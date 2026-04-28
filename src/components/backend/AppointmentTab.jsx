@@ -73,7 +73,7 @@ function dateStr(d) {
 }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
-export default function AppointmentTab({ clinicSettings, theme, onOpenCustomer }) {
+export default function AppointmentTab({ clinicSettings, theme }) {
   const isDark = theme !== 'light';
 
   // ── State ──
@@ -519,12 +519,42 @@ export default function AppointmentTab({ clinicSettings, theme, onOpenCustomer }
                         const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
                         return (
                           <div key={room} className={`flex-1 ${_colMinClass} border-l border-[var(--bd)]/30 px-0.5 relative`} style={{ height: SLOT_H }}>
-                            <button onClick={() => openEdit(appt)}
-                              className={`absolute left-0.5 right-0.5 top-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden transition-all hover:ring-1 hover:ring-sky-400 z-[5] ${st.bg} border border-[var(--bd)]/50`}
+                            {/* Phase 15.7-septies (2026-04-29) — switched
+                                outer <button> to <div role="button"> so we
+                                can NEST a real <a target="_blank"> on the
+                                customer name without violating HTML5
+                                button-inside-button rules. The full cell
+                                area still opens the edit modal on click;
+                                the inner <a> stops propagation so name
+                                click opens new tab without ALSO firing
+                                edit. Keyboard: tabIndex=0 + Enter/Space → edit. */}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openEdit(appt)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(appt); } }}
+                              className={`absolute left-0.5 right-0.5 top-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden transition-all hover:ring-1 hover:ring-sky-400 z-[5] ${st.bg} border border-[var(--bd)]/50 cursor-pointer`}
                               style={{ height: span * SLOT_H - 4 }}>
                               <div className="flex items-center gap-1">
                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
-                                <span className="text-xs font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
+                                {/* Customer name = clickable link to customer detail
+                                    in a NEW BROWSER TAB. e.stopPropagation prevents the
+                                    parent cell's onClick (edit modal) from firing. */}
+                                {appt.customerId ? (
+                                  <a
+                                    href={`/?backend=1&customer=${encodeURIComponent(String(appt.customerId))}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => { e.stopPropagation(); }}
+                                    className="text-xs font-bold text-[var(--tx-heading)] truncate hover:underline underline-offset-2 hover:text-sky-300"
+                                    title={`เปิดข้อมูล ${appt.customerName || ''} ในแท็บใหม่`}
+                                    data-testid="appt-grid-customer-link"
+                                  >
+                                    {appt.customerName || '-'}
+                                  </a>
+                                ) : (
+                                  <span className="text-xs font-bold text-[var(--tx-heading)] truncate">{appt.customerName || '-'}</span>
+                                )}
                                 {/* Phase 15.7-bis — collision indicator: shows when ≥2
                                     appts share this exact startTime+room key. Click on
                                     the badge expands the list (handled by stopPropagation
@@ -558,7 +588,7 @@ export default function AppointmentTab({ clinicSettings, theme, onOpenCustomer }
                                   </>
                                 );
                               })()}
-                            </button>
+                            </div>
                             {/* Phase 15.7-bis — list duplicate appts as small clickable
                                 pills directly under the primary, so admin can edit each.
                                 Sits inside the same cell so visual rhythm stays. */}
@@ -636,14 +666,11 @@ export default function AppointmentTab({ clinicSettings, theme, onOpenCustomer }
             setFormMode(null);
             // listener auto-refreshes the day grid + the mini-calendar bubble
           } : undefined}
-          // Open the customer's detail page from the modal. Caller (BackendDashboard)
-          // injects this; if not provided (legacy embed), the customer name
-          // renders as static text per AppointmentFormModal's onOpenCustomer
-          // prop guard.
-          onOpenCustomer={onOpenCustomer ? (customerId) => {
-            setFormMode(null); // close modal so customer page is visible
-            onOpenCustomer(customerId);
-          } : undefined}
+          // Phase 15.7-septies (2026-04-29) — modal customer-name opens
+          // a NEW BROWSER TAB (handled inside the modal via <a target="_blank">).
+          // We just enable the link here. The Phase 15.7-sexies in-page
+          // redirect callback (onOpenCustomer) is removed per user directive.
+          enableCustomerLink={true}
         />
       )}
     </div>

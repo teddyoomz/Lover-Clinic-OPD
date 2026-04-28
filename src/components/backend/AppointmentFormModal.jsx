@@ -26,6 +26,10 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, X, Loader2, CheckCircle2, AlertCircle, Trash2,
 } from 'lucide-react';
+// Phase 15.7-septies (2026-04-29) — open customer detail in a NEW BROWSER TAB
+// instead of in-page redirect. User: "เปิด Tab ของ Browser ใหม่... ไม่ใช่
+// redirection หน้าเดิมไป มันใช้ยาก".
+import { openCustomerInNewTab } from '../../lib/customerNavigation.js';
 import {
   createBackendAppointment, updateBackendAppointment,
   getAllCustomers,
@@ -108,13 +112,14 @@ function defaultFormData(overrides = {}) {
  * @param {Object} [props.theme]
  * @param {() => void} props.onSaved
  * @param {() => void} props.onClose
- * @param {(customerId: string) => void} [props.onOpenCustomer] — Phase 15.7-sexies
- *        Optional callback fired when admin clicks the customer name in the
- *        modal. Receives the customerId (be_customers doc id, falls back to
- *        proClinicId per the V33 parity invariant). When omitted, the
- *        customer name renders as static text (current modal-from-customer-
- *        page behaviour). Wired by AppointmentTab so admin can jump to
- *        ข้อมูลลูกค้า directly from the calendar.
+ * @param {boolean} [props.enableCustomerLink=false] — Phase 15.7-septies
+ *        When true, the customer name renders as a clickable link that
+ *        opens the customer detail page in a NEW BROWSER TAB
+ *        (`?backend=1&customer={id}`). When false (default), name renders
+ *        as static text. CustomerDetailView keeps it false (we're already
+ *        on the customer page); AppointmentTab passes true.
+ *        Replaces the Phase 15.7-sexies in-page-redirect `onOpenCustomer`
+ *        callback per user directive 2026-04-29.
  * @param {() => Promise<void> | void} [props.onDelete] — Phase 15.7-sexies
  *        Optional callback fired when admin clicks the "ลบนัดหมาย" button.
  *        Edit mode only. Caller is responsible for confirm() + actual
@@ -137,7 +142,7 @@ export default function AppointmentFormModal({
   theme,
   onSaved,
   onClose,
-  onOpenCustomer,
+  enableCustomerLink = false,
   onDelete,
 }) {
   const isDark = theme !== 'light';
@@ -434,21 +439,24 @@ export default function AppointmentFormModal({
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
             {lockedCustomer || formData.customerName ? (
               <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
-                {/* Phase 15.7-sexies (2026-04-28) — clickable customer name
-                    when onOpenCustomer is provided. AppointmentTab uses this
-                    so admin can jump from a calendar slot to ข้อมูลลูกค้า
-                    directly. CustomerDetailView omits the prop → static text
-                    (we're already on the customer page). */}
-                {onOpenCustomer && formData.customerId ? (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onOpenCustomer(formData.customerId); }}
+                {/* Phase 15.7-septies (2026-04-29) — clickable customer name
+                    that opens a NEW BROWSER TAB to the customer detail page.
+                    Replaces the Phase 15.7-sexies in-page-redirect callback.
+                    User: "เปิด Tab ของ Browser ใหม่... ไม่ใช่ redirection".
+                    Gated by `enableCustomerLink` prop so CustomerDetailView's
+                    own modal still renders static text. */}
+                {enableCustomerLink && formData.customerId ? (
+                  <a
+                    href={`/?backend=1&customer=${encodeURIComponent(formData.customerId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); }}
                     className={`text-xs font-bold underline-offset-4 hover:underline transition-colors ${isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-700 hover:text-sky-900'} text-left`}
-                    title="เปิดหน้าข้อมูลลูกค้า"
+                    title="เปิดหน้าข้อมูลลูกค้าในแท็บใหม่"
                     data-testid="appt-modal-open-customer"
                   >
                     {formData.customerName || '-'} {formData.customerHN && <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span>}
-                  </button>
+                  </a>
                 ) : (
                   <span className="text-xs text-[var(--tx-heading)] font-bold">
                     {formData.customerName || '-'} {formData.customerHN && <span className="font-mono text-[var(--tx-muted)]">{formData.customerHN}</span>}
