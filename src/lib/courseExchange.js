@@ -134,15 +134,65 @@ export function applyCourseRefund(customer, courseId, refundAmount, opts = {}) {
 }
 
 /**
+ * Build the post-cancel customer.courses[] array.
+ * - Marks the source course as `status: 'ยกเลิก'` (cancelled — terminal).
+ * - Sets cancelledAt + cancelReason.
+ * - Does NOT remove the course from the array (audit trail integrity —
+ *   matches refund pattern; same rationale).
+ *
+ * Phase 16.5 — first soft-cancel-without-refund path. Distinct from
+ * applyCourseRefund which sets status='คืนเงิน' AND records refundAmount.
+ * Cancel = admin marks the course as no-longer-usable WITHOUT moving money
+ * (e.g. data-entry mistake or customer-side voluntary drop).
+ */
+export function applyCourseCancel(customer, courseId, opts = {}) {
+  if (!customer) throw new Error('customer required');
+  if (!courseId) throw new Error('courseId required');
+  const idx = findCourseIndex(customer, courseId);
+  if (idx < 0) throw new Error(`course not found: ${courseId}`);
+
+  const prevCourses = Array.isArray(customer.courses) ? customer.courses : [];
+  const target = prevCourses[idx];
+
+  if (target.status === 'ยกเลิก') throw new Error('course already cancelled');
+  if (target.status === 'คืนเงิน') throw new Error('course already refunded');
+
+  const cancelledAt = opts.now || new Date().toISOString();
+  const cancelledCourse = {
+    ...target,
+    status: 'ยกเลิก',
+    cancelledAt,
+    cancelReason: opts.reason || '',
+  };
+
+  const nextCourses = [
+    ...prevCourses.slice(0, idx),
+    cancelledCourse,
+    ...prevCourses.slice(idx + 1),
+  ];
+
+  return {
+    nextCourses,
+    fromCourse: target,
+    cancelledAt,
+  };
+}
+
+/**
  * Build a be_course_changes audit log entry. Called by the Firestore
- * write path AFTER applyCourseExchange or applyCourseRefund succeeds.
+ * write path AFTER applyCourseExchange, applyCourseRefund, or
+ * applyCourseCancel succeeds.
  *
  * Append-only: callers should never UPDATE an existing entry (mirrors
  * be_stock_movements / be_wallet_transactions pattern).
+ *
+ * Phase 16.5 (2026-04-29) — added 'cancel' kind alongside existing
+ * 'exchange' and 'refund'. Cancel entries have refundAmount=null +
+ * toCourse=null (only fromCourse populated).
  */
 export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, now }) {
   if (!customerId) throw new Error('customerId required');
-  if (!['exchange', 'refund'].includes(kind)) throw new Error('kind must be exchange|refund');
+  if (!['exchange', 'refund', 'cancel'].includes(kind)) throw new Error('kind must be exchange|refund|cancel');
   const changeId = `cc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const createdAt = now || new Date().toISOString();
   return {

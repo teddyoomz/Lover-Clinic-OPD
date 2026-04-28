@@ -54,6 +54,7 @@ const DailyRevenueTab        = lazy(() => import('../components/backend/reports/
 const StaffSalesTab          = lazy(() => import('../components/backend/reports/StaffSalesTab.jsx'));
 const PnLReportTab           = lazy(() => import('../components/backend/reports/PnLReportTab.jsx'));
 const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
+const RemainingCourseTab     = lazy(() => import('../components/backend/reports/RemainingCourseTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
@@ -468,6 +469,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <PaymentSummaryTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-df-payout' ? (
           <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'reports-remaining-course' ? (
+          <RemainingCourseTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : activeTab === 'product-groups' ? (
@@ -562,6 +565,7 @@ const REPORT_LABELS = {
   'reports-appt-analysis': 'วิเคราะห์นัด',
   'reports-daily-revenue': 'รายรับประจำวัน',
   'reports-staff-sales':   'ยอดขายรายพนักงาน',
+  'reports-remaining-course': 'คอร์สคงเหลือ',
 };
 
 function ReportComingSoon({ tabId, onBack, clinicSettings }) {

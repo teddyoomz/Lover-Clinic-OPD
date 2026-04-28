@@ -44,6 +44,8 @@ import {
   CalendarClock,
   // Phase 13.3 DF groups tab icon (Percent — payment fee context)
   Percent,
+  // Phase 16.5 remaining-course tab icon
+  Clock,
   // Phase 12.3 sale-insurance-claim tab icon
   Shield,
   // Phase 14.1 document-templates tab icon
@@ -129,6 +131,7 @@ export const NAV_SECTIONS = [
       { id: 'reports-pnl',           label: 'กำไรขาดทุน (P&L)',    icon: TrendingUp,      color: 'emerald', palette: 'pnl profit loss P&L กำไรขาดทุน profit-and-loss' },
       { id: 'reports-payment',       label: 'สรุปบัญชีรับชำระ',    icon: WalletIcon,      color: 'emerald', palette: 'payment summary บัญชี ชำระ สรุป cash transfer' },
       { id: 'reports-df-payout',     label: 'ค่ามือแพทย์ (DF)',     icon: Percent,         color: 'emerald', palette: 'df doctor fee payout commission report ค่ามือ หมอ แพทย์ จ่าย รายงาน' },
+      { id: 'reports-remaining-course', label: 'คอร์สคงเหลือ',       icon: Clock,           color: 'amber',   palette: 'remaining course คอร์ส คงเหลือ remaining unused refund cancel exchange ยกเลิก คืนเงิน เปลี่ยน' },
     ],
   },
   {

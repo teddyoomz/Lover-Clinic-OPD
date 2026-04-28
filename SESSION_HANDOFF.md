@@ -7,12 +7,17 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits this session, 24 cumulative unpushed)
+- **Date last updated**: 2026-04-29 (session 29) — V15 #7 combined deploy SHIPPED + phantom branch cleanup executed
 - **Branch**: `master`
-- **Last commit**: `28308ad chore(rules): Rule J — superpowers auto-trigger + session boot`
-- **Test count**: **3312** focused (+385 cumulative across sessions 27→28)
+- **Last commit**: `cf54400 docs(agents): EOD 2026-04-29 — session 28 (Phase 15.7 family + Rule J)`
+- **Test count**: **3312** focused
 - **Build**: clean
-- **Deploy state**: ⏳ **PRODUCTION = `c36888e`** (V15 #4 LIVE) · master 24 commits ahead, awaiting V15 #7 combined deploy · session 28 commits: e6afd35 + 7ec6cb7 + 1a8e36d + 7dbdfd7 + 453abb1 + 140229c + 8ae753d + f310231 + 3a16b27 + 28308ad (10 visible) plus session 27 carry-over
+- **Deploy state**: ✅ **PRODUCTION = `cf54400`** (V15 #7 LIVE 2026-04-29) · vercel `lover-clinic-2gvg69lvr-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+  - V15 #7 Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 (pc_appointments DELETE) + 2/2 (clinic_settings strip) + 2/2 (opd_sessions DELETE V27-tris) = all 200; chat_conversations probes left (anon delete blocked by rule)
+  - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 401 ✓
+  - Firebase rules: `released to cloud.firestore` (already up to date — idempotent re-publish; no schema bump)
+  - Phantom branch cleanup: `BR-1777095572005-ae97f911` purged via `/api/admin/cleanup-phantom-branch` (51 ops: 4 batches + 29 movements + 12 orders + 1 transfer + 2 appointments + 2 staff updates + 1 branch doc; auditId `cleanup-phantom-branch-1777399906398`; verified all-zeros post-delete)
+  - **Damage scope (pre-deploy)**: 24 cumulative commits across sessions 27+28 had been live-locally + tested but un-deployed for ~24h; V15 #7 closed that gap.
   - Vercel (V15 #4): `lover-clinic-kfrlkir4l-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
   - Firestore rules: released to `cloud.firestore` (be_admin_audit added)
   - Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 + strip 2/2 = 200
@@ -36,6 +41,28 @@
 - **Production URL**: https://lover-clinic-app.vercel.app
 - **Remote sync**: master = origin/master ✅
 - **SCHEMA_VERSION**: 17 (V34 unchanged schema — pure logic fix)
+
+### Session 2026-04-29 (session 29) — V15 #7 combined deploy + phantom branch cleanup (ops-only, no commits)
+
+User authorized "deploy" → executed combined V15 #7 (vercel --prod + firebase deploy --only firestore:rules) in parallel. All 24 cumulative commits + the EOD doc commit (cf54400) shipped to production. Probe-Deploy-Probe Rule B passed both sides (6/6 positive 200 + 5/5 negative 403). HTTP smoke 200/200/401. Cleanup completed for pc_appointments, clinic_settings probe field, and opd_sessions test docs (V27-tris); chat_conversations probes left for staff-side cleanup per existing rule.
+
+Then admin endpoint `/api/admin/cleanup-phantom-branch` (Phase 15.7-novies) executed against `BR-1777095572005-ae97f911`:
+- DRY-RUN list: 4 batches + 29 movements + 12 orders + 1 transfer (source) + 2 appointments + 2 staff with phantom in branchIds[] + 1 branch doc = 51 ops
+- DELETE confirmed → 51 ops committed in 1 Firestore writeBatch (under 500-cap); auditId `cleanup-phantom-branch-1777399906398` written to be_admin_audit
+- Post-verify: all summary fields = 0, branchDocExists = false ✓
+- Caller: `loverclinic@loverclinic.com` (admin claim verified)
+
+**Lesson V36 candidate**: 2 grep regexes mismatched the actual log strings while polling background-deploy state — burned cycles on `(Production: https...)` matching mid-deploy lines and `(Aliased to)` missing the real `Aliased: ` literal. Locked permanently in `feedback_background_task_completion.md` (memory) — rely on background-task completion notification as authoritative signal; don't reinvent it via brittle regex tail-grep.
+
+**Live-QA verification (all 9 features passed in production 2026-04-29 post-V15 #7)**:
+- ✓ assistants picker · ✓ advisor dropdown · ✓ location lock · ✓ customer-name new-tab · ✓ appt delete · ✓ calendar column-width · ✓ negative-stock repay · ✓ default-branch auto-pick · ✓ self-created treatment refresh
+
+**Carry-overs cleared (user confirmed 2026-04-29)**:
+- ✓ LineSettings creds — user configured (channel access token + secret + bot basic ID)
+- ✓ Customer ID backfill — not needed (read-time HN/name backfill in saleReportAggregator suffices)
+- ✓ TEST-/E2E- prefix discipline — not needed (V33.10/.11/.12 drift catchers already enforce; existing hardcoded literals are negative-test fixtures asserting validation logic)
+
+**Phase 15 = COMPLETE.** Ready for Phase 16 (Polish & Final) OR pre-launch H-bis cleanup, whichever user picks first.
 
 ### Session 2026-04-29 EOD (session 28) — Phase 15.7 family + Rule J superpowers boot (12 commits)
 

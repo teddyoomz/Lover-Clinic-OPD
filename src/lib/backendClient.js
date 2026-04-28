@@ -2746,6 +2746,49 @@ export async function refundCustomerCourse(customerId, courseId, refundAmount, o
   });
 }
 
+/**
+ * Soft-cancel a customer's course (no money refund). Phase 16.5 (2026-04-29).
+ *
+ * Mirrors refundCustomerCourse architecture but uses applyCourseCancel +
+ * kind='cancel'. Course stays in customer.courses[] with terminal status
+ * 'ยกเลิก' (audit trail integrity — same rationale as refund).
+ *
+ * @param {string} customerId
+ * @param {string} courseId
+ * @param {string} reason - non-empty (UI requires it)
+ * @param {object} opts - { actor: string }
+ * @returns {Promise<{ changeId, fromCourse, cancelledAt }>}
+ */
+export async function cancelCustomerCourse(customerId, courseId, reason, opts = {}) {
+  const { applyCourseCancel, buildChangeAuditEntry } = await import('./courseExchange.js');
+
+  return runTransaction(db, async (tx) => {
+    const cRef = customerDoc(customerId);
+    const cSnap = await tx.get(cRef);
+    if (!cSnap.exists()) throw new Error('Customer not found');
+    const customer = { id: cSnap.id, ...cSnap.data() };
+
+    const { nextCourses, fromCourse, cancelledAt } = applyCourseCancel(
+      customer, courseId, { reason: reason || '' },
+    );
+
+    tx.update(cRef, { courses: nextCourses, updatedAt: new Date().toISOString() });
+
+    const audit = buildChangeAuditEntry({
+      customerId,
+      kind: 'cancel',
+      fromCourse,
+      toCourse: null,
+      refundAmount: null,
+      reason: reason || '',
+      actor: opts.actor || '',
+    });
+    tx.set(courseChangeDoc(audit.changeId), audit);
+
+    return { changeId: audit.changeId, fromCourse, cancelledAt };
+  });
+}
+
 /** List be_course_changes audit entries for a customer (most recent first). */
 export async function listCourseChanges(customerId) {
   const q = query(courseChangesCol(), where('customerId', '==', String(customerId)));
