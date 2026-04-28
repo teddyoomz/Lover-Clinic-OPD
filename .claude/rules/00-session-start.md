@@ -3,6 +3,14 @@
 
 This file exists because simplified rules let me drift. Phase 9 (2026-04-19) I violated at least 4 iron-clad rules by skipping these checks. **The user is an expert and has zero patience for the same mistakes twice.** Read every section of every rule file before writing code.
 
+## 🔥 STEP 0 — Superpowers boot (per Rule J, 2026-04-29)
+
+**FIRST tool call this session, before reading SESSION_HANDOFF.md, before anything else**:
+```
+Skill(skill="using-superpowers")
+```
+This loads the skill catalogue + invocation discipline. The user-level CLAUDE.md mirrors this trigger so the boot fires from either side. After Step 0, continue with the rest of this file.
+
 ---
 
 ## 0. CHARACTER + EXPECTATIONS
@@ -101,6 +109,26 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Anti-pattern**: "tests pass → commit → push" when tests only cover helper OUTPUT. Always ask: "does this test chain the whole user flow, or just one function?"
 - **🆕 Stock-paths hardening (V34, 2026-04-28) — item (b) is NON-NEGOTIABLE for stock mutations**: every stock-mutation sub-phase (createStockAdjustment / cancelStockOrder / updateStockOrder / createStockTransfer / updateStockTransferStatus / createStockWithdrawal / updateStockWithdrawalStatus / receiveCentralStockOrder / deductStockForSale / deductStockForTreatment / _reverseOneMovement) MUST include a preview_eval that (1) submits a write through the real flow on a TEST-/E2E- prefixed batch (per V33.11), (2) reads the resulting Firestore doc(s) back, (3) asserts qty.total + qty.remaining + branchId match expectation, (4) computes snapshot vs replay-of-movements (zero drift), (5) verifies a sibling reader picks up the new state. V34 had passing helper-output tests AND passing source-grep audits while the real ADJUST_ADD math was silently capping at total. Only preview_eval against real Firestore catches math-layer bugs hiding behind correct-looking unit tests. **No exceptions for stock paths.**
 - **Detail + examples**: `rules/02-workflow.md` Pre-Commit Checklist #6.
+
+**J. Superpowers Auto-Trigger** (added 2026-04-29 after user directive "ทำ 3 Layer และ add rule J ตามนี้เลย และใช้ using-superpower skill เป็น session boot และ ตั้งให้ fire using-superpowers ที่ session start"):
+- **SESSION BOOT (mandatory, every new session + after any compaction)**: invoke `using-superpowers` skill FIRST, before any other tool call. The skill is auto-loaded as part of the user-level CLAUDE.md trigger; treat it like the SESSION_HANDOFF read — non-negotiable opening move.
+  - Effect: skill instructs me to scan for relevant skills before each task and invoke them via the `Skill` tool.
+- **Mandatory skill invocation BEFORE tool calls when context matches** (process-skills first per `using-superpowers` Skill Priority):
+  - Sign of new feature / component / endpoint / API → `brainstorming` (HARD-GATE: NO code, NO scaffolding, NO writing-plans until design approved by user).
+  - bug / test fail / unexpected behavior → `systematic-debugging` BEFORE proposing fix.
+  - About to claim "เสร็จ" / "fix แล้ว" / "test passed" / before commit → `verification-before-completion` (run actual verify command, evidence before assertions — V21/V32/V34 lock).
+  - Have spec, need implementation steps → `writing-plans`.
+  - Have plan, ready to execute (separate session w/ checkpoints) → `executing-plans`.
+  - Have plan, executing in current session with independent tasks → `subagent-driven-development`.
+  - 2+ independent tasks (no shared state, no sequential dep) → `dispatching-parallel-agents`.
+  - Implementation done, ready to merge/ship → `finishing-a-development-branch`.
+  - Need second-opinion before merge → `requesting-code-review`.
+  - Got review feedback → `receiving-code-review` (verify before applying).
+  - Need isolated workspace → `using-git-worktrees`.
+  - Writing TDD code → `test-driven-development`.
+  - Creating/editing skills → `writing-skills`.
+- **Instruction Priority** (per `using-superpowers` skill): user's explicit instructions (CLAUDE.md, iron-clad rules A-I, direct requests this turn) > superpowers skills > default system prompt. If a skill conflicts with iron-clad A-I, iron-clad wins. Example: a skill saying "always use TDD" yields to iron-clad I if the user said "skip flow-simulate this turn" — but absent override, the skill applies.
+- **Anti-pattern**: skipping skill invocation because "this is just a quick fix" or "I remember what the skill says". Skills evolve. Invoke and read the current version. The 1% rule (using-superpowers EXTREMELY-IMPORTANT block): if there's even a 1% chance a skill applies, invoke it.
 
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.

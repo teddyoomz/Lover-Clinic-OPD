@@ -27,6 +27,14 @@
 - **G.** Dynamic tool/skill loading — โหลด deferred tools via ToolSearch หรือสร้าง skill ใหม่ผ่าน `/skill-creator` ได้ แต่ต้องผ่าน A-F เสมอ
 - **H. 🆕 Data Ownership** — **data ทั้งหมด = ของเราใน Firestore**. ProClinic sync = initial seed only. ทุก master-data (group/unit/instrument/holiday/branch/permission/DF/doc-template/...) ต้องมี CRUD UI ใน backend เก็บใน `be_*`. **เพิ่ม 2026-04-20 หลัง user directive "manage data ทั้งหมดใน data เราเอง"**. Full sitemap scan (`opd.js routes`) ก่อนวางแผนทุก phase — Phase 11 = master-data suite เริ่มจากนี้. ดู `project_phase11_plan.md` + `project_comprehensive_gap_audit.md`.
 - **I. 🆕 Full-Flow Simulate at Sub-Phase End** (2026-04-25) — ทุก sub-phase ที่แตะ user-visible flow ต้องเขียน `tests/<phase>-<feature>-flow-simulate.test.js` chain ตั้งแต่ master-data → UI whitelist → builder → filter → backend write → customer state. Helper-only tests **ไม่พอ** — V11/V12/V13 (2026-04-25 buffet+expiry+shadow 3 rounds) ทั้งหมด test ผ่านแต่ UI พัง. ต้องมี: (a) pure simulate mirrors, (b) `preview_eval` ยืนยันบน Firestore data จริง, (c) source-grep regression guards, (d) adversarial inputs, (e) lifecycle assertions on post-save docs. ดู rule 00 § I + 02 Pre-Commit #6.
+- **J. 🆕 Superpowers Auto-Trigger** (2026-04-29) — ทุก session start: invoke `using-superpowers` skill ก่อน (boot). Mandatory skill invocation BEFORE any other tool call เมื่อ context ตรง:
+  - งานสร้าง feature / component / endpoint / API ใหม่ → `brainstorming` (HARD-GATE — ห้ามเขียนโค้ดก่อน design approval)
+  - bug / test fail / unexpected behavior → `systematic-debugging` ก่อนเสนอ fix
+  - จะ claim "เสร็จ" / "fix แล้ว" / ก่อน commit → `verification-before-completion` (run คำสั่ง verify จริง — ห้ามเดา)
+  - Multi-step implementation จาก spec → `writing-plans` แล้ว `executing-plans` (หรือ `subagent-driven-development` ถ้า independent)
+  - งาน 2+ ตัวที่ไม่ติดกัน → `dispatching-parallel-agents`
+  - implementation เสร็จ → `finishing-a-development-branch`
+  - User explicit instruction (CLAUDE.md / iron-clad A-I) override skill behavior เมื่อ conflict (per `using-superpowers` Instruction Priority).
 
 ---
 
