@@ -31,6 +31,7 @@ import {
   listAllSellers,
 } from '../../lib/backendClient.js';
 import { flattenPromotionsForStockDeduction } from '../../lib/treatmentBuyHelpers.js';
+import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import {
   findCouponByCode, listPromotions,
 } from '../../lib/backendClient.js';
@@ -78,6 +79,31 @@ const fmtDate = fmtThaiDate;
 // now drives all three sale/payment date inputs. Styling is identical to the
 // old local component (same default bg/border/padding), so no visual drift.
 function fmtMoney(n) { return n != null ? Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '0.00'; }
+
+// 2026-04-28: flatten sale.items (grouped shape: { promotions, courses,
+// products, medications }) into a flat list for inline summary in the
+// sales-list table. Each entry has `productName` + `qty` so the existing
+// `formatOrderItemsSummary` helper (Phase 15.4 s22) can render
+// "Botox x10 · Filler x2 · +N รายการ".
+function flattenSaleItemsForSummary(sale) {
+  const items = sale?.items;
+  if (!items) return [];
+  if (Array.isArray(items)) {
+    return items.map((it) => ({
+      productName: it?.name || it?.productName || '',
+      qty: it?.qty,
+    }));
+  }
+  const out = [];
+  for (const arr of [items.promotions, items.courses, items.products, items.medications]) {
+    if (Array.isArray(arr)) {
+      for (const x of arr) {
+        if (x) out.push({ productName: x.name || x.productName || '', qty: x.qty });
+      }
+    }
+  }
+  return out;
+}
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
 export default function SaleTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, onFormClose }) {
@@ -944,7 +970,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--bd)] bg-[var(--bg-elevated)]">
-                  {['เลขที่','ลูกค้า','วันที่','ยอดรวม','สถานะ','จัดการ'].map(h => (
+                  {['เลขที่','ลูกค้า','วันที่','รายการขาย','ยอดรวม','สถานะ','จัดการ'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs">{h}</th>
                   ))}
                 </tr>
@@ -978,12 +1004,34 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                         {sale.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{sale.customerHN}</span>}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
+                      {/* 2026-04-28: รายการขาย column — inline summary so admin
+                          can scan items without opening detail modal. Phase
+                          15.4 s22 helper. Truncate at md screen + max 3 items. */}
+                      <td className="px-3 py-2 text-[var(--tx-secondary)] text-xs max-w-[260px]">
+                        <div className="truncate" title={formatOrderItemsSummary(flattenSaleItemsForSummary(sale), { max: 99 })}>
+                          {formatOrderItemsSummary(flattenSaleItemsForSummary(sale), { max: 3 }) || <span className="text-[var(--tx-muted)] italic">—</span>}
+                        </div>
+                      </td>
+                      {/* 2026-04-28: yodroum column now ALWAYS shows amount;
+                          source badge appears INLINE next to amount when set
+                          (was: badge XOR amount → user couldn't see OPD-sale
+                          totals at a glance). */}
                       <td className="px-3 py-2 text-right font-mono text-[var(--tx-heading)]">
-                        {sale.source === 'exchange' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>เปลี่ยนสินค้า</span>
-                        : sale.source === 'share' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700'}`}>แชร์คอร์ส</span>
-                        : sale.source === 'treatment' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD</span>
-                        : sale.source === 'addRemaining' ? <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
-                        : `${fmtMoney(sale.billing?.netTotal)} ฿`}
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {sale.source === 'exchange' && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700'}`}>เปลี่ยนสินค้า</span>
+                          )}
+                          {sale.source === 'share' && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-violet-900/30 text-violet-400' : 'bg-violet-50 text-violet-700'}`}>แชร์คอร์ส</span>
+                          )}
+                          {sale.source === 'treatment' && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700'}`}>จาก OPD</span>
+                          )}
+                          {sale.source === 'addRemaining' && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>เพิ่มคงเหลือ</span>
+                          )}
+                          <span>{fmtMoney(sale.billing?.netTotal)} ฿</span>
+                        </div>
                       </td>
                       <td className="px-3 py-2"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${st.color === 'emerald' ? (isDark ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : st.color === 'amber' ? (isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-50 text-orange-700') : st.color === 'red' ? (isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700') : st.color === 'gray' ? (isDark ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-600') : st.color === 'purple' ? (isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-50 text-purple-700') : (isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-50 text-sky-700')}`}>{st.label}</span></td>
                       <td className="px-3 py-2">

@@ -173,3 +173,71 @@ export function resolveBranchName(branchId, branches) {
   if (typeof match.nameEn === 'string' && match.nameEn.trim()) return match.nameEn.trim();
   return '';
 }
+
+/**
+ * Pure helper: merge be_branches doc INTO the global clinicSettings shape
+ * so a single object carries branch-aware clinic info. Branch fields take
+ * precedence over clinic_settings; brand assets (logo, accentColor) keep
+ * coming from clinic_settings.
+ *
+ * Field map (be_branches → clinicSettings):
+ *   branch.name      → clinic.clinicName
+ *   branch.nameEn    → clinic.clinicNameEn
+ *   branch.address   → clinic.address
+ *   branch.phone     → clinic.phone
+ *   branch.taxId     → clinic.taxId
+ *   branch.licenseNo → clinic.licenseNo
+ *   branch.website   → clinic.website
+ *
+ * Brand fields (logo, accentColor, clinicSubtitle) come from clinicSettings
+ * unchanged because be_branches doesn't store branding.
+ *
+ * Defensive: empty string from branch is treated as "not set" → falls back
+ * to clinicSettings. So a branch with empty `address` doesn't blank out
+ * the global address.
+ *
+ * @param {object} clinicSettings
+ * @param {object} branch — be_branches doc (optional)
+ * @returns {object} merged effective settings
+ */
+export function mergeBranchIntoClinic(clinicSettings, branch) {
+  const cs = clinicSettings || {};
+  if (!branch || typeof branch !== 'object') return cs;
+  const pick = (branchVal, csVal) => {
+    if (typeof branchVal === 'string' && branchVal.trim()) return branchVal;
+    return csVal;
+  };
+  return {
+    ...cs,
+    clinicName: pick(branch.name, cs.clinicName),
+    clinicNameEn: pick(branch.nameEn, cs.clinicNameEn),
+    address: pick(branch.address, cs.address),
+    phone: pick(branch.phone, cs.phone),
+    taxId: pick(branch.taxId, cs.taxId),
+    licenseNo: pick(branch.licenseNo, cs.licenseNo),
+    website: pick(branch.website, cs.website),
+  };
+}
+
+/**
+ * Hook — returns clinicSettings merged with the currently selected
+ * branch's data. Branch values override; brand (logo/accent) stays from
+ * clinic_settings. Used by SalePrintView / QuotationPrintView /
+ * DocumentPrintModal so PDFs render the SELECTED branch's address +
+ * phone instead of the global clinic_settings doc.
+ *
+ * Defensive: when no BranchProvider is mounted (legacy callers), the
+ * merge no-ops and returns clinicSettings unchanged.
+ *
+ * @param {object} clinicSettings
+ * @returns {object} effective clinic info for current branch context
+ */
+export function useEffectiveClinicSettings(clinicSettings) {
+  const { branchId, branches } = useSelectedBranch();
+  return useMemo(() => {
+    const branch = (branches || []).find((b) =>
+      b && (String(b.branchId || b.id) === String(branchId))
+    );
+    return mergeBranchIntoClinic(clinicSettings, branch);
+  }, [clinicSettings, branchId, branches]);
+}

@@ -20,6 +20,7 @@ import {
 import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import { sendDocumentLine } from '../../lib/sendDocumentClient.js';
+import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
 import StaffSelectField from './StaffSelectField.jsx';
@@ -58,7 +59,7 @@ const MM_TO_PX = 96 / 25.4;
 export default function DocumentPrintModal({
   open,
   onClose,
-  clinicSettings,
+  clinicSettings: rawClinicSettings,
   customer,
   // Optional pre-fill context — e.g. treatment form passes diagnosis/findings
   // or sale detail passes originalSaleId. Merged with customer/clinic defaults.
@@ -67,6 +68,11 @@ export default function DocumentPrintModal({
   // 'sale-cancelation'). Empty array = all 13 docTypes.
   docTypeFilter = [],
 }) {
+  // 2026-04-28: branch-aware clinic info — every PDF generated from this
+  // modal pulls clinic name/address/phone/taxId from the selected branch's
+  // be_branches doc (with clinic_settings fallback). User directive:
+  // "เปลี่ยนให้ระบบ Gen PDF ของเราทั้งหมดดึงข้อมูลคลินิกจาก ข้อมูลของสาขา".
+  const clinicSettings = useEffectiveClinicSettings(rawClinicSettings);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

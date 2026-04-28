@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
+import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -61,7 +62,11 @@ function computeLineTotal(item) {
 
 export default function SalePrintView({ sale, clinicSettings, onClose, sellersLookup = [] }) {
   const s = sale || {};
-  const clinic = clinicSettings || {};
+  // 2026-04-28: clinic info now sourced from the selected branch's
+  // be_branches doc (with clinic_settings fallback for brand assets like
+  // logo + accentColor). User directive: "เปลี่ยนให้ระบบ Gen PDF ของเรา
+  // ทั้งหมดดึงข้อมูลคลินิกจาก ข้อมูลของสาขา ในหน้า สาขา ของ Backend ของเรา".
+  const clinic = useEffectiveClinicSettings(clinicSettings);
   const accent = clinic.accentColor || '#dc2626';
 
   useEffect(() => {
