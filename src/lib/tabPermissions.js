@@ -59,6 +59,11 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'reports-staff-sales': { requires: ['sale_view'] },
   'reports-pnl':         { requires: ['expense_view', 'expense_management'] },
   'clinic-report':       { requires: ['report_clinic_summary'] },
+  // Phase 16.7 (2026-04-29 session 33) — Expense Report tab replicating
+  // ProClinic /admin/report/expense (4 sections: Products / Categories /
+  // Doctors / Staff). Reuses existing `report_expense` permission key
+  // (already in permissionGroupValidation.js as 'รายงานรายจ่าย').
+  'expense-report':      { requires: ['report_expense'] },
   'reports-payment':     { requires: ['sale_view', 'deposit'] },
   'reports-df-payout':   { requires: ['doctor_df_management', 'treatment_df_view', 'treatment_df_management'] },
 

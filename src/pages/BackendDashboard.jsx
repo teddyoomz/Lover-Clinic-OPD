@@ -54,6 +54,7 @@ const DailyRevenueTab        = lazy(() => import('../components/backend/reports/
 const StaffSalesTab          = lazy(() => import('../components/backend/reports/StaffSalesTab.jsx'));
 const PnLReportTab           = lazy(() => import('../components/backend/reports/PnLReportTab.jsx'));
 const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
+const ExpenseReportTab       = lazy(() => import('../components/backend/reports/ExpenseReportTab.jsx'));
 const RemainingCourseTab     = lazy(() => import('../components/backend/reports/RemainingCourseTab.jsx'));
 const ClinicReportTab        = lazy(() => import('../components/backend/reports/ClinicReportTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
@@ -476,6 +477,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <RemainingCourseTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'clinic-report' ? (
           <ClinicReportTab onNavigate={setActiveTab} clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'expense-report' ? (
+          <ExpenseReportTab onNavigate={setActiveTab} clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : activeTab === 'product-groups' ? (

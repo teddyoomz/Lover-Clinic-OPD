@@ -188,9 +188,9 @@ describe('Phase 16.3 FS.C — cross-file wiring source-grep', () => {
 });
 
 describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
-  test('D.1 — TAB_PERMISSION_MAP count is 47 (45 pre-Phase-16.3 + system-settings + clinic-report)', () => {
+  test('D.1 — TAB_PERMISSION_MAP count is 48 (47 pre-Phase-16.7 + expense-report)', () => {
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(47);
+    expect(count).toBe(48);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {
