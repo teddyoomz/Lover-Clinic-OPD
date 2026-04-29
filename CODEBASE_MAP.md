@@ -23,7 +23,8 @@ src/
 ├── constants.js                — SESSION_TIMEOUT_MS, DEFAULT_CLINIC_SETTINGS, PRESET_COLORS
 ├── utils.js                    — Helper functions, defaultFormData, clinical logic
 ├── hooks/
-│   └── useTheme.js             — Dark/Light/Auto theme hook
+│   ├── useTheme.js             — Dark/Light/Auto theme hook
+│   └── useClinicReport.js      — Phase 16.2 smart hybrid cache hook (filter-keyed Map + auto-invalidate + manual refresh + zero polling)
 ├── components/
 │   ├── ClinicLogo.jsx          — Logo component (custom URL / /logo.jpg / text fallback)
 │   ├── ThemeToggle.jsx         — Theme toggle button
@@ -46,7 +47,15 @@ src/
 │       ├── WalletPanel.jsx     — Wallet CRUD: customer wallet cards + top-up + adjust ± + transaction history modal
 │       ├── WalletPicker.jsx    — Reusable single-wallet picker: reads `be_customer_wallets`, edit-mode cap = balance + initiallyApplied
 │       ├── MembershipPanel.jsx — Card-types gradient grid + sold-memberships list + sell form (with wallet credit + initial points side-effects) + renew + cancel modals
-│       └── PointsPanel.jsx     — Loyalty point cards (balance + membership badge) + adjust (±) + transaction history modal
+│       ├── PointsPanel.jsx     — Loyalty point cards (balance + membership badge) + adjust (±) + transaction history modal
+│       └── reports/            — Phase 16.2 Clinic Report executive dashboard
+│           ├── ClinicReportTab.jsx — Phase 16.2 root tab: permission gate + branch context + sidebar + 12 widgets + PDF/CSV export + drilldown links
+│           ├── ClinicReportSidebar.jsx — Phase 16.2 sticky filter rail: branch + 7 presets + custom range + categories + export buttons + refresh
+│           └── widgets/
+│               ├── KpiTile.jsx — Phase 16.2 single-number tile + drilldown
+│               ├── RankedTableWidget.jsx — Phase 16.2 Top-N list + drilldown
+│               ├── RetentionHeatmapWidget.jsx — Phase 16.2 cohort retention heatmap (custom inline SVG)
+│               └── BranchComparisonWidget.jsx — Phase 16.2 per-branch revenue bars (custom inline progress)
 ├── lib/
 │   ├── brokerClient.js         — API client wrapper for /api/proclinic/* (existing)
 │   ├── backendClient.js        — Firestore CRUD for be_* collections + master data read/sync + Phase 7:
@@ -58,6 +67,9 @@ src/
 │   ├── financeUtils.js         — Pure calc: calcDepositRemaining, calcDepositStatus, calcSaleBilling, calcPointsEarned, calcMembershipExpiry, isMembershipExpired, fmtMoney, fmtPoints (Phase 7)
 │   ├── stockUtils.js           — Phase 8a: Pure stock qty/allocation helpers. Exports: DEFAULT_BRANCH_ID, MOVEMENT_TYPES (1..14 enum), TRANSFER_STATUS (0..4), WITHDRAWAL_STATUS (0..3), BATCH_STATUS. Functions: deductQtyNumeric, reverseQtyNumeric, buildQtyNumeric, formatStockQty, hasExpired, daysToExpiry, isBatchDepleted, isBatchAvailable, batchFifoAllocate (FIFO/FEFO/LIFO + exactBatchId first)
 │   ├── migrateCoursesSkipStockClient.js — 2026-04-28: Firebase ID-token wrapper for /api/admin/migrate-courses-skip-stock. Exports listCoursesNeedingMigration() + commitCoursesSkipStockMigration(). Used by PermissionGroupsTab admin card.
+│   ├── clinicReportAggregator.js — Phase 16.2 orchestrator: fetchClinicReportData + composeClinicReportSnapshot + clinicReportAggregator wrapper. Promise.all 10 backendClient list-* fns + 6 reused aggregators + 3 helpers + 4 internal bucket helpers
+│   ├── clinicReportHelpers.js — Phase 16.2 pure helpers: computeKpiTiles + computeRetentionCohort + computeBranchComparison + safeNum + filterSalesForReport + monthsBetween + addMonths
+│   ├── clinicReportCsv.js — Phase 16.2 CSV exporter: toCsv + downloadCsv (UTF-8 BOM, RFC 4180 quote-escape, Excel-friendly Thai)
 │   └── cloneOrchestrator.js    — 5-step clone orchestrator: profile → courses → treatments list → treatment details → finalize
 └── pages/
     ├── AdminLogin.jsx          — Login page
@@ -917,6 +929,10 @@ Inline component ด้านบนขวา — สลับ TH/EN
 - `THEMES` = [{value:'dark'|'light'|'auto', label, icon}]
 - `useTheme()` → `{theme, resolvedTheme, setTheme}`
 - set `data-theme` attribute บน `<html>` เมื่อเปลี่ยน
+
+## 📄 src/hooks/useClinicReport.js (Phase 16.2)
+
+Smart hybrid cache hook for the Clinic Report dashboard. Filter-keyed Map (serialized JSON key per filter set); auto-invalidates when filter changes; manual refresh trigger (`refresh()`); zero polling. Returns `{ data, loading, error, refresh }`. Backed by `clinicReportAggregator.fetchClinicReportData(filters, db)`.
 
 ---
 
@@ -2716,3 +2732,52 @@ Normalizer clamps negative money to 0, rounds channel amounts to 2 decimals (THB
 - Deploy Phase 13 (requires rules + Vercel)
 - Phase 14 (per execution plan)
 - End session + update SESSION_HANDOFF
+
+---
+
+## Phase 16.2 — Clinic Report executive dashboard tab (2026-04-29) SHIPPED
+
+12-widget consolidator dashboard with sticky filter rail and smart hybrid cache. Per user constraint "ห้ามเปลี่ยน wiring เดิม" — strictly additive. Zero edits to any existing aggregator (11 files) or existing detail report tab (13 files).
+
+**New files:**
+- `src/lib/clinicReportAggregator.js` — orchestrator: `fetchClinicReportData` + `composeClinicReportSnapshot`. Promise.all 10 backendClient list-* fns + reuses 6 existing aggregators (dfPayoutAggregator, revenueAnalysisAggregator, etc.) + 3 pure helpers + 4 internal bucket helpers.
+- `src/lib/clinicReportHelpers.js` — pure helpers: `computeKpiTiles`, `computeRetentionCohort`, `computeBranchComparison`, `safeNum`, `filterSalesForReport`, `monthsBetween`, `addMonths`.
+- `src/lib/clinicReportCsv.js` — CSV exporter: `toCsv` + `downloadCsv` (UTF-8 BOM, RFC 4180 quote-escape, Excel-friendly Thai text).
+- `src/hooks/useClinicReport.js` — smart hybrid cache React hook. Filter-keyed Map + auto-invalidate + manual `refresh()` + zero polling.
+- `src/components/backend/reports/ClinicReportTab.jsx` — root tab: permission gate (`report_clinic_summary`) + BranchContext + sticky sidebar + 12 widgets + PDF (html2canvas+jsPDF direct per V32 pattern) + CSV export + drilldown links to existing detail tabs.
+- `src/components/backend/reports/ClinicReportSidebar.jsx` — sticky filter rail: branch selector + 7 date presets (วันนี้ / สัปดาห์นี้ / เดือนนี้ / ไตรมาส / 6 เดือน / ปีนี้ / custom) + custom date range + 4 category toggles (Sales / Treatments / Courses / Appointments) + PDF/CSV export buttons + manual refresh.
+- `src/components/backend/reports/widgets/KpiTile.jsx` — single-number KPI tile with delta % vs prev period + drilldown link.
+- `src/components/backend/reports/widgets/RankedTableWidget.jsx` — Top-N ranked list (products / doctors / courses / branches) with drilldown.
+- `src/components/backend/reports/widgets/RetentionHeatmapWidget.jsx` — cohort retention heatmap rendered as custom inline SVG (no external chart lib).
+- `src/components/backend/reports/widgets/BranchComparisonWidget.jsx` — per-branch revenue comparison as custom inline progress bars.
+
+**Additive edits (4 small rows):**
+- `src/lib/permissionGroupValidation.js` — `report_clinic_summary` added to ALL_PERMISSION_KEYS under "รายงาน / วิเคราะห์" group.
+- `src/lib/tabPermissions.js` — `'clinic-report': { requiresAny: ['report_clinic_summary'] }` entry added to TAB_PERMISSION_MAP.
+- `src/components/backend/nav/navConfig.js` — `'clinic-report'` entry added to Reports section navConfig.
+- `src/pages/BackendDashboard.jsx` — lazy import `ClinicReportTab` + render case for `activeTab === 'clinic-report'`.
+
+**9 brainstorm decisions locked (see spec):**
+- Q1: Both audience (clinic-wide KPIs + branch drilldown)
+- Q2: Comprehensive 12 widgets
+- Q3: Sticky filter rail layout
+- Q4: 7 presets + custom range date control
+- Q5: NEW permission key `report_clinic_summary` + branch-scoped via branchIds[]
+- Q6: PDF (V32 pattern) + CSV (UTF-8 BOM)
+- Q7: Smart hybrid cache (filter-keyed Map + manual refresh)
+- Q8: Drilldown = link to existing detail tabs (zero new modals)
+- Q9: Orchestrator aggregator architecture (Approach A)
+
+**Tests:** +92 across 7 phase16.2-* test files:
+- `tests/phase16.2-clinic-report-helpers.test.js`
+- `tests/phase16.2-clinic-report-aggregator.test.js`
+- `tests/phase16.2-clinic-report-csv.test.js`
+- `tests/phase16.2-use-clinic-report.test.js`
+- `tests/phase16.2-clinic-report-sidebar.test.jsx`
+- `tests/phase16.2-clinic-report-tab.test.jsx`
+- `tests/phase16.2-clinic-report-flow-simulate.test.js`
+
+Full suite 3771 → ~3863. Build clean.
+
+Spec: `docs/superpowers/specs/2026-04-29-phase16-2-clinic-report-design.md`
+Plan: `docs/superpowers/plans/2026-04-29-phase16-2-clinic-report.md`

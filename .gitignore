@@ -39,3 +39,6 @@ skills-lock.json
 
 # Vitest coverage output (Phase 15.5 / 2026-04-28)
 coverage/
+
+# Visual Companion brainstorm session artifacts (Phase 16.2 / 2026-04-29)
+.superpowers/

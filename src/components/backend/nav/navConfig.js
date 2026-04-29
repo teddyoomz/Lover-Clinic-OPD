@@ -129,6 +129,7 @@ export const NAV_SECTIONS = [
       { id: 'reports-daily-revenue', label: 'รายรับประจำวัน',     icon: CalendarDays,    color: 'sky',   palette: 'daily revenue รายรับ ประจำวัน daily-briefing per-day' },
       { id: 'reports-staff-sales',   label: 'ยอดขายรายพนักงาน',   icon: Users,           color: 'sky',   palette: 'staff sales doctor seller ยอดขาย รายแพทย์ พนักงาน' },
       { id: 'reports-pnl',           label: 'กำไรขาดทุน (P&L)',    icon: TrendingUp,      color: 'emerald', palette: 'pnl profit loss P&L กำไรขาดทุน profit-and-loss' },
+      { id: 'clinic-report',         label: 'รายงานคลินิก',         icon: BarChart3,        color: 'amber',   palette: 'clinic report ภาพรวม executive dashboard kpi รายงานคลินิก' },
       { id: 'reports-payment',       label: 'สรุปบัญชีรับชำระ',    icon: WalletIcon,      color: 'emerald', palette: 'payment summary บัญชี ชำระ สรุป cash transfer' },
       { id: 'reports-df-payout',     label: 'ค่ามือแพทย์ (DF)',     icon: Percent,         color: 'emerald', palette: 'df doctor fee payout commission report ค่ามือ หมอ แพทย์ จ่าย รายงาน' },
       { id: 'reports-remaining-course', label: 'คอร์สคงเหลือ',       icon: Clock,           color: 'amber',   palette: 'remaining course คอร์ส คงเหลือ remaining unused refund cancel exchange ยกเลิก คืนเงิน เปลี่ยน' },

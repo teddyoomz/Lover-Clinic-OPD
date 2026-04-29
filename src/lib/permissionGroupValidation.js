@@ -212,6 +212,7 @@ export const PERMISSION_MODULES = Object.freeze([
       { key: 'report_employee_self_expense',                label: 'ค่ามือผู้ช่วย (ตัวเอง)' },
       { key: 'report_profit_and_loss',                      label: 'รายงาน P&L' },
       { key: 'report_income',                               label: 'รายงานรายรับ' },
+      { key: 'report_clinic_summary',                       label: 'รายงานคลินิก (ภาพรวมผู้บริหาร)' },
       { key: 'clinic_report_expense',                       label: 'รายจ่ายระดับคลินิก' },
       { key: 'clinic_report_treatment_spending',            label: 'ใช้ยาระดับคลินิก' },
     ],

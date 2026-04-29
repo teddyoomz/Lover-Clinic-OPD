@@ -58,6 +58,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'reports-daily-revenue': { requires: ['sale_view'] },
   'reports-staff-sales': { requires: ['sale_view'] },
   'reports-pnl':         { requires: ['expense_view', 'expense_management'] },
+  'clinic-report':       { requires: ['report_clinic_summary'] },
   'reports-payment':     { requires: ['sale_view', 'deposit'] },
   'reports-df-payout':   { requires: ['doctor_df_management', 'treatment_df_view', 'treatment_df_management'] },
 

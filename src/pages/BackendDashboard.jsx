@@ -55,6 +55,7 @@ const StaffSalesTab          = lazy(() => import('../components/backend/reports/
 const PnLReportTab           = lazy(() => import('../components/backend/reports/PnLReportTab.jsx'));
 const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
 const RemainingCourseTab     = lazy(() => import('../components/backend/reports/RemainingCourseTab.jsx'));
+const ClinicReportTab        = lazy(() => import('../components/backend/reports/ClinicReportTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
@@ -473,6 +474,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-remaining-course' ? (
           <RemainingCourseTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'clinic-report' ? (
+          <ClinicReportTab onNavigate={setActiveTab} clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab.startsWith('reports-') ? (
           <ReportComingSoon tabId={activeTab} onBack={() => setActiveTab('reports')} clinicSettings={clinicSettings} />
         ) : activeTab === 'product-groups' ? (

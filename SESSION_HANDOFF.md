@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 30 cont.) — Phase 16.3 + 16.3-bis fix
+- **Date last updated**: 2026-04-29 EOD (session 31) — Phase 16.2 Clinic Report SHIPPED
 - **Branch**: `master`
-- **Last commit**: `ced094d fix(tab-access): Phase 16.3-bis — wire tabOverrides through useTabAccess hook`
-- **Test count**: **3771** focused (+174 cumulative this session)
+- **Last commit**: `dacf189` — feat(reports): Phase 16.2 Clinic Report executive dashboard tab
+- **Test count**: **~3863** (+92 from Phase 16.2 across 7 phase16.2-* test files; baseline was 3771)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` · master 1 commit ahead-of-prod (`ced094d` 16.3-bis fix awaiting V15 #10 deploy auth)
+- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` · master 2 commits ahead-of-prod (`ced094d` 16.3-bis + `dacf189` 16.2, awaiting V15 #10 deploy auth)
   - V15 #9 firestore.rules CHANGED — Phase 16.3 narrow match for `clinic_settings/system_config` + `be_admin_audit/system-config-*` create exception (rules version 20 → 21)
   - Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 = all 200
   - HTTP smoke: / 200, /admin 200, /api/webhook/line 401 (LINE sig — expected)
@@ -20,6 +20,30 @@
   - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
   - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
   - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
+
+### Session 2026-04-29 EOD (session 31) — Phase 16.2 Clinic Report SHIPPED
+
+Subagent-driven 14-task pipeline executed. All tasks closed with two-stage review (spec compliance + code quality). User constraint "ห้ามเปลี่ยน wiring เดิม" preserved — strictly additive: 9 NEW source files + 1 NEW hook + 7 NEW test files + 4 small additive edits (permission key row + tab gate + nav entry + lazy import).
+
+**9 brainstorm decisions locked** (see spec doc):
+- Audience: Both (clinic-wide + branch drilldown)
+- Scope: Comprehensive 12 widgets
+- Layout: Sticky filter rail + scrollable widget grid
+- Date control: 7 presets + custom picker
+- Permission: NEW `report_clinic_summary` + branch-scoped via branchIds[]
+- Export: PDF (V32 pattern: html2canvas+jsPDF direct) + CSV (UTF-8 BOM)
+- Cache: Smart hybrid (filter-keyed + manual refresh + auto-invalidate)
+- Drilldown: Link to existing detail tabs (zero new modals)
+- Architecture: Orchestrator aggregator (Approach A)
+
+**Files** (committed in this bundle): spec + plan + 9 NEW source files + 1 NEW hook + 7 NEW test files + 4 small additive edits.
+
+**Tests**: 3771 → ~3863 (+92). Build clean.
+
+**Status**: master 2 commits ahead of prod (Phase 16.3-bis `ced094d` + Phase 16.2 `dacf189`). Awaiting V15 #10 deploy auth from user when ready.
+
+Spec: `docs/superpowers/specs/2026-04-29-phase16-2-clinic-report-design.md`
+Plan: `docs/superpowers/plans/2026-04-29-phase16-2-clinic-report.md`
 
 ### Session 2026-04-29 EOD (session 30 cont.) — Phase 16.3 + V15 #9 + 16.3-bis fix
 

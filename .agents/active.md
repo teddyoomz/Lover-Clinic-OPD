@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-04-29 EOD (session 30 cont.) — Phase 16.3 LIVE + 16.3-bis fix"
-status: "Production = f4e6127 (V15 #9 LIVE). master = ced094d (Phase 16.3-bis fix, 1 commit unpushed-to-prod)."
-current_focus: "Phase 16.3 closed. Awaiting QA + decision on next sub-phase (16.2 Clinic Report next per master plan)."
+updated_at: "2026-04-29 EOD (session 31) — Phase 16.2 Clinic Report SHIPPED"
+status: "Production = f4e6127 (V15 #9 LIVE). master = dacf189 (Phase 16.3-bis + 16.2, 2 commits unpushed-to-prod)."
+current_focus: "Phase 16.2 Clinic Report SHIPPED. Awaiting QA + V15 #10 deploy auth (or proceed 16.5 RemainingCourse / 16.1 SmartAudience next)."
 branch: "master"
-last_commit: "ced094d"
-tests: 3771
+last_commit: "dacf189"
+tests: 3863
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "f4e6127"
 firestore_rules_version: 21
@@ -14,26 +14,25 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `ced094d` · production = `f4e6127` (V15 #9 LIVE) · 1 commit unpushed-to-prod (16.3-bis tab-override wire fix)
-- **3771/3771** tests pass · build clean · firestore.rules version 21
-- Dev server `localhost:5173` HMR live with all session 30-cont fixes
+- master = `dacf189` (Phase 16.2) · production = `f4e6127` (V15 #9 LIVE) · 2 commits unpushed-to-prod (16.3-bis + 16.2)
+- **~3863/3863** tests pass · build clean · firestore.rules version 21
+- Phase 16.2 Clinic Report tab SHIPPED (session 31, subagent-driven 14-task pipeline)
 
-## What this session shipped (2026-04-29 cont., 8 commits)
-See `.agents/sessions/2026-04-29-session30-cont-phase16-3.md` for detail.
-- V36 multi-writer-sweep + fail-loud + phantom-branch fallback (`ae760c7`)
-- V36-bis productName fallback + V36-tris master_data removal (`6f8af43`)
-- V36-quater purchased-in-session course-history reorder (`db6d84e`)
-- V36-quinquies real-time listeners (CourseHistoryTab + CustomerDetailView) (`0dd147c`)
-- Phase 16.3 System Settings tab — tabOverrides + defaults + featureFlags + audit (`f4e6127`, V15 #9 LIVE)
-- Phase 16.3-bis useTabAccess overrides wire fix (`ced094d`, unpushed-to-prod)
-- 2 EOD handoff docs (`c2f0661`, `e5ff48b`)
+## What session 31 shipped (2026-04-29 EOD)
+Phase 16.2 — Clinic Report executive dashboard (subagent-driven).
+
+- 9 NEW source files: clinicReportAggregator.js + clinicReportHelpers.js + clinicReportCsv.js + useClinicReport.js + ClinicReportTab.jsx + ClinicReportSidebar.jsx + 4 widgets
+- 4 additive edits: permissionGroupValidation.js + tabPermissions.js + navConfig.js + BackendDashboard.jsx
+- 7 NEW test files (+92 tests, all green)
+- Spec: `docs/superpowers/specs/2026-04-29-phase16-2-clinic-report-design.md`
+- Plan: `docs/superpowers/plans/2026-04-29-phase16-2-clinic-report.md`
 
 ## Next action
-**Phase 16.3-bis fix tested on dev (HMR live).** Awaiting:
-1. User QA — set tabOverride.<id>.hidden=true / adminOnly=true → switch to non-admin persona → verify tab hides/admin-only behaviour
-2. User decision: ship V15 #10 (deploy 16.3-bis fix to prod) OR proceed to **16.2 Clinic Report** brainstorm
+**Phase 16.2 SHIPPED.** Awaiting:
+1. User QA of Clinic Report tab (12 widgets, sticky sidebar, PDF/CSV export, drilldown links)
+2. User decision: ship V15 #10 (deploy both 16.3-bis + 16.2 to prod) OR proceed to **16.5 RemainingCourse** / **16.1 SmartAudience** next
 
 ## Outstanding user-triggered actions
-- V15 #10 deploy auth (1 commit unpushed: `ced094d`) — required to ship 16.3-bis fix to prod
+- V15 #10 deploy auth (2 commits unpushed: `ced094d` 16.3-bis + `dacf189` 16.2)
 - 16.4 Order tab intel still failing `MODULE_NOT_FOUND` (deferred)
 - Pre-launch H-bis cleanup LOCKED OFF (memory)
