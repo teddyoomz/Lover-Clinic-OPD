@@ -104,8 +104,11 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       // Phase 16.7-ter — be_courses for percent-rate price lookup on
       // unlinked treatments (no sale to read price from).
       listCourses().catch(() => []),
-      // Phase 16.7-quinquies — staff schedules for hourly-pay computation
-      listStaffSchedules({ startDate: from, endDate: to }).catch(() => []),
+      // Phase 16.7-quinquies-bis — staff schedules for hourly-pay computation.
+      // Pass NO date filter: recurring entries have date='' and get filtered
+      // out by listStaffSchedules' date-range guard. computeHourlyFromSchedules
+      // does the range filtering itself.
+      listStaffSchedules({}).catch(() => []),
     ])
       .then(([s, t, e, d, st, g, o, c, sc]) => {
         if (abort) return;

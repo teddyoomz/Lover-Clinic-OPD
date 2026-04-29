@@ -108,16 +108,30 @@ export function computeAutoPayrollForPersons(persons, filter, today) {
 /**
  * Compute hourly fee accumulation from be_staff_schedules.
  *
- * For each schedule entry:
- *   - skip if entry.type ∈ {'leave', 'off', 'holiday'} (non-working)
- *   - skip if entry.status === 'cancelled'
- *   - skip if entry.date NOT in [from, to]
- *   - skip if endTime > now (only count elapsed hours)
- *   - skip if branchIds filter active and entry.branchId not in set
- *   - hours = (endTime - startTime) in hours; cap at 24h per entry (cross-midnight safety)
- *   - accumulate person.hourlyIncome × hours into Map keyed by staffId
+ * Phase 16.7-quinquies-bis: handle BOTH `recurring` (weekly pattern with
+ * `dayOfWeek` + empty `date`) AND per-date entries. Most ProClinic-synced
+ * schedules are recurring — they describe a weekly shift pattern, not a
+ * specific calendar day. Per-date entries are typically `leave` overrides
+ * or special-day shifts.
  *
- * @param {Array<{staffId, date, startTime, endTime, type, status, branchId}>} schedules
+ * For each entry:
+ *   - skip if entry.type ∈ {'leave', 'off', 'holiday'} (non-working);
+ *     `leave` entries are collected separately as a date-based override Set
+ *   - skip if entry.status === 'cancelled'
+ *   - skip if branchIds filter active and entry.branchId not in set
+ *
+ * For PER-DATE entries (have `date` field):
+ *   - skip if date NOT in [from, to]
+ *   - skip if endTime > now (not yet elapsed)
+ *   - hours = (endTime - startTime); cap at 24
+ *
+ * For RECURRING entries (date='', dayOfWeek 0..6):
+ *   - expand into all matching weekdays in [from, to]
+ *   - for each occurrence: skip if endTime > now (not yet elapsed)
+ *   - skip occurrence if a `leave` entry exists for that staff+date
+ *   - hours per occurrence = (endTime - startTime); cap at 24
+ *
+ * @param {Array<{staffId, date, dayOfWeek, startTime, endTime, type, status, branchId}>} schedules
  * @param {Array<{id, hourlyIncome}>} persons
  * @param {{from, to, branchIds?}} filter
  * @param {Date} now — current Date (real callers pass `new Date()`)
@@ -145,6 +159,18 @@ export function computeHourlyFromSchedules(schedules, persons, filter, now) {
 
   const NON_WORKING_TYPES = new Set(['leave', 'off', 'holiday']);
 
+  // Build leave-override Set: `${staffId}|${date}` → exclude that specific
+  // recurring occurrence. Branch filter NOT applied here — leaves apply
+  // regardless of which branch the original recurring entry was for.
+  const leaveSet = new Set();
+  for (const e of schedules) {
+    if (!e) continue;
+    if (!NON_WORKING_TYPES.has(e.type)) continue;
+    const lvDate = String(e.date || '').slice(0, 10);
+    const lvStaffId = String(e.staffId || '').trim();
+    if (lvDate && lvStaffId) leaveSet.add(`${lvStaffId}|${lvDate}`);
+  }
+
   // Helper: parse 'YYYY-MM-DD' + 'HH:MM' → Date in local TZ
   const parseDateTime = (date, time) => {
     if (!date || !time) return null;
@@ -154,19 +180,76 @@ export function computeHourlyFromSchedules(schedules, persons, filter, now) {
     return new Date(y, m - 1, d, hh, mm, 0, 0);
   };
 
+  // Helper: hours between HH:MM strings, cap at 24, return 0 on invalid
+  const computeHours = (startTime, endTime) => {
+    const [sh, sm] = String(startTime || '').split(':').map(Number);
+    const [eh, em] = String(endTime || '').split(':').map(Number);
+    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    if (endMin <= startMin) return 0;
+    let h = (endMin - startMin) / 60;
+    if (h > 24) h = 24;
+    return h;
+  };
+
+  // Helper: enumerate dates in [from, to] inclusive with weekday (0..6).
+  // Capped at 3 years for safety.
+  const datesInRange = (() => {
+    const out = [];
+    const [fy, fm, fd] = from.split('-').map(Number);
+    const [ty, tm, td] = to.split('-').map(Number);
+    if (![fy, fm, fd, ty, tm, td].every(Number.isFinite)) return out;
+    const cur = new Date(fy, fm - 1, fd);
+    const end = new Date(ty, tm - 1, td);
+    const MAX = 366 * 3;
+    let count = 0;
+    while (cur <= end && count < MAX) {
+      const yy = cur.getFullYear();
+      const mm = String(cur.getMonth() + 1).padStart(2, '0');
+      const dd = String(cur.getDate()).padStart(2, '0');
+      out.push({ date: `${yy}-${mm}-${dd}`, weekday: cur.getDay() });
+      cur.setDate(cur.getDate() + 1);
+      count += 1;
+    }
+    return out;
+  })();
+
   for (const e of schedules) {
     if (!e) continue;
     if (NON_WORKING_TYPES.has(e.type)) continue;
     if (e.status === 'cancelled') continue;
-    const date = String(e.date || '').slice(0, 10);
-    if (!date) continue;
-    if (date < from || date > to) continue;
     if (branchSet && e.branchId && !branchSet.has(String(e.branchId))) continue;
     const staffId = String(e.staffId || '').trim();
     if (!staffId) continue;
     const rate = rateById.get(staffId);
     if (!rate) continue;
 
+    // RECURRING entries: expand by dayOfWeek across the date range
+    if (e.type === 'recurring' || e.type === 'weekly') {
+      if (e.dayOfWeek == null) continue; // null/undefined → not a valid weekday
+      const dow = Number(e.dayOfWeek);
+      if (!Number.isInteger(dow) || dow < 0 || dow > 6) continue;
+      const hours = computeHours(e.startTime, e.endTime);
+      if (hours <= 0) continue;
+      for (const d of datesInRange) {
+        if (d.weekday !== dow) continue;
+        if (leaveSet.has(`${staffId}|${d.date}`)) continue; // leave override
+        const endDt = parseDateTime(d.date, e.endTime);
+        if (!endDt) continue;
+        if (endDt > now) continue; // future occurrence — not yet elapsed
+        const cur = map.get(staffId) || { totalAmount: 0, totalHours: 0 };
+        cur.totalHours += hours;
+        cur.totalAmount += rate * hours;
+        map.set(staffId, cur);
+      }
+      continue;
+    }
+
+    // PER-DATE entries: explicit `date` field required
+    const date = String(e.date || '').slice(0, 10);
+    if (!date) continue;
+    if (date < from || date > to) continue;
     const startDt = parseDateTime(date, e.startTime);
     const endDt = parseDateTime(date, e.endTime);
     if (!startDt || !endDt) continue;

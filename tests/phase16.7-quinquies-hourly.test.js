@@ -86,3 +86,94 @@ describe('HR.F — adversarial', () => {
     expect(computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 29, 23, 0)).size).toBe(0);
   });
 });
+
+describe('HR.G — recurring schedules (Phase 16.7-quinquies-bis)', () => {
+  // April 2026 calendar: Mondays = 6, 13, 20, 27. Sundays = 5, 12, 19, 26.
+  // dayOfWeek: 0=Sun, 1=Mon, ..., 6=Sat
+  it('HR.G.1 — recurring Monday × 4.5h × 300 ฿ = 4 × 1350 = 5400 ฿ when all 4 Mondays elapsed', () => {
+    const schedules = [{
+      staffId: 'D-1', date: '', dayOfWeek: 1,
+      startTime: '08:30', endTime: '13:00', type: 'recurring',
+    }];
+    // Now = end of April 2026 (after April 27 Monday)
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 30, 23, 59));
+    expect(m.get('D-1').totalHours).toBe(18); // 4.5 × 4 Mondays
+    expect(m.get('D-1').totalAmount).toBe(5400); // 18 × 300
+  });
+
+  it('HR.G.2 — leave override on a Monday excludes that occurrence', () => {
+    const schedules = [
+      { staffId: 'D-1', date: '', dayOfWeek: 1, startTime: '08:30', endTime: '13:00', type: 'recurring' },
+      { staffId: 'D-1', date: '2026-04-13', dayOfWeek: null, startTime: '', endTime: '', type: 'leave' },
+    ];
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 30, 23, 59));
+    // 3 Mondays counted (April 6, 20, 27); April 13 excluded by leave override
+    expect(m.get('D-1').totalHours).toBe(13.5); // 4.5 × 3
+    expect(m.get('D-1').totalAmount).toBe(4050); // 13.5 × 300
+  });
+
+  it('HR.G.3 — recurring future occurrence (endTime > now) is skipped', () => {
+    const schedules = [{
+      staffId: 'D-1', date: '', dayOfWeek: 1,
+      startTime: '08:30', endTime: '13:00', type: 'recurring',
+    }];
+    // Now = April 14, 2026 — after April 6 + 13 Mondays elapsed; April 20 + 27 still future
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 14, 0, 0));
+    expect(m.get('D-1').totalHours).toBe(9); // 4.5 × 2
+  });
+
+  it('HR.G.4 — invalid dayOfWeek (null/undefined/7) skipped', () => {
+    const schedules = [
+      { staffId: 'D-1', date: '', dayOfWeek: null, startTime: '08:30', endTime: '13:00', type: 'recurring' },
+      { staffId: 'D-1', date: '', dayOfWeek: 7, startTime: '08:30', endTime: '13:00', type: 'recurring' },
+      { staffId: 'D-1', date: '', startTime: '08:30', endTime: '13:00', type: 'recurring' }, // missing
+    ];
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 30, 23, 59));
+    expect(m.size).toBe(0);
+  });
+
+  it('HR.G.5 — type="weekly" alias also works', () => {
+    const schedules = [{
+      staffId: 'D-1', date: '', dayOfWeek: 1, // Monday
+      startTime: '09:00', endTime: '12:00', type: 'weekly',
+    }];
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 30, 23, 59));
+    expect(m.get('D-1').totalHours).toBe(12); // 3h × 4 Mondays
+  });
+
+  it('HR.G.6 — recurring + per-date entries combine correctly', () => {
+    const schedules = [
+      { staffId: 'D-1', date: '', dayOfWeek: 1, startTime: '09:00', endTime: '12:00', type: 'recurring' }, // Mondays × 3h
+      { staffId: 'D-1', date: '2026-04-29', startTime: '14:00', endTime: '18:00', type: 'work' }, // Wed extra 4h
+    ];
+    const m = computeHourlyFromSchedules(schedules, persons, { from: '2026-04-01', to: '2026-04-30' }, new Date(2026, 3, 30, 23, 59));
+    expect(m.get('D-1').totalHours).toBe(16); // 12 (Mondays) + 4 (Wed)
+    expect(m.get('D-1').totalAmount).toBe(4800);
+  });
+
+  it('HR.G.7 — branch filter on recurring entry', () => {
+    const schedules = [
+      { staffId: 'D-1', date: '', dayOfWeek: 1, startTime: '09:00', endTime: '12:00', type: 'recurring', branchId: 'BR-A' },
+      { staffId: 'D-1', date: '', dayOfWeek: 2, startTime: '09:00', endTime: '12:00', type: 'recurring', branchId: 'BR-B' },
+    ];
+    const m = computeHourlyFromSchedules(
+      schedules, persons,
+      { from: '2026-04-01', to: '2026-04-30', branchIds: ['BR-A'] },
+      new Date(2026, 3, 30, 23, 59),
+    );
+    expect(m.get('D-1').totalHours).toBe(12); // Mondays only — BR-B Tuesdays excluded
+  });
+
+  it('HR.G.8 — recurring with empty branchId still counted (no filter applied)', () => {
+    const schedules = [{
+      staffId: 'D-1', date: '', dayOfWeek: 1,
+      startTime: '09:00', endTime: '12:00', type: 'recurring', branchId: '',
+    }];
+    const m = computeHourlyFromSchedules(
+      schedules, persons,
+      { from: '2026-04-01', to: '2026-04-30', branchIds: ['BR-A'] },
+      new Date(2026, 3, 30, 23, 59),
+    );
+    expect(m.get('D-1').totalHours).toBe(12); // empty branchId on schedule → not filtered out
+  });
+});

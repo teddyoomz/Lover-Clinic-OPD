@@ -69,8 +69,12 @@ export async function fetchExpenseReportData(filter = {}) {
     ['courses',    () => listCourses()],
     // Phase 16.7-ter — branches for sidebar empty-state diagnostics
     ['branches',   () => listBranches()],
-    // Phase 16.7-quinquies — staff schedules for hourly-pay computation
-    ['schedules', () => listStaffSchedules({ startDate: from, endDate: to }).catch(() => [])],
+    // Phase 16.7-quinquies-bis — staff schedules for hourly-pay computation.
+    // Pass NO date filter: recurring entries have date='' and get filtered
+    // out by listStaffSchedules' date-range guard. computeHourlyFromSchedules
+    // does the range filtering itself per entry type (recurring expansion +
+    // per-date passthrough + leave-override Set).
+    ['schedules', () => listStaffSchedules({}).catch(() => [])],
   ];
 
   const settled = await Promise.all(
