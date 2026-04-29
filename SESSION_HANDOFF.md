@@ -7,12 +7,33 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-30 — **V15 #10 deploy LIVE**
+- **Date last updated**: 2026-04-30 EOD — Phase 16.1 plan locked
 - **Branch**: `master`
-- **Last commit**: `821c954` — feat(orders): Phase 16.4 — Order parity gaps G1-G6 (additive UI; ProClinic /admin/order alignment)
+- **Last commit**: `f83e95c` — docs(agents): EOD 2026-04-30 V15 #10 deploy + Phase 16.1 plan
 - **Test count**: **4261** (+140 since 4121: Phase 16.7-quinquies +53, ter +37 + 1 audit-V36 fix, ter-bis +10 buffet/courseType, Phase 16.4 +31, misc adjustments +9)
 - **Build**: clean
 - **Deploy state**: ✅ **PRODUCTION = `821c954`** (V15 #10 LIVE 2026-04-30) · master in sync · 0 commits unpushed-to-prod
+
+### Session 2026-04-30 EOD — Phase 16.1 Smart Audience plan locked (after V15 #10 deploy)
+
+After V15 #10 deploy + Phase 16.4 ship, brainstormed Phase 16.1 Smart Audience tab via Skill(brainstorming) + 4 AskUserQuestion locks. Plan written to `~/.claude/plans/resume-loverclinic-continue-tidy-thunder.md` (11 files: 4 modify + 7 create + 4 tests; +99 tests target).
+
+**Brainstorm decisions** (locked):
+- Q1 Save mode: NEW be_audiences collection + named segments (CRUD UI)
+- Q2 Predicate set: All 8 (4 demographic + 4 behavioural)
+- Q3 Export: CSV download only (no LINE push v1)
+- Q4 Preview: real-time count + 10-name sample (debounced 300ms)
+
+**Schema audit findings** (in plan):
+- customer field is `source` NOT `acquisitionSource`
+- customer `branchId` not in customerValidation bounds (deferred audit)
+- sales `items[]` has productId XOR courseId, NO medications array
+- existing `downloadCSV` (csvExport.js) UTF-8 BOM ready for reuse
+- `smart_audience` permission key already declared at permissionGroupValidation.js:164
+
+Detail: `.agents/sessions/2026-04-30-phase16-1-smart-audience-plan.md`
+
+**Next action**: execute the plan via subagent-driven-development OR executing-plans. Rule K work-first-test-last. Will require V15 #11 deploy when ships (firestore.rules adds be_audiences entry).
 
 ### V15 #10 deploy (2026-04-30) — combined vercel + firestore:rules
 - Pre-probe Rule B: 6/6 endpoints 200 ✓ (chat_conversations / pc_appointments / clinic_settings × 2 / opd_sessions anon CREATE+PATCH)
@@ -266,30 +287,30 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-04-29 EOD (session 33).
+Resume LoverClinic — continue from 2026-04-30 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=31e2d79, prod=f4e6127 — 10 commits unpushed-to-prod)
-3. .agents/active.md (4121 tests pass; Phase 16.7 family shipped + 16.7-quinquies plan ready)
-4. .claude/rules/00-session-start.md (iron-clad incl. NEW Rule J extension + Rule K)
-5. .agents/sessions/2026-04-29-session33-phase16-7-family.md
+2. SESSION_HANDOFF.md (master=f83e95c, prod=821c954)
+3. .agents/active.md (4261 tests pass; Phase 16.1 plan locked)
+4. .claude/rules/00-session-start.md
+5. .agents/sessions/2026-04-30-phase16-1-smart-audience-plan.md
 
-Status: master=31e2d79, 4121/4121 tests pass, prod=f4e6127 LIVE (V15 #9)
+Status: master=f83e95c, 4261/4261 tests pass, prod=821c954 LIVE (V15 #10)
 
-Next action: EXECUTE Phase 16.7-quinquies plan
-- Spec: docs/superpowers/specs/2026-04-29-phase16-7-quinquies-payroll-design.md
-- Plan: docs/superpowers/plans/2026-04-29-phase16-7-quinquies-payroll.md
-- 22 tasks across 6 phases (A schema/UI / B sync / C payrollHelpers / D wiring / E tests / F ship)
+Next action: EXECUTE Phase 16.1 Smart Audience plan
+- Plan: ~/.claude/plans/resume-loverclinic-continue-tidy-thunder.md
+- 11 files (4 modify + 7 create + 4 test files)
+- 4 brainstorming Qs locked (be_audiences saved segments / all 8 predicates / CSV-only / real-time debounced preview)
 - Rule K work-first-test-last ordering
-- Pick mode: subagent-driven-development (recommended) OR executing-plans
+- Pick subagent-driven-development (recommended) OR executing-plans
 
 Outstanding (user-triggered):
-- V15 #10 deploy auth — 10 commits unpushed (e2e46f7 + 0daf6dd + 088e784 + 0e5b9ac + f698ed7 + a57b4e4 + 31e2d79 + carry-overs)
-- 16.5 RemainingCourse 2nd-pass / 16.1 SmartAudience / 16.4 Order parity pending
+- V15 #11 deploy auth — needed when Phase 16.1 ships (firestore.rules adds be_audiences entry)
+- 16.8 /audit-all run after Phase 16.1 ships
 - Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill-auto-trigger (incl. ORTHOGONAL plan-mode); Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval.
 /session-start
 ```
 
