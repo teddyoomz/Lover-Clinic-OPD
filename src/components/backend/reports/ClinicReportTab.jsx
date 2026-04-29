@@ -63,26 +63,27 @@ function buildPresetRange(presetId) {
 }
 
 export default function ClinicReportTab({ onNavigate }) {
+  // ── ALL HOOKS FIRST (Rules of Hooks — must be called in same order every render) ─
+  // Bug history (2026-04-29):
+  //   1. canAccessTab destructure was wrong name — useTabAccess returns `canAccess`
+  //      (NOT `canAccessTab`). Calling undefined('clinic-report') threw TypeError →
+  //      React unmounted → "black screen" UX. The Task 11 test mock locked in the
+  //      wrong name so tests passed (V11 mock-shadowed reality).
+  //   2. Permission gate was placed BEFORE useState/useMemo/useClinicReport calls,
+  //      violating Rules of Hooks (hooks count would change between renders if
+  //      `canAccess` flipped after async config load). All hooks now run first.
   const { branches, branchId: currentBranchId } = useSelectedBranch();
-  const { canAccessTab, isAdmin } = useTabAccess();
+  const { canAccess, isAdmin } = useTabAccess();
   const dashboardRootRef = useRef(null);
 
-  // Permission gate
-  if (!canAccessTab('clinic-report')) {
-    return (
-      <div className="p-6 text-center text-[var(--tx-muted)]" data-testid="clinic-report-no-access">
-        <AlertCircle className="inline mr-2" size={16} />
-        ไม่มีสิทธิ์ดูรายงานคลินิก
-      </div>
-    );
-  }
-
-  // Branch scoping — admin sees all; non-admin sees only their assigned branch
+  // Branch scoping — admin sees all; non-admin sees only their assigned branch.
+  // Defensive `branches || []` in case the provider hasn't resolved yet (legacy callers).
+  const safeBranches = Array.isArray(branches) ? branches : [];
   const effectiveBranches = isAdmin
-    ? branches
-    : branches.filter((b) => b.id === currentBranchId);
+    ? safeBranches
+    : safeBranches.filter((b) => b.id === currentBranchId);
 
-  const [selectedBranchIds, setSelectedBranchIds] = useState(
+  const [selectedBranchIds, setSelectedBranchIds] = useState(() =>
     effectiveBranches.map((b) => b.id),
   );
   const [selectedPresetId, setSelectedPresetId] = useState('last6months');
@@ -109,6 +110,16 @@ export default function ClinicReportTab({ onNavigate }) {
   );
 
   const { snapshot, loading, error, refresh } = useClinicReport(filter);
+
+  // ── ALL HOOKS DONE — now safe to early-return ────────────────────────────
+  if (!canAccess('clinic-report')) {
+    return (
+      <div className="p-6 text-center text-[var(--tx-muted)]" data-testid="clinic-report-no-access">
+        <AlertCircle className="inline mr-2" size={16} />
+        ไม่มีสิทธิ์ดูรายงานคลินิก
+      </div>
+    );
+  }
 
   const handleExportPdf = async () => {
     if (!dashboardRootRef.current) return;

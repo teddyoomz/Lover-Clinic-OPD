@@ -9,8 +9,11 @@ vi.mock('../src/lib/BranchContext.jsx', () => ({
   useSelectedBranch: () => ({ branches: [{ id: 'BR-A', name: 'ชลบุรี' }], branchId: 'BR-A' }),
   resolveBranchName: (id) => id,
 }));
+// V11 mock-shadowed-reality fix (2026-04-29): real useTabAccess returns
+// `canAccess` not `canAccessTab`. The original mock locked in the wrong name
+// → tests passed but production crashed with TypeError on tab open.
 vi.mock('../src/hooks/useTabAccess.js', () => ({
-  useTabAccess: () => ({ canAccessTab: () => true, isAdmin: true }),
+  useTabAccess: () => ({ canAccess: () => true, isAdmin: true }),
   useHasPermission: () => () => true,
 }));
 
