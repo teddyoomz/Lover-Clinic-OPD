@@ -7,12 +7,16 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 32) — Phase 16.2 LIVE-data-fix
+- **Date last updated**: 2026-04-29 EOD (session 33) — Phase 16.7 family + 16.7-quinquies plan ready
 - **Branch**: `master`
-- **Last commit**: `fdf3d41` — fix(clinic-report): real-schema field mapping (revenue / topServices dedup / topProducts / topDoctors / course util)
-- **Test count**: **3894** (+31 from session 32: P4.8/P5/P6/P7/P8/A4 helper + integration coverage)
+- **Last commit**: `31e2d79` — docs(plan): Phase 16.7-quinquies — payroll + hourly + commission implementation plan
+- **Test count**: **4121** (+227 from session 33: 16.2-bis +171, 16.7 +80, 16.7-bis +14, 16.7-ter +29, 16.7-quater +13; minor mock fixes -80)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · master **4 commits ahead-of-prod** (`ced094d` 16.3-bis + `0aa8cb6` 16.2 ship + `9642bda` black-screen fix + `fdf3d41` real-schema fix), awaiting V15 #10 deploy auth
+- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE) · master **10 commits ahead-of-prod**, awaiting V15 #10 deploy auth
+  - 5 code commits: `e2e46f7` 16.2-bis · `0daf6dd` 16.7 · `088e784` 16.7-bis · `0e5b9ac` 16.7-ter · `f698ed7` 16.7-quater
+  - 2 doc commits: `a57b4e4` 16.7-quinquies spec · `31e2d79` 16.7-quinquies plan
+  - 3 carry-over from session 32: `ced094d` 16.3-bis · `0aa8cb6` 16.2 · `9642bda` black-screen · `fdf3d41` real-schema · `951e627` doc-handoff (incl. above totals → 10 unpushed unique)
+  - firestore.rules version 21 unchanged this session
   - V15 #9 firestore.rules CHANGED — Phase 16.3 narrow match for `clinic_settings/system_config` + `be_admin_audit/system-config-*` create exception (rules version 20 → 21)
   - Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 = all 200
   - HTTP smoke: / 200, /admin 200, /api/webhook/line 401 (LINE sig — expected)
@@ -20,6 +24,40 @@
   - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
   - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
   - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
+
+### Session 2026-04-29 EOD (session 33) — Phase 16.7 Expense Report family + 16.7-quinquies plan
+
+5 ship commits + spec + plan. ExpenseReportTab + DfPayoutReportTab now surface DF/expense/commission with real production data. Phase 16.7-quinquies (payroll + hourly + commission auto-computed) designed end-to-end and planned, awaiting execution next session.
+
+**Code commits**:
+- `e2e46f7` Phase 16.2-bis — clinic-report inline explanations (Info icon popover, 16 metrics) + 5 wiring fixes (TOP-10 DOCTORS doctor-enrichment via `enrichSalesWithDoctorIdFromTreatments` + branch-awareness gaps fixed in courseUtilization, expenseRatio, newCustomersTrend, cashFlow expense leg)
+- `0daf6dd` Phase 16.7 — NEW Expense Report tab `tab=expense-report` replicating ProClinic `/admin/report/expense` 4-section layout (Doctors / Staff+Assistants / Categories / Products placeholder) using be_* canonical
+- `088e784` Phase 16.7-bis — DfPayoutReportTab 4-col extension (ค่านั่ง / ค่ามือ / เงินเดือน / รายจ่ายอื่นๆ) + QuotationFormModal seller picker uses `listAllSellers` (was `listStaff`)
+- `0e5b9ac` Phase 16.7-ter — unlinked-treatment DF helpers (`computeUnlinkedTreatmentDfBuckets` + `mergeUnlinkedDfIntoPayoutRows`) so treatments with dfEntries but no linkedSaleId now contribute DF (live verified ฿14,710 reconciled). Branch sidebar empty state with helpful migration hint replacing "ไม่มีสาขา"
+- `f698ed7` Phase 16.7-quater — dfPayoutAggregator fallback schema robustness: accept `sellerId‖id`, `percent‖share*100`, equal-split when sum=0 (43/57 April sales had all-zero percents pre-fix)
+
+**Doc commits** (Phase 16.7-quinquies):
+- `a57b4e4` spec doc — 5-stream design: salary+payday schema + auto-payroll (computed-on-read) + hourly fee from be_staff_schedules + commission from sale.sellers + ProClinic sync mapper extension
+- `31e2d79` plan doc — 22 tasks across 6 phases (A schema/UI / B sync / C payrollHelpers / D wiring / E test bank / F verify+ship). Rule K work-first test-last ordering.
+
+**Live preview_eval verified** (session 33 mid):
+- ExpenseReportTab: รายจ่ายรวม ฿14,710 · ค่ามือแพทย์ ฿14,590 · ค่ามือพนักงาน+ผู้ช่วย ฿120 · นาสาว An เอ ฿14,580 · นาสาว เอ เอ ฿10 · คุณ พิมพ์ (ผู้ช่วยแพทย์) ฿120
+- 6 of 82 treatments had dfEntries; ALL had `linkedSaleId=''` (consume-existing-course case); pre-fix all-zero. Post-fix: surface correctly.
+- 43 of 57 sales have sellers[].percent='0' (master-data drift; sellers are be_staff not be_doctors — no DF rates configured).
+- be_branches collection is EMPTY (admin needs to migrate from master_data — branch sidebar shows hint).
+
+**Rule additions this session** (locked in `.claude/rules/00-session-start.md` + `CLAUDE.md`):
+- **Rule J extended**: Plan-mode ORTHOGONAL to brainstorming. Both layers required. Drift caught + locked.
+- **Rule K added**: Work-first, Test-last for multi-stream cycles. Build all structure → review → test bank as final pass before commit. Don't interleave.
+
+**Methodology drift acknowledged**:
+- Session 32 user follow-ups (DF report wiring + clinic-report inline explanations) entered plan-mode WITHOUT explicit `Skill(brainstorming)` invocation. User caught + Rule J updated. Phase 16.7-quinquies brainstorming this session done explicitly via Skill tool — fixed.
+
+Detail: `.agents/sessions/2026-04-29-session33-phase16-7-family.md`
+
+**Next action**: Execute `docs/superpowers/plans/2026-04-29-phase16-7-quinquies-payroll.md` (22 tasks). Pick subagent-driven-development OR executing-plans.
+
+---
 
 ### Session 2026-04-29 EOD (session 32) — Phase 16.2 LIVE-data-fix
 
@@ -219,27 +257,30 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-04-29 EOD (session 32).
+Resume LoverClinic — continue from 2026-04-29 EOD (session 33).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=fdf3d41, prod=f4e6127 — 4 commits unpushed-to-prod)
-3. .agents/active.md (3894 tests pass; Phase 16.2 functional with real data)
-4. .claude/rules/00-session-start.md (iron-clad + V-table)
-5. .agents/sessions/2026-04-29-session32-phase16-2-fixes.md
+2. SESSION_HANDOFF.md (master=31e2d79, prod=f4e6127 — 10 commits unpushed-to-prod)
+3. .agents/active.md (4121 tests pass; Phase 16.7 family shipped + 16.7-quinquies plan ready)
+4. .claude/rules/00-session-start.md (iron-clad incl. NEW Rule J extension + Rule K)
+5. .agents/sessions/2026-04-29-session33-phase16-7-family.md
 
-Status: master=fdf3d41, 3894/3894 tests pass, prod=f4e6127 LIVE (V15 #9)
-Next user-requested follow-ups (queued from session 32):
-- (A) DF report wiring (รายงานจ่าย DF / ค่ามือแพทย์) — no data; แพทย์ & ผู้ช่วย page records doctor-vs-assistant; reference ProClinic รายจ่าย page; replicate via be_* data; multi-branch aware
-- (B) Clinic-report inline UI explanations per tile + chart, then audit each metric's wiring/logic
+Status: master=31e2d79, 4121/4121 tests pass, prod=f4e6127 LIVE (V15 #9)
+
+Next action: EXECUTE Phase 16.7-quinquies plan
+- Spec: docs/superpowers/specs/2026-04-29-phase16-7-quinquies-payroll-design.md
+- Plan: docs/superpowers/plans/2026-04-29-phase16-7-quinquies-payroll.md
+- 22 tasks across 6 phases (A schema/UI / B sync / C payrollHelpers / D wiring / E tests / F ship)
+- Rule K work-first-test-last ordering
+- Pick mode: subagent-driven-development (recommended) OR executing-plans
 
 Outstanding (user-triggered):
-- V15 #10 deploy auth — 4 commits unpushed (ced094d 16.3-bis + 0aa8cb6 16.2 ship + 9642bda black-screen + fdf3d41 real-schema)
-- 16.5 RemainingCourse + 16.1 SmartAudience pending per master Phase 16 plan
-- 16.4 Order tab parity audit deferred (intel at docs/proclinic-scan/admin-order-*.json)
+- V15 #10 deploy auth — 10 commits unpushed (e2e46f7 + 0daf6dd + 088e784 + 0e5b9ac + f698ed7 + a57b4e4 + 31e2d79 + carry-overs)
+- 16.5 RemainingCourse 2nd-pass / 16.1 SmartAudience / 16.4 Order parity pending
 - Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger; NO real-action clicks in preview_eval (memory-locked); H-quater (no master_data reads in feature code).
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill-auto-trigger (incl. ORTHOGONAL plan-mode); Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval.
 /session-start
 ```
 
