@@ -1,32 +1,32 @@
-// V36 — Treatment fail-loud config-impossible regression bank.
+// V36 / V36-bis / V36-tris — Treatment SKIP path regression bank.
 //
-// Locks the V36 contract (2026-04-29):
-//   - Treatment context: when _ensureProductTracked returns null AND the
-//     product genuinely doesn't exist in EITHER be_products OR
-//     master_data/products/items, throw TRACKED_UPSERT_FAILED with
-//     friendly Thai error. Was: silent SKIP movement that misled admin.
-//   - Sale context: preserves silent-skip per V35.3-ter explicit user
-//     contract ("ขายของจาก tab=sales แล้ว...สุดท้ายก็ไม่มีการตัดสต็อคจริง"
-//     was the V35.3-ter complaint; we ALREADY chose silent-skip there to
-//     match Phase 12.x sale flow). Throwing in sale context = regression.
-//   - Phase 15.7 negative-stock invariant PRESERVED: tracked product +
-//     shortfall still routes through pickNegativeTargetBatch + AUTO-NEG
-//     synthesis. NO TRACKED_UPSERT_FAILED fires for shortfall — only
-//     fires for genuine config-impossible.
+// Timeline:
+//   - V36 (2026-04-29 morning): added TRACKED_UPSERT_FAILED throw in
+//     treatment context to surface "config-impossible" cases loudly.
+//   - V36-bis (2026-04-29 afternoon): user report — Allergan 100 U treatment
+//     save threw the V36 error even though product DOES exist (id=941 with
+//     stockConfig.trackStock=true). Root cause: many submission paths set
+//     item.productId to a synthetic value (rowId from purchases, master_data
+//     clone id, empty falls to row.id) that doesn't match the canonical
+//     be_products doc id even though item.productName matches. User
+//     directive: "ห้ามพลาดแบบนี้อีก ไม่ว่าจะเป็นการ submit จากไหน".
+//     V36-bis fix:
+//       (a) Add `_resolveProductIdByName` fallback — exact-name match in
+//           be_products → rewire item.productId before auto-init.
+//       (b) REVERTED V36 throw → silent-skip with diagnostic note.
+//   - V36-tris (2026-04-29 afternoon): user directive — "ห้ามใช้ master_data
+//     ใน backend ไม่ว่าจะใช้ทำอะไร ห้ามใช้ master_data ประมวลผลเด็ดขาด ต้องใช้
+//     be_database เท่านั้น". Removed master_data legacy fallback from
+//     `_getProductStockConfig` + `_ensureProductTracked`. be_products is
+//     the only source of truth at runtime.
 //
 // Test classes:
-//   V36.E.1-5   — TRACKED_UPSERT_FAILED error shape (code, productId,
-//                 productName, Thai message)
-//   V36.E.6-10  — fail-loud branch source-grep (treatment context throws,
-//                 sale context falls through to silent-skip)
-//   V36.E.11-15 — Phase 15.7 negative-stock invariant grep (AUTO-NEG synth
-//                 + pickNegativeTargetBatch + negativeOverage marker still
-//                 present and gated by tracked=true, NOT by config-possible)
-//   V36.E.16-20 — _ensureProductTracked setDoc-merge path (be_products +
-//                 master_data branches both use merge upsert; null only
-//                 returned when genuinely no doc anywhere)
-//   V36.E.21-25 — Caller-side error propagation (TreatmentFormPage catches
-//                 stockErr.message → friendly Thai surface in alert)
+//   V36.E.6-10  — V36-bis: silent-skip with diagnostic note (NOT throw)
+//   V36.E.11-15 — Phase 15.7 negative-stock invariant preserved
+//   V36.E.16-20 — _ensureProductTracked setDoc-merge path
+//   V36.E.21-25 — caller-side error propagation
+//   V36.H.1-8   — V36-bis name-fallback resolution
+//   V36.I.1-6   — V36-tris master_data fallback removal
 
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -41,47 +41,21 @@ const TFP = readFileSync(
   'utf-8'
 );
 
-describe('V36.E.1-5 — TRACKED_UPSERT_FAILED error shape', () => {
-  test('E.1 — error code is TRACKED_UPSERT_FAILED', () => {
-    expect(BACKEND_CLIENT).toMatch(/err\.code\s*=\s*['"]TRACKED_UPSERT_FAILED['"]/);
+describe('V36.E.6-10 — V36-bis: silent-skip with diagnostic note (NOT throw)', () => {
+  test('E.6 — V36-bis: NO TRACKED_UPSERT_FAILED throw in _deductOneItem', () => {
+    // V36 throw was reverted in V36-bis per user directive
+    // "ห้ามพลาดแบบนี้อีก ไม่ว่าจะเป็นการ submit จากไหน".
+    // _deductOneItem must NOT throw a TRACKED_UPSERT_FAILED error.
+    expect(BACKEND_CLIENT).not.toMatch(/throw\s+err;[\s\S]{0,300}TRACKED_UPSERT_FAILED/);
+    expect(BACKEND_CLIENT).not.toMatch(/err\.code\s*=\s*['"]TRACKED_UPSERT_FAILED['"]/);
   });
 
-  test('E.2 — error carries productId field', () => {
-    expect(BACKEND_CLIENT).toMatch(/err\.productId\s*=\s*item\.productId/);
-  });
-
-  test('E.3 — error carries productName field', () => {
-    expect(BACKEND_CLIENT).toMatch(/err\.productName\s*=\s*item\.productName/);
-  });
-
-  test('E.4 — Thai error message references "ไม่สามารถตั้งค่า" + product name', () => {
-    expect(BACKEND_CLIENT).toMatch(/ไม่สามารถตั้งค่าการตัดสต็อคของสินค้า/);
-    // Message uses item.productName fallback to item.productId
-    expect(BACKEND_CLIENT).toMatch(/item\.productName\s*\|\|\s*item\.productId/);
-  });
-
-  test('E.5 — Thai error message points admin to ProductFormModal', () => {
-    expect(BACKEND_CLIENT).toMatch(/ข้อมูลพื้นฐาน\s*→\s*สินค้า/);
-  });
-});
-
-describe('V36.E.6-10 — fail-loud branch source-grep', () => {
-  test('E.6 — throw is gated to context==="treatment" only', () => {
-    // The else-if branch must check context === 'treatment' BEFORE throw.
-    // Comment block + Thai error message before the throw add up to ~1300
-    // chars so window is generous.
-    expect(BACKEND_CLIENT).toMatch(/else if \(context === ['"]treatment['"]\)\s*\{[\s\S]{0,2500}TRACKED_UPSERT_FAILED/);
-  });
-
-  test('E.7 — sale context falls through to legacy silent-skip', () => {
-    // Comment must explicitly say sale context preserves silent-skip
-    expect(BACKEND_CLIENT).toMatch(/sale context.*silent-skip/i);
-    // The SKIP emit at line ~5755-5782 must still exist
+  test('E.7 — silent-skip emit at !tracked still exists with Thai note', () => {
     expect(BACKEND_CLIENT).toMatch(/note: reason === ['"]trackStock-false['"]/);
     expect(BACKEND_CLIENT).toMatch(/product not yet configured for stock tracking/);
   });
 
-  test('E.8 — auto-init still fires for sale context (V35.3-ter preserved)', () => {
+  test('E.8 — auto-init still fires for sale + treatment context (V35.3-ter preserved)', () => {
     expect(BACKEND_CLIENT).toMatch(/if \(!tracked && \(context === ['"]treatment['"] \|\| context === ['"]sale['"]\)\)/);
   });
 
@@ -89,8 +63,8 @@ describe('V36.E.6-10 — fail-loud branch source-grep', () => {
     expect(BACKEND_CLIENT).toMatch(/V35\.3-ter/);
   });
 
-  test('E.10 — V36 marker comment near the throw', () => {
-    expect(BACKEND_CLIENT).toMatch(/V36 \(2026-04-29\)[\s\S]{0,200}fail-loud/);
+  test('E.10 — V36-bis revert marker comment present', () => {
+    expect(BACKEND_CLIENT).toMatch(/V36-bis \(2026-04-29\)[\s\S]{0,500}REVERTED/);
   });
 });
 
@@ -109,57 +83,52 @@ describe('V36.E.11-15 — Phase 15.7 negative-stock invariant preserved', () => 
     expect(BACKEND_CLIENT).toMatch(/negativeOverage/);
   });
 
-  test('E.14 — shortfall path is gated on context AND tracked=true (NOT TRACKED_UPSERT_FAILED gate)', () => {
-    // V36 throw fires BEFORE the tracked-with-shortfall path. The shortfall
-    // path is `if (plan.shortfall > 0 && (context === 'treatment' || ...))`.
-    // It must remain reachable from the tracked=true branch (V35.3-ter
-    // auto-init succeeded → tracked=true → FIFO with shortfall → AUTO-NEG).
+  test('E.14 — shortfall path is gated on context AND reachable from tracked=true', () => {
+    // The shortfall path is `if (plan.shortfall > 0 && (context === 'treatment' || ...))`.
+    // V35.3-ter auto-init succeeds → tracked=true → FIFO with shortfall → AUTO-NEG.
     expect(BACKEND_CLIENT).toMatch(/if \(plan\.shortfall > 0 && \(context === ['"]treatment['"] \|\| context === ['"]sale['"]\)\)/);
   });
 
-  test('E.15 — V36 throw NOT fired for shortfall (only config-impossible)', () => {
-    // Source-grep: the throw is inside the !tracked block, NOT inside the
-    // shortfall block. shortfall block lives lower in _deductOneItem and
-    // never throws TRACKED_UPSERT_FAILED.
-    const throwIdx = BACKEND_CLIENT.indexOf("err.code = 'TRACKED_UPSERT_FAILED'");
-    expect(throwIdx).toBeGreaterThan(0);
-    const after = BACKEND_CLIENT.substring(throwIdx, throwIdx + 1500);
-    // The shortfall path uses `pickNegativeTargetBatch` — must NOT appear
-    // INSIDE the throw block (between throw and end of else-if).
-    const blockEnd = after.indexOf('}');
-    expect(blockEnd).toBeGreaterThan(0);
-    const block = after.substring(0, blockEnd);
-    expect(block).not.toMatch(/pickNegativeTargetBatch/);
+  test('E.15 — Phase 15.7 unchanged by V36-bis revert (negative-stock allowance intact)', () => {
+    // Confirm pickNegativeTargetBatch + autoNegative + negativeOverage all
+    // still wire together inside _deductOneItem (not orphaned).
+    const fnStart = BACKEND_CLIENT.indexOf('async function _deductOneItem(');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 14000);
+    expect(body).toMatch(/pickNegativeTargetBatch/);
+    expect(body).toMatch(/autoNegative:\s*true/);
+    expect(body).toMatch(/negativeOverage/);
   });
 });
 
-describe('V36.E.16-20 — _ensureProductTracked setDoc-merge path', () => {
+describe('V36.E.16-20 — _ensureProductTracked setDoc-merge path (V36-tris: be_products only)', () => {
   test('E.16 — be_products branch uses setDoc with merge:true', () => {
     const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
     const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
     const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
-    // be_products branch
-    expect(body).toMatch(/be_products[\s\S]{0,500}setDoc\(beRef,[\s\S]{0,300}merge:\s*true/);
+    expect(body).toMatch(/setDoc\(beRef,[\s\S]{0,300}merge:\s*true/);
   });
 
-  test('E.17 — master_data branch uses setDoc with merge:true', () => {
+  test('E.17 — V36-tris: master_data branch REMOVED', () => {
     const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
     const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
     const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
-    expect(body).toMatch(/master_data[\s\S]{0,500}setDoc\(legacyRef,[\s\S]{0,300}merge:\s*true/);
+    // No more master_data references in this helper
+    expect(body).not.toMatch(/master_data/);
+    expect(body).not.toMatch(/legacyRef/);
+    expect(body).not.toMatch(/legacySnap/);
   });
 
-  test('E.18 — return null only when both be_products + master_data missing', () => {
+  test('E.18 — return null when be_products doc missing', () => {
     const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
     const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
     const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
-    // The structure is: if be exists → setDoc + return baseConfig; else if legacy exists → setDoc + return baseConfig; else return null.
-    expect(body).toMatch(/if \(beSnap\.exists\(\)\)\s*\{[\s\S]+?return baseConfig;/);
-    expect(body).toMatch(/if \(legacySnap\.exists\(\)\)\s*\{[\s\S]+?return baseConfig;/);
-    expect(body).toMatch(/return null;[\s\S]{0,200}\}\s*catch/);
+    // Structure: if (!beSnap.exists()) return null; else setDoc + return baseConfig.
+    expect(body).toMatch(/if \(!beSnap\.exists\(\)\)\s*return null/);
+    expect(body).toMatch(/return baseConfig/);
   });
 
-  test('E.19 — no updateDoc on either branch (V36 contract)', () => {
+  test('E.19 — no updateDoc anywhere in helper (V36 setDoc-merge contract)', () => {
     const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
     const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
     const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
@@ -194,12 +163,159 @@ describe('V36.E.21-25 — caller-side error propagation', () => {
     expect(TFP).toMatch(/catch\s*\(stockErr\)\s*\{[\s\S]+?ตัดสต็อกการรักษาไม่สำเร็จ/);
   });
 
-  test('E.24 — Thai error surface uses stockErr.message (carries V36 friendly text)', () => {
+  test('E.24 — Thai error surface uses stockErr.message', () => {
     expect(TFP).toMatch(/ตัดสต็อกการรักษาไม่สำเร็จ:\s*\$\{stockErr\.message\}/);
   });
 
   test('E.25 — branchId on deductStockForTreatment call comes from useSelectedBranch (V36 Phase 1.5)', () => {
     expect(TFP).toMatch(/useSelectedBranch\s*\(\s*\)/);
     expect(TFP).toMatch(/branchId:\s*SELECTED_BRANCH_ID/);
+  });
+});
+
+describe('V36.H — V36-bis productName fallback resolution', () => {
+  test('H.1 — _resolveProductIdByName helper exists', () => {
+    expect(BACKEND_CLIENT).toMatch(/async function _resolveProductIdByName/);
+  });
+
+  test('H.2 — helper does case-insensitive trimmed match', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _resolveProductIdByName');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 2000);
+    expect(body).toMatch(/\.trim\(\)\.toLowerCase\(\)/);
+  });
+
+  test('H.3 — helper queries via listProducts (be_products only — V36-tris)', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _resolveProductIdByName');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 2000);
+    expect(body).toMatch(/listProducts\s*\(/);
+    // Should NOT touch master_data
+    expect(body).not.toMatch(/master_data/);
+  });
+
+  test('H.4 — _deductOneItem invokes name fallback when initial id lookup fails', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _deductOneItem(');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 14000);
+    expect(body).toMatch(/_resolveProductIdByName/);
+  });
+
+  test('H.5 — name fallback gated on !tracked + productName + (treatment|sale) context', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _deductOneItem(');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 14000);
+    // The fallback block uses item.productName to resolve
+    expect(body).toMatch(/!tracked && item\.productName/);
+  });
+
+  test('H.6 — lookupProductId variable carries resolved id for downstream FIFO', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _deductOneItem(');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 14000);
+    expect(body).toMatch(/let lookupProductId/);
+    // listStockBatches uses lookupProductId for FIFO query
+    expect(body).toMatch(/listStockBatches\(\{ productId: lookupProductId/);
+    // pickNegativeTargetBatch uses lookupProductId for negative-stock target
+    expect(body).toMatch(/productId: lookupProductId/);
+  });
+
+  test('H.7 — console.info trace when name fallback resolves', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _deductOneItem(');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 14000);
+    expect(body).toMatch(/console\.info\([\s\S]{0,200}name fallback/);
+  });
+
+  test('H.8 — V36-bis marker comment near the name-fallback block', () => {
+    expect(BACKEND_CLIENT).toMatch(/V36-bis \(2026-04-29\)[\s\S]{0,500}name fallback/);
+  });
+});
+
+describe('V36.J — V36-bis course-history audit fix (deductCourseItems after createBackendTreatment)', () => {
+  test('J.1 — deductCourseItems is called AFTER createBackendTreatment in TFP handleSubmit', () => {
+    const createIdx = TFP.indexOf('createBackendTreatment(customerId, backendDetail)');
+    const deductIdx = TFP.indexOf('await deductCourseItems(customerId, existingDeductions');
+    expect(createIdx).toBeGreaterThan(0);
+    expect(deductIdx).toBeGreaterThan(0);
+    expect(deductIdx).toBeGreaterThan(createIdx);
+  });
+
+  test('J.2 — deductCourseItems passes the resolved newTid (result.treatmentId || treatmentId)', () => {
+    expect(TFP).toMatch(/const newTid = result\.treatmentId \|\| treatmentId/);
+    expect(TFP).toMatch(/treatmentId: newTid/);
+  });
+
+  test('J.3 — atomic rollback on course-deduct failure: deleteBackendTreatment fires for create-mode orphans', () => {
+    expect(TFP).toMatch(/catch \(courseErr\)\s*\{[\s\S]+?deleteBackendTreatment/);
+    // edit-mode skip: only delete when !isEdit
+    expect(TFP).toMatch(/if \(!isEdit && result\?\.treatmentId\)/);
+  });
+
+  test('J.4 — Thai error prefix "ตัดคอร์สไม่สำเร็จ" on course-deduct failure', () => {
+    expect(TFP).toMatch(/ตัดคอร์สไม่สำเร็จ:\s*\$\{courseErr\.message\}/);
+  });
+
+  test('J.5 — deductCourseItems audit emit (backendClient.js) gated on opts.treatmentId', () => {
+    expect(BACKEND_CLIENT).toMatch(/Phase 16\.5-quater[\s\S]{0,400}kind=['"]use['"]/);
+    expect(BACKEND_CLIENT).toMatch(/if \(opts\.treatmentId\)\s*\{[\s\S]{0,800}kind:\s*['"]use['"]/);
+  });
+
+  test('J.6 — V36-bis marker comment near the reorder', () => {
+    expect(TFP).toMatch(/V36-bis \(2026-04-29\)[\s\S]{0,800}deductCourseItems[\s\S]{0,200}createBackendTreatment/);
+  });
+});
+
+describe('V36.I — V36-tris master_data fallback removal', () => {
+  test('I.1 — _getProductStockConfig does NOT read master_data', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _getProductStockConfig');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 1500);
+    expect(body).not.toMatch(/master_data/);
+    expect(body).not.toMatch(/legacyRef/);
+    expect(body).not.toMatch(/legacySnap/);
+  });
+
+  test('I.2 — _ensureProductTracked does NOT read master_data', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
+    expect(body).not.toMatch(/master_data/);
+    expect(body).not.toMatch(/legacyRef/);
+    expect(body).not.toMatch(/legacySnap/);
+  });
+
+  test('I.3 — _resolveProductIdByName uses listProducts (be_products) only', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _resolveProductIdByName');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 2000);
+    expect(body).toMatch(/listProducts/);
+    expect(body).not.toMatch(/master_data/);
+  });
+
+  test('I.4 — V36-tris marker comment in _getProductStockConfig', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _getProductStockConfig');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 1500);
+    expect(body).toMatch(/V36-tris/);
+  });
+
+  test('I.5 — V36-tris marker comment in _ensureProductTracked', () => {
+    const fnStart = BACKEND_CLIENT.indexOf('async function _ensureProductTracked');
+    const fnEnd = BACKEND_CLIENT.indexOf('\nasync function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 5000);
+    expect(body).toMatch(/V36-tris/);
+  });
+
+  test('I.6 — listProducts reads be_products via productsCol helper (no master_data) — Phase 14.10-tris contract', () => {
+    // productsCol helper resolves to be_products collection.
+    expect(BACKEND_CLIENT).toMatch(/const productsCol\s*=\s*\(\)\s*=>\s*collection\(db,\s*\.\.\.basePath\(\),\s*['"]be_products['"]/);
+    // listProducts uses productsCol (NOT a master_data path).
+    const fnStart = BACKEND_CLIENT.indexOf('export async function listProducts');
+    expect(fnStart).toBeGreaterThan(0);
+    const fnEnd = BACKEND_CLIENT.indexOf('\nexport async function ', fnStart + 30);
+    const body = BACKEND_CLIENT.substring(fnStart, fnEnd > 0 ? fnEnd : fnStart + 4000);
+    expect(body).toMatch(/productsCol/);
+    expect(body).not.toMatch(/master_data/);
   });
 });

@@ -217,10 +217,13 @@ describe('Phase 15.7 — Negative stock flow simulate', () => {
       // Search the whole _deductOneItem body for the FK-check + the
       // negative-stock-synthetic-batch context label (proves the V35 FK
       // invariant guards the synthetic-batch path specifically).
+      // V36-bis (2026-04-29): synthetic batch creation now uses
+      // `lookupProductId` (resolved by name fallback) instead of
+      // `item.productId` directly. Either matches the FK-invariant.
       const fn = BackendClientSrc.split('async function _deductOneItem')[1] || '';
       const nextFn = fn.indexOf('\nasync function ');
       const body = nextFn > 0 ? fn.slice(0, nextFn) : fn;
-      expect(body).toMatch(/_assertProductExists\(\s*item\.productId/);
+      expect(body).toMatch(/_assertProductExists\(\s*(item\.productId|lookupProductId)/);
       expect(body).toMatch(/negative-stock-synthetic-batch/);
     });
   });

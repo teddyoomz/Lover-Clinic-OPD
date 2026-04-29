@@ -207,7 +207,10 @@ describe('V36.D — V36 marker comments present', () => {
     expect(updateDocCount).toBe(0);
   });
 
-  test('D.4 — V36 marker on _ensureProductTracked refactor', () => {
-    expect(BACKEND_CLIENT).toMatch(/V36 \(2026-04-29\)[\s\S]{0,400}setDoc\(\{merge:true\}\)/);
+  test('D.4 — V36-tris marker on _ensureProductTracked refactor (sync-staging fallback removed)', () => {
+    // V36 originally introduced setDoc({merge:true}) for be_products + master_data.
+    // V36-tris (2026-04-29 user directive) removed the master_data branch.
+    // The marker in code is now V36-tris.
+    expect(BACKEND_CLIENT).toMatch(/V36-tris \(2026-04-29\)[\s\S]{0,800}setDoc\(\{merge:true\}\)/);
   });
 });

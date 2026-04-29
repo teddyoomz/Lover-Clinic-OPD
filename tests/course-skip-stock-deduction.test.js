@@ -379,9 +379,15 @@ describe('CSS.F — _ensureProductTracked single-writer + vendor-receive refacto
     expect(helperBlock?.[0]).toMatch(/return existing/);
   });
 
-  it('F.4 helper falls back to legacy master_data when be_products has no doc', () => {
+  it('F.4 V36-tris: helper does NOT read legacy master_data (per iron-clad H-quater)', () => {
+    // User directive 2026-04-29: "ห้ามใช้ master_data ใน backend ไม่ว่าจะใช้
+    // ทำอะไร". V36-tris removed the master_data fallback from
+    // _ensureProductTracked. be_products is the single source of truth at
+    // runtime. Iron-clad H-quater locks this in.
     const helperBlock = backendClientSrc.match(/async function _ensureProductTracked[\s\S]+?\n\}/);
-    expect(helperBlock?.[0]).toMatch(/master_data['"],\s*['"]products['"],\s*['"]items['"]/);
+    expect(helperBlock?.[0]).not.toMatch(/master_data/);
+    expect(helperBlock?.[0]).not.toMatch(/legacyRef/);
+    expect(helperBlock?.[0]).not.toMatch(/legacySnap/);
   });
 
   it('F.5 vendor-receive _buildBatchFromOrderItem now calls shared helper (not inline setDoc)', () => {
@@ -441,24 +447,26 @@ describe('CSS.G — _deductOneItem decision tree + context threading', () => {
     // V35.3-ter (2026-04-28 user-confirmed): user reported sale-path
     // products silent-skipped despite having batches. Extended auto-init
     // to fire on both contexts so sale + treatment behave identically.
+    // V36-bis (2026-04-29): _ensureProductTracked now called with
+    // `lookupProductId` (resolved by name fallback) instead of
+    // `item.productId` directly. Either matches the contract.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    // V36 (2026-04-29) — slice 6000 → 8000 (V36 fail-loud throw block
-    // added ~1500 chars between auto-init and silent-skip).
-    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
+    const slice = backendClientSrc.slice(fnStart, fnStart + 9000);
     expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
-    expect(slice).toMatch(/_ensureProductTracked\(item\.productId/);
+    expect(slice).toMatch(/_ensureProductTracked\((item\.productId|lookupProductId)/);
   });
 
   it('G.6 decision tree branch 4 — silent-skip remains for unknown/manual context only (V21 anti-regression)', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    // V36 (2026-04-29) — slice 6000 → 8000 to keep silent-skip emit in window.
-    const slice = backendClientSrc.slice(fnStart, fnStart + 8000);
+    // V36-bis: window grew further (name-fallback + reverted throw block).
+    const slice = backendClientSrc.slice(fnStart, fnStart + 9000);
     // Silent-skip note still exists as defensive fallback for callers
     // that don't pass a known context (treatment/sale handled above).
     expect(slice).toMatch(/product not yet configured for stock tracking/);
     // V21 anti-regression — auto-init branch must come BEFORE silent-skip
     // emit so the auto-init has a chance to fire first.
-    const autoInitIdx = slice.search(/_ensureProductTracked\(item\.productId/);
+    // V36-bis: matches either item.productId or lookupProductId variant.
+    const autoInitIdx = slice.search(/_ensureProductTracked\((item\.productId|lookupProductId)/);
     const silentSkipIdx = slice.search(/product not yet configured for stock tracking/);
     expect(autoInitIdx).toBeGreaterThan(0);
     expect(silentSkipIdx).toBeGreaterThan(0);

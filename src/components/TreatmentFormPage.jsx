@@ -2101,18 +2101,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
           if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
         }
-        if (existingDeductions.length > 0) {
-          const { deductCourseItems } = await import('../lib/backendClient.js');
-          // Phase 16.5-quater (2026-04-29) — pass treatmentId + staff so the
-          // deduction emits a be_course_changes audit entry (kind='use'),
-          // visible in CustomerDetailView ประวัติการใช้คอร์ส tab.
-          const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
-          await deductCourseItems(customerId, existingDeductions, {
-            treatmentId,
-            staffId: doctorId || '',
-            staffName: treatingDoctor?.name || '',
-          });
-        }
+        // V36-bis (2026-04-29) — moved deductCourseItems to AFTER
+        // createBackendTreatment. Pre-V36-bis: in create mode, treatmentId
+        // prop was empty when deductCourseItems ran → opts.treatmentId
+        // gate at backendClient.js:938 was falsy → audit emit (kind='use')
+        // skipped silently → "ประวัติการใช้คอร์ส" tab showed nothing for
+        // newly-created treatments. User report 2026-04-29: "คอร์สที่ตัด
+        // ผ่านการรักษาในแต่ละครั้ง ไม่ขึ้นในประวัติการใช้คอร์ส".
+        // The reorder is safe because:
+        //   (a) edit-mode reverseCourseDeduction still fires above (line 2099)
+        //       before any new write
+        //   (b) if course deduction throws (shortfall), we delete the orphan
+        //       treatment to maintain atomic-rollback contract
+        // See V36-bis test V36.J in tests/v36-treatment-skip-fail-loud.test.js
 
         // Phase 8b — Stock: on EDIT, reverse old treatment stock BEFORE the doc update.
         // Phase 14.7.F (2026-04-26) — gate the reverse+rededuct on a stock-shape
@@ -2142,6 +2143,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           ? await updateBackendTreatment(treatmentId, backendDetail)
           : await createBackendTreatment(customerId, backendDetail);
         await rebuildTreatmentSummary(customerId);
+
+        // V36-bis (2026-04-29) — deductCourseItems moved here so we have
+        // the real treatmentId (from result.treatmentId on create OR from
+        // treatmentId prop on edit). The audit emit (kind='use') at
+        // backendClient.js:938 fires only when opts.treatmentId is set.
+        if (existingDeductions.length > 0) {
+          const newTid = result.treatmentId || treatmentId;
+          const { deductCourseItems } = await import('../lib/backendClient.js');
+          const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
+          try {
+            await deductCourseItems(customerId, existingDeductions, {
+              treatmentId: newTid,
+              staffId: doctorId || '',
+              staffName: treatingDoctor?.name || '',
+            });
+          } catch (courseErr) {
+            // Atomic-rollback contract: if course deduction throws (e.g.
+            // shortfall), delete the just-created treatment doc so the
+            // user can fix and retry without an orphan record.
+            // Edit-mode preserves the original doc — no rollback needed.
+            if (!isEdit && result?.treatmentId) {
+              try {
+                const { deleteBackendTreatment } = await import('../lib/backendClient.js');
+                await deleteBackendTreatment(result.treatmentId);
+              } catch (rbErr) {
+                console.error('[TreatmentForm] orphan-treatment rollback failed:', rbErr);
+              }
+            }
+            throw new Error(`ตัดคอร์สไม่สำเร็จ: ${courseErr.message}`);
+          }
+        }
 
         // Phase 8b — Stock: deduct treatment-side items.
         //

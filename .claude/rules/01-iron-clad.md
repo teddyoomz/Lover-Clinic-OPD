@@ -90,6 +90,22 @@
 - Denormalize field บน existing doc > สร้าง collection ใหม่. 99% ของคลินิก query ทำได้ client-side filter.
 - ห้าม `be_*_log` / `be_*_history` collection ถ้าไม่มี reader จริง — เก็บ array บน parent doc พอ
 
+### H-quater. master_data is NOT readable from feature code (V36-tris extension, 2026-04-29)
+User directive (verbatim): "ห้ามใช้ master_data ใน backend ไม่ว่าจะใช้ทำอะไร ห้ามใช้ master_data ประมวลผลเด็ดขาด ต้องใช้ be_database เท่านั้น ป้องกันโดยลบ masterdata ดิบที่ sync มาทั้งหมดในโปรแกรม ให้มีแค่ data จาก be data เท่านั้น".
+
+This extends iron-clad H beyond "no write-back to ProClinic" → **NO READS from `master_data/*` in feature code AT ALL**:
+- Feature code (treatment / sale / stock deduct + ensure / ANY backend tab) reads ONLY from `be_*` collections.
+- The ONLY exceptions remain MasterDataTab.jsx (sanctioned sync UI per H-bis) and the migrator helpers (one-shot DEV scaffolding that copies master_data → be_*).
+- All other reads of `master_data/*` are violations even if "just for fallback / safety / legacy compat".
+- Wipe endpoint `/api/admin/wipe-master-data` (V36-tris) deletes the raw sync artifacts so they can't accidentally be read at runtime — admin runs this once master-data → be_* migration is complete.
+
+**Anti-pattern**: "fall back to master_data when be_* is empty" / "master_data fallback retained as a read-through safety". Both are violations of H-quater. If be_* doesn't have the data, run the migrator (one-shot, DEV-only, then wipe). Don't silently degrade to master_data reads at runtime.
+
+**Audit trigger**: every `master_data` read in `src/lib/**` and `src/components/**` (outside MasterDataTab + migrator paths) is a violation. Grep target:
+```
+grep -rn "master_data" src/lib src/components | grep -v MasterDataTab | grep -v "// " | grep -v migrator
+```
+
 ### D. Continuous Improvement (iron-clad 2026-04-19)
 **ยิ่งทำงาน ยิ่งเรียนรู้ ยิ่งเก่งขึ้น** — ทุก session ต้องเหลาเครื่องมือให้คมขึ้น.
 - Bug found → fix + **adversarial test** + update/create audit skill invariant + เพิ่ม skill ใน `audit-all`

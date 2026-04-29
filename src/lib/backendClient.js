@@ -5470,21 +5470,52 @@ async function _stockLib() {
 // read-through safety for docs that never migrated.
 async function _getProductStockConfig(productId) {
   if (!productId) return null;
+  // V36-tris (2026-04-29) — user directive: legacy sync-staging fallback
+  // REMOVED. be_products is the single source of truth at runtime per
+  // iron-clad H. Feature code reads ONLY be_* collections.
+  // Wipe endpoint /api/admin/wipe-master-data prevents accidental
+  // cross-pollination from sync-staging artifacts.
   try {
     const beRef = doc(db, ...basePath(), 'be_products', String(productId));
     const beSnap = await getDoc(beRef);
-    if (beSnap.exists()) {
-      const data = beSnap.data();
-      if (data.stockConfig) return data.stockConfig;
-      // be_products doc exists but no stockConfig yet — fall through to
-      // legacy master_data fallback before giving up, in case the
-      // auto-opt-in write landed there under the old code path.
-    }
-    const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
-    const legacySnap = await getDoc(legacyRef);
-    if (!legacySnap.exists()) return null;
-    return legacySnap.data().stockConfig || null;
+    if (!beSnap.exists()) return null;
+    return beSnap.data().stockConfig || null;
   } catch {
+    return null;
+  }
+}
+
+// V36-bis (2026-04-29) — productName fallback resolver. Many submission
+// paths set item.productId to a synthetic value:
+//   - Course/promotion buy modal → rowId like "purchased-{ts}-{idx}"
+//   - Cross-collection clone IDs (be_products id != legacy sync id)
+//   - Manual-entry forms → empty productId, falls to row.id
+//   - Pre-V20 multi-branch test data → mismatched productIds
+// Pre-V36-bis: those paths silent-SKIPped (V31 anti-pattern) or with
+// V36 throw fail-loud → user-visible "ตัดสต็อกการรักษาไม่สำเร็จ" alert
+// for products that GENUINELY exist (just under a different doc id).
+//
+// V36-bis fix: when productId can't resolve, try EXACT-NAME match in
+// be_products. If found, rewire item.productId to the resolved doc id
+// and continue normal FIFO deduct. User directive 2026-04-29:
+//   "ห้ามพลาดแบบนี้อีก ไม่ว่าจะเป็นการ submit จากไหน"
+//
+// Returns matched be_products doc ID (string) or null. Case-insensitive,
+// trimmed exact match. Defensive: catches all errors.
+async function _resolveProductIdByName(productName) {
+  if (!productName || typeof productName !== 'string') return null;
+  const target = productName.trim().toLowerCase();
+  if (!target) return null;
+  try {
+    const all = await listProducts();
+    const match = (all || []).find((p) => {
+      if (!p) return false;
+      const n = String(p.productName || p.name || '').trim().toLowerCase();
+      return n === target;
+    });
+    return match ? String(match.id || match.productId || '') : null;
+  } catch (e) {
+    console.warn('[_resolveProductIdByName] lookup failed for', productName, e);
     return null;
   }
 }
@@ -5523,40 +5554,27 @@ async function _ensureProductTracked(productId, opts = {}) {
     isControlled: !!existing?.isControlled,
   };
 
-  // V36 (2026-04-29) — switch from updateDoc → setDoc({merge:true}) so the
-  // helper doesn't silently fail when (a) the be_products doc exists but with
-  // no stockConfig field, or (b) the doc is missing entirely. setDoc with
-  // merge upserts the field without clobbering siblings AND creates the doc
-  // when missing. Returns null ONLY when the product genuinely doesn't exist
-  // in EITHER be_products OR master_data/products/items — that is the
-  // genuine "config-impossible" state which the caller (V36 fail-loud)
-  // surfaces as TRACKED_UPSERT_FAILED in treatment context.
+  // V36-tris (2026-04-29) — REMOVED legacy sync-staging fallback per user
+  // directive. be_products is the single source of truth.
+  // setDoc({merge:true}) upserts stockConfig without clobbering siblings;
+  // if be_products doc is missing entirely, returns null. The V36-bis
+  // name-fallback in `_deductOneItem` resolves the common case where
+  // item.productId is a synthetic value but item.productName matches a
+  // real be_products doc → caller rewires to the resolved id BEFORE this
+  // helper is called.
   try {
     const beRef = doc(db, ...basePath(), 'be_products', String(productId));
     const beSnap = await getDoc(beRef);
-    if (beSnap.exists()) {
-      await setDoc(beRef, {
-        stockConfig: baseConfig,
-        _stockConfigSetBy: setBy,
-        _stockConfigSetAt: now,
-      }, { merge: true });
-      return baseConfig;
-    }
-    const legacyRef = doc(db, ...basePath(), 'master_data', 'products', 'items', String(productId));
-    const legacySnap = await getDoc(legacyRef);
-    if (legacySnap.exists()) {
-      await setDoc(legacyRef, {
-        stockConfig: baseConfig,
-        _stockConfigSetBy: setBy,
-        _stockConfigSetAt: now,
-      }, { merge: true });
-      return baseConfig;
-    }
-    return null;
+    if (!beSnap.exists()) return null;
+    await setDoc(beRef, {
+      stockConfig: baseConfig,
+      _stockConfigSetBy: setBy,
+      _stockConfigSetAt: now,
+    }, { merge: true });
+    return baseConfig;
   } catch (e) {
-    // Non-fatal — log + return null. Caller decides whether to throw
-    // (V36: treatment context throws TRACKED_UPSERT_FAILED; sale context
-    // preserves silent-skip per V35.3-ter contract).
+    // Non-fatal — log + return null. V36-bis: callers no longer throw
+    // (silent-skip with diagnostic note in Movement Log instead).
     console.warn('[_ensureProductTracked] failed for', productId, e);
     return null;
   }
@@ -5742,6 +5760,33 @@ async function _deductOneItem({
   let cfg = await _getProductStockConfig(item.productId);
   let tracked = cfg && cfg.trackStock === true;
 
+  // V36-bis (2026-04-29) — productName fallback. User report: "ตัดรักษา
+  // Allergan 100u แล้วขึ้นว่าไม่มีในระบบ ทั้งๆที่ก็มี ไม่งั้น dropdown จะมา
+  // จากไหน". Many submission paths pass a synthetic productId (purchase
+  // rowId, master_data clone id, empty falls to row.id) that doesn't
+  // match the canonical be_products doc id even though the product
+  // genuinely exists by NAME. Try the name-fallback BEFORE auto-init so
+  // we can rewire to the right doc.
+  let lookupProductId = item.productId;
+  if (!tracked && item.productName && (context === 'treatment' || context === 'sale')) {
+    const resolvedId = await _resolveProductIdByName(item.productName);
+    if (resolvedId && resolvedId !== String(item.productId || '')) {
+      const reCfg = await _getProductStockConfig(resolvedId);
+      if (reCfg && reCfg.trackStock === true) {
+        cfg = reCfg;
+        tracked = true;
+        lookupProductId = resolvedId;
+        console.info(
+          `[_deductOneItem] productId resolved by name fallback: "${item.productName}" → ${resolvedId} (was ${item.productId})`
+        );
+      } else {
+        // Name match exists but stockConfig not set yet — auto-init below
+        // will run on the resolved id (not the original).
+        lookupProductId = resolvedId;
+      }
+    }
+  }
+
   // V35.3-ter (2026-04-28 — user-confirmed): auto-init for BOTH treatment
   // AND sale context. Pre-fix sale-side silent-skipped untracked products
   // → user reported "ขายของจาก tab=sales แล้ว...สุดท้ายก็ไม่มีการตัดสต็อคจริง".
@@ -5751,39 +5796,24 @@ async function _deductOneItem({
   // design) → admin sets `stockConfig.trackStock=false` explicitly via
   // ProductFormModal to opt out.
   if (!tracked && (context === 'treatment' || context === 'sale')) {
-    const upserted = await _ensureProductTracked(item.productId, {
+    const upserted = await _ensureProductTracked(lookupProductId, {
       setBy: `_deductOneItem(${context})`,
       unit: item.unit,
     });
     if (upserted && upserted.trackStock === true) {
       cfg = upserted;
       tracked = true;
-    } else if (context === 'treatment') {
-      // V36 (2026-04-29) — fail-loud config-impossible. Fires ONLY when the
-      // product genuinely doesn't exist in EITHER be_products OR
-      // master_data/products/items (the auto-init upsert via setDoc-merge
-      // returned null). Does NOT fire on shortfall or no-batch-at-branch —
-      // those continue to route through the Phase 15.7 negative-stock
-      // allowance (pickNegativeTargetBatch + AUTO-NEG synthesis below).
-      // Sale context preserves silent-skip per V35.3-ter explicit user
-      // contract — only treatment context throws.
-      // Caller (deductStockForTreatment) catches err.code and surfaces a
-      // friendly error to the React form so admin can fix the product
-      // master then retry. Was: silent SKIP movement that misled admin
-      // into thinking stock deducted while qty.remaining never moved
-      // (V31 silent-swallow anti-pattern; comment-vs-code drift —
-      // line 5694 promised V31 fail-loud but the code did silent skip).
-      const err = new Error(
-        `ไม่สามารถตั้งค่าการตัดสต็อคของสินค้า "${item.productName || item.productId}" ` +
-        `ได้ — สินค้านี้ไม่มีอยู่ใน database (be_products หรือ master_data) ` +
-        `กรุณาเพิ่มสินค้าใน "ข้อมูลพื้นฐาน → สินค้า" ก่อน`
-      );
-      err.code = 'TRACKED_UPSERT_FAILED';
-      err.productId = item.productId;
-      err.productName = item.productName;
-      throw err;
     }
-    // sale context: fall through to legacy silent-skip below (V35.3-ter).
+    // V36-bis (2026-04-29) — REVERTED V36 fail-loud throw per user
+    // directive: "ห้ามพลาดแบบนี้อีก ไม่ว่าจะเป็นการ submit จากไหน".
+    // The V36 throw fired for products that genuinely existed but with
+    // mismatched productIds (synthetic rowIds, master_data clone ids,
+    // etc.) — see V36-bis name fallback above. With name-fallback in
+    // place, the residual "no doc by id AND no doc by name" case is
+    // genuinely rare (manual one-off entries, deleted master products
+    // referenced by old treatments). Fall through to silent-skip with
+    // a clear diagnostic note in the SKIP movement so admin can spot
+    // the case in Movement Log without blocking the save.
   }
 
   if (!tracked) {
@@ -5830,7 +5860,12 @@ async function _deductOneItem({
   // (never central) so unconditional `includeLegacyMain: true` is safe;
   // central tier branches (WH-XXX) won't match a 'main' branchId so the
   // dual query returns nothing extra anyway.
-  const batches = await listStockBatches({ productId: item.productId, branchId, status: BATCH_STATUS.ACTIVE, includeLegacyMain: true });
+  // V36-bis (2026-04-29) — use `lookupProductId` (resolved by name fallback
+  // above when the original item.productId didn't match a be_products doc).
+  // Falls back to item.productId for the common case where it already
+  // matches. Movement records still carry item.productId (the original)
+  // so audit trails stay consistent with the form-submitted shape.
+  const batches = await listStockBatches({ productId: lookupProductId, branchId, status: BATCH_STATUS.ACTIVE, includeLegacyMain: true });
   // V35.3-bis (2026-04-28 same-day fix): do NOT pass `branchId` to
   // batchFifoAllocate. listStockBatches already filtered with
   // includeLegacyMain (legacy `branchId='main'` batches included for
@@ -5841,7 +5876,7 @@ async function _deductOneItem({
   // V35.3 first cut). Pre-filter at the listStockBatches layer is the
   // single source of truth; batchFifoAllocate operates on the
   // already-filtered list.
-  const plan = batchFifoAllocate(batches, item.qty, { productId: item.productId, preferNewest });
+  const plan = batchFifoAllocate(batches, item.qty, { productId: lookupProductId, preferNewest });
 
   // Phase 15.7 (2026-04-28) — negative-stock allowance for tracked products.
   // User directive post V15 #4: "หากเกิดการรักษา ตัดคอร์ส ขาย หรืออื่นใด ที่
@@ -5876,7 +5911,7 @@ async function _deductOneItem({
       allocations: plan.allocations,
       branchBatches: batches,
       branchId,
-      productId: item.productId,
+      productId: lookupProductId, // V36-bis: use resolved id for cross-branch lookup
     });
     if (!negativeTargetBatchId) {
       // Fallback C: no batches whatsoever at branch+product. Create a
@@ -5886,13 +5921,15 @@ async function _deductOneItem({
       // V35 FK invariant: product must exist in be_products before any
       // batch is written. Throws PRODUCT_NOT_FOUND if missing — admin
       // sees the friendly error instead of a phantom synthetic batch.
-      await _assertProductExists(item.productId, 'negative-stock-synthetic-batch');
+      // V36-bis: use lookupProductId so the synthetic batch references
+      // the canonical be_products doc (resolved by name fallback).
+      await _assertProductExists(lookupProductId, 'negative-stock-synthetic-batch');
       const newId = _genBatchId();
       const now = new Date().toISOString();
       negativeTargetBatch = {
         batchId: newId,
         lot: `AUTO-NEG-${Date.now()}`,
-        productId: item.productId,
+        productId: lookupProductId, // V36-bis canonical id
         productName: item.productName,
         unit: item.unit || '',
         branchId,
