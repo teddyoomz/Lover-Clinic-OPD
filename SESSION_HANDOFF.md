@@ -7,12 +7,16 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 evening (session 30) — V36 multi-writer-sweep + phantom-branch fallback + V15 #8 deploy
+- **Date last updated**: 2026-04-29 late evening (session 30 cont.) — Phase 16.3 System Settings + V36-quater/quinquies course-history + V15 #9 deploy
 - **Branch**: `master`
-- **Last commit**: `ae760c7 fix(stock): V36 — multi-writer-sweep + fail-loud + phantom-branch fallback`
-- **Test count**: **3597** focused (+141 across V36 family)
+- **Last commit**: `f4e6127 feat(system): Phase 16.3 — System Settings tab + per-tab overrides + feature flags + audit trail`
+- **Test count**: **3759** focused (+162 across V36-quater + V36-quinquies + Phase 16.3)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `ae760c7`** (V15 #8 LIVE 2026-04-29 evening) · vercel `lover-clinic-gxx8hxgzm-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+  - V15 #9 firestore.rules CHANGED — Phase 16.3 narrow match for `clinic_settings/system_config` + `be_admin_audit/system-config-*` create exception (rules version 20 → 21)
+  - Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 = all 200
+  - HTTP smoke: / 200, /admin 200, /api/webhook/line 401 (LINE sig — expected)
+  - Phase 16.3 system_config new probe: unauth GET → 404 (doc not yet created; rule deployed cleanly)
   - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
   - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
   - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
