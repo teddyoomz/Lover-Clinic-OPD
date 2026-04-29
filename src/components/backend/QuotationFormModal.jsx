@@ -10,7 +10,7 @@ import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import {
-  saveQuotation, getAllCustomers, listStaff,
+  saveQuotation, getAllCustomers, listAllSellers,
   // Phase 14.10-tris (2026-04-26) — be_courses/products/promotions canonical
   listCourses, listProducts, listPromotions,
 } from '../../lib/backendClient.js';
@@ -62,9 +62,13 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
   useEffect(() => {
     let cancelled = false;
     setRefLoading(true);
+    // Phase 16.7-bis (2026-04-29 session 33): switched listStaff → listAllSellers
+    // so doctors + assistants appear in the seller picker. Pre-fix, only be_staff
+    // entries were shown; user reported "ช่องพนักงานขายทุกช่องใน backend ให้ใส่
+    // ชื่อแพทย์/ผู้ช่วยลงไปด้วย เผื่อแพทย์/ผู้ช่วยเป็นคนขายเอง".
     Promise.all([
       getAllCustomers().catch(() => []),
-      listStaff().catch(() => []),
+      listAllSellers().catch(() => []),
       listCourses().catch(() => []),
       listProducts().catch(() => []),
       listPromotions().catch(() => []),
