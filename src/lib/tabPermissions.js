@@ -80,18 +80,59 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'document-templates':  { adminOnly: true },
   'line-settings':       { adminOnly: true },  // V32-tris-ter — LINE OA channel + bot config
   'link-requests':       { adminOnly: true },  // V32-tris-quater — LINE link approval queue
+
+  // Phase 16.3 (2026-04-29) — System Settings tab. Permission-key gated
+  // (Q2-C: NEW key `system_config_management`) so owner can grant to
+  // head-of-ops without giving full admin claim. Admin bypass implicit.
+  'system-settings':     { requires: ['system_config_management'] },
 });
+
+/**
+ * Phase 16.3 (2026-04-29) — pure helper to merge a runtime override on top
+ * of the static gate. NOT mutating — `TAB_PERMISSION_MAP` is frozen.
+ *
+ * Override shape (Q1-D, all 3 patterns):
+ *   { hidden?: boolean, requires?: string[], adminOnly?: boolean }
+ *
+ * Merge semantics:
+ *   - hidden: true → tab hidden (treat as adminOnly + no admin bypass for sidebar)
+ *   - requires: array → ADDED to static requires list (any-of merge; admin can
+ *     widen the gate by adding extra keys, deduplicated client-side)
+ *   - adminOnly: true → flag flips on; false → flag flips off (or stays static)
+ *
+ * @param {{requires?: string[], adminOnly?: boolean}} staticGate
+ * @param {{hidden?: boolean, requires?: string[], adminOnly?: boolean}|null} override
+ * @returns {{requires: string[], adminOnly: boolean, hidden: boolean}}
+ */
+export function applyTabOverride(staticGate, override) {
+  const sg = staticGate || {};
+  const ov = override || {};
+  const baseReq = Array.isArray(sg.requires) ? sg.requires : [];
+  const addReq = Array.isArray(ov.requires) ? ov.requires : [];
+  const merged = Array.from(new Set([...baseReq, ...addReq]));
+  const adminOnly = ov.adminOnly !== undefined ? !!ov.adminOnly : !!sg.adminOnly;
+  const hidden = ov.hidden === true;
+  return { requires: merged, adminOnly, hidden };
+}
 
 /**
  * @param {string} tabId
  * @param {Record<string, boolean>} permissions  - flat key → true map
  * @param {boolean} isAdmin  - admin bypass (all tabs visible)
+ * @param {Record<string, object>} [overrides]   - Phase 16.3 runtime overrides
+ *   from `clinic_settings/system_config.tabOverrides`. Optional; falls back
+ *   to static gate when omitted.
  * @returns {boolean}
  */
-export function canAccessTab(tabId, permissions, isAdmin) {
+export function canAccessTab(tabId, permissions, isAdmin, overrides) {
+  const staticGate = TAB_PERMISSION_MAP[tabId];
+  if (!staticGate && !overrides?.[tabId]) return true; // unknown tab → default allow
+  const gate = applyTabOverride(staticGate || {}, overrides?.[tabId] || null);
+  // hidden:true → tab is hidden from EVERYONE except admin bypass.
+  // Use case: admin temporarily disables a tab; admin still sees it to
+  // un-hide. Non-admins see nothing.
+  if (gate.hidden && !isAdmin) return false;
   if (isAdmin) return true;
-  const gate = TAB_PERMISSION_MAP[tabId];
-  if (!gate) return true; // unknown tab → default allow
   if (gate.adminOnly) return false;
   const reqs = gate.requires || [];
   if (reqs.length === 0) return true;
@@ -104,10 +145,11 @@ export function canAccessTab(tabId, permissions, isAdmin) {
  * @param {Array<string>} tabIds
  * @param {Record<string, boolean>} permissions
  * @param {boolean} isAdmin
+ * @param {Record<string, object>} [overrides]
  * @returns {Array<string>}
  */
-export function filterAllowedTabs(tabIds, permissions, isAdmin) {
-  return (tabIds || []).filter((id) => canAccessTab(id, permissions, isAdmin));
+export function filterAllowedTabs(tabIds, permissions, isAdmin, overrides) {
+  return (tabIds || []).filter((id) => canAccessTab(id, permissions, isAdmin, overrides));
 }
 
 /**
@@ -116,13 +158,13 @@ export function filterAllowedTabs(tabIds, permissions, isAdmin) {
  * `reports` → `sales` → any tab. Used by BackendDashboard when the
  * requested deep-link tab is forbidden.
  */
-export function firstAllowedTab(permissions, isAdmin, candidates = ['appointments', 'customers', 'reports', 'sales']) {
+export function firstAllowedTab(permissions, isAdmin, candidates = ['appointments', 'customers', 'reports', 'sales'], overrides) {
   for (const id of candidates) {
-    if (canAccessTab(id, permissions, isAdmin)) return id;
+    if (canAccessTab(id, permissions, isAdmin, overrides)) return id;
   }
   // Fallback: scan the full map.
   for (const id of Object.keys(TAB_PERMISSION_MAP)) {
-    if (canAccessTab(id, permissions, isAdmin)) return id;
+    if (canAccessTab(id, permissions, isAdmin, overrides)) return id;
   }
   return null;
 }

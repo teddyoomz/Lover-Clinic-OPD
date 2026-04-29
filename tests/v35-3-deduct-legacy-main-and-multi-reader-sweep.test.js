@@ -148,14 +148,18 @@ describe('V35.3.B — _deductOneItem now passes includeLegacyMain:true', () => {
     // overage onto a target batch (negativeOverage marker). The throw
     // remains as defensive fallback for non-supported contexts.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Phase 16.3 (2026-04-29) — fn body grew after V36-bis + Phase 16.3
+    // negative-stock-toggle gate. Slice widened 20000 → 25000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
   });
 
   it('B.4 V35.3-ter: auto-init fires for BOTH treatment AND sale context', () => {
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Phase 16.3 (2026-04-29) — fn body grew after V36-bis + Phase 16.3
+    // negative-stock-toggle gate. Slice widened 20000 → 25000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
     // The auto-init branch now matches both contexts
     expect(slice).toMatch(/!tracked\s*&&\s*\(context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]\)/);
   });
@@ -166,7 +170,9 @@ describe('V35.3.B — _deductOneItem now passes includeLegacyMain:true', () => {
     // movement with negativeOverage:true. Replaces the prior V35.3-ter
     // silent-skip pattern.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Phase 16.3 (2026-04-29) — fn body grew after V36-bis + Phase 16.3
+    // negative-stock-toggle gate. Slice widened 20000 → 25000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
     expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
     // Phase 15.7 negative-push markers
     expect(slice).toMatch(/negativeOverage:\s*true/);

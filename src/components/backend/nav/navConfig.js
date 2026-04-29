@@ -160,6 +160,8 @@ export const NAV_SECTIONS = [
       { id: 'document-templates',   label: 'เทมเพลตเอกสาร',        icon: FileTextIcon,  color: 'amber', palette: 'document template certificate medical fit-to-fly medicine label consent referral เทมเพลต เอกสาร ใบรับรอง ฉลากยา ส่งตัว' },
       { id: 'line-settings',        label: 'ตั้งค่า LINE OA',       icon: MessageCircle, color: 'emerald', palette: 'line official account messaging chat bot qr link channel webhook ลายน์ ออฟฟิเชียล แชท บอท ผูก qr' },
       { id: 'link-requests',        label: 'คำขอผูก LINE',          icon: MessageCircle, color: 'emerald', palette: 'line link request approve reject pending bot id national passport ลายน์ คำขอ ผูก อนุมัติ รอ ตรวจสอบ' },
+      // Phase 16.3 (2026-04-29) — System Settings tab.
+      { id: 'system-settings',      label: 'ตั้งค่าระบบ',           icon: Settings,      color: 'amber', palette: 'system settings tab visibility override default deposit points feature flag negative stock toggle ระบบ ตั้งค่า แท็บ ค่าเริ่มต้น มัดจำ คะแนน สต็อคติดลบ' },
     ],
   },
 ];

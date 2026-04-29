@@ -293,13 +293,25 @@ describe('Phase 15.6 ACE.E — firestore.rules be_admin_audit lockdown', () => {
     expect(rulesSrc).toMatch(/match\s+\/be_admin_audit\/\{auditId\}/);
   });
 
-  it('be_admin_audit is locked to admin SDK only (read,write: if false)', () => {
-    const block = rulesSrc.match(/match\s+\/be_admin_audit\/\{auditId\}\s*\{[\s\S]{0,300}\}/);
+  it('be_admin_audit lockdown: writes to non-system-config docs blocked (Phase 15.6 + 16.3)', () => {
+    // Phase 16.3 (2026-04-29) — narrow exception added: `system-config-*`
+    // doc-id prefix admits CREATE for admin OR perm_system_config_management.
+    // All other doc ids stay locked. update + delete remain blocked
+    // entirely (immutable audit ledger). Read opened to isClinicStaff() so
+    // the SystemConfigAuditPanel can render — Phase 15.6 admin SDK constraint
+    // for WRITE is preserved by the prefix gate.
+    const block = rulesSrc.match(/match\s+\/be_admin_audit\/\{auditId\}\s*\{[\s\S]{0,1200}\}/);
     expect(block, 'be_admin_audit block not found').not.toBeNull();
-    expect(block[0]).toMatch(/allow\s+read,\s*write:\s*if\s+false/);
+    // update + delete locked
+    expect(block[0]).toMatch(/allow\s+update,\s*delete:\s*if\s+false/);
+    // read open to isClinicStaff (audit panel render)
+    expect(block[0]).toMatch(/allow\s+read:\s*if\s+isClinicStaff\(\)/);
+    // create gated by prefix + admin/perm
+    expect(block[0]).toMatch(/system-config-/);
   });
 
-  it('Phase 15.6 marker comment present near rule', () => {
-    expect(rulesSrc).toMatch(/Phase 15\.6[\s\S]{0,300}be_admin_audit/);
+  it('Phase 15.6 + 16.3 marker comments present near rule', () => {
+    expect(rulesSrc).toMatch(/Phase 15\.6[\s\S]{0,1500}be_admin_audit/);
+    expect(rulesSrc).toMatch(/Phase 16\.3[\s\S]{0,400}system-config-/);
   });
 });

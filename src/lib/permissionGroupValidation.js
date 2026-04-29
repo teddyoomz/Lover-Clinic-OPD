@@ -230,6 +230,11 @@ export const PERMISSION_MODULES = Object.freeze([
       { key: 'doctor_management',             label: 'จัดการแพทย์ & ผู้ช่วย' },
       { key: 'user_management',               label: 'จัดการพนักงาน' },
       { key: 'google_calendar',               label: 'ตั้งค่า Google Calendar' },
+      // Phase 16.3 (2026-04-29) — System Settings tab. Owner/admin grants
+      // this to head-of-ops or designated power users so they can adjust
+      // tab visibility / defaults / feature flags without needing the
+      // full admin claim. See firestore.rules clinic_settings/system_config.
+      { key: 'system_config_management',      label: 'ตั้งค่าระบบ (16.3)' },
     ],
   },
 ]);

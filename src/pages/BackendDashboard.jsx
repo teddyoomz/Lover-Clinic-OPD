@@ -56,6 +56,8 @@ const PnLReportTab           = lazy(() => import('../components/backend/reports/
 const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
 const RemainingCourseTab     = lazy(() => import('../components/backend/reports/RemainingCourseTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
+// Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
+const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
@@ -513,6 +515,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <LineSettingsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'link-requests' ? (
           <LinkRequestsTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'system-settings' ? (
+          <SystemSettingsTab />
         ) : null}
         </Suspense>
       </div>

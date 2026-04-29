@@ -40,6 +40,20 @@ service cloud.firestore {
         allow write: if isClinicStaff();
       }
 
+      // ── Phase 16.3 (2026-04-29) — System Settings ──
+      // Single doc storing tab-visibility overrides + defaults + feature
+      // flags. Q2-C: write gated by NEW permission key
+      // `system_config_management` OR admin claim. Read: any clinic-staff
+      // (UI consumers + backendClient._deductOneItem stock-deduct gate).
+      // More specific match takes precedence over the wildcard above.
+      match /clinic_settings/system_config {
+        allow read: if isClinicStaff();
+        allow write: if isSignedIn() && (
+          request.auth.token.admin == true ||
+          request.auth.token['perm_system_config_management'] == true
+        );
+      }
+
       // ── ProClinic session cookies (cookie-relay extension writes unauth) ──
       // The Chrome extension PATCHes cached cookies to these docs via
       // Firestore REST without a Firebase auth token. Same rationale as
@@ -303,9 +317,20 @@ service cloud.firestore {
       // ── Backend: Phase 15.6 (2026-04-28) Admin cleanup audit log ──
       // Written ONLY by /api/admin/cleanup-* endpoints (firebase-admin SDK
       // bypasses rules). Lists deleted batch / product / sale IDs + caller
-      // email + timestamp for forensic review. Client SDK locked.
+      // email + timestamp for forensic review. Client SDK locked EXCEPT
+      // for Phase 16.3 system-config-* docs (admin/perm-gated CREATE so
+      // saveSystemConfig writes audit + system_config atomically in one
+      // batch from the client).
       match /be_admin_audit/{auditId} {
-        allow read, write: if false;
+        allow read: if isClinicStaff();
+        // Phase 16.3 (2026-04-29) — narrow exception for system-config-*
+        // audit docs. Same gate as the system_config doc itself (Q2-C).
+        allow create: if isSignedIn() &&
+                         auditId.matches('^system-config-.*') && (
+                           request.auth.token.admin == true ||
+                           request.auth.token['perm_system_config_management'] == true
+                         );
+        allow update, delete: if false;  // immutable
       }
 
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──

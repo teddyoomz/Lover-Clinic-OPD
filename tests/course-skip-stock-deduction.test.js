@@ -668,7 +668,9 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     // silent-skip pattern is GONE for the supported contexts; user-confirmed
     // via AskUserQuestion 2026-04-28: "FIFO-last batch goes negative".
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Phase 16.3 (2026-04-29) — fn body grew after V36-bis name fallback +
+    // negative-stock-toggle gate. Slice widened 20000 → 25000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
     // Defensive throw for non-supported contexts is preserved.
     expect(slice).toMatch(/Stock insufficient/);
     expect(slice).toMatch(/throw new Error/);
@@ -682,7 +684,9 @@ describe('CSS.K — V19 / V21 / V31 anti-regression locks', () => {
     // real before/after numbers + negativeOverage:true. Replaces the prior
     // V35.3-ter silent-skip pattern.
     const fnStart = backendClientSrc.indexOf('async function _deductOneItem(');
-    const slice = backendClientSrc.slice(fnStart, fnStart + 20000);
+    // Phase 16.3 (2026-04-29) — fn body grew after V36-bis name fallback +
+    // negative-stock-toggle gate. Slice widened 20000 → 25000.
+    const slice = backendClientSrc.slice(fnStart, fnStart + 25000);
     // Treatment+sale gate still narrows the negative-push path.
     expect(slice).toMatch(/context\s*===\s*['"]treatment['"]\s*\|\|\s*context\s*===\s*['"]sale['"]/);
     // negativeOverage marker on the new movement

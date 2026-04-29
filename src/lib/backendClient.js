@@ -5970,6 +5970,42 @@ async function _deductOneItem({
   let negativeTargetBatchId = null;
   let negativeTargetBatch = null;
   if (plan.shortfall > 0 && (context === 'treatment' || context === 'sale')) {
+    // Phase 16.3 (2026-04-29) — feature flag gate. Q4-C: when admin sets
+    // `clinic_settings/system_config.featureFlags.allowNegativeStock=false`,
+    // block NEW negatives but PRESERVE the existing-negative repay path
+    // (which lives in `_repayNegativeBalances` upstream of `_buildBatchFromOrderItem`
+    // / `_receiveAtDestination` — NOT here). Admin can transition off the
+    // negative-stock allowance without orphaning batches that already went
+    // negative.
+    //
+    // Default: true (Phase 15.7 contract). Cached read per call — system_config
+    // is a single doc + listener-keyed in the UI; calling getSystemConfig()
+    // here is one Firestore read per stock-deduct, acceptable given
+    // treatment-save runs at most a few items.
+    try {
+      const { getSystemConfig } = await import('./systemConfigClient.js');
+      const sysCfg = await getSystemConfig();
+      if (sysCfg && sysCfg.featureFlags && sysCfg.featureFlags.allowNegativeStock === false) {
+        const err = new Error(
+          `สต็อคของ "${item.productName || item.productId}" ไม่พอ — ` +
+          `admin ปิดการใช้สต็อคติดลบในระบบ กรุณานำเข้าสต็อคก่อน หรือเปิด toggle ` +
+          `"อนุญาตการตัดสต็อคติดลบ" ใน "ตั้งค่าระบบ"`
+        );
+        err.code = 'STOCK_INSUFFICIENT_NEGATIVE_DISABLED';
+        err.productId = item.productId;
+        err.productName = item.productName;
+        err.shortfall = plan.shortfall;
+        throw err;
+      }
+    } catch (e) {
+      // Re-throw STOCK_INSUFFICIENT_NEGATIVE_DISABLED; swallow other errors
+      // (config-read failures degrade gracefully to default-allow per
+      // Phase 15.7 contract — never block treatment save on a transient
+      // config-read failure).
+      if (e?.code === 'STOCK_INSUFFICIENT_NEGATIVE_DISABLED') throw e;
+      console.warn('[_deductOneItem] system_config read failed; defaulting allowNegativeStock=true:', e?.message);
+    }
+
     negativeTargetBatchId = pickNegativeTargetBatch({
       allocations: plan.allocations,
       branchBatches: batches,
