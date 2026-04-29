@@ -196,12 +196,22 @@ async function handleSyncDoctors(req, res) {
     console.warn('[syncDoctors] df_group enrichment skipped:', err.message);
   }
 
+  // Phase 16.7-quinquies (B1): preserve salary + salary_date from ProClinic API
+  // response (fields present when ProClinic returns JSON-enriched doctor rows).
+  // extractDoctorList HTML scraper doesn't emit them yet — default to '' / null
+  // so master_data always has the field, ready for when enrichment is added.
+  const mappedItems = items.map(it => ({
+    ...it,
+    salary: it.salary != null ? String(it.salary) : '',
+    salary_date: (it.salary_date != null && it.salary_date !== '') ? Number(it.salary_date) : null,
+  }));
+
   return res.status(200).json({
     success: true,
     type: 'doctors',
-    count: items.length,
+    count: mappedItems.length,
     totalPages,
-    items
+    items: mappedItems
   });
 }
 
@@ -213,12 +223,21 @@ async function handleSyncStaff(req, res) {
   const { items, totalPages } = await scrapePaginated(
     session, `${base}/admin/user`, extractStaffList
   );
+  // Phase 16.7-quinquies (B2): preserve salary + salary_date + hourly_income
+  // from ProClinic API response. extractStaffList HTML scraper doesn't emit
+  // them yet — default to '' / null so master_data always has the field ready.
+  const mappedItems = items.map(it => ({
+    ...it,
+    salary: it.salary != null ? String(it.salary) : '',
+    salary_date: (it.salary_date != null && it.salary_date !== '') ? Number(it.salary_date) : null,
+    hourly_income: it.hourly_income != null ? String(it.hourly_income) : '',
+  }));
   return res.status(200).json({
     success: true,
     type: 'staff',
-    count: items.length,
+    count: mappedItems.length,
     totalPages,
-    items
+    items: mappedItems
   });
 }
 

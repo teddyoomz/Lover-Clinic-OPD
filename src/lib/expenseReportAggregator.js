@@ -20,7 +20,14 @@
 //   F + F-bis  — Triangle Rule (intel captured Phase 0; columns mirror ProClinic)
 //   V14       — no undefined leaves
 
-import { listDoctors, listStaff, listExpenseCategories, listDfGroups, listDfStaffRates, listCourses, listBranches } from './backendClient.js';
+import { listDoctors, listStaff, listExpenseCategories, listDfGroups, listDfStaffRates, listCourses, listBranches, listStaffSchedules } from './backendClient.js';
+import {
+  computeAutoPayrollForPersons,
+  computeHourlyFromSchedules,
+  computeCommissionFromSales,
+  mergeAutoIntoRows,
+} from './payrollHelpers.js';
+import { thaiTodayISO } from '../utils.js';
 import { loadSalesByDateRange, loadTreatmentsByDateRange, loadExpensesByDateRange } from './reportsLoaders.js';
 import { computeDfPayoutReport } from './dfPayoutAggregator.js';
 import {
@@ -62,6 +69,8 @@ export async function fetchExpenseReportData(filter = {}) {
     ['courses',    () => listCourses()],
     // Phase 16.7-ter — branches for sidebar empty-state diagnostics
     ['branches',   () => listBranches()],
+    // Phase 16.7-quinquies — staff schedules for hourly-pay computation
+    ['schedules', () => listStaffSchedules({ startDate: from, endDate: to }).catch(() => [])],
   ];
 
   const settled = await Promise.all(
@@ -105,6 +114,7 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
     dfStaffRates = [],
     courses = [],
     branches = [],
+    schedules = [],
     errors = {},
   } = rawData || {};
 
@@ -178,6 +188,27 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
   // Build the 3 visible sections
   const doctorRows   = buildExpenseDoctorRows({ doctors, expenses: filteredExpenses, dfPayoutRows });
   const staffRows    = buildExpenseStaffRows({ staff, doctors, expenses: filteredExpenses, dfPayoutRows });
+
+  // Phase 16.7-quinquies — auto-payroll / hourly / commission enrichment.
+  // All computed-on-read; no Firestore writes for these auto entries.
+  const allPersons = [...doctors, ...staff];
+  const today = thaiTodayISO();
+  const nowDate = new Date();
+  const autoPayrollMap = computeAutoPayrollForPersons(allPersons, filter, today);
+  const hourlyMap      = computeHourlyFromSchedules(schedules, allPersons, filter, nowDate);
+  const commissionMap  = computeCommissionFromSales(branchFilteredSales, filter);
+
+  const enrichedDoctorRows = mergeAutoIntoRows(doctorRows, autoPayrollMap, hourlyMap, commissionMap, { isStaffSection: false });
+  const enrichedStaffRows  = mergeAutoIntoRows(staffRows,  autoPayrollMap, hourlyMap, commissionMap, { isStaffSection: true  });
+
+  // Sum auto-totals for the summary tile
+  let totalAutoPayroll = 0;
+  for (const v of autoPayrollMap.values()) totalAutoPayroll += Number(v.totalSalary || 0);
+  let totalAutoHourly = 0;
+  for (const v of hourlyMap.values()) totalAutoHourly += Number(v.totalAmount || 0);
+  let totalAutoCommission = 0;
+  for (const v of commissionMap.values()) totalAutoCommission += Number(v.totalCommission || 0);
+
   const categoryRows = buildExpenseCategoryRows({ expenses: filteredExpenses });
 
   // Phase 16.7-ter — sum unlinked DF for totalAll calculation
@@ -185,13 +216,21 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
   for (const bucket of unlinkedBuckets.values()) {
     totalUnlinkedDf += Number(bucket.totalDf || 0);
   }
-  const summary = computeExpenseSummary({ doctorRows, staffRows, categoryRows, totalUnlinkedDf });
+  const summary = computeExpenseSummary({
+    doctorRows: enrichedDoctorRows,
+    staffRows: enrichedStaffRows,
+    categoryRows,
+    totalUnlinkedDf,
+    totalAutoPayroll,
+    totalAutoHourly,
+    totalAutoCommission,
+  });
 
   return {
     summary,
     sections: {
-      doctors:    doctorRows,
-      staff:      staffRows,
+      doctors:    enrichedDoctorRows,
+      staff:      enrichedStaffRows,
       categories: categoryRows,
       // products section deferred to Phase 16.7-bis; emit empty so UI handles uniformly
       products:   [],
@@ -213,6 +252,11 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
         courses:    courses.length,
         branches:   branches.length,
         unlinkedDfDoctors: unlinkedBuckets.size,
+        // Phase 16.7-quinquies — payroll diagnostics
+        schedules: schedules.length,
+        autoPayrollPersons: autoPayrollMap.size,
+        hourlyPersons: hourlyMap.size,
+        commissionSellers: commissionMap.size,
       },
     },
   };

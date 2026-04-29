@@ -106,6 +106,22 @@ export function validateDoctor(form) {
     }
   }
 
+  // Phase 16.7-quinquies — monthly salary (optional; ≥ 0)
+  if (form.salary != null && form.salary !== '') {
+    const n = Number(form.salary);
+    if (!Number.isFinite(n) || n < 0) {
+      return ['salary', 'เงินเดือนต้องเป็นจำนวนที่ไม่ติดลบ'];
+    }
+  }
+
+  // Phase 16.7-quinquies — payday (1..31; integer)
+  if (form.salaryDate != null && form.salaryDate !== '') {
+    const n = Number(form.salaryDate);
+    if (!Number.isInteger(n) || n < 1 || n > 31) {
+      return ['salaryDate', 'วันที่จ่ายเงินเดือนต้องอยู่ระหว่าง 1-31'];
+    }
+  }
+
   if (form.dfPaidType != null && !DF_PAID_TYPE_OPTIONS.includes(form.dfPaidType)) {
     return ['dfPaidType', 'ประเภทการจ่ายค่ามือไม่ถูกต้อง'];
   }
@@ -157,6 +173,8 @@ export function emptyDoctorForm() {
     color: '',
     backgroundColor: '',
     hourlyIncome: '',
+    salary: '',
+    salaryDate: '',
     defaultDfGroupId: '',
     dfPaidType: '',
     minimumDfType: '',
@@ -186,6 +204,8 @@ export function normalizeDoctor(form) {
     color: trim(form.color),
     backgroundColor: trim(form.backgroundColor),
     hourlyIncome: coerceNum(form.hourlyIncome),
+    salary: coerceNum(form.salary),
+    salaryDate: form.salaryDate === '' || form.salaryDate == null ? null : Number(form.salaryDate),
     defaultDfGroupId: trim(form.defaultDfGroupId),
     dfPaidType: form.dfPaidType || '',
     minimumDfType: trim(form.minimumDfType),

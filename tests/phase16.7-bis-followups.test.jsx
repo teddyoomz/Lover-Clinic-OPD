@@ -95,6 +95,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listDfStaffRates: vi.fn().mockResolvedValue([]),
   // Phase 16.7-ter — be_courses for percent-rate price lookup on unlinked treatments
   listCourses:      vi.fn().mockResolvedValue([]),
+  // Phase 16.7-quinquies — staff schedules for hourly-pay computation
+  listStaffSchedules: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../src/lib/csvExport.js', () => ({ downloadCSV: vi.fn() }));
 vi.mock('./DateRangePicker.jsx', () => ({

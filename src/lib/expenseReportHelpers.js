@@ -258,7 +258,15 @@ export function buildExpenseCategoryRows({ expenses = [] } = {}) {
  *   totalCategoryCount: number,
  * }}
  */
-export function computeExpenseSummary({ doctorRows = [], staffRows = [], categoryRows = [], totalUnlinkedDf = 0 } = {}) {
+export function computeExpenseSummary({
+  doctorRows = [],
+  staffRows = [],
+  categoryRows = [],
+  totalUnlinkedDf = 0,
+  totalAutoPayroll = 0,
+  totalAutoHourly = 0,
+  totalAutoCommission = 0,
+} = {}) {
   const sumKey = (rows, key) => rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
   const totalDoctor       = roundTHB(sumKey(doctorRows, 'total'));
   const totalDoctorSit    = roundTHB(sumKey(doctorRows, 'sitFee'));
@@ -277,7 +285,10 @@ export function computeExpenseSummary({ doctorRows = [], staffRows = [], categor
   // had filled dfEntries totaling ~14,710 baht → previously totalAll showed
   // ฿0 even though doctors had earned DF.
   const unlinkedDf = roundTHB(Number(totalUnlinkedDf || 0));
-  const totalAll = roundTHB(totalCategory + unlinkedDf);
+  const autoPayroll    = roundTHB(Number(totalAutoPayroll || 0));
+  const autoHourly     = roundTHB(Number(totalAutoHourly || 0));
+  const autoCommission = roundTHB(Number(totalAutoCommission || 0));
+  const totalAll = roundTHB(totalCategory + unlinkedDf + autoPayroll + autoHourly + autoCommission);
   return {
     totalDoctor,
     totalDoctorSit,
@@ -290,6 +301,9 @@ export function computeExpenseSummary({ doctorRows = [], staffRows = [], categor
     totalStaffOther,
     totalCategory,
     totalUnlinkedDf: unlinkedDf,
+    totalAutoPayroll: autoPayroll,
+    totalAutoHourly: autoHourly,
+    totalAutoCommission: autoCommission,
     totalAll,
     totalDoctorCount: doctorRows.length,
     totalStaffCount: staffRows.length,

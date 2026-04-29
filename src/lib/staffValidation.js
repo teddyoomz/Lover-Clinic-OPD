@@ -113,6 +113,30 @@ export function validateStaff(form) {
     return ['note', `note เกิน ${NOTE_MAX_LENGTH} ตัวอักษร`];
   }
 
+  // Phase 16.7-quinquies — hourly fee (optional; ≥ 0). Mirror be_doctors.
+  if (form.hourlyIncome != null && form.hourlyIncome !== '') {
+    const n = Number(form.hourlyIncome);
+    if (!Number.isFinite(n) || n < 0) {
+      return ['hourlyIncome', 'รายได้รายชั่วโมงต้องเป็นจำนวนที่ไม่ติดลบ'];
+    }
+  }
+
+  // Phase 16.7-quinquies — monthly salary (optional; ≥ 0)
+  if (form.salary != null && form.salary !== '') {
+    const n = Number(form.salary);
+    if (!Number.isFinite(n) || n < 0) {
+      return ['salary', 'เงินเดือนต้องเป็นจำนวนที่ไม่ติดลบ'];
+    }
+  }
+
+  // Phase 16.7-quinquies — payday (1..31; integer)
+  if (form.salaryDate != null && form.salaryDate !== '') {
+    const n = Number(form.salaryDate);
+    if (!Number.isInteger(n) || n < 1 || n > 31) {
+      return ['salaryDate', 'วันที่จ่ายเงินเดือนต้องอยู่ระหว่าง 1-31'];
+    }
+  }
+
   return null;
 }
 
@@ -130,6 +154,9 @@ export function emptyStaffForm() {
     color: '',
     backgroundColor: '',
     defaultDfGroupId: '',
+    hourlyIncome: '',
+    salary: '',
+    salaryDate: '',
     hasSales: false,
     disabled: false,
     note: '',
@@ -140,6 +167,7 @@ export function emptyStaffForm() {
 
 export function normalizeStaff(form) {
   const trim = (v) => typeof v === 'string' ? v.trim() : '';
+  const coerceNum = (v) => (v === '' || v == null) ? null : Number(v);
   return {
     ...form,
     firstname: trim(form.firstname),
@@ -153,6 +181,9 @@ export function normalizeStaff(form) {
     color: trim(form.color),
     backgroundColor: trim(form.backgroundColor),
     defaultDfGroupId: trim(form.defaultDfGroupId),
+    hourlyIncome: coerceNum(form.hourlyIncome),
+    salary: coerceNum(form.salary),
+    salaryDate: form.salaryDate === '' || form.salaryDate == null ? null : Number(form.salaryDate),
     hasSales: !!form.hasSales,
     disabled: !!form.disabled,
     note: trim(form.note),

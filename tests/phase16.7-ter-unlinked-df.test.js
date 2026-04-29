@@ -367,7 +367,7 @@ describe('UD.F — Source-grep regression guards', () => {
   it('UD.F.3 — totalAll formula in computeExpenseSummary uses totalCategory + totalUnlinkedDf', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('src/lib/expenseReportHelpers.js', 'utf-8');
-    expect(src).toMatch(/totalAll\s*=\s*roundTHB\(totalCategory\s*\+\s*unlinkedDf\)/);
+    expect(src).toMatch(/totalAll\s*=\s*roundTHB\(totalCategory\s*\+\s*unlinkedDf/);
   });
 
   it('UD.F.4 — Phase 16.7-ter institutional-memory marker present', async () => {

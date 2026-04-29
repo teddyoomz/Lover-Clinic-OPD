@@ -32,6 +32,7 @@ import {
   listDfGroups,
   listDfStaffRates,
   listCourses,
+  listStaffSchedules,
 } from '../../../lib/backendClient.js';
 import {
   filterExpensesForExpenseReport,
@@ -42,6 +43,13 @@ import {
   computeUnlinkedTreatmentDfBuckets,
   mergeUnlinkedDfIntoPayoutRows,
 } from '../../../lib/expenseReportHelpers.js';
+import {
+  computeAutoPayrollForPersons,
+  computeHourlyFromSchedules,
+  computeCommissionFromSales,
+  mergeAutoIntoRows,
+} from '../../../lib/payrollHelpers.js';
+import { thaiTodayISO } from '../../../utils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -77,6 +85,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
   const [groups, setGroups] = useState([]);
   const [overrides, setOverrides] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,8 +104,10 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       // Phase 16.7-ter — be_courses for percent-rate price lookup on
       // unlinked treatments (no sale to read price from).
       listCourses().catch(() => []),
+      // Phase 16.7-quinquies — staff schedules for hourly-pay computation
+      listStaffSchedules({ startDate: from, endDate: to }).catch(() => []),
     ])
-      .then(([s, t, e, d, st, g, o, c]) => {
+      .then(([s, t, e, d, st, g, o, c, sc]) => {
         if (abort) return;
         setSales(s || []);
         setTreatments(t || []);
@@ -106,6 +117,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
         setGroups(g || []);
         setOverrides(o || []);
         setCourses(c || []);
+        setSchedules(sc || []);
       })
       .catch((err) => { if (!abort) setError(err?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
@@ -171,19 +183,42 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       expenses: filteredExpenses,
       dfPayoutRows,
     });
+
+    // Phase 16.7-quinquies — auto-payroll / hourly / commission enrichment
+    const allPersons = [...doctors, ...staff];
+    const today = thaiTodayISO();
+    const nowDate = new Date();
+    const autoPayrollMap = computeAutoPayrollForPersons(allPersons, { from, to }, today);
+    const hourlyMap      = computeHourlyFromSchedules(schedules, allPersons, { from, to }, nowDate);
+    const commissionMap  = computeCommissionFromSales(sales, { from, to });
+
+    const enrichedDoctorRows = mergeAutoIntoRows(doctorRows, autoPayrollMap, hourlyMap, commissionMap, { isStaffSection: false });
+    const enrichedStaffRows  = mergeAutoIntoRows(staffSectionRows, autoPayrollMap, hourlyMap, commissionMap, { isStaffSection: true });
+
+    let totalAutoPayroll = 0;
+    for (const v of autoPayrollMap.values()) totalAutoPayroll += Number(v.totalSalary || 0);
+    let totalAutoHourly = 0;
+    for (const v of hourlyMap.values()) totalAutoHourly += Number(v.totalAmount || 0);
+    let totalAutoCommission = 0;
+    for (const v of commissionMap.values()) totalAutoCommission += Number(v.totalCommission || 0);
+
+    // totalUnlinkedDf intentionally OMITTED — already folded into doctorRows.df via mergeUnlinkedDfIntoPayoutRows; passing it here would double-count.
     const summary = computeExpenseSummary({
-      doctorRows,
-      staffRows: staffSectionRows,
+      doctorRows: enrichedDoctorRows,
+      staffRows: enrichedStaffRows,
       categoryRows: [],
+      totalAutoPayroll,
+      totalAutoHourly,
+      totalAutoCommission,
     });
     return {
-      doctorRows,
-      assistantRows: staffSectionRows,
+      doctorRows: enrichedDoctorRows,
+      assistantRows: enrichedStaffRows,
       summary,
       dfSummary: dfReport.summary || { total: 0, doctorCount: 0, lineCount: 0, saleCount: 0 },
       unlinkedDfDoctors: unlinkedBuckets.size,
     };
-  }, [sales, treatments, doctors, groups, overrides, expenses, courses, from, to]);
+  }, [sales, treatments, doctors, staff, groups, overrides, expenses, courses, schedules, from, to]);
 
   const handleRangeChange = useCallback(({ from: f, to: t, presetId: id }) => {
     setFrom(f); setTo(t); setPresetId(id);

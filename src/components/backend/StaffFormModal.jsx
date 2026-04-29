@@ -221,6 +221,53 @@ export default function StaffFormModal({ staff, onClose, onSaved, clinicSettings
         )}
       </div>
 
+      {/* Phase 16.7-quinquies — financial section */}
+      <div className="border-t border-[var(--bd)] pt-3 mt-3">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--tx-muted)] mb-2">💰 การเงิน</h4>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-[var(--tx-muted)]">รายได้รายชั่วโมง (บาท)</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={form.hourlyIncome || ''}
+              onChange={(e) => update({ hourlyIncome: e.target.value })}
+              placeholder="0"
+              className="w-full rounded border border-[var(--bd)] bg-[var(--bg-input)] px-2 py-1 text-sm"
+              data-field="hourlyIncome"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-[var(--tx-muted)]">เงินเดือน (บาท/เดือน)</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={form.salary || ''}
+              onChange={(e) => update({ salary: e.target.value })}
+              placeholder="0"
+              className="w-full rounded border border-[var(--bd)] bg-[var(--bg-input)] px-2 py-1 text-sm"
+              data-field="salary"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-[var(--tx-muted)]">วันที่จ่ายเงินเดือน (1-31)</label>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              value={form.salaryDate || ''}
+              onChange={(e) => update({ salaryDate: e.target.value })}
+              placeholder="25"
+              className="w-full rounded border border-[var(--bd)] bg-[var(--bg-input)] px-2 py-1 text-sm"
+              data-field="salaryDate"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Colors */}
       <div className="grid grid-cols-2 gap-3">
         <div data-field="color">

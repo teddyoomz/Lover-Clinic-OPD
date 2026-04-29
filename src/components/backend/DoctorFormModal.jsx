@@ -239,6 +239,37 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
         </div>
       </div>
 
+      {/* Phase 16.7-quinquies — salary fields */}
+      <div className="grid grid-cols-2 gap-3">
+        <div data-field="salary">
+          <label className="block text-xs text-[var(--tx-muted)] mb-1">เงินเดือน (บาท/เดือน)</label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={form.salary || ''}
+            onChange={(e) => update({ salary: e.target.value })}
+            placeholder="0"
+            className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
+            data-field="salary"
+          />
+        </div>
+        <div data-field="salaryDate">
+          <label className="block text-xs text-[var(--tx-muted)] mb-1">วันที่จ่ายเงินเดือน (1-31)</label>
+          <input
+            type="number"
+            min="1"
+            max="31"
+            step="1"
+            value={form.salaryDate || ''}
+            onChange={(e) => update({ salaryDate: e.target.value })}
+            placeholder="25"
+            className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
+            data-field="salaryDate"
+          />
+        </div>
+      </div>
+
       {/* Colors */}
       <div className="grid grid-cols-2 gap-3">
         <div data-field="color">

@@ -8811,6 +8811,12 @@ function mapMasterToStaff(src, id, now, existingCreatedAt) {
     branchIds: [],
     color: String(src.color || '').trim(),
     backgroundColor: '',
+    // Phase 16.7-quinquies (B4): carry salary + hourly fields from master_data → be_staff.
+    // master_data stores salary/hourly_income as strings (passthrough from ProClinic API);
+    // be_staff stores as Number for math. Overwrite pattern (merge:false).
+    hourlyIncome: src.hourly_income !== undefined && src.hourly_income !== '' ? Number(src.hourly_income) || 0 : 0,
+    salary: src.salary !== undefined && src.salary !== '' ? Number(src.salary) || 0 : 0,
+    salaryDate: src.salary_date !== undefined && src.salary_date !== null ? Number(src.salary_date) : null,
     hasSales: false,
     disabled: String(src.status || '').trim() === 'พักใช้งาน',
     firebaseUid: '',
@@ -8854,6 +8860,12 @@ function mapMasterToDoctor(src, id, now, existingCreatedAt) {
     defaultDfGroupId: String(src.defaultDfGroupId || src.df_group_id || '').trim(),
     dfPaidType: '',
     minimumDfType: '',
+    // Phase 16.7-quinquies (B3): carry salary fields from master_data → be_doctors.
+    // master_data stores salary as string (passthrough from ProClinic API);
+    // be_doctors stores as Number for math. salary_date (1-31 day) → salaryDate.
+    // Overwrite pattern — runMasterToBeMigration does setDoc(..., {merge:false}).
+    salary: src.salary !== undefined && src.salary !== '' ? Number(src.salary) || 0 : 0,
+    salaryDate: src.salary_date !== undefined && src.salary_date !== null ? Number(src.salary_date) : null,
     hasSales: false,
     disabled: String(src.status || '').trim() === 'พักใช้งาน',
     firebaseUid: '',
