@@ -236,6 +236,20 @@ vi.mock('../src/lib/backendClient.js', () => ({
   reverseCourseDeduction: vi.fn(),
 }));
 
+// Phase 16.3-bis (2026-04-29) — useTabAccess now imports useSystemConfig
+// which calls onSnapshot(clinic_settings/system_config). With the mocked
+// firebase.js stub (db = {}), the Firestore `doc()` call throws.
+// Stub useSystemConfig to return defaults so the hook chain passes
+// without touching Firestore.
+vi.mock('../src/hooks/useSystemConfig.js', () => ({
+  useSystemConfig: () => ({
+    config: { tabOverrides: {}, defaults: {}, featureFlags: { allowNegativeStock: true } },
+    loading: false,
+    defaults: {},
+  }),
+  __resetSystemConfigCache: vi.fn(),
+}));
+
 // Stub heavy tab children — we only need scaffold routing verification.
 vi.mock('../src/components/backend/CloneTab.jsx', () => ({ default: () => <div data-testid="t-clone" /> }));
 vi.mock('../src/components/backend/CustomerListTab.jsx', () => ({ default: () => <div data-testid="t-customers" /> }));
