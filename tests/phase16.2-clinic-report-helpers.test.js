@@ -293,4 +293,166 @@ describe('P4 computeBranchComparison', () => {
       expect(row.saleCount).not.toBeUndefined();
     }
   });
+
+  it('P4.8 — uses getSaleNetTotal (real billing.netTotal field)', () => {
+    // Real LoverClinic schema uses sale.billing.netTotal, NOT sale.total
+    const realSales = [
+      { id: 's1', branchId: 'BR-A', billing: { netTotal: 7000 }, status: 'paid', saleDate: '2026-04-15', customerId: 'c1' },
+      { id: 's2', branchId: 'BR-B', billing: { netTotal: 3500 }, status: 'paid', saleDate: '2026-04-20', customerId: 'c2' },
+    ];
+    const r = computeBranchComparison({ sales: realSales, branches, filter });
+    expect(r.rows.find(x => x.branchId === 'BR-A').revenue).toBe(7000);
+    expect(r.rows.find(x => x.branchId === 'BR-B').revenue).toBe(3500);
+  });
+});
+
+// ─── P5 getSaleNetTotal helper ─────────────────────────────────────────────
+import { getSaleNetTotal, getExpenseDate, computeCourseUtilizationFromCustomers } from '../src/lib/clinicReportHelpers.js';
+import { parseQtyString } from '../src/lib/courseUtils.js';
+
+describe('P5 getSaleNetTotal', () => {
+  it('P5.1 — primary: reads sale.billing.netTotal (real schema)', () => {
+    expect(getSaleNetTotal({ billing: { netTotal: 12500 } })).toBe(12500);
+  });
+
+  it('P5.2 — fallback: sale.netTotal flat field', () => {
+    expect(getSaleNetTotal({ netTotal: 8000 })).toBe(8000);
+  });
+
+  it('P5.3 — fallback: sale.total (legacy/test fixtures)', () => {
+    expect(getSaleNetTotal({ total: 5000 })).toBe(5000);
+  });
+
+  it('P5.4 — fallback: sale.grandTotal', () => {
+    expect(getSaleNetTotal({ grandTotal: 1500 })).toBe(1500);
+  });
+
+  it('P5.5 — last resort: derives from items[].lineTotal', () => {
+    expect(getSaleNetTotal({
+      items: {
+        courses: [{ lineTotal: 2000 }],
+        products: [{ lineTotal: 500 }, { qty: 2, unitPrice: 100 }],
+        medications: [{ lineTotal: 300 }],
+      },
+    })).toBe(3000); // 2000 + 500 + 200 + 300
+  });
+
+  it('P5.6 — null / undefined / non-object → 0', () => {
+    expect(getSaleNetTotal(null)).toBe(0);
+    expect(getSaleNetTotal(undefined)).toBe(0);
+    expect(getSaleNetTotal('string')).toBe(0);
+    expect(getSaleNetTotal({})).toBe(0);
+  });
+
+  it('P5.7 — billing.netTotal=0 falls through to fallback chain', () => {
+    expect(getSaleNetTotal({ billing: { netTotal: 0 }, total: 999 })).toBe(999);
+  });
+
+  it('P5.8 — never returns undefined / NaN / negative', () => {
+    expect(getSaleNetTotal({ billing: { netTotal: 'abc' } })).toBe(0);
+    expect(getSaleNetTotal({ items: { products: [{ qty: NaN, unitPrice: 100 }] } })).toBe(0);
+  });
+});
+
+describe('P6 getExpenseDate', () => {
+  it('P6.1 — primary: reads expense.date (real schema)', () => {
+    expect(getExpenseDate({ date: '2026-04-15' })).toBe('2026-04-15');
+  });
+
+  it('P6.2 — fallback: expense.expenseDate (legacy/test)', () => {
+    expect(getExpenseDate({ expenseDate: '2026-04-10' })).toBe('2026-04-10');
+  });
+
+  it('P6.3 — fallback: expense.createdAt (timestamp slice)', () => {
+    expect(getExpenseDate({ createdAt: '2026-04-05T12:00:00Z' })).toBe('2026-04-05');
+  });
+
+  it('P6.4 — null / undefined → empty string', () => {
+    expect(getExpenseDate(null)).toBe('');
+    expect(getExpenseDate(undefined)).toBe('');
+    expect(getExpenseDate({})).toBe('');
+  });
+
+  it('P6.5 — never returns undefined', () => {
+    expect(getExpenseDate({ date: null })).toBe('');
+  });
+});
+
+describe('P7 computeCourseUtilizationFromCustomers', () => {
+  it('P7.1 — sums (total - remaining) / total across all customers (real qty string format)', () => {
+    const customers = [
+      { id: 'c1', courses: [{ qty: '180 / 200 U' }, { qty: '50 / 100 ครั้ง' }] }, // used 20 + 50 = 70 / 300 total
+      { id: 'c2', courses: [{ qty: '99 / 100 U' }] }, // used 1 / 100 total
+    ];
+    // total = 400, used = 71 → 17.75%
+    const util = computeCourseUtilizationFromCustomers(customers, parseQtyString);
+    expect(util).toBeCloseTo(17.75, 2);
+  });
+
+  it('P7.2 — empty customers array → 0', () => {
+    expect(computeCourseUtilizationFromCustomers([], parseQtyString)).toBe(0);
+  });
+
+  it('P7.3 — customers without courses → 0', () => {
+    expect(computeCourseUtilizationFromCustomers([{ id: 'c1' }, { id: 'c2', courses: [] }], parseQtyString)).toBe(0);
+  });
+
+  it('P7.4 — skips cancelled / refunded / exchanged courses', () => {
+    const customers = [
+      { id: 'c1', courses: [
+        { qty: '0 / 100 U', status: 'cancelled' },     // skipped
+        { qty: '50 / 100 U', status: 'active' },        // counted: 50/100 used
+        { qty: '0 / 50 U', status: 'refunded' },        // skipped
+        { qty: '10 / 50 U', status: 'exchanged' },      // skipped
+      ] },
+    ];
+    // total = 100, used = 50 → 50%
+    expect(computeCourseUtilizationFromCustomers(customers, parseQtyString)).toBe(50);
+  });
+
+  it('P7.5 — bad parseQtyString or missing customers → 0', () => {
+    expect(computeCourseUtilizationFromCustomers(null, parseQtyString)).toBe(0);
+    expect(computeCourseUtilizationFromCustomers([{ courses: [{ qty: '50 / 100' }] }], null)).toBe(0);
+  });
+
+  it('P7.6 — handles malformed qty strings gracefully (parseQtyString returns 0/0)', () => {
+    const customers = [{ id: 'c1', courses: [{ qty: 'broken' }, { qty: null }, { qty: '' }] }];
+    expect(computeCourseUtilizationFromCustomers(customers, parseQtyString)).toBe(0);
+  });
+
+  it('P7.7 — V14 — never returns undefined / NaN', () => {
+    const result = computeCourseUtilizationFromCustomers([{ courses: [{ qty: '5 / 10' }] }], parseQtyString);
+    expect(Number.isFinite(result)).toBe(true);
+    expect(result).toBe(50);
+  });
+});
+
+describe('P8 computeKpiTiles real-schema integration', () => {
+  // Verify the helper resolves the real be_sales / be_expenses field paths
+  it('P8.1 — revenueYtd reads sale.billing.netTotal (not sale.total)', () => {
+    const sales = [
+      { id: 's1', branchId: 'BR-A', billing: { netTotal: 12000 }, status: 'paid', saleDate: '2026-04-15', customerId: 'c1' },
+      { id: 's2', branchId: 'BR-A', billing: { netTotal: 8000 }, status: 'paid', saleDate: '2026-04-20', customerId: 'c2' },
+    ];
+    const t = computeKpiTiles({ sales, customers: [], expenses: [], filter: { from: '2026-04-01', to: '2026-04-30' } });
+    expect(t.revenueYtd).toBe(20000);
+  });
+
+  it('P8.2 — expenseRatio reads expense.date (not expense.expenseDate)', () => {
+    const sales = [
+      { id: 's1', branchId: 'BR-A', billing: { netTotal: 10000 }, status: 'paid', saleDate: '2026-04-15', customerId: 'c1' },
+    ];
+    const expenses = [{ id: 'e1', date: '2026-04-10', amount: 2500 }];
+    const t = computeKpiTiles({ sales, customers: [], expenses, filter: { from: '2026-04-01', to: '2026-04-30' } });
+    expect(t.expenseRatio).toBeCloseTo(25, 1);
+  });
+
+  it('P8.3 — avgTicket uses real netTotal too', () => {
+    const sales = [
+      { id: 's1', branchId: 'BR-A', billing: { netTotal: 12000 }, status: 'paid', saleDate: '2026-04-15', customerId: 'c1' },
+      { id: 's2', branchId: 'BR-A', billing: { netTotal: 8000 }, status: 'paid', saleDate: '2026-04-20', customerId: 'c2' },
+    ];
+    const t = computeKpiTiles({ sales, customers: [], expenses: [], filter: { from: '2026-04-01', to: '2026-04-30' } });
+    expect(t.avgTicket).toBe(10000); // 20000 / 2
+  });
 });

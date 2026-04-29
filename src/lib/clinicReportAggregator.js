@@ -46,11 +46,15 @@ import { aggregateStaffSales }          from './staffSalesAggregator.js';
 import { aggregateStockReport }         from './stockReportAggregator.js';
 import { aggregateAppointmentReport }   from './appointmentReportAggregator.js';
 import { aggregateAppointmentAnalysis } from './appointmentAnalysisAggregator.js';
+import { parseQtyString }               from './courseUtils.js';
 
 import {
   computeKpiTiles,
   computeRetentionCohort,
   computeBranchComparison,
+  computeCourseUtilizationFromCustomers,
+  getSaleNetTotal,
+  getExpenseDate,
 } from './clinicReportHelpers.js';
 
 // ─── Phase 1: Fetch ────────────────────────────────────────────────────────
@@ -146,7 +150,9 @@ export function composeClinicReportSnapshot(rawData, filter = {}) {
   // ── Delegate to shared helpers ──
   const branchComparison  = computeBranchComparison({ sales, branches, filter });
   const retentionCohort   = computeRetentionCohort({ sales, customers, filter });
-  const courseUtilization = _computeCourseUtilization(customers);
+  // Use real parseQtyString helper from courseUtils — customer.courses[].qty
+  // is a string `"<remaining> / <total> <unit>"` not numeric fields.
+  const courseUtilization = computeCourseUtilizationFromCustomers(customers, parseQtyString);
   const noShowRate        = Number(appointmentAnalysis?.totals?.noShowRate || 0);
 
   const tiles = computeKpiTiles({
@@ -162,27 +168,33 @@ export function composeClinicReportSnapshot(rawData, filter = {}) {
   });
 
   // ── Build table slices ──
-  const topServices = (revenueByProcedure?.rows || [])
+  // topServices: aggregate revenueByProcedure rows BY courseName (sum across
+  // procedureType + category dimensions). Fixes the duplication where the same
+  // service appeared in 2 rows because it was sold under 2 procedure-types.
+  const topServices = _aggregateTopServices(revenueByProcedure?.rows || []).slice(0, 10);
+
+  // topDoctors: read from staffSales.doctorRows (real shape — NOT `rows`).
+  // staffSalesAggregator returns {staffRows, doctorRows, totals, meta} where:
+  //   doctorRows: [{ doctorKey, doctorName, saleCount, netTotal, paidAmount }, ...]
+  // Previous bug: orchestrator read `staffSales.rows` (doesn't exist) AND
+  // filtered by `/Dr\./i.test(staffName) || r.role === 'doctor'` — both
+  // brittle for Thai honorifics. Fix uses real `doctorRows` array directly.
+  const topDoctors = (staffSales?.doctorRows || [])
     .map(r => ({
-      name:    r.courseName || r.name || '',
-      revenue: Number(r.lineTotal || r.paidShare || 0),
-      count:   Number(r.qty || 0),
+      // RankedTableWidget reads {staffName, total} — adapt names for widget
+      staffName: r.doctorName || '',
+      total:     Number(r.netTotal || 0),
+      saleCount: Number(r.saleCount || 0),
     }))
-    .sort((a, b) => b.revenue - a.revenue)
+    .filter(r => r.staffName && r.total > 0)
+    .sort((a, b) => b.total - a.total)
     .slice(0, 10);
 
-  const topDoctors = (staffSales?.rows || [])
-    .filter(r => (r.role || '').toLowerCase() === 'doctor' || /Dr\./i.test(r.staffName || ''))
-    .slice(0, 10);
-
-  const topProducts = (stockReport?.rows || [])
-    .map(r => ({
-      name:  r.productName || r.name || '',
-      value: Number(r.totalValue || r.cost || 0),
-      qty:   Number(r.qty || 0),
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
+  // topProducts: aggregate from sales.items.products[] (and items.medications[])
+  // — the actual SOLD products with revenue + qty. Previously used
+  // stockReportAggregator output which is INVENTORY value (stock on hand) not
+  // sales value, leading to nonsensical "0 sold" with high values.
+  const topProducts = _aggregateTopProducts(sales, filter).slice(0, 10);
 
   // ── Build chart series ──
   const revenueTrend       = _bucketByMonth(sales, filter);
@@ -261,7 +273,7 @@ function _bucketByMonth(sales, filter) {
     if (!d) continue;
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
-    buckets[d] = (buckets[d] || 0) + (Number(s.total) || 0);
+    buckets[d] = (buckets[d] || 0) + getSaleNetTotal(s);
   }
   return Object.entries(buckets).sort().map(([label, value]) => ({ label, value }));
 }
@@ -292,12 +304,12 @@ function _bucketCashFlowByMonth(sales, expenses, filter) {
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
     if (!buckets[d]) buckets[d] = { revenue: 0, exp: 0 };
-    buckets[d].revenue += Number(s.total) || 0;
+    buckets[d].revenue += getSaleNetTotal(s);
   }
 
   for (const e of expenses) {
-    // listExpenses uses `e.date` field internally
-    const d = String(e.date || e.expenseDate || '').slice(0, 7);
+    // Use shared getExpenseDate helper (canonical e.date field).
+    const d = getExpenseDate(e).slice(0, 7);
     if (!d) continue;
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
@@ -312,21 +324,73 @@ function _bucketCashFlowByMonth(sales, expenses, filter) {
 }
 
 /**
- * Compute overall course utilization % across all customers.
- * used / total for all courses in all customer.courses[].
+ * Aggregate top services by courseName ONLY (sum across procedureType+category
+ * splits). Fixes the dashboard duplication where the same service appeared
+ * in multiple rows because revenueAnalysisAggregator groups by
+ * (procedureType, category, courseId-or-name, promotionName).
+ *
+ * Returns rows sorted desc by revenue, with merged qty + revenue per service.
  */
-function _computeCourseUtilization(customers) {
-  let totalQty = 0;
-  let usedQty  = 0;
-  for (const c of customers) {
-    for (const course of (c.courses || [])) {
-      const remaining = Number(course.qtyRemaining ?? course.remaining ?? 0);
-      const total     = Number(course.qty ?? course.qtyTotal ?? 0);
-      if (total > 0) {
-        totalQty += total;
-        usedQty  += (total - remaining);
+function _aggregateTopServices(revenueRows) {
+  if (!Array.isArray(revenueRows)) return [];
+  const groups = new Map(); // courseName → { revenue, count }
+  for (const r of revenueRows) {
+    const name = String(r.courseName || r.name || '').trim();
+    if (!name) continue;
+    const ent = groups.get(name) || { name, revenue: 0, count: 0 };
+    // Use lineTotal as primary revenue source; fall back to paidShare/paidAmount
+    ent.revenue += Number(r.lineTotal || r.paidShare || r.paidAmount || 0);
+    ent.count   += Number(r.qty || 0);
+    groups.set(name, ent);
+  }
+  return [...groups.values()]
+    .filter(r => r.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+/**
+ * Aggregate top products SOLD across sales.items.products[] +
+ * sales.items.medications[] (medications are also product-like sellable items).
+ *
+ * Real LoverClinic schema (per saleReportAggregator.deriveSaleType):
+ *   sale.items.products[]    — { productId, productName, qty, lineTotal, ... }
+ *   sale.items.medications[] — same shape
+ *
+ * Replaces the previous (broken) approach of using stockReportAggregator
+ * output, which reports INVENTORY value (stock on hand) — orthogonal to
+ * "what products are selling well". Filters by date range + non-cancelled.
+ */
+function _aggregateTopProducts(sales, filter) {
+  const { from = '', to = '', branchIds } = filter || {};
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
+
+  const groups = new Map(); // productName → { name, value, qty }
+  for (const s of (sales || [])) {
+    if (!s || s.status === 'cancelled') continue;
+    const d = String(s.saleDate || '').slice(0, 10);
+    if (from && d < from) continue;
+    if (to   && d > to)   continue;
+    if (branchSet && !branchSet.has(String(s.branchId))) continue;
+
+    const items = s.items && typeof s.items === 'object' ? s.items : {};
+    for (const bucket of ['products', 'medications']) {
+      const arr = Array.isArray(items[bucket]) ? items[bucket] : [];
+      for (const it of arr) {
+        const name = String(it?.productName || it?.name || '').trim();
+        if (!name) continue;
+        const lineTotal = Number(it?.lineTotal) || (Number(it?.qty) * Number(it?.unitPrice || it?.price)) || 0;
+        const qty = Number(it?.qty) || 0;
+        const ent = groups.get(name) || { name, value: 0, qty: 0 };
+        ent.value += lineTotal;
+        ent.qty   += qty;
+        groups.set(name, ent);
       }
     }
   }
-  return totalQty > 0 ? Math.round((usedQty / totalQty) * 10000) / 100 : 0;
+
+  return [...groups.values()]
+    .filter(p => p.value > 0 || p.qty > 0)
+    .sort((a, b) => b.value - a.value);
 }

@@ -21,6 +21,57 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Read the canonical net total from a sale doc.
+ *
+ * Real LoverClinic sale schema (per `buildSaleReportRow` in saleReportAggregator.js):
+ *   sale.billing.netTotal — invoice grand total before payment
+ *
+ * Fallbacks for legacy or test-fixture variants: `s.netTotal`, `s.total`,
+ * derived from items.courses[].lineTotal / items.products[].lineTotal /
+ * items.medications[].lineTotal as last resort. All-zero return is intentional
+ * when the sale has no money fields at all (defensive — caller treats as 0).
+ *
+ * Bug fix history (2026-04-29): clinicReportAggregator was reading `s.total`
+ * directly which doesn't exist on real be_sales docs → revenue tile + chart +
+ * cash flow + branch comparison + avg ticket all showed 0. This helper
+ * centralises the resolution so all 5 callers use the same lookup chain.
+ */
+export function getSaleNetTotal(sale) {
+  if (!sale || typeof sale !== 'object') return 0;
+  const billing = sale.billing && typeof sale.billing === 'object' ? sale.billing : null;
+  // Primary: sale.billing.netTotal
+  const fromBilling = billing ? safeNum(billing.netTotal) : 0;
+  if (fromBilling > 0) return fromBilling;
+  // Fallback chain
+  const flat = safeNum(sale.netTotal) || safeNum(sale.total) || safeNum(sale.grandTotal);
+  if (flat > 0) return flat;
+  // Last resort: derive from items[].lineTotal sums
+  const items = sale.items && typeof sale.items === 'object' ? sale.items : {};
+  let derived = 0;
+  for (const bucket of ['courses', 'products', 'medications']) {
+    const arr = Array.isArray(items[bucket]) ? items[bucket] : [];
+    for (const it of arr) {
+      derived += safeNum(it?.lineTotal) || (safeNum(it?.qty) * safeNum(it?.unitPrice || it?.price));
+    }
+  }
+  return derived;
+}
+
+/**
+ * Read the canonical date string (YYYY-MM-DD) from an expense doc.
+ *
+ * Real LoverClinic expense schema (per `listExpenses` in backendClient.js):
+ *   expense.date — Bangkok-local YYYY-MM-DD
+ *
+ * Fallbacks: `e.expenseDate`, `e.createdAt` (sliced to 10 chars). Empty string
+ * if all sources missing.
+ */
+export function getExpenseDate(expense) {
+  if (!expense || typeof expense !== 'object') return '';
+  return String(expense.date || expense.expenseDate || expense.createdAt || '').slice(0, 10);
+}
+
 /** Filter sales by date range + optional branchIds + non-cancelled. */
 function filterSalesForReport(sales, { from, to, branchIds }) {
   if (!Array.isArray(sales)) return [];
@@ -74,7 +125,8 @@ export function computeKpiTiles({
 } = {}) {
   const filtered = filterSalesForReport(sales, filter);
 
-  const revenueYtd = roundTHB(filtered.reduce((s, x) => s + (Number(x.total) || 0), 0));
+  // Use getSaleNetTotal helper (handles real be_sales schema: s.billing.netTotal)
+  const revenueYtd = roundTHB(filtered.reduce((s, x) => s + getSaleNetTotal(x), 0));
   const saleCount = filtered.length;
   const avgTicket = saleCount > 0 ? roundTHB(revenueYtd / saleCount) : 0;
 
@@ -86,7 +138,7 @@ export function computeKpiTiles({
   for (const s of filtered) {
     const k = String(s.saleDate || s.createdAt || '').slice(0, 7);
     if (!k) continue;
-    monthBuckets[k] = (monthBuckets[k] || 0) + (Number(s.total) || 0);
+    monthBuckets[k] = (monthBuckets[k] || 0) + getSaleNetTotal(s);
   }
   // Derive the last calendar month in range and the one immediately before it.
   let lastCalMonth = '';
@@ -129,15 +181,15 @@ export function computeKpiTiles({
   }).length;
   const newCustomersPerMonth = newCustomersInRange / months;
 
-  // Expense ratio
+  // Expense ratio — read e.date (real be_expenses schema per listExpenses)
   const expensesInRange = (expenses || []).filter(e => {
-    const d = String(e.expenseDate || e.createdAt || '').slice(0, 10);
+    const d = getExpenseDate(e);
     if (!d) return false;
     if (filter.from && d < filter.from) return false;
     if (filter.to && d > filter.to) return false;
     return true;
   });
-  const expenseTotal = expensesInRange.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const expenseTotal = expensesInRange.reduce((s, x) => s + safeNum(x.amount), 0);
   const expenseRatio = revenueYtd > 0 ? roundTHB((expenseTotal / revenueYtd) * 100) : 0;
 
   return {
@@ -271,7 +323,7 @@ export function computeBranchComparison({ sales = [], branches = [], filter = {}
     const bid = String(s.branchId || '');
     if (!acc.has(bid)) continue;
     const ent = acc.get(bid);
-    ent.revenue += Number(s.total) || 0;
+    ent.revenue += getSaleNetTotal(s);
     ent.saleCount += 1;
   }
 
@@ -284,4 +336,48 @@ export function computeBranchComparison({ sales = [], branches = [], filter = {}
 
   rows.sort((a, z) => z.revenue - a.revenue);
   return { rows };
+}
+
+/**
+ * Course utilization % across all customers' purchased courses.
+ *
+ * Real LoverClinic schema (per courseUtils.js + assignCourseToCustomer):
+ *   customer.courses[].qty is a STRING in format `"<remaining> / <total> <unit>"`
+ *   (e.g. `"199 / 200 U"`). Parse via existing parseQtyString helper.
+ *
+ * Returns: percentage of (total qty − remaining qty) across all customers'
+ * courses, rounded to 2 decimal places. Empty / no-courses case returns 0.
+ *
+ * Bug fix history (2026-04-29): orchestrator's `computeCourseUtilization` was
+ * reading `course.qtyRemaining` and `course.qtyTotal` numeric fields which
+ * don't exist (the real shape is a string `qty` field that needs parsing).
+ * Result: every clinic showed 0% course util in the dashboard tile.
+ *
+ * Signature accepts `parseQtyString` as injected dep so the helper stays
+ * pure (no lib import) — caller passes the real one from courseUtils.
+ *
+ * @param {Array} customers
+ * @param {(qtyStr: string) => { remaining: number, total: number, unit: string }} parseQtyString
+ * @returns {number}
+ */
+export function computeCourseUtilizationFromCustomers(customers, parseQtyString) {
+  if (!Array.isArray(customers) || typeof parseQtyString !== 'function') return 0;
+  let totalQty = 0, usedQty = 0;
+  for (const c of customers) {
+    const courses = Array.isArray(c?.courses) ? c.courses : [];
+    for (const course of courses) {
+      // Skip cancelled / refunded / exchanged courses (they shouldn't count
+      // toward utilization since they're no longer billable).
+      if (course?.status && /cancel|refund|exchang/i.test(course.status)) continue;
+      const parsed = parseQtyString(course?.qty);
+      const total = safeNum(parsed?.total);
+      const remaining = safeNum(parsed?.remaining);
+      if (total > 0) {
+        totalQty += total;
+        usedQty += Math.max(0, total - remaining);
+      }
+    }
+  }
+  if (totalQty === 0) return 0;
+  return Math.round((usedQty / totalQty) * 10000) / 100;
 }
