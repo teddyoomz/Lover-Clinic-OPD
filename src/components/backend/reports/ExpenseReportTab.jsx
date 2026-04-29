@@ -273,7 +273,14 @@ export default function ExpenseReportTab({ onNavigate, clinicSettings, theme }) 
             </label>
           ))}
           {effectiveBranches.length === 0 && (
-            <p className="text-[10px] text-[var(--tx-muted)]">ไม่มีสาขา</p>
+            // Phase 16.7-ter — better empty state. When be_branches is empty
+            // (typical when admin hasn't migrated upstream-sync data yet),
+            // the report still renders ALL data (branchIds=[] = no branch
+            // filter). User just doesn't see a branch selector.
+            <p className="text-[9px] text-[var(--tx-muted)] leading-relaxed" data-testid="expense-report-no-branches-hint">
+              ใช้ข้อมูลทุกสาขา (ยังไม่ได้นำเข้า be_branches — ไปที่
+              <span className="text-amber-300"> ข้อมูลพื้นฐาน → Sync ProClinic</span> เพื่อนำเข้า)
+            </p>
           )}
         </Section>
 

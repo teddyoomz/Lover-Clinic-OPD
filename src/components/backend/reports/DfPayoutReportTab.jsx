@@ -31,12 +31,16 @@ import {
   listStaff,
   listDfGroups,
   listDfStaffRates,
+  listCourses,
 } from '../../../lib/backendClient.js';
 import {
   filterExpensesForExpenseReport,
   buildExpenseDoctorRows,
   buildExpenseStaffRows,
   computeExpenseSummary,
+  // Phase 16.7-ter — surface DF for treatments without linkedSaleId
+  computeUnlinkedTreatmentDfBuckets,
+  mergeUnlinkedDfIntoPayoutRows,
 } from '../../../lib/expenseReportHelpers.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
@@ -72,6 +76,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
   const [staff, setStaff] = useState([]);
   const [groups, setGroups] = useState([]);
   const [overrides, setOverrides] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -87,8 +92,11 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       listStaff().catch(() => []),
       listDfGroups().catch(() => []),
       listDfStaffRates().catch(() => []),
+      // Phase 16.7-ter — be_courses for percent-rate price lookup on
+      // unlinked treatments (no sale to read price from).
+      listCourses().catch(() => []),
     ])
-      .then(([s, t, e, d, st, g, o]) => {
+      .then(([s, t, e, d, st, g, o, c]) => {
         if (abort) return;
         setSales(s || []);
         setTreatments(t || []);
@@ -97,6 +105,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
         setStaff(st || []);
         setGroups(g || []);
         setOverrides(o || []);
+        setCourses(c || []);
       })
       .catch((err) => { if (!abort) setError(err?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
@@ -116,7 +125,39 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
     });
     // Phase 16.7-bis: enrich with 4 expense columns from be_expenses
     const filteredExpenses = filterExpensesForExpenseReport(expenses, { from, to });
-    const dfPayoutRows = Array.isArray(dfReport?.rows) ? dfReport.rows : [];
+    const dfPayoutRowsRaw = Array.isArray(dfReport?.rows) ? dfReport.rows : [];
+
+    // Phase 16.7-ter: merge in DF from treatments without linkedSaleId.
+    // Production data finding (2026-04-29 session 33): 6 treatments in April
+    // had filled dfEntries but ALL had `linkedSaleId=''` (consume-existing-
+    // course case). dfPayoutAggregator skipped them entirely → ฿0 across
+    // the board. This block surfaces baht-type DF directly + percent-type
+    // via course price lookup.
+    const courseById = new Map(
+      (Array.isArray(courses) ? courses : []).map(c => [String(c?.courseId || c?.id || ''), c])
+    );
+    const priceLookup = (courseId) => {
+      const c = courseById.get(String(courseId));
+      if (!c) return 0;
+      const candidates = [c.price, c.salePrice, c.sale_price, c.priceInclVat, c.price_incl_vat];
+      for (const v of candidates) {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      return 0;
+    };
+    const alreadyCountedSaleIds = new Set();
+    for (const r of dfPayoutRowsRaw) {
+      for (const b of (r.breakdown || [])) {
+        if (b?.saleId) alreadyCountedSaleIds.add(String(b.saleId));
+      }
+    }
+    const unlinkedBuckets = computeUnlinkedTreatmentDfBuckets(
+      treatments,
+      { alreadyCountedSaleIds, priceLookup },
+    );
+    const dfPayoutRows = mergeUnlinkedDfIntoPayoutRows(dfPayoutRowsRaw, unlinkedBuckets, doctors);
+
     const doctorRows = buildExpenseDoctorRows({
       doctors,
       expenses: filteredExpenses,
@@ -140,8 +181,9 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       assistantRows: staffSectionRows,
       summary,
       dfSummary: dfReport.summary || { total: 0, doctorCount: 0, lineCount: 0, saleCount: 0 },
+      unlinkedDfDoctors: unlinkedBuckets.size,
     };
-  }, [sales, treatments, doctors, groups, overrides, expenses, from, to]);
+  }, [sales, treatments, doctors, groups, overrides, expenses, courses, from, to]);
 
   const handleRangeChange = useCallback(({ from: f, to: t, presetId: id }) => {
     setFrom(f); setTo(t); setPresetId(id);

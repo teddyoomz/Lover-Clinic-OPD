@@ -20,7 +20,7 @@
 //   F + F-bis  — Triangle Rule (intel captured Phase 0; columns mirror ProClinic)
 //   V14       — no undefined leaves
 
-import { listDoctors, listStaff, listExpenseCategories, listDfGroups, listDfStaffRates } from './backendClient.js';
+import { listDoctors, listStaff, listExpenseCategories, listDfGroups, listDfStaffRates, listCourses, listBranches } from './backendClient.js';
 import { loadSalesByDateRange, loadTreatmentsByDateRange, loadExpensesByDateRange } from './reportsLoaders.js';
 import { computeDfPayoutReport } from './dfPayoutAggregator.js';
 import {
@@ -29,6 +29,9 @@ import {
   buildExpenseStaffRows,
   buildExpenseCategoryRows,
   computeExpenseSummary,
+  // Phase 16.7-ter (2026-04-29 session 33) — DF for unlinked treatments
+  computeUnlinkedTreatmentDfBuckets,
+  mergeUnlinkedDfIntoPayoutRows,
 } from './expenseReportHelpers.js';
 
 // ─── Phase 1: Fetch ────────────────────────────────────────────────────────
@@ -52,6 +55,13 @@ export async function fetchExpenseReportData(filter = {}) {
     ['treatments', () => loadTreatmentsByDateRange({ from, to })],
     ['dfGroups',   () => listDfGroups()],
     ['dfStaffRates', () => listDfStaffRates()],
+    // Phase 16.7-ter — be_courses for percent-rate price lookup on unlinked
+    // treatments (treatment.detail.dfEntries[].rows[].type='percent' needs
+    // the course price; without a sale to read price from, fall back to
+    // the master course doc).
+    ['courses',    () => listCourses()],
+    // Phase 16.7-ter — branches for sidebar empty-state diagnostics
+    ['branches',   () => listBranches()],
   ];
 
   const settled = await Promise.all(
@@ -93,6 +103,8 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
     treatments = [],
     dfGroups = [],
     dfStaffRates = [],
+    courses = [],
+    branches = [],
     errors = {},
   } = rawData || {};
 
@@ -130,13 +142,50 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
     startDate: filter.from || '',
     endDate: filter.to || '',
   });
-  const dfPayoutRows = Array.isArray(dfReport?.rows) ? dfReport.rows : [];
+  const dfPayoutRowsRaw = Array.isArray(dfReport?.rows) ? dfReport.rows : [];
+
+  // Phase 16.7-ter (2026-04-29 session 33) — merge in DF from unlinked treatments
+  // (treatments with filled dfEntries but empty linkedSaleId). This handles
+  // the consume-existing-course case where TFP saves DF entries but no new
+  // sale is created → dfPayoutAggregator's join leaves them invisible.
+  // Real-production verified case: 6 treatments in April with filled
+  // dfEntries, ALL with empty linkedSaleId → previously ฿0 across the board.
+  const courseById = new Map(
+    (Array.isArray(courses) ? courses : []).map(c => [String(c?.courseId || c?.id || ''), c])
+  );
+  const priceLookup = (courseId) => {
+    const c = courseById.get(String(courseId));
+    if (!c) return 0;
+    const candidates = [c.price, c.salePrice, c.sale_price, c.priceInclVat, c.price_incl_vat];
+    for (const v of candidates) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  };
+  const alreadyCountedSaleIds = new Set();
+  for (const r of dfPayoutRowsRaw) {
+    for (const b of (r.breakdown || [])) {
+      if (b?.saleId) alreadyCountedSaleIds.add(String(b.saleId));
+    }
+  }
+  const unlinkedBuckets = computeUnlinkedTreatmentDfBuckets(
+    branchFilteredTreatments,
+    { alreadyCountedSaleIds, priceLookup },
+  );
+  const dfPayoutRows = mergeUnlinkedDfIntoPayoutRows(dfPayoutRowsRaw, unlinkedBuckets, doctors);
 
   // Build the 3 visible sections
   const doctorRows   = buildExpenseDoctorRows({ doctors, expenses: filteredExpenses, dfPayoutRows });
   const staffRows    = buildExpenseStaffRows({ staff, doctors, expenses: filteredExpenses, dfPayoutRows });
   const categoryRows = buildExpenseCategoryRows({ expenses: filteredExpenses });
-  const summary      = computeExpenseSummary({ doctorRows, staffRows, categoryRows });
+
+  // Phase 16.7-ter — sum unlinked DF for totalAll calculation
+  let totalUnlinkedDf = 0;
+  for (const bucket of unlinkedBuckets.values()) {
+    totalUnlinkedDf += Number(bucket.totalDf || 0);
+  }
+  const summary = computeExpenseSummary({ doctorRows, staffRows, categoryRows, totalUnlinkedDf });
 
   return {
     summary,
@@ -160,6 +209,10 @@ export function composeExpenseReportSnapshot(rawData, filter = {}) {
         sales:      branchFilteredSales.length,
         treatments: branchFilteredTreatments.length,
         dfRows:     dfPayoutRows.length,
+        // Phase 16.7-ter — surface diagnostics for "ทำไมรายงานเป็น 0"
+        courses:    courses.length,
+        branches:   branches.length,
+        unlinkedDfDoctors: unlinkedBuckets.size,
       },
     },
   };

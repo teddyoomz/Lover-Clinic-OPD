@@ -258,7 +258,7 @@ export function buildExpenseCategoryRows({ expenses = [] } = {}) {
  *   totalCategoryCount: number,
  * }}
  */
-export function computeExpenseSummary({ doctorRows = [], staffRows = [], categoryRows = [] } = {}) {
+export function computeExpenseSummary({ doctorRows = [], staffRows = [], categoryRows = [], totalUnlinkedDf = 0 } = {}) {
   const sumKey = (rows, key) => rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
   const totalDoctor       = roundTHB(sumKey(doctorRows, 'total'));
   const totalDoctorSit    = roundTHB(sumKey(doctorRows, 'sitFee'));
@@ -270,12 +270,14 @@ export function computeExpenseSummary({ doctorRows = [], staffRows = [], categor
   const totalStaffSalary  = roundTHB(sumKey(staffRows, 'salary'));
   const totalStaffOther   = roundTHB(sumKey(staffRows, 'other'));
   const totalCategory     = roundTHB(sumKey(categoryRows, 'total'));
-  // totalAll uses the category sum because doctor + staff sums and category
-  // sum should reconcile: every expense has both a categoryName AND (usually)
-  // a userId. Doctor + staff rows skip expenses-without-userId; category
-  // captures everything. We expose both and let the UI display category sum
-  // as the "total" headline.
-  const totalAll = totalCategory;
+  // Phase 16.7-ter (2026-04-29 session 33): totalAll = categoryTotal +
+  // unlinkedDfTotal. Pre-fix totalAll = totalCategory which missed DF from
+  // treatments that weren't yet booked as be_expenses. Real-production case
+  // (user-reported all-zeros bug): be_expenses is empty BUT 6 treatments
+  // had filled dfEntries totaling ~14,710 baht → previously totalAll showed
+  // ฿0 even though doctors had earned DF.
+  const unlinkedDf = roundTHB(Number(totalUnlinkedDf || 0));
+  const totalAll = roundTHB(totalCategory + unlinkedDf);
   return {
     totalDoctor,
     totalDoctorSit,
@@ -287,6 +289,7 @@ export function computeExpenseSummary({ doctorRows = [], staffRows = [], categor
     totalStaffSalary,
     totalStaffOther,
     totalCategory,
+    totalUnlinkedDf: unlinkedDf,
     totalAll,
     totalDoctorCount: doctorRows.length,
     totalStaffCount: staffRows.length,
@@ -302,3 +305,154 @@ export const EXPENSE_CATEGORY_PATTERNS = Object.freeze({
 });
 
 export { classifyExpenseCategory, bucketExpensesByUser, fullName };
+
+/**
+ * Phase 16.7-ter (2026-04-29 session 33) — compute DF for treatments whose
+ * dfEntries are filled in but whose linkedSaleId is empty (or points to a
+ * sale outside the date range / not loaded).
+ *
+ * Why this exists:
+ *   `dfPayoutAggregator.computeDfPayoutReport` requires a treatment-to-sale
+ *   join (Phase 14.5) — it iterates SALES and for each in-range sale checks
+ *   `explicitBySale[saleId]` for a matching treatment. Treatments with empty
+ *   linkedSaleId NEVER match the join → their DF is invisible.
+ *
+ *   Real production case: when a user completes a treatment that consumes
+ *   an EXISTING customer course (not a new purchase), no fresh sale is
+ *   created. TreatmentFormPage saves `detail.dfEntries[]` but
+ *   `detail.linkedSaleId` stays empty → DF goes uncounted.
+ *
+ *   Investigation 2026-04-29 (session 33 user-reported all-zeros bug):
+ *   6 treatments in April had filled dfEntries; ALL 6 had `linkedSaleId=''`.
+ *   ExpenseReportTab + DfPayoutReportTab both showed ฿0 for every doctor.
+ *
+ * What we compute:
+ *   - For `type: 'baht'` rate rows: DF = `value` per row (flat baht; qty
+ *     defaults to 1 because the treatment is the qty unit).
+ *   - For `type: 'percent'` rate rows: DF = `price * (value / 100)`. Price
+ *     comes from the `priceLookup(courseId)` callback (be_courses lookup);
+ *     when the lookup returns 0 / null, the row is skipped (no sale = no
+ *     price = no DF). v1 limitation: documented in test bank.
+ *
+ * Idempotent with dfPayoutAggregator: pass `alreadyCountedSaleIds` so we
+ * SKIP any treatment whose linkedSaleId is already covered by the canonical
+ * Phase 14.5 path. Treatments without linkedSaleId are always processed
+ * here. Treatments with linkedSaleId pointing to an out-of-range sale are
+ * also processed (since dfPayoutAggregator's sale loop excludes them).
+ *
+ * @param {Array<Object>} treatments
+ * @param {Object} [options]
+ * @param {Set<string>} [options.alreadyCountedSaleIds]   — saleIds already counted by dfPayoutAggregator
+ * @param {(courseId: string) => number} [options.priceLookup] — be_courses price for percent rates
+ * @returns {Map<string, { totalDf: number, lineCount: number, breakdown: Array<Object> }>}
+ *          per-doctor unlinked-DF buckets
+ */
+export function computeUnlinkedTreatmentDfBuckets(treatments, options = {}) {
+  const { alreadyCountedSaleIds = new Set(), priceLookup = null } = options;
+  const map = new Map();
+  for (const t of (treatments || [])) {
+    if (!t) continue;
+    const linked = String(t?.detail?.linkedSaleId || t?.linkedSaleId || '').trim();
+    // If linked AND already counted by dfPayoutAggregator → skip (no double-count).
+    if (linked && alreadyCountedSaleIds.has(linked)) continue;
+    const entries = t?.detail?.dfEntries;
+    if (!Array.isArray(entries) || entries.length === 0) continue;
+
+    for (const entry of entries) {
+      const doctorId = String(entry?.doctorId || '').trim();
+      if (!doctorId) continue;
+      for (const row of (entry.rows || [])) {
+        if (!row || !row.enabled) continue;
+        const value = Number(row.value) || 0;
+        if (value <= 0) continue;
+        const type = row.type;
+        let df = 0;
+        let priceUsed = null;
+        if (type === 'baht') {
+          df = value; // flat per visit; qty=1
+        } else if (type === 'percent') {
+          if (typeof priceLookup !== 'function') continue;
+          const courseId = String(row.courseId || '').trim();
+          if (!courseId) continue;
+          priceUsed = priceLookup(courseId) || 0;
+          if (priceUsed <= 0) continue;
+          df = priceUsed * (value / 100);
+        } else {
+          continue; // unknown type
+        }
+        if (df <= 0) continue;
+        if (!map.has(doctorId)) {
+          map.set(doctorId, { totalDf: 0, lineCount: 0, breakdown: [] });
+        }
+        const bucket = map.get(doctorId);
+        bucket.totalDf += df;
+        bucket.lineCount += 1;
+        bucket.breakdown.push({
+          treatmentId: t.id || t.treatmentId || null,
+          treatmentDate: t?.detail?.treatmentDate || '',
+          courseId: row.courseId || '',
+          courseName: row.courseName || '',
+          rateType: type,
+          rateValue: value,
+          priceUsed,
+          df,
+          source: 'unlinkedTreatment',
+        });
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Phase 16.7-ter — merge unlinked-DF buckets into dfPayoutAggregator rows
+ * before passing to buildExpenseDoctorRows / buildExpenseStaffRows.
+ *
+ * Returns a NEW array; does NOT mutate input rows. New doctorIds (not in
+ * the original dfPayoutRows) get a synthetic row with totalDf populated.
+ *
+ * @param {Array<{doctorId, doctorName, totalDf, lineCount, breakdown, ...}>} dfPayoutRows
+ * @param {Map<string, {totalDf, lineCount, breakdown}>} unlinkedBuckets
+ * @param {Array<Object>} doctors  — for resolving doctorName on synthetic rows
+ * @returns {Array<{doctorId, doctorName, totalDf, lineCount, breakdown}>}
+ */
+export function mergeUnlinkedDfIntoPayoutRows(dfPayoutRows, unlinkedBuckets, doctors = []) {
+  const safeRows = Array.isArray(dfPayoutRows) ? dfPayoutRows : [];
+  const safeBuckets = unlinkedBuckets instanceof Map ? unlinkedBuckets : new Map();
+  if (safeBuckets.size === 0) return safeRows.map(r => ({ ...r }));
+
+  const doctorById = new Map(
+    (doctors || []).map(d => [String(d?.doctorId || d?.id || ''), d])
+  );
+  const out = safeRows.map(r => {
+    const doctorId = String(r?.doctorId || '');
+    const bucket = safeBuckets.get(doctorId);
+    if (!bucket) return { ...r };
+    return {
+      ...r,
+      totalDf: roundTHB(Number(r.totalDf || 0) + bucket.totalDf),
+      lineCount: Number(r.lineCount || 0) + bucket.lineCount,
+      breakdown: [...(Array.isArray(r.breakdown) ? r.breakdown : []), ...bucket.breakdown],
+    };
+  });
+  // Add synthetic rows for doctorIds present in buckets but not in original rows
+  const seen = new Set(out.map(r => String(r.doctorId)));
+  for (const [doctorId, bucket] of safeBuckets) {
+    if (seen.has(doctorId)) continue;
+    const doctor = doctorById.get(doctorId);
+    const doctorName = doctor?.name
+      || `${doctor?.firstname || ''} ${doctor?.lastname || ''}`.trim()
+      || doctor?.nickname
+      || doctorId;
+    out.push({
+      doctorId,
+      doctorName,
+      dfGroupId: doctor?.defaultDfGroupId || '',
+      totalDf: roundTHB(bucket.totalDf),
+      saleCount: 0,
+      lineCount: bucket.lineCount,
+      breakdown: bucket.breakdown,
+    });
+  }
+  return out;
+}
