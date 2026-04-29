@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 late evening (session 30 cont.) — Phase 16.3 System Settings + V36-quater/quinquies course-history + V15 #9 deploy
+- **Date last updated**: 2026-04-29 EOD (session 30 cont.) — Phase 16.3 + 16.3-bis fix
 - **Branch**: `master`
-- **Last commit**: `f4e6127 feat(system): Phase 16.3 — System Settings tab + per-tab overrides + feature flags + audit trail`
-- **Test count**: **3759** focused (+162 across V36-quater + V36-quinquies + Phase 16.3)
+- **Last commit**: `ced094d fix(tab-access): Phase 16.3-bis — wire tabOverrides through useTabAccess hook`
+- **Test count**: **3771** focused (+174 cumulative this session)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` · master 1 commit ahead-of-prod (`ced094d` 16.3-bis fix awaiting V15 #10 deploy auth)
   - V15 #9 firestore.rules CHANGED — Phase 16.3 narrow match for `clinic_settings/system_config` + `be_admin_audit/system-config-*` create exception (rules version 20 → 21)
   - Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 = all 200
   - HTTP smoke: / 200, /admin 200, /api/webhook/line 401 (LINE sig — expected)
@@ -20,6 +20,24 @@
   - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
   - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
   - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
+
+### Session 2026-04-29 EOD (session 30 cont.) — Phase 16.3 + V15 #9 + 16.3-bis fix
+
+8 commits across V36 family + Phase 16 next sub-phase.
+
+**Commits**: ae760c7 V36 → 6f8af43 V36-bis/tris → db6d84e V36-quater → 0dd147c V36-quinquies → f4e6127 Phase 16.3 → ced094d 16.3-bis (unpushed-to-prod) + 2 EOD doc commits.
+
+**V36-quater** — purchased-in-session course-history audit emit fix (TFP:2654 sibling miss to V36-bis line 2156 fix). Customer "asdas dasd" treatment with purchased-in-session courses → 0 audit docs in be_course_changes pre-fix; post-fix audit emits properly.
+
+**V36-quinquies** — real-time listeners. NEW `listenToCustomer(customerId, ...)` + `listenToCourseChanges(customerId, ...)` helpers. CustomerDetailView now uses live `liveCustomer` state via onSnapshot; CourseHistoryTab swapped from one-shot `listCourseChanges` to onSnapshot. User report: "ประวัติการใช้คอร์สไม่รีเฟรชแบบ real time".
+
+**Phase 16.3 System Settings tab** — admin UI for tab-visibility overrides + defaults (deposit% / points-per-baht / dateRange) + feature flags (allowNegativeStock Q4-C semantic) + audit trail viewer. NEW permission key `system_config_management`. firestore.rules version 20 → 21 (clinic_settings/system_config narrow match + be_admin_audit/system-config-* create exception). 4 brainstorming Qs answered (Q1-D / Q2-C / Q3-A / Q4-C). Spec: `docs/superpowers/specs/2026-04-29-phase16-3-system-settings-design.md`. Tests +107 across 5 phase16.3-* files.
+
+**V15 #9 deploy** — Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 200; HTTP smoke / 200 · /admin 200 · /api/webhook/line 401. Phase 16.3 system_config new probe: unauth GET → 404 (doc not yet created — rule deployed cleanly).
+
+**Phase 16.3-bis fix** (ced094d, unpushed-to-prod) — V12 multi-reader-sweep regression at consumer-hook level. `useTabAccess.js` called `canAccessTab/filterAllowedTabs/firstAllowedTab` WITHOUT the new 4th `overrides` arg → admin-saved tabOverrides had ZERO runtime effect. Fix: import `useSystemConfig`, extract `config.tabOverrides`, pass to all 3 forwarded helpers + closures + memo dep. Tests +12 V36-style anti-regression bank (every consumer-hook call must include 4th arg).
+
+Detail: `.agents/sessions/2026-04-29-session30-cont-phase16-3.md`
 
 ### Session 2026-04-29 evening (session 30) — V36 + V15 #8
 
@@ -148,23 +166,23 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-04-29 EOD (session 29).
+Resume LoverClinic — continue from 2026-04-29 EOD (session 30 cont.).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=2aae710, prod=cf54400 — 5 commits unpushed)
-3. .agents/active.md (3456 tests pass; Phase 16.5 family closed)
-4. .claude/rules/00-session-start.md (iron-clad + V-summary)
-5. .agents/sessions/2026-04-29-session29-phase16-5-family.md
+2. SESSION_HANDOFF.md (master=ced094d, prod=f4e6127 — 1 commit unpushed-to-prod)
+3. .agents/active.md (3771 tests pass; Phase 16.3 closed; 16.3-bis fix on master)
+4. .claude/rules/00-session-start.md (iron-clad + V-table incl. Phase 16.3 + 16.3-bis)
+5. .agents/sessions/2026-04-29-session30-cont-phase16-3.md
 
-Status: master=2aae710, 3456/3456 tests pass, prod=cf54400 LIVE
-Next: V15 #8 deploy when authorized OR start 16.3 System Settings
+Status: master=ced094d, 3771/3771 tests pass, prod=f4e6127 LIVE (V15 #9)
+Next: User QA Phase 16.3 + 16.3-bis on dev → V15 #10 deploy auth OR proceed 16.2 Clinic Report
 Outstanding (user-triggered):
-- V15 #8 combined deploy auth (5 commits)
-- After deploy: live QA Phase 16.5 family
+- V15 #10 deploy auth (1 commit ced094d unpushed-to-prod — 16.3-bis tab-override wire fix)
+- 16.4 Order tab intel still failing MODULE_NOT_FOUND (deferred)
 - Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger; NO real-action clicks in preview_eval (memory-locked).
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger; NO real-action clicks in preview_eval (memory-locked); H-quater (no master_data reads in feature code).
 /session-start
 ```
 
