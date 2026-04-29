@@ -207,16 +207,50 @@ export function computeDfPayoutReport({
     }
 
     // Build list of (doctorId, share) pairs for this sale.
+    //
+    // Phase 16.7-quater (2026-04-29 session 33) — schema flexibility:
+    //   1. Accept seller.id ALONGSIDE seller.sellerId. Production data
+    //      (verified via preview_eval against live April 2026 sales) uses
+    //      `id` field for the seller key — pre-fix the filter rejected
+    //      every such seller, leading to all-zero DF in the fallback path.
+    //   2. Accept seller.share (0..1) ALONGSIDE seller.percent (0..100) so
+    //      legacy + new sale schemas both resolve.
+    //   3. When the sum of explicit percents/shares equals zero but
+    //      sellers exist, fall back to EQUAL SPLIT (1/N). 43 of 57 April
+    //      sales had all-zero percents and no DF computed — equal split is
+    //      the safe default that preserves DF visibility while admin fixes
+    //      the underlying data drift.
     let assignments = [];
     if (Array.isArray(sale.sellers) && sale.sellers.length > 0) {
-      assignments = sale.sellers
-        .filter((s) => s && s.sellerId)
-        .map((s) => ({ doctorId: String(s.sellerId), share: (Number(s.percent) || 0) / 100 }));
-    } else if (sale.doctorId) {
-      assignments = [{ doctorId: String(sale.doctorId), share: 1 }];
-    } else {
-      continue; // unassigned sale — skip
+      const validSellers = sale.sellers.filter((s) => s && (s.sellerId || s.id));
+      if (validSellers.length > 0) {
+        const explicitShares = validSellers.map((s) => {
+          const pct = Number(s.percent);
+          if (Number.isFinite(pct) && pct > 0) return pct / 100;
+          const sh = Number(s.share);
+          if (Number.isFinite(sh) && sh > 0) return sh;
+          return 0;
+        });
+        const sumShare = explicitShares.reduce((a, b) => a + b, 0);
+        if (sumShare > 0) {
+          assignments = validSellers.map((s, i) => ({
+            doctorId: String(s.sellerId || s.id),
+            share: explicitShares[i],
+          }));
+        } else {
+          // All-zero percents: equal split across N sellers
+          const evenShare = 1 / validSellers.length;
+          assignments = validSellers.map((s) => ({
+            doctorId: String(s.sellerId || s.id),
+            share: evenShare,
+          }));
+        }
+      }
     }
+    if (assignments.length === 0 && sale.doctorId) {
+      assignments = [{ doctorId: String(sale.doctorId), share: 1 }];
+    }
+    if (assignments.length === 0) continue; // unassigned sale — skip
 
     for (const { doctorId, share } of assignments) {
       if (share <= 0) continue;
