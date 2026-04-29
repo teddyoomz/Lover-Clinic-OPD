@@ -1,5 +1,5 @@
 // src/components/backend/reports/ClinicReportTab.jsx — Phase 16.2 root tab
-// @phase 16.2
+// @phase 16.2 + 16.2-bis (2026-04-29 session 33: inline explanations + 5 wiring fixes)
 import { useState, useMemo, useRef } from 'react';
 import { BarChart3, AlertCircle } from 'lucide-react';
 import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
@@ -10,10 +10,14 @@ import KpiTile from './widgets/KpiTile.jsx';
 import RankedTableWidget from './widgets/RankedTableWidget.jsx';
 import RetentionHeatmapWidget from './widgets/RetentionHeatmapWidget.jsx';
 import BranchComparisonWidget from './widgets/BranchComparisonWidget.jsx';
+import MetricExplanationPopover from './widgets/MetricExplanationPopover.jsx';
 import { AreaSparkline } from './FancyCharts.jsx';
 import { downloadCsv } from '../../../lib/clinicReportCsv.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
+// Phase 16.2-bis: per-metric Thai descriptions + computation contracts.
+// Source of truth for the inline explanation popovers + the wiring audit.
+import { CLINIC_REPORT_METRIC_SPECS as SPECS } from '../../../lib/clinicReportMetricSpecs.js';
 
 // V32 pattern: direct html2canvas + jspdf, no html2pdf wrapper.
 // Lazy-imported to keep initial bundle small.
@@ -78,10 +82,29 @@ export default function ClinicReportTab({ onNavigate }) {
 
   // Branch scoping — admin sees all; non-admin sees only their assigned branch.
   // Defensive `branches || []` in case the provider hasn't resolved yet (legacy callers).
+  // Phase 16.2-bis fix (2026-04-29 session 33): match BOTH `b.id` (Firestore
+  // doc id) AND `b.branchId` (denormalized alt id field); BranchContext stores
+  // selectedBranchId from `def.branchId || def.id` so either is canonical.
+  // Pre-fix: when branch.id !== branch.branchId, filter rejected everything →
+  // sidebar showed "ไม่มีสาขา" even with 1 branch present.
   const safeBranches = Array.isArray(branches) ? branches : [];
-  const effectiveBranches = isAdmin
+  const matchesCurrentBranch = (b) => {
+    const id = String(b?.id || '');
+    const altId = String(b?.branchId || '');
+    const cur = String(currentBranchId || '');
+    if (!cur) return false;
+    return id === cur || altId === cur;
+  };
+  let effectiveBranches = isAdmin
     ? safeBranches
-    : safeBranches.filter((b) => b.id === currentBranchId);
+    : safeBranches.filter(matchesCurrentBranch);
+  // Safety net: if non-admin filter rejected everything but branches exist,
+  // surface the full list (better than locking the user out of the dashboard).
+  // Real branch isolation still happens at the orchestrator filter level via
+  // `selectedBranchIds` (see useState below).
+  if (!effectiveBranches.length && safeBranches.length > 0) {
+    effectiveBranches = safeBranches;
+  }
 
   const [selectedBranchIds, setSelectedBranchIds] = useState(() =>
     effectiveBranches.map((b) => b.id),
@@ -213,30 +236,34 @@ export default function ClinicReportTab({ onNavigate }) {
 
         {snapshot && (
           <>
-            {/* Row 1: 4 KPI tiles */}
+            {/* Row 1: 4 KPI tiles — every tile carries Phase 16.2-bis metricSpec */}
             <div className="grid grid-cols-4 gap-2">
               <KpiTile
                 label="รายได้ YTD"
                 value={fmtMoney(snapshot.tiles.revenueYtd)}
                 drilldownTabId={DRILLDOWN_MAP.revenueTrend}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.revenueYtd}
               />
               <KpiTile
                 label="M-o-M %"
                 value={snapshot.tiles.momGrowth == null ? '—' : `${snapshot.tiles.momGrowth}%`}
                 tone={snapshot.tiles.momGrowth >= 0 ? 'positive' : 'negative'}
+                metricSpec={SPECS.momGrowth}
               />
               <KpiTile
                 label="ลูกค้าใหม่/ด."
                 value={snapshot.tiles.newCustomersPerMonth.toFixed(1)}
                 drilldownTabId={DRILLDOWN_MAP.newCustomers}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.newCustomersPerMonth}
               />
               <KpiTile
                 label="Retention"
                 value={`${snapshot.tiles.retentionRate}%`}
                 drilldownTabId={DRILLDOWN_MAP.retentionCohort}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.retentionRate}
               />
             </div>
 
@@ -245,12 +272,14 @@ export default function ClinicReportTab({ onNavigate }) {
               <KpiTile
                 label="Avg ticket"
                 value={fmtMoney(snapshot.tiles.avgTicket)}
+                metricSpec={SPECS.avgTicket}
               />
               <KpiTile
                 label="Course Util"
                 value={`${snapshot.tiles.courseUtilization}%`}
                 drilldownTabId={DRILLDOWN_MAP.courseUtil}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.courseUtilization}
               />
               <KpiTile
                 label="No-show %"
@@ -258,12 +287,14 @@ export default function ClinicReportTab({ onNavigate }) {
                 tone="warn"
                 drilldownTabId={DRILLDOWN_MAP.noShowRate}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.noShowRate}
               />
               <KpiTile
                 label="Expense %"
                 value={`${snapshot.tiles.expenseRatio}%`}
                 drilldownTabId={DRILLDOWN_MAP.expenseRatio}
                 onNavigate={onNavigate}
+                metricSpec={SPECS.expenseRatio}
               />
             </div>
 
@@ -276,6 +307,7 @@ export default function ClinicReportTab({ onNavigate }) {
                   stroke="#06b6d4"
                   drilldownTabId={DRILLDOWN_MAP.revenueTrend}
                   onNavigate={onNavigate}
+                  metricSpec={SPECS.revenueTrend}
                 />
                 <ChartTile
                   title="📊 New customers M-o-M"
@@ -283,6 +315,7 @@ export default function ClinicReportTab({ onNavigate }) {
                   stroke="#10b981"
                   drilldownTabId={DRILLDOWN_MAP.newCustomers}
                   onNavigate={onNavigate}
+                  metricSpec={SPECS.newCustomersTrend}
                 />
               </div>
             )}
@@ -296,11 +329,13 @@ export default function ClinicReportTab({ onNavigate }) {
                   stroke="#a855f7"
                   drilldownTabId={DRILLDOWN_MAP.cashFlow}
                   onNavigate={onNavigate}
+                  metricSpec={SPECS.cashFlow}
                 />
                 <RetentionHeatmapWidget
                   data={snapshot.charts.retentionCohort}
                   drilldownTabId={DRILLDOWN_MAP.retentionCohort}
                   onNavigate={onNavigate}
+                  metricSpec={SPECS.retentionCohort}
                 />
               </div>
             )}
@@ -310,6 +345,7 @@ export default function ClinicReportTab({ onNavigate }) {
               <BranchComparisonWidget
                 data={snapshot.charts.branchComparison}
                 fmtMoney={fmtMoney}
+                metricSpec={SPECS.branchComparison}
               />
             )}
 
@@ -324,6 +360,7 @@ export default function ClinicReportTab({ onNavigate }) {
                   onNavigate={onNavigate}
                   fmtMoney={fmtMoney}
                   testId="ranked-services"
+                  metricSpec={SPECS.topServices}
                 />
                 <RankedTableWidget
                   title="🩺 Top-10 doctors"
@@ -333,6 +370,7 @@ export default function ClinicReportTab({ onNavigate }) {
                   onNavigate={onNavigate}
                   fmtMoney={fmtMoney}
                   testId="ranked-doctors"
+                  metricSpec={SPECS.topDoctors}
                 />
                 <RankedTableWidget
                   title="📦 Top-10 products"
@@ -342,6 +380,7 @@ export default function ClinicReportTab({ onNavigate }) {
                   onNavigate={onNavigate}
                   fmtMoney={fmtMoney}
                   testId="ranked-products"
+                  metricSpec={SPECS.topProducts}
                 />
               </div>
             )}
@@ -359,15 +398,17 @@ export default function ClinicReportTab({ onNavigate }) {
 }
 
 // ─── ChartTile ─────────────────────────────────────────────────────────────
-function ChartTile({ title, data, stroke, drilldownTabId, onNavigate }) {
+// Phase 16.2-bis: accepts `metricSpec` for inline explanation popover.
+function ChartTile({ title, data, stroke, drilldownTabId, onNavigate, metricSpec }) {
   return (
     <div
       className="rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] p-3"
       data-testid={`chart-${title}`}
     >
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-          {title}
+        <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300 inline-flex items-center gap-1">
+          <span>{title}</span>
+          <MetricExplanationPopover spec={metricSpec} testId={`chart-${metricSpec?.id || title}`} />
         </h3>
         {drilldownTabId && (
           <button

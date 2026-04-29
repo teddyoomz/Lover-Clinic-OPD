@@ -1,20 +1,27 @@
-// src/components/backend/reports/widgets/RetentionHeatmapWidget.jsx — Phase 16.2
+// src/components/backend/reports/widgets/RetentionHeatmapWidget.jsx — Phase 16.2 / extended 16.2-bis
 import { ChevronRight } from 'lucide-react';
+import MetricExplanationPopover from './MetricExplanationPopover.jsx';
 
 /**
  * Cohort retention heatmap. Custom inline SVG (no chart library).
+ *
+ * Phase 16.2-bis: accepts `metricSpec` for inline explanation popover.
  *
  * @param {object} p
  * @param {{ rows: Array<{cohort: string, cohortSize: number, cells: number[]}>, overallRate: number }} p.data
  * @param {string|null} [p.drilldownTabId]
  * @param {(tabId: string) => void} [p.onNavigate]
+ * @param {object|null} [p.metricSpec] — Phase 16.2-bis
  */
-export default function RetentionHeatmapWidget({ data, drilldownTabId, onNavigate }) {
+export default function RetentionHeatmapWidget({ data, drilldownTabId, onNavigate, metricSpec }) {
   const rows = data?.rows || [];
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] p-3" data-testid="widget-retention-cohort">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2">Retention cohort</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 inline-flex items-center gap-1">
+          <span>Retention cohort</span>
+          <MetricExplanationPopover spec={metricSpec} testId={`widget-${metricSpec?.id || 'retention-cohort'}`} />
+        </h3>
         <p className="text-[10px] text-[var(--tx-muted)]">ไม่มีข้อมูลในช่วงเวลานี้</p>
       </div>
     );
@@ -38,8 +45,9 @@ export default function RetentionHeatmapWidget({ data, drilldownTabId, onNavigat
   return (
     <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] p-3" data-testid="widget-retention-cohort">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300">
-          Retention cohort
+        <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300 inline-flex items-center gap-1">
+          <span>Retention cohort</span>
+          <MetricExplanationPopover spec={metricSpec} testId={`widget-${metricSpec?.id || 'retention-cohort'}`} />
           <span className="ml-2 text-[10px] font-normal text-[var(--tx-muted)]">overall {data.overallRate ?? 0}%</span>
         </h3>
         {drilldownTabId && (

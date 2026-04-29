@@ -39,6 +39,11 @@ import {
   listExpenses,
   listBranches,
 } from './backendClient.js';
+// Phase 16.2-bis (2026-04-29 session 33): be_treatments load for doctor-enrichment.
+// loadTreatmentsByDateRange is already used by DfPayoutReportTab; reusing here
+// to fix TOP-10 DOCTORS empty-table bug. Sales lack a denormalized doctorId
+// when they're treatment-linked; we join via treatment.detail.linkedSaleId.
+import { loadTreatmentsByDateRange } from './reportsLoaders.js';
 
 import { aggregateRevenueByProcedure } from './revenueAnalysisAggregator.js';
 import { aggregateCustomerReport }      from './customerReportAggregator.js';
@@ -53,6 +58,7 @@ import {
   computeRetentionCohort,
   computeBranchComparison,
   computeCourseUtilizationFromCustomers,
+  filterExpensesForReport,
   getSaleNetTotal,
   getExpenseDate,
 } from './clinicReportHelpers.js';
@@ -92,6 +98,11 @@ export async function fetchClinicReportData(filter = {}) {
     ['courses',  () => listCourses()],
     ['expenses', () => listExpenses({ startDate: from, endDate: to })],
     ['branches', () => listBranches()],
+    // Phase 16.2-bis: load treatments alongside sales so we can enrich
+    // sale.doctorId from treatment.detail.linkedSaleId BEFORE the staff
+    // sales aggregator runs. Without this, TOP-10 DOCTORS table renders
+    // empty because sales don't carry denormalized doctorId.
+    ['treatments', () => loadTreatmentsByDateRange({ from, to })],
   ];
 
   const settled = await Promise.all(
@@ -136,23 +147,48 @@ export function composeClinicReportSnapshot(rawData, filter = {}) {
     courses = [],
     expenses = [],
     branches = [],
+    treatments = [],
     errors = {},
   } = rawData || {};
 
+  // ── Phase 16.2-bis: enrich sales with doctorId via treatment.linkedSaleId ──
+  // Must run BEFORE staffSalesAggregator. The aggregator's `doctorKey` reads
+  // sale.doctorId / sale.treatment?.doctorId; treatment-linked sales carry
+  // neither natively. We compute the join here once.
+  const enrichedSales = enrichSalesWithDoctorIdFromTreatments(sales, treatments);
+
+  // ── Phase 16.2-bis: pre-filter enriched sales by branchIds for aggregators
+  //   that don't read filter.branchIds internally. Without this, TOP-10
+  //   DOCTORS / Top-services / etc. include cross-branch sales even when
+  //   the user filtered to a single branch. computeBranchComparison still
+  //   reads filter.branchIds itself (separate concern).
+  const branchSetForAggs = Array.isArray(filter.branchIds) && filter.branchIds.length
+    ? new Set(filter.branchIds.map(String))
+    : null;
+  const branchFilteredEnrichedSales = branchSetForAggs
+    ? enrichedSales.filter(s => s && branchSetForAggs.has(String(s.branchId)))
+    : enrichedSales;
+
   // ── Delegate to existing aggregators ──
-  const revenueByProcedure = aggregateRevenueByProcedure(sales, courses, filter);
-  const customerReport     = aggregateCustomerReport(customers, sales, filter);
-  const staffSales         = aggregateStaffSales(sales, filter);
+  // Phase 16.2-bis: pass enriched + branch-filtered sales to aggregators
+  // that don't have built-in branch awareness.
+  const revenueByProcedure = aggregateRevenueByProcedure(branchFilteredEnrichedSales, courses, filter);
+  const customerReport     = aggregateCustomerReport(customers, branchFilteredEnrichedSales, filter);
+  const staffSales         = aggregateStaffSales(branchFilteredEnrichedSales, filter);
   const stockReport        = aggregateStockReport(batches, products, filter);
   const appointmentReport  = aggregateAppointmentReport(appointments, customers, [...staff, ...doctors], filter);
-  const appointmentAnalysis = aggregateAppointmentAnalysis(appointments, sales, { from: filter.from, to: filter.to });
+  const appointmentAnalysis = aggregateAppointmentAnalysis(appointments, branchFilteredEnrichedSales, { from: filter.from, to: filter.to });
 
   // ── Delegate to shared helpers ──
-  const branchComparison  = computeBranchComparison({ sales, branches, filter });
-  const retentionCohort   = computeRetentionCohort({ sales, customers, filter });
-  // Use real parseQtyString helper from courseUtils — customer.courses[].qty
-  // is a string `"<remaining> / <total> <unit>"` not numeric fields.
-  const courseUtilization = computeCourseUtilizationFromCustomers(customers, parseQtyString);
+  // computeBranchComparison reads filter.branchIds internally; pass full
+  // enrichedSales so it can group by branchId for the visible branch set.
+  const branchComparison  = computeBranchComparison({ sales: enrichedSales, branches, filter });
+  // computeRetentionCohort filters its own date+branch internally.
+  const retentionCohort   = computeRetentionCohort({ sales: enrichedSales, customers, filter });
+  // Phase 16.2-bis: pass filter.branchIds so course utilization respects branch filter.
+  // Pre-fix: customers across all branches were aggregated even when user
+  // filtered the dashboard to a single branch.
+  const courseUtilization = computeCourseUtilizationFromCustomers(customers, parseQtyString, filter.branchIds);
   const noShowRate        = Number(appointmentAnalysis?.totals?.noShowRate || 0);
 
   const tiles = computeKpiTiles({
@@ -197,9 +233,13 @@ export function composeClinicReportSnapshot(rawData, filter = {}) {
   const topProducts = _aggregateTopProducts(sales, filter).slice(0, 10);
 
   // ── Build chart series ──
-  const revenueTrend       = _bucketByMonth(sales, filter);
+  // Phase 16.2-bis: _bucketByMonth + _bucketCashFlowByMonth read
+  // filter.branchIds internally (post-fix), so passing branch-prefiltered
+  // sales would double-filter. Use enrichedSales (full set) and let the
+  // bucket helpers apply their own branch filter.
+  const revenueTrend       = _bucketByMonth(enrichedSales, filter);
   const newCustomersTrend  = _bucketCustomersByMonth(customers, filter);
-  const cashFlow           = _bucketCashFlowByMonth(sales, expenses, filter);
+  const cashFlow           = _bucketCashFlowByMonth(enrichedSales, expenses, filter);
 
   return {
     tiles,
@@ -263,9 +303,17 @@ function buildMonthRange(from, to) {
   return months.length > 0 ? months : [start];
 }
 
-/** Bucket sales revenue by month within the filter window. */
+/**
+ * Bucket sales revenue by month within the filter window.
+ *
+ * Phase 16.2-bis: respects filter.branchIds. Pre-fix this counted ALL sales
+ * across branches, inflating the trend.
+ */
 function _bucketByMonth(sales, filter) {
-  const { from = '', to = '' } = filter || {};
+  const { from = '', to = '', branchIds } = filter || {};
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
   const buckets = {};
   for (const s of sales) {
     if (!s || s.status === 'cancelled') continue;
@@ -273,28 +321,48 @@ function _bucketByMonth(sales, filter) {
     if (!d) continue;
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
+    if (branchSet && s.branchId && !branchSet.has(String(s.branchId))) continue;
     buckets[d] = (buckets[d] || 0) + getSaleNetTotal(s);
   }
   return Object.entries(buckets).sort().map(([label, value]) => ({ label, value }));
 }
 
-/** Bucket new customer count by month within the filter window. */
+/**
+ * Bucket new customer count by month within the filter window.
+ *
+ * Phase 16.2-bis: respects filter.branchIds. Pre-fix this counted ALL
+ * customers across branches even when the user filtered to one branch,
+ * inflating the trend.
+ */
 function _bucketCustomersByMonth(customers, filter) {
-  const { from = '', to = '' } = filter || {};
+  const { from = '', to = '', branchIds } = filter || {};
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
   const buckets = {};
   for (const c of customers) {
     const d = String(c.createdAt || '').slice(0, 7);
     if (!d) continue;
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
+    if (branchSet && c.branchId && !branchSet.has(String(c.branchId))) continue;
     buckets[d] = (buckets[d] || 0) + 1;
   }
   return Object.entries(buckets).sort().map(([label, value]) => ({ label, value }));
 }
 
-/** Bucket net cash flow (revenue − expenses) by month. */
+/**
+ * Bucket net cash flow (revenue − expenses) by month.
+ *
+ * Phase 16.2-bis: routes expenses through `filterExpensesForReport` so
+ * branch filter applies. Pre-fix the expense leg summed ALL branches even
+ * when the user filtered to one branch — overstated profit.
+ */
 function _bucketCashFlowByMonth(sales, expenses, filter) {
-  const { from = '', to = '' } = filter || {};
+  const { from = '', to = '', branchIds } = filter || {};
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
   const buckets = {};
 
   for (const s of sales) {
@@ -303,16 +371,16 @@ function _bucketCashFlowByMonth(sales, expenses, filter) {
     if (!d) continue;
     if (from && d < from.slice(0, 7)) continue;
     if (to   && d > to.slice(0, 7)) continue;
+    if (branchSet && s.branchId && !branchSet.has(String(s.branchId))) continue;
     if (!buckets[d]) buckets[d] = { revenue: 0, exp: 0 };
     buckets[d].revenue += getSaleNetTotal(s);
   }
 
-  for (const e of expenses) {
-    // Use shared getExpenseDate helper (canonical e.date field).
+  // Phase 16.2-bis: filterExpensesForReport applies branchIds + date + non-void.
+  const branchAwareExpenses = filterExpensesForReport(expenses, filter);
+  for (const e of branchAwareExpenses) {
     const d = getExpenseDate(e).slice(0, 7);
     if (!d) continue;
-    if (from && d < from.slice(0, 7)) continue;
-    if (to   && d > to.slice(0, 7)) continue;
     if (!buckets[d]) buckets[d] = { revenue: 0, exp: 0 };
     buckets[d].exp += Number(e.amount) || 0;
   }
@@ -321,6 +389,84 @@ function _bucketCashFlowByMonth(sales, expenses, filter) {
     label,
     value: v.revenue - v.exp,
   }));
+}
+
+/**
+ * Phase 16.2-bis (2026-04-29 session 33) — enrich sales array with `doctorId`
+ * inferred from linked treatments.
+ *
+ * The bug it fixes: TOP-10 DOCTORS empty in clinic-report. `staffSalesAggregator`
+ * groups by `doctorKey(sale)` which reads `sale.doctorId || sale.treatment?.doctorId`
+ * — but treatment-linked sales (the majority) don't carry either field. The
+ * canonical link is `treatment.detail.linkedSaleId` (Phase 12.2b shipped both
+ * `linkedSaleId` AND `detail.linkedSaleId` for backward compat). For each
+ * such treatment, we stamp the matching sale with `doctorId` from the
+ * treatment.
+ *
+ * Idempotent: if a sale already has `doctorId`, it is preserved; the
+ * enrichment only fills in the gap.
+ *
+ * Returns a NEW array (does NOT mutate input). Sale objects in the returned
+ * array MAY be the same reference as the input sale (when no enrichment
+ * happens) OR a shallow copy with the added field. This is fine for read-only
+ * aggregation; do NOT pass this output to a Firestore write.
+ *
+ * @param {Array} sales       — be_sales docs (cancelled/active mix; aggregator filters)
+ * @param {Array} treatments  — be_treatments docs in date range
+ * @returns {Array}            enriched sales (same length as input)
+ */
+export function enrichSalesWithDoctorIdFromTreatments(sales, treatments) {
+  if (!Array.isArray(sales)) return [];
+  if (!Array.isArray(treatments) || treatments.length === 0) return sales;
+
+  // Build saleId → first-doctorId map from treatments.
+  // Resolution priority per treatment:
+  //   1. t.detail.doctorId (canonical Phase 14)
+  //   2. t.detail.dfEntries[0].doctorId (Phase 14 DF entry path)
+  //   3. t.doctorId (legacy flat field)
+  // First match wins (treatments later in the list don't override an
+  // earlier-stamped sale; preserves Phase 14.5 explicit-overrides-implicit
+  // semantic).
+  const saleToDoctor = new Map();
+  for (const t of treatments) {
+    if (!t) continue;
+    const detail = t.detail && typeof t.detail === 'object' ? t.detail : {};
+    // Phase 12.2b: linkedSaleId may live at top-level OR detail.linkedSaleId
+    const linkedSaleId = String(detail.linkedSaleId || t.linkedSaleId || '').trim();
+    if (!linkedSaleId) continue;
+    if (saleToDoctor.has(linkedSaleId)) continue; // first-match-wins
+
+    const doctorId =
+      String(detail.doctorId || '').trim() ||
+      String(detail?.dfEntries?.[0]?.doctorId || '').trim() ||
+      String(t.doctorId || '').trim();
+    if (!doctorId) continue;
+
+    const doctorName =
+      String(detail.doctorName || '').trim() ||
+      String(detail?.dfEntries?.[0]?.doctorName || '').trim() ||
+      String(t.doctorName || '').trim();
+
+    saleToDoctor.set(linkedSaleId, { doctorId, doctorName });
+  }
+
+  if (saleToDoctor.size === 0) return sales;
+
+  return sales.map((s) => {
+    if (!s || typeof s !== 'object') return s;
+    // Idempotent: existing doctorId wins.
+    if (s.doctorId) return s;
+    const sid = String(s.id || '').trim();
+    if (!sid) return s;
+    const enrich = saleToDoctor.get(sid);
+    if (!enrich) return s;
+    // Shallow copy + stamp; preserves all other fields including billing.
+    return {
+      ...s,
+      doctorId: enrich.doctorId,
+      doctorName: s.doctorName || enrich.doctorName || '',
+    };
+  });
 }
 
 /**

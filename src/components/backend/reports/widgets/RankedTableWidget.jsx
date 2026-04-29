@@ -1,8 +1,12 @@
-// src/components/backend/reports/widgets/RankedTableWidget.jsx — Phase 16.2
+// src/components/backend/reports/widgets/RankedTableWidget.jsx — Phase 16.2 / extended 16.2-bis
 import { ChevronRight } from 'lucide-react';
+import MetricExplanationPopover from './MetricExplanationPopover.jsx';
 
 /**
  * Top-N ranked list. Click "ดูทั้งหมด" → existing detail tab.
+ *
+ * Phase 16.2-bis (2026-04-29): accepts `metricSpec` prop. Info icon renders
+ * next to the title with hover/tap popover explaining the metric.
  *
  * @param {object} p
  * @param {string} p.title
@@ -12,16 +16,20 @@ import { ChevronRight } from 'lucide-react';
  * @param {(tabId: string) => void} [p.onNavigate]
  * @param {(n: number) => string} [p.fmtMoney]
  * @param {string} [p.testId]
+ * @param {object|null} [p.metricSpec] — Phase 16.2-bis: ClinicReportMetricSpec for popover
  */
 export default function RankedTableWidget({
   title, rows = [], fmtKeys = { value: 'revenue', qty: 'count' },
   drilldownTabId, onNavigate, fmtMoney = (n) => Number(n || 0).toLocaleString('th-TH'),
-  testId,
+  testId, metricSpec,
 }) {
   return (
     <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] p-3" data-testid={testId || `ranked-${title}`}>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300 inline-flex items-center gap-1">
+          <span>{title}</span>
+          <MetricExplanationPopover spec={metricSpec} testId={`ranked-${metricSpec?.id || title}`} />
+        </h3>
         {drilldownTabId && (
           <button
             type="button"

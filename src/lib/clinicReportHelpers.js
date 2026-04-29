@@ -89,6 +89,34 @@ function filterSalesForReport(sales, { from, to, branchIds }) {
   });
 }
 
+/**
+ * Phase 16.2-bis (2026-04-29): Filter expenses by date range + optional branchIds + non-void.
+ *
+ * Mirror of `filterSalesForReport`. Bug fix: pre-16.2-bis the orchestrator's
+ * `_bucketCashFlowByMonth` and `computeKpiTiles.expenseRatio` summed expenses
+ * across ALL branches even when the user filtered the dashboard to one. This
+ * helper centralises the expense filter so both call sites are branch-aware.
+ *
+ * @param {Array} expenses
+ * @param {Object} filter   { from, to, branchIds? }
+ * @returns {Array} filtered expenses (active + in-range + matching branch)
+ */
+export function filterExpensesForReport(expenses, { from, to, branchIds } = {}) {
+  if (!Array.isArray(expenses)) return [];
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
+  return expenses.filter(e => {
+    if (!e || e.status === 'void') return false;
+    const d = getExpenseDate(e);
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    if (branchSet && !branchSet.has(String(e.branchId))) return false;
+    return true;
+  });
+}
+
 /** Calendar months spanned by [from, to] inclusive (counts the boundary month even when `to` is mid-month). */
 function monthsBetween(from, to) {
   if (!from || !to) return 1;
@@ -181,14 +209,9 @@ export function computeKpiTiles({
   }).length;
   const newCustomersPerMonth = newCustomersInRange / months;
 
-  // Expense ratio — read e.date (real be_expenses schema per listExpenses)
-  const expensesInRange = (expenses || []).filter(e => {
-    const d = getExpenseDate(e);
-    if (!d) return false;
-    if (filter.from && d < filter.from) return false;
-    if (filter.to && d > filter.to) return false;
-    return true;
-  });
+  // Phase 16.2-bis: route through filterExpensesForReport so branch filter applies.
+  // Pre-fix: this sum was global across all branches even when user filtered.
+  const expensesInRange = filterExpensesForReport(expenses, filter);
   const expenseTotal = expensesInRange.reduce((s, x) => s + safeNum(x.amount), 0);
   const expenseRatio = revenueYtd > 0 ? roundTHB((expenseTotal / revenueYtd) * 100) : 0;
 
@@ -356,14 +379,25 @@ export function computeBranchComparison({ sales = [], branches = [], filter = {}
  * Signature accepts `parseQtyString` as injected dep so the helper stays
  * pure (no lib import) — caller passes the real one from courseUtils.
  *
+ * Phase 16.2-bis (2026-04-29): added optional 3rd arg `branchIds`. When
+ * supplied, only customers with `branchId` in the set are counted. Customers
+ * with no `branchId` are accepted (default branch / legacy data) when
+ * branchIds is omitted; rejected when branchIds is non-empty (defensive
+ * against accidental cross-branch leakage).
+ *
  * @param {Array} customers
  * @param {(qtyStr: string) => { remaining: number, total: number, unit: string }} parseQtyString
+ * @param {string[]} [branchIds]   — if non-empty, restrict to customers in these branches
  * @returns {number}
  */
-export function computeCourseUtilizationFromCustomers(customers, parseQtyString) {
+export function computeCourseUtilizationFromCustomers(customers, parseQtyString, branchIds) {
   if (!Array.isArray(customers) || typeof parseQtyString !== 'function') return 0;
+  const branchSet = Array.isArray(branchIds) && branchIds.length
+    ? new Set(branchIds.map(String))
+    : null;
   let totalQty = 0, usedQty = 0;
   for (const c of customers) {
+    if (branchSet && !branchSet.has(String(c?.branchId))) continue;
     const courses = Array.isArray(c?.courses) ? c.courses : [];
     for (const course of courses) {
       // Skip cancelled / refunded / exchanged courses (they shouldn't count
