@@ -412,6 +412,95 @@ describe('V36.K — Customer + branch invariance (per user directive 2026-04-29)
   });
 });
 
+describe('V36.L — V36-quinquies real-time listeners on CustomerDetailView (2026-04-29)', () => {
+  const CDV = readFileSync(
+    resolve(__dirname, '../src/components/backend/CustomerDetailView.jsx'),
+    'utf-8'
+  );
+  const CHT = readFileSync(
+    resolve(__dirname, '../src/components/backend/CourseHistoryTab.jsx'),
+    'utf-8'
+  );
+
+  test('L.1 — listenToCustomer helper exported from backendClient.js', () => {
+    expect(BACKEND_CLIENT).toMatch(/export function listenToCustomer\s*\(\s*customerId,\s*onChange/);
+    // Subscribes to customerDoc (single-doc onSnapshot)
+    expect(BACKEND_CLIENT).toMatch(/listenToCustomer[\s\S]{0,500}onSnapshot\(customerDoc/);
+  });
+
+  test('L.2 — listenToCourseChanges helper exported from backendClient.js', () => {
+    expect(BACKEND_CLIENT).toMatch(/export function listenToCourseChanges\s*\(\s*customerId,\s*onChange/);
+    // Filters by customerId via where clause
+    expect(BACKEND_CLIENT).toMatch(/listenToCourseChanges[\s\S]{0,800}where\(['"]customerId['"]/);
+    // onSnapshot used (real-time)
+    expect(BACKEND_CLIENT).toMatch(/listenToCourseChanges[\s\S]{0,800}onSnapshot/);
+  });
+
+  test('L.3 — both listeners return an unsubscribe function (default-empty when customerId falsy)', () => {
+    // Both helpers handle empty customerId by returning a no-op unsubscribe
+    expect(BACKEND_CLIENT).toMatch(/listenToCustomer[\s\S]{0,500}return \(\) => \{\}/);
+    expect(BACKEND_CLIENT).toMatch(/listenToCourseChanges[\s\S]{0,500}return \(\) => \{\}/);
+  });
+
+  test('L.4 — CustomerDetailView imports listenToCustomer + uses it for liveCustomer state', () => {
+    expect(CDV).toMatch(/listenToCustomer/);
+    expect(CDV).toMatch(/const \[liveCustomer, setLiveCustomer\] = useState\(customerProp\)/);
+    expect(CDV).toMatch(/const customer = liveCustomer \|\| customerProp/);
+  });
+
+  test('L.5 — CustomerDetailView listener cleanup (unsubscribe on unmount + customer change)', () => {
+    // Find the function-call site (skip past the import statement at top of file)
+    const idx = CDV.indexOf('const unsubscribe = listenToCustomer');
+    expect(idx).toBeGreaterThan(0);
+    const block = CDV.substring(idx, idx + 800);
+    // Cleanup return must follow within the same useEffect block
+    expect(block).toMatch(/return \(\) => unsubscribe\(\)/);
+  });
+
+  test('L.6 — CourseHistoryTab uses listenToCourseChanges (NOT one-shot listCourseChanges)', () => {
+    expect(CHT).toMatch(/listenToCourseChanges/);
+    // Old one-shot import REMOVED
+    expect(CHT).not.toMatch(/import\s*\{[^}]*\blistCourseChanges\b[^}]*\}\s*from/);
+  });
+
+  test('L.7 — CourseHistoryTab listener cleanup', () => {
+    const idx = CHT.indexOf('const unsubscribe = listenToCourseChanges');
+    expect(idx).toBeGreaterThan(0);
+    const block = CHT.substring(idx, idx + 700);
+    expect(block).toMatch(/return \(\) => unsubscribe\(\)/);
+  });
+
+  test('L.8 — V36-quinquies marker comments present at all touch points', () => {
+    // backendClient.js — both helper definitions have markers
+    expect(BACKEND_CLIENT).toMatch(/V36-quinquies \(2026-04-29\)[\s\S]{0,2000}export function listenToCustomer/);
+    expect(BACKEND_CLIENT).toMatch(/V36-quinquies \(2026-04-29\)[\s\S]{0,2500}export function listenToCourseChanges/);
+    // Component-side markers
+    expect(CDV).toMatch(/V36-quinquies \(2026-04-29\)/);
+    expect(CHT).toMatch(/V36-quinquies \(2026-04-29\)/);
+  });
+
+  test('L.9 — pre-existing real-time listeners still wired (treatments + sales + appointments + finance)', () => {
+    // Anti-regression — V36-quinquies must not break the existing 4 listeners
+    expect(CDV).toMatch(/listenToCustomerTreatments/);
+    expect(CDV).toMatch(/listenToCustomerSales/);
+    expect(CDV).toMatch(/listenToCustomerAppointments/);
+    expect(CDV).toMatch(/listenToCustomerFinance/);
+  });
+
+  test('L.10 — CustomerDetailView does NOT use bare `customer` prop (must use renamed customerProp + liveCustomer)', () => {
+    // Function signature uses { customer: customerProp, ... } (renamed)
+    expect(CDV).toMatch(/customer:\s*customerProp/);
+    // After rename, downstream code reads from `customer` (= liveCustomer || customerProp)
+    // which means the destructured `customer` is the LIVE merged value, not the raw prop.
+    // The signature MUST NOT have a bare `customer` destructure (would shadow + defeat live).
+    const fnStart = CDV.indexOf('export default function CustomerDetailView');
+    const sigEnd = CDV.indexOf('}) {', fnStart);
+    const sig = CDV.substring(fnStart, sigEnd);
+    // No bare `customer,` (only the renamed `customer: customerProp,`)
+    expect(sig).not.toMatch(/^\s*customer,/m);
+  });
+});
+
 describe('V36.I — V36-tris master_data fallback removal', () => {
   test('I.1 — _getProductStockConfig does NOT read master_data', () => {
     const fnStart = BACKEND_CLIENT.indexOf('async function _getProductStockConfig');

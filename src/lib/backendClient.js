@@ -698,6 +698,69 @@ export function listenToCustomerTreatments(customerId, onChange, onError) {
   }, onError);
 }
 
+/**
+ * V36-quinquies (2026-04-29) — real-time listener for the customer doc itself.
+ * Powers `CustomerDetailView` so courses[] / expiredCourses / patientData /
+ * finance / treatmentSummary refresh live without F5. Replaces stale-prop
+ * pattern where parent BackendDashboard's `viewingCustomer` only updated
+ * after explicit reload (e.g. post-edit).
+ *
+ * Use case: user does treatment that deducts a course → customer.courses[i].qty
+ * mutates → listener fires → CustomerDetailView re-renders active/used tabs +
+ * remaining-qty display. Same for expired-course lifecycle, patientData
+ * edits from another admin, etc.
+ *
+ * @param {string} customerId
+ * @param {(customer: object|null) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToCustomer(customerId, onChange, onError) {
+  if (!customerId) {
+    onChange?.(null);
+    return () => {};
+  }
+  return onSnapshot(customerDoc(String(customerId)), (snap) => {
+    if (!snap.exists()) {
+      onChange(null);
+      return;
+    }
+    onChange({ id: snap.id, ...snap.data() });
+  }, onError || (() => {}));
+}
+
+/**
+ * V36-quinquies (2026-04-29) — real-time listener for be_course_changes
+ * filtered to one customer. Powers `CourseHistoryTab` ("ประวัติการใช้คอร์ส")
+ * so newly-emitted course audit entries (kind='use' from treatment-deduct,
+ * kind='cancel' from cancellation, etc.) appear immediately without F5.
+ *
+ * User report 2026-04-29: "ประวัติการใช้คอร์สไม่รีเฟรชแบบ real time ต้อง
+ * กด f5 ก่อนในหน้าข้อมูลลูกค้า แก้ให้ทุกอย่างในหน้าข้อมูลลูกค้า refresh
+ * real time เลย".
+ *
+ * Sort: createdAt desc client-side (Firestore where + orderBy on different
+ * fields would require composite index; sort post-fetch is cheap given
+ * per-customer cardinality is bounded).
+ *
+ * @param {string} customerId
+ * @param {(entries: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToCourseChanges(customerId, onChange, onError) {
+  if (!customerId) {
+    onChange?.([]);
+    return () => {};
+  }
+  const q = query(courseChangesCol(), where('customerId', '==', String(customerId)));
+  return onSnapshot(q, (snap) => {
+    const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    entries.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    onChange(entries);
+  }, onError || (() => {}));
+}
+
 /** Get single treatment from be_treatments */
 export async function getTreatment(treatmentId) {
   const snap = await getDoc(treatmentDoc(treatmentId));

@@ -13,13 +13,20 @@
 //      since the course is removed from customer.courses[].
 //   - "พร้อมแสดงผู้ทำรายการนั้นๆที่ได้บันทึกไว้ด้วย" — staffName per row.
 //
-// Reads via listCourseChanges(customerId) → sorted by createdAt desc.
+// V36-quinquies (2026-04-29) — switched from one-shot listCourseChanges to
+// real-time listenToCourseChanges. User report: "ประวัติการใช้คอร์สไม่รี
+// เฟรชแบบ real time ต้องกด f5 ก่อนในหน้าข้อมูลลูกค้า แก้ให้ทุกอย่างในหน้า
+// ข้อมูลลูกค้า refresh real time เลย". Pre-fix: customer saved a treatment
+// in TreatmentFormPage modal → audit emit wrote a be_course_changes doc →
+// but CustomerDetailView's CourseHistoryTab still showed the snapshot from
+// when the modal opened → user had to F5 to see the new entry. With the
+// listener, the new entry appears the moment Firestore confirms the write.
 
 import { useEffect, useState } from 'react';
 import {
   Clock, Loader2, Plus, ArrowDownLeft, Repeat, Share2, X as XIcon, Receipt,
 } from 'lucide-react';
-import { listCourseChanges } from '../../lib/backendClient.js';
+import { listenToCourseChanges } from '../../lib/backendClient.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 
 const KIND_META = {
@@ -113,14 +120,27 @@ export default function CourseHistoryTab({ customerId }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
+    if (!customerId) {
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
-    listCourseChanges(customerId)
-      .then((list) => { if (!cancelled) setEntries(list || []); })
-      .catch((e) => { if (!cancelled) setError(e?.message || 'โหลดประวัติไม่สำเร็จ'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    // V36-quinquies: real-time listener. New be_course_changes docs
+    // (kind='use' from treatment-deduct, etc.) appear without F5.
+    const unsubscribe = listenToCourseChanges(
+      customerId,
+      (list) => {
+        setEntries(list || []);
+        setLoading(false);
+      },
+      (e) => {
+        setError(e?.message || 'โหลดประวัติไม่สำเร็จ');
+        setLoading(false);
+      },
+    );
+    return () => unsubscribe();
   }, [customerId]);
 
   if (loading) {

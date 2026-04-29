@@ -11,7 +11,7 @@ import {
 import {
   getCustomerTreatments, listenToCustomerTreatments,
   getCustomerSales, listenToCustomerSales,
-  addCourseRemainingQty, getCustomer,
+  addCourseRemainingQty, getCustomer, listenToCustomer,
   // Phase 14.10-tris (2026-04-26) — be_* canonical for staff/products
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
   listAllSellers, listProducts,
@@ -105,7 +105,7 @@ function relativeTime(isoStr) {
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 export default function CustomerDetailView({
-  customer, accentColor, theme, clinicSettings,
+  customer: customerProp, accentColor, theme, clinicSettings,
   onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment,
   onCustomerUpdated, onCreateSale, onOpenFinance,
   onEditCustomer,    // V33.3 — open the full Edit Customer page (BackendDashboard takeover)
@@ -113,7 +113,18 @@ export default function CustomerDetailView({
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
-  const pd = customer?.patientData || {};
+
+  // V36-quinquies (2026-04-29) — live customer doc via onSnapshot listener.
+  // User report: "ประวัติการใช้คอร์สไม่รีเฟรชแบบ real time ต้องกด f5 ก่อน
+  // ในหน้าข้อมูลลูกค้า แก้ให้ทุกอย่างในหน้าข้อมูลลูกค้า refresh real time
+  // เลย". Pre-fix: parent BackendDashboard kept a stale `viewingCustomer`
+  // snapshot and only refreshed after explicit edit-and-return. Course
+  // mutations (treatment-deduct, addQty, exchange, share, cancel) all
+  // updated the customer doc in Firestore but the open detail view showed
+  // the stale prop until F5. Now the listener keeps `liveCustomer` in
+  // sync; we fall back to the prop on first render before the listener
+  // fires + when a new customer is selected.
+  const [liveCustomer, setLiveCustomer] = useState(customerProp);
   // 2026-04-28: V33-created customers (LC-YY###### doc id) have
   // `proClinicId: null` (born inside our system, no ProClinic ID). Listener
   // subscriptions + modal customerId props were hardcoded to
@@ -121,7 +132,22 @@ export default function CustomerDetailView({
   // empty sales, modals couldn't operate). Canonical identity is the
   // Firestore doc id; proClinicId is denormalized for ProClinic-cloned
   // customers only. Fallback to id resolves both shapes.
+  const customer = liveCustomer || customerProp;
   const customerId = customer?.id || customer?.proClinicId || null;
+  useEffect(() => {
+    // Reset liveCustomer when the prop changes (admin clicks a different
+    // customer in the list) so we don't show stale courses[] from the
+    // previous customer while the new listener spins up.
+    setLiveCustomer(customerProp);
+    if (!customerId) return;
+    const unsubscribe = listenToCustomer(
+      customerId,
+      (live) => { if (live) setLiveCustomer(live); },
+      (err) => console.warn('[CustomerDetailView] customer listener failed:', err),
+    );
+    return () => unsubscribe();
+  }, [customerId, customerProp]);
+  const pd = customer?.patientData || {};
 
   const [treatments, setTreatments] = useState([]);
   const [treatmentsLoading, setTreatmentsLoading] = useState(false);
