@@ -7,12 +7,21 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 33) — Phase 16.7 family + 16.7-quinquies plan ready
+- **Date last updated**: 2026-04-30 — **V15 #10 deploy LIVE**
 - **Branch**: `master`
-- **Last commit**: `31e2d79` — docs(plan): Phase 16.7-quinquies — payroll + hourly + commission implementation plan
-- **Test count**: **4121** (+227 from session 33: 16.2-bis +171, 16.7 +80, 16.7-bis +14, 16.7-ter +29, 16.7-quater +13; minor mock fixes -80)
+- **Last commit**: `821c954` — feat(orders): Phase 16.4 — Order parity gaps G1-G6 (additive UI; ProClinic /admin/order alignment)
+- **Test count**: **4261** (+140 since 4121: Phase 16.7-quinquies +53, ter +37 + 1 audit-V36 fix, ter-bis +10 buffet/courseType, Phase 16.4 +31, misc adjustments +9)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE) · master **10 commits ahead-of-prod**, awaiting V15 #10 deploy auth
+- **Deploy state**: ✅ **PRODUCTION = `821c954`** (V15 #10 LIVE 2026-04-30) · master in sync · 0 commits unpushed-to-prod
+
+### V15 #10 deploy (2026-04-30) — combined vercel + firestore:rules
+- Pre-probe Rule B: 6/6 endpoints 200 ✓ (chat_conversations / pc_appointments / clinic_settings × 2 / opd_sessions anon CREATE+PATCH)
+- `firebase deploy --only firestore:rules` — idempotent re-publish (rules unchanged since V15 #9; release v21 → v21)
+- `vercel --prod --yes` — 34s build · `lover-clinic-10paf858k-...` aliased to `lover-clinic-app.vercel.app`
+- Post-probe Rule B: 6/6 endpoints 200 ✓
+- HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 (LINE sig expected)
+- Cleanup: pc_appointments 2/2 200 · clinic_settings strip 2/2 200 · chat_conversations + opd_sessions probes hidden via V27 isArchived:true (admin staff cleanup pending)
+- 13 commits shipped: `821c954` Phase 16.4 + `835070d` 16.7-quinquies-ter + `a5b616c` 16.7-quinquies-bis + `841941a` 16.7-quinquies + `31e2d79` + `a57b4e4` (docs) + `f698ed7` 16.7-quater + `0e5b9ac` 16.7-ter + `088e784` 16.7-bis + `0daf6dd` 16.7 + `e2e46f7` 16.2-bis + `9642bda` + `fdf3d41` 16.2 fixes + `0aa8cb6` 16.2 + `ced094d` 16.3-bis
   - 5 code commits: `e2e46f7` 16.2-bis · `0daf6dd` 16.7 · `088e784` 16.7-bis · `0e5b9ac` 16.7-ter · `f698ed7` 16.7-quater
   - 2 doc commits: `a57b4e4` 16.7-quinquies spec · `31e2d79` 16.7-quinquies plan
   - 3 carry-over from session 32: `ced094d` 16.3-bis · `0aa8cb6` 16.2 · `9642bda` black-screen · `fdf3d41` real-schema · `951e627` doc-handoff (incl. above totals → 10 unpushed unique)
