@@ -2648,10 +2648,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           try {
             const { deductCourseItems } = await import('../lib/backendClient.js');
             // Phase 16.5-quater — same treatment-deduction audit emit
+            // V36-quater (2026-04-29) — V12 multi-writer-sweep miss fix.
+            // Pre-V36-quater used bare `treatmentId` prop (empty in
+            // create-mode) → audit emit gate at backendClient.js:938
+            // skipped → "ประวัติการใช้คอร์ส" tab empty for purchased-in-
+            // session course usage. User report 2026-04-29: "ไม่เห็นขึ้น
+            // เลยไอ้สั้ส เห็นคอร์สที่เพิ่งใช้ไหม". V36-bis already fixed
+            // the existingDeductions sibling call site (line ~2156) but
+            // missed THIS call site — exact V12 lesson repeat (every
+            // grep-replace must enumerate ALL call sites of the target).
+            // Customer + branch invariant per user directive
+            // "อย่าให้พลาดอีก ในคนอื่นและสาขาอื่นด้วย" — deductCourseItems
+            // is branch-agnostic (reads only customerDoc + opts), so this
+            // fix works for any customer at any branch.
+            const purchasedNewTid = result.treatmentId || treatmentId;
             const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
             await deductCourseItems(customerId, purchasedDeductions, {
               preferNewest: true,
-              treatmentId,
+              treatmentId: purchasedNewTid,
               staffId: doctorId || '',
               staffName: treatingDoctor?.name || '',
             });
