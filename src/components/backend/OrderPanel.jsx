@@ -86,6 +86,12 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [search, setSearch] = useState('');
+  // Phase 16.4 G2/G3/G6 (2026-04-29) — list filters (status / cost_type /
+  // period date range). All client-side filters on the loaded `orders`.
+  const [statusFilter, setStatusFilter] = useState('all');     // all|active|cancelled
+  const [costTypeFilter, setCostTypeFilter] = useState('all'); // all|with-cost|premium-only|no-cost
+  const [periodFrom, setPeriodFrom] = useState('');            // YYYY-MM-DD
+  const [periodTo, setPeriodTo] = useState('');                // YYYY-MM-DD
   const [pendingPrefill, setPendingPrefill] = useState(null);
   const [detailOrderId, setDetailOrderId] = useState(null);
   // 2026-04-27 actor tracking — eager-load sellers (be_staff + be_doctors)
@@ -147,17 +153,42 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
   }, [prefillProduct]);
 
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return orders;
-    const q = search.toLowerCase();
-    return orders.filter(o =>
-      (o.vendorName || '').toLowerCase().includes(q) ||
-      (o.orderId || '').toLowerCase().includes(q)
-    );
-  }, [orders, search]);
+    const q = search.trim().toLowerCase();
+    return orders.filter(o => {
+      // Search (vendor / orderId)
+      if (q && !((o.vendorName || '').toLowerCase().includes(q) || (o.orderId || '').toLowerCase().includes(q))) {
+        return false;
+      }
+      // Phase 16.4 G2 — status filter
+      if (statusFilter !== 'all') {
+        const s = String(o.status || 'active');
+        if (statusFilter === 'cancelled' && s !== 'cancelled' && s !== 'cancelled_post_receive') return false;
+        if (statusFilter === 'active' && (s === 'cancelled' || s === 'cancelled_post_receive')) return false;
+      }
+      // Phase 16.4 G3 — cost_type filter (line-item shape)
+      if (costTypeFilter !== 'all') {
+        const items = Array.isArray(o.items) ? o.items : [];
+        const hasPremium = items.some(it => !!it.isPremium);
+        const hasCostBearing = items.some(it => !it.isPremium && (Number(it.cost) || 0) > 0);
+        const hasZeroCost = items.some(it => (Number(it.cost) || 0) === 0);
+        if (costTypeFilter === 'premium-only' && !hasPremium) return false;
+        if (costTypeFilter === 'with-cost' && !hasCostBearing) return false;
+        if (costTypeFilter === 'no-cost' && !hasZeroCost) return false;
+      }
+      // Phase 16.4 G6 — period date-range filter on importedDate
+      if (periodFrom || periodTo) {
+        const date = String(o.importedDate || '').slice(0, 10);
+        if (!date) return false;
+        if (periodFrom && date < periodFrom) return false;
+        if (periodTo && date > periodTo) return false;
+      }
+      return true;
+    });
+  }, [orders, search, statusFilter, costTypeFilter, periodFrom, periodTo]);
 
   // Phase 15.4 — pagination 20/page recent-first. Reset on filter change.
   const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filteredOrders, {
-    key: `${BRANCH_ID}|${search}`,
+    key: `${BRANCH_ID}|${search}|${statusFilter}|${costTypeFilter}|${periodFrom}|${periodTo}`,
   });
 
   // 2026-04-27 actor tracking — handleCancel now opens ActorConfirmModal
@@ -210,6 +241,38 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหา vendor หรือ ORD-..."
             className="w-full pl-9 pr-3 py-2 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]" />
+        </div>
+        {/* Phase 16.4 G2/G3/G6 (2026-04-29) — list filters */}
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">สถานะ</label>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              data-field="filter-status"
+              className="w-full px-2 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="all">ทั้งหมด</option>
+              <option value="active">ใช้งาน</option>
+              <option value="cancelled">ยกเลิก</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ประเภทต้นทุน</label>
+            <select value={costTypeFilter} onChange={e => setCostTypeFilter(e.target.value)}
+              data-field="filter-cost-type"
+              className="w-full px-2 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="all">ทั้งหมด</option>
+              <option value="with-cost">มีต้นทุน</option>
+              <option value="premium-only">ของแถมเท่านั้น</option>
+              <option value="no-cost">ไม่มีต้นทุน</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ช่วงวันที่ (จาก)</label>
+            <DateField value={periodFrom} onChange={setPeriodFrom} locale="ce" size="sm" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ถึง</label>
+            <DateField value={periodTo} onChange={setPeriodTo} locale="ce" size="sm" />
+          </div>
         </div>
       </div>
 
@@ -271,8 +334,21 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-orange-400">{fmtMoney(total)}</td>
                     <td className="px-3 py-2 text-center">
-                      {o.status === 'cancelled' ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/30 text-red-400 border border-red-800">ยกเลิก</span>
+                      {(o.status === 'cancelled' || o.status === 'cancelled_post_receive') ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/30 text-red-400 border border-red-800"
+                                title={o.cancelReason || ''}>
+                            {o.status === 'cancelled_post_receive' ? 'ยกเลิก (post-receive)' : 'ยกเลิก'}
+                          </span>
+                          {/* Phase 16.4 G4 (2026-04-29) — surface cancelReason inline */}
+                          {o.cancelReason && (
+                            <span className="text-[10px] text-[var(--tx-muted)] italic max-w-[140px] truncate"
+                                  title={o.cancelReason}
+                                  data-testid="order-cancel-reason">
+                              {o.cancelReason}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-800">ใช้งาน</span>
                       )}
@@ -376,6 +452,11 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
   const [vendorName, setVendorName] = useState('');
   const [importedDate, setImportedDate] = useState(today);
   const [note, setNote] = useState('');
+  // Phase 16.4 G1 (2026-04-29) — surface discount + discountType form inputs.
+  // Backend createStockOrder already persists these (line 4842-4843); UI was
+  // missing the controls. Mirror CentralStockOrderPanel pattern.
+  const [discount, setDiscount] = useState('');
+  const [discountType, setDiscountType] = useState('amount');
   const [items, setItems] = useState(() => {
     if (prefillProduct) {
       const pid = String(prefillProduct.productId || prefillProduct.id);
@@ -448,6 +529,9 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
         vendorName: vendorName.trim(),
         importedDate,
         note: note.trim(),
+        // Phase 16.4 G1 (2026-04-29) — discount surfaced from new UI inputs.
+        discount: Number(discount) || 0,
+        discountType: discountType === 'percent' ? 'percent' : 'amount',
         branchId: BRANCH_ID,
         items: validItems.map(it => ({
           productId: it.productId,
@@ -540,6 +624,29 @@ function OrderCreateForm({ isDark, products, productsLoading, prefillProduct, br
           <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">หมายเหตุ</label>
           <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
             className={`${inputCls} resize-none`} placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)" />
+        </div>
+        {/* Phase 16.4 G1 (2026-04-29) — discount + discountType inputs (parity
+            with CentralStockOrderPanel + ProClinic /admin/order/create form). */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">ส่วนลด</label>
+            <input type="number" min="0" step="0.01" value={discount}
+              onChange={e => setDiscount(e.target.value)}
+              className={inputCls}
+              placeholder="0"
+              data-field="discount"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">ประเภทส่วนลด</label>
+            <select value={discountType} onChange={e => setDiscountType(e.target.value)}
+              className={inputCls}
+              data-field="discountType"
+            >
+              <option value="amount">บาท</option>
+              <option value="percent">%</option>
+            </select>
+          </div>
         </div>
       </div>
 

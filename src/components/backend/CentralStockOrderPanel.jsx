@@ -91,6 +91,12 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   const [unitGroups, setUnitGroups] = useState([]);
   const [mastersLoading, setMastersLoading] = useState(false);
   const [search, setSearch] = useState('');
+  // Phase 16.4 G2/G3/G6 (2026-04-29) — list filters (status / cost_type /
+  // period date range). Mirrors OrderPanel.jsx pattern.
+  const [statusFilter, setStatusFilter] = useState('all');     // all|active|cancelled
+  const [costTypeFilter, setCostTypeFilter] = useState('all'); // all|with-cost|premium-only|no-cost
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
   // 2026-04-27 actor tracking
   const [sellers, setSellers] = useState([]);
   const [sellersLoading, setSellersLoading] = useState(true);
@@ -172,17 +178,41 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
   }, [prefillProduct]);
 
   const filteredOrders = useMemo(() => {
-    if (!search.trim()) return orders;
-    const q = search.toLowerCase();
-    return orders.filter(o =>
-      (o.vendorName || '').toLowerCase().includes(q) ||
-      (o.orderId || '').toLowerCase().includes(q)
-    );
-  }, [orders, search]);
+    const q = search.trim().toLowerCase();
+    return orders.filter(o => {
+      if (q && !((o.vendorName || '').toLowerCase().includes(q) || (o.orderId || '').toLowerCase().includes(q))) {
+        return false;
+      }
+      // Phase 16.4 G2 — status filter
+      if (statusFilter !== 'all') {
+        const s = String(o.status || 'pending');
+        if (statusFilter === 'cancelled' && s !== 'cancelled' && s !== 'cancelled_post_receive') return false;
+        if (statusFilter === 'active' && (s === 'cancelled' || s === 'cancelled_post_receive')) return false;
+      }
+      // Phase 16.4 G3 — cost_type filter
+      if (costTypeFilter !== 'all') {
+        const items = Array.isArray(o.items) ? o.items : [];
+        const hasPremium = items.some(it => !!it.isPremium);
+        const hasCostBearing = items.some(it => !it.isPremium && (Number(it.cost) || 0) > 0);
+        const hasZeroCost = items.some(it => (Number(it.cost) || 0) === 0);
+        if (costTypeFilter === 'premium-only' && !hasPremium) return false;
+        if (costTypeFilter === 'with-cost' && !hasCostBearing) return false;
+        if (costTypeFilter === 'no-cost' && !hasZeroCost) return false;
+      }
+      // Phase 16.4 G6 — period date-range filter
+      if (periodFrom || periodTo) {
+        const date = String(o.importedDate || '').slice(0, 10);
+        if (!date) return false;
+        if (periodFrom && date < periodFrom) return false;
+        if (periodTo && date > periodTo) return false;
+      }
+      return true;
+    });
+  }, [orders, search, statusFilter, costTypeFilter, periodFrom, periodTo]);
 
-  // Phase 15.4 — pagination 20/page recent-first. Reset on warehouse/search change.
+  // Phase 15.4 — pagination 20/page recent-first. Reset on warehouse/search/filters change.
   const { page, setPage, totalPages, visibleItems, totalCount } = usePagination(filteredOrders, {
-    key: `${centralWarehouseId || ''}|${search}`,
+    key: `${centralWarehouseId || ''}|${search}|${statusFilter}|${costTypeFilter}|${periodFrom}|${periodTo}`,
   });
 
   // 2026-04-27 actor tracking — open ActorConfirmModal instead of confirm()/prompt()
@@ -244,6 +274,38 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
             className="px-4 py-2 rounded-lg text-xs font-bold bg-orange-700 text-white hover:bg-orange-600 flex items-center gap-1.5">
             <Plus size={14} /> สร้าง PO
           </button>
+        </div>
+        {/* Phase 16.4 G2/G3/G6 (2026-04-29) — list filters */}
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">สถานะ</label>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              data-field="filter-status"
+              className="w-full px-2 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="all">ทั้งหมด</option>
+              <option value="active">ใช้งาน</option>
+              <option value="cancelled">ยกเลิก</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ประเภทต้นทุน</label>
+            <select value={costTypeFilter} onChange={e => setCostTypeFilter(e.target.value)}
+              data-field="filter-cost-type"
+              className="w-full px-2 py-1.5 rounded-md text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)]">
+              <option value="all">ทั้งหมด</option>
+              <option value="with-cost">มีต้นทุน</option>
+              <option value="premium-only">ของแถมเท่านั้น</option>
+              <option value="no-cost">ไม่มีต้นทุน</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ช่วงวันที่ (จาก)</label>
+            <DateField value={periodFrom} onChange={setPeriodFrom} locale="ce" size="sm" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1">ถึง</label>
+            <DateField value={periodTo} onChange={setPeriodTo} locale="ce" size="sm" />
+          </div>
         </div>
       </div>
 
@@ -315,9 +377,20 @@ export default function CentralStockOrderPanel({ centralWarehouseId, theme, pref
                       {Number(o.discount) > 0 ? `${fmtMoney(o.discount)} ${o.discountType === 'percent' ? '%' : '฿'}` : '—'}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`} data-testid="cpo-status-badge">
-                        {info.label}
-                      </span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${STATUS_BADGE[info.color]}`} data-testid="cpo-status-badge"
+                              title={o.cancelReason || ''}>
+                          {info.label}
+                        </span>
+                        {/* Phase 16.4 G4 (2026-04-29) — surface cancelReason inline */}
+                        {(o.status === 'cancelled' || o.status === 'cancelled_post_receive') && o.cancelReason && (
+                          <span className="text-[10px] text-[var(--tx-muted)] italic max-w-[140px] truncate"
+                                title={o.cancelReason}
+                                data-testid="cpo-cancel-reason">
+                            {o.cancelReason}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       <button onClick={() => setDetailOrderId(o.orderId)}
