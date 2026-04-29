@@ -7,12 +7,44 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 29) — Phase 16 kickoff + 16.5 base/bis/ter/quater + V15 #7 deploy
+- **Date last updated**: 2026-04-29 evening (session 30) — V36 multi-writer-sweep + phantom-branch fallback + V15 #8 deploy
 - **Branch**: `master`
-- **Last commit**: `2aae710 feat(course): Phase 16.5-quater — bug bundle + course-history tab + audit unification`
-- **Test count**: **3456** focused (+144 across 16.5 family)
+- **Last commit**: `ae760c7 fix(stock): V36 — multi-writer-sweep + fail-loud + phantom-branch fallback`
+- **Test count**: **3597** focused (+141 across V36 family)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `cf54400`** (V15 #7 LIVE 2026-04-29) · vercel `lover-clinic-2gvg69lvr-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+- **Deploy state**: ✅ **PRODUCTION = `ae760c7`** (V15 #8 LIVE 2026-04-29 evening) · vercel `lover-clinic-gxx8hxgzm-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app`
+  - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
+  - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
+  - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
+
+### Session 2026-04-29 evening (session 30) — V36 + V15 #8
+
+V36 cluster (3 distinct bugs from V15 #7 fallout):
+- Bug A — transfer + withdrawal `_receiveAtDestination` skipped `_ensureProductTracked` (V12 multi-writer mirror) → destination batches existed but `stockConfig.trackStock !== true` → treatment silent-SKIPped while qty.remaining never moved
+- Bug B — `_deductOneItem` decision-tree comment promised V31 fail-loud for treatment context; code did silent-skip (V21-class comment-vs-code drift)
+- Bug C — `BranchContext` retained phantom branchId `BR-1777095572005-ae97f911` from cleanup-deleted branch in localStorage; pre-V36 logic only validated cached id on first snapshot
+
+Fixes (commit `ae760c7`):
+- `_receiveAtDestination` (transfer + withdrawal) now route through `_ensureProductTracked` per V12 single-writer contract
+- Treatment context throws `TRACKED_UPSERT_FAILED` Thai error when product genuinely missing; sale context preserves silent-skip per V35.3-ter
+- `_ensureProductTracked` switched `updateDoc` → `setDoc({merge:true})` for robust upsert
+- `BranchContext` re-validates `selectionStillValid` on EVERY snapshot; auto-falls back to default or `'main'` when current selection no longer exists
+- Phase 15.7 negative-stock invariant PRESERVED (locked by V36.E.11-15 + V36.F.4-8)
+
+Tests: +144 V36 cases across 4 new files (v36-batch-creator-ensure-tracked-sweep + v36-treatment-skip-fail-loud + v36-branch-correctness-audit + v36-stock-end-to-end-flow-simulate); 3 legacy regressions fixed (course-skip F.6 caller-count + slice; phase15.4 ML.C/ML.D fnSlice; branch-isolation BR1.5 var-name)
+
+Live preview_eval pre-deploy:
+- Confirmed product 276 (BA - วิตามินผิวใส) + 281 (BA - Allergan 50 U) had `stockConfig: null` despite having batches
+- 3 SKIP movements at branch BR-1777095572005-ae97f911 (the phantom from stale BranchContext)
+- After page reload with V36 fix: BranchContext fallback → `selectedBranchId = 'main'` → Movement Log shows 341 entries (vs 4 phantom-only pre-V36)
+
+V15 #8 deploy:
+- vercel `lover-clinic-gxx8hxgzm-...` ~41s build + alias
+- firebase rules idempotent re-publish (no schema change)
+- Probe-Deploy-Probe pre+post 100% green
+- All 6 cumulative commits unpushed-to-prod from session 29 + V36 commit shipped (Phase 16.5 base+bis+ter+quater + EOD docs + V36)
+
+
   - V15 #7 Probe-Deploy-Probe: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup 4/4 (pc_appointments DELETE) + 2/2 (clinic_settings strip) + 2/2 (opd_sessions DELETE V27-tris) = all 200; chat_conversations probes left (anon delete blocked by rule)
   - HTTP smoke: root 200 / /admin 200 / /api/webhook/line 401 ✓
   - Firebase rules: `released to cloud.firestore` (already up to date — idempotent re-publish; no schema bump)
