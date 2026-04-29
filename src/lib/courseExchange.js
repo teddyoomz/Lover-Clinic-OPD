@@ -18,6 +18,30 @@
 //     createdAt: <ISO> }
 
 /**
+ * Phase 16.7-quinquies-ter (2026-04-29) — derive the canonical course
+ * type label from a course doc, handling legacy/clone variants where
+ * the type marker lives in the qty string instead of a courseType field.
+ *
+ * Returns one of:
+ *   'เหมาตามจริง' — fixed-bundle course consumed in full each visit
+ *   'บุฟเฟต์'    — unlimited use until expiry
+ *   'pick-at-treatment' — product chosen at treatment time
+ *   ''           — standard qty-tracked course (no badge needed)
+ *
+ * @param {object|null|undefined} c — course-like object
+ */
+export function inferCourseType(c) {
+  if (!c || typeof c !== 'object') return '';
+  const ct = String(c.courseType || '').trim();
+  if (ct) return ct;
+  const qty = typeof c.qty === 'string' ? c.qty : '';
+  if (qty === 'เหมาตามจริง' || c.isRealQty) return 'เหมาตามจริง';
+  if (qty === 'บุฟเฟต์' || c.isBuffet) return 'บุฟเฟต์';
+  if (c.isPickAtTreatment || c.needsPickSelection) return 'pick-at-treatment';
+  return '';
+}
+
+/**
  * Find a course inside customer.courses[] by its courseId. Returns the
  * index or -1.
  */
@@ -214,7 +238,7 @@ export function applyCourseCancel(customer, courseId, opts = {}) {
  * 'exchange' and 'refund'. Cancel entries have refundAmount=null +
  * toCourse=null (only fromCourse populated).
  */
-export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, staffId, staffName, qtyDelta, qtyBefore, qtyAfter, toCustomerId, toCustomerName, linkedTreatmentId, now }) {
+export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, refundAmount, reason, actor, staffId, staffName, qtyDelta, qtyBefore, qtyAfter, toCustomerId, toCustomerName, linkedTreatmentId, productName, productQty, productUnit, now }) {
   if (!customerId) throw new Error('customerId required');
   // Phase 16.5-quater (2026-04-29) — extended kind enum:
   //   'add'      — addCourseRemainingQty (เพิ่มคงเหลือ button) — qtyDelta + qtyBefore + qtyAfter
@@ -242,6 +266,12 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
       name: String(fromCourse.name || ''),
       status: String(fromCourse.status || ''),
       value: String(fromCourse.value || ''),
+      // Phase 16.7-quinquies-ter (2026-04-29) — preserve courseType so
+      // the audit display can show a clear badge ("เหมาตามจริง" /
+      // "บุฟเฟต์" / standard) and suppress the misleading "1/1 → 0/1"
+      // qty line. inferCourseType handles legacy/clone data where
+      // courseType lives in the qty string itself instead of a field.
+      courseType: inferCourseType(fromCourse),
     } : null,
     toCourse: toCourse ? {
       courseId: toCourse.courseId || null,
@@ -265,6 +295,15 @@ export function buildChangeAuditEntry({ customerId, kind, fromCourse, toCourse, 
     // Phase 16.5-quater 'use' kind metadata: linkedTreatmentId so the
     // ประวัติการใช้คอร์ส tab can deep-link back to the treatment record.
     linkedTreatmentId: String(linkedTreatmentId || ''),
+    // Phase 16.7-quinquies-ter (2026-04-29) — product-level enrichment for
+    // 'use' audits. When a wrapper course (e.g. "เทส IV แก้แฮงค์2") deducts
+    // a sub-product (e.g. Allergan 100 U at 75 U), the audit shows the
+    // PRODUCT that was actually consumed alongside the wrapper course name.
+    // User directive: "หาบั๊คแล้วแก้ให้แสดงทุกการใช้คอร์ส ตัดคอร์ส จริงๆ".
+    // V14 lock: empty string for unset (not undefined), 0 for unset numeric.
+    productName: String(productName || ''),
+    productQty: typeof productQty === 'number' ? productQty : (Number(productQty) || 0),
+    productUnit: String(productUnit || ''),
     createdAt,
   };
 }

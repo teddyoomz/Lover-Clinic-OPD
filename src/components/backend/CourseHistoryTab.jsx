@@ -38,6 +38,15 @@ const KIND_META = {
   refund:   { label: 'คืนเงิน',       color: 'text-amber-400',   bg: 'bg-amber-900/20',   border: 'border-amber-700/40',   Icon: Receipt },
 };
 
+// Phase 16.7-quinquies-ter (2026-04-29) — courseType badge meta. Surfaced
+// per user directive "ฝากแจ้งในประวัติการใช้คอร์สเลยละกัน ว่าการใช้คอร์ส
+// นั้นมันมาจากคอร์สประเภทไหน". Empty courseType → no badge (standard).
+const COURSE_TYPE_META = {
+  'เหมาตามจริง':      { label: 'เหมาตามจริง', cls: 'text-orange-400 border-orange-700/40 bg-orange-900/20' },
+  'บุฟเฟต์':           { label: 'บุฟเฟต์',      cls: 'text-amber-400 border-amber-700/40 bg-amber-900/20' },
+  'pick-at-treatment': { label: 'เลือกตอนรักษา', cls: 'text-cyan-400 border-cyan-700/40 bg-cyan-900/20' },
+};
+
 function fmtDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -70,6 +79,26 @@ function CourseHistoryRow({ entry }) {
   const treatmentLine = entry.linkedTreatmentId
     ? `อ้างอิงการรักษา ${entry.linkedTreatmentId}`
     : '';
+  // Phase 16.7-quinquies-ter (2026-04-29) — surface the actual product
+  // consumed within the wrapper course (e.g. Allergan 100 U -75 U inside
+  // "เทส IV แก้แฮงค์2"). Only render when both name and qty exist on the
+  // audit doc; older entries without these fields fall back to course-only.
+  const productName = String(entry.productName || '').trim();
+  const productQty = Number(entry.productQty) || 0;
+  const productUnit = String(entry.productUnit || '').trim();
+  const showProductLine = entry.kind === 'use' && productName && productQty > 0;
+  // When the product line is shown, the course-level qty tracker
+  // ("1/1 U → 0/1 U (-1)") is internal accounting noise — the actual
+  // consumption story is the product line (e.g. "Allergan 100 U  -75 U").
+  // Wrapper courses like "เทส IV แก้แฮงค์2" with sentinel 1/1 qty AND
+  // เหมาตามจริง / บุฟเฟต์ types both produce a misleading course-tracker
+  // movement that confuses admins. Hide the qty line in this case.
+  // For in-house treatments without a product (e.g. "ธาราบำบัด" 9/10 →
+  // 8/10 ครั้ง), no productName is set → qty line is meaningful → shown.
+  const showQtyLine = (qtyBefore || qtyAfter) && !showProductLine;
+  // Phase 16.7-quinquies-ter — courseType badge.
+  const courseType = String(entry.fromCourse?.courseType || '').trim();
+  const courseTypeMeta = COURSE_TYPE_META[courseType] || null;
 
   return (
     <div className={`px-3 py-3 border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] flex items-start gap-3`}
@@ -89,9 +118,23 @@ function CourseHistoryRow({ entry }) {
           {fromValue && entry.kind !== 'exchange' && (
             <span className="text-[11px] text-[var(--tx-muted)] ml-1">({fromValue})</span>
           )}
+          {courseTypeMeta && (
+            <span
+              data-testid={`course-history-type-${entry.changeId}`}
+              className={`ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded border ${courseTypeMeta.cls}`}
+            >
+              {courseTypeMeta.label}
+            </span>
+          )}
         </div>
         <div className="text-[11px] text-[var(--tx-muted)] mt-1 space-y-0.5">
-          {(qtyBefore || qtyAfter) && (
+          {showProductLine && (
+            <div data-testid={`course-history-product-${entry.changeId}`}>
+              สินค้า: <span className="font-bold text-[var(--tx-secondary)]">{productName}</span>
+              <span className="ml-2 text-rose-400">-{productQty}{productUnit ? ` ${productUnit}` : ''}</span>
+            </div>
+          )}
+          {showQtyLine && (
             <div>
               จำนวน: <span className="text-[var(--tx-secondary)]">{qtyBefore || '-'}</span>
               {' → '}

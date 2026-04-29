@@ -258,7 +258,11 @@ describe('V36.J — V36-bis course-history audit fix (deductCourseItems after cr
 
   test('J.5 — deductCourseItems audit emit (backendClient.js) gated on opts.treatmentId', () => {
     expect(BACKEND_CLIENT).toMatch(/Phase 16\.5-quater[\s\S]{0,400}kind=['"]use['"]/);
-    expect(BACKEND_CLIENT).toMatch(/if \(opts\.treatmentId\)\s*\{[\s\S]{0,800}kind:\s*['"]use['"]/);
+    // Slice limit raised from 800→2500 chars after Phase 16.7-quinquies-ter
+    // added the productByIndex map + product enrichment between the gate
+    // and the emit. Comment-vs-code drift guard: the audit is still gated
+    // on opts.treatmentId; the body just got longer.
+    expect(BACKEND_CLIENT).toMatch(/if \(opts\.treatmentId\)\s*\{[\s\S]{0,3500}kind:\s*['"]use['"]/);
   });
 
   test('J.6 — V36-bis marker comment near the reorder', () => {

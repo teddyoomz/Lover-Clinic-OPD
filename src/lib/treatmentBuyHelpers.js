@@ -681,3 +681,54 @@ export function buildCustomerCourseGroups(customerCourses) {
   }
   return out;
 }
+
+/**
+ * Phase 16.7-quinquies-ter (2026-04-29) — filter predicate for the
+ * "ข้อมูลการใช้คอร์ส" panel in TreatmentFormPage.
+ *
+ * Hides courses that have NO usable units left so admin doesn't see a
+ * cluttered list of depleted entries when picking what to consume in
+ * the treatment. Special course types (เหมาตามจริง / บุฟเฟต์ /
+ * pick-at-treatment) are kept regardless of qty because their
+ * consumption doesn't follow the standard remaining/total contract.
+ *
+ * Recognized "real-qty" markers (any one is sufficient):
+ *   - c.courseType === 'เหมาตามจริง' — explicit type field
+ *   - c.isRealQty === true — pre-mapped flag
+ *   - c.qty === 'เหมาตามจริง' — qty string itself (some legacy/clone data
+ *     stores the type marker directly in the qty field with no courseType)
+ *
+ * Standard qty-tracked courses: uses canonical `parseQtyString` so number
+ * formats like "7,998 / 10,000 Shot" (with commas) parse correctly.
+ *
+ * @param {{
+ *   qty?: string,
+ *   courseType?: string,
+ *   isRealQty?: boolean,
+ *   isBuffet?: boolean,
+ *   isPickAtTreatment?: boolean,
+ *   needsPickSelection?: boolean,
+ * } | null | undefined} c
+ * @returns {boolean} true if the course should be shown in the use list
+ */
+export function isCourseUsableInTreatment(c) {
+  if (!c || typeof c !== 'object') return false;
+  const courseType = String(c.courseType || '');
+  const qtyStr = typeof c.qty === 'string' ? c.qty : '';
+  // Special types that don't follow the remaining/total contract.
+  // Check qty-string variant too — some legacy/clone data stores the type
+  // marker directly in qty without a courseType field.
+  if (c.isRealQty || courseType === 'เหมาตามจริง' || qtyStr === 'เหมาตามจริง') return true;
+  if (c.isBuffet || courseType === 'บุฟเฟต์' || qtyStr === 'บุฟเฟต์') return true;
+  if (c.isPickAtTreatment || c.needsPickSelection) return true;
+  // Standard qty-tracked courses: parse via canonical parseQtyString
+  // (handles commas like "7,998 / 10,000"). Hide if cannot parse OR
+  // remaining=0 OR total=0.
+  if (!qtyStr) return false;
+  const m = qtyStr.match(/^([\d.,]+)\s*\/\s*([\d.,]+)\s*(.*)$/);
+  if (!m) return false;
+  const remaining = parseFloat(m[1].replace(/,/g, ''));
+  const total = parseFloat(m[2].replace(/,/g, ''));
+  if (!Number.isFinite(remaining) || !Number.isFinite(total)) return false;
+  return remaining > 0 && total > 0;
+}

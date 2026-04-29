@@ -1001,11 +1001,53 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
   if (opts.treatmentId) {
     try {
       const { buildChangeAuditEntry } = await import('./courseExchange.js');
+      // Phase 16.7-quinquies-ter (2026-04-29) — build a per-courseIndex map
+      // of the deduction's product info so the audit can record the actual
+      // PRODUCT consumed (e.g. "Allergan 100 U  -75 U") alongside the
+      // wrapper course name. Mirrors the matchesDed logic the deduction
+      // loop already uses, but applied here as one-pass best-effort: when
+      // one deduction row touches multiple course indexes, we attribute
+      // the deduction's product info to ALL touched indexes for that
+      // deduction. User-visible result: each per-index audit entry shows
+      // which product line drove the consumption.
+      const productByIndex = new Map(); // courseIndex → { productName, productQty, productUnit }
+      for (const d of (deductions || [])) {
+        if (!d) continue;
+        const productName = String(d.productName || '').trim();
+        if (!productName) continue;
+        const productQty = Number(d.deductQty) || 0;
+        const productUnit = String(d.unit || '').trim();
+        // Match deductions against beforeSnapshot using the same
+        // name+product predicate as the deduction loop. We DON'T track
+        // per-deduction qty consumed (the dedup loop is complex), so when
+        // a deduction matches multiple indexes we attach its productName
+        // to all of them. Edge cases: rare.
+        for (let i = 0; i < beforeSnapshot.length; i++) {
+          if (productByIndex.has(i)) continue; // first-deduction-wins per index
+          const c = beforeSnapshot[i];
+          if (!c) continue;
+          const nameMatch = d.courseName ? c.name === d.courseName : true;
+          const productMatch = d.productName ? (c.product || c.name) === d.productName : true;
+          if (nameMatch && productMatch) {
+            productByIndex.set(i, { productName, productQty, productUnit });
+          }
+        }
+      }
+
       for (let i = 0; i < beforeSnapshot.length; i++) {
         const beforeC = beforeSnapshot[i];
         const afterC = courses[i];
         if (!beforeC || !afterC) continue;
-        if (String(beforeC.qty || '') === String(afterC.qty || '')) continue;
+        // Phase 16.7-quinquies-ter (2026-04-29) — buffet courses keep qty
+        // unchanged on use (consumeRealQty skips them per user contract).
+        // Without an explicit gate, the qtyChanged check would skip the
+        // audit entirely → buffet usage invisible in ประวัติการใช้คอร์ส.
+        // Emit audit if EITHER qty changed OR a deduction was attributed
+        // to this course index (i.e. caller targeted this course).
+        const qtyChanged = String(beforeC.qty || '') !== String(afterC.qty || '');
+        const productInfo = productByIndex.get(i) || {};
+        const hadAttributedDeduction = productByIndex.has(i);
+        if (!qtyChanged && !hadAttributedDeduction) continue;
         const beforeP = parseQtyString(beforeC.qty || '');
         const afterP = parseQtyString(afterC.qty || '');
         const delta = (Number(beforeP.remaining) || 0) - (Number(afterP.remaining) || 0);
@@ -1023,6 +1065,9 @@ export async function deductCourseItems(customerId, deductions, opts = {}) {
           qtyBefore: String(beforeC.qty || ''),
           qtyAfter: String(afterC.qty || ''),
           linkedTreatmentId: String(opts.treatmentId || ''),
+          productName: productInfo.productName || '',
+          productQty: productInfo.productQty || 0,
+          productUnit: productInfo.productUnit || '',
         });
         await setDoc(courseChangeDoc(audit.changeId), audit);
       }

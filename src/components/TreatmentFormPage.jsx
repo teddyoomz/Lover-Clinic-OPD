@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment } from '../lib/treatmentBuyHelpers.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -1801,7 +1801,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // remains the source of truth for selectedCourseItems / deductCourseItems
   // / treatmentCoursesForDf which all read by rowId or courseIndex.
   const customerCourseGroups = useMemo(() => {
-    return buildCustomerCourseGroups(options?.customerCourses || []);
+    // Phase 16.7-quinquies-ter (2026-04-29) — hide depleted (remaining=0)
+    // + zero-total (0/0) courses; keep special types (เหมาตามจริง /
+    // บุฟเฟต์ / pick-at-treatment) regardless of qty.
+    const usable = (options?.customerCourses || []).filter(isCourseUsableInTreatment);
+    return buildCustomerCourseGroups(usable);
   }, [options?.customerCourses]);
 
   // ── Seller commission auto-calc ──
