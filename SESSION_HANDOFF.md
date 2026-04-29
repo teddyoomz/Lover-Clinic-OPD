@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-29 EOD (session 31) — Phase 16.2 Clinic Report SHIPPED
+- **Date last updated**: 2026-04-29 EOD (session 32) — Phase 16.2 LIVE-data-fix
 - **Branch**: `master`
-- **Last commit**: `dacf189` — feat(reports): Phase 16.2 Clinic Report executive dashboard tab
-- **Test count**: **~3863** (+92 from Phase 16.2 across 7 phase16.2-* test files; baseline was 3771)
+- **Last commit**: `fdf3d41` — fix(clinic-report): real-schema field mapping (revenue / topServices dedup / topProducts / topDoctors / course util)
+- **Test count**: **3894** (+31 from session 32: P4.8/P5/P6/P7/P8/A4 helper + integration coverage)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · vercel `lover-clinic-219w7h3b7-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` · master 2 commits ahead-of-prod (`ced094d` 16.3-bis + `dacf189` 16.2, awaiting V15 #10 deploy auth)
+- **Deploy state**: ✅ **PRODUCTION = `f4e6127`** (V15 #9 LIVE 2026-04-29 late evening) · master **4 commits ahead-of-prod** (`ced094d` 16.3-bis + `0aa8cb6` 16.2 ship + `9642bda` black-screen fix + `fdf3d41` real-schema fix), awaiting V15 #10 deploy auth
   - V15 #9 firestore.rules CHANGED — Phase 16.3 narrow match for `clinic_settings/system_config` + `be_admin_audit/system-config-*` create exception (rules version 20 → 21)
   - Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 ✓; post 6/6 + 5/5 ✓; cleanup 4/4 = all 200
   - HTTP smoke: / 200, /admin 200, /api/webhook/line 401 (LINE sig — expected)
@@ -20,6 +20,35 @@
   - V15 #8 Probe-Deploy-Probe Rule B: pre 6/6 + 5/5 negative ✓; post 6/6 + 5/5 negative ✓; cleanup pc_appointments 2/2 + clinic_settings strip 2/2 = all 200; opd_sessions probes hidden via V27 isArchived:true; chat_conversations probes left for staff cleanup
   - HTTP smoke: / 200 · /admin 200 · /api/webhook/line 401 ✓
   - Firebase rules: idempotent re-publish (firestore.rules unchanged this deploy)
+
+### Session 2026-04-29 EOD (session 32) — Phase 16.2 LIVE-data-fix
+
+2 user-reported bug fixes after Phase 16.2 ship — tab opened to **black screen**, then once unblocked **most tiles showed 0/empty**. Both root-caused + fixed; tab now renders with real data.
+
+**Fix 1 — `9642bda` black-screen on tab open**:
+- V11 mock-shadowed-reality: `ClinicReportTab` destructured `canAccessTab` but real `useTabAccess()` returns `canAccess`. Test mock used wrong name → tests passed while production threw `TypeError: canAccessTab is not a function`.
+- Plus latent Rules of Hooks violation: permission gate's early-return placed BEFORE useState/useMemo/useClinicReport calls → "React detected change in order of Hooks" when canAccess flipped after async config load.
+- Fix: rename to `canAccess` + move early-return AFTER all hooks + defensive `Array.isArray(branches)` guard. Test mock corrected to match real shape with V11 anti-pattern comment.
+
+**Fix 2 — `fdf3d41` real-schema field mapping (5 distinct mismatches)**:
+- `s.total → s.billing.netTotal` (NEW `getSaleNetTotal` helper with cascading fallback) — affected revenueYtd · avgTicket · momGrowth · revenueTrend · cashFlow · branchComparison
+- `e.expenseDate → e.date` (NEW `getExpenseDate` helper) — affected expenseRatio · cashFlow expense leg
+- `course.qty` is a STRING `"<rem> / <total> <unit>"` parsed via `courseUtils.parseQtyString` (NEW `computeCourseUtilizationFromCustomers` helper) — affected courseUtilization tile
+- topServices duplicated by procedureType+category split → NEW `_aggregateTopServices` groups by courseName
+- topProducts used stockReportAggregator (inventory) → NEW `_aggregateTopProducts` walks `sales.items.products[]` + `medications[]`
+- `staffSales.rows` doesn't exist (real shape is `{staffRows, doctorRows}`) → orchestrator now reads `doctorRows` directly + drops the brittle `/Dr\./` regex (Thai นพ./พญ./ทพ. now safe)
+
+**Live browser verification**: revenueYtd 0 → ฿2,256,286 · avgTicket 0 → ฿39,583.96 · courseUtil 0% → 23.46% · TOP-10 SERVICES deduped (เทส IV แก้แฮงค์2 800k merged from 600k×3 + 200k×1 splits) · TOP-10 PRODUCTS shows real sold-product names with qty.
+
+**Remaining 0/empty per user "ยกเว้นช่องไหนที่เริ่มเก็บจากวันนี้เป็นต้นไปก็ไม่เป็นไร"**: EXPENSE % (no `be_expenses` yet) · เปรียบเทียบสาขา (no `be_branches`) · TOP-10 DOCTORS (sales lack `doctorId`) · RETENTION 0% (1 cohort n=1) · NO-SHOW % (no statuses) · M-O-M "—" (prev calendar month had 0 revenue).
+
+**Tests**: 3863 → 3894 (+31). 79/79 phase16.2 file pass. Build clean.
+
+Detail: `.agents/sessions/2026-04-29-session32-phase16-2-fixes.md`
+
+**2 user-requested follow-ups queued for session 33**:
+1. **DF report wiring** — รายงานจ่าย DF (ค่ามือแพทย์) shows no data; แพทย์ & ผู้ช่วย page already records doctor-vs-assistant. Replicate ProClinic's รายจ่าย page using OUR `be_*` data. Multi-branch aware.
+2. **Clinic-report inline UI explanations** — add description per tile + chart on `tab=clinic-report` (metrics need context for non-experts), then trace back through wiring to verify each metric's logic. Multi-branch aware.
 
 ### Session 2026-04-29 EOD (session 31) — Phase 16.2 Clinic Report SHIPPED
 
@@ -190,20 +219,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-04-29 EOD (session 30 cont.).
+Resume LoverClinic — continue from 2026-04-29 EOD (session 32).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ced094d, prod=f4e6127 — 1 commit unpushed-to-prod)
-3. .agents/active.md (3771 tests pass; Phase 16.3 closed; 16.3-bis fix on master)
-4. .claude/rules/00-session-start.md (iron-clad + V-table incl. Phase 16.3 + 16.3-bis)
-5. .agents/sessions/2026-04-29-session30-cont-phase16-3.md
+2. SESSION_HANDOFF.md (master=fdf3d41, prod=f4e6127 — 4 commits unpushed-to-prod)
+3. .agents/active.md (3894 tests pass; Phase 16.2 functional with real data)
+4. .claude/rules/00-session-start.md (iron-clad + V-table)
+5. .agents/sessions/2026-04-29-session32-phase16-2-fixes.md
 
-Status: master=ced094d, 3771/3771 tests pass, prod=f4e6127 LIVE (V15 #9)
-Next: User QA Phase 16.3 + 16.3-bis on dev → V15 #10 deploy auth OR proceed 16.2 Clinic Report
+Status: master=fdf3d41, 3894/3894 tests pass, prod=f4e6127 LIVE (V15 #9)
+Next user-requested follow-ups (queued from session 32):
+- (A) DF report wiring (รายงานจ่าย DF / ค่ามือแพทย์) — no data; แพทย์ & ผู้ช่วย page records doctor-vs-assistant; reference ProClinic รายจ่าย page; replicate via be_* data; multi-branch aware
+- (B) Clinic-report inline UI explanations per tile + chart, then audit each metric's wiring/logic
+
 Outstanding (user-triggered):
-- V15 #10 deploy auth (1 commit ced094d unpushed-to-prod — 16.3-bis tab-override wire fix)
-- 16.4 Order tab intel still failing MODULE_NOT_FOUND (deferred)
+- V15 #10 deploy auth — 4 commits unpushed (ced094d 16.3-bis + 0aa8cb6 16.2 ship + 9642bda black-screen + fdf3d41 real-schema)
+- 16.5 RemainingCourse + 16.1 SmartAudience pending per master Phase 16 plan
+- 16.4 Order tab parity audit deferred (intel at docs/proclinic-scan/admin-order-*.json)
 - Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J skill auto-trigger; NO real-action clicks in preview_eval (memory-locked); H-quater (no master_data reads in feature code).
