@@ -2781,3 +2781,55 @@ Full suite 3771 → ~3863. Build clean.
 
 Spec: `docs/superpowers/specs/2026-04-29-phase16-2-clinic-report-design.md`
 Plan: `docs/superpowers/plans/2026-04-29-phase16-2-clinic-report.md`
+
+---
+
+## Phase 16.1 (2026-04-30) — Smart Audience tab
+
+Rule-builder UI for marketing segmentation. Admin builds AND/OR predicate trees over `be_customers` + `be_sales`, sees real-time count + 10-name sample, saves named segments to NEW `be_audiences` collection, exports matched customers as CSV.
+
+**Brainstorming HARD-GATE (Rule J) — 4 Qs locked previous session**:
+- Q1: Save to `be_audiences` (NEW collection + sidebar CRUD)
+- Q2: All 8 predicates (4 demographic + 4 behavioural)
+- Q3: CSV download only (no LINE push v1)
+- Q4: Real-time count + 10-name sample (debounced 300ms)
+
+**8 predicates** (PREDICATE_TYPES frozen list):
+- `age-range` `{min, max}` — uses `customer.birthdate` + Thai TZ via `bangkokNow`
+- `gender` `{value: 'M'|'F'}` — matches `customer.gender`
+- `branch` `{branchIds: string[]}` — matches `customer.branchId` (legacy `patientData.branch` fallback)
+- `source` `{values: string[]}` — matches `customer.source` (NOT `acquisitionSource`)
+- `bought-x-in-last-n` `{kind: 'product'|'course', refId, months}` — scans sales.items[]
+- `spend-bracket` `{min, max}` — sums `sale.billing.netTotal` (excludes cancelled/refunded)
+- `last-visit-days` `{op: '>='|'<=', days}` — most-recent saleDate
+- `has-unfinished-course` `{value: bool}` — customer.courses[] with parseQty.remaining > 0
+
+**Files**:
+- NEW `src/lib/audienceRules.js` — 8-predicate evaluator + `evaluateGroup` recursive + `evaluateRule` orchestrator + `indexSalesByCustomer` + `computeAgeYears` / `daysBetween` / `mostRecentSaleDate` / `sumNetTotal` helpers
+- NEW `src/lib/audienceValidation.js` — `validateAudienceRule` recursive shape + V14 `hasUndefinedLeaves` walker + `emptyAudienceRule`
+- EXTEND `src/lib/backendClient.js` — `newAudienceId` (crypto-grade) + `getAudience` + `listAudiences` + `listenToAudiences` + `saveAudience` + `deleteAudience`
+- EXTEND `src/lib/tabPermissions.js` — `'smart-audience': { requires: ['smart_audience'] }` (perm key already in permissionGroupValidation.js analytics module)
+- EXTEND `src/components/backend/nav/navConfig.js` — Target icon + nav entry under `reports` section
+- EXTEND `src/pages/BackendDashboard.jsx` — lazy import + render case
+- EXTEND `firestore.rules` — `match /be_audiences/{audienceId} { allow read, write: if isClinicStaff(); }`
+- NEW `src/components/backend/SmartAudienceTab.jsx` — main shell + onSnapshot listener + debounced 300ms preview + CSV export (also exports pure `buildAudienceCsvRows` helper)
+- NEW `src/components/backend/audience/RuleBuilder.jsx` — recursive AND/OR group builder (depth cap 3 in UI, 6 in validator)
+- NEW `src/components/backend/audience/PredicateRow.jsx` — switch by 8 predicate types + `defaultParamsForType`
+- NEW `src/components/backend/audience/SavedSegmentSidebar.jsx` — onSnapshot list + search + delete button
+- NEW `src/components/backend/audience/AudiencePreviewPane.jsx` — count + 10-name sample + Export CSV button
+
+**Tests**: +170 across 4 phase16.1-* test files:
+- `tests/phase16.1-audience-rules.test.js` — 87 predicate + group + evaluateRule tests
+- `tests/phase16.1-audience-validation.test.js` — 38 shape + V14 + emptyRule tests
+- `tests/phase16.1-audience-tab.test.jsx` — 23 RTL render + sub-component tests
+- `tests/phase16.1-audience-flow-simulate.test.js` — 22 Rule I full-flow + source-grep regression guards
+
+**Legacy regression fixes** in this commit:
+- `tests/branch-collection-coverage.test.js` — `be_audiences` added to COLLECTION_MATRIX as global-scope
+- `tests/phase16.3-flow-simulate.test.js` D.1 — TAB_PERMISSION_MAP count 48 → 49
+
+**Iron-clad refs honored**: Rule E + H + H-quater (be_* only, no master_data reads); Rule J brainstorming HARD-GATE; Rule K work-first-test-last (11 source files first → review → 4 test files); V14 no-undefined-leaves (validator walks tree); V12 multi-reader-sweep (one canonical helper per audience consumer).
+
+**Deploy gate**: V15 #11 needed when shipping (firestore.rules adds `be_audiences` entry → Probe-Deploy-Probe Rule B + explicit "deploy" THIS turn per V18).
+
+Plan: `~/.claude/plans/resume-loverclinic-continue-tidy-thunder.md`

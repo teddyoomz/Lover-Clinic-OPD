@@ -290,6 +290,17 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Backend: Phase 16.1 (2026-04-30) Smart Audience saved segments ──
+      // Marketing query rules persisted as serialized rule trees:
+      //   { rule: { kind: 'group', op: 'AND'|'OR', children: [...] }, name, ... }
+      // Read+write open to clinic staff. Hard-delete in v1 (soft-delete +
+      // audit ledger reserved for v2 if marketing-team usage warrants it).
+      // Per Rule E + H + H-quater: feature reads only be_* (be_customers +
+      // be_sales + be_audiences); zero master_data reads in feature code.
+      match /be_audiences/{audienceId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: V32-tris-ter (2026-04-26) LINE Customer Link Tokens ──
       // V33.9 — be_customer_link_tokens rule REMOVED. Pre-V33.4 QR-token
       // flow stripped (admin-mint endpoint + webhook consumer + client

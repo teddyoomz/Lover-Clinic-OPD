@@ -7595,6 +7595,104 @@ export async function migrateMasterVouchersToBe() {
   return { imported, skipped, total: masterSnap.size };
 }
 
+// ─── Audience CRUD (Phase 16.1 Smart Audience — 2026-04-30) ────────────────
+// Saved query rules for marketing campaigns. Each doc stores a serialized
+// rule tree (group AND/OR children with predicate leaves) plus metadata.
+// Per Rule C2: ID minted client-side via crypto.getRandomValues (128-bit
+// entropy) — no Math.random tokens.
+
+const audiencesCol = () => collection(db, ...basePath(), 'be_audiences');
+const audienceDoc = (id) => doc(db, ...basePath(), 'be_audiences', String(id));
+
+const AUDIENCE_NAME_MAX = 80;
+const AUDIENCE_DESC_MAX = 300;
+
+/** Mint a fresh audience id. Format: `AUD-<ts>-<16hex>`. Caller passes to saveAudience. */
+export function newAudienceId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  return `AUD-${Date.now()}-${hex}`;
+}
+
+export async function getAudience(audienceId) {
+  const id = String(audienceId || '').trim();
+  if (!id) return null;
+  const snap = await getDoc(audienceDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function listAudiences() {
+  const snap = await getDocs(audiencesCol());
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  items.sort((a, b) => {
+    const ua = a.updatedAt || '';
+    const ub = b.updatedAt || '';
+    if (ua !== ub) return ub.localeCompare(ua);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+  return items;
+}
+
+/**
+ * Real-time listener variant. Mirrors listenToHolidays sort contract so a
+ * UI sidebar can drop in onSnapshot without re-sorting.
+ *
+ * @param {(items: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToAudiences(onChange, onError) {
+  return onSnapshot(audiencesCol(), (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => {
+      const ua = a.updatedAt || '';
+      const ub = b.updatedAt || '';
+      if (ua !== ub) return ub.localeCompare(ua);
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    onChange(items);
+  }, onError);
+}
+
+export async function saveAudience(audienceId, data) {
+  const id = String(audienceId || '').trim();
+  if (!id) throw new Error('audienceId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+
+  const name = String(data.name || '').trim();
+  if (!name) throw new Error('name required');
+  if (name.length > AUDIENCE_NAME_MAX) throw new Error(`name > ${AUDIENCE_NAME_MAX} chars`);
+  const descRaw = typeof data.description === 'string' ? data.description.trim() : '';
+  if (descRaw.length > AUDIENCE_DESC_MAX) throw new Error(`description > ${AUDIENCE_DESC_MAX} chars`);
+
+  // V14 + shape validation via the rule validator. Rejects undefined leaves
+  // + unknown predicate types + malformed params before hitting Firestore.
+  const { validateAudienceRule } = await import('./audienceValidation.js');
+  const fail = validateAudienceRule(data.rule);
+  if (fail) {
+    const [field, msg] = fail;
+    throw new Error(`audience.${field}: ${msg}`);
+  }
+
+  const now = new Date().toISOString();
+  const createdBy = typeof data.createdBy === 'string' ? data.createdBy : '';
+  await setDoc(audienceDoc(id), {
+    audienceId: id,
+    name,
+    description: descRaw,
+    rule: data.rule,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+    createdBy,
+  }, { merge: false });
+}
+
+export async function deleteAudience(audienceId) {
+  const id = String(audienceId || '').trim();
+  if (!id) throw new Error('audienceId required');
+  await deleteDoc(audienceDoc(id));
+}
+
 // ─── Product Group CRUD (Phase 11.2 Master Data Suite) ─────────────────────
 // OUR collection per Rule H — no ProClinic write-back, sync-seed-only relation
 // to master_data/products. Shape validated upstream by productGroupValidation.

@@ -56,6 +56,8 @@ const PnLReportTab           = lazy(() => import('../components/backend/reports/
 const DfPayoutReportTab      = lazy(() => import('../components/backend/reports/DfPayoutReportTab.jsx'));
 const ExpenseReportTab       = lazy(() => import('../components/backend/reports/ExpenseReportTab.jsx'));
 const RemainingCourseTab     = lazy(() => import('../components/backend/reports/RemainingCourseTab.jsx'));
+// Phase 16.1 (2026-04-30) — Smart Audience tab (lazy; heavy rule-builder UI + onSnapshot listener)
+const SmartAudienceTab       = lazy(() => import('../components/backend/SmartAudienceTab.jsx'));
 const ClinicReportTab        = lazy(() => import('../components/backend/reports/ClinicReportTab.jsx'));
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
@@ -475,6 +477,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <DfPayoutReportTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'reports-remaining-course' ? (
           <RemainingCourseTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'smart-audience' ? (
+          <SmartAudienceTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'clinic-report' ? (
           <ClinicReportTab onNavigate={setActiveTab} clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'expense-report' ? (

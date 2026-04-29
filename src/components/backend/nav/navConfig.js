@@ -46,6 +46,8 @@ import {
   Percent,
   // Phase 16.5 remaining-course tab icon
   Clock,
+  // Phase 16.1 smart-audience tab icon (audience-targeting metaphor)
+  Target,
   // Phase 12.3 sale-insurance-claim tab icon
   Shield,
   // Phase 14.1 document-templates tab icon
@@ -134,6 +136,7 @@ export const NAV_SECTIONS = [
       { id: 'reports-payment',       label: 'สรุปบัญชีรับชำระ',    icon: WalletIcon,      color: 'emerald', palette: 'payment summary บัญชี ชำระ สรุป cash transfer' },
       { id: 'reports-df-payout',     label: 'ค่ามือแพทย์ (DF)',     icon: Percent,         color: 'emerald', palette: 'df doctor fee payout commission report ค่ามือ หมอ แพทย์ จ่าย รายงาน' },
       { id: 'reports-remaining-course', label: 'คอร์สคงเหลือ',       icon: Clock,           color: 'amber',   palette: 'remaining course คอร์ส คงเหลือ remaining unused refund cancel exchange ยกเลิก คืนเงิน เปลี่ยน' },
+      { id: 'smart-audience',           label: 'Smart Audience',     icon: Target,          color: 'amber',   palette: 'smart audience segment marketing target group csv export กลุ่มเป้าหมาย ลูกค้า กลุ่ม วิเคราะห์ filter rule builder query' },
     ],
   },
   {
