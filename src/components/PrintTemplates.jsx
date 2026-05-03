@@ -339,6 +339,126 @@ export function DashboardOPDPrint({ session, clinicSettings = {} }) {
   const reportSubtitle = isCustom ? 'Custom Form Report'
     : isFollowUp ? 'Follow-Up Assessment Report' : 'OPD Summary Report';
 
+  // RP1 lift (2026-04-30) — score cards extracted from JSX-IIFE so the
+  // print template avoids the Vite-OXC-banned inline JSX-IIFE pattern.
+  // Each render function reads from the parent-scoped `d`, `card`,
+  // `cardHeader`, `cardTitle`, `cardBody`, `ScoreBar`. Called from JSX
+  // as a named function (not an anonymous IIFE).
+  function renderAdamCard() {
+    const adamRes = calculateADAM(d);
+    const adamColor = adamRes.total >= 3 ? '#dc2626' : adamRes.total >= 1 ? '#f59e0b' : '#22c55e';
+    return (
+      <div style={card}>
+        <div style={cardHeader(adamColor)}>
+          <div style={{ width: '3px', height: '12px', background: adamColor, borderRadius: '2px' }} />
+          <h4 style={cardTitle(adamColor)}>แบบประเมินพร่องฮอร์โมนเพศชาย (ADAM Score)</h4>
+        </div>
+        <div style={cardBody}>
+          {/* Score summary row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${adamColor}08`, borderRadius: '8px', marginBottom: '12px', border: `1px solid ${adamColor}20` }}>
+            <div style={{ textAlign: 'center', minWidth: '48px' }}>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: adamColor, lineHeight: 1 }}>{adamRes.total}</div>
+              <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 10</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{adamRes.text}</div>
+              <ScoreBar value={adamRes.total} max={10} color={adamColor} />
+            </div>
+          </div>
+          {/* Questions grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 16px' }}>
+            {[
+              { k: d.adam_1, t: 'ความต้องการทางเพศลดลง' },
+              { k: d.adam_2, t: 'รู้สึกขาดพลังงาน' },
+              { k: d.adam_3, t: 'ความแข็งแรง/ความทนทานลดลง' },
+              { k: d.adam_4, t: 'ส่วนสูงลดลง' },
+              { k: d.adam_5, t: 'ซึมเศร้า / ความสุขในชีวิตลดลง' },
+              { k: d.adam_6, t: 'อารมณ์แปรปรวน หงุดหงิดง่าย' },
+              { k: d.adam_7, t: 'การแข็งตัวของอวัยวะเพศลดลง' },
+              { k: d.adam_8, t: 'ความสามารถออกกำลังกายลดลง' },
+              { k: d.adam_9, t: 'ง่วงนอนหลังทานอาหารเย็น' },
+              { k: d.adam_10, t: 'ประสิทธิภาพการทำงานลดลง' },
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', borderBottom: '1px solid #f8fafc' }}>
+                <span style={{ fontSize: '9px', color: '#64748b' }}>{i + 1}. {item.t}</span>
+                <span style={{ fontSize: '9px', fontWeight: '800', color: item.k ? adamColor : '#cbd5e1', minWidth: '28px', textAlign: 'right' }}>
+                  {item.k ? '✓ YES' : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderMrsCard() {
+    const mrsRes = calculateMRS(d);
+    const mrsColor = mrsRes.score >= 30 ? '#dc2626' : mrsRes.score >= 17 ? '#f59e0b' : mrsRes.score >= 9 ? '#3b82f6' : '#22c55e';
+    return (
+      <div style={card}>
+        <div style={cardHeader(mrsColor)}>
+          <div style={{ width: '3px', height: '12px', background: mrsColor, borderRadius: '2px' }} />
+          <h4 style={cardTitle(mrsColor)}>แบบประเมินอาการวัยทองหญิง (MRS — Menopause Rating Scale)</h4>
+        </div>
+        <div style={cardBody}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${mrsColor}08`, borderRadius: '8px', border: `1px solid ${mrsColor}20` }}>
+            <div style={{ textAlign: 'center', minWidth: '48px' }}>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: mrsColor, lineHeight: 1 }}>{mrsRes.score}</div>
+              <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 44</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{mrsRes.text}</div>
+              <ScoreBar value={mrsRes.score} max={44} color={mrsColor} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderIiefCard() {
+    const iiefScore = calculateIIEFScore(d);
+    const interp = getIIEFInterpretation(iiefScore);
+    const iiefColor = iiefScore <= 7 ? '#dc2626' : iiefScore <= 11 ? '#f97316' : iiefScore <= 16 ? '#f59e0b' : iiefScore <= 21 ? '#3b82f6' : '#22c55e';
+    const iiefQs = [
+      { k: 'iief_1', t: 'ความมั่นใจในการแข็งตัว' },
+      { k: 'iief_2', t: 'แข็งตัวพอที่จะสอดใส่ได้' },
+      { k: 'iief_3', t: 'คงความแข็งตัวระหว่างมีเพศสัมพันธ์' },
+      { k: 'iief_4', t: 'คงความแข็งตัวจนเสร็จกิจ' },
+      { k: 'iief_5', t: 'ความพึงพอใจในการมีเพศสัมพันธ์' },
+    ];
+    return (
+      <div style={card}>
+        <div style={cardHeader(iiefColor)}>
+          <div style={{ width: '3px', height: '12px', background: iiefColor, borderRadius: '2px' }} />
+          <h4 style={cardTitle(iiefColor)}>สมรรถภาพทางเพศ (IIEF-5 / SHIM Score)</h4>
+        </div>
+        <div style={cardBody}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${iiefColor}08`, borderRadius: '8px', marginBottom: '12px', border: `1px solid ${iiefColor}20` }}>
+            <div style={{ textAlign: 'center', minWidth: '48px' }}>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: iiefColor, lineHeight: 1 }}>{iiefScore}</div>
+              <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 25</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{interp.text}</div>
+              <ScoreBar value={iiefScore} max={25} color={iiefColor} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+            {iiefQs.map((q, i) => (
+              <div key={q.k} style={{ textAlign: 'center', padding: '8px 4px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '18px', fontWeight: '900', color: iiefColor }}>{d[q.k] || 0}</div>
+                <div style={{ fontSize: '7px', color: '#94a3b8', marginTop: '3px', lineHeight: '1.3' }}>Q{i + 1}</div>
+                <div style={{ fontSize: '7px', color: '#64748b', marginTop: '1px', lineHeight: '1.3' }}>{q.t.substring(0, 14)}{q.t.length > 14 ? '…' : ''}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: '#fff', color: '#0f172a', fontFamily: 'sans-serif', width: '210mm', minHeight: '297mm', margin: '0 auto', padding: '0' }}>
 
@@ -513,122 +633,13 @@ export function DashboardOPDPrint({ session, clinicSettings = {} }) {
             </div>
 
             {/* ADAM */}
-            {showAdam && (() => {
-              const adamRes = calculateADAM(d);
-              const adamColor = adamRes.total >= 3 ? '#dc2626' : adamRes.total >= 1 ? '#f59e0b' : '#22c55e';
-              return (
-                <div style={card}>
-                  <div style={cardHeader(adamColor)}>
-                    <div style={{ width: '3px', height: '12px', background: adamColor, borderRadius: '2px' }} />
-                    <h4 style={cardTitle(adamColor)}>แบบประเมินพร่องฮอร์โมนเพศชาย (ADAM Score)</h4>
-                  </div>
-                  <div style={cardBody}>
-                    {/* Score summary row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${adamColor}08`, borderRadius: '8px', marginBottom: '12px', border: `1px solid ${adamColor}20` }}>
-                      <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                        <div style={{ fontSize: '28px', fontWeight: '900', color: adamColor, lineHeight: 1 }}>{adamRes.total}</div>
-                        <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 10</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{adamRes.text}</div>
-                        <ScoreBar value={adamRes.total} max={10} color={adamColor} />
-                      </div>
-                    </div>
-                    {/* Questions grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 16px' }}>
-                      {[
-                        { k: d.adam_1, t: 'ความต้องการทางเพศลดลง' },
-                        { k: d.adam_2, t: 'รู้สึกขาดพลังงาน' },
-                        { k: d.adam_3, t: 'ความแข็งแรง/ความทนทานลดลง' },
-                        { k: d.adam_4, t: 'ส่วนสูงลดลง' },
-                        { k: d.adam_5, t: 'ซึมเศร้า / ความสุขในชีวิตลดลง' },
-                        { k: d.adam_6, t: 'อารมณ์แปรปรวน หงุดหงิดง่าย' },
-                        { k: d.adam_7, t: 'การแข็งตัวของอวัยวะเพศลดลง' },
-                        { k: d.adam_8, t: 'ความสามารถออกกำลังกายลดลง' },
-                        { k: d.adam_9, t: 'ง่วงนอนหลังทานอาหารเย็น' },
-                        { k: d.adam_10, t: 'ประสิทธิภาพการทำงานลดลง' },
-                      ].map((item, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', borderBottom: '1px solid #f8fafc' }}>
-                          <span style={{ fontSize: '9px', color: '#64748b' }}>{i + 1}. {item.t}</span>
-                          <span style={{ fontSize: '9px', fontWeight: '800', color: item.k ? adamColor : '#cbd5e1', minWidth: '28px', textAlign: 'right' }}>
-                            {item.k ? '✓ YES' : '—'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {showAdam && renderAdamCard()}
 
             {/* MRS */}
-            {showMrs && (() => {
-              const mrsRes = calculateMRS(d);
-              const mrsColor = mrsRes.score >= 30 ? '#dc2626' : mrsRes.score >= 17 ? '#f59e0b' : mrsRes.score >= 9 ? '#3b82f6' : '#22c55e';
-              return (
-                <div style={card}>
-                  <div style={cardHeader(mrsColor)}>
-                    <div style={{ width: '3px', height: '12px', background: mrsColor, borderRadius: '2px' }} />
-                    <h4 style={cardTitle(mrsColor)}>แบบประเมินอาการวัยทองหญิง (MRS — Menopause Rating Scale)</h4>
-                  </div>
-                  <div style={cardBody}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${mrsColor}08`, borderRadius: '8px', border: `1px solid ${mrsColor}20` }}>
-                      <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                        <div style={{ fontSize: '28px', fontWeight: '900', color: mrsColor, lineHeight: 1 }}>{mrsRes.score}</div>
-                        <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 44</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{mrsRes.text}</div>
-                        <ScoreBar value={mrsRes.score} max={44} color={mrsColor} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {showMrs && renderMrsCard()}
 
             {/* IIEF-5 */}
-            {isPerf && (() => {
-              const iiefScore = calculateIIEFScore(d);
-              const interp = getIIEFInterpretation(iiefScore);
-              const iiefColor = iiefScore <= 7 ? '#dc2626' : iiefScore <= 11 ? '#f97316' : iiefScore <= 16 ? '#f59e0b' : iiefScore <= 21 ? '#3b82f6' : '#22c55e';
-              const iiefQs = [
-                { k: 'iief_1', t: 'ความมั่นใจในการแข็งตัว' },
-                { k: 'iief_2', t: 'แข็งตัวพอที่จะสอดใส่ได้' },
-                { k: 'iief_3', t: 'คงความแข็งตัวระหว่างมีเพศสัมพันธ์' },
-                { k: 'iief_4', t: 'คงความแข็งตัวจนเสร็จกิจ' },
-                { k: 'iief_5', t: 'ความพึงพอใจในการมีเพศสัมพันธ์' },
-              ];
-              return (
-                <div style={card}>
-                  <div style={cardHeader(iiefColor)}>
-                    <div style={{ width: '3px', height: '12px', background: iiefColor, borderRadius: '2px' }} />
-                    <h4 style={cardTitle(iiefColor)}>สมรรถภาพทางเพศ (IIEF-5 / SHIM Score)</h4>
-                  </div>
-                  <div style={cardBody}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 12px', background: `${iiefColor}08`, borderRadius: '8px', marginBottom: '12px', border: `1px solid ${iiefColor}20` }}>
-                      <div style={{ textAlign: 'center', minWidth: '48px' }}>
-                        <div style={{ fontSize: '28px', fontWeight: '900', color: iiefColor, lineHeight: 1 }}>{iiefScore}</div>
-                        <div style={{ fontSize: '9px', color: '#94a3b8' }}>/ 25</div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '6px' }}>{interp.text}</div>
-                        <ScoreBar value={iiefScore} max={25} color={iiefColor} />
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
-                      {iiefQs.map((q, i) => (
-                        <div key={q.k} style={{ textAlign: 'center', padding: '8px 4px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                          <div style={{ fontSize: '18px', fontWeight: '900', color: iiefColor }}>{d[q.k] || 0}</div>
-                          <div style={{ fontSize: '7px', color: '#94a3b8', marginTop: '3px', lineHeight: '1.3' }}>Q{i + 1}</div>
-                          <div style={{ fontSize: '7px', color: '#64748b', marginTop: '1px', lineHeight: '1.3' }}>{q.t.substring(0, 14)}{q.t.length > 14 ? '…' : ''}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {isPerf && renderIiefCard()}
           </>
         )}
 

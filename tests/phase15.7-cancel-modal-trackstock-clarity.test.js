@@ -105,8 +105,10 @@ describe('Phase 15.7 — Cancel modal trackStock clarity', () => {
   });
 
   describe('C2 — modal copy uses per-reason render', () => {
-    it('C2.1 modal calls summarizeSkipReasons on stockImpact.skipReasons', () => {
-      expect(SaleTabSource).toMatch(/summarizeSkipReasons\(\s*cancelAnalysis\.stockImpact\.skipReasons\s*\)/);
+    it('C2.1 modal passes stockImpact.skipReasons into the extracted breakdown renderer', () => {
+      expect(SaleTabSource).toMatch(/function\s+SkipReasonsBreakdown\(\{\s*skipReasons\s*\}\)/);
+      expect(SaleTabSource).toMatch(/summarizeSkipReasons\(\s*skipReasons\s*\)/);
+      expect(SaleTabSource).toMatch(/<SkipReasonsBreakdown\s+skipReasons=\{cancelAnalysis\.stockImpact\.skipReasons\}/);
     });
 
     it('C2.2 modal renders course-skip line with Thai copy', () => {

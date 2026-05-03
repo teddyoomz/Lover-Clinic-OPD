@@ -170,6 +170,61 @@ function SaleItemsCell({ items, isDark }) {
 }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
+// RP1 lift (2026-04-30) — skip-reasons breakdown was a JSX-IIFE inside
+// the cancel-confirm modal. Extracted so the parent JSX stays IIFE-free
+// (Vite-OXC ban on inline JSX-IIFE inside JSX expressions).
+function SkipReasonsBreakdown({ skipReasons }) {
+  const groups = summarizeSkipReasons(skipReasons);
+  const order = ['course-skip', 'trackStock-false', 'not-tracked', 'no-batch-at-branch', 'shortfall'];
+  const fmtNames = (names) => {
+    const arr = names.slice(0, 5);
+    const tail = names.length > 5 ? ` … และอีก ${names.length - 5}` : '';
+    return arr.join(', ') + tail;
+  };
+  const renderLine = (reason, g) => {
+    const names = fmtNames(g.itemNames || []);
+    switch (reason) {
+      case 'course-skip':
+        return (
+          <div key={reason} className="text-xs text-violet-300">
+            ℹ {g.count} รายการในคอร์ส [{names}] ตั้งค่า "ไม่ตัดสต็อค" — การยกเลิกจะไม่คืนสต็อคของรายการเหล่านี้
+          </div>
+        );
+      case 'trackStock-false':
+        return (
+          <div key={reason} className="text-xs text-sky-300">
+            ℹ {g.count} สินค้า [{names}] ตั้งค่าที่ระดับสินค้า "ไม่ตัดสต็อค" — การยกเลิกจะไม่คืนสต็อคให้ตามไปด้วย
+          </div>
+        );
+      case 'not-tracked':
+        return (
+          <div key={reason} className="text-xs text-[var(--tx-muted)]">
+            ℹ {g.count} สินค้า [{names}] ยังไม่เคยตั้งค่าสต็อค — การยกเลิกไม่กระทบสต็อก
+          </div>
+        );
+      case 'no-batch-at-branch':
+        return (
+          <div key={reason} className="text-xs text-orange-300">
+            ⚠ {g.count} สินค้า [{names}] ไม่มี batch ที่สาขานี้ตอนตัด — ไม่มีสต็อคให้คืน
+          </div>
+        );
+      case 'shortfall':
+        return (
+          <div key={reason} className="text-xs text-orange-300">
+            ⚠ {g.count} สินค้า [{names}] ตัดเกินสต็อคที่มี (สต็อคติดลบ) — การยกเลิกจะคืนเฉพาะส่วนที่ระบบบันทึกได้
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+  return (
+    <div className="space-y-1">
+      {order.filter(r => groups[r]).map(r => renderLine(r, groups[r]))}
+    </div>
+  );
+}
+
 export default function SaleTab({ clinicSettings, theme, initialCustomer, onCustomerUsed, onFormClose }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
@@ -1356,57 +1411,9 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       reason from analyzeStockImpact) and groups by reason via
                       summarizeSkipReasons. Falls back gracefully for legacy
                       analyzeStockImpact results that didn't carry skipReasons. */}
-                  {cancelAnalysis.stockImpact && Array.isArray(cancelAnalysis.stockImpact.skipReasons) && cancelAnalysis.stockImpact.skipReasons.length > 0 && (() => {
-                    const groups = summarizeSkipReasons(cancelAnalysis.stockImpact.skipReasons);
-                    const order = ['course-skip', 'trackStock-false', 'not-tracked', 'no-batch-at-branch', 'shortfall'];
-                    const fmtNames = (names) => {
-                      const arr = names.slice(0, 5);
-                      const tail = names.length > 5 ? ` … และอีก ${names.length - 5}` : '';
-                      return arr.join(', ') + tail;
-                    };
-                    const renderLine = (reason, g) => {
-                      const names = fmtNames(g.itemNames || []);
-                      switch (reason) {
-                        case 'course-skip':
-                          return (
-                            <div key={reason} className="text-xs text-violet-300">
-                              ℹ {g.count} รายการในคอร์ส [{names}] ตั้งค่า "ไม่ตัดสต็อค" — การยกเลิกจะไม่คืนสต็อคของรายการเหล่านี้
-                            </div>
-                          );
-                        case 'trackStock-false':
-                          return (
-                            <div key={reason} className="text-xs text-sky-300">
-                              ℹ {g.count} สินค้า [{names}] ตั้งค่าที่ระดับสินค้า "ไม่ตัดสต็อค" — การยกเลิกจะไม่คืนสต็อคให้ตามไปด้วย
-                            </div>
-                          );
-                        case 'not-tracked':
-                          return (
-                            <div key={reason} className="text-xs text-[var(--tx-muted)]">
-                              ℹ {g.count} สินค้า [{names}] ยังไม่เคยตั้งค่าสต็อค — การยกเลิกไม่กระทบสต็อก
-                            </div>
-                          );
-                        case 'no-batch-at-branch':
-                          return (
-                            <div key={reason} className="text-xs text-orange-300">
-                              ⚠ {g.count} สินค้า [{names}] ไม่มี batch ที่สาขานี้ตอนตัด — ไม่มีสต็อคให้คืน
-                            </div>
-                          );
-                        case 'shortfall':
-                          return (
-                            <div key={reason} className="text-xs text-orange-300">
-                              ⚠ {g.count} สินค้า [{names}] ตัดเกินสต็อคที่มี (สต็อคติดลบ) — การยกเลิกจะคืนเฉพาะส่วนที่ระบบบันทึกได้
-                            </div>
-                          );
-                        default:
-                          return null;
-                      }
-                    };
-                    return (
-                      <div className="space-y-1">
-                        {order.filter(r => groups[r]).map(r => renderLine(r, groups[r]))}
-                      </div>
-                    );
-                  })()}
+                  {cancelAnalysis.stockImpact && Array.isArray(cancelAnalysis.stockImpact.skipReasons) && cancelAnalysis.stockImpact.skipReasons.length > 0 && (
+                    <SkipReasonsBreakdown skipReasons={cancelAnalysis.stockImpact.skipReasons} />
+                  )}
                 </div>
               )}
 

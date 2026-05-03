@@ -49,6 +49,22 @@ function fromThaiDate(thaiDate) {
 const bangkokNow = bangkokNowUtil;
 const todayISO = thaiTodayISO;
 
+// RP1 lift (2026-04-30) — small pure helpers extracted from inline JSX-IIFE
+// per Vite-OXC ban (see CLAUDE.md rules/03-stack.md § Vite OXC).
+function formatThaiAppointmentDate(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-');
+  return `${parseInt(d)}/${parseInt(m)}/${parseInt(y) + 543}`;
+}
+function renderDoctorLabel(doctors, value) {
+  if (!doctors || !value) return null;
+  const doc = doctors.find(o => o.value === value);
+  return doc ? <span className="text-gray-500">แพทย์: {doc.label}</span> : null;
+}
+function renderJsxBlock(fn) {
+  return fn();
+}
+
 // DatePickerThai removed — shared `DateField` (imported below) replaces all
 // 5 use sites. Each caller's custom `className` (bg/border/focus color) is
 // now passed as `fieldClassName` to preserve the original visual concept.
@@ -2691,9 +2707,1092 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     historyCurrentPage * HISTORY_PAGE_SIZE
   );
 
+  // RP1 lift (2026-04-30) — render functions extracted from JSX-IIFE per
+  // Vite-OXC ban (CLAUDE.md rules/03-stack.md § Vite OXC). Behaviour identical;
+  // only the wrapping syntax changes: inline JSX-IIFE → render helper.
+  const renderOpdButton = (session) => {
+    const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
+    const isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done';
+    const isFailed  = !isPending && !isDone && session.brokerStatus === 'failed';
+    return (
+      <button
+        onClick={() => handleOpdClick(session)}
+        disabled={isPending || isDone}
+        title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
+        className={`p-2 rounded-lg border transition-all ${
+          isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
+          isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
+          isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
+          'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
+        }`}
+      ><ClipboardCheck size={15}/></button>
+    );
+  };
+
+  // Viewing-session result modal (huge — full patient OPD record + assessments
+  // + deposit + clinical summary + treatment timeline).
+  const renderViewingSessionModal = () => {
+    const d = viewingSession.patientData || {};
+    const formType = viewingSession.formType || 'intake';
+    const isFollowUp = formType.startsWith('followup_');
+    const isCustom = formType === 'custom';
+
+    const reasons = getReasons(d);
+    const goals = getHrtGoals(d);
+
+    const isPerf = (!isFollowUp && reasons.includes('สมรรถภาพทางเพศ')) || formType === 'followup_ed';
+    const isHrt = (!isFollowUp && reasons.includes('เสริมฮอร์โมน')) || formType === 'followup_adam' || formType === 'followup_mrs';
+    const showAdam = (!isFollowUp && (isPerf || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)'))) || formType === 'followup_adam';
+    const showMrs = (!isFollowUp && goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || formType === 'followup_mrs';
+
+    const clinicalSummaryText = generateClinicalSummary(d, formType, viewingSession.customTemplate, summaryLang);
+
+    return (
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
+        <div className="bg-[var(--bg-elevated)] rounded-xl shadow-2xl border border-[var(--bd)] w-full max-w-5xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden relative">
+
+          {hasNewUpdate && (
+            <div className="bg-blue-600 text-white px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 shadow-lg relative z-20">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} className="animate-pulse" />
+                <span className="text-xs sm:text-sm font-bold tracking-wide">⚠️ มีข้อมูลอัปเดตใหม่ขณะที่คุณกำลังดูหน้านี้!</span>
+              </div>
+              <button onClick={() => {
+                const latest = sessions.find(s => s.id === viewingSession.id);
+                setHasNewUpdate(false);
+                if (latest) {
+                  setViewingSession(latest);
+                  if (latest.isUnread) {
+                    lastViewedStrRef.current[latest.id] = stableStr(latest.patientData || {});
+                    lastAutoSyncedStrRef.current[latest.id] = stableStr(latest.patientData || {});
+                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
+                  }
+                }
+              }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-xs sm:text-xs font-black font-semibold shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
+                ✓ รับทราบ
+              </button>
+            </div>
+          )}
+
+          <div className="px-4 py-3 border-b border-[var(--bd)] flex flex-wrap items-center gap-x-3 gap-y-2 shrink-0 bg-[var(--bg-surface)]">
+            <div className="flex items-center gap-2.5 flex-1 min-w-[140px]">
+              <div className={`p-1.5 rounded bg-black border shrink-0 ${isCustom ? 'border-cyan-900/50 text-cyan-500' : isPerf || isHrt ? 'border-red-900/50 text-red-500' : 'border-[var(--bd-strong)] text-gray-300'}`}>
+                {isCustom ? <LayoutTemplate size={16}/> : isPerf ? <Flame size={16} /> : <FileText size={16} />}
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-white font-semibold text-xs sm:text-sm leading-tight">
+                  {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'ประวัติผู้ป่วย OPD'}
+                </h3>
+                <p className="text-[11px] text-red-500 font-mono mt-0.5">ID: {viewingSession.id}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && (
+              <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
+                <Edit3 size={13} /> แก้ไขข้อมูล
+              </button>
+              )}
+              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && renderResyncButton()}
+              {viewingSession.patientData && !isCustom && (
+                <>
+                  <button onClick={() => setPrintMode('dashboard')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded border border-[var(--bd-strong)] transition-colors text-xs font-bold font-semibold whitespace-nowrap">
+                    <Printer size={13} /> พิมพ์สรุป A4
+                  </button>
+                  <button onClick={() => setPrintMode('official')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
+                    <Printer size={13} /> พิมพ์ฟอร์มมาตรฐาน
+                  </button>
+                </>
+              )}
+              {viewingSession.patientData && renderViewingSessionOpdButton()}
+              <button onClick={() => {
+                if (hasNewUpdate && !window.confirm('⚠️ มีข้อมูลอัปเดตใหม่ที่คุณยังไม่ได้รับทราบ\nต้องการปิดหน้านี้จริงๆ หรือไม่?')) return;
+                closeViewSession();
+              }} className="p-1.5 bg-[var(--bg-hover)] hover:bg-red-600 text-gray-400 hover:text-white rounded border border-[var(--bd-strong)] hover:border-red-600 transition-all shrink-0">
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done' && (
+            <div className="px-4 sm:px-6 py-3 bg-[var(--opd-bg)] border-b border-[var(--opd-bd)] flex items-center gap-3 shrink-0 flex-wrap">
+              <div className="p-1.5 rounded-lg bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)]">
+                <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black font-semibold text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
+                <p className="text-xs text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
+                  {viewingSession.brokerProClinicHN && (
+                    <span className="px-1.5 py-0.5 rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] text-[var(--opd-color)] font-black">
+                      HN {viewingSession.brokerProClinicHN}
+                    </span>
+                  )}
+                </p>
+                {viewingSession.brokerLastAutoSyncAt && (
+                  <p className="text-[11px] text-[var(--opd-color)] opacity-70 font-mono mt-0.5 flex items-center gap-1">
+                    🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(viewingSession.brokerLastAutoSyncAt)}
+                  </p>
+                )}
+              </div>
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {viewingSession.brokerProClinicId && (<>
+                  <a href={getProClinicUrl(viewingSession.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
+                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
+                    title={getProClinicUrl(viewingSession.brokerProClinicId)}>
+                    ProClinic ↗
+                  </a>
+                  <button onClick={() => handleOpenPatientView(viewingSession)}
+                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
+                    <Search size={9}/> คอร์สและนัดหมาย ↗
+                  </button>
+                  <button onClick={() => handleProClinicEdit(viewingSession)}
+                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
+                    แก้ไขใน ProClinic
+                  </button>
+                  <button onClick={() => handleProClinicDelete(viewingSession)}
+                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
+                    ลบจาก ProClinic
+                  </button>
+                </>)}
+              </div>
+            </div>
+          )}
+          {viewingSession.brokerStatus === 'failed' && (
+            <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 shrink-0">
+              <div className="flex items-center gap-3">
+                <X size={16} className="text-red-400 shrink-0" />
+                <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
+                <button
+                  onClick={() => handleOpdClick(viewingSession)}
+                  className="ml-auto text-[11px] font-black font-semibold text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
+                >ลองใหม่</button>
+              </div>
+              {(viewingSession.brokerError || '').includes('Session หมดอายุ') && (
+                <p className="text-xs text-orange-400 mt-2 ml-7">💡 กดปุ่ม "แชร์ Session" ใน Extension Popup แล้วกด "ลองใหม่"</p>
+              )}
+            </div>
+          )}
+          <div className="p-4 md:p-6 overflow-y-auto bg-[var(--bg-base)] flex-1 custom-scrollbar">
+            {!viewingSession.patientData && (
+              <div className="p-12 text-center text-gray-600 flex flex-col items-center gap-4 mb-6">
+                <Clock size={36} className="opacity-30" />
+                <p className="text-sm font-bold text-gray-400">รอลูกค้ากรอกข้อมูล...</p>
+                <p className="text-xs text-gray-600">ลูกค้ายังไม่ได้กรอกแบบฟอร์ม</p>
+              </div>
+            )}
+            <div className={`grid grid-cols-1 ${isFollowUp || isCustom ? '' : 'md:grid-cols-2'} gap-6`} style={viewingSession.patientData ? {} : {display:'none'}}>
+
+              <div className="space-y-6">
+                <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
+                  <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลส่วนตัว</h4>
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ชื่อ-สกุล:</span><span className="col-span-2 font-bold text-white break-words">{d.prefix !== 'ไม่ระบุ' ? d.prefix : ''} {d.firstName} {d.lastName}</span></div>
+                    <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">เพศ:</span><span className="col-span-2 font-bold text-white">{d.gender || '-'}</span></div>
+                    <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันเกิด:</span><span className="col-span-2 font-bold text-white">{renderDobFormat(d)} <span className="text-red-500 font-mono text-xs ml-2">[{d.age} ปี]</span></span></div>
+                    {d.idCard && (
+                      <div className="grid grid-cols-3 gap-2"><span className="text-gray-500 flex items-center gap-1"><CreditCard size={12}/> บัตร/Passport:</span><span className="col-span-2 font-bold text-white font-mono">{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span></div>
+                    )}
+
+                    {(isFollowUp || isCustom) && (
+                      <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันที่ประเมิน:</span><span className="col-span-2 font-bold text-orange-400">{d.assessmentDate || '-'}</span></div>
+                    )}
+
+                    {!isFollowUp && !isCustom && (
+                      <>
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">สัญชาติ:</span><span className="col-span-2 font-bold text-white">{d.nationality === 'ต่างชาติ' ? (d.nationalityCountry || 'ต่างชาติ') : 'ไทย'}</span></div>
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">โทรศัพท์:</span><span className="col-span-2 font-bold text-white font-mono break-all">{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span></div>
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ที่อยู่:</span><span className="col-span-2 font-bold text-gray-300 text-xs leading-relaxed break-words">{[d.address, d.subDistrict && `ต.${d.subDistrict}`, d.district && `อ.${d.district}`, d.province, d.postalCode].filter(Boolean).join(' ') || '-'}</span></div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {!isFollowUp && !isCustom && (
+                  <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-orange-900/30">
+                    <h4 className="text-xs font-black text-orange-600 font-semibold border-b border-orange-900/30 pb-2 mb-4">ติดต่อฉุกเฉิน</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span className="text-orange-500/50">ชื่อ-สกุล:</span><span className="font-bold text-orange-200">{d.emergencyName || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-orange-500/50">ความสัมพันธ์:</span><span className="font-bold text-orange-200">{d.emergencyRelation || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-orange-500/50">โทรศัพท์:</span><span className="font-bold font-mono text-orange-200 break-all">{formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!isFollowUp && !isCustom && (
+                <div className="space-y-6">
+                  <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden h-full">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-gray-700"></div>
+                    <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลสุขภาพพื้นฐาน</h4>
+                    <div className="mb-5">
+                      <span className="text-xs text-gray-500 block mb-2">สาเหตุที่มาพบแพทย์</span>
+                      <div className="flex flex-col gap-2 font-black text-white bg-[var(--bg-hover)] p-3 rounded border border-[var(--bd-strong)] font-semibold text-sm border-l-2 border-l-red-600 mb-2">
+                        {reasons.map(r => (
+                          <div key={r} className="break-words">• {r === 'อื่นๆ' ? `อื่นๆ: ${d.visitReasonOther}` : r}</div>
+                        ))}
+                      </div>
+                      {isHrt && goals.length > 0 && (
+                        <div className="bg-[var(--bg-card)] p-3 rounded border border-[var(--bd-strong)] mt-2">
+                          <span className="text-xs text-gray-500 uppercase block mb-2">เป้าหมายการเสริมฮอร์โมน</span>
+                          <div className="flex flex-wrap gap-1.5">
+                             {goals.map(g => (
+                               <span key={g} className="font-bold text-orange-400 text-xs bg-orange-950/20 border border-orange-900/30 px-2 py-0.5 rounded break-words max-w-full">
+                                 {g === 'ฮอร์โมนเพื่อการข้ามเพศ' ? `ข้ามเพศ (${d.hrtTransType})` : g === 'อื่นๆ' ? `อื่นๆ (${d.hrtOtherDetail})` : g}
+                               </span>
+                             ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className={`p-3 rounded border ${d.hasAllergies === 'มี' ? 'bg-red-950/20 border-red-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
+                        <span className={`text-xs font-semibold block mb-1 ${d.hasAllergies === 'มี' ? 'text-red-500' : 'text-gray-500'}`}>ประวัติแพ้ยา/อาหาร</span>
+                        <span className={`font-bold text-sm break-words ${d.hasAllergies === 'มี' ? 'text-red-400' : 'text-gray-300'}`}>{d.hasAllergies === 'มี' ? d.allergiesDetail : 'ไม่มี'}</span>
+                      </div>
+                      <div className={`p-3 rounded border ${d.hasUnderlying === 'มี' ? 'bg-orange-950/20 border-orange-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
+                        <span className={`text-xs font-semibold block mb-1 ${d.hasUnderlying === 'มี' ? 'text-orange-500' : 'text-gray-500'}`}>โรคประจำตัว</span>
+                        <span className={`font-bold text-sm leading-relaxed break-words ${d.hasUnderlying === 'มี' ? 'text-orange-300' : 'text-gray-300'}`}>
+                          {d.hasUnderlying === 'มี' ? (
+                            <ul className="list-disc pl-4 space-y-1">
+                              {d.ud_hypertension && <li>ความดันโลหิตสูง</li>}
+                              {d.ud_diabetes && <li>เบาหวาน</li>}
+                              {d.ud_lung && <li>โรคปอด</li>}
+                              {d.ud_kidney && <li>โรคไต</li>}
+                              {d.ud_heart && <li>โรคหัวใจ</li>}
+                              {d.ud_blood && <li>โรคโลหิต</li>}
+                              {d.ud_other && <li>{d.ud_otherDetail}</li>}
+                            </ul>
+                          ) : 'ไม่มี'}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
+                        <span className="text-xs text-gray-500 font-semibold block mb-1">ยาที่ใช้ประจำ</span>
+                        <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
+                      </div>
+                      {d.bloodType && d.bloodType !== 'ไม่ทราบ' && (
+                        <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
+                          <span className="text-xs text-gray-500 font-semibold block mb-1">กรุ๊ปเลือด</span>
+                          <span className="font-bold text-sm text-gray-300">{d.bloodType}</span>
+                        </div>
+                      )}
+                      {d.pregnancy && d.pregnancy !== 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์' && (
+                        <div className={`p-3 rounded border ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'bg-pink-950/20 border-pink-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
+                          <span className={`text-xs font-semibold block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
+                          <span className={`font-bold text-sm ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-300' : 'text-gray-300'}`}>{d.pregnancy}</span>
+                        </div>
+                      )}
+                      {d.howFoundUs && d.howFoundUs.length > 0 && (
+                        <div className="p-3 bg-[var(--bg-elevated)] rounded border border-blue-900/30">
+                          <span className="text-xs text-blue-500 font-semibold block mb-2 flex items-center gap-1"><Globe size={10}/> รู้จักคลินิกจาก</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {d.howFoundUs.map(ch => (
+                              <span key={ch} className="text-xs font-bold text-blue-300 bg-blue-950/30 border border-blue-900/40 px-2.5 py-1 rounded-full">{ch}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Custom Form Answers Viewer */}
+            {isCustom && viewingSession.customTemplate && (
+              <div className="mt-6 bg-[var(--bg-elevated)] p-5 sm:p-8 rounded-2xl border border-cyan-900/40 relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-cyan-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs shadow-lg">CUSTOM</div>
+                <h4 className="text-xs font-black text-cyan-500 font-semibold mb-6 flex items-center gap-2">
+                  <LayoutTemplate size={12}/> แบบฟอร์ม: {viewingSession.customTemplate.title}
+                </h4>
+                <div className="space-y-4">
+                  {viewingSession.customTemplate.questions.map((q, idx) => {
+                    const answer = d[q.id];
+                    let displayAns = '-';
+                    if (Array.isArray(answer)) displayAns = answer.length > 0 ? answer.join(', ') : '-';
+                    else if (answer) displayAns = answer;
+
+                    return (
+                      <div key={q.id} className="bg-[var(--bg-surface)] p-4 rounded-xl border border-[var(--bd)]">
+                        <span className="text-gray-400 text-xs font-bold mb-2 block">{idx+1}. {q.label}</span>
+                        <div className="text-white text-sm font-medium whitespace-pre-wrap">{displayAns}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Standard Form Answers Viewer */}
+            {!isCustom && (isPerf || showAdam || showMrs) && (
+              <div className="mt-6 space-y-6">
+                {!isFollowUp && isPerf && (
+                  <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
+                     <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-red-600 rounded-full"></span> การประเมินส่วนที่ 1: อาการเบื้องต้น
+                    </h4>
+                    <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
+                      <span className="text-gray-300 font-medium text-sm">มีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย</span>
+                      {d.symp_pe ? <span className="font-black text-red-500 bg-red-950/30 px-3 py-1 rounded border border-red-900/50 text-sm">มีอาการ</span> : <span className="text-[#555] font-mono text-sm">ไม่มี</span>}
+                    </div>
+                  </div>
+                )}
+
+                {showAdam && renderAdamSection(d, isFollowUp, isPerf)}
+                {showMrs && renderMrsSection(d, isFollowUp)}
+                {isPerf && renderIiefSection(d, isFollowUp)}
+              </div>
+            )}
+
+            {/* Deposit Info Section */}
+            {viewingSession.formType === 'deposit' && viewingSession.depositData && renderDepositSection()}
+
+            {viewingSession.patientData && (
+            <div className="mt-8 pt-6 border-t border-[var(--bd)] relative">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
+                <h4 className="text-xs font-black text-gray-400 font-semibold flex items-center gap-2">
+                  <FileText size={14} className="text-blue-500 shrink-0" /> สรุปประวัติผู้ป่วย (Clinical Summary)
+                </h4>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex bg-[var(--bg-hover)] border border-[var(--bd-strong)] rounded overflow-hidden text-xs font-bold font-semibold">
+                    <button onClick={() => setSummaryLang('en')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'en' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>EN</button>
+                    <button onClick={() => setSummaryLang('th')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'th' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>TH</button>
+                  </div>
+                  <button onClick={() => handleCopyToClipboard(clinicalSummaryText, false)} className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 px-3 py-1.5 border rounded text-xs uppercase font-bold transition-colors ${isCopied ? 'bg-green-950/40 text-green-500 border-green-900/50' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 border-[var(--bd-strong)]'}`}>
+                    {isCopied ? <CheckCircle2 size={12} /> : <ClipboardList size={12} />}
+                    {isCopied ? 'คัดลอกสำเร็จ' : 'คัดลอกข้อความ'}
+                  </button>
+                </div>
+              </div>
+              <textarea readOnly value={clinicalSummaryText} className="w-full bg-[var(--bg-surface)] border border-[var(--bd)] text-gray-300 rounded-lg p-3 sm:p-4 text-xs sm:text-xs font-mono resize-none outline-none custom-scrollbar leading-relaxed" rows="8"/>
+            </div>
+            )}
+
+            {/* Treatment History from ProClinic */}
+            {viewingSession.brokerProClinicId && (
+              <div className="mt-8 pt-6 border-t border-[var(--bd)]">
+                <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
+                  refreshKey={treatmentRefreshKey} autoExpandId={autoExpandTreatmentId}
+                  onOpenCreateForm={(cid) => {
+                    const pd = viewingSession.patientData || {};
+                    const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
+                    setTreatmentFormMode({ mode: 'create', customerId: cid, patientName: name, patientData: pd });
+                  }}
+                  onOpenEditForm={(tid, cid) => {
+                    const pd = viewingSession.patientData || {};
+                    const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
+                    setTreatmentFormMode({ mode: 'edit', customerId: cid, treatmentId: tid, patientName: name });
+                  }} />
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
+  // End-date selector inside renderScheduleModal — was a nested IIFE.
+  const renderScheduleEndDaySelector = (thaiMo) => {
+    const [sy2, sm2] = schedStartMonth.split('-').map(Number);
+    const lastMo = new Date(sy2, sm2 - 1 + schedAdvanceMonths, 0);
+    const lastMoStr = `${lastMo.getFullYear()}-${String(lastMo.getMonth() + 1).padStart(2, '0')}`;
+    const dimLast = lastMo.getDate();
+    const todayD = bangkokNow();
+    const isCurrentMonth = lastMoStr === `${todayD.getUTCFullYear()}-${String(todayD.getUTCMonth() + 1).padStart(2, '0')}`;
+    const minDay = isCurrentMonth ? todayD.getUTCDate() : 1;
+    const dayOptions = [];
+    for (let d = minDay; d <= dimLast; d++) dayOptions.push(d);
+    const defaultEnd = `${lastMoStr}-${String(dimLast).padStart(2, '0')}`;
+    const currentEnd = schedEndDay || defaultEnd;
+    const currentEndDay = parseInt((currentEnd).split('-')[2]) || dimLast;
+    const validDay = currentEndDay < minDay ? minDay : currentEndDay > dimLast ? dimLast : currentEndDay;
+    return (
+      <div>
+        <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
+        <select value={validDay} onChange={e => { const d = Number(e.target.value); setSchedEndDay(`${lastMoStr}-${String(d).padStart(2, '0')}`); }}
+          className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+          {dayOptions.map(d => <option key={d} value={d}>{d} {thaiMo[lastMo.getMonth()]} {lastMo.getFullYear() + 543}</option>)}
+        </select>
+      </div>
+    );
+  };
+
+  // Schedule link generator modal.
+  const renderScheduleModal = () => {
+    const thaiMo = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const monthOptions = [];
+    const nowForOpts = bangkokNow();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(Date.UTC(nowForOpts.getUTCFullYear(), nowForOpts.getUTCMonth() + i, 1));
+      const val = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      const label = `${thaiMo[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
+      monthOptions.push({ val, label });
+    }
+    const shownRooms = (clinicSettings.rooms || []).filter(r =>
+      r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
+    );
+
+    return (
+      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
+        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตาราง</h2>
+            <button onClick={() => !schedGenLoading && setShowScheduleModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white"><X size={14} /></button>
+          </div>
+
+          {schedGenResult ? (
+            <div className="p-6 flex flex-col items-center gap-4">
+              <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
+              <div className="w-full">
+                <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">URL</label>
+                <div className="flex gap-2">
+                  <input readOnly value={schedGenResult.url} className="flex-1 text-xs bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-[var(--tx-body)] font-mono" />
+                  <button onClick={() => { navigator.clipboard.writeText(schedGenResult.url); showToast('คัดลอกแล้ว', 2000); }}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40' : 'bg-pink-100 border border-pink-300 text-pink-600 hover:bg-pink-200'}`}>Copy</button>
+                </div>
+              </div>
+              <button onClick={() => { setSchedGenResult(null); setShowScheduleModal(false); }}
+                className="mt-2 px-6 py-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs font-bold hover:text-white">ปิด</button>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-[var(--tx-muted)]">ลิงก์จะใช้ข้อมูลวันหมอเข้า/ปิดคิว/ปิดช่วงเวลา ที่ตั้งค่าไว้ด้านล่างปฏิทิน</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เดือนเริ่มต้น</label>
+                  <select value={schedStartMonth} onChange={e => setSchedStartMonth(e.target.value)}
+                    className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                    {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงทั้งหมด</label>
+                  <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
+                    className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} เดือน</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">ช่วงเวลาละ</label>
+                  <select value={schedSlotDuration} onChange={e => setSchedSlotDuration(Number(e.target.value))}
+                    className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                    {[15,30,45,60,75,90,105,120].map(n => <option key={n} value={n}>{n >= 60 ? `${n/60} ชม.${n%60 ? ` ${n%60} นาที` : ''}` : `${n} นาที`}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-end pb-0.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => { setSchedNoDoctorRequired(e.target.checked); if (e.target.checked) setSchedSelectedDoctor(null); setSchedSelectedRoom(null); }}
+                      className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
+                    <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
+                  </label>
+                </div>
+              </div>
+
+              {!schedNoDoctorRequired && practitioners.filter(p => p.role === 'doctor').length > 0 && (
+                <div>
+                  <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เลือกแพทย์</label>
+                  <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
+                    className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                    <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
+                    {practitioners.filter(p => p.role === 'doctor').map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {shownRooms.length > 0 && (
+                <div>
+                  <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
+                    เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
+                  </label>
+                  <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
+                    className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
+                    <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
+                    {shownRooms.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {schedNoDoctorRequired && (
+                <label className="flex items-center gap-2 cursor-pointer select-none bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
+                  <input type="checkbox" checked={schedShowDoctorStatus} onChange={e => setSchedShowDoctorStatus(e.target.checked)}
+                    className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
+                  <span className="text-xs text-[var(--tx-body)]">แสดงสถานะ "หมอว่าง/ไม่ว่าง" ให้ลูกค้าเห็น</span>
+                </label>
+              )}
+
+              {schedStartMonth === thaiYearMonth() && (
+              <div>
+                <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงคิวตั้งแต่</label>
+                <div className="flex gap-2">
+                  {[['today', 'วันนี้เป็นต้นไป'], ['tomorrow', 'พรุ่งนี้เป็นต้นไป']].map(([val, label]) => (
+                    <button key={val} onClick={() => setSchedShowFrom(val)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${schedShowFrom === val
+                        ? (isDark ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-pink-100 border-pink-400 text-pink-700')
+                        : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              )}
+
+              {/* End date selector — RP1 lift (2026-04-30). */}
+              {renderScheduleEndDaySelector(thaiMo)}
+
+              <button onClick={handleGenScheduleLink} disabled={schedGenLoading}
+                className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? (isDark ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-100 border border-green-300 text-green-600 opacity-70') : (isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white')}`}>
+                {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Patient-link modal body. Returns `null` when the modal target is missing
+  // and self-clears the modal state — preserves original IIFE side-effect.
+  const renderPatientLinkModal = () => {
+    const plSession = sessions.find(s => s.id === patientLinkModal) || archivedSessions.find(s => s.id === patientLinkModal);
+    if (!plSession) { setPatientLinkModal(null); return null; }
+    const plToken = plSession.patientLinkToken;
+    const plEnabled = plSession.patientLinkEnabled;
+    return (
+      <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPatientLinkModal(null)}>
+        <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" style={{boxShadow: '0 0 60px rgba(168,85,247,0.15)'}} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-3 p-5 border-b border-[var(--bd)]">
+            <div className="w-9 h-9 rounded-xl bg-purple-950/60 border border-purple-900/50 flex items-center justify-center shrink-0">
+              <Link size={16} className="text-purple-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-black font-semibold text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
+              <p className="text-sm font-bold text-white truncate">{plSession.sessionName || plSession.id}</p>
+            </div>
+            <button onClick={() => setPatientLinkModal(null)} className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[var(--bg-hover)] transition-colors"><X size={16}/></button>
+          </div>
+          <div className="p-5 flex flex-col gap-4">
+            {!plToken ? (
+              <>
+                <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
+                <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
+                  {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ดูข้อมูล
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500 font-semibold font-bold">สถานะ</span>
+                  <span className={`text-xs font-black font-semibold px-2 py-1 rounded-lg ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
+                    {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs text-gray-600 font-semibold font-bold">ลิงก์</p>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={getPatientLinkUrl(plToken)} className="flex-1 bg-[var(--bg-card)] border border-[var(--bd)] text-gray-500 text-xs p-2.5 rounded-lg outline-none font-mono" />
+                    <button onClick={() => handleCopyToClipboard(getPatientLinkUrl(plToken), true)} className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-white transition-colors shrink-0"><ClipboardList size={14}/></button>
+                    <a href={getPatientLinkUrl(plToken)} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-purple-400 transition-colors shrink-0"><ExternalLink size={14}/></a>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { setSelectedQR(plSession.id); setQrDisplayMode('patientLink'); setPatientLinkModal(null); }} className="flex-1 py-2.5 rounded-xl border border-purple-900/50 text-purple-400 hover:bg-purple-950/30 text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5">
+                    <QrCode size={13}/> QR
+                  </button>
+                  <button onClick={() => { handleTogglePatientLink(plSession); }} disabled={patientLinkLoading} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${plEnabled ? 'border-[var(--bd)] text-gray-400 hover:text-white hover:border-[#444]' : 'border-green-900/50 text-green-400 hover:bg-green-950/30'}`}>
+                    {plEnabled ? <><ToggleLeft size={13}/> ปิด</> : <><ToggleRight size={13}/> เปิด</>}
+                  </button>
+                  <button onClick={() => { handleDeletePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="p-2.5 rounded-xl border border-red-900/30 text-red-500 hover:bg-red-950/30 transition-colors disabled:opacity-60" title="ลบลิงก์">
+                    <Trash2 size={14}/>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Confirm modal for deposit cancel/complete/delete actions.
+  const renderDepositConfirmModal = () => {
+    const { session: dSess, action: dAction } = depositToDelete;
+    const dName = dSess.patientData ? `${dSess.patientData.firstName || ''} ${dSess.patientData.lastName || ''}`.trim() : dSess.sessionName || dSess.id;
+    const isCancel = dAction === 'cancel';
+    const isComplete = dAction === 'complete';
+    const icon = isComplete ? <UserCheck size={24}/> : <Trash2 size={24}/>;
+    const iconBg = isComplete ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50';
+    const iconGlow = isComplete ? '0 0 15px rgba(96,165,250,0.4)' : '0 0 15px rgba(220,38,38,0.4)';
+    const title = isComplete ? 'ลูกค้ามาถึงคลินิกแล้ว?' : isCancel ? 'ยกเลิกการจอง?' : 'ลบคิวจองนี้?';
+    const desc = isComplete ? 'ย้ายไปประวัติจอง (การจองเรียบร้อย ลูกค้ามาถึงคลินิกแล้ว)'
+      : isCancel ? 'จะลบมัดจำ + ลูกค้าใน ProClinic ด้วย'
+      : 'ย้ายไปประวัติจอง (กู้คืนได้)';
+    const confirmLabel = isComplete ? 'ยืนยัน' : isCancel ? 'ยกเลิกการจอง' : 'ยืนยันการลบ';
+    const confirmBg = isComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700';
+    const confirmGlow = '';
+    const borderColor = isComplete ? 'border-blue-900/50' : 'border-red-900/50';
+    const boxGlow = isComplete ? '0 0 40px rgba(96,165,250,0.15)' : `0 0 40px rgba(${acRgb},0.15)`;
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+        <div className={`bg-[var(--bg-elevated)] rounded-xl border ${borderColor} w-full max-w-sm overflow-hidden p-6 text-center`} style={{boxShadow: boxGlow}}>
+          <div className={`w-16 h-16 ${iconBg} rounded-full border flex items-center justify-center mx-auto mb-4`} style={{boxShadow: iconGlow}}>{icon}</div>
+          <h3 className="text-base sm:text-lg font-black text-white mb-2">{title}</h3>
+          <p className="text-gray-400 font-bold text-sm mb-1">{dName}</p>
+          <p className="text-gray-500 mb-6 text-xs">{desc}</p>
+          <div className="flex gap-3">
+            <button onClick={() => setDepositToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
+            <button onClick={() => {
+              setDepositToDelete(null);
+              if (isCancel) { handleDepositCancel(dSess); }
+              else if (isComplete) {
+                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
+                  serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
+                  isPermanent: false, createdAt: serverTimestamp(),
+                });
+              } else {
+                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
+                  isArchived: true, archivedAt: serverTimestamp(),
+                });
+              }
+            }} className={`flex-1 px-4 py-3 ${confirmBg} text-white rounded font-bold text-xs ${confirmGlow}`}>{confirmLabel}</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Confirm modal for general session delete.
+  const renderSessionDeleteModal = () => {
+    const delSession = sessions.find(s => s.id === sessionToDelete) || noDepositSessions.find(s => s.id === sessionToDelete) || depositSessions.find(s => s.id === sessionToDelete);
+    const isServiceDone = delSession?.patientData && delSession?.opdRecordedAt && delSession?.brokerStatus === 'done';
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+        <div className={`bg-[var(--bg-elevated)] rounded-xl border w-full max-w-sm overflow-hidden p-6 text-center ${isServiceDone ? 'border-emerald-900/50' : 'border-red-900/50'}`} style={{boxShadow: `0 0 40px rgba(${acRgb},0.15)`}}>
+          <div className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto mb-4 ${isServiceDone ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50'}`} style={{boxShadow: isServiceDone ? '0 0 15px rgba(16,185,129,0.4)' : '0 0 15px rgba(220,38,38,0.4)'}}>{isServiceDone ? <CheckCircle2 size={24} /> : <Trash2 size={24} />}</div>
+          <h3 className="text-base sm:text-lg font-black text-white mb-2">{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบข้อมูล?'}</h3>
+          <p className="text-gray-500 mb-6 text-xs leading-relaxed">{isServiceDone
+            ? <>ยืนยันการรับบริการและย้ายไปยังประวัติ<br/><span className="font-mono text-sm text-emerald-400">{delSession?.sessionName || sessionToDelete}</span></>
+            : <>กำลังลบข้อมูลคิว <br/><span className="font-mono text-sm" style={{color: ac}}>{sessionToDelete}</span><br/>ข้อมูลนี้จะไม่สามารถกู้คืนได้</>
+          }</p>
+          <div className="flex gap-3">
+            <button onClick={() => setSessionToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
+            <button onClick={() => deleteSession(sessionToDelete)} className={`flex-1 px-4 py-3 text-white rounded font-bold text-xs ${isServiceDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบ'}</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ADAM/MRS/IIEF-5 assessment renderers — used inside the viewing-session
+  // modal. Each takes the resolved `d` (patientData) plus context flags.
+  const renderAdamSection = (d, isFollowUp, isPerf) => {
+    const adamRes = calculateADAM(d);
+    return (
+      <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
+        <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
+          <span className="w-2 h-2 bg-red-600 rounded-full"></span> {isFollowUp ? 'แบบประเมินติดตามอาการ' : `การประเมินส่วนที่ ${isPerf ? '2' : '1'}`}: พร่องฮอร์โมนเพศชาย (ADAM)
+        </h4>
+        <div className={`p-4 rounded-lg border mb-5 flex items-center justify-between ${adamRes.bg}`}>
+          <div className="flex-1 pr-2">
+            <span className="text-xs font-semibold text-gray-500 block">ผลการประเมิน</span>
+            <span className={`font-black text-sm sm:text-lg leading-tight ${adamRes.color} block`}>{adamRes.text}</span>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-xl sm:text-2xl font-black text-white">{adamRes.total}</span>
+            <span className="text-gray-500 text-xs sm:text-sm font-bold"> / 10</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 text-xs sm:text-sm">
+          {[
+            { k: d.adam_1, t: 'ความต้องการทางเพศลดลง' },
+            { k: d.adam_2, t: 'รู้สึกขาดพลังงาน' },
+            { k: d.adam_3, t: 'ความแข็งแรงหรือความทนทานลดลง' },
+            { k: d.adam_4, t: 'ส่วนสูงลดลง' },
+            { k: d.adam_5, t: 'ซึมเศร้า ความสุขในชีวิตลดลง' },
+            { k: d.adam_6, t: 'อารมณ์แปรปรวน หงุดหงิดง่าย' },
+            { k: d.adam_7, t: 'การแข็งตัวของอวัยวะเพศลดลง' },
+            { k: d.adam_8, t: 'ความสามารถในการเล่นกีฬาหรือออกกำลังกายลดลง' },
+            { k: d.adam_9, t: 'ง่วงนอนหลังทานอาหารเย็น' },
+            { k: d.adam_10, t: 'ประสิทธิภาพการทำงานลดลง' }
+          ].map((item, idx) => (
+            <div key={idx} className="flex items-start justify-between border-b border-[var(--bd)] pb-1.5 gap-4">
+              <span className="text-gray-400 leading-snug">{idx+1}. {item.t}</span>
+              {item.k ? <span className="font-black text-orange-500 shrink-0">มีอาการ</span> : <span className="text-[#333] font-mono shrink-0">ไม่มี</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMrsSection = (d, isFollowUp) => {
+    const mrsRes = calculateMRS(d);
+    return (
+      <div className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-pink-900/50 shadow-inner relative overflow-hidden">
+         <h4 className="text-xs font-black text-pink-500 font-semibold mb-6 flex items-center gap-2">
+          <Activity size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'การประเมินส่วนที่ 1'}: อาการวัยทอง (MRS)
+        </h4>
+        <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
+          <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
+            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
+            <div className="flex items-baseline gap-1 mb-3">
+              <span className={`text-5xl sm:text-6xl font-black ${mrsRes.color} leading-none`}>{mrsRes.score}</span>
+              <span className="text-lg font-bold text-[#333]">/ 44</span>
+            </div>
+            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center whitespace-nowrap ${mrsRes.bg} ${mrsRes.color}`}>
+              {mrsRes.text}
+            </div>
+          </div>
+          <div className="flex-1 w-full space-y-2">
+            {[
+              { q: '1. อาการร้อนวูบวาบ เหงื่อออก', v: d.mrs_1 }, { q: '2. อาการทางหัวใจ (ใจสั่น หัวใจเต้นเร็ว)', v: d.mrs_2 },
+              { q: '3. ปัญหาการนอนหลับ (นอนไม่หลับ ตื่นกลางดึก)', v: d.mrs_3 }, { q: '4. อารมณ์ซึมเศร้า (เศร้าหมอง หดหู่)', v: d.mrs_4 },
+              { q: '5. อารมณ์หงุดหงิดง่าย', v: d.mrs_5 }, { q: '6. วิตกกังวล กระวนกระวาย', v: d.mrs_6 },
+              { q: '7. อ่อนเพลียทั้งร่างกายและจิตใจ (ไม่มีแรง)', v: d.mrs_7 }, { q: '8. ปัญหาทางเพศ (ความต้องการลดลง)', v: d.mrs_8 },
+              { q: '9. ปัญหาทางเดินปัสสาวะ (ปัสสาวะบ่อย/แสบขัด)', v: d.mrs_9 }, { q: '10. อาการช่องคลอดแห้ง', v: d.mrs_10 },
+              { q: '11. อาการปวดข้อและกล้ามเนื้อ', v: d.mrs_11 }
+            ].map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-[var(--bg-card)] p-2 sm:px-3 rounded border border-[var(--bd)] gap-2">
+                <span className="text-xs text-gray-300 font-medium leading-snug">{item.q}</span>
+                <span className="text-sm font-black text-pink-500 whitespace-nowrap shrink-0">ระดับ: {item.v || 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderIiefSection = (d, isFollowUp) => {
+    const iiefScore = calculateIIEFScore(d);
+    const interp = getIIEFInterpretation(iiefScore);
+    return (
+      <div className="bg-gradient-to-br from-[#1a0505] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-red-900/50 relative overflow-hidden">
+        <Flame className="absolute bottom-[-20px] right-[-20px] w-48 h-48 text-red-600 opacity-5 pointer-events-none" />
+        <h4 className="text-xs font-black text-red-500 font-semibold mb-6 flex items-center gap-2">
+          <Flame size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'ส่วนที่ 3'}: ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)
+        </h4>
+        <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
+          <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
+            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
+            <div className="flex items-baseline gap-1 mb-3">
+              <span className={`text-5xl sm:text-6xl font-black ${interp.color} leading-none`}>{iiefScore}</span>
+              <span className="text-lg font-bold text-[#333]">/ 25</span>
+            </div>
+            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center ${interp.bg} ${interp.color}`}>
+              {interp.text}
+            </div>
+          </div>
+          <div className="flex-1 w-full space-y-3">
+            {[
+              { q: 'Q1. ความมั่นใจในการแข็งตัว', v: d.iief_1 }, { q: 'Q2. แข็งตัวพอที่จะสอดใส่', v: d.iief_2 },
+              { q: 'Q3. คงความแข็งตัวระหว่างมีเพศสัมพันธ์', v: d.iief_3 }, { q: 'Q4. คงความแข็งตัวจนเสร็จกิจ', v: d.iief_4 },
+              { q: 'Q5. ความพึงพอใจในการมีเพศสัมพันธ์', v: d.iief_5 }
+            ].map((item, idx) => (
+              <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between bg-[var(--bg-card)] p-3 rounded border border-[var(--bd)] gap-2">
+                <span className="text-xs text-gray-300 font-medium leading-snug">{item.q}</span>
+                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                  <span className="text-xs text-gray-600 uppercase font-mono sm:hidden">คะแนน</span>
+                  <span className="text-lg font-black text-red-500 bg-[var(--bg-card)] w-8 h-8 flex items-center justify-center rounded border border-red-900/30 shrink-0">{item.v || 0}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Deposit info section inside the viewing-session modal body.
+  const renderDepositSection = () => {
+    const dep = editingDepositData || viewingSession.depositData;
+    const isEditing = !!editingDepositData;
+    const optLabel = (list, val) => {
+      const found = (depositOptions?.[list] || []).find(o => o.value === val);
+      return found ? found.label : val || '-';
+    };
+    return (
+      <div className="mt-6 bg-[var(--bg-elevated)] p-4 sm:p-5 rounded-xl border border-emerald-900/40 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600"></div>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-xs font-black text-emerald-500 font-semibold flex items-center gap-2">
+            <ClipboardCheck size={12}/> ข้อมูลการจองมัดจำ
+          </h4>
+          <div className="flex gap-1.5">
+            {!isEditing ? (
+              !(viewingSession.isArchived && viewingSession.formType === 'deposit') && <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
+                className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
+                <Edit3 size={10}/> แก้ไข
+              </button>
+            ) : (<>
+              <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
+                disabled={depositSaving}
+                className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 disabled:bg-emerald-900 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
+                <CheckCircle2 size={10}/> {depositSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+              </button>
+              <button onClick={() => setEditingDepositData(null)}
+                className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-[var(--bd-strong)] text-gray-400 hover:text-white transition-colors">
+                ยกเลิก
+              </button>
+            </>)}
+          </div>
+        </div>
+        {!isEditing ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</span>
+              <span className="font-bold text-emerald-300">{dep.paymentChannel || '-'}</span>
+            </div>
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">ยอดชำระ</span>
+              <span className="font-bold text-emerald-300">{dep.paymentAmount ? `${Number(dep.paymentAmount).toLocaleString()} บาท` : '-'}</span>
+            </div>
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</span>
+              <span className="font-bold text-white">{toThaiDate(dep.depositDate) || '-'}</span>
+            </div>
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">เวลา</span>
+              <span className="font-bold text-white">{dep.depositTime || '-'}</span>
+            </div>
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">พนักงานขาย</span>
+              <span className="font-bold text-white">{optLabel('sellers', dep.salesperson)}</span>
+            </div>
+            <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
+              <span className="text-xs text-gray-500 uppercase block mb-1">เลขอ้างอิง</span>
+              <span className="font-bold text-white">{dep.refNo || '-'}</span>
+            </div>
+            {dep.depositNote && (
+              <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)] sm:col-span-2">
+                <span className="text-xs text-gray-500 uppercase block mb-1">หมายเหตุ</span>
+                <span className="font-bold text-gray-300 text-xs">{dep.depositNote}</span>
+              </div>
+            )}
+            {dep.hasAppointment && (<>
+              <div className="sm:col-span-2 mt-2 mb-1"><span className="text-xs font-black text-orange-500 font-semibold flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
+              <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
+                <span className="text-xs text-gray-500 uppercase block mb-1">วันนัด</span>
+                <span className="font-bold text-orange-300">{toThaiDate(dep.appointmentDate) || '-'}</span>
+              </div>
+              <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
+                <span className="text-xs text-gray-500 uppercase block mb-1">เวลา</span>
+                <span className="font-bold text-orange-300">{dep.appointmentStartTime || ''} - {dep.appointmentEndTime || ''}</span>
+              </div>
+              <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
+                <span className="text-xs text-gray-500 uppercase block mb-1">แพทย์</span>
+                <span className="font-bold text-white">{optLabel('doctors', dep.doctor)}</span>
+              </div>
+              <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
+                <span className="text-xs text-gray-500 uppercase block mb-1">ห้องตรวจ</span>
+                <span className="font-bold text-white">{optLabel('rooms', dep.room)}</span>
+              </div>
+              {(dep.visitPurpose || []).length > 0 && (
+                <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30 sm:col-span-2">
+                  <span className="text-xs text-gray-500 uppercase block mb-1">นัดมาเพื่อ</span>
+                  <div className="flex flex-wrap gap-1">{dep.visitPurpose.map(v => <span key={v} className="text-xs font-bold text-orange-300 bg-orange-950/30 border border-orange-900/40 px-2 py-0.5 rounded">{v}</span>)}</div>
+                </div>
+              )}
+            </>)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</label>
+              <select value={dep.paymentChannel || ''} onChange={e => setEditingDepositData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                <option value="">-- เลือก --</option>
+                {(depositOptions?.paymentMethods || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">ยอดชำระ</label>
+              <input type="number" value={dep.paymentAmount || ''} onChange={e => setEditingDepositData(p => ({...p, paymentAmount: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
+              <DateField value={dep.depositDate || ''} onChange={v => setEditingDepositData(p => ({...p, depositDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">เวลา</label>
+              <input type="time" value={dep.depositTime || ''} onChange={e => setEditingDepositData(p => ({...p, depositTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">พนักงานขาย</label>
+              <select value={dep.salesperson || ''} onChange={e => setEditingDepositData(p => ({...p, salesperson: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                <option value="">-- เลือก --</option>
+                {(depositOptions?.sellers || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase block mb-1">เลขอ้างอิง</label>
+              <input type="text" value={dep.refNo || ''} onChange={e => setEditingDepositData(p => ({...p, refNo: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-gray-500 uppercase block mb-1">หมายเหตุ</label>
+              <textarea value={dep.depositNote || ''} onChange={e => setEditingDepositData(p => ({...p, depositNote: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none resize-none" rows={2}/>
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-3 mt-1">
+              <label className="text-xs text-gray-500 uppercase">นัดหมาย</label>
+              <button onClick={() => setEditingDepositData(p => ({...p, hasAppointment: !p.hasAppointment}))}
+                className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${dep.hasAppointment ? 'bg-orange-900/30 border-orange-600 text-orange-400' : 'bg-[var(--bg-card)] border-[var(--bd)] text-gray-500'}`}>
+                {dep.hasAppointment ? 'มีนัดหมาย' : 'ไม่มีนัดหมาย'}
+              </button>
+            </div>
+            {dep.hasAppointment && (<>
+              <div>
+                <label className="text-xs text-gray-500 uppercase block mb-1">วันนัด</label>
+                <DateField value={dep.appointmentDate || ''} onChange={v => setEditingDepositData(p => ({...p, appointmentDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase block mb-1">เริ่ม</label>
+                  <select value={dep.appointmentStartTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                    <option value="">--</option>
+                    {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase block mb-1">สิ้นสุด</label>
+                  <select value={dep.appointmentEndTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                    <option value="">--</option>
+                    {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase block mb-1">แพทย์</label>
+                <select value={dep.doctor || ''} onChange={e => setEditingDepositData(p => ({...p, doctor: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                  <option value="">-- เลือก --</option>
+                  {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 uppercase block mb-1">ห้องตรวจ</label>
+                <select value={dep.room || ''} onChange={e => setEditingDepositData(p => ({...p, room: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
+                  <option value="">-- เลือก --</option>
+                  {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </>)}
+          </div>
+        )}
+        {/* Deposit sync status */}
+        {viewingSession.depositSyncStatus === 'done' && viewingSession.depositSyncAt && (
+          <div className="mt-3 p-2 bg-emerald-950/20 border border-emerald-900/30 rounded text-xs text-emerald-400 font-mono flex items-center gap-2">
+            <CheckCircle2 size={12}/> บันทึกมัดจำลง ProClinic แล้ว · {formatBangkokTime(viewingSession.depositSyncAt)}
+          </div>
+        )}
+        {viewingSession.depositSyncStatus === 'failed' && (
+          <div className="mt-3 p-2 bg-red-950/20 border border-red-900/30 rounded text-xs text-red-400 font-mono">
+            ผิดพลาด: {viewingSession.depositSyncError}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Resync button for the viewing-session modal header.
+  const renderResyncButton = () => {
+    const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
+    return (
+      <button
+        onClick={() => handleResync(viewingSession)}
+        disabled={isPending}
+        title="บันทึกข้อมูลลง ProClinic อีกครั้ง (manual resync)"
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
+          isPending
+            ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse cursor-not-allowed'
+            : 'bg-teal-950/20 hover:bg-teal-900/40 text-teal-400 border-teal-800/50'
+        }`}
+      >
+        <RotateCcw size={13} className={isPending ? 'animate-spin' : ''} />
+        {isPending ? 'กำลังส่ง...' : 'Resync ProClinic'}
+      </button>
+    );
+  };
+
+  // Full-OPD button for the viewing-session modal header (richer styling
+  // than the per-row renderOpdButton — shows label + done-state).
+  const renderViewingSessionOpdButton = () => {
+    const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
+    const isFailed  = !isPending && viewingSession.brokerStatus === 'failed';
+    const isDone    = !isPending && !!viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done';
+    return (
+      <button
+        onClick={() => handleOpdClick(viewingSession)}
+        disabled={isPending || isDone}
+        title={
+          isPending ? 'กำลังส่งข้อมูลไป ProClinic...' :
+          isDone    ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' :
+          isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || ''}` :
+          viewingSession.opdRecordedAt ? 'ส่งข้อมูลไป ProClinic' : 'ส่งข้อมูลไป ProClinic'
+        }
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
+          isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
+          isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
+          isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
+          viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)]' :
+          'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'
+        }`}
+      >
+        <ClipboardCheck size={13} />
+        {isPending ? 'กำลังส่ง...' : isFailed ? 'ล้มเหลว' : viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'}
+      </button>
+    );
+  };
+
+  // Shared QR card renderer (deposit + no-deposit). Diff between the two
+  // call sites is only the token-text color (`tokenColor` arg).
+  const renderQrCard = (qrSession, tokenColor) => {
+    const plToken = qrSession?.patientLinkToken;
+    const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
+    const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
+    return (
+      <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
+        <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
+          <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
+        </div>
+        <div className="w-full text-center">
+          <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{qrSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
+        </div>
+        <div className="w-full text-left">
+          <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
+          <p className={`font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all ${tokenColor}`}>{selectedQR}</p>
+        </div>
+        <div className="w-full text-left">
+          <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
+          <div className="flex items-center gap-2">
+            <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
+            <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
+              className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
+              {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500"/> : <ClipboardList size={18}/>}
+            </button>
+            <a href={linkUrl} target="_blank" rel="noopener noreferrer"
+              className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
+              <ExternalLink size={18}/>
+            </a>
+          </div>
+        </div>
+        <div className="w-full h-px bg-[var(--bd)] my-2"></div>
+        <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
+          <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden">
-      
+
       {toastMsg && (
         <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] flex items-center gap-4 animate-in slide-in-from-bottom-5 z-[100] border border-blue-400">
           <div className="bg-white/20 p-2 rounded-full"><Bell size={24} className="animate-bounce" /></div>
@@ -3122,24 +4221,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <FileText size={15}/>
                         </button>
                       )}
-                      {d && (() => {
-                        const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
-                        const isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done';
-                        const isFailed  = !isPending && !isDone && session.brokerStatus === 'failed';
-                        return (
-                          <button
-                            onClick={() => handleOpdClick(session)}
-                            disabled={isPending || isDone}
-                            title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
-                            className={`p-2 rounded-lg border transition-all ${
-                              isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
-                              isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
-                              isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                              'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
-                            }`}
-                          ><ClipboardCheck size={15}/></button>
-                        );
-                      })()}
+                      {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+                      {d && renderOpdButton(session)}
                       <button onClick={() => setSessionToRestore(session)}
                         className="p-2 bg-orange-950/30 hover:bg-orange-900/50 text-orange-400 hover:text-orange-300 rounded-lg border border-orange-900/50 transition-colors" title="กลับเข้าคิวใหม่">
                         <RotateCcw size={15}/>
@@ -3286,49 +4369,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} className="text-emerald-500" /> QR Code จอง
               </h2>
-              {selectedQR && selectedQR.startsWith('DEP-') ? (() => {
-                const depSession = depositSessions.find(s => s.id === selectedQR);
-                const plToken = depSession?.patientLinkToken;
-                const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
-                const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
-                return (
-                  <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
-                    {/* QR image — white card with glow */}
-                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
-                      <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
-                    </div>
-                    {/* Session name */}
-                    <div className="w-full text-center">
-                      <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{depSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
-                    </div>
-                    {/* Token */}
-                    <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
-                      <p className="font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-emerald-400">{selectedQR}</p>
-                    </div>
-                    {/* Link */}
-                    <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
-                      <div className="flex items-center gap-2">
-                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
-                        <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
-                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
-                          {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500"/> : <ClipboardList size={18}/>}
-                        </button>
-                        <a href={linkUrl} target="_blank" rel="noopener noreferrer"
-                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
-                          <ExternalLink size={18}/>
-                        </a>
-                      </div>
-                    </div>
-                    <div className="w-full h-px bg-[var(--bd)] my-2"></div>
-                    {/* Simulate button */}
-                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
-                      <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
-                    </button>
-                  </div>
-                );
-              })() : (
+              {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+              {selectedQR && selectedQR.startsWith('DEP-') ? (
+                renderQrCard(depositSessions.find(s => s.id === selectedQR), 'text-emerald-400')
+              ) : (
                 <div className="text-gray-600 text-sm py-12">
                   <QrCode size={64} className="mx-auto mb-4 opacity-15"/>
                   <p className="text-xs text-gray-500">กดปุ่ม QR บนการ์ดจอง<br/>เพื่อแสดง QR Code</p>
@@ -3562,44 +4606,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} className="text-orange-500" /> QR Code จอง
               </h2>
-              {selectedQR && noDepositSessions.find(s => s.id === selectedQR) ? (() => {
-                const ndSession = noDepositSessions.find(s => s.id === selectedQR);
-                const plToken = ndSession?.patientLinkToken;
-                const qrSrc = plToken ? getPatientLinkQRUrl(plToken) : getQRUrl(selectedQR);
-                const linkUrl = plToken ? getPatientLinkUrl(plToken) : getSessionUrl(selectedQR);
-                return (
-                  <div className="space-y-4 sm:space-y-6 flex flex-col items-center animate-in zoom-in duration-300 w-full px-2 sm:px-0">
-                    <div className="p-3 sm:p-4 bg-white rounded-3xl w-full aspect-square max-w-[360px] mx-auto flex items-center justify-center overflow-hidden shadow-xl">
-                      <img src={qrSrc} alt="QR" className="w-full h-full object-contain"/>
-                    </div>
-                    <div className="w-full text-center">
-                      <h3 className="text-xl sm:text-2xl font-black text-[var(--tx-heading)] mb-1">{ndSession?.sessionName || 'ไม่มีชื่อคิว'}</h3>
-                    </div>
-                    <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">รหัสคิว (Token)</p>
-                      <p className="font-mono text-sm sm:text-base font-black bg-[var(--bg-input)] px-4 py-3 rounded-xl border border-[var(--bd)] shadow-inner text-center break-all text-orange-400">{selectedQR}</p>
-                    </div>
-                    <div className="w-full text-left">
-                      <p className="text-xs sm:text-xs text-[var(--tx-muted)] font-semibold mb-1.5">คัดลอกลิงก์ (Copy Link)</p>
-                      <div className="flex items-center gap-2">
-                        <input readOnly value={linkUrl} className="flex-1 min-w-0 bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs sm:text-xs p-3 sm:p-3.5 rounded-xl outline-none font-mono" />
-                        <button onClick={() => { navigator.clipboard.writeText(linkUrl); setIsLinkCopied(true); setTimeout(() => setIsLinkCopied(false), 2000); }}
-                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="คัดลอกลิงก์">
-                          {isLinkCopied ? <CheckCircle2 size={18} className="text-green-500"/> : <ClipboardList size={18}/>}
-                        </button>
-                        <a href={linkUrl} target="_blank" rel="noopener noreferrer"
-                          className="bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] p-3 sm:p-3.5 rounded-xl border border-[var(--bd)] text-[var(--tx-heading)] transition-colors flex-shrink-0" title="เปิดในหน้าต่างใหม่">
-                          <ExternalLink size={18}/>
-                        </a>
-                      </div>
-                    </div>
-                    <div className="w-full h-px bg-[var(--bd)] my-2"></div>
-                    <button onClick={() => onSimulateScan(selectedQR)} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-heading)] py-3.5 sm:py-4 rounded-xl text-xs sm:text-sm font-bold font-semibold transition-all flex items-center justify-center gap-2">
-                      <Eye size={16}/> จำลองเปิดกรอกฟอร์ม
-                    </button>
-                  </div>
-                );
-              })() : (
+              {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+              {selectedQR && noDepositSessions.find(s => s.id === selectedQR) ? (
+                renderQrCard(noDepositSessions.find(s => s.id === selectedQR), 'text-orange-400')
+              ) : (
                 <div className="text-gray-600 text-sm py-12">
                   <QrCode size={64} className="mx-auto mb-4 opacity-15"/>
                   <p className="text-xs text-gray-500">กดปุ่ม QR บนการ์ดจอง<br/>เพื่อแสดง QR Code</p>
@@ -3698,9 +4708,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       {session.appointmentData && (
                         <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-400">
                           <CalendarClock size={11} className="text-orange-400"/>
-                          <span className={`font-bold ${isDark ? 'text-orange-300' : 'text-pink-600'}`}>{session.appointmentData.appointmentDate ? (() => { const [y,m,d] = session.appointmentData.appointmentDate.split('-'); return `${parseInt(d)}/${parseInt(m)}/${parseInt(y)+543}`; })() : '-'}</span>
+                          {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+                          <span className={`font-bold ${isDark ? 'text-orange-300' : 'text-pink-600'}`}>{session.appointmentData.appointmentDate ? formatThaiAppointmentDate(session.appointmentData.appointmentDate) : '-'}</span>
                           {session.appointmentData.appointmentStartTime && <span>{session.appointmentData.appointmentStartTime}{session.appointmentData.appointmentEndTime ? ` - ${session.appointmentData.appointmentEndTime}` : ''}</span>}
-                          {session.appointmentData.doctor && depositOptions?.doctors && (() => { const doc = depositOptions.doctors.find(o => o.value === session.appointmentData.doctor); return doc ? <span className="text-gray-500">แพทย์: {doc.label}</span> : null; })()}
+                          {renderDoctorLabel(depositOptions?.doctors, session.appointmentData.doctor)}
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
                           {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-orange-500">กำลัง sync...</span>}
@@ -3781,7 +4792,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
           )}
         </div>
-      ) : adminMode === 'appointment' ? (() => {
+      ) : adminMode === 'appointment' ? renderJsxBlock(() => {
         // ── Appointment Calendar ──
         const [y, m] = apptMonth.split('-').map(Number);
         const firstDayOfMonth = new Date(y, m - 1, 1);
@@ -4404,7 +5415,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             )}
 
             {/* ── Schedule Day Preferences ── */}
-            {(() => {
+            {renderJsxBlock(() => {
               // Build months for preference calendar: current apptMonth ± based on navigation
               const prefMonths = [apptMonth];
               const moPrefix = apptMonth + '-';
@@ -4531,7 +5542,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 })}
                               </div>
                               {/* Time slot grid for selected day */}
-                              {schedBlockingDay && schedBlockingDay.startsWith(mo) && (() => {
+                              {schedBlockingDay && schedBlockingDay.startsWith(mo) && renderJsxBlock(() => {
                                 const bDate = new Date(schedBlockingDay);
                                 const bDow = bDate.getDay();
                                 const isWknd = bDow === 0 || bDow === 6;
@@ -4630,7 +5641,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                     </div>
                                   </div>
                                 );
-                              })()}
+                              })}
                             </div>
                           </div>
                         </div>
@@ -4662,7 +5673,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   </div>}
                 </div>
               );
-            })()}
+            })}
 
             {/* ── Schedule links list ── */}
             {schedList.length > 0 && (
@@ -4737,14 +5748,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             )}
           </div>
         );
-      })() : (
+      }) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1" id="qr-panel">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
               <h2 className="text-sm sm:text-base font-bold font-semibold mb-4 sm:mb-6 flex items-center justify-center gap-2 text-gray-400 w-full">
                 <QrCode size={18} style={{color: ac}} /> QR Code / ลิงก์
               </h2>
-              {selectedQR ? (() => {
+              {selectedQR ? renderJsxBlock(() => {
                 const plToken = activeSessionInfo?.patientLinkToken;
                 const plEnabled = activeSessionInfo?.patientLinkEnabled;
                 const isPlMode = qrDisplayMode === 'patientLink' && !!plToken;
@@ -4804,7 +5815,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   )}
                 </div>
                 );
-              })() : (
+              }) : (
                 <div className="py-20 w-full text-gray-600 flex flex-col items-center bg-[var(--bg-elevated)] rounded-2xl border border-dashed border-[var(--bd)]">
                   <Flame size={48} className="mb-4 opacity-20 text-red-500" />
                   <p className="text-xs sm:text-sm font-semibold text-center px-4 leading-relaxed font-bold">กดสร้างคิวใหม่ด้านบน<br/>เพื่อแสดง QR Code และลิงก์</p>
@@ -4878,24 +5889,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.status === 'completed' && data && (
                             <button onClick={() => handleViewSession(session)} className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูข้อมูล"><FileText size={15} /></button>
                           )}
-                          {session.status === 'completed' && data && (() => {
-                            const isPending = brokerPending[session.id] || session.brokerStatus === 'pending';
-                            const isDone    = !isPending && !!session.opdRecordedAt && session.brokerStatus === 'done';
-                            const isFailed  = !isPending && !isDone && session.brokerStatus === 'failed';
-                            return (
-                              <button
-                                onClick={() => handleOpdClick(session)}
-                                disabled={isPending || isDone}
-                                title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
-                                className={`p-2 rounded-lg border transition-all ${
-                                  isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
-                                  isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
-                                  isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                                  'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-[var(--opd-bd-str)] hover:text-[var(--opd-color)]'
-                                }`}
-                              ><ClipboardCheck size={15} /></button>
-                            );
-                          })()}
+                          {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+                          {session.status === 'completed' && data && renderOpdButton(session)}
                           {session.formType === 'deposit' && session.serviceCompleted && (
                             <button onClick={() => setDepositToDelete({ session, action: 'cancel' })} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 transition-colors" title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"><XCircle size={15} /></button>
                           )}
@@ -5032,716 +6027,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       )}
 
       {/* Session Result Viewer */}
-      {viewingSession && (() => {
-        const d = viewingSession.patientData || {};
-        const formType = viewingSession.formType || 'intake';
-        const isFollowUp = formType.startsWith('followup_');
-        const isCustom = formType === 'custom';
-
-        const reasons = getReasons(d);
-        const goals = getHrtGoals(d);
-        
-        const isPerf = (!isFollowUp && reasons.includes('สมรรถภาพทางเพศ')) || formType === 'followup_ed';
-        const isHrt = (!isFollowUp && reasons.includes('เสริมฮอร์โมน')) || formType === 'followup_adam' || formType === 'followup_mrs';
-        const showAdam = (!isFollowUp && (isPerf || goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้ชาย)'))) || formType === 'followup_adam';
-        const showMrs = (!isFollowUp && goals.includes('อาการฮอร์โมนตก/วัยทอง (ผู้หญิง)')) || formType === 'followup_mrs';
-        
-        const clinicalSummaryText = generateClinicalSummary(d, formType, viewingSession.customTemplate, summaryLang);
-        
-        return (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4 z-50">
-          <div className="bg-[var(--bg-elevated)] rounded-xl shadow-2xl border border-[var(--bd)] w-full max-w-5xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden relative">
-            
-            {hasNewUpdate && (
-              <div className="bg-blue-600 text-white px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 shadow-lg relative z-20">
-                <div className="flex items-center gap-2">
-                  <AlertCircle size={18} className="animate-pulse" />
-                  <span className="text-xs sm:text-sm font-bold tracking-wide">⚠️ มีข้อมูลอัปเดตใหม่ขณะที่คุณกำลังดูหน้านี้!</span>
-                </div>
-                <button onClick={() => {
-                  const latest = sessions.find(s => s.id === viewingSession.id);
-                  setHasNewUpdate(false);
-                  if (latest) {
-                    setViewingSession(latest);
-                    if (latest.isUnread) {
-                      lastViewedStrRef.current[latest.id] = stableStr(latest.patientData || {});
-                      lastAutoSyncedStrRef.current[latest.id] = stableStr(latest.patientData || {});
-                      updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', latest.id), { isUnread: false }).catch(console.error);
-                    }
-                  }
-                }} className="bg-white text-blue-700 px-4 py-1.5 rounded-lg text-xs sm:text-xs font-black font-semibold shadow-sm hover:bg-blue-50 transition-colors w-full sm:w-auto">
-                  ✓ รับทราบ
-                </button>
-              </div>
-            )}
-
-            <div className="px-4 py-3 border-b border-[var(--bd)] flex flex-wrap items-center gap-x-3 gap-y-2 shrink-0 bg-[var(--bg-surface)]">
-              {/* Title — grows to fill space, buttons wrap below if needed */}
-              <div className="flex items-center gap-2.5 flex-1 min-w-[140px]">
-                <div className={`p-1.5 rounded bg-black border shrink-0 ${isCustom ? 'border-cyan-900/50 text-cyan-500' : isPerf || isHrt ? 'border-red-900/50 text-red-500' : 'border-[var(--bd-strong)] text-gray-300'}`}>
-                  {isCustom ? <LayoutTemplate size={16}/> : isPerf ? <Flame size={16} /> : <FileText size={16} />}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-black text-white font-semibold text-xs sm:text-sm leading-tight">
-                    {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'ประวัติผู้ป่วย OPD'}
-                  </h3>
-                  <p className="text-[11px] text-red-500 font-mono mt-0.5">ID: {viewingSession.id}</p>
-                </div>
-              </div>
-
-              {/* Buttons — always full labels, wrap to next line when space is tight */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && (
-                <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
-                  <Edit3 size={13} /> แก้ไขข้อมูล
-                </button>
-                )}
-                {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && (() => {
-                  const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
-                  return (
-                    <button
-                      onClick={() => handleResync(viewingSession)}
-                      disabled={isPending}
-                      title="บันทึกข้อมูลลง ProClinic อีกครั้ง (manual resync)"
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
-                        isPending
-                          ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse cursor-not-allowed'
-                          : 'bg-teal-950/20 hover:bg-teal-900/40 text-teal-400 border-teal-800/50'
-                      }`}
-                    >
-                      <RotateCcw size={13} className={isPending ? 'animate-spin' : ''} />
-                      {isPending ? 'กำลังส่ง...' : 'Resync ProClinic'}
-                    </button>
-                  );
-                })()}
-                {viewingSession.patientData && !isCustom && (
-                  <>
-                    <button onClick={() => setPrintMode('dashboard')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded border border-[var(--bd-strong)] transition-colors text-xs font-bold font-semibold whitespace-nowrap">
-                      <Printer size={13} /> พิมพ์สรุป A4
-                    </button>
-                    <button onClick={() => setPrintMode('official')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/50 text-red-500 rounded border border-red-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
-                      <Printer size={13} /> พิมพ์ฟอร์มมาตรฐาน
-                    </button>
-                  </>
-                )}
-                {viewingSession.patientData && (() => {
-                  const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
-                  const isFailed  = !isPending && viewingSession.brokerStatus === 'failed';
-                  const isDone    = !isPending && !!viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done';
-                  return (
-                    <button
-                      onClick={() => handleOpdClick(viewingSession)}
-                      disabled={isPending || isDone}
-                      title={
-                        isPending ? 'กำลังส่งข้อมูลไป ProClinic...' :
-                        isDone    ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' :
-                        isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || ''}` :
-                        viewingSession.opdRecordedAt ? 'ส่งข้อมูลไป ProClinic' : 'ส่งข้อมูลไป ProClinic'
-                      }
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
-                        isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
-                        isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
-                        isFailed  ? 'bg-red-950/20 text-red-400 border-red-700/50' :
-                        viewingSession.opdRecordedAt ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)]' :
-                        'bg-[var(--bg-card)] text-[var(--tx-muted)] border-dashed border-[var(--bd)] hover:border-teal-500/60 hover:text-[var(--opd-color)]'
-                      }`}
-                    >
-                      <ClipboardCheck size={13} />
-                      {isPending ? 'กำลังส่ง...' : isFailed ? 'ล้มเหลว' : viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'}
-                    </button>
-                  );
-                })()}
-                <button onClick={() => {
-                  if (hasNewUpdate && !window.confirm('⚠️ มีข้อมูลอัปเดตใหม่ที่คุณยังไม่ได้รับทราบ\nต้องการปิดหน้านี้จริงๆ หรือไม่?')) return;
-                  closeViewSession();
-                }} className="p-1.5 bg-[var(--bg-hover)] hover:bg-red-600 text-gray-400 hover:text-white rounded border border-[var(--bd-strong)] hover:border-red-600 transition-all shrink-0">
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            
-            {viewingSession.opdRecordedAt && viewingSession.brokerStatus === 'done' && (
-              <div className="px-4 sm:px-6 py-3 bg-[var(--opd-bg)] border-b border-[var(--opd-bd)] flex items-center gap-3 shrink-0 flex-wrap">
-                <div className="p-1.5 rounded-lg bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)]">
-                  <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black font-semibold text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
-                  <p className="text-xs text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
-                    {viewingSession.brokerProClinicHN && (
-                      <span className="px-1.5 py-0.5 rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] text-[var(--opd-color)] font-black">
-                        HN {viewingSession.brokerProClinicHN}
-                      </span>
-                    )}
-                  </p>
-                  {viewingSession.brokerLastAutoSyncAt && (
-                    <p className="text-[11px] text-[var(--opd-color)] opacity-70 font-mono mt-0.5 flex items-center gap-1">
-                      🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(viewingSession.brokerLastAutoSyncAt)}
-                    </p>
-                  )}
-                </div>
-                <div className="ml-auto flex items-center gap-2 flex-wrap">
-                  {viewingSession.brokerProClinicId && (<>
-                    <a href={getProClinicUrl(viewingSession.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
-                      title={getProClinicUrl(viewingSession.brokerProClinicId)}>
-                      ProClinic ↗
-                    </a>
-                    <button onClick={() => handleOpenPatientView(viewingSession)}
-                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
-                      <Search size={9}/> คอร์สและนัดหมาย ↗
-                    </button>
-                    <button onClick={() => handleProClinicEdit(viewingSession)}
-                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
-                      แก้ไขใน ProClinic
-                    </button>
-                    <button onClick={() => handleProClinicDelete(viewingSession)}
-                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
-                      ลบจาก ProClinic
-                    </button>
-                  </>)}
-                </div>
-              </div>
-            )}
-            {viewingSession.brokerStatus === 'failed' && (
-              <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 shrink-0">
-                <div className="flex items-center gap-3">
-                  <X size={16} className="text-red-400 shrink-0" />
-                  <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
-                  <button
-                    onClick={() => handleOpdClick(viewingSession)}
-                    className="ml-auto text-[11px] font-black font-semibold text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
-                  >ลองใหม่</button>
-                </div>
-                {(viewingSession.brokerError || '').includes('Session หมดอายุ') && (
-                  <p className="text-xs text-orange-400 mt-2 ml-7">💡 กดปุ่ม "แชร์ Session" ใน Extension Popup แล้วกด "ลองใหม่"</p>
-                )}
-              </div>
-            )}
-            <div className="p-4 md:p-6 overflow-y-auto bg-[var(--bg-base)] flex-1 custom-scrollbar">
-              {!viewingSession.patientData && (
-                <div className="p-12 text-center text-gray-600 flex flex-col items-center gap-4 mb-6">
-                  <Clock size={36} className="opacity-30" />
-                  <p className="text-sm font-bold text-gray-400">รอลูกค้ากรอกข้อมูล...</p>
-                  <p className="text-xs text-gray-600">ลูกค้ายังไม่ได้กรอกแบบฟอร์ม</p>
-                </div>
-              )}
-              <div className={`grid grid-cols-1 ${isFollowUp || isCustom ? '' : 'md:grid-cols-2'} gap-6`} style={viewingSession.patientData ? {} : {display:'none'}}>
-
-                <div className="space-y-6">
-                  <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-red-600"></div>
-                    <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลส่วนตัว</h4>
-                    <div className="space-y-3 text-sm">
-                      <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ชื่อ-สกุล:</span><span className="col-span-2 font-bold text-white break-words">{d.prefix !== 'ไม่ระบุ' ? d.prefix : ''} {d.firstName} {d.lastName}</span></div>
-                      <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">เพศ:</span><span className="col-span-2 font-bold text-white">{d.gender || '-'}</span></div>
-                      <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันเกิด:</span><span className="col-span-2 font-bold text-white">{renderDobFormat(d)} <span className="text-red-500 font-mono text-xs ml-2">[{d.age} ปี]</span></span></div>
-                      {d.idCard && (
-                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500 flex items-center gap-1"><CreditCard size={12}/> บัตร/Passport:</span><span className="col-span-2 font-bold text-white font-mono">{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span></div>
-                      )}
-
-                      {(isFollowUp || isCustom) && (
-                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">วันที่ประเมิน:</span><span className="col-span-2 font-bold text-orange-400">{d.assessmentDate || '-'}</span></div>
-                      )}
-
-                      {!isFollowUp && !isCustom && (
-                        <>
-                          <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">สัญชาติ:</span><span className="col-span-2 font-bold text-white">{d.nationality === 'ต่างชาติ' ? (d.nationalityCountry || 'ต่างชาติ') : 'ไทย'}</span></div>
-                          <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">โทรศัพท์:</span><span className="col-span-2 font-bold text-white font-mono break-all">{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span></div>
-                          <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ที่อยู่:</span><span className="col-span-2 font-bold text-gray-300 text-xs leading-relaxed break-words">{[d.address, d.subDistrict && `ต.${d.subDistrict}`, d.district && `อ.${d.district}`, d.province, d.postalCode].filter(Boolean).join(' ') || '-'}</span></div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {!isFollowUp && !isCustom && (
-                    <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-orange-900/30">
-                      <h4 className="text-xs font-black text-orange-600 font-semibold border-b border-orange-900/30 pb-2 mb-4">ติดต่อฉุกเฉิน</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-orange-500/50">ชื่อ-สกุล:</span><span className="font-bold text-orange-200">{d.emergencyName || '-'}</span></div>
-                        <div className="flex justify-between"><span className="text-orange-500/50">ความสัมพันธ์:</span><span className="font-bold text-orange-200">{d.emergencyRelation || '-'}</span></div>
-                        <div className="flex justify-between"><span className="text-orange-500/50">โทรศัพท์:</span><span className="font-bold font-mono text-orange-200 break-all">{formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</span></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {!isFollowUp && !isCustom && (
-                  <div className="space-y-6">
-                    <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)] shadow-inner relative overflow-hidden h-full">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-gray-700"></div>
-                      <h4 className="text-xs font-black text-gray-500 font-semibold border-b border-[var(--bd)] pb-2 mb-4">ข้อมูลสุขภาพพื้นฐาน</h4>
-                      <div className="mb-5">
-                        <span className="text-xs text-gray-500 block mb-2">สาเหตุที่มาพบแพทย์</span>
-                        <div className="flex flex-col gap-2 font-black text-white bg-[var(--bg-hover)] p-3 rounded border border-[var(--bd-strong)] font-semibold text-sm border-l-2 border-l-red-600 mb-2">
-                          {reasons.map(r => (
-                            <div key={r} className="break-words">• {r === 'อื่นๆ' ? `อื่นๆ: ${d.visitReasonOther}` : r}</div>
-                          ))}
-                        </div>
-                        {isHrt && goals.length > 0 && (
-                          <div className="bg-[var(--bg-card)] p-3 rounded border border-[var(--bd-strong)] mt-2">
-                            <span className="text-xs text-gray-500 uppercase block mb-2">เป้าหมายการเสริมฮอร์โมน</span>
-                            <div className="flex flex-wrap gap-1.5">
-                               {goals.map(g => (
-                                 <span key={g} className="font-bold text-orange-400 text-xs bg-orange-950/20 border border-orange-900/30 px-2 py-0.5 rounded break-words max-w-full">
-                                   {g === 'ฮอร์โมนเพื่อการข้ามเพศ' ? `ข้ามเพศ (${d.hrtTransType})` : g === 'อื่นๆ' ? `อื่นๆ (${d.hrtOtherDetail})` : g}
-                                 </span>
-                               ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        <div className={`p-3 rounded border ${d.hasAllergies === 'มี' ? 'bg-red-950/20 border-red-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                          <span className={`text-xs font-semibold block mb-1 ${d.hasAllergies === 'มี' ? 'text-red-500' : 'text-gray-500'}`}>ประวัติแพ้ยา/อาหาร</span>
-                          <span className={`font-bold text-sm break-words ${d.hasAllergies === 'มี' ? 'text-red-400' : 'text-gray-300'}`}>{d.hasAllergies === 'มี' ? d.allergiesDetail : 'ไม่มี'}</span>
-                        </div>
-                        <div className={`p-3 rounded border ${d.hasUnderlying === 'มี' ? 'bg-orange-950/20 border-orange-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                          <span className={`text-xs font-semibold block mb-1 ${d.hasUnderlying === 'มี' ? 'text-orange-500' : 'text-gray-500'}`}>โรคประจำตัว</span>
-                          <span className={`font-bold text-sm leading-relaxed break-words ${d.hasUnderlying === 'มี' ? 'text-orange-300' : 'text-gray-300'}`}>
-                            {d.hasUnderlying === 'มี' ? (
-                              <ul className="list-disc pl-4 space-y-1">
-                                {d.ud_hypertension && <li>ความดันโลหิตสูง</li>}
-                                {d.ud_diabetes && <li>เบาหวาน</li>}
-                                {d.ud_lung && <li>โรคปอด</li>}
-                                {d.ud_kidney && <li>โรคไต</li>}
-                                {d.ud_heart && <li>โรคหัวใจ</li>}
-                                {d.ud_blood && <li>โรคโลหิต</li>}
-                                {d.ud_other && <li>{d.ud_otherDetail}</li>}
-                              </ul>
-                            ) : 'ไม่มี'}
-                          </span>
-                        </div>
-                        <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 font-semibold block mb-1">ยาที่ใช้ประจำ</span>
-                          <span className="font-bold text-sm text-gray-300 break-words">{d.currentMedication || 'ไม่มี'}</span>
-                        </div>
-                        {d.bloodType && d.bloodType !== 'ไม่ทราบ' && (
-                          <div className="p-3 bg-[var(--bg-card)] rounded border border-[var(--bd)]">
-                            <span className="text-xs text-gray-500 font-semibold block mb-1">กรุ๊ปเลือด</span>
-                            <span className="font-bold text-sm text-gray-300">{d.bloodType}</span>
-                          </div>
-                        )}
-                        {d.pregnancy && d.pregnancy !== 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์' && (
-                          <div className={`p-3 rounded border ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'bg-pink-950/20 border-pink-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)]'}`}>
-                            <span className={`text-xs font-semibold block mb-1 ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-500' : 'text-gray-500'}`}>การตั้งครรภ์</span>
-                            <span className={`font-bold text-sm ${d.pregnancy === 'กำลังตั้งครรภ์' ? 'text-pink-300' : 'text-gray-300'}`}>{d.pregnancy}</span>
-                          </div>
-                        )}
-                        {d.howFoundUs && d.howFoundUs.length > 0 && (
-                          <div className="p-3 bg-[var(--bg-elevated)] rounded border border-blue-900/30">
-                            <span className="text-xs text-blue-500 font-semibold block mb-2 flex items-center gap-1"><Globe size={10}/> รู้จักคลินิกจาก</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {d.howFoundUs.map(ch => (
-                                <span key={ch} className="text-xs font-bold text-blue-300 bg-blue-950/30 border border-blue-900/40 px-2.5 py-1 rounded-full">{ch}</span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Custom Form Answers Viewer */}
-              {isCustom && viewingSession.customTemplate && (
-                <div className="mt-6 bg-[var(--bg-elevated)] p-5 sm:p-8 rounded-2xl border border-cyan-900/40 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-cyan-900 text-white px-4 py-2 rounded-bl-2xl font-black text-xs shadow-lg">CUSTOM</div>
-                  <h4 className="text-xs font-black text-cyan-500 font-semibold mb-6 flex items-center gap-2">
-                    <LayoutTemplate size={12}/> แบบฟอร์ม: {viewingSession.customTemplate.title}
-                  </h4>
-                  <div className="space-y-4">
-                    {viewingSession.customTemplate.questions.map((q, idx) => {
-                      const answer = d[q.id];
-                      let displayAns = '-';
-                      if (Array.isArray(answer)) displayAns = answer.length > 0 ? answer.join(', ') : '-';
-                      else if (answer) displayAns = answer;
-
-                      return (
-                        <div key={q.id} className="bg-[var(--bg-surface)] p-4 rounded-xl border border-[var(--bd)]">
-                          <span className="text-gray-400 text-xs font-bold mb-2 block">{idx+1}. {q.label}</span>
-                          <div className="text-white text-sm font-medium whitespace-pre-wrap">{displayAns}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Standard Form Answers Viewer */}
-              {!isCustom && (isPerf || showAdam || showMrs) && (
-                <div className="mt-6 space-y-6">
-                  {!isFollowUp && isPerf && (
-                    <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
-                       <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-red-600 rounded-full"></span> การประเมินส่วนที่ 1: อาการเบื้องต้น
-                      </h4>
-                      <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
-                        <span className="text-gray-300 font-medium text-sm">มีอาการหลั่งเร็ว / หลั่งไวร่วมด้วย</span>
-                        {d.symp_pe ? <span className="font-black text-red-500 bg-red-950/30 px-3 py-1 rounded border border-red-900/50 text-sm">มีอาการ</span> : <span className="text-[#555] font-mono text-sm">ไม่มี</span>}
-                      </div>
-                    </div>
-                  )}
-
-                  {showAdam && (() => {
-                    const adamRes = calculateADAM(d);
-                    return (
-                      <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--bd)]">
-                        <h4 className="text-xs font-black text-gray-400 font-semibold mb-4 flex items-center gap-2">
-                          <span className="w-2 h-2 bg-red-600 rounded-full"></span> {isFollowUp ? 'แบบประเมินติดตามอาการ' : `การประเมินส่วนที่ ${isPerf ? '2' : '1'}`}: พร่องฮอร์โมนเพศชาย (ADAM)
-                        </h4>
-                        <div className={`p-4 rounded-lg border mb-5 flex items-center justify-between ${adamRes.bg}`}>
-                          <div className="flex-1 pr-2">
-                            <span className="text-xs font-semibold text-gray-500 block">ผลการประเมิน</span>
-                            <span className={`font-black text-sm sm:text-lg leading-tight ${adamRes.color} block`}>{adamRes.text}</span>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <span className="text-xl sm:text-2xl font-black text-white">{adamRes.total}</span>
-                            <span className="text-gray-500 text-xs sm:text-sm font-bold"> / 10</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 text-xs sm:text-sm">
-                          {[
-                            { k: d.adam_1, t: 'ความต้องการทางเพศลดลง' },
-                            { k: d.adam_2, t: 'รู้สึกขาดพลังงาน' },
-                            { k: d.adam_3, t: 'ความแข็งแรงหรือความทนทานลดลง' },
-                            { k: d.adam_4, t: 'ส่วนสูงลดลง' },
-                            { k: d.adam_5, t: 'ซึมเศร้า ความสุขในชีวิตลดลง' },
-                            { k: d.adam_6, t: 'อารมณ์แปรปรวน หงุดหงิดง่าย' },
-                            { k: d.adam_7, t: 'การแข็งตัวของอวัยวะเพศลดลง' },
-                            { k: d.adam_8, t: 'ความสามารถในการเล่นกีฬาหรือออกกำลังกายลดลง' },
-                            { k: d.adam_9, t: 'ง่วงนอนหลังทานอาหารเย็น' },
-                            { k: d.adam_10, t: 'ประสิทธิภาพการทำงานลดลง' }
-                          ].map((item, idx) => (
-                            <div key={idx} className="flex items-start justify-between border-b border-[var(--bd)] pb-1.5 gap-4">
-                              <span className="text-gray-400 leading-snug">{idx+1}. {item.t}</span>
-                              {item.k ? <span className="font-black text-orange-500 shrink-0">มีอาการ</span> : <span className="text-[#333] font-mono shrink-0">ไม่มี</span>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {showMrs && (() => {
-                    const mrsRes = calculateMRS(d);
-                    return (
-                      <div className="bg-gradient-to-br from-[#1a0515] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-pink-900/50 shadow-inner relative overflow-hidden">
-                         <h4 className="text-xs font-black text-pink-500 font-semibold mb-6 flex items-center gap-2">
-                          <Activity size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'การประเมินส่วนที่ 1'}: อาการวัยทอง (MRS)
-                        </h4>
-                        <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
-                          <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
-                            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
-                            <div className="flex items-baseline gap-1 mb-3">
-                              <span className={`text-5xl sm:text-6xl font-black ${mrsRes.color} leading-none`}>{mrsRes.score}</span>
-                              <span className="text-lg font-bold text-[#333]">/ 44</span>
-                            </div>
-                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center whitespace-nowrap ${mrsRes.bg} ${mrsRes.color}`}>
-                              {mrsRes.text}
-                            </div>
-                          </div>
-                          <div className="flex-1 w-full space-y-2">
-                            {[
-                              { q: '1. อาการร้อนวูบวาบ เหงื่อออก', v: d.mrs_1 }, { q: '2. อาการทางหัวใจ (ใจสั่น หัวใจเต้นเร็ว)', v: d.mrs_2 },
-                              { q: '3. ปัญหาการนอนหลับ (นอนไม่หลับ ตื่นกลางดึก)', v: d.mrs_3 }, { q: '4. อารมณ์ซึมเศร้า (เศร้าหมอง หดหู่)', v: d.mrs_4 },
-                              { q: '5. อารมณ์หงุดหงิดง่าย', v: d.mrs_5 }, { q: '6. วิตกกังวล กระวนกระวาย', v: d.mrs_6 },
-                              { q: '7. อ่อนเพลียทั้งร่างกายและจิตใจ (ไม่มีแรง)', v: d.mrs_7 }, { q: '8. ปัญหาทางเพศ (ความต้องการลดลง)', v: d.mrs_8 },
-                              { q: '9. ปัญหาทางเดินปัสสาวะ (ปัสสาวะบ่อย/แสบขัด)', v: d.mrs_9 }, { q: '10. อาการช่องคลอดแห้ง', v: d.mrs_10 },
-                              { q: '11. อาการปวดข้อและกล้ามเนื้อ', v: d.mrs_11 }
-                            ].map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between bg-[var(--bg-card)] p-2 sm:px-3 rounded border border-[var(--bd)] gap-2">
-                                <span className="text-xs text-gray-300 font-medium leading-snug">{item.q}</span>
-                                <span className="text-sm font-black text-pink-500 whitespace-nowrap shrink-0">ระดับ: {item.v || 0}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {isPerf && (() => {
-                    const iiefScore = calculateIIEFScore(d);
-                    const interp = getIIEFInterpretation(iiefScore);
-                    return (
-                      <div className="bg-gradient-to-br from-[#1a0505] to-[#0a0a0a] p-4 sm:p-6 rounded-xl border border-red-900/50 relative overflow-hidden">
-                        <Flame className="absolute bottom-[-20px] right-[-20px] w-48 h-48 text-red-600 opacity-5 pointer-events-none" />
-                        <h4 className="text-xs font-black text-red-500 font-semibold mb-6 flex items-center gap-2">
-                          <Flame size={12}/> {isFollowUp ? 'แบบประเมินติดตามอาการ' : 'ส่วนที่ 3'}: ความเสื่อมสมรรถภาพทางเพศ (IIEF-5)
-                        </h4>
-                        <div className="flex flex-col md:flex-row gap-6 items-center md:items-stretch relative z-10">
-                          <div className="flex flex-col items-center justify-center p-6 bg-black rounded-xl border border-[var(--bd-strong)] w-full md:min-w-[180px] md:w-auto shadow-inner">
-                            <span className="text-xs font-bold text-gray-500 font-semibold mb-2">คะแนนรวม</span>
-                            <div className="flex items-baseline gap-1 mb-3">
-                              <span className={`text-5xl sm:text-6xl font-black ${interp.color} leading-none`}>{iiefScore}</span>
-                              <span className="text-lg font-bold text-[#333]">/ 25</span>
-                            </div>
-                            <div className={`px-4 py-1.5 rounded text-xs sm:text-xs font-semibold border text-center ${interp.bg} ${interp.color}`}>
-                              {interp.text}
-                            </div>
-                          </div>
-                          <div className="flex-1 w-full space-y-3">
-                            {[
-                              { q: 'Q1. ความมั่นใจในการแข็งตัว', v: d.iief_1 }, { q: 'Q2. แข็งตัวพอที่จะสอดใส่', v: d.iief_2 },
-                              { q: 'Q3. คงความแข็งตัวระหว่างมีเพศสัมพันธ์', v: d.iief_3 }, { q: 'Q4. คงความแข็งตัวจนเสร็จกิจ', v: d.iief_4 },
-                              { q: 'Q5. ความพึงพอใจในการมีเพศสัมพันธ์', v: d.iief_5 }
-                            ].map((item, idx) => (
-                              <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between bg-[var(--bg-card)] p-3 rounded border border-[var(--bd)] gap-2">
-                                <span className="text-xs text-gray-300 font-medium leading-snug">{item.q}</span>
-                                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                                  <span className="text-xs text-gray-600 uppercase font-mono sm:hidden">คะแนน</span>
-                                  <span className="text-lg font-black text-red-500 bg-[var(--bg-card)] w-8 h-8 flex items-center justify-center rounded border border-red-900/30 shrink-0">{item.v || 0}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* ── Deposit Info Section ── */}
-              {viewingSession.formType === 'deposit' && viewingSession.depositData && (() => {
-                const dep = editingDepositData || viewingSession.depositData;
-                const isEditing = !!editingDepositData;
-                const optLabel = (list, val) => {
-                  const found = (depositOptions?.[list] || []).find(o => o.value === val);
-                  return found ? found.label : val || '-';
-                };
-                return (
-                  <div className="mt-6 bg-[var(--bg-elevated)] p-4 sm:p-5 rounded-xl border border-emerald-900/40 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-600"></div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-xs font-black text-emerald-500 font-semibold flex items-center gap-2">
-                        <ClipboardCheck size={12}/> ข้อมูลการจองมัดจำ
-                      </h4>
-                      <div className="flex gap-1.5">
-                        {!isEditing ? (
-                          !(viewingSession.isArchived && viewingSession.formType === 'deposit') && <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingDepositData({...viewingSession.depositData}); }}
-                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors flex items-center gap-1">
-                            <Edit3 size={10}/> แก้ไข
-                          </button>
-                        ) : (<>
-                          <button onClick={() => handleSaveDepositData(viewingSession.id, editingDepositData)}
-                            disabled={depositSaving}
-                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-600 disabled:bg-emerald-900 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
-                            <CheckCircle2 size={10}/> {depositSaving ? 'กำลังบันทึก...' : 'บันทึก'}
-                          </button>
-                          <button onClick={() => setEditingDepositData(null)}
-                            className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-[var(--bd-strong)] text-gray-400 hover:text-white transition-colors">
-                            ยกเลิก
-                          </button>
-                        </>)}
-                      </div>
-                    </div>
-                    {!isEditing ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</span>
-                          <span className="font-bold text-emerald-300">{dep.paymentChannel || '-'}</span>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">ยอดชำระ</span>
-                          <span className="font-bold text-emerald-300">{dep.paymentAmount ? `${Number(dep.paymentAmount).toLocaleString()} บาท` : '-'}</span>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</span>
-                          <span className="font-bold text-white">{toThaiDate(dep.depositDate) || '-'}</span>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">เวลา</span>
-                          <span className="font-bold text-white">{dep.depositTime || '-'}</span>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">พนักงานขาย</span>
-                          <span className="font-bold text-white">{optLabel('sellers', dep.salesperson)}</span>
-                        </div>
-                        <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)]">
-                          <span className="text-xs text-gray-500 uppercase block mb-1">เลขอ้างอิง</span>
-                          <span className="font-bold text-white">{dep.refNo || '-'}</span>
-                        </div>
-                        {dep.depositNote && (
-                          <div className="bg-[var(--bg-surface)] p-3 rounded border border-[var(--bd)] sm:col-span-2">
-                            <span className="text-xs text-gray-500 uppercase block mb-1">หมายเหตุ</span>
-                            <span className="font-bold text-gray-300 text-xs">{dep.depositNote}</span>
-                          </div>
-                        )}
-                        {dep.hasAppointment && (<>
-                          <div className="sm:col-span-2 mt-2 mb-1"><span className="text-xs font-black text-orange-500 font-semibold flex items-center gap-1"><CalendarClock size={10}/> นัดหมาย</span></div>
-                          <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
-                            <span className="text-xs text-gray-500 uppercase block mb-1">วันนัด</span>
-                            <span className="font-bold text-orange-300">{toThaiDate(dep.appointmentDate) || '-'}</span>
-                          </div>
-                          <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
-                            <span className="text-xs text-gray-500 uppercase block mb-1">เวลา</span>
-                            <span className="font-bold text-orange-300">{dep.appointmentStartTime || ''} - {dep.appointmentEndTime || ''}</span>
-                          </div>
-                          <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
-                            <span className="text-xs text-gray-500 uppercase block mb-1">แพทย์</span>
-                            <span className="font-bold text-white">{optLabel('doctors', dep.doctor)}</span>
-                          </div>
-                          <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30">
-                            <span className="text-xs text-gray-500 uppercase block mb-1">ห้องตรวจ</span>
-                            <span className="font-bold text-white">{optLabel('rooms', dep.room)}</span>
-                          </div>
-                          {(dep.visitPurpose || []).length > 0 && (
-                            <div className="bg-[var(--bg-surface)] p-3 rounded border border-orange-900/30 sm:col-span-2">
-                              <span className="text-xs text-gray-500 uppercase block mb-1">นัดมาเพื่อ</span>
-                              <div className="flex flex-wrap gap-1">{dep.visitPurpose.map(v => <span key={v} className="text-xs font-bold text-orange-300 bg-orange-950/30 border border-orange-900/40 px-2 py-0.5 rounded">{v}</span>)}</div>
-                            </div>
-                          )}
-                        </>)}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">ช่องทางชำระเงิน</label>
-                          <select value={dep.paymentChannel || ''} onChange={e => setEditingDepositData(p => ({...p, paymentChannel: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                            <option value="">-- เลือก --</option>
-                            {(depositOptions?.paymentMethods || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">ยอดชำระ</label>
-                          <input type="number" value={dep.paymentAmount || ''} onChange={e => setEditingDepositData(p => ({...p, paymentAmount: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
-                          <DateField value={dep.depositDate || ''} onChange={v => setEditingDepositData(p => ({...p, depositDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">เวลา</label>
-                          <input type="time" value={dep.depositTime || ''} onChange={e => setEditingDepositData(p => ({...p, depositTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">พนักงานขาย</label>
-                          <select value={dep.salesperson || ''} onChange={e => setEditingDepositData(p => ({...p, salesperson: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                            <option value="">-- เลือก --</option>
-                            {(depositOptions?.sellers || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 uppercase block mb-1">เลขอ้างอิง</label>
-                          <input type="text" value={dep.refNo || ''} onChange={e => setEditingDepositData(p => ({...p, refNo: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="text-xs text-gray-500 uppercase block mb-1">หมายเหตุ</label>
-                          <textarea value={dep.depositNote || ''} onChange={e => setEditingDepositData(p => ({...p, depositNote: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none resize-none" rows={2}/>
-                        </div>
-                        <div className="sm:col-span-2 flex items-center gap-3 mt-1">
-                          <label className="text-xs text-gray-500 uppercase">นัดหมาย</label>
-                          <button onClick={() => setEditingDepositData(p => ({...p, hasAppointment: !p.hasAppointment}))}
-                            className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${dep.hasAppointment ? 'bg-orange-900/30 border-orange-600 text-orange-400' : 'bg-[var(--bg-card)] border-[var(--bd)] text-gray-500'}`}>
-                            {dep.hasAppointment ? 'มีนัดหมาย' : 'ไม่มีนัดหมาย'}
-                          </button>
-                        </div>
-                        {dep.hasAppointment && (<>
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase block mb-1">วันนัด</label>
-                            <DateField value={dep.appointmentDate || ''} onChange={v => setEditingDepositData(p => ({...p, appointmentDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase block mb-1">เริ่ม</label>
-                              <select value={dep.appointmentStartTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                                <option value="">--</option>
-                                {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 uppercase block mb-1">สิ้นสุด</label>
-                              <select value={dep.appointmentEndTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                                <option value="">--</option>
-                                {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase block mb-1">แพทย์</label>
-                            <select value={dep.doctor || ''} onChange={e => setEditingDepositData(p => ({...p, doctor: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                              <option value="">-- เลือก --</option>
-                              {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 uppercase block mb-1">ห้องตรวจ</label>
-                            <select value={dep.room || ''} onChange={e => setEditingDepositData(p => ({...p, room: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
-                              <option value="">-- เลือก --</option>
-                              {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                          </div>
-                        </>)}
-                      </div>
-                    )}
-                    {/* Deposit sync status */}
-                    {viewingSession.depositSyncStatus === 'done' && viewingSession.depositSyncAt && (
-                      <div className="mt-3 p-2 bg-emerald-950/20 border border-emerald-900/30 rounded text-xs text-emerald-400 font-mono flex items-center gap-2">
-                        <CheckCircle2 size={12}/> บันทึกมัดจำลง ProClinic แล้ว · {formatBangkokTime(viewingSession.depositSyncAt)}
-                      </div>
-                    )}
-                    {viewingSession.depositSyncStatus === 'failed' && (
-                      <div className="mt-3 p-2 bg-red-950/20 border border-red-900/30 rounded text-xs text-red-400 font-mono">
-                        ผิดพลาด: {viewingSession.depositSyncError}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {viewingSession.patientData && (
-              <div className="mt-8 pt-6 border-t border-[var(--bd)] relative">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
-                  <h4 className="text-xs font-black text-gray-400 font-semibold flex items-center gap-2">
-                    <FileText size={14} className="text-blue-500 shrink-0" /> สรุปประวัติผู้ป่วย (Clinical Summary)
-                  </h4>
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    {/* Language toggle */}
-                    <div className="flex bg-[var(--bg-hover)] border border-[var(--bd-strong)] rounded overflow-hidden text-xs font-bold font-semibold">
-                      <button onClick={() => setSummaryLang('en')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'en' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>EN</button>
-                      <button onClick={() => setSummaryLang('th')} className="px-3 py-1.5 transition-colors" style={summaryLang === 'th' ? {backgroundColor: ac, color: '#fff'} : {color: '#6b7280'}}>TH</button>
-                    </div>
-                    <button onClick={() => handleCopyToClipboard(clinicalSummaryText, false)} className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 px-3 py-1.5 border rounded text-xs uppercase font-bold transition-colors ${isCopied ? 'bg-green-950/40 text-green-500 border-green-900/50' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 border-[var(--bd-strong)]'}`}>
-                      {isCopied ? <CheckCircle2 size={12} /> : <ClipboardList size={12} />}
-                      {isCopied ? 'คัดลอกสำเร็จ' : 'คัดลอกข้อความ'}
-                    </button>
-                  </div>
-                </div>
-                <textarea readOnly value={clinicalSummaryText} className="w-full bg-[var(--bg-surface)] border border-[var(--bd)] text-gray-300 rounded-lg p-3 sm:p-4 text-xs sm:text-xs font-mono resize-none outline-none custom-scrollbar leading-relaxed" rows="8"/>
-              </div>
-              )}
-
-              {/* Treatment History from ProClinic */}
-              {viewingSession.brokerProClinicId && (
-                <div className="mt-8 pt-6 border-t border-[var(--bd)]">
-                  <TreatmentTimeline customerId={viewingSession.brokerProClinicId} isDark={isDark}
-                    refreshKey={treatmentRefreshKey} autoExpandId={autoExpandTreatmentId}
-                    onOpenCreateForm={(cid) => {
-                      const pd = viewingSession.patientData || {};
-                      const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
-                      setTreatmentFormMode({ mode: 'create', customerId: cid, patientName: name, patientData: pd });
-                    }}
-                    onOpenEditForm={(tid, cid) => {
-                      const pd = viewingSession.patientData || {};
-                      const name = [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ') || viewingSession.sessionName || '';
-                      setTreatmentFormMode({ mode: 'edit', customerId: cid, treatmentId: tid, patientName: name });
-                    }} />
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-        );
-      })()}
-
+      {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+      {viewingSession && renderViewingSessionModal()}
       {/* Treatment Create/Edit Full Page */}
       {treatmentFormMode && (
         <TreatmentFormPage
@@ -6286,68 +6573,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       )}
 
       {/* Patient Link Modal */}
-      {patientLinkModal && (() => {
-        const plSession = sessions.find(s => s.id === patientLinkModal) || archivedSessions.find(s => s.id === patientLinkModal);
-        if (!plSession) { setPatientLinkModal(null); return null; }
-        const plToken = plSession.patientLinkToken;
-        const plEnabled = plSession.patientLinkEnabled;
-        return (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPatientLinkModal(null)}>
-            <div className="bg-[var(--bg-elevated)] rounded-2xl border border-[var(--bd)] w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" style={{boxShadow: '0 0 60px rgba(168,85,247,0.15)'}} onClick={e => e.stopPropagation()}>
-              {/* Header */}
-              <div className="flex items-center gap-3 p-5 border-b border-[var(--bd)]">
-                <div className="w-9 h-9 rounded-xl bg-purple-950/60 border border-purple-900/50 flex items-center justify-center shrink-0">
-                  <Link size={16} className="text-purple-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black font-semibold text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
-                  <p className="text-sm font-bold text-white truncate">{plSession.sessionName || plSession.id}</p>
-                </div>
-                <button onClick={() => setPatientLinkModal(null)} className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[var(--bg-hover)] transition-colors"><X size={16}/></button>
-              </div>
-              {/* Body */}
-              <div className="p-5 flex flex-col gap-4">
-                {!plToken ? (
-                  <>
-                    <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
-                    <button onClick={() => { handleGeneratePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="w-full py-3.5 rounded-xl font-bold text-sm font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)'}}>
-                      {patientLinkLoading ? <Loader2 size={15} className="animate-spin"/> : <Link size={15}/>} สร้างลิงก์ดูข้อมูล
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500 font-semibold font-bold">สถานะ</span>
-                      <span className={`text-xs font-black font-semibold px-2 py-1 rounded-lg ${plEnabled ? 'bg-green-950/40 text-green-400 border border-green-900/30' : 'bg-gray-800 text-gray-500 border border-gray-700'}`}>
-                        {plEnabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <p className="text-xs text-gray-600 font-semibold font-bold">ลิงก์</p>
-                      <div className="flex items-center gap-2">
-                        <input readOnly value={getPatientLinkUrl(plToken)} className="flex-1 bg-[var(--bg-card)] border border-[var(--bd)] text-gray-500 text-xs p-2.5 rounded-lg outline-none font-mono" />
-                        <button onClick={() => handleCopyToClipboard(getPatientLinkUrl(plToken), true)} className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-white transition-colors shrink-0"><ClipboardList size={14}/></button>
-                        <a href={getPatientLinkUrl(plToken)} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-purple-400 transition-colors shrink-0"><ExternalLink size={14}/></a>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => { setSelectedQR(plSession.id); setQrDisplayMode('patientLink'); setPatientLinkModal(null); }} className="flex-1 py-2.5 rounded-xl border border-purple-900/50 text-purple-400 hover:bg-purple-950/30 text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5">
-                        <QrCode size={13}/> QR
-                      </button>
-                      <button onClick={() => { handleTogglePatientLink(plSession); }} disabled={patientLinkLoading} className={`flex-1 py-2.5 rounded-xl border text-xs font-bold font-semibold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 ${plEnabled ? 'border-[var(--bd)] text-gray-400 hover:text-white hover:border-[#444]' : 'border-green-900/50 text-green-400 hover:bg-green-950/30'}`}>
-                        {plEnabled ? <><ToggleLeft size={13}/> ปิด</> : <><ToggleRight size={13}/> เปิด</>}
-                      </button>
-                      <button onClick={() => { handleDeletePatientLink(plSession.id); setPatientLinkModal(null); }} disabled={patientLinkLoading} className="p-2.5 rounded-xl border border-red-900/30 text-red-500 hover:bg-red-950/30 transition-colors disabled:opacity-60" title="ลบลิงก์">
-                        <Trash2 size={14}/>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
+      {patientLinkModal && renderPatientLinkModal()}
 
       {/* Patient View Modal (iframe popup) */}
       {patientViewUrl && (
@@ -6362,252 +6589,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       )}
 
-      {/* Deposit Confirm Modal */}
-      {depositToDelete && (() => {
-        const { session: dSess, action: dAction } = depositToDelete;
-        const dName = dSess.patientData ? `${dSess.patientData.firstName || ''} ${dSess.patientData.lastName || ''}`.trim() : dSess.sessionName || dSess.id;
-        const isCancel = dAction === 'cancel';
-        const isComplete = dAction === 'complete';
-        const icon = isComplete ? <UserCheck size={24}/> : <Trash2 size={24}/>;
-        const iconBg = isComplete ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50';
-        const iconGlow = isComplete ? '0 0 15px rgba(96,165,250,0.4)' : '0 0 15px rgba(220,38,38,0.4)';
-        const title = isComplete ? 'ลูกค้ามาถึงคลินิกแล้ว?' : isCancel ? 'ยกเลิกการจอง?' : 'ลบคิวจองนี้?';
-        const desc = isComplete ? 'ย้ายไปประวัติจอง (การจองเรียบร้อย ลูกค้ามาถึงคลินิกแล้ว)'
-          : isCancel ? 'จะลบมัดจำ + ลูกค้าใน ProClinic ด้วย'
-          : 'ย้ายไปประวัติจอง (กู้คืนได้)';
-        const confirmLabel = isComplete ? 'ยืนยัน' : isCancel ? 'ยกเลิกการจอง' : 'ยืนยันการลบ';
-        const confirmBg = isComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700';
-        const confirmGlow = '';
-        const borderColor = isComplete ? 'border-blue-900/50' : 'border-red-900/50';
-        const boxGlow = isComplete ? '0 0 40px rgba(96,165,250,0.15)' : `0 0 40px rgba(${acRgb},0.15)`;
-        return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-            <div className={`bg-[var(--bg-elevated)] rounded-xl border ${borderColor} w-full max-w-sm overflow-hidden p-6 text-center`} style={{boxShadow: boxGlow}}>
-              <div className={`w-16 h-16 ${iconBg} rounded-full border flex items-center justify-center mx-auto mb-4`} style={{boxShadow: iconGlow}}>{icon}</div>
-              <h3 className="text-base sm:text-lg font-black text-white mb-2">{title}</h3>
-              <p className="text-gray-400 font-bold text-sm mb-1">{dName}</p>
-              <p className="text-gray-500 mb-6 text-xs">{desc}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setDepositToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
-                <button onClick={() => {
-                  setDepositToDelete(null);
-                  if (isCancel) { handleDepositCancel(dSess); }
-                  else if (isComplete) {
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
-                      serviceCompleted: true, serviceCompletedAt: serverTimestamp(),
-                      isPermanent: false, createdAt: serverTimestamp(),
-                    });
-                  } else {
-                    updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
-                      isArchived: true, archivedAt: serverTimestamp(),
-                    });
-                  }
-                }} className={`flex-1 px-4 py-3 ${confirmBg} text-white rounded font-bold text-xs ${confirmGlow}`}>{confirmLabel}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Deposit Confirm Modal — RP1 lift (2026-04-30) extracted from JSX-IIFE per Vite-OXC ban. */}
+      {depositToDelete && renderDepositConfirmModal()}
 
-      {/* Delete Modal */}
-      {sessionToDelete && (() => {
-        const delSession = sessions.find(s => s.id === sessionToDelete) || noDepositSessions.find(s => s.id === sessionToDelete) || depositSessions.find(s => s.id === sessionToDelete);
-        const isServiceDone = delSession?.patientData && delSession?.opdRecordedAt && delSession?.brokerStatus === 'done';
-        return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className={`bg-[var(--bg-elevated)] rounded-xl border w-full max-w-sm overflow-hidden p-6 text-center ${isServiceDone ? 'border-emerald-900/50' : 'border-red-900/50'}`} style={{boxShadow: `0 0 40px rgba(${acRgb},0.15)`}}>
-            <div className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto mb-4 ${isServiceDone ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-red-950/50 text-red-500 border-red-900/50'}`} style={{boxShadow: isServiceDone ? '0 0 15px rgba(16,185,129,0.4)' : '0 0 15px rgba(220,38,38,0.4)'}}>{isServiceDone ? <CheckCircle2 size={24} /> : <Trash2 size={24} />}</div>
-            <h3 className="text-base sm:text-lg font-black text-white mb-2">{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบข้อมูล?'}</h3>
-            <p className="text-gray-500 mb-6 text-xs leading-relaxed">{isServiceDone
-              ? <>ยืนยันการรับบริการและย้ายไปยังประวัติ<br/><span className="font-mono text-sm text-emerald-400">{delSession?.sessionName || sessionToDelete}</span></>
-              : <>กำลังลบข้อมูลคิว <br/><span className="font-mono text-sm" style={{color: ac}}>{sessionToDelete}</span><br/>ข้อมูลนี้จะไม่สามารถกู้คืนได้</>
-            }</p>
-            <div className="flex gap-3">
-              <button onClick={() => setSessionToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
-              <button onClick={() => deleteSession(sessionToDelete)} className={`flex-1 px-4 py-3 text-white rounded font-bold text-xs ${isServiceDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{isServiceDone ? 'ยืนยันการรับบริการ' : 'ยืนยันการลบ'}</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {/* Delete Modal — RP1 lift (2026-04-30) extracted from JSX-IIFE per Vite-OXC ban. */}
+      {sessionToDelete && renderSessionDeleteModal()}
 
-      {/* ── Schedule Link Modal ── */}
-      {showScheduleModal && (() => {
-        const thaiMo = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-        const monthOptions = [];
-        const nowForOpts = bangkokNow();
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(Date.UTC(nowForOpts.getUTCFullYear(), nowForOpts.getUTCMonth() + i, 1));
-          const val = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-          const label = `${thaiMo[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
-          monthOptions.push({ val, label });
-        }
-        // Pre-compute room options for the selector — avoid an IIFE inside JSX
-        // (CLAUDE.md rule 2: Vite OXC parser crashes on inline IIFE JSX).
-        const shownRooms = (clinicSettings.rooms || []).filter(r =>
-          r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
-        );
-
-        return (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
-            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-              {/* Header */}
-              <div className="p-4 border-b border-[var(--bd)] flex items-center justify-between">
-                <h2 className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2"><Link size={16} className="text-green-400" /> สร้างลิงก์ตาราง</h2>
-                <button onClick={() => !schedGenLoading && setShowScheduleModal(false)} className="p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white"><X size={14} /></button>
-              </div>
-
-              {schedGenResult ? (
-                <div className="p-6 flex flex-col items-center gap-4">
-                  <img src={schedGenResult.qrUrl} alt="QR" className="w-48 h-48 rounded-xl border border-[var(--bd)]" />
-                  <div className="w-full">
-                    <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">URL</label>
-                    <div className="flex gap-2">
-                      <input readOnly value={schedGenResult.url} className="flex-1 text-xs bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-[var(--tx-body)] font-mono" />
-                      <button onClick={() => { navigator.clipboard.writeText(schedGenResult.url); showToast('คัดลอกแล้ว', 2000); }}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold ${isDark ? 'bg-green-950/40 border border-green-900/50 text-green-400 hover:bg-green-900/40' : 'bg-pink-100 border border-pink-300 text-pink-600 hover:bg-pink-200'}`}>Copy</button>
-                    </div>
-                  </div>
-                  <button onClick={() => { setSchedGenResult(null); setShowScheduleModal(false); }}
-                    className="mt-2 px-6 py-2.5 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] text-xs font-bold hover:text-white">ปิด</button>
-                </div>
-              ) : (
-                <div className="p-4 space-y-4">
-                  <p className="text-xs text-[var(--tx-muted)]">ลิงก์จะใช้ข้อมูลวันหมอเข้า/ปิดคิว/ปิดช่วงเวลา ที่ตั้งค่าไว้ด้านล่างปฏิทิน</p>
-                  {/* Month + advance */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เดือนเริ่มต้น</label>
-                      <select value={schedStartMonth} onChange={e => setSchedStartMonth(e.target.value)}
-                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                        {monthOptions.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงทั้งหมด</label>
-                      <select value={schedAdvanceMonths} onChange={e => setSchedAdvanceMonths(Number(e.target.value))}
-                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                        {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} เดือน</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Slot interval + options */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">ช่วงเวลาละ</label>
-                      <select value={schedSlotDuration} onChange={e => setSchedSlotDuration(Number(e.target.value))}
-                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                        {[15,30,45,60,75,90,105,120].map(n => <option key={n} value={n}>{n >= 60 ? `${n/60} ชม.${n%60 ? ` ${n%60} นาที` : ''}` : `${n} นาที`}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex items-end pb-0.5">
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" checked={schedNoDoctorRequired} onChange={e => { setSchedNoDoctorRequired(e.target.checked); if (e.target.checked) setSchedSelectedDoctor(null); setSchedSelectedRoom(null); }}
-                          className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
-                        <span className="text-[11px] text-[var(--tx-body)]">ไม่ต้องพบแพทย์</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Doctor selector — only when พบแพทย์ */}
-                  {!schedNoDoctorRequired && practitioners.filter(p => p.role === 'doctor').length > 0 && (
-                    <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เลือกแพทย์</label>
-                      <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
-                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                        <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
-                        {practitioners.filter(p => p.role === 'doctor').map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {/* Room selector — filtered by schedule mode.
-                      พบแพทย์ → ห้องแพทย์ ; ไม่พบแพทย์ → ห้องหัตถการทั่วไป.
-                      Rooms configured in ClinicSettingsPanel (`clinicSettings.rooms[]`).
-                      `shownRooms` computed above to avoid IIFE-in-JSX pattern. */}
-                  {shownRooms.length > 0 && (
-                    <div>
-                      <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
-                        เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
-                      </label>
-                      <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
-                        className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                        <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
-                        {shownRooms.map(r => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {/* Show doctor status toggle — ไม่พบแพทย์ mode only.
-                      Default off — admin opts in if they want the customer
-                      to see when the doctor is (un)available alongside the
-                      assistant slot. */}
-                  {schedNoDoctorRequired && (
-                    <label className="flex items-center gap-2 cursor-pointer select-none bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
-                      <input type="checkbox" checked={schedShowDoctorStatus} onChange={e => setSchedShowDoctorStatus(e.target.checked)}
-                        className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
-                      <span className="text-xs text-[var(--tx-body)]">แสดงสถานะ "หมอว่าง/ไม่ว่าง" ให้ลูกค้าเห็น</span>
-                    </label>
-                  )}
-
-                  {/* Show from option — only relevant if start month is current month */}
-                  {schedStartMonth === thaiYearMonth() && (
-                  <div>
-                    <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงคิวตั้งแต่</label>
-                    <div className="flex gap-2">
-                      {[['today', 'วันนี้เป็นต้นไป'], ['tomorrow', 'พรุ่งนี้เป็นต้นไป']].map(([val, label]) => (
-                        <button key={val} onClick={() => setSchedShowFrom(val)}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${schedShowFrom === val
-                            ? (isDark ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' : 'bg-pink-100 border-pink-400 text-pink-700')
-                            : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-body)]'}`}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  )}
-
-                  {/* End date selector */}
-                  {(() => {
-                    const [sy2, sm2] = schedStartMonth.split('-').map(Number);
-                    const lastMo = new Date(sy2, sm2 - 1 + schedAdvanceMonths, 0);
-                    const lastMoStr = `${lastMo.getFullYear()}-${String(lastMo.getMonth() + 1).padStart(2, '0')}`;
-                    const dimLast = lastMo.getDate();
-                    const todayD = bangkokNow();
-                    const todayFull = `${todayD.getUTCFullYear()}-${String(todayD.getUTCMonth() + 1).padStart(2, '0')}-${String(todayD.getUTCDate()).padStart(2, '0')}`;
-                    const isCurrentMonth = lastMoStr === `${todayD.getUTCFullYear()}-${String(todayD.getUTCMonth() + 1).padStart(2, '0')}`;
-                    const minDay = isCurrentMonth ? todayD.getUTCDate() : 1;
-                    const dayOptions = [];
-                    for (let d = minDay; d <= dimLast; d++) dayOptions.push(d);
-                    const defaultEnd = `${lastMoStr}-${String(dimLast).padStart(2, '0')}`;
-                    const currentEnd = schedEndDay || defaultEnd;
-                    const currentEndDay = parseInt((currentEnd).split('-')[2]) || dimLast;
-                    const validDay = currentEndDay < minDay ? minDay : currentEndDay > dimLast ? dimLast : currentEndDay;
-                    return (
-                      <div>
-                        <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">แสดงถึงวันที่ ({thaiMo[lastMo.getMonth()]})</label>
-                        <select value={validDay} onChange={e => { const d = Number(e.target.value); setSchedEndDay(`${lastMoStr}-${String(d).padStart(2, '0')}`); }}
-                          className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                          {dayOptions.map(d => <option key={d} value={d}>{d} {thaiMo[lastMo.getMonth()]} {lastMo.getFullYear() + 543}</option>)}
-                        </select>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Gen button */}
-                  <button onClick={handleGenScheduleLink} disabled={schedGenLoading}
-                    className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${schedGenLoading ? (isDark ? 'bg-green-950/30 border border-green-900/40 text-green-500 opacity-70' : 'bg-green-100 border border-green-300 text-green-600 opacity-70') : (isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white')}`}>
-                    {schedGenLoading ? <><RefreshCw size={14} className="animate-spin" /> กำลัง Sync + สร้างลิงก์...</> : <><Link size={14} /> Sync + สร้างลิงก์</>}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {/* ── Schedule Link Modal — RP1 lift (2026-04-30) extracted from JSX-IIFE per Vite-OXC ban. ── */}
+      {showScheduleModal && renderScheduleModal()}
 
     </div>
   );

@@ -42,3 +42,8 @@ coverage/
 
 # Visual Companion brainstorm session artifacts (Phase 16.2 / 2026-04-29)
 .superpowers/
+
+# graphify (knowledge-graph skill) artifacts (2026-04-30 install)
+graphify-out/
+.graphify_python
+.graphify_version

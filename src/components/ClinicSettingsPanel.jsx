@@ -183,6 +183,108 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const ac = settings.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
+  // RP1 lift (2026-04-30): Master Data Sync card was inline JSX-IIFE.
+  // Hoisted here so the JSX expression below is just `{masterDataSyncCard}`
+  // (Vite-OXC ban on inline JSX-IIFE patterns).
+  const masterDataSyncCard = (() => {
+    const SYNC_TYPES = [
+      { key: 'products', label: 'ยา / บริการ / สินค้า', fn: syncProducts, icon: '💊', color: 'emerald' },
+      { key: 'doctors', label: 'แพทย์ / ผู้ช่วย', fn: syncDoctors, icon: '🩺', color: 'sky' },
+      { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
+      { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
+    ];
+    const colorMap = {
+      emerald: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40',
+      sky: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40',
+      purple: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40',
+      amber: 'bg-orange-950/30 border-orange-800 text-orange-400 hover:bg-orange-900/40',
+    };
+    const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
+
+    const runSync = async (key, fn) => {
+      setSyncStatus(prev => ({ ...prev, [key]: 'loading' }));
+      setSyncResults(prev => ({ ...prev, [key]: null }));
+      try {
+        const data = await fn();
+        if (data.success) {
+          // Save master data to Firestore (backup — accessible even if ProClinic is down)
+          if (db && appId && data.items?.length) {
+            try {
+              // Save metadata
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key), {
+                type: key,
+                count: data.items.length,
+                totalPages: data.totalPages,
+                syncedAt: serverTimestamp(),
+              });
+              // Save items in batches of 400 (Firestore limit = 500 ops per batch)
+              const BATCH_LIMIT = 400;
+              for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
+                const chunk = data.items.slice(start, start + BATCH_LIMIT);
+                const batch = writeBatch(db);
+                chunk.forEach((item, i) => {
+                  const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key, 'items', String(item.id || (start + i)));
+                  batch.set(itemRef, { ...item, _syncedAt: new Date().toISOString() });
+                });
+                await batch.commit();
+              }
+            } catch (e) {
+              console.warn(`[MasterSync] Failed to save ${key} to Firestore:`, e);
+            }
+          }
+          setSyncStatus(prev => ({ ...prev, [key]: 'done' }));
+          setSyncResults(prev => ({ ...prev, [key]: { count: data.count, totalPages: data.totalPages } }));
+        } else {
+          setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
+          setSyncResults(prev => ({ ...prev, [key]: { error: data.error } }));
+        }
+      } catch (err) {
+        setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
+        setSyncResults(prev => ({ ...prev, [key]: { error: err.message } }));
+      }
+    };
+
+    const runAll = async () => {
+      for (const t of SYNC_TYPES) {
+        await runSync(t.key, t.fn);
+      }
+    };
+
+    return (
+      <div className="space-y-2">
+        {SYNC_TYPES.map(t => (
+          <div key={t.key} className="flex items-center gap-3">
+            <button
+              onClick={() => runSync(t.key, t.fn)}
+              disabled={syncStatus[t.key] === 'loading'}
+              className={`px-3 py-2 rounded-lg text-sm font-bold tracking-wider transition-all flex items-center gap-2 border disabled:opacity-50 min-w-[200px] ${colorMap[t.color]}`}
+            >
+              {syncStatus[t.key] === 'loading'
+                ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync...</>
+                : <><span>{t.icon}</span> {t.label}</>
+              }
+            </button>
+            {syncStatus[t.key] === 'done' && syncResults[t.key] && (
+              <span className="text-sm text-green-500 font-bold">✓ {syncResults[t.key].count} รายการ ({syncResults[t.key].totalPages} หน้า)</span>
+            )}
+            {syncStatus[t.key] === 'error' && syncResults[t.key] && (
+              <span className="text-sm text-red-500 font-bold">✗ {syncResults[t.key].error}</span>
+            )}
+          </div>
+        ))}
+        <div className="pt-2">
+          <button
+            onClick={runAll}
+            disabled={isSyncing}
+            className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] hover:bg-[var(--bg-base)] disabled:opacity-50"
+          >
+            {isSyncing ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync ทั้งหมด...</> : <><Download size={14}/> Sync ทั้งหมด</>}
+          </button>
+        </div>
+      </div>
+    );
+  })();
+
   return (
     <div className="w-full max-w-3xl mx-auto animate-in fade-in duration-300">
       <div className="flex items-center gap-3 mb-6">
@@ -748,104 +850,7 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </h3>
           <p className="text-[11px] text-gray-600 mb-4">ดึงข้อมูลหลักจาก ProClinic (ยา, คอร์ส, แพทย์, พนักงาน) มา cache ในระบบ</p>
 
-          {(() => {
-            const SYNC_TYPES = [
-              { key: 'products', label: 'ยา / บริการ / สินค้า', fn: syncProducts, icon: '💊', color: 'emerald' },
-              { key: 'doctors', label: 'แพทย์ / ผู้ช่วย', fn: syncDoctors, icon: '🩺', color: 'sky' },
-              { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
-              { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
-            ];
-            const colorMap = {
-              emerald: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40',
-              sky: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40',
-              purple: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40',
-              amber: 'bg-orange-950/30 border-orange-800 text-orange-400 hover:bg-orange-900/40',
-            };
-            const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
-
-            const runSync = async (key, fn) => {
-              setSyncStatus(prev => ({ ...prev, [key]: 'loading' }));
-              setSyncResults(prev => ({ ...prev, [key]: null }));
-              try {
-                const data = await fn();
-                if (data.success) {
-                  // Save master data to Firestore (backup — accessible even if ProClinic is down)
-                  if (db && appId && data.items?.length) {
-                    try {
-                      // Save metadata
-                      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key), {
-                        type: key,
-                        count: data.items.length,
-                        totalPages: data.totalPages,
-                        syncedAt: serverTimestamp(),
-                      });
-                      // Save items in batches of 400 (Firestore limit = 500 ops per batch)
-                      const BATCH_LIMIT = 400;
-                      for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
-                        const chunk = data.items.slice(start, start + BATCH_LIMIT);
-                        const batch = writeBatch(db);
-                        chunk.forEach((item, i) => {
-                          const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key, 'items', String(item.id || (start + i)));
-                          batch.set(itemRef, { ...item, _syncedAt: new Date().toISOString() });
-                        });
-                        await batch.commit();
-                      }
-                    } catch (e) {
-                      console.warn(`[MasterSync] Failed to save ${key} to Firestore:`, e);
-                    }
-                  }
-                  setSyncStatus(prev => ({ ...prev, [key]: 'done' }));
-                  setSyncResults(prev => ({ ...prev, [key]: { count: data.count, totalPages: data.totalPages } }));
-                } else {
-                  setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
-                  setSyncResults(prev => ({ ...prev, [key]: { error: data.error } }));
-                }
-              } catch (err) {
-                setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
-                setSyncResults(prev => ({ ...prev, [key]: { error: err.message } }));
-              }
-            };
-
-            const runAll = async () => {
-              for (const t of SYNC_TYPES) {
-                await runSync(t.key, t.fn);
-              }
-            };
-
-            return (
-              <div className="space-y-2">
-                {SYNC_TYPES.map(t => (
-                  <div key={t.key} className="flex items-center gap-3">
-                    <button
-                      onClick={() => runSync(t.key, t.fn)}
-                      disabled={syncStatus[t.key] === 'loading'}
-                      className={`px-3 py-2 rounded-lg text-sm font-bold tracking-wider transition-all flex items-center gap-2 border disabled:opacity-50 min-w-[200px] ${colorMap[t.color]}`}
-                    >
-                      {syncStatus[t.key] === 'loading'
-                        ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync...</>
-                        : <><span>{t.icon}</span> {t.label}</>
-                      }
-                    </button>
-                    {syncStatus[t.key] === 'done' && syncResults[t.key] && (
-                      <span className="text-sm text-green-500 font-bold">✓ {syncResults[t.key].count} รายการ ({syncResults[t.key].totalPages} หน้า)</span>
-                    )}
-                    {syncStatus[t.key] === 'error' && syncResults[t.key] && (
-                      <span className="text-sm text-red-500 font-bold">✗ {syncResults[t.key].error}</span>
-                    )}
-                  </div>
-                ))}
-                <div className="pt-2">
-                  <button
-                    onClick={runAll}
-                    disabled={isSyncing}
-                    className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] hover:bg-[var(--bg-base)] disabled:opacity-50"
-                  >
-                    {isSyncing ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync ทั้งหมด...</> : <><Download size={14}/> Sync ทั้งหมด</>}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+          {masterDataSyncCard}
         </div>
 
         {/* ProClinic Integration */}

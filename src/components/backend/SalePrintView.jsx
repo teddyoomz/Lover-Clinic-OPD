@@ -235,16 +235,15 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                 </div>
               )}
             </div>
-            {(() => {
-              // Same as QuotationPrintView — prefer logoUrlLight (the black-red
-              // variant uploaded for light backgrounds). No color manipulation.
-              const printLogo = clinic.logoUrlLight || clinic.logoUrl;
-              if (!printLogo) return null;
-              return (
-                <img src={printLogo} alt="" className="h-16 w-16 object-contain shrink-0"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              );
-            })()}
+            {/* Print logo — same as QuotationPrintView; prefer logoUrlLight (black-red variant for light backgrounds). RP1 lift: no IIFE in JSX (Vite-OXC ban). */}
+            {(clinic.logoUrlLight || clinic.logoUrl) && (
+              <img
+                src={clinic.logoUrlLight || clinic.logoUrl}
+                alt=""
+                className="h-16 w-16 object-contain shrink-0"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            )}
           </div>
         </div>
 

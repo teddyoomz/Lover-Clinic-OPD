@@ -99,10 +99,10 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listStaffSchedules: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../src/lib/csvExport.js', () => ({ downloadCSV: vi.fn() }));
-vi.mock('./DateRangePicker.jsx', () => ({
+vi.mock('../src/components/backend/reports/DateRangePicker.jsx', () => ({
   default: () => null,
   buildPresets: () => [{ id: 'thisMonth', from: '2026-04-01', to: '2026-04-30' }],
-}), { virtual: true });
+}));
 
 import DfPayoutReportTab from '../src/components/backend/reports/DfPayoutReportTab.jsx';
 

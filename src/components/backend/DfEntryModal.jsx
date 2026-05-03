@@ -38,6 +38,24 @@ import { scrollToField } from '../../lib/marketingUiUtils.js';
  * @param {() => void} props.onClose
  * @param {object} [props.clinicSettings]
  */
+
+// RP1 lift (2026-04-30) — extracted from in-row JSX-IIFE so percent-amount
+// preview avoids the Vite-OXC-banned inline JSX-IIFE pattern. Pure render.
+function PercentAmountSpan({ entry, treatmentCourses }) {
+  const tc = (treatmentCourses || []).find((c) => String(c.courseId) === String(entry.courseId));
+  const priceNum = Number(tc?.price) || 0;
+  const rateNum = Number(entry.value) || 0;
+  const amount = priceNum * rateNum / 100;
+  return (
+    <span
+      className="text-[11px] font-mono text-emerald-400 tabular-nums whitespace-nowrap w-20 text-right"
+      title={`${rateNum}% × ฿${priceNum.toLocaleString('th-TH')}`}
+    >
+      ≈ ฿{amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
+  );
+}
+
 export default function DfEntryModal({
   entry,
   treatmentCourses = [],
@@ -300,20 +318,9 @@ export default function DfEntryModal({
                     can see how much they're actually earning without
                     mental math. Uses course.price from treatmentCourses
                     prop (TreatmentFormPage passes full course price). */}
-                {r.enabled && r.type === 'percent' && (() => {
-                  const tc = (treatmentCourses || []).find((c) => String(c.courseId) === String(r.courseId));
-                  const priceNum = Number(tc?.price) || 0;
-                  const rateNum = Number(r.value) || 0;
-                  const amount = priceNum * rateNum / 100;
-                  return (
-                    <span
-                      className="text-[11px] font-mono text-emerald-400 tabular-nums whitespace-nowrap w-20 text-right"
-                      title={`${rateNum}% × ฿${priceNum.toLocaleString('th-TH')}`}
-                    >
-                      ≈ ฿{amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  );
-                })()}
+                {r.enabled && r.type === 'percent' && (
+                  <PercentAmountSpan entry={r} treatmentCourses={treatmentCourses} />
+                )}
               </div>
             ))}
           </div>

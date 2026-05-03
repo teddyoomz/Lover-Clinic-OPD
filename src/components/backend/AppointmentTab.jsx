@@ -73,6 +73,28 @@ function dateStr(d) {
 }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); }
 
+// RP1 lift (2026-04-30) — appointment-slot meta-row was wrapped in a
+// JSX-IIFE inside a .map() (per-row resolveAssistantNames). Extracted to
+// a named sub-component so the JSX stays IIFE-free (Vite-OXC ban).
+function AppointmentSlotMeta({ appt, span, doctorMap }) {
+  const assistantNames = resolveAssistantNames(appt, doctorMap);
+  return (
+    <>
+      <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
+        {appt.doctorName && `${appt.doctorName}`}{appt.appointmentTo && ` · ${appt.appointmentTo}`}
+      </p>
+      {/* Phase 15.7 — assistant names below doctor row.
+          Hidden if no assistants, or if grid slot is too short
+          (span >= 2 only — span 1 has barely room for doctor). */}
+      {assistantNames.length > 0 && span >= 2 && (
+        <p className="text-[8px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
+          + {assistantNames.join(', ')}
+        </p>
+      )}
+    </>
+  );
+}
+
 export default function AppointmentTab({ clinicSettings, theme }) {
   const isDark = theme !== 'light';
 
@@ -330,6 +352,12 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const selDow = selD.getDay();
   const selThaiDate = `วัน${THAI_DAYS_FULL[selDow]}ที่ ${selD.getDate()} ${THAI_MONTHS[selD.getMonth()]} ${selD.getFullYear()+543}`;
 
+  // RP1 lift (2026-04-30) — column-sizing constants previously wrapped in
+  // a JSX-IIFE; hoisted here so the resource-grid block uses plain
+  // identifiers (Vite-OXC ban on inline JSX-IIFE inside JSX expressions).
+  const _colWidth = rooms.length >= 7 ? 110 : rooms.length >= 5 ? 130 : 160;
+  const _colMinClass = rooms.length >= 7 ? 'min-w-[110px]' : rooms.length >= 5 ? 'min-w-[130px]' : 'min-w-[160px]';
+
   return (
     // Desktop (≥lg): time grid LEFT, calendar+doctor RIGHT (per user 2026-04-19).
     // Mobile (<lg): stack calendar on top (already matches current UX).
@@ -487,10 +515,6 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                 headers still fit); 7+ rooms get 110px (tighter but
                 everything visible). minWidth uses the same per-col size
                 so horizontal scroll is the LAST resort, not the default. */}
-            {(() => {
-              const _colWidth = rooms.length >= 7 ? 110 : rooms.length >= 5 ? 130 : 160;
-              const _colMinClass = rooms.length >= 7 ? 'min-w-[110px]' : rooms.length >= 5 ? 'min-w-[130px]' : 'min-w-[160px]';
-              return (
             <div style={{ minWidth: rooms.length * _colWidth + 60 }}>
               {/* Room header row */}
               <div className="flex border-b border-[var(--bd)] sticky top-0 z-10 bg-[var(--bg-elevated)]">
@@ -570,24 +594,9 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                                   </span>
                                 )}
                               </div>
-                              {span > 1 && (() => {
-                                const assistantNames = resolveAssistantNames(appt, doctorMap);
-                                return (
-                                  <>
-                                    <p className="text-[8px] text-[var(--tx-muted)] truncate mt-0.5">
-                                      {appt.doctorName && `${appt.doctorName}`}{appt.appointmentTo && ` · ${appt.appointmentTo}`}
-                                    </p>
-                                    {/* Phase 15.7 — assistant names below doctor row.
-                                        Hidden if no assistants, or if grid slot is too short
-                                        (span >= 2 only — span 1 has barely room for doctor). */}
-                                    {assistantNames.length > 0 && span >= 2 && (
-                                      <p className="text-[8px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
-                                        + {assistantNames.join(', ')}
-                                      </p>
-                                    )}
-                                  </>
-                                );
-                              })()}
+                              {span > 1 && (
+                                <AppointmentSlotMeta appt={appt} span={span} doctorMap={doctorMap} />
+                              )}
                             </div>
                             {/* Phase 15.7-bis — list duplicate appts as small clickable
                                 pills directly under the primary, so admin can edit each.
@@ -633,8 +642,6 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                 ))}
               </div>
             </div>
-              );
-            })()}
           </div>
         </div>
         )}
