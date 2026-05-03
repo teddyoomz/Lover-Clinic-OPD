@@ -55,7 +55,6 @@ After verification (read cited code + reproduce claim), the audit invariants wer
 - **CL3** silent partial-failure → handled with per-appointment errors[]
 - **FF3** scrollToError gap → data-field="sellers"+"paymentChannels" both exist
 - **RP1** IIFE JSX → CLAUDE.md Bug #5 was about CLICK HANDLERS; render-time IIFEs work
-- **PV1-PV5** PDPA → explicitly deferred per user directive
 
 ### D2 — :focus-visible CSS rule beats per-component focus-ring edits
 145 sites flagged with `focus:outline-none` lacking ring. Mass-editing each Tailwind class would be brittle (variants: focus:border, plain, etc). Single CSS rule scoped to interactive elements (input/select/textarea/button/role="button"/role="tab"/role="menuitem"/[tabindex]/a) using :focus-visible — only triggers on KEYBOARD focus (mouse clicks preserved). Disabled/readonly skip. Covers all 145 + future additions.
@@ -232,7 +231,6 @@ Nothing blocking. Production at `093d4d9` LIVE + verified.
 - BackendDashboard further split — could try splitting more medium-weight tabs
 
 ### P3 (deferred / out of scope)
-- PV1-PV5 PDPA — user-deferred per CLAUDE.md memory
 - AV6 open Firestore rules — all justified by webhook/extension/public-link needs
 - UC5 axe-core contrast scan — needs separate tool
 

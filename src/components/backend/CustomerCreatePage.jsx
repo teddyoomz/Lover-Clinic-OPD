@@ -636,7 +636,7 @@ export default function CustomerCreatePage({
               </div>
             </div>
 
-            {/* Image marketing consent (PDPA) */}
+            {/* Image marketing consent */}
             <div className="pt-2 border-t border-[var(--bd)]">
               <label className="inline-flex items-start gap-2 text-sm">
                 <input
@@ -648,7 +648,7 @@ export default function CustomerCreatePage({
                   className="mt-0.5"
                 />
                 <span className="text-[var(--tx-muted)]">
-                  ลูกค้ายินยอมให้ใช้รูปภาพเพื่อการตลาด/รีวิว (PDPA)
+                  ลูกค้ายินยอมให้ใช้รูปภาพเพื่อการตลาด/รีวิว
                 </span>
               </label>
             </div>

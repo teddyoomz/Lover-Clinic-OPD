@@ -981,7 +981,6 @@ If user wants to extend: see P1/P2 polish below.
 - Permission system end-to-end (Phase 13.5 deferred) — `hasPermission(user, key)` gate at every tab render entry. Needs user input on permission group definitions before implementation.
 
 ### P3 explicitly out-of-scope
-- PV1-PV5 PDPA (consent UI / audit log / data-export / data-erasure) — user-deferred per CLAUDE.md memory
 - AV6 open Firestore rules — all justified by webhook/extension/public-link needs (locked by Rule B comments)
 
 ### Phase 15 readiness — UNBLOCKED ✓

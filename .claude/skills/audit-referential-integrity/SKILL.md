@@ -60,4 +60,4 @@ Firestore has no FK constraints. Every `customerId`, `productId`, `batchId`, `sa
 Severity: **CRITICAL** = ghost refs can exist in production. **HIGH** = possible under rare conditions. **WARN** = no guard but never observed. Use standard table output.
 
 ## Why this matters
-MOPH audit, PDPA data-subject-deletion requests, financial reconciliation. Ghost refs break all three.
+MOPH audit, customer-data deletion requests, financial reconciliation. Ghost refs break all three.

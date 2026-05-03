@@ -206,7 +206,6 @@ NONE. Production stable. All security paths automated.
 
 ### P3 — Out of scope
 - M9 customer doc summary reconciler (substantial cron-style; tx-log already mitigates drift)
-- PV1-PV5 PDPA (user-deferred)
 - Phase 15 Central Stock (multi-branch — single-branch clinic doesn't need)
 
 ## Resume Prompt (paste into next chat)

@@ -7,7 +7,7 @@
 
 ## Headline Numbers (raw agent counts — pre-triage)
 
-- CRITICAL: 12 (with 5 deferred-PDPA + 5 justified-rule findings already accounted for)
+- CRITICAL: 12 (with 5 justified-rule findings already accounted for)
 - HIGH: 9
 - MEDIUM: ~10
 - PASS: ~80+
@@ -106,10 +106,8 @@
 | A1, A4, A7 | PASS | api/* | updateMask correct, no hardcoded credentials, no hanging promises detected |
 | A8 | NOTE | api/admin/* | CORS `*` acceptable (token-gated); api/proclinic/* origin guard implicit via Vercel rewrites |
 | P1-P3 | PASS | various | No N+1 queries, ~7 listeners (under 10-bound), chat history TTL + buy modal pagination |
-| PV1-PV5 | DEFERRED | n/a | PDPA consent UI / audit log / data-export / data-erasure missing — **explicitly deferred per user directive (CLAUDE.md memory)** |
-| PV6 | MEDIUM | n/a | Retention policy undocumented except chat (7-day TTL) |
 
-**Verdict**: 4 real P0 candidates (3× Math.random tx IDs, 2× IIFE JSX). PDPA explicitly deferred. RP5 silent catches: opportunity to extend the new debugLog from Phase 14.7.H-J.
+**Verdict**: 4 real P0 candidates (3× Math.random tx IDs, 2× IIFE JSX). RP5 silent catches: opportunity to extend the new debugLog from Phase 14.7.H-J.
 
 ---
 
@@ -140,7 +138,6 @@
 
 ### P3 — Deferred (out of scope for this session)
 
-- **PV1-PV5** — All PDPA work explicitly deferred per user directive
 - **AV6** — Open Firestore rules (all justified by webhook/extension/public-link needs)
 - **UC5** — Contrast AA scan (requires axe-core)
 

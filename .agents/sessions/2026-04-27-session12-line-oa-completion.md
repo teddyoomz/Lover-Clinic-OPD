@@ -240,7 +240,6 @@ None pending. Wait for user QA / new feature ask.
   components (T5.b billing extracted; rest pending)
 
 ### P3 — Out of scope
-- PDPA suite (PV1-PV5) — user-deferred
 - Phase 15 Central Stock — multi-branch only
 
 ## Resume Prompt

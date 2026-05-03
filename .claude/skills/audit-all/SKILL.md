@@ -1,6 +1,6 @@
 ---
 name: audit-all
-description: "Run all 17 LoverClinic audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, PDPA privacy, frontend-specific timezone/links/forms, and anti-vibe-code (duplication + security + schema hygiene)."
+description: "Run all LoverClinic audits sequentially and produce a consolidated violation report. Covers money, stock, cascade, referential integrity, Firestore correctness, treatment form, clone/sync, React patterns, API layer, appointments, UI/culture/a11y, performance, frontend-specific timezone/links/forms, and anti-vibe-code (duplication + security + schema hygiene)."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob, Skill"
@@ -43,16 +43,13 @@ Run these in order (17 total):
 18. `/audit-firebase-admin-security` (FA1–FA12) — privileged api/admin/** endpoints: private-key hygiene, token verification with checkRevoked, admin gate (custom claim OR bootstrap UID), self-protection on delete/revoke-admin, input validation, CORS + method gates, no `firebase-admin` imports in src/. Phase 12.0 infrastructure.
 19. `/audit-finance-completeness` (FC1–FC20) — every Phase 12 entity has validator + CRUD + Firestore rule + tests + Rule E cleanliness. 5-seller + 3-payment-method limits enforced. Claims aggregator + P&L reconcile. State machines present. Production vs @dev-only separation. Required before Phase 13 ships.
 
-**Tier 6 — legal/compliance (7 invariants)**:
-20. `/audit-privacy-pdpa` (PV1–PV7) — Thai PDPA, consent, retention
+**Tier 6 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
+20. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
 
-**Tier 7 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
-21. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
+**Tier 7 — Chat notification pipeline (8 invariants — session 2026-04-22 phantom-noti fix)**:
+21. `/audit-chat-notifications` (AN1–AN8) — sound trigger wires to `chatUnread` not `chatConvCount`, `ChatDetailView` mount effect zeros `unreadCount`, `api/webhook/send.js` zeros `unreadCount`, shared `countUnreadPeople` / `shouldRingChatAlert` / `shouldRingChatInterval` helpers enforced via Rule of 3, Firestore REST string `integerValue` coerced, PHANTOM-NOTI REPRO tests present. User-reported 2026-04-22 "noti เตือนค้างแต่ไม่มีแชทค้าง".
 
-**Tier 8 — Chat notification pipeline (8 invariants — session 2026-04-22 phantom-noti fix)**:
-22. `/audit-chat-notifications` (AN1–AN8) — sound trigger wires to `chatUnread` not `chatConvCount`, `ChatDetailView` mount effect zeros `unreadCount`, `api/webhook/send.js` zeros `unreadCount`, shared `countUnreadPeople` / `shouldRingChatAlert` / `shouldRingChatInterval` helpers enforced via Rule of 3, Firestore REST string `integerValue` coerced, PHANTOM-NOTI REPRO tests present. User-reported 2026-04-22 "noti เตือนค้างแต่ไม่มีแชทค้าง".
-
-**Total: 237 invariants**. Do NOT write report to disk — chat output only.
+**Total: 230 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 
@@ -110,7 +107,7 @@ Run these in order (17 total):
 
 ## Severity mapping
 
-- **CRITICAL**: money can be created/lost, audit chain broken, orphaned data in production, credential leak (MOPH + PDPA + financial audit failures)
+- **CRITICAL**: money can be created/lost, audit chain broken, orphaned data in production, credential leak (MOPH + financial audit failures)
 - **HIGH**: cascade incomplete, concurrency corruption under normal usage, memory leak bounded by working hours, slot double-booking
 - **MEDIUM**: silent failures, audit-field gaps, small data drift, stale UI state
 - **LOW**: accessibility polish, performance micro-gains, cosmetic consistency

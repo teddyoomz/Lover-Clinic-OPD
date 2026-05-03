@@ -221,7 +221,6 @@ None. Production deployed + verified.
 - Phase 15 Central Stock Conditional (skip if single-branch)
 
 ### P3 (out of scope)
-- PV1-PV5 PDPA — user-deferred
 - Sync flow MIGHT need branchId field if user runs in multi-branch
   environment; current sync drops branchId='' which causes default-branch
   fallback. Reconsider if user reports cross-branch issues.

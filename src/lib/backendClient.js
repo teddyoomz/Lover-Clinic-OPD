@@ -59,18 +59,18 @@ export async function getAllCustomers() {
 /**
  * Save/overwrite customer to be_customers.
  *
- * PV1-PV2 (Thai PDPA 2562): every customer doc carries a `consent` block.
- * Defaults both flags to `false` — Phase 9 marketing MUST set `marketing:
- * true` via an explicit UI opt-in before sending any promotional message.
- * `healthData: true` is required by PDPA §26 before processing sensitive
- * data (vitals, diagnosis). Existing customers imported from ProClinic get
- * the defaults; the admin needs to re-confirm via a one-time consent prompt.
+ * Every customer doc carries a `consent` block. Defaults both flags to
+ * `false` — marketing flows MUST set `marketing: true` via explicit UI
+ * opt-in before sending promotional messages. `healthData: true` is
+ * required before processing sensitive data (vitals, diagnosis). Existing
+ * customers imported from ProClinic get the defaults; the admin re-confirms
+ * via a one-time consent prompt when needed.
  */
 export async function saveCustomer(proClinicId, data, opts = {}) {
   const safe = data && typeof data === 'object' ? data : {};
   const withConsent = {
     ...safe,
-    // PV1/PV2 consent block last so it can't be stomped by `...safe` above.
+    // Consent block last so it can't be stomped by `...safe` above.
     consent: { marketing: false, healthData: false, ...(safe.consent || {}) },
   };
 
@@ -603,13 +603,13 @@ export async function findCustomersByField(field, value, excludeProClinicId = nu
  * memberships / appointments / wallet-tx / point-tx. This function is
  * gated on explicit caller intent: no UI path invokes it today (hard
  * delete is intentionally not exposed), so behaviour for existing flows
- * is unchanged. Added now so any future admin / PDPA-erasure caller
- * can't accidentally half-delete.
+ * is unchanged. Added now so any future admin erasure caller can't
+ * accidentally half-delete.
  *
  * Stock movements (be_stock_movements) and wallet-tx/point-tx logs ARE
- * deleted here as part of the erasure. That's intentional for PDPA
- * right-to-erasure; do NOT use this function for normal "cancel" or
- * "soft delete" operations.
+ * deleted here as part of the erasure. That's intentional for full
+ * customer-data removal; do NOT use this function for normal "cancel"
+ * or "soft delete" operations.
  */
 export async function deleteCustomerCascade(proClinicId, opts = {}) {
   const cid = String(proClinicId);
