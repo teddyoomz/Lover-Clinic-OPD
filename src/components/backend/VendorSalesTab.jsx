@@ -36,6 +36,9 @@ const STATUS_BADGE = {
 };
 
 export default function VendorSalesTab({ clinicSettings }) {
+  // Phase 17.0 (BS-9) — subscribe to branch context so reload re-fires
+  // immediately when the user switches the top-right BranchSelector.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [tab, setTab] = useState('sales'); // 'sales' | 'vendors'
   const [vendors, setVendors] = useState([]);
   const [sales, setSales] = useState([]);
@@ -66,7 +69,9 @@ export default function VendorSalesTab({ clinicSettings }) {
       setProducts(ps.filter(p => p.type === 'สินค้าหน้าร้าน' || p.type === 'สินค้า'));
     } catch (e) { setError(e.message || 'โหลดข้อมูลล้มเหลว'); }
     finally { setLoading(false); }
-  }, []);
+    // Phase 17.0 (BS-9) — selectedBranchId in deps; listVendorSales +
+    // listProducts read resolveSelectedBranchId() from localStorage internally.
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filteredSales = useMemo(() => {

@@ -166,6 +166,7 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
   - `// audit-branch-scope: BS-2 OR-field` (marketing collection with `allBranches:true` doc-level field)
   - `// audit-branch-scope: BS-3 dev-only` (legitimate `getAllMasterDataItems` callsite — reserved; none currently)
 - **Verify**: `npm test -- --run tests/audit-branch-scope.test.js && npm test -- --run tests/branch-scope-flow-simulate.test.js`. Both must be green pre-deploy.
+- **Branch-refresh discipline (BS-9, 2026-05-05)**: every branch-scoped tab importing `list*` from `scopedDataLayer.js` MUST subscribe to `useSelectedBranch` AND include `selectedBranchId` in the data-loading hook's deps array (`useCallback`/`useEffect`). Phase 17.0 closed Promotion/Coupon/Voucher gap (PromotionTab/CouponTab/VoucherTab were imported from scopedDataLayer but had `useCallback(..., [])` empty deps → branch switch never triggered re-fetch). `useBranchAwareListener` is a sanctioned exception (auto-handles re-subscribe) — annotate `// audit-branch-scope: BS-9 listener-driven`. Audit BS-9 enforces.
 
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.

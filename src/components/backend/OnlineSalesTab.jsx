@@ -46,7 +46,9 @@ export default function OnlineSalesTab({ clinicSettings, theme }) {
       setCustomers(cs);
     } catch (e) { setError(e.message); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+    // Phase 17.0 (BS-9) — selectedBranchId in deps; listOnlineSales +
+    // listBankAccounts read resolveSelectedBranchId() from localStorage internally.
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

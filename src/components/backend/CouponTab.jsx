@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
 import { listCoupons, deleteCoupon } from '../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CouponFormModal from './CouponFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -12,6 +13,9 @@ import { thaiTodayISO } from '../../utils.js';
 function fmtDateRange(s, e) { return (s && e) ? `${s} — ${e}` : ''; }
 
 export default function CouponTab({ clinicSettings, theme }) {
+  // Phase 17.0 (BS-9) — subscribe to branch context so reload re-fires
+  // immediately when the user switches the top-right BranchSelector.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -31,7 +35,8 @@ export default function CouponTab({ clinicSettings, theme }) {
     try { setItems(await listCoupons()); }
     catch (e) { setError(e.message || 'โหลดคูปองล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+    // Phase 17.0 (BS-9) — listCoupons reads resolveSelectedBranchId() internally.
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

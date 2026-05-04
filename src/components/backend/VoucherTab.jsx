@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Gift, Calendar, Loader2 } from 'lucide-react';
 import { listVouchers, deleteVoucher } from '../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import VoucherFormModal from './VoucherFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -10,6 +11,9 @@ import { VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 
 export default function VoucherTab({ clinicSettings, theme }) {
+  // Phase 17.0 (BS-9) — subscribe to branch context so reload re-fires
+  // immediately when the user switches the top-right BranchSelector.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -29,7 +33,8 @@ export default function VoucherTab({ clinicSettings, theme }) {
     try { setItems(await listVouchers()); }
     catch (e) { setError(e.message || 'โหลด Voucher ล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+    // Phase 17.0 (BS-9) — listVouchers reads resolveSelectedBranchId() internally.
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

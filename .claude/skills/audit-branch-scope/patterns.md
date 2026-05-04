@@ -1,6 +1,6 @@
-# patterns.md — concrete BS-1..BS-8 grep recipes
+# patterns.md — concrete BS-1..BS-9 grep recipes
 
-Each invariant has a Bash recipe (preferred — `git grep` works identically on Windows + Linux + macOS) and a PowerShell variant for sessions where the user is on a Windows-only shell. The Vitest bank in `tests/audit-branch-scope.test.js` automates all 8; the recipes below are for interactive investigation.
+Each invariant has a Bash recipe (preferred — `git grep` works identically on Windows + Linux + macOS) and a PowerShell variant for sessions where the user is on a Windows-only shell. The Vitest bank in `tests/audit-branch-scope.test.js` automates all 9; the recipes below are for interactive investigation.
 
 ---
 
@@ -227,7 +227,7 @@ if ($count -ge 17) { "BS-8 OK ($count lines)" } else { "BS-8 FAIL — only $coun
 npm test -- --run tests/audit-branch-scope.test.js
 ```
 
-Expected: 8 pass (or 7 + 1 soft-pass for BS-6 until Task 10).
+Expected: 9 pass (or 8 + 1 soft-pass for BS-6 until Task 10; BS-9 added Phase 17.0 2026-05-05).
 
 ---
 
@@ -248,3 +248,42 @@ Expected: 8 pass (or 7 + 1 soft-pass for BS-6 until Task 10).
 - Phase BS: commits `aecf3a1` + `cf897f6` (multi-branch foundation, V20 lessons)
 - Iron-clad H-quater: feature code reads `be_*` only, never `master_data/*`
 - Companion audits: `/audit-master-data-ownership` (data ownership rule), `/audit-backend-firestore-only` (Rule E)
+
+---
+
+## BS-9 — Branch-switch refresh discipline
+
+### Bash
+
+```bash
+# Find all backend tab files that import a branch-scoped lister from scopedDataLayer.
+git grep -lE "from ['\"](\\.\\./)+lib/scopedDataLayer" -- "src/components/backend/" \
+  | xargs -I {} sh -c '
+      # For each file, check whether it imports useSelectedBranch OR has
+      # the BS-9 listener-driven sanctioned annotation.
+      if grep -qE "useSelectedBranch|audit-branch-scope: BS-9 listener-driven" "{}"; then
+        :  # OK
+      else
+        echo "BS-9 violation: {} imports scopedDataLayer but missing useSelectedBranch + dep"
+      fi
+    '
+```
+
+### PowerShell
+
+```powershell
+git grep -lE "from ['\""](\.\./)+lib/scopedDataLayer" -- "src/components/backend/" |
+  ForEach-Object {
+    $file = $_
+    $content = Get-Content -Path $file -Raw -ErrorAction SilentlyContinue
+    if ($content -notmatch "useSelectedBranch|audit-branch-scope: BS-9 listener-driven") {
+      "BS-9 violation: $file imports scopedDataLayer but missing useSelectedBranch + dep"
+    }
+  }
+```
+
+**Expected**: empty (or only annotated listener-driven tabs).
+
+**If non-empty**: the new tab imports a branch-scoped lister but won't re-fetch when the user switches branches. Either (a) add `useSelectedBranch` import + `selectedBranchId` in `useCallback`/`useEffect` deps, or (b) if the tab uses `useBranchAwareListener`, add `// audit-branch-scope: BS-9 listener-driven` annotation at file top.
+
+**Why**: Phase 17.0 (2026-05-05) closed Promotion/Coupon/Voucher branch-leak gap. Without BS-9, future tabs can silently regress — `scopedDataLayer.js` auto-injects branchId at call time but React only re-runs `reload` when a dep changes; without `selectedBranchId` in deps, the tab never re-fetches after a branch switch.

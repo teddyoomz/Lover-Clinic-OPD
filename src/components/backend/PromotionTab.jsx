@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
 import { listPromotions, deletePromotion } from '../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -24,6 +25,9 @@ function formatThaiDateRange(start, end) {
 }
 
 export default function PromotionTab({ clinicSettings, theme }) {
+  // Phase 17.0 (BS-9) — subscribe to branch context so reload re-fires
+  // immediately when the user switches the top-right BranchSelector.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -52,7 +56,9 @@ export default function PromotionTab({ clinicSettings, theme }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // Phase 17.0 (BS-9) — selectedBranchId in deps; listPromotions reads
+    // resolveSelectedBranchId() from localStorage internally.
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

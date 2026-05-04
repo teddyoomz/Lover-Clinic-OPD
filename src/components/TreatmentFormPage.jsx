@@ -323,6 +323,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Falls back to 'main' when no BranchProvider is mounted (e.g. when
   // TreatmentFormPage is opened from AdminDashboard create-treatment flow).
   const { branchId: SELECTED_BRANCH_ID } = useSelectedBranch();
+
+  // Phase 17.0 (BS-9) — clear modal caches on branch switch so subsequent
+  // opens re-fetch fresh data for the new branch instead of returning stale
+  // cached results from the previous branch. Mirrors PromotionTab/CouponTab/
+  // VoucherTab BS-9 pattern. The modal openers (openMedModal /
+  // openMedGroupModal / openConsModal / openConsGroupModal) preserve their
+  // `if (cache.length > 0) return;` early-return for cheap re-opens within
+  // a branch. Uses the EXISTING SELECTED_BRANCH_ID (Phase 14.7.H wiring) —
+  // do not introduce a parallel selectedBranchId.
+  useEffect(() => {
+    setMedAllProducts([]);
+    setMedGroupData([]);
+    setConsAllProducts([]);
+    setConsGroupData([]);
+  }, [SELECTED_BRANCH_ID]);
   const inputCls = `w-full rounded-lg px-3 py-2.5 text-sm outline-none border transition-all ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
   const labelCls = 'text-xs font-semibold text-gray-500 mb-1 block';
   const selectCls = inputCls;

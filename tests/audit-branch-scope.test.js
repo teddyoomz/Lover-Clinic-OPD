@@ -189,3 +189,149 @@ describe('audit-branch-scope BS-1..BS-8', () => {
     ).toBeGreaterThanOrEqual(17);
   });
 });
+
+// ─── BS-9 — Branch-switch refresh discipline (Phase 17.0, 2026-05-05) ──────
+//
+// Every backend tab that imports a branch-scoped lister from
+// scopedDataLayer.js MUST also import useSelectedBranch + include
+// selectedBranchId in the data-loading hook's deps.
+//
+// Sanctioned exception: tabs using useBranchAwareListener (auto-handles
+// re-subscribe) — annotate `// audit-branch-scope: BS-9 listener-driven`.
+
+import fg from 'fast-glob';
+
+describe('BS-9 — branch-switch refresh discipline', () => {
+  const backendTabFiles = fg.sync('src/components/backend/**/*Tab.jsx', { cwd: process.cwd() });
+
+  // Branch-scoped listers — these helpers in scopedDataLayer.js auto-inject
+  // resolveSelectedBranchId() and therefore return data filtered by branch.
+  // Tabs that import any of these MUST also subscribe to useSelectedBranch
+  // so the read re-fires on branch switch.
+  // Source: src/lib/scopedDataLayer.js — every export that calls
+  // raw.X({ branchId: resolveSelectedBranchId(), ...opts }) belongs here.
+  const BRANCH_SCOPED_LISTERS = [
+    'listProducts', 'listCourses', 'listProductGroups', 'listProductUnitGroups',
+    'listMedicalInstruments', 'listHolidays', 'listDfGroups', 'listDfStaffRates',
+    'listBankAccounts', 'listExpenseCategories', 'listExpenses', 'listStaffSchedules',
+    'listPromotions', 'listCoupons', 'listVouchers',
+    'listOnlineSales', 'listSaleInsuranceClaims', 'listVendorSales', 'listQuotations',
+    'getAllDeposits', 'listAllSellers', 'listStaffByBranch',
+    'getAllSales', 'getAppointmentsByDate', 'getAppointmentsByMonth',
+    'listStockBatches', 'listStockOrders', 'listStockMovements',
+    'listProductGroupsForTreatment',
+  ];
+
+  function tabImportsScopedLister(content) {
+    return /from\s+['"](\.\.\/)+lib\/scopedDataLayer/.test(content);
+  }
+
+  function tabImportsBranchScopedLister(content) {
+    if (!tabImportsScopedLister(content)) return false;
+    // Look for any branch-scoped lister name in import-specifier braces.
+    // Strategy: extract every `import { ... } from '.../scopedDataLayer'`
+    // block, then check whether any branch-scoped name appears inside.
+    const importBlocks = [...content.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s+['"](\.\.\/)+lib\/scopedDataLayer[^'"]*['"]/g)];
+    for (const m of importBlocks) {
+      const body = m[1];
+      for (const name of BRANCH_SCOPED_LISTERS) {
+        // word-boundary match — handles both `name` and `name as alias`
+        const re = new RegExp(`\\b${name}\\b`);
+        if (re.test(body)) return true;
+      }
+    }
+    return false;
+  }
+
+  function tabHasBranchSubscription(content) {
+    return /useSelectedBranch/.test(content)
+      || /audit-branch-scope:\s*BS-9 listener-driven/.test(content);
+  }
+
+  function tabHasSelectedBranchInDeps(content) {
+    // Discover the alias the file uses for the branch context's branchId
+    // (commonly `selectedBranchId` per Phase BS V2 canonical pattern, but
+    // legacy callsites may use `BRANCH_ID` / `SELECTED_BRANCH_ID` / `branchId`).
+    // Match `const { branchId: <ALIAS> } = useSelectedBranch()`. If the
+    // destructure is `const { branchId } = ...` (no alias), the alias is
+    // `branchId` itself.
+    if (/audit-branch-scope:\s*BS-9 listener-driven/.test(content)) return true;
+    const aliasMatch = content.match(/const\s*\{\s*branchId(?:\s*:\s*([A-Za-z_][A-Za-z0-9_]*))?\s*\}\s*=\s*useSelectedBranch\(\)/);
+    if (!aliasMatch) return false;
+    const alias = aliasMatch[1] || 'branchId';
+    // Verify at least one useCallback / useEffect deps array contains the alias.
+    const depsRe = new RegExp(
+      `(useCallback|useEffect)\\([\\s\\S]+?\\},\\s*\\[[^\\]]*\\b${alias}\\b[^\\]]*\\]`,
+    );
+    return depsRe.test(content);
+  }
+
+  it('BS-9.1 every tab importing a branch-scoped lister also subscribes to useSelectedBranch', () => {
+    const violations = [];
+    for (const f of backendTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (tabImportsBranchScopedLister(content) && !tabHasBranchSubscription(content)) {
+        violations.push(f);
+      }
+    }
+    expect(violations, `BS-9.1 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-9.2 every such tab includes selectedBranchId in data-loading hook deps', () => {
+    const violations = [];
+    for (const f of backendTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (tabImportsBranchScopedLister(content) && tabHasBranchSubscription(content) && !tabHasSelectedBranchInDeps(content)) {
+        violations.push(f);
+      }
+    }
+    expect(violations, `BS-9.2 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-9.3 PromotionTab passes BS-9.1+9.2 (regression guard)', () => {
+    const content = readFileSync('src/components/backend/PromotionTab.jsx', 'utf8');
+    expect(tabImportsBranchScopedLister(content)).toBe(true);
+    expect(tabHasBranchSubscription(content)).toBe(true);
+    expect(tabHasSelectedBranchInDeps(content)).toBe(true);
+  });
+
+  it('BS-9.4 CouponTab passes BS-9.1+9.2 (regression guard)', () => {
+    const content = readFileSync('src/components/backend/CouponTab.jsx', 'utf8');
+    expect(tabImportsBranchScopedLister(content)).toBe(true);
+    expect(tabHasBranchSubscription(content)).toBe(true);
+    expect(tabHasSelectedBranchInDeps(content)).toBe(true);
+  });
+
+  it('BS-9.5 VoucherTab passes BS-9.1+9.2 (regression guard)', () => {
+    const content = readFileSync('src/components/backend/VoucherTab.jsx', 'utf8');
+    expect(tabImportsBranchScopedLister(content)).toBe(true);
+    expect(tabHasBranchSubscription(content)).toBe(true);
+    expect(tabHasSelectedBranchInDeps(content)).toBe(true);
+  });
+
+  it('BS-9.6 sanctioned exception annotation pattern works', () => {
+    // HolidaysTab uses useBranchAwareListener — audit accepts via annotation OR useSelectedBranch.
+    const content = readFileSync('src/components/backend/HolidaysTab.jsx', 'utf8');
+    expect(tabHasBranchSubscription(content)).toBe(true);
+  });
+
+  it('BS-9.7 BS-9 marker comments present in the 3 fixed marketing tabs', () => {
+    const tabs = ['PromotionTab', 'CouponTab', 'VoucherTab'];
+    for (const tab of tabs) {
+      const content = readFileSync(`src/components/backend/${tab}.jsx`, 'utf8');
+      expect(content, tab).toMatch(/Phase 17\.0|BS-9/);
+    }
+  });
+
+  it('BS-9.8 source-grep traversal emits zero violations across all backend tabs', () => {
+    const allViolations = [];
+    for (const f of backendTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (tabImportsBranchScopedLister(content)) {
+        if (!tabHasBranchSubscription(content)) allViolations.push(`${f} BS-9.1`);
+        if (!tabHasSelectedBranchInDeps(content)) allViolations.push(`${f} BS-9.2`);
+      }
+    }
+    expect(allViolations).toEqual([]);
+  });
+});

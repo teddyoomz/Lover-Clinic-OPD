@@ -16,7 +16,7 @@ allowed-tools: "Read, Grep, Glob, Bash"
 
 This audit guards the seams between layers. Drift = stale data showing across branches, listeners stuck on old branch, writers losing their branchId stamp.
 
-## Scope — 8 invariants (BS-1..BS-8)
+## Scope — 9 invariants (BS-1..BS-9)
 
 | ID | Rule | Pattern |
 |---|---|---|
@@ -28,10 +28,11 @@ This audit guards the seams between layers. Drift = stale data showing across br
 | BS-6 | `tests/branch-scope-flow-simulate.test.js` exists and runs (Task 10 will populate) | soft-pass until Task 10 ships |
 | BS-7 | `scopedDataLayer.js` universal re-exports point to `raw.X` (no `_scoped` wrap, no branchId injection) | spot-check the 6 known universal exports remain raw |
 | BS-8 | Phase BS V2 + BSA Task 1-2 writers preserve `_resolveBranchIdForWrite` stamps | grep count ≥17 lines in `backendClient.js` |
+| BS-9 | Branch-switch refresh discipline — every backend tab importing `list*` from `scopedDataLayer.js` MUST also import `useSelectedBranch` AND include `selectedBranchId` in `useCallback`/`useEffect` deps (Phase 17.0, 2026-05-05). Sanctioned exception: tabs using `useBranchAwareListener` (auto-handles re-subscribe) — annotate `// audit-branch-scope: BS-9 listener-driven` | grep tabs that import scopedDataLayer; verify file imports `useSelectedBranch` or has the BS-9 annotation |
 
 ## How to run
 
-1. `npm test -- --run tests/audit-branch-scope.test.js` — automated regression bank for all 8 invariants
+1. `npm test -- --run tests/audit-branch-scope.test.js` — automated regression bank for all 9 invariants
 2. For interactive investigation, run grep recipes from [patterns.md](patterns.md) and read surrounding code
 3. Decide severity per violation:
    - **PASS**: invariant holds across all paths
@@ -50,11 +51,12 @@ Add a file-header comment when a file legitimately must import directly. The aud
 | `// audit-branch-scope: sanctioned exception — root composition / mixed scope` | BackendDashboard root composition imports a small slice of backendClient | BackendDashboard.jsx ONLY |
 | `// audit-branch-scope: BS-2 OR-field` | Marketing/global collections that branch-spread via `allBranches:true` doc-level field | reserved for future cross-branch features |
 | `// audit-branch-scope: BS-3 dev-only` | `getAllMasterDataItems` callsite that legitimately needs dev-only sync data | reserved — currently no callsite outside MasterDataTab |
+| `// audit-branch-scope: BS-9 listener-driven` | Tab uses `useBranchAwareListener` to handle branch-switch refresh (no `useSelectedBranch` dep needed) | tabs whose data-load is fully driven by branch-aware listeners (Phase 17.0) |
 
 ## Arguments
 
-- `--quick` — BS-1, BS-3, BS-4, BS-8 (4 highest-risk, most-likely-to-regress)
-- `--full` — all 8 (default; takes < 2s)
+- `--quick` — BS-1, BS-3, BS-4, BS-8, BS-9 (5 highest-risk, most-likely-to-regress)
+- `--full` — all 9 (default; takes < 2s)
 
 ## Output
 
@@ -64,7 +66,7 @@ Single markdown punch list to chat. Do NOT write to disk.
 # audit-branch-scope report — <YYYY-MM-DD HH:MM>
 
 ## Summary
-- Total invariants: 8
+- Total invariants: 9
 - ✅ PASS: <count>
 - ⚠️ WARN: <count>
 - ❌ VIOLATION: <count>
@@ -74,6 +76,7 @@ Single markdown punch list to chat. Do NOT write to disk.
 
 ## Notes
 - BS-6: <pending|ok>
+- BS-9 (Phase 17.0): <pass|warn|fail> — branch-switch refresh discipline
 - Build: <clean|fail>
 ```
 

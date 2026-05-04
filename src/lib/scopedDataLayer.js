@@ -389,7 +389,11 @@ export const beCourseToMasterShape = (...args) => raw.beCourseToMasterShape(...a
 // and keeps the BSA boundary clean.
 
 // ─── Treatment context-specific helper (be_product_groups for TFP modal) ───
-export const listProductGroupsForTreatment = (...args) => raw.listProductGroupsForTreatment(...args);
+// Phase 17.0 — was a pass-through; now auto-injects branchId so TFP modal
+// shows only current-branch product-groups + products. Layer 1 underlying
+// lister was extended in same phase to accept opts.
+export const listProductGroupsForTreatment = (productType, opts = {}) =>
+  raw.listProductGroupsForTreatment(productType, { branchId: resolveSelectedBranchId(), ...opts });
 
 // ─── Admin reconciler ──────────────────────────────────────────────────────
 export const reconcileAllCustomerSummaries = (...args) => raw.reconcileAllCustomerSummaries(...args);

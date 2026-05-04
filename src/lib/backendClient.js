@@ -8426,12 +8426,21 @@ export async function deleteProductGroup(groupId) {
  *
  * @param {'ยากลับบ้าน' | 'สินค้าสิ้นเปลือง'} productType
  */
-export async function listProductGroupsForTreatment(productType) {
+export async function listProductGroupsForTreatment(productType, { branchId, allBranches = false } = {}) {
   const targetType = String(productType || '').trim();
   if (!targetType) return [];
+  // Phase 17.0 — accept branchId opts + filter both queries when present.
+  // No opts (test/back-end paths) preserves cross-branch behavior.
+  const useFilter = branchId && !allBranches;
+  const groupsRef = useFilter
+    ? query(productGroupsCol(), where('branchId', '==', String(branchId)))
+    : productGroupsCol();
+  const productsRef = useFilter
+    ? query(productsCol(), where('branchId', '==', String(branchId)))
+    : productsCol();
   const [groupsSnap, productsSnap] = await Promise.all([
-    getDocs(productGroupsCol()),
-    getDocs(productsCol()),
+    getDocs(groupsRef),
+    getDocs(productsRef),
   ]);
   const productLookup = new Map();
   productsSnap.docs.forEach(d => {

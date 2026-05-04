@@ -1,7 +1,7 @@
 ---
-updated_at: "2026-05-04 EOD — V15 #16 LIVE; Phase BSA + leak sweeps + Phase BS V3 + wiki bootstrap shipped"
-status: "master=f39760b = prod LIVE (V15 #16) · 4997 tests pass · 0 commits ahead-of-prod"
-current_focus: "idle — Phase 17 plan TBD; wiki expand on demand"
+updated_at: "2026-05-05 — Phase 17.0 spec+plan written + wiki backfill cycle complete; awaiting implementation"
+status: "master=f39760b = prod LIVE (V15 #16) · 4997 tests pass · 0 commits ahead-of-prod · Phase 17.0 paused mid-implementation"
+current_focus: "Phase 17.0 — BSA leak sweep 3 (Promotion/Coupon/Voucher refresh + TFP phantom data + BS-9 lock); spec+plan ready, wiki-first review surfaced spec bug + corrected"
 branch: "master"
 last_commit: "f39760b"
 tests: 4997
@@ -35,14 +35,28 @@ storage_rules_version: 2
 - be_deposits added to branch-scoped set (Finance Deposit sub-tab); other Finance sub-tabs stay as-is
 
 ## Next action
-Idle — awaiting next user direction. Phase 17 plan TBD.
+Resume Phase 17.0 implementation via subagent-driven-development. Plan at `docs/superpowers/plans/2026-05-05-phase-17-0-bsa-leak-sweep-3.md`. Tasks 1-15. Single bundled commit per Rule K. Wiki-first review (R2) corrected spec Task 6 + Task 11 F4 to use TFP's existing `SELECTED_BRANCH_ID` (Phase 14.7.H wiring at line 25+325) instead of inventing a parallel `selectedBranchId`.
+
+## This session shipped (so far)
+- **Phase 17.0 spec** at `docs/superpowers/specs/2026-05-05-phase-17-0-bsa-leak-sweep-3-design.md`
+- **Phase 17.0 plan** at `docs/superpowers/plans/2026-05-05-phase-17-0-bsa-leak-sweep-3.md`
+- **Wiki backfill cycle** — 13 entity pages + 1 extended (scoped-data-layer 99→234 lines) + 4 concept pages + Phase 17.2 anticipation page (branch-equality-no-main) + index/log updates
+- **Wiki-first review (R2)** — caught spec bug: TFP already has useSelectedBranch wired at line 25+325 (Phase 14.7.H follow-up A) under name SELECTED_BRANCH_ID; spec Task 6 + plan Task 11 F4 amended
+
+## Decisions (this session)
+- Phase 17.0 = bug-fix scope: 3 marketing tabs branch-refresh + TFP phantom data + listProductGroupsForTreatment fix + BS-9 invariant lock (skill + memory + Rule L)
+- Phase 17.1 = cross-branch master-data import on 7 tabs (separate brainstorm cycle pending)
+- Phase 17.2 = remove "main" / "default" branch concept (~20 files affected; separate brainstorm cycle pending; wiki concept page filed)
+- Wiki-first methodology validated this session — caught a real spec bug (duplicate import + name collision) before implementation
 
 ## Outstanding user-triggered actions
-- Browser smoke verify per-branch UI behavior on prod (BSA leak fixes + LINE per-branch + Deposit per-branch)
-- LineSettingsTab พระราม 3 — admin must enter Channel Secret + Access Token for second LINE OA
-- Hard-gate via Firebase custom claim (Phase BS-future)
-- /audit-all orchestrator readiness pass
-- Wiki expand on demand: Phase plans / V-entries / major files / Firestore collections
+- **Browser smoke verify per-branch UI behavior** on prod (BSA leak fixes + LINE per-branch + Deposit per-branch)
+- **LineSettingsTab พระราม 3** — admin must enter Channel Secret + Access Token for second LINE OA
+- **Hard-gate** via Firebase custom claim (Phase BS-future)
+- **/audit-all** orchestrator readiness pass
+- **Phase 17.2 brainstorm** — Branch equality, remove "main" / default / star concept (queued after 17.0 + 17.1 ship). Wiki page: `wiki/concepts/branch-equality-no-main.md`
+- **Phase 17.1 brainstorm** — Cross-branch master-data import on 7 tabs (queued after 17.0 ships). Wiki page: `wiki/concepts/cross-branch-import-pattern.md`
+- **Wiki backfill follow-on cycles**: V1-V36 archive distillation, Phase 1-16 plan source-pages, audit-skill catalog, full backendClient + Sale/Appointment entity pages, master-collection inventory
 
 ## Rules in force
 - V18 deploy auth (per-turn "deploy"; no roll-over); V15 combined; Probe-Deploy-Probe Rule B (5 endpoints)
