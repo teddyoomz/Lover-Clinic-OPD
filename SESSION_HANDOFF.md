@@ -7,12 +7,12 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-05 EOD — V15 #14 LIVE; H-bis ProClinic strip explored + reverted
+- **Date last updated**: 2026-05-05 EOD+ — V15 #14 LIVE; H-bis aborted; graphify claude integration installed
 - **Branch**: `master`
-- **Last commit**: `1d15db5` — feat(ap1-bis): multi-slot 15-min interval reservation closes range-overlap
+- **Last commit**: `fdd7efc` — chore(graphify): install claude integration — auto-read GRAPH_REPORT before codebase Qs
 - **Test count**: **4612** (unchanged — H-bis test bank reverted with all source edits)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `1d15db5`** (V15 #14 LIVE 2026-05-05) · **in-sync with prod**
+- **Deploy state**: ✅ **PRODUCTION = `1d15db5`** (V15 #14 LIVE 2026-05-05) · master 2 docs/config commits ahead-of-prod (`63ebf03` session-end + `fdd7efc` graphify install — neither needs deploy)
 
 ### Session 2026-05-05 EOD — V15 #14 deploy + H-bis ProClinic strip explored + fully reverted
 
@@ -316,16 +316,16 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-05 EOD.
+Resume LoverClinic — continue from 2026-05-05 EOD+.
 
 Read in order BEFORE any tool call:
-1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=1d15db5, prod=1d15db5)
-3. .agents/active.md (4612 tests pass; in-sync with prod)
+1. CLAUDE.md (now includes ## graphify section — consult graphify-out/GRAPH_REPORT.md for codebase Qs)
+2. SESSION_HANDOFF.md (master=fdd7efc, prod=1d15db5)
+3. .agents/active.md (4612 tests pass; 2 docs/config commits ahead-of-prod)
 4. .claude/rules/00-session-start.md
 5. .agents/sessions/2026-05-05-v15-14-and-hbis-revert.md
 
-Status: master=1d15db5, 4612/4612 tests pass, prod=1d15db5 LIVE (V15 #14). In-sync.
+Status: master=fdd7efc, 4612/4612 tests pass, prod=1d15db5 LIVE (V15 #14). 2 docs/config commits ahead-of-prod (no deploy needed for those).
 
 Next action: Brainstorm backend branch-selector via Skill(superpowers:brainstorming)
 - User queued (2× /brainstorm in last session) a major new feature: top-right Tab to switch active branch (mirror ProClinic UX)
