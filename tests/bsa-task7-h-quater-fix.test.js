@@ -45,19 +45,35 @@ describe('Task 7 — H-quater fix: getAllMasterDataItems removed from feature co
   });
 
   it('T7.regression-guard MasterDataTab is the ONLY src file allowed to call getAllMasterDataItems', () => {
-    const out = execSync(
-      'git grep -lE "getAllMasterDataItems\\(" -- "src/**" 2>/dev/null || true',
-      { encoding: 'utf8', cwd: process.cwd() }
-    ).split('\n').filter(Boolean);
-    const violations = out.filter((f) => {
+    let lines = [];
+    try {
+      lines = execSync(
+        'git grep -nE "getAllMasterDataItems\\(" -- "src/**"',
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], cwd: process.cwd() }
+      ).split('\n').filter(Boolean);
+    } catch {
+      lines = [];
+    }
+    // Each line is `path:lineno:content`. Drop sanctioned files + comment-only
+    // matches, then collapse to a unique violating-file list.
+    const violatingFiles = new Set();
+    for (const line of lines) {
+      const firstColon = line.indexOf(':');
+      const secondColon = line.indexOf(':', firstColon + 1);
+      if (firstColon < 0 || secondColon < 0) continue;
+      const file = line.slice(0, firstColon);
+      const content = line.slice(secondColon + 1);
       // Allowed: MasterDataTab (sanctioned dev-only sync UI)
-      if (f.endsWith('MasterDataTab.jsx')) return false;
+      if (file.endsWith('MasterDataTab.jsx')) continue;
       // Allowed: backendClient.js DEFINES the function (not a call site)
-      if (f.endsWith('backendClient.js')) return false;
+      if (file.endsWith('backendClient.js')) continue;
       // Allowed: scopedDataLayer.js re-exports the function (not a call site)
-      if (f.endsWith('scopedDataLayer.js')) return false;
-      return true;
-    });
+      if (file.endsWith('scopedDataLayer.js')) continue;
+      // Comment-only matches (line + block comment continuation) are not real callers
+      if (/^\s*\/\//.test(content) || /^\s*\*/.test(content)) continue;
+      violatingFiles.add(file);
+    }
+    const violations = [...violatingFiles];
     expect(violations, `H-quater violations: ${violations.join(', ')}`).toEqual([]);
   });
 });
