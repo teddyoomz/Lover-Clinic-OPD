@@ -632,12 +632,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       try {
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
-          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer, listDfGroups, listDfStaffRates } = await import('../lib/scopedDataLayer.js');
+          // Task 7 (BSA, 2026-05-04) — Rule H-quater fix: replaced
+          // getAllMasterDataItems() (master_data/* universal pool, branch-blind)
+          // with be_* listers via scopedDataLayer. listProducts/listCourses
+          // auto-inject the selected branchId. listStaff/listDoctors are
+          // universal — branch soft-gate via filterStaffByBranch /
+          // filterDoctorsByBranch (Phase BS V1) is preserved below.
+          const {
+            getTreatment: getBackendTreatment,
+            getCustomer: getBackendCustomer,
+            listDfGroups,
+            listDfStaffRates,
+            listProducts,
+            listCourses,
+            listStaff,
+            listDoctors,
+          } = await import('../lib/scopedDataLayer.js');
           const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
-            getAllMasterDataItems('doctors'),
-            getAllMasterDataItems('products'),
-            getAllMasterDataItems('staff'),
-            getAllMasterDataItems('courses'),
+            listDoctors().catch(() => []),                  // universal — soft-gate below
+            listProducts().catch(() => []),                 // auto-inject branchId
+            listStaff().catch(() => []),                    // universal — soft-gate below
+            listCourses().catch(() => []),                  // auto-inject branchId
             listDfGroups().catch(() => []),
             listDfStaffRates().catch(() => []),
           ]);
@@ -1125,8 +1140,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedModalLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
-        const all = await getAllMasterDataItems('products');
+        // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+        const { listProducts } = await import('../lib/scopedDataLayer.js');
+        const all = await listProducts();
         setMedAllProducts(all.filter(p => p.type === 'ยา').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category })));
       } else {
         const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
@@ -1304,8 +1320,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsModalLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
-        const all = await getAllMasterDataItems('products');
+        // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+        const { listProducts } = await import('../lib/scopedDataLayer.js');
+        const all = await listProducts();
         setConsAllProducts(all.filter(p => p.type === 'สินค้าสิ้นเปลือง').map(p => ({ id: p.id, name: p.name, unit: p.unit, category: p.category })));
       } else {
         const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
@@ -1423,17 +1440,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setBuyLoading(true);
     try {
       // Backend mode: load from Firestore — NEVER fetch ProClinic directly.
-      // Promotions come from be_promotions (our CRUD); courses/products from master_data.
+      // Task 7 (BSA): courses/products read via be_* listers (branch-scoped),
+      // promotions via be_promotions. No master_data/* reads (Rule H-quater).
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems, listPromotions } = await import('../lib/scopedDataLayer.js');
+        const { listProducts, listCourses, listPromotions } = await import('../lib/scopedDataLayer.js');
         let items = [];
         let categories = [];
         if (type === 'product') {
-          const all = await getAllMasterDataItems('products');
+          const all = await listProducts();
           items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, type: p.type }));
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         } else if (type === 'course') {
-          const all = await getAllMasterDataItems('courses');
+          const all = await listCourses();
           // Phase 12.2b follow-up (2026-04-25): preserve daysBeforeExpire
           // + period + unit. Prior whitelist kept courseType but stripped
           // the validity window → expiry='' on customer.courses even when
@@ -3163,8 +3181,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   setLabModalLoading(true);
                   try {
                     if (saveTarget === 'backend') {
-                      const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
-                      const all = await getAllMasterDataItems('products');
+                      // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+                      const { listProducts } = await import('../lib/scopedDataLayer.js');
+                      const all = await listProducts();
                       setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category || '').toLowerCase().includes('lab')).map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit })));
                     } else {
                       const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
@@ -3194,7 +3213,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         setLabModalVat(!!lab.isVatIncluded); setLabModalOpen(true);
                         if (labProducts.length === 0) {
                           if (saveTarget === 'backend') {
-                            import('../lib/scopedDataLayer.js').then(({ getAllMasterDataItems }) => getAllMasterDataItems('products').then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
+                            // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+                            import('../lib/scopedDataLayer.js').then(({ listProducts }) => listProducts().then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
                           } else {
                             broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
                           }
