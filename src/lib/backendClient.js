@@ -1563,18 +1563,34 @@ const appointmentSlotsCol = () => collection(db, ...basePath(), 'be_appointment_
 const appointmentSlotDoc = (slotId) => doc(db, ...basePath(), 'be_appointment_slots', String(slotId));
 
 /**
- * Build a deterministic slot key from appointment time fields. Same inputs
- * always yield the same id, so two concurrent createBackendAppointment
- * calls for the same exact slot will collide on `tx.get(slotDocRef)`.
+ * Default slot interval for AP1-bis multi-slot reservation. 15 minutes
+ * matches ProClinic + clinic-typical scheduling granularity. Tunable by
+ * caller for tests but every production write uses 15.
+ */
+export const SLOT_INTERVAL_MIN = 15;
+
+function _parseHHMM(s) {
+  const m = String(s || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function _formatHHMM(totalMin) {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * AP1 (legacy single-slot) — exact-key slot id. KEPT for backward-compat
+ * with V15 #12/#13 production data. New code uses buildAppointmentSlotKeys
+ * (plural, multi-slot — see AP1-bis below).
  *
- * Format: `${date}_${doctorId}_${startTime}_${endTime}` — Firestore doc
- * IDs forbid `/` only; `:` and `_` are fine. We sanitize doctorId via
- * encodeURIComponent fallback to handle whatever ProClinic ids contain.
- *
- * Empty / missing inputs return '' so the caller can skip the atomic
- * path (legacy / scripted imports without time fields).
- *
- * Exported for tests + admin diagnostic tooling.
+ * Format: `${date}_${doctorId}_${startTime}_${endTime}`. Empty / missing
+ * inputs return ''.
  */
 export function buildAppointmentSlotKey(input) {
   const { date, doctorId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
@@ -1583,10 +1599,57 @@ export function buildAppointmentSlotKey(input) {
   const s = String(startTime || '').trim();
   const e = String(endTime || startTime || '').trim();
   if (!d || !doc || !s) return '';
-  // Replace '/' (forbidden in Firestore doc IDs) with '-' as a defensive
-  // measure; ProClinic ids are usually clean ints but be safe.
   const safeDoc = doc.replace(/[\/.]/g, '-');
   return `${d}_${safeDoc}_${s}_${e || s}`;
+}
+
+/**
+ * AP1-bis (2026-05-04): build the ARRAY of 15-min interval slot keys an
+ * appointment occupies. Catches RANGE-OVERLAP collisions the legacy
+ * single-key approach missed (e.g. 09:00-10:00 vs 09:30-10:30 — both
+ * reserve slot 09:30 → atomic tx.get sees the conflict).
+ *
+ * Bucketing semantics:
+ *   - startTime is FLOORED to the nearest interval boundary (09:10 → 09:00)
+ *   - endTime is CEILINGED   (09:25 → 09:30)
+ *   - emit `${date}_${doctorId}_${HH:MM}` for every interval start in
+ *     [floor(start), ceil(end))
+ *
+ * Edge cases:
+ *   - endTime missing OR ≤ startTime: emits ONE slot at floor(start)
+ *   - startTime invalid (non-HH:MM): returns []
+ *   - missing date/doctorId: returns []
+ *
+ * Returns plain string[] (sorted by time, deduped). Caller maps each to
+ * `appointmentSlotDoc(key)` for tx.get / tx.set.
+ *
+ * Tunable interval (default 15) for tests; production callers use the
+ * default. Intervals 1, 5, 10, 15, 30, 60 supported.
+ */
+export function buildAppointmentSlotKeys(input, intervalMin = SLOT_INTERVAL_MIN) {
+  const { date, doctorId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
+  const d = String(date || '').trim();
+  const doc = String(doctorId || '').trim();
+  if (!d || !doc) return [];
+  const start = _parseHHMM(startTime);
+  if (start === null) return [];
+  const end = _parseHHMM(endTime);
+  const interval = Number.isFinite(intervalMin) && intervalMin > 0 ? Math.floor(intervalMin) : SLOT_INTERVAL_MIN;
+  const safeDoc = doc.replace(/[\/.]/g, '-');
+
+  // Single-point or end<=start: emit ONE slot at floor(start).
+  if (end === null || end <= start) {
+    const floorStart = Math.floor(start / interval) * interval;
+    return [`${d}_${safeDoc}_${_formatHHMM(floorStart)}`];
+  }
+
+  const floorStart = Math.floor(start / interval) * interval;
+  const ceilEnd = Math.ceil(end / interval) * interval;
+  const keys = [];
+  for (let m = floorStart; m < ceilEnd; m += interval) {
+    keys.push(`${d}_${safeDoc}_${_formatHHMM(m)}`);
+  }
+  return keys;
 }
 
 /** Create a new backend appointment.
@@ -1658,45 +1721,56 @@ export async function createBackendAppointment(data) {
     updatedAt: now,
   };
 
-  // AP1 atomic exact-slot guard via runTransaction. Falls back to plain
-  // setDoc when slot key cannot be built (legacy imports / open-ended
-  // appointments without time fields).
-  const slotKey = data?.skipServerCollisionCheck
-    ? ''
-    : buildAppointmentSlotKey({
+  // AP1-bis (2026-05-04): atomic MULTI-slot guard via runTransaction. Each
+  // appointment reserves one slot doc per 15-min interval it covers — so
+  // 09:00-10:00 reserves [09:00, 09:15, 09:30, 09:45]. Range-overlap
+  // collisions (different startTimes, overlapping ranges) collide on the
+  // shared interval slot and Firestore's optimistic-lock semantics retry
+  // until one wins.
+  //
+  // Falls back to plain setDoc when slot keys cannot be built (legacy
+  // imports / open-ended appointments without time fields).
+  const slotKeys = data?.skipServerCollisionCheck
+    ? []
+    : buildAppointmentSlotKeys({
         date: targetDate,
         doctorId: targetDoctorId,
         startTime: targetStart,
         endTime: targetEnd,
       });
 
-  if (slotKey) {
-    const slotRef = appointmentSlotDoc(slotKey);
+  if (slotKeys.length > 0) {
+    const slotRefs = slotKeys.map((k) => appointmentSlotDoc(k));
     try {
       await runTransaction(db, async (tx) => {
-        const slotSnap = await tx.get(slotRef);
-        if (slotSnap.exists()) {
-          const slotData = slotSnap.data() || {};
-          if (!slotData.cancelled) {
-            const err = new Error(
-              `AP1_COLLISION: slot ${slotKey} already taken by ${slotData.appointmentId || '(unknown)'}`,
-            );
-            err.code = 'AP1_COLLISION';
-            err.slotKey = slotKey;
-            err.atomic = true;
-            throw err;
-          }
+        // Read all slot docs first (Firestore tx requires reads before writes).
+        const snaps = await Promise.all(slotRefs.map((ref) => tx.get(ref)));
+        for (let i = 0; i < snaps.length; i++) {
+          const snap = snaps[i];
+          if (!snap.exists()) continue;
+          const slotData = snap.data() || {};
+          if (slotData.cancelled) continue;
+          const err = new Error(
+            `AP1_COLLISION: slot ${slotKeys[i]} already taken by ${slotData.appointmentId || '(unknown)'}`,
+          );
+          err.code = 'AP1_COLLISION';
+          err.slotKey = slotKeys[i];
+          err.atomic = true;
+          throw err;
         }
-        tx.set(slotRef, {
-          slotId: slotKey,
-          appointmentId,
-          date: targetDate,
-          doctorId: targetDoctorId,
-          startTime: targetStart,
-          endTime: targetEnd,
-          cancelled: false,
-          takenAt: now,
-        });
+        // No collision — reserve every interval slot + write the appointment.
+        for (let i = 0; i < slotRefs.length; i++) {
+          tx.set(slotRefs[i], {
+            slotId: slotKeys[i],
+            appointmentId,
+            date: targetDate,
+            doctorId: targetDoctorId,
+            startTime: targetStart,
+            endTime: targetEnd,
+            cancelled: false,
+            takenAt: now,
+          });
+        }
         tx.set(appointmentDoc(appointmentId), apptPayload);
       });
     } catch (e) {
@@ -1704,7 +1778,7 @@ export async function createBackendAppointment(data) {
       throw e;
     }
   } else {
-    // Legacy path: no slot key (missing time fields) — plain setDoc.
+    // Legacy path: no slot keys (missing time fields) — plain setDoc.
     await setDoc(appointmentDoc(appointmentId), apptPayload);
   }
 
@@ -1712,26 +1786,50 @@ export async function createBackendAppointment(data) {
 }
 
 /**
- * AP1 helper — clear the slot reservation when an appointment is deleted
+ * AP1 helper — clear the slot reservation(s) when an appointment is deleted
  * or status='cancelled'. Best-effort: failures don't roll back the parent
  * mutation (the slot doc is a guard, not a financial record).
  *
+ * AP1-bis (2026-05-04): releases the FULL ARRAY of 15-min interval slot docs
+ * an appointment occupied (e.g. 09:00-10:00 → [09:00, 09:15, 09:30, 09:45]).
+ * Falls back to the legacy single-key delete when the multi-slot key array
+ * is empty (defensive — covers legacy data created before V15 #14).
+ *
  * Caller passes the appointment payload (date/doctorId/startTime/endTime
- * needed to rebuild the deterministic key).
+ * needed to rebuild the deterministic keys).
  */
 async function _releaseAppointmentSlot(apptData) {
-  const slotKey = buildAppointmentSlotKey({
-    date: normalizeApptDate(apptData?.date),
-    doctorId: String(apptData?.doctorId || apptData?.doctor?.id || '').trim(),
-    startTime: String(apptData?.startTime || '').trim(),
-    endTime: String(apptData?.endTime || apptData?.startTime || '').trim(),
-  });
-  if (!slotKey) return;
-  try {
-    await deleteDoc(appointmentSlotDoc(slotKey));
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[AP1] slot release failed:', slotKey, e?.message || e);
+  const date = normalizeApptDate(apptData?.date);
+  const doctorId = String(apptData?.doctorId || apptData?.doctor?.id || '').trim();
+  const startTime = String(apptData?.startTime || '').trim();
+  const endTime = String(apptData?.endTime || apptData?.startTime || '').trim();
+
+  // AP1-bis: prefer multi-slot release (V15 #14+ data).
+  const slotKeys = buildAppointmentSlotKeys({ date, doctorId, startTime, endTime });
+
+  if (slotKeys.length > 0) {
+    try {
+      const batch = writeBatch(db);
+      for (const key of slotKeys) {
+        batch.delete(appointmentSlotDoc(key));
+      }
+      await batch.commit();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[AP1] multi-slot release failed:', slotKeys.join(','), e?.message || e);
+    }
+  }
+
+  // Legacy single-key release (V15 #12/#13 data) — safe even when slotKeys
+  // already covered the floor key, because deleteDoc is idempotent.
+  const legacyKey = buildAppointmentSlotKey({ date, doctorId, startTime, endTime });
+  if (legacyKey && !slotKeys.includes(legacyKey)) {
+    try {
+      await deleteDoc(appointmentSlotDoc(legacyKey));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[AP1] legacy slot release failed:', legacyKey, e?.message || e);
+    }
   }
 }
 
@@ -1740,16 +1838,21 @@ async function _releaseAppointmentSlot(apptData) {
  *
  * AP1 slot reservation maintenance:
  *   - When the time fields (date / doctorId / startTime / endTime) change,
- *     the OLD slot doc is released so the slot becomes available again, and
- *     a NEW slot doc is reserved (best-effort; the read-then-update in this
+ *     the OLD slot docs are released so the slots become available again, and
+ *     NEW slot docs are reserved (best-effort; the read-then-update in this
  *     path doesn't run inside a transaction — caller relies on the same
  *     pre-write soft check via UI for range overlaps).
- *   - When status flips to 'cancelled', the slot is released so the time
+ *   - When status flips to 'cancelled', the slots are released so the time
  *     becomes bookable again.
+ *
+ * AP1-bis (2026-05-04): operates on the ARRAY of 15-min interval slot keys
+ * via buildAppointmentSlotKeys. Slot rotation uses writeBatch for atomicity
+ * within the slot collection (still NOT a single transaction with the
+ * appointment doc — see AP1 module comment for trade-off rationale).
  */
 export async function updateBackendAppointment(appointmentId, data) {
   // Pre-read the current appointment to detect time-field changes + capture
-  // the OLD slot key for cleanup. Defensive: if the read fails (network),
+  // the OLD slot keys for cleanup. Defensive: if the read fails (network),
   // skip slot maintenance and fall through to the bare update — slot
   // staleness is preferable to losing the appointment update.
   let oldData = null;
@@ -1766,38 +1869,62 @@ export async function updateBackendAppointment(appointmentId, data) {
   // Slot maintenance — fire-and-forget after the write commits.
   if (oldData) {
     const merged = { ...oldData, ...data };
-    const oldKey = buildAppointmentSlotKey({
-      date: normalizeApptDate(oldData.date),
-      doctorId: String(oldData.doctorId || oldData.doctor?.id || '').trim(),
-      startTime: String(oldData.startTime || '').trim(),
-      endTime: String(oldData.endTime || oldData.startTime || '').trim(),
-    });
-    const newKey = buildAppointmentSlotKey({
-      date: normalizeApptDate(merged.date),
-      doctorId: String(merged.doctorId || merged.doctor?.id || '').trim(),
-      startTime: String(merged.startTime || '').trim(),
-      endTime: String(merged.endTime || merged.startTime || '').trim(),
-    });
-    const becameCancelled = data?.status === 'cancelled' && oldData.status !== 'cancelled';
-    const timeChanged = oldKey && newKey && oldKey !== newKey;
+    const oldDate = normalizeApptDate(oldData.date);
+    const oldDoctorId = String(oldData.doctorId || oldData.doctor?.id || '').trim();
+    const oldStart = String(oldData.startTime || '').trim();
+    const oldEnd = String(oldData.endTime || oldData.startTime || '').trim();
+    const newDate = normalizeApptDate(merged.date);
+    const newDoctorId = String(merged.doctorId || merged.doctor?.id || '').trim();
+    const newStart = String(merged.startTime || '').trim();
+    const newEnd = String(merged.endTime || merged.startTime || '').trim();
 
-    if (becameCancelled && oldKey) {
-      try { await deleteDoc(appointmentSlotDoc(oldKey)); } catch (e) { /* best-effort */ }
-    } else if (timeChanged) {
-      // Release old slot, reserve new (sequential — best-effort, not atomic).
-      try { await deleteDoc(appointmentSlotDoc(oldKey)); } catch { /* noop */ }
+    const oldKeys = buildAppointmentSlotKeys({
+      date: oldDate, doctorId: oldDoctorId, startTime: oldStart, endTime: oldEnd,
+    });
+    const newKeys = buildAppointmentSlotKeys({
+      date: newDate, doctorId: newDoctorId, startTime: newStart, endTime: newEnd,
+    });
+
+    const becameCancelled = data?.status === 'cancelled' && oldData.status !== 'cancelled';
+    // Compare arrays as sorted JSON to detect ANY change (covers different
+    // length OR same length different values OR same values different order).
+    const oldKeySig = [...oldKeys].sort().join('|');
+    const newKeySig = [...newKeys].sort().join('|');
+    const timeChanged = oldKeys.length > 0 && newKeys.length > 0 && oldKeySig !== newKeySig;
+
+    const now = new Date().toISOString();
+
+    if (becameCancelled && oldKeys.length > 0) {
       try {
-        await setDoc(appointmentSlotDoc(newKey), {
-          slotId: newKey,
-          appointmentId,
-          date: normalizeApptDate(merged.date),
-          doctorId: String(merged.doctorId || merged.doctor?.id || '').trim(),
-          startTime: String(merged.startTime || '').trim(),
-          endTime: String(merged.endTime || merged.startTime || '').trim(),
-          cancelled: false,
-          takenAt: new Date().toISOString(),
-        });
-      } catch { /* noop — slot will heal on next create at this slot */ }
+        const batch = writeBatch(db);
+        for (const key of oldKeys) batch.delete(appointmentSlotDoc(key));
+        await batch.commit();
+      } catch { /* best-effort */ }
+    } else if (timeChanged) {
+      // Release old slots, reserve new — both via writeBatch for atomicity
+      // within the slot collection. NOT atomic with the appointment doc
+      // update above (same trade-off as create's pre-write scan).
+      try {
+        const releaseBatch = writeBatch(db);
+        for (const key of oldKeys) releaseBatch.delete(appointmentSlotDoc(key));
+        await releaseBatch.commit();
+      } catch { /* noop */ }
+      try {
+        const reserveBatch = writeBatch(db);
+        for (const key of newKeys) {
+          reserveBatch.set(appointmentSlotDoc(key), {
+            slotId: key,
+            appointmentId,
+            date: newDate,
+            doctorId: newDoctorId,
+            startTime: newStart,
+            endTime: newEnd,
+            cancelled: false,
+            takenAt: now,
+          });
+        }
+        await reserveBatch.commit();
+      } catch { /* noop — slots will heal on next create at this slot */ }
     }
   }
 
