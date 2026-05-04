@@ -3194,7 +3194,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         setLabModalVat(!!lab.isVatIncluded); setLabModalOpen(true);
                         if (labProducts.length === 0) {
                           if (saveTarget === 'backend') {
-                            import('../lib/backendClient.js').then(({ getAllMasterDataItems }) => getAllMasterDataItems('products').then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
+                            import('../lib/scopedDataLayer.js').then(({ getAllMasterDataItems }) => getAllMasterDataItems('products').then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
                           } else {
                             broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
                           }

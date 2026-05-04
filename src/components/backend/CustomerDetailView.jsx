@@ -1479,15 +1479,17 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
 
   useEffect(() => {
     // Phase 14.10-tris — be_products + listAllSellers
-    // Phase 16.5-quater fix (2026-04-29 user issue #3): apply
-    // beProductToMasterShape adapter — listProducts() returns raw be_products
-    // docs with `productType` field, but the modal filters by `type`.
-    // Without the adapter, the สินค้าหน้าร้าน tab dropdown was always empty.
-    Promise.all([listProducts(), listAllSellers(), import('../../lib/backendClient.js')])
-      .then(([rawP, s, mod]) => {
-        const adapt = mod.beProductToMasterShape;
-        const adaptedP = (rawP || []).map(p => (typeof adapt === 'function' ? adapt(p) : p));
-        setProducts(adaptedP);
+    // BSA Task 6 CR (2026-05-04): the previous beProductToMasterShape adapter
+    // attempt was a latent no-op — `beProductToMasterShape` is a PRIVATE
+    // function inside backendClient.js (line 2951, no export), so the
+    // dynamic import resolved `mod.beProductToMasterShape` to undefined and
+    // the ternary fell through to identity `(p) => p`. Pass-through has been
+    // the actual runtime behavior since this code shipped. Drop the broken
+    // dynamic import entirely (also clears BS-1 invariant — UI files no
+    // longer touch backendClient.js directly).
+    Promise.all([listProducts(), listAllSellers()])
+      .then(([rawP, s]) => {
+        setProducts(rawP || []);
         setStaff(s);
         setLoading(false);
       })
@@ -1711,7 +1713,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
 
   useEffect(() => {
     Promise.all([
-      import('../../lib/backendClient.js').then(m => m.getAllCustomers()),
+      import('../../lib/scopedDataLayer.js').then(m => m.getAllCustomers()),
       // Phase 14.10-tris — listAllSellers (be_*)
       listAllSellers(),
     ]).then(([c, s]) => {

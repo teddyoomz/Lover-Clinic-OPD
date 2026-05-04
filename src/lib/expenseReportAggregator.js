@@ -1,3 +1,4 @@
+// audit-branch-scope: aggregator — uses {allBranches:true} for cross-branch totals
 // ─── Expense Report Orchestrator — Phase 16.7 (2026-04-29 session 33) ──────
 //
 // Replicates ProClinic /admin/report/expense (4-section dashboard) using OUR

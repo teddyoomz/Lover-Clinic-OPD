@@ -1,3 +1,4 @@
+// audit-branch-scope: sanctioned exception — Rule H-bis dev-only sync orchestrator
 // ─── Clone Orchestrator ─────────────────────────────────────────────────────
 // Orchestrates full customer clone from ProClinic → be_* Firestore collections.
 // Runs entirely on frontend, calling existing broker API functions.

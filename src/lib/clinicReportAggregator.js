@@ -1,3 +1,4 @@
+// audit-branch-scope: aggregator — uses {allBranches:true} for cross-branch totals
 // ─── Clinic Report Orchestrator — Phase 16.2 (2026-04-29) ──────────────────
 //
 // Architecture: 2-phase pipeline.
