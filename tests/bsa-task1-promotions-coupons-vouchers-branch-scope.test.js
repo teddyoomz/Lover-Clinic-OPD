@@ -24,6 +24,7 @@ vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test' }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  try { window.localStorage.removeItem('selectedBranchId'); } catch {}
 });
 
 describe('Task 1 — Promotions/Coupons/Vouchers branch-scope', () => {
@@ -37,6 +38,8 @@ describe('Task 1 — Promotions/Coupons/Vouchers branch-scope', () => {
       expect(mockGetDocs).toHaveBeenCalledTimes(2);
       expect(items).toHaveLength(2);
       expect(items.map(i => i.id).sort()).toEqual(['P1', 'P2']);
+      expect(mockWhere).toHaveBeenCalledWith('branchId', '==', 'BR-A');
+      expect(mockWhere).toHaveBeenCalledWith('allBranches', '==', true);
     });
 
     it('T1.A.2 with {allBranches:true} runs 1 query (no filter)', async () => {
@@ -76,6 +79,15 @@ describe('Task 1 — Promotions/Coupons/Vouchers branch-scope', () => {
       expect(mockGetDocs).toHaveBeenCalledTimes(2);
       expect(items.map(i => i.id).sort()).toEqual(['C1', 'C2']);
     });
+
+    it('T1.B.2 dedupes when coupon doc matches both queries', async () => {
+      mockGetDocs
+        .mockResolvedValueOnce({ docs: [{ id: 'CDUP', data: () => ({ coupon_name: 'd', coupon_code: 'D1', branchId: 'BR-A', allBranches: true }) }] })
+        .mockResolvedValueOnce({ docs: [{ id: 'CDUP', data: () => ({ coupon_name: 'd', coupon_code: 'D1', branchId: 'BR-A', allBranches: true }) }] });
+      const { listCoupons } = await import('../src/lib/backendClient.js');
+      const items = await listCoupons({ branchId: 'BR-A' });
+      expect(items).toHaveLength(1);
+    });
   });
 
   describe('T1.C listVouchers (mirror)', () => {
@@ -86,6 +98,15 @@ describe('Task 1 — Promotions/Coupons/Vouchers branch-scope', () => {
       const { listVouchers } = await import('../src/lib/backendClient.js');
       const items = await listVouchers({ branchId: 'BR-A' });
       expect(items).toHaveLength(2);
+    });
+
+    it('T1.C.2 dedupes when voucher doc matches both queries', async () => {
+      mockGetDocs
+        .mockResolvedValueOnce({ docs: [{ id: 'VDUP', data: () => ({ allBranches: true, branchId: 'BR-A' }) }] })
+        .mockResolvedValueOnce({ docs: [{ id: 'VDUP', data: () => ({ allBranches: true, branchId: 'BR-A' }) }] });
+      const { listVouchers } = await import('../src/lib/backendClient.js');
+      const items = await listVouchers({ branchId: 'BR-A' });
+      expect(items).toHaveLength(1);
     });
   });
 

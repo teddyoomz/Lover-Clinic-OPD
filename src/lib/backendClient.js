@@ -22,6 +22,56 @@ function _resolveBranchIdForWrite(data) {
   return resolveSelectedBranchId() || null;
 }
 
+/**
+ * Phase BSA — branch-scoped read helper for marketing-style collections that
+ * support an `allBranches: true` doc-level field (visible from every branch
+ * even when caller filters by a specific branchId). Firestore can't OR
+ * across fields → 2 queries + Set-dedup.
+ *
+ * Used by listPromotions / listCoupons / listVouchers. Sort fixed to
+ * `updatedAt` desc with `id` tiebreaker for determinism (V14 lock — output
+ * order matters when consumer renders without re-sort).
+ *
+ * Legacy callers (no opts) skip the filter entirely and return the full
+ * collection — preserves pre-Phase-BSA shape.
+ *
+ * NOTE: Pre-Phase-BSA docs that have neither `branchId` nor `allBranches`
+ * field will be EXCLUDED from filtered reads (Firestore where('field','==',v)
+ * skips docs missing the field). Backfill via writer-stamp on next save OR
+ * a one-shot migration before consumers start passing {branchId}. This is
+ * dormant until a consumer wires {branchId} — no runtime impact today.
+ */
+async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  if (!useFilter) {
+    const snap = await getDocs(colRef);
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => {
+      const cmp = (b.updatedAt || '').localeCompare(a.updatedAt || '');
+      return cmp !== 0 ? cmp : (a.id || '').localeCompare(b.id || '');
+    });
+    return items;
+  }
+  const [byBranch, byAllBranches] = await Promise.all([
+    getDocs(query(colRef, where('branchId', '==', String(branchId)))),
+    getDocs(query(colRef, where('allBranches', '==', true))),
+  ]);
+  const seen = new Set();
+  const items = [];
+  for (const snap of [byBranch, byAllBranches]) {
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      items.push({ id: d.id, ...d.data() });
+    }
+  }
+  items.sort((a, b) => {
+    const cmp = (b.updatedAt || '').localeCompare(a.updatedAt || '');
+    return cmp !== 0 ? cmp : (a.id || '').localeCompare(b.id || '');
+  });
+  return items;
+}
+
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 
@@ -7863,35 +7913,10 @@ export async function getPromotion(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Phase BSA — branch-scoped read with allBranches=true OR-merge.
- *  Promotion docs may set `allBranches: true` to be visible at every branch
- *  even when caller passes a specific branchId. Firestore can't OR across
- *  fields → 2 queries + Set-dedup. Legacy no-opts call returns full list. */
+/** Phase BSA — branch-scoped via _listWithBranchOrMerge. See helper docstring
+ *  for legacy-doc gotcha. */
 export async function listPromotions(opts = {}) {
-  const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
-  if (!useFilter) {
-    const snap = await getDocs(promotionsCol());
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-    return items;
-  }
-  // 2-query OR-merge: branchId==current OR allBranches==true
-  const [byBranch, byAllBranches] = await Promise.all([
-    getDocs(query(promotionsCol(), where('branchId', '==', String(branchId)))),
-    getDocs(query(promotionsCol(), where('allBranches', '==', true))),
-  ]);
-  const seen = new Set();
-  const items = [];
-  for (const snap of [byBranch, byAllBranches]) {
-    for (const d of snap.docs) {
-      if (seen.has(d.id)) continue;
-      seen.add(d.id);
-      items.push({ id: d.id, ...d.data() });
-    }
-  }
-  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  return items;
+  return _listWithBranchOrMerge(promotionsCol(), opts);
 }
 
 export async function savePromotion(promotionId, data) {
@@ -7967,31 +7992,10 @@ export async function getCoupon(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Phase BSA — branch-scoped read with allBranches=true OR-merge (mirror of listPromotions). */
+/** Phase BSA — branch-scoped via _listWithBranchOrMerge. See helper docstring
+ *  for legacy-doc gotcha. */
 export async function listCoupons(opts = {}) {
-  const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
-  if (!useFilter) {
-    const snap = await getDocs(couponsCol());
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-    return items;
-  }
-  const [byBranch, byAllBranches] = await Promise.all([
-    getDocs(query(couponsCol(), where('branchId', '==', String(branchId)))),
-    getDocs(query(couponsCol(), where('allBranches', '==', true))),
-  ]);
-  const seen = new Set();
-  const items = [];
-  for (const snap of [byBranch, byAllBranches]) {
-    for (const d of snap.docs) {
-      if (seen.has(d.id)) continue;
-      seen.add(d.id);
-      items.push({ id: d.id, ...d.data() });
-    }
-  }
-  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  return items;
+  return _listWithBranchOrMerge(couponsCol(), opts);
 }
 
 export async function saveCoupon(couponId, data) {
@@ -8067,31 +8071,10 @@ export async function getVoucher(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Phase BSA — branch-scoped read with allBranches=true OR-merge (mirror of listPromotions). */
+/** Phase BSA — branch-scoped via _listWithBranchOrMerge. See helper docstring
+ *  for legacy-doc gotcha. */
 export async function listVouchers(opts = {}) {
-  const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
-  if (!useFilter) {
-    const snap = await getDocs(vouchersCol());
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-    return items;
-  }
-  const [byBranch, byAllBranches] = await Promise.all([
-    getDocs(query(vouchersCol(), where('branchId', '==', String(branchId)))),
-    getDocs(query(vouchersCol(), where('allBranches', '==', true))),
-  ]);
-  const seen = new Set();
-  const items = [];
-  for (const snap of [byBranch, byAllBranches]) {
-    for (const d of snap.docs) {
-      if (seen.has(d.id)) continue;
-      seen.add(d.id);
-      items.push({ id: d.id, ...d.data() });
-    }
-  }
-  items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
-  return items;
+  return _listWithBranchOrMerge(vouchersCol(), opts);
 }
 
 export async function saveVoucher(voucherId, data) {
