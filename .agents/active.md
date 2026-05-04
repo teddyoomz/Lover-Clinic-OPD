@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-04 EOD — AP1-bis multi-slot pushed; V15 #14 deploy auth pending"
-status: "master=1d15db5 · prod=V15 #13 LIVE · 4612 tests pass · 1 commit ahead-of-prod"
-current_focus: "AP1-bis range-overlap fix shipped to master. V15 #14 source-only deploy awaits explicit auth (V18 lock)."
+updated_at: "2026-05-05 EOD — V15 #14 LIVE (AP1-bis multi-slot); H-bis migration aborted + reverted"
+status: "master=1d15db5 · prod=1d15db5 LIVE · 4612 tests pass · in-sync with prod"
+current_focus: "V15 #14 deployed. H-bis ProClinic strip explored + reverted at user direction. Branch-selector brainstorm queued."
 branch: "master"
 last_commit: "1d15db5"
 tests: 4612
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "c0d9dc4"
+production_commit: "1d15db5"
 firestore_rules_version: 24
 storage_rules_version: 2
 ---
@@ -14,31 +14,29 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `1d15db5` · production = `c0d9dc4` (V15 #13 LIVE 2026-05-04) · **1 commit ahead-of-prod**
-- 4612/4612 tests pass · build clean · firestore.rules v24 (added `be_appointment_slots` block in V15 #13)
-- Phase 16 status: ALL LIVE (16.1-16.8 done). Cluster shifted to **audit-fix sweep** (TF2/AP1/R-FK/a11y) + new **ProfileDropdown** + **AP1-bis multi-slot**
+- master = `1d15db5` · production = `1d15db5` (V15 #14 LIVE 2026-05-05) · **in-sync** (no commits ahead)
+- 4612/4612 tests pass · build clean · firestore.rules v24 (unchanged from V15 #13 — idempotent re-publish)
+- Phase 16 ALL LIVE. AP1-bis multi-slot reservation shipped to prod.
 
 ## What this session shipped
-- `f88f23e` audit-fix bundle — TF2 scrollToError 8 anchors + AP1 lightweight post-write verify + R-FK `_assertBeRefExists` + a11y P1/P3 (CustomerCreatePage/SaleTab) + ProfileDropdown (top-right avatar + logout-only menu) + PDPA strip
-- `c0d9dc4` AP1 schema-based slot reservation (V15 #13) — `be_appointment_slots` collection + `runTransaction` atomic guard + TF3 TFP full a11y sweep
-- `1d15db5` AP1-bis multi-slot 15-min interval reservation — closes range-overlap gap (09:00-10:00 vs 09:30-10:30 now collide on shared 09:30/09:45 slots). Tests +28 (A2 update + A5 18 + A6 9). **PENDING V15 #14 deploy auth.**
-- V15 #11/#12/#13 combined deploys earlier in session (full Probe-Deploy-Probe Rule B, all 6/6 + 6/6)
+- **V15 #14 combined deploy** (2026-05-05) — vercel + firebase rules; Probe-Deploy-Probe Rule B 6/6 pre + 6/6 post + cleanup 4/4 + HTTP smoke (/ 200, /admin 200, line webhook 401-LINE-sig). Vercel build 3.12s, aliased `lover-clinic-app.vercel.app`. Rules idempotent.
+- **H-bis ProClinic strip migration** — planned + executed Phase A-F-lite (52 tests) → user halted "เอาทุกอย่างที่มึงเปลี่ยนใน frontend กุคืนมาให้หมด" → full revert via `git checkout HEAD -- ...` + `cookie-relay/` restored. **Zero commits made**; working tree clean.
+- Plan file `database-vast-dahl.md` updated to ABORTED status with carry-forward lessons.
 
 ## Decisions (1-line each)
-- AP1 fix sequence chosen: lightweight post-write verify (V15 #12) → schema atomic exact-key (V15 #13) → multi-slot 15-min array (V15 #14 pending) — incremental hardening, each layer additive
-- `buildAppointmentSlotKey` (singular) KEPT for backward-compat with V15 #12/#13 production data + legacy release fallback
-- AP1-bis interval = 15 min matches ProClinic + clinic-typical granularity; `SLOT_INTERVAL_MIN` exported for tests
-- ProfileDropdown placement: next to ThemeToggle (customer-detail breadcrumb + default desktop) per user "Tab login อยู่บนขวาจอ"
-- PDPA strip honored verbatim — removed from active code/comments/skills; ProClinic-scan JSON kept (data integrity)
+- H-bis abort root cause: scope of "backend" overlapped with files user considers frontend (cookie-relay powers PatientDashboard.broker.getCourses; ClinicSettingsPanel sync UI is user-active).
+- Big-bang multi-file ProClinic strip too risky in this codebase — tier-by-tier or single-file-per-deploy preferred next attempt.
+- V15 #14 deploy ran AFTER full revert — AP1-bis was independent of the strip work, shipped clean on the original 1d15db5 commit.
+- AdminDashboard, TreatmentFormPage, TreatmentTimeline, cookie-relay/ all classified as frontend-touching → leave alone in any future strip.
 
 ## Next action
-**Await user "deploy" command for V15 #14** (AP1-bis source-only — `be_appointment_slots` rule already live since V15 #13 so rules deploy is idempotent; vercel ships the multi-slot logic). Per V18 lock: per-turn explicit auth, no carry-forward.
+**Brainstorm backend branch-selector via `superpowers:brainstorming` skill** — user queued a major feature: top-right Tab to switch active branch (mirror ProClinic UX). Shared collections: customers / staff (filtered by per-staff branch access) / permission-groups / branches / system-settings. Pre-req: tag every existing customer with `branchId='นครราชสีมา'`.
 
 ## Outstanding user-triggered actions
-- **V15 #14 deploy auth** — AP1-bis multi-slot fix (1 commit ahead)
-- 16.8 `/audit-all` orchestrator-only readiness check (Phase 16 final closure)
-- Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
-- Phase 17 plan TBD when user ready
+- **Branch-selector design brainstorm** (next session — invoke `Skill(brainstorming)` per Rule J before any plan/code)
+- Customer-tag bootstrap to baseline `branchId` before new branches
+- 16.8 `/audit-all` orchestrator-only readiness check
+- Phase 17 plan TBD
 
 ## Rules in force
 - V18 deploy auth (per-turn explicit "deploy"; no roll-over)
@@ -46,5 +44,5 @@ storage_rules_version: 2
 - Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode
 - Rule K work-first, test-last for multi-stream cycles
 - Rule H-quater no master_data reads in feature code
-- NO real-action clicks in preview_eval (memory rule)
-- V31 silent-swallow lock (no `try/catch console.warn(continuing)`)
+- NO real-action clicks in preview_eval
+- V31 silent-swallow lock

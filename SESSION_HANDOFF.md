@@ -7,12 +7,24 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-04 EOD — AP1-bis multi-slot pushed, V15 #14 deploy auth pending
+- **Date last updated**: 2026-05-05 EOD — V15 #14 LIVE; H-bis ProClinic strip explored + reverted
 - **Branch**: `master`
 - **Last commit**: `1d15db5` — feat(ap1-bis): multi-slot 15-min interval reservation closes range-overlap
-- **Test count**: **4612** (+351 since 4261: Phase 16.1 +170, audit-fix bundle +120, AP1 schema +22, AP1-bis +28, misc legacy regressions +11)
+- **Test count**: **4612** (unchanged — H-bis test bank reverted with all source edits)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `c0d9dc4`** (V15 #13 LIVE 2026-05-04) · master 1 commit ahead-of-prod (`1d15db5` AP1-bis)
+- **Deploy state**: ✅ **PRODUCTION = `1d15db5`** (V15 #14 LIVE 2026-05-05) · **in-sync with prod**
+
+### Session 2026-05-05 EOD — V15 #14 deploy + H-bis ProClinic strip explored + fully reverted
+
+User authorized V15 #14 to ship `1d15db5` AP1-bis multi-slot. Mid-session pivot to "H-bis backend ProClinic strip — backend ใช้ database เราทั้งหมด" with big-bang rollout. Planned + approved + executed Phase A-F-lite (52-test bank, +source edits across ClinicSettingsPanel / ChartCanvas / ChartTemplateSelector / TreatmentTimeline / TreatmentFormPage / AdminDashboard / BackendDashboard / firestore.rules + cookie-relay/ delete) → user halted "เอาทุกอย่างที่มึงเปลี่ยนใน frontend กุคืนมาให้หมด" → full revert via `git checkout HEAD -- ...` + cookie-relay/ restored. **Zero commits made.**
+
+Then V15 #14 deploy (independent of strip work) shipped clean: pre-probe 6/6 ✓, vercel + firebase rules in parallel ✓ (build 3.12s, rules idempotent re-publish), post-probe 6/6 ✓, cleanup 4/4 ✓, HTTP smoke / 200 + /admin 200 + line webhook 401-LINE-sig.
+
+Branch-selector brainstorm queued for next session (queued via `/brainstorm` × 2 — needs `Skill(superpowers:brainstorming)` invocation per Rule J).
+
+**V15 #14 deploy** (2026-05-05) — vercel ships AP1-bis logic; rules unchanged from V15 #13 (idempotent). 6/6 + 6/6 probes ✓.
+
+Detail: `.agents/sessions/2026-05-05-v15-14-and-hbis-revert.md`
 
 ### Session 2026-05-04 EOD — audit-fix sweep + AP1 V15 #11/#12/#13 + AP1-bis V15 #14 pending
 
@@ -304,29 +316,34 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-04 EOD.
+Resume LoverClinic — continue from 2026-05-05 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=1d15db5, prod=c0d9dc4)
-3. .agents/active.md (4612 tests pass; AP1-bis pushed; V15 #14 pending)
+2. SESSION_HANDOFF.md (master=1d15db5, prod=1d15db5)
+3. .agents/active.md (4612 tests pass; in-sync with prod)
 4. .claude/rules/00-session-start.md
-5. .agents/sessions/2026-05-04-ap1-bis-multi-slot.md
+5. .agents/sessions/2026-05-05-v15-14-and-hbis-revert.md
 
-Status: master=1d15db5, 4612/4612 tests pass, prod=c0d9dc4 LIVE (V15 #13). 1 commit ahead-of-prod (AP1-bis source-only).
+Status: master=1d15db5, 4612/4612 tests pass, prod=1d15db5 LIVE (V15 #14). In-sync.
 
-Next action: AWAIT user "deploy" command for V15 #14
-- AP1-bis multi-slot 15-min interval reservation
-- Source-only (be_appointment_slots rule already live since V15 #13)
-- V18 lock — per-turn explicit auth required, no carry-forward
+Next action: Brainstorm backend branch-selector via Skill(superpowers:brainstorming)
+- User queued (2× /brainstorm in last session) a major new feature: top-right Tab to switch active branch (mirror ProClinic UX)
+- Shared collections across branches: customers / staff (filtered by per-staff branch access) / permission-groups / branches / system-settings
+- Per-branch isolation: everything else
+- Pre-req: tag every existing customer with branchId='นครราชสีมา' baseline before any new branch ships
+- Rule J HARD-GATE: invoke Skill(brainstorming) FIRST before any plan/code
 
 Outstanding (user-triggered):
-- V15 #14 deploy auth — AP1-bis (1 commit ahead)
-- 16.8 /audit-all orchestrator-only readiness check (Phase 16 final closure)
-- Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
-- Phase 17 plan TBD when user ready
+- Branch-selector brainstorm + plan
+- Customer-tag bootstrap (baseline branchId)
+- 16.8 /audit-all orchestrator-only readiness check
+- Phase 17 plan TBD
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval; V31 silent-swallow lock.
+
+CONTEXT: H-bis ProClinic strip was attempted + fully reverted last session per user directive "เอาทุกอย่างที่มึงเปลี่ยนใน frontend กุคืนมาให้หมด". DO NOT re-attempt without user explicitly re-authorizing scope. Plan file `~/.claude/plans/database-vast-dahl.md` marked ABORTED.
+
 /session-start
 ```
 
