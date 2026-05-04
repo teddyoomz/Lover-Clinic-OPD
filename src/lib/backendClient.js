@@ -11283,3 +11283,20 @@ export async function convertQuotationToSale(quotationId) {
 // pattern (Phase 15.6) — admin-token verified, two-phase list→delete.
 //
 // Spec: docs/superpowers/specs/2026-04-29-br-phantom-cleanup-design.md
+
+// ─── Phase BSA — universal listener markers ─────────────────────────────────
+// useBranchAwareListener (Phase BSA Task 5) checks fn.__universal__ to skip
+// branchId injection. Customer-attached + audience + permission listeners
+// cross branches (one customer may visit multiple branches; audiences filter
+// globally; permissions are per-user). Branch-scoped listeners
+// (listenToAppointmentsByDate / listenToAllSales / listenToHolidays /
+// listenToScheduleByDay) remain unmarked — the hook injects current branchId
+// for them and re-subscribes on branch switch.
+listenToCustomer.__universal__ = true;
+listenToCustomerTreatments.__universal__ = true;
+listenToCustomerAppointments.__universal__ = true;
+listenToCustomerSales.__universal__ = true;
+listenToCustomerFinance.__universal__ = true;
+listenToCourseChanges.__universal__ = true;
+listenToAudiences.__universal__ = true;
+listenToUserPermissions.__universal__ = true;
