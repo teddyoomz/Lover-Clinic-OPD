@@ -72,6 +72,30 @@ async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } 
   return items;
 }
 
+/**
+ * Phase BSA Task 2 — branch-scoped read helper for collections WITHOUT the
+ * `allBranches: true` doc-level field. Single where('branchId','==',X) query
+ * when the filter is active; full-collection read otherwise. Returns raw docs
+ * with NO sort — callers apply their own additional filters (status, date
+ * range, saleId, vendorId) and sort, because each financial lister has a
+ * different secondary-filter signature.
+ *
+ * Used by listOnlineSales / listSaleInsuranceClaims / listVendorSales.
+ * For collections WITH the allBranches doc field (promotions / coupons /
+ * vouchers), use `_listWithBranchOrMerge` instead (Task 1).
+ *
+ * Legacy callers (no opts) skip the filter entirely and return the full
+ * collection — preserves pre-Phase-BSA shape.
+ */
+async function _listWithBranch(colRef, { branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(colRef, where('branchId', '==', String(branchId)))
+    : colRef;
+  const snap = await getDocs(ref);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 
@@ -10100,9 +10124,8 @@ export async function getOnlineSale(onlineSaleId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listOnlineSales({ status, startDate, endDate } = {}) {
-  const snap = await getDocs(onlineSalesCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+export async function listOnlineSales({ status, startDate, endDate, branchId, allBranches = false } = {}) {
+  let items = await _listWithBranch(onlineSalesCol(), { branchId, allBranches });
   if (status) items = items.filter(o => o.status === status);
   if (startDate) items = items.filter(o => (o.transferDate || '') >= startDate);
   if (endDate) items = items.filter(o => (o.transferDate || '') <= endDate);
@@ -10121,6 +10144,7 @@ export async function saveOnlineSale(onlineSaleId, data, opts = {}) {
   await setDoc(onlineSaleDoc(id), {
     ...normalized,
     onlineSaleId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
@@ -10168,9 +10192,8 @@ export async function getSaleInsuranceClaim(claimId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listSaleInsuranceClaims({ saleId, status, startDate, endDate } = {}) {
-  const snap = await getDocs(saleInsuranceClaimsCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+export async function listSaleInsuranceClaims({ saleId, status, startDate, endDate, branchId, allBranches = false } = {}) {
+  let items = await _listWithBranch(saleInsuranceClaimsCol(), { branchId, allBranches });
   if (saleId) items = items.filter(c => c.saleId === saleId);
   if (status) items = items.filter(c => c.status === status);
   if (startDate) items = items.filter(c => (c.claimDate || '') >= startDate);
@@ -10190,6 +10213,7 @@ export async function saveSaleInsuranceClaim(claimId, data, opts = {}) {
   await setDoc(saleInsuranceClaimDoc(id), {
     ...normalized,
     claimId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
@@ -10591,9 +10615,8 @@ export async function deleteVendor(vendorId) {
   await deleteDoc(vendorDoc(id));
 }
 
-export async function listVendorSales({ vendorId, status, startDate, endDate } = {}) {
-  const snap = await getDocs(vendorSalesCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+export async function listVendorSales({ vendorId, status, startDate, endDate, branchId, allBranches = false } = {}) {
+  let items = await _listWithBranch(vendorSalesCol(), { branchId, allBranches });
   if (vendorId) items = items.filter(s => s.vendorId === vendorId);
   if (status) items = items.filter(s => s.status === status);
   if (startDate) items = items.filter(s => (s.saleDate || '') >= startDate);
@@ -10613,6 +10636,7 @@ export async function saveVendorSale(saleId, data, opts = {}) {
   await setDoc(vendorSaleDoc(id), {
     ...normalized,
     vendorSaleId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
