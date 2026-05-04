@@ -192,6 +192,152 @@ vi.mock('../src/lib/backendClient.js', () => {
     deleteMembership: mockLister('deleteMembership'),
     deleteMasterCourse: mockLister('deleteMasterCourse'),
     deleteMasterItem: mockLister('deleteMasterItem'),
+
+    // ── BS2.9 surface-completeness mocks (Task 4-CR) ───────────────────────
+    // Listeners (raw — useBranchAwareListener wraps in Task 5)
+    listenToCustomer: mockLister('listenToCustomer'),
+    listenToCustomerTreatments: mockLister('listenToCustomerTreatments'),
+    listenToCustomerAppointments: mockLister('listenToCustomerAppointments'),
+    listenToCustomerSales: mockLister('listenToCustomerSales'),
+    listenToCustomerFinance: mockLister('listenToCustomerFinance'),
+    listenToCourseChanges: mockLister('listenToCourseChanges'),
+    listenToAudiences: mockLister('listenToAudiences'),
+    listenToUserPermissions: mockLister('listenToUserPermissions'),
+    listenToAppointmentsByDate: mockLister('listenToAppointmentsByDate'),
+    listenToAllSales: mockLister('listenToAllSales'),
+    listenToHolidays: mockLister('listenToHolidays'),
+    listenToScheduleByDay: mockLister('listenToScheduleByDay'),
+
+    // Customer ops
+    addCustomer: mockLister('addCustomer'),
+    updateCustomer: mockLister('updateCustomer'),
+    updateCustomerFromForm: mockLister('updateCustomerFromForm'),
+    customerExists: mockLister('customerExists'),
+    buildFormFromCustomer: mockLister('buildFormFromCustomer'),
+
+    // Sale ops
+    createBackendSale: mockLister('createBackendSale'),
+    updateBackendSale: mockLister('updateBackendSale'),
+    cancelBackendSale: mockLister('cancelBackendSale'),
+    updateSalePayment: mockLister('updateSalePayment'),
+    markSalePaid: mockLister('markSalePaid'),
+    assignCourseToCustomer: mockLister('assignCourseToCustomer'),
+    applyDepositToSale: mockLister('applyDepositToSale'),
+    convertQuotationToSale: mockLister('convertQuotationToSale'),
+    analyzeSaleCancel: mockLister('analyzeSaleCancel'),
+    applySaleCancelToCourses: mockLister('applySaleCancelToCourses'),
+    setTreatmentLinkedSaleId: mockLister('setTreatmentLinkedSaleId'),
+    transitionSaleInsuranceClaim: mockLister('transitionSaleInsuranceClaim'),
+
+    // Treatment ops
+    createBackendTreatment: mockLister('createBackendTreatment'),
+    updateBackendTreatment: mockLister('updateBackendTreatment'),
+    rebuildTreatmentSummary: mockLister('rebuildTreatmentSummary'),
+
+    // Course ops
+    deductCourseItems: mockLister('deductCourseItems'),
+    reverseCourseDeduction: mockLister('reverseCourseDeduction'),
+    addCourseRemainingQty: mockLister('addCourseRemainingQty'),
+    addPicksToResolvedGroup: mockLister('addPicksToResolvedGroup'),
+    resolvePickedCourseInCustomer: mockLister('resolvePickedCourseInCustomer'),
+    cancelCustomerCourse: mockLister('cancelCustomerCourse'),
+    refundCustomerCourse: mockLister('refundCustomerCourse'),
+    exchangeCourseProduct: mockLister('exchangeCourseProduct'),
+
+    // Stock ops + analysis
+    createStockOrder: mockLister('createStockOrder'),
+    updateStockOrder: mockLister('updateStockOrder'),
+    cancelStockOrder: mockLister('cancelStockOrder'),
+    createStockAdjustment: mockLister('createStockAdjustment'),
+    createStockTransfer: mockLister('createStockTransfer'),
+    updateStockTransferStatus: mockLister('updateStockTransferStatus'),
+    createStockWithdrawal: mockLister('createStockWithdrawal'),
+    updateStockWithdrawalStatus: mockLister('updateStockWithdrawalStatus'),
+    deductStockForSale: mockLister('deductStockForSale'),
+    reverseStockForSale: mockLister('reverseStockForSale'),
+    deductStockForTreatment: mockLister('deductStockForTreatment'),
+    reverseStockForTreatment: mockLister('reverseStockForTreatment'),
+    analyzeStockImpact: mockLister('analyzeStockImpact'),
+    summarizeSkipReasons: mockLister('summarizeSkipReasons'),
+
+    // Central stock ops
+    createCentralWarehouse: mockLister('createCentralWarehouse'),
+    updateCentralWarehouse: mockLister('updateCentralWarehouse'),
+    createCentralStockOrder: mockLister('createCentralStockOrder'),
+    cancelCentralStockOrder: mockLister('cancelCentralStockOrder'),
+    receiveCentralStockOrder: mockLister('receiveCentralStockOrder'),
+
+    // Appointment ops
+    createBackendAppointment: mockLister('createBackendAppointment'),
+    updateBackendAppointment: mockLister('updateBackendAppointment'),
+
+    // Deposit ops
+    createDeposit: mockLister('createDeposit'),
+    updateDeposit: mockLister('updateDeposit'),
+    cancelDeposit: mockLister('cancelDeposit'),
+    refundDeposit: mockLister('refundDeposit'),
+    reverseDepositUsage: mockLister('reverseDepositUsage'),
+
+    // Wallet/points ops
+    ensureCustomerWallet: mockLister('ensureCustomerWallet'),
+    topUpWallet: mockLister('topUpWallet'),
+    adjustWallet: mockLister('adjustWallet'),
+    deductWallet: mockLister('deductWallet'),
+    refundToWallet: mockLister('refundToWallet'),
+    adjustPoints: mockLister('adjustPoints'),
+    earnPoints: mockLister('earnPoints'),
+    reversePointsEarned: mockLister('reversePointsEarned'),
+
+    // Membership ops
+    createMembership: mockLister('createMembership'),
+    cancelMembership: mockLister('cancelMembership'),
+    renewMembership: mockLister('renewMembership'),
+
+    // Document infra
+    seedDocumentTemplatesIfEmpty: mockLister('seedDocumentTemplatesIfEmpty'),
+    upgradeSystemDocumentTemplates: mockLister('upgradeSystemDocumentTemplates'),
+    findResumableDraft: mockLister('findResumableDraft'),
+    recordDocumentPrint: mockLister('recordDocumentPrint'),
+
+    // Audience helpers
+    newAudienceId: mockLister('newAudienceId'),
+
+    // Master shape
+    beCourseToMasterShape: mockLister('beCourseToMasterShape'),
+
+    // Master data sync (DEV-only — re-exported for build, not for general use)
+    runMasterDataSync: mockLister('runMasterDataSync'),
+    getAllMasterDataItems: mockLister('getAllMasterDataItems'),
+    clearMasterDataItems: mockLister('clearMasterDataItems'),
+    createMasterCourse: mockLister('createMasterCourse'),
+    updateMasterCourse: mockLister('updateMasterCourse'),
+    createMasterItem: mockLister('createMasterItem'),
+    updateMasterItem: mockLister('updateMasterItem'),
+    migrateMasterPromotionsToBe: mockLister('migrateMasterPromotionsToBe'),
+    migrateMasterCouponsToBe: mockLister('migrateMasterCouponsToBe'),
+    migrateMasterVouchersToBe: mockLister('migrateMasterVouchersToBe'),
+    migrateMasterProductGroupsToBe: mockLister('migrateMasterProductGroupsToBe'),
+    migrateMasterProductUnitsToBe: mockLister('migrateMasterProductUnitsToBe'),
+    migrateMasterMedicalInstrumentsToBe: mockLister('migrateMasterMedicalInstrumentsToBe'),
+    migrateMasterHolidaysToBe: mockLister('migrateMasterHolidaysToBe'),
+    migrateMasterBranchesToBe: mockLister('migrateMasterBranchesToBe'),
+    migrateMasterPermissionGroupsToBe: mockLister('migrateMasterPermissionGroupsToBe'),
+    migrateMasterStaffToBe: mockLister('migrateMasterStaffToBe'),
+    migrateMasterDoctorsToBe: mockLister('migrateMasterDoctorsToBe'),
+    migrateMasterStaffSchedulesToBe: mockLister('migrateMasterStaffSchedulesToBe'),
+    migrateMasterProductsToBe: mockLister('migrateMasterProductsToBe'),
+    migrateMasterCoursesToBeV2: mockLister('migrateMasterCoursesToBeV2'),
+    migrateMasterDfGroupsToBe: mockLister('migrateMasterDfGroupsToBe'),
+    migrateMasterDfStaffRatesToBe: mockLister('migrateMasterDfStaffRatesToBe'),
+    migrateMasterWalletTypesToBe: mockLister('migrateMasterWalletTypesToBe'),
+    migrateMasterMembershipTypesToBe: mockLister('migrateMasterMembershipTypesToBe'),
+    migrateMasterMedicineLabelsToBe: mockLister('migrateMasterMedicineLabelsToBe'),
+
+    // Treatment context-specific
+    listProductGroupsForTreatment: mockLister('listProductGroupsForTreatment'),
+
+    // Admin reconciler
+    reconcileAllCustomerSummaries: mockLister('reconcileAllCustomerSummaries'),
   };
 });
 
@@ -274,10 +420,14 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
       it(`BS2.4.${name} does NOT inject branchId`, async () => {
         const scoped = await import('../src/lib/scopedDataLayer.js');
         await scoped[name]();
-        const captured = calls[name];
-        if (captured !== undefined) {
-          expect(captured.branchId).toBeUndefined();
-        }
+        // V21 lock — assert the captured opts directly. The previous
+        // `if (captured !== undefined)` guard let a vacuous-pass slip
+        // through if the mock was missing (captured undefined → branch
+        // skipped → green). Optional chaining keeps the test honest:
+        // captured?.branchId must be undefined either because captured
+        // is itself undefined (raw export, no opts arg) OR because the
+        // function didn't auto-inject branchId.
+        expect(calls[name]?.branchId).toBeUndefined();
       });
     }
   });
@@ -338,5 +488,93 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
       await scoped.listProducts();
       expect(calls.listProducts.branchId).toBe('main');
     });
+  });
+
+  describe('BS2.9 — surface completeness (UI consumers)', () => {
+    // Every name UI components actually import from backendClient — must
+    // be re-exported by scopedDataLayer so Task 6 mass-import migration
+    // can swap import paths without build failure.
+    const requiredExports = [
+      // Listeners (raw — useBranchAwareListener wraps in Task 5)
+      'listenToCustomer', 'listenToCustomerTreatments',
+      'listenToCustomerAppointments', 'listenToCustomerSales',
+      'listenToCustomerFinance', 'listenToCourseChanges',
+      'listenToAudiences', 'listenToUserPermissions',
+      'listenToAppointmentsByDate', 'listenToAllSales',
+      'listenToHolidays', 'listenToScheduleByDay',
+      // Customer ops
+      'addCustomer', 'updateCustomer', 'updateCustomerFromForm',
+      'customerExists', 'buildFormFromCustomer',
+      // Sale ops
+      'createBackendSale', 'updateBackendSale', 'cancelBackendSale',
+      'updateSalePayment', 'markSalePaid',
+      'assignCourseToCustomer', 'applyDepositToSale',
+      'convertQuotationToSale', 'analyzeSaleCancel',
+      'applySaleCancelToCourses', 'setTreatmentLinkedSaleId',
+      'transitionSaleInsuranceClaim',
+      // Treatment ops
+      'createBackendTreatment', 'updateBackendTreatment',
+      'rebuildTreatmentSummary',
+      // Course ops
+      'deductCourseItems', 'reverseCourseDeduction',
+      'addCourseRemainingQty', 'addPicksToResolvedGroup',
+      'resolvePickedCourseInCustomer', 'cancelCustomerCourse',
+      'refundCustomerCourse', 'exchangeCourseProduct',
+      // Stock ops + analysis
+      'createStockOrder', 'updateStockOrder', 'cancelStockOrder',
+      'createStockAdjustment', 'createStockTransfer',
+      'updateStockTransferStatus', 'createStockWithdrawal',
+      'updateStockWithdrawalStatus', 'deductStockForSale',
+      'reverseStockForSale', 'deductStockForTreatment',
+      'reverseStockForTreatment', 'analyzeStockImpact',
+      'summarizeSkipReasons',
+      // Central stock ops
+      'createCentralWarehouse', 'updateCentralWarehouse',
+      'createCentralStockOrder', 'cancelCentralStockOrder',
+      'receiveCentralStockOrder',
+      // Appointment ops
+      'createBackendAppointment', 'updateBackendAppointment',
+      // Deposit ops
+      'createDeposit', 'updateDeposit', 'cancelDeposit',
+      'refundDeposit', 'reverseDepositUsage',
+      // Wallet/points ops
+      'ensureCustomerWallet', 'topUpWallet', 'adjustWallet',
+      'deductWallet', 'refundToWallet',
+      'adjustPoints', 'earnPoints', 'reversePointsEarned',
+      // Membership ops
+      'createMembership', 'cancelMembership', 'renewMembership',
+      // Document infra
+      'seedDocumentTemplatesIfEmpty', 'upgradeSystemDocumentTemplates',
+      'findResumableDraft', 'recordDocumentPrint',
+      // Audience helpers
+      'newAudienceId',
+      // Master shape
+      'beCourseToMasterShape',
+      // Master data sync (DEV-only — for build, MasterDataTab uses)
+      'runMasterDataSync', 'getAllMasterDataItems', 'clearMasterDataItems',
+      'createMasterCourse', 'updateMasterCourse',
+      'createMasterItem', 'updateMasterItem',
+      'migrateMasterPromotionsToBe', 'migrateMasterCouponsToBe',
+      'migrateMasterVouchersToBe', 'migrateMasterProductGroupsToBe',
+      'migrateMasterProductUnitsToBe', 'migrateMasterMedicalInstrumentsToBe',
+      'migrateMasterHolidaysToBe', 'migrateMasterBranchesToBe',
+      'migrateMasterPermissionGroupsToBe', 'migrateMasterStaffToBe',
+      'migrateMasterDoctorsToBe', 'migrateMasterStaffSchedulesToBe',
+      'migrateMasterProductsToBe', 'migrateMasterCoursesToBeV2',
+      'migrateMasterDfGroupsToBe', 'migrateMasterDfStaffRatesToBe',
+      'migrateMasterWalletTypesToBe', 'migrateMasterMembershipTypesToBe',
+      'migrateMasterMedicineLabelsToBe',
+      // Treatment context-specific
+      'listProductGroupsForTreatment',
+      // Admin reconciler
+      'reconcileAllCustomerSummaries',
+    ];
+
+    for (const name of requiredExports) {
+      it(`BS2.9.${name} is exported from scopedDataLayer`, async () => {
+        const scoped = await import('../src/lib/scopedDataLayer.js');
+        expect(typeof scoped[name]).toBe('function');
+      });
+    }
   });
 });

@@ -103,9 +103,33 @@ export const listMembershipTypes = raw.listMembershipTypes;
 export const listWalletTypes = raw.listWalletTypes;
 export const listCourseChanges = raw.listCourseChanges;
 
+// ─── Universal listeners (live snapshot — re-exported raw) ─────────────────
+// Layer 3 hook (useBranchAwareListener, Task 5) wraps these for branchId
+// injection + re-subscribe on branch change. Customer-attached listeners
+// have __universal__:true marker (Task 3) so the hook skips branch logic.
+export const listenToCustomer = raw.listenToCustomer;
+export const listenToCustomerTreatments = raw.listenToCustomerTreatments;
+export const listenToCustomerAppointments = raw.listenToCustomerAppointments;
+export const listenToCustomerSales = raw.listenToCustomerSales;
+export const listenToCustomerFinance = raw.listenToCustomerFinance;
+export const listenToCourseChanges = raw.listenToCourseChanges;
+export const listenToAudiences = raw.listenToAudiences;
+export const listenToUserPermissions = raw.listenToUserPermissions;
+
+// ─── Branch-scoped listeners (raw — useBranchAwareListener injects branchId) ─
+// useBranchAwareListener hook (Task 5) injects branchId and re-subscribes on
+// branch switch. Re-export RAW here — listeners need re-subscribe lifecycle
+// that a wrapper-at-call-time can't provide.
+export const listenToAppointmentsByDate = raw.listenToAppointmentsByDate;
+export const listenToAllSales = raw.listenToAllSales;
+export const listenToHolidays = raw.listenToHolidays;
+export const listenToScheduleByDay = raw.listenToScheduleByDay;
+
 // Audiences (smart segments — global filter)
 export const listAudiences = raw.listAudiences;
 export const getAudience = raw.getAudience;
+// Audience helpers
+export const newAudienceId = raw.newAudienceId;
 
 // Documents
 export const getDocumentTemplate = raw.getDocumentTemplate;
@@ -113,6 +137,12 @@ export const listDocumentDrafts = raw.listDocumentDrafts;
 export const listDocumentPrints = raw.listDocumentPrints;
 export const getDocumentDraft = raw.getDocumentDraft;
 export const getNextCertNumber = raw.getNextCertNumber;
+
+// ─── Document infra (seeding / upgrade / drafts / print log) ───────────────
+export const seedDocumentTemplatesIfEmpty = raw.seedDocumentTemplatesIfEmpty;
+export const upgradeSystemDocumentTemplates = raw.upgradeSystemDocumentTemplates;
+export const findResumableDraft = raw.findResumableDraft;
+export const recordDocumentPrint = raw.recordDocumentPrint;
 
 // Vendors (universal supplier directory)
 export const listVendors = raw.listVendors;
@@ -123,7 +153,10 @@ export const listCentralWarehouses = raw.listCentralWarehouses;
 export const listStockLocations = raw.listStockLocations;
 export const getCentralStockOrder = raw.getCentralStockOrder;
 
-// Stock — tier-scoped (caller passes locationId explicitly)
+// ─── Stock — tier-scoped (caller passes locationId explicitly) ─────────────
+// listStockTransfers/Withdrawals span TWO tiers (central WH ↔ branch); caller
+// chooses which side to query via locationId. Auto-injecting branchId would
+// silently filter out central-tier views.
 export const listStockTransfers = raw.listStockTransfers;
 export const listStockWithdrawals = raw.listStockWithdrawals;
 export const getStockBatch = raw.getStockBatch;
@@ -235,3 +268,127 @@ export const deleteDeposit = raw.deleteDeposit;
 export const deleteMembership = raw.deleteMembership;
 export const deleteMasterCourse = raw.deleteMasterCourse;
 export const deleteMasterItem = raw.deleteMasterItem;
+
+// ─── Customer write/read operations ────────────────────────────────────────
+export const addCustomer = raw.addCustomer;
+export const updateCustomer = raw.updateCustomer;
+export const updateCustomerFromForm = raw.updateCustomerFromForm;
+export const customerExists = raw.customerExists;
+export const buildFormFromCustomer = raw.buildFormFromCustomer;
+
+// ─── Sale operations ───────────────────────────────────────────────────────
+export const createBackendSale = raw.createBackendSale;
+export const updateBackendSale = raw.updateBackendSale;
+export const cancelBackendSale = raw.cancelBackendSale;
+export const updateSalePayment = raw.updateSalePayment;
+export const markSalePaid = raw.markSalePaid;
+export const assignCourseToCustomer = raw.assignCourseToCustomer;
+export const applyDepositToSale = raw.applyDepositToSale;
+export const convertQuotationToSale = raw.convertQuotationToSale;
+export const analyzeSaleCancel = raw.analyzeSaleCancel;
+export const applySaleCancelToCourses = raw.applySaleCancelToCourses;
+export const setTreatmentLinkedSaleId = raw.setTreatmentLinkedSaleId;
+export const transitionSaleInsuranceClaim = raw.transitionSaleInsuranceClaim;
+
+// ─── Treatment operations ──────────────────────────────────────────────────
+export const createBackendTreatment = raw.createBackendTreatment;
+export const updateBackendTreatment = raw.updateBackendTreatment;
+export const rebuildTreatmentSummary = raw.rebuildTreatmentSummary;
+
+// ─── Course operations ─────────────────────────────────────────────────────
+export const deductCourseItems = raw.deductCourseItems;
+export const reverseCourseDeduction = raw.reverseCourseDeduction;
+export const addCourseRemainingQty = raw.addCourseRemainingQty;
+export const addPicksToResolvedGroup = raw.addPicksToResolvedGroup;
+export const resolvePickedCourseInCustomer = raw.resolvePickedCourseInCustomer;
+export const cancelCustomerCourse = raw.cancelCustomerCourse;
+export const refundCustomerCourse = raw.refundCustomerCourse;
+export const exchangeCourseProduct = raw.exchangeCourseProduct;
+
+// ─── Stock operations (writers + analysis) ─────────────────────────────────
+export const createStockOrder = raw.createStockOrder;
+export const updateStockOrder = raw.updateStockOrder;
+export const cancelStockOrder = raw.cancelStockOrder;
+export const createStockAdjustment = raw.createStockAdjustment;
+export const createStockTransfer = raw.createStockTransfer;
+export const updateStockTransferStatus = raw.updateStockTransferStatus;
+export const createStockWithdrawal = raw.createStockWithdrawal;
+export const updateStockWithdrawalStatus = raw.updateStockWithdrawalStatus;
+export const deductStockForSale = raw.deductStockForSale;
+export const reverseStockForSale = raw.reverseStockForSale;
+export const deductStockForTreatment = raw.deductStockForTreatment;
+export const reverseStockForTreatment = raw.reverseStockForTreatment;
+export const analyzeStockImpact = raw.analyzeStockImpact;
+export const summarizeSkipReasons = raw.summarizeSkipReasons;
+
+// ─── Central stock operations ──────────────────────────────────────────────
+export const createCentralWarehouse = raw.createCentralWarehouse;
+export const updateCentralWarehouse = raw.updateCentralWarehouse;
+export const createCentralStockOrder = raw.createCentralStockOrder;
+export const cancelCentralStockOrder = raw.cancelCentralStockOrder;
+export const receiveCentralStockOrder = raw.receiveCentralStockOrder;
+
+// ─── Appointment operations ────────────────────────────────────────────────
+export const createBackendAppointment = raw.createBackendAppointment;
+export const updateBackendAppointment = raw.updateBackendAppointment;
+
+// ─── Deposit operations ────────────────────────────────────────────────────
+export const createDeposit = raw.createDeposit;
+export const updateDeposit = raw.updateDeposit;
+export const cancelDeposit = raw.cancelDeposit;
+export const refundDeposit = raw.refundDeposit;
+export const reverseDepositUsage = raw.reverseDepositUsage;
+
+// ─── Wallet / points operations ────────────────────────────────────────────
+export const ensureCustomerWallet = raw.ensureCustomerWallet;
+export const topUpWallet = raw.topUpWallet;
+export const adjustWallet = raw.adjustWallet;
+export const deductWallet = raw.deductWallet;
+export const refundToWallet = raw.refundToWallet;
+export const adjustPoints = raw.adjustPoints;
+export const earnPoints = raw.earnPoints;
+export const reversePointsEarned = raw.reversePointsEarned;
+
+// ─── Membership operations ─────────────────────────────────────────────────
+export const createMembership = raw.createMembership;
+export const cancelMembership = raw.cancelMembership;
+export const renewMembership = raw.renewMembership;
+
+// ─── Master shape conversion ───────────────────────────────────────────────
+export const beCourseToMasterShape = raw.beCourseToMasterShape;
+
+// ─── Master data sync — DEV-ONLY (Rule H-bis: strip before production) ─────
+// MasterDataTab is the sole sanctioned consumer of these helpers. Re-exported
+// here so Task 6 mass migration doesn't fail to build; not for general use.
+export const runMasterDataSync = raw.runMasterDataSync;
+export const getAllMasterDataItems = raw.getAllMasterDataItems;
+export const clearMasterDataItems = raw.clearMasterDataItems;
+export const createMasterCourse = raw.createMasterCourse;
+export const updateMasterCourse = raw.updateMasterCourse;
+export const createMasterItem = raw.createMasterItem;
+export const updateMasterItem = raw.updateMasterItem;
+export const migrateMasterPromotionsToBe = raw.migrateMasterPromotionsToBe;
+export const migrateMasterCouponsToBe = raw.migrateMasterCouponsToBe;
+export const migrateMasterVouchersToBe = raw.migrateMasterVouchersToBe;
+export const migrateMasterProductGroupsToBe = raw.migrateMasterProductGroupsToBe;
+export const migrateMasterProductUnitsToBe = raw.migrateMasterProductUnitsToBe;
+export const migrateMasterMedicalInstrumentsToBe = raw.migrateMasterMedicalInstrumentsToBe;
+export const migrateMasterHolidaysToBe = raw.migrateMasterHolidaysToBe;
+export const migrateMasterBranchesToBe = raw.migrateMasterBranchesToBe;
+export const migrateMasterPermissionGroupsToBe = raw.migrateMasterPermissionGroupsToBe;
+export const migrateMasterStaffToBe = raw.migrateMasterStaffToBe;
+export const migrateMasterDoctorsToBe = raw.migrateMasterDoctorsToBe;
+export const migrateMasterStaffSchedulesToBe = raw.migrateMasterStaffSchedulesToBe;
+export const migrateMasterProductsToBe = raw.migrateMasterProductsToBe;
+export const migrateMasterCoursesToBeV2 = raw.migrateMasterCoursesToBeV2;
+export const migrateMasterDfGroupsToBe = raw.migrateMasterDfGroupsToBe;
+export const migrateMasterDfStaffRatesToBe = raw.migrateMasterDfStaffRatesToBe;
+export const migrateMasterWalletTypesToBe = raw.migrateMasterWalletTypesToBe;
+export const migrateMasterMembershipTypesToBe = raw.migrateMasterMembershipTypesToBe;
+export const migrateMasterMedicineLabelsToBe = raw.migrateMasterMedicineLabelsToBe;
+
+// ─── Treatment context-specific helper (be_product_groups for TFP modal) ───
+export const listProductGroupsForTreatment = raw.listProductGroupsForTreatment;
+
+// ─── Admin reconciler ──────────────────────────────────────────────────────
+export const reconcileAllCustomerSummaries = raw.reconcileAllCustomerSummaries;
