@@ -28,6 +28,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAdminToken } from './_lib/adminAuth.js';
+import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -55,15 +56,12 @@ function getAdminFirestore() {
   return cachedDb;
 }
 
-async function getLineToken(db) {
-  try {
-    const snap = await db.doc(`artifacts/${APP_ID}/public/data/clinic_settings/chat_config`).get();
-    if (!snap.exists) return null;
-    const data = snap.data() || {};
-    return data?.line?.channelAccessToken || null;
-  } catch {
-    return null;
-  }
+async function getLineTokenForBranch(db, branchId) {
+  // Phase BS V3 (2026-05-04) — branch-aware. When caller supplies branchId
+  // (typically customer.branchId), read be_line_configs/{branchId}; fall
+  // back to legacy clinic_settings/chat_config.line during transition.
+  const resolved = await resolveLineConfigForAdmin(db, { branchId });
+  return resolved?.config?.channelAccessToken || null;
 }
 
 async function sendLine({ token, recipient, message, pdfUrl }) {
@@ -108,7 +106,7 @@ export default async function handler(req, res) {
   if (!caller) return; // verifyAdminToken wrote 401/403 already
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const { type, recipient, pdfUrl, message } = body;
+  const { type, recipient, pdfUrl, message, branchId, customerId } = body;
 
   // LINE-only: reject any other channel type explicitly.
   if (type !== 'line') {
@@ -121,9 +119,23 @@ export default async function handler(req, res) {
   const db = getAdminFirestore();
 
   try {
-    const token = await getLineToken(db);
+    // Phase BS V3 (2026-05-04) — resolve which branch's LINE OA to use.
+    // Priority:
+    //   1. Explicit branchId in body (caller knows which branch's channel)
+    //   2. customer.branchId (lookup customerId if provided)
+    //   3. Legacy fallback (handled inside getLineTokenForBranch)
+    let resolvedBranchId = branchId || null;
+    if (!resolvedBranchId && customerId) {
+      try {
+        const cSnap = await db.doc(`artifacts/${APP_ID}/public/data/be_customers/${customerId}`).get();
+        if (cSnap.exists) {
+          resolvedBranchId = cSnap.data()?.branchId || null;
+        }
+      } catch { /* fall through to legacy */ }
+    }
+    const token = await getLineTokenForBranch(db, resolvedBranchId);
     const result = await sendLine({ token, recipient, message, pdfUrl });
-    return res.status(200).json(result);
+    return res.status(200).json({ ...result, branchId: resolvedBranchId });
   } catch (err) {
     if (err.code === 'CONFIG_MISSING') {
       return res.status(503).json({ error: err.message, code: 'CONFIG_MISSING' });

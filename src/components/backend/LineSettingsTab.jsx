@@ -1,20 +1,21 @@
-// ─── LINE Settings Tab — V32-tris-ter (2026-04-26) ──────────────────────
-// Comprehensive admin settings for LINE Official Account integration.
-// Per user directive: "ทำหน้า setting line ต่างหากมาใน backend ด้วยนะ
-// setting ค่าต่างๆที่ควรจะมี เพื่อให้ใช้งานได้หลากหลายรูปแบบ และ
-// รองรับทุกสถานการณ์".
+// ─── LINE Settings Tab — Phase BS V3 (2026-05-04) ──────────────────────
+// Per-branch LINE Official Account configuration. Each branch has its own
+// channel + bot Q&A + linking config stored at:
+//   artifacts/{appId}/public/data/be_line_configs/{branchId}
 //
-// Reads + writes Firestore `clinic_settings/chat_config` (line.* keys).
-// Single source of truth used by:
-//   - api/webhook/line.js (bot Q&A + admin-mediated id-link request flow)
-//   - api/admin/send-document.js (LINE Push delivery)
-//   - api/admin/customer-line-link.js (link-status admin actions)
-// V33.9 — api/admin/customer-link.js (QR-token mint) removed.
+// User directive 2026-05-04: "ตั้งค่า line OA กับ คำของผูก Line ก็แยกข้อมูล
+// กันนะ ใช้คนละ line กัน" (LINE OA settings + LINE link requests must be
+// separate per branch — each branch uses different LINE channel).
+//
+// Pre-V3 (V32-tris-ter, 2026-04-26 → V33.x): single config at
+//   clinic_settings/chat_config.line — shared across all branches. The
+//   webhook + admin endpoints retain that location as a transition fallback;
+//   this UI is fully migrated to be_line_configs/{branchId}.
 //
 // Sections:
 //   1. ช่อง / Channel — channelId, channelSecret, channelAccessToken,
 //      botBasicId, enabled toggle
-//   2. ทดสอบการเชื่อมต่อ — push to LINE /v2/bot/info
+//   2. ทดสอบการเชื่อมต่อ — push to LINE /v2/bot/info via /api/admin/line-test
 //   3. Bot Q&A — bot enabled, intent keywords, max-list sizes,
 //      help/welcome/error message overrides
 //   4. ผูกบัญชีลูกค้า — admin-mediated id-link flow config
@@ -24,42 +25,21 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Save, Loader2, AlertCircle, CheckCircle2, Copy, Wifi, WifiOff, MessageCircle, QrCode, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react';
-import { db, appId } from '../../firebase.js';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 // V32-tris-ter-fix (2026-04-26) — direct browser → api.line.me fails CORS
 // preflight (LINE doesn't send Access-Control-Allow-Origin). Proxy via
 // admin-gated /api/admin/line-test endpoint instead.
 import { testLineConnection } from '../../lib/lineTestClient.js';
+import {
+  getLineConfig,
+  saveLineConfig,
+  DEFAULT_LINE_CONFIG,
+  validateLineConfig,
+} from '../../lib/lineConfigClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
-const CHAT_CONFIG_PATH = ['artifacts', '__APP__', 'public', 'data', 'clinic_settings', 'chat_config'];
-
-const DEFAULT_BOT_CONFIG = Object.freeze({
-  // Channel credentials
-  channelId: '',
-  channelSecret: '',
-  channelAccessToken: '',
-  botBasicId: '',                // @-handle e.g. "@123abcde"
-  enabled: false,
-  // Bot Q&A
-  botEnabled: true,
-  coursesKeywords: ['คอร์ส', 'courses', 'course', 'เหลือ', 'remaining'],
-  appointmentsKeywords: ['นัด', 'appointment', 'appt', 'วันนัด'],
-  maxCoursesInReply: 20,
-  maxAppointmentsInReply: 10,
-  helpMessage: '',               // empty = use default from lineBotResponder
-  welcomeMessage: '',            // shown after successful link
-  notLinkedMessage: '',          // shown when customer not linked
-  // Customer linking
-  tokenTtlMinutes: 1440,
-  alreadyLinkedRule: 'block',    // 'block' | 'replace'
-});
-
-function pathFor(appId) {
-  return CHAT_CONFIG_PATH.map(p => p === '__APP__' ? appId : p);
-}
-
-export default function LineSettingsTab({ clinicSettings }) {
-  const [form, setForm] = useState(() => ({ ...DEFAULT_BOT_CONFIG }));
+export default function LineSettingsTab() {
+  const { branchId, branches, isReady } = useSelectedBranch();
+  const [form, setForm] = useState(() => ({ ...DEFAULT_LINE_CONFIG }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -70,75 +50,65 @@ export default function LineSettingsTab({ clinicSettings }) {
   const [testResult, setTestResult] = useState(null); // { ok, message } | null
   const [copied, setCopied] = useState('');
 
-  // Load existing config on mount
+  const branchName =
+    branches?.find?.((b) => (b.branchId || b.id) === branchId)?.branchName ||
+    branches?.find?.((b) => (b.branchId || b.id) === branchId)?.name ||
+    branchId ||
+    '(ไม่ระบุสาขา)';
+
+  // Load config for the selected branch on mount + on branch switch.
   const reload = useCallback(async () => {
+    if (!branchId) return;
     setLoading(true);
     setError('');
+    setSuccess('');
+    setTestResult(null);
     try {
-      const ref = doc(db, ...pathFor(appId));
-      const snap = await getDoc(ref);
-      const remote = snap.exists() ? (snap.data()?.line || {}) : {};
-      // Merge with defaults so newly-introduced fields have safe values
-      setForm(prev => ({
-        ...DEFAULT_BOT_CONFIG,
-        ...remote,
-        coursesKeywords: Array.isArray(remote.coursesKeywords) && remote.coursesKeywords.length
-          ? remote.coursesKeywords : DEFAULT_BOT_CONFIG.coursesKeywords,
-        appointmentsKeywords: Array.isArray(remote.appointmentsKeywords) && remote.appointmentsKeywords.length
-          ? remote.appointmentsKeywords : DEFAULT_BOT_CONFIG.appointmentsKeywords,
-      }));
+      const remote = await getLineConfig(branchId);
+      // Merge with defaults so newly-introduced fields have safe values.
+      // remote=null when this branch has never been configured — that's
+      // expected for fresh branches; show defaults so admin can start.
+      setForm({
+        ...DEFAULT_LINE_CONFIG,
+        ...(remote || {}),
+        coursesKeywords:
+          Array.isArray(remote?.coursesKeywords) && remote.coursesKeywords.length
+            ? remote.coursesKeywords
+            : DEFAULT_LINE_CONFIG.coursesKeywords,
+        appointmentsKeywords:
+          Array.isArray(remote?.appointmentsKeywords) && remote.appointmentsKeywords.length
+            ? remote.appointmentsKeywords
+            : DEFAULT_LINE_CONFIG.appointmentsKeywords,
+      });
     } catch (e) {
       setError(e.message || 'โหลดการตั้งค่า LINE ล้มเหลว');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    if (isReady && branchId) reload();
+  }, [isReady, branchId, reload]);
 
-  const update = (patch) => setForm(prev => ({ ...prev, ...patch }));
+  const update = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSave = async () => {
-    // Basic validation
-    if (form.enabled && (!form.channelSecret || !form.channelAccessToken)) {
-      setError('เปิดใช้งาน LINE ต้องกรอก Channel Secret + Access Token');
+    if (!branchId) {
+      setError('ยังไม่ได้เลือกสาขา — โปรดเลือกสาขาที่จะตั้งค่า LINE OA');
       return;
     }
-    if (form.botBasicId && !/^@/.test(String(form.botBasicId).trim())) {
-      setError('Bot Basic ID ต้องขึ้นต้นด้วย @ (เช่น @123abcde)');
+    const validation = validateLineConfig(form);
+    if (!validation.valid) {
+      setError(validation.errors[0] || 'ข้อมูลไม่ถูกต้อง');
       return;
     }
     setSaving(true);
     setError('');
     setSuccess('');
     try {
-      const ref = doc(db, ...pathFor(appId));
-      // Merge into chat_config (don't clobber facebook section if present)
-      const snap = await getDoc(ref);
-      const existing = snap.exists() ? (snap.data() || {}) : {};
-      const merged = {
-        ...existing,
-        line: {
-          channelId: String(form.channelId || '').trim(),
-          channelSecret: String(form.channelSecret || '').trim(),
-          channelAccessToken: String(form.channelAccessToken || '').trim(),
-          botBasicId: String(form.botBasicId || '').trim(),
-          enabled: !!form.enabled,
-          botEnabled: !!form.botEnabled,
-          coursesKeywords: (form.coursesKeywords || []).map(s => String(s).trim()).filter(Boolean),
-          appointmentsKeywords: (form.appointmentsKeywords || []).map(s => String(s).trim()).filter(Boolean),
-          maxCoursesInReply: Math.max(1, Math.min(100, Number(form.maxCoursesInReply) || 20)),
-          maxAppointmentsInReply: Math.max(1, Math.min(100, Number(form.maxAppointmentsInReply) || 10)),
-          helpMessage: String(form.helpMessage || ''),
-          welcomeMessage: String(form.welcomeMessage || ''),
-          notLinkedMessage: String(form.notLinkedMessage || ''),
-          tokenTtlMinutes: Math.max(1, Math.min(60 * 24 * 7, Number(form.tokenTtlMinutes) || 1440)),
-          alreadyLinkedRule: ['block', 'replace'].includes(form.alreadyLinkedRule) ? form.alreadyLinkedRule : 'block',
-          updatedAt: new Date().toISOString(),
-        },
-      };
-      await setDoc(ref, merged, { merge: true });
-      setSuccess('บันทึกการตั้งค่าเรียบร้อย');
+      await saveLineConfig(branchId, form);
+      setSuccess(`บันทึกการตั้งค่า LINE ของ "${branchName}" เรียบร้อย`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (e) {
       setError(e.message || 'บันทึกการตั้งค่าล้มเหลว');
@@ -151,15 +121,14 @@ export default function LineSettingsTab({ clinicSettings }) {
     setTesting(true);
     setTestResult(null);
     try {
-      // V32-tris-ter-fix: route through backend proxy. The proxy reads
-      // the SAVED token from clinic_settings/chat_config (not the unsaved
-      // form value) — admin must Save before testing. We check unsaved
-      // state first to give a clearer error than "CONFIG_MISSING".
+      // Pass branchId to backend proxy so it reads the saved token from
+      // be_line_configs/{branchId} (not the unsaved form value). Admin
+      // must Save before testing.
       if (!form.channelAccessToken) {
         setTestResult({ ok: false, message: 'ยังไม่ได้กรอก Channel Access Token — โปรดใส่ + กดบันทึกก่อนทดสอบ' });
         return;
       }
-      const result = await testLineConnection();
+      const result = await testLineConnection({ branchId });
       setTestResult(result);
     } catch (e) {
       setTestResult({ ok: false, message: e.message || 'เกิดข้อผิดพลาดขณะทดสอบ' });
@@ -197,10 +166,20 @@ export default function LineSettingsTab({ clinicSettings }) {
   const labelCls = 'block text-xs text-[var(--tx-muted)] mb-1';
 
   return (
-    <div className="space-y-4 max-w-3xl" data-testid="line-settings-tab">
+    <div className="space-y-4 max-w-3xl" data-testid="line-settings-tab" data-branch-id={branchId || ''}>
       <div className="flex items-center gap-2 mb-2">
         <MessageCircle size={20} className="text-[#06C755]" />
         <h2 className="text-2xl font-black text-[var(--tx-heading)]">ตั้งค่า LINE Official Account</h2>
+      </div>
+
+      {/* Phase BS V3 — branch-scope hint. Hides on single-branch deployments. */}
+      <div className="px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30 text-amber-200 text-xs flex items-start gap-2"
+        data-testid="line-settings-branch-hint">
+        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+        <div>
+          การตั้งค่านี้ใช้กับสาขา <strong>{branchName}</strong> เท่านั้น —
+          แต่ละสาขาใช้ LINE OA แยกกัน ต้องตั้งของสาขาอื่นแยกต่างหาก
+        </div>
       </div>
 
       {error && (
@@ -269,6 +248,17 @@ export default function LineSettingsTab({ clinicSettings }) {
             </button>
           </div>
         </div>
+
+        {/* Phase BS V3 — destination (bot user ID) populated by test-conn,
+             used by webhook routing. Read-only for transparency. */}
+        {form.destination && (
+          <div>
+            <label className={labelCls}>LINE Bot Destination ID (auto-populated on connection test — used for webhook routing)</label>
+            <input type="text" value={form.destination} readOnly
+              className={`${inputCls} opacity-70 cursor-default`}
+              data-field="destination" />
+          </div>
+        )}
 
         {/* Webhook URL */}
         <div className="pt-2 border-t border-[var(--bd)]">

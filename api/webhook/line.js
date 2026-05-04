@@ -32,6 +32,11 @@ import {
   // (pre-V33.4 QR-token flow stripped; admin-mediated approval uses
   // formatLinkRequestApprovedReply via linkRequestsClient).
 } from '../../src/lib/lineBotResponder.js';
+// Phase BS V3 (2026-05-04) — per-branch LINE OA config. Webhook routes
+// incoming events by event.destination → resolves branchId from
+// be_line_configs/{branchId}. Falls back to clinic_settings/chat_config.line
+// during transition.
+import { resolveLineConfigForWebhook } from '../admin/_lib/lineConfigAdmin.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -73,6 +78,11 @@ function verifySignature(body, signature, channelSecret) {
 }
 
 async function getChatConfig() {
+  // Phase BS V3 (2026-05-04) — used as a fallback for top-of-handler signature
+  // verification only. Per-event branch routing happens later via
+  // resolveLineConfigForWebhook(event). Once all branches have configs in
+  // be_line_configs/* this top-of-handler check becomes redundant + can be
+  // simplified to "webhook is enabled?" without touching any tokens.
   const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
   if (!res.ok) return null;
   const doc = await res.json();
@@ -88,6 +98,25 @@ async function getChatConfig() {
     clinicName: doc.fields?.clinicName?.stringValue || '',
     accentColor: doc.fields?.accentColor?.stringValue || '',
   };
+}
+
+/**
+ * Phase BS V3 (2026-05-04) — read enable-flags across ALL be_line_configs
+ * docs to decide whether to accept the webhook at all. Returns true if
+ * ANY config is enabled with a channelSecret. This is intentionally
+ * permissive — we still verify the signature per-event using the matched
+ * config. If all branches are disabled, the webhook short-circuits.
+ */
+async function isAnyLineEnabled(db) {
+  try {
+    const snap = await db
+      .collection(`artifacts/${APP_ID}/public/data/be_line_configs`)
+      .where('enabled', '==', true)
+      .limit(1)
+      .get();
+    if (!snap.empty) return true;
+  } catch { /* fall through */ }
+  return false;
 }
 
 async function getLineProfile(userId, accessToken) {
@@ -241,17 +270,25 @@ async function findCustomerByPassport(idValue) {
 // Create a pending link-request entry. Returns true if created, false on
 // failure. Always returns regardless of match — the bot replies the same
 // ack message either way (anti-enumeration).
-async function createLinkRequest({ customer, lineUserId, lineProfile, idType, idValue }) {
+async function createLinkRequest({ customer, lineUserId, lineProfile, idType, idValue, branchId }) {
   if (!customer) return false;
   try {
     const db = getAdminFirestore();
     const requestId = `lr-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const last4 = String(idValue || '').slice(-4);
+    // Phase BS V3 (2026-05-04) — stamp branchId resolved from the matched
+    // LINE OA config. customer.branchId wins if present (the link is *for*
+    // that customer's branch); otherwise fall back to the LINE config's
+    // branch. Either is acceptable so the LinkRequestsTab branch filter +
+    // legacy-untagged include catches it.
+    const stampedBranchId =
+      String(customer.branchId || '').trim() || String(branchId || '').trim() || null;
     await db.doc(`artifacts/${APP_ID}/public/data/be_link_requests/${requestId}`).set({
       requestId,
       customerId: String(customer.id || customer.customerId || ''),
       customerName: String(customer.customerName || customer.name || ''),
       customerHN: String(customer.proClinicHN || customer.hn || ''),
+      branchId: stampedBranchId,
       lineUserId,
       lineDisplayName: String(lineProfile?.displayName || ''),
       linePictureUrl: String(lineProfile?.pictureUrl || ''),
@@ -311,7 +348,7 @@ async function findUpcomingAppointmentsForCustomer(customerId) {
 // Side-effects: may push 1 reply via LINE Reply API, may update Firestore.
 // Returns true when a reply was sent (caller can suppress the chat-storage
 // "unread" bump if desired — we keep both so admin sees the conversation).
-async function maybeEmitBotReply(event, config) {
+async function maybeEmitBotReply(event, config, branchId) {
   if (event.message?.type !== 'text') return false;
   const userId = event.source?.userId;
   const text = event.message?.text || '';
@@ -359,7 +396,10 @@ async function maybeEmitBotReply(event, config) {
     if (customer) {
       // Get LINE profile for the snapshot
       const profile = await getLineProfile(userId, config.channelAccessToken);
-      await createLinkRequest({ customer, lineUserId: userId, lineProfile: profile, idType, idValue });
+      // Phase BS V3 — stamp branchId on the link request (resolved from
+      // the matched LINE OA config; falls back to customer.branchId inside
+      // createLinkRequest).
+      await createLinkRequest({ customer, lineUserId: userId, lineProfile: profile, idType, idValue, branchId });
       // V33.7 — derive customer's preferred language for the ack reply
       const lang = getLanguageForCustomer(customer);
       await replyLineMessage(event.replyToken, formatIdRequestAck(lang), config.channelAccessToken);
@@ -425,11 +465,36 @@ async function maybeEmitBotReply(event, config) {
 
 // ─── Process LINE events ────────────────────────────────────────────────────
 
-async function processEvent(event, config) {
+async function processEvent(event, fallbackConfig) {
   if (event.type !== 'message') return;
 
   const userId = event.source?.userId;
   if (!userId) return;
+
+  // Phase BS V3 (2026-05-04) — resolve per-event branch config. event.destination
+  // is the LINE bot's userId; we look it up in be_line_configs to find which
+  // branch owns this channel. Falls back to the legacy clinic_settings/chat_config
+  // config (passed in as fallbackConfig) during transition so existing single-
+  // branch deployments keep working.
+  let config = fallbackConfig;
+  let branchId = null;
+  try {
+    const db = getAdminFirestore();
+    const resolved = await resolveLineConfigForWebhook(db, event);
+    if (resolved && resolved.config?.channelAccessToken) {
+      config = {
+        channelAccessToken: resolved.config.channelAccessToken,
+        channelSecret: resolved.config.channelSecret,
+        enabled: resolved.config.enabled !== false,
+        clinicName: resolved.config.clinicName || fallbackConfig?.clinicName || '',
+        accentColor: resolved.config.accentColor || fallbackConfig?.accentColor || '',
+      };
+      branchId = resolved.branchId || null;
+    }
+  } catch (err) {
+    console.warn('[line-webhook] config resolution fell back:', err?.message || err);
+  }
+  if (!config?.channelAccessToken) return;
 
   const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/line_${userId}`;
   const msgPath = `${convPath}/messages/${event.message.id}`;
@@ -507,7 +572,7 @@ async function processEvent(event, config) {
   // even if the bot also auto-replied. Best-effort: bot reply errors
   // never block the webhook.
   try {
-    await maybeEmitBotReply(event, config);
+    await maybeEmitBotReply(event, config, branchId);
   } catch (err) {
     console.warn('[line-webhook] bot reply failed:', err?.message || err);
   }
@@ -525,24 +590,59 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).end();
 
-  const config = await getChatConfig();
-  if (!config || !config.enabled || !config.channelSecret) {
+  // Phase BS V3 (2026-05-04) — multi-channel support. Webhook can receive
+  // events from any branch's LINE OA. Strategy:
+  //   1. Parse body to read events[].destination — same destination across
+  //      events in a single payload (LINE guarantees one channel per delivery).
+  //   2. Resolve config via destination → be_line_configs OR legacy chat_config.
+  //   3. Verify signature against THAT config's channelSecret.
+  //   4. Pass legacy config as fallback for processEvent (per-event resolution
+  //      runs again inside processEvent for defensive double-check).
+  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  const signature = req.headers['x-line-signature'];
+
+  let body;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  } catch {
+    return res.status(400).json({ error: 'invalid JSON' });
+  }
+  const events = body?.events || [];
+
+  // Resolve which config to verify against. Prefer first event's destination.
+  let verifyConfig = null;
+  let fallbackConfig = null;
+  try {
+    const db = getAdminFirestore();
+    const dest = events[0]?.destination;
+    if (dest) {
+      const resolved = await resolveLineConfigForWebhook(db, events[0]);
+      if (resolved && resolved.config?.channelSecret) {
+        verifyConfig = resolved.config;
+      }
+    }
+  } catch (err) {
+    console.warn('[line-webhook] resolve at top-of-handler failed:', err?.message || err);
+  }
+  // Always read legacy chat_config as a safety net (single-channel existing
+  // deployments). When verifyConfig wasn't resolved via destination, use
+  // legacy as the verifier.
+  fallbackConfig = await getChatConfig();
+  if (!verifyConfig) verifyConfig = fallbackConfig;
+
+  if (!verifyConfig || !verifyConfig.enabled || !verifyConfig.channelSecret) {
     return res.status(200).json({ message: 'LINE chat not configured' });
   }
 
-  // Verify signature
-  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-  const signature = req.headers['x-line-signature'];
-  if (!signature || !verifySignature(rawBody, signature, config.channelSecret)) {
+  // Verify signature against the resolved config.
+  if (!signature || !verifySignature(rawBody, signature, verifyConfig.channelSecret)) {
     console.warn('[line-webhook] Invalid signature');
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  const events = body.events || [];
-
-  // Process events in parallel
-  await Promise.allSettled(events.map(e => processEvent(e, config)));
+  // Process events in parallel. processEvent re-resolves per-event for
+  // defensive correctness — same channel ⇒ same config, but cheap.
+  await Promise.allSettled(events.map(e => processEvent(e, verifyConfig)));
 
   return res.status(200).json({ received: events.length });
 }

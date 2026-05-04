@@ -175,7 +175,10 @@ describe('Q3 webhook id-link-request handler', () => {
     expect(idBranch).not.toMatch(/customer\s*===\s*null[\s\S]{0,80}formatNotLinkedReply/);
   });
   test('Q3.7 createLinkRequest writes pending entry only when customer found', () => {
-    expect(idBranch).toMatch(/if \(customer\)[\s\S]{0,200}createLinkRequest/);
+    // Phase BS V3 (2026-05-04) — comment block grew between `if (customer)`
+    // and the createLinkRequest call (explaining branchId stamp). Widen
+    // the window to 500 chars.
+    expect(idBranch).toMatch(/if \(customer\)[\s\S]{0,500}createLinkRequest/);
   });
   test('Q3.8 findCustomerByNationalId queries patientData.nationalId', () => {
     expect(WEBHOOK_SRC).toMatch(/\.where\(['"]patientData\.nationalId['"]/);

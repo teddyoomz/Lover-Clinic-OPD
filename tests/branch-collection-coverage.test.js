@@ -78,7 +78,8 @@ const COLLECTION_MATRIX = {
   'be_document_drafts':    { scope: 'global',  reason: 'Print form drafts (Phase 14.10 — caller-scoped via staffUid)' },
   'be_course_changes':     { scope: 'global',  reason: 'Course exchange + refund audit ledger (T4 / Phase 14.4 G5 — append-only, customer-scoped via field)' },
   // V33.9 — be_customer_link_tokens removed (QR-token flow stripped).
-  'be_link_requests':      { scope: 'global', reason: 'LINE link-request approval queue (V32-tris-quater — admin-mediated; client SDK blocked)' },
+  'be_link_requests':      { scope: 'global', reason: 'LINE link-request approval queue (V32-tris-quater — admin-mediated; client SDK blocked). Phase BS V3 (2026-05-04) stamps branchId on writes for filtered admin views, but the collection itself remains globally readable + admin-write only.' },
+  'be_line_configs':       { scope: 'global', reason: 'Phase BS V3 (2026-05-04) — per-branch LINE OA configuration. Branch attribution is STRUCTURAL (doc-id === branchId), not via a payload field. Webhook routes by event.destination → looked up across collection. Classified global so BC2.direct accessor check skips it; per-branch isolation is by doc-id key, verified in tests/phase-bs-v3-line-per-branch.test.js.' },
   'be_link_attempts':      { scope: 'global', reason: 'LINE link-request rate-limit tracker (V32-tris-quater — 5/24h cap; client SDK blocked)' },
   'be_admin_audit':        { scope: 'global', reason: 'Phase 15.6 / V35 admin cleanup audit log (cleanup-orphan-stock + cleanup-test-products + cleanup-test-sales). Admin SDK only writes; client SDK blocked.' },
   'be_audiences':          { scope: 'global', reason: 'Phase 16.1 (2026-04-30) Smart Audience saved segments — clinic-wide marketing rule trees (rule.kind: group | predicate). Hard-delete in v1.' },

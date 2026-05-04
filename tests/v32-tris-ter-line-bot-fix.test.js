@@ -175,7 +175,8 @@ describe('F4 LineSettingsTab proxy wiring', () => {
 
   test('F4.2 handleTestConnection calls testLineConnection() proxy', () => {
     const fn = TAB_SRC.match(/const handleTestConnection[\s\S]*?^\s*\};/m)?.[0] || '';
-    expect(fn).toMatch(/await testLineConnection\(\)/);
+    // Phase BS V3 (2026-05-04) — testLineConnection now takes {branchId}.
+    expect(fn).toMatch(/await testLineConnection\(\s*\{\s*branchId\s*\}\s*\)/);
   });
 
   test('F4.3 NO direct browser fetch to api.line.me (CORS would fail)', () => {
@@ -208,7 +209,19 @@ describe('F5 logical correctness (no live network)', () => {
     expect(WEBHOOK_SRC).toMatch(/console\.warn.*\[line-webhook\] bot reply failed/);
   });
 
-  test('F5.5 admin endpoint Firestore path matches APP_ID + chat_config exactly', () => {
-    expect(ADMIN_TEST_SRC).toMatch(/artifacts\/\$\{APP_ID\}\/public\/data\/clinic_settings\/chat_config/);
+  test('F5.5 admin endpoint Firestore path resolves via lineConfigAdmin helper', () => {
+    // Phase BS V3 (2026-05-04) — line-test endpoint no longer reads
+    // clinic_settings/chat_config directly. It delegates to
+    // resolveLineConfigForAdmin which checks be_line_configs/{branchId}
+    // first then falls back to the legacy chat_config path.
+    expect(ADMIN_TEST_SRC).toMatch(/resolveLineConfigForAdmin/);
+    expect(ADMIN_TEST_SRC).toMatch(/from\s+['"]\.\/_lib\/lineConfigAdmin\.js['"]/);
+    // The legacy path itself still lives in lineConfigAdmin (transition
+    // fallback); confirm the helper still references it as a safety net.
+    const HELPER_SRC = require('node:fs').readFileSync(
+      require('node:path').join(process.cwd(), 'api/admin/_lib/lineConfigAdmin.js'),
+      'utf8'
+    );
+    expect(HELPER_SRC).toMatch(/clinic_settings\/chat_config/);
   });
 });

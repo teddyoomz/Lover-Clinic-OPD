@@ -262,7 +262,9 @@ describe('L8 api/webhook/line.js bot integration', () => {
     expect(botIdx).toBeGreaterThan(storeIdx); // bot AFTER storage
   });
   test('L8.4 bot errors do NOT block webhook (try/catch swallow)', () => {
-    expect(WEBHOOK_SRC).toMatch(/maybeEmitBotReply\(event,\s*config\)[\s\S]{0,300}console\.warn/);
+    // Phase BS V3 (2026-05-04) — maybeEmitBotReply now takes (event, config, branchId)
+    // for per-branch routing. The try/catch swallow contract is preserved.
+    expect(WEBHOOK_SRC).toMatch(/maybeEmitBotReply\(event,\s*config,\s*branchId\)[\s\S]{0,300}console\.warn/);
   });
   // V33.9 — L8.5-L8.7 (consumeLinkToken assertions) REMOVED. Function deleted.
   test('L8.5 V33.9: consumeLinkToken function REMOVED from webhook', () => {
@@ -335,29 +337,59 @@ describe('L9 LineSettingsTab', () => {
     expect(SETTINGS_SRC).toMatch(/line-settings-test-ok/);
     expect(SETTINGS_SRC).toMatch(/line-settings-test-fail/);
     // V32-tris-ter-fix: api.line.me call moved to backend proxy (CORS).
-    // Settings tab now calls testLineConnection() from lineTestClient.
-    expect(SETTINGS_SRC).toMatch(/testLineConnection\(\)/);
+    // Phase BS V3 (2026-05-04): testLineConnection now passes {branchId}
+    // so the proxy reads be_line_configs/{branchId} (per-branch token).
+    expect(SETTINGS_SRC).toMatch(/testLineConnection\(\s*\{\s*branchId\s*\}\s*\)/);
     expect(SETTINGS_SRC).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/lineTestClient\.js['"]/);
   });
-  test('L9.7 save button persists via setDoc with merge:true', () => {
+  test('L9.7 save button persists via lineConfigClient.saveLineConfig', () => {
     expect(SETTINGS_SRC).toMatch(/data-testid=["']line-settings-save["']/);
-    expect(SETTINGS_SRC).toMatch(/setDoc\([\s\S]{0,200}\{\s*merge:\s*true\s*\}\)/);
+    // Phase BS V3 (2026-05-04): write delegated to lineConfigClient.
+    // Internally saveLineConfig still calls setDoc({merge:true}); covered
+    // by phase-bs-v3-line-per-branch.test.js F3.2.
+    expect(SETTINGS_SRC).toMatch(/saveLineConfig\(branchId,\s*form\)/);
   });
   test('L9.8 input clamps maxCoursesInReply / maxAppointmentsInReply / tokenTtlMinutes', () => {
-    expect(SETTINGS_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(100,\s*Number\(form\.maxCoursesInReply\)/);
-    expect(SETTINGS_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(100,\s*Number\(form\.maxAppointmentsInReply\)/);
-    expect(SETTINGS_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(60\s*\*\s*24\s*\*\s*7,\s*Number\(form\.tokenTtlMinutes\)/);
+    // Phase BS V3 (2026-05-04) — clamp logic relocated to lineConfigClient
+    // normalizeLineConfigForWrite. Tab still imports the helper which
+    // applies the clamps before writing. Source-grep moves to the helper.
+    const HELPER_SRC = require('node:fs').readFileSync(
+      require('node:path').join(process.cwd(), 'src/lib/lineConfigClient.js'),
+      'utf8'
+    );
+    expect(HELPER_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(100,\s*Number\(r\.maxCoursesInReply\)/);
+    expect(HELPER_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(100,\s*Number\(r\.maxAppointmentsInReply\)/);
+    expect(HELPER_SRC).toMatch(/Math\.max\(1,\s*Math\.min\(60\s*\*\s*24\s*\*\s*7,\s*Number\(r\.tokenTtlMinutes\)/);
   });
   test('L9.9 botBasicId validation rejects non-@ prefix', () => {
-    // Validator runs `/^@/` against form.botBasicId before save.
+    // Phase BS V3 — validator extracted to lineConfigClient.validateLineConfig.
+    // Tab calls validateLineConfig(form) before save. The label is still
+    // shown in the tab's UI.
     expect(SETTINGS_SRC).toMatch(/Bot Basic ID/);
-    expect(SETTINGS_SRC).toMatch(/!\/\^@\/\.test\(String\(form\.botBasicId\)/);
+    const HELPER_SRC = require('node:fs').readFileSync(
+      require('node:path').join(process.cwd(), 'src/lib/lineConfigClient.js'),
+      'utf8'
+    );
+    expect(HELPER_SRC).toMatch(/!\/\^@\/\.test\(String\(c\.botBasicId\)/);
   });
   test('L9.10 enabled=true requires creds present (basic safety)', () => {
-    expect(SETTINGS_SRC).toMatch(/form\.enabled\s*&&\s*\(!form\.channelSecret\s*\|\|\s*!form\.channelAccessToken\)/);
+    // Phase BS V3 — relocated to validateLineConfig in lineConfigClient.
+    const HELPER_SRC = require('node:fs').readFileSync(
+      require('node:path').join(process.cwd(), 'src/lib/lineConfigClient.js'),
+      'utf8'
+    );
+    expect(HELPER_SRC).toMatch(/c\.enabled\s*&&\s*\(!c\.channelSecret\s*\|\|\s*!c\.channelAccessToken\)/);
   });
   test('L9.11 alreadyLinkedRule enum: block | replace', () => {
-    expect(SETTINGS_SRC).toMatch(/['"]block['"],\s*['"]replace['"]/);
+    // Phase BS V3 (2026-05-04) — enum guard relocated to lineConfigClient.
+    // The dropdown still carries both <option value="block"> + <option value="replace">.
+    expect(SETTINGS_SRC).toMatch(/value="block"/);
+    expect(SETTINGS_SRC).toMatch(/value="replace"/);
+    const HELPER_SRC = require('node:fs').readFileSync(
+      require('node:path').join(process.cwd(), 'src/lib/lineConfigClient.js'),
+      'utf8'
+    );
+    expect(HELPER_SRC).toMatch(/\['block',\s*'replace'\]/);
   });
   test('L9.12 secret + token fields default-hidden (password input toggle)', () => {
     expect(SETTINGS_SRC).toMatch(/showSecret/);

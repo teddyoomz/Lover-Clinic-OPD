@@ -29,6 +29,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAdminToken } from './_lib/adminAuth.js';
+import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
 import {
   formatLinkRequestApprovedReply,
   formatLinkRequestRejectedReply,
@@ -58,14 +59,12 @@ function getAdminFirestore() {
   return cachedDb;
 }
 
-async function getLineToken(db) {
-  try {
-    const snap = await db.doc(`artifacts/${APP_ID}/public/data/clinic_settings/chat_config`).get();
-    if (!snap.exists) return null;
-    return snap.data()?.line?.channelAccessToken || null;
-  } catch {
-    return null;
-  }
+async function getLineTokenForBranch(db, branchId) {
+  // Phase BS V3 (2026-05-04) — branch-aware. Approve/reject pushes the
+  // notification through the branch's own LINE OA (the same channel the
+  // customer DM'd into). Falls back to legacy chat_config.line.
+  const resolved = await resolveLineConfigForAdmin(db, { branchId });
+  return resolved?.config?.channelAccessToken || null;
 }
 
 async function pushLineMessage(token, lineUserId, text) {
@@ -153,12 +152,15 @@ async function handleApprove({ db, requestId, callerUid }) {
   });
   await batch.commit();
 
-  // Push LINE notification (non-fatal)
-  const token = await getLineToken(db);
+  // Push LINE notification (non-fatal). Phase BS V3: use the request's
+  // stamped branchId to find the right LINE OA channel; fall back to
+  // customer.branchId, then legacy.
+  const requestBranchId = req.branchId || cSnap.data()?.branchId || null;
+  const token = await getLineTokenForBranch(db, requestBranchId);
   const customerName = cSnap.data()?.customerName || cSnap.data()?.name || '';
   pushLineMessage(token, lineUserId, formatLinkRequestApprovedReply(customerName)).catch(() => {});
 
-  return { requestId, status: 'approved' };
+  return { requestId, status: 'approved', branchId: requestBranchId };
 }
 
 async function handleReject({ db, requestId, reason, callerUid }) {
@@ -178,11 +180,13 @@ async function handleReject({ db, requestId, reason, callerUid }) {
     rejectReason: String(reason || '').slice(0, 200),
   });
 
-  // Push LINE notification (non-fatal)
-  const token = await getLineToken(db);
+  // Push LINE notification (non-fatal). Phase BS V3: use the request's
+  // stamped branchId to find the right LINE OA channel.
+  const requestBranchId = req.branchId || null;
+  const token = await getLineTokenForBranch(db, requestBranchId);
   pushLineMessage(token, lineUserId, formatLinkRequestRejectedReply()).catch(() => {});
 
-  return { requestId, status: 'rejected' };
+  return { requestId, status: 'rejected', branchId: requestBranchId };
 }
 
 export default async function handler(req, res) {

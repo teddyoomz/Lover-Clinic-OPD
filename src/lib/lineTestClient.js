@@ -24,9 +24,14 @@ async function getIdToken() {
  * server-side. Returns a normalized result that LineSettingsTab can
  * surface as ok/fail in the UI.
  *
+ * Phase BS V3 (2026-05-04): accepts {branchId} so the server reads the
+ * saved token from be_line_configs/{branchId} (per-branch). Legacy
+ * callers without branchId continue to read from clinic_settings/chat_config.
+ *
+ * @param {{ branchId?: string }} [opts]
  * @returns {Promise<{ ok: true, message: string } | { ok: false, message: string, code?: string }>}
  */
-export async function testLineConnection() {
+export async function testLineConnection({ branchId } = {}) {
   const token = await getIdToken();
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -34,7 +39,7 @@ export async function testLineConnection() {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ action: 'test' }),
+    body: JSON.stringify({ action: 'test', branchId: branchId || null }),
   });
   let body = null;
   try { body = await res.json(); } catch { /* non-JSON */ }

@@ -337,6 +337,21 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // ── Backend: Phase BS V3 (2026-05-04) Per-branch LINE OA configs ──
+      // Each branch has its own LINE Official Account channel. Webhook
+      // routes incoming events by event.destination → resolves branchId.
+      // Read open to clinic staff so LineSettingsTab can render. Write
+      // gated to admin OR system_config_management permission (mirror of
+      // clinic_settings/system_config gate).
+      match /be_line_configs/{branchId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isSignedIn() && (
+          request.auth.token.admin == true ||
+          request.auth.token['perm_system_config_management'] == true
+        );
+        allow delete: if isSignedIn() && request.auth.token.admin == true;
+      }
+
       // ── Backend: Phase 15.6 (2026-04-28) Admin cleanup audit log ──
       // Written ONLY by /api/admin/cleanup-* endpoints (firebase-admin SDK
       // bypasses rules). Lists deleted batch / product / sale IDs + caller

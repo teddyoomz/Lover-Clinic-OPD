@@ -20,6 +20,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAdminToken } from './_lib/adminAuth.js';
+import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -45,15 +46,10 @@ function getAdminFirestore() {
   return cachedDb;
 }
 
-async function getLineToken(db) {
-  try {
-    const snap = await db.doc(`artifacts/${APP_ID}/public/data/clinic_settings/chat_config`).get();
-    if (!snap.exists) return null;
-    const data = snap.data() || {};
-    return data?.line?.channelAccessToken || null;
-  } catch {
-    return null;
-  }
+async function getLineConfigResolved(db, branchId) {
+  // Phase BS V3 (2026-05-04) — prefer be_line_configs/{branchId} when caller
+  // supplies branchId; fall back to legacy clinic_settings/chat_config.
+  return resolveLineConfigForAdmin(db, { branchId });
 }
 
 export default async function handler(req, res) {
@@ -67,14 +63,15 @@ export default async function handler(req, res) {
   if (!caller) return; // 401/403 written
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const { action } = body;
+  const { action, branchId } = body;
   if (action !== 'test') {
     return res.status(400).json({ error: 'action must be "test"' });
   }
 
   try {
     const db = getAdminFirestore();
-    const token = await getLineToken(db);
+    const resolved = await getLineConfigResolved(db, branchId);
+    const token = resolved?.config?.channelAccessToken;
     if (!token) {
       return res.status(503).json({
         error: 'LINE Channel Access Token ยังไม่ได้ตั้งค่า — โปรดเพิ่มที่ ตั้งค่า LINE OA',
@@ -100,6 +97,20 @@ export default async function handler(req, res) {
       });
     }
     const info = await lineRes.json();
+
+    // Phase BS V3 — when test succeeds against be_line_configs/{branchId},
+    // persist the bot's userId as the destination field. The webhook needs
+    // this to route incoming events back to the correct branch.
+    if (resolved?.source === 'be_line_configs' && resolved.branchId && info.userId) {
+      try {
+        await db
+          .doc(`artifacts/${APP_ID}/public/data/be_line_configs/${resolved.branchId}`)
+          .set({ destination: info.userId, destinationUpdatedAt: new Date().toISOString() }, { merge: true });
+      } catch (err) {
+        console.warn('[line-test] failed to persist destination:', err?.message || err);
+      }
+    }
+
     return res.status(200).json({
       ok: true,
       displayName: info.displayName || '',
@@ -108,6 +119,8 @@ export default async function handler(req, res) {
       premiumId: info.premiumId || '',
       pictureUrl: info.pictureUrl || '',
       chatMode: info.chatMode || '',
+      branchId: resolved?.branchId || null,
+      source: resolved?.source || null,
     });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'test failed' });
