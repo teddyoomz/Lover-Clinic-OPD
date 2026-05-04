@@ -305,33 +305,8 @@ vi.mock('../src/lib/backendClient.js', () => {
     // Master shape
     beCourseToMasterShape: mockLister('beCourseToMasterShape'),
 
-    // Master data sync (DEV-only — re-exported for build, not for general use)
-    runMasterDataSync: mockLister('runMasterDataSync'),
-    getAllMasterDataItems: mockLister('getAllMasterDataItems'),
-    clearMasterDataItems: mockLister('clearMasterDataItems'),
-    createMasterCourse: mockLister('createMasterCourse'),
-    updateMasterCourse: mockLister('updateMasterCourse'),
-    createMasterItem: mockLister('createMasterItem'),
-    updateMasterItem: mockLister('updateMasterItem'),
-    migrateMasterPromotionsToBe: mockLister('migrateMasterPromotionsToBe'),
-    migrateMasterCouponsToBe: mockLister('migrateMasterCouponsToBe'),
-    migrateMasterVouchersToBe: mockLister('migrateMasterVouchersToBe'),
-    migrateMasterProductGroupsToBe: mockLister('migrateMasterProductGroupsToBe'),
-    migrateMasterProductUnitsToBe: mockLister('migrateMasterProductUnitsToBe'),
-    migrateMasterMedicalInstrumentsToBe: mockLister('migrateMasterMedicalInstrumentsToBe'),
-    migrateMasterHolidaysToBe: mockLister('migrateMasterHolidaysToBe'),
-    migrateMasterBranchesToBe: mockLister('migrateMasterBranchesToBe'),
-    migrateMasterPermissionGroupsToBe: mockLister('migrateMasterPermissionGroupsToBe'),
-    migrateMasterStaffToBe: mockLister('migrateMasterStaffToBe'),
-    migrateMasterDoctorsToBe: mockLister('migrateMasterDoctorsToBe'),
-    migrateMasterStaffSchedulesToBe: mockLister('migrateMasterStaffSchedulesToBe'),
-    migrateMasterProductsToBe: mockLister('migrateMasterProductsToBe'),
-    migrateMasterCoursesToBeV2: mockLister('migrateMasterCoursesToBeV2'),
-    migrateMasterDfGroupsToBe: mockLister('migrateMasterDfGroupsToBe'),
-    migrateMasterDfStaffRatesToBe: mockLister('migrateMasterDfStaffRatesToBe'),
-    migrateMasterWalletTypesToBe: mockLister('migrateMasterWalletTypesToBe'),
-    migrateMasterMembershipTypesToBe: mockLister('migrateMasterMembershipTypesToBe'),
-    migrateMasterMedicineLabelsToBe: mockLister('migrateMasterMedicineLabelsToBe'),
+    // Master data sync helpers REMOVED from scopedDataLayer in Task 11
+    // (MasterDataTab consumes them via backendClient direct per Rule H-bis).
 
     // Treatment context-specific
     listProductGroupsForTreatment: mockLister('listProductGroupsForTreatment'),
@@ -550,20 +525,8 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
       'newAudienceId',
       // Master shape
       'beCourseToMasterShape',
-      // Master data sync (DEV-only — for build, MasterDataTab uses)
-      'runMasterDataSync', 'getAllMasterDataItems', 'clearMasterDataItems',
-      'createMasterCourse', 'updateMasterCourse',
-      'createMasterItem', 'updateMasterItem',
-      'migrateMasterPromotionsToBe', 'migrateMasterCouponsToBe',
-      'migrateMasterVouchersToBe', 'migrateMasterProductGroupsToBe',
-      'migrateMasterProductUnitsToBe', 'migrateMasterMedicalInstrumentsToBe',
-      'migrateMasterHolidaysToBe', 'migrateMasterBranchesToBe',
-      'migrateMasterPermissionGroupsToBe', 'migrateMasterStaffToBe',
-      'migrateMasterDoctorsToBe', 'migrateMasterStaffSchedulesToBe',
-      'migrateMasterProductsToBe', 'migrateMasterCoursesToBeV2',
-      'migrateMasterDfGroupsToBe', 'migrateMasterDfStaffRatesToBe',
-      'migrateMasterWalletTypesToBe', 'migrateMasterMembershipTypesToBe',
-      'migrateMasterMedicineLabelsToBe',
+      // Master data sync helpers REMOVED from scopedDataLayer in Task 11
+      // (MasterDataTab consumes them via backendClient direct per Rule H-bis).
       // Treatment context-specific
       'listProductGroupsForTreatment',
       // Admin reconciler

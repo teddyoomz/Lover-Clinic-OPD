@@ -376,35 +376,12 @@ export const renewMembership = (...args) => raw.renewMembership(...args);
 // ─── Master shape conversion ───────────────────────────────────────────────
 export const beCourseToMasterShape = (...args) => raw.beCourseToMasterShape(...args);
 
-// ─── Master data sync — DEV-ONLY (Rule H-bis: strip before production) ─────
-// MasterDataTab is the sole sanctioned consumer of these helpers. Re-exported
-// here so Task 6 mass migration doesn't fail to build; not for general use.
-export const runMasterDataSync = (...args) => raw.runMasterDataSync(...args);
-export const getAllMasterDataItems = (...args) => raw.getAllMasterDataItems(...args);
-export const clearMasterDataItems = (...args) => raw.clearMasterDataItems(...args);
-export const createMasterCourse = (...args) => raw.createMasterCourse(...args);
-export const updateMasterCourse = (...args) => raw.updateMasterCourse(...args);
-export const createMasterItem = (...args) => raw.createMasterItem(...args);
-export const updateMasterItem = (...args) => raw.updateMasterItem(...args);
-export const migrateMasterPromotionsToBe = (...args) => raw.migrateMasterPromotionsToBe(...args);
-export const migrateMasterCouponsToBe = (...args) => raw.migrateMasterCouponsToBe(...args);
-export const migrateMasterVouchersToBe = (...args) => raw.migrateMasterVouchersToBe(...args);
-export const migrateMasterProductGroupsToBe = (...args) => raw.migrateMasterProductGroupsToBe(...args);
-export const migrateMasterProductUnitsToBe = (...args) => raw.migrateMasterProductUnitsToBe(...args);
-export const migrateMasterMedicalInstrumentsToBe = (...args) => raw.migrateMasterMedicalInstrumentsToBe(...args);
-export const migrateMasterHolidaysToBe = (...args) => raw.migrateMasterHolidaysToBe(...args);
-export const migrateMasterBranchesToBe = (...args) => raw.migrateMasterBranchesToBe(...args);
-export const migrateMasterPermissionGroupsToBe = (...args) => raw.migrateMasterPermissionGroupsToBe(...args);
-export const migrateMasterStaffToBe = (...args) => raw.migrateMasterStaffToBe(...args);
-export const migrateMasterDoctorsToBe = (...args) => raw.migrateMasterDoctorsToBe(...args);
-export const migrateMasterStaffSchedulesToBe = (...args) => raw.migrateMasterStaffSchedulesToBe(...args);
-export const migrateMasterProductsToBe = (...args) => raw.migrateMasterProductsToBe(...args);
-export const migrateMasterCoursesToBeV2 = (...args) => raw.migrateMasterCoursesToBeV2(...args);
-export const migrateMasterDfGroupsToBe = (...args) => raw.migrateMasterDfGroupsToBe(...args);
-export const migrateMasterDfStaffRatesToBe = (...args) => raw.migrateMasterDfStaffRatesToBe(...args);
-export const migrateMasterWalletTypesToBe = (...args) => raw.migrateMasterWalletTypesToBe(...args);
-export const migrateMasterMembershipTypesToBe = (...args) => raw.migrateMasterMembershipTypesToBe(...args);
-export const migrateMasterMedicineLabelsToBe = (...args) => raw.migrateMasterMedicineLabelsToBe(...args);
+// ─── Master data sync — REMOVED FROM SCOPED LAYER (Task 11) ────────────────
+// Per Rule H-bis, master-data sync helpers (getAllMasterDataItems, run*Sync,
+// migrate*ToBe, etc.) live in backendClient.js and are consumed ONLY by
+// MasterDataTab.jsx (sanctioned exception per BS-1 annotation). Removing
+// them from scopedDataLayer prevents accidental re-export to feature code
+// and keeps the BSA boundary clean.
 
 // ─── Treatment context-specific helper (be_product_groups for TFP modal) ───
 export const listProductGroupsForTreatment = (...args) => raw.listProductGroupsForTreatment(...args);
