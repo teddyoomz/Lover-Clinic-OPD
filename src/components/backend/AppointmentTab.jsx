@@ -28,6 +28,7 @@ import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
@@ -150,8 +151,12 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   // Replaces the legacy "doctors who have appointments today" derivation.
   const [doctors, setDoctors] = useState([]);
   useEffect(() => {
-    listDoctors().then(setDoctors).catch(() => setDoctors([]));
-  }, []);
+    // Phase BSA leak-fix (2026-05-04): apply branch soft-gate so calendar
+    // only shows doctors with access to current branch. Re-runs on switch.
+    listDoctors()
+      .then((d) => setDoctors(filterDoctorsByBranch(d || [], selectedBranchId)))
+      .catch(() => setDoctors([]));
+  }, [selectedBranchId]);
   // Phase 15.7 (2026-04-28) — doctor lookup map for assistant-name resolution
   // on legacy appointments that lack the denormalized `assistantNames` field.
   // Helper resolveAssistantNames in src/lib/appointmentDisplay.js falls back

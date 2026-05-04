@@ -200,6 +200,10 @@ export default function CustomerDetailView({
   const [apptFormModal, setApptFormModal] = useState(null); // { mode: 'create'|'edit', appt? }
   // Phase 15.7 (2026-04-28) — doctor lookup map for assistant-name resolver
   // fallback (legacy appts written before assistantNames denorm).
+  // audit-branch-scope: cross-branch — customer treatments may have been
+  // recorded by doctors at any branch over time. This map MUST include
+  // all-branch doctors so legacy records resolve names correctly even
+  // when admin views from a different branch (Phase BSA decision 2026-05-04).
   const [doctorsList, setDoctorsList] = useState([]);
   useEffect(() => {
     listDoctors().then(setDoctorsList).catch(() => setDoctorsList([]));

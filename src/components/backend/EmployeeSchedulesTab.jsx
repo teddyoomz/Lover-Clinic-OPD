@@ -21,6 +21,7 @@ import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterStaffByBranch } from '../../lib/branchScopeUtils.js';
 
 function staffDisplayName(s) {
   if (!s) return '';
@@ -52,9 +53,14 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     setStaffLoading(true);
     try {
       const list = await listStaff();
-      setStaff(list);
-      if (!selectedStaffId && list.length > 0) {
-        setSelectedStaffId(String(list[0].staffId || list[0].id));
+      // Phase BSA leak-fix (2026-05-04): branch soft-gate. Only show staff
+      // with access to current branch (branchIds[] contains selectedBranchId).
+      const filtered = filterStaffByBranch(list || [], selectedBranchId);
+      setStaff(filtered);
+      if (filtered.length === 0) {
+        setSelectedStaffId('');
+      } else if (!selectedStaffId || !filtered.some(s => String(s.staffId || s.id) === selectedStaffId)) {
+        setSelectedStaffId(String(filtered[0].staffId || filtered[0].id));
       }
     } catch (e) {
       setError(e?.message || 'โหลดรายชื่อพนักงานล้มเหลว');
@@ -62,9 +68,9 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     } finally {
       setStaffLoading(false);
     }
-  }, [selectedStaffId]);
+  }, [selectedStaffId, selectedBranchId]);
 
-  useEffect(() => { loadStaff(); }, []);
+  useEffect(() => { loadStaff(); }, [selectedBranchId]);
 
   // Phase 13.2.8-bis (2026-04-26 user correction): calendar shows ALL
   // staff at once. Sidebar selection filters only the right-rail sections.

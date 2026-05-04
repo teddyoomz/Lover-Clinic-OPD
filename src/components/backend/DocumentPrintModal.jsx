@@ -20,7 +20,8 @@ import {
 import { printDocument, buildPrintContext, renderTemplate, safeImgTag, exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import { sendDocumentLine } from '../../lib/sendDocumentClient.js';
-import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
+import { useEffectiveClinicSettings, useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import SignatureCanvasField from './SignatureCanvasField.jsx';
 import StaffSelectField from './StaffSelectField.jsx';
@@ -73,6 +74,7 @@ export default function DocumentPrintModal({
   // be_branches doc (with clinic_settings fallback). User directive:
   // "เปลี่ยนให้ระบบ Gen PDF ของเราทั้งหมดดึงข้อมูลคลินิกจาก ข้อมูลของสาขา".
   const clinicSettings = useEffectiveClinicSettings(rawClinicSettings);
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -113,15 +115,17 @@ export default function DocumentPrintModal({
     // for the session so any template can use them without re-fetch. Errors
     // (permission denied / network) gracefully fall back to empty list so
     // the dropdown doesn't stay stuck on "กำลังโหลด...".
-    listDoctors().then(setDoctorList).catch((err) => {
+    // Phase BSA leak-fix (2026-05-04): branch soft-gate. Print signers
+    // should be staff at the current branch.
+    listDoctors().then((d) => setDoctorList(filterDoctorsByBranch(d || [], selectedBranchId))).catch((err) => {
       console.warn('[DocumentPrintModal] listDoctors failed:', err?.message || err);
       setDoctorList([]);
     });
-    listStaff().then(setStaffList).catch((err) => {
+    listStaff().then((s) => setStaffList(filterStaffByBranch(s || [], selectedBranchId))).catch((err) => {
       console.warn('[DocumentPrintModal] listStaff failed:', err?.message || err);
       setStaffList([]);
     });
-  }, [open, docTypeFilter.join(',')]);
+  }, [open, docTypeFilter.join(','), selectedBranchId]);
 
   const filteredTemplates = useMemo(() => {
     const q = query.trim().toLowerCase();

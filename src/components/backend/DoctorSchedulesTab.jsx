@@ -20,6 +20,7 @@ import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 
 function doctorDisplayName(d) {
   if (!d) return '';
@@ -49,16 +50,21 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   // Modal state
   const [modal, setModal] = useState(null); // { kind, entry } | null
 
-  // Load doctors once
+  // Load doctors — re-runs on branch switch (Phase BSA leak-fix 2026-05-04)
   const loadDoctors = useCallback(async () => {
     setDoctorsLoading(true);
     try {
       const list = await listDoctors();
       // ProClinic doctor positions: 'แพทย์' + 'ผู้ช่วยแพทย์' — both have schedules
-      setDoctors(list);
-      // Default-select first doctor
-      if (!selectedDoctorId && list.length > 0) {
-        setSelectedDoctorId(String(list[0].doctorId || list[0].id));
+      // Phase BSA leak-fix: branch soft-gate. Only show doctors with access
+      // to current branch (branchIds[] contains selectedBranchId).
+      const filtered = filterDoctorsByBranch(list || [], selectedBranchId);
+      setDoctors(filtered);
+      // Default-select first doctor in filtered list (or clear if none)
+      if (filtered.length === 0) {
+        setSelectedDoctorId('');
+      } else if (!selectedDoctorId || !filtered.some(d => String(d.doctorId || d.id) === selectedDoctorId)) {
+        setSelectedDoctorId(String(filtered[0].doctorId || filtered[0].id));
       }
     } catch (e) {
       setError(e?.message || 'โหลดรายชื่อแพทย์ล้มเหลว');
@@ -66,9 +72,9 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
     } finally {
       setDoctorsLoading(false);
     }
-  }, [selectedDoctorId]);
+  }, [selectedDoctorId, selectedBranchId]);
 
-  useEffect(() => { loadDoctors(); }, []);
+  useEffect(() => { loadDoctors(); }, [selectedBranchId]);
 
   // Phase 13.2.7-bis (2026-04-26 user correction):
   // ProClinic /admin/schedule/doctor calendar shows ALL doctors at once

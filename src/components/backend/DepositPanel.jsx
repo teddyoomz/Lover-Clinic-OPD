@@ -20,6 +20,8 @@ import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
@@ -143,7 +145,11 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [staff, setStaff] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [optionsLoaded, setOptionsLoaded] = useState(false);
+  // Phase BSA leak-fix (2026-05-04): cache key on branchId so seller/recipient
+  // pickers re-load when admin switches branch. Pre-fix `false` flag never
+  // re-loaded → stale staff/doctors visible across branches.
+  const { branchId: selectedBranchId } = useSelectedBranch();
+  const [optionsLoadedFor, setOptionsLoadedFor] = useState(null);
 
   // ── Load list ──────────────────────────────────────────────────────────
   const loadList = useCallback(async () => {
@@ -156,7 +162,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   // ── Load options on demand ─────────────────────────────────────────────
   const loadOptions = useCallback(async () => {
-    if (optionsLoaded) return;
+    if (optionsLoadedFor === selectedBranchId) return;
     try {
       const [c, s, d] = await Promise.all([
         getAllCustomers(),
@@ -169,11 +175,15 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         const parts = [x.firstname || x.firstName || '', x.lastname || x.lastName || ''].filter(Boolean);
         return parts.join(' ').trim() || x.nickname || x.name || x.fullName || '';
       };
-      setStaff(s.map(x => ({ id: x.staffId || x.id, name: buildName(x), position: x.position })));
-      setDoctors(d.map(x => ({ id: x.doctorId || x.id, name: buildName(x), position: x.position })));
-      setOptionsLoaded(true);
+      // Phase BSA leak-fix (2026-05-04): branch soft-gate. Seller/recipient
+      // pickers must show only staff/doctors with access to current branch.
+      const sFiltered = filterStaffByBranch(s || [], selectedBranchId);
+      const dFiltered = filterDoctorsByBranch(d || [], selectedBranchId);
+      setStaff(sFiltered.map(x => ({ id: x.staffId || x.id, name: buildName(x), position: x.position })));
+      setDoctors(dFiltered.map(x => ({ id: x.doctorId || x.id, name: buildName(x), position: x.position })));
+      setOptionsLoadedFor(selectedBranchId);
     } catch (e) { console.warn('[DepositPanel] load options failed:', e); }
-  }, [optionsLoaded]);
+  }, [optionsLoadedFor, selectedBranchId]);
 
   // ── Open create form (with optional initial customer) ─────────────────
   const openCreate = useCallback((initial) => {

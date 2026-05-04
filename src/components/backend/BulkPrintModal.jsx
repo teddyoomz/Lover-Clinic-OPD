@@ -30,6 +30,8 @@ import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';
 import StaffSelectField from './StaffSelectField.jsx';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 
 const STEP_PICK = 'pick';
 const STEP_FILL = 'fill';
@@ -66,14 +68,18 @@ export default function BulkPrintModal({ customers = [], clinicSettings, onClose
   // V32-tris (2026-04-26) — lazy-load doctor + staff lists in parallel.
   // Per-user directive "ทำแบบฉลาดๆ smart อะ" — bulk modal must surface
   // the same smart picker as DocumentPrintModal.
+  // Phase BSA leak-fix (2026-05-04): branch soft-gate. Print signers should
+  // be staff at the current branch (signing on behalf of that branch's
+  // clinic). Re-runs on branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   useEffect(() => {
     let cancel = false;
-    listDoctors().then((d) => { if (!cancel) setDoctorList(d || []); })
+    listDoctors().then((d) => { if (!cancel) setDoctorList(filterDoctorsByBranch(d || [], selectedBranchId)); })
       .catch((err) => { if (!cancel) { console.warn('[BulkPrintModal] listDoctors:', err?.message || err); setDoctorList([]); } });
-    listStaff().then((s) => { if (!cancel) setStaffList(s || []); })
+    listStaff().then((s) => { if (!cancel) setStaffList(filterStaffByBranch(s || [], selectedBranchId)); })
       .catch((err) => { if (!cancel) { console.warn('[BulkPrintModal] listStaff:', err?.message || err); setStaffList([]); } });
     return () => { cancel = true; };
-  }, []);
+  }, [selectedBranchId]);
 
   const filtered = useMemo(() => {
     let items = templates;
