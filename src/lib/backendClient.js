@@ -7098,12 +7098,43 @@ export async function listCentralWarehouses({ includeInactive = false } = {}) {
 
 /**
  * Combined branch + warehouse list for Transfer/Withdrawal UI selectors.
- * Returns: [{id, name, kind: 'branch'|'central'}] — 'main' branch always first.
+ * Returns: [{id, name, kind: 'branch'|'central'}] — branches first
+ * (default-flagged first), then central warehouses.
+ *
+ * Phase BS regression-fix (2026-05-06) — pre-fix this hardcoded a single
+ * 'main' branch + central warehouses; be_branches docs (e.g.
+ * "นครราชสีมา") were NEVER in the list. Stock UI's name lookup
+ * (currentLocation = locations.find(l => l.id === selectedBranchId))
+ * couldn't resolve real branch IDs → fell back to displaying the raw
+ * "BR-1777873556815-26df6480" string. User report:
+ * "หน้า สต็อคก็เสือกโชว์คำว่า BR-1777873556815-26df6480 ทำไมไม่โชว์ชื่อสาขา".
+ *
+ * Now: pull be_branches alongside warehouses. Each branch entry uses
+ * the human-readable `name` field. Legacy 'main' fallback only kicks
+ * in when be_branches is empty (single-branch pre-V20 deployments).
  */
 export async function listStockLocations() {
-  const warehouses = await listCentralWarehouses();
+  const [warehouses, branches] = await Promise.all([
+    listCentralWarehouses(),
+    listBranches(),
+  ]);
+  const branchEntries = (branches || []).map(b => {
+    const id = b.branchId || b.id;
+    const name = (typeof b.name === 'string' && b.name.trim()) ? b.name : (b.branchName || id);
+    return { id: String(id), name: String(name), kind: 'branch', isDefault: !!b.isDefault };
+  });
+  // Sort default branch first, then others alphabetically.
+  branchEntries.sort((a, b) => {
+    if (a.isDefault && !b.isDefault) return -1;
+    if (!a.isDefault && b.isDefault) return 1;
+    return a.name.localeCompare(b.name, 'th');
+  });
+  // Legacy 'main' fallback only when be_branches is empty.
+  const branchList = branchEntries.length > 0
+    ? branchEntries
+    : [{ id: 'main', name: 'สาขาหลัก (main)', kind: 'branch', isDefault: true }];
   return [
-    { id: 'main', name: 'สาขาหลัก (main)', kind: 'branch' },
+    ...branchList,
     ...warehouses.map(w => ({ id: w.stockId, name: w.stockName, kind: 'central', phone: w.telephoneNumber, address: w.address })),
   ];
 }
