@@ -8,7 +8,7 @@ import { Plus, X, CalendarX } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import DateField from '../DateField.jsx';
-import { saveHoliday } from '../../lib/backendClient.js';
+import { saveHoliday } from '../../lib/scopedDataLayer.js';
 import {
   HOLIDAY_TYPES,
   STATUS_OPTIONS,

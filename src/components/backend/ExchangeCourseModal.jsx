@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { exchangeCourseProduct, listCourses, listStaffByBranch } from '../../lib/backendClient.js';
+import { exchangeCourseProduct, listCourses, listStaffByBranch } from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 

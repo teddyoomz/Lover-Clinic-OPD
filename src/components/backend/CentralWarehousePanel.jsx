@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   listCentralWarehouses, createCentralWarehouse, updateCentralWarehouse, deleteCentralWarehouse,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 
 export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCreate }) {
   const [warehouses, setWarehouses] = useState([]);

@@ -12,7 +12,7 @@ import {
   getAllDeposits, getDeposit, getAllCustomers,
   // Phase 14.10-tris (2026-04-26) — be_* canonical, no master_data mirror
   listStaff, listDoctors,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';

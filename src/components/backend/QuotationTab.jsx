@@ -11,7 +11,7 @@ import {
   // backed by be_staff + be_doctors so SalePrintView can resolve legacy
   // seller ids (e.g. ProClinic numeric "614") → names.
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import QuotationFormModal from './QuotationFormModal.jsx';
 import QuotationPrintView from './QuotationPrintView.jsx';
 import SalePrintView from './SalePrintView.jsx';

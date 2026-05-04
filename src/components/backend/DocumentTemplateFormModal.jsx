@@ -11,7 +11,7 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { Plus, X, AlertCircle, ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { saveDocumentTemplate } from '../../lib/backendClient.js';
+import { saveDocumentTemplate } from '../../lib/scopedDataLayer.js';
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,

@@ -15,7 +15,7 @@ import {
   listBankAccounts, saveBankAccount, deleteBankAccount,
   listExpenseCategories, saveExpenseCategory, deleteExpenseCategory,
   listExpenses, saveExpense, deleteExpense,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   emptyBankAccountForm, generateBankAccountId,
   ACCOUNT_TYPE_OPTIONS,

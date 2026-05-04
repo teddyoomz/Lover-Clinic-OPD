@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Wallet, AlertCircle } from 'lucide-react';
-import { getActiveDeposits } from '../../lib/backendClient.js';
+import { getActiveDeposits } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 

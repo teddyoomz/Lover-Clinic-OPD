@@ -15,7 +15,7 @@ import {
   listProducts,
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.
 import Pagination from './Pagination.jsx';

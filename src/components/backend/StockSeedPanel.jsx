@@ -14,7 +14,7 @@ import {
 import {
   // Phase 14.10-tris (2026-04-26) — be_products canonical
   listProducts, listStockBatches, createStockOrder,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO } from '../../utils.js';

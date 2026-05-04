@@ -29,12 +29,12 @@ import {
   // reported numeric "614" showing because master_data entry for that
   // staff had empty `name`, while be_staff has proper firstname/lastname.
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { flattenPromotionsForStockDeduction } from '../../lib/treatmentBuyHelpers.js';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import {
   findCouponByCode, listPromotions,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 
 // Phase 14.7.H follow-up A (2026-04-26) — branchId now resolved via
 // `useSelectedBranch()` hook from BranchContext. Single-branch clinics

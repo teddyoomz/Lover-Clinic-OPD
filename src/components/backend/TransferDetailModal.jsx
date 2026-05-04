@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, Truck, AlertCircle, ArrowRightLeft, Package } from 'lucide-react';
 import {
   getStockTransfer, getStockBatch, listStockLocations,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 
 const STATUS_INFO = {

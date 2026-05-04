@@ -18,7 +18,7 @@ import {
   listenToScheduleByDay, listDoctors,
   // Phase 15.7-sexies (2026-04-28) — delete from calendar modal
   deleteBackendAppointment,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';

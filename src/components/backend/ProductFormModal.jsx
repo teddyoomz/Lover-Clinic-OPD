@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveProduct, listProductGroups, listProductUnitGroups, listProducts } from '../../lib/backendClient.js';
+import { saveProduct, listProductGroups, listProductUnitGroups, listProducts } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS,
   validateProduct, emptyProductForm, generateProductId,

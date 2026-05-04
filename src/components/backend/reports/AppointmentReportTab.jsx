@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── AppointmentReportTab — Phase 10.4 ────────────────────────────────────
 // Replicates ProClinic /admin/report/appointment (10 cols + Export File).
 // Joins be_appointments + be_customers (customerType) + master_data/staff

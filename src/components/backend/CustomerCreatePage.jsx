@@ -29,7 +29,7 @@ import {
   GENDER_OPTIONS,
   RECEIPT_TYPE_OPTIONS,
 } from '../../lib/customerValidation.js';
-import { addCustomer, buildFormFromCustomer, updateCustomerFromForm } from '../../lib/backendClient.js';
+import { addCustomer, buildFormFromCustomer, updateCustomerFromForm } from '../../lib/scopedDataLayer.js';
 import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DateField from '../DateField.jsx';

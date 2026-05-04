@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Banknote, Loader2 } from 'lucide-react';
-import { listDfGroups, deleteDfGroup } from '../../lib/backendClient.js';
+import { listDfGroups, deleteDfGroup } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DfGroupFormModal from './DfGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

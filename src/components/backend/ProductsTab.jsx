@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Package, Loader2, Tag } from 'lucide-react';
-import { listProducts, deleteProduct } from '../../lib/backendClient.js';
+import { listProducts, deleteProduct } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

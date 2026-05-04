@@ -36,10 +36,11 @@ const saleTabSrc = read('src/components/backend/SaleTab.jsx');
 
 // ============================================================================
 describe('STB.A — buy-modal field mapping source-grep', () => {
-  it('A.1 SaleTab imports beCourseToMasterShape from backendClient', () => {
+  it('A.1 SaleTab imports beCourseToMasterShape from scopedDataLayer (BSA Task 6)', () => {
     expect(saleTabSrc).toMatch(/beCourseToMasterShape/);
     // Confirm it's an import (not just a comment mention)
-    const importBlock = saleTabSrc.match(/from ['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/g);
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+    const importBlock = saleTabSrc.match(/from ['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/g);
     expect(importBlock).toBeTruthy();
   });
 

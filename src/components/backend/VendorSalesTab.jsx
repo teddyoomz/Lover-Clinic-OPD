@@ -18,7 +18,7 @@ import {
   listVendorSales, saveVendorSale, deleteVendorSale, transitionVendorSale,
   // Phase 14.10-tris (2026-04-26) — be_products canonical
   listProducts,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   emptyVendorForm, generateVendorId, validateVendor,
 } from '../../lib/vendorValidation.js';

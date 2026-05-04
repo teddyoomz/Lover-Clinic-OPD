@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── RevenueAnalysisTab — Phase 10.7 ──────────────────────────────────────
 // Replicates ProClinic /admin/revenue-analysis-by-procedure — 10 cols +
 // type/category paid-amount summary bars (replaces deferred pie charts).

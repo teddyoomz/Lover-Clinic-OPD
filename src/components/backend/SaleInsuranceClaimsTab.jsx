@@ -35,7 +35,7 @@ import {
   transitionSaleInsuranceClaim,
   getAllSales,
   listBankAccounts,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { STATUS_OPTIONS } from '../../lib/saleInsuranceClaimValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, AlertCircle, Package, ShoppingBag } from 'lucide-react';
-import { getCentralStockOrder } from '../../lib/backendClient.js';
+import { getCentralStockOrder } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 

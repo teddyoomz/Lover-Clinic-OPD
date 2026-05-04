@@ -11,7 +11,7 @@ import {
 import {
   getAllCustomers, getPointBalance, getPointTransactions, adjustPoints,
   getCustomerMembership,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtPoints, fmtMoney } from '../../lib/financeUtils.js';
 
 const clean = (o) => JSON.parse(JSON.stringify(o));

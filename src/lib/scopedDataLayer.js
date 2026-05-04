@@ -18,377 +18,396 @@
 //
 // Audit: BS-1 forbids UI components from importing backendClient.js
 // directly (must use this module). BS-7 forbids classification drift.
+//
+// NOTE on lazy access (Task 6 hardening, 2026-05-04):
+//   Every export accesses `raw.X` LAZILY (inside a closure called at usage
+//   time), never at module-load. This keeps vitest strict-mock checking
+//   happy when tests mock backendClient.js with a partial surface — the
+//   strict-namespace error only fires when code actually calls the
+//   undefined export, not when scopedDataLayer evaluates its own exports.
+//   Public callable surface is unchanged: every export is still a function
+//   with the same signature backendClient.js exposes.
 
 import * as raw from './backendClient.js';
 import { resolveSelectedBranchId } from './branchSelection.js';
 
 // ─── Branch-scoped one-shot listers — auto-inject ──────────────────────────
+// Lazy: raw.X accessed at call time, not module-load.
 
-const _scoped = (fn) => (opts = {}) =>
-  fn({ branchId: resolveSelectedBranchId(), ...opts });
-
-const _scopedPositional = (fn) => (positional, opts = {}) =>
-  fn(positional, { branchId: resolveSelectedBranchId(), ...opts });
-
-// Master data
-export const listProducts = _scoped(raw.listProducts);
-export const listCourses = _scoped(raw.listCourses);
-export const listProductGroups = _scoped(raw.listProductGroups);
-export const listProductUnitGroups = _scoped(raw.listProductUnitGroups);
-export const listMedicalInstruments = _scoped(raw.listMedicalInstruments);
-export const listHolidays = _scoped(raw.listHolidays);
-export const listDfGroups = _scoped(raw.listDfGroups);
-export const listDfStaffRates = _scoped(raw.listDfStaffRates);
+export const listProducts = (opts = {}) => raw.listProducts({ branchId: resolveSelectedBranchId(), ...opts });
+export const listCourses = (opts = {}) => raw.listCourses({ branchId: resolveSelectedBranchId(), ...opts });
+export const listProductGroups = (opts = {}) => raw.listProductGroups({ branchId: resolveSelectedBranchId(), ...opts });
+export const listProductUnitGroups = (opts = {}) => raw.listProductUnitGroups({ branchId: resolveSelectedBranchId(), ...opts });
+export const listMedicalInstruments = (opts = {}) => raw.listMedicalInstruments({ branchId: resolveSelectedBranchId(), ...opts });
+export const listHolidays = (opts = {}) => raw.listHolidays({ branchId: resolveSelectedBranchId(), ...opts });
+export const listDfGroups = (opts = {}) => raw.listDfGroups({ branchId: resolveSelectedBranchId(), ...opts });
+export const listDfStaffRates = (opts = {}) => raw.listDfStaffRates({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Finance master
-export const listBankAccounts = _scoped(raw.listBankAccounts);
-export const listExpenseCategories = _scoped(raw.listExpenseCategories);
-export const listExpenses = _scoped(raw.listExpenses);
+export const listBankAccounts = (opts = {}) => raw.listBankAccounts({ branchId: resolveSelectedBranchId(), ...opts });
+export const listExpenseCategories = (opts = {}) => raw.listExpenseCategories({ branchId: resolveSelectedBranchId(), ...opts });
+export const listExpenses = (opts = {}) => raw.listExpenses({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Schedules
-export const listStaffSchedules = _scoped(raw.listStaffSchedules);
+export const listStaffSchedules = (opts = {}) => raw.listStaffSchedules({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Marketing (with allBranches:true doc-field OR-merge inside Layer 1)
-export const listPromotions = _scoped(raw.listPromotions);
-export const listCoupons = _scoped(raw.listCoupons);
-export const listVouchers = _scoped(raw.listVouchers);
+export const listPromotions = (opts = {}) => raw.listPromotions({ branchId: resolveSelectedBranchId(), ...opts });
+export const listCoupons = (opts = {}) => raw.listCoupons({ branchId: resolveSelectedBranchId(), ...opts });
+export const listVouchers = (opts = {}) => raw.listVouchers({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Financial
-export const listOnlineSales = _scoped(raw.listOnlineSales);
-export const listSaleInsuranceClaims = _scoped(raw.listSaleInsuranceClaims);
-export const listVendorSales = _scoped(raw.listVendorSales);
-export const listQuotations = _scoped(raw.listQuotations);
+export const listOnlineSales = (opts = {}) => raw.listOnlineSales({ branchId: resolveSelectedBranchId(), ...opts });
+export const listSaleInsuranceClaims = (opts = {}) => raw.listSaleInsuranceClaims({ branchId: resolveSelectedBranchId(), ...opts });
+export const listVendorSales = (opts = {}) => raw.listVendorSales({ branchId: resolveSelectedBranchId(), ...opts });
+export const listQuotations = (opts = {}) => raw.listQuotations({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Sellers / staff-by-branch
-export const listAllSellers = _scoped(raw.listAllSellers);
-export const listStaffByBranch = _scoped(raw.listStaffByBranch);
+export const listAllSellers = (opts = {}) => raw.listAllSellers({ branchId: resolveSelectedBranchId(), ...opts });
+export const listStaffByBranch = (opts = {}) => raw.listStaffByBranch({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Sales / appointments — positional + opts
-export const getAllSales = _scoped(raw.getAllSales);
-export const getAppointmentsByDate = _scopedPositional(raw.getAppointmentsByDate);
-export const getAppointmentsByMonth = _scopedPositional(raw.getAppointmentsByMonth);
+export const getAllSales = (opts = {}) => raw.getAllSales({ branchId: resolveSelectedBranchId(), ...opts });
+export const getAppointmentsByDate = (positional, opts = {}) => raw.getAppointmentsByDate(positional, { branchId: resolveSelectedBranchId(), ...opts });
+export const getAppointmentsByMonth = (positional, opts = {}) => raw.getAppointmentsByMonth(positional, { branchId: resolveSelectedBranchId(), ...opts });
 
 // Stock — branch-scoped (locationId == branchId at branch tier)
-export const listStockBatches = _scoped(raw.listStockBatches);
-export const listStockOrders = _scoped(raw.listStockOrders);
-export const listStockMovements = _scoped(raw.listStockMovements);
+export const listStockBatches = (opts = {}) => raw.listStockBatches({ branchId: resolveSelectedBranchId(), ...opts });
+export const listStockOrders = (opts = {}) => raw.listStockOrders({ branchId: resolveSelectedBranchId(), ...opts });
+export const listStockMovements = (opts = {}) => raw.listStockMovements({ branchId: resolveSelectedBranchId(), ...opts });
 
-// ─── Universal — re-export raw, NO branch logic ────────────────────────────
+// ─── Universal — re-export raw (LAZY), NO branch logic ─────────────────────
 
 // Staff / doctors / customers / templates / branches / permissions
-export const listStaff = raw.listStaff;
-export const listDoctors = raw.listDoctors;
-export const listBranches = raw.listBranches;
-export const listPermissionGroups = raw.listPermissionGroups;
-export const listDocumentTemplates = raw.listDocumentTemplates;
+export const listStaff = (...args) => raw.listStaff(...args);
+export const listDoctors = (...args) => raw.listDoctors(...args);
+export const listBranches = (...args) => raw.listBranches(...args);
+export const listPermissionGroups = (...args) => raw.listPermissionGroups(...args);
+export const listDocumentTemplates = (...args) => raw.listDocumentTemplates(...args);
 
 // Customer-attached subcollections
-export const getCustomer = raw.getCustomer;
-export const getAllCustomers = raw.getAllCustomers;
-export const getCustomerWallets = raw.getCustomerWallets;
-export const getWalletBalance = raw.getWalletBalance;
-export const getWalletTransactions = raw.getWalletTransactions;
-export const getCustomerMembership = raw.getCustomerMembership;
-export const getAllMemberships = raw.getAllMemberships;
-export const getCustomerMembershipDiscount = raw.getCustomerMembershipDiscount;
-export const getCustomerBahtPerPoint = raw.getCustomerBahtPerPoint;
-export const getPointBalance = raw.getPointBalance;
-export const getPointTransactions = raw.getPointTransactions;
-export const getCustomerTreatments = raw.getCustomerTreatments;
-export const getCustomerSales = raw.getCustomerSales;
-export const getCustomerAppointments = raw.getCustomerAppointments;
-export const getCustomerDeposits = raw.getCustomerDeposits;
-export const getActiveDeposits = raw.getActiveDeposits;
-export const listMembershipTypes = raw.listMembershipTypes;
-export const listWalletTypes = raw.listWalletTypes;
-export const listCourseChanges = raw.listCourseChanges;
+export const getCustomer = (...args) => raw.getCustomer(...args);
+export const getAllCustomers = (...args) => raw.getAllCustomers(...args);
+export const getCustomerWallets = (...args) => raw.getCustomerWallets(...args);
+export const getWalletBalance = (...args) => raw.getWalletBalance(...args);
+export const getWalletTransactions = (...args) => raw.getWalletTransactions(...args);
+export const getCustomerMembership = (...args) => raw.getCustomerMembership(...args);
+export const getAllMemberships = (...args) => raw.getAllMemberships(...args);
+export const getCustomerMembershipDiscount = (...args) => raw.getCustomerMembershipDiscount(...args);
+export const getCustomerBahtPerPoint = (...args) => raw.getCustomerBahtPerPoint(...args);
+export const getPointBalance = (...args) => raw.getPointBalance(...args);
+export const getPointTransactions = (...args) => raw.getPointTransactions(...args);
+export const getCustomerTreatments = (...args) => raw.getCustomerTreatments(...args);
+export const getCustomerSales = (...args) => raw.getCustomerSales(...args);
+export const getCustomerAppointments = (...args) => raw.getCustomerAppointments(...args);
+export const getCustomerDeposits = (...args) => raw.getCustomerDeposits(...args);
+export const getActiveDeposits = (...args) => raw.getActiveDeposits(...args);
+export const listMembershipTypes = (...args) => raw.listMembershipTypes(...args);
+export const listWalletTypes = (...args) => raw.listWalletTypes(...args);
+export const listCourseChanges = (...args) => raw.listCourseChanges(...args);
 
-// ─── Universal listeners (live snapshot — re-exported raw) ─────────────────
+// ─── Universal listeners (live snapshot — re-exported lazy) ────────────────
 // Layer 3 hook (useBranchAwareListener, Task 5) wraps these for branchId
 // injection + re-subscribe on branch change. Customer-attached listeners
 // have __universal__:true marker (Task 3) so the hook skips branch logic.
-export const listenToCustomer = raw.listenToCustomer;
-export const listenToCustomerTreatments = raw.listenToCustomerTreatments;
-export const listenToCustomerAppointments = raw.listenToCustomerAppointments;
-export const listenToCustomerSales = raw.listenToCustomerSales;
-export const listenToCustomerFinance = raw.listenToCustomerFinance;
-export const listenToCourseChanges = raw.listenToCourseChanges;
-export const listenToAudiences = raw.listenToAudiences;
-export const listenToUserPermissions = raw.listenToUserPermissions;
+//
+// Listener marker preservation: useBranchAwareListener reads `fn.__universal__`
+// to decide branch logic. Wrapping the listener in `(...args) => raw.X(...args)`
+// would HIDE that marker. Solution: assign __universal__ on the wrapper at
+// first-call resolve, or use Object.defineProperty up-front. Since these are
+// all marked __universal__:true on raw.X (Task 3), copy the marker eagerly:
+// the marker is a static boolean (not a function call), so accessing it does
+// NOT trigger vitest strict-mock the same way method invocation does — but
+// to be safe, mark the wrapper directly here (literal true).
+
+function _makeUniversalListener(name) {
+  const wrapper = (...args) => raw[name](...args);
+  wrapper.__universal__ = true;
+  return wrapper;
+}
+
+export const listenToCustomer = _makeUniversalListener('listenToCustomer');
+export const listenToCustomerTreatments = _makeUniversalListener('listenToCustomerTreatments');
+export const listenToCustomerAppointments = _makeUniversalListener('listenToCustomerAppointments');
+export const listenToCustomerSales = _makeUniversalListener('listenToCustomerSales');
+export const listenToCustomerFinance = _makeUniversalListener('listenToCustomerFinance');
+export const listenToCourseChanges = _makeUniversalListener('listenToCourseChanges');
+export const listenToAudiences = _makeUniversalListener('listenToAudiences');
+export const listenToUserPermissions = _makeUniversalListener('listenToUserPermissions');
 
 // ─── Branch-scoped listeners (raw — useBranchAwareListener injects branchId) ─
 // useBranchAwareListener hook (Task 5) injects branchId and re-subscribes on
 // branch switch. Re-export RAW here — listeners need re-subscribe lifecycle
 // that a wrapper-at-call-time can't provide.
-export const listenToAppointmentsByDate = raw.listenToAppointmentsByDate;
-export const listenToAllSales = raw.listenToAllSales;
-export const listenToHolidays = raw.listenToHolidays;
-export const listenToScheduleByDay = raw.listenToScheduleByDay;
+export const listenToAppointmentsByDate = (...args) => raw.listenToAppointmentsByDate(...args);
+export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
+export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
+export const listenToScheduleByDay = (...args) => raw.listenToScheduleByDay(...args);
 
 // Audiences (smart segments — global filter)
-export const listAudiences = raw.listAudiences;
-export const getAudience = raw.getAudience;
+export const listAudiences = (...args) => raw.listAudiences(...args);
+export const getAudience = (...args) => raw.getAudience(...args);
 // Audience helpers
-export const newAudienceId = raw.newAudienceId;
+export const newAudienceId = (...args) => raw.newAudienceId(...args);
 
 // Documents
-export const getDocumentTemplate = raw.getDocumentTemplate;
-export const listDocumentDrafts = raw.listDocumentDrafts;
-export const listDocumentPrints = raw.listDocumentPrints;
-export const getDocumentDraft = raw.getDocumentDraft;
-export const getNextCertNumber = raw.getNextCertNumber;
+export const getDocumentTemplate = (...args) => raw.getDocumentTemplate(...args);
+export const listDocumentDrafts = (...args) => raw.listDocumentDrafts(...args);
+export const listDocumentPrints = (...args) => raw.listDocumentPrints(...args);
+export const getDocumentDraft = (...args) => raw.getDocumentDraft(...args);
+export const getNextCertNumber = (...args) => raw.getNextCertNumber(...args);
 
 // ─── Document infra (seeding / upgrade / drafts / print log) ───────────────
-export const seedDocumentTemplatesIfEmpty = raw.seedDocumentTemplatesIfEmpty;
-export const upgradeSystemDocumentTemplates = raw.upgradeSystemDocumentTemplates;
-export const findResumableDraft = raw.findResumableDraft;
-export const recordDocumentPrint = raw.recordDocumentPrint;
+export const seedDocumentTemplatesIfEmpty = (...args) => raw.seedDocumentTemplatesIfEmpty(...args);
+export const upgradeSystemDocumentTemplates = (...args) => raw.upgradeSystemDocumentTemplates(...args);
+export const findResumableDraft = (...args) => raw.findResumableDraft(...args);
+export const recordDocumentPrint = (...args) => raw.recordDocumentPrint(...args);
 
 // Vendors (universal supplier directory)
-export const listVendors = raw.listVendors;
+export const listVendors = (...args) => raw.listVendors(...args);
 
 // Stock — central tier (universal across central warehouses)
-export const listCentralStockOrders = raw.listCentralStockOrders;
-export const listCentralWarehouses = raw.listCentralWarehouses;
-export const listStockLocations = raw.listStockLocations;
-export const getCentralStockOrder = raw.getCentralStockOrder;
+export const listCentralStockOrders = (...args) => raw.listCentralStockOrders(...args);
+export const listCentralWarehouses = (...args) => raw.listCentralWarehouses(...args);
+export const listStockLocations = (...args) => raw.listStockLocations(...args);
+export const getCentralStockOrder = (...args) => raw.getCentralStockOrder(...args);
 
 // ─── Stock — tier-scoped (caller passes locationId explicitly) ─────────────
 // listStockTransfers/Withdrawals span TWO tiers (central WH ↔ branch); caller
 // chooses which side to query via locationId. Auto-injecting branchId would
 // silently filter out central-tier views.
-export const listStockTransfers = raw.listStockTransfers;
-export const listStockWithdrawals = raw.listStockWithdrawals;
-export const getStockBatch = raw.getStockBatch;
-export const getStockOrder = raw.getStockOrder;
-export const getStockTransfer = raw.getStockTransfer;
-export const getStockWithdrawal = raw.getStockWithdrawal;
-export const getStockAdjustment = raw.getStockAdjustment;
+export const listStockTransfers = (...args) => raw.listStockTransfers(...args);
+export const listStockWithdrawals = (...args) => raw.listStockWithdrawals(...args);
+export const getStockBatch = (...args) => raw.getStockBatch(...args);
+export const getStockOrder = (...args) => raw.getStockOrder(...args);
+export const getStockTransfer = (...args) => raw.getStockTransfer(...args);
+export const getStockWithdrawal = (...args) => raw.getStockWithdrawal(...args);
+export const getStockAdjustment = (...args) => raw.getStockAdjustment(...args);
 
 // ─── Generic single-doc gets — caller has the id, no branch scope ──────────
 
-export const getProduct = raw.getProduct;
-export const getCourse = raw.getCourse;
-export const getProductGroup = raw.getProductGroup;
-export const getProductUnitGroup = raw.getProductUnitGroup;
-export const getMedicalInstrument = raw.getMedicalInstrument;
-export const getHoliday = raw.getHoliday;
-export const getDfGroup = raw.getDfGroup;
-export const getDfStaffRates = raw.getDfStaffRates;
-export const getBankAccount = raw.getBankAccount;
-export const getExpense = raw.getExpense;
-export const getOnlineSale = raw.getOnlineSale;
-export const getSaleInsuranceClaim = raw.getSaleInsuranceClaim;
-export const getQuotation = raw.getQuotation;
-export const getStaff = raw.getStaff;
-export const getDoctor = raw.getDoctor;
-export const getBranch = raw.getBranch;
-export const getPermissionGroup = raw.getPermissionGroup;
-export const getStaffSchedule = raw.getStaffSchedule;
-export const getCoupon = raw.getCoupon;
-export const getVoucher = raw.getVoucher;
-export const getPromotion = raw.getPromotion;
-export const getTreatment = raw.getTreatment;
-export const getBackendSale = raw.getBackendSale;
-export const getDeposit = raw.getDeposit;
-export const getAllDeposits = raw.getAllDeposits;
-export const getSaleByTreatmentId = raw.getSaleByTreatmentId;
-export const getMasterDataMeta = raw.getMasterDataMeta;
-export const getActiveSchedulesForDate = raw.getActiveSchedulesForDate;
-export const getBeBackedMasterTypes = raw.getBeBackedMasterTypes;
+export const getProduct = (...args) => raw.getProduct(...args);
+export const getCourse = (...args) => raw.getCourse(...args);
+export const getProductGroup = (...args) => raw.getProductGroup(...args);
+export const getProductUnitGroup = (...args) => raw.getProductUnitGroup(...args);
+export const getMedicalInstrument = (...args) => raw.getMedicalInstrument(...args);
+export const getHoliday = (...args) => raw.getHoliday(...args);
+export const getDfGroup = (...args) => raw.getDfGroup(...args);
+export const getDfStaffRates = (...args) => raw.getDfStaffRates(...args);
+export const getBankAccount = (...args) => raw.getBankAccount(...args);
+export const getExpense = (...args) => raw.getExpense(...args);
+export const getOnlineSale = (...args) => raw.getOnlineSale(...args);
+export const getSaleInsuranceClaim = (...args) => raw.getSaleInsuranceClaim(...args);
+export const getQuotation = (...args) => raw.getQuotation(...args);
+export const getStaff = (...args) => raw.getStaff(...args);
+export const getDoctor = (...args) => raw.getDoctor(...args);
+export const getBranch = (...args) => raw.getBranch(...args);
+export const getPermissionGroup = (...args) => raw.getPermissionGroup(...args);
+export const getStaffSchedule = (...args) => raw.getStaffSchedule(...args);
+export const getCoupon = (...args) => raw.getCoupon(...args);
+export const getVoucher = (...args) => raw.getVoucher(...args);
+export const getPromotion = (...args) => raw.getPromotion(...args);
+export const getTreatment = (...args) => raw.getTreatment(...args);
+export const getBackendSale = (...args) => raw.getBackendSale(...args);
+export const getDeposit = (...args) => raw.getDeposit(...args);
+export const getAllDeposits = (...args) => raw.getAllDeposits(...args);
+export const getSaleByTreatmentId = (...args) => raw.getSaleByTreatmentId(...args);
+export const getMasterDataMeta = (...args) => raw.getMasterDataMeta(...args);
+export const getActiveSchedulesForDate = (...args) => raw.getActiveSchedulesForDate(...args);
+export const getBeBackedMasterTypes = (...args) => raw.getBeBackedMasterTypes(...args);
 
 // ─── Writes — re-export raw (Phase BS V2 stamping handled inside) ──────────
 
-export const saveCustomer = raw.saveCustomer;
-export const deleteCustomerDocOnly = raw.deleteCustomerDocOnly;
-export const deleteCustomerCascade = raw.deleteCustomerCascade;
-export const saveTreatment = raw.saveTreatment;
-export const deleteBackendTreatment = raw.deleteBackendTreatment;
-export const saveProduct = raw.saveProduct;
-export const deleteProduct = raw.deleteProduct;
-export const saveCourse = raw.saveCourse;
-export const deleteCourse = raw.deleteCourse;
-export const saveProductGroup = raw.saveProductGroup;
-export const deleteProductGroup = raw.deleteProductGroup;
-export const saveProductUnitGroup = raw.saveProductUnitGroup;
-export const deleteProductUnitGroup = raw.deleteProductUnitGroup;
-export const saveMedicalInstrument = raw.saveMedicalInstrument;
-export const deleteMedicalInstrument = raw.deleteMedicalInstrument;
-export const saveHoliday = raw.saveHoliday;
-export const deleteHoliday = raw.deleteHoliday;
-export const saveBranch = raw.saveBranch;
-export const deleteBranch = raw.deleteBranch;
-export const savePermissionGroup = raw.savePermissionGroup;
-export const deletePermissionGroup = raw.deletePermissionGroup;
-export const saveStaff = raw.saveStaff;
-export const deleteStaff = raw.deleteStaff;
-export const saveDoctor = raw.saveDoctor;
-export const deleteDoctor = raw.deleteDoctor;
-export const saveDfGroup = raw.saveDfGroup;
-export const deleteDfGroup = raw.deleteDfGroup;
-export const saveDfStaffRates = raw.saveDfStaffRates;
-export const deleteDfStaffRates = raw.deleteDfStaffRates;
-export const saveBankAccount = raw.saveBankAccount;
-export const deleteBankAccount = raw.deleteBankAccount;
-export const saveExpenseCategory = raw.saveExpenseCategory;
-export const deleteExpenseCategory = raw.deleteExpenseCategory;
-export const saveExpense = raw.saveExpense;
-export const deleteExpense = raw.deleteExpense;
-export const saveOnlineSale = raw.saveOnlineSale;
-export const deleteOnlineSale = raw.deleteOnlineSale;
-export const transitionOnlineSale = raw.transitionOnlineSale;
-export const saveSaleInsuranceClaim = raw.saveSaleInsuranceClaim;
-export const deleteSaleInsuranceClaim = raw.deleteSaleInsuranceClaim;
-export const saveDocumentTemplate = raw.saveDocumentTemplate;
-export const deleteDocumentTemplate = raw.deleteDocumentTemplate;
-export const saveDocumentDraft = raw.saveDocumentDraft;
-export const deleteDocumentDraft = raw.deleteDocumentDraft;
-export const saveVendor = raw.saveVendor;
-export const deleteVendor = raw.deleteVendor;
-export const saveVendorSale = raw.saveVendorSale;
-export const deleteVendorSale = raw.deleteVendorSale;
-export const transitionVendorSale = raw.transitionVendorSale;
-export const saveQuotation = raw.saveQuotation;
-export const deleteQuotation = raw.deleteQuotation;
-export const savePromotion = raw.savePromotion;
-export const deletePromotion = raw.deletePromotion;
-export const saveCoupon = raw.saveCoupon;
-export const deleteCoupon = raw.deleteCoupon;
-export const findCouponByCode = raw.findCouponByCode;
-export const saveVoucher = raw.saveVoucher;
-export const deleteVoucher = raw.deleteVoucher;
-export const saveStaffSchedule = raw.saveStaffSchedule;
-export const deleteStaffSchedule = raw.deleteStaffSchedule;
-export const saveAudience = raw.saveAudience;
-export const deleteAudience = raw.deleteAudience;
-export const deleteCentralWarehouse = raw.deleteCentralWarehouse;
-export const deleteBackendSale = raw.deleteBackendSale;
-export const deleteBackendAppointment = raw.deleteBackendAppointment;
-export const deleteDeposit = raw.deleteDeposit;
-export const deleteMembership = raw.deleteMembership;
-export const deleteMasterCourse = raw.deleteMasterCourse;
-export const deleteMasterItem = raw.deleteMasterItem;
+export const saveCustomer = (...args) => raw.saveCustomer(...args);
+export const deleteCustomerDocOnly = (...args) => raw.deleteCustomerDocOnly(...args);
+export const deleteCustomerCascade = (...args) => raw.deleteCustomerCascade(...args);
+export const saveTreatment = (...args) => raw.saveTreatment(...args);
+export const deleteBackendTreatment = (...args) => raw.deleteBackendTreatment(...args);
+export const saveProduct = (...args) => raw.saveProduct(...args);
+export const deleteProduct = (...args) => raw.deleteProduct(...args);
+export const saveCourse = (...args) => raw.saveCourse(...args);
+export const deleteCourse = (...args) => raw.deleteCourse(...args);
+export const saveProductGroup = (...args) => raw.saveProductGroup(...args);
+export const deleteProductGroup = (...args) => raw.deleteProductGroup(...args);
+export const saveProductUnitGroup = (...args) => raw.saveProductUnitGroup(...args);
+export const deleteProductUnitGroup = (...args) => raw.deleteProductUnitGroup(...args);
+export const saveMedicalInstrument = (...args) => raw.saveMedicalInstrument(...args);
+export const deleteMedicalInstrument = (...args) => raw.deleteMedicalInstrument(...args);
+export const saveHoliday = (...args) => raw.saveHoliday(...args);
+export const deleteHoliday = (...args) => raw.deleteHoliday(...args);
+export const saveBranch = (...args) => raw.saveBranch(...args);
+export const deleteBranch = (...args) => raw.deleteBranch(...args);
+export const savePermissionGroup = (...args) => raw.savePermissionGroup(...args);
+export const deletePermissionGroup = (...args) => raw.deletePermissionGroup(...args);
+export const saveStaff = (...args) => raw.saveStaff(...args);
+export const deleteStaff = (...args) => raw.deleteStaff(...args);
+export const saveDoctor = (...args) => raw.saveDoctor(...args);
+export const deleteDoctor = (...args) => raw.deleteDoctor(...args);
+export const saveDfGroup = (...args) => raw.saveDfGroup(...args);
+export const deleteDfGroup = (...args) => raw.deleteDfGroup(...args);
+export const saveDfStaffRates = (...args) => raw.saveDfStaffRates(...args);
+export const deleteDfStaffRates = (...args) => raw.deleteDfStaffRates(...args);
+export const saveBankAccount = (...args) => raw.saveBankAccount(...args);
+export const deleteBankAccount = (...args) => raw.deleteBankAccount(...args);
+export const saveExpenseCategory = (...args) => raw.saveExpenseCategory(...args);
+export const deleteExpenseCategory = (...args) => raw.deleteExpenseCategory(...args);
+export const saveExpense = (...args) => raw.saveExpense(...args);
+export const deleteExpense = (...args) => raw.deleteExpense(...args);
+export const saveOnlineSale = (...args) => raw.saveOnlineSale(...args);
+export const deleteOnlineSale = (...args) => raw.deleteOnlineSale(...args);
+export const transitionOnlineSale = (...args) => raw.transitionOnlineSale(...args);
+export const saveSaleInsuranceClaim = (...args) => raw.saveSaleInsuranceClaim(...args);
+export const deleteSaleInsuranceClaim = (...args) => raw.deleteSaleInsuranceClaim(...args);
+export const saveDocumentTemplate = (...args) => raw.saveDocumentTemplate(...args);
+export const deleteDocumentTemplate = (...args) => raw.deleteDocumentTemplate(...args);
+export const saveDocumentDraft = (...args) => raw.saveDocumentDraft(...args);
+export const deleteDocumentDraft = (...args) => raw.deleteDocumentDraft(...args);
+export const saveVendor = (...args) => raw.saveVendor(...args);
+export const deleteVendor = (...args) => raw.deleteVendor(...args);
+export const saveVendorSale = (...args) => raw.saveVendorSale(...args);
+export const deleteVendorSale = (...args) => raw.deleteVendorSale(...args);
+export const transitionVendorSale = (...args) => raw.transitionVendorSale(...args);
+export const saveQuotation = (...args) => raw.saveQuotation(...args);
+export const deleteQuotation = (...args) => raw.deleteQuotation(...args);
+export const savePromotion = (...args) => raw.savePromotion(...args);
+export const deletePromotion = (...args) => raw.deletePromotion(...args);
+export const saveCoupon = (...args) => raw.saveCoupon(...args);
+export const deleteCoupon = (...args) => raw.deleteCoupon(...args);
+export const findCouponByCode = (...args) => raw.findCouponByCode(...args);
+export const saveVoucher = (...args) => raw.saveVoucher(...args);
+export const deleteVoucher = (...args) => raw.deleteVoucher(...args);
+export const saveStaffSchedule = (...args) => raw.saveStaffSchedule(...args);
+export const deleteStaffSchedule = (...args) => raw.deleteStaffSchedule(...args);
+export const saveAudience = (...args) => raw.saveAudience(...args);
+export const deleteAudience = (...args) => raw.deleteAudience(...args);
+export const deleteCentralWarehouse = (...args) => raw.deleteCentralWarehouse(...args);
+export const deleteBackendSale = (...args) => raw.deleteBackendSale(...args);
+export const deleteBackendAppointment = (...args) => raw.deleteBackendAppointment(...args);
+export const deleteDeposit = (...args) => raw.deleteDeposit(...args);
+export const deleteMembership = (...args) => raw.deleteMembership(...args);
+export const deleteMasterCourse = (...args) => raw.deleteMasterCourse(...args);
+export const deleteMasterItem = (...args) => raw.deleteMasterItem(...args);
 
 // ─── Customer write/read operations ────────────────────────────────────────
-export const addCustomer = raw.addCustomer;
-export const updateCustomer = raw.updateCustomer;
-export const updateCustomerFromForm = raw.updateCustomerFromForm;
-export const customerExists = raw.customerExists;
-export const buildFormFromCustomer = raw.buildFormFromCustomer;
+export const addCustomer = (...args) => raw.addCustomer(...args);
+export const updateCustomer = (...args) => raw.updateCustomer(...args);
+export const updateCustomerFromForm = (...args) => raw.updateCustomerFromForm(...args);
+export const customerExists = (...args) => raw.customerExists(...args);
+export const buildFormFromCustomer = (...args) => raw.buildFormFromCustomer(...args);
 
 // ─── Sale operations ───────────────────────────────────────────────────────
-export const createBackendSale = raw.createBackendSale;
-export const updateBackendSale = raw.updateBackendSale;
-export const cancelBackendSale = raw.cancelBackendSale;
-export const updateSalePayment = raw.updateSalePayment;
-export const markSalePaid = raw.markSalePaid;
-export const assignCourseToCustomer = raw.assignCourseToCustomer;
-export const applyDepositToSale = raw.applyDepositToSale;
-export const convertQuotationToSale = raw.convertQuotationToSale;
-export const analyzeSaleCancel = raw.analyzeSaleCancel;
-export const applySaleCancelToCourses = raw.applySaleCancelToCourses;
-export const setTreatmentLinkedSaleId = raw.setTreatmentLinkedSaleId;
-export const transitionSaleInsuranceClaim = raw.transitionSaleInsuranceClaim;
+export const createBackendSale = (...args) => raw.createBackendSale(...args);
+export const updateBackendSale = (...args) => raw.updateBackendSale(...args);
+export const cancelBackendSale = (...args) => raw.cancelBackendSale(...args);
+export const updateSalePayment = (...args) => raw.updateSalePayment(...args);
+export const markSalePaid = (...args) => raw.markSalePaid(...args);
+export const assignCourseToCustomer = (...args) => raw.assignCourseToCustomer(...args);
+export const applyDepositToSale = (...args) => raw.applyDepositToSale(...args);
+export const convertQuotationToSale = (...args) => raw.convertQuotationToSale(...args);
+export const analyzeSaleCancel = (...args) => raw.analyzeSaleCancel(...args);
+export const applySaleCancelToCourses = (...args) => raw.applySaleCancelToCourses(...args);
+export const setTreatmentLinkedSaleId = (...args) => raw.setTreatmentLinkedSaleId(...args);
+export const transitionSaleInsuranceClaim = (...args) => raw.transitionSaleInsuranceClaim(...args);
 
 // ─── Treatment operations ──────────────────────────────────────────────────
-export const createBackendTreatment = raw.createBackendTreatment;
-export const updateBackendTreatment = raw.updateBackendTreatment;
-export const rebuildTreatmentSummary = raw.rebuildTreatmentSummary;
+export const createBackendTreatment = (...args) => raw.createBackendTreatment(...args);
+export const updateBackendTreatment = (...args) => raw.updateBackendTreatment(...args);
+export const rebuildTreatmentSummary = (...args) => raw.rebuildTreatmentSummary(...args);
 
 // ─── Course operations ─────────────────────────────────────────────────────
-export const deductCourseItems = raw.deductCourseItems;
-export const reverseCourseDeduction = raw.reverseCourseDeduction;
-export const addCourseRemainingQty = raw.addCourseRemainingQty;
-export const addPicksToResolvedGroup = raw.addPicksToResolvedGroup;
-export const resolvePickedCourseInCustomer = raw.resolvePickedCourseInCustomer;
-export const cancelCustomerCourse = raw.cancelCustomerCourse;
-export const refundCustomerCourse = raw.refundCustomerCourse;
-export const exchangeCourseProduct = raw.exchangeCourseProduct;
+export const deductCourseItems = (...args) => raw.deductCourseItems(...args);
+export const reverseCourseDeduction = (...args) => raw.reverseCourseDeduction(...args);
+export const addCourseRemainingQty = (...args) => raw.addCourseRemainingQty(...args);
+export const addPicksToResolvedGroup = (...args) => raw.addPicksToResolvedGroup(...args);
+export const resolvePickedCourseInCustomer = (...args) => raw.resolvePickedCourseInCustomer(...args);
+export const cancelCustomerCourse = (...args) => raw.cancelCustomerCourse(...args);
+export const refundCustomerCourse = (...args) => raw.refundCustomerCourse(...args);
+export const exchangeCourseProduct = (...args) => raw.exchangeCourseProduct(...args);
 
 // ─── Stock operations (writers + analysis) ─────────────────────────────────
-export const createStockOrder = raw.createStockOrder;
-export const updateStockOrder = raw.updateStockOrder;
-export const cancelStockOrder = raw.cancelStockOrder;
-export const createStockAdjustment = raw.createStockAdjustment;
-export const createStockTransfer = raw.createStockTransfer;
-export const updateStockTransferStatus = raw.updateStockTransferStatus;
-export const createStockWithdrawal = raw.createStockWithdrawal;
-export const updateStockWithdrawalStatus = raw.updateStockWithdrawalStatus;
-export const deductStockForSale = raw.deductStockForSale;
-export const reverseStockForSale = raw.reverseStockForSale;
-export const deductStockForTreatment = raw.deductStockForTreatment;
-export const reverseStockForTreatment = raw.reverseStockForTreatment;
-export const analyzeStockImpact = raw.analyzeStockImpact;
-export const summarizeSkipReasons = raw.summarizeSkipReasons;
+export const createStockOrder = (...args) => raw.createStockOrder(...args);
+export const updateStockOrder = (...args) => raw.updateStockOrder(...args);
+export const cancelStockOrder = (...args) => raw.cancelStockOrder(...args);
+export const createStockAdjustment = (...args) => raw.createStockAdjustment(...args);
+export const createStockTransfer = (...args) => raw.createStockTransfer(...args);
+export const updateStockTransferStatus = (...args) => raw.updateStockTransferStatus(...args);
+export const createStockWithdrawal = (...args) => raw.createStockWithdrawal(...args);
+export const updateStockWithdrawalStatus = (...args) => raw.updateStockWithdrawalStatus(...args);
+export const deductStockForSale = (...args) => raw.deductStockForSale(...args);
+export const reverseStockForSale = (...args) => raw.reverseStockForSale(...args);
+export const deductStockForTreatment = (...args) => raw.deductStockForTreatment(...args);
+export const reverseStockForTreatment = (...args) => raw.reverseStockForTreatment(...args);
+export const analyzeStockImpact = (...args) => raw.analyzeStockImpact(...args);
+export const summarizeSkipReasons = (...args) => raw.summarizeSkipReasons(...args);
 
 // ─── Central stock operations ──────────────────────────────────────────────
-export const createCentralWarehouse = raw.createCentralWarehouse;
-export const updateCentralWarehouse = raw.updateCentralWarehouse;
-export const createCentralStockOrder = raw.createCentralStockOrder;
-export const cancelCentralStockOrder = raw.cancelCentralStockOrder;
-export const receiveCentralStockOrder = raw.receiveCentralStockOrder;
+export const createCentralWarehouse = (...args) => raw.createCentralWarehouse(...args);
+export const updateCentralWarehouse = (...args) => raw.updateCentralWarehouse(...args);
+export const createCentralStockOrder = (...args) => raw.createCentralStockOrder(...args);
+export const cancelCentralStockOrder = (...args) => raw.cancelCentralStockOrder(...args);
+export const receiveCentralStockOrder = (...args) => raw.receiveCentralStockOrder(...args);
 
 // ─── Appointment operations ────────────────────────────────────────────────
-export const createBackendAppointment = raw.createBackendAppointment;
-export const updateBackendAppointment = raw.updateBackendAppointment;
+export const createBackendAppointment = (...args) => raw.createBackendAppointment(...args);
+export const updateBackendAppointment = (...args) => raw.updateBackendAppointment(...args);
 
 // ─── Deposit operations ────────────────────────────────────────────────────
-export const createDeposit = raw.createDeposit;
-export const updateDeposit = raw.updateDeposit;
-export const cancelDeposit = raw.cancelDeposit;
-export const refundDeposit = raw.refundDeposit;
-export const reverseDepositUsage = raw.reverseDepositUsage;
+export const createDeposit = (...args) => raw.createDeposit(...args);
+export const updateDeposit = (...args) => raw.updateDeposit(...args);
+export const cancelDeposit = (...args) => raw.cancelDeposit(...args);
+export const refundDeposit = (...args) => raw.refundDeposit(...args);
+export const reverseDepositUsage = (...args) => raw.reverseDepositUsage(...args);
 
 // ─── Wallet / points operations ────────────────────────────────────────────
-export const ensureCustomerWallet = raw.ensureCustomerWallet;
-export const topUpWallet = raw.topUpWallet;
-export const adjustWallet = raw.adjustWallet;
-export const deductWallet = raw.deductWallet;
-export const refundToWallet = raw.refundToWallet;
-export const adjustPoints = raw.adjustPoints;
-export const earnPoints = raw.earnPoints;
-export const reversePointsEarned = raw.reversePointsEarned;
+export const ensureCustomerWallet = (...args) => raw.ensureCustomerWallet(...args);
+export const topUpWallet = (...args) => raw.topUpWallet(...args);
+export const adjustWallet = (...args) => raw.adjustWallet(...args);
+export const deductWallet = (...args) => raw.deductWallet(...args);
+export const refundToWallet = (...args) => raw.refundToWallet(...args);
+export const adjustPoints = (...args) => raw.adjustPoints(...args);
+export const earnPoints = (...args) => raw.earnPoints(...args);
+export const reversePointsEarned = (...args) => raw.reversePointsEarned(...args);
 
 // ─── Membership operations ─────────────────────────────────────────────────
-export const createMembership = raw.createMembership;
-export const cancelMembership = raw.cancelMembership;
-export const renewMembership = raw.renewMembership;
+export const createMembership = (...args) => raw.createMembership(...args);
+export const cancelMembership = (...args) => raw.cancelMembership(...args);
+export const renewMembership = (...args) => raw.renewMembership(...args);
 
 // ─── Master shape conversion ───────────────────────────────────────────────
-export const beCourseToMasterShape = raw.beCourseToMasterShape;
+export const beCourseToMasterShape = (...args) => raw.beCourseToMasterShape(...args);
 
 // ─── Master data sync — DEV-ONLY (Rule H-bis: strip before production) ─────
 // MasterDataTab is the sole sanctioned consumer of these helpers. Re-exported
 // here so Task 6 mass migration doesn't fail to build; not for general use.
-export const runMasterDataSync = raw.runMasterDataSync;
-export const getAllMasterDataItems = raw.getAllMasterDataItems;
-export const clearMasterDataItems = raw.clearMasterDataItems;
-export const createMasterCourse = raw.createMasterCourse;
-export const updateMasterCourse = raw.updateMasterCourse;
-export const createMasterItem = raw.createMasterItem;
-export const updateMasterItem = raw.updateMasterItem;
-export const migrateMasterPromotionsToBe = raw.migrateMasterPromotionsToBe;
-export const migrateMasterCouponsToBe = raw.migrateMasterCouponsToBe;
-export const migrateMasterVouchersToBe = raw.migrateMasterVouchersToBe;
-export const migrateMasterProductGroupsToBe = raw.migrateMasterProductGroupsToBe;
-export const migrateMasterProductUnitsToBe = raw.migrateMasterProductUnitsToBe;
-export const migrateMasterMedicalInstrumentsToBe = raw.migrateMasterMedicalInstrumentsToBe;
-export const migrateMasterHolidaysToBe = raw.migrateMasterHolidaysToBe;
-export const migrateMasterBranchesToBe = raw.migrateMasterBranchesToBe;
-export const migrateMasterPermissionGroupsToBe = raw.migrateMasterPermissionGroupsToBe;
-export const migrateMasterStaffToBe = raw.migrateMasterStaffToBe;
-export const migrateMasterDoctorsToBe = raw.migrateMasterDoctorsToBe;
-export const migrateMasterStaffSchedulesToBe = raw.migrateMasterStaffSchedulesToBe;
-export const migrateMasterProductsToBe = raw.migrateMasterProductsToBe;
-export const migrateMasterCoursesToBeV2 = raw.migrateMasterCoursesToBeV2;
-export const migrateMasterDfGroupsToBe = raw.migrateMasterDfGroupsToBe;
-export const migrateMasterDfStaffRatesToBe = raw.migrateMasterDfStaffRatesToBe;
-export const migrateMasterWalletTypesToBe = raw.migrateMasterWalletTypesToBe;
-export const migrateMasterMembershipTypesToBe = raw.migrateMasterMembershipTypesToBe;
-export const migrateMasterMedicineLabelsToBe = raw.migrateMasterMedicineLabelsToBe;
+export const runMasterDataSync = (...args) => raw.runMasterDataSync(...args);
+export const getAllMasterDataItems = (...args) => raw.getAllMasterDataItems(...args);
+export const clearMasterDataItems = (...args) => raw.clearMasterDataItems(...args);
+export const createMasterCourse = (...args) => raw.createMasterCourse(...args);
+export const updateMasterCourse = (...args) => raw.updateMasterCourse(...args);
+export const createMasterItem = (...args) => raw.createMasterItem(...args);
+export const updateMasterItem = (...args) => raw.updateMasterItem(...args);
+export const migrateMasterPromotionsToBe = (...args) => raw.migrateMasterPromotionsToBe(...args);
+export const migrateMasterCouponsToBe = (...args) => raw.migrateMasterCouponsToBe(...args);
+export const migrateMasterVouchersToBe = (...args) => raw.migrateMasterVouchersToBe(...args);
+export const migrateMasterProductGroupsToBe = (...args) => raw.migrateMasterProductGroupsToBe(...args);
+export const migrateMasterProductUnitsToBe = (...args) => raw.migrateMasterProductUnitsToBe(...args);
+export const migrateMasterMedicalInstrumentsToBe = (...args) => raw.migrateMasterMedicalInstrumentsToBe(...args);
+export const migrateMasterHolidaysToBe = (...args) => raw.migrateMasterHolidaysToBe(...args);
+export const migrateMasterBranchesToBe = (...args) => raw.migrateMasterBranchesToBe(...args);
+export const migrateMasterPermissionGroupsToBe = (...args) => raw.migrateMasterPermissionGroupsToBe(...args);
+export const migrateMasterStaffToBe = (...args) => raw.migrateMasterStaffToBe(...args);
+export const migrateMasterDoctorsToBe = (...args) => raw.migrateMasterDoctorsToBe(...args);
+export const migrateMasterStaffSchedulesToBe = (...args) => raw.migrateMasterStaffSchedulesToBe(...args);
+export const migrateMasterProductsToBe = (...args) => raw.migrateMasterProductsToBe(...args);
+export const migrateMasterCoursesToBeV2 = (...args) => raw.migrateMasterCoursesToBeV2(...args);
+export const migrateMasterDfGroupsToBe = (...args) => raw.migrateMasterDfGroupsToBe(...args);
+export const migrateMasterDfStaffRatesToBe = (...args) => raw.migrateMasterDfStaffRatesToBe(...args);
+export const migrateMasterWalletTypesToBe = (...args) => raw.migrateMasterWalletTypesToBe(...args);
+export const migrateMasterMembershipTypesToBe = (...args) => raw.migrateMasterMembershipTypesToBe(...args);
+export const migrateMasterMedicineLabelsToBe = (...args) => raw.migrateMasterMedicineLabelsToBe(...args);
 
 // ─── Treatment context-specific helper (be_product_groups for TFP modal) ───
-export const listProductGroupsForTreatment = raw.listProductGroupsForTreatment;
+export const listProductGroupsForTreatment = (...args) => raw.listProductGroupsForTreatment(...args);
 
 // ─── Admin reconciler ──────────────────────────────────────────────────────
-export const reconcileAllCustomerSummaries = raw.reconcileAllCustomerSummaries;
+export const reconcileAllCustomerSummaries = (...args) => raw.reconcileAllCustomerSummaries(...args);

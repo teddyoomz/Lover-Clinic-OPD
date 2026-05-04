@@ -21,7 +21,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveProductGroup, listProducts } from '../../lib/backendClient.js';
+import { saveProductGroup, listProducts } from '../../lib/scopedDataLayer.js';
 import {
   PRODUCT_TYPES,
   NAME_MAX_LENGTH,

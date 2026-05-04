@@ -19,7 +19,7 @@
 // the rules would reject anyway.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { listenToUserPermissions } from '../lib/backendClient.js';
+import { listenToUserPermissions } from '../lib/scopedDataLayer.js';
 import { isOwnerEmail } from '../lib/ownerEmails.js';
 import { bootstrapSelfAsAdmin, syncClaimsSelf } from '../lib/adminUsersClient.js';
 

@@ -74,9 +74,10 @@ describe('Phase 15.7-sexies — Appointment modal delete button', () => {
   });
 
   describe('SX4 — AppointmentTab wires onDelete to modal', () => {
-    it('SX4.1 imports deleteBackendAppointment from backendClient', () => {
+    it('SX4.1 imports deleteBackendAppointment from scopedDataLayer (BSA Task 6)', () => {
       expect(TabSrc).toMatch(/deleteBackendAppointment/);
-      const importBlock = TabSrc.match(/import\s*\{[\s\S]+?\}\s*from\s+['"]\.\.\/\.\.\/lib\/backendClient[^'"]*['"]/);
+      // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+      const importBlock = TabSrc.match(/import\s*\{[\s\S]+?\}\s*from\s+['"]\.\.\/\.\.\/lib\/scopedDataLayer[^'"]*['"]/);
       expect(importBlock).toBeTruthy();
       expect(importBlock[0]).toMatch(/deleteBackendAppointment/);
     });

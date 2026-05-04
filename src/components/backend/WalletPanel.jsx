@@ -13,7 +13,7 @@ import {
   ensureCustomerWallet,
   // Phase 14.10-tris (2026-04-26) — be_wallet_types canonical
   listWalletTypes,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 import DateField from '../DateField.jsx';
 import FileUploadField from './FileUploadField.jsx';

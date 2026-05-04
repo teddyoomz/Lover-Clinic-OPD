@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Building2, Loader2, Phone, MapPin, Star } from 'lucide-react';
-import { listBranches, deleteBranch } from '../../lib/backendClient.js';
+import { listBranches, deleteBranch } from '../../lib/scopedDataLayer.js';
 import BranchFormModal from './BranchFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';

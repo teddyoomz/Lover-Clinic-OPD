@@ -13,7 +13,7 @@ import {
   createMembership, cancelMembership, renewMembership, getAllMemberships, deleteMembership,
   // Phase 14.10-tris (2026-04-26) — be_* canonical (was master_data mirror)
   listMembershipTypes, listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtMoney, calcMembershipExpiry, isMembershipExpired } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';

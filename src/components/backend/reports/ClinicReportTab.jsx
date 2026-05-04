@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // src/components/backend/reports/ClinicReportTab.jsx — Phase 16.2 root tab
 // @phase 16.2 + 16.2-bis (2026-04-29 session 33: inline explanations + 5 wiring fixes)
 import { useState, useMemo, useRef } from 'react';

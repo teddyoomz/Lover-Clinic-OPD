@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle2, Loader2 } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { markSalePaid } from '../../lib/backendClient.js';
+import { markSalePaid } from '../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../utils.js';
 
 const METHOD_OPTIONS = Object.freeze([

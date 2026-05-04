@@ -16,7 +16,7 @@ import FileUploadField from './FileUploadField.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 // Phase 14.10-tris (2026-04-26) — be_courses + be_products canonical
-import { savePromotion, listCourses, listProducts } from '../../lib/backendClient.js';
+import { savePromotion, listCourses, listProducts } from '../../lib/scopedDataLayer.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
 

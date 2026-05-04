@@ -10,7 +10,7 @@ import { useState, useCallback } from 'react';
 import { Plus, Trash2, Scale } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveProductUnitGroup } from '../../lib/backendClient.js';
+import { saveProductUnitGroup } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS,
   GROUP_NAME_MAX_LENGTH,

@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── StaffSalesTab — Phase 10.X2 ──────────────────────────────────────────
 // Closes 2 ReportsHome cards:
 //  - "ยอดขายรายแพทย์/พนักงาน" (sub-tab: ทั้งหมด / ตามยอดเงินที่ชำระ)

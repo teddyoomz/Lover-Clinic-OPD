@@ -16,7 +16,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveCourse, listProducts, listCourses } from '../../lib/backendClient.js';
+import { saveCourse, listProducts, listCourses } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS, COURSE_TYPE_OPTIONS, USAGE_TYPE_OPTIONS,
   validateCourse, emptyCourseForm, generateCourseId,

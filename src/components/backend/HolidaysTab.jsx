@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, CalendarX, Loader2, Repeat } from 'lucide-react';
-import { listenToHolidays, deleteHoliday } from '../../lib/backendClient.js';
+import { listenToHolidays, deleteHoliday } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import HolidayFormModal from './HolidayFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

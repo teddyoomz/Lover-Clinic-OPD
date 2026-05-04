@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import DOMPurify from 'dompurify';
 import { FileText, Printer, ChevronLeft, X, Loader2, Search, ZoomIn, ZoomOut, Maximize2, Download, MessageCircle } from 'lucide-react';
 import DateField from '../DateField.jsx';
-import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint, saveDocumentDraft, findResumableDraft, deleteDocumentDraft } from '../../lib/backendClient.js';
+import { listDocumentTemplates, getNextCertNumber, listDoctors, listStaff, upgradeSystemDocumentTemplates, recordDocumentPrint, saveDocumentDraft, findResumableDraft, deleteDocumentDraft } from '../../lib/scopedDataLayer.js';
 import {
   DOC_TYPE_LABELS,
 } from '../../lib/documentTemplateValidation.js';

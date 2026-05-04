@@ -24,7 +24,7 @@ import {
   Warehouse, Package, ShoppingBag, Truck, ClipboardCheck, Activity,
   Plus, Loader2, SlidersHorizontal,
 } from 'lucide-react';
-import { listCentralWarehouses } from '../../lib/backendClient.js';
+import { listCentralWarehouses } from '../../lib/scopedDataLayer.js';
 import StockBalancePanel from './StockBalancePanel.jsx';
 import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';

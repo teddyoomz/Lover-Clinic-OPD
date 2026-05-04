@@ -44,9 +44,10 @@ vi.mock('../src/hooks/useTabAccess.js', () => ({
 
 // ─── M9.A — source-grep regression guards ────────────────────────────────
 describe('M9.A — source-grep regression guards', () => {
-  test('M9.A.1 imports reconcileAllCustomerSummaries from backendClient', () => {
+  test('M9.A.1 imports reconcileAllCustomerSummaries from scopedDataLayer (BSA Task 6)', () => {
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
     expect(TAB_SRC).toMatch(/reconcileAllCustomerSummaries/);
-    expect(TAB_SRC).toMatch(/from ['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+    expect(TAB_SRC).toMatch(/from ['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
   test('M9.A.2 imports useTabAccess for isAdmin gate', () => {
     expect(TAB_SRC).toMatch(/useTabAccess/);

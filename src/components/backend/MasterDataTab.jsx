@@ -1,3 +1,4 @@
+// audit-branch-scope: sanctioned exception — Rule H-bis dev-only sync
 // @dev-only — STRIP BEFORE PRODUCTION RELEASE (rule H-bis)
 // ─── MasterDataTab — Sync + Display master data from ProClinic ──────────────
 // Sub-tabs: Products | Doctors | Staff | Courses

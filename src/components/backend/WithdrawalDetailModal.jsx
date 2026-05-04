@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, ClipboardCheck, AlertCircle, ArrowRightLeft, Package, CheckCircle2, Ban } from 'lucide-react';
 import {
   getStockWithdrawal, getStockBatch, listStockLocations,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   approveStockWithdrawal, rejectStockWithdrawal,
 } from '../../lib/stockWithdrawalApprovalClient.js';

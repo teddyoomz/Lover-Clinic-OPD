@@ -616,7 +616,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     let cancelled = false;
     (async () => {
       try {
-        const { getCustomerMembership } = await import('../lib/backendClient.js');
+        const { getCustomerMembership } = await import('../lib/scopedDataLayer.js');
         const m = await getCustomerMembership(customerId);
         if (!cancelled) setBackendActiveMembership(m || null);
       } catch (e) {
@@ -632,7 +632,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       try {
         // ── BACKEND MODE: load from master_data + be_treatments ──
         if (saveTarget === 'backend') {
-          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer, listDfGroups, listDfStaffRates } = await import('../lib/backendClient.js');
+          const { getAllMasterDataItems, getTreatment: getBackendTreatment, getCustomer: getBackendCustomer, listDfGroups, listDfStaffRates } = await import('../lib/scopedDataLayer.js');
           const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
             getAllMasterDataItems('doctors'),
             getAllMasterDataItems('products'),
@@ -764,7 +764,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.couponCode) {
                 setCouponCode(t.couponCode);
                 try {
-                  const { findCouponByCode } = await import('../lib/backendClient.js');
+                  const { findCouponByCode } = await import('../lib/scopedDataLayer.js');
                   const c = await findCouponByCode(t.couponCode);
                   if (c) setCouponInfo(c);
                 } catch { /* coupon expired / deleted — keep code string, skip badge */ }
@@ -778,7 +778,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.payment?.saleNote) setSaleNote(t.payment.saleNote);
               // Phase 7: Restore deposit + wallet selection from linked sale (if exists)
               try {
-                const { getSaleByTreatmentId } = await import('../lib/backendClient.js');
+                const { getSaleByTreatmentId } = await import('../lib/scopedDataLayer.js');
                 const linkedSale = await getSaleByTreatmentId(treatmentId);
                 const deps = Array.isArray(linkedSale?.billing?.depositIds) ? linkedSale.billing.depositIds : [];
                 if (deps.length > 0) {
@@ -1125,7 +1125,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedModalLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
         const all = await getAllMasterDataItems('products');
         setMedAllProducts(all.filter(p => p.type === 'ยา').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category })));
       } else {
@@ -1235,7 +1235,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
         // No master_data fallback — if user deletes all groups, they see
         // empty state (Rule H: be_ = canonical, master_data is DEV-ONLY cache).
-        const { listProductGroupsForTreatment } = await import('../lib/backendClient.js');
+        const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
         const cached = await listProductGroupsForTreatment('ยากลับบ้าน');
         if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
@@ -1304,7 +1304,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsModalLoading(true);
     try {
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+        const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
         const all = await getAllMasterDataItems('products');
         setConsAllProducts(all.filter(p => p.type === 'สินค้าสิ้นเปลือง').map(p => ({ id: p.id, name: p.name, unit: p.unit, category: p.category })));
       } else {
@@ -1359,7 +1359,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       if (saveTarget === 'backend') {
         // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
         // No master_data fallback — delete-in-tab must propagate here.
-        const { listProductGroupsForTreatment } = await import('../lib/backendClient.js');
+        const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
         const cached = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง');
         if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
       } else {
@@ -1425,7 +1425,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // Backend mode: load from Firestore — NEVER fetch ProClinic directly.
       // Promotions come from be_promotions (our CRUD); courses/products from master_data.
       if (saveTarget === 'backend') {
-        const { getAllMasterDataItems, listPromotions } = await import('../lib/backendClient.js');
+        const { getAllMasterDataItems, listPromotions } = await import('../lib/scopedDataLayer.js');
         let items = [];
         let categories = [];
         if (type === 'product') {
@@ -2066,7 +2066,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Firestore course entry at its `courseIndex`.
         if (selectedCourseItems.size > 0) {
           try {
-            const { getCustomer: fetchLiveCustomer } = await import('../lib/backendClient.js');
+            const { getCustomer: fetchLiveCustomer } = await import('../lib/scopedDataLayer.js');
             const { parseQtyString } = await import('../lib/courseUtils.js');
             const liveCustomer = await fetchLiveCustomer(customerId);
             const liveCourses = liveCustomer?.courses || [];
@@ -2127,7 +2127,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
 
-        const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/backendClient.js');
+        const { createBackendTreatment, updateBackendTreatment, rebuildTreatmentSummary } = await import('../lib/scopedDataLayer.js');
         // Strip undefined values — Firestore rejects any field with value undefined
         const clean = (obj) => JSON.parse(JSON.stringify(obj));
         const backendDetail = clean({
@@ -2195,7 +2195,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const oldExisting = (existingCourseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
         const oldPurchased = (existingCourseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
         if (isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
-          const { reverseCourseDeduction } = await import('../lib/backendClient.js');
+          const { reverseCourseDeduction } = await import('../lib/scopedDataLayer.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
           if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
         }
@@ -2230,7 +2230,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         });
         if (isEdit && stockChanged) {
           try {
-            const { reverseStockForTreatment } = await import('../lib/backendClient.js');
+            const { reverseStockForTreatment } = await import('../lib/scopedDataLayer.js');
             await reverseStockForTreatment(treatmentId);
           } catch (stockErr) {
             throw new Error(`คืนสต็อกการรักษาเดิมไม่สำเร็จ: ${stockErr.message}`);
@@ -2248,7 +2248,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // backendClient.js:938 fires only when opts.treatmentId is set.
         if (existingDeductions.length > 0) {
           const newTid = result.treatmentId || treatmentId;
-          const { deductCourseItems } = await import('../lib/backendClient.js');
+          const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
           const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
           try {
             await deductCourseItems(customerId, existingDeductions, {
@@ -2263,7 +2263,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // Edit-mode preserves the original doc — no rollback needed.
             if (!isEdit && result?.treatmentId) {
               try {
-                const { deleteBackendTreatment } = await import('../lib/backendClient.js');
+                const { deleteBackendTreatment } = await import('../lib/scopedDataLayer.js');
                 await deleteBackendTreatment(result.treatmentId);
               } catch (rbErr) {
                 console.error('[TreatmentForm] orphan-treatment rollback failed:', rbErr);
@@ -2288,7 +2288,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // appear under that sale's saleId in the audit trail. Either way
         // every dispensed med yields exactly one movement entry.
         const newTreatmentId = result.treatmentId || treatmentId;
-        const { deductStockForTreatment } = await import('../lib/backendClient.js');
+        const { deductStockForTreatment } = await import('../lib/scopedDataLayer.js');
         const stockUtilsMod = await import('../lib/stockUtils.js');
         const TREATMENT_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT;       // 6
         const TREATMENT_MED_TYPE = stockUtilsMod.MOVEMENT_TYPES.TREATMENT_MED; // 7
@@ -2326,7 +2326,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Auto-create sale invoice when treatment has billing items (hasSale)
         if (hasSale && !isEdit) {
           try {
-            const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/backendClient.js');
+            const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/scopedDataLayer.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
             purchasedItems.forEach(p => {
               const t = p.itemType || 'product';
@@ -2382,14 +2382,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // Phase 8b — Stock: deduct for auto-sale's products + medications. Fail-fast
             // and delete the sale if stock can't be allocated, so no partial state.
             try {
-              const { deductStockForSale, deleteBackendSale } = await import('../lib/backendClient.js');
+              const { deductStockForSale, deleteBackendSale } = await import('../lib/scopedDataLayer.js');
               await deductStockForSale(createRes.saleId, grouped, {
                 customerId, branchId: SELECTED_BRANCH_ID,
                 user: { userId: firstSeller?.id || '', userName: firstSeller?.name || '' },
               });
             } catch (stockErr) {
               try {
-                const { deleteBackendSale } = await import('../lib/backendClient.js');
+                const { deleteBackendSale } = await import('../lib/scopedDataLayer.js');
                 await deleteBackendSale(createRes.saleId);
               } catch {}
               throw new Error(`ตัดสต็อก auto-sale ไม่สำเร็จ: ${stockErr.message}`);
@@ -2489,7 +2489,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               deductWallet, refundToWallet,
               earnPoints, reversePointsEarned,
               reverseStockForSale, deductStockForSale,
-            } = await import('../lib/backendClient.js');
+            } = await import('../lib/scopedDataLayer.js');
             const linkedSale = await getSaleByTreatmentId(result.treatmentId || treatmentId || '');
             // TF4: hasSale false→true transition on edit. The treatment was
             // saved without purchased items on a previous visit; user edited
@@ -2498,7 +2498,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // need to CREATE a sale now. Mirror the create-path saga.
             if (!linkedSale) {
               try {
-                const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, deductStockForSale, deleteBackendSale, setTreatmentLinkedSaleId } = await import('../lib/backendClient.js');
+                const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, deductStockForSale, deleteBackendSale, setTreatmentLinkedSaleId } = await import('../lib/scopedDataLayer.js');
                 const newGrouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
                 purchasedItems.forEach(p => {
                   const t = p.itemType || 'product';
@@ -2744,7 +2744,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
         if (purchasedDeductions.length > 0) {
           try {
-            const { deductCourseItems } = await import('../lib/backendClient.js');
+            const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
             // Phase 16.5-quater — same treatment-deduction audit emit
             // V36-quater (2026-04-29) — V12 multi-writer-sweep miss fix.
             // Pre-V36-quater used bare `treatmentId` prop (empty in
@@ -3163,7 +3163,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   setLabModalLoading(true);
                   try {
                     if (saveTarget === 'backend') {
-                      const { getAllMasterDataItems } = await import('../lib/backendClient.js');
+                      const { getAllMasterDataItems } = await import('../lib/scopedDataLayer.js');
                       const all = await getAllMasterDataItems('products');
                       setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category || '').toLowerCase().includes('lab')).map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit })));
                     } else {
@@ -4493,7 +4493,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     onClick={async () => {
                       setCouponLookingUp(true); setCouponLookupError('');
                       try {
-                        const { findCouponByCode } = await import('../lib/backendClient.js');
+                        const { findCouponByCode } = await import('../lib/scopedDataLayer.js');
                         const c = await findCouponByCode(couponCode);
                         if (!c) { setCouponInfo(null); setCouponLookupError('ไม่พบคูปอง หรือหมดอายุ'); return; }
                         setCouponInfo(c);
@@ -4825,7 +4825,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               || typeof pickModalCourse._beCourseIndex === 'number';
             if (saveTarget === 'backend' && customerId && isPersistedPlaceholder) {
               try {
-                const { resolvePickedCourseInCustomer } = await import('../lib/backendClient.js');
+                const { resolvePickedCourseInCustomer } = await import('../lib/scopedDataLayer.js');
                 const key = pickModalCourse._beCourseId || pickModalCourse._beCourseIndex;
                 await resolvePickedCourseInCustomer(customerId, key, picks);
               } catch (e) {
@@ -4852,7 +4852,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             if (saveTarget === 'backend' && customerId && reopenPickGroup.pickedFromCourseId) {
               try {
                 const { addPicksToResolvedGroup, getCustomer: getBackendCustomer } =
-                  await import('../lib/backendClient.js');
+                  await import('../lib/scopedDataLayer.js');
                 await addPicksToResolvedGroup(
                   customerId,
                   reopenPickGroup.pickedFromCourseId,

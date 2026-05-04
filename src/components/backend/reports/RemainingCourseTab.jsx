@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── RemainingCourseTab — Phase 16.5 (2026-04-29) ──────────────────────────
 // Mirrors ProClinic /admin/remaining-course. Lists every customer's course
 // in be_customers[].courses[] flattened to rows. Filter by search/status/

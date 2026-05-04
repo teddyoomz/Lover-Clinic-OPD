@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Briefcase, Loader2, Tag, Clock, Package } from 'lucide-react';
-import { listCourses, deleteCourse } from '../../lib/backendClient.js';
+import { listCourses, deleteCourse } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CourseFormModal from './CourseFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

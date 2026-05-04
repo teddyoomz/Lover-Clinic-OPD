@@ -10,7 +10,7 @@ import { Plus, Trash2, Wrench } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import DateField from '../DateField.jsx';
-import { saveMedicalInstrument } from '../../lib/backendClient.js';
+import { saveMedicalInstrument } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,

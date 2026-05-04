@@ -24,7 +24,7 @@
 
 import { useState, useEffect } from 'react';
 import { Save, X, Loader2, AlertCircle, CheckCircle2, IdCard } from 'lucide-react';
-import { updateCustomer } from '../../lib/backendClient.js';
+import { updateCustomer } from '../../lib/scopedDataLayer.js';
 
 function validateNationalId(v) {
   const cleaned = String(v || '').replace(/[\s\-.()]/g, '');

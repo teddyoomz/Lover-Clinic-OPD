@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, CreditCard, AlertCircle } from 'lucide-react';
-import { getCustomerWallets } from '../../lib/backendClient.js';
+import { getCustomerWallets } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 
 export default function WalletPicker({

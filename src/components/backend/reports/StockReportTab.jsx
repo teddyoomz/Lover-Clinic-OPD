@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── StockReportTab — Phase 10.5 ──────────────────────────────────────────
 // Replicates ProClinic /admin/report/stock (9 cols + Export File).
 // Joins be_stock_batches + master_data/products. Read-only — no mutations.

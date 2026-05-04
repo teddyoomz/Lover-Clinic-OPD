@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // src/components/backend/reports/ExpenseReportTab.jsx — Phase 16.7 (2026-04-29 session 33)
 // @phase 16.7
 //

@@ -1,3 +1,4 @@
+// audit-branch-scope: sanctioned exception — root composition / mixed scope
 // ─── Backend Dashboard — ระบบหลังบ้าน ──────────────────────────────────────
 // Redesigned 2026-04-19: nav extracted to BackendNav (sidebar + mobile
 // drawer + cmdk palette). Adding new tabs = just add an entry to

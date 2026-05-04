@@ -120,11 +120,12 @@ describe('Phase 15.7 — Cancel modal trackStock clarity', () => {
       expect(SaleTabSource).toMatch(/ตั้งค่าที่ระดับสินค้า\s*"ไม่ตัดสต็อค"/);
     });
 
-    it('C2.4 modal imports summarizeSkipReasons from backendClient', () => {
+    it('C2.4 modal imports summarizeSkipReasons from scopedDataLayer (BSA Task 6)', () => {
       // Multi-line import — assert presence of the symbol + the
-      // backendClient path, not strict adjacency.
+      // scopedDataLayer path, not strict adjacency.
+      // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
       expect(SaleTabSource).toMatch(/summarizeSkipReasons/);
-      expect(SaleTabSource).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/backendClient/);
+      expect(SaleTabSource).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
     });
 
     it('C2.5 modal lists 5 reason types in its render order', () => {

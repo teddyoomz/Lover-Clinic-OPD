@@ -57,7 +57,8 @@ describe('Phase 15.7-octies — Advisor dropdown + location lock', () => {
       expect(ModalSrc).toMatch(/listAllSellers/);
       expect(ModalSrc).toMatch(/resolveBranchName/);
       // Both must appear in import statements
-      const importBlock = ModalSrc.match(/import\s*\{[\s\S]+?\}\s*from\s+['"]\.\.\/\.\.\/lib\/backendClient[^'"]*['"]/);
+      // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+      const importBlock = ModalSrc.match(/import\s*\{[\s\S]+?\}\s*from\s+['"]\.\.\/\.\.\/lib\/scopedDataLayer[^'"]*['"]/);
       expect(importBlock).toBeTruthy();
       expect(importBlock[0]).toMatch(/listAllSellers/);
     });

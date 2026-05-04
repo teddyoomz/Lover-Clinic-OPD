@@ -29,7 +29,7 @@ import {
   listAllSellers,
   // Phase 15.4 (2026-04-28) item 7 — smart unit dropdown
   listProductUnitGroups,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared 20/page pager.

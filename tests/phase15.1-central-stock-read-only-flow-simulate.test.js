@@ -126,8 +126,9 @@ describe('Phase 15.1 F4 — CentralStockTab structure', () => {
     expect(centralTabSrc).toMatch(/export default function CentralStockTab/);
   });
 
-  it('F4.2 imports listCentralWarehouses from backendClient', () => {
-    expect(centralTabSrc).toMatch(/import\s*\{\s*listCentralWarehouses\s*\}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  it('F4.2 imports listCentralWarehouses from scopedDataLayer (BSA Task 6)', () => {
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+    expect(centralTabSrc).toMatch(/import\s*\{\s*listCentralWarehouses\s*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
   });
 
   it('F4.3 has 6 sub-tabs: balance, orders, transfers, withdrawals, movements, warehouses', () => {

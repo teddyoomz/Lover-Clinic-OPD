@@ -137,7 +137,8 @@ describe('Phase 15.5/Item 2 — IT2.A pure merge logic', () => {
 // ════════════════════════════════════════════════════════════════════════════
 describe('Phase 15.5/Item 2 — IT2.B source-grep guards', () => {
   it('B1 ProductFormModal imports listProducts', () => {
-    expect(FORM_SRC).toMatch(/import\s*\{[^}]*listProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient/);
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+    expect(FORM_SRC).toMatch(/import\s*\{[^}]*listProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
   });
 
   it('B2 useEffect Promise.all includes listProducts() (eager-load on mount)', () => {

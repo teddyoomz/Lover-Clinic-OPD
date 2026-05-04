@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertCircle, PackageOpen } from 'lucide-react';
-import { listPermissionGroups, deletePermissionGroup, reconcileAllCustomerSummaries } from '../../lib/backendClient.js';
+import { listPermissionGroups, deletePermissionGroup, reconcileAllCustomerSummaries } from '../../lib/scopedDataLayer.js';
 import { listCoursesNeedingMigration, commitCoursesSkipStockMigration } from '../../lib/migrateCoursesSkipStockClient.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

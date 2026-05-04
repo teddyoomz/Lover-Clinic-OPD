@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, SlidersHorizontal, AlertCircle, Plus, Minus, Package } from 'lucide-react';
 import {
   getStockAdjustment, getStockBatch, listStockLocations,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import { resolveBranchName } from '../../lib/BranchContext.jsx';
 

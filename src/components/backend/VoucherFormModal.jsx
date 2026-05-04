@@ -6,7 +6,7 @@ import { useState } from 'react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveVoucher } from '../../lib/backendClient.js';
+import { saveVoucher } from '../../lib/scopedDataLayer.js';
 import { validateVoucher, emptyVoucherForm, VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
 

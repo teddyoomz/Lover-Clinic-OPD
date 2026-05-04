@@ -13,7 +13,7 @@ import {
   saveQuotation, getAllCustomers, listAllSellers,
   // Phase 14.10-tris (2026-04-26) — be_courses/products/promotions canonical
   listCourses, listProducts, listPromotions,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   validateQuotationStrict, normalizeQuotation, emptyQuotationForm,
   generateQuotationId, DOSAGE_UNITS, ADMINISTRATION_METHODS, ADMINISTRATION_TIMES,

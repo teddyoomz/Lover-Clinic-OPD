@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, FolderTree, Loader2, Package } from 'lucide-react';
-import { listProductGroups, deleteProductGroup, listProducts } from '../../lib/backendClient.js';
+import { listProductGroups, deleteProductGroup, listProducts } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductGroupFormModal from './ProductGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

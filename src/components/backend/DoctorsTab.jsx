@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Stethoscope, Loader2, Mail, ShieldCheck, Ban } from 'lucide-react';
 import { auth } from '../../firebase.js';
-import { listDoctors, deleteDoctor } from '../../lib/backendClient.js';
+import { listDoctors, deleteDoctor } from '../../lib/scopedDataLayer.js';
 import { deleteAdminUser } from '../../lib/adminUsersClient.js';
 import DoctorFormModal from './DoctorFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

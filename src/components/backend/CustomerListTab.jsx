@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
-import { getAllCustomers } from '../../lib/backendClient.js';
+import { getAllCustomers } from '../../lib/scopedDataLayer.js';
 import { hexToRgb } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';

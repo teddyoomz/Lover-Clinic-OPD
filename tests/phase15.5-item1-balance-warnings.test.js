@@ -174,7 +174,8 @@ describe('Phase 15.5/Item 1 — IT.A pure threshold logic', () => {
 // ════════════════════════════════════════════════════════════════════════════
 describe('Phase 15.5/Item 1 — IT.B source-grep guards', () => {
   it('B1 panel imports listProducts (threshold lookup source)', () => {
-    expect(PANEL_SRC).toMatch(/import\s*\{[^}]*listProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient/);
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+    expect(PANEL_SRC).toMatch(/import\s*\{[^}]*listProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
   });
 
   it('B2 panel maintains productThresholdMap state', () => {

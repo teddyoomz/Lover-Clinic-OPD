@@ -16,7 +16,7 @@ import {
   deleteDocumentTemplate,
   seedDocumentTemplatesIfEmpty,
   upgradeSystemDocumentTemplates,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,

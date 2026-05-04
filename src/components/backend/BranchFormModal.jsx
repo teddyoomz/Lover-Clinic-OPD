@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveBranch } from '../../lib/backendClient.js';
+import { saveBranch } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,

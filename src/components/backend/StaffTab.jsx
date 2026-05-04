@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, User, Loader2, Mail, ShieldCheck, Ban } from 'lucide-react';
 import { auth } from '../../firebase.js';
-import { listStaff, deleteStaff } from '../../lib/backendClient.js';
+import { listStaff, deleteStaff } from '../../lib/scopedDataLayer.js';
 import { deleteAdminUser } from '../../lib/adminUsersClient.js';
 import StaffFormModal from './StaffFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

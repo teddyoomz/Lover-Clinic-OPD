@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info } from 'lucide-react';
-import { listStockBatches, listStockLocations, listProducts } from '../../lib/backendClient.js';
+import { listStockBatches, listStockLocations, listProducts } from '../../lib/scopedDataLayer.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
 // Phase 15.6 (2026-04-28) — legacy-main fallback for default-branch view.
 // Mirrors MovementLogPanel pattern (which has had this since Phase 15.4 s19).

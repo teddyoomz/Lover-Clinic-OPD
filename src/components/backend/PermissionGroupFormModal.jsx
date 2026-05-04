@@ -7,7 +7,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { savePermissionGroup } from '../../lib/backendClient.js';
+import { savePermissionGroup } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS,
   NAME_MAX_LENGTH,

@@ -554,7 +554,8 @@ describe('INV.11 — UI → backend wiring (source-grep)', () => {
   it('11.1 StockAdjustPanel form imports createStockAdjustment', () => {
     const path = join(process.cwd(), 'src', 'components', 'backend', 'StockAdjustPanel.jsx');
     const src = readFileSync(path, 'utf-8');
-    expect(src).toMatch(/import\s*\{[^}]*createStockAdjustment[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/backendClient/);
+    // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
+    expect(src).toMatch(/import\s*\{[^}]*createStockAdjustment[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
     // And actually CALLS it on submit (not just imports unused)
     expect(src).toMatch(/createStockAdjustment\s*\(/);
   });

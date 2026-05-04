@@ -23,7 +23,7 @@ import {
   recordDocumentPrint,
   listDoctors,
   listStaff,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { exportDocumentToPdf } from '../../lib/documentPrintEngine.js';
 import { computeStaffAutoFill } from '../../lib/documentFieldAutoFill.js';
 import {

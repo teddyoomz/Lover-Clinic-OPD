@@ -13,7 +13,7 @@ import {
   listStockLocations, listStockBatches,
   // 2026-04-27 actor tracking
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import TransferDetailModal from './TransferDetailModal.jsx';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';

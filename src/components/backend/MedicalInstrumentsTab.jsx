@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Wrench, Loader2, Calendar, AlertTriangle } from 'lucide-react';
-import { listMedicalInstruments, deleteMedicalInstrument } from '../../lib/backendClient.js';
+import { listMedicalInstruments, deleteMedicalInstrument } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import MedicalInstrumentFormModal from './MedicalInstrumentFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

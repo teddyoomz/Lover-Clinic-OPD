@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── DF Payout Report Tab — Phase 13.4.2 / extended Phase 16.7-bis ────────
 //
 // Per-doctor + per-assistant DF payout over a date range. Joins:

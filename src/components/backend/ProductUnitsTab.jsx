@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Scale, Loader2, ArrowRight } from 'lucide-react';
-import { listProductUnitGroups, deleteProductUnitGroup } from '../../lib/backendClient.js';
+import { listProductUnitGroups, deleteProductUnitGroup } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductUnitFormModal from './ProductUnitFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';

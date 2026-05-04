@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── AppointmentAnalysisTab — Phase 10.8 ──────────────────────────────────
 // Replicates ProClinic /admin/appointment-analysis — per-advisor KPI table
 // (10 cols) + appointment breakdown (expected sales) + unexpected-sale list.

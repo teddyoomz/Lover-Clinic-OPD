@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Tag, Calendar, Loader2 } from 'lucide-react';
-import { listPromotions, deletePromotion } from '../../lib/backendClient.js';
+import { listPromotions, deletePromotion } from '../../lib/scopedDataLayer.js';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';

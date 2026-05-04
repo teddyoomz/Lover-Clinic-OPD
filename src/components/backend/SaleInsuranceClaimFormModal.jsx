@@ -14,7 +14,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
-import { saveSaleInsuranceClaim } from '../../lib/backendClient.js';
+import { saveSaleInsuranceClaim } from '../../lib/scopedDataLayer.js';
 import {
   validateSaleInsuranceClaim,
   emptySaleInsuranceClaimForm,

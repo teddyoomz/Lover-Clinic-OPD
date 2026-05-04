@@ -16,7 +16,7 @@ import {
   listProductUnitGroups,
   // 2026-04-27 actor tracking — staff + doctors picker for "ผู้ทำรายการ"
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import ActorConfirmModal from './ActorConfirmModal.jsx';
 // Phase 15.4 (2026-04-28) — shared smart-unit-dropdown (Rule C1 Rule-of-3).

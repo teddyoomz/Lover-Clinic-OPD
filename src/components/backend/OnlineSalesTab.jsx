@@ -9,7 +9,7 @@ import DateField from '../DateField.jsx';
 import {
   listOnlineSales, saveOnlineSale, deleteOnlineSale, transitionOnlineSale,
   listBankAccounts, getAllCustomers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS, emptyOnlineSaleForm, generateOnlineSaleId,
 } from '../../lib/onlineSaleValidation.js';

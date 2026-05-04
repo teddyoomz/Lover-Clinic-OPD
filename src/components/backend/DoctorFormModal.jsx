@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveDoctor, listBranches, listPermissionGroups, listDfGroups } from '../../lib/backendClient.js';
+import { saveDoctor, listBranches, listPermissionGroups, listDfGroups } from '../../lib/scopedDataLayer.js';
 import { createAdminUser, updateAdminUser } from '../../lib/adminUsersClient.js';
 import {
   STATUS_OPTIONS, POSITION_OPTIONS, DF_PAID_TYPE_OPTIONS,

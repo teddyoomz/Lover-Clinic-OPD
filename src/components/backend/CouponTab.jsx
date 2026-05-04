@@ -2,7 +2,7 @@
 // Shell + empty/loading chrome extracted to MarketingTabShell (AV10).
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Ticket, Calendar, Loader2 } from 'lucide-react';
-import { listCoupons, deleteCoupon } from '../../lib/backendClient.js';
+import { listCoupons, deleteCoupon } from '../../lib/scopedDataLayer.js';
 import CouponFormModal from './CouponFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';

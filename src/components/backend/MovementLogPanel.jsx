@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
 // Phase 14.10-tris (2026-04-26) — be_products canonical (was master_data mirror)
-import { listStockMovements, listProducts, listStockLocations } from '../../lib/backendClient.js';
+import { listStockMovements, listProducts, listStockLocations } from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';

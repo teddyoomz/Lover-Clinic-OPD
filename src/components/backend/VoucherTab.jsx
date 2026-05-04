@@ -2,7 +2,7 @@
 // Shell + empty/loading chrome extracted to MarketingTabShell (AV10).
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Gift, Calendar, Loader2 } from 'lucide-react';
-import { listVouchers, deleteVoucher } from '../../lib/backendClient.js';
+import { listVouchers, deleteVoucher } from '../../lib/scopedDataLayer.js';
 import VoucherFormModal from './VoucherFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';

@@ -9,7 +9,7 @@ import { useState } from 'react';
 import DateField from '../DateField.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
-import { saveCoupon } from '../../lib/backendClient.js';
+import { saveCoupon } from '../../lib/scopedDataLayer.js';
 import { validateCoupon, emptyCouponForm, COUPON_BRANCHES } from '../../lib/couponValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
 

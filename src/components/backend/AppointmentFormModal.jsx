@@ -41,7 +41,7 @@ import {
   // (staff + doctors merged + branch-filtered + composed names) per user
   // directive: "ที่ปรึกษา ... แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
   listAllSellers,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
 import { thaiTodayISO } from '../../utils.js';

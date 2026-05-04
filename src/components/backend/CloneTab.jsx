@@ -11,7 +11,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Search, Loader2, AlertCircle, Download, Info, Users, Pause, Play, X, CheckCircle2, RefreshCw, SkipForward, Zap } from 'lucide-react';
 import { searchCustomers } from '../../lib/brokerClient.js';
-import { customerExists } from '../../lib/backendClient.js';
+import { customerExists } from '../../lib/scopedDataLayer.js';
 import { smartClone, cloneAllCustomers } from '../../lib/cloneOrchestrator.js';
 import { hexToRgb } from '../../utils.js';
 import CustomerCard from './CustomerCard.jsx';

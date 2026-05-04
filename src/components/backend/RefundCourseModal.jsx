@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { refundCustomerCourse } from '../../lib/backendClient.js';
+import { refundCustomerCourse } from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 

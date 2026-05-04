@@ -1,3 +1,4 @@
+// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
 // ─── Smart Audience Tab — Phase 16.1 (2026-04-30) ───────────────────────────
 // Rule-builder UI for marketing segmentation. Admin builds AND/OR predicate
 // trees over be_customers + be_sales + be_audiences (saved segments), sees

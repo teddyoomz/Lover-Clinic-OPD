@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   getStockOrder, listStockMovements, updateStockOrder, cancelStockOrder,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
 import { fmtMoney } from '../../lib/financeUtils.js';

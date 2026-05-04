@@ -6,7 +6,7 @@ import { Plus, Trash2, Search } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 // Phase 14.10-tris (2026-04-26) — be_courses canonical (was master_data mirror)
-import { saveDfGroup, listCourses } from '../../lib/backendClient.js';
+import { saveDfGroup, listCourses } from '../../lib/scopedDataLayer.js';
 import {
   emptyDfGroupForm, generateDfGroupId, validateDfGroupStrict, normalizeDfGroup,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,

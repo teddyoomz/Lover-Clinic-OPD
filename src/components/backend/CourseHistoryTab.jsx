@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react';
 import {
   Clock, Loader2, Plus, ArrowDownLeft, Repeat, Share2, X as XIcon, Receipt,
 } from 'lucide-react';
-import { listenToCourseChanges } from '../../lib/backendClient.js';
+import { listenToCourseChanges } from '../../lib/scopedDataLayer.js';
 import { fmtMoney } from '../../lib/financeUtils.js';
 
 const KIND_META = {

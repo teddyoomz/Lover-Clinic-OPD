@@ -24,7 +24,7 @@ import {
   // Phase 15.7 (2026-04-28) — load doctors for the assistant-name fallback
   // resolver (legacy appts written before assistantNames denorm).
   listDoctors,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
 // Phase BS (2026-05-06) — show "สาขาที่สร้างรายการ" tag on the customer card.
 // Customer base is shared across branches; this field is purely a display
@@ -1439,7 +1439,7 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
             try {
               await addCourseRemainingQty(customerId, courseIndex, Number(addQty));
               // Create sale record for audit
-              const { createBackendSale } = await import('../../lib/backendClient.js');
+              const { createBackendSale } = await import('../../lib/scopedDataLayer.js');
               await createBackendSale(JSON.parse(JSON.stringify({
                 customerId, customerName: customerName || '', customerHN: '',
                 saleDate: thaiTodayISO(),
@@ -1601,7 +1601,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
             if (!staffId) { alert('กรุณาเลือกพนักงาน'); return; }
             setSaving(true);
             try {
-              const bc = await import('../../lib/backendClient.js');
+              const bc = await import('../../lib/scopedDataLayer.js');
               const { deductCourseItems, createBackendSale, assignCourseToCustomer, updateCustomer, getCustomer } = bc;
               const isRetail = selected.type === 'สินค้าหน้าร้าน';
               const deductAmount = Number(qty);
@@ -1806,7 +1806,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
             if (Number(shareQty) > currentParsed.remaining) { alert(`คงเหลือไม่พอ: มี ${currentParsed.remaining} ต้องการ ${shareQty}`); return; }
             setSaving(true);
             try {
-              const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/backendClient.js');
+              const { deductCourseItems, assignCourseToCustomer, createBackendSale } = await import('../../lib/scopedDataLayer.js');
               const toId = selectedCust.proClinicId || selectedCust.id;
               // 1. Deduct from source customer
               await deductCourseItems(fromCustomerId, [{ courseIndex, deductQty: Number(shareQty), courseName: course.name }]);

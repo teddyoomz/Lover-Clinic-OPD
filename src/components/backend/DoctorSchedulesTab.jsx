@@ -14,7 +14,7 @@ import {
   listStaffSchedules,
   saveStaffSchedule,
   deleteStaffSchedule,
-} from '../../lib/backendClient.js';
+} from '../../lib/scopedDataLayer.js';
 import MonthCalendarGrid from './scheduling/MonthCalendarGrid.jsx';
 import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
 import ScheduleEntryFormModal from './scheduling/ScheduleEntryFormModal.jsx';
