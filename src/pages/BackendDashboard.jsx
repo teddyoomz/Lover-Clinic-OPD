@@ -16,6 +16,7 @@ import { DEFAULT_CLINIC_SETTINGS } from '../constants.js';
 import { applyThemeColor } from '../utils.js';
 import { useTheme } from '../hooks/useTheme.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import ProfileDropdown from '../components/backend/ProfileDropdown.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
 import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
 import { BranchProvider } from '../lib/BranchContext.jsx';
@@ -241,6 +242,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       <BranchSelector className="hidden lg:flex" />
       {/* Desktop theme toggle in breadcrumb for a11y — mobile has one in TopBar */}
       <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
+      {/* Profile dropdown (2026-05-04) — avatar + logout-only menu */}
+      <div className="hidden lg:block"><ProfileDropdown /></div>
     </div>
   ) : (
     // Desktop: show theme toggle in a tiny slot (mobile TopBar handles it) +
@@ -248,6 +251,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     <div className="hidden lg:flex items-center justify-end gap-3">
       <BranchSelector />
       <ThemeToggle theme={theme} setTheme={setTheme} />
+      <ProfileDropdown />
     </div>
   );
 

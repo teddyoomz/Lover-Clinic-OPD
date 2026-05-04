@@ -3,6 +3,7 @@
 // param UI by predicate.type. Always emits a fully-shaped predicate doc
 // (no undefined leaves — V14 lock).
 
+import { memo } from 'react';
 import { Trash2 } from 'lucide-react';
 import { PREDICATE_TYPES } from '../../../lib/audienceRules.js';
 
@@ -34,7 +35,12 @@ export function defaultParamsForType(type) {
 
 const numToInputValue = (v) => (Number.isFinite(v) ? String(v) : '');
 
-export default function PredicateRow({ predicate, onChange, onDelete, branches, products, courses }) {
+// P5 perf — memoized so parent setState (e.g. unrelated rule mutations or
+// toolbar typing) doesn't re-render every sibling row. Default shallow compare
+// is sufficient because RuleBuilder builds new predicate object identities only
+// when that specific row's data changes; refs (branches/products/courses) are
+// stable per parent render.
+function PredicateRow({ predicate, onChange, onDelete, branches, products, courses }) {
   const type = predicate?.type || 'age-range';
   const params = (predicate?.params && typeof predicate.params === 'object' && !Array.isArray(predicate.params))
     ? predicate.params
@@ -57,6 +63,7 @@ export default function PredicateRow({ predicate, onChange, onDelete, branches, 
         onChange={(e) => changeType(e.target.value)}
         className="px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
         data-testid="predicate-type-select"
+        aria-label="ประเภทเงื่อนไข"
       >
         {PREDICATE_TYPES.map((t) => (
           <option key={t} value={t}>{PREDICATE_LABELS[t] || t}</option>
@@ -94,6 +101,7 @@ function renderParams(type, params, patchParams, refs) {
             className="w-16 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             placeholder="ขั้นต่ำ"
             data-testid="param-age-min"
+            aria-label="อายุขั้นต่ำ (ปี)"
           />
           <span className="text-xs">–</span>
           <input
@@ -103,6 +111,7 @@ function renderParams(type, params, patchParams, refs) {
             className="w-16 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             placeholder="สูงสุด"
             data-testid="param-age-max"
+            aria-label="อายุสูงสุด (ปี)"
           />
           <span className="text-xs text-[var(--tx-secondary)]">ปี</span>
         </>
@@ -114,6 +123,7 @@ function renderParams(type, params, patchParams, refs) {
           onChange={(e) => patchParams({ value: e.target.value })}
           className="px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
           data-testid="param-gender"
+          aria-label="เลือกเพศ"
         >
           <option value="">เลือกเพศ</option>
           <option value="F">หญิง</option>
@@ -173,6 +183,7 @@ function renderParams(type, params, patchParams, refs) {
             className="flex-1 min-w-[160px] px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             placeholder="Facebook, Walk-in, LINE"
             data-testid="param-source"
+            aria-label="ที่มาของลูกค้า (คั่นด้วยจุลภาค)"
           />
         </>
       );
@@ -188,6 +199,7 @@ function renderParams(type, params, patchParams, refs) {
             onChange={(e) => patchParams({ kind: e.target.value, refId: '' })}
             className="px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             data-testid="param-bought-kind"
+            aria-label="ประเภทรายการที่ซื้อ (สินค้า/คอร์ส)"
           >
             <option value="product">สินค้า</option>
             <option value="course">คอร์ส</option>
@@ -197,6 +209,7 @@ function renderParams(type, params, patchParams, refs) {
             onChange={(e) => patchParams({ refId: e.target.value })}
             className="flex-1 min-w-[180px] px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             data-testid="param-bought-ref"
+            aria-label={`เลือก${params.kind === 'course' ? 'คอร์ส' : 'สินค้า'}ที่ซื้อ`}
           >
             <option value="">เลือก{params.kind === 'course' ? 'คอร์ส' : 'สินค้า'}</option>
             {list.map((it) => {
@@ -212,6 +225,7 @@ function renderParams(type, params, patchParams, refs) {
             onChange={(e) => patchParams({ months: e.target.value === '' ? 0 : Number(e.target.value) })}
             className="w-16 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             data-testid="param-bought-months"
+            aria-label="จำนวนเดือนย้อนหลัง"
           />
           <span className="text-xs text-[var(--tx-secondary)]">เดือน</span>
         </>
@@ -228,6 +242,7 @@ function renderParams(type, params, patchParams, refs) {
             className="w-24 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             placeholder="ขั้นต่ำ"
             data-testid="param-spend-min"
+            aria-label="ยอดใช้จ่ายขั้นต่ำ (บาท)"
           />
           <span className="text-xs">–</span>
           <input
@@ -237,6 +252,7 @@ function renderParams(type, params, patchParams, refs) {
             className="w-24 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             placeholder="สูงสุด"
             data-testid="param-spend-max"
+            aria-label="ยอดใช้จ่ายสูงสุด (บาท)"
           />
           <span className="text-xs text-[var(--tx-secondary)]">บาท</span>
         </>
@@ -249,6 +265,7 @@ function renderParams(type, params, patchParams, refs) {
             onChange={(e) => patchParams({ op: e.target.value })}
             className="px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             data-testid="param-lastvisit-op"
+            aria-label="ตัวดำเนินการการมาล่าสุด"
           >
             <option value="<=">มาภายใน</option>
             <option value=">=">ไม่มาเกิน</option>
@@ -259,6 +276,7 @@ function renderParams(type, params, patchParams, refs) {
             onChange={(e) => patchParams({ days: e.target.value === '' ? 0 : Number(e.target.value) })}
             className="w-20 px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
             data-testid="param-lastvisit-days"
+            aria-label="จำนวนวันการมาล่าสุด"
           />
           <span className="text-xs text-[var(--tx-secondary)]">วัน</span>
         </>
@@ -270,6 +288,7 @@ function renderParams(type, params, patchParams, refs) {
           onChange={(e) => patchParams({ value: e.target.value === 'true' })}
           className="px-2 py-1 rounded text-xs bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-primary)]"
           data-testid="param-unfinished"
+          aria-label="มีคอร์สคงเหลือหรือไม่"
         >
           <option value="true">มี</option>
           <option value="false">ไม่มี</option>
@@ -279,3 +298,5 @@ function renderParams(type, params, patchParams, refs) {
       return null;
   }
 }
+
+export default memo(PredicateRow);

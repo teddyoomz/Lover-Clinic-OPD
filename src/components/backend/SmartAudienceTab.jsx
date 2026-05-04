@@ -18,7 +18,7 @@
 //   - Math accuracy — spend-bracket sums billing.netTotal; age uses bangkokNow
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Target, Save, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Target, Save, Plus, Trash2, RefreshCw, RotateCcw } from 'lucide-react';
 import {
   evaluateRule,
   indexSalesByCustomer,
@@ -43,12 +43,45 @@ import { downloadCSV } from '../../lib/csvExport.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { roundTHB } from '../../lib/reportsUtils.js';
+import DateField from '../DateField.jsx';
 import RuleBuilder from './audience/RuleBuilder.jsx';
 import SavedSegmentSidebar from './audience/SavedSegmentSidebar.jsx';
 import AudiencePreviewPane from './audience/AudiencePreviewPane.jsx';
 
 const PREVIEW_DEBOUNCE_MS = 300;
 const SAMPLE_SIZE = 10;
+// P1/P3 perf — bound the be_sales scan so 50k+ docs don't load on every mount.
+// Default looks back 12 months from today; admin can widen via toolbar.
+const DEFAULT_SALES_RANGE_MONTHS = 12;
+
+/**
+ * Compute the default sales date range for the SmartAudience toolbar.
+ * Returns ISO YYYY-MM-DD strings in Bangkok TZ. `from` is N months back
+ * from today (clamped to day-1 when target month is shorter), `to` is today.
+ *
+ * Exported for tests so the 12-month default can be asserted without
+ * mounting React.
+ */
+export function defaultSalesDateRange(monthsBack = DEFAULT_SALES_RANGE_MONTHS, todayISO = thaiTodayISO()) {
+  const to = todayISO;
+  const [yStr, mStr, dStr] = String(todayISO).split('-');
+  const y = Number(yStr);
+  const m = Number(mStr); // 1-12
+  const d = Number(dStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return { from: '', to };
+  }
+  // Subtract N months. JS Date handles month-overflow naturally, but we want
+  // to clamp the day so 2026-03-31 minus 1 month = 2026-02-28 (not 2026-03-03).
+  const targetMonthIdx = m - 1 - monthsBack; // 0-based, may go negative
+  const targetYear = y + Math.floor(targetMonthIdx / 12);
+  const targetMonth0 = ((targetMonthIdx % 12) + 12) % 12;
+  // Last day of target month: day 0 of month+1.
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth0 + 1, 0)).getUTCDate();
+  const dayClamped = Math.min(d, lastDay);
+  const from = `${targetYear}-${String(targetMonth0 + 1).padStart(2, '0')}-${String(dayClamped).padStart(2, '0')}`;
+  return { from, to };
+}
 
 const CSV_COLUMNS = Object.freeze([
   { key: 'hn',           label: 'HN' },
@@ -114,6 +147,10 @@ export default function SmartAudienceTab({ clinicSettings: _unused }) {
   const [description, setDescription] = useState('');
   const [rule, setRule] = useState(() => emptyAudienceRule());
 
+  // P1/P3 — sales date-range state (default 12 months back to today, Bangkok TZ).
+  // Initialized lazily so we evaluate once at mount; admin can widen via UI.
+  const [salesRange, setSalesRange] = useState(() => defaultSalesDateRange());
+
   // Data sources for evaluation
   const [customers, setCustomers] = useState([]);
   const [sales, setSales] = useState([]);
@@ -144,14 +181,15 @@ export default function SmartAudienceTab({ clinicSettings: _unused }) {
     return () => { try { unsub && unsub(); } catch { /* noop */ } };
   }, []);
 
-  // Load customers + sales + products + courses on mount.
+  // Load customers + sales + products + courses. Customer load stays full
+  // (needed for evaluation); sales load is BOUNDED by salesRange (P1/P3).
   const reloadData = useCallback(async () => {
     setDataLoading(true);
     setDataError('');
     try {
       const [cs, ss, ps, cos] = await Promise.all([
         loadAllCustomersForReport(),
-        loadSalesByDateRange({}),
+        loadSalesByDateRange({ from: salesRange.from || '', to: salesRange.to || '' }),
         listProducts().catch(() => []),
         listCourses().catch(() => []),
       ]);
@@ -164,9 +202,20 @@ export default function SmartAudienceTab({ clinicSettings: _unused }) {
     } finally {
       setDataLoading(false);
     }
-  }, []);
+  }, [salesRange.from, salesRange.to]);
 
+  // Reload when range changes (or on mount). useCallback dep ensures fresh closure.
   useEffect(() => { reloadData(); }, [reloadData]);
+
+  const handleRangeFromChange = useCallback((v) => {
+    setSalesRange((cur) => ({ ...cur, from: v || '' }));
+  }, []);
+  const handleRangeToChange = useCallback((v) => {
+    setSalesRange((cur) => ({ ...cur, to: v || '' }));
+  }, []);
+  const handleRangeReset = useCallback(() => {
+    setSalesRange(defaultSalesDateRange());
+  }, []);
 
   // Pre-build sales index (memo by sales array reference).
   const salesByCustomer = useMemo(() => indexSalesByCustomer(sales), [sales]);
@@ -321,6 +370,50 @@ export default function SmartAudienceTab({ clinicSettings: _unused }) {
           <div className="text-xs text-[var(--tx-secondary)]" data-testid="smart-audience-subtitle">
             {subtitle}
           </div>
+
+          {/* P1/P3 perf — bounded sales date-range filter (default 12 months back). */}
+          <div
+            className="flex flex-wrap items-end gap-2"
+            data-testid="smart-audience-sales-range"
+          >
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] uppercase tracking-wide text-[var(--tx-secondary)]">
+                ช่วงเวลา (วันที่ขาย) — ตั้งแต่
+              </label>
+              <div className="w-40">
+                <DateField
+                  size="sm"
+                  value={salesRange.from || ''}
+                  onChange={handleRangeFromChange}
+                  placeholder="ตั้งแต่"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] uppercase tracking-wide text-[var(--tx-secondary)]">
+                ถึง
+              </label>
+              <div className="w-40">
+                <DateField
+                  size="sm"
+                  value={salesRange.to || ''}
+                  onChange={handleRangeToChange}
+                  placeholder="ถึง"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRangeReset}
+              className="px-2 py-1 text-xs rounded border border-[var(--bd)] hover:border-[var(--tx-heading)] flex items-center gap-1"
+              title="รีเซ็ตเป็น 12 เดือนล่าสุด"
+              data-testid="smart-audience-range-reset"
+            >
+              <RotateCcw className="w-3 h-3" aria-hidden />
+              รีเซ็ต
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <input
               type="text"

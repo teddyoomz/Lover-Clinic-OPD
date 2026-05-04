@@ -3,12 +3,17 @@
 // Each group has op (AND/OR) + children (groups OR predicates).
 // Depth capped at 4 for sensible UX (validator allows 6).
 
+import { memo } from 'react';
 import { Plus } from 'lucide-react';
 import PredicateRow, { defaultParamsForType } from './PredicateRow.jsx';
 
 const MAX_NEST_DEPTH_UI = 3;
 
-export default function RuleBuilder({ rule, onChange, branches, products, courses, depth = 0 }) {
+// P5 perf — memoized so toolbar / sidebar setState in SmartAudienceTab doesn't
+// re-render the whole rule tree. Default shallow compare is enough: parent
+// passes the SAME `rule` object identity unless that subtree's data changed,
+// and `branches/products/courses` arrays are stable per parent render.
+function RuleBuilder({ rule, onChange, branches, products, courses, depth = 0 }) {
   const op = rule?.op === 'OR' ? 'OR' : 'AND';
   const children = Array.isArray(rule?.children) ? rule.children : [];
 
@@ -55,6 +60,7 @@ export default function RuleBuilder({ rule, onChange, branches, products, course
           onChange={(e) => setOp(e.target.value)}
           className="px-2 py-1 rounded text-xs font-semibold bg-[var(--bg-card)] border border-[var(--bd)] text-[var(--tx-heading)]"
           data-testid={`rule-op-depth-${depth}`}
+          aria-label="ตัวเชื่อมเงื่อนไข (AND/OR)"
         >
           <option value="AND">ทั้งหมด (AND)</option>
           <option value="OR">อย่างน้อยหนึ่ง (OR)</option>
@@ -68,6 +74,7 @@ export default function RuleBuilder({ rule, onChange, branches, products, course
             onClick={addPredicate}
             className="px-2 py-1 rounded text-xs border border-[var(--bd)] hover:border-emerald-500 flex items-center gap-1"
             data-testid={`rule-add-predicate-depth-${depth}`}
+            aria-label="เพิ่มเงื่อนไข"
           >
             <Plus className="w-3 h-3" aria-hidden />
             เงื่อนไข
@@ -78,6 +85,7 @@ export default function RuleBuilder({ rule, onChange, branches, products, course
               onClick={addGroup}
               className="px-2 py-1 rounded text-xs border border-[var(--bd)] hover:border-sky-500 flex items-center gap-1"
               data-testid={`rule-add-group-depth-${depth}`}
+              aria-label="เพิ่มกลุ่มเงื่อนไขย่อย"
             >
               <Plus className="w-3 h-3" aria-hidden />
               กลุ่ม
@@ -137,3 +145,5 @@ export default function RuleBuilder({ rule, onChange, branches, products, course
     </div>
   );
 }
+
+export default memo(RuleBuilder);

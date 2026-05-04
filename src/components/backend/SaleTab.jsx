@@ -271,7 +271,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [editingSale, setEditingSale] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // a11y polish (audit UC5 fix, 2026-05-04): track which field caused the
+  // current error so we can wire aria-invalid + aria-describedby on the input.
+  // Cleared on next field edit OR when admin reopens/resets the form.
+  const [errorField, setErrorField] = useState('');
   const [success, setSuccess] = useState(false);
+  // Helper: spread aria-* on the named field's input. Returns empty when no
+  // error active for this field. The matching <p role="alert"> uses id pattern
+  // `err-${field}` so aria-describedby points at it.
+  const ariaErrFor = (field) => (errorField === field
+    ? { 'aria-invalid': true, 'aria-describedby': `err-${field}` }
+    : { 'aria-invalid': undefined, 'aria-describedby': undefined });
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -703,6 +713,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
   const scrollToError = (fieldAttr, msg) => {
     setError(msg);
+    setErrorField(fieldAttr);
     setTimeout(() => {
       const el = document.querySelector(`[data-field="${fieldAttr}"]`);
       if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
@@ -717,7 +728,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     if (paymentStatus === 'paid' || paymentStatus === 'split') {
       if (!pmChannels.some(c => c.enabled && c.method)) { scrollToError('salePayment', 'กรุณาเลือกช่องทางชำระเงิน'); return; }
     }
-    setSaving(true); setError('');
+    setSaving(true); setError(''); setErrorField('');
     try {
       const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
       purchasedItems.forEach(p => {
@@ -1584,12 +1595,18 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               {customerName ? (
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-rose-900/10 border border-rose-700/30">
                   <span className="text-xs font-bold">{customerName} <span className="font-mono text-[var(--tx-muted)]">{customerHN}</span></span>
-                  <button onClick={() => { setCustomerId(''); setCustomerName(''); setCustomerHN(''); }} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ล้าง"><X size={14} /></button>
+                  <button onClick={() => { setCustomerId(''); setCustomerName(''); setCustomerHN(''); setErrorField(f => f === 'saleCustomer' ? '' : f); }} className="text-[var(--tx-muted)] hover:text-red-400" aria-label="ล้างลูกค้าที่เลือก"><X size={14} /></button>
                 </div>
               ) : (
                 <div>
-                  <input type="text" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="ค้นหาชื่อ / HN..."
+                  <input type="text" value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); if (errorField === 'saleCustomer') setErrorField(''); }} placeholder="ค้นหาชื่อ / HN..."
+                    data-field="saleCustomer" data-testid="saletab-customer-search"
+                    aria-label="ค้นหาลูกค้า"
+                    {...ariaErrFor('saleCustomer')}
                     className={inputCls} />
+                  {errorField === 'saleCustomer' && error && (
+                    <p id="err-saleCustomer" role="alert" className="text-rose-400 text-xs mt-1" data-testid="field-error-saleCustomer">{error}</p>
+                  )}
                   {filteredCustomers.length > 0 && customerSearch && (
                     <div className={`mt-1 max-h-32 overflow-y-auto border rounded-lg ${isDark ? 'border-[var(--bd-strong)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
                       {filteredCustomers.map(c => {
@@ -1605,9 +1622,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   )}
                 </div>
               )}
-              <div className="mt-2">
+              <div className="mt-2" data-field="saleDate" data-testid="saletab-sale-date-wrap" {...ariaErrFor('saleDate')}>
                 <label className={labelCls}>วันที่ขาย *</label>
-                <DateField value={saleDate} onChange={setSaleDate} className="max-w-[200px]" />
+                <DateField value={saleDate} onChange={(v) => { setSaleDate(v); if (errorField === 'saleDate') setErrorField(''); }} className="max-w-[200px]" />
+                {errorField === 'saleDate' && error && (
+                  <p id="err-saleDate" role="alert" className="text-rose-400 text-xs mt-1" data-testid="field-error-saleDate">{error}</p>
+                )}
               </div>
             </div>
 
@@ -1776,17 +1796,22 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                 <div><label className={labelCls}>เลขอ้างอิง</label><LocalInput type="text" value={refNo} onCommit={setRefNo} className={inputCls} placeholder="REF-001" /></div>
               </div>
               <label className={labelCls}>ช่องทางชำระเงิน</label>
+              <div data-field="salePayment" data-testid="saletab-payment-section" {...ariaErrFor('salePayment')}>
               {pmChannels.map((ch, i) => (
                 <div key={i} className="flex items-center gap-2 mb-1.5">
-                  <input type="checkbox" checked={ch.enabled} onChange={e => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, enabled: e.target.checked} : c))} className="accent-rose-500" />
-                  <select value={ch.method} onChange={e => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, method: e.target.value} : c))} className={`${inputCls} !w-40`} disabled={!ch.enabled}>
+                  <input type="checkbox" checked={ch.enabled} onChange={e => { setPmChannels(prev => prev.map((c,j) => j===i ? {...c, enabled: e.target.checked} : c)); if (errorField === 'salePayment') setErrorField(''); }} className="accent-rose-500" aria-label={`เปิดใช้ช่องทางชำระเงินที่ ${i + 1}`} />
+                  <select value={ch.method} onChange={e => { setPmChannels(prev => prev.map((c,j) => j===i ? {...c, method: e.target.value} : c)); if (errorField === 'salePayment') setErrorField(''); }} className={`${inputCls} !w-40`} disabled={!ch.enabled} aria-label={`ช่องทางชำระเงินที่ ${i + 1}`}>
                     <option value="">เลือกช่องทาง</option>
                     {PAYMENT_CHANNELS.map(pc => <option key={pc.id} value={pc.name}>{pc.name}</option>)}
                   </select>
-                  <LocalInput type="number" value={ch.amount} onCommit={v => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: v} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} />
+                  <LocalInput type="number" value={ch.amount} onCommit={v => setPmChannels(prev => prev.map((c,j) => j===i ? {...c, amount: v} : c))} className={`${inputCls} !w-28 text-right`} placeholder="0.00" disabled={!ch.enabled} aria-label={`จำนวนเงินช่องทางที่ ${i + 1} (บาท)`} />
                   <span className="text-xs text-[var(--tx-muted)] shrink-0">บาท</span>
                 </div>
               ))}
+              {errorField === 'salePayment' && error && (
+                <p id="err-salePayment" role="alert" className="text-rose-400 text-xs mt-1" data-testid="field-error-salePayment">{error}</p>
+              )}
+              </div>
               <div className="mt-3">
                 <FileUploadField
                   storagePath={`uploads/be_sales/${editingSale?.saleId || `_pending_${Date.now()}`}`}
@@ -1801,19 +1826,22 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             </div>
 
             {/* Sellers */}
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`} data-field="saleSellers" data-testid="saletab-sellers-section" {...ariaErrFor('saleSellers')}>
               <h3 className="text-xs font-bold uppercase tracking-widest text-orange-400 flex items-center gap-1.5 mb-3"><UsersIcon size={12} /> พนักงานขาย</h3>
               {pmSellers.map((s, i) => (
                 <div key={i} className="flex items-center gap-2 mb-1.5">
-                  <input type="checkbox" checked={s.enabled} onChange={e => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, enabled: e.target.checked} : x))} className="accent-orange-500" />
-                  <select value={s.id} onChange={e => { const sel = sellers.find(x => String(x.id)===e.target.value); setPmSellers(prev => prev.map((x,j) => j===i ? {...x, id: e.target.value, name: sel?.name||''} : x)); }} className={`${inputCls} !w-48`} disabled={!s.enabled}>
+                  <input type="checkbox" checked={s.enabled} onChange={e => { setPmSellers(prev => prev.map((x,j) => j===i ? {...x, enabled: e.target.checked} : x)); if (errorField === 'saleSellers') setErrorField(''); }} className="accent-orange-500" aria-label={`เปิดใช้พนักงานขายที่ ${i + 1}`} />
+                  <select value={s.id} onChange={e => { const sel = sellers.find(x => String(x.id)===e.target.value); setPmSellers(prev => prev.map((x,j) => j===i ? {...x, id: e.target.value, name: sel?.name||''} : x)); if (errorField === 'saleSellers') setErrorField(''); }} className={`${inputCls} !w-48`} disabled={!s.enabled} aria-label={`เลือกพนักงานขายที่ ${i + 1}`}>
                     <option value="">เลือกพนักงาน</option>
                     {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
                   </select>
-                  <LocalInput type="number" value={s.percent} onCommit={v => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, percent: v} : x))} className={`${inputCls} !w-16 text-center`} placeholder="%" disabled={!s.enabled} />
+                  <LocalInput type="number" value={s.percent} onCommit={v => setPmSellers(prev => prev.map((x,j) => j===i ? {...x, percent: v} : x))} className={`${inputCls} !w-16 text-center`} placeholder="%" disabled={!s.enabled} aria-label={`เปอร์เซ็นต์ค่าคอมมิชชันของพนักงานที่ ${i + 1}`} />
                   <span className="text-xs text-[var(--tx-muted)]">%</span>
                 </div>
               ))}
+              {errorField === 'saleSellers' && error && (
+                <p id="err-saleSellers" role="alert" className="text-rose-400 text-xs mt-1" data-testid="field-error-saleSellers">{error}</p>
+              )}
             </div>
 
             {/* Notes */}

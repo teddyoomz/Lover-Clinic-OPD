@@ -28,6 +28,45 @@ import { useSelectedBranch } from '../lib/BranchContext.jsx';
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
 import { computeTreatmentBilling, computeBmi, formatBaht } from '../lib/treatmentBilling.js';
 
+// ── data-field tag registry (TF2 audit, 2026-05-04) ────────────────────────
+//
+// Every required-field validator in handleSubmit (and any future addition)
+// must target one of these `data-field` keys. The shared scrollToFieldError
+// resolver in src/lib/scrollToFieldError.js does
+// `document.querySelector('[data-field="<key>"], [name="<key>"]')` and is a
+// SILENT NO-OP when the key has no matching node. CLAUDE.md historical bug
+// #8 (scrollToError missing data-field) — keep this list in sync with both
+// the validator AND the JSX. Tests/tf2-scroll-to-error-coverage.test.js
+// asserts no validator key drifts away from the JSX.
+//
+// Form-section anchors (one per required-field group):
+//   doctor                            — แพทย์ select
+//   treatmentDate                     — DateField wrapper
+//   courseSection                     — entire ข้อมูลการใช้คอร์ส section
+//   sellers                           — section wrapper for พนักงานขาย
+//   sellers[<idx>]                    — per-row anchor on each pmSellers row
+//   paymentChannels                   — section wrapper for ช่องทางชำระเงิน
+//   paymentChannels[<idx>]            — per-row anchor on each pmChannels row
+//   paymentDate                       — required (วันที่ชำระเงิน *)
+//
+// Repeating-row anchors (idx is 0-based array index):
+//   <treatmentItem.id>                — fill-later qty row (id = courseRowId)
+//   purchasedItems[<idx>]             — purchased retail product row
+//   medications[<idx>]                — medication row
+//   consumables[<idx>]                — consumable row
+//
+// Vital-sign per-field anchors (forward-looking — vital validators may
+// require any one of these to scroll-to-error directly):
+//   vitals.weight, vitals.height, vitals.temperature, vitals.pulseRate,
+//   vitals.respiratoryRate, vitals.systolicBP, vitals.diastolicBP,
+//   vitals.oxygenSaturation
+//
+// When you ADD a new required-field validator, also add the corresponding
+// data-field tag in the JSX AND extend the assertion list in
+// tests/tf2-scroll-to-error-coverage.test.js. Otherwise the alert fires
+// but the page stays put — exactly the production-affecting silent no-op
+// the TF2 audit flagged.
+//
 // ── Helpers ─────────────────────────────────────────────────────────────────
 //
 // Perf note (2026-04-19): every helper in this file is wrapped in React.memo.
@@ -128,7 +167,7 @@ const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputC
     <>
       <div className="grid grid-cols-3 gap-2">
         {[['weight', 'น้ำหนัก (kg)'], ['height', 'ส่วนสูง (cm)']].map(([key, label]) => (
-          <div key={key}>
+          <div key={key} data-field={`vitals.${key}`}>
             <label className={labelCls}>{label}</label>
             <LocalInput value={vitals[key]} onCommit={commit[key]} className={`${inputCls} text-center`} placeholder="-" />
           </div>
@@ -141,13 +180,13 @@ const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputC
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
         {[['temperature', 'BT (°C)'], ['pulseRate', 'PR (bpm)'], ['respiratoryRate', 'RR'],
           ['systolicBP', 'SBP (mmHg)'], ['diastolicBP', 'DBP (mmHg)']].map(([key, label]) => (
-          <div key={key}>
+          <div key={key} data-field={`vitals.${key}`}>
             <label className={labelCls}>{label}</label>
             <LocalInput value={vitals[key]} onCommit={commit[key]} className={`${inputCls} text-center`} placeholder="-" />
           </div>
         ))}
       </div>
-      <div className="mt-2">
+      <div className="mt-2" data-field="vitals.oxygenSaturation">
         <label className={labelCls}>O₂ Sat (%)</label>
         <LocalInput value={vitals.oxygenSaturation} onCommit={commit.oxygenSaturation} className={`${inputCls} text-center w-24`} placeholder="-" />
       </div>
@@ -3647,7 +3686,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {!isEdit && <div className="col-span-1"></div>}
                 </div>
                 {medications.map((med, i) => (
-                  <div key={i} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                  <div key={i} data-field={`medications[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
                     <div className={`${isEdit ? 'col-span-4' : 'col-span-4'} text-xs font-bold truncate px-1`}>{med.name}</div>
                     <div className={`${isEdit ? 'col-span-3' : 'col-span-3'} text-xs text-gray-400 truncate px-1`}>{med.dosage || '-'}</div>
                     <div className={`${isEdit ? 'col-span-3' : 'col-span-2'} text-xs text-center`}>{med.qty} {med.unit}</div>
@@ -3969,7 +4008,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 </div>
                 <div className="max-h-[150px] overflow-y-auto">
                   {purchasedByType.product.map((item, idx) => (
-                    <div key={`pr-${idx}`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-orange-500/5' : 'border-gray-50 bg-orange-50/50'}`}>
+                    <div key={`pr-${idx}`} data-field={`purchasedItems[${idx}]`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-orange-500/5' : 'border-gray-50 bg-orange-50/50'}`}>
                       <div className="flex items-center gap-2 min-w-0">
                         <Check size={12} className="text-orange-500 shrink-0" />
                         <span className="text-xs font-medium truncate">{item.name}</span>
@@ -4303,7 +4342,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {!isEdit && <div className="col-span-1"></div>}
                 </div>
                 {consumables.map((item, i) => (
-                  <div key={i} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center`}>
+                  <div key={i} data-field={`consumables[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center`}>
                     <div className={`${isEdit ? 'col-span-5' : 'col-span-6'} text-xs font-bold truncate px-1`}>{item.name}</div>
                     {isEdit ? (
                       <div className="col-span-3 text-xs text-center">{item.qty}</div>
@@ -4545,7 +4584,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Payment date + time */}
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
+              <div data-field="paymentDate">
                 <label className={labelCls}>วันที่ชำระเงิน *</label>
                 <DateField value={paymentDate} onChange={setPaymentDate} locale="be" fieldClassName={inputCls} />
               </div>
@@ -4560,7 +4599,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <div className="space-y-2 mb-3" data-field="paymentChannels">
                 <label className={labelCls}>ช่องทางชำระเงิน</label>
                 {pmChannels.map((ch, idx) => (
-                  <div key={idx} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                  <div key={idx} data-field={`paymentChannels[${idx}]`} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
                     <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
                     <select value={ch.method} onChange={e => updatePmChannel(idx, 'method', e.target.value)} disabled={!ch.enabled}
                       className={`${selectCls} !w-auto flex-1 min-w-[160px]`}>
@@ -4594,7 +4633,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
               {pmSellers.map((sl, idx) => (
-                <div key={idx} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
+                <div key={idx} data-field={`sellers[${idx}]`} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
                   <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
                   <select value={sl.id} onChange={e => updatePmSeller(idx, 'id', e.target.value)} disabled={!sl.enabled}
                     className={`${selectCls} !w-auto flex-1 min-w-[140px]`}>

@@ -1581,6 +1581,17 @@ export async function createBackendAppointment(data) {
   const targetStart = String(data?.startTime || '').trim();
   const targetEnd = String(data?.endTime || data?.startTime || '').trim();
 
+  // AP1 race window note (audit MEDIUM, 2026-05-04):
+  // Read-then-write below has a ~1s race where two admins clicking save
+  // in the same second can double-book. Mitigations in place:
+  //   1) Pre-write collision check (existing logic below)
+  //   2) Client-side gate via openCreate disabled during 1s freshness
+  //   3) Post-write verification (added 2026-05-04): re-read the date
+  //      after setDoc; if any OTHER appointment for same doctor+overlapping
+  //      time was committed during our window, deleteDoc(self) + throw.
+  // Full atomic fix needs a be_appointment_slots reservation collection
+  // (slot ID = `${date}_${doctorId}_${startTime}`) inside runTransaction.
+  // That's a schema change requiring firestore.rules deploy — deferred.
   if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
     const existing = await getAppointmentsByDate(targetDate);
     const collision = existing.find(a => {
@@ -1610,6 +1621,44 @@ export async function createBackendAppointment(data) {
     createdAt: now,
     updatedAt: now,
   });
+
+  // AP1 post-write verification (audit MEDIUM defense-in-depth):
+  // Re-read the date and check whether ANY other non-cancelled appointment
+  // for the same doctor+overlapping time landed during our setDoc window.
+  // If yes, undo our write and throw — the user retries; the other admin's
+  // write wins. Doesn't fully eliminate the race but tightens the window
+  // from "any 1s collision" to "two writes commit in the exact same
+  // millisecond AND both pass post-verify". Acceptable until slot-doc
+  // schema lands.
+  if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
+    try {
+      const after = await getAppointmentsByDate(targetDate);
+      const conflict = after.find(a => {
+        if ((a.appointmentId || a.id) === appointmentId) return false; // self
+        const otherDoctorId = String(a.doctorId || a.doctor?.id || '').trim();
+        if (otherDoctorId !== targetDoctorId) return false;
+        if (a.status === 'cancelled') return false;
+        const otherStart = String(a.startTime || '').trim();
+        const otherEnd = String(a.endTime || a.startTime || '').trim();
+        return targetStart < otherEnd && targetEnd > otherStart;
+      });
+      if (conflict) {
+        // Roll back our just-written doc + surface the collision.
+        try { await deleteDoc(appointmentDoc(appointmentId)); } catch { /* best-effort */ }
+        const err = new Error(`AP1_COLLISION: post-write — doctor ${targetDoctorId} concurrently booked ${conflict.startTime}-${conflict.endTime} on ${targetDate}`);
+        err.code = 'AP1_COLLISION';
+        err.collision = conflict;
+        err.postWrite = true;
+        throw err;
+      }
+    } catch (e) {
+      if (e?.code === 'AP1_COLLISION') throw e;
+      // Network blip on post-verify is non-fatal — keep the appointment.
+      // eslint-disable-next-line no-console
+      console.warn('[AP1] post-write verification skipped:', e?.message || e);
+    }
+  }
+
   return { appointmentId, success: true };
 }
 
@@ -7604,6 +7653,56 @@ export async function migrateMasterVouchersToBe() {
 const audiencesCol = () => collection(db, ...basePath(), 'be_audiences');
 const audienceDoc = (id) => doc(db, ...basePath(), 'be_audiences', String(id));
 
+/**
+ * R-FK helper (audit fix): soft existence check against a be_* collection.
+ * Throws BE_REF_NOT_FOUND if the referenced doc doesn't exist. Used at
+ * write-time to catch orphan FKs before they land in Firestore.
+ *
+ * Pattern mirrors V35 `_assertProductExists`. Empty `id` is treated as a
+ * no-op (caller's separate validator should reject empty refs).
+ *
+ * Usage:
+ *   await _assertBeRefExists('be_products', productId, 'product');
+ *   await _assertBeRefExists('be_courses',  courseId,  'course');
+ *   await _assertBeRefExists('be_staff',    staffId,   'staff');
+ */
+async function _assertBeRefExists(collectionName, id, label) {
+  const sid = String(id ?? '').trim();
+  if (!sid) return;
+  const ref = doc(db, ...basePath(), collectionName, sid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    const err = new Error(
+      `BE_REF_NOT_FOUND: ${label || collectionName}/${sid} ไม่พบใน ${collectionName} — อาจถูกลบไปแล้ว`,
+    );
+    err.code = 'BE_REF_NOT_FOUND';
+    err.collection = collectionName;
+    err.refId = sid;
+    throw err;
+  }
+}
+
+/**
+ * Walk an audience rule tree and collect every `bought-x-in-last-n` predicate's
+ * (kind, refId) pair. Used by saveAudience to verify each refId resolves to
+ * a real be_products / be_courses doc at write-time (R-FK soft fix).
+ */
+function _collectAudienceBoughtRefs(node) {
+  const out = [];
+  if (!node || typeof node !== 'object') return out;
+  if (node.kind === 'group' && Array.isArray(node.children)) {
+    for (const c of node.children) out.push(..._collectAudienceBoughtRefs(c));
+    return out;
+  }
+  if (node.kind === 'predicate' && node.type === 'bought-x-in-last-n') {
+    const params = (node.params && typeof node.params === 'object') ? node.params : {};
+    const kind = params.kind === 'course' ? 'course' : 'product';
+    const refId = String(params.refId || '').trim();
+    if (refId) out.push({ kind, refId });
+  }
+  return out;
+}
+
 const AUDIENCE_NAME_MAX = 80;
 const AUDIENCE_DESC_MAX = 300;
 
@@ -7654,7 +7753,7 @@ export function listenToAudiences(onChange, onError) {
   }, onError);
 }
 
-export async function saveAudience(audienceId, data) {
+export async function saveAudience(audienceId, data, opts = {}) {
   const id = String(audienceId || '').trim();
   if (!id) throw new Error('audienceId required');
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
@@ -7672,6 +7771,22 @@ export async function saveAudience(audienceId, data) {
   if (fail) {
     const [field, msg] = fail;
     throw new Error(`audience.${field}: ${msg}`);
+  }
+
+  // R-FK soft fix (audit follow-up): every `bought-x-in-last-n.refId`
+  // resolves to a real be_products / be_courses doc at write time. Catches
+  // the picker-open / admin-deleted-master race. Opt-out via
+  // opts.skipFKCheck=true for test fixtures.
+  if (!opts.skipFKCheck) {
+    const refs = _collectAudienceBoughtRefs(data.rule);
+    for (const { kind, refId } of refs) {
+      const col = kind === 'course' ? 'be_courses' : 'be_products';
+      const label = kind === 'course' ? 'course' : 'product';
+      // _assertBeRefExists throws BE_REF_NOT_FOUND with Thai error copy
+      // — UI catches by code and prompts admin to re-pick.
+      // eslint-disable-next-line no-await-in-loop
+      await _assertBeRefExists(col, refId, label);
+    }
   }
 
   const now = new Date().toISOString();

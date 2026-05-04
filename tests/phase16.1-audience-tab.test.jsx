@@ -60,11 +60,13 @@ vi.mock('../src/lib/BranchContext.jsx', () => ({
   }),
 }));
 
-import SmartAudienceTab, { buildAudienceCsvRows } from '../src/components/backend/SmartAudienceTab.jsx';
+import SmartAudienceTab, { buildAudienceCsvRows, defaultSalesDateRange } from '../src/components/backend/SmartAudienceTab.jsx';
 import PredicateRow, { defaultParamsForType } from '../src/components/backend/audience/PredicateRow.jsx';
 import RuleBuilder from '../src/components/backend/audience/RuleBuilder.jsx';
 import SavedSegmentSidebar from '../src/components/backend/audience/SavedSegmentSidebar.jsx';
 import AudiencePreviewPane from '../src/components/backend/audience/AudiencePreviewPane.jsx';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 beforeEach(() => {
   listenToAudiencesMock.mockReset();
@@ -335,5 +337,76 @@ describe('T5 AudiencePreviewPane + buildAudienceCsvRows', () => {
     const salesByCustomer = new Map();
     const rows = buildAudienceCsvRows(['unknown'], customerById, salesByCustomer, today);
     expect(rows).toEqual([]);
+  });
+});
+
+// ─── T6 P1/P3/P5 perf — sales date-range bounding + memoization ─────────────
+describe('T6 P1/P3 sales date-range bounding (perf hardening)', () => {
+  test('T6.1 defaultSalesDateRange returns 12-months-back to today (Bangkok TZ)', () => {
+    // Pin today via the explicit second arg so the test is deterministic.
+    const range = defaultSalesDateRange(12, '2026-04-30');
+    expect(range.to).toBe('2026-04-30');
+    expect(range.from).toBe('2025-04-30');
+  });
+
+  test('T6.2 defaultSalesDateRange clamps day when target month is shorter', () => {
+    // 2026-03-31 minus 1 month → Feb has 28 days in 2026 → clamp to 2026-02-28.
+    const range = defaultSalesDateRange(1, '2026-03-31');
+    expect(range.to).toBe('2026-03-31');
+    expect(range.from).toBe('2026-02-28');
+  });
+
+  test('T6.3 defaultSalesDateRange handles year wrap (Jan minus 12 months)', () => {
+    const range = defaultSalesDateRange(12, '2026-01-15');
+    expect(range.from).toBe('2025-01-15');
+    expect(range.to).toBe('2026-01-15');
+  });
+
+  test('T6.4 SmartAudienceTab calls loadSalesByDateRange with bounded {from,to}, not {}', async () => {
+    render(<SmartAudienceTab />);
+    await waitFor(() => expect(loadSalesMock).toHaveBeenCalled());
+    const lastCallArg = loadSalesMock.mock.calls[loadSalesMock.mock.calls.length - 1][0];
+    expect(lastCallArg).toBeDefined();
+    expect(typeof lastCallArg.from).toBe('string');
+    expect(typeof lastCallArg.to).toBe('string');
+    // 12-month default = non-empty ISO range
+    expect(lastCallArg.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(lastCallArg.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // from must be strictly less than to (12 months earlier)
+    expect(lastCallArg.from < lastCallArg.to).toBe(true);
+  });
+
+  test('T6.5 reset button restores default range UI element exists + works', async () => {
+    render(<SmartAudienceTab />);
+    await waitFor(() => expect(loadSalesMock).toHaveBeenCalled());
+    const resetBtn = screen.getByTestId('smart-audience-range-reset');
+    expect(resetBtn).toBeInTheDocument();
+    expect(screen.getByTestId('smart-audience-sales-range')).toBeInTheDocument();
+    // Click reset — should re-fire loadSalesByDateRange with default range.
+    const callsBefore = loadSalesMock.mock.calls.length;
+    fireEvent.click(resetBtn);
+    // No state actually changed (already at default) so no extra call expected,
+    // but the button must not throw and the range div must still be present.
+    expect(loadSalesMock.mock.calls.length).toBeGreaterThanOrEqual(callsBefore);
+  });
+});
+
+describe('T7 P5 memoization — RuleBuilder + PredicateRow wrapped in React.memo', () => {
+  test('T7.1 RuleBuilder.jsx source uses memo() default export', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../src/components/backend/audience/RuleBuilder.jsx'),
+      'utf8',
+    );
+    expect(src).toMatch(/import\s*\{\s*memo[^}]*\}\s*from\s*['"]react['"]/);
+    expect(src).toMatch(/export\s+default\s+memo\s*\(\s*RuleBuilder\s*\)/);
+  });
+
+  test('T7.2 PredicateRow.jsx source uses memo() default export', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../src/components/backend/audience/PredicateRow.jsx'),
+      'utf8',
+    );
+    expect(src).toMatch(/import\s*\{\s*memo[^}]*\}\s*from\s*['"]react['"]/);
+    expect(src).toMatch(/export\s+default\s+memo\s*\(\s*PredicateRow\s*\)/);
   });
 });

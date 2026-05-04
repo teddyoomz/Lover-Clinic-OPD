@@ -89,8 +89,36 @@ export default function CustomerCreatePage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // a11y polish (audit UC5 fix, 2026-05-04): per-field error map. Populated by
+  // handleSubmit when the validator throws with err.field; cleared via setField.
+  // Keys match data-field attrs so aria-describedby IDs stay deterministic.
+  const [fieldErrors, setFieldErrors] = useState({});
   const profileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
+
+  /** Read aria-* props for an input bound to a single field. Spreads onto JSX. */
+  const ariaErrProps = (fieldName) => {
+    const has = !!fieldErrors[fieldName];
+    return {
+      'aria-invalid': has || undefined,
+      'aria-describedby': has ? `err-${fieldName}` : undefined,
+    };
+  };
+  /** Render a hidden-when-empty error message for a single field. */
+  const FieldError = ({ field }) => {
+    const msg = fieldErrors[field];
+    if (!msg) return null;
+    return (
+      <p
+        id={`err-${field}`}
+        role="alert"
+        className="text-rose-500 text-xs mt-1"
+        data-testid={`field-error-${field}`}
+      >
+        {msg}
+      </p>
+    );
+  };
 
   // Reset state on mount (page is unmounted/remounted by BackendDashboard
   // takeover when creatingCustomer / editingCustomer toggles).
@@ -120,7 +148,11 @@ export default function CustomerCreatePage({
   const isThai = form.customer_type === 'thai' || form.customer_type === '';
   const showSourceDetail = form.source === 'อื่น';
 
-  const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+  const setField = (key, value) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    // a11y: clear stale error for this field as user edits (1.3.1 + 4.1.3).
+    setFieldErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
   const patchForm = (patch) => setForm((p) => ({ ...p, ...patch }));
 
   const handleCustomerTypeChange = (next) => {
@@ -226,6 +258,9 @@ export default function CustomerCreatePage({
       const field = err.field || 'firstname';
       const msg = err.message || 'บันทึกล้มเหลว';
       setError(msg);
+      // a11y: surface per-field message so the input gains aria-invalid +
+      // aria-describedby pointing at #err-<field>. Cleared on next setField.
+      setFieldErrors((prev) => ({ ...prev, [field]: msg }));
       scrollToFieldError(field, msg, { useAlert: false });
     } finally {
       setSaving(false);
@@ -376,16 +411,19 @@ export default function CustomerCreatePage({
                 </select>
               </div>
               <div className="col-span-2 md:col-span-1">
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">ชื่อ <span className="text-red-400">*</span></label>
-                <input type="text" value={form.firstname || ''} onChange={(e) => setField('firstname', e.target.value)} maxLength={100} required data-field="firstname" data-testid="customer-form-firstname" className={inputCls()} />
+                <label htmlFor="customer-form-firstname-input" className="block text-xs text-[var(--tx-muted)] mb-1">ชื่อ <span className="text-red-400">*</span></label>
+                <input id="customer-form-firstname-input" type="text" value={form.firstname || ''} onChange={(e) => setField('firstname', e.target.value)} maxLength={100} required data-field="firstname" data-testid="customer-form-firstname" className={inputCls()} {...ariaErrProps('firstname')} />
+                <FieldError field="firstname" />
               </div>
               <div className="col-span-2 md:col-span-1">
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">นามสกุล</label>
-                <input type="text" value={form.lastname || ''} onChange={(e) => setField('lastname', e.target.value)} maxLength={100} data-field="lastname" data-testid="customer-form-lastname" className={inputCls()} />
+                <label htmlFor="customer-form-lastname-input" className="block text-xs text-[var(--tx-muted)] mb-1">นามสกุล</label>
+                <input id="customer-form-lastname-input" type="text" value={form.lastname || ''} onChange={(e) => setField('lastname', e.target.value)} maxLength={100} data-field="lastname" data-testid="customer-form-lastname" className={inputCls()} {...ariaErrProps('lastname')} />
+                <FieldError field="lastname" />
               </div>
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">ชื่อเล่น</label>
-                <input type="text" value={form.nickname || ''} onChange={(e) => setField('nickname', e.target.value)} maxLength={50} data-field="nickname" data-testid="customer-form-nickname" className={inputCls()} />
+                <label htmlFor="customer-form-nickname-input" className="block text-xs text-[var(--tx-muted)] mb-1">ชื่อเล่น</label>
+                <input id="customer-form-nickname-input" type="text" value={form.nickname || ''} onChange={(e) => setField('nickname', e.target.value)} maxLength={50} data-field="nickname" data-testid="customer-form-nickname" className={inputCls()} {...ariaErrProps('nickname')} />
+                <FieldError field="nickname" />
               </div>
             </div>
 
@@ -410,26 +448,30 @@ export default function CustomerCreatePage({
                 />
               </div>
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">น้ำหนัก (kg)</label>
-                <input type="number" min={1} max={500} value={form.weight ?? ''} onChange={(e) => setField('weight', e.target.value)} data-field="weight" data-testid="customer-form-weight" className={inputCls()} />
+                <label htmlFor="customer-form-weight-input" className="block text-xs text-[var(--tx-muted)] mb-1">น้ำหนัก (kg)</label>
+                <input id="customer-form-weight-input" type="number" min={1} max={500} value={form.weight ?? ''} onChange={(e) => setField('weight', e.target.value)} data-field="weight" data-testid="customer-form-weight" className={inputCls()} {...ariaErrProps('weight')} />
+                <FieldError field="weight" />
               </div>
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">ส่วนสูง (cm)</label>
-                <input type="number" min={30} max={280} value={form.height ?? ''} onChange={(e) => setField('height', e.target.value)} data-field="height" data-testid="customer-form-height" className={inputCls()} />
+                <label htmlFor="customer-form-height-input" className="block text-xs text-[var(--tx-muted)] mb-1">ส่วนสูง (cm)</label>
+                <input id="customer-form-height-input" type="number" min={30} max={280} value={form.height ?? ''} onChange={(e) => setField('height', e.target.value)} data-field="height" data-testid="customer-form-height" className={inputCls()} {...ariaErrProps('height')} />
+                <FieldError field="height" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {isThai && (
                 <div>
-                  <label className="block text-xs text-[var(--tx-muted)] mb-1">เลขบัตรประชาชน</label>
-                  <input type="text" value={form.citizen_id || ''} onChange={(e) => setField('citizen_id', e.target.value)} placeholder="1234567890123" maxLength={20} data-field="citizen_id" data-testid="customer-form-citizen-id" className={inputCls('font-mono')} />
+                  <label htmlFor="customer-form-citizen-id-input" className="block text-xs text-[var(--tx-muted)] mb-1">เลขบัตรประชาชน</label>
+                  <input id="customer-form-citizen-id-input" type="text" value={form.citizen_id || ''} onChange={(e) => setField('citizen_id', e.target.value)} placeholder="1234567890123" maxLength={20} data-field="citizen_id" data-testid="customer-form-citizen-id" className={inputCls('font-mono')} {...ariaErrProps('citizen_id')} />
+                  <FieldError field="citizen_id" />
                 </div>
               )}
               {isForeigner && (
                 <div>
-                  <label className="block text-xs text-[var(--tx-muted)] mb-1">เลขพาสปอร์ต</label>
-                  <input type="text" value={form.passport_id || ''} onChange={(e) => setField('passport_id', e.target.value)} placeholder="AA1234567" maxLength={30} data-field="passport_id" data-testid="customer-form-passport-id" className={inputCls('font-mono uppercase')} />
+                  <label htmlFor="customer-form-passport-id-input" className="block text-xs text-[var(--tx-muted)] mb-1">เลขพาสปอร์ต</label>
+                  <input id="customer-form-passport-id-input" type="text" value={form.passport_id || ''} onChange={(e) => setField('passport_id', e.target.value)} placeholder="AA1234567" maxLength={30} data-field="passport_id" data-testid="customer-form-passport-id" className={inputCls('font-mono uppercase')} {...ariaErrProps('passport_id')} />
+                  <FieldError field="passport_id" />
                 </div>
               )}
               <div>
@@ -453,12 +495,14 @@ export default function CustomerCreatePage({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">เบอร์โทร</label>
-                <input type="tel" value={form.telephone_number || ''} onChange={(e) => setField('telephone_number', e.target.value)} placeholder="0812345678" maxLength={30} data-field="telephone_number" data-testid="customer-form-phone" className={inputCls()} />
+                <label htmlFor="customer-form-phone-input" className="block text-xs text-[var(--tx-muted)] mb-1">เบอร์โทร</label>
+                <input id="customer-form-phone-input" type="tel" value={form.telephone_number || ''} onChange={(e) => setField('telephone_number', e.target.value)} placeholder="0812345678" maxLength={30} data-field="telephone_number" data-testid="customer-form-phone" className={inputCls()} {...ariaErrProps('telephone_number')} />
+                <FieldError field="telephone_number" />
               </div>
               <div>
-                <label className="block text-xs text-[var(--tx-muted)] mb-1">อีเมล</label>
-                <input type="email" value={form.email || ''} onChange={(e) => setField('email', e.target.value)} maxLength={100} data-field="email" data-testid="customer-form-email" className={inputCls()} />
+                <label htmlFor="customer-form-email-input" className="block text-xs text-[var(--tx-muted)] mb-1">อีเมล</label>
+                <input id="customer-form-email-input" type="email" value={form.email || ''} onChange={(e) => setField('email', e.target.value)} maxLength={100} data-field="email" data-testid="customer-form-email" className={inputCls()} {...ariaErrProps('email')} />
+                <FieldError field="email" />
               </div>
               <div>
                 <label className="block text-xs text-[var(--tx-muted)] mb-1">LINE ID</label>
