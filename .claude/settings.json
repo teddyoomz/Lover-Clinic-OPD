@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[HOOK after Edit/Write] 🔥 PRE-COMMIT CHECKLIST (after 2026-04-19 handleSyncCoupons runtime crash): (a) npm test -- --run ALL PASS (b) npm run build clean — catches Edit silent-fail that tests miss (c) area audit: backend file → /audit-backend-firestore-only; api/proclinic/*.js → grep-pair every `case x:` has `async function handleX`; new collection → /audit-anti-vibe-code (d) end-to-end trace for mutation paths (e) CODEBASE_MAP if backend files touched. [EDIT-TOOL TRAP] a parameter typo errors silently — every Edit success must be paired with a grep confirming the text landed. [RULE E] backend UI ห้าม import brokerClient ยกเว้น MasterDataTab. Backend = commit-only. vercel --prod รอ user สั่ง THIS TURN.\"}'"
+            "command": "echo '{\"additionalContext\": \"[HOOK after Edit/Write] \ud83d\udd25 PRE-COMMIT CHECKLIST (after 2026-04-19 handleSyncCoupons runtime crash): (a) npm test -- --run ALL PASS (b) npm run build clean \u2014 catches Edit silent-fail that tests miss (c) area audit: backend file \u2192 /audit-backend-firestore-only; api/proclinic/*.js \u2192 grep-pair every `case x:` has `async function handleX`; new collection \u2192 /audit-anti-vibe-code (d) end-to-end trace for mutation paths (e) CODEBASE_MAP if backend files touched. [EDIT-TOOL TRAP] a parameter typo errors silently \u2014 every Edit success must be paired with a grep confirming the text landed. [RULE E] backend UI \u0e2b\u0e49\u0e32\u0e21 import brokerClient \u0e22\u0e01\u0e40\u0e27\u0e49\u0e19 MasterDataTab. Backend = commit-only. vercel --prod \u0e23\u0e2d user \u0e2a\u0e31\u0e48\u0e07 THIS TURN.\"}'"
           }
         ]
       }
@@ -21,6 +21,15 @@
             "command": "bash -c 'INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r \".tool_input.command\"); if echo \"$CMD\" | grep -qE \"(backend|Backend|SaleTab|CloneTab|CustomerListTab|CustomerCard|CustomerDetailView|MasterDataTab|AppointmentTab|FinanceTab|DepositPanel|WalletPanel|MembershipPanel|PointsPanel|TreatmentFormPage|BackendDashboard)\"; then echo \"BLOCKED: Backend files should NOT be deployed via vercel --prod. Commit only.\" >&2; exit 2; fi; exit 0'"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}'   || true ;; esac"
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -29,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[🚨 MANDATORY FIRST READ: .claude/rules/00-session-start.md — character, expectations, iron-clad, past violations, workflow checklist.] [IRON-CLAD 2026-04-19] A. ทำ X แล้ว Y พัง → ถอด X ทันที. B. firebase deploy --only firestore:rules ต้อง probe webhook + sync unauth writes ก่อน/หลัง — 403 = revert ทันที. C. Rule of 3 / crypto.getRandomValues / NO user.uid in public docs / NO allow:if-true ยกเว้น pc_* + chat_conversations / NO premature Firestore collection. D. bug → adversarial test + audit skill invariant + /audit-all registration. E. 🆕 BACKEND = FIRESTORE ONLY — src/components/backend/** + BackendDashboard.jsx ห้าม import brokerClient หรือ fetch /api/proclinic/* ยกเว้น MasterDataTab.jsx. Phase 9 ละเมิดด้วยการให้ PromotionTab/CouponTab/VoucherTab POST ProClinic — REVERTED. Audit: /audit-backend-firestore-only. F. Triangle Rule: ห้ามเดา URL/method — opd.js intel|click|fill|network capture จริง ก่อน/ระหว่างทำ. [SESSION CONTEXT] Phase 8/12 DONE. Phase 9 Firestore-only rework in progress. [DEPLOY] vercel --prod รอ user สั่ง THIS TURN ทุกครั้ง — prior auth ไม่ roll over.\"}'"
+            "command": "echo '{\"additionalContext\": \"[\ud83d\udea8 MANDATORY FIRST READ: .claude/rules/00-session-start.md \u2014 character, expectations, iron-clad, past violations, workflow checklist.] [IRON-CLAD 2026-04-19] A. \u0e17\u0e33 X \u0e41\u0e25\u0e49\u0e27 Y \u0e1e\u0e31\u0e07 \u2192 \u0e16\u0e2d\u0e14 X \u0e17\u0e31\u0e19\u0e17\u0e35. B. firebase deploy --only firestore:rules \u0e15\u0e49\u0e2d\u0e07 probe webhook + sync unauth writes \u0e01\u0e48\u0e2d\u0e19/\u0e2b\u0e25\u0e31\u0e07 \u2014 403 = revert \u0e17\u0e31\u0e19\u0e17\u0e35. C. Rule of 3 / crypto.getRandomValues / NO user.uid in public docs / NO allow:if-true \u0e22\u0e01\u0e40\u0e27\u0e49\u0e19 pc_* + chat_conversations / NO premature Firestore collection. D. bug \u2192 adversarial test + audit skill invariant + /audit-all registration. E. \ud83c\udd95 BACKEND = FIRESTORE ONLY \u2014 src/components/backend/** + BackendDashboard.jsx \u0e2b\u0e49\u0e32\u0e21 import brokerClient \u0e2b\u0e23\u0e37\u0e2d fetch /api/proclinic/* \u0e22\u0e01\u0e40\u0e27\u0e49\u0e19 MasterDataTab.jsx. Phase 9 \u0e25\u0e30\u0e40\u0e21\u0e34\u0e14\u0e14\u0e49\u0e27\u0e22\u0e01\u0e32\u0e23\u0e43\u0e2b\u0e49 PromotionTab/CouponTab/VoucherTab POST ProClinic \u2014 REVERTED. Audit: /audit-backend-firestore-only. F. Triangle Rule: \u0e2b\u0e49\u0e32\u0e21\u0e40\u0e14\u0e32 URL/method \u2014 opd.js intel|click|fill|network capture \u0e08\u0e23\u0e34\u0e07 \u0e01\u0e48\u0e2d\u0e19/\u0e23\u0e30\u0e2b\u0e27\u0e48\u0e32\u0e07\u0e17\u0e33. [SESSION CONTEXT] Phase 8/12 DONE. Phase 9 Firestore-only rework in progress. [DEPLOY] vercel --prod \u0e23\u0e2d user \u0e2a\u0e31\u0e48\u0e07 THIS TURN \u0e17\u0e38\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07 \u2014 prior auth \u0e44\u0e21\u0e48 roll over.\"}'"
           }
         ]
       }
@@ -39,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"[IRON-CLAD PRE-PROMPT] A: bug → revert. B: firestore:rules probe-deploy-probe. C: Rule of 3 / crypto tokens / no uid in public docs / no allow:if-true. D: bug → test + skill. E: backend = Firestore only (no brokerClient in non-MasterDataTab). F: Triangle — opd.js capture before guessing URL/method. Deploy wait for user per-turn. See .claude/rules/00-session-start.md first.\"}'"
+            "command": "echo '{\"additionalContext\": \"[IRON-CLAD PRE-PROMPT] A: bug \u2192 revert. B: firestore:rules probe-deploy-probe. C: Rule of 3 / crypto tokens / no uid in public docs / no allow:if-true. D: bug \u2192 test + skill. E: backend = Firestore only (no brokerClient in non-MasterDataTab). F: Triangle \u2014 opd.js capture before guessing URL/method. Deploy wait for user per-turn. See .claude/rules/00-session-start.md first.\"}'"
           }
         ]
       }
