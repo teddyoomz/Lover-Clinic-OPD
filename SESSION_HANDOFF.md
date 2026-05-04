@@ -7,12 +7,29 @@
 
 ## Current State
 
-- **Date last updated**: 2026-04-30 EOD — Phase 16.1 plan locked
+- **Date last updated**: 2026-05-04 EOD — AP1-bis multi-slot pushed, V15 #14 deploy auth pending
 - **Branch**: `master`
-- **Last commit**: `f83e95c` — docs(agents): EOD 2026-04-30 V15 #10 deploy + Phase 16.1 plan
-- **Test count**: **4261** (+140 since 4121: Phase 16.7-quinquies +53, ter +37 + 1 audit-V36 fix, ter-bis +10 buffet/courseType, Phase 16.4 +31, misc adjustments +9)
+- **Last commit**: `1d15db5` — feat(ap1-bis): multi-slot 15-min interval reservation closes range-overlap
+- **Test count**: **4612** (+351 since 4261: Phase 16.1 +170, audit-fix bundle +120, AP1 schema +22, AP1-bis +28, misc legacy regressions +11)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `821c954`** (V15 #10 LIVE 2026-04-30) · master in sync · 0 commits unpushed-to-prod
+- **Deploy state**: ✅ **PRODUCTION = `c0d9dc4`** (V15 #13 LIVE 2026-05-04) · master 1 commit ahead-of-prod (`1d15db5` AP1-bis)
+
+### Session 2026-05-04 EOD — audit-fix sweep + AP1 V15 #11/#12/#13 + AP1-bis V15 #14 pending
+
+Resumed Phase 16.1 plan (V15 #11 deploy LIVE earlier) → MEDIUM/LOW audit-fix sweep (TF2 scrollToError 8 anchors / R-FK FK validator / a11y P1/P3 sweep / AP1 lightweight verify) → ProfileDropdown (top-right avatar logout-only menu) → PDPA strip per user verbatim directive → AP1 schema-based atomic slot reservation (V15 #13 with `be_appointment_slots` collection) → TF3 TFP full a11y sweep → AP1-bis multi-slot 15-min interval array (closes range-overlap that exact-key missed).
+
+**Code commits**:
+- `f88f23e` audit-fix bundle — TF2 scrollToError 8 data-field anchors + AP1 lightweight post-write verify w/ rollback + R-FK `_assertBeRefExists` + a11y P1/P3 (CustomerCreatePage + SaleTab) + ProfileDropdown + PDPA strip
+- `c0d9dc4` AP1 schema atomic — `be_appointment_slots` collection + `runTransaction(tx.get + tx.set)` exact-key guard + TF3 TFP full a11y sweep (fieldErrors state + ariaErrProps + FieldError + 23 Thai aria-labels)
+- `1d15db5` AP1-bis multi-slot — `buildAppointmentSlotKeys()` returns array of `${date}_${doctorId}_${HH:MM}` keys (floor start, ceil end, 15-min interval); createBackendAppointment uses Promise.all tx.get + iterate tx.set; _releaseAppointmentSlot + updateBackendAppointment use writeBatch over arrays; +28 tests (A5 helper 18 + A6 source-grep 9 + A2 updates 1)
+
+**V15 #11 deploy** (2026-04-30) — Phase 16.1 + `be_audiences` rule (firestore.rules v21 → v22). 6/6 + 6/6 probes ✓.
+**V15 #12 deploy** (2026-05-04) — audit-fix bundle (no rules change). 6/6 + 6/6 probes ✓.
+**V15 #13 deploy** (2026-05-04) — AP1 schema + `be_appointment_slots` rule (v23 → v24). 6/6 + 6/6 probes ✓ + anon write to slots returns 403 (rule confirmed live).
+
+**Pending**: V15 #14 deploy auth for `1d15db5` AP1-bis (source-only — `be_appointment_slots` rule already live).
+
+Detail: `.agents/sessions/2026-05-04-ap1-bis-multi-slot.md`
 
 ### Session 2026-04-30 EOD — Phase 16.1 Smart Audience plan locked (after V15 #10 deploy)
 
@@ -287,30 +304,29 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-04-30 EOD.
+Resume LoverClinic — continue from 2026-05-04 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=f83e95c, prod=821c954)
-3. .agents/active.md (4261 tests pass; Phase 16.1 plan locked)
+2. SESSION_HANDOFF.md (master=1d15db5, prod=c0d9dc4)
+3. .agents/active.md (4612 tests pass; AP1-bis pushed; V15 #14 pending)
 4. .claude/rules/00-session-start.md
-5. .agents/sessions/2026-04-30-phase16-1-smart-audience-plan.md
+5. .agents/sessions/2026-05-04-ap1-bis-multi-slot.md
 
-Status: master=f83e95c, 4261/4261 tests pass, prod=821c954 LIVE (V15 #10)
+Status: master=1d15db5, 4612/4612 tests pass, prod=c0d9dc4 LIVE (V15 #13). 1 commit ahead-of-prod (AP1-bis source-only).
 
-Next action: EXECUTE Phase 16.1 Smart Audience plan
-- Plan: ~/.claude/plans/resume-loverclinic-continue-tidy-thunder.md
-- 11 files (4 modify + 7 create + 4 test files)
-- 4 brainstorming Qs locked (be_audiences saved segments / all 8 predicates / CSV-only / real-time debounced preview)
-- Rule K work-first-test-last ordering
-- Pick subagent-driven-development (recommended) OR executing-plans
+Next action: AWAIT user "deploy" command for V15 #14
+- AP1-bis multi-slot 15-min interval reservation
+- Source-only (be_appointment_slots rule already live since V15 #13)
+- V18 lock — per-turn explicit auth required, no carry-forward
 
 Outstanding (user-triggered):
-- V15 #11 deploy auth — needed when Phase 16.1 ships (firestore.rules adds be_audiences entry)
-- 16.8 /audit-all run after Phase 16.1 ships
+- V15 #14 deploy auth — AP1-bis (1 commit ahead)
+- 16.8 /audit-all orchestrator-only readiness check (Phase 16 final closure)
 - Pre-launch H-bis cleanup LOCKED OFF (user trigger only)
+- Phase 17 plan TBD when user ready
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval; V31 silent-swallow lock.
 /session-start
 ```
 
