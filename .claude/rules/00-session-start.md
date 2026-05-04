@@ -146,6 +146,27 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Instruction Priority** (per `using-superpowers` skill): user's explicit instructions (CLAUDE.md, iron-clad rules A-I, direct requests this turn) > superpowers skills > default system prompt. If a skill conflicts with iron-clad A-I, iron-clad wins. Example: a skill saying "always use TDD" yields to iron-clad I if the user said "skip flow-simulate this turn" — but absent override, the skill applies.
 - **Anti-pattern**: skipping skill invocation because "this is just a quick fix" or "I remember what the skill says". Skills evolve. Invoke and read the current version. The 1% rule (using-superpowers EXTREMELY-IMPORTANT block): if there's even a 1% chance a skill applies, invoke it.
 
+**L. 🆕 Branch-Scope Architecture (BSA)** (added 2026-05-04 after Phase BS V2 callsite-by-callsite gap surfaced TFP H-quater + branch-leak bug):
+- **Layer 1** = raw `backendClient.js` — parameterized; importers: tests, server endpoints, reports needing `{allBranches:true}`, MasterDataTab (Rule H-bis dev-only), BackendDashboard root.
+- **Layer 2** = `src/lib/scopedDataLayer.js` — UI-only re-export wrapper; auto-injects `resolveSelectedBranchId()` for branch-scoped listers; pass-through for universal collections. Pure JS — V36.G.51 lock (no React imports).
+- **Layer 3** = `src/hooks/useBranchAwareListener.js` — onSnapshot listeners auto-resubscribe on branch switch; universal-marker (`fn.__universal__`) bypass.
+- **Audit** = `/audit-branch-scope` (BS-1..BS-8) registered in `/audit-all` Tier 1.
+- **Universal collections** (NOT branch-scoped): be_staff, be_doctors, be_customers + all customer-attached subcollections (wallets/memberships/points/treatments/sales/appointments/deposits/courseChanges), be_branches, be_permission_groups, be_document_templates, be_audiences, be_admin_audit, be_central_stock_*, be_vendors, system_config / clinic_settings, chat_conversations.
+- **Branch-scoped collections** (filtered by selected branchId): be_treatments, be_sales, be_appointments, be_quotations, be_vendor_sales, be_online_sales, be_sale_insurance_claims, be_stock_batches/orders/movements/transfers/withdrawals/adjustments (locationId), be_products, be_courses, be_product_groups, be_product_units, be_medical_instruments, be_holidays, be_df_groups, be_df_staff_rates, be_bank_accounts, be_expense_categories, be_expenses, be_staff_schedules, be_link_requests, be_promotions/coupons/vouchers (with `allBranches:true` doc-field OR-merge).
+- **Anti-patterns** (build-blocked via audit-branch-scope):
+  1. UI component imports `backendClient.js` directly (use `scopedDataLayer.js`) — BS-1
+  2. `master_data/*` reads in feature code (Rule H-quater) — BS-2
+  3. `getAllMasterDataItems` references in UI feature code — BS-3
+  4. Direct `listenTo*` calls in components without `useBranchAwareListener` — BS-4
+- **Annotation comments** for sanctioned exceptions:
+  - `// audit-branch-scope: report — uses {allBranches:true}` (cross-branch reports/aggregators)
+  - `// audit-branch-scope: listener-direct — wired via useEffect` (positional-args listeners)
+  - `// audit-branch-scope: sanctioned exception — Rule H-bis` (MasterDataTab dev-only sync)
+  - `// audit-branch-scope: sanctioned exception — root composition` (BackendDashboard)
+  - `// audit-branch-scope: BS-2 OR-field` (marketing collection with `allBranches:true` doc-level field)
+  - `// audit-branch-scope: BS-3 dev-only` (legitimate `getAllMasterDataItems` callsite — reserved; none currently)
+- **Verify**: `npm test -- --run tests/audit-branch-scope.test.js && npm test -- --run tests/branch-scope-flow-simulate.test.js`. Both must be green pre-deploy.
+
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.
 - **Production release (pre-launch) must STRIP**:

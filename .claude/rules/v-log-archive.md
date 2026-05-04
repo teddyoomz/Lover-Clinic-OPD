@@ -592,3 +592,88 @@
 
 ---
 
+### Phase BSA (2026-05-04) — Branch-Scope Architecture (eliminated branch-leak bug class)
+
+User report (verbatim, brainstorming session 2026-05-04):
+> "เลือกเป็นสาขาพระราม 3 ไว้ แล้วไปเปิดหน้าสร้างการรักษาใหม่ ทุกปุ่มแม่งยังดึงของสาขา นครราชสีมา มาอยู่เลย ทั้งคอร์ส ยา ค่ามือ แพทย์ ผู้ช่วย"
+
+User's architecture question:
+> "อยากรู้ว่ามีไอเดียอื่นไหม แบบกำหนดมาแต่ต้นทีเดียวเลย แล้วปุ่มเป็นร้อยเป็นพันใน shell ui ของเรารู้เองและเปลี่ยนแปลงเองได้หมด"
+
+#### Root cause
+
+Phase BS V2 (commit `cf897f6`) wired `_resolveBranchIdForWrite` on writers + 12 branch-scoped listers accept `{branchId, allBranches}` opts. BUT — **callsites must pass `{branchId}` manually**. With 84 UI files importing backendClient, drift was inevitable.
+
+Specific TFP bug:
+- TFP load path used `getAllMasterDataItems('products'/'courses'/'staff'/'doctors')` which reads `master_data/*` (Rule H-quater violation, no branch awareness)
+- TFP also called `listDfGroups()` / `listDfStaffRates()` without `{branchId}` opts
+- Result: branch switch via top-right selector had no effect on TFP — courses/products/DF rates still loaded from นครราชสีมา (where the migration had stamped all data)
+
+#### Fix — 12-task BSA implementation
+
+Spec: `docs/superpowers/specs/2026-05-04-branch-scope-architecture-design.md`
+Plan: `docs/superpowers/plans/2026-05-04-branch-scope-architecture.md`
+
+Three layers:
+1. **Layer 1** (`backendClient.js`) extended with `{branchId, allBranches}` on 6 more listers (Tasks 1-2):
+   - listPromotions/Coupons/Vouchers — 2-query OR-merge for `allBranches:true` doc-field via shared `_listWithBranchOrMerge` helper (Rule of 3)
+   - listOnlineSales/SaleInsuranceClaims/VendorSales — single-query branch filter via `_listWithBranch` helper
+   - 6 writers (savePromotion/Coupon/Voucher + saveOnlineSale/SaleInsuranceClaim/VendorSale) stamp via `_resolveBranchIdForWrite`
+2. **Layer 2** (`src/lib/scopedDataLayer.js` NEW) auto-injects `resolveSelectedBranchId()` at call time. Pure JS — V36.G.51 lock (no React). Universal collections re-exported raw (Tasks 3-4).
+3. **Layer 3** (`src/hooks/useBranchAwareListener.js` NEW) re-subscribes onSnapshot listeners on branch switch. `__universal__` marker on customer-attached listeners (Task 3) bypasses branch logic (Task 5).
+
+UI migration:
+- 84 UI files mass-migrated `import` from `backendClient` → `scopedDataLayer` (Task 6)
+- TFP H-quater fix: `getAllMasterDataItems` replaced with `listProducts/listCourses/listStaff/listDoctors` from scopedDataLayer (Task 7) — **THE user-reported bug closed**
+- Live listeners migrated to `useBranchAwareListener` (Task 8) — branch switch now refreshes appointment calendar / sale list / holidays without F5
+
+Audit + lock:
+- `/audit-branch-scope` skill with BS-1..BS-8 invariants (Task 9), registered in `/audit-all` Tier 1
+- `tests/branch-scope-flow-simulate.test.js` F1-F9 (Task 10) — Rule I full-flow simulate
+- Master-data sync helpers removed from scopedDataLayer surface (Task 11) — kept in backendClient for MasterDataTab consumption only
+
+#### Tests
+
+4744 → 4954 (+210 net):
+- +24 Task 1 (Promotions/Coupons/Vouchers branch-scope + writer stamps + dedup helpers)
+- +12 Task 2 (financial listers branch-scope)
+- +12 Task 3 (universal listener markers)
+- +159 Task 4 (scopedDataLayer auto-inject + 111 BS2.9 surface completeness)
+- +11 Task 5 (useBranchAwareListener hook)
+- +1 Task 6 (BS-1 source-grep regression guard)
+- +10 Task 7 (TFP H-quater regression guards)
+- +2 Task 8 (BS-4 listener migration regression)
+- +8 Task 9 (BS-1..BS-8 audit invariants)
+- +9 Task 10 (F1-F9 flow simulate)
+- −26 Task 11 (BS2.9 list pruned of dev-only sync helpers — net coverage unchanged)
+
+#### Lessons
+
+1. **Per-callsite migration patterns scale linearly with callsite count** — 84 UI files is too many to keep correct by hand. Centralize at the import boundary (Layer 2 wrapper module). The wrapper is the architectural answer to "how do we make `branchId` correct by default for hundreds of buttons" — change the import path, get correct semantics for free.
+2. **Auto-inject by default is safer than explicit-required** for the COMMON path. Explicit opt-out (`{allBranches:true}`) covers the rare cross-branch case. Default-correct + explicit-opt-out flips the failure mode from silent-wrong to loud-no-data when intent is missing.
+3. **Listener re-subscribe on branch switch needs a hook** — auto-inject only works at CALL time; live listeners need component-level re-subscribe handling. `useBranchAwareListener` consolidates this. The `__universal__` marker pattern (`fn.__universal__ = true`) lets the same hook handle both branch-scoped and universal listeners without exposing the distinction at every callsite.
+4. **Rule H-quater enforcement at the lib level** (delete `getAllMasterDataItems` from feature code) prevents fallback-by-temptation. The function still exists in backendClient.js for MasterDataTab's use, but removing it from scopedDataLayer + adding the audit invariant BS-3 ensures it can never sneak back into a feature path.
+5. **Audit skill at the import boundary** (BS-1: no UI imports `backendClient` directly) is the most ergonomic invariant — easy to grep, easy to fix, hard to bypass. Combined with annotation comments for sanctioned exceptions, the audit gives a clear "this file is or is not branch-aware" answer.
+6. **The lazy-export refactor in scopedDataLayer.js (Task 4 fix-up)** was forced by vitest strict-namespace partial mocks — every `raw.X` access converted from module-load eager eval to call-time lazy. Public callable shape preserved; trade-off: errors for missing exports surface at first call instead of import. Acceptable because build still catches truly missing names.
+
+#### Anti-patterns locked
+
+After BSA:
+- Any UI component importing `backendClient.js` directly fails build (audit BS-1)
+- Any `master_data/*` read in feature code fails build (audit BS-2 / Rule H-quater)
+- Any `getAllMasterDataItems` reference outside MasterDataTab fails build (audit BS-3)
+- Any direct `listenTo*` call without `useBranchAwareListener` (or `// audit-branch-scope: listener-direct` annotation) fails build (audit BS-4)
+- Any new branch-scoped collection without classification in `branch-collection-coverage.test.js` fails build (BS-5)
+- Branch-scope flow-simulate gone missing → audit BS-6 fails
+- Universal re-export accidentally wrapped → audit BS-7 fails
+- Writer loses `_resolveBranchIdForWrite` stamp → audit BS-8 fails
+
+Files relevant to BSA:
+- `src/lib/backendClient.js` — Layer 1 (extended Tasks 1-3)
+- `src/lib/scopedDataLayer.js` — Layer 2 (NEW Task 4 + lazy refactor + Task 11 cleanup)
+- `src/hooks/useBranchAwareListener.js` — Layer 3 (NEW Task 5)
+- `src/components/TreatmentFormPage.jsx` — H-quater fix (Task 7) + Task 6 import migration
+- `tests/audit-branch-scope.test.js` — BS-1..BS-8 invariants (Task 9)
+- `tests/branch-scope-flow-simulate.test.js` — F1-F9 (Task 10)
+- `.claude/skills/audit-branch-scope/{SKILL.md,patterns.md}` — Audit skill (Task 9)
+
