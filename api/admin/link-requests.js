@@ -78,13 +78,35 @@ async function pushLineMessage(token, lineUserId, text) {
   return res.ok;
 }
 
-async function handleList({ db, status }) {
+async function handleList({ db, status, branchId, allBranches }) {
   let query = db.collection(`artifacts/${APP_ID}/public/data/be_link_requests`);
   if (status && ['pending', 'approved', 'rejected', 'expired'].includes(status)) {
     query = query.where('status', '==', status);
   }
+  // Phase BS V2 — branch-scoped link request list. When branchId given AND
+  // !allBranches, server-side where prunes to that branch's pending queue.
+  // Legacy callers (no branchId) keep getting cross-branch behavior.
+  if (branchId && !allBranches) {
+    query = query.where('branchId', '==', String(branchId));
+  }
   const snap = await query.get();
-  const items = snap.docs.map(d => d.data() || {});
+  let items = snap.docs.map(d => d.data() || {});
+  // Phase BS V2 — also include legacy untagged requests in the default
+  // branch's view (those created pre-Phase-BS without branchId field).
+  // Without this, they'd be invisible to admins after the Phase BS deploy.
+  // Skip when allBranches is requested (cross-branch view already gets all).
+  if (branchId && !allBranches) {
+    const legacySnap = await db.collection(`artifacts/${APP_ID}/public/data/be_link_requests`)
+      .where('status', '==', status || 'pending').get();
+    const tagged = new Set(items.map(i => String(i.requestId || '')));
+    for (const d of legacySnap.docs) {
+      const it = d.data() || {};
+      const bid = typeof it.branchId === 'string' ? it.branchId.trim() : '';
+      if (!bid && !tagged.has(String(it.requestId || ''))) {
+        items.push(it);
+      }
+    }
+  }
   // Sort: pending first, then by requestedAt desc
   items.sort((a, b) => {
     const aPending = a.status === 'pending' ? 0 : 1;
@@ -174,12 +196,13 @@ export default async function handler(req, res) {
   if (!caller) return; // 401/403 written
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const { action, requestId, status, reason } = body;
+  const { action, requestId, status, reason, branchId, allBranches } = body;
   const db = getAdminFirestore();
 
   try {
     if (action === 'list') {
-      const result = await handleList({ db, status });
+      // Phase BS V2 — branchId opt threaded through to handleList.
+      const result = await handleList({ db, status, branchId, allBranches });
       return res.status(200).json(result);
     }
     if (action === 'approve') {

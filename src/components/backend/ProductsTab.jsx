@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Package, Loader2, Tag } from 'lucide-react';
 import { listProducts, deleteProduct } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS } from '../../lib/productValidation.js';
@@ -20,6 +21,8 @@ const TYPE_BADGE = {
 };
 
 export default function ProductsTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -32,10 +35,10 @@ export default function ProductsTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listProducts()); }
+    try { setItems(await listProducts({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดสินค้าล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

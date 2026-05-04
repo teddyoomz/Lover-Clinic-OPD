@@ -68,6 +68,8 @@ export default function FinanceMasterTab({ clinicSettings, theme }) {
 /* ─── Bank Accounts section ─────────────────────────────────────────────── */
 
 function BankAccountsSection() {
+  // Phase BS V2 — branch-scoped reads + writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyBankAccountForm());
   const [editingId, setEditingId] = useState(null);
@@ -76,17 +78,18 @@ function BankAccountsSection() {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listBankAccounts()); }
+    try { setItems(await listBankAccounts({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
     try {
       const id = editingId || generateBankAccountId();
-      await saveBankAccount(id, form);
+      // Phase BS V2 — stamp branchId on save (preserves on edit).
+      await saveBankAccount(id, { ...form, branchId: form.branchId || selectedBranchId });
       setForm(emptyBankAccountForm());
       setEditingId(null);
       await reload();
@@ -157,6 +160,8 @@ function BankAccountsSection() {
 /* ─── Expense Categories section ────────────────────────────────────────── */
 
 function ExpenseCategoriesSection() {
+  // Phase BS V2 — branch-scoped reads + writes.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyExpenseCategoryForm());
   const [editingId, setEditingId] = useState(null);
@@ -165,17 +170,18 @@ function ExpenseCategoriesSection() {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listExpenseCategories()); }
+    try { setItems(await listExpenseCategories({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
     try {
       const id = editingId || generateExpenseCategoryId();
-      await saveExpenseCategory(id, form);
+      // Phase BS V2 — stamp branchId on save (preserves on edit).
+      await saveExpenseCategory(id, { ...form, branchId: form.branchId || selectedBranchId });
       setForm(emptyExpenseCategoryForm());
       setEditingId(null);
       await reload();

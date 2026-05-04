@@ -79,7 +79,8 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
     if (doctors.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
     try {
-      const all = await listStaffSchedules();
+      // Phase BS V2 — branch-scoped fetch.
+      const all = await listStaffSchedules({ branchId: selectedBranchId });
       const doctorIdSet = new Set(doctors.map((d) => String(d.doctorId || d.id)));
       const filtered = all.filter((e) => doctorIdSet.has(String(e.staffId)));
       setSchedules(filtered);
@@ -89,7 +90,7 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
     } finally {
       setScheduleLoading(false);
     }
-  }, [doctors]);
+  }, [doctors, selectedBranchId]);
 
   useEffect(() => { loadSchedules(); }, [loadSchedules]);
 

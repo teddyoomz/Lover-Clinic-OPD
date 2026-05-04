@@ -8,6 +8,20 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
 
+/**
+ * Phase BS V2 (2026-05-06) — branchId stamp helper for master-data writes.
+ * If `data.branchId` is a non-empty string, preserves it (immutable on edit).
+ * Otherwise returns the current selected branch from BranchContext via
+ * resolveSelectedBranchId(). Falls back to FALLBACK_ID 'main' in pre-V20
+ * single-branch deployments where the script context has no localStorage.
+ */
+function _resolveBranchIdForWrite(data) {
+  if (data && typeof data.branchId === 'string' && data.branchId.trim()) {
+    return data.branchId;
+  }
+  return resolveSelectedBranchId() || null;
+}
+
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 
@@ -8233,10 +8247,14 @@ export async function getProductGroup(groupId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listProductGroups() {
-  const snap = await getDocs(productGroupsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listProductGroups({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(productGroupsCol(), where('branchId', '==', String(branchId)))
+    : productGroupsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  // Sort newest-first (by updatedAt); ties broken by createdAt so deterministic.
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8270,6 +8288,7 @@ export async function saveProductGroup(groupId, data) {
   const now = new Date().toISOString();
   await setDoc(productGroupDoc(id), {
     ...data,
+    branchId: _resolveBranchIdForWrite(data),
     groupId: id,
     name: String(data.name).trim(),
     status: data.status || 'ใช้งาน',
@@ -8420,8 +8439,13 @@ export async function getProductUnitGroup(unitGroupId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listProductUnitGroups() {
-  const snap = await getDocs(productUnitsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listProductUnitGroups({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(productUnitsCol(), where('branchId', '==', String(branchId)))
+    : productUnitsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
@@ -8451,6 +8475,7 @@ export async function saveProductUnitGroup(unitGroupId, data) {
   const now = new Date().toISOString();
   await setDoc(productUnitDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     unitGroupId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -8495,8 +8520,13 @@ export async function getMedicalInstrument(instrumentId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listMedicalInstruments() {
-  const snap = await getDocs(medicalInstrumentsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listMedicalInstruments({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(medicalInstrumentsCol(), where('branchId', '==', String(branchId)))
+    : medicalInstrumentsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
@@ -8523,6 +8553,7 @@ export async function saveMedicalInstrument(instrumentId, data) {
   const now = new Date().toISOString();
   await setDoc(medicalInstrumentDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     instrumentId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -8550,8 +8581,13 @@ export async function getHoliday(holidayId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listHolidays() {
-  const snap = await getDocs(holidaysCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listHolidays({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(holidaysCol(), where('branchId', '==', String(branchId)))
+    : holidaysCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
@@ -8578,8 +8614,28 @@ export async function listHolidays() {
  * @param {(err: Error) => void} [onError]
  * @returns {() => void} unsubscribe
  */
-export function listenToHolidays(onChange, onError) {
-  return onSnapshot(holidaysCol(), (snap) => {
+/** Phase BS V2 — opts {branchId, allBranches} positional arg between
+ * the function name and onChange. Backward-compat: if first arg is a
+ * function, treat as legacy 2-arg shape (onChange, onError) and skip
+ * the branch filter (cross-branch listener — pre-Phase-BS behavior). */
+export function listenToHolidays(optsOrCallback, onChangeOrError, maybeOnError) {
+  let opts = {};
+  let onChange;
+  let onError;
+  if (typeof optsOrCallback === 'function') {
+    onChange = optsOrCallback;
+    onError = onChangeOrError;
+  } else {
+    opts = optsOrCallback || {};
+    onChange = onChangeOrError;
+    onError = maybeOnError;
+  }
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const q = useFilter
+    ? query(holidaysCol(), where('branchId', '==', String(branchId)))
+    : holidaysCol();
+  return onSnapshot(q, (snap) => {
     const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     items.sort((a, b) => {
       const ua = a.updatedAt || '';
@@ -8607,6 +8663,7 @@ export async function saveHoliday(holidayId, data) {
   const now = new Date().toISOString();
   await setDoc(holidayDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     holidayId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -9565,8 +9622,13 @@ export async function getProduct(productId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listProducts() {
-  const snap = await getDocs(productsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listProducts({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(productsCol(), where('branchId', '==', String(branchId)))
+    : productsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
@@ -9597,6 +9659,7 @@ export async function saveProduct(productId, data) {
   const now = new Date().toISOString();
   await setDoc(productDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     productId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -9621,8 +9684,13 @@ export async function getCourse(courseId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listCourses() {
-  const snap = await getDocs(coursesCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listCourses({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(coursesCol(), where('branchId', '==', String(branchId)))
+    : coursesCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
@@ -9653,6 +9721,7 @@ export async function saveCourse(courseId, data) {
   const now = new Date().toISOString();
   await setDoc(courseDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     courseId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -9825,8 +9894,13 @@ export async function getBankAccount(bankAccountId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listBankAccounts() {
-  const snap = await getDocs(bankAccountsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listBankAccounts({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(bankAccountsCol(), where('branchId', '==', String(branchId)))
+    : bankAccountsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => {
     if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
@@ -9857,6 +9931,7 @@ export async function saveBankAccount(bankAccountId, data) {
   const now = new Date().toISOString();
   await setDoc(bankAccountDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     bankAccountId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -9874,8 +9949,13 @@ export async function deleteBankAccount(bankAccountId) {
 const expenseCategoriesCol = () => collection(db, ...basePath(), 'be_expense_categories');
 const expenseCategoryDoc = (id) => doc(db, ...basePath(), 'be_expense_categories', String(id));
 
-export async function listExpenseCategories() {
-  const snap = await getDocs(expenseCategoriesCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listExpenseCategories({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(expenseCategoriesCol(), where('branchId', '==', String(branchId)))
+    : expenseCategoriesCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
   return items;
@@ -9891,6 +9971,7 @@ export async function saveExpenseCategory(categoryId, data) {
   const now = new Date().toISOString();
   await setDoc(expenseCategoryDoc(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     categoryId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -10594,8 +10675,13 @@ export async function getDfGroup(groupId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listDfGroups() {
-  const snap = await getDocs(dfGroupsCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listDfGroups({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(dfGroupsCol(), where('branchId', '==', String(branchId)))
+    : dfGroupsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
   return items;
@@ -10611,6 +10697,7 @@ export async function saveDfGroup(groupId, data) {
   const now = new Date().toISOString();
   await setDoc(dfGroupDocRef(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     id,
     groupId: id,
     createdAt: data.createdAt || now,
@@ -10633,8 +10720,13 @@ export async function getDfStaffRates(staffId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listDfStaffRates() {
-  const snap = await getDocs(dfStaffRatesCol());
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+export async function listDfStaffRates({ branchId, allBranches = false } = {}) {
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(dfStaffRatesCol(), where('branchId', '==', String(branchId)))
+    : dfStaffRatesCol();
+  const snap = await getDocs(ref);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -10648,6 +10740,7 @@ export async function saveDfStaffRates(staffId, data) {
   const now = new Date().toISOString();
   await setDoc(dfStaffRatesDocRef(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
@@ -10678,9 +10771,16 @@ export async function getStaffSchedule(scheduleId) {
  * (inclusive ISO strings). No indexes required — client-side filter on
  * the full collection. Realistic volume: <1000 entries.
  */
+/** Phase BS V2 — filters now also accept {branchId, allBranches}. Default no
+ * filter (legacy compat). When branchId given AND !allBranches, server-side
+ * where('branchId', '==', X) prunes payload before client-side staff/date filters. */
 export async function listStaffSchedules(filters = {}) {
-  const { staffId, startDate, endDate } = filters || {};
-  const snap = await getDocs(staffSchedulesCol());
+  const { staffId, startDate, endDate, branchId, allBranches = false } = filters || {};
+  const useBranchFilter = branchId && !allBranches;
+  const ref = useBranchFilter
+    ? query(staffSchedulesCol(), where('branchId', '==', String(branchId)))
+    : staffSchedulesCol();
+  const snap = await getDocs(ref);
   let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   if (staffId) items = items.filter((e) => String(e.staffId) === String(staffId));
   if (startDate) items = items.filter((e) => (e.date || '') >= startDate);
@@ -10703,6 +10803,7 @@ export async function saveStaffSchedule(scheduleId, data) {
   const now = new Date().toISOString();
   await setDoc(staffScheduleDocRef(id), {
     ...normalized,
+    branchId: _resolveBranchIdForWrite(data),
     id,
     scheduleId: id,
     createdAt: data.createdAt || now,

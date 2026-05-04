@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Wrench, Loader2, Calendar, AlertTriangle } from 'lucide-react';
 import { listMedicalInstruments, deleteMedicalInstrument } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import MedicalInstrumentFormModal from './MedicalInstrumentFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import {
@@ -31,6 +32,8 @@ function maintenanceBadge(days) {
 }
 
 export default function MedicalInstrumentsTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -44,14 +47,14 @@ export default function MedicalInstrumentsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      setItems(await listMedicalInstruments());
+      setItems(await listMedicalInstruments({ branchId: selectedBranchId }));
     } catch (e) {
       setError(e.message || 'โหลดเครื่องหัตถการล้มเหลว');
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

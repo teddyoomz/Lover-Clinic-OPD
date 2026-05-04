@@ -26,6 +26,7 @@ import {
   getLineLinkState, formatLineLinkStatusBadge, maskLineUserId, LINK_STATES,
 } from '../../lib/customerLineLinkState.js';
 import { getLanguageForCustomer } from '../../lib/lineBotResponder.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import LangPillToggle from './LangPillToggle.jsx';
 
 const STATUS_TABS = [
@@ -37,6 +38,8 @@ const STATUS_TABS = [
 ];
 
 export default function LinkRequestsTab() {
+  // Phase BS V2 — branch-scoped link requests.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,7 +54,7 @@ export default function LinkRequestsTab() {
       // not be_link_requests). Other tabs unchanged.
       const result = filter === 'linked'
         ? await listLinkedCustomers()
-        : await listLinkRequests({ status: filter });
+        : await listLinkRequests({ status: filter, branchId: selectedBranchId });
       setItems(Array.isArray(result?.items) ? result.items : []);
     } catch (e) {
       setError(e.message || 'โหลดรายการล้มเหลว');
@@ -59,7 +62,7 @@ export default function LinkRequestsTab() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

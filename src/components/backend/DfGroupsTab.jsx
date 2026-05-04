@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Banknote, Loader2 } from 'lucide-react';
 import { listDfGroups, deleteDfGroup } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DfGroupFormModal from './DfGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/dfGroupValidation.js';
@@ -14,6 +15,8 @@ const STATUS_BADGE = {
 };
 
 export default function DfGroupsTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -25,10 +28,10 @@ export default function DfGroupsTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listDfGroups()); }
+    try { setItems(await listDfGroups({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดกลุ่ม DF ล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

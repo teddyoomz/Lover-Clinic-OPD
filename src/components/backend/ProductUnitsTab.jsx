@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Scale, Loader2, ArrowRight } from 'lucide-react';
 import { listProductUnitGroups, deleteProductUnitGroup } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductUnitFormModal from './ProductUnitFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/productUnitValidation.js';
@@ -18,6 +19,8 @@ const STATUS_BADGE = {
 };
 
 export default function ProductUnitsTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -31,14 +34,14 @@ export default function ProductUnitsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      setItems(await listProductUnitGroups());
+      setItems(await listProductUnitGroups({ branchId: selectedBranchId }));
     } catch (e) {
       setError(e.message || 'โหลดกลุ่มหน่วยล้มเหลว');
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

@@ -72,7 +72,8 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     if (staff.length === 0) { setSchedules([]); return; }
     setScheduleLoading(true);
     try {
-      const all = await listStaffSchedules();
+      // Phase BS V2 — branch-scoped fetch.
+      const all = await listStaffSchedules({ branchId: selectedBranchId });
       const staffIdSet = new Set(staff.map((s) => String(s.staffId || s.id)));
       const filtered = all.filter((e) => staffIdSet.has(String(e.staffId)));
       setSchedules(filtered);
@@ -82,7 +83,7 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
     } finally {
       setScheduleLoading(false);
     }
-  }, [staff]);
+  }, [staff, selectedBranchId]);
 
   useEffect(() => { loadSchedules(); }, [loadSchedules]);
 

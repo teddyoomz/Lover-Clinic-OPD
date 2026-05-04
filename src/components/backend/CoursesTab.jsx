@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, Briefcase, Loader2, Tag, Clock, Package } from 'lucide-react';
 import { listCourses, deleteCourse } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CourseFormModal from './CourseFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/courseValidation.js';
@@ -14,6 +15,8 @@ const STATUS_BADGE = {
 };
 
 export default function CoursesTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -25,10 +28,10 @@ export default function CoursesTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    try { setItems(await listCourses()); }
+    try { setItems(await listCourses({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดคอร์สล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

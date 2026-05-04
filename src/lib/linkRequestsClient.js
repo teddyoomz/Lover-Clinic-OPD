@@ -35,9 +35,15 @@ async function call(payload) {
   return body;
 }
 
-/** List link requests (default: pending). Returns { items: [...] }. */
-export function listLinkRequests({ status = 'pending' } = {}) {
-  return call({ action: 'list', status });
+/**
+ * List link requests (default: pending). Returns { items: [...] }.
+ *
+ * Phase BS V2 (2026-05-06) — opts now accept {branchId, allBranches}. When
+ * branchId given AND !allBranches, the server filters the pending queue to
+ * that branch (plus legacy untagged requests so admins don't lose them).
+ */
+export function listLinkRequests({ status = 'pending', branchId, allBranches } = {}) {
+  return call({ action: 'list', status, branchId, allBranches });
 }
 
 /** Approve a pending request. Writes lineUserId onto customer + pushes LINE notif. */

@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, FolderTree, Loader2, Package } from 'lucide-react';
 import { listProductGroups, deleteProductGroup, listProducts } from '../../lib/backendClient.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductGroupFormModal from './ProductGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { PRODUCT_TYPES, STATUS_OPTIONS } from '../../lib/productGroupValidation.js';
@@ -28,6 +29,8 @@ const TYPE_COLOR = {
 };
 
 export default function ProductGroupsTab({ clinicSettings, theme }) {
+  // Phase BS V2 — branch-scoped reads.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -43,7 +46,11 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      const [groups, products] = await Promise.all([listProductGroups(), listProducts().catch(() => [])]);
+      // Phase BS V2 — branch-scoped fetch.
+      const [groups, products] = await Promise.all([
+        listProductGroups({ branchId: selectedBranchId }),
+        listProducts({ branchId: selectedBranchId }).catch(() => []),
+      ]);
       setItems(groups);
       const lookup = new Map();
       (products || []).forEach(p => {
@@ -57,7 +64,7 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 
