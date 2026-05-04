@@ -47,6 +47,7 @@ import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js'
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
+import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 
 // Constants — duplicated from AppointmentTab (will collapse into a shared
 // constants module in a follow-up Rule-of-3 sweep). Keep values identical.
@@ -239,7 +240,13 @@ export default function AppointmentFormModal({
       listDoctors().catch(() => []),
       listAllSellers({ branchId: selectedBranchId }).catch(() => []),
     ]).then(([d, sellers]) => {
-      setDoctors((d || []).filter(x => x.status !== 'พักใช้งาน'));
+      // Phase BS (2026-05-06): filter doctor picker to those with branch
+      // access. listDoctors() doesn't accept a branchId param (the legacy
+      // pattern queries the entire be_doctors collection); we filter at the
+      // consumer via filterDoctorsByBranch which respects the empty-branchIds
+      // legacy fallback. Status filter retained for "พักใช้งาน" exclusion.
+      const branchScoped = filterDoctorsByBranch(d || [], selectedBranchId);
+      setDoctors(branchScoped.filter(x => x.status !== 'พักใช้งาน'));
       // listAllSellers already returns {id, name} composed shape and dedupes
       // ids across staff + doctors. Sort alphabetically for picker UX.
       const sorted = (sellers || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'th'));

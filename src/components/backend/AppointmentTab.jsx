@@ -21,6 +21,7 @@ import {
 } from '../../lib/backendClient.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
@@ -98,6 +99,9 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
 export default function AppointmentTab({ clinicSettings, theme }) {
   const isDark = theme !== 'light';
 
+  // Phase BS — branch-scoped appointment fetches.
+  const { branchId: selectedBranchId } = useSelectedBranch();
+
   // ── State ──
   const [selectedDate, setSelectedDate] = useState(() => dateStr(new Date()));
   // Thai time (GMT+7): avoid Jan 1 boundary where UTC-negative browsers see last December.
@@ -164,9 +168,13 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   );
 
   // ── Load month appointment counts (for mini calendar) ──
+  // Phase BS — pass selectedBranchId so the dot map only counts appointments
+  // for the current branch. Re-runs when admin switches branch.
   useEffect(() => {
-    getAppointmentsByMonth(monthStr).then(setMonthAppts).catch(() => setMonthAppts({}));
-  }, [monthStr]);
+    getAppointmentsByMonth(monthStr, { branchId: selectedBranchId })
+      .then(setMonthAppts)
+      .catch(() => setMonthAppts({}));
+  }, [monthStr, selectedBranchId]);
 
   // ── Load day appointments (for time grid) ──
   // Phase 14.7.H follow-up B (2026-04-26) — switched from one-shot fetch
@@ -344,8 +352,10 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const refreshAfterSave = useCallback(async () => {
     setFormMode(null);
     await loadDay(selectedDate);
-    getAppointmentsByMonth(monthStr).then(setMonthAppts).catch(() => {});
-  }, [loadDay, selectedDate, monthStr]);
+    getAppointmentsByMonth(monthStr, { branchId: selectedBranchId })
+      .then(setMonthAppts)
+      .catch(() => {});
+  }, [loadDay, selectedDate, monthStr, selectedBranchId]);
 
   // Selected date info
   const selD = parseDate(selectedDate);

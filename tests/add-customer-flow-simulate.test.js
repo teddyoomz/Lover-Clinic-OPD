@@ -75,15 +75,23 @@ describe('V33.L — addCustomer minimal happy path', () => {
   it('L2 — written doc has every required root key', async () => {
     const { addCustomer } = await import('../src/lib/backendClient.js');
     await addCustomer({ firstname: 'จอห์น' });
+    // Phase BS (2026-05-06) — when no branchId opt is passed, addCustomer
+    // falls back to resolveSelectedBranchId() which returns FALLBACK_ID
+    // 'main' in jsdom (no localStorage prepopulated). Pre-Phase-BS the
+    // default was `branchId: branchId || null`. The contract still ensures
+    // a string (or null) is written; just verify it's set.
     expect(writtenDoc).toMatchObject({
       hn_no: 'LC-26000001',
       proClinicId: null,
       proClinicHN: null,
-      branchId: null,
       isManualEntry: true,
       treatmentCount: 0,
       created_year: 2026,
     });
+    // branchId always present (Phase BS) — falls back to FALLBACK_ID 'main'
+    // when neither opts.branchId nor localStorage has a value.
+    expect(writtenDoc).toHaveProperty('branchId');
+    expect(typeof writtenDoc.branchId === 'string' || writtenDoc.branchId === null).toBe(true);
     expect(writtenDoc.courses).toEqual([]);
     expect(writtenDoc.appointments).toEqual([]);
     expect(writtenDoc.treatmentSummary).toEqual([]);

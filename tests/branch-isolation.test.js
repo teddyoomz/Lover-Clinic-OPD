@@ -31,6 +31,12 @@ const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 describe('BR1: BranchContext + useSelectedBranch hook', () => {
   const SRC = READ('src/lib/BranchContext.jsx');
+  // Phase BS (2026-05-06) — STORAGE_KEY / FALLBACK_ID / resolveSelectedBranchId /
+  // resetBranchSelection were extracted to branchSelection.js so the data
+  // layer can read them without React. BranchContext.jsx re-exports them.
+  // Source-grep BR1.3/6/7/8 must search BOTH files.
+  const SELECTION_SRC = READ('src/lib/branchSelection.js');
+  const COMBINED = SRC + '\n' + SELECTION_SRC;
 
   it('BR1.1: exports BranchProvider component', () => {
     expect(SRC).toMatch(/export function BranchProvider/);
@@ -43,9 +49,13 @@ describe('BR1: BranchContext + useSelectedBranch hook', () => {
   });
 
   it('BR1.3: persists selection to localStorage under stable key', () => {
-    expect(SRC).toMatch(/STORAGE_KEY\s*=\s*['"]selectedBranchId['"]/);
+    // Phase BS — STORAGE_KEY now lives in branchSelection.js (canonical).
+    expect(COMBINED).toMatch(/STORAGE_KEY\s*=\s*['"]selectedBranchId['"]/);
+    // setItem still happens in BranchContext.jsx (BranchProvider's
+    // selectBranch closure) — unchanged.
     expect(SRC).toMatch(/window\.localStorage\?\.setItem\(STORAGE_KEY/);
-    expect(SRC).toMatch(/window\.localStorage\?\.getItem\(STORAGE_KEY\)/);
+    // getItem present in either file (initializer + resolveSelectedBranchId).
+    expect(COMBINED).toMatch(/window\.localStorage\?\.getItem\(STORAGE_KEY\)/);
   });
 
   it('BR1.4: subscribes to be_branches via onSnapshot (live updates)', () => {
@@ -62,15 +72,21 @@ describe('BR1: BranchContext + useSelectedBranch hook', () => {
   });
 
   it('BR1.6: exports resolveSelectedBranchId for non-React callers', () => {
-    expect(SRC).toMatch(/export function resolveSelectedBranchId/);
+    // Phase BS — canonical definition in branchSelection.js; BranchContext.jsx
+    // re-exports for back-compat. Either path satisfies the contract.
+    expect(SELECTION_SRC).toMatch(/export function resolveSelectedBranchId/);
+    expect(SRC).toMatch(/export\s+(const|function)\s+resolveSelectedBranchId/);
   });
 
   it('BR1.7: exports resetBranchSelection for tests/setup flows', () => {
-    expect(SRC).toMatch(/export function resetBranchSelection/);
+    // Phase BS — canonical in branchSelection.js, re-exported from BranchContext.
+    expect(SELECTION_SRC).toMatch(/export function resetBranchSelection/);
+    expect(SRC).toMatch(/export\s+(const|function)\s+resetBranchSelection/);
   });
 
   it('BR1.8: FALLBACK_ID is "main" (back-compat with hardcoded data)', () => {
-    expect(SRC).toMatch(/FALLBACK_ID\s*=\s*['"]main['"]/);
+    // Phase BS — canonical FALLBACK_ID in branchSelection.js.
+    expect(COMBINED).toMatch(/FALLBACK_ID\s*=\s*['"]main['"]/);
   });
 
   it('BR1.9: provider value object includes branchId, branches, selectBranch, isReady', () => {

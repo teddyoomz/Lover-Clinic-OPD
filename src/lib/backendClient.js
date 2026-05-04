@@ -4,6 +4,9 @@
 
 import { db, appId } from '../firebase.js';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
+// Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
+// importing BranchContext.jsx into the data layer (React leak risk).
+import { resolveSelectedBranchId } from './branchSelection.js';
 
 // ─── Base path ──────────────────────────────────────────────────────────────
 const basePath = () => ['artifacts', appId, 'public', 'data'];
@@ -350,10 +353,22 @@ export { buildFormFromCustomer };
 // V33.3 — Update existing customer doc from form. Mirrors addCustomer flow
 // but with no HN counter (preserves existing) + uses existing customerId.
 // Re-uploads files only if NEW File objects passed; existing URLs preserved.
+//
+// Phase BS (2026-05-06) — IMMUTABILITY CONTRACT for branchId: the
+// "สาขาที่สร้างรายการลูกค้า" tag is set ONCE on CREATE (addCustomer or
+// cloneOrchestrator first import) and NEVER overwritten on subsequent
+// edits. This function deliberately ignores any branchId in `opts` or in
+// `form`. Backfill of legacy untagged customers happens via the dedicated
+// /api/admin/customer-branch-baseline endpoint, NOT through edit. Tests in
+// BS7 lock this contract.
 export async function updateCustomerFromForm(customerId, form, opts = {}) {
   if (!customerId) throw new Error('customerId required');
-  const { branchId, updatedBy = null, files = null } = opts;
+  const { updatedBy = null, files = null } = opts;
   const safe = form && typeof form === 'object' ? { ...form } : {};
+  // Phase BS — strip branchId from form before normalization so even if the
+  // form has it (legacy data from buildFormFromCustomer), we don't write it
+  // back through the patch and accidentally overwrite the canonical doc.
+  if ('branchId' in safe) delete safe.branchId;
 
   const { normalizeCustomer, validateCustomer } = await import('./customerValidation.js');
 
@@ -410,8 +425,10 @@ export async function updateCustomerFromForm(customerId, form, opts = {}) {
   });
 
   // Compute updates — flat root fields + dotted-path patientData merge.
-  // We use updateDoc with the FULL re-merged doc to preserve consent + branchId
-  // + nested object structure that downstream readers depend on.
+  // We use updateDoc with the FULL re-merged doc to preserve consent +
+  // nested object structure that downstream readers depend on.
+  // Phase BS: branchId deliberately NOT in patch — immutability contract
+  // (see function-level comment). Existing branchId on doc preserved.
   const patch = {
     ...finalForm,
     // Re-build patientData (camelCase mirror) since the form may have changed.
@@ -419,7 +436,10 @@ export async function updateCustomerFromForm(customerId, form, opts = {}) {
     lastUpdatedAt: new Date().toISOString(),
     lastUpdatedBy: updatedBy || null,
   };
-  if (branchId) patch.branchId = branchId;
+  // Defensive: if a stray branchId snuck through finalForm (shouldn't
+  // happen given the strip above + normalizeCustomer doesn't add it),
+  // remove it from the patch before writing.
+  if ('branchId' in patch) delete patch.branchId;
 
   await updateDoc(customerDoc(customerId), patch);
   return { id: customerId };
@@ -473,7 +493,15 @@ export async function generateCustomerHN() {
  * URLs land in the same write. If upload fails, throws and no doc is written.
  */
 export async function addCustomer(form, opts = {}) {
-  const { branchId = null, createdBy = null, files = null, strict = true } = opts;
+  // Phase BS (2026-05-06) — branchId fallback chain: explicit opt > current
+  // user's selected branch (BranchContext) > null. The hook fallback covers
+  // the legacy CustomerCreatePage callers that don't yet pass branchId
+  // explicitly. resolveSelectedBranchId() returns the FALLBACK_ID 'main' in
+  // pre-V20 single-branch deployments — preserves backward compat.
+  const { branchId, createdBy = null, files = null, strict = true } = opts;
+  const resolvedBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (resolveSelectedBranchId() || null);
   const safe = form && typeof form === 'object' ? { ...form } : {};
 
   // Steps 1+2 — normalize FIRST (coerce types e.g. gender 'm'→'M', upper
@@ -559,7 +587,8 @@ export async function addCustomer(form, opts = {}) {
     patientData: buildPatientDataFromForm(finalForm),
     proClinicId: null,
     proClinicHN: null,
-    branchId: branchId || null,
+    // Phase BS — stamp on CREATE only. Immutable thereafter.
+    branchId: resolvedBranchId,
     createdAt: nowIso,
     createdBy: createdBy || null,
     lastUpdatedAt: nowIso,
@@ -1693,7 +1722,11 @@ export async function createBackendAppointment(data) {
   // transaction. Catches range overlaps the slot-doc can't. Same logic as
   // before; complements the atomic exact-key guard.
   if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
-    const existing = await getAppointmentsByDate(targetDate);
+    // Phase BS — doctor collision check spans ALL branches because the same
+    // physical doctor can't be in two places at once, even if they're
+    // assigned to multiple branches. Explicit allBranches:true so the check
+    // doesn't silently scope after Phase BS reader refactor.
+    const existing = await getAppointmentsByDate(targetDate, { allBranches: true });
     const collision = existing.find(a => {
       const otherDoctorId = String(a.doctorId || a.doctor?.id || '').trim();
       if (otherDoctorId !== targetDoctorId) return false;
@@ -1973,9 +2006,21 @@ function normalizeApptDate(rawDate) {
   return '';
 }
 
-/** Get all appointments for a month (YYYY-MM) */
-export async function getAppointmentsByMonth(yearMonth) {
-  const snap = await getDocs(appointmentsCol());
+/**
+ * Get all appointments for a month (YYYY-MM).
+ *
+ * Phase BS (2026-05-06) — branch-scoped read.
+ * Same `{branchId, allBranches}` opts contract as `getAllSales` —
+ * see that function's JSDoc for filter semantics. Legacy callers
+ * (no opts) get unfiltered global behavior.
+ */
+export async function getAppointmentsByMonth(yearMonth, opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    : appointmentsCol();
+  const snap = await getDocs(ref);
   const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   // Normalize `date` on every row so the month-level bubble count matches
   // the day-level list (bug 2026-04-20: drifted dates like
@@ -2022,11 +2067,22 @@ export function listenToCustomerAppointments(customerId, onChange, onError) {
  * Client-side filter via normalizeApptDate to tolerate drifted date formats
  * (timestamps, trailing whitespace, Firestore Timestamp values). Without
  * this, Firestore where('date','==',x) misses docs that the month-level
- * bubble counts include — producing "bubble says 1 but day is empty". */
-export async function getAppointmentsByDate(dateStr) {
+ * bubble counts include — producing "bubble says 1 but day is empty".
+ *
+ * Phase BS (2026-05-06) — branch-scoped read. Same `{branchId, allBranches}`
+ * opts contract as `getAllSales`. Branch filter is composed with the
+ * existing client-side date-normalization (server-side filter on
+ * branchId stays compatible because branchId is a top-level string field).
+ */
+export async function getAppointmentsByDate(dateStr, opts = {}) {
   const target = normalizeApptDate(dateStr);
   if (!target) return [];
-  const snap = await getDocs(appointmentsCol());
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    : appointmentsCol();
+  const snap = await getDocs(ref);
   const appts = snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .filter(a => normalizeApptDate(a.date) === target)
@@ -2357,9 +2413,27 @@ export async function markSalePaid(saleId, { method, amount, refNo = '', paidAt 
   return { success: true, totalPaid, saleStatus, paymentStatus };
 }
 
-/** Get all sales (sorted by date desc) */
-export async function getAllSales() {
-  const snap = await getDocs(salesCol());
+/**
+ * Get all sales (sorted by date desc).
+ *
+ * Phase BS (2026-05-06) — branch-scoped read.
+ *   - `branchId` (opt): when provided AND `allBranches !== true`, applies
+ *     server-side `where('branchId', '==', branchId)` so only the current
+ *     branch's sales transit the wire.
+ *   - `allBranches` (opt, default false): explicit override for cross-branch
+ *     reports / aggregators that intentionally span branches. When true,
+ *     branchId is ignored and all docs returned.
+ *   - No opts (legacy callers) → no filter applied; preserves pre-Phase-BS
+ *     behavior so aggregators that haven't been updated still receive
+ *     global rows.
+ */
+export async function getAllSales(opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(salesCol(), where('branchId', '==', String(branchId)))
+    : salesCol();
+  const snap = await getDocs(ref);
   const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   // Sort by createdAt (has time) desc — latest first
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
@@ -9779,13 +9853,22 @@ export async function getExpense(expenseId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listExpenses({ startDate, endDate, categoryId, branchId } = {}) {
+/**
+ * List expenses with optional date / category / branch filters.
+ *
+ * Phase BS (2026-05-06) — adds explicit `allBranches` opt. When `branchId`
+ * is passed AND `allBranches` is true, the branchId filter is bypassed
+ * (cross-branch report aggregators that intentionally want every branch
+ * use this to avoid accidental scoping if the caller forgets to omit
+ * branchId). Legacy semantics preserved: omitting branchId = no filter.
+ */
+export async function listExpenses({ startDate, endDate, categoryId, branchId, allBranches = false } = {}) {
   const snap = await getDocs(expensesCol());
   let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   if (startDate) items = items.filter(e => (e.date || '') >= startDate);
   if (endDate) items = items.filter(e => (e.date || '') <= endDate);
   if (categoryId) items = items.filter(e => e.categoryId === categoryId);
-  if (branchId) items = items.filter(e => e.branchId === branchId);
+  if (branchId && !allBranches) items = items.filter(e => e.branchId === branchId);
   items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return items;
 }
@@ -10378,8 +10461,20 @@ export async function getQuotation(quotationId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listQuotations() {
-  const snap = await getDocs(quotationsCol());
+/**
+ * List quotations sorted newest-first.
+ *
+ * Phase BS (2026-05-06) — branch-scoped read. Same `{branchId, allBranches}`
+ * opts contract as `getAllSales`. Legacy callers (no opts) get
+ * unfiltered global behavior (preserves QuotationTab pre-Phase-BS shape).
+ */
+export async function listQuotations(opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const ref = useFilter
+    ? query(quotationsCol(), where('branchId', '==', String(branchId)))
+    : quotationsCol();
+  const snap = await getDocs(ref);
   const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   // Newest first by quotationDate, then createdAt.
   items.sort((a, b) => {

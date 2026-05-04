@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2
 } from 'lucide-react';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
@@ -26,6 +26,10 @@ import {
   listDoctors,
 } from '../../lib/backendClient.js';
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
+// Phase BS (2026-05-06) — show "สาขาที่สร้างรายการ" tag on the customer card.
+// Customer base is shared across branches; this field is purely a display
+// tag indicating which branch first created the record.
+import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
@@ -317,6 +321,16 @@ export default function CustomerDetailView({
 
   const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '-';
   const hn = customer?.proClinicHN || '';
+
+  // Phase BS — resolve customer's "branch of creation" name. Uses the FULL
+  // (unscoped) branches list from useSelectedBranch so customers tagged with
+  // a branch the current user can't access still display their origin name.
+  // Empty branchId or unresolvable branchId render '—'.
+  const { branches: allBranchesForLabel } = useSelectedBranch();
+  const customerBranchId = (typeof customer?.branchId === 'string' && customer.branchId) || '';
+  const customerBranchName = customerBranchId
+    ? (resolveBranchName(customerBranchId, allBranchesForLabel) || customerBranchId)
+    : '';
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
   const activeCourses = useMemo(() => allCourses.filter(c => {
@@ -658,6 +672,15 @@ export default function CustomerDetailView({
               {pd.howFoundUs?.length > 0 && (
                 <InfoRow label="ที่มา" value={Array.isArray(pd.howFoundUs) ? pd.howFoundUs.join(', ') : pd.howFoundUs} />
               )}
+              {/* Phase BS (2026-05-06) — branch-of-creation tag. Always
+                  rendered (graceful '—' when untagged) so the user can spot
+                  legacy customers needing migration via MasterDataTab's
+                  customer-branch-baseline button. */}
+              <InfoRow
+                label="สาขาที่สร้างรายการ"
+                value={customerBranchName || '—'}
+                icon={<Building2 size={11} />}
+              />
             </div>
           </div>
 

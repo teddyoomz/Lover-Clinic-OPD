@@ -244,10 +244,22 @@ describe('V33.KK — updateCustomerFromForm orchestrator', () => {
     expect(writtenPayload.hn_no).not.toMatch(/^LC-26000(?!001$)/);
   });
 
-  it('KK7 — branchId injected when provided', async () => {
+  it('KK7 — branchId IS IMMUTABLE on update (Phase BS — was: injected when provided)', async () => {
+    // Phase BS (2026-05-06) — branchId is "สาขาที่สร้างรายการ", set ONCE
+    // on CREATE (addCustomer / cloneOrchestrator) and NEVER overwritten on
+    // edit. updateCustomerFromForm strips branchId from both opts AND form
+    // before writing. Backfill happens via /api/admin/customer-branch-
+    // baseline endpoint, NOT through edit. This test was originally locked
+    // pre-Phase-BS as "branchId injected when provided" — flipped to assert
+    // the new immutability contract.
     const { updateCustomerFromForm } = await import('../src/lib/backendClient.js');
-    await updateCustomerFromForm('LC-26000001', { firstname: 'A', hn_no: 'LC-26000001' }, { branchId: 'BR-test' });
-    expect(writtenPayload.branchId).toBe('BR-test');
+    await updateCustomerFromForm(
+      'LC-26000001',
+      { firstname: 'A', hn_no: 'LC-26000001', branchId: 'BR-MUTATION-ATTEMPT' },
+      { branchId: 'BR-OPT-ATTEMPT' },
+    );
+    // branchId must NOT be in the written patch (immutability strip).
+    expect(writtenPayload).not.toHaveProperty('branchId');
   });
 
   it('KK8 — empty customerId throws', async () => {

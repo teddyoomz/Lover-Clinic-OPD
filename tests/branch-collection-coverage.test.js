@@ -348,8 +348,12 @@ describe('BC5: cross-branch operations preserve source vs dest distinction', () 
 
 describe('BC6: single-branch clinic behavior is unchanged (back-compat smoke test)', () => {
   it('BC6.1: useSelectedBranch falls back to "main" when no provider mounted', () => {
+    // Phase BS — FALLBACK_ID canonical literal moved to branchSelection.js
+    // (V36.G.51 audit: data layer can't import .jsx). BranchContext.jsx
+    // re-exports the constant + uses it in the hook fallback shape.
     const ctxSrc = READ('src/lib/BranchContext.jsx');
-    expect(ctxSrc).toMatch(/FALLBACK_ID = ['"]main['"]/);
+    const selectionSrc = READ('src/lib/branchSelection.js');
+    expect(selectionSrc).toMatch(/FALLBACK_ID\s*=\s*['"]main['"]/);
     expect(ctxSrc).toMatch(/branchId:\s*FALLBACK_ID/);
   });
 

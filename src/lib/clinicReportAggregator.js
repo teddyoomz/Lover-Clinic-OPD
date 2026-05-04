@@ -80,12 +80,19 @@ export async function fetchClinicReportData(filter = {}) {
   const months = buildMonthRange(from, to);
 
   // Each entry: [key, fetcher] — errors are caught per-key
+  // Phase BS (2026-05-06): pass `allBranches: true` to listers that have
+  // a branch-aware shape so the clinic-report aggregator stays cross-branch
+  // even after Phase BS makes per-branch the default for UI tabs. The
+  // clinic-report renders a multi-branch comparison by design — branchId
+  // filter would silently scope every metric to the selected branch.
   const fetchers = [
-    ['sales',     () => getAllSales()],
+    ['sales',     () => getAllSales({ allBranches: true })],
     ['customers', () => getAllCustomers()],
     ['appointments', async () => {
       // Aggregate across every month in the date range
-      const results = await Promise.all(months.map(ym => getAppointmentsByMonth(ym)));
+      const results = await Promise.all(
+        months.map(ym => getAppointmentsByMonth(ym, { allBranches: true })),
+      );
       // Each result is a { date: [...] } grouped object — flatten to array
       return results.flatMap(grouped =>
         Object.values(grouped || {}).flat()
@@ -96,7 +103,7 @@ export async function fetchClinicReportData(filter = {}) {
     ['products', () => listProducts()],
     ['batches',  () => listStockBatches()],
     ['courses',  () => listCourses()],
-    ['expenses', () => listExpenses({ startDate: from, endDate: to })],
+    ['expenses', () => listExpenses({ startDate: from, endDate: to, allBranches: true })],
     ['branches', () => listBranches()],
     // Phase 16.2-bis: load treatments alongside sales so we can enrich
     // sale.doctorId from treatment.detail.linkedSaleId BEFORE the staff

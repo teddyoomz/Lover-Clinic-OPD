@@ -14,7 +14,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Search, Loader2, RefreshCw, Download, AlertCircle, CheckCircle2,
   Package, Stethoscope, Users, BookOpen, Database, Filter, ChevronDown, Info,
-  Plus, Edit3, Trash2, X, ArrowLeft
+  Plus, Edit3, Trash2, X, ArrowLeft,
+  // Phase BS (2026-05-06) — customer-branch-baseline section icon
+  Building2,
 } from 'lucide-react';
 import {
   getMasterDataMeta, getAllMasterDataItems, runMasterDataSync,
@@ -36,7 +38,14 @@ import {
   migrateMasterMedicineLabelsToBe,
   // Phase 12.11: debug helper for verifying be_* wiring
   clearMasterDataItems, getBeBackedMasterTypes,
+  // Phase BS (2026-05-06) — customer-branch-baseline section reads branches.
+  listBranches,
 } from '../../lib/backendClient.js';
+// Phase BS (2026-05-06) — admin endpoint client for customer-branch-baseline.
+import {
+  listUntaggedCustomers,
+  applyCustomerBranchBaseline,
+} from '../../lib/customerBranchBaselineClient.js';
 import {
   syncProducts, syncDoctors, syncStaff, syncCourses,
   syncWalletTypes, syncMembershipTypes, syncCoupons, syncVouchers, listItems,
@@ -906,6 +915,9 @@ export default function MasterDataTab({ clinicSettings, theme }) {
         </p>
       </div>
 
+      {/* ═══ [A4] Phase BS — Customer Branch Baseline (one-shot migration) ═══ */}
+      <CustomerBranchBaselinePanel isDark={isDark} />
+
       {/* ═══ [B] Sub-Tab Navigation ═══ */}
       <div className="flex items-center gap-2 flex-wrap">
         {SYNC_TYPES.map(st => {
@@ -1077,5 +1089,178 @@ function StatusBadge({ value, isDark }) {
     }`}>
       {isActive ? 'ใช้งาน' : value}
     </span>
+  );
+}
+
+// ─── Phase BS (2026-05-06) — Customer Branch Baseline Panel ────────────
+// One-shot migration: backfill `branchId` on every legacy be_customers
+// doc that lacks it. Two-phase flow per V31/V35 cleanup pattern:
+//   1. Dry-Run → fetches list of untagged customers (via /api/admin/
+//      customer-branch-baseline action='list')
+//   2. Apply → after admin picks target branch, sends confirmCustomerIds[]
+//      → endpoint writeBatch updates each customer + writes audit doc.
+function CustomerBranchBaselinePanel({ isDark }) {
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [targetBranchId, setTargetBranchId] = useState('');
+  const [dryRun, setDryRun] = useState(null); // null | { untagged, total, totalCustomers }
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setBranchesLoading(true);
+    listBranches()
+      .then(list => {
+        if (cancelled) return;
+        setBranches(list || []);
+        // Default-select the isDefault branch (or first) so admin doesn't
+        // need to pick when there's only one option.
+        const def = (list || []).find(b => b.isDefault) || (list || [])[0];
+        if (def) setTargetBranchId(String(def.branchId || def.id || ''));
+      })
+      .catch(() => { if (!cancelled) setBranches([]); })
+      .finally(() => { if (!cancelled) setBranchesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleDryRun = async () => {
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const data = await listUntaggedCustomers();
+      setDryRun(data);
+    } catch (e) {
+      setError(e.message || 'Dry-Run ล้มเหลว');
+      setDryRun(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!dryRun || dryRun.total === 0) return;
+    if (!targetBranchId) { setError('กรุณาเลือกสาขาเป้าหมาย'); return; }
+    const confirmCustomerIds = dryRun.untagged.map(c => c.customerId).filter(Boolean);
+    if (confirmCustomerIds.length === 0) { setError('ไม่มีลูกค้าให้อัพเดต'); return; }
+    if (!window.confirm(`อัพเดต ${confirmCustomerIds.length} ลูกค้า → branchId=${targetBranchId}?\n(การดำเนินการนี้ทำครั้งเดียวต่อการ deploy — ไม่สามารถย้อนกลับโดยอัตโนมัติได้)`)) return;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const result = await applyCustomerBranchBaseline({ targetBranchId, confirmCustomerIds });
+      setSuccess(`อัพเดตสำเร็จ ${result.updatedCount} ลูกค้า · audit: ${result.auditId}`);
+      setDryRun(null); // force re-dry-run if admin wants to verify
+    } catch (e) {
+      setError(e.message || 'Apply ล้มเหลว');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg"
+      style={{ border: `1.5px solid rgba(56,189,248,0.20)` }}
+      data-testid="customer-branch-baseline-panel"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-bold text-[var(--tx-heading)] uppercase tracking-wider flex items-center gap-2">
+          <Building2 size={14} className="text-sky-400" /> Backfill ลูกค้า → สาขา default (Phase BS)
+        </h3>
+        <span className="text-[10px] text-[var(--tx-muted)] font-bold uppercase tracking-wider">One-shot migration</span>
+      </div>
+
+      <p className="text-xs text-[var(--tx-muted)] mb-4 flex items-start gap-1.5">
+        <Info size={12} className="flex-shrink-0 mt-0.5" />
+        <span>
+          ลูกค้าที่สร้างก่อน Phase BS จะไม่มี <code className="px-1 bg-[var(--bg-hover)] rounded">branchId</code> แท็ก —
+          กดปุ่มนี้เพื่อกำหนดสาขา default ให้ทุกคน. CustomerDetailView จะแสดง <strong>"สาขาที่สร้างรายการ"</strong> แท็บนี้
+          หลัง Apply. ดำเนินการครั้งเดียวหลัง deploy Phase BS ก็พอ.
+        </span>
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] uppercase tracking-wider text-[var(--tx-muted)] mb-1 font-bold">สาขาเป้าหมาย</label>
+          <select
+            value={targetBranchId}
+            onChange={(e) => setTargetBranchId(e.target.value)}
+            disabled={busy || branchesLoading || branches.length === 0}
+            data-testid="cbbl-target-branch"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-sm focus:outline-none focus:border-sky-500"
+          >
+            {branches.length === 0
+              ? <option value="">— ยังไม่มีสาขาใน be_branches —</option>
+              : branches.map(b => {
+                  const id = String(b.branchId || b.id || '');
+                  const name = b.name || b.branchName || id;
+                  return <option key={id} value={id}>{name}{b.isDefault ? ' ⭐' : ''}</option>;
+                })}
+          </select>
+        </div>
+        <div className="flex items-end gap-2">
+          <button
+            onClick={handleDryRun}
+            disabled={busy}
+            data-testid="cbbl-dry-run"
+            className={`flex-1 px-3 py-2 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 ${
+              isDark ? 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40' : 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'
+            }`}
+          >
+            {busy && !dryRun ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+            Dry-Run · ดูรายชื่อ
+          </button>
+          <button
+            onClick={handleApply}
+            disabled={busy || !dryRun || dryRun.total === 0 || !targetBranchId}
+            data-testid="cbbl-apply"
+            className={`flex-1 px-3 py-2 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 ${
+              isDark ? 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            {busy && dryRun ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+            Apply · เขียน branchId
+          </button>
+        </div>
+      </div>
+
+      {dryRun && (
+        <div className="mt-2 rounded-lg border border-[var(--bd)] bg-[var(--bg-hover)] p-3 text-xs space-y-1" data-testid="cbbl-preview">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[var(--tx-heading)]">{dryRun.total}</span>
+            <span className="text-[var(--tx-muted)]">/ {dryRun.totalCustomers} ลูกค้ายังไม่มี branchId</span>
+          </div>
+          {dryRun.total > 0 && (
+            <details>
+              <summary className="cursor-pointer text-[var(--tx-muted)] hover:text-sky-400 select-none">
+                ดูรายชื่อ ({Math.min(20, dryRun.total)} แรก)
+              </summary>
+              <ul className="mt-2 space-y-0.5 max-h-40 overflow-y-auto font-mono text-[11px]">
+                {dryRun.untagged.slice(0, 20).map(c => (
+                  <li key={c.customerId} className="flex items-center gap-2">
+                    <span className="text-[var(--tx-muted)] w-32 truncate">{c.customerId}</span>
+                    <span className="text-[var(--tx-muted)] w-16">{c.hn || '—'}</span>
+                    <span className="text-[var(--tx-primary)] truncate">{c.name}</span>
+                  </li>
+                ))}
+              </ul>
+              {dryRun.total > 20 && (
+                <p className="mt-2 text-[10px] text-[var(--tx-muted)]">… และอีก {dryRun.total - 20} รายการ</p>
+              )}
+            </details>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className={`mt-3 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'} border rounded-lg px-3 py-2 text-xs flex items-center gap-1.5`} data-testid="cbbl-error">
+          <AlertCircle size={12} /> {error}
+        </div>
+      )}
+      {success && (
+        <div className={`mt-3 ${isDark ? 'bg-emerald-900/20 border-emerald-700/40 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'} border rounded-lg px-3 py-2 text-xs flex items-center gap-1.5`} data-testid="cbbl-success">
+          <CheckCircle2 size={12} /> {success}
+        </div>
+      )}
+    </div>
   );
 }

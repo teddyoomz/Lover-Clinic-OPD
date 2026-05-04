@@ -95,6 +95,14 @@ const FIELD_BOUNDS = {
   // time (foreigner → 'en', else 'th'). See getLanguageForCustomer in
   // src/lib/lineBotResponder.js.
   lineLanguage: 10,
+  // Phase BS (2026-05-06) — multi-branch: which branch CREATED this customer.
+  // Semantic: "สาขาที่สร้างรายการลูกค้า" (immutable after first write).
+  // Optional. Stamped on CREATE by addCustomer / cloneOrchestrator /
+  // /api/admin/customer-branch-baseline (one-shot backfill). Update paths
+  // (updateCustomerFromForm) MUST NOT change this field — see immutability
+  // contract in backendClient.js. Customer base is shared across branches;
+  // this field is purely a display tag on CustomerDetailView card.
+  branchId: 100,
 };
 
 const GALLERY_MAX_ITEMS = 20;
@@ -326,6 +334,8 @@ export function emptyCustomerForm() {
     gallery_upload: [],
     created_year: null,
     consent: { marketing: false, healthData: false, imageMarketing: false },
+    // Phase BS (2026-05-06) — branch-of-creation tag (immutable after create).
+    branchId: '',
   };
 }
 
@@ -381,6 +391,14 @@ export function normalizeCustomer(form) {
   // V33-customer-create — passport upper-cased + trimmed.
   if (typeof out.passport_id === 'string') {
     out.passport_id = out.passport_id.trim().toUpperCase();
+  }
+
+  // Phase BS (2026-05-06) — branchId trim (string-only). Empty string preserved
+  // (different from missing field for legacy migration semantics: empty string
+  // = "explicitly unset"; missing = "never set"). Both treated as untagged
+  // by the customer-branch-baseline migration endpoint.
+  if (typeof out.branchId === 'string') {
+    out.branchId = out.branchId.trim();
   }
 
   // V33-customer-create — created_year coerce to int or null.

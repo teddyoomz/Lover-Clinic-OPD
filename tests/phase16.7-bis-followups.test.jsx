@@ -21,8 +21,12 @@ describe('FQ.A — QuotationFormModal seller picker uses listAllSellers (Phase 1
     expect(importLine || '').not.toMatch(/listStaff[^A]/); // not 'listStaff' (allow listStaffByBranch / listAllSellers)
   });
 
-  it('FQ.A.2 — Promise.all loads listAllSellers', () => {
-    expect(src).toMatch(/listAllSellers\(\)/);
+  it('FQ.A.2 — Promise.all loads listAllSellers (Phase BS: with branchId opt)', () => {
+    // Phase BS (2026-05-06) — listAllSellers now accepts {branchId} for
+    // per-branch staff filtering. Pre-Phase-BS the call was no-arg; now
+    // it's `listAllSellers({ branchId: selectedBranchId })`. Match either
+    // shape so this regression guard accepts the Phase BS upgrade.
+    expect(src).toMatch(/listAllSellers\(\s*(\{[^}]*branchId[^}]*\}|)\s*\)/);
   });
 
   it('FQ.A.3 — V11 lock: source still imports listAllSellers (do not regress to listStaff)', () => {

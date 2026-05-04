@@ -23,6 +23,7 @@ import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // no provider exists. The hook falls back to 'main' when no provider is
 // mounted, preserving legacy behavior.).
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUtils.js';
 // T5.b (2026-04-26) — billing math + BMI + baht formatter extracted to
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
@@ -649,8 +650,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // are keyed by. Without this map the resolver returns null for
           // every row and the DF modal shows "0 บาท ทุกอัน" (user-reported).
           setMasterCourses(courseItems || []);
-          const allStaff = staffItems.map(s => ({ id: s.id, name: s.name, position: s.position }));
-          const allDoctors = doctorItems.filter(d => d.status !== 'พักใช้งาน');
+          // Phase BS (2026-05-06) — branch-scope staff + doctor pickers.
+          // Backward-compat: empty/missing branchIds[] = visible-everywhere.
+          // Filter applied BEFORE other transforms so downstream maps + the
+          // sellers/doctors/assistants triple-fanout all inherit the scope.
+          const branchScopedStaff = filterStaffByBranch(staffItems, SELECTED_BRANCH_ID);
+          const branchScopedDoctors = filterDoctorsByBranch(doctorItems, SELECTED_BRANCH_ID);
+          const allStaff = branchScopedStaff.map(s => ({ id: s.id, name: s.name, position: s.position }));
+          const allDoctors = branchScopedDoctors.filter(d => d.status !== 'พักใช้งาน');
 
           // Load customer courses from be_customers (NOT from ProClinic).
           // One row per customer.courses entry — NO grouping — so each purchase

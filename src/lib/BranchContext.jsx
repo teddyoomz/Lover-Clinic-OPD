@@ -25,9 +25,18 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
-
-const STORAGE_KEY = 'selectedBranchId';
-const FALLBACK_ID = 'main'; // Pre-be_branches deployments default to this.
+import { useUserPermission } from '../contexts/UserPermissionContext.jsx';
+// Phase BS (2026-05-06): pure JS branch-selection helpers extracted to
+// branchSelection.js so non-React lib code can read selectedBranchId
+// without importing this .jsx file (V36 audit G.51 — no React leak into
+// data layer). Re-exported below for back-compat with existing callers.
+import {
+  STORAGE_KEY,
+  FALLBACK_ID,
+  resolveSelectedBranchId as resolveSelectedBranchIdImpl,
+  setSelectedBranchId,
+  resetBranchSelection as resetBranchSelectionImpl,
+} from './branchSelection.js';
 
 const BranchContext = createContext(null);
 
@@ -147,23 +156,19 @@ export function useSelectedBranch() {
 /**
  * One-shot resolver for places that need the selected branch outside of
  * React render (e.g. lib code, async handlers). Reads localStorage.
- * Returns FALLBACK_ID if nothing stored.
+ * Returns FALLBACK_ID if nothing stored. Re-exported from
+ * branchSelection.js (Phase BS — pure JS module, no React).
  */
-export function resolveSelectedBranchId() {
-  try {
-    return (typeof window !== 'undefined' && window.localStorage?.getItem(STORAGE_KEY)) || FALLBACK_ID;
-  } catch {
-    return FALLBACK_ID;
-  }
-}
+export const resolveSelectedBranchId = resolveSelectedBranchIdImpl;
 
 /**
  * Reset to default (first-time setup, tests). Wipes localStorage so the
- * provider re-resolves on next mount.
+ * provider re-resolves on next mount. Re-exported from branchSelection.js.
  */
-export function resetBranchSelection() {
-  try { window.localStorage?.removeItem(STORAGE_KEY); } catch {}
-}
+export const resetBranchSelection = resetBranchSelectionImpl;
+
+// Re-export for callers that need the synchronous setter outside React.
+export { setSelectedBranchId };
 
 export const __BRANCH_FALLBACK_ID = FALLBACK_ID;
 
@@ -279,4 +284,72 @@ export function useEffectiveClinicSettings(clinicSettings) {
     );
     return mergeBranchIntoClinic(clinicSettings, branch);
   }, [clinicSettings, branchId, branches]);
+}
+
+// ─── Phase BS (2026-05-06) — User-scoped branch list ─────────────────────
+// Per-staff branch access enforcement at the soft-gate UI layer. The
+// BranchSelector dropdown should only show branches the current user can
+// switch to — gated by `staff.branchIds[]` from be_staff doc.
+//
+// Backward-compat contract: empty/missing branchIds[] = "all branches"
+// (legacy staff records pre-Phase-BS + bootstrap admin with no staff doc).
+// Explicit non-empty branchIds[] = scoped subset. New staff added through
+// StaffFormModal will set branchIds[] explicitly.
+//
+// Hard-gate (Firestore rules check `request.auth.token.branchIds`) is
+// out of scope for v1 — soft-gate covers the UX requirement
+// "user without permission cannot see other branches in the dropdown".
+
+/**
+ * Pure helper — filter branches by current staff's branchIds[].
+ *
+ * Empty/null inputs degrade gracefully:
+ *   - branches null/non-array → returns []
+ *   - staff null/missing → returns full list (backward compat)
+ *   - staff.branchIds empty array OR missing → returns full list (backward compat)
+ *   - staff.branchIds non-empty → filtered subset by id match
+ *
+ * Match key: branch.branchId OR branch.id (mirrors BranchSelector lookup).
+ *
+ * @param {Array<{id?, branchId?}>} branches
+ * @param {{branchIds?: string[]} | null | undefined} staff
+ * @returns {Array}
+ */
+export function filterBranchesByStaffAccess(branches, staff) {
+  const list = Array.isArray(branches) ? branches : [];
+  if (!staff || !Array.isArray(staff.branchIds) || staff.branchIds.length === 0) {
+    return list;
+  }
+  const allowed = new Set(staff.branchIds.map((x) => String(x)));
+  return list.filter((b) => {
+    if (!b) return false;
+    const id = String(b.branchId || b.id || '');
+    return allowed.has(id);
+  });
+}
+
+/**
+ * Hook — same shape as useSelectedBranch() but `branches` is filtered by
+ * current user's staff.branchIds[]. Use for the BranchSelector dropdown
+ * and any UI that should hide branches the user can't switch to.
+ *
+ * Returns `allBranches` as well so consumers needing the unscoped list
+ * (admin reports, system-config tab, etc.) don't need a second hook call.
+ *
+ * Must be called inside BOTH BranchProvider AND UserPermissionProvider.
+ * Outside UserPermissionProvider (tests, storybook), useUserPermission()
+ * returns a bootstrap-admin shape with staff=null → all branches returned.
+ *
+ * @returns {{ branchId, branches, selectBranch, isReady, allBranches }}
+ */
+export function useUserScopedBranches() {
+  const { branchId, branches, selectBranch, isReady } = useSelectedBranch();
+  const { staff } = useUserPermission();
+  return useMemo(() => ({
+    branchId,
+    branches: filterBranchesByStaffAccess(branches, staff),
+    selectBranch,
+    isReady,
+    allBranches: branches,
+  }), [branchId, branches, selectBranch, isReady, staff]);
 }

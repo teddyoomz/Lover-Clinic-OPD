@@ -66,9 +66,12 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
     // so doctors + assistants appear in the seller picker. Pre-fix, only be_staff
     // entries were shown; user reported "ช่องพนักงานขายทุกช่องใน backend ให้ใส่
     // ชื่อแพทย์/ผู้ช่วยลงไปด้วย เผื่อแพทย์/ผู้ช่วยเป็นคนขายเอง".
+    // Phase BS (2026-05-06): pass branchId so the picker only shows staff/
+    // doctors with branchIds[] including the selected branch (legacy
+    // branchIds[]=[] still treated as visible-everywhere).
     Promise.all([
       getAllCustomers().catch(() => []),
-      listAllSellers().catch(() => []),
+      listAllSellers({ branchId: selectedBranchId }).catch(() => []),
       listCourses().catch(() => []),
       listProducts().catch(() => []),
       listPromotions().catch(() => []),
@@ -83,7 +86,7 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
       })
       .finally(() => { if (!cancelled) setRefLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedBranchId]);
 
   const update = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
 

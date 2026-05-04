@@ -18,6 +18,7 @@ import SalePrintView from './SalePrintView.jsx';
 import SalePaymentModal from './SalePaymentModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { STATUS_OPTIONS } from '../../lib/quotationValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 const STATUS_BADGE = {
   draft:     { label: 'ร่าง',       cls: 'bg-neutral-700/20 border-neutral-700/40 text-neutral-300' },
@@ -41,6 +42,8 @@ function formatDateThai(iso) {
 }
 
 export default function QuotationTab({ clinicSettings, theme }) {
+  // Phase BS — branch-scoped quotation list.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -68,7 +71,8 @@ export default function QuotationTab({ clinicSettings, theme }) {
   const reload = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const data = await listQuotations();
+      // Phase BS — branch-scoped fetch.
+      const data = await listQuotations({ branchId: selectedBranchId });
       setItems(data);
     } catch (e) {
       setError(e.message || 'โหลดข้อมูลใบเสนอราคาล้มเหลว');
@@ -76,7 +80,7 @@ export default function QuotationTab({ clinicSettings, theme }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 

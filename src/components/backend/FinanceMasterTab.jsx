@@ -238,12 +238,17 @@ function ExpensesSection() {
   const reload = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [list, cats] = await Promise.all([listExpenses(), listExpenseCategories()]);
+      // Phase BS — branch-scoped expenses (already supported pre-Phase-BS;
+      // explicit pass to fold into the {branchId, allBranches} contract).
+      const [list, cats] = await Promise.all([
+        listExpenses({ branchId: selectedBranchId }),
+        listExpenseCategories(),
+      ]);
       setItems(list);
       setCategories(cats);
     } catch (e) { setError(e.message); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const handleSubmit = async (e) => {

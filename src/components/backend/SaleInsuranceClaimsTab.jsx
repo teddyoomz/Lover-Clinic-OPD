@@ -37,6 +37,7 @@ import {
   listBankAccounts,
 } from '../../lib/backendClient.js';
 import { STATUS_OPTIONS } from '../../lib/saleInsuranceClaimValidation.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import SaleInsuranceClaimFormModal from './SaleInsuranceClaimFormModal.jsx';
 
@@ -48,6 +49,8 @@ const STATUS_BADGE = {
 };
 
 export default function SaleInsuranceClaimsTab({ clinicSettings }) {
+  // Phase BS — branch-scoped sales fetch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [items, setItems] = useState([]);
   const [sales, setSales] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -70,7 +73,7 @@ export default function SaleInsuranceClaimsTab({ clinicSettings }) {
     try {
       const [cls, ss, bs] = await Promise.all([
         listSaleInsuranceClaims(),
-        getAllSales(),
+        getAllSales({ branchId: selectedBranchId }),
         listBankAccounts(),
       ]);
       setItems(cls);
@@ -78,7 +81,7 @@ export default function SaleInsuranceClaimsTab({ clinicSettings }) {
       setBankAccounts(bs);
     } catch (e) { setError(e.message || 'โหลดข้อมูลล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { reload(); }, [reload]);
 
   const filtered = useMemo(() => {

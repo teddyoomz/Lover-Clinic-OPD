@@ -151,12 +151,14 @@ describe('V22-bis G3 — SaleTab.jsx', () => {
   it('G3.4 eager-load useEffect on mount calls listAllSellers', () => {
     // The new mount-effect must reference listAllSellers + setSellers.
     expect(saleTabSrc).toMatch(/V22 fix 2026-04-27/);
-    // dep array []: runs once on mount.
-    const block = saleTabSrc.match(/Eager-load seller lookup on mount[\s\S]{0,1500}/);
+    // Phase BS (2026-05-06) — listAllSellers now accepts {branchId} for
+    // per-branch staff scoping. Eager-load passes BRANCH_ID + adds the
+    // dep so re-fetches when admin switches branch via top-right tab.
+    const block = saleTabSrc.match(/Eager-load seller lookup on mount[\s\S]{0,2000}/);
     expect(block).toBeTruthy();
-    expect(block[0]).toContain('listAllSellers()');
+    expect(block[0]).toMatch(/listAllSellers\(\{\s*branchId:\s*BRANCH_ID\s*\}\)/);
     expect(block[0]).toContain('setSellers');
-    expect(block[0]).toMatch(/\}, \[\]\);/);
+    expect(block[0]).toMatch(/\},\s*\[BRANCH_ID\]\);/);
   });
 });
 

@@ -5,6 +5,9 @@
 
 import * as broker from './brokerClient.js';
 import { saveCustomer, updateCustomer, saveTreatment, createBackendAppointment, getCustomer, customerExists, getTreatment as getBackendTreatment, findCustomersByField } from './backendClient.js';
+// Phase BS (2026-05-06): pure JS module — keeps cloneOrchestrator (a lib
+// helper imported by tests + non-React UI) free of .jsx imports.
+import { resolveSelectedBranchId } from './branchSelection.js';
 
 // ─── Parse Thai date "8 เมษายน 2026" → "2026-04-08" ────────────────────────
 const TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -115,6 +118,20 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
     }
   } catch { /* duplicate-check is best-effort */ }
 
+  // Phase BS (2026-05-06) — stamp branchId on FIRST clone only. If the
+  // doc already exists (re-clone / re-sync), preserve whatever branchId
+  // is on it (immutability contract). For new clones, use the current
+  // BranchContext selection. resolveSelectedBranchId() returns FALLBACK
+  // 'main' in pre-V20 single-branch deployments.
+  let preservedBranchId = null;
+  try {
+    const existing = await getCustomer(proClinicId);
+    if (existing && typeof existing.branchId === 'string' && existing.branchId) {
+      preservedBranchId = existing.branchId;
+    }
+  } catch { /* read failure is non-fatal — fall through to fresh stamp */ }
+  const branchIdForClone = preservedBranchId || resolveSelectedBranchId() || null;
+
   // Write initial doc
   const customerData = {
     proClinicId: String(proClinicId),
@@ -129,6 +146,8 @@ export async function cloneCustomer(proClinicId, onProgress, signal) {
     lastSyncedAt: now,
     cloneStatus: 'in_progress',
     cloneProgress: progress,
+    // Phase BS — branch-of-creation tag (immutable after first clone).
+    branchId: branchIdForClone,
   };
 
   try {

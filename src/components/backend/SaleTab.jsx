@@ -353,11 +353,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [medModalPremium, setMedModalPremium] = useState(false);
 
   // ── Load sales list ──
+  // Phase BS (2026-05-06) — branch-scoped fetch via the new {branchId}
+  // contract on getAllSales. Re-loads when admin switches branch via the
+  // top-right BranchSelector (BRANCH_ID dep).
   const loadSales = useCallback(async () => {
     setListLoading(true);
-    try { setSales(await getAllSales()); } catch { setSales([]); }
+    try { setSales(await getAllSales({ branchId: BRANCH_ID })); } catch { setSales([]); }
     finally { setListLoading(false); }
-  }, []);
+  }, [BRANCH_ID]);
   useEffect(() => { loadSales(); }, [loadSales]);
 
   // ── Eager-load seller lookup on mount (V22 fix 2026-04-27) ──
@@ -368,11 +371,16 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // staff_id (e.g. "614") into the UI. Loading the seller list eagerly is
   // ~1 small fetch (listAllSellers reads be_staff + be_doctors); cheap
   // enough to do on tab mount so every render path gets a populated lookup.
+  //
+  // Phase BS (2026-05-06): pass current branchId so the picker only shows
+  // staff/doctors with branchIds[] including the selected branch (or empty
+  // branchIds[] = all-branches legacy fallback). Re-fetches when admin
+  // switches branch via the top-right BranchSelector.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const list = await listAllSellers();
+        const list = await listAllSellers({ branchId: BRANCH_ID });
         if (!cancelled && Array.isArray(list)) setSellers(list);
       } catch (e) {
         // Non-fatal: subsequent loadOptions still re-fetches when form opens.
@@ -380,7 +388,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [BRANCH_ID]);
 
   // Load cancel analysis (courses + money + stock) whenever the cancel modal opens
   useEffect(() => {

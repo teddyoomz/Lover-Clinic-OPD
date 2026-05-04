@@ -31,6 +31,7 @@ import {
 } from '../../lib/customerValidation.js';
 import { addCustomer, buildFormFromCustomer, updateCustomerFromForm } from '../../lib/backendClient.js';
 import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DateField from '../DateField.jsx';
 import ThaiAddressSelect from './customer-form/ThaiAddressSelect.jsx';
 
@@ -71,7 +72,12 @@ const sectionTitleCls = 'flex items-center gap-2 text-sm font-bold text-[var(--t
 export default function CustomerCreatePage({
   onSaved,
   onCancel,
-  branchId = null,
+  // Phase BS (2026-05-06) — `branchId` prop kept for explicit override
+  // (tests / storybook). Production callers in BackendDashboard don't
+  // pass it; we resolve from BranchContext via useSelectedBranch hook
+  // below so the customer's "สาขาที่สร้างรายการ" tag matches whichever
+  // branch the admin currently has selected.
+  branchId: branchIdProp = null,
   createdBy = null,
   // V33.3 — dual-mode: 'create' (default, addCustomer + counter) or 'edit'
   // (updateCustomerFromForm + preserve hn_no). When mode='edit', pass
@@ -79,6 +85,10 @@ export default function CustomerCreatePage({
   mode = 'create',
   initialCustomer = null,
 }) {
+  // Phase BS — current selected branch from context (defaults to FALLBACK_ID
+  // 'main' when no provider mounted). Prop wins when explicitly passed.
+  const { branchId: branchIdFromContext } = useSelectedBranch();
+  const branchId = branchIdProp || branchIdFromContext;
   const isEdit = mode === 'edit' && initialCustomer;
   const customerIdForEdit = isEdit ? (initialCustomer.id || initialCustomer.proClinicId || initialCustomer.customerId) : null;
   const [form, setForm] = useState(() => isEdit ? (buildFormFromCustomer(initialCustomer) || emptyCustomerForm()) : emptyCustomerForm());
@@ -236,13 +246,15 @@ export default function CustomerCreatePage({
     try {
       let result;
       if (isEdit) {
+        // Phase BS — DO NOT pass branchId on update (immutable after create).
         result = await updateCustomerFromForm(customerIdForEdit, form, {
-          branchId,
           updatedBy: createdBy,
           files: { profile: profileFile, gallery: galleryFiles },
         });
         setSuccess(`บันทึกการแก้ไขเรียบร้อย — HN: ${form.hn_no || customerIdForEdit}`);
       } else {
+        // Phase BS — branchId from BranchContext stamps the new customer
+        // with the currently-selected branch as their "สาขาที่สร้าง".
         result = await addCustomer(form, {
           branchId,
           createdBy,
