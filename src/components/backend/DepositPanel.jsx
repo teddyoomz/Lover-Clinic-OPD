@@ -152,12 +152,16 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [optionsLoadedFor, setOptionsLoadedFor] = useState(null);
 
   // ── Load list ──────────────────────────────────────────────────────────
+  // Phase BSA leak-sweep-2 (2026-05-04) — deposits are branch-scoped per
+  // user directive "ทำให้แถบมัดจำ แยกสาขากัน". scopedDataLayer.getAllDeposits
+  // auto-injects current branchId on each call; deps include selectedBranchId
+  // so the list re-loads when admin switches branch via top-right selector.
   const loadList = useCallback(async () => {
     setListLoading(true);
     try { setDeposits(await getAllDeposits()); }
     catch (e) { console.warn('[DepositPanel] load list failed:', e); setDeposits([]); }
     finally { setListLoading(false); }
-  }, []);
+  }, [selectedBranchId]);
   useEffect(() => { loadList(); }, [loadList]);
 
   // ── Load options on demand ─────────────────────────────────────────────

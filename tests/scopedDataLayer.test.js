@@ -335,6 +335,8 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
       'listAllSellers', 'listStaffByBranch',
       'listStockBatches', 'listStockOrders', 'listStockMovements',
       'getAllSales',
+      // Phase BSA leak-sweep-2 (2026-05-04) — deposits branch-scoped
+      'getAllDeposits',
     ];
     for (const name of branchScoped) {
       it(`BS2.1.${name} auto-injects current branchId`, async () => {
@@ -390,6 +392,11 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
       'listStaff', 'listDoctors', 'listBranches', 'listPermissionGroups',
       'listDocumentTemplates', 'listAudiences', 'getCustomer', 'getAllCustomers',
       'listCentralStockOrders', 'listCentralWarehouses', 'listStockLocations',
+      // Phase BSA leak-sweep-2 (2026-05-04) — customer-attached deposit
+      // lookups stay UNIVERSAL (a customer can have deposits at any branch
+      // and customer-detail views aggregate across all). getAllDeposits is
+      // the LIST-level reader and is branch-scoped (BS2.1).
+      'getCustomerDeposits', 'getActiveDeposits',
     ];
     for (const name of universal) {
       it(`BS2.4.${name} does NOT inject branchId`, async () => {

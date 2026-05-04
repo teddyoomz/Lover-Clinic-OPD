@@ -61,6 +61,10 @@ export const listOnlineSales = (opts = {}) => raw.listOnlineSales({ branchId: re
 export const listSaleInsuranceClaims = (opts = {}) => raw.listSaleInsuranceClaims({ branchId: resolveSelectedBranchId(), ...opts });
 export const listVendorSales = (opts = {}) => raw.listVendorSales({ branchId: resolveSelectedBranchId(), ...opts });
 export const listQuotations = (opts = {}) => raw.listQuotations({ branchId: resolveSelectedBranchId(), ...opts });
+// Deposits — Phase BSA leak-sweep-2 (2026-05-04): branch-scoped per user
+// directive. Customer-attached deposit lookups (getCustomerDeposits /
+// getActiveDeposits) stay UNIVERSAL — see below.
+export const getAllDeposits = (opts = {}) => raw.getAllDeposits({ branchId: resolveSelectedBranchId(), ...opts });
 
 // Sellers / staff-by-branch
 export const listAllSellers = (opts = {}) => raw.listAllSellers({ branchId: resolveSelectedBranchId(), ...opts });
@@ -210,7 +214,8 @@ export const getPromotion = (...args) => raw.getPromotion(...args);
 export const getTreatment = (...args) => raw.getTreatment(...args);
 export const getBackendSale = (...args) => raw.getBackendSale(...args);
 export const getDeposit = (...args) => raw.getDeposit(...args);
-export const getAllDeposits = (...args) => raw.getAllDeposits(...args);
+// getAllDeposits — moved up to "Financial" group (branch-scoped). DO NOT
+// re-export as universal here; that would shadow the auto-inject wrapper.
 export const getSaleByTreatmentId = (...args) => raw.getSaleByTreatmentId(...args);
 export const getMasterDataMeta = (...args) => raw.getMasterDataMeta(...args);
 export const getActiveSchedulesForDate = (...args) => raw.getActiveSchedulesForDate(...args);

@@ -118,12 +118,18 @@ export default function OrderPanel({ clinicSettings, theme, prefillProduct, onPr
     return () => { cancelled = true; };
   }, [BRANCH_ID]);
 
+  // Phase BSA leak-fix-2 (2026-05-04): user reported "นำเข้า order ดูได้แค่
+  // สาขาตัวเอง ตอนนี้มันขึ้นทั้ง 2 สาขา" — branch switch leaked across.
+  // Pre-fix: deps `[]` froze BRANCH_ID in the first-render closure (typically
+  // empty/undefined) → listStockOrders received no branch filter → returned
+  // EVERY branch's orders. Now BRANCH_ID is in deps so the callback re-fires
+  // when admin switches branch via top-right selector.
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try { setOrders(await listStockOrders({ branchId: BRANCH_ID })); }
     catch (e) { console.error('[OrderPanel] listStockOrders failed:', e); setOrders([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [BRANCH_ID]);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
 

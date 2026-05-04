@@ -3669,6 +3669,10 @@ export async function createDeposit(data, opts = {}) {
     paymentEvidencePath: data.paymentEvidencePath || '',
     proClinicDepositId: data.proClinicDepositId || null,
     usageHistory: [],
+    // Phase BSA leak-sweep-2 (2026-05-04) — deposits are now branch-scoped
+    // per user directive "ทำให้แถบมัดจำ แยกสาขากัน". Stamps current branch
+    // at create time; immutable after (updateDeposit preserves it).
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: now,
     updatedAt: now,
   };
@@ -3701,6 +3705,10 @@ export async function updateDeposit(depositId, data) {
   // Never allow direct override of usedAmount / usageHistory via this function
   delete updates.usedAmount;
   delete updates.usageHistory;
+  // Phase BSA leak-sweep-2 (2026-05-04) — branchId is immutable after create.
+  // Deposit belongs to the branch that created it; admin can't reassign via
+  // edit. (Same pattern as customer/sale/treatment branchId.)
+  delete updates.branchId;
   await updateDoc(ref, updates);
   await recalcCustomerDepositBalance(current.customerId);
   return { success: true };
@@ -3767,10 +3775,21 @@ export async function deleteDeposit(depositId) {
   return { success: true };
 }
 
-/** Get all deposits (sorted by createdAt desc). */
-export async function getAllDeposits() {
-  const snap = await getDocs(depositsCol());
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+/**
+ * Get all deposits (sorted by createdAt desc).
+ *
+ * Phase BSA leak-sweep-2 (2026-05-04) — branch-scoped via `_listWithBranch`
+ * per user directive "ทำให้แถบมัดจำ แยกสาขากัน". When `branchId` is passed
+ * (typical UI path via scopedDataLayer auto-inject), filters
+ * `where('branchId','==',X)`. Cross-branch reports/aggregators pass
+ * `{allBranches:true}` to skip the filter.
+ *
+ * Customer-attached lookups (`getCustomerDeposits` / `getActiveDeposits`)
+ * remain UNIVERSAL — a customer can have deposits at any branch and the
+ * customer-detail view aggregates across all branches.
+ */
+export async function getAllDeposits(opts = {}) {
+  const list = await _listWithBranch(depositsCol(), opts);
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
 }
