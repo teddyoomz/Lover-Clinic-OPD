@@ -331,6 +331,44 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  // TF3 a11y polish (audit, 2026-05-04): per-field error map mirroring
+  // CustomerCreatePage / SaleTab (commit f88f23e). Keys match the data-field
+  // anchors used by scrollToError so screen-reader users get the same
+  // aria-invalid + aria-describedby experience the sighted user gets via
+  // ring-2 ring-red-500 + scrollIntoView. Cleared as the user edits the
+  // offending control. WCAG 2.2 1.3.1 (Info and Relationships) +
+  // 4.1.3 (Status Messages).
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  /** Spread props that surface aria-invalid + aria-describedby for `field`. */
+  const ariaErrProps = (field) => {
+    const has = !!fieldErrors[field];
+    return {
+      'aria-invalid': has || undefined,
+      'aria-describedby': has ? `err-${field}` : undefined,
+    };
+  };
+
+  /** Inline error <p role="alert"> with stable id="err-{field}". */
+  const FieldError = ({ field }) => {
+    const msg = fieldErrors[field];
+    if (!msg) return null;
+    return (
+      <p
+        id={`err-${field}`}
+        role="alert"
+        className="text-rose-500 text-xs mt-1"
+        data-testid={`field-error-${field}`}
+      >
+        {msg}
+      </p>
+    );
+  };
+
+  /** Clear error for a field (call from per-field onChange / setter). */
+  const clearFieldError = (field) => {
+    setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  };
   const [options, setOptions] = useState(null);
   const [prevTreatment, setPrevTreatment] = useState(null);
 
@@ -1882,6 +1920,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const scrollToError = (fieldAttr, msg) => {
     alert(msg);
     setError(msg);
+    // TF3 a11y polish (audit 2026-05-04): mirror the visual ring-2 with the
+    // SR-equivalent aria-invalid + aria-describedby. Stored under the same
+    // key as data-field so a single key drives both pathways. Cleared
+    // either by the per-field setter (clearFieldError) or by the next
+    // setFieldErrors({}) at handleSubmit reset.
+    if (fieldAttr) setFieldErrors((prev) => ({ ...prev, [fieldAttr]: msg }));
     setTimeout(() => {
       const el = document.querySelector(`[data-field="${fieldAttr}"]`);
       if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('ring-2', 'ring-red-500'); setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000); }
@@ -1890,6 +1934,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   };
 
   const handleSubmit = async () => {
+    // TF3 a11y polish — clear stale per-field errors at submit start so
+    // re-submit doesn't surface yesterday's aria-invalid on inputs the
+    // user has since corrected.
+    setFieldErrors({});
     if (!doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
     if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
     // Phase 12.2b Step 7 (2026-04-24): fill-later treatment items (from
@@ -2884,11 +2932,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <SectionHeader icon={Stethoscope} title="ข้อมูลการรักษา" isDark={isDark} accent={accent} />
               <div className="space-y-3">
                 <div data-field="doctor">
-                  <label className={labelCls}>แพทย์ *</label>
-                  <select value={doctorId} onChange={e => setDoctorId(e.target.value)} className={selectCls}>
+                  <label className={labelCls} htmlFor="tfp-doctor-select">แพทย์ *</label>
+                  <select
+                    id="tfp-doctor-select"
+                    value={doctorId}
+                    onChange={e => { setDoctorId(e.target.value); clearFieldError('doctor'); }}
+                    className={selectCls}
+                    aria-label="เลือกแพทย์"
+                    {...ariaErrProps('doctor')}
+                  >
                     <option value="">เลือกแพทย์</option>
                     {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
+                  <FieldError field="doctor" />
                 </div>
                 <div>
                   <label className={labelCls}>ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
@@ -2907,9 +2963,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     })}
                   </div>
                 </div>
-                <div data-field="treatmentDate">
+                <div data-field="treatmentDate" {...ariaErrProps('treatmentDate')}>
                   <label className={labelCls}>วันที่รักษา *</label>
-                  <DateField value={treatmentDate} onChange={setTreatmentDate} locale="be" fieldClassName={inputCls} />
+                  <DateField
+                    value={treatmentDate}
+                    onChange={(v) => { setTreatmentDate(v); clearFieldError('treatmentDate'); }}
+                    locale="be"
+                    fieldClassName={inputCls}
+                  />
+                  <FieldError field="treatmentDate" />
                 </div>
               </div>
             </FormSection>
@@ -3073,6 +3135,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
                         <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
                         <button onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                          aria-label={`ลบรูปที่ ${idx + 1}`}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <X size={10} />
                         </button>
@@ -3129,8 +3192,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
                           }
                         }
-                      }} className="text-cyan-500 hover:text-cyan-400"><Edit3 size={12} /></button>
-                      <button onClick={() => setLabItems(prev => prev.filter((_, i) => i !== li))} className="text-red-500 hover:text-red-400"><Trash2 size={12} /></button>
+                      }} className="text-cyan-500 hover:text-cyan-400" aria-label={`แก้ไข Lab ${lab.productName || ''}`}><Edit3 size={12} /></button>
+                      <button onClick={() => setLabItems(prev => prev.filter((_, i) => i !== li))} className="text-red-500 hover:text-red-400" aria-label={`ลบ Lab ${lab.productName || ''}`}><Trash2 size={12} /></button>
                     </div>
                     <textarea value={lab.information || ''} onChange={e => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, information: e.target.value } : l))}
                       rows={2} className={`w-full text-[11px] rounded-lg px-2 py-1.5 resize-none outline-none border mb-2 ${isDark ? 'bg-[#0a0a0a] border-[#333] text-gray-300' : 'bg-white border-gray-200'}`} placeholder="รายละเอียด Lab" />
@@ -3171,6 +3234,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           <div key={ii} className="relative aspect-square rounded overflow-hidden border border-[#333] group">
                             <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
                             <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l))}
+                              aria-label={`ลบรูป Lab ที่ ${ii + 1}`}
                               className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
                           </div>
                         ))}
@@ -3183,6 +3247,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
                           <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfFileName: '', fileId: '' } : l))}
+                            aria-label="ลบไฟล์ PDF Lab"
                             className="text-red-400 hover:text-red-300"><X size={10} /></button>
                         </div>
                       ) : (
@@ -3644,7 +3709,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <div className={`rounded-lg border p-3 mb-3 ${isDark ? 'border-sky-900/30 bg-[#0a0c14]' : 'border-sky-200 bg-sky-50/30'}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-bold text-sky-400 uppercase tracking-widest">ประวัติการสั่งยา (Remed)</p>
-                  <button onClick={() => setRemedModalOpen(false)} className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
+                  <button onClick={() => setRemedModalOpen(false)} aria-label="ปิดประวัติการสั่งยา" className="ml-auto text-gray-400 hover:text-gray-300 p-1"><Trash2 size={12} /></button>
                 </div>
                 {(options?.remedItems || []).length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-4">ไม่พบประวัติการสั่งยาของผู้ป่วยรายนี้</p>
@@ -3686,15 +3751,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {!isEdit && <div className="col-span-1"></div>}
                 </div>
                 {medications.map((med, i) => (
-                  <div key={i} data-field={`medications[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>
+                  <div key={i} data-field={`medications[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`} {...ariaErrProps(`medications[${i}]`)}>
                     <div className={`${isEdit ? 'col-span-4' : 'col-span-4'} text-xs font-bold truncate px-1`}>{med.name}</div>
                     <div className={`${isEdit ? 'col-span-3' : 'col-span-3'} text-xs text-gray-400 truncate px-1`}>{med.dosage || '-'}</div>
                     <div className={`${isEdit ? 'col-span-3' : 'col-span-2'} text-xs text-center`}>{med.qty} {med.unit}</div>
                     {!isEdit && <div className="col-span-2 text-xs text-center">{med.isPremium ? <span className="text-green-500">ของแถม</span> : med.unitPrice}</div>}
                     {!isEdit && (
                       <div className="col-span-1 flex items-center justify-center gap-1">
-                        <button onClick={() => editMedication(i)} className="text-blue-400 hover:text-blue-300 transition-colors"><Edit3 size={11} /></button>
-                        <button onClick={() => removeMed(i)} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={11} /></button>
+                        <button onClick={() => editMedication(i)} aria-label={`แก้ไขยา ${med.name}`} className="text-blue-400 hover:text-blue-300 transition-colors"><Edit3 size={11} /></button>
+                        <button onClick={() => removeMed(i)} aria-label={`ลบยา ${med.name}`} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={11} /></button>
                       </div>
                     )}
                   </div>
@@ -3704,7 +3769,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           </FormSection>
 
           {/* ── ข้อมูลการใช้คอร์ส — matching ProClinic layout ──────────── */}
-          {<div data-field="courseSection"><FormSection isDark={isDark}>
+          {<div data-field="courseSection" {...ariaErrProps('courseSection')}><FormSection isDark={isDark}>
+            <FieldError field="courseSection" />
             <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
               {!isEdit && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
@@ -3982,14 +4048,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             <input
                               type="number"
                               value={item.qty}
-                              onChange={e => updateTreatmentItem(item.id, 'qty', e.target.value)}
+                              onChange={e => { updateTreatmentItem(item.id, 'qty', e.target.value); clearFieldError(item.id); }}
                               className={`${inputCls} !w-24 text-center !py-1 shrink-0 ${needsQty ? '!border-amber-500 !ring-1 !ring-amber-500/50' : ''}`}
                               min="0"
                               placeholder={item.fillLater ? 'ระบุ' : ''}
                               aria-label={`จำนวน ${item.name}${item.fillLater ? ' (ต้องระบุก่อนบันทึก)' : ''}`}
+                              {...ariaErrProps(item.id)}
                             />
                             <span className="text-xs text-gray-500 shrink-0">{item.unit}</span>
-                            <button onClick={() => removeTreatmentItem(item.id)} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
+                            <button onClick={() => removeTreatmentItem(item.id)} aria-label={`ลบรายการ ${item.name}`} className="text-red-400 hover:text-red-300 shrink-0 ml-1"><Trash2 size={11} /></button>
                           </div>
                         );
                       })}
@@ -4008,12 +4075,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 </div>
                 <div className="max-h-[150px] overflow-y-auto">
                   {purchasedByType.product.map((item, idx) => (
-                    <div key={`pr-${idx}`} data-field={`purchasedItems[${idx}]`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-orange-500/5' : 'border-gray-50 bg-orange-50/50'}`}>
+                    <div key={`pr-${idx}`} data-field={`purchasedItems[${idx}]`} className={`flex items-center justify-between px-3 py-1.5 border-b ${isDark ? 'border-[#1a1a1a] bg-orange-500/5' : 'border-gray-50 bg-orange-50/50'}`} {...ariaErrProps(`purchasedItems[${idx}]`)}>
                       <div className="flex items-center gap-2 min-w-0">
                         <Check size={12} className="text-orange-500 shrink-0" />
                         <span className="text-xs font-medium truncate">{item.name}</span>
                         <span className="text-[11px] text-orange-500 shrink-0">(ซื้อเพิ่ม)</span>
-                        <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); removePurchasedItem(item); }} aria-label={`ลบสินค้า ${item.name}`} className="text-red-400 hover:text-red-300 shrink-0 p-1"><Trash2 size={12} /></button>
                       </div>
                       <span className="text-xs text-gray-500 shrink-0 ml-2">{item.qty} {item.unit}</span>
                     </div>
@@ -4342,16 +4409,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   {!isEdit && <div className="col-span-1"></div>}
                 </div>
                 {consumables.map((item, i) => (
-                  <div key={i} data-field={`consumables[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center`}>
+                  <div key={i} data-field={`consumables[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center`} {...ariaErrProps(`consumables[${i}]`)}>
                     <div className={`${isEdit ? 'col-span-5' : 'col-span-6'} text-xs font-bold truncate px-1`}>{item.name}</div>
                     {isEdit ? (
                       <div className="col-span-3 text-xs text-center">{item.qty}</div>
                     ) : (
-                      <input value={item.qty} onChange={e => updateConsumable(i, 'qty', e.target.value)} className={`${inputCls} col-span-3 text-center`} placeholder="1" />
+                      <input value={item.qty} onChange={e => { updateConsumable(i, 'qty', e.target.value); clearFieldError(`consumables[${i}]`); }} className={`${inputCls} col-span-3 text-center`} placeholder="1" aria-label={`จำนวนสินค้าสิ้นเปลือง ${item.name}`} />
                     )}
                     <div className={`${isEdit ? 'col-span-2' : 'col-span-2'} text-xs text-gray-500 px-1`}>{item.unit}</div>
                     {!isEdit && (
-                      <button onClick={() => removeConsumable(i)} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
+                      <button onClick={() => removeConsumable(i)} aria-label={`ลบสินค้าสิ้นเปลือง ${item.name}`} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
                         <Trash2 size={12} />
                       </button>
                     )}
@@ -4584,32 +4651,48 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Payment date + time */}
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <div data-field="paymentDate">
+              <div data-field="paymentDate" {...ariaErrProps('paymentDate')}>
                 <label className={labelCls}>วันที่ชำระเงิน *</label>
-                <DateField value={paymentDate} onChange={setPaymentDate} locale="be" fieldClassName={inputCls} />
+                <DateField
+                  value={paymentDate}
+                  onChange={(v) => { setPaymentDate(v); clearFieldError('paymentDate'); }}
+                  locale="be"
+                  fieldClassName={inputCls}
+                />
+                <FieldError field="paymentDate" />
               </div>
               <div>
-                <label className={labelCls}>เวลา</label>
-                <input type="time" value={paymentTime} onChange={e => setPaymentTime(e.target.value)} className={inputCls} />
+                <label className={labelCls} htmlFor="tfp-payment-time">เวลา</label>
+                <input
+                  id="tfp-payment-time"
+                  type="time"
+                  value={paymentTime}
+                  onChange={e => setPaymentTime(e.target.value)}
+                  className={inputCls}
+                  aria-label="เวลาที่ชำระเงิน"
+                />
               </div>
             </div>
 
             {/* Payment channels (3 rows) — visible when status is 2 or 4 */}
             {(paymentStatus === '2' || paymentStatus === '4') && (
-              <div className="space-y-2 mb-3" data-field="paymentChannels">
+              <div className="space-y-2 mb-3" data-field="paymentChannels" {...ariaErrProps('paymentChannels')}>
                 <label className={labelCls}>ช่องทางชำระเงิน</label>
                 {pmChannels.map((ch, idx) => (
                   <div key={idx} data-field={`paymentChannels[${idx}]`} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!ch.enabled && idx > 0 ? 'opacity-40' : ''}`}>
-                    <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
-                    <select value={ch.method} onChange={e => updatePmChannel(idx, 'method', e.target.value)} disabled={!ch.enabled}
-                      className={`${selectCls} !w-auto flex-1 min-w-[160px]`}>
+                    <input type="checkbox" checked={ch.enabled} onChange={e => updatePmChannel(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" aria-label={`เปิดใช้ช่องทางชำระแถวที่ ${idx + 1}`} />
+                    <select value={ch.method} onChange={e => { updatePmChannel(idx, 'method', e.target.value); clearFieldError('paymentChannels'); }} disabled={!ch.enabled}
+                      className={`${selectCls} !w-auto flex-1 min-w-[160px]`}
+                      aria-label={`เลือกช่องทางชำระแถวที่ ${idx + 1}`}>
                       <option value="">เลือกช่องทาง</option>
                       {paymentChannels.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
-                    <input type="number" value={ch.amount} onChange={e => updatePmChannel(idx, 'amount', e.target.value)} disabled={!ch.enabled}
-                      className={`${inputCls} !w-32 text-right shrink-0`} placeholder={`ยอดชำระ ${idx + 1}`} min="0" step="0.01" />
+                    <input type="number" value={ch.amount} onChange={e => { updatePmChannel(idx, 'amount', e.target.value); clearFieldError('paymentChannels'); }} disabled={!ch.enabled}
+                      className={`${inputCls} !w-32 text-right shrink-0`} placeholder={`ยอดชำระ ${idx + 1}`} min="0" step="0.01"
+                      aria-label={`จำนวนเงินที่ชำระแถวที่ ${idx + 1}`} />
                   </div>
                 ))}
+                <FieldError field="paymentChannels" />
               </div>
             )}
 
@@ -4629,26 +4712,30 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
           {/* ── Sellers (พนักงานขาย) — only when there's a sale ───────────────── */}
           {showBilling && (
-          <div data-field="sellers"><FormSection isDark={isDark}>
+          <div data-field="sellers" {...ariaErrProps('sellers')}><FormSection isDark={isDark}>
             <SectionHeader icon={DollarSign} title="พนักงานขาย" isDark={isDark} accent="#f59e0b" />
             <div className="space-y-2">
               {pmSellers.map((sl, idx) => (
                 <div key={idx} data-field={`sellers[${idx}]`} className={`flex items-center gap-2 flex-wrap sm:flex-nowrap ${!sl.enabled && idx > 0 ? 'opacity-40' : ''}`}>
-                  <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" />
-                  <select value={sl.id} onChange={e => updatePmSeller(idx, 'id', e.target.value)} disabled={!sl.enabled}
-                    className={`${selectCls} !w-auto flex-1 min-w-[140px]`}>
+                  <input type="checkbox" checked={sl.enabled} onChange={e => updatePmSeller(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 accent-purple-500 shrink-0" aria-label={`เปิดใช้พนักงานขายแถวที่ ${idx + 1}`} />
+                  <select value={sl.id} onChange={e => { updatePmSeller(idx, 'id', e.target.value); clearFieldError('sellers'); }} disabled={!sl.enabled}
+                    className={`${selectCls} !w-auto flex-1 min-w-[140px]`}
+                    aria-label={`เลือกพนักงานขายแถวที่ ${idx + 1}`}>
                     <option value="">เลือกพนักงานขาย</option>
                     {sellerOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <input type="number" value={sl.percent} onChange={e => updatePmSeller(idx, 'percent', e.target.value)} disabled={!sl.enabled}
-                    className={`${inputCls} !w-14 text-right shrink-0`} placeholder="%" min="0" max="100" step="0.01" />
+                    className={`${inputCls} !w-14 text-right shrink-0`} placeholder="%" min="0" max="100" step="0.01"
+                    aria-label={`เปอร์เซ็นต์คอมมิชชันแถวที่ ${idx + 1}`} />
                   <span className="text-xs text-gray-500 shrink-0">%</span>
                   <input type="text" value={sl.total ? formatBaht(sl.total) : ''} readOnly disabled={!sl.enabled}
-                    className={`${inputCls} !w-24 text-right opacity-70 shrink-0`} placeholder="คอม" />
+                    className={`${inputCls} !w-24 text-right opacity-70 shrink-0`} placeholder="คอม"
+                    aria-label={`ยอดคอมมิชชันแถวที่ ${idx + 1} (คำนวณอัตโนมัติ)`} />
                   <span className="text-xs text-gray-500 shrink-0">บาท</span>
                 </div>
               ))}
             </div>
+            <FieldError field="sellers" />
           </FormSection></div>
           )}
 

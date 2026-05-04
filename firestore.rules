@@ -290,6 +290,18 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ── Backend: AP1 (2026-05-04) Appointment slot reservation ──
+      // Atomic collision guard for createBackendAppointment. Each slot doc
+      // ID encodes `${date}_${doctorId}_${startTime}_${endTime}` so the
+      // createBackendAppointment runTransaction can `tx.get(slotDocRef)` →
+      // throw on existence → otherwise `tx.set` BOTH the slot AND the
+      // appointment atomically. Eliminates the ~1s read-then-write race.
+      // Slot docs are deleted when the appointment is deleted/cancelled.
+      // No append-only constraint needed (slots are short-lived guards).
+      match /be_appointment_slots/{slotId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Phase 16.1 (2026-04-30) Smart Audience saved segments ──
       // Marketing query rules persisted as serialized rule trees:
       //   { rule: { kind: 'group', op: 'AND'|'OR', children: [...] }, name, ... }

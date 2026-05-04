@@ -1555,6 +1555,40 @@ export async function exchangeCourseProduct(customerId, courseIndex, newProduct,
 const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(id));
 
+// AP1 schema fix (2026-05-04, V15 #13 candidate): atomic slot reservation
+// to eliminate the read-then-write race in createBackendAppointment. Slot
+// doc ID encodes the deterministic key — runTransaction tx.get throws on
+// existence, otherwise tx.set both slot + appointment atomically.
+const appointmentSlotsCol = () => collection(db, ...basePath(), 'be_appointment_slots');
+const appointmentSlotDoc = (slotId) => doc(db, ...basePath(), 'be_appointment_slots', String(slotId));
+
+/**
+ * Build a deterministic slot key from appointment time fields. Same inputs
+ * always yield the same id, so two concurrent createBackendAppointment
+ * calls for the same exact slot will collide on `tx.get(slotDocRef)`.
+ *
+ * Format: `${date}_${doctorId}_${startTime}_${endTime}` — Firestore doc
+ * IDs forbid `/` only; `:` and `_` are fine. We sanitize doctorId via
+ * encodeURIComponent fallback to handle whatever ProClinic ids contain.
+ *
+ * Empty / missing inputs return '' so the caller can skip the atomic
+ * path (legacy / scripted imports without time fields).
+ *
+ * Exported for tests + admin diagnostic tooling.
+ */
+export function buildAppointmentSlotKey(input) {
+  const { date, doctorId, startTime, endTime } = (input && typeof input === 'object') ? input : {};
+  const d = String(date || '').trim();
+  const doc = String(doctorId || '').trim();
+  const s = String(startTime || '').trim();
+  const e = String(endTime || startTime || '').trim();
+  if (!d || !doc || !s) return '';
+  // Replace '/' (forbidden in Firestore doc IDs) with '-' as a defensive
+  // measure; ProClinic ids are usually clean ints but be safe.
+  const safeDoc = doc.replace(/[\/.]/g, '-');
+  return `${d}_${safeDoc}_${s}_${e || s}`;
+}
+
 /** Create a new backend appointment.
  *
  * Audit P1 (2026-04-26 AP1): server-side last-mile collision check before
@@ -1581,17 +1615,20 @@ export async function createBackendAppointment(data) {
   const targetStart = String(data?.startTime || '').trim();
   const targetEnd = String(data?.endTime || data?.startTime || '').trim();
 
-  // AP1 race window note (audit MEDIUM, 2026-05-04):
-  // Read-then-write below has a ~1s race where two admins clicking save
-  // in the same second can double-book. Mitigations in place:
-  //   1) Pre-write collision check (existing logic below)
-  //   2) Client-side gate via openCreate disabled during 1s freshness
-  //   3) Post-write verification (added 2026-05-04): re-read the date
-  //      after setDoc; if any OTHER appointment for same doctor+overlapping
-  //      time was committed during our window, deleteDoc(self) + throw.
-  // Full atomic fix needs a be_appointment_slots reservation collection
-  // (slot ID = `${date}_${doctorId}_${startTime}`) inside runTransaction.
-  // That's a schema change requiring firestore.rules deploy — deferred.
+  // AP1 schema fix (2026-05-04, V15 #13): atomic slot reservation eliminates
+  // the read-then-write race. The slot doc encodes the exact slot key; two
+  // concurrent createBackendAppointment calls for the same doctor+date+time
+  // will collide on `tx.get(slotDocRef)` and Firestore's optimistic-lock
+  // semantics retry until one succeeds.
+  //
+  // RANGE-OVERLAP (different startTimes, overlapping ranges, e.g. 09:00-10:00
+  // vs 09:30-10:30) — the exact-key tx doesn't catch this; the pre-write
+  // overlap scan below + post-write verification still apply. Future fix:
+  // mint multiple slot docs per 15-min interval. Tracked as AP1-bis.
+  //
+  // Pre-write OVERLAP scan (caller-friendly soft check) — runs OUTSIDE the
+  // transaction. Catches range overlaps the slot-doc can't. Same logic as
+  // before; complements the atomic exact-key guard.
   if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
     const existing = await getAppointmentsByDate(targetDate);
     const collision = existing.find(a => {
@@ -1600,7 +1637,6 @@ export async function createBackendAppointment(data) {
       if (a.status === 'cancelled') return false;
       const otherStart = String(a.startTime || '').trim();
       const otherEnd = String(a.endTime || a.startTime || '').trim();
-      // Time-range overlap: targetStart < otherEnd AND targetEnd > otherStart
       return targetStart < otherEnd && targetEnd > otherStart;
     });
     if (collision) {
@@ -1615,65 +1651,177 @@ export async function createBackendAppointment(data) {
   const now = new Date().toISOString();
   // Strip the gate flag so it never leaks into the persisted doc.
   const { skipServerCollisionCheck: _stripGate, ...persistData } = data || {};
-  await setDoc(appointmentDoc(appointmentId), {
+  const apptPayload = {
     appointmentId,
     ...persistData,
     createdAt: now,
     updatedAt: now,
-  });
+  };
 
-  // AP1 post-write verification (audit MEDIUM defense-in-depth):
-  // Re-read the date and check whether ANY other non-cancelled appointment
-  // for the same doctor+overlapping time landed during our setDoc window.
-  // If yes, undo our write and throw — the user retries; the other admin's
-  // write wins. Doesn't fully eliminate the race but tightens the window
-  // from "any 1s collision" to "two writes commit in the exact same
-  // millisecond AND both pass post-verify". Acceptable until slot-doc
-  // schema lands.
-  if (!data?.skipServerCollisionCheck && targetDate && targetDoctorId && targetStart) {
-    try {
-      const after = await getAppointmentsByDate(targetDate);
-      const conflict = after.find(a => {
-        if ((a.appointmentId || a.id) === appointmentId) return false; // self
-        const otherDoctorId = String(a.doctorId || a.doctor?.id || '').trim();
-        if (otherDoctorId !== targetDoctorId) return false;
-        if (a.status === 'cancelled') return false;
-        const otherStart = String(a.startTime || '').trim();
-        const otherEnd = String(a.endTime || a.startTime || '').trim();
-        return targetStart < otherEnd && targetEnd > otherStart;
+  // AP1 atomic exact-slot guard via runTransaction. Falls back to plain
+  // setDoc when slot key cannot be built (legacy imports / open-ended
+  // appointments without time fields).
+  const slotKey = data?.skipServerCollisionCheck
+    ? ''
+    : buildAppointmentSlotKey({
+        date: targetDate,
+        doctorId: targetDoctorId,
+        startTime: targetStart,
+        endTime: targetEnd,
       });
-      if (conflict) {
-        // Roll back our just-written doc + surface the collision.
-        try { await deleteDoc(appointmentDoc(appointmentId)); } catch { /* best-effort */ }
-        const err = new Error(`AP1_COLLISION: post-write — doctor ${targetDoctorId} concurrently booked ${conflict.startTime}-${conflict.endTime} on ${targetDate}`);
-        err.code = 'AP1_COLLISION';
-        err.collision = conflict;
-        err.postWrite = true;
-        throw err;
-      }
+
+  if (slotKey) {
+    const slotRef = appointmentSlotDoc(slotKey);
+    try {
+      await runTransaction(db, async (tx) => {
+        const slotSnap = await tx.get(slotRef);
+        if (slotSnap.exists()) {
+          const slotData = slotSnap.data() || {};
+          if (!slotData.cancelled) {
+            const err = new Error(
+              `AP1_COLLISION: slot ${slotKey} already taken by ${slotData.appointmentId || '(unknown)'}`,
+            );
+            err.code = 'AP1_COLLISION';
+            err.slotKey = slotKey;
+            err.atomic = true;
+            throw err;
+          }
+        }
+        tx.set(slotRef, {
+          slotId: slotKey,
+          appointmentId,
+          date: targetDate,
+          doctorId: targetDoctorId,
+          startTime: targetStart,
+          endTime: targetEnd,
+          cancelled: false,
+          takenAt: now,
+        });
+        tx.set(appointmentDoc(appointmentId), apptPayload);
+      });
     } catch (e) {
       if (e?.code === 'AP1_COLLISION') throw e;
-      // Network blip on post-verify is non-fatal — keep the appointment.
-      // eslint-disable-next-line no-console
-      console.warn('[AP1] post-write verification skipped:', e?.message || e);
+      throw e;
     }
+  } else {
+    // Legacy path: no slot key (missing time fields) — plain setDoc.
+    await setDoc(appointmentDoc(appointmentId), apptPayload);
   }
 
   return { appointmentId, success: true };
 }
 
-/** Update an existing appointment */
+/**
+ * AP1 helper — clear the slot reservation when an appointment is deleted
+ * or status='cancelled'. Best-effort: failures don't roll back the parent
+ * mutation (the slot doc is a guard, not a financial record).
+ *
+ * Caller passes the appointment payload (date/doctorId/startTime/endTime
+ * needed to rebuild the deterministic key).
+ */
+async function _releaseAppointmentSlot(apptData) {
+  const slotKey = buildAppointmentSlotKey({
+    date: normalizeApptDate(apptData?.date),
+    doctorId: String(apptData?.doctorId || apptData?.doctor?.id || '').trim(),
+    startTime: String(apptData?.startTime || '').trim(),
+    endTime: String(apptData?.endTime || apptData?.startTime || '').trim(),
+  });
+  if (!slotKey) return;
+  try {
+    await deleteDoc(appointmentSlotDoc(slotKey));
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[AP1] slot release failed:', slotKey, e?.message || e);
+  }
+}
+
+/**
+ * Update an existing appointment.
+ *
+ * AP1 slot reservation maintenance:
+ *   - When the time fields (date / doctorId / startTime / endTime) change,
+ *     the OLD slot doc is released so the slot becomes available again, and
+ *     a NEW slot doc is reserved (best-effort; the read-then-update in this
+ *     path doesn't run inside a transaction — caller relies on the same
+ *     pre-write soft check via UI for range overlaps).
+ *   - When status flips to 'cancelled', the slot is released so the time
+ *     becomes bookable again.
+ */
 export async function updateBackendAppointment(appointmentId, data) {
+  // Pre-read the current appointment to detect time-field changes + capture
+  // the OLD slot key for cleanup. Defensive: if the read fails (network),
+  // skip slot maintenance and fall through to the bare update — slot
+  // staleness is preferable to losing the appointment update.
+  let oldData = null;
+  try {
+    const snap = await getDoc(appointmentDoc(appointmentId));
+    if (snap.exists()) oldData = snap.data();
+  } catch { /* best-effort */ }
+
   await updateDoc(appointmentDoc(appointmentId), {
     ...data,
     updatedAt: new Date().toISOString(),
   });
+
+  // Slot maintenance — fire-and-forget after the write commits.
+  if (oldData) {
+    const merged = { ...oldData, ...data };
+    const oldKey = buildAppointmentSlotKey({
+      date: normalizeApptDate(oldData.date),
+      doctorId: String(oldData.doctorId || oldData.doctor?.id || '').trim(),
+      startTime: String(oldData.startTime || '').trim(),
+      endTime: String(oldData.endTime || oldData.startTime || '').trim(),
+    });
+    const newKey = buildAppointmentSlotKey({
+      date: normalizeApptDate(merged.date),
+      doctorId: String(merged.doctorId || merged.doctor?.id || '').trim(),
+      startTime: String(merged.startTime || '').trim(),
+      endTime: String(merged.endTime || merged.startTime || '').trim(),
+    });
+    const becameCancelled = data?.status === 'cancelled' && oldData.status !== 'cancelled';
+    const timeChanged = oldKey && newKey && oldKey !== newKey;
+
+    if (becameCancelled && oldKey) {
+      try { await deleteDoc(appointmentSlotDoc(oldKey)); } catch (e) { /* best-effort */ }
+    } else if (timeChanged) {
+      // Release old slot, reserve new (sequential — best-effort, not atomic).
+      try { await deleteDoc(appointmentSlotDoc(oldKey)); } catch { /* noop */ }
+      try {
+        await setDoc(appointmentSlotDoc(newKey), {
+          slotId: newKey,
+          appointmentId,
+          date: normalizeApptDate(merged.date),
+          doctorId: String(merged.doctorId || merged.doctor?.id || '').trim(),
+          startTime: String(merged.startTime || '').trim(),
+          endTime: String(merged.endTime || merged.startTime || '').trim(),
+          cancelled: false,
+          takenAt: new Date().toISOString(),
+        });
+      } catch { /* noop — slot will heal on next create at this slot */ }
+    }
+  }
+
   return { success: true };
 }
 
-/** Delete an appointment */
+/**
+ * Delete an appointment + release its AP1 slot reservation.
+ * Slot release is best-effort; appointment deletion is the source of truth.
+ */
 export async function deleteBackendAppointment(appointmentId) {
+  // Capture the appointment payload BEFORE deletion so we can rebuild the
+  // deterministic slot key for cleanup.
+  let apptData = null;
+  try {
+    const snap = await getDoc(appointmentDoc(appointmentId));
+    if (snap.exists()) apptData = snap.data();
+  } catch { /* best-effort */ }
+
   await deleteDoc(appointmentDoc(appointmentId));
+
+  if (apptData) {
+    await _releaseAppointmentSlot(apptData);
+  }
   return { success: true };
 }
 

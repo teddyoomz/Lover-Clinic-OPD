@@ -82,6 +82,7 @@ const COLLECTION_MATRIX = {
   'be_link_attempts':      { scope: 'global', reason: 'LINE link-request rate-limit tracker (V32-tris-quater — 5/24h cap; client SDK blocked)' },
   'be_admin_audit':        { scope: 'global', reason: 'Phase 15.6 / V35 admin cleanup audit log (cleanup-orphan-stock + cleanup-test-products + cleanup-test-sales). Admin SDK only writes; client SDK blocked.' },
   'be_audiences':          { scope: 'global', reason: 'Phase 16.1 (2026-04-30) Smart Audience saved segments — clinic-wide marketing rule trees (rule.kind: group | predicate). Hard-delete in v1.' },
+  'be_appointment_slots':  { scope: 'global', reason: 'AP1 (2026-05-04) atomic slot reservation guard — short-lived doc per `${date}_${doctorId}_${startTime}_${endTime}` key. Eliminates createBackendAppointment read-then-write race via runTransaction. Released on appointment delete/cancel.' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },
