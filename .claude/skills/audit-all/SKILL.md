@@ -14,42 +14,43 @@ Meta-runner that chains every `audit-*` skill and aggregates output.
 
 Run these in order (17 total):
 
-**Tier 1 — backend integrity (money/stock/cascade, 45 invariants)**:
+**Tier 1 — backend integrity (money/stock/cascade/branch, 53 invariants)**:
 1. `/audit-money-flow` (M1–M15)
 2. `/audit-stock-flow` (S1–S28) — V34 (2026-04-28) added S16-S20: per-tier conservation, time-travel replay, concurrent-write atomicity, listener alignment, test-prefix discipline. Phase 15.5 (2026-04-28) added S21-S25: per-product warning thresholds, anti-hardcoded-threshold, ActorPicker branchIds[] filter (5 panels), withdrawal approval admin endpoint, unit dropdown enrichment. V35 / Phase 15.6 (2026-04-28) added S26-S28: default-branch view passes includeLegacyMain, FK validation via _assertProductExists at every batch creator, ProductSelectField extracted (Rule C1 lock)
 3. `/audit-cascade-logic` (C1–C15)
+4. `/audit-branch-scope` (BS1–BS8) — BSA Task 9 (2026-05-04): UI imports only scopedDataLayer (not backendClient direct), no master_data/* reads in feature code (Rule H-quater), getAllMasterDataItems gone from UI (BSA Task 7 lock), branch-scoped listenTo* wired through useBranchAwareListener, COLLECTION_MATRIX classification, scopedDataLayer universal re-exports point to raw, _resolveBranchIdForWrite stamps preserved on every writer
 
 **Tier 2 — data + system integrity (47 invariants)**:
-4. `/audit-referential-integrity` (R1–R11) — FK / orphan detection
-5. `/audit-firestore-correctness` (F1–F10) — rules, updateMask, snapshot 2x, counters
-6. `/audit-clone-sync` (CL1–CL9) — Phase 1-2 races + dedup
-7. `/audit-api-layer` (A1–A9) — Vercel serverless + webhooks
+5. `/audit-referential-integrity` (R1–R11) — FK / orphan detection
+6. `/audit-firestore-correctness` (F1–F10) — rules, updateMask, snapshot 2x, counters
+7. `/audit-clone-sync` (CL1–CL9) — Phase 1-2 races + dedup
+8. `/audit-api-layer` (A1–A9) — Vercel serverless + webhooks
 
 **Tier 3 — UI + user-facing (40 invariants)**:
-8. `/audit-treatment-form` (TF1–TF10) — Phase 3 (3200 LOC)
-9. `/audit-appointment-calendar` (AP1–AP8) — Phase 4 slot conflicts + TZ
-10. `/audit-react-patterns` (RP1–RP10) — IIFE JSX, stale closure, listeners
-11. `/audit-ui-cultural-a11y` (UC1–UC8) — Thai rules + WCAG 2.2
-12. `/audit-performance` (P1–P8) — N+1, bundle, pagination
+9. `/audit-treatment-form` (TF1–TF10) — Phase 3 (3200 LOC)
+10. `/audit-appointment-calendar` (AP1–AP8) — Phase 4 slot conflicts + TZ
+11. `/audit-react-patterns` (RP1–RP10) — IIFE JSX, stale closure, listeners
+12. `/audit-ui-cultural-a11y` (UC1–UC8) — Thai rules + WCAG 2.2
+13. `/audit-performance` (P1–P8) — N+1, bundle, pagination
 
 **Tier 4 — frontend-specific (28 invariants — session 2026-04-19)**:
-13. `/audit-frontend-timezone` (TZ1–TZ8) — Thai GMT+7 correctness (naked `new Date()`, `.toISOString()` drifts, `.getDay()` TZ-fragile)
-14. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
-15. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
+14. `/audit-frontend-timezone` (TZ1–TZ8) — Thai GMT+7 correctness (naked `new Date()`, `.toISOString()` drifts, `.getDay()` TZ-fragile)
+15. `/audit-frontend-links` (LK1–LK10) — schedule/patient/QR link persisted-filter + resync consistency + legacy-doc defaults
+16. `/audit-frontend-forms` (FF1–FF10) — DateField, scrollToError, submit-disable, edit-mode restore, Thai error copy
 
 **Tier 5 — hygiene / anti-vibe-code (51 invariants — session 2026-04-19, extended 2026-04-20)**:
-16. `/audit-anti-vibe-code` (AV1–AV12) — Rule of 3 duplication, `Math.random` tokens, leaked uids in world-readable docs, open Firestore/Storage rules, orphan collections, over-normalized schema
-17. `/audit-backend-firestore-only` (BF1–BF7) — backend UI ห้าม import brokerClient หรือเรียก /api/proclinic/* ยกเว้น MasterDataTab (rule 03-stack.md). Phase 9 violation 2026-04-19.
-18. `/audit-firebase-admin-security` (FA1–FA12) — privileged api/admin/** endpoints: private-key hygiene, token verification with checkRevoked, admin gate (custom claim OR bootstrap UID), self-protection on delete/revoke-admin, input validation, CORS + method gates, no `firebase-admin` imports in src/. Phase 12.0 infrastructure.
-19. `/audit-finance-completeness` (FC1–FC20) — every Phase 12 entity has validator + CRUD + Firestore rule + tests + Rule E cleanliness. 5-seller + 3-payment-method limits enforced. Claims aggregator + P&L reconcile. State machines present. Production vs @dev-only separation. Required before Phase 13 ships.
+17. `/audit-anti-vibe-code` (AV1–AV12) — Rule of 3 duplication, `Math.random` tokens, leaked uids in world-readable docs, open Firestore/Storage rules, orphan collections, over-normalized schema
+18. `/audit-backend-firestore-only` (BF1–BF7) — backend UI ห้าม import brokerClient หรือเรียก /api/proclinic/* ยกเว้น MasterDataTab (rule 03-stack.md). Phase 9 violation 2026-04-19.
+19. `/audit-firebase-admin-security` (FA1–FA12) — privileged api/admin/** endpoints: private-key hygiene, token verification with checkRevoked, admin gate (custom claim OR bootstrap UID), self-protection on delete/revoke-admin, input validation, CORS + method gates, no `firebase-admin` imports in src/. Phase 12.0 infrastructure.
+20. `/audit-finance-completeness` (FC1–FC20) — every Phase 12 entity has validator + CRUD + Firestore rule + tests + Rule E cleanliness. 5-seller + 3-payment-method limits enforced. Claims aggregator + P&L reconcile. State machines present. Production vs @dev-only separation. Required before Phase 13 ships.
 
 **Tier 6 — Phase 10 Reports & Analytics (15 invariants — session 2026-04-19)**:
-20. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
+21. `/audit-reports-accuracy` (AR1–AR15) — date-range inclusivity, cancelled-row exclusion, roundTHB consistency, refund/VAT separation, footer reconciliation, CSV-table parity, RFM stability, defensive field access, idempotency. Required for any Phase 10 report tab change.
 
 **Tier 7 — Chat notification pipeline (8 invariants — session 2026-04-22 phantom-noti fix)**:
-21. `/audit-chat-notifications` (AN1–AN8) — sound trigger wires to `chatUnread` not `chatConvCount`, `ChatDetailView` mount effect zeros `unreadCount`, `api/webhook/send.js` zeros `unreadCount`, shared `countUnreadPeople` / `shouldRingChatAlert` / `shouldRingChatInterval` helpers enforced via Rule of 3, Firestore REST string `integerValue` coerced, PHANTOM-NOTI REPRO tests present. User-reported 2026-04-22 "noti เตือนค้างแต่ไม่มีแชทค้าง".
+22. `/audit-chat-notifications` (AN1–AN8) — sound trigger wires to `chatUnread` not `chatConvCount`, `ChatDetailView` mount effect zeros `unreadCount`, `api/webhook/send.js` zeros `unreadCount`, shared `countUnreadPeople` / `shouldRingChatAlert` / `shouldRingChatInterval` helpers enforced via Rule of 3, Firestore REST string `integerValue` coerced, PHANTOM-NOTI REPRO tests present. User-reported 2026-04-22 "noti เตือนค้างแต่ไม่มีแชทค้าง".
 
-**Total: 230 invariants**. Do NOT write report to disk — chat output only.
+**Total: 238 invariants**. Do NOT write report to disk — chat output only.
 
 ## Consolidated report format
 
