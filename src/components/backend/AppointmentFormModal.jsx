@@ -42,6 +42,7 @@ import {
   // directive: "ที่ปรึกษา ... แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
   listAllSellers,
 } from '../../lib/scopedDataLayer.js';
+import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
 import { thaiTodayISO } from '../../utils.js';
@@ -263,10 +264,16 @@ export default function AppointmentFormModal({
   // Phase 14.7.H follow-up H (2026-04-26): listenToHolidays so the modal's
   // skipHolidayCheck confirm prompt fires against the latest holiday set
   // even when admin A edits HolidaysTab while admin B is mid-booking.
-  useEffect(() => {
-    const unsub = listenToHolidays(setHolidays, () => setHolidays([]));
-    return unsub;
-  }, []);
+  // Phase BSA Task 8 (2026-05-04) — migrated to useBranchAwareListener.
+  // Pass {allBranches: true} to keep cross-branch holiday visibility (legacy
+  // behavior — modal's holiday confirm should fire regardless of selected
+  // branch since holidays may be clinic-wide).
+  useBranchAwareListener(
+    listenToHolidays,
+    { allBranches: true },
+    setHolidays,
+    () => setHolidays([]),
+  );
 
   // Filtered customer list (only used when not locked)
   const filteredCustomers = useMemo(() => {

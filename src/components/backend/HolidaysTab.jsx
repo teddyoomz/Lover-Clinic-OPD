@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Trash2, CalendarX, Loader2, Repeat } from 'lucide-react';
 import { listenToHolidays, deleteHoliday } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import HolidayFormModal from './HolidayFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
@@ -51,18 +52,16 @@ export default function HolidaysTab({ clinicSettings, theme }) {
     return Promise.resolve();
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    // Phase BS V2 — pass {branchId} so the listener filters server-side.
-    // Re-subscribes when admin switches branch via top-right BranchSelector.
-    const unsub = listenToHolidays(
-      { branchId: selectedBranchId },
-      (list) => { setItems(list); setLoading(false); },
-      (e) => { setError(e?.message || 'โหลดวันหยุดล้มเหลว'); setItems([]); setLoading(false); },
-    );
-    return unsub;
-  }, [selectedBranchId]);
+  // Phase BSA Task 8 (2026-05-04) — useBranchAwareListener handles
+  // branchId injection + auto re-subscribe on top-right branch switch.
+  // Loading kicks on at mount; the hook will fire onChange shortly after.
+  useEffect(() => { setLoading(true); setError(''); }, [selectedBranchId]);
+  useBranchAwareListener(
+    listenToHolidays,
+    {},
+    (list) => { setItems(list); setLoading(false); },
+    (e) => { setError(e?.message || 'โหลดวันหยุดล้มเหลว'); setItems([]); setLoading(false); },
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

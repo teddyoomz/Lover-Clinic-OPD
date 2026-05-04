@@ -13,12 +13,18 @@ import {
   ChevronLeft, ChevronRight, Plus, Loader2, User,
   CalendarDays, CalendarX,
 } from 'lucide-react';
+// audit-branch-scope: listener-direct — listenToAppointmentsByDate +
+// listenToScheduleByDay use positional args incompatible with the
+// useBranchAwareListener (object-arg) contract; kept as direct
+// useEffect with branchId in deps. listenToHolidays migrated to hook
+// below (Phase BSA Task 8, 2026-05-04).
 import {
   getAppointmentsByMonth, getAppointmentsByDate, listenToAppointmentsByDate, listenToHolidays,
   listenToScheduleByDay, listDoctors,
   // Phase 15.7-sexies (2026-04-28) — delete from calendar modal
   deleteBackendAppointment,
 } from '../../lib/scopedDataLayer.js';
+import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
@@ -128,10 +134,16 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   // this banner without a full nav-and-back. Silent-fail on subscribe error
   // (permission denied / network hiccup) = empty list, booking flow untouched.
   const [holidays, setHolidays] = useState([]);
-  useEffect(() => {
-    const unsub = listenToHolidays(setHolidays, () => setHolidays([]));
-    return unsub;
-  }, []);
+  // Phase BSA Task 8 — useBranchAwareListener auto-injects branchId +
+  // re-subscribes on branch switch. Pass {allBranches: true} to keep the
+  // banner calendar cross-branch (legacy behavior — useFilter is gated by
+  // !allBranches in listenToHolidays).
+  useBranchAwareListener(
+    listenToHolidays,
+    { allBranches: true },
+    setHolidays,
+    () => setHolidays([]),
+  );
 
   // Phase 13.2.9 — TodaysDoctorsPanel data: load doctors once + subscribe
   // to merged schedule entries for the selected date (recurring + override).
