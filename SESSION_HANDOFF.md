@@ -7,12 +7,24 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-05 EOD+ — V15 #14 LIVE; H-bis aborted; graphify claude integration installed
+- **Date last updated**: 2026-05-04 EOD — Phase BS shipped + Phase BS V2 master-data branch-scoped; V15 #16 pending
 - **Branch**: `master`
-- **Last commit**: `fdd7efc` — chore(graphify): install claude integration — auto-read GRAPH_REPORT before codebase Qs
-- **Test count**: **4612** (unchanged — H-bis test bank reverted with all source edits)
+- **Last commit**: `cf897f6` — feat(branch-bs-v2): master-data tabs branch-scoped per user directive
+- **Test count**: **4744** (+132 BS tests; 6 existing tests adjusted for new contract)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `1d15db5`** (V15 #14 LIVE 2026-05-05) · master 2 docs/config commits ahead-of-prod (`63ebf03` session-end + `fdd7efc` graphify install — neither needs deploy)
+- **Deploy state**: ✅ **PRODUCTION = `83d8413`** (V15 #15 LIVE 2026-05-06) · master **3 code commits ahead-of-prod** (`da57c08` stock-name fix + `aecf3a1` listener branch-scope + `cf897f6` Phase BS V2). 2833 prod docs migrated via admin SDK (LIVE NOW, no code deploy needed for that part).
+
+### Session 2026-05-04 EOD — Phase BS shipped + Phase BS V2 master-data branch-scoped
+
+V15 #15 deploy (LIVE) shipped Phase BS — top-right BranchSelector with per-staff branchIds[] soft-gate; customer doc gains immutable branchId tag; 5 picker filters; 5 reader refactors with allBranches opt-out; /api/admin/customer-branch-baseline migration endpoint; +132 tests; build clean; full Probe-Deploy-Probe 6/6+6/6+cleanup 4/4.
+
+Mid-session 2 user-reported regressions on prod: (1) sales/treatments/appointments empty after Phase BS (legacy untagged data filtered out by branchId where-clause) — fixed via direct admin-SDK migration of 2103 untagged docs to นครราชสีมา (LIVE NOW); (2) stock page showed raw `BR-1777873556815-26df6480` not "นครราชสีมา" — fixed via listStockLocations now pulling be_branches (`da57c08`); (3) appointment tab branch switch had no effect on day grid — listener `listenToAppointmentsByDate` not refactored in Phase BS V1 — fixed (`aecf3a1`).
+
+Phase BS V2 (`cf897f6`): user clarified scope — every tab in ข้อมูลพื้นฐาน must respect BranchSelector EXCEPT พนักงาน/สิทธิ์/เทมเพลต/แพทย์/สาขา/ตั้งค่าระบบ/Sync ProClinic. 11 listers refactored (productGroups/units/medicalInstruments/holidays/products/courses/dfGroups/dfStaffRates/bankAccounts/expenseCategories/staffSchedules); 8 writers stamp branchId via NEW `_resolveBranchIdForWrite` helper; 9 UI tabs wired; /api/admin/link-requests handleList accepts {branchId, allBranches} with legacy-untagged fallback. 730 master-data docs migrated to นครราชสีมา via admin SDK. preview_eval verified all 11 listers branch-scope correctly.
+
+V15 #16 deploy pending (3 commits ahead-of-prod). LineSettingsTab per-branch redesign deferred (needs schema redesign for single global config doc).
+
+Detail: `.agents/sessions/2026-05-04-phase-bs-v2.md`
 
 ### Session 2026-05-05 EOD — V15 #14 deploy + H-bis ProClinic strip explored + fully reverted
 
@@ -316,33 +328,31 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-05 EOD+.
+Resume LoverClinic — continue from 2026-05-04 EOD.
 
 Read in order BEFORE any tool call:
-1. CLAUDE.md (now includes ## graphify section — consult graphify-out/GRAPH_REPORT.md for codebase Qs)
-2. SESSION_HANDOFF.md (master=fdd7efc, prod=1d15db5)
-3. .agents/active.md (4612 tests pass; 2 docs/config commits ahead-of-prod)
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=cf897f6, prod=83d8413)
+3. .agents/active.md (4744 tests pass; 3 code commits ahead-of-prod)
 4. .claude/rules/00-session-start.md
-5. .agents/sessions/2026-05-05-v15-14-and-hbis-revert.md
+5. .agents/sessions/2026-05-04-phase-bs-v2.md
 
-Status: master=fdd7efc, 4612/4612 tests pass, prod=1d15db5 LIVE (V15 #14). 2 docs/config commits ahead-of-prod (no deploy needed for those).
+Status: master=cf897f6, 4744/4744 tests pass, prod=83d8413 LIVE (V15 #15). 3 code commits ahead-of-prod (V15 #16 pending deploy auth). 2833 prod docs already migrated to นครราชสีมา via admin SDK (LIVE NOW).
 
-Next action: Brainstorm backend branch-selector via Skill(superpowers:brainstorming)
-- User queued (2× /brainstorm in last session) a major new feature: top-right Tab to switch active branch (mirror ProClinic UX)
-- Shared collections across branches: customers / staff (filtered by per-staff branch access) / permission-groups / branches / system-settings
-- Per-branch isolation: everything else
-- Pre-req: tag every existing customer with branchId='นครราชสีมา' baseline before any new branch ships
-- Rule J HARD-GATE: invoke Skill(brainstorming) FIRST before any plan/code
+Next action: V15 #16 combined deploy when user types "deploy" THIS turn.
+- vercel --prod + firebase rules (idempotent — no rule changes)
+- Probe-Deploy-Probe Rule B (6/6 pre + 6/6 post + cleanup 4/4)
+- Ships da57c08 (stock name fix) + aecf3a1 (listener branch-scope) + cf897f6 (Phase BS V2 master-data)
 
 Outstanding (user-triggered):
-- Branch-selector brainstorm + plan
-- Customer-tag bootstrap (baseline branchId)
+- V15 #16 deploy
+- LineSettingsTab per-branch redesign (single global doc; deferred)
+- be_link_requests writers branchId stamp (webhook-side; legacy fallback shim covers reads for now)
+- Hard-gate via Firebase custom claim (Phase BS-future)
 - 16.8 /audit-all orchestrator-only readiness check
 - Phase 17 plan TBD
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); NO real-action clicks in preview_eval; V31 silent-swallow lock.
-
-CONTEXT: H-bis ProClinic strip was attempted + fully reverted last session per user directive "เอาทุกอย่างที่มึงเปลี่ยนใน frontend กุคืนมาให้หมด". DO NOT re-attempt without user explicitly re-authorizing scope. Plan file `~/.claude/plans/database-vast-dahl.md` marked ABORTED.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); Phase BS branchId IMMUTABILITY on customer doc; V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
 
 /session-start
 ```
