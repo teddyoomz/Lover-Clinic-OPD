@@ -2104,13 +2104,34 @@ export async function getAppointmentsByDate(dateStr, opts = {}) {
  * AppointmentTab caller subscribes per-day so this only runs when the
  * tab is open and only one date is being watched.
  */
-export function listenToAppointmentsByDate(dateStr, onChange, onError) {
+export function listenToAppointmentsByDate(dateStr, optsOrCallback, onChangeOrError, maybeOnError) {
+  // Phase BS regression-fix (2026-05-06) — third positional arg promoted
+  // to opts {branchId, allBranches}. Backward-compat: legacy callers pass
+  // (dateStr, onChange, onError) and get unfiltered behavior. New callers
+  // pass (dateStr, {branchId, allBranches}, onChange, onError) for
+  // branch-scoped real-time updates.
+  let opts = {};
+  let onChange;
+  let onError;
+  if (typeof optsOrCallback === 'function') {
+    onChange = optsOrCallback;
+    onError = onChangeOrError;
+  } else {
+    opts = optsOrCallback || {};
+    onChange = onChangeOrError;
+    onError = maybeOnError;
+  }
   const target = normalizeApptDate(dateStr);
   if (!target) {
     onChange?.([]);
     return () => {};
   }
-  return onSnapshot(appointmentsCol(), (snap) => {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const q = useFilter
+    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    : appointmentsCol();
+  return onSnapshot(q, (snap) => {
     const appts = snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(a => normalizeApptDate(a.date) === target)
@@ -2471,6 +2492,10 @@ export async function getCustomerSales(customerId) {
  * @returns {() => void} unsubscribe
  */
 export function listenToAllSales(opts, onChange, onError) {
+  // Phase BS regression-fix (2026-05-06) — opts now also accepts
+  // {branchId, allBranches} for branch-scoped real-time updates.
+  // Backward-compat: legacy callers pass {since} only and get unfiltered
+  // behavior across branches. New callers pass branchId for soft-gate.
   // 365 days ago (Bangkok TZ via thaiTodayISO arithmetic at call time)
   const defaultSince = (() => {
     const d = new Date();
@@ -2478,7 +2503,13 @@ export function listenToAllSales(opts, onChange, onError) {
     return d.toISOString().slice(0, 10);
   })();
   const since = (opts && typeof opts.since === 'string' && opts.since) || defaultSince;
-  const q = query(salesCol(), where('saleDate', '>=', since));
+  const branchId = opts && opts.branchId;
+  const allBranches = !!(opts && opts.allBranches);
+  const useFilter = branchId && !allBranches;
+  // Compose where clauses: saleDate range always; branchId only if scoped.
+  const q = useFilter
+    ? query(salesCol(), where('saleDate', '>=', since), where('branchId', '==', String(branchId)))
+    : query(salesCol(), where('saleDate', '>=', since));
   return onSnapshot(q, (snap) => {
     const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));

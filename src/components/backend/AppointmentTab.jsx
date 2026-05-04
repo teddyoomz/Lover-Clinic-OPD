@@ -192,8 +192,16 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   useEffect(() => {
     if (!selectedDate) return;
     setDayLoading(true);
+    // Phase BS regression-fix (2026-05-06) — pass branchId so the day-grid
+    // listener only emits appointments for the selected branch. Without
+    // this, switching branch via the top-right BranchSelector left the
+    // day grid showing the previous branch's appointments (user report:
+    // "tab=appointments ทำไมกดเปลี่ยนสาขาด้านบนขวามือเป็นพระราม 3 แล้ว
+    // นัดแม่งเหมือนเดิม"). selectedBranchId added to deps so the effect
+    // re-subscribes on switch.
     const unsubscribe = listenToAppointmentsByDate(
       selectedDate,
+      { branchId: selectedBranchId },
       (appts) => {
         setDayAppts(appts);
         setDayLoading(false);
@@ -204,7 +212,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       },
     );
     return () => unsubscribe();
-  }, [selectedDate]);
+  }, [selectedDate, selectedBranchId]);
 
   // ── Derived: rooms, doctors for the day ──
   // Cumulative across month navigation + persistent via localStorage. Bug
