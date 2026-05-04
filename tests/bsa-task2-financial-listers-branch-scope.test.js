@@ -121,51 +121,50 @@ describe('Task 2 — Financial listers branch-scope', () => {
   });
 
   describe('T2.D writers stamp branchId', () => {
+    // CR fix (2026-05-04): Replaced defensive `if (mockSetDoc.calls.length > 0)`
+    // guards with HARD `expect(mockSetDoc).toHaveBeenCalled()` assertions.
+    // Each payload below is shaped to satisfy its validator (verified against
+    // src/lib/onlineSaleValidation.js / saleInsuranceClaimValidation.js /
+    // vendorSaleValidation.js). If a future validator tightening breaks
+    // the payload, the test FAILS LOUDLY — surfacing the regression — instead
+    // of silently skipping the branchId assertion (V21-class shape-not-
+    // behavior pattern).
     it('T2.D.1 saveOnlineSale stamps current branchId from localStorage', async () => {
       try { window.localStorage.setItem('selectedBranchId', 'BR-OS'); } catch {}
       const { saveOnlineSale } = await import('../src/lib/backendClient.js');
-      // Build a payload minimal enough to pass onlineSaleValidation. If validator throws,
-      // mockSetDoc won't be called — the test still verifies our code path didn't call setDoc
-      // without branchId. If validator passes, branchId must be on the written doc.
-      try {
-        await saveOnlineSale('OS-1', { customerId: 'C1', amount: 100, transferDate: '2026-05-01' });
-      } catch (e) { /* validator may reject — that's OK; the write didn't happen */ }
-      if (mockSetDoc.mock.calls.length > 0) {
-        expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-OS');
-      }
+      // validateOnlineSale (non-strict): customerId + amount required.
+      await saveOnlineSale('OS-1', { customerId: 'C1', amount: 100, transferDate: '2026-05-01' });
+      expect(mockSetDoc).toHaveBeenCalled();
+      expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-OS');
     });
 
     it('T2.D.2 saveSaleInsuranceClaim stamps current branchId', async () => {
       try { window.localStorage.setItem('selectedBranchId', 'BR-IC'); } catch {}
       const { saveSaleInsuranceClaim } = await import('../src/lib/backendClient.js');
-      try {
-        await saveSaleInsuranceClaim('IC-1', { saleId: 'S1', amount: 50 });
-      } catch (e) { /* validator may reject */ }
-      if (mockSetDoc.mock.calls.length > 0) {
-        expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-IC');
-      }
+      // validateSaleInsuranceClaim (non-strict): saleId + customerId + claimAmount required.
+      await saveSaleInsuranceClaim('IC-1', { saleId: 'S1', customerId: 'C1', claimAmount: 50 });
+      expect(mockSetDoc).toHaveBeenCalled();
+      expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-IC');
     });
 
     it('T2.D.3 saveVendorSale stamps current branchId', async () => {
       try { window.localStorage.setItem('selectedBranchId', 'BR-VS'); } catch {}
       const { saveVendorSale } = await import('../src/lib/backendClient.js');
-      try {
-        await saveVendorSale('VS-1', { vendorId: 'V1', amount: 200, saleDate: '2026-05-01' });
-      } catch (e) { /* validator may reject */ }
-      if (mockSetDoc.mock.calls.length > 0) {
-        expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-VS');
-      }
+      // validateVendorSale (non-strict): vendorId required; items must be array
+      // (empty allowed in non-strict). normalizeVendorSale recomputes totalAmount
+      // from items/discount so the math invariant always holds.
+      await saveVendorSale('VS-1', { vendorId: 'V1', items: [], saleDate: '2026-05-01' });
+      expect(mockSetDoc).toHaveBeenCalled();
+      expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-VS');
     });
 
     it('T2.D.4 saveOnlineSale preserves data.branchId on edit (resolveBranchIdForWrite contract)', async () => {
       try { window.localStorage.setItem('selectedBranchId', 'BR-CURRENT'); } catch {}
       const { saveOnlineSale } = await import('../src/lib/backendClient.js');
-      try {
-        await saveOnlineSale('OS-EDIT', { customerId: 'C1', amount: 100, transferDate: '2026-05-01', branchId: 'BR-ORIGINAL' });
-      } catch (e) { /* validator may reject */ }
-      if (mockSetDoc.mock.calls.length > 0) {
-        expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-ORIGINAL');
-      }
+      await saveOnlineSale('OS-EDIT', { customerId: 'C1', amount: 100, transferDate: '2026-05-01', branchId: 'BR-ORIGINAL' });
+      expect(mockSetDoc).toHaveBeenCalled();
+      // edit path: data.branchId wins over current localStorage.
+      expect(mockSetDoc.mock.calls[0][1].branchId).toBe('BR-ORIGINAL');
     });
   });
 });

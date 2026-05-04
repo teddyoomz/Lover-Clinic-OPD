@@ -80,12 +80,26 @@ async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } 
  * range, saleId, vendorId) and sort, because each financial lister has a
  * different secondary-filter signature.
  *
- * Used by listOnlineSales / listSaleInsuranceClaims / listVendorSales.
- * For collections WITH the allBranches doc field (promotions / coupons /
- * vouchers), use `_listWithBranchOrMerge` instead (Task 1).
+ * Used by listOnlineSales / listSaleInsuranceClaims / listVendorSales
+ * (Phase BSA Task 2). For collections WITH the allBranches doc field
+ * (promotions / coupons / vouchers), use `_listWithBranchOrMerge` instead
+ * (Task 1).
  *
  * Legacy callers (no opts) skip the filter entirely and return the full
  * collection — preserves pre-Phase-BSA shape.
+ *
+ * NOTE: Pre-Phase-BSA docs that lack the `branchId` field will be EXCLUDED
+ * from filtered reads (Firestore where('field','==',v) skips docs missing
+ * the field). Unlike _listWithBranchOrMerge there is NO `allBranches` doc-
+ * field fallback — these collections are pure branch-scoped. Backfill
+ * options:
+ *   1. Writer-stamp on next save (covers gradual migration — every
+ *      saveOnlineSale / saveSaleInsuranceClaim / saveVendorSale already
+ *      writes branchId via _resolveBranchIdForWrite)
+ *   2. One-shot admin migrator (covers all legacy docs at once)
+ *   3. Caller passes {allBranches:true} when wanting to see legacy docs
+ *      (forces full-collection read, no filter)
+ * This is dormant until a consumer wires {branchId} — no runtime impact today.
  */
 async function _listWithBranch(colRef, { branchId, allBranches = false } = {}) {
   const useFilter = branchId && !allBranches;
