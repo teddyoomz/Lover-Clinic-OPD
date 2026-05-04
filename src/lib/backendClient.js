@@ -7863,9 +7863,33 @@ export async function getPromotion(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listPromotions() {
-  const snap = await getDocs(promotionsCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+/** Phase BSA — branch-scoped read with allBranches=true OR-merge.
+ *  Promotion docs may set `allBranches: true` to be visible at every branch
+ *  even when caller passes a specific branchId. Firestore can't OR across
+ *  fields → 2 queries + Set-dedup. Legacy no-opts call returns full list. */
+export async function listPromotions(opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  if (!useFilter) {
+    const snap = await getDocs(promotionsCol());
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return items;
+  }
+  // 2-query OR-merge: branchId==current OR allBranches==true
+  const [byBranch, byAllBranches] = await Promise.all([
+    getDocs(query(promotionsCol(), where('branchId', '==', String(branchId)))),
+    getDocs(query(promotionsCol(), where('allBranches', '==', true))),
+  ]);
+  const seen = new Set();
+  const items = [];
+  for (const snap of [byBranch, byAllBranches]) {
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      items.push({ id: d.id, ...d.data() });
+    }
+  }
   items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   return items;
 }
@@ -7881,6 +7905,7 @@ export async function savePromotion(promotionId, data) {
   await setDoc(promotionDoc(id), {
     ...data,
     promotionId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
@@ -7942,9 +7967,29 @@ export async function getCoupon(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listCoupons() {
-  const snap = await getDocs(couponsCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+/** Phase BSA — branch-scoped read with allBranches=true OR-merge (mirror of listPromotions). */
+export async function listCoupons(opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  if (!useFilter) {
+    const snap = await getDocs(couponsCol());
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return items;
+  }
+  const [byBranch, byAllBranches] = await Promise.all([
+    getDocs(query(couponsCol(), where('branchId', '==', String(branchId)))),
+    getDocs(query(couponsCol(), where('allBranches', '==', true))),
+  ]);
+  const seen = new Set();
+  const items = [];
+  for (const snap of [byBranch, byAllBranches]) {
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      items.push({ id: d.id, ...d.data() });
+    }
+  }
   items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   return items;
 }
@@ -7960,6 +8005,7 @@ export async function saveCoupon(couponId, data) {
   await setDoc(couponDoc(id), {
     ...data,
     couponId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now,
     updatedAt: now,
   }, { merge: false });
@@ -8021,9 +8067,29 @@ export async function getVoucher(proClinicId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listVouchers() {
-  const snap = await getDocs(vouchersCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+/** Phase BSA — branch-scoped read with allBranches=true OR-merge (mirror of listPromotions). */
+export async function listVouchers(opts = {}) {
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  if (!useFilter) {
+    const snap = await getDocs(vouchersCol());
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return items;
+  }
+  const [byBranch, byAllBranches] = await Promise.all([
+    getDocs(query(vouchersCol(), where('branchId', '==', String(branchId)))),
+    getDocs(query(vouchersCol(), where('allBranches', '==', true))),
+  ]);
+  const seen = new Set();
+  const items = [];
+  for (const snap of [byBranch, byAllBranches]) {
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      items.push({ id: d.id, ...d.data() });
+    }
+  }
   items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   return items;
 }
@@ -8038,6 +8104,7 @@ export async function saveVoucher(voucherId, data) {
   const now = new Date().toISOString();
   await setDoc(voucherDoc(id), {
     ...data, voucherId: id,
+    branchId: _resolveBranchIdForWrite(data),
     createdAt: data.createdAt || now, updatedAt: now,
   }, { merge: false });
 }
