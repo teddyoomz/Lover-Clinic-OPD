@@ -2,7 +2,7 @@
 title: Wiki Index
 type: index
 date-created: 2026-05-04
-date-updated: 2026-05-05
+date-updated: 2026-05-06
 ---
 
 # LoverClinic Wiki — Index
@@ -43,6 +43,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [be_exam_rooms](entities/be-exam-rooms.md) | Firestore collection | Branch-scoped exam-room master (Phase 18.0). Each doc: examRoomId / branchId / name / status / sortOrder. Standard BSA pattern. |
 | [ExamRoomsTab](entities/exam-rooms-tab.md) | Component | `be_exam_rooms` CRUD (Phase 18.0). Backend tab `tab=exam-rooms` under "ข้อมูลพื้นฐาน". BS-9 compliant. Soft-confirm delete with auto-routing to ไม่ระบุห้อง. |
 | [appointmentRoomColumns](entities/appointment-room-columns.md) | Helper / Lib | Pure render-side helpers for AppointmentTab grid columns (`effectiveRoomId`, `buildRoomColumnList`, `UNASSIGNED_ROOM_ID`). 16 unit tests. |
+| [appointmentTypes.js (SSOT)](entities/appointment-types-ssot.md) | Helper / Lib | Phase 19.0 4-type taxonomy SSOT. `APPOINTMENT_TYPES` + `DEFAULT_APPOINTMENT_TYPE` + 4 helpers. Replaces 2-value `'sales'`/`'followup'` enum across 7+ consumers. |
 
 ## Concepts
 
@@ -50,7 +51,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 |---|---|
 | [LLM Wiki pattern](concepts/llm-wiki-pattern.md) | Compounding knowledge base maintained by LLM, not RAG-on-raw-docs. The pattern THIS wiki implements. |
 | [Branch-Scope Architecture](concepts/branch-scope-architecture.md) | 3-layer wrapper that makes branchId default-correct for all UI reads in LoverClinic. Solves the user-reported "branch leak" bug class. |
-| [Iron-clad rules A-L](concepts/iron-clad-rules.md) | The 12 mandatory rules that govern every change in this codebase. Lives in `.claude/rules/`; wiki page summarizes. |
+| [Iron-clad rules A-M](concepts/iron-clad-rules.md) | The mandatory rules that govern every change in this codebase. Lives in `.claude/rules/`; wiki page summarizes. Rule M added 2026-05-06 (data ops via local + admin SDK). |
 | [Rule H-quater (no master_data reads)](concepts/rule-h-quater.md) | Feature code reads only from `be_*`, never from `master_data/*`. Enforced by BSA audit BS-2. |
 | [LoverClinic architecture overview](concepts/lover-clinic-architecture.md) | Top-level: React 19 + Firestore + ProClinic mirror + Vercel serverless. Multi-branch via Phase BS V2 + BSA. |
 | [Branch-switch refresh discipline (BS-9)](concepts/branch-switch-refresh-discipline.md) | Every branch-scoped tab MUST re-fetch on top-right BranchSelector switch. Phase 17.0 invariant. 3-place lock (audit + memory + Rule L). |
@@ -61,6 +62,8 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [Branch Exam Rooms (Phase 18.0)](concepts/branch-exam-rooms.md) | Per-branch exam-room CRUD master. Replaces `appt-rooms-seen` localStorage cumulative cache. Shipped V15 #19 + V15 #20. Migration `--apply` ran 2026-05-05 (3 rooms seeded for นครราชสีมา). |
 | [Runtime fallback for orphan roomIds](concepts/runtime-fallback-orphan-room.md) | Phase 18.0 render-time pattern: blank/missing/stale/cross-branch `roomId` → virtual ไม่ระบุห้อง column. Zero writes on room delete. |
 | [V12 shape-drift bug class](concepts/v12-shape-drift.md) | When writer schema changes, every reader becomes a bug-magnet until swept. Original V12 (2026-04-24) + Phase 17.2-quinquies/septies/octies recurrences (2026-05-05). |
+| [Appointment 15-min slots + 4-type taxonomy (Phase 19.0)](concepts/appointment-15min-and-4types.md) | Slot interval 30→15 min everywhere; type taxonomy `'sales'`/`'followup'` → 4 explicit (`deposit-booking`/`no-deposit-booking`/`treatment-in`/`follow-up`). Shipped V15 #22. Migration `--apply` (27 docs, Option B uniform). |
+| [Data ops via local + admin SDK (Rule M)](concepts/data-ops-via-local-sdk.md) | Codified 2026-05-06. Any data manipulation on prod = `vercel env pull` + admin-SDK + canonical artifacts path + dry-run/apply + audit doc + idempotency + forensic-trail. Never deploy-coupled. |
 
 ## Analyses
 

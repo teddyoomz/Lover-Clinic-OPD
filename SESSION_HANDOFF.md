@@ -406,29 +406,29 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-05 EOD.
+Resume LoverClinic — continue from 2026-05-06 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=a89fc6a, prod=bdd917e V15 #20 LIVE)
-3. .agents/active.md (5394 tests; 2 commits ahead-of-prod)
-4. .claude/rules/00-session-start.md (iron-clad + V-summary)
-5. .agents/sessions/2026-05-05-phase-18-0-and-phase-17-2-fix-series.md
+2. SESSION_HANDOFF.md (master=ac3ab4c, prod=024f6dd V15 #22 LIVE)
+3. .agents/active.md (5463 tests; 1 commit ahead-of-prod, docs-only)
+4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary; Rule M new this session)
+5. .agents/sessions/2026-05-06-phase-19-0-and-rule-m.md
 
-Status: master=a89fc6a, 5394/5394 tests pass, prod=bdd917e (V15 #20 LIVE 2026-05-05 — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms LIVE). master 2 commits ahead-of-prod: `882fb35` empty-state removal (V15 #21 pending) + `a89fc6a` wiki backfill (no deploy). Phase 18.0 migration `--apply` ran on prod (3 rooms seeded for นครราชสีมา — audit `phase-18-0-seed-exam-rooms-1777978075511-...`).
+Status: master=ac3ab4c, 5463/5463 tests pass, prod=024f6dd (V15 #22 LIVE 2026-05-05 — Phase 19.0 LIVE: 15-min slots + 4-type taxonomy). master 1 commit ahead-of-prod: `ac3ab4c` (rules-only — Rule M + session-end wiki update; no deploy needed). Phase 19.0 migration `--apply` ran on prod (27/27 docs migrated 18 null + 9 'sales' → 'no-deposit-booking' — audit `phase-19-0-migrate-appointment-types-1777987427963-c3e11db0`).
 
-Next action: idle. Awaits V15 #21 deploy auth (`882fb35` only — small UX fix; drops "ไม่มีนัดหมายวันนี้" empty-state for click-create on empty days/branches).
+Next action: idle. Phase 19.0 fully shipped + migrated. Rule M (data ops via local + admin SDK + pull env) + session-end wiki auto-update locked in.
 
 Outstanding (user-triggered):
-- V15 #21 deploy (`882fb35` empty-state removal; combined vercel + firestore:rules + Probe-Deploy-Probe Rule B)
+- Update Rule B docs in `.claude/rules/01-iron-clad.md` to clarify `artifacts/{APP_ID}/public/data/` prefix on probe URLs (false-alarm during V15 #22 — root-cause = wrong URL convention, not rule drift)
 - SaleTab field-name audit (post-Phase-17.2-septies; same pattern as TFP `productType` vs `type`)
-- Full AppointmentTab roomId migration (deferred — current grid still uses roomName strings; openCreate + occupied + apptMap rebuild)
+- Full AppointmentTab roomId migration (deferred from Phase 18.0 — current grid still uses roomName strings; openCreate + occupied + apptMap rebuild)
 - LineSettings พระราม 3 per-branch redesign (per-branch chat_config doc — needs schema redesign)
 - Hard-gate Firebase custom claim (currently soft-gate)
 - /audit-all readiness pass
 - 🚨 H-bis ProClinic strip (pre-launch — strip MasterDataTab + brokerClient + cookie-relay/ + dev-only api/proclinic/* + CloneTab)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B (5 endpoints + V23 anon dual-step); Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B (6 endpoints + V23 anon dual-step + be_exam_rooms 403 lock; URLs need `artifacts/{APP_ID}/public/data/` prefix); Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); 🆕 Rule M data-ops via local + admin-SDK + pull-env (never deploy-coupled — V15 #22 lesson lock); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
 
 /session-start
 ```
