@@ -38,6 +38,9 @@ import {
   listAllSellers,
   searchBackendCustomers,
   getCustomer,
+  addCustomer,
+  updateCustomerFromForm,
+  deleteCustomerCascade,
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
@@ -2052,46 +2055,60 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-      let result;
-      if (hasExistingProClinic) {
-        result = await broker.updateProClinic(
-          session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
-      } else {
-        result = await broker.fillProClinic(patient);
-      }
-      setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
-      if (result?.success) {
-        await updateDoc(ref, {
-          opdRecordedAt: new Date().toISOString(),
-          brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
-          brokerError: null, brokerJob: null,
-          ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
-          ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
-        });
-      } else if (result?.notFound) {
-        // HN ไม่เจอใน ProClinic → ถอด HN/OPD แล้วลอง create ใหม่อัตโนมัติ
-        await updateDoc(ref, {
-          brokerProClinicId: null, brokerProClinicHN: null,
-          opdRecordedAt: null, brokerLastAutoSyncAt: null,
-          brokerStatus: null, brokerError: null, brokerJob: null,
-          patientLinkToken: null, patientLinkEnabled: false,
-        });
-        showToast('HN ไม่พบใน ProClinic — ถอด HN แล้ว กำลังบันทึกใหม่...');
-        // ลอง create ใหม่
-        const createResult = await broker.fillProClinic(patient);
-        if (createResult?.success) {
+      // Phase 20.0 Task 5b (2026-05-06) — patient-submit lifecycle on be_*.
+      // brokerProClinicId field semantics now = be_customers id (preserved
+      // for backward compat with existing opd_sessions docs). Cloned customers
+      // already have the same id between proClinicId and be_customers doc-id;
+      // new customers from addCustomer get a fresh id (counter-generated).
+      try {
+        let result;
+        if (hasExistingProClinic) {
+          // Update existing be_customers doc
+          await updateCustomerFromForm(session.brokerProClinicId, patient, {});
+          // Re-read to get current state
+          const updated = await getCustomer(session.brokerProClinicId);
+          result = updated
+            ? { success: true, proClinicId: updated.id, proClinicHN: updated.hn_no || updated.proClinicHN || '' }
+            : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers' };
+        } else {
+          // Create new be_customers doc
+          const created = await addCustomer(patient, { strict: false });
+          result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
+        }
+        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+        if (result?.success) {
           await updateDoc(ref, {
             opdRecordedAt: new Date().toISOString(),
             brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
             brokerError: null, brokerJob: null,
-            ...(createResult.proClinicId ? { brokerProClinicId: createResult.proClinicId } : {}),
-            ...(createResult.proClinicHN ? { brokerProClinicHN: createResult.proClinicHN } : {}),
+            ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
+            ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
           });
-        } else {
-          await updateDoc(ref, { brokerStatus: 'failed', brokerError: createResult?.error || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+        } else if (result?.notFound) {
+          // HN ไม่เจอใน be_customers → ถอด HN/OPD แล้วลอง create ใหม่อัตโนมัติ
+          await updateDoc(ref, {
+            brokerProClinicId: null, brokerProClinicHN: null,
+            opdRecordedAt: null, brokerLastAutoSyncAt: null,
+            brokerStatus: null, brokerError: null, brokerJob: null,
+            patientLinkToken: null, patientLinkEnabled: false,
+          });
+          showToast('HN ไม่พบในระบบ — ถอด HN แล้ว กำลังบันทึกใหม่...');
+          try {
+            const created = await addCustomer(patient, { strict: false });
+            await updateDoc(ref, {
+              opdRecordedAt: new Date().toISOString(),
+              brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+              brokerError: null, brokerJob: null,
+              ...(created.id ? { brokerProClinicId: created.id } : {}),
+              ...(created.hn ? { brokerProClinicHN: created.hn } : {}),
+            });
+          } catch (createErr) {
+            await updateDoc(ref, { brokerStatus: 'failed', brokerError: createErr?.message || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+          }
         }
-      } else {
-        await updateDoc(ref, { brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ', brokerJob: null });
+      } catch (innerErr) {
+        setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
+        await updateDoc(ref, { brokerStatus: 'failed', brokerError: innerErr?.message || String(innerErr), brokerJob: null });
       }
     } catch(e) {
       console.error('broker error:', e);
@@ -2160,12 +2177,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
+      // Phase 20.0 Task 5b — be_customers create-or-update.
       let result;
-      if (hasExistingProClinic) {
-        result = await broker.updateProClinic(
-          session.brokerProClinicId || null, session.brokerProClinicHN || null, patient);
-      } else {
-        result = await broker.fillProClinic(patient);
+      try {
+        if (hasExistingProClinic) {
+          await updateCustomerFromForm(session.brokerProClinicId, patient, {});
+          const updated = await getCustomer(session.brokerProClinicId);
+          result = updated
+            ? { success: true, proClinicId: updated.id, proClinicHN: updated.hn_no || updated.proClinicHN || '' }
+            : { success: false, error: 'ไม่พบลูกค้าใน be_customers' };
+        } else {
+          const created = await addCustomer(patient, { strict: false });
+          result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
+        }
+      } catch (innerErr) {
+        result = { success: false, error: innerErr?.message || String(innerErr) };
       }
       autoSyncInFlightRef.current.delete(sessionId);
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
@@ -2258,11 +2284,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // First time: create customer in ProClinic
         // Fire-and-forget: don't block API call on Firestore write
         updateDoc(ref, { brokerStatus: 'pending' }).catch(() => {});
-        showToast('กำลังสร้างลูกค้าใน ProClinic...');
-        const result = await broker.fillProClinic(patient);
-        if (!result?.success) throw new Error(result?.error || 'สร้างลูกค้าไม่สำเร็จ');
-        proClinicId = result.proClinicId;
-        proClinicHN = result.proClinicHN;
+        showToast('กำลังสร้างลูกค้า...');
+        // Phase 20.0 Task 5b — addCustomer (be_*) replaces broker.fillProClinic
+        const created = await addCustomer(patient, { strict: false });
+        if (!created?.id) throw new Error('สร้างลูกค้าไม่สำเร็จ');
+        proClinicId = created.id;
+        proClinicHN = created.hn || '';
         await updateDoc(ref, {
           brokerStatus: 'done', brokerError: null,
           brokerProClinicId: proClinicId, brokerProClinicHN: proClinicHN,
@@ -2270,13 +2297,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         });
         showToast(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังบันทึกมัดจำ...`);
       } else if (alreadySynced) {
-        // Re-sync: update existing customer OPD data
-        showToast('กำลังอัพเดทข้อมูลลูกค้าใน ProClinic...');
-        await broker.updateProClinic(proClinicId, proClinicHN, patient);
+        // Phase 20.0 Task 5b — update existing be_customers doc.
+        showToast('กำลังอัพเดทข้อมูลลูกค้า...');
+        await updateCustomerFromForm(proClinicId, patient, {});
         await updateDoc(ref, { brokerLastAutoSyncAt: serverTimestamp() });
         showToast('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
       } else {
-        showToast('กำลังบันทึกมัดจำลง ProClinic...');
+        showToast('กำลังบันทึกมัดจำ...');
       }
 
       // Step 2: Submit or update deposit in ProClinic
@@ -2575,28 +2602,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch(e) { console.error('delete job write:', e); }
 
     try {
-      const result = await broker.deleteProClinic(
-        proClinicId, session.brokerProClinicHN || null, patient);
+      // Phase 20.0 Task 5b — deleteCustomerCascade (be_*) replaces
+      // broker.deleteProClinic. Cascade deletes treatments / sales / deposits
+      // / wallets / wallet-tx / memberships / point-tx / appointments owned
+      // by this customer in be_*. Confirm flag required (destructive).
+      try {
+        await deleteCustomerCascade(proClinicId, { confirm: true });
+      } catch (cascadeErr) {
+        // notFound case: customer doc no longer exists → still strip session ids
+        if (!String(cascadeErr?.message || '').includes('not found')
+            && !String(cascadeErr?.message || '').includes('NotFound')) {
+          throw cascadeErr;
+        }
+      }
       setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-      if (result?.success || result?.notFound) {
-        // ลบสำเร็จ หรือ customer ไม่อยู่แล้ว → ถอด HN/OPD ออกทั้งคู่
-        setViewingSession(prev => prev?.id === session.id
-          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false }
-          : prev);
-        await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
-          brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null,
-          patientLinkToken: null, patientLinkEnabled: false });
-        if (result?.notFound) {
-          showToast('HN ไม่พบใน ProClinic (ถูกลบไปแล้ว) — ถอด HN ออก พร้อมบันทึกใหม่');
-        }
-      } else {
-        await updateDoc(ref, { brokerStatus: null, brokerJob: null });
-        showToast(`ลบ ProClinic ไม่สำเร็จ: ${result?.error}`);
-      }
+      // Strip HN/OPD from session always (deleteCustomerCascade doesn't return
+      // a "notFound" sentinel — best-effort cascade is what we want).
+      setViewingSession(prev => prev?.id === session.id
+        ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false }
+        : prev);
+      await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
+        brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null,
+        patientLinkToken: null, patientLinkEnabled: false });
     } catch(e) {
       setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
       console.error('delete error:', e);
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
+      try {
+        await updateDoc(ref, { brokerStatus: null, brokerJob: null });
+      } catch (_) {}
+      showToast(`ลบไม่สำเร็จ: ${e?.message || String(e)}`);
     }
   };
 
