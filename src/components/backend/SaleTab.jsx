@@ -497,14 +497,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     ]);
     setCustomers(c);
     setSellers(sellerList);
-    // 2026-04-28 fix: be_products uses productName / productCategory / productType.
-    // Pre-fix `x.name` was undefined → "ยากลับบ้าน" picker empty list.
+    // 2026-04-28 fix: be_products uses productName / productType.
+    // Phase 20.0 SaleTab audit (2026-05-06) — corrected categoryName
+    // (productCategory does NOT exist on be_products; canonical schema
+    // per productValidation.js is `categoryName`) + canonical-first order
+    // on `unit` (Phase 17.2-septies pattern: mainUnitName||unit).
     setMedProducts(p.map(x => ({
       id: x.id || x.productId,
       name: x.productName || x.name || '',
       price: x.price != null ? x.price : (x.salePrice != null ? x.salePrice : 0),
-      unit: x.unit || x.mainUnitName || '',
-      category: x.productCategory || x.category || '',
+      unit: x.mainUnitName || x.unit || '',
+      category: x.categoryName || x.productCategory || x.category || '',
       type: x.productType || x.type || '',
     })));
   }, [customers.length, sellers.length]);
@@ -539,12 +542,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             products: p.products || [],
           }));
       } else if (type === 'product') {
-        // 2026-04-28 fix: be_products docs use `productName` / `productCategory`
-        // / `productType` (NOT `name` / `category` / `type`). Pre-fix mapping
-        // read undefined → buyFilteredItems filter `i.name.toLowerCase()`
-        // threw → user saw empty list. Plus `p.type === 'สินค้าหน้าร้าน'`
-        // matched 0/323 products because real field is `productType`.
-        // Alias both shapes (be_products canonical + master_data legacy).
+        // 2026-04-28 fix: be_products docs use `productName` / `productType`
+        // (NOT `name` / `type`). Pre-fix mapping read undefined → buy modal
+        // empty.
+        // Phase 20.0 SaleTab audit (2026-05-06) — corrected `categoryName`
+        // (canonical per productValidation.js — productCategory does NOT
+        // exist on be_products) + canonical-first order on `unit` (Phase
+        // 17.2-septies pattern).
         const all = await listProducts();
         items = all
           .filter(p => {
@@ -555,8 +559,8 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             id: p.id || p.productId,
             name: p.productName || p.name || '',
             price: p.price != null ? p.price : (p.salePrice != null ? p.salePrice : 0),
-            unit: p.unit || p.mainUnitName || '',
-            category: p.productCategory || p.category || '',
+            unit: p.mainUnitName || p.unit || '',
+            category: p.categoryName || p.productCategory || p.category || '',
             itemType: 'product',
             // V14 — preserve skipStockDeduction if ever set at product level
             // (currently a course-row-only flag; harmless if absent on products).

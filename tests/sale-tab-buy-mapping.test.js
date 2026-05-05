@@ -64,8 +64,11 @@ describe('STB.A — buy-modal field mapping source-grep', () => {
   });
 
   it('A.5 product-type filter ("สินค้าหน้าร้าน") preserved', () => {
+    // Phase 20.0 SaleTab audit (2026-05-06) — comment-with-old-pattern
+    // removed; the actual filter uses local var pType = productType||type
+    // per Phase 17.2-septies canonical-first pattern.
     const openBuy = saleTabSrc.match(/const openBuyModal[\s\S]+?\}, \[buyItems\]\);/);
-    expect(openBuy?.[0]).toMatch(/p\.type\s*===\s*['"]สินค้าหน้าร้าน['"]/);
+    expect(openBuy?.[0]).toMatch(/(pType|p\.productType\s*\|\|\s*p\.type)[\s\S]*?===\s*['"]สินค้าหน้าร้าน['"]/);
   });
 });
 
