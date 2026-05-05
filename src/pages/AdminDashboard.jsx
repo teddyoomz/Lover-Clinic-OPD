@@ -1583,33 +1583,57 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       setSelectedQR(sessionId);
       setAdminMode('noDeposit', true);
 
-      // Create appointment in ProClinic (background — don't block UI)
+      // Phase 20.0 Task 3 — create be_appointments doc instead of ProClinic.
+      // appointmentProClinicId field name preserved for backward compat with
+      // existing opd_sessions docs; semantics now = be_appointments doc id
+      // (BA-{ts} format).
       const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
-      const apptResult = await broker.createAppointment({
-        appointmentDate: noDepositFormData.appointmentDate,
-        appointmentStartTime: noDepositFormData.appointmentStartTime,
-        appointmentEndTime: noDepositFormData.appointmentEndTime,
-        advisor: noDepositFormData.advisor,
-        doctor: noDepositFormData.doctor,
-        assistant: noDepositFormData.assistant,
-        room: noDepositFormData.room,
-        source: noDepositFormData.source,
-        appointmentTo: visitPurposeText,
-        appointmentNote: noDepositFormData.sessionName?.trim() || '',
-      });
-
-      if (apptResult?.success && apptResult.appointmentProClinicId) {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-          appointmentProClinicId: apptResult.appointmentProClinicId,
-          appointmentSyncStatus: 'done',
+      const doctorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.doctor || ''));
+      const advisorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.advisor || ''));
+      try {
+        const apptResult = await createBackendAppointment({
+          date: noDepositFormData.appointmentDate,
+          startTime: noDepositFormData.appointmentStartTime,
+          endTime: noDepositFormData.appointmentEndTime,
+          doctorId: noDepositFormData.doctor ? String(noDepositFormData.doctor) : '',
+          doctorName: doctorRecord?.name || '',
+          advisorId: noDepositFormData.advisor ? String(noDepositFormData.advisor) : '',
+          advisorName: advisorRecord?.name || '',
+          assistantId: noDepositFormData.assistant ? String(noDepositFormData.assistant) : '',
+          roomId: noDepositFormData.room ? String(noDepositFormData.room) : '',
+          source: noDepositFormData.source || 'walk-in',
+          appointmentTo: visitPurposeText,
+          note: noDepositFormData.sessionName?.trim() || '',
+          appointmentType: 'no-deposit-booking', // Phase 19.0 explicit
+          // No customerId yet — kiosk session created before patient form fill.
+          customerId: '',
+          customerName: noDepositFormData.sessionName?.trim() || '',
         });
-        showToast('สร้างคิวจองไม่มัดจำ + นัดหมาย ProClinic สำเร็จ!');
-      } else {
+        if (apptResult?.appointmentId) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            appointmentProClinicId: apptResult.appointmentId,
+            appointmentSyncStatus: 'done',
+          });
+          showToast('สร้างคิวจองไม่มัดจำ + นัดหมายสำเร็จ!');
+        } else {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            appointmentSyncStatus: 'failed',
+            appointmentSyncError: 'No appointmentId returned',
+          });
+          showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ');
+        }
+      } catch (apptErr) {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
           appointmentSyncStatus: 'failed',
-          appointmentSyncError: apptResult?.error || 'Unknown error',
+          appointmentSyncError: apptErr?.code === 'AP1_COLLISION'
+            ? `ช่วงเวลานี้มีนัดอยู่แล้ว: ${apptErr.collision?.startTime || ''}-${apptErr.collision?.endTime || ''}`
+            : (apptErr?.message || String(apptErr)),
         });
-        showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมาย ProClinic ไม่สำเร็จ');
+        if (apptErr?.code === 'AP1_COLLISION') {
+          showToast('สร้างคิวสำเร็จ แต่ช่วงเวลานัดหมายชนกับนัดอื่น');
+        } else {
+          showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ');
+        }
       }
     } catch (e) {
       console.error('confirmCreateNoDeposit:', e);
@@ -1644,18 +1668,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       visitPurpose: noDepositFormData.visitPurpose || [],
     };
 
+    // Phase 20.0 Task 3 — be_appointments shape (no ProClinic field names).
     const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+    const doctorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.doctor || ''));
+    const advisorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.advisor || ''));
     const apptPayload = {
-      appointmentDate: noDepositFormData.appointmentDate,
-      appointmentStartTime: noDepositFormData.appointmentStartTime,
-      appointmentEndTime: noDepositFormData.appointmentEndTime,
-      advisor: noDepositFormData.advisor,
-      doctor: noDepositFormData.doctor,
-      assistant: noDepositFormData.assistant,
-      room: noDepositFormData.room,
-      source: noDepositFormData.source,
+      date: noDepositFormData.appointmentDate,
+      startTime: noDepositFormData.appointmentStartTime,
+      endTime: noDepositFormData.appointmentEndTime,
+      doctorId: noDepositFormData.doctor ? String(noDepositFormData.doctor) : '',
+      doctorName: doctorRecord?.name || '',
+      advisorId: noDepositFormData.advisor ? String(noDepositFormData.advisor) : '',
+      advisorName: advisorRecord?.name || '',
+      assistantId: noDepositFormData.assistant ? String(noDepositFormData.assistant) : '',
+      roomId: noDepositFormData.room ? String(noDepositFormData.room) : '',
+      source: noDepositFormData.source || 'walk-in',
       appointmentTo: visitPurposeText,
-      appointmentNote: noDepositFormData.sessionName?.trim() || '',
+      note: noDepositFormData.sessionName?.trim() || '',
+      appointmentType: 'no-deposit-booking',
+      customerId: session.customerId ? String(session.customerId) : '',
+      customerName: noDepositFormData.sessionName?.trim() || '',
     };
 
     try {
@@ -1666,29 +1698,44 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
 
       if (session.appointmentProClinicId) {
-        // Update existing appointment in ProClinic
-        const apptResult = await broker.updateAppointment(session.appointmentProClinicId, apptPayload);
-        if (apptResult?.success) {
-          showToast('อัพเดทนัดหมาย ProClinic สำเร็จ!');
-        } else {
-          showToast('บันทึกใน app แล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ' + (apptResult?.error || ''));
+        // Update existing be_appointments doc (field name preserved for
+        // backward compat — semantics now = be_appointments id).
+        try {
+          await updateBackendAppointment(session.appointmentProClinicId, apptPayload);
+          showToast('อัพเดทนัดหมายสำเร็จ!');
+        } catch (apptErr) {
+          if (apptErr?.code === 'AP1_COLLISION') {
+            showToast('ช่วงเวลานี้มีนัดอยู่แล้ว');
+          } else {
+            showToast('บันทึกใน app แล้ว แต่อัพเดทนัดหมายไม่สำเร็จ: ' + (apptErr?.message || String(apptErr)));
+          }
         }
       } else {
-        // No ProClinic ID yet (previous sync failed) → retry creating
-        const apptResult = await broker.createAppointment(apptPayload);
-        if (apptResult?.success && apptResult.appointmentProClinicId) {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
-            appointmentProClinicId: apptResult.appointmentProClinicId,
-            appointmentSyncStatus: 'done',
-            appointmentSyncError: null,
-          });
-          showToast('สร้างนัดหมาย ProClinic สำเร็จ!');
-        } else {
+        // No appointment id yet (previous create failed) → retry creating
+        try {
+          const apptResult = await createBackendAppointment(apptPayload);
+          if (apptResult?.appointmentId) {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
+              appointmentProClinicId: apptResult.appointmentId,
+              appointmentSyncStatus: 'done',
+              appointmentSyncError: null,
+            });
+            showToast('สร้างนัดหมายสำเร็จ!');
+          } else {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
+              appointmentSyncStatus: 'failed',
+              appointmentSyncError: 'No appointmentId returned',
+            });
+            showToast('บันทึกใน app แล้ว แต่สร้างนัดหมายไม่สำเร็จ');
+          }
+        } catch (apptErr) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', editingAppointment), {
             appointmentSyncStatus: 'failed',
-            appointmentSyncError: apptResult?.error || 'Unknown error',
+            appointmentSyncError: apptErr?.code === 'AP1_COLLISION'
+              ? `ช่วงเวลานี้มีนัดอยู่แล้ว: ${apptErr.collision?.startTime || ''}-${apptErr.collision?.endTime || ''}`
+              : (apptErr?.message || String(apptErr)),
           });
-          showToast('บันทึกใน app แล้ว แต่สร้างนัดหมาย ProClinic ไม่สำเร็จ: ' + (apptResult?.error || ''));
+          showToast('บันทึกใน app แล้ว แต่สร้างนัดหมายไม่สำเร็จ');
         }
       }
     } catch (e) {
@@ -1782,11 +1829,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const handleNoDepositCancel = async (session) => {
     try {
-      // Delete appointment from ProClinic first (if exists)
+      // Phase 20.0 Task 3 — delete be_appointments doc (field name preserved).
       if (session.appointmentProClinicId) {
         try {
-          await broker.deleteAppointment(session.appointmentProClinicId);
-        } catch (e) { console.warn('deleteAppointment failed (non-blocking):', e); }
+          await deleteBackendAppointment(session.appointmentProClinicId);
+        } catch (e) { console.warn('deleteBackendAppointment failed (non-blocking):', e); }
       }
 
       if (session.patientData) {
