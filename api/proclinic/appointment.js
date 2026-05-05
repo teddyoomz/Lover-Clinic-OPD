@@ -3,6 +3,7 @@
 import { createSession, getSession, handleCors } from './_lib/session.js';
 import { extractCSRF } from './_lib/scraper.js';
 import { verifyAuth } from './_lib/auth.js';
+import { mapAppointmentTypeForProClinic } from './_lib/appointmentTypeProClinic.js';
 import * as cheerio from 'cheerio';
 import { debugLog } from '../../src/lib/debugLog.js';
 
@@ -27,7 +28,8 @@ async function handleCreate(req, res) {
   params.set('_token', csrf);
   params.set('type', '');
   params.set('current_doctor_id', '');
-  params.set('appointment_type', appointment.appointmentType || 'sales');
+  // Phase 19.0 — translate 4-type → 2-type for ProClinic; rule H-bis @dev-only
+  params.set('appointment_type', mapAppointmentTypeForProClinic(appointment.appointmentType));
   params.set('appointment_option', 'once');
   // Link to customer — ProClinic uses 'choose' (not 'existed')
   if (appointment.customerId) {
@@ -192,7 +194,8 @@ async function handleUpdate(req, res) {
   params.set('is_basic_flow', 'true');
   params.set('type', '');
   params.set('current_doctor_id', existingData.doctor_id || '');
-  params.set('appointment_type', existingData.appointment_type || 'sales');
+  // Phase 19.0 — translate 4-type → 2-type for ProClinic; rule H-bis @dev-only
+  params.set('appointment_type', mapAppointmentTypeForProClinic(existingData.appointment_type || existingData.appointmentType));
   params.set('appointment_option', 'once');
 
   // Do NOT send customer_option on update — ProClinic trial breaks with 'existed'
