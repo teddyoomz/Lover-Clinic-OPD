@@ -7,12 +7,27 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-04 EOD — Phase BS shipped + Phase BS V2 master-data branch-scoped; V15 #16 pending
+- **Date last updated**: 2026-05-05 EOD — Phase 17 trilogy + 17.2-bis + 17.2-ter shipped to master; V15 #18 LEAKING in prod; V15 #19 pending
 - **Branch**: `master`
-- **Last commit**: `cf897f6` — feat(branch-bs-v2): master-data tabs branch-scoped per user directive
-- **Test count**: **4744** (+132 BS tests; 6 existing tests adjusted for new contract)
+- **Last commit**: `281c871` — fix(phase-17-2-ter): TodaysDoctorsPanel cross-branch leak via listenToScheduleByDay
+- **Test count**: **5199** (Phase 17.0 +44 / 17.1 +167 / 17.2 +52 / 17.2-bis +1 / 17.2-ter unchanged + ~62 stale tests deleted/updated through cycles)
 - **Build**: clean
-- **Deploy state**: ✅ **PRODUCTION = `83d8413`** (V15 #15 LIVE 2026-05-06) · master **3 code commits ahead-of-prod** (`da57c08` stock-name fix + `aecf3a1` listener branch-scope + `cf897f6` Phase BS V2). 2833 prod docs migrated via admin SDK (LIVE NOW, no code deploy needed for that part).
+- **Deploy state**: ⚠️ **PRODUCTION = `24aa9e9`** (V15 #18 LIVE 2026-05-05; bundles Phase 17.0 + 17.1 + 17.2 — but cross-branch LEAK regression surfaced post-deploy). master **2 commits ahead-of-prod**: `0361268` (17.2-bis: per-user-key resolver + null-guard helpers) + `281c871` (17.2-ter: schedule listener branchId filter). Phase 17.2 migration `--apply` ALREADY ran on prod (3 writes — audit `phase-17-2-remove-main-branch-1777961452972-...`).
+
+### Session 2026-05-05 EOD — Phase 17 trilogy (BS-9 / cross-branch import / branch equality) + 2 hotfixes
+
+Marathon session: shipped 5 commits (4 features + 1 hotfix-pair) over the course of the day. Phase 17.0 (5799bd5, V15 #17): BSA leak sweep 3 closed Promotion/Coupon/Voucher branch-refresh + TFP modal phantom data + locked BS-9 invariant in 3 places (audit skill + memory + Rule L). 17-page wiki backfill cycle bundled. Phase 17.1 (ff78426, V15 #18): admin-only "Copy from another branch" feature on 7 master-data tabs — shared modal + 7 per-entity adapters + atomic firebase-admin server endpoint + 167 tests. Phase 17.2 (24aa9e9, V15 #18): branch equality directive ("ทุกสาขาเป็นสาขาเหมือนกัน") — admin SDK migration script + per-user uid localStorage + newest-default + single-branch-no-picker + isDefault stripped + includeLegacyMain removed + BranchProvider hoisted to App.jsx. Migration `--apply` ran on prod (3 writes, idempotent).
+
+Post-deploy regression: user reported TFP buttons + AppointmentTab TodaysDoctorsPanel showed cross-branch data after switching to a branch with no data. Root cause: `branchSelection.js resolveSelectedBranchId()` read the LEGACY unkeyed localStorage key, but Phase 17.2 BranchContext writes to per-user keyed `selectedBranchId:${uid}`. After first-mount migration, resolver returned null → scopedDataLayer auto-inject passed null → raw lister `useFilter = branchId && !allBranches` evaluated false → cross-branch read.
+
+**Phase 17.2-bis** (0361268): resolver reads `auth.currentUser.uid` synchronously + per-user key first; `_autoInject`/`_autoInjectPositional` helpers in scopedDataLayer return `[]` when no branch resolved (28 wrappers migrated).
+**Phase 17.2-ter** (281c871): `getActiveSchedulesForDate` + `listenToScheduleByDay` accept branchId positional arg + apply where-clause; AppointmentTab passes selectedBranchId + adds to deps.
+
+V15 #19 pending — bundles 17.2-bis + 17.2-ter. Awaits explicit "deploy" THIS turn.
+
+Wiki-first methodology validated: caught a real spec bug (TFP duplicate import / SELECTED_BRANCH_ID name) in Phase 17.0 review pre-implementation.
+
+Detail: `.agents/sessions/2026-05-05-phase-17-trilogy-and-leak-fixes.md`
 
 ### Session 2026-05-04 EOD — Phase BS shipped + Phase BS V2 master-data branch-scoped
 
@@ -328,31 +343,33 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-04 EOD.
+Resume LoverClinic — continue from 2026-05-05 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=cf897f6, prod=83d8413)
-3. .agents/active.md (4744 tests pass; 3 code commits ahead-of-prod)
-4. .claude/rules/00-session-start.md
-5. .agents/sessions/2026-05-04-phase-bs-v2.md
+2. SESSION_HANDOFF.md (master=281c871, prod=24aa9e9 V15 #18 LEAKING)
+3. .agents/active.md (5199 tests; 2 commits ahead-of-prod)
+4. .claude/rules/00-session-start.md (iron-clad + V-summary)
+5. .agents/sessions/2026-05-05-phase-17-trilogy-and-leak-fixes.md
 
-Status: master=cf897f6, 4744/4744 tests pass, prod=83d8413 LIVE (V15 #15). 3 code commits ahead-of-prod (V15 #16 pending deploy auth). 2833 prod docs already migrated to นครราชสีมา via admin SDK (LIVE NOW).
+Status: master=281c871, 5199/5199 tests pass, prod=24aa9e9 (V15 #18 LIVE — has cross-branch LEAK). master 2 commits ahead-of-prod. Phase 17.2 migration `--apply` already ran on prod data (3 writes, idempotent — audit `phase-17-2-remove-main-branch-1777961452972-...`).
 
-Next action: V15 #16 combined deploy when user types "deploy" THIS turn.
+Next action: 🚨 V15 #19 combined deploy when user types "deploy" THIS turn.
 - vercel --prod + firebase rules (idempotent — no rule changes)
-- Probe-Deploy-Probe Rule B (6/6 pre + 6/6 post + cleanup 4/4)
-- Ships da57c08 (stock name fix) + aecf3a1 (listener branch-scope) + cf897f6 (Phase BS V2 master-data)
+- Probe-Deploy-Probe Rule B (5/5 pre + 5/5 post + cleanup)
+- Ships 0361268 (17.2-bis: per-user-key resolver + null-guard helpers) + 281c871 (17.2-ter: schedule listener branchId filter)
+- Clears TFP modals + Promotion/Coupon/Voucher tabs + AppointmentTab TodaysDoctorsPanel cross-branch leak
 
 Outstanding (user-triggered):
-- V15 #16 deploy
-- LineSettingsTab per-branch redesign (single global doc; deferred)
-- be_link_requests writers branchId stamp (webhook-side; legacy fallback shim covers reads for now)
-- Hard-gate via Firebase custom claim (Phase BS-future)
-- 16.8 /audit-all orchestrator-only readiness check
-- Phase 17 plan TBD
+- V15 #19 deploy (CRITICAL — clears prod leak)
+- Browser smoke verify post-deploy (TFP modals / marketing tabs / TodaysDoctorsPanel)
+- Internal-leak audit follow-up: _resolveProductIdByName, findProductGroupByName, saveBankAccount mutex, listStockTransfers/Withdrawals, listExpenses (all in backendClient.js — 5 sites flagged in 17.2-ter commit)
+- LineSettings พระราม 3 admin entry (Channel Secret + Access Token)
+- Hard-gate Firebase custom claim (Phase BS-future)
+- /audit-all orchestrator readiness pass
+- Phase 17.1 brainstorm executed inline this session; Phase 17.2 brainstorm executed inline; both shipped
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; H-quater (no master_data reads in feature code); Phase BS branchId IMMUTABILITY on customer doc; V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
 
 /session-start
 ```
