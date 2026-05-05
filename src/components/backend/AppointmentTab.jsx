@@ -37,6 +37,7 @@ import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // rendering "+ ผู้ช่วย: A, B, C" below the doctor name. Helper falls back
 // to doctorMap lookup for legacy appts that lack assistantNames denorm.
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
+import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -50,16 +51,10 @@ const STATUSES = [
   { value: 'cancelled', label: 'ยกเลิก', bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 ];
 const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav (read by AppointmentFormModal)
-const SLOT_H = 36; // px per 30-min slot
-
-// Generate time slots 08:30 - 22:30 (30-min)
-const TIME_SLOTS = [];
-for (let h = 8; h <= 22; h++) {
-  for (let m = 0; m < 60; m += 30) {
-    if (h === 8 && m === 0) continue;
-    TIME_SLOTS.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-  }
-}
+// Phase 19.0 (2026-05-06) — SLOT_H halved to 18 (was 36 per 30-min); 15-min
+// canonical TIME_SLOTS imported from staffScheduleValidation. Total grid
+// pixel-height preserved (28 rows × 36 = 1008; 56 rows × 18 = 1008).
+const SLOT_H = 18; // px per 15-min slot
 
 // AP3: clinic is Thailand (Asia/Bangkok, UTC+7, no DST). `new Date()` + the
 // local-getters below would be fine for admins in Thailand but drift for
@@ -382,7 +377,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       mode: 'create',
       initialDate: date || selectedDate,
       initialStartTime: time || '10:00',
-      initialEndTime: time ? (TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time) : '10:30',
+      initialEndTime: time ? (TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time) : '10:15',
       initialRoomName: room || '',
     });
   };
