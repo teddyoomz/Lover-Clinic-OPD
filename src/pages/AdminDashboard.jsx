@@ -4163,6 +4163,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             )}
           </div>
+          {/* Phase 20.0 Task 6 (2026-05-06) — BranchSelector in DESKTOP header.
+               Mirrors the mobile placement (line ~4030) but rendered inside
+               the `hidden xl:flex` desktop block so it's visible at xl: ≥1280px
+               viewports. Without this, desktop users see no branch picker. */}
+          <BranchSelector />
           {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} />}
           {/* Online admins indicator — desktop */}
           <div className="relative group">
