@@ -79,3 +79,13 @@ export function buildDoctorMap(doctors) {
   }
   return m;
 }
+
+// Phase 19.0 (2026-05-06) — re-export type-resolution helpers from
+// appointmentTypes.js so chip-rendering callers (AppointmentTab,
+// CustomerDetailView, AdminDashboard) have a single import surface.
+export {
+  resolveAppointmentTypeLabel,
+  resolveAppointmentTypeDefaultColor,
+  APPOINTMENT_TYPES,
+  DEFAULT_APPOINTMENT_TYPE,
+} from './appointmentTypes.js';

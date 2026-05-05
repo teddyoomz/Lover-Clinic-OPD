@@ -27,6 +27,7 @@ import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
 import { shouldRingChatAlert, shouldRingChatInterval } from '../lib/chatUnreadUtils.js';
+import { resolveAppointmentTypeLabel } from '../lib/appointmentDisplay.js';
 import DateField from '../components/DateField.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
@@ -5350,7 +5351,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {selectedAppts.map((appt) => {
                       const statusMap = { '1': 'รอดำเนินการ', '2': 'ยืนยันแล้ว', '3': 'เสร็จสิ้น', '4': 'ยกเลิก' };
                       const statusColor = { '1': 'text-orange-400', '2': 'text-green-400', '3': 'text-blue-400', '4': 'text-red-400' };
-                      const typeMap = { follow: 'ติดตาม', sales: 'ขาย', consult: 'ปรึกษา', treatment: 'รักษา' };
                       return (
                         <div key={appt.id} className="p-4 hover:bg-[var(--bg-hover)] transition-colors">
                           <div className="flex items-start gap-3">
@@ -5380,7 +5380,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               </div>
                               <div className="flex flex-wrap gap-1.5 mt-1.5">
                                 {appt.appointmentType && (
-                                  <span className="text-[11px] bg-sky-950/40 text-sky-400 border border-sky-900/40 px-1.5 py-0.5 rounded font-bold">{typeMap[appt.appointmentType] || appt.appointmentType}</span>
+                                  <span className="text-[11px] bg-sky-950/40 text-sky-400 border border-sky-900/40 px-1.5 py-0.5 rounded font-bold">{resolveAppointmentTypeLabel(appt.appointmentType)}</span>
                                 )}
                                 <span className={`text-[11px] font-bold ${statusColor[appt.status] || 'text-gray-400'}`}>
                                   {appt.confirmed ? '✓ ' : ''}{statusMap[appt.status] || `สถานะ ${appt.status}`}
@@ -5629,7 +5629,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                                 <>
                                                   <span className={`font-bold truncate ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>{appt.fullCustomerName || appt.customerName || '—'}</span>
                                                   {appt.doctorName && appt.doctorName !== '-' && <span className="text-[8px] text-sky-500 shrink-0">🔥{appt.doctorName}</span>}
-                                                  {appt.appointmentType && <span className="text-[8px] text-gray-500 shrink-0">{appt.appointmentType}</span>}
+                                                  {appt.appointmentType && <span className="text-[8px] text-gray-500 shrink-0">{resolveAppointmentTypeLabel(appt.appointmentType)}</span>}
                                                 </>
                                               ) : (
                                                 <span className="text-gray-600 text-[11px]">—</span>
