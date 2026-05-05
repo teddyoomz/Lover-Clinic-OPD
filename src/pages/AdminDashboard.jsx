@@ -34,8 +34,11 @@ import {
   deleteBackendAppointment,
   listStaff,
   listDoctors,
+  listExamRooms,
+  listAllSellers,
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
+import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
@@ -1484,14 +1487,53 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return <span className="bg-gray-800 text-gray-300 border border-gray-700 px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap inline-block">INTAKE</span>;
   };
 
-  // ── Deposit: fetch options from ProClinic ──
+  // ── Deposit: build form options from be_* (Phase 20.0 Task 4, 2026-05-06) ──
+  // Replaces broker.getDepositOptions which scraped ProClinic's deposit form.
+  // Sources: listStaff (advisors) + listDoctors + listExamRooms + listAllSellers
+  // + canonical TIME_SLOTS (Phase 19.0 15-min) + static paymentMethods
+  // (Thai canonical list — admin can rewire to listBankAccounts in a follow-up).
+  const PAYMENT_METHODS_STATIC = Object.freeze([
+    { value: 'cash', label: 'เงินสด' },
+    { value: 'transfer', label: 'โอน' },
+    { value: 'credit', label: 'บัตรเครดิต' },
+    { value: 'debit', label: 'บัตรเดบิต' },
+    { value: 'qr', label: 'QR Code' },
+  ]);
+  const CUSTOMER_SOURCES_STATIC = Object.freeze([
+    { value: 'walk-in', label: 'Walk-in' },
+    { value: 'facebook', label: 'Facebook' },
+    { value: 'line', label: 'LINE' },
+    { value: 'referral', label: 'แนะนำ' },
+    { value: 'other', label: 'อื่นๆ' },
+  ]);
   const fetchDepositOptions = async () => {
     if (depositOptions) return; // already loaded
     setDepositOptionsLoading(true);
     try {
-      const res = await broker.getDepositOptions();
-      if (res?.success) setDepositOptions(res.options);
-      else console.warn('deposit-options failed:', res?.error);
+      const [doctors, staff, rooms, sellers] = await Promise.all([
+        listDoctors().catch(() => []),
+        listStaff().catch(() => []),
+        listExamRooms().catch(() => []),
+        listAllSellers().catch(() => []),
+      ]);
+      const timeOptions = CANONICAL_TIME_SLOTS.map(t => ({ value: t, label: t }));
+      const options = {
+        paymentMethods: [...PAYMENT_METHODS_STATIC],
+        sellers: (sellers || []).map(s => ({ value: String(s.id), label: s.name || s.id })),
+        appointmentStartTimes: timeOptions,
+        appointmentEndTimes: timeOptions,
+        doctors: (doctors || [])
+          .filter(d => d.status !== 'พักใช้งาน')
+          .map(d => ({ value: String(d.id), label: d.name || d.id })),
+        rooms: (rooms || [])
+          .filter(r => r.status !== 'พักใช้งาน')
+          .map(r => ({ value: String(r.id), label: r.name || r.roomName || r.id })),
+        advisors: (staff || [])
+          .filter(s => s.status !== 'พักใช้งาน')
+          .map(s => ({ value: String(s.id), label: s.name || s.id })),
+        sources: [...CUSTOMER_SOURCES_STATIC],
+      };
+      setDepositOptions(options);
     } catch (e) { console.error('fetchDepositOptions:', e); }
     setDepositOptionsLoading(false);
   };
