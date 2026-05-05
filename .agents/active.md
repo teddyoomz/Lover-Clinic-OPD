@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-05 — Phase 17.2 branch-equality (no main branch) shipped to master; 5198 tests pass; 2 commits ahead-of-prod"
-status: "master=<phase-17-2-sha> · 5198 tests pass · 2 commits ahead-of-prod (V15 #17 = 5799bd5; Phase 17.1 ff78426 + Phase 17.2 ahead)"
-current_focus: "Phase 17.2 done — admin SDK migration script awaits separate explicit user authorization to --apply against prod data."
+updated_at: "2026-05-05 — Phase 17.2-bis hotfix (per-user-key resolver + cross-branch leak guard); 5199 tests pass; 1 commit ahead-of-prod"
+status: "master=<phase-17-2-bis-sha> · 5199 tests pass · 1 commit ahead-of-prod (V15 #18 = 24aa9e9)"
+current_focus: "Hotfix shipped to master. Awaits explicit deploy to clear the prod TFP cross-branch leak."
 branch: "master"
-last_commit: "<phase-17-2-sha>"
-tests: 5198
+last_commit: "<phase-17-2-bis-sha>"
+tests: 5199
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "5799bd5"
+production_commit: "24aa9e9"
 firestore_rules_version: 25
 storage_rules_version: 2
 ---

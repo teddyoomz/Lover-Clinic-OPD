@@ -67,19 +67,29 @@ describe('F2 — listProductGroupsForTreatment branchId filter', () => {
 // ─── F3 — scopedDataLayer auto-inject ─────────────────────────────────────
 
 describe('F3 — scopedDataLayer wrapper auto-inject', () => {
-  it('F3.1 wrapper signature accepts (productType, opts)', () => {
+  // Phase 17.2-bis (2026-05-05) — wrappers now use the _autoInject /
+  // _autoInjectPositional helpers instead of inline opts spread. Helpers
+  // call resolveSelectedBranchId() inside, return [] when null. Tests
+  // updated to assert the new pattern (helper-based) while preserving
+  // intent: branchId auto-injection from resolver, allBranches passthrough.
+
+  it('F3.1 wrapper uses _autoInjectPositional helper (Phase 17.2-bis)', () => {
     const content = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
-    expect(content).toMatch(/listProductGroupsForTreatment\s*=\s*\(\s*productType\s*,\s*opts\s*=\s*\{\s*\}\s*\)\s*=>/);
+    expect(content).toMatch(/listProductGroupsForTreatment\s*=\s*_autoInjectPositional\(\s*\(\)\s*=>\s*raw\.listProductGroupsForTreatment\s*\)/);
   });
 
-  it('F3.2 wrapper passes resolveSelectedBranchId() as branchId opt', () => {
+  it('F3.2 _autoInjectPositional helper invokes resolveSelectedBranchId()', () => {
     const content = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
-    expect(content).toMatch(/listProductGroupsForTreatment[\s\S]+?branchId:\s*resolveSelectedBranchId\(\)/);
+    // Find the helper definition and assert it calls resolveSelectedBranchId.
+    expect(content).toMatch(/function\s+_autoInjectPositional[\s\S]+?resolveSelectedBranchId\(\)/);
   });
 
-  it('F3.3 wrapper preserves explicit opts override (spread after default)', () => {
+  it('F3.3 _autoInjectPositional preserves explicit opts override + safe-empty fallback', () => {
     const content = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
-    expect(content).toMatch(/\{\s*branchId:\s*resolveSelectedBranchId\(\)\s*,\s*\.\.\.opts\s*\}/);
+    // Helper has the safe-empty branch (returns Promise.resolve([]) when no id).
+    expect(content).toMatch(/function\s+_autoInjectPositional[\s\S]+?Promise\.resolve\(\[\]\)/);
+    // Helper passes through when explicit branchId set.
+    expect(content).toMatch(/function\s+_autoInjectPositional[\s\S]+?opts\.branchId/);
   });
 });
 
@@ -133,9 +143,9 @@ describe('F5 — Source-grep regression guards', () => {
     expect(content).toMatch(/listProductGroupsForTreatment\s*\([^)]*\{\s*branchId/);
   });
 
-  it('F5.2 scopedDataLayer wrapper passes opts as 2nd arg (Layer 2)', () => {
+  it('F5.2 scopedDataLayer wrapper uses _autoInjectPositional for listProductGroupsForTreatment (Phase 17.2-bis)', () => {
     const content = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
-    expect(content).toMatch(/raw\.listProductGroupsForTreatment\(\s*productType\s*,\s*\{[^}]*branchId/);
+    expect(content).toMatch(/listProductGroupsForTreatment\s*=\s*_autoInjectPositional/);
   });
 
   it('F5.3 TFP imports useSelectedBranch', () => {

@@ -31,54 +31,106 @@
 import * as raw from './backendClient.js';
 import { resolveSelectedBranchId } from './branchSelection.js';
 
+// ─── Phase 17.2-bis (2026-05-05) — auto-inject helpers ────────────────────
+// Wraps a raw lister with two safety properties:
+//   1. Lazy access to raw.X (preserves the V36.G.51 / Task 6 strict-mock
+//      partial-namespace pattern — raw.X resolved at call time, not
+//      module-load).
+//   2. Returns Promise<[]> when no branch is resolved AND caller did not
+//      opt out via allBranches:true or explicit branchId. This prevents
+//      the cross-branch leak that surfaced in Phase 17.2 prod after the
+//      per-user-key migration: resolveSelectedBranchId() correctly returned
+//      null in edge cases (user not logged in / first-mount race), and
+//      raw lister's `useFilter = branchId && !allBranches` evaluated null
+//      as falsy → cross-branch read. UI saw "every branch's data" instead
+//      of empty for the selected branch (user reported "ทุกปุ่มมั่วไปหมด"
+//      on TFP after switching branches).
+//
+// Pass-through cases (no auto-inject; raw lister called as-is):
+//   - opts.allBranches === true        → caller wants cross-branch read
+//   - opts.branchId is truthy string   → caller specified explicit branchId
+//
+// Auto-inject case (any other shape — null/undefined branchId + no allBranches):
+//   - resolveSelectedBranchId() runs
+//   - if null → Promise.resolve([])  — UI safe, no leak
+//   - else → raw.X({ ...opts, branchId: resolved })
+//
+// Test back-compat: callsites in tests that pass an explicit branchId still
+// pass through unchanged. Callsites that pass NO opts trigger auto-inject;
+// if no branch resolves, they get [] (was: cross-branch read pre-Phase-17.2-bis).
+
+function _autoInject(rawFnGetter) {
+  return (opts = {}) => {
+    if (opts.allBranches === true) return rawFnGetter()(opts);
+    if (typeof opts.branchId === 'string' && opts.branchId) {
+      return rawFnGetter()(opts);
+    }
+    const id = resolveSelectedBranchId();
+    if (!id) return Promise.resolve([]);
+    return rawFnGetter()({ ...opts, branchId: id });
+  };
+}
+
+function _autoInjectPositional(rawFnGetter) {
+  return (positional, opts = {}) => {
+    if (opts.allBranches === true) return rawFnGetter()(positional, opts);
+    if (typeof opts.branchId === 'string' && opts.branchId) {
+      return rawFnGetter()(positional, opts);
+    }
+    const id = resolveSelectedBranchId();
+    if (!id) return Promise.resolve([]);
+    return rawFnGetter()(positional, { ...opts, branchId: id });
+  };
+}
+
 // ─── Branch-scoped one-shot listers — auto-inject ──────────────────────────
 // Lazy: raw.X accessed at call time, not module-load.
 
-export const listProducts = (opts = {}) => raw.listProducts({ branchId: resolveSelectedBranchId(), ...opts });
-export const listCourses = (opts = {}) => raw.listCourses({ branchId: resolveSelectedBranchId(), ...opts });
-export const listProductGroups = (opts = {}) => raw.listProductGroups({ branchId: resolveSelectedBranchId(), ...opts });
-export const listProductUnitGroups = (opts = {}) => raw.listProductUnitGroups({ branchId: resolveSelectedBranchId(), ...opts });
-export const listMedicalInstruments = (opts = {}) => raw.listMedicalInstruments({ branchId: resolveSelectedBranchId(), ...opts });
-export const listHolidays = (opts = {}) => raw.listHolidays({ branchId: resolveSelectedBranchId(), ...opts });
-export const listDfGroups = (opts = {}) => raw.listDfGroups({ branchId: resolveSelectedBranchId(), ...opts });
-export const listDfStaffRates = (opts = {}) => raw.listDfStaffRates({ branchId: resolveSelectedBranchId(), ...opts });
+export const listProducts = _autoInject(() => raw.listProducts);
+export const listCourses = _autoInject(() => raw.listCourses);
+export const listProductGroups = _autoInject(() => raw.listProductGroups);
+export const listProductUnitGroups = _autoInject(() => raw.listProductUnitGroups);
+export const listMedicalInstruments = _autoInject(() => raw.listMedicalInstruments);
+export const listHolidays = _autoInject(() => raw.listHolidays);
+export const listDfGroups = _autoInject(() => raw.listDfGroups);
+export const listDfStaffRates = _autoInject(() => raw.listDfStaffRates);
 
 // Finance master
-export const listBankAccounts = (opts = {}) => raw.listBankAccounts({ branchId: resolveSelectedBranchId(), ...opts });
-export const listExpenseCategories = (opts = {}) => raw.listExpenseCategories({ branchId: resolveSelectedBranchId(), ...opts });
-export const listExpenses = (opts = {}) => raw.listExpenses({ branchId: resolveSelectedBranchId(), ...opts });
+export const listBankAccounts = _autoInject(() => raw.listBankAccounts);
+export const listExpenseCategories = _autoInject(() => raw.listExpenseCategories);
+export const listExpenses = _autoInject(() => raw.listExpenses);
 
 // Schedules
-export const listStaffSchedules = (opts = {}) => raw.listStaffSchedules({ branchId: resolveSelectedBranchId(), ...opts });
+export const listStaffSchedules = _autoInject(() => raw.listStaffSchedules);
 
 // Marketing (with allBranches:true doc-field OR-merge inside Layer 1)
-export const listPromotions = (opts = {}) => raw.listPromotions({ branchId: resolveSelectedBranchId(), ...opts });
-export const listCoupons = (opts = {}) => raw.listCoupons({ branchId: resolveSelectedBranchId(), ...opts });
-export const listVouchers = (opts = {}) => raw.listVouchers({ branchId: resolveSelectedBranchId(), ...opts });
+export const listPromotions = _autoInject(() => raw.listPromotions);
+export const listCoupons = _autoInject(() => raw.listCoupons);
+export const listVouchers = _autoInject(() => raw.listVouchers);
 
 // Financial
-export const listOnlineSales = (opts = {}) => raw.listOnlineSales({ branchId: resolveSelectedBranchId(), ...opts });
-export const listSaleInsuranceClaims = (opts = {}) => raw.listSaleInsuranceClaims({ branchId: resolveSelectedBranchId(), ...opts });
-export const listVendorSales = (opts = {}) => raw.listVendorSales({ branchId: resolveSelectedBranchId(), ...opts });
-export const listQuotations = (opts = {}) => raw.listQuotations({ branchId: resolveSelectedBranchId(), ...opts });
+export const listOnlineSales = _autoInject(() => raw.listOnlineSales);
+export const listSaleInsuranceClaims = _autoInject(() => raw.listSaleInsuranceClaims);
+export const listVendorSales = _autoInject(() => raw.listVendorSales);
+export const listQuotations = _autoInject(() => raw.listQuotations);
 // Deposits — Phase BSA leak-sweep-2 (2026-05-04): branch-scoped per user
 // directive. Customer-attached deposit lookups (getCustomerDeposits /
 // getActiveDeposits) stay UNIVERSAL — see below.
-export const getAllDeposits = (opts = {}) => raw.getAllDeposits({ branchId: resolveSelectedBranchId(), ...opts });
+export const getAllDeposits = _autoInject(() => raw.getAllDeposits);
 
 // Sellers / staff-by-branch
-export const listAllSellers = (opts = {}) => raw.listAllSellers({ branchId: resolveSelectedBranchId(), ...opts });
-export const listStaffByBranch = (opts = {}) => raw.listStaffByBranch({ branchId: resolveSelectedBranchId(), ...opts });
+export const listAllSellers = _autoInject(() => raw.listAllSellers);
+export const listStaffByBranch = _autoInject(() => raw.listStaffByBranch);
 
 // Sales / appointments — positional + opts
-export const getAllSales = (opts = {}) => raw.getAllSales({ branchId: resolveSelectedBranchId(), ...opts });
-export const getAppointmentsByDate = (positional, opts = {}) => raw.getAppointmentsByDate(positional, { branchId: resolveSelectedBranchId(), ...opts });
-export const getAppointmentsByMonth = (positional, opts = {}) => raw.getAppointmentsByMonth(positional, { branchId: resolveSelectedBranchId(), ...opts });
+export const getAllSales = _autoInject(() => raw.getAllSales);
+export const getAppointmentsByDate = _autoInjectPositional(() => raw.getAppointmentsByDate);
+export const getAppointmentsByMonth = _autoInjectPositional(() => raw.getAppointmentsByMonth);
 
 // Stock — branch-scoped (locationId == branchId at branch tier)
-export const listStockBatches = (opts = {}) => raw.listStockBatches({ branchId: resolveSelectedBranchId(), ...opts });
-export const listStockOrders = (opts = {}) => raw.listStockOrders({ branchId: resolveSelectedBranchId(), ...opts });
-export const listStockMovements = (opts = {}) => raw.listStockMovements({ branchId: resolveSelectedBranchId(), ...opts });
+export const listStockBatches = _autoInject(() => raw.listStockBatches);
+export const listStockOrders = _autoInject(() => raw.listStockOrders);
+export const listStockMovements = _autoInject(() => raw.listStockMovements);
 
 // ─── Universal — re-export raw (LAZY), NO branch logic ─────────────────────
 
@@ -392,8 +444,10 @@ export const beCourseToMasterShape = (...args) => raw.beCourseToMasterShape(...a
 // Phase 17.0 — was a pass-through; now auto-injects branchId so TFP modal
 // shows only current-branch product-groups + products. Layer 1 underlying
 // lister was extended in same phase to accept opts.
-export const listProductGroupsForTreatment = (productType, opts = {}) =>
-  raw.listProductGroupsForTreatment(productType, { branchId: resolveSelectedBranchId(), ...opts });
+// Phase 17.2-bis (2026-05-05) — uses _autoInjectPositional so a null
+// resolveSelectedBranchId() returns [] (no cross-branch leak). productType
+// is the positional arg.
+export const listProductGroupsForTreatment = _autoInjectPositional(() => raw.listProductGroupsForTreatment);
 
 // ─── Admin reconciler ──────────────────────────────────────────────────────
 export const reconcileAllCustomerSummaries = (...args) => raw.reconcileAllCustomerSummaries(...args);

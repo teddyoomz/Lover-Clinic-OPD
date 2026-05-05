@@ -364,10 +364,15 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
   });
 
   describe('BS2.3 caller override paths', () => {
-    it('BS2.3.1 {allBranches:true} preserved', async () => {
+    it('BS2.3.1 {allBranches:true} preserved (Phase 17.2-bis: no redundant branchId injection)', async () => {
+      // Phase 17.2-bis (2026-05-05): when allBranches:true, scopedDataLayer
+      // pass-throughs without auto-injecting branchId — caller wants
+      // cross-branch read, branchId is moot. Pre-17.2-bis the wrapper
+      // unconditionally spread `{branchId: resolveSelectedBranchId(), ...opts}`
+      // which produced the redundant pair `{branchId:'BR-TEST', allBranches:true}`.
       const scoped = await import('../src/lib/scopedDataLayer.js');
       await scoped.listProducts({ allBranches: true });
-      expect(calls.listProducts).toEqual({ branchId: 'BR-TEST', allBranches: true });
+      expect(calls.listProducts).toEqual({ allBranches: true });
     });
 
     it('BS2.3.2 explicit {branchId:"OTHER"} overrides current', async () => {
@@ -463,17 +468,42 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
     });
   });
 
-  describe('BS2.8 Phase 17.2 — localStorage absence falls back to null (no main)', () => {
-    it('BS2.8.1 Phase 17.2 — empty localStorage → null branchId injected (no main fallback)', async () => {
-      // Phase 17.2 (2026-05-05): FALLBACK_ID changed from 'main' literal to
-      // null. resolveSelectedBranchId returns null when localStorage is
-      // empty; callers must guard `!branchId`. Coverage of the runtime
-      // selection in tests/phase-17-2-branch-context-rewrite.test.jsx
-      // BC1.8 (`branchId` not 'main' when no branches exist).
-      try { window.localStorage.removeItem('selectedBranchId'); } catch {}
+  describe('BS2.8 Phase 17.2-bis — localStorage absence → empty array (no cross-branch leak)', () => {
+    it('BS2.8.1 empty localStorage → wrapper returns [] WITHOUT calling raw lister', async () => {
+      // Phase 17.2-bis (2026-05-05): when resolveSelectedBranchId() returns
+      // null (no branch resolved, no auth, no localStorage), the wrapper
+      // returns Promise.resolve([]) directly. Pre-17.2-bis it injected
+      // `branchId: null` and the raw lister fell back to a CROSS-BRANCH
+      // read because `useFilter = branchId && !allBranches` evaluated
+      // null as falsy. User-facing symptom on prod: TFP buttons showed
+      // every branch's data after switching to a branch with no data.
+      // Coverage of the runtime selection in
+      // tests/phase-17-2-branch-context-rewrite.test.jsx BC1.8.
+      try {
+        window.localStorage.removeItem('selectedBranchId');
+        // Phase 17.2-bis — also clear per-user keyed values (the auth mock
+        // returns uid='user-test' OR similar; ensure no keyed value either).
+        Object.keys(window.localStorage)
+          .filter(k => k.startsWith('selectedBranchId:'))
+          .forEach(k => window.localStorage.removeItem(k));
+      } catch {}
+      // Reset captured calls to detect "raw was NOT invoked".
+      delete calls.listProducts;
       const scoped = await import('../src/lib/scopedDataLayer.js');
-      await scoped.listProducts();
-      expect(calls.listProducts.branchId).toBeNull();
+      const result = await scoped.listProducts();
+      expect(result).toEqual([]);
+      // raw.listProducts must NOT have been called (cross-branch leak prevention).
+      expect(calls.listProducts).toBeUndefined();
+    });
+
+    it('BS2.8.2 explicit {allBranches:true} still works when localStorage empty', async () => {
+      // allBranches:true is the explicit cross-branch read opt — must work
+      // even when no branch is resolved. Pass-through, no auto-inject.
+      try { window.localStorage.removeItem('selectedBranchId'); } catch {}
+      delete calls.listProducts;
+      const scoped = await import('../src/lib/scopedDataLayer.js');
+      await scoped.listProducts({ allBranches: true });
+      expect(calls.listProducts).toEqual({ allBranches: true });
     });
   });
 

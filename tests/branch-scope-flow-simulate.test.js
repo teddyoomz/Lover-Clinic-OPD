@@ -155,12 +155,16 @@ describe('F1-F9 — Branch-Scope Flow Simulate (Rule I)', () => {
     expect(cap.opts.branchId).toBe('BR-X');
   });
 
-  it('F5: {allBranches:true} opt-out preserved alongside branchId', async () => {
+  it('F5: {allBranches:true} opt-out preserved (Phase 17.2-bis: no redundant branchId injection)', async () => {
+    // Phase 17.2-bis (2026-05-05): _autoInject is pass-through when
+    // allBranches:true — caller wants cross-branch read; branchId is moot.
+    // Pre-17.2-bis the wrapper unconditionally spread branchId alongside
+    // (`{branchId:'BR-X', allBranches:true}`), now drops the redundancy.
     setBranch('BR-X');
     const scoped = await import('../src/lib/scopedDataLayer.js');
     await scoped.listProducts({ allBranches: true });
     const cap = captures.find((c) => c.name === 'listProducts');
-    expect(cap.opts).toEqual({ branchId: 'BR-X', allBranches: true });
+    expect(cap.opts).toEqual({ allBranches: true });
   });
 
   it('F6: explicit {branchId:"OVERRIDE"} wins over current selection', async () => {

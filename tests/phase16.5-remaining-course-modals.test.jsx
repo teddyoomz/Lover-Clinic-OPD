@@ -62,6 +62,14 @@ beforeEach(() => {
     { id: 'staff-1', name: 'นาง สมหญิง ใจดี' },
     { id: 'staff-2', name: 'นางสาว วันใส รักษ์ดี' },
   ]);
+  // Phase 17.2-bis (2026-05-05): scopedDataLayer's _autoInject helper
+  // returns Promise.resolve([]) when resolveSelectedBranchId() returns null,
+  // bypassing the raw lister mock. Seed localStorage with the per-user
+  // keyed value so the auto-inject resolves to a real branchId and the
+  // mocked raw helpers are actually invoked.
+  try {
+    window.localStorage.setItem('selectedBranchId:uid-test', 'BR-test');
+  } catch {}
 });
 
 // Helper: wait for staff list to load + pick the first staff member.
