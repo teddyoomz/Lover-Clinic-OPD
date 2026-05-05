@@ -721,7 +721,31 @@ export function isCourseUsableInTreatment(c) {
   if (c.isRealQty || courseType === 'เหมาตามจริง' || qtyStr === 'เหมาตามจริง') return true;
   if (c.isBuffet || courseType === 'บุฟเฟต์' || qtyStr === 'บุฟเฟต์') return true;
   if (c.isPickAtTreatment || c.needsPickSelection) return true;
-  // Standard qty-tracked courses: parse via canonical parseQtyString
+  // Phase 17.2-octies (2026-05-05) — GROUPED-shape support. mapRawCoursesToForm
+  // produces { products: [{ remaining, total, ... }] } with NO top-level qty
+  // string. Pre-fix this branch hit `if (!qtyStr) return false` and rejected
+  // every standard qty-tracked grouped course → TFP courses panel empty for
+  // any customer whose courses survived the prior allZero filter (asdas dasd
+  // repro: 3 IV Drip courses with remaining 8/89/26 → all rejected).
+  // Fix: when c.products is a non-empty array, return true iff ANY product
+  // has remaining > 0. Falls through to flat-shape parse otherwise so the
+  // direct-from-customer.courses[] flat-shape callers (legacy / tests) still
+  // work.
+  if (Array.isArray(c.products) && c.products.length > 0) {
+    return c.products.some(p => {
+      if (!p || p.remaining == null) return false;
+      const rem = parseFloat(String(p.remaining).replace(/,/g, ''));
+      // Parity with flat-shape: hide zero-total entries (data corruption
+      // guard — remaining > total is anomalous; total === 0 is no-capacity).
+      // total optional: when missing, use rem > 0 alone.
+      const totRaw = p.total;
+      const tot = totRaw == null || totRaw === ''
+        ? Infinity
+        : parseFloat(String(totRaw).replace(/,/g, ''));
+      return Number.isFinite(rem) && rem > 0 && (Number.isFinite(tot) ? tot > 0 : true);
+    });
+  }
+  // Standard qty-tracked courses (flat shape): parse via canonical parseQtyString
   // (handles commas like "7,998 / 10,000"). Hide if cannot parse OR
   // remaining=0 OR total=0.
   if (!qtyStr) return false;
