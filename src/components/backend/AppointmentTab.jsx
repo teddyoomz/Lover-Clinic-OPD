@@ -23,6 +23,8 @@ import {
   listenToScheduleByDay, listDoctors,
   // Phase 15.7-sexies (2026-04-28) — delete from calendar modal
   deleteBackendAppointment,
+  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
+  listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { bangkokNow } from '../../utils.js';
@@ -279,11 +281,40 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   const UNASSIGNED_ROOM = '— ไม่ระบุห้อง —';
   const effectiveRoom = (a) => (a && a.roomName ? String(a.roomName).trim() : UNASSIGNED_ROOM);
 
+  // Phase 18.0 (2026-05-05) — load branch-scoped exam-room master so
+  // empty rooms render as draggable columns (admin can drag-create even
+  // before any booking exists). Refetches on selectedBranchId change
+  // (BS-9 compliant).
+  const [branchExamRooms, setBranchExamRooms] = useState([]);
+  useEffect(() => {
+    if (!selectedBranchId) { setBranchExamRooms([]); return; }
+    listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
+      .then(rs => setBranchExamRooms(rs || []))
+      .catch(() => setBranchExamRooms([]));
+  }, [selectedBranchId]);
+
   const rooms = useMemo(() => {
-    const set = new Set(allKnownRooms);
+    // Phase 18.0 — column set = master rooms (sorted by sortOrder→name) +
+    // any legacy roomName strings still in the data + virtual ไม่ระบุห้อง
+    // when at least one orphan appt exists. The legacy roomName strings
+    // path is preserved so old appts created before exam-rooms shipped
+    // continue to render in their own column until their roomId is set.
+    const masterNames = branchExamRooms
+      .slice()
+      .sort((a, b) =>
+        (a.sortOrder || 0) - (b.sortOrder || 0) ||
+        String(a.name || '').localeCompare(String(b.name || ''), 'th')
+      )
+      .map(r => r.name)
+      .filter(Boolean);
+    const masterSet = new Set(masterNames);
+    const set = new Set(masterNames);
+    // Keep legacy roomName strings that aren't in the master (orphan
+    // labels — appts created before this branch had its rooms set up).
+    allKnownRooms.forEach(r => { if (!masterSet.has(r)) set.add(r); });
     if (dayAppts.some(a => !a?.roomName)) set.add(UNASSIGNED_ROOM);
     return [...set];
-  }, [allKnownRooms, dayAppts]);
+  }, [branchExamRooms, allKnownRooms, dayAppts]);
 
   // Pre-compute appointment lookup map for O(1) access in time grid.
   // Phase 15.7-bis: array-valued so duplicates at same startTime+room
