@@ -7,12 +7,32 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-05 EOD — Phase 17 trilogy + 17.2-bis + 17.2-ter shipped to master; V15 #18 LEAKING in prod; V15 #19 pending
+- **Date last updated**: 2026-05-05 EOD — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms shipped. V15 #19 + V15 #20 LIVE in prod. Wiki backfilled.
 - **Branch**: `master`
-- **Last commit**: `281c871` — fix(phase-17-2-ter): TodaysDoctorsPanel cross-branch leak via listenToScheduleByDay
-- **Test count**: **5199** (Phase 17.0 +44 / 17.1 +167 / 17.2 +52 / 17.2-bis +1 / 17.2-ter unchanged + ~62 stale tests deleted/updated through cycles)
+- **Last commit**: `a89fc6a` — docs(wiki): backfill Phase 17.2 fix series + Phase 18.0 Branch Exam Rooms cycle
+- **Test count**: **5394** (Phase 17.2 +71 octies / Phase 18.0 +89 / -3 stale rebases through 17.2-quinquies–octies + Phase 18.0 cycles)
 - **Build**: clean
-- **Deploy state**: ⚠️ **PRODUCTION = `24aa9e9`** (V15 #18 LIVE 2026-05-05; bundles Phase 17.0 + 17.1 + 17.2 — but cross-branch LEAK regression surfaced post-deploy). master **2 commits ahead-of-prod**: `0361268` (17.2-bis: per-user-key resolver + null-guard helpers) + `281c871` (17.2-ter: schedule listener branchId filter). Phase 17.2 migration `--apply` ALREADY ran on prod (3 writes — audit `phase-17-2-remove-main-branch-1777961452972-...`).
+- **Deploy state**: **PRODUCTION = `bdd917e`** (V15 #20 LIVE 2026-05-05). master **2 commits ahead-of-prod**: `882fb35` (empty-state removal — pending V15 #21) + `a89fc6a` (wiki docs only — no deploy needed). Phase 18.0 migration `--apply` ran on prod (3 rooms seeded for นครราชสีมา — audit `phase-18-0-seed-exam-rooms-1777978075511-...`).
+
+### Session 2026-05-05 EOD — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms
+
+Marathon EOD session. Shipped 18 commits + 2 deploys + migration --apply + wiki backfill.
+
+**Phase 17.2 fix series** (cross-branch correctness — V12 shape-drift recurrences):
+- 17.2-quinquies (`c76e953`) — TFP cache leak: extend BS-9 to buyItems/buyCategories + drop length>0 short-circuits + SELECTED_BRANCH_ID in form-data deps
+- 17.2-sexies (`73771d9`) — internal-leak audit: `_resolveProductIdByName(name, branchId)` + `findProductGroupByName(opts)` + `saveBankAccount` mutex scoped + cross-tier annotations
+- 17.2-septies (`9046dcf`) — TFP reader field-name fix (productType/productName/categoryName/mainUnitName/courseName/salePrice fallback) + branch indicator banner
+- 17.2-octies (`c248c67`) — isCourseUsableInTreatment GROUPED + FLAT shape; asdas dasd's 3 IV Drip courses now visible
+
+**Phase 18.0 Branch Exam Rooms** (`c08fc14`→`c5609c9`, 11 tasks): NEW be_exam_rooms collection + ExamRoomsTab + ExamRoomFormModal + appointmentRoomColumns helper + AppointmentFormModal/Tab/DepositPanel integration + migration script + 89 new tests. firestore.rules v26 adds match block.
+
+**Deploys**: V15 #19 shipped Phase 17.2 fixes + Phase 18.0 (`e5f2171`). V15 #20 shipped follow-up `bdd917e` (legacy localStorage cache drop + master-rooms-only column derivation). Both clean: 6/6 pre + 6/6 post + 4/4 cleanup. Migration `--apply` seeded นครราชสีมา with 3 rooms (audit `phase-18-0-seed-exam-rooms-1777978075511-...`).
+
+**V15 #21 pending**: `882fb35` drops "ไม่มีนัดหมายวันนี้" empty-state — always render grid for click-create on empty days/branches.
+
+**Wiki backfill** (`a89fc6a`): 6 NEW pages — be_exam_rooms / exam-rooms-tab / appointmentRoomColumns entities + branch-exam-rooms / runtime-fallback-orphan-room / v12-shape-drift concepts. TFP entity extended with Phase 17.2 fix series section.
+
+Detail: `.agents/sessions/2026-05-05-phase-18-0-and-phase-17-2-fix-series.md`
 
 ### Session 2026-05-05 EOD — Phase 17 trilogy (BS-9 / cross-branch import / branch equality) + 2 hotfixes
 
@@ -347,29 +367,25 @@ Resume LoverClinic — continue from 2026-05-05 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=281c871, prod=24aa9e9 V15 #18 LEAKING)
-3. .agents/active.md (5199 tests; 2 commits ahead-of-prod)
+2. SESSION_HANDOFF.md (master=a89fc6a, prod=bdd917e V15 #20 LIVE)
+3. .agents/active.md (5394 tests; 2 commits ahead-of-prod)
 4. .claude/rules/00-session-start.md (iron-clad + V-summary)
-5. .agents/sessions/2026-05-05-phase-17-trilogy-and-leak-fixes.md
+5. .agents/sessions/2026-05-05-phase-18-0-and-phase-17-2-fix-series.md
 
-Status: master=281c871, 5199/5199 tests pass, prod=24aa9e9 (V15 #18 LIVE — has cross-branch LEAK). master 2 commits ahead-of-prod. Phase 17.2 migration `--apply` already ran on prod data (3 writes, idempotent — audit `phase-17-2-remove-main-branch-1777961452972-...`).
+Status: master=a89fc6a, 5394/5394 tests pass, prod=bdd917e (V15 #20 LIVE 2026-05-05 — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms LIVE). master 2 commits ahead-of-prod: `882fb35` empty-state removal (V15 #21 pending) + `a89fc6a` wiki backfill (no deploy). Phase 18.0 migration `--apply` ran on prod (3 rooms seeded for นครราชสีมา — audit `phase-18-0-seed-exam-rooms-1777978075511-...`).
 
-Next action: 🚨 V15 #19 combined deploy when user types "deploy" THIS turn.
-- vercel --prod + firebase rules (idempotent — no rule changes)
-- Probe-Deploy-Probe Rule B (5/5 pre + 5/5 post + cleanup)
-- Ships 0361268 (17.2-bis: per-user-key resolver + null-guard helpers) + 281c871 (17.2-ter: schedule listener branchId filter)
-- Clears TFP modals + Promotion/Coupon/Voucher tabs + AppointmentTab TodaysDoctorsPanel cross-branch leak
+Next action: idle. Awaits V15 #21 deploy auth (`882fb35` only — small UX fix; drops "ไม่มีนัดหมายวันนี้" empty-state for click-create on empty days/branches).
 
 Outstanding (user-triggered):
-- V15 #19 deploy (CRITICAL — clears prod leak)
-- Browser smoke verify post-deploy (TFP modals / marketing tabs / TodaysDoctorsPanel)
-- Internal-leak audit follow-up: _resolveProductIdByName, findProductGroupByName, saveBankAccount mutex, listStockTransfers/Withdrawals, listExpenses (all in backendClient.js — 5 sites flagged in 17.2-ter commit)
-- LineSettings พระราม 3 admin entry (Channel Secret + Access Token)
-- Hard-gate Firebase custom claim (Phase BS-future)
-- /audit-all orchestrator readiness pass
-- Phase 17.1 brainstorm executed inline this session; Phase 17.2 brainstorm executed inline; both shipped
+- V15 #21 deploy (`882fb35` empty-state removal; combined vercel + firestore:rules + Probe-Deploy-Probe Rule B)
+- SaleTab field-name audit (post-Phase-17.2-septies; same pattern as TFP `productType` vs `type`)
+- Full AppointmentTab roomId migration (deferred — current grid still uses roomName strings; openCreate + occupied + apptMap rebuild)
+- LineSettings พระราม 3 per-branch redesign (per-branch chat_config doc — needs schema redesign)
+- Hard-gate Firebase custom claim (currently soft-gate)
+- /audit-all readiness pass
+- 🚨 H-bis ProClinic strip (pre-launch — strip MasterDataTab + brokerClient + cookie-relay/ + dev-only api/proclinic/* + CloneTab)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B (5 endpoints + V23 anon dual-step); Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
 
 /session-start
 ```
