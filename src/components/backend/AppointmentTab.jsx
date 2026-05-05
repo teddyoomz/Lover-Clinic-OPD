@@ -240,81 +240,56 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     return () => unsubscribe();
   }, [selectedDate, selectedBranchId]);
 
-  // ── Derived: rooms, doctors for the day ──
-  // Cumulative across month navigation + persistent via localStorage. Bug
-  // 2026-04-20: previously REPLACED rooms on every month change → months
-  // with 1 booking showed only 1 room column, blocking new bookings into
-  // other rooms. Fix: only ADD, never remove, seeded from prior sessions.
-  // The shared AppointmentFormModal reads this same localStorage key so the
-  // room dropdown there sees every room ever booked.
-  const [allKnownRooms, setAllKnownRooms] = useState(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(ROOMS_CACHE_KEY) : null;
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr.filter(r => typeof r === 'string' && r.trim()).slice(0, 50) : [];
-    } catch { return []; }
-  });
-  useEffect(() => {
-    setAllKnownRooms(prev => {
-      const roomSet = new Set(prev);
-      Object.values(monthAppts).forEach(arr => arr.forEach(a => { if (a.roomName) roomSet.add(a.roomName); }));
-      dayAppts.forEach(a => { if (a.roomName) roomSet.add(a.roomName); });
-      const next = [...roomSet].sort();
-      // Early-exit if identical to avoid redundant localStorage writes
-      if (next.length === prev.length && next.every((r, i) => r === prev[i])) return prev;
-      try { window.localStorage?.setItem(ROOMS_CACHE_KEY, JSON.stringify(next)); } catch { /* quota or no-window: ignore */ }
-      return next;
-    });
-  }, [monthAppts, dayAppts]);
-
-  // Phase 15.7-bis (2026-04-28) — calendar badge/grid mismatch fix.
-  // User reports (29/4 + 30/4 + 6/5): mini-calendar bubble counts ALL
-  // appointments for the date (e.g. 4 on 29/4) but the grid shows only 1
-  // — because the previous apptMap had two silent-drop bugs:
-  //   1. `if (a.startTime && a.roomName)` filter dropped appts with no
-  //      roomName (legacy/imported data) entirely.
-  //   2. Map keyed by `startTime|roomName` overwrote duplicates — last
-  //      appt at the same slot+room "wins"; collisions invisible.
-  // Fix: array-valued apptMap (multi-render per cell) + virtual
-  // "ไม่ระบุห้อง" column for roomless appts. effectiveRoom() resolves the
-  // column for both the map key + the occupied check.
-  const UNASSIGNED_ROOM = '— ไม่ระบุห้อง —';
-  const effectiveRoom = (a) => (a && a.roomName ? String(a.roomName).trim() : UNASSIGNED_ROOM);
-
-  // Phase 18.0 (2026-05-05) — load branch-scoped exam-room master so
-  // empty rooms render as draggable columns (admin can drag-create even
-  // before any booking exists). Refetches on selectedBranchId change
-  // (BS-9 compliant).
+  // Phase 18.0 (2026-05-05) — load branch-scoped exam-room master.
+  // Each branch's exam rooms are the SOURCE OF TRUTH for grid columns.
+  // Legacy localStorage `appt-rooms-seen` cache is dropped — orphan
+  // legacy appts (with non-master roomName) route to ไม่ระบุห้อง column
+  // via the runtime fallback below.
   const [branchExamRooms, setBranchExamRooms] = useState([]);
   useEffect(() => {
     if (!selectedBranchId) { setBranchExamRooms([]); return; }
     listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
       .then(rs => setBranchExamRooms(rs || []))
       .catch(() => setBranchExamRooms([]));
+    // One-time legacy cache cleanup — drop the per-device cumulative
+    // room-name list now that be_exam_rooms is the canonical source.
+    try { window.localStorage?.removeItem(ROOMS_CACHE_KEY); } catch { /* ignore */ }
   }, [selectedBranchId]);
 
+  // Phase 15.7-bis (2026-04-28) — array-valued apptMap so duplicate
+  // appts at same startTime+room render together (calendar badge/grid
+  // mismatch fix). Phase 18.0 (2026-05-05) — effectiveRoom now resolves
+  // strictly against the BRANCH MASTER. Appts with no roomName OR with
+  // a roomName not present in the current branch's exam-room master
+  // route to UNASSIGNED_ROOM. Result: legacy strings ("Dr.Chaiyaporn",
+  // "ห้อง 1", "นักกายภาพA x" etc.) no longer pollute the column header.
+  const UNASSIGNED_ROOM = '— ไม่ระบุห้อง —';
+  const masterRoomNameSet = useMemo(
+    () => new Set(branchExamRooms.map(r => String(r.name || '').trim()).filter(Boolean)),
+    [branchExamRooms],
+  );
+  const effectiveRoom = (a) => {
+    const nm = a && a.roomName ? String(a.roomName).trim() : '';
+    if (!nm) return UNASSIGNED_ROOM;
+    return masterRoomNameSet.has(nm) ? nm : UNASSIGNED_ROOM;
+  };
+
   const rooms = useMemo(() => {
-    // Phase 18.0 — column set = master rooms (sorted by sortOrder→name) +
-    // any legacy roomName strings still in the data + virtual ไม่ระบุห้อง
-    // when at least one orphan appt exists. The legacy roomName strings
-    // path is preserved so old appts created before exam-rooms shipped
-    // continue to render in their own column until their roomId is set.
-    const masterNames = branchExamRooms
+    // Phase 18.0 — column set = master rooms ONLY (sorted by sortOrder
+    // then name) + virtual ไม่ระบุห้อง when at least one appt resolves
+    // to UNASSIGNED. Legacy roomName strings dropped entirely.
+    const ordered = branchExamRooms
       .slice()
       .sort((a, b) =>
         (a.sortOrder || 0) - (b.sortOrder || 0) ||
         String(a.name || '').localeCompare(String(b.name || ''), 'th')
       )
-      .map(r => r.name)
+      .map(r => String(r.name || '').trim())
       .filter(Boolean);
-    const masterSet = new Set(masterNames);
-    const set = new Set(masterNames);
-    // Keep legacy roomName strings that aren't in the master (orphan
-    // labels — appts created before this branch had its rooms set up).
-    allKnownRooms.forEach(r => { if (!masterSet.has(r)) set.add(r); });
-    if (dayAppts.some(a => !a?.roomName)) set.add(UNASSIGNED_ROOM);
+    const set = new Set(ordered);
+    if (dayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM)) set.add(UNASSIGNED_ROOM);
     return [...set];
-  }, [branchExamRooms, allKnownRooms, dayAppts]);
+  }, [branchExamRooms, masterRoomNameSet, dayAppts]);
 
   // Pre-compute appointment lookup map for O(1) access in time grid.
   // Phase 15.7-bis: array-valued so duplicates at same startTime+room
