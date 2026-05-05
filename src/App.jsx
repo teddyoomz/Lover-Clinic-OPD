@@ -236,25 +236,34 @@ export default function App() {
     <>
       <div className={`min-h-screen bg-[#050505] font-sans text-gray-200 ${printMode !== null ? 'hidden' : 'block print:hidden'}`}>
         {/* AdminDashboard stays mounted always — keeps Firestore listener alive for auto-sync */}
+        {/* Phase 20.0 Task 6 follow-up (2026-05-06) — AdminDashboard now wraps
+             in UserPermissionProvider + BranchProvider so the new BranchSelector
+             in the header (Phase 6) can read be_branches via useSelectedBranch.
+             Pre-fix: useSelectedBranch outside provider returned {branches: []}
+             → BranchSelector returned null → no UI in top-right. */}
         <Suspense fallback={<LazyFallback />}>
-        <div className={adminView === 'simulation' ? 'hidden' : ''}>
-          <AdminDashboard
-            db={db} appId={appId} user={user} auth={auth}
-            viewingSession={viewingSession} setViewingSession={setViewingSession}
-            setPrintMode={setPrintMode}
-            clinicSettings={clinicSettings}
-            theme={theme} setTheme={setTheme}
-            onSimulateScan={(id, opts) => { setSimulatedSessionId(id); setSimulationSuppressNotif(!!opts?.suppressNotif); setAdminView('simulation'); }}
-          />
-        </div>
-        {adminView === 'simulation' && (
-          <PatientForm
-            db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
-            suppressNotif={simulationSuppressNotif}
-            onBack={() => setAdminView('dashboard')} clinicSettings={clinicSettings}
-            theme={theme} setTheme={setTheme}
-          />
-        )}
+        <UserPermissionProvider user={user}>
+          <BranchProvider>
+            <div className={adminView === 'simulation' ? 'hidden' : ''}>
+              <AdminDashboard
+                db={db} appId={appId} user={user} auth={auth}
+                viewingSession={viewingSession} setViewingSession={setViewingSession}
+                setPrintMode={setPrintMode}
+                clinicSettings={clinicSettings}
+                theme={theme} setTheme={setTheme}
+                onSimulateScan={(id, opts) => { setSimulatedSessionId(id); setSimulationSuppressNotif(!!opts?.suppressNotif); setAdminView('simulation'); }}
+              />
+            </div>
+            {adminView === 'simulation' && (
+              <PatientForm
+                db={db} appId={appId} user={user} sessionId={simulatedSessionId} isSimulation={true}
+                suppressNotif={simulationSuppressNotif}
+                onBack={() => setAdminView('dashboard')} clinicSettings={clinicSettings}
+                theme={theme} setTheme={setTheme}
+              />
+            )}
+          </BranchProvider>
+        </UserPermissionProvider>
         </Suspense>
       </div>
 
