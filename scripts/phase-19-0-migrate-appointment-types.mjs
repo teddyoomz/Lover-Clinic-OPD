@@ -48,8 +48,13 @@ const NEW_APPOINTMENT_TYPES = Object.freeze([
   'follow-up',
 ]);
 const DEFAULT_TYPE = 'no-deposit-booking';
-const APPT_COLLECTION = 'be_appointments';
-const AUDIT_COLLECTION = 'be_admin_audit';
+const APP_ID = 'loverclinic-opd-4c39b';
+// Production data lives under artifacts/{APP_ID}/public/data/* — matches
+// Phase 18.0 migration script convention. Root-level collections are
+// blocked by the default-deny rule.
+const BASE_PATH = `artifacts/${APP_ID}/public/data`;
+const APPT_COLLECTION = `${BASE_PATH}/be_appointments`;
+const AUDIT_COLLECTION = `${BASE_PATH}/be_admin_audit`;
 
 // ─── CLI args ──────────────────────────────────────────────────────────────
 const apply = process.argv.includes('--apply');
@@ -92,12 +97,15 @@ function initFirebase() {
     process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
     process.env.FIREBASE_ADMIN_PRIVATE_KEY
   ) {
-    // Build from individual env vars
+    // Build from individual env vars. PEM keys come from .env files with
+    // literal "\n" (backslash-n) escapes — convert to real newlines so
+    // firebase-admin's PEM parser accepts them.
+    const privateKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
     credText = JSON.stringify({
       type: 'service_account',
       project_id: 'loverclinic-opd-4c39b',
       private_key_id: 'key-id',
-      private_key: process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+      private_key: privateKey,
       client_email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
       client_id: 'client-id',
       auth_uri: 'https://accounts.google.com/o/oauth2/auth',
