@@ -11008,9 +11008,17 @@ export async function migrateMasterStaffSchedulesToBe() {
  * @param {Array<string>} [staffIdsFilter]
  * @returns {Promise<Array<{staffId, type, source, startTime, endTime, ...}>>}
  */
-export async function getActiveSchedulesForDate(targetDate, staffIdsFilter) {
+export async function getActiveSchedulesForDate(targetDate, staffIdsFilter, branchId) {
+  // Phase 17.2-ter (2026-05-05) — accept branchId positional arg (5th in the
+  // chained call shape, 3rd here). Safe-by-default: null branchId returns []
+  // instead of leaking cross-branch via the unfiltered listStaffSchedules
+  // call. This was the root cause of the TodaysDoctorsPanel leak — the
+  // panel showed every branch's doctors on the selected date even after
+  // the user switched to a branch with no schedule data.
+  const effectiveBranchId = branchId !== undefined ? branchId : resolveSelectedBranchId();
+  if (!effectiveBranchId) return [];
   const { mergeSchedulesForDate } = await import('./staffScheduleValidation.js');
-  const all = await listStaffSchedules();
+  const all = await listStaffSchedules({ branchId: effectiveBranchId });
   return mergeSchedulesForDate(targetDate, all, staffIdsFilter);
 }
 
@@ -11025,7 +11033,20 @@ export async function getActiveSchedulesForDate(targetDate, staffIdsFilter) {
  * @param {Array<string>} [staffIdsFilter]
  * @param {(err: Error) => void} [onError]
  */
-export function listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onError) {
+export function listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onError, branchId) {
+  // Phase 17.2-ter (2026-05-05) — accept branchId positional (5th arg).
+  // Safe-by-default: null branchId emits [] once + returns no-op unsub.
+  // Pre-fix: onSnapshot(staffSchedulesCol(), ...) was unfiltered → fed
+  // every branch's schedules into the merge function → TodaysDoctorsPanel
+  // showed phantom "doctor on duty" entries from other branches.
+  const effectiveBranchId = branchId !== undefined ? branchId : resolveSelectedBranchId();
+  if (!effectiveBranchId) {
+    try { onChange?.([]); } catch (e) {
+      if (onError) onError(e);
+    }
+    return () => {};
+  }
+
   let timer = null;
   const fire = (merged) => {
     if (timer) clearTimeout(timer);
@@ -11041,8 +11062,12 @@ export function listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onEr
   let mergeFn = null;
   import('./staffScheduleValidation.js').then((m) => { mergeFn = m.mergeSchedulesForDate; });
 
-  const unsub = onSnapshot(
+  const branchScopedRef = query(
     staffSchedulesCol(),
+    where('branchId', '==', String(effectiveBranchId)),
+  );
+  const unsub = onSnapshot(
+    branchScopedRef,
     (snap) => {
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // mergeFn might still be loading on the very first snapshot — fall

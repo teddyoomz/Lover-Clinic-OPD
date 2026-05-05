@@ -198,7 +198,28 @@ export const listenToUserPermissions = _makeUniversalListener('listenToUserPermi
 export const listenToAppointmentsByDate = (...args) => raw.listenToAppointmentsByDate(...args);
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
-export const listenToScheduleByDay = (...args) => raw.listenToScheduleByDay(...args);
+// Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
+// (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
+// was extended to accept branchId so AppointmentTab can thread the current
+// selectedBranchId + add it to its useEffect deps for re-subscribe on
+// branch switch. Wrapper auto-injects branchId at position 5 when caller
+// omits it; safe-by-default no-op when no branch resolved.
+export const listenToScheduleByDay = (targetDate, onChange, staffIdsFilter, onError, branchId) => {
+  const id = branchId !== undefined ? branchId : resolveSelectedBranchId();
+  if (!id) {
+    try { onChange?.([]); } catch (e) { if (onError) onError(e); }
+    return () => {};
+  }
+  return raw.listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onError, id);
+};
+
+// Phase 17.2-ter — getActiveSchedulesForDate now branch-aware (3rd positional
+// arg = branchId). Wrapper auto-injects + safe-empty when no branch resolved.
+export const getActiveSchedulesForDate = (targetDate, staffIdsFilter, branchId) => {
+  const id = branchId !== undefined ? branchId : resolveSelectedBranchId();
+  if (!id) return Promise.resolve([]);
+  return raw.getActiveSchedulesForDate(targetDate, staffIdsFilter, id);
+};
 
 // Audiences (smart segments — global filter)
 export const listAudiences = (...args) => raw.listAudiences(...args);
@@ -270,7 +291,8 @@ export const getDeposit = (...args) => raw.getDeposit(...args);
 // re-export as universal here; that would shadow the auto-inject wrapper.
 export const getSaleByTreatmentId = (...args) => raw.getSaleByTreatmentId(...args);
 export const getMasterDataMeta = (...args) => raw.getMasterDataMeta(...args);
-export const getActiveSchedulesForDate = (...args) => raw.getActiveSchedulesForDate(...args);
+// getActiveSchedulesForDate — moved to branch-aware-listeners block above
+// (Phase 17.2-ter) where it auto-injects branchId at the 3rd positional arg.
 export const getBeBackedMasterTypes = (...args) => raw.getBeBackedMasterTypes(...args);
 
 // ─── Writes — re-export raw (Phase BS V2 stamping handled inside) ──────────

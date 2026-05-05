@@ -168,6 +168,12 @@ export default function AppointmentTab({ clinicSettings, theme }) {
     if (!selectedDate) return;
     setTodaysSchedulesLoading(true);
     const doctorIds = doctors.map((d) => String(d.doctorId || d.id));
+    // Phase 17.2-ter (2026-05-05) — pass selectedBranchId as 5th arg so
+    // listenToScheduleByDay applies a branchId where-clause to its
+    // onSnapshot subscription. Branch switch is in the deps array → effect
+    // re-runs → new listener subscribed against new branch. Pre-fix the
+    // listener subscribed unfiltered → TodaysDoctorsPanel showed phantom
+    // doctors from other branches.
     const unsub = listenToScheduleByDay(
       selectedDate,
       (merged) => {
@@ -176,9 +182,10 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       },
       doctorIds.length > 0 ? doctorIds : undefined,
       () => { setTodaysSchedules([]); setTodaysSchedulesLoading(false); },
+      selectedBranchId,
     );
     return unsub;
-  }, [selectedDate, doctors.length]);
+  }, [selectedDate, doctors.length, selectedBranchId]);
   const currentHoliday = useMemo(
     () => isDateHoliday(selectedDate, holidays),
     [selectedDate, holidays],
