@@ -564,7 +564,9 @@ export default function AppointmentFormModal({
           {/* Appointment Type */}
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ประเภทนัดหมาย</label>
-            <div className="flex gap-3">
+            {/* Phase 19.0 — flex-wrap so 4 items don't overflow on narrow widths
+                (mirrors assistantIds row pattern at line ~627). */}
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5">
               {APPOINTMENT_TYPES.map(t => (
                 <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
                   <input type="radio" checked={formData.appointmentType === t.value} onChange={() => update({ appointmentType: t.value })} className="accent-sky-500" />{t.label}
