@@ -7,12 +7,55 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-05 EOD — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms shipped. V15 #19 + V15 #20 LIVE in prod. Wiki backfilled.
+- **Date last updated**: 2026-05-05 EOD — Phase 19.0 (15-min slots + 4-type taxonomy) LIVE in prod (V15 #22). Migration --apply complete. master IN SYNC with prod.
 - **Branch**: `master`
-- **Last commit**: `a89fc6a` — docs(wiki): backfill Phase 17.2 fix series + Phase 18.0 Branch Exam Rooms cycle
-- **Test count**: **5394** (Phase 17.2 +71 octies / Phase 18.0 +89 / -3 stale rebases through 17.2-quinquies–octies + Phase 18.0 cycles)
+- **Last commit**: `024f6dd` — fix(phase-19-0/task-10): migration script — PEM parse + artifacts path
+- **Test count**: **5463** (Phase 19.0 +69 from Task 11 batch / 0 net from phase15.7-bis assertion polish)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `bdd917e`** (V15 #20 LIVE 2026-05-05). master **2 commits ahead-of-prod**: `882fb35` (empty-state removal — pending V15 #21) + `a89fc6a` (wiki docs only — no deploy needed). Phase 18.0 migration `--apply` ran on prod (3 rooms seeded for นครราชสีมา — audit `phase-18-0-seed-exam-rooms-1777978075511-...`).
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05). master IN SYNC. Phase 19.0 migration `--apply` ran on prod (audit `phase-19-0-migrate-appointment-types-1777987427963-c3e11db0`): 27/27 appointments migrated (18 null + 9 'sales' legacy → 'no-deposit-booking' per Option B uniform). Idempotency verified.
+
+### Session 2026-05-05 EOD — Phase 19.0 (appointment 15-min slots + 4-type taxonomy)
+
+Marathon EOD continuation session. Spec → plan → 14 tasks subagent-driven → V15 #22 deploy → migration. ~16 commits across implementation + 2 polish commits + post-deploy script fix.
+
+**Brainstorming locks**: Q1 = Option B Uniform (all legacy → 'no-deposit-booking'); Q3-Q9 covered slot interval / defaults / colors / business rules / DepositPanel writer / ProClinic translator.
+
+**Source delivered** (Tasks 1-10):
+- Task 1 (`ef4c003`): NEW `src/lib/appointmentTypes.js` SSOT — 4-type taxonomy, frozen, with resolvers + migrate helper
+- Task 2 (`73fbf22`): canonical 15-min `TIME_SLOTS` (28 → 56 entries) in `staffScheduleValidation.js`; new `SLOT_INTERVAL_MIN_DISPLAY` export
+- Task 3 (`1dcd55b`): NEW `api/proclinic/_lib/appointmentTypeProClinic.js` 4→2 translator (@dev-only H-bis)
+- Task 4 (`a25b101` + flex-wrap polish): AppointmentFormModal — drop local TIME_SLOTS+APPT_TYPES; defaults `'10:15'`/`'no-deposit-booking'`; auto-bump endTime; flex-wrap on radio row
+- Task 5 (`99711f8`): AppointmentTab — SLOT_H 36→18 (grid pixel-height preserved); canonical TIME_SLOTS
+- Task 6 (`c5a97e5` + 2 polish commits): DepositPanel — canonical TIME_SLOTS; `'deposit-booking'` writer default; useState + resetForm both updated; APPOINTMENT_TYPES SSOT import
+- Task 7 (`f4df1d7`): aggregator + report tab use SSOT resolver + APPOINTMENT_TYPES filter
+- Task 8 (`010e42f`): AdminDashboard typeMap → `resolveAppointmentTypeLabel`; `appointmentDisplay.js` re-exports SSOT
+- Task 9 (`74a3f76`): `api/proclinic/appointment.js` translator wired at 2 PATCH sites
+- Task 10 (`b671ec1` + `fbc3215`): NEW migration script (Option B uniform; --dry-run/--apply; audit + forensic-trail; invocation guard + crypto-secure randHex)
+
+**Test bank** (Task 11, `af0be21`, Rule K work-first-test-last batch): 9 new files, 69 new tests across A/T/F/D/G/C/M/F/P groups (incl. Rule I full-flow). Plus `b6b87a8` adjacent test polish for phase15.7-bis effectiveRoom shape (Phase 18.0 evolution).
+
+**Verification** (Task 12-13): full suite 5463/5463 passing · build clean · audit greps all zero · live `preview_eval` confirmed runtime SSOT semantics (4 values + Thai labels + colors + resolvers + migrate + translator + 15-min canonical TIME_SLOTS).
+
+**V15 #22 deploy**:
+- Pre-probe 6/6 ✓ + Post-probe 6/6 ✓ (Rule B Probe-Deploy-Probe)
+- vercel `lover-clinic-omo4w9c5z-...` aliased to `lover-clinic-app.vercel.app`
+- firestore:rules idempotent re-publish (rules unchanged from V15 #20)
+- Cleanup: pc_appointments DELETE 4/4 + clinic_settings strip 2/2
+
+**Production migration**:
+- `node scripts/phase-19-0-migrate-appointment-types.mjs --apply`
+- 27/27 documents migrated in 1 batch
+- Audit doc: `artifacts/loverclinic-opd-4c39b/public/data/be_admin_audit/phase-19-0-migrate-appointment-types-1777987427963-c3e11db0`
+- Idempotency re-check: 0 docs to migrate ✓
+
+**Bugs surfaced + fixed during deploy**:
+1. Migration script PEM-parse failure — env loader's `\n` literal not converted; fixed via split('\\n').join('\n')
+2. Migration script wrong path — bare `be_appointments` collection vs production's `artifacts/{APP_ID}/public/data/be_appointments`; fixed via BASE_PATH constant
+3. Rule B probe URLs were ALSO missing the artifacts prefix — pre-probe initially showed 5/6 incorrect 403s before I corrected the URL convention. The 403s were artifacts of wrong probe URLs, NOT live rule drift.
+
+**Open follow-up**: Update `.claude/rules/01-iron-clad.md` Rule B documentation to clarify the `artifacts/{APP_ID}/public/data/` prefix on all probe URLs. The simplified path notation in the current docs is misleading and triggered a 30-minute false-alarm during deploy.
+
+Detail: `.agents/active.md` (frozen for next-session boot)
 
 ### Session 2026-05-05 EOD — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms
 
