@@ -16,12 +16,26 @@ import * as broker from '../lib/brokerClient.js';
 // Queue calendar reads be_appointments via scopedDataLayer (auto-injects
 // branchId once Phase 20.0 Task 6 BranchSelector ships). Replaces the
 // pc_appointments getDoc/onSnapshot pattern + broker.syncAppointments
-// calls. brokerClient still imported for other flows (Flow B/C/D appt CRUD,
-// deposit submission, customer search, courses) — those phases follow.
+// calls. brokerClient still imported for other flows (Flow B deposit
+// submit, Flow C no-deposit, customer search, courses) — those phases follow.
+//
+// Phase 20.0 Task 2 (2026-05-06) — Flow D appointment modal CRUD on be_*.
+// listCustomerAppointments / createAppointment / updateAppointment /
+// deleteAppointment (broker → ProClinic) replaced with getCustomerAppointments
+// / createBackendAppointment / updateBackendAppointment / deleteBackendAppointment.
+// listStaff + listDoctors replace broker.getLivePractitioners (Frontend
+// practitioners cluster).
 import {
   listenToAppointmentsByMonth,
   getAppointmentsByMonth,
+  getCustomerAppointments,
+  createBackendAppointment,
+  updateBackendAppointment,
+  deleteBackendAppointment,
+  listStaff,
+  listDoctors,
 } from '../lib/scopedDataLayer.js';
+import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
@@ -146,22 +160,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  // Live practitioners — fetched directly from ProClinic (5-min cache).
-  // Fallback to clinicSettings.practitioners if fetch fails (offline / 429 / no creds).
-  // User rule: show everyone (drop 'hidden' role); same person can appear in both
-  // doctor and assistant lists when ProClinic has them in both.
+  // Live practitioners — Phase 20.0 Task 2 (2026-05-06): rewired from
+  // broker.getLivePractitioners (ProClinic 5-min cache) to be_* parallel
+  // listStaff() + listDoctors() reads. listStaff = assistants/staff,
+  // listDoctors = doctors. Universal lists (not branch-scoped).
+  // Fallback to clinicSettings.practitioners if reads fail (Firestore offline).
   const [livePractitioners, setLivePractitioners] = useState(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await broker.getLivePractitioners();
+        const [doctors, staff] = await Promise.all([
+          listDoctors(),
+          listStaff(),
+        ]);
         if (cancelled) return;
-        if (res?.success) {
-          const docs = res.doctors.map(d => ({ id: d.id, name: d.name, role: 'doctor' }));
-          const assts = res.assistants.map(a => ({ id: a.id, name: a.name, role: 'assistant' }));
-          setLivePractitioners([...docs, ...assts]);
-        }
+        const docs = (doctors || [])
+          .filter(d => d.status !== 'พักใช้งาน')
+          .map(d => ({ id: d.id, name: d.name, role: 'doctor' }));
+        const assts = (staff || [])
+          .filter(s => s.status !== 'พักใช้งาน')
+          .map(s => ({ id: s.id, name: s.name, role: 'assistant' }));
+        setLivePractitioners([...docs, ...assts]);
       } catch (_) { /* silent — fallback to clinicSettings */ }
     })();
     return () => { cancelled = true; };
@@ -528,15 +548,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptCustomerLoading(true);
     if (!depositOptions) fetchDepositOptions();
     try {
-      const res = await broker.listCustomerAppointments(customer.id);
-      if (res.success) {
-        setApptCustomerAppts(res.appointments || []);
-        // Update customer name if API returned a better one
-        if (res.customerName && !customer.name) setApptSelectedCustomer(prev => ({ ...prev, name: res.customerName }));
-      } else {
-        showToast(res.error || 'โหลดนัดหมายไม่สำเร็จ', 4000);
-      }
-    } catch (e) { showToast(e.message, 4000); }
+      // Phase 20.0 Task 2 — read be_appointments via getCustomerAppointments
+      // (one-shot; client-filters by customerId across cross-branch).
+      const list = await getCustomerAppointments(customer.id);
+      setApptCustomerAppts(list || []);
+    } catch (e) { showToast(e.message || String(e), 4000); }
     setApptCustomerLoading(false);
   };
 
@@ -559,65 +575,70 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
     setApptFormSaving(true);
     try {
-      // Include customer name in note for ProClinic identification
-      const custLabel = apptSelectedCustomer.name || `ID:${apptSelectedCustomer.id}`;
-      const noteWithCust = apptFormData.note
-        ? `[${custLabel}] ${apptFormData.note}`
-        : `[${custLabel}]`;
-
-      // advisor + room + source are REQUIRED by ProClinic
+      // Phase 20.0 Task 2 — be_appointments shape (ProClinic field names
+      // dropped). advisor + room + source are NOT mandatory by be_*
+      // schema (admin can leave blank); soft-validate but don't block save.
       const advisorVal = apptFormData.advisor || (depositOptions?.advisors?.[0]?.value) || '';
       const roomVal = apptFormData.room || (depositOptions?.rooms?.[0]?.value) || '';
-      if (!advisorVal || !roomVal) {
-        showToast('กรุณาเลือกที่ปรึกษาและห้องตรวจ', 3000);
-        setApptFormSaving(false);
-        return;
-      }
+      // Look up display names for denormalized be_appointments fields.
+      const doctorRecord = practitioners.find(p => String(p.id) === String(apptFormData.doctor || ''));
+      const advisorRecord = practitioners.find(p => String(p.id) === String(advisorVal || ''));
       const payload = {
-        appointmentDate: apptFormData.date,
-        appointmentStartTime: apptFormData.startTime,
-        appointmentEndTime: apptFormData.endTime,
-        advisor: advisorVal,
-        doctor: apptFormData.doctor || undefined,
-        room: roomVal,
+        date: apptFormData.date,
+        startTime: apptFormData.startTime,
+        endTime: apptFormData.endTime,
+        doctorId: apptFormData.doctor ? String(apptFormData.doctor) : '',
+        doctorName: doctorRecord?.name || '',
+        advisorId: advisorVal ? String(advisorVal) : '',
+        advisorName: advisorRecord?.name || '',
+        roomId: roomVal ? String(roomVal) : '',
         source: apptFormData.source || 'walk-in',
-        appointmentTo: apptFormData.appointmentTo || undefined,
-        appointmentNote: noteWithCust,
-        customerId: apptSelectedCustomer.id,
+        appointmentTo: apptFormData.appointmentTo || '',
+        note: apptFormData.note || '',
+        appointmentType: DEFAULT_APPOINTMENT_TYPE, // Phase 19.0 default
+        customerId: String(apptSelectedCustomer.id),
+        customerName: apptSelectedCustomer.name || '',
       };
       let res;
       if (apptFormMode.mode === 'edit') {
-        res = await broker.updateAppointment(apptFormMode.appointmentId, payload);
+        res = await updateBackendAppointment(apptFormMode.appointmentId, payload);
       } else {
-        res = await broker.createAppointment(payload);
+        res = await createBackendAppointment(payload);
       }
-      if (res.success) {
+      if (res?.success !== false) {
         showToast(apptFormMode.mode === 'create' ? 'สร้างนัดหมายสำเร็จ' : 'แก้ไขนัดหมายสำเร็จ', 3000);
         setApptFormMode(null);
         setApptFormData({ date: '', startTime: '', endTime: '', doctor: '', advisor: '', room: '', source: '', appointmentTo: '', note: '' });
-        // Re-fetch appointments (real-time update)
-        const refresh = await broker.listCustomerAppointments(apptSelectedCustomer.id);
-        if (refresh.success) setApptCustomerAppts(refresh.appointments || []);
+        // Re-fetch appointments
+        const list = await getCustomerAppointments(apptSelectedCustomer.id);
+        setApptCustomerAppts(list || []);
       } else {
         showToast(res.error || 'ไม่สำเร็จ', 4000);
       }
-    } catch (e) { showToast(e.message, 4000); }
+    } catch (e) {
+      // AP1_COLLISION surfaces here — show friendly message
+      if (e?.code === 'AP1_COLLISION') {
+        showToast(`ช่วงเวลานี้มีนัดอยู่แล้ว: ${e.collision?.startTime || ''}-${e.collision?.endTime || ''}`, 5000);
+      } else {
+        showToast(e.message || String(e), 4000);
+      }
+    }
     setApptFormSaving(false);
   };
 
   const handleApptDelete = async (appointmentId) => {
     if (!confirm('ลบนัดหมายนี้?')) return;
     try {
-      const res = await broker.deleteAppointment(appointmentId);
-      if (res.success) {
+      const res = await deleteBackendAppointment(appointmentId);
+      if (res?.success !== false) {
         showToast('ลบนัดหมายสำเร็จ', 3000);
-        // Re-fetch (real-time update)
-        const refresh = await broker.listCustomerAppointments(apptSelectedCustomer.id);
-        if (refresh.success) setApptCustomerAppts(refresh.appointments || []);
+        // Re-fetch (Phase 20.0 Task 2 — be_*)
+        const list = await getCustomerAppointments(apptSelectedCustomer.id);
+        setApptCustomerAppts(list || []);
       } else {
         showToast(res.error || 'ลบไม่สำเร็จ', 4000);
       }
-    } catch (e) { showToast(e.message, 4000); }
+    } catch (e) { showToast(e.message || String(e), 4000); }
   };
 
   // ── Load saved schedule day preferences + schedule list ──
