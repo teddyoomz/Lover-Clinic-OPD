@@ -152,6 +152,10 @@ export const listDocumentTemplates = (...args) => raw.listDocumentTemplates(...a
 // Customer-attached subcollections
 export const getCustomer = (...args) => raw.getCustomer(...args);
 export const getAllCustomers = (...args) => raw.getAllCustomers(...args);
+// Phase 20.0 Task 5a (2026-05-06) — be_customers search (replaces
+// broker.searchCustomers). Universal (cross-branch); admin can find
+// any customer regardless of selected branch.
+export const searchBackendCustomers = (...args) => raw.searchBackendCustomers(...args);
 export const getCustomerWallets = (...args) => raw.getCustomerWallets(...args);
 export const getWalletBalance = (...args) => raw.getWalletBalance(...args);
 export const getWalletTransactions = (...args) => raw.getWalletTransactions(...args);

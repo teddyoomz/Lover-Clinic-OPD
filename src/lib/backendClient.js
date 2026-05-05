@@ -162,6 +162,47 @@ export async function getAllCustomers() {
 }
 
 /**
+ * Phase 20.0 Task 5a (2026-05-06) — search be_customers by query string.
+ * Replaces broker.searchCustomers (which scraped ProClinic). Matches against
+ * HN / phone / nationalId / firstname / lastname (case-insensitive substring).
+ *
+ * Returns shape compatible with AdminDashboard's apptSearchResults consumer:
+ *   [{ id, name, hn, phone }]
+ *
+ * Universal — not branch-scoped (admin may need to find customers across
+ * branches; customer entities are universal per Rule L Layer 2 contract).
+ */
+export async function searchBackendCustomers(queryStr) {
+  const q = String(queryStr || '').trim().toLowerCase();
+  if (!q) return [];
+  const all = await getAllCustomers();
+  return all
+    .filter(c => {
+      const fn = String(c.firstname || c.firstName || c.patientData?.firstName || '').toLowerCase();
+      const ln = String(c.lastname || c.lastName || c.patientData?.lastName || '').toLowerCase();
+      const hn = String(c.hn_no || c.hn || c.patientData?.hn || '').toLowerCase();
+      const phone = String(c.phone || c.patientData?.phone || '').toLowerCase();
+      const natId = String(c.nationalId || c.patientData?.nationalId || '').toLowerCase();
+      return (
+        fn.includes(q) || ln.includes(q) || hn.includes(q) ||
+        phone.includes(q) || natId.includes(q)
+      );
+    })
+    .slice(0, 50) // cap at 50 results
+    .map(c => {
+      const fn = c.firstname || c.firstName || c.patientData?.firstName || '';
+      const ln = c.lastname || c.lastName || c.patientData?.lastName || '';
+      const composed = [fn, ln].filter(Boolean).join(' ').trim();
+      return {
+        id: c.id,
+        name: composed || c.patientData?.fullName || c.id,
+        hn: c.hn_no || c.hn || c.patientData?.hn || '',
+        phone: c.phone || c.patientData?.phone || '',
+      };
+    });
+}
+
+/**
  * Save/overwrite customer to be_customers.
  *
  * Every customer doc carries a `consent` block. Defaults both flags to

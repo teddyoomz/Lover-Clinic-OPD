@@ -36,6 +36,8 @@ import {
   listDoctors,
   listExamRooms,
   listAllSellers,
+  searchBackendCustomers,
+  getCustomer,
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
@@ -476,19 +478,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (localStorage.getItem('lc_push_enabled') === 'true') setPushEnabled(true);
   }, []);
 
-  // Auto-sync ProClinic credentials to Cookie Relay extension
-  useEffect(() => {
-    function handleExtReady(e) {
-      if (e.data?.type !== 'LC_COOKIE_RELAY_READY') return;
-      broker.getProClinicCredentials().then(res => {
-        if (res?.success) {
-          window.postMessage({ type: 'LC_SET_CREDENTIALS', origin: res.origin, email: res.email, password: res.password }, '*');
-        }
-      });
-    }
-    window.addEventListener('message', handleExtReady);
-    return () => window.removeEventListener('message', handleExtReady);
-  }, []);
+  // Phase 20.0 Task 5a (2026-05-06) — broker.getProClinicCredentials removed.
+  // Cookie Relay auto-sync was for ProClinic session bootstrap; with the
+  // ProClinic dependency phasing out (no-deploy directive 2026-05-06) the
+  // Cookie Relay extension is dev-only scaffolding (Rule H-bis). Listener
+  // entirely dropped — extension that posts LC_COOKIE_RELAY_READY now sees
+  // no response, which is fine: it falls back to manual credential entry
+  // in MasterDataTab.
 
   // โหลด / subscribe globalPushMuted จาก Firestore
   useEffect(() => {
@@ -554,8 +550,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptSearchResults(null);
     setApptSelectedCustomer(null);
     try {
-      const res = await broker.searchCustomers(q);
-      setApptSearchResults(res.success ? (res.customers || []) : []);
+      // Phase 20.0 Task 5a (2026-05-06) — search be_customers via
+      // searchBackendCustomers (replaces broker.searchCustomers).
+      const customers = await searchBackendCustomers(q);
+      setApptSearchResults(customers || []);
     } catch (e) {
       showToast(`ค้นหาไม่สำเร็จ: ${e.message}`, 4000);
       setApptSearchResults([]);
@@ -1416,10 +1414,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             coursesRefreshRequest: null,
             lastCoursesAutoFetch: serverTimestamp(),
           }).catch(e => console.error('auto courses trigger:', e));
-          broker.getCourses(s.brokerProClinicId)
-            .then(result => {
+          // Phase 20.0 Task 5a (2026-05-06) — read be_customers doc directly
+          // (customer.courses[] is already maintained by treatment / sale flows).
+          // Replaces broker.getCourses (which scraped ProClinic).
+          getCustomer(s.brokerProClinicId)
+            .then(customer => {
               autoCoursesRequestedRef.current.delete(s.id);
               const cRef = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id);
+              const result = customer ? {
+                success: true,
+                courses: customer.courses || [],
+                expiredCourses: customer.expiredCourses || [],
+                appointments: customer.appointments || [],
+                patientName: [customer.firstname || '', customer.lastname || ''].filter(Boolean).join(' ').trim() || customer.patientData?.fullName || '',
+                error: null,
+              } : { success: false, courses: [], expiredCourses: [], appointments: [], patientName: '', error: 'ไม่พบลูกค้าใน be_customers' };
               updateDoc(cRef, {
                 latestCourses: {
                   courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
@@ -2473,7 +2482,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       status: 'loading', courses: [], expiredCourses: [], error: '',
     });
     try {
-      const result = await broker.getCourses(session.brokerProClinicId);
+      // Phase 20.0 Task 5a (2026-05-06) — read be_customers doc directly.
+      const customer = await getCustomer(session.brokerProClinicId);
+      const result = customer ? {
+        success: true,
+        courses: customer.courses || [],
+        expiredCourses: customer.expiredCourses || [],
+        appointments: customer.appointments || [],
+        patientName: [customer.firstname || '', customer.lastname || ''].filter(Boolean).join(' ').trim() || customer.patientData?.fullName || '',
+        error: null,
+      } : { success: false, courses: [], expiredCourses: [], appointments: [], patientName: '', error: 'ไม่พบลูกค้าใน be_customers' };
       coursesJobIdRef.current = null;
       autoCoursesRequestedRef.current.delete(session.id);
       setCoursesPanel(prev => prev?.sessionId === session.id
@@ -2588,7 +2606,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const PROCLINIC_ORIGIN = (clinicSettings?.proClinicOrigin || 'https://proclinicth.com').trim().replace(/\/+$/, '');
   const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
 
-  // ── Import from ProClinic handlers ──────────────────────────────────────────
+  // ── Search be_customers (Phase 20.0 Task 5a — was Import-from-ProClinic) ──
+  // Repurposed: search by HN/phone/nationalId/name across be_customers.
+  // The "Import" wording remains on the legacy UI section but the data
+  // source is now be_customers (no ProClinic round-trip).
   const handleImportSearch = async () => {
     const q = importSearch.trim();
     if (!q) return;
@@ -2598,9 +2619,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setImportError('');
     setImportSuccess('');
     try {
-      const result = await broker.searchCustomers(q);
-      if (!result.success) throw new Error(result.error || 'ค้นหาไม่สำเร็จ');
-      setImportResults(result.customers || []);
+      const customers = await searchBackendCustomers(q);
+      setImportResults(customers || []);
     } catch (err) {
       setImportError(err.message);
     } finally {
@@ -2613,18 +2633,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setImportPreview(null);
     setImportError('');
     try {
-      const [patientRes, coursesRes] = await Promise.all([
-        broker.fetchPatientFromProClinic(proClinicId),
-        broker.getCourses(proClinicId),
-      ]);
-      if (!patientRes.success) throw new Error(patientRes.error || 'ดึงข้อมูลไม่สำเร็จ');
+      // Phase 20.0 Task 5a (2026-05-06) — load be_customers doc; replaces
+      // broker.fetchPatientFromProClinic + broker.getCourses parallel call.
+      const customer = await getCustomer(proClinicId);
+      if (!customer) throw new Error('ไม่พบลูกค้าใน be_customers');
       setImportPreview({
-        patient: patientRes.patient,
-        proClinicId: patientRes.proClinicId,
-        proClinicHN: patientRes.proClinicHN,
-        courses: coursesRes.success ? coursesRes.courses : [],
-        expiredCourses: coursesRes.success ? coursesRes.expiredCourses : [],
-        appointments: coursesRes.success ? coursesRes.appointments : [],
+        patient: customer.patientData || customer,
+        proClinicId: customer.proClinicId || customer.id,
+        proClinicHN: customer.proClinicHN || customer.hn_no || customer.hn || '',
+        courses: customer.courses || [],
+        expiredCourses: customer.expiredCourses || [],
+        appointments: customer.appointments || [],
       });
     } catch (err) {
       setImportError(err.message);
