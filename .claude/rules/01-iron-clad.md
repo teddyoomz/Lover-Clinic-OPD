@@ -6,12 +6,32 @@
 **Why:** 2026-04-19 deploy `8fc2ed9` ของ session ก่อนทับ Console rules ที่เปิดไว้ → webhook + sync write 403 → chat + ปฏิทินตาย. Revert (`git reset --hard c0d0ffc` + new commit) เป็น safety net.
 
 ### B. Probe-Deploy-Probe สำหรับ `firestore:rules`
+
+**🚨 CRITICAL URL CONVENTION (2026-05-06 lesson lock — Phase 19.0 V15 #22)**:
+ALL probe URLs MUST include the `artifacts/{APP_ID}/public/data/` prefix.
+Production data lives at this canonical path; bare `/{collection}` URLs
+hit the default-deny limbo and return spurious 403s that look like rule
+drift. Phase 19.0 V15 #22 wasted 30 min on a false alarm because the
+simplified `.../chat_conversations` shorthand below was interpreted as
+a literal URL.
+
+```
+APP_ID="loverclinic-opd-4c39b"
+BASE="https://firestore.googleapis.com/v1/projects/loverclinic-opd-4c39b/databases/(default)/documents"
+PREFIX="artifacts/$APP_ID/public/data"
+# All probe URLs use $BASE/$PREFIX/<collection>/<doc-id> — never $BASE/<collection>/<doc-id>.
+```
+
+**Per local-only directive 2026-05-06**: deploys are now user-triggered only;
+this rule applies when an explicit rules deploy is authorized (rare). The
+default workflow is local-only (per `feedback_local_only_no_deploy.md`).
+
 ทุกครั้งที่จะ `firebase deploy --only firestore:rules` — ไม่มีข้อยกเว้น:
-1. `curl -X POST .../chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-2. `curl -X PATCH .../pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-3. `curl -X PATCH .../clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
-4. `curl -X PATCH .../clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
-5. **NEW V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
+1. `curl -X POST $BASE/$PREFIX/chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
+2. `curl -X PATCH $BASE/$PREFIX/pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
+3. `curl -X PATCH $BASE/$PREFIX/clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
+4. `curl -X PATCH $BASE/$PREFIX/clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
+5. **V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
    ```
    # Step A: provision anonymous ID token
    ANON_TOKEN=$(curl -s -X POST \
@@ -21,29 +41,34 @@
    # Step B: CREATE probe doc with isArchived=true + status=completed
    #         CRITICAL (V27 lesson): MUST set isArchived:true OR status:'completed'
    #         on CREATE. Old pattern (status:'pending') made probes appear in
-   #         the patient queue UI as "ไม่ระบุชื่อ" entries → user reported
-   #         "มึงมาเทสสร้างเหี้ยไรหน้านี้แล้วทำไมไม่ลบ ากปรกเกะกะ เลอะเทะ".
-   #         Anon CREATE has NO field whitelist (allow create: if true) so
-   #         we can set staff-only fields like isArchived on creation.
-   curl -X POST ".../opd_sessions?documentId=test-probe-anon-$(date +%s)" \
+   #         the patient queue UI as "ไม่ระบุชื่อ" entries.
+   curl -X POST "$BASE/$PREFIX/opd_sessions?documentId=test-probe-anon-$(date +%s)" \
      -H "Authorization: Bearer $ANON_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"fields":{"status":{"stringValue":"completed"},"isArchived":{"booleanValue":true},"patientData":{"mapValue":{"fields":{}}}}}'
    # Step C: PATCH a whitelisted field — proves V23 hasOnly path works
-   curl -X PATCH ".../opd_sessions/test-probe-anon-$(date +%s)?updateMask.fieldPaths=isUnread" \
+   curl -X PATCH "$BASE/$PREFIX/opd_sessions/test-probe-anon-$(date +%s)?updateMask.fieldPaths=isUnread" \
      -H "Authorization: Bearer $ANON_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"fields":{"isUnread":{"booleanValue":true}}}'
    # → ต้อง 200 (patient form submit + dashboard course-refresh path)
    # FIREBASE_API_KEY = web API key from Firebase Console → Project Settings
    ```
-6. `firebase deploy --only firestore:rules`
-7. รัน probe 1-5 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-8. ลบ probe docs ทิ้ง:
-   - DELETE `pc_appointments/test-probe-{TS}` x 2 (anon allowed)
-   - PATCH `clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field
-   - DELETE `chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
-   - DELETE `opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
+6. **Phase 18.0 (2026-05-05)** — `be_exam_rooms` CREATE probe (clinic-staff only):
+   ```
+   curl -X POST "$BASE/$PREFIX/be_exam_rooms?documentId=test-probe-$(date +%s)" \
+     -H "Authorization: Bearer $STAFF_TOKEN" \
+     -d '{"fields":{"probe":{"booleanValue":true}}}'
+   # → 200 (clinic-staff). Anon → 403 (expected; rule allows staff only).
+   ```
+7. `firebase deploy --only firestore:rules`
+8. รัน probe 1-6 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+9. ลบ probe docs ทิ้ง:
+   - DELETE `$BASE/$PREFIX/pc_appointments/test-probe-{TS}` x 2 (anon allowed)
+   - PATCH `$BASE/$PREFIX/clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field
+   - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
+   - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
+   - DELETE `$BASE/$PREFIX/be_exam_rooms/test-probe-{TS}` x 2 (clinic-staff)
      → For periodic admin cleanup: PermissionGroupsTab "ลบ test-probe ค้าง" button
      → Calls `/api/admin/cleanup-test-probes` (admin-only, firebase-admin Firestore SDK)
    - V27 fix: CREATE step now uses isArchived=true so docs hide from queue UI even before cleanup
