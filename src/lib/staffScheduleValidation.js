@@ -50,13 +50,19 @@ const WORKING_TIME_TYPES = new Set(['recurring', 'work', 'halfday']);
 // Types that need start/end times when used per-date (excludes recurring which uses dayOfWeek).
 const PER_DATE_WORK_TYPES = new Set(['work', 'halfday']);
 
-// Canonical 30-min time slot list — matches ProClinic dropdown (08:30-22:00).
+// Phase 19.0 (2026-05-06) — canonical 15-min time slot list
+// (08:15-22:00). Was 30-min (08:30-22:00, 28 entries) prior to Phase 19.0.
+// Now 56 entries. Aligned with backendClient.SLOT_INTERVAL_MIN = 15
+// (AP1-bis schema-based reservation). Imported by AppointmentTab,
+// AppointmentFormModal, DepositPanel, ScheduleEntryFormModal — replacing
+// 3 prior local copies (Rule of 3 collapse).
+export const SLOT_INTERVAL_MIN_DISPLAY = 15;
 export const TIME_SLOTS = Object.freeze((() => {
   const slots = [];
   for (let h = 8; h <= 22; h++) {
-    for (const m of [0, 30]) {
-      if (h === 8 && m === 0) continue; // start at 08:30
-      if (h === 22 && m === 30) continue; // end at 22:00
+    for (const m of [0, 15, 30, 45]) {
+      if (h === 8 && m === 0) continue; // start at 08:15
+      if (h === 22 && (m === 15 || m === 30 || m === 45)) continue; // end at 22:00
       slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
   }
