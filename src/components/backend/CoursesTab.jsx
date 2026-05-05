@@ -7,6 +7,7 @@ import { listCourses, deleteCourse } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CourseFormModal from './CourseFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { STATUS_OPTIONS } from '../../lib/courseValidation.js';
 
 const STATUS_BADGE = {
@@ -66,6 +67,13 @@ export default function CoursesTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="courses"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Briefcase}
         title="คอร์ส"

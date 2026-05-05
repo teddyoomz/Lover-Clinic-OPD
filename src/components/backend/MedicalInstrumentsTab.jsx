@@ -8,6 +8,7 @@ import { listMedicalInstruments, deleteMedicalInstrument } from '../../lib/scope
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import MedicalInstrumentFormModal from './MedicalInstrumentFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import {
   STATUS_OPTIONS,
   daysUntilMaintenance,
@@ -101,6 +102,13 @@ export default function MedicalInstrumentsTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="medical-instruments"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Wrench}
         title="เครื่องหัตถการ"

@@ -11,6 +11,7 @@ import { listProductUnitGroups, deleteProductUnitGroup } from '../../lib/scopedD
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductUnitFormModal from './ProductUnitFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { STATUS_OPTIONS } from '../../lib/productUnitValidation.js';
 
 const STATUS_BADGE = {
@@ -88,6 +89,13 @@ export default function ProductUnitsTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="product-units"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Scale}
         title="หน่วยสินค้า"

@@ -7,6 +7,7 @@ import { listDfGroups, deleteDfGroup } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DfGroupFormModal from './DfGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { STATUS_OPTIONS } from '../../lib/dfGroupValidation.js';
 
 const STATUS_BADGE = {
@@ -68,6 +69,13 @@ export default function DfGroupsTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="df-groups"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Banknote}
         title="กลุ่ม DF (ค่ามือ)"

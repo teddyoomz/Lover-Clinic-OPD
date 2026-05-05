@@ -7,6 +7,7 @@ import { listProducts, deleteProduct } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductFormModal from './ProductFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { STATUS_OPTIONS, PRODUCT_TYPE_OPTIONS } from '../../lib/productValidation.js';
 
 const STATUS_BADGE = {
@@ -81,6 +82,13 @@ export default function ProductsTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="products"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Package}
         title="สินค้า"

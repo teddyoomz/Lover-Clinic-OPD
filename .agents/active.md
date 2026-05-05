@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-05 — Phase 17.0 spec+plan written + wiki backfill cycle complete; awaiting implementation"
-status: "master=f39760b = prod LIVE (V15 #16) · 4997 tests pass · 0 commits ahead-of-prod · Phase 17.0 paused mid-implementation"
-current_focus: "Phase 17.0 — BSA leak sweep 3 (Promotion/Coupon/Voucher refresh + TFP phantom data + BS-9 lock); spec+plan ready, wiki-first review surfaced spec bug + corrected"
+updated_at: "2026-05-05 — Phase 17.1 cross-branch master-data import shipped to master; 5208 tests pass; 1 commit ahead-of-prod"
+status: "master=<phase-17-1-sha> · 5208 tests pass · 1 commit ahead-of-prod (V15 #17 = 5799bd5)"
+current_focus: "Phase 17.1 done. Phase 17.2 brainstorm next on demand. Wiki backfill more on demand."
 branch: "master"
-last_commit: "f39760b"
-tests: 4997
+last_commit: "<phase-17-1-sha>"
+tests: 5208
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "f39760b"
+production_commit: "5799bd5"
 firestore_rules_version: 25
 storage_rules_version: 2
 ---

@@ -12,6 +12,7 @@ import { listProductGroups, deleteProductGroup, listProducts } from '../../lib/s
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import ProductGroupFormModal from './ProductGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { PRODUCT_TYPES, STATUS_OPTIONS } from '../../lib/productGroupValidation.js';
 
 const STATUS_BADGE = {
@@ -120,6 +121,13 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="product-groups"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={FolderTree}
         title="กลุ่มสินค้า"

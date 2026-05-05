@@ -9,6 +9,7 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import HolidayFormModal from './HolidayFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import {
   STATUS_OPTIONS,
@@ -118,6 +119,13 @@ export default function HolidaysTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="holidays"
+          isDark={theme === 'dark'}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={CalendarX}
         title="วันหยุด"
