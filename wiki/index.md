@@ -7,7 +7,7 @@ date-updated: 2026-05-05
 
 # LoverClinic Wiki — Index
 
-Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle).
+Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle).
 
 **Schema**: see [CLAUDE.md](CLAUDE.md) for conventions.
 **Activity log**: see [log.md](log.md) for chronological history.
@@ -40,6 +40,9 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [ProductsTab](entities/products-tab.md) | Component | `be_products` CRUD (Phase 11.7). Phase 17.1 target. |
 | [CoursesTab](entities/courses-tab.md) | Component | `be_courses` CRUD (Phase 11.8). Phase 17.1 target. |
 | [DfGroupsTab](entities/df-groups-tab.md) | Component | `be_df_groups` CRUD (Phase 13.x). Phase 17.1 target. |
+| [be_exam_rooms](entities/be-exam-rooms.md) | Firestore collection | Branch-scoped exam-room master (Phase 18.0). Each doc: examRoomId / branchId / name / status / sortOrder. Standard BSA pattern. |
+| [ExamRoomsTab](entities/exam-rooms-tab.md) | Component | `be_exam_rooms` CRUD (Phase 18.0). Backend tab `tab=exam-rooms` under "ข้อมูลพื้นฐาน". BS-9 compliant. Soft-confirm delete with auto-routing to ไม่ระบุห้อง. |
+| [appointmentRoomColumns](entities/appointment-room-columns.md) | Helper / Lib | Pure render-side helpers for AppointmentTab grid columns (`effectiveRoomId`, `buildRoomColumnList`, `UNASSIGNED_ROOM_ID`). 16 unit tests. |
 
 ## Concepts
 
@@ -55,6 +58,9 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [Marketing collections](concepts/marketing-collections.md) | `be_promotions` / `be_coupons` / `be_vouchers` — branch-scoped with `allBranches:true` doc-field OR-merge. Phase 9. |
 | [Master-data tabs pattern](concepts/master-data-tabs-pattern.md) | 7 backend tabs (Phase 11+) sharing a near-identical structure. Targets for Phase 17.1 cross-branch import. |
 | [Branch equality — no "main" branch](concepts/branch-equality-no-main.md) | Phase 17.2 anticipation. Per user directive 2026-05-05: remove `isDefault` / `'main'` / star UI. ~20 files affected. |
+| [Branch Exam Rooms (Phase 18.0)](concepts/branch-exam-rooms.md) | Per-branch exam-room CRUD master. Replaces `appt-rooms-seen` localStorage cumulative cache. Shipped V15 #19 + V15 #20. Migration `--apply` ran 2026-05-05 (3 rooms seeded for นครราชสีมา). |
+| [Runtime fallback for orphan roomIds](concepts/runtime-fallback-orphan-room.md) | Phase 18.0 render-time pattern: blank/missing/stale/cross-branch `roomId` → virtual ไม่ระบุห้อง column. Zero writes on room delete. |
+| [V12 shape-drift bug class](concepts/v12-shape-drift.md) | When writer schema changes, every reader becomes a bug-magnet until swept. Original V12 (2026-04-24) + Phase 17.2-quinquies/septies/octies recurrences (2026-05-05). |
 
 ## Analyses
 

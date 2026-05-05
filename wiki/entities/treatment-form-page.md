@@ -75,8 +75,17 @@ Phase 17.0 will additionally add a `useEffect` that watches `selectedBranchId` a
 - Entity: [listProductGroupsForTreatment](list-product-groups-for-treatment.md)
 - V-entries: V21 (lightbox + close-on-edit at TreatmentTimelineModal interaction with TFP edit page), V13 (full-flow simulate mandate after 3 rounds of buffet/expiry/shadow bugs that helper-only tests missed), V11 (mock-shadowed missing export — `npm run build` mandatory), V12 (shape-migration multi-reader sweep — applies to any TFP shape change consumed by readers)
 
+## Phase 17.2 fix series (2026-05-05)
+
+Four sibling commits closed cross-branch correctness gaps in TFP — all instances of [V12 shape-drift bug class](../concepts/v12-shape-drift.md):
+
+- **17.2-quinquies** (`c76e953`) — Modal data caches leaked across branches. BS-9 cache-reset useEffect at line ~329 missed `buyItems` + `buyCategories` (course/OTC/promotion modal caches). Fix: extend BS-9 to drain those slots + drop `length>0` short-circuits in 5 modal openers + add `SELECTED_BRANCH_ID` to form-data useEffect deps.
+- **17.2-septies** (`9046dcf`) — Reader field-name drift. TFP filter+map sites read legacy `p.type` / `p.name` / `p.category` / `p.unit`, but `be_products` and `be_courses` use canonical `productType` / `productName` / `categoryName` / `mainUnitName` / `courseName` / `salePrice` / `courseCategory`. Filter `p.type === 'ยา'` returned 0 of 178 ยา products → empty modals. Fix: every site uses canonical-first fallback. PLUS: branch indicator banner at TFP top header (`data-testid="tfp-branch-indicator"`) shows current branch — diagnostic for both user and Claude.
+- **17.2-octies** (`c248c67`) — `isCourseUsableInTreatment` was flat-shape only (`c.qty` string). Call site at line ~1982 passes the GROUPED-shape output from `mapRawCoursesToForm` (`c.products[]`). 3 IV Drip courses for asdas dasd (8/89/26 remaining) all rejected → courses panel empty. Fix: helper accepts both shapes.
+- **18.0 family** — Branch Exam Rooms shipped (V15 #19 + V15 #20). TFP modal openers no longer affected (Phase 17.2-quinquies dropped the cache short-circuit so empty branches don't re-show stale data). See [Branch Exam Rooms concept](../concepts/branch-exam-rooms.md).
+
 ## History
 
 - 2026-04-26 — V21 lightbox + close-on-edit fixes shipped. The treatment timeline modal had two latent click bugs (image `<a href=data:>` blocked by Chrome + edit button hidden under modal z-100). TFP itself wasn't changed but its z-80 stack relationship was the structural fix.
-- 2026-05-04 — Phase BSA Task 7 H-quater fix (commit `6f76ec6`). `getAllMasterDataItems` removed from TFP load path; replaced with `listProducts/listCourses/listStaff/listDoctors` from scopedDataLayer. Single-modal openers also migrated. Group-modal openers point through scopedDataLayer but Layer 2 wrapper is still a pass-through pending Phase 17.0.
-- 2026-05-05 — Wiki backfill page created. Phase 17.0 will add `useSelectedBranch()` hook + cache-reset useEffect for the four phantom-data modal caches and rewrite the `listProductGroupsForTreatment` Layer 2 wrapper to auto-inject branchId.
+- 2026-05-04 — Phase BSA Task 7 H-quater fix (commit `6f76ec6`). `getAllMasterDataItems` removed from TFP load path; replaced with `listProducts/listCourses/listStaff/listDoctors` from scopedDataLayer. Single-modal openers also migrated.
+- 2026-05-05 — Phase 17.2 quinquies/septies/octies + Phase 18.0 family shipped (V15 #19 + V15 #20). Cross-branch correctness fully restored. Branch indicator banner added at TFP top.
