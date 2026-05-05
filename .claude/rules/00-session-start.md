@@ -168,6 +168,40 @@ Screenshots alone = shape-only capture = bug vector. The `/triangle-inspect` ski
 - **Verify**: `npm test -- --run tests/audit-branch-scope.test.js && npm test -- --run tests/branch-scope-flow-simulate.test.js`. Both must be green pre-deploy.
 - **Branch-refresh discipline (BS-9, 2026-05-05)**: every branch-scoped tab importing `list*` from `scopedDataLayer.js` MUST subscribe to `useSelectedBranch` AND include `selectedBranchId` in the data-loading hook's deps array (`useCallback`/`useEffect`). Phase 17.0 closed Promotion/Coupon/Voucher gap (PromotionTab/CouponTab/VoucherTab were imported from scopedDataLayer but had `useCallback(..., [])` empty deps → branch switch never triggered re-fetch). `useBranchAwareListener` is a sanctioned exception (auto-handles re-subscribe) — annotate `// audit-branch-scope: BS-9 listener-driven`. Audit BS-9 enforces.
 
+**M. 🆕 Data ops via local + admin SDK + pull env** (added 2026-05-06 after user directive "ถ้ามีการสั่งให้แก้ข้อมูล ย้ายข้อมูล ลบข้อมูล สร้างข้อมูล หรือจัดการต่างๆเกี่ยวกับข้อมูล ให้ pull env แล้วทำเลยจาก local ไม่ต้องรอ deploy"):
+
+When the user authorizes ANY data manipulation against production Firestore — edit / migrate / delete / create / cascade-cleanup / bulk-update / counter-reset / reclassify — execute it from LOCAL via firebase-admin SDK + pulled Vercel env. **Do NOT wait for a deploy cycle.** Data-only ops belong in `scripts/` or one-shot node commands, not in shipped code.
+
+**Required workflow**:
+1. **Pull env**: `vercel env pull .env.local.prod --environment=production` (refresh creds; reuse if pulled this session)
+2. **Use admin SDK** (firebase-admin) — bypasses rules + reaches all paths. NEVER use unauth REST or client SDK for data ops.
+3. **Use canonical paths**: production data lives at `artifacts/{APP_ID}/public/data/{collection}` where `APP_ID = 'loverclinic-opd-4c39b'`. Bare `/{collection}` writes go to default-deny limbo.
+4. **PEM key conversion**: `.env.local.prod` stores `FIREBASE_ADMIN_PRIVATE_KEY` with literal `\n` escapes — convert via `key.split('\\n').join('\n')` before passing to `cert(...)`.
+5. **Two-phase**: every data-op script defaults to dry-run; commits only when `--apply` flag is passed. Phase 18.0 + Phase 19.0 migration scripts = canonical templates.
+6. **Audit doc**: every batch op writes `artifacts/{APP_ID}/public/data/be_admin_audit/<phase>-<op>-<ts>-<rand>` with `{scanned, migrated/deleted/created, skipped, beforeDistribution, afterDistribution, appliedAt}`.
+7. **Idempotency**: re-run with `--apply` must yield 0 writes. Build the skip-on-already-migrated check into the script.
+8. **Forensic-trail fields** when mutating existing docs: stamp `<field>MigratedAt: serverTimestamp()` + `<field>LegacyValue: <prior>`.
+9. **Invocation guard**: every `.mjs` script wraps its `main()` call in `if (process.argv[1] === fileURLToPath(import.meta.url))` so unit-test imports don't auto-trigger Firebase init.
+10. **Crypto-secure random**: audit-doc IDs use `randomBytes(...).toString('hex')` (not Math.random).
+
+**Anti-patterns** (every one of these surfaced as a real bug — Phase 19.0 V15 #22):
+- ❌ Adding a one-shot data-fix to a UI component as "do it on next page-load if state is missing X" — deploy-coupled + race-prone. Build a script.
+- ❌ Embedding ID lists / collection paths directly in admin endpoints expecting users to invoke them via the UI — admin endpoints are for staff-clicked runtime ops; data migration is a developer concern.
+- ❌ Modifying production data via Firebase Console manually — leaves no audit trail + zero re-run safety.
+- ❌ Deploying code that contains a one-shot migration → 1st-load auto-trigger. Deploy churn + rollback complexity unjustified.
+- ❌ Using `db.collection('foo')` (root path) instead of `db.collection('artifacts/{APP_ID}/public/data/foo')` — surfaced live during V15 #22 (Phase 19.0) when migration scanned 0 docs.
+
+**When this rule does NOT apply**:
+- Pre-deploy migration script scaffolding shipped to `scripts/` BEFORE the V-deploy is OK (the *script* ships, the *--apply* runs from local later).
+- Schema/rule changes that REQUIRE deploy coupling (e.g. tightening a Firestore rule) — those go through Probe-Deploy-Probe (Rule B), not data ops.
+- Test-fixture scaffolding for adversarial tests — uses mock Firestore, not real prod data.
+
+**Verify locally first**: every data op gets a dry-run on prod data BEFORE the `--apply`. Capture distribution; sanity-check counts; only then commit writes.
+
+**Lesson lock**: V15 #22 Phase 19.0 (2026-05-06) — migration script had two latent bugs (PEM-parse + bare-collection-path) that ONLY surfaced at LIVE execution time. Both caught + fixed in <10 minutes because the run was local + admin-SDK (not deploy-coupled). Had this been a UI-triggered migration, the fix would have required redeploy + new probe cycle. Local-first wins on iteration speed AND blast-radius control.
+
+---
+
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.
 - **Production release (pre-launch) must STRIP**:
