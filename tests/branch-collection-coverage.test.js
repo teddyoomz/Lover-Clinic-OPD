@@ -69,6 +69,7 @@ const COLLECTION_MATRIX = {
   'be_medical_instruments':{ scope: 'global',  reason: 'Master data' },
   'be_branches':           { scope: 'global',  reason: 'Branch directory itself' },
   'be_holidays':           { scope: 'global',  reason: 'Clinic-wide holidays (could be branch-scoped later)' },
+  'be_exam_rooms':         { scope: 'branch-spread', source: 'Phase 18.0 — ExamRoomsTab; saveExamRoom spreads branchId via _resolveBranchIdForWrite. Each branch maintains its own exam-room list independently.' },
   'be_permission_groups':  { scope: 'global',  reason: 'Roles' },
   'be_promotions':         { scope: 'global',  reason: 'Clinic-wide marketing' },
   'be_coupons':            { scope: 'global',  reason: 'Clinic-wide marketing' },

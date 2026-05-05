@@ -92,6 +92,14 @@ export const listProductGroups = _autoInject(() => raw.listProductGroups);
 export const listProductUnitGroups = _autoInject(() => raw.listProductUnitGroups);
 export const listMedicalInstruments = _autoInject(() => raw.listMedicalInstruments);
 export const listHolidays = _autoInject(() => raw.listHolidays);
+// Phase 18.0 (2026-05-05) — branch-scoped exam-room master + listener +
+// writers. listExamRooms accepts {branchId, allBranches, status} via auto-
+// inject; listenToExamRoomsByBranch is positional so the hook layer
+// (useBranchAwareListener) handles re-subscribe on branch switch.
+export const listExamRooms = _autoInject(() => raw.listExamRooms);
+export const getExamRoom = (...args) => raw.getExamRoom(...args);
+export const saveExamRoom = (...args) => raw.saveExamRoom(...args);
+export const deleteExamRoom = (...args) => raw.deleteExamRoom(...args);
 export const listDfGroups = _autoInject(() => raw.listDfGroups);
 export const listDfStaffRates = _autoInject(() => raw.listDfStaffRates);
 
@@ -198,6 +206,7 @@ export const listenToUserPermissions = _makeUniversalListener('listenToUserPermi
 export const listenToAppointmentsByDate = (...args) => raw.listenToAppointmentsByDate(...args);
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
+export const listenToExamRoomsByBranch = (...args) => raw.listenToExamRoomsByBranch(...args);
 // Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
 // (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
 // was extended to accept branchId so AppointmentTab can thread the current
