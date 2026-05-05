@@ -12,6 +12,8 @@ import {
   getAllDeposits, getDeposit, getAllCustomers,
   // Phase 14.10-tris (2026-04-26) — be_* canonical, no master_data mirror
   listStaff, listDoctors,
+  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
+  listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
@@ -133,7 +135,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [apptDoctorId, setApptDoctorId] = useState('');
   const [apptDoctorName, setApptDoctorName] = useState('');
   const [apptAssistantIds, setApptAssistantIds] = useState([]);
-  const [apptRoomName, setApptRoomName] = useState('');
+  const [apptRoomId, setApptRoomId] = useState('');  // Phase 18.0 — FK to be_exam_rooms
+  const [apptRoomName, setApptRoomName] = useState('');  // snapshot for historical display
   const [apptChannel, setApptChannel] = useState('');
   const [apptPurpose, setApptPurpose] = useState('');
   const [apptNote, setApptNote] = useState('');
@@ -165,13 +168,16 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   useEffect(() => { loadList(); }, [loadList]);
 
   // ── Load options on demand ─────────────────────────────────────────────
+  const [examRooms, setExamRooms] = useState([]);
   const loadOptions = useCallback(async () => {
     if (optionsLoadedFor === selectedBranchId) return;
     try {
-      const [c, s, d] = await Promise.all([
+      const [c, s, d, rooms] = await Promise.all([
         getAllCustomers(),
         listStaff(),
         listDoctors(),
+        // Phase 18.0 (2026-05-05) — branch-scoped active exam rooms
+        listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' }).catch(() => []),
       ]);
       setCustomers(c);
       // Phase 14.10-tris — be_staff/be_doctors shape: firstname+lastname (no flat .name)
@@ -185,6 +191,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       const dFiltered = filterDoctorsByBranch(d || [], selectedBranchId);
       setStaff(sFiltered.map(x => ({ id: x.staffId || x.id, name: buildName(x), position: x.position })));
       setDoctors(dFiltered.map(x => ({ id: x.doctorId || x.id, name: buildName(x), position: x.position })));
+      setExamRooms(rooms || []);
       setOptionsLoadedFor(selectedBranchId);
     } catch (e) { console.warn('[DepositPanel] load options failed:', e); }
   }, [optionsLoadedFor, selectedBranchId]);
@@ -318,7 +325,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
             return d ? String(d.name || '').trim() : '';
           })
           .filter(Boolean),
-        roomName: apptRoomName,
+        roomId: apptRoomId || '',  // Phase 18.0 — FK to be_exam_rooms
+        roomName: apptRoomName,    // snapshot
         channel: apptChannel,
         purpose: apptPurpose,
         note: apptNote,
@@ -859,8 +867,19 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       </div>
                       <div>
                         <label className={labelCls}>ห้องตรวจ</label>
-                        <input type="text" value={apptRoomName} onChange={e => setApptRoomName(e.target.value)}
-                          className={inputCls} placeholder="เช่น ห้อง 1" />
+                        <select
+                          aria-label="ห้องตรวจ"
+                          value={apptRoomId}
+                          onChange={e => {
+                            const id = e.target.value;
+                            const room = examRooms.find(r => (r.examRoomId || r.id) === id);
+                            setApptRoomId(id);
+                            setApptRoomName(room ? room.name : '');
+                          }}
+                          className={inputCls}>
+                          <option value="">— ไม่ระบุห้อง —</option>
+                          {examRooms.map(r => <option key={r.examRoomId || r.id} value={r.examRoomId || r.id}>{r.name}</option>)}
+                        </select>
                       </div>
                     </div>
                     {/* Assistants (multi, max 5) */}
