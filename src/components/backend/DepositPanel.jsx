@@ -209,9 +209,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     setNote(''); setCustomerSource(''); setSourceDetail('');
     setPaymentEvidenceUrl(''); setPaymentEvidencePath('');
     setSellers(emptySellers());
-    setHasAppointment(false); setApptType('sales'); setApptOption('once');
+    setHasAppointment(false); setApptType('deposit-booking'); setApptOption('once');
     setApptEveryN('1'); setApptUnit('วัน'); setApptTimes('1');
-    setApptDate(todayStr()); setApptStartTime('10:00'); setApptEndTime('10:30');
+    setApptDate(todayStr()); setApptStartTime('10:00'); setApptEndTime('10:15');
     setApptDoctorId(''); setApptDoctorName(''); setApptAssistantIds([]);
     setApptRoomName(''); setApptChannel(''); setApptPurpose(''); setApptNote('');
     setApptColor(''); setApptLineNotify(false);
