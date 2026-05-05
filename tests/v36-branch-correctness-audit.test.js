@@ -127,7 +127,9 @@ describe('V36.G.9-16 — TreatmentFormPage branchId source', () => {
   });
 
   test('G.10 — destructures branchId via useSelectedBranch hook', () => {
-    expect(TFP).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID\s*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
+    // destructured fields (branches: branchList for branch banner).
+    expect(TFP).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
   });
 
   test('G.11 — every deductStockForTreatment call passes branchId: SELECTED_BRANCH_ID', () => {
@@ -167,7 +169,10 @@ describe('V36.G.9-16 — TreatmentFormPage branchId source', () => {
     // The destructure statement itself contains both `branchId: SELECTED_BRANCH_ID`
     // (key) and `useSelectedBranch()` (RHS). Skip past the destructure when
     // looking for the first call-site use.
-    const destructureIdx = TFP.indexOf('const { branchId: SELECTED_BRANCH_ID }');
+    // Phase 17.2-septies (2026-05-05) — match-based search (was indexOf
+    // for exact `}`); accommodates additional destructured fields.
+    const destructureMatch = TFP.match(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+    const destructureIdx = destructureMatch ? destructureMatch.index : -1;
     expect(destructureIdx).toBeGreaterThan(0);
     // Locate first use AFTER the destructure line ends
     const afterDestructure = TFP.indexOf('\n', destructureIdx);

@@ -324,7 +324,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // + stock writes. BranchProvider is hoisted to App.jsx (Phase 17.2), so
   // SELECTED_BRANCH_ID always resolves to a real branchId (or null until
   // BranchContext snapshot resolves; callers guard via isReady).
-  const { branchId: SELECTED_BRANCH_ID } = useSelectedBranch();
+  const { branchId: SELECTED_BRANCH_ID, branches: branchList } = useSelectedBranch();
+  // Phase 17.2-septies (2026-05-05) — branch indicator banner. User directive:
+  // "ทำให้แสดงสาขาตรงด้านบนของหน้า TFP ทั้งสร้างทั้งแก้ไขเลย user จะได้ไม่
+  // สับสน ตัวมึงเองจะได้ไม่สับสนด้วย". Resolved at render time so any branch
+  // switch surfaces immediately. data-branch-id on the banner gives future
+  // preview_eval / RTL tests a deterministic selector.
+  const currentBranch = (branchList || []).find(b => (b.branchId || b.id) === SELECTED_BRANCH_ID) || null;
 
   // Phase 17.0 (BS-9) + Phase 17.2-quinquies (2026-05-05) — clear ALL modal
   // data caches on branch switch. Defense-in-depth: cache-reset here +
@@ -1170,9 +1176,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     try {
       if (saveTarget === 'backend') {
         // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+        // Phase 17.2-septies (2026-05-05) — schema-reader fix. The canonical
+        // be_products schema uses productType / productName / categoryName /
+        // mainUnitName (legacy ProClinic-mirror used type / name / category /
+        // unit). Read both with productType-first fallback so future schema
+        // additions don't silently break.
         const { listProducts } = await import('../lib/scopedDataLayer.js');
         const all = await listProducts();
-        setMedAllProducts(all.filter(p => p.type === 'ยา').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category })));
+        setMedAllProducts(all.filter(p => (p.productType || p.type) === 'ยา').map(p => ({
+          id: p.id,
+          name: p.productName || p.name || '',
+          price: p.price,
+          unit: p.mainUnitName || p.unit || '',
+          category: p.categoryName || p.category || '',
+        })));
       } else {
         const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
         if (data.success) {
@@ -1350,9 +1367,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     try {
       if (saveTarget === 'backend') {
         // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
+        // Phase 17.2-septies (2026-05-05) — schema-reader fix (see openMedModal).
         const { listProducts } = await import('../lib/scopedDataLayer.js');
         const all = await listProducts();
-        setConsAllProducts(all.filter(p => p.type === 'สินค้าสิ้นเปลือง').map(p => ({ id: p.id, name: p.name, unit: p.unit, category: p.category })));
+        setConsAllProducts(all.filter(p => (p.productType || p.type) === 'สินค้าสิ้นเปลือง').map(p => ({
+          id: p.id,
+          name: p.productName || p.name || '',
+          unit: p.mainUnitName || p.unit || '',
+          category: p.categoryName || p.category || '',
+        })));
       } else {
         const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
         if (data.success) {
@@ -1479,7 +1502,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         let categories = [];
         if (type === 'product') {
           const all = await listProducts();
-          items = all.filter(p => p.type === 'สินค้าหน้าร้าน').map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, category: p.category, type: p.type }));
+          // Phase 17.2-septies (2026-05-05) — schema-reader fix. be_products
+          // canonical fields are productType / productName / categoryName /
+          // mainUnitName. Filter + map use productType-first fallback.
+          items = all.filter(p => (p.productType || p.type) === 'สินค้าหน้าร้าน').map(p => ({
+            id: p.id,
+            name: p.productName || p.name || '',
+            price: p.price,
+            unit: p.mainUnitName || p.unit || '',
+            category: p.categoryName || p.category || '',
+            type: p.productType || p.type || '',
+          }));
           categories = [...new Set(items.map(p => p.category).filter(Boolean))].sort();
         } else if (type === 'course') {
           const all = await listCourses();
@@ -1490,18 +1523,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           //
           // Skip shadow/archive courses from ProClinic sync (empty
           // courseType, null price — same rule as SaleTab).
+          //
+          // Phase 17.2-septies (2026-05-05) — schema-reader fix. be_courses
+          // canonical fields are courseName / courseCategory / salePrice /
+          // courseProducts. Map uses courseName-first fallback so courses
+          // render with their actual name + price + category visible
+          // (was "เป็นโครงเปล่าๆ" pre-fix).
           items = all
             .filter(c => {
               const ct = c.courseType || c.course_type || '';
-              const price = c.price != null ? Number(c.price) : (c.salePrice != null ? Number(c.salePrice) : null);
+              const price = c.salePrice != null ? Number(c.salePrice) : (c.price != null ? Number(c.price) : null);
               return !!ct && price != null && price > 0;
             })
             .map(c => ({
-              id: c.id, name: c.name, price: c.price, category: c.category,
+              id: c.id,
+              name: c.courseName || c.name || '',
+              price: c.salePrice != null ? c.salePrice : c.price,
+              category: c.courseCategory || c.category || '',
               type: 'course', itemType: 'course',
               unit: c.unit || '',
               courseType: c.courseType || c.course_type || '',
-              products: c.products || [],
+              products: c.courseProducts || c.products || [],
               daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
                 : (c.days_before_expire != null ? c.days_before_expire : null),
               period: c.period != null ? c.period : null,
@@ -2969,6 +3011,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           </button>
         </div>
       </div>
+
+      {/* ── Branch indicator (Phase 17.2-septies) ────────────────────────── */}
+      {currentBranch && (
+        <div className="max-w-6xl mx-auto px-4 pt-3">
+          <div
+            className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-700'}`}
+            data-testid="tfp-branch-indicator"
+            data-branch-id={SELECTED_BRANCH_ID || ''}
+          >
+            <span className="opacity-70">สาขา:</span>
+            <span className="text-base">{currentBranch.name || '(ไม่มีชื่อ)'}</span>
+            {currentBranch.nameEn && <span className="opacity-50 text-[10px]">{currentBranch.nameEn}</span>}
+            <span className="ml-auto opacity-30 text-[10px] font-mono">{SELECTED_BRANCH_ID || ''}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (

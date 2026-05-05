@@ -194,7 +194,9 @@ describe('BR3: SaleTab + 4 stock panels + TreatmentFormPage source branchId from
   it('BR3.6: TreatmentFormPage sources branchId from hook + uses SELECTED_BRANCH_ID for sale/stock writes', () => {
     const src = READ('src/components/TreatmentFormPage.jsx');
     expect(src).toMatch(/useSelectedBranch/);
-    expect(src).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID\s*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
+    // destructured fields (branches: branchList for branch banner).
+    expect(src).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
     // 5 call sites that previously had `branchId: 'main'` now use SELECTED_BRANCH_ID
     const occurrences = src.match(/branchId:\s*SELECTED_BRANCH_ID/g) || [];
     expect(occurrences.length).toBeGreaterThanOrEqual(5);

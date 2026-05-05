@@ -114,7 +114,9 @@ describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () 
       expect(TFP_SRC).toMatch(/import\s*\{\s*useSelectedBranch\s*\}\s*from\s*['"]\.\.\/lib\/BranchContext\.jsx['"]/);
     });
     it('Q5.2 SELECTED_BRANCH_ID is destructured from useSelectedBranch (no shadow var)', () => {
-      expect(TFP_SRC).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID\s*\}\s*=\s*useSelectedBranch\(\)/);
+      // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
+      // destructured fields (branches: branchList for branch banner).
+      expect(TFP_SRC).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
     });
     it('Q5.3 NO `if (X.length > 0) return;` of any kind in modal openers', () => {
       // Generic catch-all: any future cache-shape variant gets caught.
