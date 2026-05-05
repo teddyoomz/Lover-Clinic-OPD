@@ -77,6 +77,10 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'medical-instruments': { adminOnly: true },
   holidays:              { adminOnly: true },
   branches:              { adminOnly: true },
+  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master. Admin-default
+  // OR explicit exam_room_management perm. Owner can grant to a branch
+  // manager without making them full admin.
+  'exam-rooms':          { requires: ['exam_room_management'], adminOnly: true },
   'permission-groups':   { adminOnly: true },
   staff:                 { adminOnly: true },
   'staff-schedules':     { requires: ['user_schedule_management', 'user_schedule_view'], adminOnly: false },
