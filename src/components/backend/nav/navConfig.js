@@ -30,6 +30,8 @@ import {
   LayoutDashboard, Receipt, CalendarCheck, Boxes, Sparkles, TrendingUp, Activity,
   // Phase 11 master-data tab icons
   FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
+  // Phase 18.0 exam-rooms tab icon
+  DoorOpen,
   // Phase 12.1 people tab icons
   User, Stethoscope,
   // Phase 12.2 catalog tab icons
@@ -153,6 +155,7 @@ export const NAV_SECTIONS = [
       { id: 'medical-instruments',  label: 'เครื่องหัตถการ',      icon: Wrench,        color: 'amber', palette: 'medical instrument laser hifu maintenance เครื่องมือ' },
       { id: 'holidays',             label: 'วันหยุด',             icon: CalendarX,     color: 'amber', palette: 'holiday off วันหยุด day-off closure' },
       { id: 'branches',             label: 'สาขา',               icon: Building2,     color: 'amber', palette: 'branch สาขา location' },
+      { id: 'exam-rooms',           label: 'ห้องตรวจ',            icon: DoorOpen,      color: 'amber', palette: 'exam room treatment ห้อง ตรวจ ห้องตรวจ ห้องรักษา room' },
       { id: 'permission-groups',    label: 'สิทธิ์การใช้งาน',      icon: ShieldCheck,   color: 'amber', palette: 'permission role rights สิทธิ์ บทบาท access' },
       { id: 'staff',                label: 'พนักงาน',             icon: User,          color: 'amber', palette: 'staff employee user พนักงาน เจ้าหน้าที่' },
       { id: 'staff-schedules',      label: 'ตารางพนักงาน',         icon: CalendarClock, color: 'amber', palette: 'schedule shift work holiday leave ตารางพนักงาน เวลา ทำงาน หยุด ลา พนักงาน employee' },

@@ -197,6 +197,7 @@ describe('section integrity', () => {
       'medical-instruments',
       'holidays',
       'branches',
+      'exam-rooms',  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
       'permission-groups',
       'staff',
       'staff-schedules',

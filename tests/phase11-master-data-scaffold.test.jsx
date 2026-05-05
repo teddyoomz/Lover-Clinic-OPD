@@ -50,6 +50,7 @@ const MASTER_STUB_IDS = [
   'medical-instruments',
   'holidays',
   'branches',
+  'exam-rooms',  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
   'permission-groups',
   'staff',
   'staff-schedules',
@@ -76,9 +77,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 19 items — 1 sync + 6 P11 + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings', () => {
+  it('M2 master section has exactly 20 items — 1 sync + 6 P11 + 1 P18 (exam-rooms) + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(19);
+    expect(master.items.length).toBe(20);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 

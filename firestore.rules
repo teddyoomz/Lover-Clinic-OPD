@@ -207,6 +207,13 @@ service cloud.firestore {
       match /be_branches/{branchId} {
         allow read, write: if isClinicStaff();
       }
+      // Phase 18.0 (2026-05-05) — branch-scoped exam-room master.
+      // Standard be_* rule: any clinic staff can read/write. Branch isolation
+      // is enforced at the application layer via _resolveBranchIdForWrite +
+      // listExamRooms({branchId}) auto-inject.
+      match /be_exam_rooms/{roomId} {
+        allow read, write: if isClinicStaff();
+      }
       match /be_permission_groups/{groupId} {
         allow read, write: if isClinicStaff();
       }

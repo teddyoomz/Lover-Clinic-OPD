@@ -71,6 +71,7 @@ import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
 import MedicalInstrumentsTab from '../components/backend/MedicalInstrumentsTab.jsx';
 import HolidaysTab from '../components/backend/HolidaysTab.jsx';
 import BranchesTab from '../components/backend/BranchesTab.jsx';
+import ExamRoomsTab from '../components/backend/ExamRoomsTab.jsx';
 import PermissionGroupsTab from '../components/backend/PermissionGroupsTab.jsx';
 import StaffTab from '../components/backend/StaffTab.jsx';
 import DoctorsTab from '../components/backend/DoctorsTab.jsx';
@@ -500,6 +501,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <HolidaysTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'branches' ? (
           <BranchesTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'exam-rooms' ? (
+          <ExamRoomsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'permission-groups' ? (
           <PermissionGroupsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'staff' ? (

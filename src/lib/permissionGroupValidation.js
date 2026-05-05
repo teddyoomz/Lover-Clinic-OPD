@@ -222,6 +222,7 @@ export const PERMISSION_MODULES = Object.freeze([
     label: 'ตั้งค่า / ข้อมูลพื้นฐาน',
     items: [
       { key: 'branch_management',             label: 'ตั้งค่าสาขา' },
+      { key: 'exam_room_management',          label: 'จัดการห้องตรวจ' },
       { key: 'holiday_setting',               label: 'ตั้งค่าวันหยุดสาขา' },
       { key: 'medical_instrument',            label: 'เครื่องหัตถการ' },
       { key: 'product_management',            label: 'จัดการสินค้า' },
