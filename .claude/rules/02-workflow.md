@@ -170,6 +170,55 @@ Anti-pattern (caught in Phase 9 session 2026-04-19): claiming "checked" after on
   `tests/v33-12-test-sale-prefix.test.js` asserts the rule + helper file
   are present.
 
+### 🆕 Test appointment-doc prefix (V33.13 — Phase 20.0 directive codified)
+- **Every test that writes a real Firestore appointment doc** (preview_eval
+  scripts, integration tests via firebase-admin SDK, E2E fixtures touching
+  `be_appointments`) MUST use an appointment ID with prefix
+  `TEST-APPT-` or `E2E-APPT-`. Mock-only tests don't need it.
+- Use the canonical helper:
+  ```js
+  import { createTestAppointmentId } from 'tests/helpers/testAppointment.js';
+  const appointmentId = createTestAppointmentId();                       // 'TEST-APPT-<ts>'
+  const appointmentId = createTestAppointmentId({ prefix: 'E2E' });      // 'E2E-APPT-<ts>'
+  const appointmentId = createTestAppointmentId({ suffix: 'multi' });    // 'TEST-APPT-<ts>-multi'
+  ```
+- `isTestAppointmentId(id)` + `getTestAppointmentPrefix(id)` — admin-side
+  cleanup helpers (mirror of V33.10 + V33.11 + V33.12).
+- **Why**: Phase 20.0 (2026-05-06) Frontend rewire from brokerClient → be_*
+  required preview_eval verification on production Firestore for write paths
+  (Flows B/C/D — deposit booking / no-deposit booking / appointment modal
+  CRUD). Per `feedback_no_real_action_in_preview_eval.md` (chanel customer
+  2853 incident lock), preview_eval against production Firestore MUST use
+  TEST-prefixed fixtures — never click real action buttons. V33.13 provides
+  the canonical helper for appointment IDs in those preview_eval flows.
+- **Anti-pattern**: hardcoding appointment IDs like `'BA-1777000000000'`
+  (production format) in tests that hit Firestore. Drift catcher:
+  `tests/v33-13-test-appointment-prefix.test.js` asserts the rule + helper
+  file are present.
+
+### 🆕 Test deposit-doc prefix (V33.14 — Phase 20.0 directive codified)
+- **Every test that writes a real Firestore deposit doc** (preview_eval
+  scripts, integration tests via firebase-admin SDK, E2E fixtures touching
+  `be_deposits`) MUST use a deposit ID with prefix
+  `TEST-DEPOSIT-` or `E2E-DEPOSIT-`. Mock-only tests don't need it.
+- Use the canonical helper:
+  ```js
+  import { createTestDepositId } from 'tests/helpers/testDeposit.js';
+  const depositId = createTestDepositId();                       // 'TEST-DEPOSIT-<ts>'
+  const depositId = createTestDepositId({ prefix: 'E2E' });      // 'E2E-DEPOSIT-<ts>'
+  const depositId = createTestDepositId({ suffix: 'multi' });    // 'TEST-DEPOSIT-<ts>-multi'
+  ```
+- `isTestDepositId(id)` + `getTestDepositPrefix(id)` — admin-side cleanup
+  helpers (mirror of V33.10 + V33.11 + V33.12 + V33.13).
+- **Why**: Phase 20.0 (2026-05-06) DepositBookingModal preview_eval
+  verification needs TEST-prefixed deposit IDs alongside V33.13 appointment
+  IDs (deposits-with-appointment write both a deposit doc + an appointment
+  doc).
+- **Anti-pattern**: hardcoding deposit IDs like `'DEP-1777000000000'`
+  (production format) in tests that hit Firestore. Drift catcher:
+  `tests/v33-14-test-deposit-prefix.test.js` asserts the rule + helper file
+  are present.
+
 ### CODEBASE_MAP.md
 อัพเดท `F:\LoverClinic-app\CODEBASE_MAP.md` ทุกครั้งที่เพิ่ม/ลบ/rename/restructure ไฟล์ใน `src/` หรือ `api/` — source of truth สำหรับ onboarding + future sessions.
 
