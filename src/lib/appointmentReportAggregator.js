@@ -22,6 +22,8 @@
 //     shown as filter option but returns empty for us since we don't store it).
 
 import { dateRangeFilter, sortBy } from './reportsUtils.js';
+// Phase 19.0 — SSOT for appointment-type taxonomy.
+import { resolveAppointmentTypeLabel, DEFAULT_APPOINTMENT_TYPE } from './appointmentTypes.js';
 
 /* ─── Label maps ─────────────────────────────────────────────────────────── */
 
@@ -31,12 +33,6 @@ const STATUS_LABELS = {
   confirmed: 'ยืนยันแล้ว',
   done: 'เสร็จแล้ว',
   cancelled: 'ยกเลิก',
-};
-
-/** Our internal appointmentType → Thai display label (matches AppointmentTab APPT_TYPES). */
-const TYPE_LABELS = {
-  sales: 'นัดเพื่อขาย',
-  followup: 'นัดติดตาม',
 };
 
 /* ─── Source-shape derivers ──────────────────────────────────────────────── */
@@ -83,10 +79,10 @@ function deriveStatusLabel(appt) {
   return STATUS_LABELS[raw] || raw;
 }
 
-/** Appointment type display — unknown → raw value (e.g. 'consult' if ever added). */
+/** Appointment type display — delegates to SSOT resolver. Phase 19.0. */
 function deriveTypeLabel(appt) {
-  const raw = (appt?.appointmentType || 'sales').trim();
-  return TYPE_LABELS[raw] || raw;
+  const value = appt?.appointmentType;
+  return resolveAppointmentTypeLabel(value); // unknown → DEFAULT label via SSOT
 }
 
 /** วันที่นัด composite string: "{date} {startTime}-{endTime}" for CSV.
@@ -123,7 +119,7 @@ export function buildAppointmentReportRow(appt, customerIndex, staffIndex) {
     // ProClinic's default for appointments that haven't been moved. When
     // we ship reschedulingFrom[] tracking, map here.
     rescheduleHistory: '-',
-    appointmentType: a.appointmentType || 'sales',
+    appointmentType: a.appointmentType || DEFAULT_APPOINTMENT_TYPE,
     appointmentTypeLabel: deriveTypeLabel(a),
     status: a.status || 'pending',
     statusLabel: deriveStatusLabel(a),
@@ -156,7 +152,7 @@ export function buildAppointmentReportRow(appt, customerIndex, staffIndex) {
  * @param {string} [filters.searchText]                 — case-insensitive on HN/name/doctor/advisor/purpose
  * @param {string} [filters.customerTypeFilter='all']   — 'all' | 'ลูกค้าทั่วไป' | 'ลูกค้ารีวิว' | 'Influencer'
  * @param {string} [filters.statusFilter='all']         — 'all' | 'pending' | 'confirmed' | 'done' | 'cancelled'
- * @param {string} [filters.typeFilter='all']           — 'all' | 'sales' | 'followup'
+ * @param {string} [filters.typeFilter='all']           — 'all' | one of APPOINTMENT_TYPE_VALUES (Phase 19.0)
  * @param {boolean} [filters.includeCancelled=true]     — AR3: cancelled appts still show by default
  *                                                        (unlike sales where cancelled are usually hidden).
  *                                                        Kept as a toggle so CSV export can strip them.

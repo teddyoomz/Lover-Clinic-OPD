@@ -19,6 +19,7 @@ import {
   aggregateAppointmentReport,
   buildAppointmentReportColumns,
 } from '../../../lib/appointmentReportAggregator.js';
+import { APPOINTMENT_TYPES } from '../../../lib/appointmentTypes.js';
 import {
   loadAppointmentsByDateRange,
   loadAllCustomersForReport,
@@ -47,10 +48,10 @@ const STATUS_OPTIONS = [
   { v: 'cancelled', t: 'ยกเลิก' },
 ];
 
+// Phase 19.0 — filter options derived from APPOINTMENT_TYPES SSOT (4 types).
 const TYPE_OPTIONS = [
-  { v: 'all',      t: 'ทุกประเภทนัด' },
-  { v: 'sales',    t: 'นัดเพื่อขาย' },
-  { v: 'followup', t: 'นัดติดตาม' },
+  { v: 'all', t: 'ทุกประเภทนัด' },
+  ...APPOINTMENT_TYPES.map((tt) => ({ v: tt.value, t: tt.label })),
 ];
 
 // Badge colors per status (NO red on names — Thai culture; red only on the
