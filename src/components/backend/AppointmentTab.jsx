@@ -252,18 +252,33 @@ export default function AppointmentTab({ clinicSettings, theme }) {
   }, [selectedBranchId]);
 
   // Phase 15.7-bis (2026-04-28) — array-valued apptMap so duplicate
-  // appts at same startTime+room render together (calendar badge/grid
-  // mismatch fix). Phase 18.0 (2026-05-05) — effectiveRoom now resolves
-  // strictly against the BRANCH MASTER. Appts with no roomName OR with
-  // a roomName not present in the current branch's exam-room master
-  // route to UNASSIGNED_ROOM. Result: legacy strings ("Dr.Chaiyaporn",
-  // "ห้อง 1", "นักกายภาพA x" etc.) no longer pollute the column header.
+  // appts at same startTime+room render together. Phase 18.0 (2026-05-05) —
+  // effectiveRoom resolved against branch master via roomName string.
+  // Phase 20.0 AppointmentTab roomId migration (2026-05-06) — match by
+  // roomId FK FIRST (canonical, robust to room renames), fall back to
+  // roomName for legacy appts that pre-date Phase 18.0 roomId stamping.
+  // Returns the master room's NAME (column-header label) regardless of
+  // which side resolved the match.
   const UNASSIGNED_ROOM = '— ไม่ระบุห้อง —';
+  const masterRoomById = useMemo(
+    () => {
+      const m = new Map();
+      for (const r of branchExamRooms) {
+        if (r?.id) m.set(String(r.id), String(r.name || '').trim());
+      }
+      return m;
+    },
+    [branchExamRooms],
+  );
   const masterRoomNameSet = useMemo(
     () => new Set(branchExamRooms.map(r => String(r.name || '').trim()).filter(Boolean)),
     [branchExamRooms],
   );
   const effectiveRoom = (a) => {
+    // 1. roomId FK match (canonical, post-Phase-18.0 appts)
+    const rid = a && a.roomId ? String(a.roomId) : '';
+    if (rid && masterRoomById.has(rid)) return masterRoomById.get(rid);
+    // 2. roomName legacy match (pre-Phase-18.0 appts written with name only)
     const nm = a && a.roomName ? String(a.roomName).trim() : '';
     if (!nm) return UNASSIGNED_ROOM;
     return masterRoomNameSet.has(nm) ? nm : UNASSIGNED_ROOM;
