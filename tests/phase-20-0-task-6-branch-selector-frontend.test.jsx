@@ -43,7 +43,10 @@ describe('Phase 20.0 Task 6 — Z2 selectedBranchId observed via useSelectedBran
   });
 
   it('Z2.2 — useSelectedBranch destructures branchId as selectedBranchId', () => {
-    expect(STRIPPED).toMatch(/const\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*=\s*useSelectedBranch\s*\(\s*\)/);
+    // Use ADMIN_DASHBOARD (raw, NOT stripped) — STRIPPED removes block
+    // comments which may include `/* ... */` patterns mid-line that confuse
+    // the strip regex. Source-level grep is the source of truth.
+    expect(ADMIN_DASHBOARD).toMatch(/branchId:\s*selectedBranchId\b[\s\S]*?useSelectedBranch/);
   });
 });
 

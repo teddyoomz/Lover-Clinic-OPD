@@ -196,27 +196,23 @@ describe('Phase 20.0 Flow B — B4 graceful degradation on read failure', () => 
   });
 });
 
-describe('Phase 20.0 Flow B — B5 deposit sync gating preserved (Phase 5 scope)', () => {
-  // The deposit-sync workflow (broker.submitDeposit / updateDeposit /
-  // cancelDeposit) keys off session.brokerProClinicId — that wiring stays
-  // in Phase 4 because patient submit (which sets brokerProClinicId today)
-  // is Phase 5 territory. After Phase 5, the gate flips to
-  // session.beCustomerId and the broker.deposit* calls become be_*
-  // createDeposit/updateDeposit/cancelDeposit.
+describe('Phase 20.0 Flow B — B5 deposit-sync rewire to be_* (post-Phase-5c)', () => {
+  // Phase 5c (2026-05-06) replaced broker.{submitDeposit, updateDeposit,
+  // cancelDeposit} with be_* createDeposit / updateDeposit / cancelDeposit.
+  // session.depositProClinicId field name preserved for backward compat;
+  // semantics now = be_deposits doc id.
 
-  it('B5.1 — deposit-sync block still uses brokerProClinicId gate (Phase 5 will rewire)', () => {
-    // Pre-Phase-5: this gate must still exist (sync only fires when
-    // patient submit completed via broker.fillProClinic).
+  it('B5.1 — opd_sessions.brokerProClinicId / depositProClinicId fields still tracked (backward compat)', () => {
     expect(STRIPPED).toMatch(/brokerProClinicId/);
+    expect(STRIPPED).toMatch(/depositProClinicId/);
   });
 
-  it('B5.2 — deposit ledger writes still go through broker (deferred to Phase 5)', () => {
-    // Phase 4 deliberately scopes JUST the dropdown rewire. The deposit-sync
-    // workflow + handleDepositCancel + handleSaveDepositData remain pre-Phase-5
-    // until patient submit creates be_customers (then we can hand off to
-    // be_deposits createDeposit). Lock this delineation so a future commit
-    // can't accidentally orphan-drop the broker calls without their replacement
-    // landing simultaneously.
-    expect(STRIPPED).toMatch(/broker\.submitDeposit|broker\.updateDeposit|broker\.cancelDeposit/);
+  it('B5.2 — deposit ledger writes go through be_* (broker.{submitDeposit,updateDeposit,cancelDeposit} all gone)', () => {
+    expect(STRIPPED).not.toMatch(/broker\.submitDeposit/);
+    expect(STRIPPED).not.toMatch(/broker\.updateDeposit/);
+    expect(STRIPPED).not.toMatch(/broker\.cancelDeposit/);
+    // Replacements present
+    expect(STRIPPED).toMatch(/createDeposit\s*\(/);
+    expect(STRIPPED).toMatch(/cancelDeposit\s*\(/);
   });
 });

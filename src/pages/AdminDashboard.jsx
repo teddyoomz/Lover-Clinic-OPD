@@ -11,20 +11,31 @@ import {
   Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
-import * as broker from '../lib/brokerClient.js';
-// Phase 20.0 Task 1 (2026-05-06) — Frontend rewire from ProClinic to be_*.
-// Queue calendar reads be_appointments via scopedDataLayer (auto-injects
-// branchId once Phase 20.0 Task 6 BranchSelector ships). Replaces the
-// pc_appointments getDoc/onSnapshot pattern + broker.syncAppointments
-// calls. brokerClient still imported for other flows (Flow B deposit
-// submit, Flow C no-deposit, customer search, courses) — those phases follow.
+// Phase 20.0 Tasks 1-6 + 5a-5c (2026-05-06) — Frontend ProClinic rewire
+// COMPLETE. AdminDashboard no longer imports brokerClient — every broker.*
+// call has been replaced with be_* equivalents from scopedDataLayer:
 //
-// Phase 20.0 Task 2 (2026-05-06) — Flow D appointment modal CRUD on be_*.
-// listCustomerAppointments / createAppointment / updateAppointment /
-// deleteAppointment (broker → ProClinic) replaced with getCustomerAppointments
-// / createBackendAppointment / updateBackendAppointment / deleteBackendAppointment.
-// listStaff + listDoctors replace broker.getLivePractitioners (Frontend
-// practitioners cluster).
+//   broker.syncAppointments        → listenToAppointmentsByMonth (live)
+//   broker.list/create/update/deleteAppointment → backend appointment CRUD
+//   broker.listCustomerAppointments → getCustomerAppointments
+//   broker.getDepositOptions       → listStaff + listDoctors + listExamRooms
+//                                   + listAllSellers + canonical TIME_SLOTS
+//   broker.getLivePractitioners    → Promise.all([listDoctors, listStaff])
+//   broker.getProClinicCredentials → REMOVED (cookie-relay credential auto-sync)
+//   broker.searchCustomers         → searchBackendCustomers
+//   broker.getCourses              → getCustomer (read .courses[] field)
+//   broker.fetchPatientFromProClinic → getCustomer
+//   broker.fillProClinic           → addCustomer
+//   broker.updateProClinic         → updateCustomerFromForm
+//   broker.deleteProClinic         → deleteCustomerCascade
+//   broker.submitDeposit           → createDeposit
+//   broker.updateDeposit           → updateDeposit (be_*)
+//   broker.cancelDeposit           → cancelDeposit (be_*)
+//
+// brokerClient.js + api/proclinic/* + cookie-relay still EXIST in repo
+// (used by MasterDataTab dev sync) but the Frontend layer is fully on be_*.
+// Per user directive 2026-05-06 (no-deploy), production stays on V15 #22
+// until next explicit deploy.
 import {
   listenToAppointmentsByMonth,
   getAppointmentsByMonth,
@@ -41,6 +52,9 @@ import {
   addCustomer,
   updateCustomerFromForm,
   deleteCustomerCascade,
+  createDeposit,
+  updateDeposit,
+  cancelDeposit,
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
@@ -168,6 +182,54 @@ const stableStr = (obj) => {
   };
   return JSON.stringify(sort(obj));
 };
+
+// Phase 20.0 Task 5c (2026-05-06) — pure mapper from Frontend kiosk
+// depositData shape → be_deposits createDeposit/updateDeposit shape.
+// Field rename:
+//   paymentAmount → amount
+//   depositDate   → paymentDate
+//   depositTime   → paymentTime
+//   salesperson   → sellers[0] (single-seller kiosk flow)
+//   visitPurpose  → joined into appointmentTo (string)
+//   has-appt    → preserves doctor/assistant/room ids inside appointment{}
+// Customer ids from session.brokerProClinicId/HN (Phase 5b — be_customers
+// id) + patient.firstname/lastname for customerName denormalization.
+export function mapDepositPayloadToBe(dep, customerId, customerHN, patient) {
+  const visitPurposeText = Array.isArray(dep?.visitPurpose) ? dep.visitPurpose.join(', ') : '';
+  const customerName = [
+    patient?.firstname || patient?.firstName || '',
+    patient?.lastname || patient?.lastName || '',
+  ].filter(Boolean).join(' ').trim();
+  return {
+    customerId: String(customerId || ''),
+    customerName: customerName || patient?.fullName || '',
+    customerHN: String(customerHN || ''),
+    amount: Number(dep?.paymentAmount) || 0,
+    paymentChannel: dep?.paymentChannel || '',
+    paymentDate: dep?.depositDate || new Date().toISOString().slice(0, 10),
+    paymentTime: dep?.depositTime || '',
+    refNo: dep?.refNo || '',
+    sellers: dep?.salesperson
+      ? [{ sellerId: String(dep.salesperson), percent: 100 }]
+      : [],
+    customerSource: dep?.appointmentChannel || '',
+    sourceDetail: dep?.sourceDetail || '',
+    hasAppointment: !!dep?.hasAppointment,
+    appointment: dep?.hasAppointment
+      ? {
+          appointmentDate: dep.appointmentDate || '',
+          appointmentStartTime: dep.appointmentStartTime || '',
+          appointmentEndTime: dep.appointmentEndTime || '',
+          consultantId: dep.consultant ? String(dep.consultant) : '',
+          doctorId: dep.doctor ? String(dep.doctor) : '',
+          assistantId: dep.assistant ? String(dep.assistant) : '',
+          roomId: dep.room ? String(dep.room) : '',
+          appointmentTo: visitPurposeText,
+        }
+      : null,
+    note: visitPurposeText,
+  };
+}
 
 export default function AdminDashboard({ db, appId, user, auth, viewingSession, setViewingSession, setPrintMode, onSimulateScan, clinicSettings = {}, theme, setTheme }) {
   const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
@@ -2306,25 +2368,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         showToast('กำลังบันทึกมัดจำ...');
       }
 
-      // Step 2: Submit or update deposit in ProClinic
+      // Step 2: Phase 20.0 Task 5c (2026-05-06) — write be_deposits doc.
+      // ProClinic deposit-sync workflow replaced with be_* canonical write.
+      // Field mapping: paymentAmount → amount, depositDate → paymentDate,
+      // depositTime → paymentTime, salesperson → sellers[0], visitPurpose
+      // joined → appointmentTo. customer ids from session.brokerProClinicId/HN.
       await updateDoc(ref, { depositSyncStatus: 'pending' });
       const dep = session.depositData || {};
-      const depositPayload = {
-        ...dep,
-        appointmentTo: (dep.visitPurpose || []).join(', '),
-      };
+      const dataForBe = mapDepositPayloadToBe(dep, proClinicId, proClinicHN, patient);
 
-      let depResult;
-      if (alreadySynced) {
-        // Re-sync: update existing deposit
-        depResult = await broker.updateDeposit(proClinicId, proClinicHN, session.depositProClinicId || null, depositPayload);
-      } else {
-        // First time: create new deposit
-        depResult = await broker.submitDeposit(proClinicId, proClinicHN, depositPayload);
-      }
-      if (!depResult?.success) {
-        if (depResult?.debug) console.error('deposit sync debug:', depResult.debug);
-        throw new Error(depResult?.error || 'บันทึกมัดจำไม่สำเร็จ');
+      let depositId;
+      try {
+        if (alreadySynced && session.depositProClinicId) {
+          // Update existing be_deposits doc
+          await updateDeposit(session.depositProClinicId, dataForBe);
+          depositId = session.depositProClinicId;
+        } else {
+          // Create new be_deposits doc
+          const created = await createDeposit(dataForBe);
+          depositId = created?.depositId;
+        }
+      } catch (depErr) {
+        console.error('deposit sync debug:', depErr);
+        throw new Error(depErr?.message || 'บันทึกมัดจำไม่สำเร็จ');
       }
 
       await updateDoc(ref, {
@@ -2332,7 +2398,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         depositSyncError: null,
         depositSyncAt: serverTimestamp(),
         isUnread: false,
-        ...(depResult.depositProClinicId ? { depositProClinicId: depResult.depositProClinicId } : {}),
+        ...(depositId ? { depositProClinicId: depositId } : {}),
       });
       lastViewedStrRef.current[session.id] = stableStr(d || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(d || {});
@@ -2358,12 +2424,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     try {
       await updateDoc(ref, { depositSyncStatus: 'pending' });
-      showToast('กำลังยกเลิกการจองใน ProClinic...');
+      showToast('กำลังยกเลิกการจอง...');
 
-      if (proClinicId) {
-        const result = await broker.cancelDeposit(proClinicId, proClinicHN);
-        if (!result?.success) throw new Error(result?.error || 'ยกเลิกการจองไม่สำเร็จ');
-        showToast(result.message || 'ยกเลิกการจองสำเร็จ');
+      // Phase 20.0 Task 5c — cancel be_deposits doc instead of ProClinic.
+      // session.depositProClinicId field semantics now = be_deposits doc id.
+      if (session.depositProClinicId) {
+        try {
+          await cancelDeposit(session.depositProClinicId, { cancelNote: 'ยกเลิกจาก kiosk' });
+          showToast('ยกเลิกการจองสำเร็จ');
+        } catch (cancelErr) {
+          throw new Error(cancelErr?.message || 'ยกเลิกการจองไม่สำเร็จ');
+        }
       }
 
       // Archive the session (move to deposit history)
@@ -2403,22 +2474,29 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       setEditingDepositData(null);
 
       if (alreadySynced) {
-        // Also update in ProClinic
-        showToast('กำลังอัพเดทข้อมูลจองใน ProClinic...');
+        // Phase 20.0 Task 5c — update existing be_deposits doc.
+        showToast('กำลังอัพเดทข้อมูลจอง...');
         await updateDoc(ref, { depositSyncStatus: 'pending' });
-        const depositPayload = { ...newData, appointmentTo: (newData.visitPurpose || []).join(', ') };
-        const result = await broker.updateDeposit(
-          sess.brokerProClinicId, sess.brokerProClinicHN,
-          sess.depositProClinicId || null, depositPayload
+        const dataForBe = mapDepositPayloadToBe(
+          newData, sess.brokerProClinicId, sess.brokerProClinicHN, sess.patientData,
         );
-        if (!result?.success) {
-          await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: result?.error });
-          showToast(`บันทึกในระบบแล้ว แต่อัพเดท ProClinic ไม่สำเร็จ: ${result?.error}`);
+        try {
+          if (sess.depositProClinicId) {
+            await updateDeposit(sess.depositProClinicId, dataForBe);
+          } else {
+            // No deposit doc yet → create new
+            const created = await createDeposit(dataForBe);
+            if (created?.depositId) {
+              await updateDoc(ref, { depositProClinicId: created.depositId });
+            }
+          }
+        } catch (depErr) {
+          await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: depErr?.message });
+          showToast(`บันทึกในระบบแล้ว แต่อัพเดทมัดจำไม่สำเร็จ: ${depErr?.message}`);
           return;
         }
         await updateDoc(ref, {
           depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),
-          ...(result.depositId ? { depositProClinicId: result.depositId } : {}),
         });
         showToast('อัพเดทข้อมูลจองสำเร็จทั้งในระบบและ ProClinic');
       } else {

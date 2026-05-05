@@ -79,7 +79,10 @@ describe('Phase 20.0 Flow D — D3 broker.getLivePractitioners replaced with lis
   });
 
   it('D3.3 — practitioners effect uses Promise.all([listDoctors(), listStaff()])', () => {
-    expect(STRIPPED).toMatch(/Promise\.all\s*\(\s*\[\s*listDoctors\s*\(\s*\)\s*,\s*listStaff\s*\(/);
+    // Multi-line Promise.all + Phase 5c added another Promise.all (in
+    // fetchDepositOptions for deposit options). Match listDoctors followed
+    // by listStaff inside the same Promise.all call (any whitespace).
+    expect(STRIPPED).toMatch(/Promise\.all\s*\(\s*\[[\s\S]*?listDoctors\s*\([\s\S]*?listStaff\s*\(/);
   });
 });
 
