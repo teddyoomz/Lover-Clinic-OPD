@@ -8,6 +8,7 @@ import {
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
 import { countUnreadPeople } from '../lib/chatUnreadUtils.js';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
 
 // ─── LINE / FB brand colors ────────────────────────────────────────────────
 const LINE_COLOR = '#06C755';
@@ -445,6 +446,8 @@ function isWithinChatHours(timestamp, settings) {
 }
 
 export default function ChatPanel({ db, appId, user, clinicSettings }) {
+  // Phase 20.0 follow-up (2026-05-06) — per-branch chat filter.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -468,14 +471,22 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   }, [db, appId]);
 
   // Listen to conversations — sorted oldest first (admins respond top-to-bottom)
+  // Phase 20.0 follow-up (2026-05-06) — per-branch chat filter. Conversations
+  // are stamped with branchId on incoming webhook (api/webhook/{facebook,line}.js).
+  // Show only convs matching the currently-selected branch. Legacy convs
+  // without branchId fall through (admin sees them on every branch as a
+  // transition gesture; one-shot migration script will stamp them later).
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
     const q = query(convsRef, orderBy('lastMessageAt', 'asc'));
     return onSnapshot(q, snap => {
-      const convs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setConversations(convs);
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const filtered = selectedBranchId
+        ? all.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
+        : all;
+      setConversations(filtered);
     });
-  }, [db, appId]);
+  }, [db, appId, selectedBranchId]);
 
   // Listen to chat history (only when viewing) + auto-delete > 7 days
   useEffect(() => {
