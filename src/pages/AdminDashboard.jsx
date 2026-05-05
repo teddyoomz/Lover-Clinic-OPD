@@ -47,6 +47,12 @@ import {
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+// Phase 20.0 Task 6 (2026-05-06) — BranchSelector in Frontend header.
+// Mirrors BackendDashboard's BranchSelector mount; auto-hides for single-
+// branch clinics. BranchProvider already at App.jsx (Phase 17.2) so this
+// component picks up the per-user-keyed selectedBranchId immediately.
+import BranchSelector from '../components/backend/BranchSelector.jsx';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
@@ -163,6 +169,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  // Phase 20.0 Task 6 (2026-05-06) — observe BranchContext so be_*
+  // listeners + reads can include selectedBranchId in their deps array
+  // and auto-resubscribe on branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   // Live practitioners — Phase 20.0 Task 2 (2026-05-06): rewired from
   // broker.getLivePractitioners (ProClinic 5-min cache) to be_* parallel
   // listStaff() + listDoctors() reads. listStaff = assistants/staff,
@@ -514,18 +524,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // + broker.syncAppointments auto-sync effects (auto-sync, lazy-sync per-month
   // navigate, 21:00 daily sync, manual handleSyncAppointments). be_appointments
   // is now the canonical source, kept live by Firestore — no manual sync needed.
+  //
+  // Phase 20.0 Task 6 (2026-05-06) — branch-scoped via scopedDataLayer
+  // auto-inject (resolveSelectedBranchId reads per-user localStorage). Switching
+  // BranchSelector → branchSelection key changes → next mount picks up new
+  // branch. selectedBranchId added to deps so the effect resubscribes when
+  // admin clicks BranchSelector dropdown.
   useEffect(() => {
     if (!db || !appId) return;
     const unsub = listenToAppointmentsByMonth(
       apptMonth,
-      { allBranches: true }, // Pre-Task-6 — preserve existing cross-branch view
+      // Phase 20.0 Task 6 — auto-inject selectedBranchId; pass {} so the
+      // scopedDataLayer wrapper resolves the current branch. allBranches
+      // dropped — Frontend queue calendar now follows top-right BranchSelector.
+      {},
       (appts) => {
         setApptData({ appointments: appts, syncedAt: new Date().toISOString() });
       },
       () => { setApptData(null); }
     );
     return () => { try { unsub?.(); } catch { /* defensive */ } };
-  }, [apptMonth, db, appId]);
+  }, [apptMonth, db, appId, selectedBranchId]);
 
   // ── Appointment Manager handlers ──
   const handleApptSearch = async () => {
@@ -696,7 +715,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // schedule-filter loop (preserves filter shape).
       const uniqueMonths = Array.from(new Set(activeScheds.flatMap(s => s.months || [])));
       const groupedByMonth = await Promise.all(uniqueMonths.map(mo =>
-        getAppointmentsByMonth(mo, { allBranches: true })
+        getAppointmentsByMonth(mo, {})
       ));
       const apptsByMonth = {};
       uniqueMonths.forEach((mo, i) => {
@@ -1074,7 +1093,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // Phase 20.0 Task 1 — read be_appointments (canonical) instead of
       // pc_appointments mirror.
       for (const mo of months) {
-        const grouped = await getAppointmentsByMonth(mo, { allBranches: true });
+        const grouped = await getAppointmentsByMonth(mo, {});
         const appts = Object.values(grouped || {}).flat();
         appts.forEach(a => {
           if (!a.date || !a.startTime || !a.endTime) return;
@@ -1144,7 +1163,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const freshBookedSlots = [];
           const freshDoctorBookedSlots = [];
           for (const mo of months) {
-            const grouped = await getAppointmentsByMonth(mo, { allBranches: true });
+            const grouped = await getAppointmentsByMonth(mo, {});
             const appts = Object.values(grouped || {}).flat();
             appts.forEach(a => {
               if (!a.date || !a.startTime || !a.endTime) return;
@@ -3871,6 +3890,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               )}
             </div>
+            {/* Phase 20.0 Task 6 (2026-05-06) — BranchSelector in header.
+                 Auto-hides on single-branch clinics; per-user-keyed selection
+                 persists across sessions (Phase 17.2). Mirrors BackendDashboard
+                 placement (next to ThemeToggle). */}
+            <BranchSelector />
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
             {/* Online admins indicator */}
             <div className="relative group">

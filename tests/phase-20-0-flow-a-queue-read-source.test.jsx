@@ -184,33 +184,26 @@ describe('Phase 20.0 Flow A — A5 listener filters + sorts correctly', () => {
   });
 });
 
-describe('Phase 20.0 Flow A — A6 useBranchAwareListener readiness', () => {
-  // Phase 20.0 Task 6 will swap allBranches:true → branch-scoped via
-  // useBranchAwareListener. For now (Task 1) we pass {allBranches:true} as
-  // the explicit opts so the auto-inject doesn't return [] when no branch
-  // is yet selected (AdminDashboard pre-Task-6 has no BranchProvider mount
-  // for Frontend). Lock the {allBranches:true} call site so a future commit
-  // can swap to a branch-scoped variant intentionally.
+describe('Phase 20.0 Flow A — A6 branch-scope auto-inject (post-Task-6)', () => {
+  // Phase 20.0 Task 6 (2026-05-06) — swapped the placeholder {allBranches:true}
+  // to {} so scopedDataLayer auto-injects resolveSelectedBranchId(). Z3 tests
+  // in phase-20-0-task-6-branch-selector-frontend.test.jsx own the post-
+  // Task-6 invariants. A6 here verifies Phase 1's transition is complete
+  // (no {allBranches:true} placeholder remains for these calls).
 
-  it('A6.1 — listenToAppointmentsByMonth call passes {allBranches:true} opts (pre-Task-6)', () => {
+  it('A6.1 — listenToAppointmentsByMonth uses {} opts (auto-inject branch)', () => {
     const stripped = ADMIN_DASHBOARD
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
-    // Capture the listener invocation block + assert the opts arg shape.
     expect(stripped).toMatch(
-      /listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*allBranches:\s*true\s*\}/s,
+      /listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*\}\s*,/s,
     );
   });
 
-  it('A6.2 — getAppointmentsByMonth schedule-link calls also pass {allBranches:true}', () => {
+  it('A6.2 — getAppointmentsByMonth schedule-link calls use {} (auto-inject)', () => {
     const stripped = ADMIN_DASHBOARD
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
-    // At least one getAppointmentsByMonth call should have allBranches:true
-    // (mirrors current AdminDashboard cross-branch view; Phase 20.0 Task 6
-    // tightens to selectedBranchId).
-    expect(stripped).toMatch(
-      /getAppointmentsByMonth\s*\([^)]+\{\s*allBranches:\s*true\s*\}/s,
-    );
+    expect(stripped).toMatch(/getAppointmentsByMonth\s*\([^,]+,\s*\{\s*\}\s*\)/);
   });
 });
