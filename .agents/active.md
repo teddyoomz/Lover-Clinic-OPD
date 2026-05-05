@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-05 EOD — V15 #19 SHIPPED — Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 LIVE in prod"
-status: "master=e5f2171 · prod=e5f2171 (V15 #19, LIVE) · 0 commits ahead-of-prod · 5394 tests pass"
-current_focus: "V15 #19 deployed cleanly. Awaits explicit user authorization to run scripts/phase-18-0-seed-exam-rooms.mjs --apply for นครราชสีมา 3-room seed + appt backfill."
+updated_at: "2026-05-05 EOD — V15 #20 SHIPPED — AppointmentTab columns = master rooms ONLY (legacy localStorage cache dropped)"
+status: "master=bdd917e · prod=bdd917e (V15 #20, LIVE) · 0 commits ahead-of-prod · 5394 tests pass"
+current_focus: "V15 #20 LIVE. AppointmentTab columns now show only master rooms per branch (+ ไม่ระบุห้อง for orphan appts)."
 branch: "master"
-last_commit: "e5f2171"
+last_commit: "bdd917e"
 tests: 5394
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e5f2171"
+production_commit: "bdd917e"
 firestore_rules_version: 26
 storage_rules_version: 2
 ---
@@ -14,8 +14,26 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `e5f2171` = LIVE in prod (V15 #19 deployed 2026-05-05)
-- 5394/5394 tests pass · build clean · firestore.rules v26 deployed with NEW be_exam_rooms match block
+- master = `bdd917e` = LIVE in prod (V15 #20 deployed 2026-05-05)
+- 5394/5394 tests pass · build clean · firestore.rules v26 (idempotent re-deploy)
+
+## V15 #20 deploy (2026-05-05) — AppointmentTab follow-up fix
+User report after V15 #19 deploy: legacy localStorage cache strings
+("Dr.Chaiyaporn", "นักกายภาพ", "นักกายภาพA x", "ห้อง 1", "ห้องผ่าตัด")
+were rendering as column headers in AppointmentTab BOTH branches —
+nonsense at พระราม 3 (which has 0 master rooms). Phase 18.0 contract
+violated by Task 7's "minimal patch" preserving allKnownRooms.
+
+Fix (commit `bdd917e`):
+- Drop allKnownRooms state + setAllKnownRooms useEffect entirely
+- One-time legacy cache cleanup on AppointmentTab mount: localStorage.removeItem('appt-rooms-seen')
+- effectiveRoom() resolves strictly against branch master → orphan
+  legacy roomName values route to ไม่ระบุห้อง column
+- rooms useMemo: column set = master rooms (sorted) + virtual ไม่ระบุห้อง
+  iff any orphan appt
+
+Deploy: 6/6 pre + 6/6 post probes ✓; cleanup 4/4 ✓; HTTP smoke ✓;
+be_exam_rooms unauth POST → 403 (rule active) ✓.
 
 ## V15 #19 deploy (2026-05-05)
 - Pre-probe Rule B: 6/6 endpoints 200 ✓ (chat_conversations + pc_appointments + clinic_settings × 2 + V23 anon opd_sessions CREATE+PATCH)
