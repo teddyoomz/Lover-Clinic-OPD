@@ -6122,14 +6122,22 @@ async function _getProductStockConfig(productId) {
 // and continue normal FIFO deduct. User directive 2026-04-29:
 //   "ห้ามพลาดแบบนี้อีก ไม่ว่าจะเป็นการ submit จากไหน"
 //
+// Phase 17.2-sexies (2026-05-05) — internal-leak fix: previously called
+// `listProducts()` with no opts so the lookup ranged across ALL branches.
+// On a multi-branch clinic with shared product names ("Acetin", "Aloe gel"
+// etc.) the name match could resolve to a sibling-branch be_products doc
+// → wrong stockConfig + wrong FIFO batch + cross-branch movement noise.
+// The caller `_deductOneItem` already receives `branchId` from
+// deductStockForSale / deductStockForTreatment; thread it through.
+//
 // Returns matched be_products doc ID (string) or null. Case-insensitive,
 // trimmed exact match. Defensive: catches all errors.
-async function _resolveProductIdByName(productName) {
+async function _resolveProductIdByName(productName, branchId) {
   if (!productName || typeof productName !== 'string') return null;
   const target = productName.trim().toLowerCase();
   if (!target) return null;
   try {
-    const all = await listProducts();
+    const all = await listProducts(branchId ? { branchId } : {});
     const match = (all || []).find((p) => {
       if (!p) return false;
       const n = String(p.productName || p.name || '').trim().toLowerCase();
@@ -6391,7 +6399,9 @@ async function _deductOneItem({
   // we can rewire to the right doc.
   let lookupProductId = item.productId;
   if (!tracked && item.productName && (context === 'treatment' || context === 'sale')) {
-    const resolvedId = await _resolveProductIdByName(item.productName);
+    // Phase 17.2-sexies — pass branchId so the name lookup stays scoped to
+    // the current branch (avoids cross-branch product-name collision).
+    const resolvedId = await _resolveProductIdByName(item.productName, branchId);
     if (resolvedId && resolvedId !== String(item.productId || '')) {
       const reCfg = await _getProductStockConfig(resolvedId);
       if (reCfg && reCfg.trackStock === true) {
@@ -7588,6 +7598,15 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
   return { transferId, status: next, success: true };
 }
 
+// audit-branch-scope: cross-tier — Phase 17.2-sexies audit (2026-05-05)
+// `locationId` IS the branch boundary here: a transfer document spans 2
+// stock locations (sourceLocationId + destinationLocationId), each tied
+// to a branch retail floor or the central warehouse. Filtering by
+// `locationId` already implicitly filters by branch. UI panels
+// (StockTransferPanel) pass locationId from the location dropdown which
+// is itself branch-scoped via scopedDataLayer.listStockLocations. When
+// caller omits locationId entirely, the intent is "all transfers" — used
+// by superadmin oversight + cross-branch reports.
 export async function listStockTransfers({ locationId, status, includeAll } = {}) {
   const clauses = [];
   const snap = await getDocs(stockTransfersCol());
@@ -7884,6 +7903,8 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
   return { withdrawalId, status: next, success: true };
 }
 
+// audit-branch-scope: cross-tier — Phase 17.2-sexies audit (2026-05-05)
+// Same contract as listStockTransfers — `locationId` is the branch boundary.
 export async function listStockWithdrawals({ locationId, status } = {}) {
   const snap = await getDocs(stockWithdrawalsCol());
   let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -8467,11 +8488,24 @@ export async function listProductGroupsForTreatment(productType, { branchId, all
 /**
  * Lookup by (case-insensitive trimmed) name. Used by the form's "already
  * exists" check before create. Returns the matching doc or null.
+ *
+ * Phase 17.2-sexies (2026-05-05) — internal-leak fix: now accepts opts.branchId
+ * + opts.allBranches and scopes the query so a duplicate-name check in
+ * branch A no longer false-positives against an identically-named group in
+ * branch B. scopedDataLayer wraps this with `_autoInject` so UI callers
+ * don't have to pass branchId explicitly.
  */
-export async function findProductGroupByName(name) {
+export async function findProductGroupByName(name, opts = {}) {
   const q = String(name || '').trim().toLowerCase();
   if (!q) return null;
-  const snap = await getDocs(productGroupsCol());
+  const constraints = [];
+  if (opts && opts.branchId && !opts.allBranches) {
+    constraints.push(where('branchId', '==', opts.branchId));
+  }
+  const queryRef = constraints.length
+    ? query(productGroupsCol(), ...constraints)
+    : productGroupsCol();
+  const snap = await getDocs(queryRef);
   for (const d of snap.docs) {
     const data = d.data();
     if (String(data.name || '').trim().toLowerCase() === q) {
@@ -9966,9 +10000,18 @@ export async function saveBankAccount(bankAccountId, data) {
   if (fail) throw new Error(fail[1]);
 
   if (normalized.isDefault) {
-    const all = await getDocs(bankAccountsCol());
+    // Phase 17.2-sexies (2026-05-05) — internal-leak fix: previously read
+    // ALL be_bank_accounts unfiltered. Saving an isDefault account in
+    // branch A would unset isDefault on every bank account in every other
+    // branch (cross-branch state corruption). isDefault is per-branch in
+    // semantics (each branch has its own preferred deposit account).
+    // Scope the mutex query to the same branch the new account belongs to.
+    const targetBranch = _resolveBranchIdForWrite(data);
+    const allSnap = targetBranch
+      ? await getDocs(query(bankAccountsCol(), where('branchId', '==', targetBranch)))
+      : await getDocs(bankAccountsCol()); // legacy fallback when no branchId resolvable
     const batch = writeBatch(db);
-    for (const d of all.docs) {
+    for (const d of allSnap.docs) {
       if (d.id !== id && d.data().isDefault === true) {
         batch.update(bankAccountDoc(d.id), { isDefault: false, updatedAt: new Date().toISOString() });
       }
