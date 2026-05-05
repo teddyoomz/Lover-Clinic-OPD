@@ -22,6 +22,8 @@
 //   set FIREBASE_ADMIN_CREDENTIALS_PATH=/path/to/serviceAccountKey.json
 
 import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
@@ -68,12 +70,11 @@ export function mapAppointmentType(value) {
 }
 
 /**
- * Generate random hex string of length n (for audit-doc suffix).
+ * Generate cryptographically random hex string of length n (for audit-doc suffix).
+ * Mirrors Phase 18.0 convention — collision-resistant audit IDs.
  */
 export function randHex(n = 8) {
-  return Array.from({ length: n }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
+  return randomBytes(Math.ceil(n / 2)).toString('hex').slice(0, n);
 }
 
 // ─── Firebase init ────────────────────────────────────────────────────────
@@ -228,7 +229,11 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('[phase-19-0] FATAL', err);
-  process.exit(1);
-});
+// Only run main() when invoked directly via CLI (not when imported by tests).
+// Mirrors Phase 18.0 convention.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('[phase-19-0] FATAL', err);
+    process.exit(1);
+  });
+}
