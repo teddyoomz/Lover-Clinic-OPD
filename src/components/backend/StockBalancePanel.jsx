@@ -10,18 +10,16 @@ import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info } from 'lucide-react';
 import { listStockBatches, listStockLocations, listProducts } from '../../lib/scopedDataLayer.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
-// Phase 15.6 (2026-04-28) — legacy-main fallback for default-branch view.
-// Mirrors MovementLogPanel pattern (which has had this since Phase 15.4 s19).
-// Without this, batches written with branchId='main' (pre-V20 / legacy seed)
-// disappear from the balance panel when admin views default branch BR-XXX.
+// Phase 17.2 (2026-05-05): legacy-main fallback removed — migration script
+// rewrites all legacy `branchId='main'` batches to real branch IDs. Strict
+// branchId filter only.
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
 export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, defaultLocationId, lockLocation }) {
-  // Phase 15.6 (2026-04-28) — branches list for default-branch detection
-  // (legacy-main fallback decision). useSelectedBranch is the canonical
-  // source of branch metadata (matches MovementLogPanel:107–112 pattern).
+  // Phase 17.2 (2026-05-05): branches list still needed for landing-default
+  // resolution (newest-first via useSelectedBranch ordering).
   const { branches } = useSelectedBranch();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +41,9 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // _deductOneItem). Filter is checkbox-driven and shows ONLY rows where
   // sum(batches[i].qty.remaining) < 0.
   const [showNegativeStockOnly, setShowNegativeStockOnly] = useState(false);
-  const [locations, setLocations] = useState([{ id: 'main', name: 'สาขาหลัก', kind: 'branch' }]);
+  // Phase 17.2 (2026-05-05): no synthetic 'main' default — initial empty list,
+  // populated from listStockLocations() once branches arrive.
+  const [locations, setLocations] = useState([]);
   // Phase 15.5 / Item 1 — per-product threshold lookup map keyed by productId
   // Shape: { [productId]: { alertDayBeforeExpire, alertQtyBeforeOutOfStock, alertQtyBeforeMaxStock } }
   const [productThresholdMap, setProductThresholdMap] = useState({});
@@ -62,7 +62,9 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // Phase 15.1 (2026-04-27) — defaultLocationId pre-selects a specific
   // location (e.g. central warehouse from CentralStockTab). lockLocation
   // hides the dropdown when caller wants the location fixed.
-  const [locationId, setLocationId] = useState(defaultLocationId || 'main');
+  // Phase 17.2 (2026-05-05): no synthetic 'main' fallback — empty until
+  // defaultLocationId or branches arrive.
+  const [locationId, setLocationId] = useState(defaultLocationId || '');
   // Phase 15.7-ter (2026-04-28) — track whether admin manually picked a
   // location so subsequent branch-list async-load doesn't override their
   // choice. Pre-fix: panel default 'main' literal + StockTab not passing
@@ -83,16 +85,16 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
     return () => { cancelled = true; };
   }, []);
 
-  // Phase 15.7-ter — auto-pick the default branch when branches arrive.
-  // Skips if (a) caller passed defaultLocationId (caller takes over),
-  // (b) admin already manually picked a location, or (c) no default branch
-  // is configured.
+  // Phase 17.2 (2026-05-05): auto-pick the FIRST branch in the list when
+  // branches arrive (useSelectedBranch already orders newest-first +
+  // staff-accessible filter). isDefault flag is gone — first item is the
+  // canonical landing default.
   useEffect(() => {
     if (defaultLocationId) return;
     if (userPickedLocation) return;
     if (!Array.isArray(branches) || branches.length === 0) return;
-    const def = branches.find((b) => b && b.isDefault);
-    const defId = def && (def.branchId || def.id);
+    const first = branches[0];
+    const defId = first && (first.branchId || first.id);
     if (defId && defId !== locationId) {
       setLocationId(String(defId));
     }
@@ -156,24 +158,14 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Phase 15.6 (Issue 1, 2026-04-28) — legacy-main fallback for default-branch
-      // view. Pre-V20 / legacy seed batches were written with branchId='main'.
-      // Without this opt-in, default-branch BR-XXX view filters them out → admin
-      // sees movement log entries but empty balance row. Mirrors MovementLogPanel
-      // pattern. Gate: NOT central tier AND (locationId='main' OR isDefault branch).
-      const currentLoc = locations.find(l => l.id === locationId) || { kind: 'branch' };
-      const isCentralLoc = currentLoc.kind === 'central';
-      const includeLegacyMain = !isCentralLoc && (
-        String(locationId) === 'main' ||
-        (Array.isArray(branches) && branches.some(
-          (b) => (b.branchId || b.id) === locationId && b.isDefault === true
-        ))
-      );
-      const list = await listStockBatches({ branchId: locationId, status: 'active', includeLegacyMain });
+      // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
+      // script rewrites all legacy `branchId='main'` batches to real branch
+      // IDs. Strict branchId filter via listStockBatches.
+      const list = await listStockBatches({ branchId: locationId, status: 'active' });
       setBatches(list);
     } catch (e) { console.error('[StockBalance] load failed:', e); setBatches([]); }
     finally { setLoading(false); }
-  }, [locationId, locations, branches]);
+  }, [locationId]);
 
   useEffect(() => { load(); }, [load]);
 

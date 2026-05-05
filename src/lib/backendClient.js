@@ -4764,48 +4764,20 @@ export async function getStockBatch(batchId) {
 /**
  * List batches for a product at a branch. Caller filters by status as needed.
  * Returns sorted by receivedAt ASC (so batchFifoAllocate can consume).
+ *
+ * Phase 17.2 (2026-05-05): `includeLegacyMain` opt removed — Phase 17.2
+ * migration script rewrites all legacy `branchId='main'` batches to real
+ * branch IDs, and Phase 17.2 outlaws synthetic 'main' branches. Strict
+ * branchId filtering only.
  */
-export async function listStockBatches({ productId, branchId, status, includeLegacyMain = false } = {}) {
-  // Phase 15.4 (s19 item 2) — `includeLegacyMain` opt-in fallback.
-  // Pre-V20 multi-branch data was written with branchId='main'. After V20
-  // BranchContext returns BR-XXX. Calls with branchId='BR-XXX' filtered out
-  // legacy batches → user reported "ปรับสต็อคไม่ได้ ติด Batch / Lot เลือกไม่ได้".
-  // Stock create forms (Adjust/Transfer/Withdrawal) opt in via this flag so
-  // user can still pick legacy batches until admin runs a migration. Default
-  // false keeps non-create callers strict.
-  const buildClauses = (bid) => {
-    const cs = [];
-    if (productId) cs.push(where('productId', '==', String(productId)));
-    if (bid) cs.push(where('branchId', '==', String(bid)));
-    if (status) cs.push(where('status', '==', String(status)));
-    return cs;
-  };
-
-  let batches = [];
-  if (includeLegacyMain && branchId && String(branchId) !== 'main') {
-    const [s1, s2] = await Promise.all([
-      getDocs(query(stockBatchesCol(), ...buildClauses(branchId))),
-      // V31 no-silent-swallow: log + return empty so primary results still surface.
-      getDocs(query(stockBatchesCol(), ...buildClauses('main'))).catch((e) => {
-        console.warn('[listStockBatches] legacy-main fallback query failed:', e?.message || e);
-        return { docs: [] };
-      }),
-    ]);
-    const seen = new Set();
-    for (const d of [...s1.docs, ...s2.docs]) {
-      const data = { id: d.id, ...d.data() };
-      const bid = data.batchId || d.id;
-      if (seen.has(bid)) continue;
-      seen.add(bid);
-      batches.push(data);
-    }
-  } else {
-    const clauses = buildClauses(branchId);
-    const q = clauses.length ? query(stockBatchesCol(), ...clauses) : stockBatchesCol();
-    const snap = await getDocs(q);
-    batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }
-
+export async function listStockBatches({ productId, branchId, status } = {}) {
+  const clauses = [];
+  if (productId) clauses.push(where('productId', '==', String(productId)));
+  if (branchId) clauses.push(where('branchId', '==', String(branchId)));
+  if (status) clauses.push(where('status', '==', String(status)));
+  const q = clauses.length ? query(stockBatchesCol(), ...clauses) : stockBatchesCol();
+  const snap = await getDocs(q);
+  const batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   batches.sort((a, b) => (a.receivedAt || '').localeCompare(b.receivedAt || ''));
   return batches;
 }
@@ -4889,8 +4861,7 @@ export async function listStockMovements(filters = {}) {
 
   if (filters.branchId != null) {
     const branchIdStr = String(filters.branchId);
-    // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): SINGLE-TIER filter +
-    // legacy-main fallback ONLY (no cross-branch alias).
+    // Phase 15.4 post-deploy bug 2 v4 (2026-04-28): SINGLE-TIER filter.
     //
     // User correction (after v2/v3): each cross-tier movement must show on
     // its OWN tier only. Korat → Central transfer: Korat sees EXPORT only
@@ -4904,19 +4875,13 @@ export async function listStockMovements(filters = {}) {
     //   EXPORT_WITHDRAWAL (10): branchId=source     → only at source view
     //   WITHDRAWAL_CONFIRM (13): branchId=destination → only at destination view
     //
-    // Legacy-main fallback STAYS (separate fix for ID-mismatch). Pre-V20
-    // stock data wrote branchId='main' (listStockLocations hardcoded id:'main')
-    // but BranchContext returns 'BR-XXX' for default branch post-V20. Caller
-    // passes `includeLegacyMain: true` when current view is the default branch.
-    // Central tier (WH-*) and non-default branches do NOT opt in.
+    // Phase 17.2 (2026-05-05): legacy-'main' alias removed — Phase 17.2
+    // migration script rewrites all legacy `branchId='main'` movements to
+    // real branch IDs.
     //
     // The branchIds[] field is STILL written (Phase E) but used by the UI
     // to compute the counterparty NAME for labels (not for branch matching).
-    const aliases = [branchIdStr];
-    if (filters.includeLegacyMain && branchIdStr !== 'main') {
-      aliases.push('main');
-    }
-    mvts = mvts.filter((m) => aliases.includes(String(m.branchId || '')));
+    mvts = mvts.filter((m) => String(m.branchId || '') === branchIdStr);
   }
 
   if (!filters.includeReversed) {
@@ -5043,13 +5008,12 @@ async function _repayNegativeBalances({
   const { stockUtils } = await _stockLib();
   const { BATCH_STATUS, applyNegativeRepay } = stockUtils;
 
-  // Fetch active batches at branch+product (legacy-main fallback for
-  // default-branch — mirrors _deductOneItem V35.3-bis pattern).
+  // Phase 17.2 (2026-05-05): legacy-'main' fallback removed — strict
+  // branchId filter (migration rewrites legacy batches to real branch IDs).
   const batches = await listStockBatches({
     productId,
     branchId,
     status: BATCH_STATUS.ACTIVE,
-    includeLegacyMain: true,
   });
 
   const { repayPlan, leftover } = applyNegativeRepay(batches, need);
@@ -6504,36 +6468,19 @@ async function _deductOneItem({
     return { productId: item.productId, skipped: true, reason, movements: [{ movementId }] };
   }
 
-  // Fetch candidate batches
-  // 2026-04-28 hotfix V35.3 (post V15 #6): user reported [IV Drip] Aura
-  // bright x 1 ครั้ง treatment showed "ไม่มีสต็อคที่สาขานี้" SKIP movement
-  // even though StockBalancePanel showed 31 amp at the branch. Root cause:
-  // Phase 15.4 + V35 Phase 15.6 audited 5 stock UI panels for the
-  // includeLegacyMain flag but missed THIS reader. Default-branch (BR-XXX)
-  // batches with legacy `branchId='main'` (pre-V20 multi-branch data) were
-  // fetched by Balance Panel but invisible to FIFO → 0 allocations →
-  // shortfall path → silent-skip movement without batch decrement.
-  // Same V12 (multi-reader sweep) lesson: when adding an opt-in flag, ALL
-  // readers must be audited. Treatment + sale always run at branch tier
-  // (never central) so unconditional `includeLegacyMain: true` is safe;
-  // central tier branches (WH-XXX) won't match a 'main' branchId so the
-  // dual query returns nothing extra anyway.
+  // Fetch candidate batches.
+  // Phase 17.2 (2026-05-05): legacy-'main' fallback removed — Phase 17.2
+  // migration rewrites legacy `branchId='main'` batches to real branch IDs
+  // before this path runs. Strict branchId filter only.
   // V36-bis (2026-04-29) — use `lookupProductId` (resolved by name fallback
   // above when the original item.productId didn't match a be_products doc).
   // Falls back to item.productId for the common case where it already
   // matches. Movement records still carry item.productId (the original)
   // so audit trails stay consistent with the form-submitted shape.
-  const batches = await listStockBatches({ productId: lookupProductId, branchId, status: BATCH_STATUS.ACTIVE, includeLegacyMain: true });
-  // V35.3-bis (2026-04-28 same-day fix): do NOT pass `branchId` to
-  // batchFifoAllocate. listStockBatches already filtered with
-  // includeLegacyMain (legacy `branchId='main'` batches included for
-  // default-branch BR-XXX queries). batchFifoAllocate has its own
-  // strict-equality branchId filter (`b.branchId !== opts.branchId`)
-  // which would re-filter the legacy batches OUT — exactly the bug
-  // user reported at 18:46 (still got "ไม่มีสต็อคที่สาขานี้" SKIP after
-  // V35.3 first cut). Pre-filter at the listStockBatches layer is the
-  // single source of truth; batchFifoAllocate operates on the
-  // already-filtered list.
+  const batches = await listStockBatches({ productId: lookupProductId, branchId, status: BATCH_STATUS.ACTIVE });
+  // batchFifoAllocate consumes the already-filtered list. Do NOT pass
+  // branchId here — listStockBatches is the single source of truth for
+  // branch filtering at this layer.
   const plan = batchFifoAllocate(batches, item.qty, { productId: lookupProductId, preferNewest });
 
   // Phase 15.7 (2026-04-28) — negative-stock allowance for tracked products.
@@ -7262,8 +7209,11 @@ export async function listCentralWarehouses({ includeInactive = false } = {}) {
  * "หน้า สต็อคก็เสือกโชว์คำว่า BR-1777873556815-26df6480 ทำไมไม่โชว์ชื่อสาขา".
  *
  * Now: pull be_branches alongside warehouses. Each branch entry uses
- * the human-readable `name` field. Legacy 'main' fallback only kicks
- * in when be_branches is empty (single-branch pre-V20 deployments).
+ * the human-readable `name` field.
+ *
+ * Phase 17.2 (2026-05-05): isDefault stripped (all branches equal peers).
+ * No synthetic 'main' branch — when be_branches is empty, return only
+ * warehouses; callers must guard on empty branch list.
  */
 export async function listStockLocations() {
   const [warehouses, branches] = await Promise.all([
@@ -7273,20 +7223,12 @@ export async function listStockLocations() {
   const branchEntries = (branches || []).map(b => {
     const id = b.branchId || b.id;
     const name = (typeof b.name === 'string' && b.name.trim()) ? b.name : (b.branchName || id);
-    return { id: String(id), name: String(name), kind: 'branch', isDefault: !!b.isDefault };
+    return { id: String(id), name: String(name), kind: 'branch' };
   });
-  // Sort default branch first, then others alphabetically.
-  branchEntries.sort((a, b) => {
-    if (a.isDefault && !b.isDefault) return -1;
-    if (!a.isDefault && b.isDefault) return 1;
-    return a.name.localeCompare(b.name, 'th');
-  });
-  // Legacy 'main' fallback only when be_branches is empty.
-  const branchList = branchEntries.length > 0
-    ? branchEntries
-    : [{ id: 'main', name: 'สาขาหลัก (main)', kind: 'branch', isDefault: true }];
+  // Sort branches alphabetically (Thai locale-aware).
+  branchEntries.sort((a, b) => a.name.localeCompare(b.name, 'th'));
   return [
-    ...branchList,
+    ...branchEntries,
     ...warehouses.map(w => ({ id: w.stockId, name: w.stockName, kind: 'central', phone: w.telephoneNumber, address: w.address })),
   ];
 }
@@ -8793,8 +8735,11 @@ export async function deleteHoliday(holidayId) {
 }
 
 // ─── Branch CRUD (Phase 11.6 Master Data Suite) ────────────────────────────
-// Core branch record (identification/contact/address/map + isDefault + status).
+// Core branch record (identification/contact/address/map + status).
 // 7-day opening-hours deferred to Phase 13.
+// Phase 17.2 (2026-05-05): isDefault stripped — all branches are equal
+// peers. Newest-created branch is the implicit landing default (resolved
+// in BranchContext.jsx).
 
 const branchesCol = () => collection(db, ...basePath(), 'be_branches');
 const branchDoc = (id) => doc(db, ...basePath(), 'be_branches', String(id));
@@ -8809,9 +8754,8 @@ export async function getBranch(branchId) {
 export async function listBranches() {
   const snap = await getDocs(branchesCol());
   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  // Default branch first, then newest-first.
+  // Phase 17.2: newest-first by updatedAt then createdAt (no isDefault).
   items.sort((a, b) => {
-    if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
     if (ua !== ub) return ub.localeCompare(ua);
@@ -8833,18 +8777,7 @@ export async function saveBranch(branchId, data) {
     throw new Error(msg);
   }
 
-  // If this branch is being set as default, clear isDefault on all others so
-  // only ONE default exists at a time.
-  if (normalized.isDefault) {
-    const all = await getDocs(branchesCol());
-    const batch = writeBatch(db);
-    for (const d of all.docs) {
-      if (d.id !== id && d.data().isDefault === true) {
-        batch.update(branchDoc(d.id), { isDefault: false, updatedAt: new Date().toISOString() });
-      }
-    }
-    await batch.commit();
-  }
+  // Phase 17.2: no isDefault mutual-exclusion update — all branches equal peers.
 
   const now = new Date().toISOString();
   await setDoc(branchDoc(id), {
@@ -9134,7 +9067,6 @@ function mapMasterToBranch(src, id, now, existingCreatedAt) {
     googleMapUrl: String(src.googleMapUrl || src.google_map_url || '').trim(),
     latitude: coerceNum(src.latitude),
     longitude: coerceNum(src.longitude),
-    isDefault: !!src.isDefault,
     status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
     note: String(src.note || '').trim(),
     createdAt: existingCreatedAt || now,

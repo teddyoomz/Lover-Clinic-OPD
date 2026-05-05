@@ -3,7 +3,7 @@
 // 8th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, Building2, Loader2, Phone, MapPin, Star } from 'lucide-react';
+import { Edit2, Trash2, Building2, Loader2, Phone, MapPin } from 'lucide-react';
 import { listBranches, deleteBranch } from '../../lib/scopedDataLayer.js';
 import BranchFormModal from './BranchFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -118,11 +118,7 @@ export default function BranchesTab({ clinicSettings, theme }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <h3 className="font-bold text-[var(--tx-heading)] truncate">{b.name || '(ไม่มีชื่อ)'}</h3>
-                      {b.isDefault && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-amber-700/25 border-amber-600/50 text-amber-200">
-                          <Star size={10} /> หลัก
-                        </span>
-                      )}
+                      {/* Phase 17.2 (2026-05-05): "หลัก" badge stripped — all branches equal peers. */}
                     </div>
                     {b.nameEn && <p className="text-[11px] text-[var(--tx-muted)] truncate">{b.nameEn}</p>}
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">

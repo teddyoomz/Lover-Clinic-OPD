@@ -200,8 +200,13 @@ describe('Phase 15.1 F5 — additive override props on existing panels', () => {
     expect(balancePanelSrc).toMatch(/function StockBalancePanel\([^)]+defaultLocationId[^)]*lockLocation[^)]*\)/);
   });
 
-  it('F5.2 StockBalancePanel — defaultLocationId initializes locationId state', () => {
-    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*'main'\)/);
+  it('F5.2 Phase 17.2 — StockBalancePanel uses empty-string fallback (no main literal)', () => {
+    // Phase 17.2 (2026-05-05): default-location fallback changed from
+    // `'main'` literal to `''` (empty string sentinel for "not yet
+    // resolved"). The auto-pick effect resolves to the current branch
+    // OR the first available stock location. Migration script handles
+    // legacy 'main' rows.
+    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*''\)/);
   });
 
   it('F5.3 StockBalancePanel — sync useEffect when defaultLocationId changes (async parent)', () => {
@@ -246,8 +251,11 @@ describe('Phase 15.1 F6 — anti-regression (V12 multi-reader sweep)', () => {
     expect(balancePanelSrc).toMatch(/value=\{locationId\}\s+onChange=\{e\s*=>\s*\{\s*setLocationId\(e\.target\.value\);\s*setUserPickedLocation\(true\)/);
   });
 
-  it('F6.2 StockBalancePanel default location is "main" when no override', () => {
-    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*'main'\)/);
+  it('F6.2 Phase 17.2 — StockBalancePanel default location is "" when no override (no main fallback)', () => {
+    // Phase 17.2 (2026-05-05): no synthetic 'main' fallback. Empty string
+    // sentinel until auto-pick effect resolves to current branch or first
+    // available stock location.
+    expect(balancePanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*''\)/);
   });
 
   it('F6.3 StockTransferPanel still calls listStockTransfers without filter when no override', () => {

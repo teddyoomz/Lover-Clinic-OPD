@@ -1,6 +1,13 @@
 // ─── BranchContext — global selected-branch state ──────────────────────
 // Phase 14.7.H follow-up A (2026-04-26)
 //
+// Phase 17.2 (2026-05-05) — Removed 'main' fallback semantic. Per-user uid
+// localStorage key (`selectedBranchId:${uid}`). Newest-created accessible
+// branch is the first-login default. Single-branch users hide the selector
+// entirely (see useBranchVisibility helper). Legacy unkeyed `selectedBranchId`
+// localStorage entries are migrated to the per-uid key on first read so
+// existing sessions resume seamlessly.
+//
 // User directive 2026-04-26: "ตอนนี้มี 1 สาขา อยากทำให้รองรับการเปิดสาขา
 // เพิ่มเติมแบบเต็มรูปแบบทีเดียวไปเลย" (currently single-branch; want full
 // multi-branch infrastructure ready when more branches open).
@@ -9,18 +16,21 @@
 // 6 components (SaleTab, OrderPanel, MovementLogPanel, StockAdjustPanel,
 // StockSeedPanel, TreatmentFormPage's 5 sites). Phase 15 (Central Stock)
 // requires a real selectedBranchId so transfers + withdrawals attribute
-// correctly.
+// correctly. Phase 17.2 closes the loop by removing the 'main' fallback
+// entirely — every branch is a peer; the migration script reassigns any
+// legacy `branchId === 'main'` data to the current default branch.
 //
 // This module:
 //   1. Loads `be_branches` via onSnapshot listener (so admin can edit
 //      branches in BranchesTab and the selector updates live).
-//   2. Auto-selects the `isDefault=true` branch on first load.
-//   3. Persists last-picked branch to localStorage so refresh keeps it.
+//   2. Resolves first-login default = newest-created branch among the
+//      caller's accessible set (staff.branchIds[]). No isDefault flag.
+//   3. Persists last-picked branch to per-uid localStorage so refresh keeps
+//      it AND a different user on the same device gets their own pick.
 //   4. Exposes `useSelectedBranch()` hook returning {branchId, branches,
 //      selectBranch, isReady}.
-//   5. Single-branch case: hook returns the only branch's id; no dropdown
-//      needed in UI. The branch-selector dropdown component below auto-
-//      hides when `branches.length < 2`.
+//   5. Single-branch case: `useBranchVisibility().showSelector === false`
+//      so BranchSelector renders a static label (no dropdown).
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
@@ -44,24 +54,113 @@ function branchesCol() {
   return collection(db, 'artifacts', appId, 'public', 'data', 'be_branches');
 }
 
+// ─── Phase 17.2 helpers — per-user uid localStorage + newest-default ────
+// Per-uid key prevents cross-account leakage on shared devices (admin
+// logs out → staff logs in → staff still saw admin's last branch).
+// Newest-created selection replaces the removed isDefault flag — admins
+// no longer have to mark a "main" branch; whatever they created last is
+// the default for first-login. Existing users get a one-time migration
+// from the legacy unkeyed `selectedBranchId` so their stored pick carries
+// forward without a re-pick prompt.
+
+function localStorageKey(uid) {
+  return `selectedBranchId:${uid}`;
+}
+
+function readSelected(uid) {
+  if (!uid || typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const v = window.localStorage.getItem(localStorageKey(uid));
+    if (v) return v;
+    // Phase 17.2 graceful upgrade — read legacy unkeyed value once,
+    // migrate to per-user key, delete old. Idempotent: legacy key absent
+    // → no-op. Legacy 'main' value falls through to readSelected returning
+    // 'main' once → caller (`pickFirstLoginDefault` fallback) replaces it
+    // with a real branchId on next branches-snapshot resolution.
+    const legacy = window.localStorage.getItem(STORAGE_KEY);
+    if (legacy) {
+      window.localStorage.setItem(localStorageKey(uid), legacy);
+      window.localStorage.removeItem(STORAGE_KEY);
+      return legacy;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSelected(uid, branchId) {
+  if (!uid || typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (branchId) {
+      window.localStorage.setItem(localStorageKey(uid), String(branchId));
+    } else {
+      window.localStorage.removeItem(localStorageKey(uid));
+    }
+  } catch {
+    // localStorage may be disabled in private mode; failure is non-fatal.
+  }
+}
+
 /**
- * Provider — wrap BackendDashboard (or any subtree that needs branch context).
- * Auto-loads `be_branches` via listener; once docs arrive, picks the
- * `isDefault=true` branch (or the first one) unless localStorage has a
- * still-valid pick.
+ * First-login default branch resolver.
+ * - branches null/empty → null
+ * - accessibleBranchIds null/empty → fall back to ALL branches (bootstrap
+ *   admin / legacy staff records pre-Phase-BS where branchIds[] is empty
+ *   meaning "all branches")
+ * - accessibleBranchIds non-empty → filter to that subset
+ * - sort accessible by createdAt DESC (newest first); secondary stable
+ *   sort on id for determinism when timestamps tie
+ * - return first.branchId || first.id; null if no accessible branches
+ */
+function pickFirstLoginDefault({ branches, accessibleBranchIds }) {
+  if (!Array.isArray(branches) || branches.length === 0) return null;
+  const hasAccessFilter = Array.isArray(accessibleBranchIds) && accessibleBranchIds.length > 0;
+  const allowed = hasAccessFilter ? new Set(accessibleBranchIds.map((x) => String(x))) : null;
+  const accessible = hasAccessFilter
+    ? branches.filter((b) => allowed.has(String(b.branchId || b.id)))
+    : branches;
+  if (accessible.length === 0) return null;
+  const sorted = [...accessible].sort((a, b) => {
+    const ca = a.createdAt || '';
+    const cb = b.createdAt || '';
+    if (ca !== cb) return String(cb).localeCompare(String(ca)); // DESC
+    return String(a.branchId || a.id).localeCompare(String(b.branchId || b.id));
+  });
+  return sorted[0].branchId || sorted[0].id || null;
+}
+
+/**
+ * Provider — wrap App (Phase 17.2 — hoisted from BackendDashboard so the
+ * same selectedBranchId state is visible to public-link surfaces, admin
+ * dashboard, AND backend dashboard).
+ *
+ * Phase 17.2 — auto-loads `be_branches` via listener; on first snapshot
+ * picks `pickFirstLoginDefault({branches, accessibleBranchIds})` (newest-
+ * created accessible branch) unless localStorage at the per-uid key has a
+ * still-valid pick. Persists selection per-uid so logout-login as a
+ * different user on the same device doesn't leak the previous pick.
+ *
+ * Defensive shape: when `useUserPermission()` is outside its provider
+ * (legacy mounts, tests), it returns `{user: null, staff: null}`. We then
+ * skip localStorage I/O (uid required) but the in-memory selection still
+ * works — the branch picked by `pickFirstLoginDefault` lives in state for
+ * the page lifetime.
  */
 export function BranchProvider({ children }) {
+  const { user, staff } = useUserPermission();
+  const currentUid = user?.uid || '';
+  // Empty/missing branchIds[] → "all branches" (bootstrap admin + legacy
+  // staff records pre-Phase-BS). Non-empty → scoped accessible list.
+  const staffAccessible = useMemo(() => (
+    Array.isArray(staff?.branchIds) ? staff.branchIds.map((x) => String(x)) : []
+  ), [staff]);
+
   const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchIdState] = useState(() => {
-    try {
-      const cached = typeof window !== 'undefined'
-        ? window.localStorage?.getItem(STORAGE_KEY)
-        : null;
-      return cached || FALLBACK_ID;
-    } catch {
-      return FALLBACK_ID;
-    }
-  });
+  // Phase 17.2 — initial state is null until the be_branches snapshot
+  // arrives. localStorage read happens inside the snapshot effect (so it
+  // can run after currentUid is known + the legacy-key migration runs).
+  const [selectedBranchId, setSelectedBranchIdState] = useState(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -70,51 +169,44 @@ export function BranchProvider({ children }) {
       unsubscribe = onSnapshot(branchesCol(), (snap) => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setBranches(list);
+
         // V36 (2026-04-29) — phantom-branch defensive fallback. Pre-V36
-        // logic only validated the cached selectedBranchId on FIRST snapshot
-        // (when isReady===false). If branches changed after that (e.g.
-        // admin deleted a branch via cleanup-phantom-branch endpoint while
-        // the page was already open OR the user's localStorage retained a
-        // since-deleted branch from a prior session), selectedBranchId
-        // stayed stale → all stock writes attributed to a phantom branch
-        // → user reported "Movement log สาขาหายไปหมด" because the reader
-        // filter excluded everything.
-        //
-        // V36 fix: validate current selectedBranchId on EVERY snapshot.
-        // If the current selection no longer matches any branch doc AND
-        // it's not the legacy 'main' fallback, fall back to default branch
-        // or 'main'. This re-fires even after isReady=true so admin can
-        // delete a branch and the UI immediately re-resolves.
-        const currentSel = (() => {
-          try { return window.localStorage?.getItem(STORAGE_KEY) || ''; } catch { return ''; }
-        })();
-        const selectionStillValid = currentSel === FALLBACK_ID ||
-          (list.length > 0 && list.some(b => (b.branchId || b.id) === currentSel));
+        // logic only validated the cached selectedBranchId on FIRST
+        // snapshot (when isReady===false). If branches changed after that
+        // (admin deleted a branch via cleanup-phantom-branch while the
+        // page was already open OR localStorage retained a since-deleted
+        // branch), selectedBranchId stayed stale → all stock writes
+        // attributed to a phantom branch → user reported "Movement log
+        // สาขาหายไปหมด". V36 fix: validate on EVERY snapshot. Phase 17.2
+        // preserves this behaviour — fallback target is now
+        // pickFirstLoginDefault (newest-created accessible) instead of
+        // isDefault=true / 'main'.
+        const stored = readSelected(currentUid);
+        const selectionStillValid = !!stored &&
+          list.length > 0 && list.some((b) => String(b.branchId || b.id) === String(stored));
 
         if (!isReady && list.length > 0) {
-          // First-load default-branch resolution.
-          if (!selectionStillValid) {
-            const def = list.find(b => b.isDefault) || list[0];
-            const id = def?.branchId || def?.id || FALLBACK_ID;
+          if (selectionStillValid) {
+            setSelectedBranchIdState(stored);
+          } else {
+            const id = pickFirstLoginDefault({ branches: list, accessibleBranchIds: staffAccessible });
             setSelectedBranchIdState(id);
-            try { window.localStorage?.setItem(STORAGE_KEY, id); } catch {}
+            if (id) writeSelected(currentUid, id);
           }
           setIsReady(true);
         } else if (!isReady && list.length === 0) {
-          // No branches in Firestore yet — keep FALLBACK_ID so existing
-          // hardcoded 'main' callsites continue to work unchanged.
-          if (!selectionStillValid) {
-            setSelectedBranchIdState(FALLBACK_ID);
-            try { window.localStorage?.setItem(STORAGE_KEY, FALLBACK_ID); } catch {}
-          }
+          // No branches in Firestore yet — keep null. Callers should guard
+          // on isReady + branchId. Phase 17.2 explicitly does NOT fall back
+          // to a 'main' sentinel; UI components either render a "no branch"
+          // empty state or wait for isReady.
+          setSelectedBranchIdState(null);
           setIsReady(true);
         } else if (isReady && !selectionStillValid) {
-          // V36 fallback: branch doc disappeared (admin cleanup OR phantom
-          // never existed). Re-resolve to default-branch or main fallback.
-          const def = list.find(b => b.isDefault) || list[0];
-          const id = def?.branchId || def?.id || FALLBACK_ID;
+          // Phantom-branch fallback (V36 contract): re-resolve to newest
+          // accessible.
+          const id = pickFirstLoginDefault({ branches: list, accessibleBranchIds: staffAccessible });
           setSelectedBranchIdState(id);
-          try { window.localStorage?.setItem(STORAGE_KEY, id); } catch {}
+          if (id) writeSelected(currentUid, id);
         }
       }, () => setIsReady(true));
     } catch {
@@ -122,33 +214,39 @@ export function BranchProvider({ children }) {
     }
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUid, staffAccessible]);
 
   const selectBranch = useMemo(() => (id) => {
     if (!id) return;
     setSelectedBranchIdState(id);
-    try { window.localStorage?.setItem(STORAGE_KEY, id); } catch {}
-  }, []);
+    writeSelected(currentUid, id);
+  }, [currentUid]);
 
   const value = useMemo(() => ({
     branchId: selectedBranchId,
     branches,
     selectBranch,
     isReady,
-  }), [selectedBranchId, branches, selectBranch, isReady]);
+    accessibleBranchIds: staffAccessible,
+  }), [selectedBranchId, branches, selectBranch, isReady, staffAccessible]);
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;
 }
 
 /**
- * Hook — returns { branchId, branches, selectBranch, isReady }.
- * Defensive: if no provider mounted, returns FALLBACK_ID so legacy
- * hardcoded callsites keep working in tests + storybook.
+ * Hook — returns { branchId, branches, selectBranch, isReady, accessibleBranchIds }.
+ *
+ * Phase 17.2 — defensive shape outside provider returns `branchId: null`
+ * (previously `FALLBACK_ID === 'main'`). Callers MUST guard on `isReady &&
+ * branchId` before using; the 'main' sentinel is no longer a valid value
+ * because the migration script reassigns any legacy `branchId === 'main'`
+ * docs to the current default branch. Tests + storybook should mount
+ * `<BranchProvider>` for realistic behaviour.
  */
 export function useSelectedBranch() {
   const ctx = useContext(BranchContext);
   if (!ctx) {
-    return { branchId: FALLBACK_ID, branches: [], selectBranch: () => {}, isReady: true };
+    return { branchId: null, branches: [], selectBranch: () => {}, isReady: true, accessibleBranchIds: [] };
   }
   return ctx;
 }
@@ -352,4 +450,35 @@ export function useUserScopedBranches() {
     isReady,
     allBranches: branches,
   }), [branchId, branches, selectBranch, isReady, staff]);
+}
+
+// ─── Phase 17.2 (2026-05-05) — Single-branch visibility helper ──────────
+// User directive: when a clinic has only ONE branch (or the current user
+// can only access ONE branch), the BranchSelector should NOT render a
+// dropdown at all — show a static label instead. This mirrors a similar
+// affordance in modern admin tools (e.g. AWS console hides region picker
+// when single-region account).
+//
+// Returns { showSelector, branches }:
+//   - showSelector === true  → BranchSelector renders the dropdown
+//   - showSelector === false → BranchSelector renders `<span>{name}</span>`
+//   - branches is the staff-accessible filtered list
+//
+// Single-branch detection uses the staff-accessible list (not the raw
+// branches list) because a multi-branch clinic where the current user is
+// scoped to one branch should also hide the selector.
+
+/**
+ * @returns {{ showSelector: boolean, branches: Array }}
+ */
+export function useBranchVisibility() {
+  const { branches } = useSelectedBranch();
+  const { staff } = useUserPermission();
+  return useMemo(() => {
+    const accessible = filterBranchesByStaffAccess(branches, staff);
+    return {
+      showSelector: accessible.length > 1,
+      branches: accessible,
+    };
+  }, [branches, staff]);
 }

@@ -52,10 +52,13 @@ describe('Phase 15.4 ML.A — listStockMovements client-side branchId filter', (
     expect(fnStart).toBeGreaterThan(0);
   });
 
-  it('ML.A.2 — branchId filter is CLIENT-SIDE (aliases.includes(m.branchId))', () => {
-    // Phase 15.4 post-deploy bug 2 v3 — uses an `aliases` set (branchIdStr +
-    // optional 'main') instead of direct === comparison.
-    expect(fnSlice).toMatch(/aliases\.includes\(String\(m\.branchId\s*\|\|\s*['"]['"]\)\)/);
+  it('ML.A.2 — Phase 17.2: branchId filter is CLIENT-SIDE (direct equality, no main alias)', () => {
+    // Phase 17.2 (2026-05-05): legacy 'main' alias path removed. Each
+    // movement filtered by `String(m.branchId || '') === branchIdStr`
+    // — no aliases array, no includeLegacyMain expansion. The migration
+    // script reassigns legacy main movements to the current default
+    // branch BEFORE deletion of the 'main' fallback.
+    expect(fnSlice).toMatch(/String\(m\.branchId\s*\|\|\s*['"]['"]\)\s*===\s*branchIdStr/);
   });
 
   it('ML.A.3 — V21 anti-regression: NO branchIds.some(...) cross-branch matching (single-tier per movement)', () => {
@@ -368,21 +371,25 @@ describe('Phase 15.4 ML.I-sim — counterparty resolution simulate', () => {
   });
 });
 
-describe('Phase 15.4 ML.G — listStockMovements: includeLegacyMain filter signature', () => {
-  // Source-grep: backendClient.js listStockMovements supports the flag.
+describe('Phase 15.4 ML.G — Phase 17.2: legacy-main alias removed (anti-regression)', () => {
+  // Phase 17.2 (2026-05-05): listStockMovements no longer accepts the
+  // includeLegacyMain flag. The migration script rewrites legacy
+  // `branchId='main'` movements to real branch IDs before deploy.
   const fnStart = backendSrc.indexOf('export async function listStockMovements');
   const fnSlice = backendSrc.slice(fnStart, fnStart + 4000);
 
-  it('ML.G.1 — fnSlice contains includeLegacyMain handling', () => {
-    expect(fnSlice).toMatch(/filters\.includeLegacyMain/);
+  it('ML.G.1 — Phase 17.2: includeLegacyMain handling REMOVED', () => {
+    expect(fnSlice).not.toMatch(/filters\.includeLegacyMain/);
+    expect(fnSlice).not.toMatch(/includeLegacyMain/);
   });
 
-  it('ML.G.2 — aliases array used to expand match set', () => {
-    expect(fnSlice).toMatch(/const\s+aliases\s*=\s*\[branchIdStr\]/);
+  it('ML.G.2 — Phase 17.2: NO aliases array (single-tier branchId equality)', () => {
+    expect(fnSlice).not.toMatch(/const\s+aliases\s*=/);
   });
 
-  it('ML.G.3 — main NOT added to aliases when branchIdStr === "main" (no duplicate)', () => {
-    expect(fnSlice).toMatch(/branchIdStr\s*!==\s*['"]main['"]/);
+  it('ML.G.3 — Phase 17.2: NO `main` literal alias check', () => {
+    expect(fnSlice).not.toMatch(/branchIdStr\s*!==\s*['"]main['"]/);
+    expect(fnSlice).not.toMatch(/aliases\.push\(['"]main['"]\)/);
   });
 
   it('ML.G.4 — V4 anti-regression: NO branchIds.some(...) — single-tier only', () => {
@@ -391,32 +398,33 @@ describe('Phase 15.4 ML.G — listStockMovements: includeLegacyMain filter signa
   });
 });
 
-describe('Phase 15.4 ML.H — MovementLogPanel passes includeLegacyMain only at default branch', () => {
+describe('Phase 15.4 ML.H — Phase 17.2: MovementLogPanel uses strict branch filter (no legacy-main path)', () => {
   const panelSrc = read('src/components/backend/MovementLogPanel.jsx');
 
-  it('ML.H.1 — destructures `branches` from useSelectedBranch', () => {
-    expect(panelSrc).toMatch(/const\s*\{\s*branchId:\s*ctxBranchId\s*,\s*branches\s*\}\s*=\s*useSelectedBranch\(\)/);
+  it('ML.H.1 — destructures branchId via useSelectedBranch (Phase 17.2 — branches no longer needed for default detection)', () => {
+    // Phase 17.2 (2026-05-05): legacy-main detection removed; the panel
+    // only needs the active branchId. May or may not destructure
+    // `branches` (stock locations are loaded via listStockLocations).
+    expect(panelSrc).toMatch(/useSelectedBranch\(\)/);
   });
 
-  it('ML.H.2 — gates includeLegacyMain on stock-tab + default-branch detection', () => {
-    expect(panelSrc).toMatch(/includeLegacyMain\s*=\s*!branchIdOverride/);
-    expect(panelSrc).toMatch(/b\.isDefault\s*===\s*true/);
+  it('ML.H.2 — Phase 17.2: NO includeLegacyMain handling, NO isDefault detection', () => {
+    expect(panelSrc).not.toMatch(/includeLegacyMain/);
+    expect(panelSrc).not.toMatch(/b\.isDefault/);
   });
 
-  it('ML.H.3 — central-tab (branchIdOverride) → includeLegacyMain false (no cross-tier pull)', () => {
-    // The `!branchIdOverride` short-circuit ensures it.
-    expect(panelSrc).toMatch(/!branchIdOverride/);
+  it('ML.H.3 — Phase 17.2: listStockMovements called with strict branch filter', () => {
+    // No cross-tier alias. Each tab passes its own branchId; legacy 'main'
+    // movements are migrated by the Phase 17.2 migration script.
+    expect(panelSrc).toMatch(/listStockMovements\(/);
   });
 
-  it('ML.H.4 — passes includeLegacyMain to listStockMovements call', () => {
-    expect(panelSrc).toMatch(/listStockMovements\([^)]*\)/);
-    // It's in a filters object — verify the filters object has the flag.
-    expect(panelSrc).toMatch(/includeLegacyMain[\s,}]/);
+  it('ML.H.4 — Phase 17.2: NO includeLegacyMain in filters payload (anti-regression)', () => {
+    expect(panelSrc).not.toMatch(/includeLegacyMain[\s,}]/);
   });
 
-  it('ML.H.5 — `main` literal alias check for legacy BranchContext fallback', () => {
-    // When BranchProvider falls back to 'main' (no be_branches), still apply.
-    expect(panelSrc).toMatch(/String\(BRANCH_ID\)\s*===\s*['"]main['"]/);
+  it('ML.H.5 — Phase 17.2: NO `main` literal alias check', () => {
+    expect(panelSrc).not.toMatch(/String\(BRANCH_ID\)\s*===\s*['"]main['"]/);
   });
 });
 

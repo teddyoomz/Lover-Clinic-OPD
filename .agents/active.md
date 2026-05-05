@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-05-05 — Phase 17.1 cross-branch master-data import shipped to master; 5208 tests pass; 1 commit ahead-of-prod"
-status: "master=<phase-17-1-sha> · 5208 tests pass · 1 commit ahead-of-prod (V15 #17 = 5799bd5)"
-current_focus: "Phase 17.1 done. Phase 17.2 brainstorm next on demand. Wiki backfill more on demand."
+updated_at: "2026-05-05 — Phase 17.2 branch-equality (no main branch) shipped to master; 5198 tests pass; 2 commits ahead-of-prod"
+status: "master=<phase-17-2-sha> · 5198 tests pass · 2 commits ahead-of-prod (V15 #17 = 5799bd5; Phase 17.1 ff78426 + Phase 17.2 ahead)"
+current_focus: "Phase 17.2 done — admin SDK migration script awaits separate explicit user authorization to --apply against prod data."
 branch: "master"
-last_commit: "<phase-17-1-sha>"
-tests: 5208
+last_commit: "<phase-17-2-sha>"
+tests: 5198
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "5799bd5"
 firestore_rules_version: 25

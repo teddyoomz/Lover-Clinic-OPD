@@ -265,8 +265,11 @@ describe('V36.G.33-40 — StockTransferPanel src/dst source', () => {
     expect(TRANSFER_PANEL).toMatch(/listStockBatches\s*\(\s*\{\s*branchId:\s*src/);
   });
 
-  test('G.37 — includeLegacyMain gated on isBranchSrc (per V35.x)', () => {
-    expect(TRANSFER_PANEL).toMatch(/includeLegacyMain:\s*isBranchSrc/);
+  test('G.37 — Phase 17.2: NO includeLegacyMain (legacy-main path removed)', () => {
+    // Phase 17.2 (2026-05-05): includeLegacyMain opt deleted from
+    // listStockBatches. Migration script reassigns legacy 'main' batches
+    // to current default branch BEFORE deploy. Anti-regression guard.
+    expect(TRANSFER_PANEL).not.toMatch(/includeLegacyMain/);
   });
 
   test('G.38 — no branchId: "main" hardcode', () => {
@@ -278,9 +281,14 @@ describe('V36.G.33-40 — StockTransferPanel src/dst source', () => {
     expect(TRANSFER_PANEL).not.toMatch(/destinationLocationId:\s*DEFAULT_BRANCH_ID/);
   });
 
-  test('G.40 — V36 lock: transfer cross-tier preserves location-type discriminator', () => {
-    // Transfer can be branch→central, central→branch, branch→branch, etc.
-    expect(TRANSFER_PANEL).toMatch(/deriveLocationType\s*\(\s*src\s*\)/);
+  test('G.40 — Phase 17.2: transfer cross-tier no longer needs deriveLocationType src/dst gate', () => {
+    // Phase 17.2 (2026-05-05): with the includeLegacyMain opt removed
+    // (G.37), the deriveLocationType(src) branch-tier gate is no longer
+    // needed. Transfer cross-tier still works via sourceLocationId +
+    // destinationLocationId; the panel just doesn't need to compute
+    // isBranchSrc to gate the legacy-main fallback any more.
+    // Anti-regression: NO `deriveLocationType(src)` call (removed).
+    expect(TRANSFER_PANEL).not.toMatch(/deriveLocationType\s*\(\s*src\s*\)/);
   });
 });
 
@@ -297,8 +305,10 @@ describe('V36.G.41-48 — StockWithdrawalPanel src/dst source', () => {
     expect(WITHDRAWAL_PANEL).toMatch(/listStockBatches\s*\(\s*\{\s*branchId:\s*src/);
   });
 
-  test('G.44 — includeLegacyMain gated on isBranchSrc', () => {
-    expect(WITHDRAWAL_PANEL).toMatch(/includeLegacyMain:\s*isBranchSrc/);
+  test('G.44 — Phase 17.2: NO includeLegacyMain (legacy-main path removed)', () => {
+    // Phase 17.2 (2026-05-05): includeLegacyMain opt deleted. Migration
+    // script reassigns legacy 'main' rows to current default branch.
+    expect(WITHDRAWAL_PANEL).not.toMatch(/includeLegacyMain/);
   });
 
   test('G.45 — no branchId: "main" hardcode', () => {
@@ -334,15 +344,24 @@ describe('V36.G.45-48 — BranchContext defensive fallback for phantom branches'
     expect(BRANCH_CONTEXT).toMatch(/selectionStillValid\s*=/);
   });
 
-  test('G.46 — fallback re-resolves selectedBranchId when current selection invalid', () => {
+  test('G.46 — Phase 17.2: fallback re-resolves via newest-default (no isDefault flag)', () => {
+    // Phase 17.2 (2026-05-05): isDefault flag stripped. Phantom-branch
+    // fallback now picks the newest accessible branch via
+    // pickFirstLoginDefault — coverage in
+    // tests/phase-17-2-branch-context-rewrite.test.jsx BC1.2.
     expect(BRANCH_CONTEXT).toMatch(/!selectionStillValid/);
-    // Resolves to either the default branch or FALLBACK_ID
-    expect(BRANCH_CONTEXT).toMatch(/list\.find\(b\s*=>\s*b\.isDefault\)/);
+    expect(BRANCH_CONTEXT).toMatch(/pickFirstLoginDefault/);
     expect(BRANCH_CONTEXT).toMatch(/FALLBACK_ID/);
+    // Anti-regression: NO isDefault filter on the fallback path.
+    expect(BRANCH_CONTEXT).not.toMatch(/list\.find\(b\s*=>\s*b\.isDefault\)/);
   });
 
-  test('G.47 — fallback persists new selection to localStorage', () => {
-    expect(BRANCH_CONTEXT).toMatch(/setItem\(STORAGE_KEY/);
+  test('G.47 — Phase 17.2: fallback persists new selection to localStorage (per-uid key)', () => {
+    // Phase 17.2 (2026-05-05): localStorage key is per-uid
+    // (`selectedBranchId:${uid}`) via localStorageKey(uid) helper.
+    // Coverage in tests/phase-17-2-branch-context-rewrite.test.jsx BC1.3.
+    expect(BRANCH_CONTEXT).toMatch(/setItem\(/);
+    expect(BRANCH_CONTEXT).toMatch(/localStorageKey\(/);
   });
 
   test('G.48 — V36 marker on phantom-branch fallback', () => {

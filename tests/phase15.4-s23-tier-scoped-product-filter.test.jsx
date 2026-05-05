@@ -36,11 +36,11 @@ describe('Phase 15.4 S23.A — availableProductIds state + load logic', () => {
     expect(adjustPanelSrc).toMatch(/listStockBatches\(\s*\{\s*branchId:\s*BRANCH_ID[\s\S]{0,200}status:\s*['"]active['"]/);
   });
 
-  it('S23.A.3 — preload uses includeLegacyMain gated by isBranchTier', () => {
-    // The preload MUST honor the same legacy-main gate as the per-product load.
-    // 2 occurrences expected: per-product load + tier-scoped preload, both gated.
-    const matches = adjustPanelSrc.match(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*isBranchTier[^}]*\}\s*\)/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+  it('S23.A.3 — Phase 17.2: NO includeLegacyMain on preload (legacy-main path removed)', () => {
+    // Phase 17.2 (2026-05-05): includeLegacyMain opt deleted. Phase 17.2
+    // migration script reassigns legacy 'main' batches to current default
+    // branch BEFORE deploy. Anti-regression: panel must not pass the flag.
+    expect(adjustPanelSrc).not.toMatch(/includeLegacyMain/);
   });
 
   it('S23.A.4 — derives Set of productIds from loaded batches', () => {
@@ -48,9 +48,10 @@ describe('Phase 15.4 S23.A — availableProductIds state + load logic', () => {
     expect(adjustPanelSrc).toMatch(/ids\.add\(String\(b\.productId\)\)/);
   });
 
-  it('S23.A.5 — useEffect re-fires when BRANCH_ID changes', () => {
-    // Tier change (e.g. selectedWarehouseId switch) must reload available products.
-    expect(adjustPanelSrc).toMatch(/setAvailableProductIds[\s\S]{0,1000}\}\s*,\s*\[BRANCH_ID,\s*isBranchTier\]\)/);
+  it('S23.A.5 — Phase 17.2: useEffect re-fires when BRANCH_ID changes (no isBranchTier dep)', () => {
+    // Phase 17.2 (2026-05-05): isBranchTier dep removed (deriveLocationType
+    // gate gone). Effect re-runs purely on BRANCH_ID switch.
+    expect(adjustPanelSrc).toMatch(/setAvailableProductIds[\s\S]{0,1000}\}\s*,\s*\[BRANCH_ID\]\)/);
   });
 
   it('S23.A.6 — V31 no-silent-swallow on preload error', () => {
@@ -202,10 +203,12 @@ describe('Phase 15.4 S23.D — V14 + V21 anti-regression', () => {
     expect(adjustPanelSrc).toMatch(/createStockAdjustment\([\s\S]{0,200}branchId:\s*BRANCH_ID/);
   });
 
-  it('S23.D.4 — bug 2/v3 legacy-main fallback in per-product batches load preserved', () => {
-    // The per-product batch load must still pass includeLegacyMain so legacy
-    // 'main' batches show at default branch.
-    expect(adjustPanelSrc).toMatch(/Phase 15\.4 \(s19 item 2\)/);
-    expect(adjustPanelSrc).toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*isBranchTier[^}]*\}\s*\)/);
+  it('S23.D.4 — Phase 17.2: per-product batches load uses strict branchId (no legacy-main fallback)', () => {
+    // Phase 17.2 (2026-05-05): legacy-main fallback removed. Per-product
+    // load is now `listStockBatches({ productId, branchId, status })`
+    // with strict branch filter. Migration script handles legacy data.
+    expect(adjustPanelSrc).toMatch(/listStockBatches\(\s*\{[^}]*productId[^}]*branchId:\s*BRANCH_ID/);
+    // Anti-regression: NO includeLegacyMain anywhere.
+    expect(adjustPanelSrc).not.toMatch(/includeLegacyMain/);
   });
 });

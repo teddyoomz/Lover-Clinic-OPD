@@ -463,12 +463,17 @@ describe('Task 4 — scopedDataLayer Layer 2', () => {
     });
   });
 
-  describe('BS2.8 localStorage absence falls back to FALLBACK_ID', () => {
-    it('BS2.8.1 empty localStorage → FALLBACK_ID injected', async () => {
+  describe('BS2.8 Phase 17.2 — localStorage absence falls back to null (no main)', () => {
+    it('BS2.8.1 Phase 17.2 — empty localStorage → null branchId injected (no main fallback)', async () => {
+      // Phase 17.2 (2026-05-05): FALLBACK_ID changed from 'main' literal to
+      // null. resolveSelectedBranchId returns null when localStorage is
+      // empty; callers must guard `!branchId`. Coverage of the runtime
+      // selection in tests/phase-17-2-branch-context-rewrite.test.jsx
+      // BC1.8 (`branchId` not 'main' when no branches exist).
       try { window.localStorage.removeItem('selectedBranchId'); } catch {}
       const scoped = await import('../src/lib/scopedDataLayer.js');
       await scoped.listProducts();
-      expect(calls.listProducts.branchId).toBe('main');
+      expect(calls.listProducts.branchId).toBeNull();
     });
   });
 

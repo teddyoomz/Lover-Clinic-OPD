@@ -1116,9 +1116,9 @@ function CustomerBranchBaselinePanel({ isDark }) {
       .then(list => {
         if (cancelled) return;
         setBranches(list || []);
-        // Default-select the isDefault branch (or first) so admin doesn't
-        // need to pick when there's only one option.
-        const def = (list || []).find(b => b.isDefault) || (list || [])[0];
+        // Phase 17.2 (2026-05-05): listBranches returns newest-first
+        // (no isDefault flag). First item is the canonical landing default.
+        const def = (list || [])[0];
         if (def) setTargetBranchId(String(def.branchId || def.id || ''));
       })
       .catch(() => { if (!cancelled) setBranches([]); })
@@ -1194,7 +1194,8 @@ function CustomerBranchBaselinePanel({ isDark }) {
               : branches.map(b => {
                   const id = String(b.branchId || b.id || '');
                   const name = b.name || b.branchName || id;
-                  return <option key={id} value={id}>{name}{b.isDefault ? ' ⭐' : ''}</option>;
+                  // Phase 17.2 (2026-05-05): isDefault star removed — all branches equal peers.
+                  return <option key={id} value={id}>{name}</option>;
                 })}
           </select>
         </div>

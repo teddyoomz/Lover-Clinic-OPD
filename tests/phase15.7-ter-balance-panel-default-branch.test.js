@@ -33,42 +33,39 @@ describe('Phase 15.7-ter — StockBalancePanel default-branch auto-pick', () => 
     });
   });
 
-  describe('TER2 — auto-pick effect', () => {
+  describe('TER2 — Phase 17.2: auto-pick first branch (isDefault flag removed)', () => {
+    // Phase 17.2 (2026-05-05): isDefault flag stripped. The auto-pick
+    // effect now picks branches[0] — useSelectedBranch already orders
+    // them newest-first + staff-accessible. The first item is the
+    // canonical landing default.
     it('TER2.1 useEffect that watches branches + defaultLocationId', () => {
-      // Find the auto-pick useEffect block (anchored on the marker comment)
-      expect(PanelSrc).toMatch(/Phase 15\.7-ter[\s\S]{0,200}auto-pick the default branch/);
+      expect(PanelSrc).toMatch(/Phase 17\.2[\s\S]{0,300}auto-pick/);
     });
 
     it('TER2.2 effect early-returns when defaultLocationId provided (caller wins)', () => {
-      // Anchor on the unique comment phrase inside the auto-pick effect.
-      const block = PanelSrc.split('auto-pick the default branch when branches arrive')[1] || '';
-      const sliced = block.slice(0, 1500);
-      expect(sliced).toMatch(/if\s*\(defaultLocationId\)\s*return;/);
+      expect(PanelSrc).toMatch(/if\s*\(defaultLocationId\)\s*return;/);
     });
 
     it('TER2.3 effect early-returns when admin already picked a location', () => {
-      const block = PanelSrc.split('auto-pick the default branch when branches arrive')[1] || '';
-      const sliced = block.slice(0, 1500);
-      expect(sliced).toMatch(/if\s*\(userPickedLocation\)\s*return;/);
+      expect(PanelSrc).toMatch(/if\s*\(userPickedLocation\)\s*return;/);
     });
 
-    it('TER2.4 effect uses branches.find with isDefault=true', () => {
-      const block = PanelSrc.split('auto-pick the default branch when branches arrive')[1] || '';
-      const sliced = block.slice(0, 1500);
-      // Tolerate arrow-fn `(b) => b && b.isDefault` (parens inside arg)
-      expect(sliced).toMatch(/branches\.find\([\s\S]{0,80}b\.isDefault/);
+    it('TER2.4 Phase 17.2 — picks branches[0] (no isDefault filter)', () => {
+      // Phase 17.2: isDefault flag REMOVED. branches[0] is the newest +
+      // accessible branch picked by useSelectedBranch ordering.
+      expect(PanelSrc).toMatch(/const\s+first\s*=\s*branches\[0\]/);
+      // Anti-regression: NO `b.isDefault` filter in the auto-pick effect.
+      const effectBlock = PanelSrc.split('Phase 17.2')[1] || '';
+      const sliced = effectBlock.slice(0, 1500);
+      expect(sliced).not.toMatch(/b\.isDefault/);
     });
 
-    it('TER2.5 effect resolves branchId or id from the branch record (V20 multi-branch)', () => {
-      const block = PanelSrc.split('auto-pick the default branch when branches arrive')[1] || '';
-      const sliced = block.slice(0, 1500);
-      expect(sliced).toMatch(/def\.branchId\s*\|\|\s*def\.id/);
+    it('TER2.5 effect resolves branchId or id from the branch record', () => {
+      expect(PanelSrc).toMatch(/first\.branchId\s*\|\|\s*first\.id/);
     });
 
-    it('TER2.6 effect sets locationId to the resolved default-branch id', () => {
-      const block = PanelSrc.split('auto-pick the default branch when branches arrive')[1] || '';
-      const sliced = block.slice(0, 1500);
-      expect(sliced).toMatch(/setLocationId\(String\(defId\)\)/);
+    it('TER2.6 effect sets locationId to the resolved id', () => {
+      expect(PanelSrc).toMatch(/setLocationId\(String\(defId\)\)/);
     });
   });
 
@@ -162,9 +159,11 @@ describe('Phase 15.7-ter — StockBalancePanel default-branch auto-pick', () => 
     });
   });
 
-  describe('TER5 — Anti-regression: original literal "main" default still works as last-resort fallback', () => {
-    it('TER5.1 useState fallback chain unchanged — defaultLocationId || "main"', () => {
-      expect(PanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*'main'\)/);
+  describe('TER5 — Phase 17.2: empty-string fallback (no main literal)', () => {
+    it('TER5.1 Phase 17.2 — useState fallback is empty string (no main literal)', () => {
+      // Phase 17.2 (2026-05-05): no synthetic 'main' fallback. Empty
+      // sentinel until defaultLocationId or branches arrive.
+      expect(PanelSrc).toMatch(/useState\(defaultLocationId\s*\|\|\s*''\)/);
     });
   });
 });

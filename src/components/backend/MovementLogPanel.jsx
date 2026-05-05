@@ -94,22 +94,9 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
   const { branchId: ctxBranchId, branches } = useSelectedBranch();
   const BRANCH_ID = branchIdOverride || ctxBranchId;
 
-  // Phase 15.4 post-deploy bug 2 v3 (2026-04-28): legacy-main fallback for
-  // default branch view. listStockLocations hardcodes id:'main' for the
-  // main branch — all transfer/withdrawal data writes branchId='main' even
-  // when BranchContext returns 'BR-XXX' post-V20. Without this fallback,
-  // stock-tab MovementLog at default branch shows nothing for transfers
-  // involving 'main' (which is the entire history of the default branch).
-  //
-  // Gate: stock tab (no override) AND current branch is default.
-  // Central tab (override set) → no legacy-main pull (would mix tiers).
-  // Non-default branches → no legacy-main (legacy 'main' = default-branch data).
-  const includeLegacyMain = !branchIdOverride && (
-    String(BRANCH_ID) === 'main' ||
-    (Array.isArray(branches) && branches.some(
-      (b) => (b.branchId || b.id) === BRANCH_ID && b.isDefault === true
-    ))
-  );
+  // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
+  // script rewrites all legacy `branchId='main'` movements to real branch
+  // IDs. Strict branchId filter via listStockMovements.
   const isDark = theme === 'dark';
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -154,7 +141,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
   const loadMovements = useCallback(async () => {
     setLoading(true);
     try {
-      const filters = { branchId: BRANCH_ID, includeReversed, includeLegacyMain };
+      const filters = { branchId: BRANCH_ID, includeReversed };
       if (productId) filters.productId = productId;
       const all = await listStockMovements(filters);
       // Filter by typeGroup and date range client-side (list query can't combine all)
@@ -173,7 +160,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
       setMovements(filtered);
     } catch (e) { console.error('[MovementLog] load failed:', e); setMovements([]); }
     finally { setLoading(false); }
-  }, [productId, typeGroup, dateFrom, dateTo, includeReversed, includeLegacyMain, BRANCH_ID]);
+  }, [productId, typeGroup, dateFrom, dateTo, includeReversed, BRANCH_ID]);
 
   useEffect(() => { loadMovements(); }, [loadMovements]);
 

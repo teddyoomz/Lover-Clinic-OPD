@@ -870,14 +870,17 @@ describe('V36.F.12 — Source-grep wiring guards (every UI button writes to the 
     expect(stockUtils).toMatch(/applyNegativeRepay[\s\S]+?createdAt[\s\S]+?localeCompare/);
   });
 
-  test('F.12.8 — Movement Log reader reads listStockMovements with includeLegacyMain on default branch', () => {
+  test('F.12.8 — Phase 17.2: Movement Log reader uses strict branchId filter (no legacy-main)', () => {
+    // Phase 17.2 (2026-05-05): includeLegacyMain opt + isDefault detection
+    // both removed. Migration script reassigns legacy 'main' movements to
+    // current default branch BEFORE deploy. Anti-regression guard.
     const ML = readFileSync(
       resolve(__dirname, '../src/components/backend/MovementLogPanel.jsx'),
       'utf-8'
     );
     expect(ML).toMatch(/listStockMovements/);
-    expect(ML).toMatch(/includeLegacyMain/);
-    expect(ML).toMatch(/isDefault === true/);
+    expect(ML).not.toMatch(/includeLegacyMain/);
+    expect(ML).not.toMatch(/isDefault === true/);
   });
 });
 

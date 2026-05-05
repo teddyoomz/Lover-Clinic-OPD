@@ -1,15 +1,23 @@
 // ─── Branch Selection — pure JS storage helpers ──────────────────────────
-// Phase BS (2026-05-06): extracted from BranchContext.jsx so the data
-// layer (backendClient.js, cloneOrchestrator.js, /api/* helpers) can
-// resolve the current selected branch WITHOUT importing a React-flavored
-// .jsx file. V36 audit invariant G.51 forbids `BranchContext.jsx`
-// imports in backendClient.js to prevent React context leaking into the
-// data layer.
+// Phase BS (2026-05-06) + Phase 17.2 (2026-05-05): extracted from
+// BranchContext.jsx so the data layer (backendClient.js, cloneOrchestrator.js,
+// /api/* helpers) can resolve the current selected branch WITHOUT importing
+// a React-flavored .jsx file. V36 audit invariant G.51 forbids
+// `BranchContext.jsx` imports in backendClient.js to prevent React context
+// leaking into the data layer.
+//
+// Phase 17.2 (2026-05-05): Branch equality + no-'main'.
+//   - FALLBACK_ID is now `null` (was `'main'`). Pre-V20 single-branch
+//     deployments are gone; no synthetic 'main' branch is ever conjured.
+//   - Callers MUST guard on `!branchId` (resolveSelectedBranchId may
+//     return null when no branches exist or localStorage hasn't been
+//     primed yet).
 //
 // Single source of truth for:
-//   - localStorage key the BranchProvider persists to
-//   - FALLBACK_ID ('main') — pre-V20 single-branch deployments default
-//     hardcoded everywhere; this constant is the canonical export.
+//   - localStorage key the BranchProvider persists to (per-uid suffix
+//     handled inside BranchContext.jsx; this module reads the legacy
+//     unkeyed key as a last-resort fallback only).
+//   - FALLBACK_ID (null) — sentinel for "no selection persisted yet".
 //   - resolveSelectedBranchId() — synchronous getter for non-React code
 //     (lib helpers, async handlers, server endpoints unaware of React).
 //
@@ -17,19 +25,21 @@
 // component callsites importing from BranchContext.jsx keep working.
 
 export const STORAGE_KEY = 'selectedBranchId';
-export const FALLBACK_ID = 'main';
+export const FALLBACK_ID = null;
 
 /**
  * Synchronous getter for the currently selected branchId. Reads
- * localStorage directly; returns FALLBACK_ID when localStorage is
- * unavailable (SSR, sandbox) or empty (first run).
+ * localStorage directly; returns FALLBACK_ID (null) when localStorage is
+ * unavailable (SSR, sandbox) or empty (first run before BranchProvider
+ * has resolved newest-default).
  *
- * @returns {string}
+ * @returns {string|null}
  */
 export function resolveSelectedBranchId() {
   try {
     if (typeof window === 'undefined') return FALLBACK_ID;
-    return window.localStorage?.getItem(STORAGE_KEY) || FALLBACK_ID;
+    const stored = window.localStorage?.getItem(STORAGE_KEY);
+    return stored || FALLBACK_ID;
   } catch {
     return FALLBACK_ID;
   }
@@ -51,7 +61,7 @@ export function setSelectedBranchId(id) {
 
 /**
  * Wipe the persisted choice so the next BranchProvider mount re-resolves
- * to the isDefault branch (or FALLBACK_ID if no branches exist).
+ * to the newest-created branch (or FALLBACK_ID/null if no branches exist).
  */
 export function resetBranchSelection() {
   try {

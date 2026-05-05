@@ -199,19 +199,9 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
         </div>
       </div>
 
-      {/* Our extensions: isDefault + status + note */}
-      <div data-field="isDefault" className="flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)]">
-        <input
-          type="checkbox"
-          id="isDefault-check"
-          checked={!!form.isDefault}
-          onChange={(e) => update({ isDefault: e.target.checked })}
-          className="w-4 h-4 rounded accent-amber-500"
-        />
-        <label htmlFor="isDefault-check" className="text-sm text-[var(--tx-primary)] cursor-pointer">
-          สาขาหลัก — ใช้เป็น default เมื่อสร้างข้อมูลใหม่
-        </label>
-      </div>
+      {/* Phase 17.2 (2026-05-05): isDefault checkbox stripped — all branches
+          are equal peers. Newest-created branch is the implicit landing
+          default (resolved in BranchContext.jsx). */}
 
       <div className="grid grid-cols-2 gap-3">
         <div data-field="status">

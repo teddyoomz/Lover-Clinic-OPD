@@ -28,11 +28,22 @@ describe('BS-B.1 — BranchSelector top-right mount in BackendDashboard', () => 
     );
   });
 
-  it('imports BranchProvider and wraps the dashboard', () => {
-    expect(dashboardSrc).toMatch(
-      /import\s+\{\s*BranchProvider\s*\}\s+from\s+['"][^'"]*BranchContext/,
+  it('Phase 17.2 — BranchProvider hoisted to App.jsx (BackendDashboard no longer wraps)', () => {
+    // Phase 17.2 (2026-05-05): BranchProvider lifted from BackendDashboard
+    // to App.jsx so the selected branch is available across all admin /
+    // patient pages from session start. Coverage in
+    // tests/phase-17-2-app-provider-hoist.test.jsx AP1.1-AP1.5.
+    const appSrc = readFileSync(
+      resolve(__dirname, '../src/App.jsx'),
+      'utf-8',
     );
-    expect(dashboardSrc).toMatch(/<BranchProvider>/);
+    expect(appSrc).toMatch(
+      /import[^;]*BranchProvider[^;]*BranchContext/,
+    );
+    expect(appSrc).toMatch(/<BranchProvider>/);
+    // BackendDashboard no longer imports/wraps it (live-code check; comments OK).
+    const codeOnly = dashboardSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(codeOnly).not.toMatch(/<BranchProvider/);
   });
 
   it('mounts <BranchSelector /> in the breadcrumb topbar slot', () => {
@@ -50,9 +61,13 @@ describe('BS-B.1 — BranchSelector top-right mount in BackendDashboard', () => 
   });
 });
 
-describe('BS-B.2 — BranchSelector auto-hide when scoped < 2', () => {
-  it('returns null when branches.length < 2', () => {
-    expect(selectorSrc).toMatch(/branches\.length\s*<\s*2/);
+describe('BS-B.2 — BranchSelector auto-hide via useBranchVisibility (Phase 17.2)', () => {
+  it('Phase 17.2 — uses useBranchVisibility().showSelector instead of branches.length < 2', () => {
+    // Phase 17.2 (2026-05-05): zero accessible branches → null.
+    // Single accessible branch → static label (no dropdown).
+    // 2+ → dropdown.
+    expect(selectorSrc).toMatch(/useBranchVisibility/);
+    expect(selectorSrc).toMatch(/showSelector/);
     expect(selectorSrc).toMatch(/return\s+null/);
   });
 

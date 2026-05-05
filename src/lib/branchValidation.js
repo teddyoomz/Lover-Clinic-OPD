@@ -1,10 +1,14 @@
 // ─── Branch validation — Phase 11.6 pure helpers ──────────────────────────
 // Triangle (Rule F, 2026-04-20): `opd.js forms /admin/branch` revealed ~18+
 // fields including 7-day opening-hours matrix. Phase 11.6 ships the CORE
-// identification/contact/address/map fields (13) + our `status` + `isDefault`
-// extensions. The weekly schedule (is_<dow>_open + <dow>_opening_time +
+// identification/contact/address/map fields (13) + our `status` extension.
+// The weekly schedule (is_<dow>_open + <dow>_opening_time +
 // <dow>_closing_time × 7 days) is deferred to Phase 13 where it pairs with
 // staff schedules and the AppointmentTab booking flow.
+//
+// Phase 17.2 (2026-05-05): isDefault stripped — all branches are equal
+// peers. Newest-created branch is the implicit landing default (resolved
+// in BranchContext.jsx). No mutual-exclusion flag, no "primary" branch.
 
 export const STATUS_OPTIONS = Object.freeze(['ใช้งาน', 'พักใช้งาน']);
 
@@ -74,11 +78,6 @@ export function validateBranch(form) {
     return ['status', 'สถานะไม่ถูกต้อง'];
   }
 
-  // isDefault must be boolean if provided
-  if (form.isDefault != null && typeof form.isDefault !== 'boolean') {
-    return ['isDefault', 'isDefault ต้องเป็น boolean'];
-  }
-
   return null;
 }
 
@@ -96,7 +95,6 @@ export function emptyBranchForm() {
     latitude: '',
     longitude: '',
     note: '',
-    isDefault: false,
     status: 'ใช้งาน',
   };
 }
@@ -118,7 +116,6 @@ export function normalizeBranch(form) {
     latitude: coerceNum(form.latitude),
     longitude: coerceNum(form.longitude),
     note: trim(form.note),
-    isDefault: !!form.isDefault,
     status: form.status || 'ใช้งาน',
   };
 }

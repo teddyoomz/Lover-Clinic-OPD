@@ -17,11 +17,12 @@ import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
-// Phase 14.7.H follow-up A — branch-aware sale + stock writes (defensive
-// import: TreatmentFormPage is reachable both in BackendDashboard's
-// BranchProvider AND from AdminDashboard's create-treatment overlay where
-// no provider exists. The hook falls back to 'main' when no provider is
-// mounted, preserving legacy behavior.).
+// Phase 14.7.H follow-up A — branch-aware sale + stock writes.
+// Phase 17.2 (2026-05-05): BranchProvider hoisted to App.jsx so every
+// reachable mount of TreatmentFormPage (BackendDashboard, AdminDashboard
+// overlay, public-link routes) sees the same provider. The hook returns
+// the user's persisted selection (per-uid localStorage) or `null` until
+// branches load — callers guard with `branchId || ''` defensive defaults.
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUtils.js';
 // T5.b (2026-04-26) — billing math + BMI + baht formatter extracted to
@@ -319,9 +320,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   }
   const isEdit = mode === 'edit';
   const accent = isDark ? '#a78bfa' : '#7c3aed';
-  // Phase 14.7.H follow-up A — resolve current branch for sale + stock writes.
-  // Falls back to 'main' when no BranchProvider is mounted (e.g. when
-  // TreatmentFormPage is opened from AdminDashboard create-treatment flow).
+  // Phase 14.7.H follow-up A + Phase 17.2 — resolve current branch for sale
+  // + stock writes. BranchProvider is hoisted to App.jsx (Phase 17.2), so
+  // SELECTED_BRANCH_ID always resolves to a real branchId (or null until
+  // BranchContext snapshot resolves; callers guard via isReady).
   const { branchId: SELECTED_BRANCH_ID } = useSelectedBranch();
 
   // Phase 17.0 (BS-9) — clear modal caches on branch switch so subsequent

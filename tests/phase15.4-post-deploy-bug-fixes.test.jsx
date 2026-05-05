@@ -81,42 +81,33 @@ describe('Phase 15.4 PD.B — V11 RTL smoke: OrderCreateForm renders without thr
 });
 
 // ============================================================================
-describe('Phase 15.4 PD.C — Bug 4 fix: includeLegacyMain gated on branch-tier', () => {
+describe('Phase 15.4 PD.C — Phase 17.2: includeLegacyMain opt removed (anti-regression)', () => {
+  // Phase 17.2 (2026-05-05): the entire includeLegacyMain opt was deleted
+  // from listStockBatches + listStockMovements. The Phase 17.2 migration
+  // script reassigns legacy `branchId='main'` rows to the current default
+  // branch BEFORE the deploy that removes the fallback. Stock create
+  // panels no longer need the deriveLocationType branch-tier gate either —
+  // every selected branch is a real branchId (be_branches doc) and central
+  // tier is identified by warehouse-id via a separate filterLocationId
+  // prop, not via deriveLocationType.
   const adjustSrc = read('src/components/backend/StockAdjustPanel.jsx');
   const transferSrc = read('src/components/backend/StockTransferPanel.jsx');
   const withdrawalSrc = read('src/components/backend/StockWithdrawalPanel.jsx');
 
-  it('PD.C.1 — StockAdjustPanel imports deriveLocationType + LOCATION_TYPE', () => {
-    expect(adjustSrc).toMatch(
-      /import\s*\{\s*deriveLocationType,\s*LOCATION_TYPE\s*\}\s+from\s+['"]\.\.\/\.\.\/lib\/stockUtils\.js['"]/
-    );
+  it('PD.C.1 — Phase 17.2: StockAdjustPanel does NOT pass includeLegacyMain', () => {
+    expect(adjustSrc).not.toMatch(/includeLegacyMain/);
   });
 
-  it('PD.C.2 — StockAdjustPanel passes includeLegacyMain: isBranchTier (NOT always true)', () => {
-    expect(adjustSrc).toMatch(
-      /const\s+isBranchTier\s*=\s*deriveLocationType\(BRANCH_ID\)\s*===\s*LOCATION_TYPE\.BRANCH/
-    );
-    expect(adjustSrc).toMatch(/includeLegacyMain:\s*isBranchTier/);
-    // Anti-regression: the bare `includeLegacyMain: true` (always-on) is GONE.
-    expect(adjustSrc).not.toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+  it('PD.C.2 — Phase 17.2: StockAdjustPanel listStockBatches has no includeLegacyMain key', () => {
+    expect(adjustSrc).not.toMatch(/listStockBatches\([\s\S]{0,300}includeLegacyMain/);
   });
 
-  it('PD.C.3 — StockTransferPanel imports + uses deriveLocationType for src tier check', () => {
-    expect(transferSrc).toMatch(
-      /import\s*\{\s*deriveLocationType,\s*LOCATION_TYPE\s*\}\s+from\s+['"]\.\.\/\.\.\/lib\/stockUtils\.js['"]/
-    );
-    expect(transferSrc).toMatch(/deriveLocationType\(src\)/);
-    expect(transferSrc).toMatch(/includeLegacyMain:\s*isBranchSrc/);
-    expect(transferSrc).not.toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+  it('PD.C.3 — Phase 17.2: StockTransferPanel does NOT pass includeLegacyMain', () => {
+    expect(transferSrc).not.toMatch(/includeLegacyMain/);
   });
 
-  it('PD.C.4 — StockWithdrawalPanel imports + uses deriveLocationType for src tier check', () => {
-    expect(withdrawalSrc).toMatch(
-      /import\s*\{\s*deriveLocationType,\s*LOCATION_TYPE\s*\}\s+from\s+['"]\.\.\/\.\.\/lib\/stockUtils\.js['"]/
-    );
-    expect(withdrawalSrc).toMatch(/deriveLocationType\(src\)/);
-    expect(withdrawalSrc).toMatch(/includeLegacyMain:\s*isBranchSrc/);
-    expect(withdrawalSrc).not.toMatch(/listStockBatches\(\s*\{[^}]*includeLegacyMain:\s*true[^}]*\}\s*\)/);
+  it('PD.C.4 — Phase 17.2: StockWithdrawalPanel does NOT pass includeLegacyMain', () => {
+    expect(withdrawalSrc).not.toMatch(/includeLegacyMain/);
   });
 });
 

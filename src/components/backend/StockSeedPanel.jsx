@@ -50,14 +50,11 @@ export default function StockSeedPanel({ onClose, onSaved }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // V35.3 (2026-04-28) — same multi-reader sweep as _deductOneItem fix.
-      // Default-branch (BR-XXX) batches that were imported pre-V20 carry
-      // `branchId='main'` and would be invisible here; opening-balance
-      // panel needs to see them so admin doesn't double-seed. Match the
-      // 5-other-panels pattern (Adjust/Balance/Withdrawal/Transfer).
+      // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
+      // rewrites legacy batches to real branch IDs. Strict branchId filter.
       const [prods, batches] = await Promise.all([
         listProducts(),
-        listStockBatches({ branchId: BRANCH_ID, status: 'active', includeLegacyMain: true }),
+        listStockBatches({ branchId: BRANCH_ID, status: 'active' }),
       ]);
       const map = new Map();
       for (const b of batches || []) {

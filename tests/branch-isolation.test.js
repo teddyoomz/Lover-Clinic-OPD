@@ -42,33 +42,40 @@ describe('BR1: BranchContext + useSelectedBranch hook', () => {
     expect(SRC).toMatch(/export function BranchProvider/);
   });
 
-  it('BR1.2: exports useSelectedBranch hook with safe fallback', () => {
+  it('BR1.2: exports useSelectedBranch hook (Phase 17.2 — no FALLBACK_ID branchId fallback)', () => {
+    // Phase 17.2 (2026-05-05): hook still exports + still safe-defaults
+    // when no provider mounted, but the fallback branchId is null (not
+    // 'main'). Coverage of the runtime null fallback is in
+    // tests/phase-17-2-branch-context-rewrite.test.jsx BC1.8.
     expect(SRC).toMatch(/export function useSelectedBranch/);
     expect(SRC).toMatch(/if\s*\(!ctx\)/);
-    expect(SRC).toMatch(/branchId:\s*FALLBACK_ID/);
   });
 
-  it('BR1.3: persists selection to localStorage under stable key', () => {
-    // Phase BS — STORAGE_KEY now lives in branchSelection.js (canonical).
+  it('BR1.3: persists selection to localStorage (Phase 17.2 — per-uid key)', () => {
+    // Phase 17.2 (2026-05-05): localStorage key is now per-uid:
+    // `selectedBranchId:${uid}`. Phase 17.2 BC1.3/4/7 cover the runtime
+    // semantics; this guard keeps the source-grep regression for the
+    // base STORAGE_KEY constant.
     expect(COMBINED).toMatch(/STORAGE_KEY\s*=\s*['"]selectedBranchId['"]/);
-    // setItem still happens in BranchContext.jsx (BranchProvider's
-    // selectBranch closure) — unchanged.
-    expect(SRC).toMatch(/window\.localStorage\?\.setItem\(STORAGE_KEY/);
+    // setItem still happens — but now uses localStorageKey(uid) helper.
+    expect(SRC).toMatch(/setItem\(/);
     // getItem present in either file (initializer + resolveSelectedBranchId).
-    expect(COMBINED).toMatch(/window\.localStorage\?\.getItem\(STORAGE_KEY\)/);
+    expect(COMBINED).toMatch(/getItem\(/);
   });
 
   it('BR1.4: subscribes to be_branches via onSnapshot (live updates)', () => {
     expect(SRC).toMatch(/onSnapshot\(branchesCol\(\)/);
   });
 
-  it('BR1.5: auto-selects isDefault=true branch when localStorage cache is empty/stale', () => {
-    expect(SRC).toMatch(/list\.find\(b\s*=>\s*b\.isDefault\)/);
-    // V36 (2026-04-29) — renamed cachedStillValid → selectionStillValid
-    // when adding the post-mount validity check (phantom branch fallback).
-    // Either name satisfies the contract: there's a validity boolean +
-    // it's used to decide whether to re-resolve the default branch.
-    expect(SRC).toMatch(/(cachedStillValid|selectionStillValid)\s*=/);
+  it('BR1.5: Phase 17.2 — newest-created branch is the first-login default (no isDefault flag)', () => {
+    // Phase 17.2 (2026-05-05): `isDefault` flag stripped. First-login
+    // default = newest createdAt among accessible branches.
+    // Coverage of the runtime selection in
+    // tests/phase-17-2-branch-context-rewrite.test.jsx BC1.2.
+    expect(SRC).toMatch(/pickFirstLoginDefault/);
+    // V36 (2026-04-29) → Phase 17.2: selectionStillValid is the validity
+    // gate (was cachedStillValid). Source-grep keeps the gate present.
+    expect(SRC).toMatch(/(cachedStillValid|selectionStillValid|isStillValid)\s*=/);
   });
 
   it('BR1.6: exports resolveSelectedBranchId for non-React callers', () => {
@@ -84,9 +91,11 @@ describe('BR1: BranchContext + useSelectedBranch hook', () => {
     expect(SRC).toMatch(/export\s+(const|function)\s+resetBranchSelection/);
   });
 
-  it('BR1.8: FALLBACK_ID is "main" (back-compat with hardcoded data)', () => {
-    // Phase BS — canonical FALLBACK_ID in branchSelection.js.
-    expect(COMBINED).toMatch(/FALLBACK_ID\s*=\s*['"]main['"]/);
+  it('BR1.8: FALLBACK_ID is null (Phase 17.2 — no main fallback)', () => {
+    // Phase 17.2 (2026-05-05): FALLBACK_ID changed from 'main' literal
+    // to null. Pre-V20 hardcoded 'main' branch is gone; every branch is
+    // a peer. Callers MUST guard on `!branchId`.
+    expect(COMBINED).toMatch(/FALLBACK_ID\s*=\s*null/);
   });
 
   it('BR1.9: provider value object includes branchId, branches, selectBranch, isReady', () => {
@@ -110,8 +119,11 @@ describe('BR2: BranchSelector dropdown UI', () => {
     expect(SRC).toMatch(/useSelectedBranch/);
   });
 
-  it('BR2.2: auto-hides when fewer than 2 branches (single-branch clinic)', () => {
-    expect(SRC).toMatch(/branches\.length\s*<\s*2/);
+  it('BR2.2: Phase 17.2 — auto-hides via useBranchVisibility (zero → null, one → static label, 2+ → dropdown)', () => {
+    // Phase 17.2 (2026-05-05): replaced raw `branches.length < 2` check
+    // with useBranchVisibility().showSelector + accessible-branches gate.
+    expect(SRC).toMatch(/useBranchVisibility/);
+    expect(SRC).toMatch(/showSelector/);
     expect(SRC).toMatch(/return null/);
   });
 
@@ -125,8 +137,13 @@ describe('BR2: BranchSelector dropdown UI', () => {
     expect(SRC).toMatch(/aria-label="เลือกสาขา"/);
   });
 
-  it('BR2.5: marks isDefault branch with star indicator', () => {
-    expect(SRC).toMatch(/b\.isDefault\s*\?\s*['"]\s*⭐['"]/);
+  it('BR2.5: Phase 17.2 — NO star indicator (all branches equal, no isDefault flag)', () => {
+    // Phase 17.2 (2026-05-05): isDefault flag stripped; option labels are
+    // now plain branch names. Anti-regression guard: no `⭐` literal in
+    // option-label code paths.
+    expect(SRC).not.toMatch(/b\.isDefault/);
+    // Option label is just the branch name (no star prefix logic).
+    expect(SRC).toMatch(/<option key=\{id\} value=\{id\}>\{name\}<\/option>/);
   });
 });
 
@@ -370,11 +387,19 @@ describe('BR8: anti-regression source-grep — no hardcoded BRANCH_ID literals',
     });
   });
 
-  it('BR8.3: BackendDashboard wraps render tree in <BranchProvider>', () => {
-    const src = READ('src/pages/BackendDashboard.jsx');
-    expect(src).toMatch(/<BranchProvider>/);
-    expect(src).toMatch(/<\/BranchProvider>/);
-    expect(src).toMatch(/import\s*\{\s*BranchProvider\s*\}\s*from\s*['"]\.\.\/lib\/BranchContext\.jsx['"]/);
+  it('BR8.3: Phase 17.2 — App.jsx wraps render tree in <BranchProvider> (hoisted from BackendDashboard)', () => {
+    // Phase 17.2 (2026-05-05): BranchProvider hoisted from
+    // BackendDashboard → App.jsx so the selected branch is available to
+    // all admin/patient pages from the moment the user lands. Coverage
+    // in tests/phase-17-2-app-provider-hoist.test.jsx AP1.1-AP1.5.
+    const appSrc = READ('src/App.jsx');
+    expect(appSrc).toMatch(/<BranchProvider>/);
+    expect(appSrc).toMatch(/<\/BranchProvider>/);
+    expect(appSrc).toMatch(/import[^;]*BranchProvider[^;]*BranchContext/);
+    // Anti-regression: BackendDashboard no longer imports/wraps it.
+    const bdSrc = READ('src/pages/BackendDashboard.jsx');
+    const bdCodeOnly = bdSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(bdCodeOnly).not.toMatch(/<BranchProvider/);
   });
 
   it('BR8.4: BackendDashboard renders <BranchSelector /> in header slot', () => {

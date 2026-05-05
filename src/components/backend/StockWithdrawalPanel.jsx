@@ -21,7 +21,8 @@ import ActorConfirmModal from './ActorConfirmModal.jsx';
 import Pagination from './Pagination.jsx';
 import { usePagination } from '../../lib/usePagination.js';
 // Phase 15.4 fix — gate legacy-main fallback to branch-tier source only.
-import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
+// Phase 17.2 (2026-05-05): deriveLocationType / LOCATION_TYPE no longer
+// needed — legacy-main fallback removed (strict branchId filter).
 // Phase 15.7-bis (2026-04-28) — banner UX for auto-repay of negative balances.
 import { formatNegativeRepayBanner, hasNegativeRepay } from '../../lib/negativeRepayBanner.js';
 // Phase 15.6 / V35.1 (2026-04-28) — searchable batch picker (Rule C1).
@@ -286,10 +287,9 @@ function WithdrawalCreateForm({ locations, sellers, sellersLoading, onClose, onS
     setBatchesLoading(true);
     (async () => {
       try {
-        // Phase 15.4 (s19 item 2) — includeLegacyMain for pre-V20 batches.
-        // Post-deploy bug 4 fix: only opt-in when source is branch tier.
-        const isBranchSrc = deriveLocationType(src) === LOCATION_TYPE.BRANCH;
-        const list = await listStockBatches({ branchId: src, status: 'active', includeLegacyMain: isBranchSrc });
+        // Phase 17.2 (2026-05-05): legacy-main fallback removed — strict
+        // branchId filter (migration rewrites legacy batches to real branch IDs).
+        const list = await listStockBatches({ branchId: src, status: 'active' });
         if (!cancelled) setBatches(list);
       } catch { if (!cancelled) setBatches([]); }
       finally { if (!cancelled) setBatchesLoading(false); }

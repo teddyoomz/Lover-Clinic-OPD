@@ -4,6 +4,7 @@ import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firesto
 import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
 import { auth, db, appId } from './firebase.js';
 import { UserPermissionProvider } from './contexts/UserPermissionContext.jsx';
+import { BranchProvider } from './lib/BranchContext.jsx';
 // DEBUG: expose auth for console API calls (DEV ONLY — Vite tree-shakes
 // the entire `if` block in prod builds; closes Rule C2 security exposure
 // surfaced by pre-Phase-15 survey scout 2026-04-26).
@@ -214,10 +215,19 @@ export default function App() {
   // UserPermissionProvider wraps so any descendant (BackendNav, tabs,
   // critical-action buttons) can call useUserPermission() / useTabAccess()
   // to gate visibility + actions. Phase 13.5.1.
+  // Phase 17.2 (2026-05-05) — BranchProvider hoisted from BackendDashboard
+  // to App.jsx. Mounted INSIDE UserPermissionProvider so BranchProvider can
+  // read `user.uid` (per-uid localStorage key) + `staff.branchIds[]`
+  // (accessible-branch filter for first-login default selection). One
+  // BranchProvider per backend mount; selection persists per-uid across
+  // refreshes and can't leak across logout-login-as-different-user on the
+  // same device.
   if (backendMode === '1') {
     return (
       <UserPermissionProvider user={user}>
-        <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
+        <BranchProvider>
+          <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
+        </BranchProvider>
       </UserPermissionProvider>
     );
   }

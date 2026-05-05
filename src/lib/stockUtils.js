@@ -454,10 +454,9 @@ export function pickNegativeTargetBatch({ allocations, branchBatches, branchId, 
     .filter((b) => {
       if (!b || !b.batchId) return false;
       if (productId && String(b.productId) !== String(productId)) return false;
-      // Phase 15.7: legacy 'main' batches at default branch — caller is
-      // expected to have already widened the read via includeLegacyMain;
-      // if branchId is supplied here we still match strict-equality so
-      // central-tier callers don't accidentally pick a branch lot.
+      // Phase 17.2 (2026-05-05): includeLegacyMain widening removed —
+      // all branches equal peers, no synthetic 'main' branch. Strict
+      // branchId equality preserves central-tier isolation.
       if (branchId && String(b.branchId) !== String(branchId)) return false;
       return true;
     })

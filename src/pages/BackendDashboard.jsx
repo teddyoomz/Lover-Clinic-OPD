@@ -20,7 +20,8 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ProfileDropdown from '../components/backend/ProfileDropdown.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
 import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
-import { BranchProvider } from '../lib/BranchContext.jsx';
+// Phase 17.2 (2026-05-05) — BranchProvider hoisted to App.jsx; this file
+// no longer wraps. BranchSelector still rendered here (top-bar slot).
 import BranchSelector from '../components/backend/BranchSelector.jsx';
 
 import CloneTab from '../components/backend/CloneTab.jsx';
@@ -257,7 +258,6 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   );
 
   return (
-    <BranchProvider>
     <BackendNav
       activeTabId={activeTab}
       onNavigate={handleNavigate}
@@ -570,7 +570,6 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         />
       )}
     </BackendNav>
-    </BranchProvider>
   );
 }
 

@@ -37,7 +37,8 @@ import { productDisplayName } from '../../lib/productValidation.js';
 // Phase 15.4 fix (post-deploy bug 4) — gate legacy-main fallback to branch-tier
 // only. When CentralStockTab passes branchIdOverride=WH-XXX, we MUST NOT pull
 // 'main' (branch-tier) batches into the central adjust picker.
-import { deriveLocationType, LOCATION_TYPE } from '../../lib/stockUtils.js';
+// Phase 17.2 (2026-05-05): deriveLocationType / LOCATION_TYPE no longer
+// needed here — legacy-main fallback removed (strict branchId filter).
 
 function currentAuditUser() {
   const u = auth.currentUser;
@@ -238,7 +239,6 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   // resolved to `undefined` at runtime, causing batch picker to show empty.
   // Now explicitly threaded so central-tier adjusts work correctly.
   const BRANCH_ID = branchId;
-  const isBranchTier = deriveLocationType(BRANCH_ID) === LOCATION_TYPE.BRANCH;
 
   // 2026-04-27 actor tracking — required ผู้ทำรายการ picker.
   const [actorId, setActorId] = useState('');
@@ -270,7 +270,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
     let cancelled = false;
     (async () => {
       try {
-        const list = await listStockBatches({ branchId: BRANCH_ID, status: 'active', includeLegacyMain: isBranchTier });
+        const list = await listStockBatches({ branchId: BRANCH_ID, status: 'active' });
         if (cancelled) return;
         const ids = new Set();
         for (const b of list || []) {
@@ -283,7 +283,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
       }
     })();
     return () => { cancelled = true; };
-  }, [BRANCH_ID, isBranchTier]);
+  }, [BRANCH_ID]);
 
   const availableProducts = useMemo(() => {
     if (!availableProductIds) return []; // still loading
@@ -292,17 +292,15 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
   }, [products, availableProductIds]);
 
   // Load batches when product picked.
-  // Phase 15.4 (s19 item 2): includeLegacyMain so pre-V20 batches written
-  // with branchId='main' surface in picker until admin migrates.
-  // Bug 4 (s20): gated to BRANCH tier only — central-tier MUST NOT pull
-  // 'main' branch-tier batches into its picker.
+  // Phase 17.2 (2026-05-05): legacy-main fallback removed — strict
+  // branchId filter (migration rewrites legacy batches to real branch IDs).
   useEffect(() => {
     if (!productId) { setBatches([]); setBatchId(''); return; }
     let cancelled = false;
     setBatchesLoading(true);
     (async () => {
       try {
-        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active', includeLegacyMain: isBranchTier });
+        const list = await listStockBatches({ productId, branchId: BRANCH_ID, status: 'active' });
         if (!cancelled) {
           setBatches(list);
           // auto-pick first available batch
@@ -315,7 +313,7 @@ function AdjustCreateForm({ isDark, products, productsLoading, prefillProduct, b
       } finally { if (!cancelled) setBatchesLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [productId, BRANCH_ID, isBranchTier]);
+  }, [productId, BRANCH_ID]);
 
   const selectedBatch = useMemo(() => batches.find(b => b.batchId === batchId), [batches, batchId]);
   const actorUser = resolveActorUser(actorId, sellers);

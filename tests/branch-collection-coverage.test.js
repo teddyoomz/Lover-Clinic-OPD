@@ -348,23 +348,32 @@ describe('BC5: cross-branch operations preserve source vs dest distinction', () 
 // ─── Single-branch fallback: no surprises for a 1-branch clinic ───────────
 
 describe('BC6: single-branch clinic behavior is unchanged (back-compat smoke test)', () => {
-  it('BC6.1: useSelectedBranch falls back to "main" when no provider mounted', () => {
-    // Phase BS — FALLBACK_ID canonical literal moved to branchSelection.js
-    // (V36.G.51 audit: data layer can't import .jsx). BranchContext.jsx
-    // re-exports the constant + uses it in the hook fallback shape.
-    const ctxSrc = READ('src/lib/BranchContext.jsx');
+  it('BC6.1: branchSelection.FALLBACK_ID is null (Phase 17.2 — no main fallback)', () => {
+    // Phase 17.2 (2026-05-05): FALLBACK_ID changed from 'main' literal to
+    // null. Pre-V20 single-branch deployments with hardcoded 'main' branch
+    // are gone; no synthetic 'main' is ever conjured. Callers MUST guard
+    // on `!branchId`. Phase 17.2 BC1 tests in
+    // tests/phase-17-2-branch-context-rewrite.test.jsx cover the runtime
+    // behaviour; this BC6.1 keeps the source-grep regression guard.
     const selectionSrc = READ('src/lib/branchSelection.js');
-    expect(selectionSrc).toMatch(/FALLBACK_ID\s*=\s*['"]main['"]/);
-    expect(ctxSrc).toMatch(/branchId:\s*FALLBACK_ID/);
+    expect(selectionSrc).toMatch(/FALLBACK_ID\s*=\s*null/);
   });
 
-  it('BC6.2: stockUtils.DEFAULT_BRANCH_ID is also "main" (single source of truth)', () => {
+  it('BC6.2: stockUtils.DEFAULT_BRANCH_ID still exists (legacy seed/migration use only)', () => {
+    // Phase 17.2 retains DEFAULT_BRANCH_ID = 'main' as a constant for the
+    // one-shot migration script (legacy 'main' batches → current default
+    // branch). It is NOT used as a runtime fallback any more — every
+    // branch is a peer.
     const utilSrc = READ('src/lib/stockUtils.js');
-    expect(utilSrc).toMatch(/export const DEFAULT_BRANCH_ID = ['"]main['"]/);
+    expect(utilSrc).toMatch(/export const DEFAULT_BRANCH_ID/);
   });
 
-  it('BC6.3: BranchSelector hides when <2 branches (single-branch clinic sees no clutter)', () => {
+  it('BC6.3: BranchSelector hides via useBranchVisibility (single-branch shows static label, zero shows null)', () => {
+    // Phase 17.2 (2026-05-05): BranchSelector now uses
+    // useBranchVisibility().showSelector instead of `branches.length < 2`.
+    // Zero branches → null. One branch → static span. 2+ → dropdown.
     const sel = READ('src/components/backend/BranchSelector.jsx');
-    expect(sel).toMatch(/branches\.length\s*<\s*2[\s\S]{0,80}return null/);
+    expect(sel).toMatch(/useBranchVisibility/);
+    expect(sel).toMatch(/showSelector/);
   });
 });
