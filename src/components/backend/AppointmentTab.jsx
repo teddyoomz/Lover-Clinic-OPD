@@ -276,8 +276,12 @@ export default function AppointmentTab({ clinicSettings, theme }) {
 
   const rooms = useMemo(() => {
     // Phase 18.0 — column set = master rooms ONLY (sorted by sortOrder
-    // then name) + virtual ไม่ระบุห้อง when at least one appt resolves
-    // to UNASSIGNED. Legacy roomName strings dropped entirely.
+    // then name) + virtual ไม่ระบุห้อง when (a) at least one appt resolves
+    // to UNASSIGNED OR (b) the branch has zero master rooms (give the
+    // user at least one clickable column so they can create a roomless
+    // appt on an empty branch — user directive 2026-05-05: "ต้องการให้
+    // user คลิ๊กลงไปในตารางแล้วสร้างนัดจากตารางเปล่าๆได้").
+    // Legacy roomName strings dropped entirely.
     const ordered = branchExamRooms
       .slice()
       .sort((a, b) =>
@@ -287,7 +291,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       .map(r => String(r.name || '').trim())
       .filter(Boolean);
     const set = new Set(ordered);
-    if (dayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM)) set.add(UNASSIGNED_ROOM);
+    const hasOrphan = dayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM);
+    if (hasOrphan || ordered.length === 0) set.add(UNASSIGNED_ROOM);
     return [...set];
   }, [branchExamRooms, masterRoomNameSet, dayAppts]);
 
@@ -538,22 +543,13 @@ export default function AppointmentTab({ clinicSettings, theme }) {
           </div>
         )}
 
-        {/* Resource Time Grid */}
-        {rooms.length === 0 && !dayLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-[var(--bg-surface)] rounded-xl" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
-            <div className="relative mb-6">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, rgba(14,165,233,0.2), rgba(14,165,233,0.05))', border: '1.5px solid rgba(14,165,233,0.3)', boxShadow: '0 0 40px rgba(14,165,233,0.15)' }}>
-                <CalendarDays size={28} className="text-sky-400" />
-              </div>
-              <div className="absolute -inset-4 rounded-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(14,165,233,0.15) 0%, transparent 70%)' }} />
-            </div>
-            <h3 className="text-lg font-black text-[var(--tx-heading)] mb-2 tracking-tight">ไม่มีนัดหมายวันนี้</h3>
-            <p className="text-sm text-[var(--tx-muted)] max-w-md mx-auto text-center leading-relaxed mb-4">
-              เลือกวันจากปฏิทินด้านซ้าย หรือกดปุ่ม "เพิ่มนัดหมาย" เพื่อสร้างนัดหมายใหม่
-            </p>
-          </div>
-        ) : (
+        {/* Resource Time Grid — always render so user can click empty
+            cells to create new appointments (user directive 2026-05-05:
+            "ต้องการให้ user คลิ๊กลงไปในตารางแล้วสร้างนัดจากตารางเปล่าๆ
+            ได้"). The "ไม่มีนัดหมายวันนี้" empty-state was removed; the
+            virtual ไม่ระบุห้อง column ensures at least one clickable
+            column even when the branch has no exam rooms. */}
+        {(
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
           <div className="overflow-x-auto">
             {/* Phase 15.7-quinquies (2026-04-28) — column width scales with
