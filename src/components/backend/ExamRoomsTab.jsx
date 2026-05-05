@@ -6,7 +6,6 @@ import { Edit2, Trash2, DoorOpen, Loader2 } from 'lucide-react';
 import {
   listExamRooms,
   deleteExamRoom,
-  listAppointments,
 } from '../../lib/scopedDataLayer.js';
 import ExamRoomFormModal from './ExamRoomFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
@@ -74,14 +73,12 @@ export default function ExamRoomsTab({ clinicSettings, theme }) {
     setDeleting(id);
     setError('');
     try {
-      // Soft-confirm: count attached appointments before prompting (Phase 18.0
-      // Q5=B-soft). Runtime fallback handles routing on render — no writes
-      // to appt docs on delete.
-      const appts = await listAppointments({ branchId }).catch(() => []);
-      const attached = appts.filter(a => a.roomId === id).length;
-      const msg = attached > 0
-        ? `ลบห้อง "${name}" — มีนัดหมาย ${attached} รายการ จะถูกย้ายไป ไม่ระบุห้อง อัตโนมัติ — ยืนยันลบ?`
-        : `ลบห้อง "${name}" ?\n\nลบจาก Firestore — ย้อนไม่ได้`;
+      // Phase 18.0 Q5=B-soft — soft-confirm dialog. Runtime fallback handles
+      // routing: any appt with roomId pointing to this deleted room is
+      // automatically displayed under the "ไม่ระบุห้อง" virtual column at
+      // render time (effectiveRoomId helper). No writes to appt docs on
+      // delete. Message warns admin that orphan appts re-route automatically.
+      const msg = `ลบห้อง "${name}" ?\n\nนัดหมายที่อ้างถึงห้องนี้จะถูกย้ายไป "ไม่ระบุห้อง" อัตโนมัติ\nลบจาก Firestore — ย้อนไม่ได้`;
       if (!window.confirm(msg)) return;
       await deleteExamRoom(id);
       await reload();

@@ -41,6 +41,8 @@ import {
   // (staff + doctors merged + branch-filtered + composed names) per user
   // directive: "ที่ปรึกษา ... แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
   listAllSellers,
+  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
+  listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
@@ -61,8 +63,10 @@ const STATUSES = [
   { value: 'done',      label: 'เสร็จแล้ว' },
   { value: 'cancelled', label: 'ยกเลิก' },
 ];
-const FALLBACK_ROOMS = [];
-const ROOMS_CACHE_KEY = 'appt-rooms-seen';
+// Phase 18.0 (2026-05-05) — FALLBACK_ROOMS + ROOMS_CACHE_KEY removed.
+// Replaced with be_exam_rooms branch-scoped master via listExamRooms.
+// Each appt now stores both roomId (FK) + roomName (snapshot for historical
+// display + deletion-safe rendering).
 
 const TIME_SLOTS = [];
 for (let h = 8; h <= 22; h++) {
@@ -82,6 +86,7 @@ function defaultFormData(overrides = {}) {
     advisorId: '', advisorName: '',
     doctorId: '', doctorName: '',
     assistantIds: [],
+    roomId: '',  // Phase 18.0 (2026-05-05) — FK to be_exam_rooms
     roomName: '',
     channel: '',
     appointmentTo: '',
@@ -175,6 +180,7 @@ export default function AppointmentFormModal({
         doctorId: appt.doctorId || '',
         doctorName: appt.doctorName || '',
         assistantIds: appt.assistantIds || [],
+        roomId: appt.roomId || '',  // Phase 18.0
         roomName: appt.roomName || '',
         channel: appt.channel || '',
         appointmentTo: appt.appointmentTo || '',
@@ -224,12 +230,9 @@ export default function AppointmentFormModal({
   // procedure (cross-role coverage), and assistant-only position is too
   // narrow. Same change applied at TreatmentFormPage:618-620.
   const assistants = useMemo(() => doctors, [doctors]);
-  const [rooms, setRooms] = useState(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem(ROOMS_CACHE_KEY) || '[]');
-      return Array.isArray(cached) ? cached : [];
-    } catch { return []; }
-  });
+  // Phase 18.0 — exam rooms loaded from be_exam_rooms (branch-scoped master).
+  // Replaces FALLBACK_ROOMS + localStorage cache.
+  const [examRooms, setExamRooms] = useState([]);
   const [holidays, setHolidays] = useState([]);
 
   useEffect(() => {
@@ -237,10 +240,15 @@ export default function AppointmentFormModal({
     // Phase 14.10-tris — switched from master_data to be_* canonical.
     // Phase 15.7-octies — advisor list now sources from listAllSellers
     // (merged staff + doctors with branch filter + composed names).
+    // Phase 18.0 — listExamRooms loads branch-scoped active rooms for
+    // the room dropdown.
     Promise.all([
       listDoctors().catch(() => []),
       listAllSellers({ branchId: selectedBranchId }).catch(() => []),
-    ]).then(([d, sellers]) => {
+      listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' }).catch(() => []),
+    ]).then(([d, sellers, rooms]) => {
+      setExamRooms(rooms || []);
+      const _placeholder = null; // keep destructure shape stable
       // Phase BS (2026-05-06): filter doctor picker to those with branch
       // access. listDoctors() doesn't accept a branchId param (the legacy
       // pattern queries the entire be_doctors collection); we filter at the
@@ -402,7 +410,8 @@ export default function AppointmentFormModal({
         doctorId: formData.doctorId, doctorName: formData.doctorName,
         assistantIds: assistantIdsForSave,
         assistantNames: assistantNamesForSave,
-        roomName: formData.roomName,
+        roomId: formData.roomId || '',  // Phase 18.0 — FK to be_exam_rooms
+        roomName: formData.roomName,    // snapshot (deletion-safe historical display)
         channel: formData.channel, appointmentTo: formData.appointmentTo,
         // Phase 15.7-octies (2026-04-29) — location is now LOCKED to the
         // current branch (resolved via useSelectedBranch + resolveBranchName).
@@ -421,14 +430,7 @@ export default function AppointmentFormModal({
       if (mode === 'edit' && appt) {
         await updateBackendAppointment(appt.appointmentId || appt.id, payload);
       } else {
-        // Persist room to localStorage cache so it shows in next session
-        if (formData.roomName) {
-          try {
-            const seen = new Set([...rooms, ...FALLBACK_ROOMS]);
-            seen.add(formData.roomName);
-            localStorage.setItem(ROOMS_CACHE_KEY, JSON.stringify([...seen]));
-          } catch {}
-        }
+        // Phase 18.0 (2026-05-05) — localStorage room cache removed.
         // Recurring multiplier (create only). Same logic as AppointmentTab.
         if (formData.recurringOption === 'multiple' && formData.recurringInterval && formData.recurringTimes) {
           const interval = Math.max(1, parseInt(formData.recurringInterval, 10) || 1);
@@ -581,10 +583,21 @@ export default function AppointmentFormModal({
             </div>
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ห้องตรวจ</label>
-              <select value={formData.roomName} onChange={e => update({ roomName: e.target.value })}
+              <select
+                aria-label="ห้องตรวจ"
+                value={formData.roomId || ''}
+                onChange={e => {
+                  const id = e.target.value;
+                  const room = examRooms.find(r => (r.examRoomId || r.id) === id);
+                  update({ roomId: id, roomName: room ? room.name : '' });
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                <option value="">ไม่ระบุ</option>
-                {[...new Set([...rooms, ...FALLBACK_ROOMS])].map(r => <option key={r} value={r}>{r}</option>)}
+                <option value="">— ไม่ระบุห้อง —</option>
+                {examRooms.map(r => <option key={r.examRoomId || r.id} value={r.examRoomId || r.id}>{r.name}</option>)}
+                {/* Edit-mode hint: appt has stale roomId (e.g. room deleted) */}
+                {formData.roomId && !examRooms.find(r => (r.examRoomId || r.id) === formData.roomId) && (
+                  <option value={formData.roomId}>(ห้องที่ลบแล้ว: {formData.roomName || formData.roomId})</option>
+                )}
               </select>
             </div>
           </div>
