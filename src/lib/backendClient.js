@@ -8768,6 +8768,100 @@ export async function deleteHoliday(holidayId) {
   await deleteDoc(holidayDoc(id));
 }
 
+// ─── Exam Room CRUD (Phase 18.0 Master Data Suite) ─────────────────────────
+// Branch-scoped exam-room master. Each branch maintains its OWN list of
+// rooms (independent — different counts + names per branch). User directive
+// 2026-05-05: "ข้อมูลห้องตรวจจะต้องเก็บแยกเป็นสาขาไว้ และแต่ละสาขาใช้กัน
+// ต่างหากไม่เกี่ยวข้องกัน". Mirrors holidays branch-scope pattern; consumed
+// by ExamRoomsTab + AppointmentFormModal dropdown + AppointmentTab grid
+// columns + DepositPanel deposit-with-appointment flow.
+
+const examRoomsCol = () => collection(db, ...basePath(), 'be_exam_rooms');
+const examRoomDoc = (id) => doc(db, ...basePath(), 'be_exam_rooms', String(id));
+
+export async function getExamRoom(examRoomId) {
+  const id = String(examRoomId || '');
+  if (!id) return null;
+  const snap = await getDoc(examRoomDoc(id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+/**
+ * List be_exam_rooms.
+ * @param {Object} [opts]
+ * @param {string}  [opts.branchId]    — filter to single branch
+ * @param {boolean} [opts.allBranches] — bypass branch filter
+ * @param {string}  [opts.status]      — additional status filter ('ใช้งาน' | 'พักใช้งาน')
+ */
+export async function listExamRooms({ branchId, allBranches = false, status } = {}) {
+  const constraints = [];
+  if (branchId && !allBranches) constraints.push(where('branchId', '==', String(branchId)));
+  if (status) constraints.push(where('status', '==', String(status)));
+  const ref = constraints.length ? query(examRoomsCol(), ...constraints) : examRoomsCol();
+  const snap = await getDocs(ref);
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Sort by sortOrder asc → name (Thai locale) for deterministic column order
+  items.sort((a, b) =>
+    (a.sortOrder || 0) - (b.sortOrder || 0) ||
+    String(a.name || '').localeCompare(String(b.name || ''), 'th')
+  );
+  return items;
+}
+
+/**
+ * Subscribe to be_exam_rooms for a single branch. Returns unsubscribe.
+ * Wired through useBranchAwareListener in AppointmentTab + ExamRoomsTab.
+ * Same sort contract as listExamRooms.
+ *
+ * @param {string} branchId — required (branch-scoped listener; cross-branch
+ *                            uses listExamRooms({allBranches:true}) instead)
+ * @param {(items: Array) => void} onChange
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToExamRoomsByBranch(branchId, onChange, onError) {
+  const q = query(examRoomsCol(), where('branchId', '==', String(branchId || '')));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) =>
+      (a.sortOrder || 0) - (b.sortOrder || 0) ||
+      String(a.name || '').localeCompare(String(b.name || ''), 'th')
+    );
+    onChange(items);
+  }, onError);
+}
+
+/**
+ * Create or update an exam room. branchId stamped via _resolveBranchIdForWrite
+ * (current selected branch unless explicitly overridden via opts.branchId).
+ */
+export async function saveExamRoom(examRoomId, data, opts = {}) {
+  const id = String(examRoomId || '');
+  if (!id) throw new Error('examRoomId required');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data object required');
+  const { normalizeExamRoom, validateExamRoom } = await import('./examRoomValidation.js');
+  const normalized = normalizeExamRoom(data);
+  const fail = validateExamRoom(normalized);
+  if (fail) {
+    const [, msg] = fail;
+    throw new Error(msg);
+  }
+  const now = new Date().toISOString();
+  await setDoc(examRoomDoc(id), {
+    ...normalized,
+    branchId: _resolveBranchIdForWrite({ ...data, ...opts }),
+    examRoomId: id,
+    createdAt: data.createdAt || now,
+    updatedAt: now,
+  }, { merge: false });
+}
+
+export async function deleteExamRoom(examRoomId) {
+  const id = String(examRoomId || '');
+  if (!id) throw new Error('examRoomId required');
+  await deleteDoc(examRoomDoc(id));
+}
+
 // ─── Branch CRUD (Phase 11.6 Master Data Suite) ────────────────────────────
 // Core branch record (identification/contact/address/map + status).
 // 7-day opening-hours deferred to Phase 13.
