@@ -46,16 +46,17 @@ import {
 } from '../../lib/scopedDataLayer.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
-import { checkAppointmentCollision } from '../../lib/staffScheduleValidation.js';
+import { checkAppointmentCollision, TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
+import { APPOINTMENT_TYPES, DEFAULT_APPOINTMENT_TYPE } from '../../lib/appointmentTypes.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 
-// Constants — duplicated from AppointmentTab (will collapse into a shared
-// constants module in a follow-up Rule-of-3 sweep). Keep values identical.
+// Phase 19.0 (2026-05-06) — TIME_SLOTS imported from canonical
+// staffScheduleValidation; APPT_TYPES replaced by APPOINTMENT_TYPES SSOT.
+// CHANNELS + STATUSES + APPT_COLORS retained locally (no SSOT yet).
 const CHANNELS = ['เคาน์เตอร์','โทรศัพท์','Walk-in','Facebook','Instagram','TikTok','Line','อื่นๆ'];
-const APPT_TYPES = [{ value: 'sales', label: 'ขาย' }, { value: 'followup', label: 'ติดตาม' }];
 const APPT_COLORS = ['ใช้สีเริ่มต้น','เหลืองอ่อน','เขียวอ่อน','ส้มอ่อน','แดงอ่อน','น้ำตาลอ่อน','ชมพูอ่อน','ม่วงอ่อน','น้ำเงินอ่อน'];
 const STATUSES = [
   { value: 'pending',   label: 'รอยืนยัน' },
@@ -68,21 +69,13 @@ const STATUSES = [
 // Each appt now stores both roomId (FK) + roomName (snapshot for historical
 // display + deletion-safe rendering).
 
-const TIME_SLOTS = [];
-for (let h = 8; h <= 22; h++) {
-  for (let m = 0; m < 60; m += 30) {
-    if (h === 8 && m === 0) continue;
-    TIME_SLOTS.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-  }
-}
-
 function defaultFormData(overrides = {}) {
   return {
     date: thaiTodayISO(),
     startTime: '10:00',
-    endTime: '10:30',
+    endTime: '10:15',  // Phase 19.0 — default 15-min duration
     customerId: '', customerName: '', customerHN: '',
-    appointmentType: 'sales',
+    appointmentType: DEFAULT_APPOINTMENT_TYPE,  // Phase 19.0 — 'no-deposit-booking'
     advisorId: '', advisorName: '',
     doctorId: '', doctorName: '',
     assistantIds: [],
@@ -174,7 +167,7 @@ export default function AppointmentFormModal({
         customerId: appt.customerId,
         customerName: appt.customerName,
         customerHN: appt.customerHN,
-        appointmentType: appt.appointmentType || 'sales',
+        appointmentType: appt.appointmentType || DEFAULT_APPOINTMENT_TYPE,
         advisorId: appt.advisorId || '',
         advisorName: appt.advisorName || '',
         doctorId: appt.doctorId || '',
@@ -203,7 +196,7 @@ export default function AppointmentFormModal({
     return defaultFormData({
       date: initialDate || thaiTodayISO(),
       startTime: initialStartTime || '10:00',
-      endTime: initialEndTime || (initialStartTime ? (TIME_SLOTS[TIME_SLOTS.indexOf(initialStartTime) + 1] || initialStartTime) : '10:30'),
+      endTime: initialEndTime || (initialStartTime ? (TIME_SLOTS[TIME_SLOTS.indexOf(initialStartTime) + 1] || initialStartTime) : '10:15'),
       roomName: initialRoomName || '',
       ...cInit,
     });
@@ -405,7 +398,7 @@ export default function AppointmentFormModal({
       const payload = {
         customerId: formData.customerId, customerName: formData.customerName, customerHN: formData.customerHN,
         date: formData.date, startTime: formData.startTime, endTime: formData.endTime || formData.startTime,
-        appointmentType: formData.appointmentType || 'sales',
+        appointmentType: formData.appointmentType || DEFAULT_APPOINTMENT_TYPE,
         advisorId: formData.advisorId || '', advisorName: formData.advisorName || '',
         doctorId: formData.doctorId, doctorName: formData.doctorName,
         assistantIds: assistantIdsForSave,
@@ -461,7 +454,27 @@ export default function AppointmentFormModal({
     }
   };
 
-  const update = (patch) => setFormData(p => ({ ...p, ...patch }));
+  const update = (patch) => {
+    setFormData((prev) => {
+      const next = { ...prev, ...patch };
+      // Phase 19.0 — when admin changes startTime and endTime is still
+      // a +15 distance from the prior startTime (default gap), auto-advance
+      // endTime to maintain the +15 default. Admin-edited endTime where
+      // the gap is anything other than +15 is preserved.
+      if (Object.prototype.hasOwnProperty.call(patch, 'startTime') && !Object.prototype.hasOwnProperty.call(patch, 'endTime')) {
+        const prevStartIdx = TIME_SLOTS.indexOf(prev.startTime);
+        const prevEndIdx = TIME_SLOTS.indexOf(prev.endTime);
+        if (prevStartIdx >= 0 && prevEndIdx === prevStartIdx + 1) {
+          // endTime was at +15 (default gap); auto-advance to maintain
+          const nextStartIdx = TIME_SLOTS.indexOf(next.startTime);
+          if (nextStartIdx >= 0) {
+            next.endTime = TIME_SLOTS[nextStartIdx + 1] || next.startTime;
+          }
+        }
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-form-modal-title" onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
@@ -552,7 +565,7 @@ export default function AppointmentFormModal({
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ประเภทนัดหมาย</label>
             <div className="flex gap-3">
-              {APPT_TYPES.map(t => (
+              {APPOINTMENT_TYPES.map(t => (
                 <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
                   <input type="radio" checked={formData.appointmentType === t.value} onChange={() => update({ appointmentType: t.value })} className="accent-sky-500" />{t.label}
                 </label>
