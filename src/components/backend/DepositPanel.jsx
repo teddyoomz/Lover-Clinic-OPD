@@ -24,10 +24,12 @@ import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
+import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
-const APPT_TYPES = [{ value: 'sales', label: 'ขาย' }, { value: 'followup', label: 'ติดตาม' }];
+// Phase 19.0 (2026-05-06) — 'sales' → 'deposit-booking' (canonical 4-type taxonomy)
+const APPT_TYPES = [{ value: 'deposit-booking', label: 'จองมัดจำ' }, { value: 'no-deposit-booking', label: 'จองไม่มัดจำ' }, { value: 'treatment-in', label: 'เข้าทำหัตถการ' }, { value: 'follow-up', label: 'ติดตามอาการ' }];
 const APPT_CHANNELS = ['เคาน์เตอร์', 'โทรศัพท์', 'Walk-in', 'Facebook', 'Instagram', 'TikTok', 'Line', 'อื่นๆ'];
 const APPT_COLORS = ['ใช้สีเริ่มต้น', 'เหลืองอ่อน', 'เขียวอ่อน', 'ส้มอ่อน', 'แดงอ่อน', 'น้ำตาลอ่อน', 'ชมพูอ่อน', 'ม่วงอ่อน', 'น้ำเงินอ่อน'];
 
@@ -47,14 +49,9 @@ function nowTimeStr() {
 }
 const clean = (o) => JSON.parse(JSON.stringify(o));
 
-// Generate time slots 08:30 - 22:30 (30-min)
-const TIME_SLOTS = [];
-for (let h = 8; h <= 22; h++) {
-  for (let mm = 0; mm < 60; mm += 30) {
-    if (h === 8 && mm === 0) continue;
-    TIME_SLOTS.push(`${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
-  }
-}
+// Phase 19.0 (2026-05-06) — TIME_SLOTS imported from canonical
+// staffScheduleValidation (15-min, 56 entries). Was a local 30-min
+// generator pre-Phase-19.0 (Rule of 3 #3 of 3).
 
 function StatusBadge({ status, isDark }) {
   const meta = STATUS_META[status] || STATUS_META.active;
@@ -124,7 +121,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   // Appointment sub-form
   const [hasAppointment, setHasAppointment] = useState(false);
-  const [apptType, setApptType] = useState('sales');
+  const [apptType, setApptType] = useState('deposit-booking'); // Phase 19.0 — was 'sales'
   const [apptOption, setApptOption] = useState('once'); // 'once' | 'multiple'
   const [apptEveryN, setApptEveryN] = useState('1');
   const [apptUnit, setApptUnit] = useState('วัน');
