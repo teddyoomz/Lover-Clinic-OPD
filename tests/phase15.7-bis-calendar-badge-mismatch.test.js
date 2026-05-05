@@ -33,12 +33,19 @@ describe('Phase 15.7-bis — Calendar badge mismatch fix', () => {
       expect(ApptTabSrc).toMatch(/const\s+UNASSIGNED_ROOM\s*=\s*['"]— ไม่ระบุห้อง —['"]/);
     });
 
-    it('C1.2 effectiveRoom helper falls back to UNASSIGNED_ROOM when roomName missing', () => {
-      expect(ApptTabSrc).toMatch(/const\s+effectiveRoom\s*=\s*\(a\)\s*=>\s*\(a\s*&&\s*a\.roomName\s*\?\s*String\(a\.roomName\)\.trim\(\)\s*:\s*UNASSIGNED_ROOM\)/);
+    it('C1.2 effectiveRoom helper falls back to UNASSIGNED_ROOM when roomName missing (Phase 18.0 master-room shape)', () => {
+      // Phase 18.0 extended effectiveRoom to also check masterRoomNameSet so
+      // legacy room strings (not in master) route to UNASSIGNED_ROOM.
+      // The fallback contract is preserved: missing/empty roomName → UNASSIGNED_ROOM.
+      expect(ApptTabSrc).toMatch(/const\s+effectiveRoom\s*=\s*\(a\)\s*=>/);
+      expect(ApptTabSrc).toMatch(/if\s*\(!nm\)\s*return\s+UNASSIGNED_ROOM/);
+      expect(ApptTabSrc).toMatch(/masterRoomNameSet\.has\(nm\)\s*\?\s*nm\s*:\s*UNASSIGNED_ROOM/);
     });
 
-    it('C1.3 virtual ไม่ระบุห้อง column appended when any dayAppt is roomless', () => {
-      expect(ApptTabSrc).toMatch(/dayAppts\.some\(a\s*=>\s*!a\?\.roomName\)/);
+    it('C1.3 virtual ไม่ระบุห้อง column appended when any dayAppt resolves to UNASSIGNED_ROOM', () => {
+      // Phase 18.0 changed the guard from `!a?.roomName` to `effectiveRoom(a) === UNASSIGNED_ROOM`
+      // so legacy-roomName appts (not in master) also trigger the virtual column.
+      expect(ApptTabSrc).toMatch(/dayAppts\.some\(a\s*=>\s*effectiveRoom\(a\)\s*===\s*UNASSIGNED_ROOM\)/);
       expect(ApptTabSrc).toMatch(/set\.add\(UNASSIGNED_ROOM\)/);
     });
   });
