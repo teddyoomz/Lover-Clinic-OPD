@@ -326,19 +326,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // BranchContext snapshot resolves; callers guard via isReady).
   const { branchId: SELECTED_BRANCH_ID } = useSelectedBranch();
 
-  // Phase 17.0 (BS-9) — clear modal caches on branch switch so subsequent
-  // opens re-fetch fresh data for the new branch instead of returning stale
-  // cached results from the previous branch. Mirrors PromotionTab/CouponTab/
-  // VoucherTab BS-9 pattern. The modal openers (openMedModal /
-  // openMedGroupModal / openConsModal / openConsGroupModal) preserve their
-  // `if (cache.length > 0) return;` early-return for cheap re-opens within
-  // a branch. Uses the EXISTING SELECTED_BRANCH_ID (Phase 14.7.H wiring) —
-  // do not introduce a parallel selectedBranchId.
+  // Phase 17.0 (BS-9) + Phase 17.2-quinquies (2026-05-05) — clear ALL modal
+  // data caches on branch switch. Defense-in-depth: cache-reset here +
+  // length>0 short-circuit guards REMOVED in every modal opener (Option A).
+  // Bug report 2026-05-05: original BS-9 effect missed buyItems +
+  // buyCategories so course / สินค้าหน้าร้าน / โปรโมชัน buttons kept showing
+  // the previous branch's data after BranchSelector switch. Companion fix
+  // adds SELECTED_BRANCH_ID to the form-data useEffect deps (line ~1033) so
+  // page-level masterCourses / dfGroups / productItems refresh on switch.
+  // Mirrors PromotionTab/CouponTab/VoucherTab BS-9 pattern.
   useEffect(() => {
     setMedAllProducts([]);
     setMedGroupData([]);
     setConsAllProducts([]);
     setConsGroupData([]);
+    setBuyItems({ course: [], promotion: [], product: [] });
+    setBuyCategories({ course: [], promotion: [], product: [] });
   }, [SELECTED_BRANCH_ID]);
   const inputCls = `w-full rounded-lg px-3 py-2.5 text-sm outline-none border transition-all ${isDark ? 'bg-[#111] border-[#222] text-gray-200 focus:border-purple-500' : 'bg-white border-gray-200 text-gray-800 focus:border-purple-400'}`;
   const labelCls = 'text-xs font-semibold text-gray-500 mb-1 block';
@@ -1030,7 +1033,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         setLoading(false);
       }
     })();
-  }, [customerId, treatmentId, isEdit]);
+  // Phase 17.2-quinquies (2026-05-05) — SELECTED_BRANCH_ID added to deps so
+  // when the user switches the top-right BranchSelector mid-TFP-life, the
+  // page-level state (productItems / courseItems / dfGroupItems / staffItems
+  // / doctorItems → masterCourses + options + DF lookups) refreshes against
+  // the new branch's master data. Without this dep, all in-page lookups
+  // remained pinned to the branch active at TFP mount.
+  }, [customerId, treatmentId, isEdit, SELECTED_BRANCH_ID]);
 
   // ── Toggle assistant ──
   const toggleAssistant = (id) => {
@@ -1153,7 +1162,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedModalVat(false);
     setMedModalPremium(false);
     setMedModalLabelOpen(false);
-    if (medAllProducts.length > 0) return;
+    // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit so every
+    // modal open re-fetches via scopedDataLayer (auto-injects current branchId).
+    // BS-9 cache-reset effect (line ~337) already drains the cache on branch
+    // switch; this guarantees freshness even if a future cache slot is missed.
     setMedModalLoading(true);
     try {
       if (saveTarget === 'backend') {
@@ -1261,7 +1273,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setMedGroupModalOpen(true);
     setMedGroupChecked(new Set());
     setMedGroupSelectedId('');
-    if (medGroupData.length > 0) return; // already loaded
+    // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setMedGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
@@ -1333,7 +1345,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsModalQuery('');
     setConsModalSelected(null);
     setConsModalQty('');
-    if (consAllProducts.length > 0) return;
+    // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setConsModalLoading(true);
     try {
       if (saveTarget === 'backend') {
@@ -1387,7 +1399,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setConsGroupModalOpen(true);
     setConsGroupChecked(new Set());
     setConsGroupSelectedId('');
-    if (consGroupData.length > 0) return;
+    // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setConsGroupLoading(true);
     try {
       if (saveTarget === 'backend') {
@@ -1452,8 +1464,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     setBuyQtyMap({});
     setBuyDiscMap({});
     setBuyVatMap({});
-    // Load data if not cached
-    if (buyItems[type]?.length > 0) return;
+    // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit; always
+    // re-fetch via scopedDataLayer auto-inject so course/product/promotion
+    // tabs reflect the currently-selected branch. BS-9 effect (line ~337)
+    // additionally drains buyItems/buyCategories on branch switch.
     setBuyLoading(true);
     try {
       // Backend mode: load from Firestore — NEVER fetch ProClinic directly.
@@ -4147,7 +4161,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         <input value={buyQuery} onChange={e => setBuyQuery(e.target.value)}
                           className={`${inputCls} !pl-8 !w-48`} placeholder="ค้นหาด้วยชื่อ" />
                       </div>
-                      <select value={buyModalType} onChange={e => { setBuyModalType(e.target.value); setBuySelectedCat(''); setBuyChecked(new Set()); setBuyQtyMap({}); setBuyDiscMap({}); setBuyVatMap({}); if (!buyItems[e.target.value]?.length) openBuyModal(e.target.value); }}
+                      <select value={buyModalType} onChange={e => { setBuyModalType(e.target.value); setBuySelectedCat(''); setBuyChecked(new Set()); setBuyQtyMap({}); setBuyDiscMap({}); setBuyVatMap({}); openBuyModal(e.target.value); /* Phase 17.2-quinquies: always re-fetch on tab switch */ }}
                         className={`${selectCls} !w-auto !text-xs`}>
                         <option value="course">คอร์ส</option>
                         <option value="promotion">โปรโมชัน</option>
@@ -4165,7 +4179,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         const isActiveType = buyModalType === type;
                         return (
                           <div key={type}>
-                            <button onClick={() => { setBuyModalType(type); setBuySelectedCat(''); if (!buyItems[type]?.length) openBuyModal(type); }}
+                            <button onClick={() => { setBuyModalType(type); setBuySelectedCat(''); openBuyModal(type); /* Phase 17.2-quinquies: always re-fetch on tab switch */ }}
                               className={`w-full text-left px-3 py-2 text-xs font-bold border-b flex items-center justify-between ${
                                 isActiveType ? 'text-teal-500' : isDark ? 'text-gray-400 border-[#1a1a1a]' : 'text-gray-600 border-gray-100'
                               } ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`}>

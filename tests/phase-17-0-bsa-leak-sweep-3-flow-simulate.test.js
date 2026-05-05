@@ -127,7 +127,10 @@ describe('F4 — TFP modal cache reset on branch change', () => {
   });
 
   it('F4.4 useEffect deps include [SELECTED_BRANCH_ID]', () => {
-    expect(tfpContent).toMatch(/setConsGroupData\(\[\]\)\s*;?\s*\}\s*,\s*\[SELECTED_BRANCH_ID\]/);
+    // Phase 17.2-quinquies (2026-05-05) extended the BS-9 reset block to
+    // also drain buyItems + buyCategories — setBuyCategories is now the
+    // last setter before the dep array close. Anchoring on that.
+    expect(tfpContent).toMatch(/setBuyCategories\([^)]+\)\s*;?\s*\}\s*,\s*\[SELECTED_BRANCH_ID\]/);
   });
 
   it('F4.5 NO duplicate selectedBranchId destructure introduced (anti-regression)', () => {
