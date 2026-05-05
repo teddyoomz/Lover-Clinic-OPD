@@ -12,6 +12,16 @@ import {
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 import * as broker from '../lib/brokerClient.js';
+// Phase 20.0 Task 1 (2026-05-06) — Frontend rewire from ProClinic to be_*.
+// Queue calendar reads be_appointments via scopedDataLayer (auto-injects
+// branchId once Phase 20.0 Task 6 BranchSelector ships). Replaces the
+// pc_appointments getDoc/onSnapshot pattern + broker.syncAppointments
+// calls. brokerClient still imported for other flows (Flow B/C/D appt CRUD,
+// deposit submission, customer search, courses) — those phases follow.
+import {
+  listenToAppointmentsByMonth,
+  getAppointmentsByMonth,
+} from '../lib/scopedDataLayer.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
@@ -297,11 +307,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptMonth, setApptMonth] = useState(() => thaiYearMonth());
   const [apptData, setApptData] = useState(null);
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
-  const [apptSyncing, setApptSyncing] = useState(false);
-  const [apptSyncSuccess, setApptSyncSuccess] = useState(false);
   const [apptSlotDuration, setApptSlotDuration] = useState(60);
-  const apptAutoSyncedRef = useRef(false); // prevent re-sync every tab switch
-  const apptSyncedMonthsRef = useRef(new Set()); // track which months have been synced
+  // Phase 20.0 Task 1 (2026-05-06) — apptSyncing/apptSyncSuccess + sync refs
+  // removed. be_appointments is canonical + live via listenToAppointmentsByMonth;
+  // no manual ProClinic sync state needed.
   const [apptFilterPractitioner, setApptFilterPractitioner] = useState('all'); // 'all' | practitioner id string
 
   // ── Appointment Manager (search & manage) state ──
@@ -477,111 +486,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     });
   }, [sessions, archivedSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Appointment calendar: subscribe to Firestore doc for current month ──
+  // ── Appointment calendar: live listener on be_appointments for current month ──
+  // Phase 20.0 Task 1 (2026-05-06) — replaces pc_appointments getDoc onSnapshot
+  // + broker.syncAppointments auto-sync effects (auto-sync, lazy-sync per-month
+  // navigate, 21:00 daily sync, manual handleSyncAppointments). be_appointments
+  // is now the canonical source, kept live by Firestore — no manual sync needed.
   useEffect(() => {
     if (!db || !appId) return;
-    const unsub = onSnapshot(
-      doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', apptMonth),
-      (snap) => { setApptData(snap.exists() ? snap.data() : null); },
+    const unsub = listenToAppointmentsByMonth(
+      apptMonth,
+      { allBranches: true }, // Pre-Task-6 — preserve existing cross-branch view
+      (appts) => {
+        setApptData({ appointments: appts, syncedAt: new Date().toISOString() });
+      },
       () => { setApptData(null); }
     );
-    return () => unsub();
+    return () => { try { unsub?.(); } catch { /* defensive */ } };
   }, [apptMonth, db, appId]);
-
-  // ── Auto-sync ±1 month on first open, then lazy sync when navigating ──
-  useEffect(() => {
-    if (adminMode !== 'appointment' || apptAutoSyncedRef.current) return;
-    apptAutoSyncedRef.current = true;
-    (async () => {
-      setApptSyncing(true);
-      setApptSyncSuccess(false);
-      try {
-        const currentMonth = thaiYearMonth();
-        await broker.syncAppointments(currentMonth);
-        apptSyncedMonthsRef.current.add(currentMonth);
-        setApptSyncSuccess(true);
-      } catch (e) {
-        showToast(`Auto-sync error: ${e.message}`, 5000);
-      }
-      setApptSyncing(false);
-    })();
-  }, [adminMode]);
-
-  // ── Lazy sync: when user navigates to a month not yet synced ──
-  useEffect(() => {
-    if (adminMode !== 'appointment' || !apptAutoSyncedRef.current) return;
-    if (apptSyncedMonthsRef.current.has(apptMonth)) return;
-    (async () => {
-      setApptSyncing(true);
-      try {
-        await broker.syncAppointments(apptMonth);
-        apptSyncedMonthsRef.current.add(apptMonth);
-      } catch { /* silent */ }
-      setApptSyncing(false);
-    })();
-  }, [apptMonth, adminMode]);
-
-  // ── Auto-sync at 21:00 daily — sync months up to furthest active session appointment ──
-  const apptAutoSyncDoneRef = useRef(null); // date string of last auto-sync (e.g. "2026-03-30")
-  useEffect(() => {
-    if (!db || !appId) return;
-    const check = async () => {
-      const now = bangkokNow();
-      const hh = now.getUTCHours();
-      const mm = now.getUTCMinutes();
-      const todayKey = thaiTodayISO();
-      // Trigger at 21:00-21:04 (5-min window), once per day
-      if (hh !== 21 || mm > 4) return;
-      if (apptAutoSyncDoneRef.current === todayKey) return;
-      apptAutoSyncDoneRef.current = todayKey;
-
-      // Find furthest month from active sessions (noDeposit + deposit)
-      const allActive = [...noDepositSessions, ...depositSessions];
-      // `now` is bangkokNow() (UTC-shifted) — must use getUTC* not getFullYear/getMonth.
-      let maxMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-      for (const s of allActive) {
-        const aDate = s.appointmentData?.appointmentDate || s.depositData?.appointmentDate;
-        if (aDate) {
-          const mo = aDate.substring(0, 7); // "YYYY-MM"
-          if (mo > maxMonth) maxMonth = mo;
-        }
-      }
-      // Also check schedule links
-      for (const s of schedList) {
-        if (s.enabled === false) continue;
-        for (const mo of (s.months || [])) {
-          if (mo > maxMonth) maxMonth = mo;
-        }
-      }
-
-      // Build list of months: current → maxMonth
-      const months = [];
-      let cursor = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-      while (cursor <= maxMonth && months.length < 12) {
-        months.push(cursor);
-        const [cy, cm] = cursor.split('-').map(Number);
-        const next = cm === 12 ? `${cy + 1}-01` : `${cy}-${String(cm + 1).padStart(2, '0')}`;
-        cursor = next;
-      }
-
-      console.log(`[auto-sync 21:00] syncing ${months.length} months: ${months[0]} → ${months[months.length - 1]}`);
-      // Sync one by one with delay to avoid ProClinic rate limiting
-      for (const mo of months) {
-        try {
-          await broker.syncAppointments(mo);
-          console.log(`[auto-sync] ${mo} done`);
-        } catch (e) { console.warn(`[auto-sync] ${mo} failed:`, e.message); }
-        // 3 second delay between months
-        await new Promise(r => setTimeout(r, 3000));
-      }
-      // Update active schedules after sync
-      try { await updateActiveSchedules(); } catch (e) { console.warn('[auto-sync 21:00] updateActiveSchedules failed:', e.message); }
-      console.log('[auto-sync 21:00] complete');
-    };
-    const interval = setInterval(check, 60000); // check every minute
-    check(); // run immediately on mount too
-    return () => clearInterval(interval);
-  }, [db, appId, noDepositSessions, depositSessions, schedList]);
 
   // ── Appointment Manager handlers ──
   const handleApptSearch = async () => {
@@ -745,16 +666,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const assistantIds = new Set(practitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
       const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
 
-      // Batch-read every unique month once across ALL active schedules (was N×M getDocs).
-      // With 5 schedules × 3 months this drops reads from 15 to 3 and keeps filter logic
-      // per-doc. Appointment docs are small so holding them in memory is fine.
+      // Phase 20.0 Task 1 — read be_appointments (canonical) instead of
+      // pc_appointments mirror. getAppointmentsByMonth returns { [date]: [...] }
+      // grouped by date; flatten back to flat array per month for the existing
+      // schedule-filter loop (preserves filter shape).
       const uniqueMonths = Array.from(new Set(activeScheds.flatMap(s => s.months || [])));
-      const monthSnaps = await Promise.all(uniqueMonths.map(mo =>
-        getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo))
+      const groupedByMonth = await Promise.all(uniqueMonths.map(mo =>
+        getAppointmentsByMonth(mo, { allBranches: true })
       ));
       const apptsByMonth = {};
       uniqueMonths.forEach((mo, i) => {
-        apptsByMonth[mo] = monthSnaps[i].exists() ? (monthSnaps[i].data().appointments || []) : [];
+        const grouped = groupedByMonth[i] || {};
+        apptsByMonth[mo] = Object.values(grouped).flat();
       });
 
       for (const sched of activeScheds) {
@@ -796,21 +719,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     } catch (e) { console.warn('[updateActiveSchedules] failed:', e.message); }
   };
 
-  const handleSyncAppointments = async (month) => {
-    setApptSyncing(true);
-    setApptSyncSuccess(false);
-    try {
-      const result = await broker.syncAppointments(month || apptMonth);
-      if (!result.success) showToast(`Sync ล้มเหลว: ${result.error}`, 5000);
-      else {
-        setApptSyncSuccess(true);
-        updateActiveSchedules();
-      }
-    } catch (e) {
-      showToast(`Sync error: ${e.message}`, 5000);
-    }
-    setApptSyncing(false);
-  };
+  // Phase 20.0 Task 1 (2026-05-06) — handleSyncAppointments removed.
+  // be_appointments is the canonical live source via listenToAppointmentsByMonth;
+  // no manual sync needed. updateActiveSchedules can still be called explicitly
+  // when an admin wants to refresh schedule-link bookedSlots from current data.
 
   // ── Toggle/Delete schedule links ──
   const handleToggleSchedule = async (token, currentEnabled) => {
@@ -1106,10 +1018,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
       }
 
-      // 2. Sync all months
-      for (const mo of months) {
-        await broker.syncAppointments(mo);
-      }
+      // 2. Phase 20.0 Task 1 — pre-sync removed. be_appointments is canonical
+      //    + live, no broker.syncAppointments call needed before reading.
 
       // 3. Collect booked slots — filter rules live in scheduleFilterUtils.js
       //    so they're testable in isolation (see tests/schedule-filter.test.js).
@@ -1137,20 +1047,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorPractitionerIds: doctorIds,
         doctorRoomIds,
       };
+      // Phase 20.0 Task 1 — read be_appointments (canonical) instead of
+      // pc_appointments mirror.
       for (const mo of months) {
-        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
-        if (snap.exists()) {
-          const appts = snap.data().appointments || [];
-          appts.forEach(a => {
-            if (!a.date || !a.startTime || !a.endTime) return;
-            if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
-              doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-            }
-            if (shouldBlockScheduleSlot(a, filterCfg)) {
-              bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-            }
-          });
-        }
+        const grouped = await getAppointmentsByMonth(mo, { allBranches: true });
+        const appts = Object.values(grouped || {}).flat();
+        appts.forEach(a => {
+          if (!a.date || !a.startTime || !a.endTime) return;
+          if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
+            doctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+          }
+          if (shouldBlockScheduleSlot(a, filterCfg)) {
+            bookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+          }
+        });
       }
 
       // 4. Generate token
@@ -1200,34 +1110,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       setSchedGenResult({ token, url, qrUrl });
       showToast('สร้างลิงก์ตารางสำเร็จ', 3000);
 
-      // Background resync all months in the schedule link (gradual, 3s delay between each)
-      // This ensures the schedule link gets the freshest data from ProClinic
+      // Phase 20.0 Task 1 — background resync simplified: no ProClinic pull
+      // (be_appointments is canonical + live), just one fresh read of
+      // be_appointments and update the schedule doc's bookedSlots. Eliminates
+      // the 3s-delay-per-month staggering since there's no rate-limited
+      // upstream to throttle against.
       (async () => {
-        console.log(`[schedule-resync] background resync ${months.length} months for new link`);
-        for (const mo of months) {
-          try {
-            await broker.syncAppointments(mo);
-            console.log(`[schedule-resync] ${mo} done`);
-          } catch (e) { console.warn(`[schedule-resync] ${mo} failed:`, e.message); }
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        // Update booked slots in the newly created schedule doc with fresh data
         try {
           const freshBookedSlots = [];
           const freshDoctorBookedSlots = [];
           for (const mo of months) {
-            const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pc_appointments', mo));
-            if (snap.exists()) {
-              (snap.data().appointments || []).forEach(a => {
-                if (!a.date || !a.startTime || !a.endTime) return;
-                if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
-                  freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-                }
-                if (shouldBlockScheduleSlot(a, filterCfg)) {
-                  freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
-                }
-              });
-            }
+            const grouped = await getAppointmentsByMonth(mo, { allBranches: true });
+            const appts = Object.values(grouped || {}).flat();
+            appts.forEach(a => {
+              if (!a.date || !a.startTime || !a.endTime) return;
+              if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
+                freshDoctorBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+              if (shouldBlockScheduleSlot(a, filterCfg)) {
+                freshBookedSlots.push({ date: a.date, startTime: a.startTime, endTime: a.endTime });
+              }
+            });
           }
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), {
             bookedSlots: freshBookedSlots,
@@ -4915,11 +4818,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
         const todayStr = thaiTodayISO();
 
-        // Stale detection: syncedAt > 1 hour or never synced
-        const syncedAt = apptData?.syncedAt ? new Date(apptData.syncedAt) : null;
-        const isStale = !syncedAt || (Date.now() - syncedAt.getTime() > 60 * 60 * 1000);
-        const staleMinutes = syncedAt ? Math.floor((Date.now() - syncedAt.getTime()) / 60000) : null;
-        const staleText = !syncedAt ? 'ยังไม่เคย Sync เดือนนี้' : staleMinutes >= 60 ? `Sync เมื่อ ${Math.floor(staleMinutes / 60)} ชม. ${staleMinutes % 60} นาทีที่แล้ว — ข้อมูลอาจไม่อัพเดท` : null;
+        // Phase 20.0 Task 1 (2026-05-06) — stale detection removed. be_appointments
+        // is live via listenToAppointmentsByMonth; the 'syncedAt' tag is just the
+        // listener-fire timestamp and the data is always fresh.
 
         return (
           <div className="space-y-4 max-w-2xl mx-auto">
@@ -4943,17 +4844,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </button>
                   </div>
                 </div>
-                {/* Row 2: sync + create link */}
+                {/* Phase 20.0 Task 1 (2026-05-06) — Sync button removed; data is live.
+                    Only "สร้างลิงก์" remains. */}
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleSyncAppointments(apptMonth)} disabled={apptSyncing}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? (isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-500' : 'bg-sky-100 border border-sky-200 text-sky-500') + ' opacity-70' : apptSyncSuccess ? (isDark ? 'bg-green-950/40 border border-green-900/50 text-green-400' : 'bg-green-50 border border-green-200 text-green-600') : (isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40' : 'bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100')}`}>
-                    <RefreshCw size={13} className={apptSyncing ? 'animate-spin' : ''} />
-                    {apptSyncing ? 'Syncing...' : apptSyncSuccess ? 'Synced' : 'Sync'}
-                    {apptSyncSuccess && apptData?.syncedAt && <span className="text-[11px] opacity-70 ml-1">{new Date(apptData.syncedAt).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}</span>}
-                  </button>
                   <button onClick={() => { setSchedStartMonth(apptMonth); setSchedGenResult(null); setSchedSlotDuration(60); setSchedNoDoctorRequired(false); setSchedSelectedDoctor(null); setSchedSelectedRoom(null); setSchedShowDoctorStatus(false); setSchedShowFrom('today'); setSchedEndDay(''); setShowScheduleModal(true); }}
-                    disabled={apptSyncing}
-                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${apptSyncing ? 'opacity-50 cursor-not-allowed ' : ''}${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${isDark ? 'bg-purple-950/40 border border-purple-800/50 text-purple-400 hover:bg-purple-900/40 hover:text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-600 hover:bg-purple-100'}`}>
                     <Link size={13} /> สร้างลิงก์
                   </button>
                 </div>
@@ -5001,26 +4896,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
               {/* Calendar grid */}
               <div className="p-3 sm:p-5 relative">
-                {/* Stale overlay — show when stale (not synced / >1hr old) */}
-                {isStale && !apptSyncing && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-b-2xl sm:rounded-b-3xl">
-                    <RefreshCw size={28} className="text-orange-400 mb-3" />
-                    <p className="text-orange-400 font-bold text-sm mb-1 text-center px-4">{staleText}</p>
-                    <p className="text-gray-400 text-xs mb-4 text-center px-4">กด Sync เพื่ออัพเดทข้อมูลนัดหมาย</p>
-                    <button onClick={() => handleSyncAppointments(apptMonth)} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-xs font-semibold flex items-center gap-2 transition-colors shadow-lg">
-                      <RefreshCw size={14} /> Sync ตอนนี้
-                    </button>
-                  </div>
-                )}
-                {/* Syncing overlay — show while sync in progress */}
-                {apptSyncing && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[1px] rounded-b-2xl sm:rounded-b-3xl">
-                    <Loader2 size={32} className="animate-spin text-sky-400 mb-3" />
-                    <p className="text-sky-400 font-bold text-sm text-center">กำลัง Sync ข้อมูลนัดหมาย...</p>
-                  </div>
-                )}
+                {/* Phase 20.0 Task 1 (2026-05-06) — stale + syncing overlays
+                    removed. be_appointments is live via listener; data is
+                    always fresh, no manual sync gate needed. */}
                 {/* Legend */}
-                <div className={`flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[11px] sm:text-[11px] text-gray-500 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mb-2.5 text-[11px] sm:text-[11px] text-gray-500">
                   <span className="flex items-center gap-1">🔥 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendDocBg}`} /> หมอเข้า</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-950/40 border border-emerald-900/40' : 'bg-emerald-50 border border-emerald-200'}`} /> ปกติ</span>
                   <span className="flex items-center gap-1"><span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-sm inline-block ${legendClosedBg}`} /> ปิด</span>
@@ -5028,13 +4908,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <span className="flex items-center gap-1"><span className={`${availCountColor} font-bold`}>ว่าง</span>/<span className="text-sky-400 font-bold">หมอ</span></span>
                 </div>
                 {/* Day headers */}
-                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1">
                   {thaiDays.map((d, i) => (
                     <div key={i} className={`text-center text-xs sm:text-xs font-bold font-semibold py-1.5 ${i >= 5 ? 'text-red-400/60' : 'text-gray-500'}`}>{d}</div>
                   ))}
                 </div>
                 {/* Day cells */}
-                <div className={`grid grid-cols-7 gap-1 sm:gap-1.5 ${(isStale || apptSyncing) ? 'opacity-30 pointer-events-none' : ''}`}>
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                   {Array.from({ length: calStart }).map((_, i) => (
                     <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[72px]" />
                   ))}
@@ -5077,15 +4957,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   })}
                 </div>
 
-                {/* Sync info */}
-                {apptData?.syncedAt && (
-                  <p className="text-xs text-gray-600 mt-3 text-right">sync: {new Date(apptData.syncedAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                )}
-                {!apptData && !apptSyncing && (
+                {/* Phase 20.0 Task 1 (2026-05-06) — sync timestamp + Sync button
+                    removed; be_appointments is live and always fresh. */}
+                {!apptData && (
                   <div className="text-center py-8 text-gray-500">
                     <CalendarDays size={36} className="mx-auto mb-3 opacity-30" />
                     <p className="text-sm font-bold mb-2">ยังไม่มีข้อมูลเดือนนี้</p>
-                    <button onClick={() => handleSyncAppointments(apptMonth)} className="text-xs text-sky-400 hover:text-sky-300 font-bold">กด Sync เพื่อดึงข้อมูลจาก ProClinic</button>
                   </div>
                 )}
               </div>

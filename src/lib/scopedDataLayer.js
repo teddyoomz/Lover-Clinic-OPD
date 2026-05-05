@@ -204,6 +204,11 @@ export const listenToUserPermissions = _makeUniversalListener('listenToUserPermi
 // branch switch. Re-export RAW here — listeners need re-subscribe lifecycle
 // that a wrapper-at-call-time can't provide.
 export const listenToAppointmentsByDate = (...args) => raw.listenToAppointmentsByDate(...args);
+// Phase 20.0 Task 1 (2026-05-06) — month-level live listener. Used by
+// AdminDashboard queue calendar (replaces pc_appointments onSnapshot).
+// Branch-scope handled by useBranchAwareListener (Layer 3); raw re-export
+// here so the hook can pass branchId positional arg.
+export const listenToAppointmentsByMonth = (...args) => raw.listenToAppointmentsByMonth(...args);
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
 export const listenToExamRoomsByBranch = (...args) => raw.listenToExamRoomsByBranch(...args);

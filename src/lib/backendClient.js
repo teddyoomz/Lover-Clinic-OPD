@@ -2244,6 +2244,74 @@ export function listenToAppointmentsByDate(dateStr, optsOrCallback, onChangeOrEr
 }
 
 /**
+ * Real-time listener variant of `getAppointmentsByMonth`. Returns a flat
+ * array of all appointments in the given YYYY-MM month, sorted by
+ * (date, startTime). Mirrors getAppointmentsByMonth's filtering but emits
+ * an array instead of the grouped {[date]: appts[]} shape — flat array is
+ * what AdminDashboard's queue calendar consumes (replaces pc_appointments
+ * onSnapshot per Phase 20.0 Flow A).
+ *
+ * Phase 20.0 Task 1 (2026-05-06) — closes the AdminDashboard ProClinic
+ * dependency on `pc_appointments/{YYYY-MM}` getDoc + brokerClient sync.
+ * be_appointments is the canonical source after Phase 19.0 + Phase 20.0
+ * migration.
+ *
+ * Branch-scope (per Layer 1 + Layer 2): caller can pass
+ * `{branchId, allBranches}` opts. scopedDataLayer wrapper auto-injects
+ * the resolved selectedBranchId. Default-deny shape: opts={}, allBranches
+ * absent → cross-branch read (preserves existing AdminDashboard semantics
+ * which never had a branch concept; future Phase 20.0 Task 6 BranchSelector
+ * will switch to branch-scoped via the scopedDataLayer wrapper).
+ *
+ * @param {string} yearMonth — 'YYYY-MM'
+ * @param {object|function} [optsOrCallback] — opts {branchId, allBranches}
+ *   OR onChange callback (legacy positional)
+ * @param {function} [onChangeOrError]
+ * @param {function} [maybeOnError]
+ * @returns {() => void} unsubscribe
+ */
+export function listenToAppointmentsByMonth(yearMonth, optsOrCallback, onChangeOrError, maybeOnError) {
+  // Mirror listenToAppointmentsByDate signature handling.
+  let opts = {};
+  let onChange;
+  let onError;
+  if (typeof optsOrCallback === 'function') {
+    onChange = optsOrCallback;
+    onError = onChangeOrError;
+  } else {
+    opts = optsOrCallback || {};
+    onChange = onChangeOrError;
+    onError = maybeOnError;
+  }
+  const target = String(yearMonth || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(target)) {
+    onChange?.([]);
+    return () => {};
+  }
+  const { branchId, allBranches = false } = opts || {};
+  const useFilter = branchId && !allBranches;
+  const q = useFilter
+    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    : appointmentsCol();
+  return onSnapshot(q, (snap) => {
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const filtered = all
+      .map(a => {
+        const iso = normalizeApptDate(a.date);
+        if (!iso || iso.slice(0, 7) !== target) return null;
+        return { ...a, date: iso };
+      })
+      .filter(Boolean);
+    filtered.sort((a, b) => {
+      const byDate = (a.date || '').localeCompare(b.date || '');
+      if (byDate !== 0) return byDate;
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    });
+    onChange(filtered);
+  }, onError);
+}
+
+/**
  * Real-time listener for customer's finance summary — bundles 4 listeners
  * into one unsubscribe. Mirrors the {depositBalance, walletBalance, wallets,
  * points, membership} shape that CustomerDetailView already consumes.
