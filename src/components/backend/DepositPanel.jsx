@@ -25,11 +25,11 @@ import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
+import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
-// Phase 19.0 (2026-05-06) — 'sales' → 'deposit-booking' (canonical 4-type taxonomy)
-const APPT_TYPES = [{ value: 'deposit-booking', label: 'จองมัดจำ' }, { value: 'no-deposit-booking', label: 'จองไม่มัดจำ' }, { value: 'treatment-in', label: 'เข้าทำหัตถการ' }, { value: 'follow-up', label: 'ติดตามอาการ' }];
+// Phase 19.0 — APPT_TYPES sourced from appointmentTypes.js SSOT (was inline 2-value array pre-Phase-19.0).
 const APPT_CHANNELS = ['เคาน์เตอร์', 'โทรศัพท์', 'Walk-in', 'Facebook', 'Instagram', 'TikTok', 'Line', 'อื่นๆ'];
 const APPT_COLORS = ['ใช้สีเริ่มต้น', 'เหลืองอ่อน', 'เขียวอ่อน', 'ส้มอ่อน', 'แดงอ่อน', 'น้ำตาลอ่อน', 'ชมพูอ่อน', 'ม่วงอ่อน', 'น้ำเงินอ่อน'];
 
@@ -803,7 +803,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                     <div className="flex flex-wrap gap-4 text-xs">
                       <div className="flex gap-3">
                         <span className="text-[var(--tx-muted)] font-bold">ประเภท:</span>
-                        {APPT_TYPES.map(t => (
+                        {APPOINTMENT_TYPES.map(t => (
                           <label key={t.value} className="flex items-center gap-1 cursor-pointer">
                             <input type="radio" checked={apptType === t.value} onChange={() => setApptType(t.value)} className="accent-violet-500" />{t.label}
                           </label>
