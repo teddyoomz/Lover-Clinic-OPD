@@ -25,6 +25,14 @@ dist-ssr
 
 .vercel
 .env*.local
+# Phase 20.0 lesson lock (2026-05-06) — `vercel env pull --environment=production`
+# writes to .env.local.prod which is NOT covered by the `.env*.local` glob
+# above (the prod suffix comes AFTER .local). Explicit entry prevents
+# accidental commit of admin-SDK + Firebase service-account credentials.
+.env.local.prod
+.env.local.preview
+.env.local.development
+.env.*.prod
 .auth/
 test-results/
 

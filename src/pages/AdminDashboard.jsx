@@ -1308,7 +1308,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions');
     const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
       const now = Date.now();
-      const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allDocsRaw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Phase 20.0 follow-up (2026-05-06) — per-branch session filter.
+      // Frontend tabs (queue / deposit / no-deposit / appointment / history)
+      // all derive from this listener. Filter by selectedBranchId; legacy
+      // docs without branchId fall through (one-shot migration script
+      // stamps existing docs with default branch).
+      const allDocs = selectedBranchId
+        ? allDocsRaw.filter(s => !s.branchId || String(s.branchId) === String(selectedBranchId))
+        : allDocsRaw;
 
       // Auto-cleanup expired sessions: delete if no data, archive if has data
       allDocs.forEach(s => {
@@ -1510,7 +1518,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       setSessions(data);
     }, (error) => console.error("Firestore Error:", error));
     return () => unsubscribe();
-  }, [db, appId, user, isNotifEnabled, notifVolume]);
+    // Phase 20.0 follow-up (2026-05-06) — selectedBranchId in deps so the
+    // filter re-applies on BranchSelector switch.
+  }, [db, appId, user, isNotifEnabled, notifVolume, selectedBranchId]);
 
   // ── Auto-fetch deposit options when viewing a session with deposit data ──
   useEffect(() => {
@@ -1642,6 +1652,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionDoc = {
       status: 'pending',
       createdAt: serverTimestamp(),
+      // Phase 20.0 follow-up (2026-05-06) — stamp branchId on every new
+      // opd_sessions doc so the queue/deposit/noDeposit/history filters
+      // by selectedBranchId in real time. Falls back to empty if no branch
+      // selected (defensive — user should always have a selected branch).
+      branchId: selectedBranchId || '',
       patientData: null,
       isPermanent: true,
       formType: 'deposit',
@@ -1705,6 +1720,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionDoc = {
       status: 'pending',
       createdAt: serverTimestamp(),
+      branchId: selectedBranchId || '', // Phase 20.0 follow-up
       patientData: null,
       isPermanent: true,
       formType: 'intake',
@@ -1908,10 +1924,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionId = `${prefix}${shortId}`;
     
     const sessionDoc = {
-      status: 'pending', 
-      createdAt: serverTimestamp(), 
-      patientData: null, 
-      isPermanent: isPermanent, 
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      branchId: selectedBranchId || '', // Phase 20.0 follow-up
+      patientData: null,
+      isPermanent: isPermanent,
       formType: formType,
       sessionName: sessionNameInput.trim() || 'ไม่ระบุชื่อ'
     };
