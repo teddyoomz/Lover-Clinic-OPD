@@ -10,7 +10,7 @@
 //
 // Three concerns covered:
 //   A. BackendDashboard no longer auto-flips _useTrialServer = true
-//   B. NAKHON_BRANCH_ID + filter on migrateMasterBranchesToBe + staff_schedules
+//   B. IMPORT_TARGET_BRANCH_ID + filter on migrateMasterBranchesToBe + staff_schedules
 //   C. Wipe script structure — Rule M canonical pattern (dry-run + apply
 //      + audit doc + idempotency + tallyByEntity)
 
@@ -69,12 +69,16 @@ describe('Phase 24.0-vicies-novies-ter — A: BackendDashboard sync source = PRO
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// B. Branch filter — NAKHON_BRANCH_ID + 2 sites
+// B. Branch filter — IMPORT_TARGET_BRANCH_ID + 2 sites
 // ═══════════════════════════════════════════════════════════════════════════
-describe('Phase 24.0-vicies-novies-ter — B: NAKHON_BRANCH_ID + branch filter', () => {
-  it('VNT.B.1 — NAKHON_BRANCH_ID exported from backendClient.js', () => {
+describe('Phase 24.0-vicies-novies-ter — B: IMPORT_TARGET_BRANCH_ID + branch filter', () => {
+  it('VNT.B.1 — IMPORT_TARGET_BRANCH_ID exported from backendClient.js', () => {
+    // Phase 24.0-vicies-novies-sexies (2026-05-07) — switched from
+    // นครราชสีมา (BR-1777873556815-26df6480) to พระราม 3
+    // (BR-1777885958735-38afbdeb) per user directive "เปลี่ยนไปนำเข้า
+    // ข้อมูลจาก proclinic จริงเข้าสาขาพระราม 3 ดีกว่า".
     expect(BC).toMatch(
-      /export\s+const\s+NAKHON_BRANCH_ID\s*=\s*['"]BR-1777873556815-26df6480['"]/,
+      /export\s+const\s+IMPORT_TARGET_BRANCH_ID\s*=\s*['"]BR-1777885958735-38afbdeb['"]/,
     );
   });
 
@@ -90,15 +94,15 @@ describe('Phase 24.0-vicies-novies-ter — B: NAKHON_BRANCH_ID + branch filter',
     );
   });
 
-  it('VNT.B.4 — migrateMasterBranchesToBe passes filter (id === NAKHON_BRANCH_ID)', () => {
+  it('VNT.B.4 — migrateMasterBranchesToBe passes filter (id === IMPORT_TARGET_BRANCH_ID)', () => {
     expect(BC).toMatch(
-      /export\s+async\s+function\s+migrateMasterBranchesToBe\(\)\s*\{[\s\S]{0,500}?filter:\s*\(_src,\s*id\)\s*=>\s*id\s*===\s*NAKHON_BRANCH_ID/,
+      /export\s+async\s+function\s+migrateMasterBranchesToBe\(\)\s*\{[\s\S]{0,500}?filter:\s*\(_src,\s*id\)\s*=>\s*id\s*===\s*IMPORT_TARGET_BRANCH_ID/,
     );
   });
 
-  it('VNT.B.5 — migrateMasterStaffSchedulesToBe filters by src.branchId === NAKHON_BRANCH_ID', () => {
+  it('VNT.B.5 — migrateMasterStaffSchedulesToBe filters by src.branchId === IMPORT_TARGET_BRANCH_ID', () => {
     expect(BC).toMatch(
-      /const\s+srcBranchId\s*=\s*String\(src\.branchId\s*\|\|\s*['"]['"]\)\.trim\(\);\s*\n\s*if\s*\(srcBranchId\s*!==\s*NAKHON_BRANCH_ID\)\s*\{\s*skipped\+\+;\s*continue;/,
+      /const\s+srcBranchId\s*=\s*String\(src\.branchId\s*\|\|\s*['"]['"]\)\.trim\(\);\s*\n\s*if\s*\(srcBranchId\s*!==\s*IMPORT_TARGET_BRANCH_ID\)\s*\{\s*skipped\+\+;\s*continue;/,
     );
   });
 

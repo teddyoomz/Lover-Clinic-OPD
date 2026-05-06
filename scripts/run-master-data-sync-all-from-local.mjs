@@ -128,6 +128,11 @@ const onlyActions = onlyArg
 const actionsToRun = onlyActions
   ? ALL_SYNC_ACTIONS.filter((a) => onlyActions.includes(a))
   : ALL_SYNC_ACTIONS;
+// Phase 24.0-vicies-novies-quater (2026-05-07) — --fresh-login forces a
+// fresh ProClinic performLogin before the sync loop. Use when cached
+// cookies are stale (e.g. after upstream role/permission changes); ensures
+// every endpoint sees a session minted with the CURRENT user role.
+const freshLogin = process.argv.includes('--fresh-login');
 
 // ─── Firebase init ─────────────────────────────────────────────────────────
 function initFirebase() {
@@ -230,6 +235,36 @@ async function main() {
   // Step 1: mint a Firebase ID token so verifyAuth accepts our requests
   console.log('[sync-all] minting Firebase ID token...');
   const idToken = await mintIdToken();
+
+  // Phase 24.0-vicies-novies-quater — optional fresh-login pre-step.
+  // Forces ProClinic to mint a new session with the CURRENT user role.
+  // Used when cached cookies in clinic_settings/proclinic_session are stale
+  // after a ProClinic-side role/permission change (the sync handlers will
+  // otherwise reuse stale cookies and 403 on endpoints the user CAN access
+  // through their browser).
+  if (freshLogin) {
+    console.log('[sync-all] --fresh-login: performing fresh ProClinic login...');
+    const sessionMod = await import('../api/proclinic/_lib/session.js');
+    const origin = (process.env.PROCLINIC_ORIGIN || '').trim().replace(/\/+$/, '');
+    const email = (process.env.PROCLINIC_EMAIL || '').trim();
+    const password = (process.env.PROCLINIC_PASSWORD || '').trim();
+    if (!origin || !email || !password) {
+      console.error('[sync-all] FATAL — missing PROCLINIC_ORIGIN/EMAIL/PASSWORD env vars');
+      process.exit(1);
+    }
+    try {
+      const result = await sessionMod.performLogin(origin, email, password);
+      if (!result?.success) {
+        console.error('[sync-all] fresh-login FAILED:', result);
+        process.exit(1);
+      }
+      console.log(`[sync-all] fresh-login OK — ${result.cookies.length} cookies cached`);
+    } catch (e) {
+      console.error('[sync-all] fresh-login threw:', e.message);
+      if (e.debug) console.error('  debug:', e.debug);
+      process.exit(1);
+    }
+  }
 
   // Step 2: dynamic import of master.js (after env loaded)
   // The path is project-relative; we're at scripts/, so master.js is ../api/proclinic/master.js

@@ -9377,13 +9377,21 @@ function mapMasterToPermissionGroup(src, id, now, existingCreatedAt) {
   };
 }
 
-// Phase 24.0-vicies-novies-ter (2026-05-07) — นครราชสีมา branch id constant.
-// User directive: "ในส่วนของปุ่ม นำเข้า master_data → backend (be_*) ให้
-// นำเข้าสาขานครราชสีมาเท่านั้น สาขาอื่นไม่ต้องไปเอาเข้า". Used by branch-
-// scoped migrate helpers (branches itself + staff_schedules) — global
-// entities (products / courses / staff / doctors / vouchers / promotions /
-// holidays / etc.) ignore this filter and import as authored.
-export const NAKHON_BRANCH_ID = 'BR-1777873556815-26df6480';
+// Phase 24.0-vicies-novies-ter (2026-05-07) — branch id constant for
+// master-data imports. Used by branch-scoped migrate helpers (branches itself
+// + staff_schedules) — global entities (products / courses / staff /
+// doctors / vouchers / promotions / holidays / etc.) ignore this filter and
+// import as authored.
+//
+// History:
+//   - 2026-05-07 v1: นครราชสีมา = BR-1777873556815-26df6480
+//   - 2026-05-07 v2 (Phase 24.0-vicies-novies-sexies): switched to พระราม 3
+//     per user directive "เปลี่ยนไปนำเข้าข้อมูลจาก proclinic จริงเข้าสาขา
+//     พระราม 3 ดีกว่า แล้วลองในสาขานั้นเลย เพราะสาขานั้นโล่งมาก ยังไม่มีอะไรเลย"
+//   - The renamed export (IMPORT_TARGET_BRANCH_ID) replaces the per-branch
+//     name (NAKHON_BRANCH_ID) so future flips don't need a rename, just a
+//     value change.
+export const IMPORT_TARGET_BRANCH_ID = 'BR-1777885958735-38afbdeb'; // พระราม 3
 
 async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapper, filter = null }) {
   const masterSnap = await getDocs(masterDataItemsCol(sourceType));
@@ -9424,15 +9432,15 @@ export async function migrateMasterHolidaysToBe() {
   return runMasterToBeMigration({ sourceType: 'holidays', targetCol: holidaysCol, targetDocFn: holidayDoc, mapper: mapMasterToHoliday });
 }
 export async function migrateMasterBranchesToBe() {
-  // Phase 24.0-vicies-novies-ter — keep ONLY the นครราชสีมา branch doc.
-  // Other branches in the production ProClinic master_data are not part of
-  // this clinic's deployment scope.
+  // Phase 24.0-vicies-novies-ter / -sexies — keep ONLY the configured import-
+  // target branch doc (currently พระราม 3). Other branches in the production
+  // ProClinic master_data are not part of this clinic's deployment scope.
   return runMasterToBeMigration({
     sourceType: 'branches',
     targetCol: branchesCol,
     targetDocFn: branchDoc,
     mapper: mapMasterToBranch,
-    filter: (_src, id) => id === NAKHON_BRANCH_ID,
+    filter: (_src, id) => id === IMPORT_TARGET_BRANCH_ID,
   });
 }
 export async function migrateMasterPermissionGroupsToBe() {
@@ -11287,13 +11295,14 @@ export async function migrateMasterStaffSchedulesToBe() {
 
     if (!proStaffId) { skipped++; continue; }
 
-    // Phase 24.0-vicies-novies-ter (2026-05-07) — branch filter: keep ONLY
-    // schedules tagged for the นครราชสีมา branch. Mirrors the migrate-
-    // branches filter; other branches' schedules are out-of-scope. Items
-    // with NO branchId field are ALSO skipped (no way to attribute them
-    // safely — admin must rerun sync after fixing source).
+    // Phase 24.0-vicies-novies-ter / -sexies (2026-05-07) — branch filter:
+    // keep ONLY schedules tagged for the configured import-target branch
+    // (currently พระราม 3). Mirrors the migrate-branches filter; other
+    // branches' schedules are out-of-scope. Items with NO branchId field are
+    // ALSO skipped (no way to attribute them safely — admin must rerun sync
+    // after fixing source).
     const srcBranchId = String(src.branchId || '').trim();
-    if (srcBranchId !== NAKHON_BRANCH_ID) { skipped++; continue; }
+    if (srcBranchId !== IMPORT_TARGET_BRANCH_ID) { skipped++; continue; }
 
     // Try doctor first, fall back to employee. Doctors take precedence
     // because /admin/api/schedule/today is primarily a doctor schedule
