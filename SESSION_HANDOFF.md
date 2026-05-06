@@ -7,12 +7,32 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-07 EOD — Phase 24.0-vicies-novies family SHIPPED (7 commits) + 2 deploys (combined mid-session, vercel-only at end). master = prod. No-deploy directive lifted mid-session.
+- **Date last updated**: 2026-05-07 EOD continuation — V38 + V39 + V38-followup + comprehensive e2e + V40 design spec (5 commits this continuation).
 - **Branch**: `master`
-- **Last commit**: `e36811f` — fix(phase-24-0-vicies-novies-octies): migrate mappers stamp branchId from selectedBranchId — per-branch catalog isolation restored
-- **Test count**: **6646 PASS / 6646 total** (full green; +204 net since last session)
+- **Last commit**: `496a15c` — docs(spec): branch backup/restore/make-fresh design (2026-05-07)
+- **Test count**: **6757 PASS / 6757 total** (full green; +111 net this continuation)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `e36811f`** (LIVE 2026-05-07) — master in sync with prod after end-of-session vercel deploy.
+- **Deploy state**: **PRODUCTION = `e36811f`** (LIVE — V38 onwards NOT deployed). master is **5 commits ahead of prod**.
+
+### Session 2026-05-07 EOD continuation — V38 + V39 + V38-followup + e2e + V40 spec (5 commits)
+
+User-driven 5-commit single-day continuation. (a) "ลบ products + courses พระราม 3 ไม่ได้" → V38 spread-order V12 fix (2 listers + Rule M backfill of 5+2 + AV17). (b) "นำเข้า products/courses/promotions เข้าพระราม 3 ไม่ได้" → V39 4 wrappers + 4 mappers + V38 source-patch (cross-branch-import 7 adapters with `canonicalIdField` + endpoint generic stamp) + Rule M backfill of 479 zombies + AV18 + 70 button-coverage tests. (c) User asked V38-followup mass-sweep → 85+ spread-order swaps across 17 files (AV17 complete). (d) User asked "เทส e2e จริงๆ ทุกปุ่ม" → 19 buttons × 30 fixtures × 122/122 assertions on real prod Firestore + cleanup. (e) User asked "ระบบ Backup สาขา + ปุ่ม สาขาใหม่" → brainstorming Q1-Q6 locked → V40 design spec (374 lines) committed → implementation plan written to `C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md`.
+
+**Commits this continuation**:
+- `4f008a3` V38 — list spread-order V12 fix (listProducts + listCourses)
+- `d964b14` V39 — migrate-button branchId stamping + V38 source-patch + 70 contract tests + AV18
+- `ee40256` V38-followup — mass-sweep 85+ spread-order swaps across 17 files (AV17 complete)
+- `b33f369` E2E — 19 migrate buttons × 30 fixtures × 122/122 assertions (real prod Firestore)
+- `496a15c` V40 spec — branch backup/restore/make-fresh design doc (374 lines, 6 Q&A locked)
+
+**Production data ops** (Rule M two-phase): 479 zombies stamped พระราม 3 (303 products + 174 courses + 2 promotions). Audit doc `be_admin_audit/phase-24-0-vicies-novies-decies-backfill-zombie-branchid-1778102599138-4d7618f4`. User deleted 5+2 V38 broken docs via post-fix delete (proof V38 fix worked end-to-end).
+
+**Outstanding**:
+- V40 implementation (~30 tasks, 7 phases) ready at `C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md`
+- Deploy 5 commits to Vercel (master ahead of prod) — pending user "deploy"
+- H-bis ProClinic strip + hard-gate Firebase claim + /audit-all (carried from prior sessions)
+
+Detail: `.agents/sessions/2026-05-07-v38-v39-e2e-v40-spec.md`
 
 ### Session 2026-05-07 EOD — Phase 24.0-vicies-novies family (7 commits, 2 deploys, per-branch catalog isolation fix)
 
@@ -539,27 +559,28 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-07 EOD.
+Resume LoverClinic — continue from 2026-05-07 EOD continuation.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master = prod = e36811f LIVE)
-3. .agents/active.md (6646 tests pass; master in sync with prod)
+2. SESSION_HANDOFF.md (master = 496a15c, prod = e36811f — 5 commits ahead)
+3. .agents/active.md (6757 tests pass)
 4. .claude/rules/00-session-start.md (iron-clad A-N + V-summary)
-5. .agents/sessions/2026-05-07-phase-24-0-vicies-novies-octies-saga.md
+5. .agents/sessions/2026-05-07-v38-v39-e2e-v40-spec.md
 
-Status: master = prod = e36811f, 6646/6646 tests pass, LIVE on lover-clinic-app.vercel.app. This session: 7 commits (Phase 24.0-vicies-novies through octies) + 2 deploys (combined mid-session, vercel-only at end). Per-branch catalog isolation working: migrate mappers stamp branchId from selectedBranchId at migrate-time → 6 catalog tabs filter by branchId correctly.
+Status: master = 496a15c (V38 + V39 + V38-followup mass-sweep + comprehensive e2e + V40 design spec). 6757/6757 tests pass, build clean. prod = e36811f (V38 onwards NOT deployed; master 5 commits ahead). 479 production zombies fixed via Rule M backfill. V40 spec approved (6 Q&A locked); implementation plan ready at C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md (~30 tasks, 7 phases).
 
-Next action: idle. Awaiting user directive.
+Next action: idle. Awaiting user directive — likely V40 implementation OR deploy.
 
 Outstanding (user-triggered):
-- Optional: admin-SDK script to wipe ~328 product / ~370 course / etc. branchless zombies (legacy from earlier trial migrations) — invisible in UI but occupy storage
-- 🚨 H-bis ProClinic full strip (brokerClient + api/proclinic + cookie-relay + MasterDataTab + clinic_settings/proclinic_session*)
+- V40 implementation (subagent-driven recommended per plan; 7 phases ~30 tasks)
+- Deploy 5 commits (V38+V39+V38-followup+e2e+V40-spec) to Vercel — say "deploy" THIS turn
+- 🚨 H-bis ProClinic full strip
 - Hard-gate Firebase custom claim (deploy-coupled)
 - /audit-all pre-release pass
-- BackendDashboard nav restructure (deferred from Phase 20.0 EOD)
+- BackendDashboard nav restructure (deferred)
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18 triple-repeat lock); V15 default = combined vercel + firestore:rules with Probe-Deploy-Probe (Rule B 4-endpoint URLs MUST include artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE for new features (orthogonal to plan-mode); Rule K work-first-test-last for multi-stream cycles; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature code); Rule M data-ops local+admin-SDK+pull-env; Rule N targeted-test-only for small bugfixes; V37 (NEVER `git add -A`); credential leak (.env.local.prod 2026-05-06) resolved per user no-rotate accept — don't re-raise; NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + AV17 (mass-sweep complete); H-quater; Rule M data-ops; Rule N targeted-test-only; V37 (NEVER `git add -A`); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
