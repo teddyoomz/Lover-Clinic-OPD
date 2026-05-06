@@ -141,16 +141,31 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // hydration and the active tab is no longer reachable.
   const { canAccess, first: firstAllowedTab, loaded: permsLoaded } = useTabAccess();
 
-  // Deep link: ?backend=1&customer=ID → auto-load customer detail
+  // Deep link: ?backend=1&customer=ID → auto-load customer detail (view mode)
+  // Deep link: ?backend=1&customer=ID&mode=edit → auto-open V33.3 Edit Customer
+  //   takeover (Phase 24.0-duodecies, 2026-05-06 — added so OPD banner's
+  //   "แก้ไขข้อมูลลูกค้า" button can deep-link directly into edit mode)
   // Deep link: ?backend=1&tab=finance&subtab=deposit → switch to finance tab
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const customerId = params.get('customer');
+    const mode = params.get('mode');
     const tab = params.get('tab');
     const subtab = params.get('subtab');
     if (customerId) {
       getCustomer(customerId)
-        .then(c => { if (c) { setViewingCustomer(c); setActiveTab('customers'); } })
+        .then(c => {
+          if (c) {
+            setActiveTab('customers');
+            // Phase 24.0-duodecies — mode=edit opens the V33.3 full-page Edit
+            // Customer takeover instead of the read-only detail view.
+            if (mode === 'edit') {
+              setEditingCustomer(c);
+            } else {
+              setViewingCustomer(c);
+            }
+          }
+        })
         .catch(() => {})
         .finally(() => setHydrated(true));
     } else {

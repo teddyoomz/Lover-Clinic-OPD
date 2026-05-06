@@ -72,6 +72,8 @@ import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUt
 import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
 // Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
 import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
+// Phase 24.0-duodecies (2026-05-06) — open backend customer detail/edit in new tab.
+import { openCustomerInNewTab, openCustomerEditInNewTab } from '../lib/customerNavigation.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -3201,6 +3203,32 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                      Patient detail/edit/delete now lives in BackendDashboard's
                      CustomerListTab (full be_* CRUD). The "คอร์สและนัดหมาย ↗"
                      button stays — it opens PatientDashboard view. */}
+                {/* Phase 24.0-duodecies (2026-05-06) — "ดูข้อมูลลูกค้า" +
+                     "แก้ไขข้อมูลลูกค้า" buttons. Both deep-link into
+                     BackendDashboard via `?backend=1&customer=ID(&mode=edit)`
+                     in a NEW BROWSER TAB (mirrors openCustomerInNewTab pattern
+                     used by DepositPanel + MembershipPanel). The customer id
+                     used is brokerProClinicHN — be_customers doc ids are
+                     HN-formatted (LC-* prefix) so HN === doc id. Falls back
+                     to brokerProClinicId for legacy sessions if HN missing. */}
+                {(viewingSession.brokerProClinicHN || viewingSession.brokerProClinicId) && (
+                  <>
+                    <button
+                      onClick={() => openCustomerInNewTab(viewingSession.brokerProClinicHN || viewingSession.brokerProClinicId)}
+                      data-testid="opd-banner-view-customer-btn"
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Eye size={11}/> ดูข้อมูลลูกค้า ↗
+                    </button>
+                    <button
+                      onClick={() => openCustomerEditInNewTab(viewingSession.brokerProClinicHN || viewingSession.brokerProClinicId)}
+                      data-testid="opd-banner-edit-customer-btn"
+                      className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-amber-700/50 text-amber-400 hover:bg-amber-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
+                    >
+                      <Edit3 size={11}/> แก้ไขข้อมูลลูกค้า ↗
+                    </button>
+                  </>
+                )}
                 {viewingSession.brokerProClinicId && (
                   <button onClick={() => handleOpenPatientView(viewingSession)}
                     className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">

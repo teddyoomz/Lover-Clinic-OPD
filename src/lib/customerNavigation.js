@@ -48,3 +48,46 @@ export function openCustomerInNewTab(customerId) {
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
+
+// ─── Phase 24.0-duodecies (2026-05-06) — edit-mode deep-link ─────────────
+//
+// User report on PatientDashboard OPD banner: "ให้เพิ่มปุ่ม แก้ไขข้อมูล
+// ลูกค้า และปุ่ม ดูข้อมูลลูกค้า เข้าไปด้วย ... แก้ไขข้อมูลลูกค้า = เปิด tab
+// หน้าแก้ไขข้อมูลลูกค้าคนนั้นใน backend".
+//
+// `?backend=1&customer=ID&mode=edit` — BackendDashboard's deep-link useEffect
+// resolves this to `setEditingCustomer(c)` (V33.3 full-page Edit Customer
+// takeover) instead of `setViewingCustomer(c)`. The view URL (no mode) keeps
+// existing semantics. Both share the same `getCustomer(id)` resolver, so id
+// can be either be_customers doc id or proClinicId.
+
+/**
+ * Build the deep-link URL that auto-opens the customer in EDIT mode (V33.3
+ * full-page takeover) on a fresh BackendDashboard mount.
+ *
+ * @param {string} customerId
+ * @returns {string} URL like `https://host/?backend=1&customer=LC-26000001&mode=edit`
+ */
+export function buildCustomerEditUrl(customerId) {
+  const id = String(customerId || '').trim();
+  if (!id) return '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : '';
+  return `${origin}/?backend=1&customer=${encodeURIComponent(id)}&mode=edit`;
+}
+
+/**
+ * Open the customer's edit page in a NEW BROWSER TAB. Mirror of
+ * openCustomerInNewTab but for edit mode.
+ *
+ * @param {string} customerId
+ * @returns {boolean}
+ */
+export function openCustomerEditInNewTab(customerId) {
+  const url = buildCustomerEditUrl(customerId);
+  if (!url) return false;
+  if (typeof window === 'undefined' || typeof window.open !== 'function') return false;
+  window.open(url, '_blank', 'noopener,noreferrer');
+  return true;
+}
