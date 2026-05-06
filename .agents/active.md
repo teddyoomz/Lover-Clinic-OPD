@@ -59,6 +59,67 @@ AdminDashboard.jsx is fully on `be_*`. ZERO `broker.*` calls remain. brokerClien
 
 Per user 2026-05-06: "จะ prod เหี้ยไร เราจะทำ ใน local ไอ้ควยนฃ" → no Vercel deploys; everything runs on `npm run dev`. Frontend `lover-clinic-app.vercel.app` stays frozen at V15 #22 indefinitely. Migrations via Rule M (admin-SDK + `vercel env pull`) still apply for production data ops as needed.
 
+## Phase 20.0 follow-ups (2026-05-06 EOD continuation)
+
+### Final ProClinic UI strip in AdminDashboard
+After commits c14edf/etc shipped strip of `broker.*` CALLS, user caught residual UI:
+"ในหน้า ประวัติผู้ป่วย OPD ของ Frontend ให้เชื่อม backend เราแทน proclinic ตอนนี้ยังไม่สมบูรณื"
+
+REMOVED in this session:
+- "นำเข้าจาก ProClinic" button + entire import-from-ProClinic JSX section in history tab (~85 lines)
+- 8 import-related state vars (showImport / importSearch / etc)
+- 4 import handlers: handleImportSearch / handleImportSelect / checkImportDuplicate / handleImportConfirm (~150 lines)
+- handleProClinicEdit + handleProClinicDelete (cascade-delete relocated to BackendDashboard)
+- PROCLINIC_ORIGIN constant + getProClinicUrl helper
+- 3 inline ProClinic URL `<a>` links (viewing-session header, appointment row, OPD-recorded badge)
+- Cookie-Relay credentials auto-sync useEffect
+
+UPDATED user-facing copy:
+- "บันทึกลง ProClinic เรียบร้อยแล้ว" → "บันทึก OPD เรียบร้อยแล้ว"
+- "ส่งข้อมูลไป ProClinic ไม่สำเร็จ" → "บันทึก OPD ไม่สำเร็จ"
+- "🔄 แก้ไขและ sync ProClinic อัตโนมัติ" → "🔄 ซิงค์อัตโนมัติ"
+- Title tooltips on cancel button updated
+
+### Per-branch filter migration + hotfix
+User: "ตอนนี่ทั้ง tab หน้าคิว จองมัดจำ จองไม่มัดจำ นัดหมาย ประวัติ กูเปลี่ยนสาขาไปมาใน selector แล้วไม่ีมีเหี้ยไรเปลี่ยน้ลย"
+
+3-layer bug:
+1. AdminDashboard's master opd_sessions onSnapshot lacked branchId filter
+2. New session writes (3 sessionDoc creates) didn't stamp branchId
+3. Migration scripts hardcoded WRONG default branchId (`BR-1777095572005-ae97f911` stale; live = `BR-1777873556815-26df6480`)
+
+Fix:
+- AdminDashboard listener: filter `!s.branchId || branchId === selectedBranchId` (legacy fall-through)
+- 3× sessionDoc creates stamp branchId
+- NEW migration scripts: phase-20-0-migrate-opd-sessions-to-branch.mjs (75 docs), phase-20-0-migrate-chat-conversations-to-branch.mjs (12 docs), phase-20-0-fix-branch-id-mismatch.mjs (75+12+380 docs hotfix to correct id)
+
+Audit docs:
+- be_admin_audit/phase-20-0-migrate-opd-sessions-1778006150465-44cbbb18
+- be_admin_audit/phase-20-0-migrate-chat-conversations-1778006214051-5f66c409
+- be_admin_audit/phase-20-0-fix-branch-id-mismatch-1778006625867-f28b7f0b
+
+### App.jsx provider-tree fix
+User: "ไหน ที่เลือกสาขาในหน้า frontend วะไอ้ควย"
+Bug: AdminDashboard mounted OUTSIDE BranchProvider — `useSelectedBranch()` returned `{branches: []}` → BranchSelector returned null.
+Fix: wrapped AdminDashboard in `<UserPermissionProvider><BranchProvider>` (mirror BackendDashboard pattern).
+
+### Desktop BranchSelector duplicate
+First fix only added BranchSelector to mobile `xl:hidden` block. Added second instance to desktop `hidden xl:flex` block. Visible at all viewport widths now.
+
+### Credential leak (RESOLVED — user accepted no rotate)
+`git add -A` swept .env.local.prod into commit `1f40cdd`. Force-push'd clean origin (per user explicit "อนุญาต"). User explicitly declined to rotate Firebase admin private key per `feedback_credential_leak_no_rotate.md`. .gitignore now blocks `.env.local.prod` + variants.
+
+### End-to-end branch isolation verified
+preview_eval at localhost:5173:
+- นครราชสีมา ประวัติ: **68 รายการ**
+- พระราม 3 ประวัติ: **0 รายการ**
+✅ Per-branch filter works correctly (note: HMR sometimes caches old listener; hard reload required to pick up filter changes during dev — production builds unaffected).
+
+## Deferred to NEXT chat
+
+- BackendDashboard nav restructure: move "นัดหมาย" from PINNED to its own section + 4 appointmentType sub-tabs (จองไม่มัดจำ / จองมัดจำ / คิวรอทำหัตถการ / คิวติดตามอาการ). Plus deposit-booking writes ลง Finance.มัดจำ tab per branch.
+- User said: "งานในแชทที่สั่งด้านบนทั้งหมดจะไปทำแชทหน้า"
+
 ## Next action
 
-Idle. All work in this cycle complete. Awaiting user direction.
+Idle. This chat fully wrapped. Open NEW chat to start the BackendDashboard nav restructure.
