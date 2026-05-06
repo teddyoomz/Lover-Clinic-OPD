@@ -1,0 +1,117 @@
+// ─── /api/admin/branch-make-fresh — V40 ────────────────────────────────────
+// Wipes all branch-scoped data for a target branch. REQUIRES autoBackupRef
+// in Storage to exist as pre-condition (caller must call /branch-backup-export
+// with isAutoPreFresh=true first). See spec §6.
+
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import crypto from 'crypto';
+import { verifyAdminToken } from './_lib/adminAuth.js';
+import { TIER_MAP, BACKUP_TIER_T1, BACKUP_TIER_T2, BACKUP_TIER_T3, BACKUP_TIER_T4, T4_SUBCOLLECTIONS } from '../../src/lib/branchBackupCore.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const BUCKET = `${APP_ID}.firebasestorage.app`;
+const BATCH_LIMIT = 400;
+
+let cachedDb = null, cachedBucket = null;
+function getAdmin() {
+  if (cachedDb && cachedBucket) return { db: cachedDb, bucket: cachedBucket };
+  let app;
+  if (getApps().length > 0) app = getApp();
+  else {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    if (!clientEmail || !rawKey) throw new Error('firebase-admin not configured');
+    app = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+        clientEmail,
+        privateKey: rawKey.replace(/\\n/g, '\n'),
+      }),
+      storageBucket: BUCKET,
+    });
+  }
+  cachedDb = getFirestore(app);
+  cachedBucket = getStorage(app).bucket();
+  return { db: cachedDb, bucket: cachedBucket };
+}
+function dataCol(db, collection) {
+  return db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(collection);
+}
+function randHex(n = 8) { return crypto.randomBytes(Math.ceil(n / 2)).toString('hex').slice(0, n); }
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+
+  const caller = await verifyAdminToken(req, res);
+  if (!caller) return;
+
+  const { branchId, autoBackupRef } = req.body || {};
+  if (!branchId) return res.status(400).json({ ok: false, error: 'MISSING_BRANCH_ID' });
+  if (!autoBackupRef || typeof autoBackupRef !== 'string') {
+    return res.status(400).json({ ok: false, error: 'AUTO_BACKUP_REQUIRED' });
+  }
+
+  try {
+    const { db, bucket } = getAdmin();
+    const [exists] = await bucket.file(autoBackupRef).exists();
+    if (!exists) return res.status(400).json({ ok: false, error: 'AUTO_BACKUP_NOT_FOUND', autoBackupRef });
+
+    const wipeList = [
+      ...TIER_MAP[BACKUP_TIER_T1],
+      ...TIER_MAP[BACKUP_TIER_T2],
+      ...TIER_MAP[BACKUP_TIER_T3],
+    ];
+    const deletedCounts = {};
+
+    for (const col of wipeList) {
+      const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
+      let deleted = 0;
+      for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+        const slice = snap.docs.slice(i, i + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const d of slice) batch.delete(d.ref);
+        await batch.commit();
+        deleted += slice.length;
+      }
+      deletedCounts[col] = deleted;
+    }
+
+    // T4 — per customer × per subcollection × where branchId
+    const customersSnap = await dataCol(db, 'be_customers').get();
+    let t4Deleted = 0;
+    for (const cust of customersSnap.docs) {
+      for (const sub of T4_SUBCOLLECTIONS) {
+        const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+        for (let i = 0; i < subSnap.docs.length; i += BATCH_LIMIT) {
+          const slice = subSnap.docs.slice(i, i + BATCH_LIMIT);
+          const batch = db.batch();
+          for (const d of slice) batch.delete(d.ref);
+          await batch.commit();
+          t4Deleted += slice.length;
+        }
+      }
+    }
+    deletedCounts['be_customers/__per_customer__'] = t4Deleted;
+
+    const auditId = `branch-make-fresh-${Date.now()}-${randHex()}`;
+    await dataCol(db, 'be_admin_audit').doc(auditId).set({
+      action: 'branch-make-fresh',
+      branchId,
+      autoBackupRef,
+      deletedCounts,
+      executedBy: caller.decoded.uid,
+      executedAt: new Date().toISOString(),
+    });
+
+    return res.status(200).json({ ok: true, deletedCounts, autoBackupRef, auditId });
+  } catch (e) {
+    console.error('branch-make-fresh error:', e);
+    return res.status(500).json({ ok: false, error: 'MAKE_FRESH_FAILED', detail: e.message });
+  }
+}
