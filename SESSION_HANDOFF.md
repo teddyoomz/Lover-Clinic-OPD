@@ -7,12 +7,36 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-06 EOD continuation 4 — Phase 23.0 + Phase 24.0 customer-delete suite SHIPPED (~30 commits). Master ahead-of-prod ~50 commits. Local-only workflow per user directive.
+- **Date last updated**: 2026-05-06 EOD continuation 5 — Phase 24.0-undecies through vicies-octies SHIPPED (~12 commits) + NEW iron-clad **Rule N**. Master ahead-of-prod ~62 commits. Local-only workflow.
 - **Branch**: `master`
-- **Last commit**: `4240abc` — feat(phase-24-0-nonies+decies): kiosk gender + customer_type + relation field + note box
-- **Test count**: **6056 PASS / 6056 total** (full green; previously-flaky phase15.5b PF.4 also recovered)
+- **Last commit**: `f9aefb1` — feat(phase-24-0-vicies-octies): Finance ไปที่นัด button + AppointmentCalendarView initialSelectedDate
+- **Test count**: **6442 PASS / 6442 total** (full green; +386 net since last session)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~50 commits.
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~62 commits.
+
+### Session 2026-05-06 EOD continuation 5 — Phase 24.0-undecies through vicies-octies (~12 commits) + Rule N
+
+User-driven rapid iteration on kiosk จองมัดจำ + Finance.มัดจำ + appointment-grid flows. NEW iron-clad **Rule N** (targeted-test-only for small bugfixes; full-suite reserved for big changes / end-of-batch / pre-deploy).
+
+**Phases shipped (12 commits, all `npm run build` clean + targeted tests green)**:
+- 24.0-undecies (`1c84bc1`) — kiosk visitPurpose "อื่นๆ" detail input + Finance column wrap
+- 24.0-duodecies (`feb31eb`) — OPD banner ดู/แก้ไขข้อมูลลูกค้า buttons + edit-mode deep-link
+- 24.0-terdecies..octiesdecies (`dce5a20`) — customer-later flow + cascades + branch-grid race fix
+- 24.0-noniesdecies (`5e5aba1`) — Finance "+ สร้างนัด" button + auto-create be_appointments
+- 24.0-vicies (`91a3190`) — kiosk deposit-edit cascades + visitPurpose + name/phone propagation
+- 24.0-vicies-bis (`2e68f4f`) — kiosk-cancel cascade + Rule N
+- 24.0-vicies-ter (`39a4f22`) — deposit-card edit-appt link + archive cascade
+- 24.0-vicies-quater (`be32427`) — paymentAmount wheel-scroll fix (2000→1999)
+- 24.0-vicies-quinquies (`98aa6be`) — kiosk + appt-tab delete = HARD-delete pair
+- 24.0-vicies-sexies (`8b61a2f`) — add-appt cascade error surfacing + listener-race defense
+- 24.0-vicies-septies (`8dc907b`) — createDeposit().depositId extract + coerceId healing
+- 24.0-vicies-octies (`f9aefb1`) — Finance "ไปที่นัด" button + AppointmentCalendarView initialSelectedDate
+
+**NEW helpers in `src/lib/appointmentDepositBatch.js`**: `attachCustomerToLinkedDeposit`, `syncAppointmentToLinkedDeposit`, `syncCustomerTempToLinkedDeposit`, `createAppointmentForExistingDeposit`, `deleteDepositBookingPair`. **NEW `src/lib/visitPurposeUtils.js`**.
+
+**Iron-clad Rule N added** to `.claude/rules/00-session-start.md` (codified rapid-iteration testing rhythm: small fix → targeted run only; big/end-of-batch → full suite).
+
+Detail: `.agents/sessions/2026-05-06-phase-24-0-undecies-thru-vicies-octies.md`
 
 ### Session 2026-05-06 EOD continuation 4 — Phase 23.0 + Phase 24.0 customer-delete suite
 
@@ -494,16 +518,16 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-06 EOD continuation 4.
+Resume LoverClinic — continue from 2026-05-06 EOD continuation 5.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=4240abc, prod=024f6dd FROZEN V15 #22)
-3. .agents/active.md (6056 tests; ~50 commits ahead-of-prod)
-4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary)
-5. .agents/sessions/2026-05-06-phase-23-24-trilogy.md
+2. SESSION_HANDOFF.md (master=f9aefb1, prod=024f6dd FROZEN V15 #22)
+3. .agents/active.md (6442 tests; ~62 commits ahead-of-prod)
+4. .claude/rules/00-session-start.md (iron-clad A-N + V-summary; NEW Rule N)
+5. .agents/sessions/2026-05-06-phase-24-0-undecies-thru-vicies-octies.md
 
-Status: master=4240abc, 6056/6056 tests pass (full green), prod=024f6dd FROZEN per no-deploy. master ahead-of-prod ~50 commits with Phase 21/22 (merged from side-branch) + Phase 23.0 (kiosk modal channel + branchId stamps + sparse-patient V12 mirror fix + cache schema-version) + Phase 24.0 customer-delete suite (main + bis through decies, ~25 commits): cascade 11 collections + dual perm gate + 1-dropdown authorizer + client-side Firestore (no /api fetch dependency for local) + graceful-skip 5 rule-locked collections + identity-based dedup recovery + Thai gender translation + customer_type='ลูกค้าทั่วไป' + contact_1_relation canonical + หมายเหตุทั่วไป box.
+Status: master=f9aefb1, 6442/6442 tests pass (full green), prod=024f6dd FROZEN per no-deploy. master ahead-of-prod ~62 commits, this session +12 commits: Phase 24.0-undecies (visitPurpose "อื่นๆ" + Finance column wrap) → duodecies (OPD banner ดู/แก้ไขข้อมูลลูกค้า + edit-mode deep-link) → terdecies..octiesdecies (customer-later flow + cascades + branch-grid race) → noniesdecies (+ สร้างนัด button) → vicies (deposit-edit cascades) → vicies-bis (kiosk-cancel cascade + NEW Rule N) → vicies-ter (deposit-card edit-appt + archive cascade) → vicies-quater (paymentAmount wheel-scroll fix) → vicies-quinquies (HARD-delete pair) → vicies-sexies (cascade error surfacing + listener-race defense) → vicies-septies (createDeposit().depositId extract + coerceId healing) → vicies-octies (Finance ไปที่นัด button + initialSelectedDate prop). NEW iron-clad Rule N (targeted-test-only for small bugfixes).
 
 Next action: idle. Open new chat for next directive.
 
@@ -513,7 +537,7 @@ Outstanding (user-triggered):
 - /audit-all pre-release pass
 - BackendDashboard nav restructure (deferred from Phase 20.0 EOD)
 
-Rules: NO Vercel deploys (local-only `feedback_local_only_no_deploy.md`); Rule M data-ops local+admin-SDK+pull-env (preserves data — NEVER delete customer data per user 2026-05-06 "อย่าลบข้อมูลลูกค้าใน frontend"); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: NO Vercel deploys (local-only); Rule M data-ops local+admin-SDK+pull-env; Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); NEW Rule N (small bugfix → targeted tests only; full suite for big/end-of-batch/pre-deploy); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
