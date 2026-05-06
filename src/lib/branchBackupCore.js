@@ -112,3 +112,75 @@ export function resolveBackupScope({ tiers = [], collections = [] } = {}) {
   }
   return out;
 }
+
+/**
+ * Build a (sourceId → newId) lookup table for FK remap during clone mode.
+ * Caller pre-mints newIds (positionally aligned with sources).
+ */
+export function buildFkRemapTable(sources, newIds) {
+  const map = new Map();
+  for (let i = 0; i < sources.length; i++) {
+    const sid = String(sources[i]?.id ?? sources[i]?.docId ?? '').trim();
+    const nid = String(newIds[i] ?? '').trim();
+    if (sid && nid) map.set(sid, nid);
+  }
+  return map;
+}
+
+/**
+ * Apply FK remap to a document. `fkSpec` maps doc-paths to target collection
+ * names. `tables` provides per-collection (oldId → newId) maps.
+ *
+ * Supported path patterns:
+ *   - 'productId' → flat field
+ *   - 'items[].productId' → array-of-objects field
+ *
+ * Unmapped IDs left unchanged + reported via `audit.unmapped` (caller mutates).
+ */
+export function applyFkRemap(doc, fkSpec, tables, audit = null) {
+  const out = JSON.parse(JSON.stringify(doc));
+  for (const [path, collection] of Object.entries(fkSpec)) {
+    const map = tables[collection];
+    if (!map) continue;
+    if (path.includes('[].')) {
+      const [arrKey, leafKey] = path.split('[].');
+      if (Array.isArray(out[arrKey])) {
+        for (const item of out[arrKey]) {
+          const oldId = String(item?.[leafKey] ?? '').trim();
+          if (!oldId) continue;
+          if (map.has(oldId)) {
+            item[leafKey] = map.get(oldId);
+          } else if (audit) {
+            audit.unmapped.push({ field: path, oldId, collection });
+          }
+        }
+      }
+    } else {
+      const oldId = String(out?.[path] ?? '').trim();
+      if (!oldId) continue;
+      if (map.has(oldId)) {
+        out[path] = map.get(oldId);
+      } else if (audit) {
+        audit.unmapped.push({ field: path, oldId, collection });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * FK spec per T1 collection. Mirrors cross-branch-import adapter fkRefs but
+ * keyed by doc-path so applyFkRemap can rewrite generically.
+ */
+export const T1_FK_SPEC = Object.freeze({
+  be_products: { /* unitId, categoryId — optional refs */
+    unitId: 'be_product_unit_groups',
+    categoryId: 'be_product_groups',
+  },
+  be_courses: { /* items[].productId → be_products */
+    'items[].productId': 'be_products',
+  },
+  be_product_groups: { /* products[].productId → be_products */
+    'products[].productId': 'be_products',
+  },
+});

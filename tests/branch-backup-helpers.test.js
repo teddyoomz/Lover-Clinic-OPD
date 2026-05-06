@@ -4,6 +4,8 @@ import {
   BACKUP_TIER_T1, BACKUP_TIER_T2, BACKUP_TIER_T3, BACKUP_TIER_T4,
   resolveBackupScope,
   isUniversalCollection,
+  buildFkRemapTable,
+  applyFkRemap,
 } from '../src/lib/branchBackupCore.js';
 
 describe('H1 — BSA tier matrix', () => {
@@ -57,5 +59,37 @@ describe('H2 — resolveBackupScope', () => {
 
   it('H2.4 — rejects universal collection in scope', () => {
     expect(() => resolveBackupScope({ collections: ['be_staff'] })).toThrow(/UNIVERSAL_COLLECTION_NOT_BACKUPABLE/);
+  });
+});
+
+describe('H3 — FK remap (clone mode)', () => {
+  it('H3.1 — buildFkRemapTable maps source IDs to new IDs', () => {
+    const sources = [{ id: 'OLD-1' }, { id: 'OLD-2' }];
+    const newIds = ['NEW-1', 'NEW-2'];
+    const map = buildFkRemapTable(sources, newIds);
+    expect(map.get('OLD-1')).toBe('NEW-1');
+    expect(map.get('OLD-2')).toBe('NEW-2');
+  });
+
+  it('H3.2 — applyFkRemap rewrites flat productId reference', () => {
+    const map = new Map([['OLD-1', 'NEW-1']]);
+    const out = applyFkRemap({ productId: 'OLD-1', name: 'X' }, { productId: 'be_products' }, { be_products: map });
+    expect(out.productId).toBe('NEW-1');
+  });
+
+  it('H3.3 — applyFkRemap rewrites array-of-objects refs', () => {
+    const map = new Map([['OLD-1', 'NEW-1'], ['OLD-2', 'NEW-2']]);
+    const doc = { items: [{ productId: 'OLD-1' }, { productId: 'OLD-2' }] };
+    const out = applyFkRemap(doc, { 'items[].productId': 'be_products' }, { be_products: map });
+    expect(out.items[0].productId).toBe('NEW-1');
+    expect(out.items[1].productId).toBe('NEW-2');
+  });
+
+  it('H3.4 — applyFkRemap leaves unmapped IDs unchanged + flags in audit', () => {
+    const map = new Map([['OLD-1', 'NEW-1']]);
+    const audit = { unmapped: [] };
+    const out = applyFkRemap({ productId: 'UNKNOWN' }, { productId: 'be_products' }, { be_products: map }, audit);
+    expect(out.productId).toBe('UNKNOWN');
+    expect(audit.unmapped).toContainEqual({ field: 'productId', oldId: 'UNKNOWN', collection: 'be_products' });
   });
 });
