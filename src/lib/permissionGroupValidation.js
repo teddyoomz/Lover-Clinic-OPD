@@ -32,7 +32,10 @@ export const PERMISSION_MODULES = Object.freeze([
       { key: 'customer_view',              label: 'ดูข้อมูลลูกค้าทั่วไป' },
       { key: 'customer_contact_view',      label: 'ดูข้อมูลการติดต่อของลูกค้า' },
       { key: 'branch_customer',            label: 'ดูเฉพาะลูกค้าสาขา' },
-      { key: 'customer_delete',            label: 'ลบลูกค้า' },
+      // Phase 24.0 (2026-05-06) — destructive cascade-delete capability. Default
+      // OFF; admin claim bypasses the perm. UI gate: useHasPermission('customer_delete')
+      // || isAdmin. Server gate (api/admin/delete-customer-cascade): same.
+      { key: 'customer_delete',            label: 'ลบลูกค้าถาวร (cascade ลบประวัติ 11 collections)' },
       { key: 'customer_product_change',    label: 'เปลี่ยนสินค้าที่ขายให้ลูกค้า' },
       { key: 'change_customer_credit',     label: 'ปรับวงเงินบัตรสมาชิก' },
       { key: 'change_customer_point',      label: 'ปรับคะแนนบัตรสมาชิก' },
