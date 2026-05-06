@@ -7,12 +7,30 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-06 EOD — Phase 21.0 SHIPPED + acceptance gate 8/8 PASS. Master ahead-of-prod ~50 commits. Local-only workflow per user directive.
+- **Date last updated**: 2026-05-06 EOD — Phase 21.0 trilogy + Phase 22.0 trilogy SHIPPED (incl. live-applied sync-status reset migration on prod). Master ahead-of-prod ~60 commits. Local-only workflow per user directive.
 - **Branch**: `master`
-- **Last commit**: `73c9fa4` — docs(agents): EOD 2026-05-06 wrap — Phase 21.0 appointment sub-tabs SHIPPED + acceptance gate 8/8 PASS (Phase 21.0 feat at `fa366f2`)
-- **Test count**: **5771** PASS / 5777 total (6 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B.PF.4 stale)
+- **Last commit**: `d378cf5` — feat(phase-22-0c): AdminDashboard schedule + clinic-prefs branch separation
+- **Test count**: **5857** PASS / 5862 total (5 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B PF.4)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~50 commits.
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~60 commits.
+
+### Session 2026-05-06 EOD continuation 3 — Phase 21.0 trilogy + Phase 22.0 trilogy (10 commits)
+
+**Phase 21.0 family — appointment sub-tabs cleanup**:
+- TDZ hotfix (86b1df7) — empty-grid + blank-screen ReferenceError fix
+- 21.0-bis (4e6a9e4) — added "นัดหมายทุกประเภท" overview sub-tab at top
+- 21.0-ter+quater (9590e57) — embedded deposit subform in modal + position-stable single-element refactor (fixes "empty grid until F5" sub-tab click bug)
+- 21.0-quinquies+sexies (777c51d) — Finance.มัดจำ "มัดจำสำหรับ" column + calendar grid polish (hour borders, status accent, occupied-cell border skip)
+- 21.0-septies (c9794e4) — purpose row size matches customer name (text-sm font-bold)
+
+**Phase 22.0 trilogy — branch correctness sweep**:
+- 22.0a (e16ed7b) — sync-status reset migration **LIVE-APPLIED on prod**: 768 docs status-flipped, 0 deletions. opd_sessions broker-* wiped + pc_*.syncedAt cleared. Forensic trail (*ResetMetadata) recoverable. Audit: `be_admin_audit/phase-22-0a-sync-status-reset-1778057983371-ceadb4fe`. User safety directive honored: "อย่าลบข้อมูลลูกค้าใน frontend แค่ให้หบุด sync".
+- 22.0b (2cec108) — kiosk modals branch correctness: fetchDepositOptions filter doctors/staff per branch + populate broken assistants dropdown + confirmCreateDeposit atomic pair-write to be_deposits + be_appointments via createDepositBookingPair (kiosk จองมัดจำ now visible in Finance.มัดจำ + BackendDashboard sub-tab).
+- 22.0c (d378cf5) — clinic_schedules.branchId stamp + list filter by selectedBranchId + schedule_prefs__{branchId} per-branch doc id + updateActiveSchedules per-schedule branchId query.
+
+5 NEW test files (+~80 tests). Build clean. NO DEPLOY.
+
+Detail: `.agents/sessions/2026-05-06-phase-21-22-trilogy.md`
 
 ### Session 2026-05-06 EOD (continuation 2) — Phase 21.0 Appointment Sub-Tabs + Deposit-Booking Pair Atomicity
 
@@ -459,30 +477,31 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-06 EOD continuation.
+Resume LoverClinic — continue from 2026-05-06 EOD continuation 3.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=79084bc, prod=024f6dd FROZEN V15 #22)
-3. .agents/active.md (5742+ tests; ~40 commits ahead-of-prod)
+2. SESSION_HANDOFF.md (master=d378cf5, prod=024f6dd FROZEN V15 #22)
+3. .agents/active.md (5857 tests; ~60 commits ahead-of-prod)
 4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary)
-5. .agents/sessions/2026-05-06-frontend-proclinic-strip-final-and-per-branch-filter.md
+5. .agents/sessions/2026-05-06-phase-21-22-trilogy.md
 
-Status: master=79084bc, 5742+ tests pass, prod=024f6dd (V15 #22 LIVE — FROZEN per no-deploy directive 2026-05-06). master ahead-of-prod ~40 commits with all Phase 20.0 work. Frontend ProClinic strip 100% complete (UI labels + URL links + handlers + state all gone from AdminDashboard.jsx; brokerClient.js + api/proclinic/* + cookie-relay/ kept for MasterDataTab dev sync only). Per-branch filter working (verified live: นครราชสีมา 68 รายการ vs พระราม 3 0 รายการ). 467 docs migrated/hotfix (75 opd_sessions + 12 chat + 380 appointments).
+Status: master=d378cf5, 5857/5862 tests pass (5 pre-existing CRLF failures unrelated), prod=024f6dd FROZEN per no-deploy directive. master ahead-of-prod ~60 commits with Phase 21.0 trilogy (appointment sub-tabs incl. ทุกประเภท overview + embedded deposit subform + UI polish + position-stable refactor) + Phase 22.0 trilogy (sync-status reset LIVE-APPLIED on prod 768 docs flipped 0 deletions + kiosk modal branch correctness + schedule branch separation).
 
-Next action: BackendDashboard nav restructure (DEFERRED to next chat per user 2026-05-06):
-- Move "นัดหมาย" from PINNED_ITEMS to its own section in left nav
-- Add 4 appointmentType sub-tabs: จองไม่มัดจำ / จองมัดจำ / คิวรอทำหัตถการ / คิวติดตามอาการ
-- Each sub-tab filters AppointmentTab by selectedBranchId × appointmentType
-- จองมัดจำ flow also writes to be_deposits per-branch (Finance.มัดจำ wiring)
+Next action: idle. Open new chat for next directive. Possible next directions:
+- H-bis ProClinic full strip
+- Manual-sync-to-be_* UI button (post-22.0a sync reset prepared the data)
+- /audit-all pre-release pass
+- Phase 23+ as user directs
 
-Outstanding (user-triggered, lower priority):
-- 🚨 H-bis ProClinic strip pre-launch (delete brokerClient.js + api/proclinic/* + cookie-relay/ + MasterDataTab) — explicitly EXCLUDED from earlier session
+Outstanding (user-triggered):
+- 🚨 H-bis ProClinic full strip (brokerClient + api/proclinic + cookie-relay + MasterDataTab + clinic_settings/proclinic_session*)
 - Hard-gate Firebase custom claim (deploy-coupled — skipped under no-deploy)
 - /audit-all readiness pass
-- Modal extraction (cosmetic refactor — AdminDashboard tabs are panels not modals)
+- Modal extraction (cosmetic)
+- Manual-sync-to-be_* UI (data prepared; UI not yet built)
 
-Rules: NO Vercel deploys (local-only directive 2026-05-06 `feedback_local_only_no_deploy.md`); Rule M data-ops via local + admin-SDK + pull-env; Rule J brainstorming HARD-GATE + plan-mode ORTHOGONAL; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature code); V36.G.51 (data layer no .jsx imports); V37 (NEVER `git add -A` — always specific files; .env.local.prod + variants now in .gitignore); credential leak in `1f40cdd` force-push'd clean — user explicit accept no-rotate per `feedback_credential_leak_no_rotate.md` (DON'T raise the leak again); NO real-action clicks in preview_eval against prod Firestore (TEST-prefixed fixtures only).
+Rules: NO Vercel deploys (local-only `feedback_local_only_no_deploy.md`); Rule M data-ops local+admin-SDK+pull-env (preserves data — NEVER delete customer data per user 2026-05-06 "อย่าลบข้อมูลลูกค้าใน frontend"); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); V36.G.51 (data layer no .jsx imports); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
