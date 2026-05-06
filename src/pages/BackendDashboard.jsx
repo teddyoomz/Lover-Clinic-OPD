@@ -102,7 +102,13 @@ const DoctorSchedulesTab   = lazy(() => import('../components/backend/DoctorSche
 const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
-import { setUseTrialServer } from '../lib/brokerClient.js';
+// Phase 24.0-vicies-novies-ter (2026-05-07) — backend dashboard now points
+// at PRODUCTION ProClinic (same as Frontend). The legacy setUseTrialServer
+// helper still exists in brokerClient.js for explicit opt-in (cookie-relay
+// extension trial mode), but it's no longer auto-enabled here. User
+// directive: "ต่อไปในหน้า Sync ข้อมูลจาก ProClinic เราจะเปลี่ยนไป Sync
+// ข้อมูลจาก Proclinic จริงที่ไม่ใช่ Trial แล้ว ซึ่งจะเป็นอันเดียวกับที่
+// Frontend เชื่อมต่ออยู่".
 import { useTabAccess } from '../hooks/useTabAccess.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
@@ -127,12 +133,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [financeMode, setFinanceMode] = useState(false);
   const [clinicSettings, setClinicSettings] = useState(() => parentSettings || { ...DEFAULT_CLINIC_SETTINGS });
 
-  // Backend dashboard uses trial ProClinic server (separate from production frontend)
-  useEffect(() => {
-    setUseTrialServer(true);
-    return () => setUseTrialServer(false);
-  }, []);
-
+  // Phase 24.0-vicies-novies-ter (2026-05-07) — backend dashboard now uses
+  // PRODUCTION ProClinic (same as Frontend). Trial-mode auto-opt-in removed.
+  // The brokerClient setter helper still exists for explicit opt-in via
+  // a feature-flag context if needed; cookie-relay extension trial-cookie
+  // path remains intact for cookie writes — only the body-flag injection
+  // from this useEffect is gone.
   const [hydrated, setHydrated] = useState(false);
 
   // Phase 13.5.2 — permission-aware navigation. canAccess() guards the
