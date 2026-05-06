@@ -77,6 +77,10 @@ describe('Phase 24.0 / P — customer_delete perm key + dual gate', () => {
       'src/components/backend/CustomerCard.jsx',
       'src/components/backend/CustomerDetailView.jsx',
       'api/admin/delete-customer-cascade.js',
+      // Issue #3 (Phase 24.0): verifyAdminOrPermissionToken accepts the
+      // 'customer_delete' claim string as its permissionKey arg. Mentioned
+      // in JSDoc + error message — legitimate canonical reference.
+      'api/admin/_lib/adminAuth.js',
       'tests/phase-24-0-permission-customer-delete.test.js',
       'tests/phase-24-0-customer-delete-server.test.js',
       'tests/phase-24-0-customer-delete-modal.test.jsx',

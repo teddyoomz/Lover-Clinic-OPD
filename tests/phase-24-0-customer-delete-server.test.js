@@ -2,7 +2,7 @@
 // Full integration testing (firebase-admin + cascade) is covered by the
 // flow-simulate test which uses a separate fixture harness, plus the
 // preview_eval verification at user-trigger time per Rule M.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import {
   assertHasDeletePermission,
@@ -91,8 +91,12 @@ describe('Phase 24.0 / S3 — classifyOrigin', () => {
 describe('Phase 24.0 / S4 — endpoint surface (source-grep guards)', () => {
   const SERVER_TXT = fs.readFileSync('api/admin/delete-customer-cascade.js', 'utf-8');
 
-  it('S4.1 endpoint imports verifyAdminToken', () => {
-    expect(SERVER_TXT).toMatch(/import\s*\{[^}]*verifyAdminToken[^}]*\}\s*from\s*['"]\.\/_lib\/adminAuth\.js['"]/);
+  it('S4.1 endpoint imports verifyAdminOrPermissionToken (Issue #3 fix — accepts customer_delete claim)', () => {
+    expect(SERVER_TXT).toMatch(/import\s*\{[^}]*verifyAdminOrPermissionToken[^}]*\}\s*from\s*['"]\.\/_lib\/adminAuth\.js['"]/);
+    // Anti-regression: must NOT use verifyAdminToken (admin-only gate would
+    // shut out legitimate non-admin perm-bearers).
+    expect(SERVER_TXT).not.toMatch(/import\s*\{[^}]*verifyAdminToken[^}]*\}\s*from\s*['"]\.\/_lib\/adminAuth\.js['"]/);
+    expect(SERVER_TXT).toMatch(/verifyAdminOrPermissionToken\(req,\s*res,\s*['"]customer_delete['"]\)/);
   });
 
   it('S4.2 endpoint declares CUSTOMER_CASCADE_COLLECTIONS list (11 entries)', () => {
@@ -127,5 +131,101 @@ describe('Phase 24.0 / S5 — shared CUSTOMER_CASCADE_COLLECTIONS parity (client
       return (m[1].match(/'(be_[a-z_]+)'/g) || []).map(s => s.slice(1, -1));
     }
     expect(parseList(clientTxt)).toEqual(parseList(serverTxt));
+  });
+});
+
+// ─── S6 — verifyAdminOrPermissionToken helper unit tests (Issue #3) ─────────
+// Verifies the new helper accepts the perm claim path that verifyAdminToken
+// rejected. Mocks firebase-admin/auth so we can drive the token-claim payload
+// without requiring real credentials.
+describe('Phase 24.0 / S6 — verifyAdminOrPermissionToken helper', () => {
+  // Lazy import + reset module state per test so the mock takes effect.
+  async function loadHelperWithMock(mockVerifyIdToken) {
+    vi.resetModules();
+    vi.doMock('firebase-admin/app', () => ({
+      initializeApp: () => ({}),
+      cert: () => ({}),
+      getApps: () => [{}],
+      getApp: () => ({}),
+    }));
+    vi.doMock('firebase-admin/auth', () => ({
+      getAuth: () => ({ verifyIdToken: mockVerifyIdToken }),
+    }));
+    const mod = await import('../api/admin/_lib/adminAuth.js');
+    mod.__resetAdminAuthForTests();
+    return mod;
+  }
+
+  function makeRes() {
+    return {
+      _status: 0,
+      _body: null,
+      status(code) { this._status = code; return this; },
+      json(body) { this._body = body; return this; },
+    };
+  }
+
+  it('S6.1 admin claim → returns caller object with isAdmin=true', async () => {
+    const { verifyAdminOrPermissionToken } = await loadHelperWithMock(async () => ({
+      uid: 'u1', email: 'admin@x.com', admin: true,
+    }));
+    const req = { headers: { authorization: 'Bearer FAKE' } };
+    const res = makeRes();
+    const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
+    expect(caller).not.toBeNull();
+    expect(caller.uid).toBe('u1');
+    expect(caller.isAdmin).toBe(true);
+    expect(res._status).toBe(0);
+  });
+
+  it('S6.2 perm claim only → returns caller object (KEY FIX — non-admin with permission)', async () => {
+    const { verifyAdminOrPermissionToken } = await loadHelperWithMock(async () => ({
+      uid: 'u2', email: 'staff@x.com', customer_delete: true,
+    }));
+    const req = { headers: { authorization: 'Bearer FAKE' } };
+    const res = makeRes();
+    const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
+    expect(caller).not.toBeNull();
+    expect(caller.isAdmin).toBe(false);
+    expect(caller.hasPermission).toBe(true);
+    expect(res._status).toBe(0);
+  });
+
+  it('S6.3 neither claim → returns null + 403', async () => {
+    const { verifyAdminOrPermissionToken } = await loadHelperWithMock(async () => ({
+      uid: 'u3', email: 'rando@x.com',
+    }));
+    const req = { headers: { authorization: 'Bearer FAKE' } };
+    const res = makeRes();
+    const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
+    expect(caller).toBeNull();
+    expect(res._status).toBe(403);
+    expect(res._body?.success).toBe(false);
+    expect(res._body?.error).toMatch(/customer_delete/);
+  });
+
+  it('S6.4a missing token → returns null + 401', async () => {
+    const { verifyAdminOrPermissionToken } = await loadHelperWithMock(async () => ({}));
+    const req = { headers: {} };
+    const res = makeRes();
+    const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
+    expect(caller).toBeNull();
+    expect(res._status).toBe(401);
+  });
+
+  it('S6.4b invalid token → returns null + 401', async () => {
+    const { verifyAdminOrPermissionToken } = await loadHelperWithMock(async () => {
+      throw Object.assign(new Error('bad'), { code: 'auth/invalid-id-token' });
+    });
+    const req = { headers: { authorization: 'Bearer BAD' } };
+    const res = makeRes();
+    const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
+    expect(caller).toBeNull();
+    expect(res._status).toBe(401);
+  });
+
+  it('S6.5 helper exported from adminAuth.js (source-grep guard)', () => {
+    const TXT = fs.readFileSync('api/admin/_lib/adminAuth.js', 'utf-8');
+    expect(TXT).toMatch(/export\s+async\s+function\s+verifyAdminOrPermissionToken/);
   });
 });

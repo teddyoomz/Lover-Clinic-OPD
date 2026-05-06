@@ -19,7 +19,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
-import { verifyAdminToken } from './_lib/adminAuth.js';
+import { verifyAdminOrPermissionToken } from './_lib/adminAuth.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 
@@ -116,18 +116,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Auth gate — verifyAdminToken returns null + writes 401/403 on failure.
-  const caller = await verifyAdminToken(req, res);
+  // Auth gate — verifyAdminOrPermissionToken returns null + writes 401/403 on
+  // failure. Phase 24.0: accept admin claim OR customer_delete perm claim
+  // (admin can delegate via /api/admin/users setPermission).
+  const caller = await verifyAdminOrPermissionToken(req, res, 'customer_delete');
   if (!caller) return;
 
-  // Phase 24.0 — accept admin claim OR customer_delete claim. verifyAdminToken
-  // already requires admin OR bootstrap-uid; we re-check here so a future
-  // verifyAdminToken evolution that loosens its gate doesn't accidentally
-  // expand customer-delete authority.
-  //
-  // verifyAdminToken returns { uid, email, isAdmin, decoded }. Real claims
-  // live on `caller.decoded` (the verified ID token claims). We also accept
-  // `caller.token` / `caller.claims` for forward-compat shape evolutions.
+  // Defense in depth — re-check via the pure helper. Redundant in the happy
+  // path now that verifyAdminOrPermissionToken accepts the perm claim, but
+  // keeps the audit invariant explicit (any future evolution of the auth
+  // helper still has to satisfy this gate).
   const claims = caller.decoded || caller.token || caller.claims || {};
   if (!assertHasDeletePermission(claims) && claims.admin !== true) {
     return res.status(403).json({ success: false, error: 'ไม่มีสิทธิ์ลบลูกค้า' });

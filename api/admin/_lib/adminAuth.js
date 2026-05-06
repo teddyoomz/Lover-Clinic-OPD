@@ -86,6 +86,49 @@ export async function verifyAdminToken(req, res) {
   return { uid: decoded.uid, email: decoded.email || '', isAdmin: true, decoded };
 }
 
+// Phase 24.0 (2026-05-06) — verify token + accept admin claim OR a specified
+// permission claim. Use for endpoints that admin can delegate via per-group
+// permission keys (e.g. customer_delete). Mirrors verifyAdminToken's auth
+// shape but loosens the admin-only gate so a non-admin staff with the named
+// permission claim (set via /api/admin/users setPermission) can call.
+//
+// Returns { uid, email, isAdmin, hasPermission, decoded } on success or
+// null after writing 401/403 to res.
+export async function verifyAdminOrPermissionToken(req, res, permissionKey) {
+  const authHeader = req.headers?.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    res.status(401).json({ success: false, error: 'Unauthorized: missing Bearer token' });
+    return null;
+  }
+
+  let decoded;
+  try {
+    decoded = await getAdminAuth().verifyIdToken(token, true);
+  } catch (err) {
+    res.status(401).json({ success: false, error: `Unauthorized: ${err?.code || 'invalid-token'}` });
+    return null;
+  }
+
+  const isAdmin = decoded.admin === true || isBootstrapAdmin(decoded.uid);
+  const hasPermission = !!(permissionKey && decoded[permissionKey] === true);
+  if (!isAdmin && !hasPermission) {
+    res.status(403).json({
+      success: false,
+      error: `Forbidden: admin or ${permissionKey} permission required`,
+    });
+    return null;
+  }
+
+  return {
+    uid: decoded.uid,
+    email: decoded.email || '',
+    isAdmin,
+    hasPermission,
+    decoded,
+  };
+}
+
 // Reset module state — test-only helper.
 export function __resetAdminAuthForTests() {
   cachedAuth = null;
