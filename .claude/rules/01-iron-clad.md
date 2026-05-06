@@ -26,6 +26,10 @@ PREFIX="artifacts/$APP_ID/public/data"
 this rule applies when an explicit rules deploy is authorized (rare). The
 default workflow is local-only (per `feedback_local_only_no_deploy.md`).
 
+**V40 update (2026-05-07)**: Probe list now covers Storage rules too. Use
+`firebase deploy --only firestore:rules,storage:rules` (combined) to deploy
+both atomically. Both rule files must be probe-tested.
+
 ทุกครั้งที่จะ `firebase deploy --only firestore:rules` — ไม่มีข้อยกเว้น:
 1. `curl -X POST $BASE/$PREFIX/chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
 2. `curl -X PATCH $BASE/$PREFIX/pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
