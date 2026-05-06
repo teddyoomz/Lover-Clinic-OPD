@@ -189,7 +189,7 @@ describe('LC3: CustomerDetailView uses listenToCustomerSales + listenToCustomerA
 // ─── LC4: AppointmentTab wiring ────────────────────────────────────────────
 
 describe('LC4: AppointmentTab uses listenToAppointmentsByDate', () => {
-  const SRC = READ('src/components/backend/AppointmentTab.jsx');
+  const SRC = READ('src/components/backend/AppointmentCalendarView.jsx');
 
   it('LC4.1: imports listenToAppointmentsByDate', () => {
     expect(SRC).toMatch(/listenToAppointmentsByDate/);
@@ -219,7 +219,7 @@ describe('LC4: AppointmentTab uses listenToAppointmentsByDate', () => {
 
 describe('LC5: anti-regression source-grep guards', () => {
   const VIEW = READ('src/components/backend/CustomerDetailView.jsx');
-  const APPT = READ('src/components/backend/AppointmentTab.jsx');
+  const APPT = READ('src/components/backend/AppointmentCalendarView.jsx');
 
   it('LC5.1: CustomerDetailView no longer has reload-callback for appointments (listener handles it)', () => {
     // The old reloadCustomerAppointments did getCustomerAppointments(...).then(setCustomerAppointments)
@@ -489,7 +489,7 @@ describe('LC7: pure simulate — coalescing + aggregation logic', () => {
 
 describe('LC8: listenToHolidays — multi-consumer cross-tab refresh', () => {
   const SRC = READ('src/lib/backendClient.js');
-  const APPT = READ('src/components/backend/AppointmentTab.jsx');
+  const APPT = READ('src/components/backend/AppointmentCalendarView.jsx');
   const FORM = READ('src/components/backend/AppointmentFormModal.jsx');
   const HOLI = READ('src/components/backend/HolidaysTab.jsx');
 

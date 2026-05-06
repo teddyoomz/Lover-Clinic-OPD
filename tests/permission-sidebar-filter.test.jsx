@@ -88,8 +88,11 @@ describe('PS1 — Phase 13.5.2 sidebar/palette permission filter', () => {
       // Find redirect effect and assert its early-return shape
       expect(dashSrc).toMatch(/if\s*\(\s*!hydrated\s*\|\|\s*!permsLoaded\s*\)\s*return/);
       expect(dashSrc).toMatch(/if\s*\(\s*canAccess\(activeTab\)\s*\)\s*return/);
-      // Falls back to firstAllowedTab
-      expect(dashSrc).toMatch(/firstAllowedTab\(\[[^\]]*appointments[^\]]*\]\)/);
+      // Falls back to firstAllowedTab — Phase 21.0 (2026-05-06) updated to
+      // appointment-no-deposit (replaces legacy 'appointments' which was
+      // removed from navConfig). Match either to keep this assertion alive
+      // through future renames.
+      expect(dashSrc).toMatch(/firstAllowedTab\(\[[^\]]*(appointment-no-deposit|appointments)[^\]]*\]\)/);
     });
 
     it('PS1.A.12 handleNavigate guards via canAccess on permsLoaded', () => {

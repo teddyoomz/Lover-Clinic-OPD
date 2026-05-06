@@ -256,7 +256,7 @@ vi.mock('../src/components/backend/CloneTab.jsx', () => ({ default: () => <div d
 vi.mock('../src/components/backend/CustomerListTab.jsx', () => ({ default: () => <div data-testid="t-customers" /> }));
 vi.mock('../src/components/backend/CustomerDetailView.jsx', () => ({ default: () => <div data-testid="t-customer-detail" /> }));
 vi.mock('../src/components/backend/MasterDataTab.jsx', () => ({ default: () => <div data-testid="t-masterdata" /> }));
-vi.mock('../src/components/backend/AppointmentTab.jsx', () => ({ default: () => <div data-testid="t-appointments" /> }));
+vi.mock('../src/components/backend/AppointmentCalendarView.jsx', () => ({ default: () => <div data-testid="t-appointments" /> }));
 vi.mock('../src/components/backend/SaleTab.jsx', () => ({ default: () => <div data-testid="t-sales" /> }));
 vi.mock('../src/components/backend/FinanceTab.jsx', () => ({ default: () => <div data-testid="t-finance" /> }));
 vi.mock('../src/components/backend/StockTab.jsx', () => ({ default: () => <div data-testid="t-stock" /> }));

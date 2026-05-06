@@ -73,8 +73,15 @@ describe('nav config — shape', () => {
 
   it('S7 deep-link whitelist — includes all legacy tab ids to preserve bookmarks', () => {
     // These IDs are baked into existing URLs out in the wild. Don't rename.
-    const legacy = ['clone', 'customers', 'masterdata', 'appointments', 'sales', 'finance', 'stock', 'promotions', 'coupons', 'vouchers'];
+    // Phase 21.0 (2026-05-06) — 'appointments' DROPPED from canonical set
+    // (replaced with 4 sub-tab ids). Legacy URL preservation handled by
+    // BackendDashboard URL-hydration redirect (?tab=appointments → ?tab=
+    // appointment-no-deposit). The 4 new ids are added below.
+    const legacy = ['clone', 'customers', 'masterdata', 'sales', 'finance', 'stock', 'promotions', 'coupons', 'vouchers'];
     for (const id of legacy) expect(ALL_ITEM_IDS).toContain(id);
+    // Phase 21.0 — 4 new appointment sub-tab ids replace legacy 'appointments'.
+    const phase21 = ['appointment-no-deposit', 'appointment-deposit', 'appointment-treatment-in', 'appointment-follow-up'];
+    for (const id of phase21) expect(ALL_ITEM_IDS).toContain(id);
   });
 });
 
@@ -117,8 +124,12 @@ describe('ITEM_LOOKUP + helpers', () => {
 });
 
 describe('pinned items', () => {
-  it('P1 นัดหมาย is pinned (frequently-used, user-requested 2026-04-19)', () => {
-    expect(PINNED_ITEMS.find(p => p.id === 'appointments')).toBeTruthy();
+  // Phase 21.0 (2026-05-06) — flipped invariant: PINNED_ITEMS is empty after
+  // 'appointments' was moved into its own NAV_SECTIONS section with 4
+  // sub-tabs. The 4 sub-tab section is asserted in S6 + the new
+  // phase-21-0-nav-config-appointment-section.test.js.
+  it('P1 PINNED_ITEMS is empty after Phase 21.0 (legacy นัดหมาย moved to section)', () => {
+    expect(PINNED_ITEMS.length).toBe(0);
   });
 
   it('P2 pinned items do NOT also appear in a section (avoid duplicate nav)', () => {

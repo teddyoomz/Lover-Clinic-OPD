@@ -2833,3 +2833,53 @@ Rule-builder UI for marketing segmentation. Admin builds AND/OR predicate trees 
 **Deploy gate**: V15 #11 needed when shipping (firestore.rules adds `be_audiences` entry → Probe-Deploy-Probe Rule B + explicit "deploy" THIS turn per V18).
 
 Plan: `~/.claude/plans/resume-loverclinic-continue-tidy-thunder.md`
+
+---
+
+## Phase 21.0 — Appointment Sub-Tabs (4 types) + Deposit-Booking Pair Atomicity (2026-05-06)
+
+**Why**: User directive — move นัดหมาย from PINNED to its own NAV section with 4 sub-tabs (จองไม่มัดจำ / จองมัดจำ / คิวรอทำหัตถการ / คิวติดตามอาการ), filtered per-branch. Plus close the deposit-booking visibility gap: pre-Phase-21.0 DepositPanel wrote only be_deposits with embedded appointment metadata (NOT a separate be_appointments doc), so deposit-bookings never appeared in any AppointmentTab grid. Phase 21.0 spawns paired (be_deposits + be_appointments) docs via writeBatch (atomic).
+
+**Scope**:
+- Nav: section `appointments-section` with 4 items in `navConfig.js`. PINNED_ITEMS now empty (legacy 'appointments' moved to section).
+- View: `src/components/backend/AppointmentTab.jsx` → renamed to `AppointmentCalendarView.jsx` + new `appointmentType` prop + `typedDayAppts` filter (defense-in-depth via `migrateLegacyAppointmentType`).
+- Modal: `AppointmentFormModal.jsx` gains `lockedAppointmentType` prop. When set: hides type radio + shows static chip + forces save payload. When set to `'deposit-booking'`: hides save button + shows redirect banner to Finance.มัดจำ.
+- Pair helper: NEW `src/lib/appointmentDepositBatch.js` — `createDepositBookingPair` + `cancelDepositBookingPair` use Firestore writeBatch to write paired (be_deposits + be_appointments) docs atomically with cross-link fields (`linkedAppointmentId` + `linkedDepositId`).
+- DepositPanel: routes `hasAppointment=true` creates to `createDepositBookingPair`; cancels with `linkedAppointmentId` use `cancelDepositBookingPair`.
+- BackendDashboard: 4 new tab cases rendering `<AppointmentCalendarView appointmentType=...>`. Old `?tab=appointments` URL hydrates to `?tab=appointment-no-deposit` (preserves bookmarks).
+- Permissions: `tabPermissions.js` adds 4 sub-tab gates with same permission set as legacy 'appointments'. firstAllowedTab default updated to `appointment-no-deposit`.
+- Migration script: NEW `scripts/phase-21-0-migrate-appointment-types-strict.mjs` — Rule M canonical (Phase 19.0 / 20.0 template). Two-phase: (a) re-stamp any orphan `appointmentType` to `'no-deposit-booking'`; (b) backfill be_appointments from be_deposits where `hasAppointment=true` + `!linkedAppointmentId`. Idempotent + audit doc + forensic trail.
+- Acceptance gate: NEW `scripts/phase-21-0-acceptance-gate.mjs` — admin-SDK matrix verification. 2 real branches × 4 types × 2 fixtures = 16 TEST-APPT-* docs. Per-branch + per-type queries return ONLY the matching cell with zero leakage. Result: 8/8 PASS. Cleanup deletes all 16 fixtures.
+
+**Files touched**:
+- RENAME `src/components/backend/AppointmentTab.jsx` → `AppointmentCalendarView.jsx` (~+50 LOC: prop + typeFilter + typedDayAppts derivation + 5 use-site refactors + 2 visual additions)
+- MODIFY `src/components/backend/AppointmentFormModal.jsx` (~+90 LOC: prop + safeLockedType + locked chip + redirect banner + save-handler guard + save-button conditional)
+- MODIFY `src/components/backend/DepositPanel.jsx` (~+30 LOC: pair-helper imports + hasAppointment route + cancel route)
+- MODIFY `src/components/backend/nav/navConfig.js` (~+25 LOC: section + 4 items + comment block)
+- MODIFY `src/lib/tabPermissions.js` (~+10 LOC: 4 sub-tab gates + firstAllowedTab default)
+- MODIFY `src/pages/BackendDashboard.jsx` (~+30 LOC: 4 tab cases + URL redirect + import rename + fallback array)
+- NEW `src/lib/appointmentDepositBatch.js` (~270 LOC)
+- NEW `scripts/phase-21-0-migrate-appointment-types-strict.mjs` (~270 LOC)
+- NEW `scripts/phase-21-0-acceptance-gate.mjs` (~190 LOC)
+- NEW 8 test files (`tests/phase-21-0-*.test.js`) — 111 tests across nav structure / calendar component / modal lock / pair helper / DepositPanel wiring / tab redirect / migration helpers / Rule I full-flow simulate
+
+**Tests**: 5642 → 5777 total (+135 net; 5771 PASS, 6 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B.PF.4 stale). Phase 21.0 focused tests: 111/111 PASS. Build clean.
+
+**Migration**: Run on prod via `node scripts/phase-21-0-migrate-appointment-types-strict.mjs --apply` (Rule M local + admin-SDK + canonical artifacts/{APP_ID}/public/data path). Result: 0 docs to migrate (idempotent — Phase 19.0 + 20.0 already cleaned). Audit doc: `be_admin_audit/phase-21-0-strict-and-backfill-1778047714399-b09eefdc`.
+
+**Acceptance gate**: 8/8 PASS — per-branch (นครราชสีมา + พระราม 3) × per-type (4 sub-tabs) isolation matrix with TEST-APPT-* fixtures (V33.13 prefix). Zero cross-cell leakage. 16 fixtures cleaned up.
+
+**Iron-clad refs honored**:
+- Rule E (backend = Firestore only — pair helper is a pure data-layer addition; no ProClinic write-back)
+- Rule H + H-quater (be_* only; APPOINTMENT_TYPES SSOT from Phase 19.0)
+- Rule J (brainstorming HARD-GATE — Skill(brainstorming) invoked + 4 design Qs locked before code)
+- Rule K (work-first test-last — 7 source files written → reviewed → then 8 test files batched)
+- Rule I (full-flow simulate — `phase-21-0-flow-simulate.test.js` chains listener emit → typedDayAppts → render assertions; acceptance-gate script extends to real Firestore)
+- Rule L / BSA (selectedBranchId in deps array of all data-loading hooks; AppointmentCalendarView imports from scopedDataLayer.js — BS-1 invariant respected)
+- Rule M (data-ops via local + admin-SDK + .env.local.prod + two-phase + audit doc + idempotent + forensic trail)
+- V37 (specific-file `git add` discipline — never `git add -A`)
+- V12 (multi-writer/reader sweep — single pair-helper module is the SOLE writer for paired docs; locked by P1 helper tests)
+
+**Deploy gate**: NONE. Per local-only directive 2026-05-06 ("จะ prod เหี้ยไร เราจะทำ ใน local ไอ้ควย"). master ahead-of-prod ~50 commits with no scheduled deploy. firestore.rules unchanged (no probe-deploy-probe needed).
+
+Spec: `docs/superpowers/specs/2026-05-06-phase-21-0-appointment-sub-tabs-design.md`

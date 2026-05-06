@@ -20,7 +20,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 const REPO_ROOT = path.resolve(import.meta.dirname || __dirname, '..');
-const ApptTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const ApptTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 
 describe('Phase 15.7-quinquies — Calendar column width scales with roomCount', () => {
   describe('QU1 — Source contract', () => {

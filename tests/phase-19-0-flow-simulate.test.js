@@ -13,7 +13,7 @@ import {
 } from '../src/lib/appointmentTypes.js';
 
 const FORM_SRC = readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
-const TAB_SRC = readFileSync('src/components/backend/AppointmentTab.jsx', 'utf8');
+const TAB_SRC = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
 const DEP_SRC = readFileSync('src/components/backend/DepositPanel.jsx', 'utf8');
 const AGG_SRC = readFileSync('src/lib/appointmentReportAggregator.js', 'utf8');
 const ADMIN_SRC = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');

@@ -182,7 +182,7 @@ describe('Phase 18.0 Task 10 — Rule I full-flow simulate', () => {
       expect(src).toMatch(/}, \[branchId\]\);/);
     });
     it('F7.6 AppointmentTab loads listExamRooms with branchId in deps', () => {
-      const src = readFileSync('src/components/backend/AppointmentTab.jsx', 'utf8');
+      const src = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
       expect(src).toMatch(/listExamRooms\(\{\s*branchId:\s*selectedBranchId/);
     });
     it('F7.7 Phase 18.0 marker present in modified files', () => {

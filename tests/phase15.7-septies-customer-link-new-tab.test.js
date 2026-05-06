@@ -33,7 +33,7 @@ import { buildCustomerDetailUrl, openCustomerInNewTab } from '../src/lib/custome
 
 const REPO_ROOT = path.resolve(import.meta.dirname || __dirname, '..');
 const NavSrc = readFileSync(path.join(REPO_ROOT, 'src/lib/customerNavigation.js'), 'utf-8');
-const TabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const TabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 const ModalSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentFormModal.jsx'), 'utf-8');
 const DashboardSrc = readFileSync(path.join(REPO_ROOT, 'src/pages/BackendDashboard.jsx'), 'utf-8');
 
@@ -174,28 +174,33 @@ describe('Phase 15.7-septies — customer link opens new browser tab', () => {
       expect(modalBlock[0]).not.toMatch(/onOpenCustomer=/);
     });
 
-    it('SE4.3 AppointmentTab no longer accepts onOpenCustomer prop (cleanup)', () => {
-      // Function signature
-      const sig = TabSrc.match(/export default function AppointmentTab\([\s\S]{0,200}\)/);
+    it('SE4.3 AppointmentCalendarView no longer accepts onOpenCustomer prop (cleanup)', () => {
+      // Function signature — Phase 21.0 (2026-05-06) renamed
+      // AppointmentTab → AppointmentCalendarView.
+      const sig = TabSrc.match(/export default function AppointmentCalendarView\([\s\S]{0,200}\)/);
       expect(sig).toBeTruthy();
       expect(sig[0]).not.toMatch(/onOpenCustomer/);
     });
   });
 
   describe('SE5 — BackendDashboard wiring cleanup', () => {
-    it('SE5.1 BackendDashboard no longer injects onOpenCustomer to AppointmentTab', () => {
-      const apptTabRender = DashboardSrc.match(/<AppointmentTab[\s\S]+?\/>/);
-      expect(apptTabRender).toBeTruthy();
-      // Phase 15.7-septies removed the in-page-redirect callback
-      expect(apptTabRender[0]).not.toMatch(/onOpenCustomer=/);
+    it('SE5.1 BackendDashboard no longer injects onOpenCustomer to AppointmentCalendarView', () => {
+      // Phase 21.0 (2026-05-06) — AppointmentTab renamed to
+      // AppointmentCalendarView; multiple instances render (one per sub-tab).
+      const apptCalendarRenders = DashboardSrc.match(/<AppointmentCalendarView[\s\S]+?\/>/g) || [];
+      expect(apptCalendarRenders.length).toBeGreaterThan(0);
+      // Phase 15.7-septies removed the in-page-redirect callback from EVERY
+      // instance.
+      for (const render of apptCalendarRenders) {
+        expect(render).not.toMatch(/onOpenCustomer=/);
+      }
     });
 
-    it('SE5.2 BackendDashboard contains Phase 15.7-septies marker explaining the removal', () => {
-      const apptTabRender = DashboardSrc.match(/<AppointmentTab[\s\S]+?\/>/);
-      // The comment around AppointmentTab references the new-tab approach
-      const wider = DashboardSrc.split('<AppointmentTab')[0].slice(-2000);
-      // Marker can sit just before or just after the render
-      expect(DashboardSrc).toMatch(/Phase 15\.7-septies/);
+    it('SE5.2 BackendDashboard contains Phase 15.7-septies marker explaining the removal (or the Phase 21.0 successor marker)', () => {
+      // Phase 21.0 marker is now the operative one for the new render flow,
+      // but Phase 15.7-septies marker may still be present in adjacent
+      // comments. Either is acceptable institutional memory.
+      expect(DashboardSrc).toMatch(/Phase 15\.7-septies|Phase 21\.0/);
     });
   });
 

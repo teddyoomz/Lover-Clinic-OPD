@@ -17,7 +17,7 @@ import path from 'path';
 
 const REPO_ROOT = path.resolve(import.meta.dirname || __dirname, '..');
 const ModalSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentFormModal.jsx'), 'utf-8');
-const TabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const TabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 const DetailSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/CustomerDetailView.jsx'), 'utf-8');
 
 describe('Phase 15.7-sexies — Appointment modal delete button', () => {

@@ -30,7 +30,7 @@ const REPO = resolve(process.cwd());
 // IIFE-in-JSX-free post-sweep.
 const SWEPT_FILES = Object.freeze([
   'src/pages/AdminDashboard.jsx',
-  'src/components/backend/AppointmentTab.jsx',
+  'src/components/backend/AppointmentCalendarView.jsx',
   'src/components/backend/SalePrintView.jsx',
   'src/components/backend/QuotationPrintView.jsx',
   'src/components/ClinicSettingsPanel.jsx',

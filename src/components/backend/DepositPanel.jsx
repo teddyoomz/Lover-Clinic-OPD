@@ -15,6 +15,16 @@ import {
   // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
   listExamRooms,
 } from '../../lib/scopedDataLayer.js';
+// Phase 21.0 (2026-05-06) — paired deposit-booking writer. When admin
+// creates a deposit with hasAppointment=true, BOTH be_deposits AND
+// be_appointments docs are written via a single Firestore writeBatch
+// (atomic). Closes the pre-Phase-21.0 visibility gap where
+// deposit-bookings created from this panel never appeared in
+// AppointmentTab/AppointmentCalendarView.
+import {
+  createDepositBookingPair,
+  cancelDepositBookingPair,
+} from '../../lib/appointmentDepositBatch.js';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
@@ -353,7 +363,15 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
           paymentEvidenceUrl: paymentEvidenceUrl || '',
           paymentEvidencePath: paymentEvidencePath || '',
         });
+      } else if (hasAppointment) {
+        // Phase 21.0 — paired write: be_deposits + be_appointments via
+        // single Firestore writeBatch. Sets linkedAppointmentId on the
+        // deposit so cancelDepositBookingPair can route both docs later.
+        // The new จองมัดจำ sub-tab reads be_appointments → this is the
+        // single hop that makes deposit-bookings visible there.
+        await createDepositBookingPair({ depositData: payload });
       } else {
+        // Pre-Phase-21.0 path: no paired appointment — single be_deposits write.
         await createDeposit(payload);
       }
       setSuccess(true);
@@ -371,10 +389,22 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     if (!cancelNote.trim()) { setCancelError('กรุณาระบุเหตุผล'); return; }
     setCancelSaving(true); setCancelError('');
     try {
-      await cancelDeposit(cancelModal.depositId || cancelModal.id, {
-        cancelNote,
-        cancelEvidenceUrl: cancelEvidenceUrl || '',
-      });
+      const depositId = cancelModal.depositId || cancelModal.id;
+      // Phase 21.0 — pair cancel when this deposit has a linkedAppointmentId
+      // (deposit-booking created via createDepositBookingPair). Both docs
+      // flip to status='cancelled' atomically. Falls back to single-doc
+      // cancelDeposit for legacy deposits without a linked appointment.
+      if (cancelModal.linkedAppointmentId) {
+        await cancelDepositBookingPair(depositId, {
+          cancelNote,
+          cancelEvidenceUrl: cancelEvidenceUrl || '',
+        });
+      } else {
+        await cancelDeposit(depositId, {
+          cancelNote,
+          cancelEvidenceUrl: cancelEvidenceUrl || '',
+        });
+      }
       setCancelModal(null); loadList();
     } catch (err) { setCancelError(err.message || 'ยกเลิกไม่สำเร็จ'); }
     finally { setCancelSaving(false); }

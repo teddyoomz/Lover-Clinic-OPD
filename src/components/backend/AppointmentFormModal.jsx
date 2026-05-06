@@ -47,7 +47,12 @@ import {
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision, TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
-import { APPOINTMENT_TYPES, DEFAULT_APPOINTMENT_TYPE } from '../../lib/appointmentTypes.js';
+import {
+  APPOINTMENT_TYPES,
+  APPOINTMENT_TYPE_VALUES,
+  DEFAULT_APPOINTMENT_TYPE,
+  resolveAppointmentTypeLabel,
+} from '../../lib/appointmentTypes.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
@@ -130,6 +135,22 @@ function defaultFormData(overrides = {}) {
  *        deleteBackendAppointment(...) + closing the modal. The button is
  *        hidden when this prop is omitted (CustomerDetailView already has
  *        its own cancel button outside the modal).
+ * @param {string|null} [props.lockedAppointmentType] — Phase 21.0 (2026-05-06)
+ *        When set to one of APPOINTMENT_TYPE_VALUES, the appointment-type
+ *        radio row is replaced with a static read-only chip showing the
+ *        canonical Thai label, and the save payload forces this value.
+ *        Used by the new นัดหมาย sub-tabs (AppointmentCalendarView) so admin
+ *        can't miscategorize while inside a typed view.
+ *
+ *        Special case `lockedAppointmentType === 'deposit-booking'`:
+ *        the modal hides the save button entirely and renders a redirect
+ *        banner directing admin to Finance.มัดจำ (DepositPanel) — that's
+ *        the canonical entry point for deposit-bookings (paired write via
+ *        appointmentDepositBatch.createDepositBookingPair). Admin clicks
+ *        "ไปสร้างมัดจำ" to navigate.
+ *
+ *        When omitted (legacy callers like CustomerDetailView), behaves
+ *        as today (admin picks any of 4 types from radio).
  */
 export default function AppointmentFormModal({
   mode,
@@ -148,6 +169,7 @@ export default function AppointmentFormModal({
   onClose,
   enableCustomerLink = false,
   onDelete,
+  lockedAppointmentType = null,
 }) {
   const isDark = theme !== 'light';
   // Phase 14.7.H follow-up A — branch-aware appointment writes.
@@ -156,6 +178,14 @@ export default function AppointmentFormModal({
   // listAllSellers with the branch filter for the advisor dropdown.
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
   const currentBranchName = resolveBranchName(selectedBranchId, branches) || (selectedBranchId === 'main' ? 'สาขาหลัก (main)' : selectedBranchId || 'สาขาหลัก');
+
+  // Phase 21.0 (2026-05-06) — validate lockedAppointmentType prop. Unknown
+  // values fall through to null (no lock applied). isLockedDepositType
+  // gates the deposit-redirect banner + save-button hiding.
+  const safeLockedType = APPOINTMENT_TYPE_VALUES.includes(lockedAppointmentType)
+    ? lockedAppointmentType
+    : null;
+  const isLockedDepositType = safeLockedType === 'deposit-booking';
 
   // ── Form data ──
   const [formData, setFormData] = useState(() => {
@@ -167,7 +197,11 @@ export default function AppointmentFormModal({
         customerId: appt.customerId,
         customerName: appt.customerName,
         customerHN: appt.customerHN,
-        appointmentType: appt.appointmentType || DEFAULT_APPOINTMENT_TYPE,
+        // Phase 21.0 — lockedAppointmentType wins over appt.appointmentType
+        // when set (defensive: prevents drift between sub-tab + appt type
+        // mid-edit; admin can't relocate an appt to a different type by
+        // editing from inside a typed sub-tab).
+        appointmentType: safeLockedType || appt.appointmentType || DEFAULT_APPOINTMENT_TYPE,
         advisorId: appt.advisorId || '',
         advisorName: appt.advisorName || '',
         doctorId: appt.doctorId || '',
@@ -198,6 +232,8 @@ export default function AppointmentFormModal({
       startTime: initialStartTime || '10:00',
       endTime: initialEndTime || (initialStartTime ? (TIME_SLOTS[TIME_SLOTS.indexOf(initialStartTime) + 1] || initialStartTime) : '10:15'),
       roomName: initialRoomName || '',
+      // Phase 21.0 — pre-fill type from lock so payload + UI start in sync.
+      appointmentType: safeLockedType || DEFAULT_APPOINTMENT_TYPE,
       ...cInit,
     });
   });
@@ -302,6 +338,14 @@ export default function AppointmentFormModal({
   }, []);
 
   const handleSave = async () => {
+    // Phase 21.0 — guard: deposit-booking creates MUST go through DepositPanel
+    // (paired writeBatch via appointmentDepositBatch.createDepositBookingPair).
+    // The modal hides the save button when isLockedDepositType, but defend
+    // against keyboard-Enter / programmatic submit by short-circuiting.
+    if (isLockedDepositType) {
+      scrollToFormError('apptCustomer', 'กรุณาสร้างจองมัดจำผ่านหน้า การเงิน → มัดจำ');
+      return;
+    }
     if (!formData.customerId) { scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า'); return; }
     if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
     if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
@@ -398,7 +442,10 @@ export default function AppointmentFormModal({
       const payload = {
         customerId: formData.customerId, customerName: formData.customerName, customerHN: formData.customerHN,
         date: formData.date, startTime: formData.startTime, endTime: formData.endTime || formData.startTime,
-        appointmentType: formData.appointmentType || DEFAULT_APPOINTMENT_TYPE,
+        // Phase 21.0 — lockedAppointmentType wins. safeLockedType is always
+        // one of APPOINTMENT_TYPE_VALUES when set; falls through to formData
+        // / DEFAULT only when no lock applies.
+        appointmentType: safeLockedType || formData.appointmentType || DEFAULT_APPOINTMENT_TYPE,
         advisorId: formData.advisorId || '', advisorName: formData.advisorName || '',
         doctorId: formData.doctorId, doctorName: formData.doctorName,
         assistantIds: assistantIdsForSave,
@@ -561,19 +608,69 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
-          {/* Appointment Type */}
+          {/* Appointment Type — Phase 21.0: when sub-tab passes
+              lockedAppointmentType, render a static chip (no radio, no edit)
+              so admin can't miscategorize while inside a typed view. When
+              not locked, render the Phase 19.0 4-radio row. */}
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ประเภทนัดหมาย</label>
-            {/* Phase 19.0 — flex-wrap so 4 items don't overflow on narrow widths
-                (mirrors assistantIds row pattern at line ~627). */}
-            <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-              {APPOINTMENT_TYPES.map(t => (
-                <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
-                  <input type="radio" checked={formData.appointmentType === t.value} onChange={() => update({ appointmentType: t.value })} className="accent-sky-500" />{t.label}
-                </label>
-              ))}
-            </div>
+            {safeLockedType ? (
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border bg-[var(--bg-elevated)] border-[var(--bd)] text-[var(--tx-secondary)]`}
+                title="ประเภทถูกล็อคจาก tab ที่เลือก"
+                data-testid="appt-type-locked-chip"
+                data-locked-type={safeLockedType}
+              >
+                <span className="text-[var(--tx-muted)]">🔒</span>
+                {resolveAppointmentTypeLabel(safeLockedType)}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                {APPOINTMENT_TYPES.map(t => (
+                  <label key={t.value} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                    <input type="radio" checked={formData.appointmentType === t.value} onChange={() => update({ appointmentType: t.value })} className="accent-sky-500" />{t.label}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
+          {/* Phase 21.0 — when admin opens this modal from the จองมัดจำ
+              sub-tab, redirect to Finance.มัดจำ where the deposit form has
+              the deposit-specific fields (amount + payment channel) and
+              the save handler routes through the appointmentDepositBatch
+              pair-write helper. */}
+          {isLockedDepositType && (
+            <div
+              className="rounded-lg p-3 bg-emerald-900/15 border border-emerald-700/40 text-xs space-y-2"
+              data-testid="appt-deposit-redirect-banner"
+            >
+              <p className="text-emerald-200 font-bold">การจองมัดจำต้องสร้างผ่านหน้าการเงิน → มัดจำ ของสาขานั้นๆ</p>
+              <p className="text-[var(--tx-muted)] leading-relaxed">
+                การจองมัดจำต้องระบุยอดเงินและช่องทางชำระ ระบบจะบันทึกทั้งใบมัดจำและนัดหมายไปพร้อมกันแบบอัตโนมัติ
+                ให้ปรากฏในแท็บ <span className="text-emerald-300 font-bold">จองมัดจำ</span> ของสาขานี้และ
+                ในแท็บ <span className="text-emerald-300 font-bold">การเงิน → มัดจำ</span> โดยอัตโนมัติ
+              </p>
+              <button
+                type="button"
+                data-testid="appt-deposit-redirect-button"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  params.set('backend', '1');
+                  params.set('tab', 'finance');
+                  params.set('subtab', 'deposit');
+                  if (formData.customerId) {
+                    params.set('action', `create-with-customer=${encodeURIComponent(formData.customerId)}`);
+                  } else {
+                    params.set('action', 'create');
+                  }
+                  window.location.href = `${window.location.pathname}?${params.toString()}`;
+                }}
+                className="px-3 py-1.5 rounded-md text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 transition-all"
+              >
+                ไปสร้างมัดจำ →
+              </button>
+            </div>
+          )}
           {/* Advisor + Doctor + Room */}
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -792,12 +889,18 @@ export default function AppointmentFormModal({
           )}
           <div className="flex-1" />
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">ยกเลิก</button>
-          <button onClick={handleSave} disabled={saving}
-            data-testid="appointment-form-save"
-            className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
-            {saving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
-            {mode === 'edit' ? 'บันทึก' : 'สร้างนัดหมาย'}
-          </button>
+          {/* Phase 21.0 — hide save button when deposit-booking is locked
+              (admin must route through DepositPanel pair-helper). Edit-mode
+              keeps save visible because edits to existing deposit-booking
+              appts only touch metadata (no new deposit doc spawn needed). */}
+          {!(isLockedDepositType && mode === 'create') && (
+            <button onClick={handleSave} disabled={saving}
+              data-testid="appointment-form-save"
+              className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
+              {saving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
+              {mode === 'edit' ? 'บันทึก' : 'สร้างนัดหมาย'}
+            </button>
+          )}
         </div>
       </div>
     </div>

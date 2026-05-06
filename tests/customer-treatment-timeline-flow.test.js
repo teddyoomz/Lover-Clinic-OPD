@@ -337,7 +337,7 @@ describe('TL8: source-grep regression guards (Rule I)', () => {
     expect(VIEW).toMatch(/<TreatmentTimelineModal/);
     // Pattern: only CustomerDetailView imports + renders it. AppointmentTab,
     // SaleTab, etc. should NOT touch this component.
-    const appt = READ('src/components/backend/AppointmentTab.jsx');
+    const appt = READ('src/components/backend/AppointmentCalendarView.jsx');
     expect(appt).not.toMatch(/TreatmentTimelineModal/);
   });
 

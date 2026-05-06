@@ -61,11 +61,35 @@ import {
 // Pinned items render flat at the top of the sidebar (above sections) —
 // reserved for frequently-used pages that deserve one-click access without
 // a section drill-down. Keep short (≤ 3 items) to preserve grouping value.
-export const PINNED_ITEMS = [
-  { id: 'appointments', label: 'นัดหมาย', icon: CalendarDays, color: 'sky', palette: 'appointment schedule นัด จอง calendar ปฏิทิน' },
-];
+//
+// Phase 21.0 (2026-05-06) — 'appointments' pinned item REMOVED. นัดหมาย
+// is now its own NAV_SECTIONS section with 4 sub-tabs (one per
+// appointmentType). Empty array preserved for ABI parity with importers
+// that destructure PINNED_ITEMS.
+export const PINNED_ITEMS = [];
 
 export const NAV_SECTIONS = [
+  // Phase 21.0 (2026-05-06) — appointment section with 4 sub-tabs, one per
+  // canonical appointmentType (Phase 19.0 SSOT). Each sub-tab renders
+  // <AppointmentCalendarView appointmentType="<canonical-id>" /> filtered
+  // to that type + the selected branch (BSA). User directive: "ให้มาเป็น
+  // tab เหมือนกันกับเมนูอื่นๆ แล้วแตกเมนูย่อยออกมา".
+  //
+  // Nav labels intentionally diverge from APPOINTMENT_TYPES.label SSOT for
+  // the queue rows (คิวรอทำหัตถการ vs SSOT 'เข้าทำหัตถการ', คิวติดตามอาการ
+  // vs SSOT 'ติดตามอาการ') per user verbatim sub-tab labels — presentation
+  // only; the storage value (be_appointments.appointmentType) stays canonical.
+  {
+    id: 'appointments-section',
+    label: 'นัดหมาย',
+    icon: CalendarDays,
+    items: [
+      { id: 'appointment-no-deposit',   label: 'จองไม่มัดจำ',     icon: CalendarDays,  color: 'sky',     palette: 'appointment booking no-deposit จองไม่มัดจำ จอง schedule นัด' },
+      { id: 'appointment-deposit',      label: 'จองมัดจำ',       icon: CalendarCheck, color: 'emerald', palette: 'appointment booking deposit จองมัดจำ deposit-booking มัดจำ จอง' },
+      { id: 'appointment-treatment-in', label: 'คิวรอทำหัตถการ', icon: Stethoscope,   color: 'sky',     palette: 'appointment treatment-in queue คิว ทำหัตถการ procedure รอ' },
+      { id: 'appointment-follow-up',    label: 'คิวติดตามอาการ', icon: Activity,      color: 'amber',   palette: 'appointment follow-up queue คิว ติดตาม อาการ' },
+    ],
+  },
   {
     id: 'customers',
     label: 'ลูกค้า',

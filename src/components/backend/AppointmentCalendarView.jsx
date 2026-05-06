@@ -1,12 +1,22 @@
-// ─── AppointmentTab — Resource Time Grid (replicate ProClinic layout) ────────
+// ─── AppointmentCalendarView — Resource Time Grid (replicate ProClinic layout) ────
 // 3-panel: Left sidebar (mini calendar + doctor list) | Main (week nav + time grid with room columns)
 //
 // Phase 14.7.C (2026-04-25): inline form replaced with shared
 // `AppointmentFormModal` (extracted in 14.7.B). Calendar grid + holiday
 // banner + week nav stay here; the entire form (validation, holiday confirm,
 // collision check, staff-schedule check, payload write) lives in the shared
-// component. Both writers — AppointmentTab + CustomerDetailView — now flow
+// component. Both writers — AppointmentCalendarView + CustomerDetailView — now flow
 // through one save path.
+//
+// Phase 21.0 (2026-05-06) — RENAMED from AppointmentTab.jsx + parameterized
+// with `appointmentType` prop so the same component renders 4 sub-tabs in
+// the new นัดหมาย NAV section. Filters dayAppts + monthAppts by exact-match
+// `appointmentType` (defense-in-depth: stale/missing types coerce to
+// 'no-deposit-booking' via migrateLegacyAppointmentType so they appear in
+// the จองไม่มัดจำ sub-tab rather than orphaning). selectedBranchId from
+// useSelectedBranch context applies BSA per-branch filter (re-subscribes
+// listeners on branch switch). Locks appointmentType on AppointmentFormModal
+// when admin creates a new appt from this view (lockedAppointmentType prop).
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
@@ -33,6 +43,16 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
+// Phase 21.0 (2026-05-06) — SSOT for type filtering + presentation labels.
+// migrateLegacyAppointmentType coerces stale/missing types to the safe
+// default ('no-deposit-booking') so unknown values appear in the จองไม่มัดจำ
+// sub-tab rather than orphaning across all 4 views.
+import {
+  APPOINTMENT_TYPE_VALUES,
+  DEFAULT_APPOINTMENT_TYPE,
+  migrateLegacyAppointmentType,
+  resolveAppointmentTypeLabel,
+} from '../../lib/appointmentTypes.js';
 // Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
 // rendering "+ ผู้ช่วย: A, B, C" below the doctor name. Helper falls back
 // to doctorMap lookup for legacy appts that lack assistantNames denorm.
@@ -100,8 +120,26 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
   );
 }
 
-export default function AppointmentTab({ clinicSettings, theme }) {
+/**
+ * @param {Object} props
+ * @param {string} [props.appointmentType] — one of APPOINTMENT_TYPE_VALUES
+ *   ('no-deposit-booking' | 'deposit-booking' | 'treatment-in' | 'follow-up').
+ *   When provided, the calendar grid + mini-calendar dot map filter dayAppts
+ *   to ONLY this type (defense-in-depth: stale/missing types coerce to
+ *   'no-deposit-booking'). When omitted, all types render (legacy behavior).
+ * @param {Object} [props.clinicSettings]
+ * @param {string} [props.theme]
+ */
+export default function AppointmentCalendarView({ appointmentType, clinicSettings, theme }) {
   const isDark = theme !== 'light';
+
+  // Phase 21.0 (2026-05-06) — defense-in-depth: validate the prop. Unknown
+  // values fall through to "show all" behavior. Production callers always
+  // pass a canonical value (one of 4); this branch is a safety net.
+  const typeFilter = APPOINTMENT_TYPE_VALUES.includes(appointmentType)
+    ? appointmentType
+    : null;
+  const typeLabel = typeFilter ? resolveAppointmentTypeLabel(typeFilter) : '';
 
   // Phase BS — branch-scoped appointment fetches.
   const { branchId: selectedBranchId } = useSelectedBranch();
@@ -301,18 +339,35 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       .map(r => String(r.name || '').trim())
       .filter(Boolean);
     const set = new Set(ordered);
-    const hasOrphan = dayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM);
+    const hasOrphan = typedDayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM);
     if (hasOrphan || ordered.length === 0) set.add(UNASSIGNED_ROOM);
     return [...set];
   }, [branchExamRooms, masterRoomNameSet, dayAppts]);
+
+  // Phase 21.0 (2026-05-06) — type filter (defense-in-depth: stale/missing
+  // types coerce to 'no-deposit-booking'). When typeFilter is null (no prop
+  // passed), all appointments pass through (legacy behavior).
+  const apptMatchesType = useCallback(
+    (a) => {
+      if (!typeFilter) return true;
+      return migrateLegacyAppointmentType(a?.appointmentType) === typeFilter;
+    },
+    [typeFilter],
+  );
+  const typedDayAppts = useMemo(
+    () => dayAppts.filter(apptMatchesType),
+    [dayAppts, apptMatchesType],
+  );
 
   // Pre-compute appointment lookup map for O(1) access in time grid.
   // Phase 15.7-bis: array-valued so duplicates at same startTime+room
   // BOTH render. Sort within each cell by createdAt asc so first-created
   // appears as the primary (deterministic).
+  // Phase 21.0 — sources from typedDayAppts so the grid + occupied check
+  // only consider appointments of the active sub-tab's type.
   const apptMap = useMemo(() => {
     const map = {};
-    dayAppts.forEach(a => {
+    typedDayAppts.forEach(a => {
       if (!a.startTime) return;
       const room = effectiveRoom(a);
       const key = `${a.startTime}|${room}`;
@@ -323,11 +378,11 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       map[k].sort((x, y) => String(x.createdAt || '').localeCompare(String(y.createdAt || '')));
     }
     return map;
-  }, [dayAppts]);
+  }, [typedDayAppts]);
 
   const dayDoctors = useMemo(() => {
     const map = {};
-    dayAppts.forEach(a => {
+    typedDayAppts.forEach(a => {
       if (!a.doctorName) return;
       if (!map[a.doctorName]) map[a.doctorName] = { name: a.doctorName, min: a.startTime, max: a.endTime };
       else {
@@ -336,7 +391,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
       }
     });
     return Object.values(map);
-  }, [dayAppts]);
+  }, [typedDayAppts]);
 
   // ── Week strip (7 days centered on selectedDate) ──
   const weekDays = useMemo(() => {
@@ -445,7 +500,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
               if (!cell) return <div key={`e${i}`} className="h-7" />;
               const isToday = cell.dateStr === today;
               const isSel = cell.dateStr === selectedDate;
-              const hasAppt = (monthAppts[cell.dateStr]||[]).length > 0;
+              const monthCellList = monthAppts[cell.dateStr]||[];
+              const hasAppt = (typeFilter ? monthCellList.filter(apptMatchesType) : monthCellList).length > 0;
               const isWe = (i % 7) >= 5;
               return (
                 <button key={cell.dateStr} onClick={() => { setSelectedDate(cell.dateStr); }}
@@ -473,7 +529,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
           onDoctorClick={(doctorId) => {
             // For now, scroll the time grid to the first appointment block
             // for that doctor (or no-op if none). Future: filter UI.
-            const first = dayAppts.find((a) => String(a.doctorId) === String(doctorId));
+            const first = typedDayAppts.find((a) => String(a.doctorId) === String(doctorId));
             if (first) {
               const slotEl = document.querySelector(`[data-time-slot="${first.startTime}"]`);
               slotEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -495,7 +551,8 @@ export default function AppointmentTab({ clinicSettings, theme }) {
               {weekDays.map(wd => {
                 const isSel = wd.date === selectedDate;
                 const isToday = wd.date === today;
-                const count = (monthAppts[wd.date]||[]).length;
+                const weekDayList = monthAppts[wd.date]||[];
+                const count = (typeFilter ? weekDayList.filter(apptMatchesType) : weekDayList).length;
                 const isWe = wd.dow === 0 || wd.dow === 6;
                 return (
                   <button key={wd.date} onClick={() => { setSelectedDate(wd.date); setCalMonth({year:parseDate(wd.date).getFullYear(), month:parseDate(wd.date).getMonth()}); }}
@@ -520,6 +577,17 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-bold text-[var(--tx-heading)]">{selThaiDate}</h3>
+            {/* Phase 21.0 — sub-tab type label so admin sees which slice
+                of appointments is being filtered. Hidden when typeFilter is null. */}
+            {typeFilter && (
+              <span
+                className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-700/20 text-sky-300 border border-sky-700/30"
+                data-testid="appt-type-filter-label"
+                data-type-filter={typeFilter}
+              >
+                {typeLabel}
+              </span>
+            )}
             <span className="text-xs font-bold text-sky-400" data-testid="appt-doctors-count-header">
               | แพทย์เข้าตรวจ {todaysSchedules.filter(s => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday').length} คน
             </span>
@@ -681,7 +749,7 @@ export default function AppointmentTab({ clinicSettings, theme }) {
                       // Check if this slot is occupied by a multi-slot appointment (skip rendering).
                       // Phase 15.7-bis — use effectiveRoom() so the virtual ไม่ระบุห้อง
                       // column also recognises its own multi-slot appointments.
-                      const occupied = dayAppts.some(a => {
+                      const occupied = typedDayAppts.some(a => {
                         if (effectiveRoom(a) !== room || !a.startTime || !a.endTime) return false;
                         return time > a.startTime && time < a.endTime;
                       });
@@ -706,6 +774,14 @@ export default function AppointmentTab({ clinicSettings, theme }) {
         <AppointmentFormModal
           mode={formMode.mode}
           appt={formMode.appt}
+          /* Phase 21.0 — lock appointmentType to the active sub-tab's
+             canonical id. The modal hides the type radio + forces payload
+             value so admin can't miscategorize while inside a typed view.
+             For 'deposit-booking' specifically, the modal renders a banner
+             redirecting admin to the Finance.มัดจำ form (DepositPanel) since
+             deposit-bookings need the deposit fields (amount/payment) and
+             go through the appointmentDepositBatch.js pair-helper writer. */
+          lockedAppointmentType={typeFilter || null}
           theme={theme}
           initialDate={formMode.initialDate}
           initialStartTime={formMode.initialStartTime}

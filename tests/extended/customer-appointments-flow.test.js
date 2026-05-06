@@ -282,7 +282,7 @@ describe('F5: shared AppointmentFormModal — wiring + payload contract', () => 
 });
 
 describe('F6: AppointmentTab uses shared AppointmentFormModal (Phase 14.7.C)', () => {
-  const src = READ('src/components/backend/AppointmentTab.jsx');
+  const src = READ('src/components/backend/AppointmentCalendarView.jsx');
 
   it('F6.1: imports the shared AppointmentFormModal', () => {
     expect(src).toMatch(/import\s+AppointmentFormModal\s+from\s*['"]\.\/AppointmentFormModal\.jsx['"]/);

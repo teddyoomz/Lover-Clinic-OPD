@@ -35,7 +35,7 @@ import { resolveAssistantNames, buildDoctorMap } from '../src/lib/appointmentDis
 const REPO_ROOT = path.resolve(import.meta.dirname || __dirname, '..');
 const AppointmentFormModalSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentFormModal.jsx'), 'utf-8');
 const DepositPanelSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/DepositPanel.jsx'), 'utf-8');
-const AppointmentTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const AppointmentTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 const CustomerDetailViewSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/CustomerDetailView.jsx'), 'utf-8');
 const ReportAggSrc = readFileSync(path.join(REPO_ROOT, 'src/lib/appointmentReportAggregator.js'), 'utf-8');
 

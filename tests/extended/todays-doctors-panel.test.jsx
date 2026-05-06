@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 import TodaysDoctorsPanel from '../src/components/backend/scheduling/TodaysDoctorsPanel.jsx';
 
 const apptTabSrc = readFileSync(
-  resolve(__dirname, '..', 'src/components/backend/AppointmentTab.jsx'),
+  resolve(__dirname, '..', 'src/components/backend/AppointmentCalendarView.jsx'),
   'utf-8'
 );
 const panelSrc = readFileSync(

@@ -36,7 +36,7 @@ describe('Phase 19.0 — TIME_SLOTS 15-min', () => {
   });
 
   test('T4.1 AppointmentTab does NOT define local TIME_SLOTS', () => {
-    const src = readFileSync('src/components/backend/AppointmentTab.jsx', 'utf8');
+    const src = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
     expect(src).not.toMatch(/^const TIME_SLOTS = \[\];/m);
   });
 
@@ -52,7 +52,7 @@ describe('Phase 19.0 — TIME_SLOTS 15-min', () => {
 
   test('T5.1 each consumer imports canonical TIME_SLOTS', () => {
     for (const path of [
-      'src/components/backend/AppointmentTab.jsx',
+      'src/components/backend/AppointmentCalendarView.jsx',
       'src/components/backend/AppointmentFormModal.jsx',
       'src/components/backend/DepositPanel.jsx',
     ]) {

@@ -119,7 +119,7 @@ describe('BS-F.7 — UI consumers pass branchId for branch-scoped fetch', () => 
 
   it('AppointmentTab passes branchId:selectedBranchId', () => {
     const src = readFileSync(
-      resolve(__dirname, '../src/components/backend/AppointmentTab.jsx'),
+      resolve(__dirname, '../src/components/backend/AppointmentCalendarView.jsx'),
       'utf-8',
     );
     expect(src).toMatch(/getAppointmentsByMonth\([^,]+,\s*\{\s*branchId:\s*selectedBranchId\s*\}\)/);

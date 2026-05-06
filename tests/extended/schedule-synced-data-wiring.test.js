@@ -30,7 +30,7 @@ import {
 // File reads for source-grep guards
 const docTabSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/DoctorSchedulesTab.jsx'), 'utf-8');
 const empTabSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/EmployeeSchedulesTab.jsx'), 'utf-8');
-const apptTabSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const apptTabSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 const apptModalSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/AppointmentFormModal.jsx'), 'utf-8');
 const todaysPanelSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/scheduling/TodaysDoctorsPanel.jsx'), 'utf-8');
 const masterTabSrc = readFileSync(resolve(__dirname, '..', 'src/components/backend/MasterDataTab.jsx'), 'utf-8');

@@ -25,7 +25,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 const REPO_ROOT = path.resolve(import.meta.dirname || __dirname, '..');
-const ApptTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentTab.jsx'), 'utf-8');
+const ApptTabSrc = readFileSync(path.join(REPO_ROOT, 'src/components/backend/AppointmentCalendarView.jsx'), 'utf-8');
 
 describe('Phase 15.7-bis — Calendar badge mismatch fix', () => {
   describe('C1 — effectiveRoom + UNASSIGNED_ROOM sentinel', () => {
@@ -45,7 +45,11 @@ describe('Phase 15.7-bis — Calendar badge mismatch fix', () => {
     it('C1.3 virtual ไม่ระบุห้อง column appended when any dayAppt resolves to UNASSIGNED_ROOM', () => {
       // Phase 18.0 changed the guard from `!a?.roomName` to `effectiveRoom(a) === UNASSIGNED_ROOM`
       // so legacy-roomName appts (not in master) also trigger the virtual column.
-      expect(ApptTabSrc).toMatch(/dayAppts\.some\(a\s*=>\s*effectiveRoom\(a\)\s*===\s*UNASSIGNED_ROOM\)/);
+      // Phase 21.0 (2026-05-06) — read source uses typedDayAppts (filtered by
+      // active sub-tab's appointmentType) so the orphan check respects the
+      // type filter. Match either dayAppts or typedDayAppts to keep this
+      // assertion alive across the rename.
+      expect(ApptTabSrc).toMatch(/(typedDayAppts|dayAppts)\.some\(a\s*=>\s*effectiveRoom\(a\)\s*===\s*UNASSIGNED_ROOM\)/);
       expect(ApptTabSrc).toMatch(/set\.add\(UNASSIGNED_ROOM\)/);
     });
   });

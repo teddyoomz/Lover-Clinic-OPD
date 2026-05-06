@@ -79,7 +79,7 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
     mockListHolidays.mockResolvedValueOnce([
       { type: 'specific', dates: ['1999-01-01'], note: 'old' },
     ]);
-    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentTab.jsx');
+    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentCalendarView.jsx');
     render(<AppointmentTab clinicSettings={{ accentColor: '#dc2626' }} theme="dark" />);
     // Wait for initial load (listHolidays fires in useEffect).
     await waitFor(() => expect(mockListHolidays).toHaveBeenCalled());
@@ -98,7 +98,7 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
       { type: 'specific', dates: [today], note: 'Test Holiday' },
     ]);
     vi.resetModules();
-    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentTab.jsx');
+    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentCalendarView.jsx');
     render(<AppointmentTab clinicSettings={{ accentColor: '#dc2626' }} theme="dark" />);
     await waitFor(() => expect(screen.getByTestId('appt-holiday-banner')).toBeInTheDocument());
     expect(screen.getByText(/Test Holiday/)).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
       { type: 'weekly', dayOfWeek: todayDow, note: 'Weekly closure' },
     ]);
     vi.resetModules();
-    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentTab.jsx');
+    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentCalendarView.jsx');
     render(<AppointmentTab clinicSettings={{ accentColor: '#dc2626' }} theme="dark" />);
     await waitFor(() => expect(screen.getByTestId('appt-holiday-banner')).toBeInTheDocument());
     expect(screen.getByText(/ทุกวัน/)).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
       { type: 'specific', dates: [today], note: 'Skipped', status: 'พักใช้งาน' },
     ]);
     vi.resetModules();
-    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentTab.jsx');
+    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentCalendarView.jsx');
     render(<AppointmentTab clinicSettings={{ accentColor: '#dc2626' }} theme="dark" />);
     await waitFor(() => expect(mockListHolidays).toHaveBeenCalled());
     expect(screen.queryByTestId('appt-holiday-banner')).not.toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('Phase 11.8 wiring — AppointmentTab holiday banner', () => {
   it('W5: listHolidays rejection is silent (no banner, no crash)', async () => {
     mockListHolidays.mockRejectedValueOnce(new Error('permission denied'));
     vi.resetModules();
-    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentTab.jsx');
+    const { default: AppointmentTab } = await import('../src/components/backend/AppointmentCalendarView.jsx');
     expect(() => render(<AppointmentTab clinicSettings={{ accentColor: '#dc2626' }} theme="dark" />)).not.toThrow();
     await waitFor(() => expect(mockListHolidays).toHaveBeenCalled());
     expect(screen.queryByTestId('appt-holiday-banner')).not.toBeInTheDocument();

@@ -14,7 +14,7 @@ import path from 'node:path';
 
 const ROOT = process.cwd();
 const APPT_TAB = fs.readFileSync(
-  path.join(ROOT, 'src/components/backend/AppointmentTab.jsx'),
+  path.join(ROOT, 'src/components/backend/AppointmentCalendarView.jsx'),
   'utf8',
 );
 

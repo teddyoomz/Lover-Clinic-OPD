@@ -29,7 +29,10 @@ import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerCreatePage from '../components/backend/CustomerCreatePage.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
-import AppointmentTab from '../components/backend/AppointmentTab.jsx';
+// Phase 21.0 (2026-05-06) — renamed from AppointmentTab to AppointmentCalendarView
+// + parameterized via `appointmentType` prop so the same component renders
+// each of the 4 new นัดหมาย sub-tabs.
+import AppointmentCalendarView from '../components/backend/AppointmentCalendarView.jsx';
 import SaleTab from '../components/backend/SaleTab.jsx';
 import FinanceTab from '../components/backend/FinanceTab.jsx';
 import StockTab from '../components/backend/StockTab.jsx';
@@ -144,9 +147,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         .catch(() => {})
         .finally(() => setHydrated(true));
     } else {
-      if (tab && ALL_ITEM_IDS.includes(tab)) {
-        setActiveTab(tab);
-        if (tab === 'finance' && subtab) setFinanceSubTab(subtab);
+      // Phase 21.0 (2026-05-06) — legacy ?tab=appointments redirects to the
+      // first sub-tab (จองไม่มัดจำ). The old 'appointments' id is no longer
+      // in ALL_ITEM_IDS so without this redirect, hydration would silently
+      // fall through to the default ('clone') and bookmarks would break.
+      const resolvedTab = tab === 'appointments' ? 'appointment-no-deposit' : tab;
+      if (resolvedTab && ALL_ITEM_IDS.includes(resolvedTab)) {
+        setActiveTab(resolvedTab);
+        if (resolvedTab === 'finance' && subtab) setFinanceSubTab(subtab);
       }
       setHydrated(true);
     }
@@ -159,7 +167,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   useEffect(() => {
     if (!hydrated || !permsLoaded) return;
     if (canAccess(activeTab)) return;
-    const fallback = firstAllowedTab(['appointments', 'customers', 'reports', 'sales']);
+    // Phase 21.0 (2026-05-06) — fallback uses the new 'appointment-no-deposit'
+    // sub-tab (replaces legacy 'appointments' which has been removed from
+    // navConfig). Per-branch filter is automatic via BSA.
+    const fallback = firstAllowedTab(['appointment-no-deposit', 'customers', 'reports', 'sales']);
     if (fallback && fallback !== activeTab) setActiveTab(fallback);
   }, [hydrated, permsLoaded, activeTab, canAccess, firstAllowedTab]);
 
@@ -424,12 +435,35 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
-        ) : activeTab === 'appointments' ? (
-          // Phase 15.7-septies (2026-04-29) — customer-name clicks in the
-          // grid + modal both open a new browser tab via the standard
-          // `?backend=1&customer={id}` deep-link. AppointmentTab handles
-          // the wiring internally; no callback prop needed here.
-          <AppointmentTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'appointment-no-deposit' ? (
+          // Phase 21.0 (2026-05-06) — sub-tab renders the calendar grid
+          // filtered to appointmentType='no-deposit-booking'. Per-branch
+          // filter via BSA + selectedBranchId. Customer-name clicks open
+          // a new browser tab via the standard ?backend=1&customer={id}
+          // deep-link (handled inside AppointmentCalendarView).
+          <AppointmentCalendarView
+            appointmentType="no-deposit-booking"
+            clinicSettings={clinicSettings}
+            theme={theme}
+          />
+        ) : activeTab === 'appointment-deposit' ? (
+          <AppointmentCalendarView
+            appointmentType="deposit-booking"
+            clinicSettings={clinicSettings}
+            theme={theme}
+          />
+        ) : activeTab === 'appointment-treatment-in' ? (
+          <AppointmentCalendarView
+            appointmentType="treatment-in"
+            clinicSettings={clinicSettings}
+            theme={theme}
+          />
+        ) : activeTab === 'appointment-follow-up' ? (
+          <AppointmentCalendarView
+            appointmentType="follow-up"
+            clinicSettings={clinicSettings}
+            theme={theme}
+          />
         ) : activeTab === 'sales' ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)}
             onFormClose={() => {

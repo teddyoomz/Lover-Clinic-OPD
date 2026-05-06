@@ -84,14 +84,16 @@ describe('filterAllowedTabs', () => {
 });
 
 describe('firstAllowedTab', () => {
+  // Phase 21.0 (2026-05-06) — default candidates list updated to use the
+  // new 'appointment-no-deposit' sub-tab (replaces legacy 'appointments').
   it('TP17: returns preferred tab when allowed', () => {
-    expect(firstAllowedTab({ appointment: true }, false)).toBe('appointments');
+    expect(firstAllowedTab({ appointment: true }, false)).toBe('appointment-no-deposit');
   });
   it('TP18: falls back to next preference when first blocked', () => {
     expect(firstAllowedTab({ sale_view: true }, false)).toBe('sales');
   });
-  it('TP19: admin always gets appointments (first preference)', () => {
-    expect(firstAllowedTab({}, true)).toBe('appointments');
+  it('TP19: admin always gets the first-preference appointment sub-tab', () => {
+    expect(firstAllowedTab({}, true)).toBe('appointment-no-deposit');
   });
   it('TP20: returns null when no tab accessible', () => {
     expect(firstAllowedTab({}, false)).toBe(null);

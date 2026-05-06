@@ -188,9 +188,14 @@ describe('Phase 16.3 FS.C — cross-file wiring source-grep', () => {
 });
 
 describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
-  test('D.1 — TAB_PERMISSION_MAP count is 50 (48 pre-Phase-16.1 + smart-audience + Phase 18.0 exam-rooms)', () => {
+  test('D.1 — TAB_PERMISSION_MAP count is 54 (50 pre-Phase-21.0 + 4 appointment sub-tab gates)', () => {
+    // Phase 21.0 (2026-05-06) — added per-sub-tab gates for the 4 new
+    // appointment views ('appointment-no-deposit' / 'appointment-deposit'
+    // / 'appointment-treatment-in' / 'appointment-follow-up'). Legacy
+    // 'appointments' key retained for backward-compat with anyone importing
+    // it. Final shape: 50 + 4 = 54.
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(50);
+    expect(count).toBe(54);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {

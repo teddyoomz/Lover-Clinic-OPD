@@ -4,7 +4,7 @@
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-const SRC = readFileSync('src/components/backend/AppointmentTab.jsx', 'utf8');
+const SRC = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
 
 describe('Phase 19.0 — AppointmentTab 15-min grid', () => {
   test('C1.1 SLOT_H = 18 (halved from 36)', () => {
