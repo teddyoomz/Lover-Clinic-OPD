@@ -61,9 +61,23 @@ default workflow is local-only (per `feedback_local_only_no_deploy.md`).
      -d '{"fields":{"probe":{"booleanValue":true}}}'
    # → 200 (clinic-staff). Anon → 403 (expected; rule allows staff only).
    ```
-7. `firebase deploy --only firestore:rules`
-8. รัน probe 1-6 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-9. ลบ probe docs ทิ้ง:
+7. **V40 (2026-05-07)** — backups Storage path admin-only:
+   ```
+   # Pre-deploy probe: anon write to backups/ → expect 403
+   curl -X POST "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o?name=backups%2FTEST-PROBE-$(date +%s).json" \
+     -H "Content-Type: application/json" -d '{"probe":true}' \
+     # → expect 403
+
+   # Admin probe: admin-token write → expect 200
+   ADMIN_TOKEN="<admin custom token>"
+   curl -X POST "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o?name=backups%2FTEST-PROBE-admin-$(date +%s).json" \
+     -H "Authorization: Bearer $ADMIN_TOKEN" \
+     -H "Content-Type: application/json" -d '{"probe":true}'
+     # → expect 200
+   ```
+8. `firebase deploy --only firestore:rules,storage:rules`
+9. รัน probe 1-7 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+10. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/pc_appointments/test-probe-{TS}` x 2 (anon allowed)
    - PATCH `$BASE/$PREFIX/clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
