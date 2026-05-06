@@ -2,8 +2,9 @@
 // Used in both CloneTab (search results) and CustomerListTab (cloned customers).
 // Follows Thai cultural rules: no red on names/HN, uses CSS variables for theme.
 
-import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download, Eye } from 'lucide-react';
+import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download, Eye, Trash2 } from 'lucide-react';
 import { hexToRgb } from '../../utils.js';
+import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
 export default function CustomerCard({
   customer,           // { proClinicId/id, proClinicHN/hn, name, phone, patientData, ... }
@@ -14,10 +15,16 @@ export default function CustomerCard({
   cloneProgress,      // { step, label, percent, detail }
   onClone,            // callback when "ดูดข้อมูลทั้งหมด" clicked
   onView,             // callback when card clicked in cloned mode → open detail view
+  onDeleteClick,      // Phase 24.0 — callback when ✕ icon clicked (cloned mode); receives customer
 }) {
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
   const isDark = theme !== 'light';
+
+  // Phase 24.0 — dual gate: explicit perm OR admin (auto-bypass).
+  const hasDeletePerm = useHasPermission('customer_delete');
+  const tabAccess = useTabAccess();
+  const canDelete = hasDeletePerm || tabAccess?.isAdmin === true;
 
   // Normalize fields across search results and cloned data
   const hn = customer.proClinicHN || customer.hn || '';
@@ -54,7 +61,21 @@ export default function CustomerCard({
       onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && mode === 'cloned' && onView) { e.preventDefault(); handleCardClick(); } }}
       role={mode === 'cloned' && onView ? 'button' : undefined}
       tabIndex={mode === 'cloned' && onView ? 0 : undefined}
-      className={`bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''}`}>
+      className={`relative bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''}`}>
+
+      {/* Phase 24.0 — inline ✕ delete icon (cloned mode only, gated) */}
+      {mode === 'cloned' && canDelete && onDeleteClick && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDeleteClick(customer); }}
+          title="ลบลูกค้า"
+          aria-label="ลบลูกค้า"
+          data-testid={`delete-customer-${customer.id || customer.proClinicId || ''}`}
+          className="absolute top-2 right-2 p-1 rounded text-[var(--tx-muted)] hover:bg-red-950/40 hover:text-red-400 transition-colors z-10"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
 
       {/* Card Header — HN badge + avatar area */}
       <div className="flex items-start gap-3 p-4 pb-2">
