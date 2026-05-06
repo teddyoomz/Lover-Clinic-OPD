@@ -81,8 +81,17 @@ describe('Phase 24.0 / F3 — audit doc shape', () => {
     expect(SERVER).toMatch(/type:\s*['"]customer-delete-cascade['"]/);
   });
 
-  it('F3.3 audit payload includes customerSnapshot', () => {
-    expect(SERVER).toMatch(/customerSnapshot:\s*customer/);
+  it('F3.3 audit payload includes customerSnapshot (post-hardening: pruned via buildSnapshot)', () => {
+    // Phase 24.0 post-review hardening: customerSnapshot is now produced by
+    // buildSnapshot(customer) which prunes heavy fields (gallery_upload /
+    // profile_image / card_photo) and falls back to identity-only when the
+    // pruned doc still exceeds the 700KB safety limit. This protects the
+    // audit doc from hitting Firestore's 1MB doc cap (which would fail the
+    // FINAL batch commit and roll back the entire cascade).
+    expect(SERVER).toMatch(/customerSnapshot:\s*buildSnapshot\(customer\)/);
+    expect(SERVER).toMatch(/function buildSnapshot/);
+    expect(SERVER).toMatch(/SNAPSHOT_BYTE_LIMIT/);
+    expect(SERVER).toMatch(/HEAVY_KEYS/);
   });
 
   it('F3.4 audit payload includes authorizedBy + performedBy + cascadeCounts + branchId + origin', () => {

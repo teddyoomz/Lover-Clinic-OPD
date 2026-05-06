@@ -259,6 +259,60 @@ export default async function handler(req, res) {
     const rand = randomBytes(6).toString('hex');
     const auditId = `customer-delete-${customerId}-${ts}-${rand}`;
     const auditRef = data.collection('be_admin_audit').doc(auditId);
+
+    // Phase 24.0 (post-review hardening) — bound the customerSnapshot size to
+    // protect against hitting Firestore's 1MB doc cap, which would fail the
+    // FINAL batch commit and roll back the entire cascade. Customers with
+    // large gallery_upload[]/notes[]/medicalHistory blobs can produce raw
+    // docs > 1MB. We retain the structural skeleton + safe-to-archive
+    // identity + audit-relevant fields; the heavy fields are pruned with a
+    // marker so the audit reader knows what was redacted.
+    const HEAVY_KEYS = ['gallery_upload', 'profile_image', 'card_photo'];
+    const SNAPSHOT_BYTE_LIMIT = 700 * 1024; // 700KB — leave headroom under 1MB cap
+    function buildSnapshot(raw) {
+      if (!raw || typeof raw !== 'object') return raw;
+      const pruned = { ...raw };
+      const redacted = [];
+      for (const k of HEAVY_KEYS) {
+        if (k in pruned) {
+          const v = pruned[k];
+          const len = Array.isArray(v) ? v.length : (typeof v === 'string' ? v.length : 0);
+          if (len > 0) {
+            pruned[k] = Array.isArray(v) ? `[REDACTED ${v.length} entries]` : '[REDACTED]';
+            redacted.push(k);
+          }
+        }
+      }
+      // Defensive size check — if STILL > limit (e.g. very long notes / patientData),
+      // wholesale-fallback to identity fields only + reason marker.
+      try {
+        const json = JSON.stringify(pruned);
+        if (json.length > SNAPSHOT_BYTE_LIMIT) {
+          return {
+            __snapshot_pruned__: true,
+            __snapshot_reason__: `oversize (${json.length} bytes, limit ${SNAPSHOT_BYTE_LIMIT})`,
+            __snapshot_redacted_keys__: redacted,
+            id: raw.id || customerId,
+            hn_no: raw.hn_no,
+            firstname: raw.firstname,
+            lastname: raw.lastname,
+            prefix: raw.prefix,
+            branchId: raw.branchId,
+            createdAt: raw.createdAt,
+            createdBy: raw.createdBy,
+            isManualEntry: raw.isManualEntry,
+            citizen_id: raw.citizen_id,
+            passport_id: raw.passport_id,
+            telephone_number: raw.telephone_number,
+          };
+        }
+      } catch { /* circular ref or non-serializable — fall through to pruned */ }
+      if (redacted.length > 0) {
+        pruned.__snapshot_redacted_keys__ = redacted;
+      }
+      return pruned;
+    }
+
     const auditPayload = {
       type: 'customer-delete-cascade',
       customerId,
@@ -281,7 +335,7 @@ export default async function handler(req, res) {
       },
       performedAt: new Date().toISOString(),
       cascadeCounts,
-      customerSnapshot: customer,
+      customerSnapshot: buildSnapshot(customer),
     };
 
     // Atomic delete + audit. Firestore batch is capped at 500 writes — chunk

@@ -107,7 +107,17 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
           doctorId, doctorName: doctorRec?.label || '',
         },
       });
-      onDeleted?.(result);
+      // Phase 24.0 (post-review hardening) — wrap onDeleted so a parent
+      // throw doesn't strand the modal in submitting=true (which would
+      // permanently lock the close + retry buttons).
+      try {
+        onDeleted?.(result);
+      } catch (parentErr) {
+        // Parent handler errored AFTER successful server delete. Surface
+        // the error but don't re-attempt the (already-completed) delete.
+        setError(`ลบสำเร็จแต่ refresh ล้มเหลว: ${parentErr?.message || parentErr}`);
+        setSubmitting(false);
+      }
     } catch (e) {
       setError(e.userMessage || e.message || 'การลบล้มเหลว');
       setSubmitting(false);
