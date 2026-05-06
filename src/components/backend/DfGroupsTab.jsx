@@ -29,11 +29,7 @@ export default function DfGroupsTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    // Phase 24.0-vicies-novies-septies (2026-05-07) — DF groups are catalog
-    // entity (clinic-wide); mapMasterToDfGroup explicitly sets branchId='' →
-    // branch filter never matches. Same fix pattern as ProductsTab/CoursesTab.
-    // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
-    try { setItems(await listDfGroups({ allBranches: true })); }
+    try { setItems(await listDfGroups({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดกลุ่ม DF ล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
   }, [selectedBranchId]);

@@ -36,15 +36,7 @@ export default function ProductsTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    // Phase 24.0-vicies-novies-septies (2026-05-07) — products are a CATALOG
-    // entity (clinic-wide). Master-data migrate (mapMasterToProduct) doesn't
-    // stamp branchId on imported docs → previous {branchId: selectedBranchId}
-    // filter showed empty list in any branch with no products stamped to it.
-    // User report: "กดลบสินค้า ... สาขาพระราม 3 ไม่ได้". Switching to
-    // {allBranches: true} makes the catalog visible in every branch context;
-    // delete still scopes to the deleted doc id (global, no branch dim).
-    // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
-    try { setItems(await listProducts({ allBranches: true })); }
+    try { setItems(await listProducts({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดสินค้าล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
   }, [selectedBranchId]);

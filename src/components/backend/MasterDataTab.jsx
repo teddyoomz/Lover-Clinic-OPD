@@ -59,6 +59,10 @@ import {
   syncSchedules,
 } from '../../lib/brokerClient.js';
 import { hexToRgb } from '../../utils.js';
+// Phase 24.0-vicies-novies-octies (2026-05-07) — selectedBranchId is passed
+// to migrate fns so mappers stamp branchId on imported be_* docs (catalog
+// tabs filter by branchId; without stamp, items invisible after migrate).
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 // Wrapper: listItems('promotion') → format like syncProducts response
 async function syncPromotions() {
@@ -217,6 +221,11 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   const isDark = theme !== 'light';
   const ac = clinicSettings?.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
+
+  // Phase 24.0-vicies-novies-octies (2026-05-07) — currently-selected branch
+  // for migrate operations. handleMigrate passes this to migrateMasterXToBe
+  // so mappers stamp imported docs with branchId at migrate time.
+  const { selectedBranchId } = useSelectedBranch();
 
   // Sub-tab state
   const [activeSubTab, setActiveSubTab] = useState('products');
@@ -386,14 +395,18 @@ export default function MasterDataTab({ clinicSettings, theme }) {
   const handleMigrate = useCallback(async (target) => {
     setMigrateStatus(prev => ({ ...prev, [target.key]: 'loading' }));
     try {
-      const r = await target.fn();
+      // Phase 24.0-vicies-novies-octies — pass current selectedBranchId so
+      // each mapper stamps branchId on the imported doc. Mappers that don't
+      // need branch dimension (branches itself, permission_groups, staff,
+      // doctors) ignore the opt — backward-compatible.
+      const r = await target.fn({ branchId: selectedBranchId || '' });
       setMigrateStatus(prev => ({ ...prev, [target.key]: r.total === 0 ? 'empty' : 'done' }));
       setMigrateResult(prev => ({ ...prev, [target.key]: r }));
     } catch (e) {
       setMigrateStatus(prev => ({ ...prev, [target.key]: 'error' }));
       setMigrateResult(prev => ({ ...prev, [target.key]: { error: e.message || 'นำเข้าไม่สำเร็จ' } }));
     }
-  }, []);
+  }, [selectedBranchId]);
 
   // ── Filter logic ──
   const filterOptions = useMemo(() => {

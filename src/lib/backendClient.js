@@ -9235,7 +9235,7 @@ export function listenToUserPermissions(uid, onChange, onError) {
 // overwrites the same doc ids while preserving `createdAt`.
 // @dev-only — removed with MasterDataTab per rule H-bis.
 
-function mapMasterToProductGroup(src, id, now, existingCreatedAt) {
+function mapMasterToProductGroup(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // Phase 11.9: normalize 4-option legacy type → 2-option via validator helper.
   // ProClinic API returns 'ยากลับบ้าน' / 'สินค้าสิ้นเปลือง' directly (verified
@@ -9271,12 +9271,14 @@ function mapMasterToProductGroup(src, id, now, existingCreatedAt) {
     products,
     status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
     note: String(src.note || '').trim(),
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-function mapMasterToProductUnit(src, id, now, existingCreatedAt) {
+function mapMasterToProductUnit(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // Expected shape: { groupName|name, units: [{name, amount}] }
   // ProClinic may ship as flat { unit_name: 'amp', unit_amount: 10 } array —
@@ -9293,12 +9295,14 @@ function mapMasterToProductUnit(src, id, now, existingCreatedAt) {
     })),
     status: src.status === 'พักใช้งาน' ? 'พักใช้งาน' : 'ใช้งาน',
     note: String(src.note || '').trim(),
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt) {
+function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   return {
     instrumentId: id,
@@ -9311,12 +9315,14 @@ function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt) {
     maintenanceLog: Array.isArray(src.maintenanceLog) ? src.maintenanceLog : [],
     status: ['ใช้งาน', 'พักใช้งาน', 'ซ่อมบำรุง'].includes(src.status) ? src.status : 'ใช้งาน',
     note: String(src.note || '').trim(),
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-function mapMasterToHoliday(src, id, now, existingCreatedAt) {
+function mapMasterToHoliday(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   const type = src.type === 'weekly' ? 'weekly' : 'specific';
   const base = {
@@ -9333,6 +9339,8 @@ function mapMasterToHoliday(src, id, now, existingCreatedAt) {
   } else {
     base.dayOfWeek = Math.max(0, Math.min(6, Number(src.dayOfWeek) || 0));
   }
+  // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time.
+  base.branchId = branchId || src.branchId || '';
   return base;
 }
 
@@ -9393,7 +9401,7 @@ function mapMasterToPermissionGroup(src, id, now, existingCreatedAt) {
 //     value change.
 export const IMPORT_TARGET_BRANCH_ID = 'BR-1777885958735-38afbdeb'; // พระราม 3
 
-async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapper, filter = null }) {
+async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapper, filter = null, branchId = '' }) {
   const masterSnap = await getDocs(masterDataItemsCol(sourceType));
   if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
   const now = new Date().toISOString();
@@ -9411,7 +9419,16 @@ async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapp
       const existing = await getDoc(targetDocFn(id));
       if (existing.exists()) existingCreatedAt = existing.data().createdAt || null;
     } catch {}
-    const doc_ = mapper(src, id, now, existingCreatedAt);
+    // Phase 24.0-vicies-novies-octies (2026-05-07) — branchId passed as 5th
+    // arg to mapper so branch-scoped catalog mappers can stamp the imported
+    // doc with the current branch context. Catalog tabs (ProductsTab,
+    // CoursesTab, DfGroupsTab, MedicalInstrumentsTab, ProductUnitsTab,
+    // ProductGroupsTab) filter by selectedBranchId — without this stamp, all
+    // imported items are invisible in any branch (user's "กดลบไม่ได้" bug).
+    // Mappers that don't need branch dimension (mapMasterToBranch /
+    // mapMasterToPermissionGroup / mapMasterToStaff / mapMasterToDoctor)
+    // simply ignore the 5th arg.
+    const doc_ = mapper(src, id, now, existingCreatedAt, branchId);
     if (!doc_) { skipped++; continue; }
     await setDoc(targetDocFn(id), doc_, { merge: false });
     imported++;
@@ -9419,17 +9436,22 @@ async function runMasterToBeMigration({ sourceType, targetCol, targetDocFn, mapp
   return { imported, skipped, total: masterSnap.size };
 }
 
-export async function migrateMasterProductGroupsToBe() {
-  return runMasterToBeMigration({ sourceType: 'product_groups', targetCol: productGroupsCol, targetDocFn: productGroupDoc, mapper: mapMasterToProductGroup });
+// Phase 24.0-vicies-novies-octies (2026-05-07) — accept {branchId} opt so
+// MasterDataTab can pass the current selectedBranchId at migrate time. The
+// mapper stamps branchId on each output doc → branch-scoped catalog tabs
+// (ProductsTab/CoursesTab/DfGroupsTab/etc.) see imported items via their
+// per-branch filter. Without this, imported docs are invisible in any branch.
+export async function migrateMasterProductGroupsToBe({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'product_groups', targetCol: productGroupsCol, targetDocFn: productGroupDoc, mapper: mapMasterToProductGroup, branchId });
 }
-export async function migrateMasterProductUnitsToBe() {
-  return runMasterToBeMigration({ sourceType: 'product_units', targetCol: productUnitsCol, targetDocFn: productUnitDoc, mapper: mapMasterToProductUnit });
+export async function migrateMasterProductUnitsToBe({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'product_units', targetCol: productUnitsCol, targetDocFn: productUnitDoc, mapper: mapMasterToProductUnit, branchId });
 }
-export async function migrateMasterMedicalInstrumentsToBe() {
-  return runMasterToBeMigration({ sourceType: 'medical_instruments', targetCol: medicalInstrumentsCol, targetDocFn: medicalInstrumentDoc, mapper: mapMasterToMedicalInstrument });
+export async function migrateMasterMedicalInstrumentsToBe({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'medical_instruments', targetCol: medicalInstrumentsCol, targetDocFn: medicalInstrumentDoc, mapper: mapMasterToMedicalInstrument, branchId });
 }
-export async function migrateMasterHolidaysToBe() {
-  return runMasterToBeMigration({ sourceType: 'holidays', targetCol: holidaysCol, targetDocFn: holidayDoc, mapper: mapMasterToHoliday });
+export async function migrateMasterHolidaysToBe({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'holidays', targetCol: holidaysCol, targetDocFn: holidayDoc, mapper: mapMasterToHoliday, branchId });
 }
 export async function migrateMasterBranchesToBe() {
   // Phase 24.0-vicies-novies-ter / -sexies — keep ONLY the configured import-
@@ -9456,7 +9478,7 @@ export async function migrateMasterPermissionGroupsToBe() {
 //     branchId, createdBy, createdAt, updatedAt }
 // Doc id = ProClinic numeric id (validator relaxed in Phase 14.x to accept).
 
-function mapMasterToDfGroup(src, id, now, existingCreatedAt) {
+function mapMasterToDfGroup(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // ProClinic status label is ใช้งาน/พักใช้งาน; be_df_groups uses active/disabled.
   const rawStatus = String(src.status || src.df_status || '').trim();
@@ -9477,19 +9499,23 @@ function mapMasterToDfGroup(src, id, now, existingCreatedAt) {
     note: String(src.note || '').trim(),
     status,
     rates,
-    branchId: '',
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time
+    // (was hardcoded ''). DfGroupsTab filters by selectedBranchId so we MUST
+    // stamp this for the imported group to be visible after migrate.
+    branchId: branchId || src.branchId || '',
     createdBy: '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-export async function migrateMasterDfGroupsToBe() {
+export async function migrateMasterDfGroupsToBe({ branchId = '' } = {}) {
   return runMasterToBeMigration({
     sourceType: 'df_groups',
     targetCol: dfGroupsCol,
     targetDocFn: dfGroupDocRef,
     mapper: mapMasterToDfGroup,
+    branchId,
   });
 }
 
@@ -10098,7 +10124,7 @@ export async function deleteCourse(courseId) {
 // ─── Phase 12.2: master_data → be_* (products + courses) ───────────────────
 // @dev-only scaffolding per rule H-bis.
 
-function mapMasterToProduct(src, id, now, existingCreatedAt) {
+function mapMasterToProduct(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // ProClinic master_data may store productType as 'ยากลับบ้าน' when coming
   // from the product-group enriched sync (Phase 11.9 switched to JSON API
@@ -10139,6 +10165,10 @@ function mapMasterToProduct(src, id, now, existingCreatedAt) {
     timesPerDay: src.timesPerDay != null ? Number(src.timesPerDay) : null,
     orderBy: src.orderBy != null ? Number(src.orderBy) : null,
     status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time
+    // selectedBranchId. Defaults preserve src.branchId fallback (legacy
+    // mappers may have stamped). Empty string when neither source.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
@@ -10152,7 +10182,7 @@ function mapMasterToProduct(src, id, now, existingCreatedAt) {
 // courseValidation normalizeCourse() — isDf defaults true, booleans default
 // false, numbers default null. Exported so tests/courseMigrate.test.js can
 // exercise the mapper without Firestore.
-export function mapMasterToCourse(src, id, now, existingCreatedAt) {
+export function mapMasterToCourse(src, id, now, existingCreatedAt, branchId = '') {
   if (!id || !src) return null;
   const products = Array.isArray(src.courseProducts) ? src.courseProducts
                  : Array.isArray(src.products) ? src.products : [];
@@ -10230,17 +10260,20 @@ export function mapMasterToCourse(src, id, now, existingCreatedAt) {
     })).filter(p => p.productId && p.qty > 0),
     orderBy: src.orderBy != null ? Number(src.orderBy) : null,
     status: src.status === 'พักใช้งาน' || src.status === 0 ? 'พักใช้งาน' : 'ใช้งาน',
+    // Phase 24.0-vicies-novies-octies — branch stamp from migrate-time
+    // selectedBranchId so CoursesTab's per-branch filter shows imported items.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-export async function migrateMasterProductsToBe() {
-  return runMasterToBeMigration({ sourceType: 'products', targetCol: productsCol, targetDocFn: productDoc, mapper: mapMasterToProduct });
+export async function migrateMasterProductsToBe({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'products', targetCol: productsCol, targetDocFn: productDoc, mapper: mapMasterToProduct, branchId });
 }
 
-export async function migrateMasterCoursesToBeV2() {
-  return runMasterToBeMigration({ sourceType: 'courses', targetCol: coursesCol, targetDocFn: courseDoc, mapper: mapMasterToCourse });
+export async function migrateMasterCoursesToBeV2({ branchId = '' } = {}) {
+  return runMasterToBeMigration({ sourceType: 'courses', targetCol: coursesCol, targetDocFn: courseDoc, mapper: mapMasterToCourse, branchId });
 }
 
 // ─── Bank Accounts CRUD (Phase 12.5) ────────────────────────────────────────

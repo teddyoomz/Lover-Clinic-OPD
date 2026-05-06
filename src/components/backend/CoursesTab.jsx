@@ -29,11 +29,7 @@ export default function CoursesTab({ clinicSettings, theme }) {
 
   const reload = useCallback(async () => {
     setLoading(true); setError('');
-    // Phase 24.0-vicies-novies-septies (2026-05-07) — courses are catalog
-    // entity (clinic-wide); migrate mapper doesn't stamp branchId.
-    // User report: "กดลบคอร์ส ... สาขาพระราม 3 ไม่ได้".
-    // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
-    try { setItems(await listCourses({ allBranches: true })); }
+    try { setItems(await listCourses({ branchId: selectedBranchId })); }
     catch (e) { setError(e.message || 'โหลดคอร์สล้มเหลว'); setItems([]); }
     finally { setLoading(false); }
   }, [selectedBranchId]);

@@ -83,8 +83,10 @@ describe('Phase 24.0-vicies-novies-ter — B: IMPORT_TARGET_BRANCH_ID + branch f
   });
 
   it('VNT.B.2 — runMasterToBeMigration accepts optional `filter` param', () => {
+    // Phase 24.0-vicies-novies-octies (2026-05-07) — also accepts branchId
+    // opt now (5th destructure key). Pattern updated to allow + .
     expect(BC).toMatch(
-      /async\s+function\s+runMasterToBeMigration\(\{\s*sourceType,\s*targetCol,\s*targetDocFn,\s*mapper,\s*filter\s*=\s*null\s*\}\)/,
+      /async\s+function\s+runMasterToBeMigration\(\{\s*sourceType,\s*targetCol,\s*targetDocFn,\s*mapper,\s*filter\s*=\s*null/,
     );
   });
 
@@ -107,8 +109,14 @@ describe('Phase 24.0-vicies-novies-ter — B: IMPORT_TARGET_BRANCH_ID + branch f
   });
 
   it('VNT.B.6 — global entities (products/courses/staff/etc) do NOT pass filter', () => {
-    // Anti-regression: only branches + staff_schedules are branch-scoped.
-    // Other entities import unfiltered.
+    // Anti-regression: only migrateMasterBranchesToBe + StaffSchedules are
+    // branch-scoped via filter. Other entities import unfiltered.
+    // Phase 24.0-vicies-novies-octies (2026-05-07) — wrapper signatures now
+    // accept {branchId} opt (forwarded to runMasterToBeMigration so mappers
+    // can stamp branchId on output). The {} signature in the regex was
+    // updated to ({ branchId = '' } = {}) for the 7 catalog migrators that
+    // were updated. Universal migrators (Staff/Doctors/PermissionGroups/
+    // Wallet/Membership/MedicineLabels/etc.) still take no args.
     const globalMigrators = [
       'migrateMasterProductsToBe', 'migrateMasterCoursesToBeV2',
       'migrateMasterStaffToBe', 'migrateMasterDoctorsToBe',
@@ -122,11 +130,13 @@ describe('Phase 24.0-vicies-novies-ter — B: IMPORT_TARGET_BRANCH_ID + branch f
       'migrateMasterMedicalInstrumentsToBe',
     ];
     for (const fn of globalMigrators) {
+      // Match the function declaration (signature may take no args OR {branchId}).
       const block = BC.match(
-        new RegExp(`export\\s+async\\s+function\\s+${fn}\\(\\)\\s*\\{[\\s\\S]{0,400}?\\}`),
+        new RegExp(`export\\s+async\\s+function\\s+${fn}\\([\\s\\S]*?\\}\\s*=\\s*\\{\\}\\s*\\)\\s*\\{[\\s\\S]{0,500}?\\}|export\\s+async\\s+function\\s+${fn}\\(\\)\\s*\\{[\\s\\S]{0,500}?\\}`),
       );
       expect(block).toBeTruthy();
-      // No `filter:` opt forwarded
+      // No `filter:` opt forwarded (filter is reserved for branches +
+      // staff_schedules which use the IMPORT_TARGET_BRANCH_ID lock).
       expect(block[0]).not.toMatch(/filter:/);
     }
   });
