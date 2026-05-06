@@ -46,6 +46,8 @@ import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
+// Phase 24.0 — dual gate (permission OR admin) for ลบลูกค้า button
+import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
 // Short/full Thai-BE formatters delegate to the shared `fmtThaiDate` helper.
@@ -113,10 +115,16 @@ export default function CustomerDetailView({
   onBack, onCreateTreatment, onEditTreatment, onDeleteTreatment,
   onCustomerUpdated, onCreateSale, onOpenFinance,
   onEditCustomer,    // V33.3 — open the full Edit Customer page (BackendDashboard takeover)
+  onDeleteCustomer,  // Phase 24.0 — open the cascade-delete modal at parent
 }) {
   const isDark = theme !== 'light';
   const ac = accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
+
+  // Phase 24.0 — dual gate: explicit perm OR admin (auto-bypass).
+  const hasDeletePerm = useHasPermission('customer_delete');
+  const tabAccess = useTabAccess();
+  const canDeleteCustomer = hasDeletePerm || tabAccess?.isAdmin === true;
 
   // V36-quinquies (2026-04-29) — live customer doc via onSnapshot listener.
   // User report: "ประวัติการใช้คอร์สไม่รีเฟรชแบบ real time ต้องกด f5 ก่อน
@@ -637,6 +645,17 @@ export default function CustomerDetailView({
                   title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
                   <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
                 </button>
+                {/* Phase 24.0 — prominent ลบลูกค้า button (dual gate) */}
+                {canDeleteCustomer && onDeleteCustomer && (
+                  <button
+                    onClick={() => onDeleteCustomer(customer)}
+                    data-testid="customer-detail-delete-button"
+                    title="ลบลูกค้าถาวร พร้อมประวัติทั้งหมด"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"
+                  >
+                    <Trash2 size={11} /> ลบลูกค้า
+                  </button>
+                )}
               </div>
             </div>
 
