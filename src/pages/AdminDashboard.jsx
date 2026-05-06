@@ -92,6 +92,7 @@ import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
 import { shouldRingChatAlert, shouldRingChatInterval } from '../lib/chatUnreadUtils.js';
 import { resolveAppointmentTypeLabel } from '../lib/appointmentDisplay.js';
+import { kioskPatientToCanonical } from '../lib/kioskPatientToCanonical.js';
 import DateField from '../components/DateField.jsx';
 
 // ── Date format helpers (DD/MM/YYYY ↔ YYYY-MM-DD) ──────────────────────────
@@ -1719,6 +1720,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           .map(r => ({ value: String(r.id), label: r.name || r.roomName || r.id })),
         advisors: branchScopedStaff.map(s => ({ value: String(s.id), label: s.name || s.id })),
         sources: [...CUSTOMER_SOURCES_STATIC],
+        // Phase 23.0 — ช่องทางนัดหมาย dropdown reads `appointmentChannels` key.
+        // Pre-fix: fetchDepositOptions only set `sources` → both deposit & no-deposit
+        // modal channel selects rendered with empty options (silent UX failure).
+        // Same static enum is reused (walk-in / FB / LINE / referral / other).
+        appointmentChannels: [...CUSTOMER_SOURCES_STATIC],
       };
       setDepositOptions(options);
     } catch (e) { console.error('fetchDepositOptions:', e); }
@@ -2271,40 +2277,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     // If already recorded successfully → block (ต้องลบจากหน้าประวัติเท่านั้น)
     if (session.opdRecordedAt && session.brokerStatus === 'done') return;
 
-    // Build patient payload
-    const reasons = getReasons(d);
-    const pmh = [];
-    if (d?.hasUnderlying === 'มี') {
-      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-      if (d.ud_diabetes)     pmh.push('เบาหวาน');
-      if (d.ud_lung)         pmh.push('โรคปอด');
-      if (d.ud_kidney)       pmh.push('โรคไต');
-      if (d.ud_heart)        pmh.push('โรคหัวใจ');
-      if (d.ud_blood)        pmh.push('โรคโลหิต');
-      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-    }
-
-    const patient = {
-      prefix:     d?.prefix    || '',
-      firstName:  d?.firstName || '',
-      lastName:   d?.lastName  || '',
-      phone:      d?.phone     || '',
-      age:        d?.age       || '',
-      reasons,
-      dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
-      address: d?.address || '',
-      province: d?.province || '',
-      district: d?.district || '', subDistrict: d?.subDistrict || '', postalCode: d?.postalCode || '',
-      nationality: d?.nationality || 'ไทย',
-      nationalityCountry: d?.nationalityCountry || '',
-      howFoundUs: d?.howFoundUs || [],
-      allergies:  d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
-      underlying: pmh.join(', '),
-      emergencyName:     d?.emergencyName     || '',
-      emergencyRelation: d?.emergencyRelation || '',
-      emergencyPhone:    d?.emergencyPhone    || '',
-      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'en'),
-    };
+    // Phase 23.0 — Rule C1 shared helper (3rd call site of identical builder).
+    const patient = kioskPatientToCanonical(d, {
+      formType: session.formType || 'intake',
+      customTemplate: session.customTemplate,
+      summaryLanguage: 'en',
+    });
 
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
     const jobId = `${sessionId}_${Date.now()}`;
@@ -2338,7 +2316,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers' };
         } else {
           // Create new be_customers doc
-          const created = await addCustomer(patient, { strict: false });
+          // Phase 23.0 — explicit branchId stamp ("สร้างรายการที่"). Mirrors
+          // CustomerCreatePage pattern. Pre-fix relied on implicit
+          // resolveSelectedBranchId() fallback inside addCustomer; explicit
+          // pass eliminates BranchContext-lag race condition.
+          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
           result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
         }
         setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
@@ -2360,7 +2342,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           });
           showToast('HN ไม่พบในระบบ — ถอด HN แล้ว กำลังบันทึกใหม่...');
           try {
-            const created = await addCustomer(patient, { strict: false });
+            // Phase 23.0 — explicit branchId stamp (recovery-recreate path).
+            const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
             await updateDoc(ref, {
               opdRecordedAt: new Date().toISOString(),
               brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
@@ -2398,35 +2381,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const handleResync = async (session) => {
     const sessionId = session.id;
     const d = session.patientData;
-    const reasons = getReasons(d);
-    const pmh = [];
-    if (d?.hasUnderlying === 'มี') {
-      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-      if (d.ud_diabetes)     pmh.push('เบาหวาน');
-      if (d.ud_lung)         pmh.push('โรคปอด');
-      if (d.ud_kidney)       pmh.push('โรคไต');
-      if (d.ud_heart)        pmh.push('โรคหัวใจ');
-      if (d.ud_blood)        pmh.push('โรคโลหิต');
-      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-    }
-    const patient = {
-      prefix: d?.prefix || '', firstName: d?.firstName || '',
-      lastName: d?.lastName || '', phone: d?.phone || '',
-      age: d?.age || '', reasons,
-      dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
-      address: d?.address || '',
-      province: d?.province || '',
-      district: d?.district || '', subDistrict: d?.subDistrict || '', postalCode: d?.postalCode || '',
-      nationality: d?.nationality || 'ไทย',
-      nationalityCountry: d?.nationalityCountry || '',
-      howFoundUs: d?.howFoundUs || [],
-      allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
-      underlying: pmh.join(', '),
-      emergencyName:     d?.emergencyName     || '',
-      emergencyRelation: d?.emergencyRelation || '',
-      emergencyPhone:    d?.emergencyPhone    || '',
-      clinicalSummary: generateClinicalSummary(d, session.formType || 'intake', session.customTemplate, 'en'),
-    };
+    // Phase 23.0 — translate kiosk camelCase → canonical snake_case via
+    // shared helper. Pre-fix the inline builder produced a camelCase blob
+    // that addCustomer's normalize/validate chain didn't recognize → root
+    // be_customers doc had wrong keys + patientData mirror was empty.
+    const patient = kioskPatientToCanonical(d, {
+      formType: session.formType || 'intake',
+      customTemplate: session.customTemplate,
+      summaryLanguage: 'en',
+    });
 
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
     const jobId = `${sessionId}_${Date.now()}`;
@@ -2453,7 +2416,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             ? { success: true, proClinicId: updated.id, proClinicHN: updated.hn_no || updated.proClinicHN || '' }
             : { success: false, error: 'ไม่พบลูกค้าใน be_customers' };
         } else {
-          const created = await addCustomer(patient, { strict: false });
+          // Phase 23.0 — explicit branchId stamp (handleResync create branch).
+          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
           result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
         }
       } catch (innerErr) {
@@ -2510,34 +2474,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     depositSyncingRef.current.add(sessionId);
     forceRerender(n => n + 1);
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId);
-    const reasons = getReasons(d);
-    const pmh = [];
-    if (d.hasUnderlying === 'มี') {
-      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-      if (d.ud_diabetes) pmh.push('เบาหวาน');
-      if (d.ud_lung) pmh.push('โรคปอด');
-      if (d.ud_kidney) pmh.push('โรคไต');
-      if (d.ud_heart) pmh.push('โรคหัวใจ');
-      if (d.ud_blood) pmh.push('โรคโลหิต');
-      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-    }
-    const patient = {
-      prefix: d?.prefix || '', firstName: d?.firstName || '',
-      lastName: d?.lastName || '', phone: d?.phone || '',
-      age: d?.age || '', reasons,
-      dobDay: d?.dobDay || '', dobMonth: d?.dobMonth || '', dobYear: d?.dobYear || '',
-      address: d?.address || '', province: d?.province || '',
-      district: d?.district || '', subDistrict: d?.subDistrict || '', postalCode: d?.postalCode || '',
-      nationality: d?.nationality || 'ไทย',
-      nationalityCountry: d?.nationalityCountry || '',
-      howFoundUs: d?.howFoundUs || [],
-      allergies: d?.hasAllergies === 'มี' ? d.allergiesDetail : '',
-      underlying: pmh.join(', '),
-      emergencyName: d?.emergencyName || '',
-      emergencyRelation: d?.emergencyRelation || '',
-      emergencyPhone: d?.emergencyPhone || '',
-      clinicalSummary: generateClinicalSummary(d, 'intake', null, 'en'),
-    };
+    // Phase 23.0 — Rule C1 shared helper (was duplicated builder).
+    const patient = kioskPatientToCanonical(d, {
+      formType: 'intake',
+      customTemplate: null,
+      summaryLanguage: 'en',
+    });
 
     try {
       // Step 1: Create/update customer in ProClinic (if not done yet)
@@ -2552,7 +2494,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         updateDoc(ref, { brokerStatus: 'pending' }).catch(() => {});
         showToast('กำลังสร้างลูกค้า...');
         // Phase 20.0 Task 5b — addCustomer (be_*) replaces broker.fillProClinic
-        const created = await addCustomer(patient, { strict: false });
+        // Phase 23.0 — explicit branchId stamp ("สร้างรายการที่").
+        const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
         if (!created?.id) throw new Error('สร้างลูกค้าไม่สำเร็จ');
         proClinicId = created.id;
         proClinicHN = created.hn || '';
@@ -3875,7 +3818,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         {/* Deposit sync status */}
         {viewingSession.depositSyncStatus === 'done' && viewingSession.depositSyncAt && (
           <div className="mt-3 p-2 bg-emerald-950/20 border border-emerald-900/30 rounded text-xs text-emerald-400 font-mono flex items-center gap-2">
-            <CheckCircle2 size={12}/> บันทึกมัดจำลง ProClinic แล้ว · {formatBangkokTime(viewingSession.depositSyncAt)}
+            <CheckCircle2 size={12}/> บันทึกมัดจำเรียบร้อย · {formatBangkokTime(viewingSession.depositSyncAt)}
           </div>
         )}
         {viewingSession.depositSyncStatus === 'failed' && (
@@ -3883,18 +3826,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             ผิดพลาด: {viewingSession.depositSyncError}
           </div>
         )}
+        {/* Phase 23.0 — surface OPD/customer sync errors inline so the
+           red-locked "บันทึกลง OPD" button has a visible recovery message
+           (pre-fix the brokerError lived only in the button tooltip → user
+           saw red lock with no explanation → "infinite-loop UX"). */}
+        {viewingSession.brokerStatus === 'failed' && viewingSession.brokerError && (
+          <div className="mt-3 p-2 bg-red-950/20 border border-red-900/30 rounded text-xs text-red-400 font-mono">
+            ⚠️ บันทึกลูกค้าล้มเหลว: {viewingSession.brokerError}
+          </div>
+        )}
       </div>
     );
   };
 
   // Resync button for the viewing-session modal header.
+  // Phase 23.0 — relabeled "Resync ProClinic" → "ซิงค์ข้อมูลใหม่" (post
+  // Phase 20.0 ProClinic strip the call path is now backend-only via
+  // scopedDataLayer; the old label was misleading + redundant with main
+  // OPD button).
   const renderResyncButton = () => {
     const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
     return (
       <button
         onClick={() => handleResync(viewingSession)}
         disabled={isPending}
-        title="บันทึกข้อมูลลง ProClinic อีกครั้ง (manual resync)"
+        title="บันทึกข้อมูลลูกค้าลง backend อีกครั้ง (manual sync)"
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
           isPending
             ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse cursor-not-allowed'
@@ -3902,7 +3858,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }`}
       >
         <RotateCcw size={13} className={isPending ? 'animate-spin' : ''} />
-        {isPending ? 'กำลังส่ง...' : 'Resync ProClinic'}
+        {isPending ? 'กำลังส่ง...' : 'ซิงค์ข้อมูลใหม่'}
       </button>
     );
   };
@@ -3918,10 +3874,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         onClick={() => handleOpdClick(viewingSession)}
         disabled={isPending || isDone}
         title={
-          isPending ? 'กำลังส่งข้อมูลไป ProClinic...' :
-          isDone    ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' :
-          isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || ''}` :
-          viewingSession.opdRecordedAt ? 'ส่งข้อมูลไป ProClinic' : 'ส่งข้อมูลไป ProClinic'
+          isPending ? 'กำลังบันทึกลง backend...' :
+          isDone    ? 'บันทึกลง backend แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' :
+          isFailed  ? `ล้มเหลว: ${viewingSession.brokerError || 'unknown error'} — กดอีกครั้งเพื่อลองใหม่` :
+          viewingSession.opdRecordedAt ? 'บันทึก OPD ลง backend' : 'บันทึก OPD ลง backend'
         }
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
           isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :

@@ -67,8 +67,14 @@ describe('Phase 20.0 Task 5b — Y2 be_customers writers wired', () => {
 });
 
 describe('Phase 20.0 Task 5b — Y3 patient-submit (handleOpdClick + handleResync) wired', () => {
-  it('Y3.1 — addCustomer called with {strict:false} opt (legacy patients may have minimal data)', () => {
-    const matches = STRIPPED.match(/addCustomer\s*\(\s*patient\s*,\s*\{\s*strict:\s*false\s*\}/g) || [];
+  it('Y3.1 — addCustomer called with {strict:false, branchId} opts (Phase 23.0 evolved contract)', () => {
+    // Phase 20.0 baseline: addCustomer(patient, { strict: false }).
+    // Phase 23.0 (2026-05-06) tightened: every kiosk callsite ALSO passes
+    // branchId explicitly to mirror CustomerCreatePage + close the
+    // "สร้างรายการที่" race vs implicit resolveSelectedBranchId fallback.
+    const matches = STRIPPED.match(
+      /addCustomer\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId/g,
+    ) || [];
     // 3 callsites: handleOpdClick + handleOpdClick-retry + handleResync + confirmDepositSync
     expect(matches.length).toBeGreaterThanOrEqual(3);
   });
@@ -116,8 +122,11 @@ describe('Phase 20.0 Task 5b — Y4 cascade-delete relocated to BackendDashboard
 });
 
 describe('Phase 20.0 Task 5b — Y5 confirmDepositSync customer-create branch wired', () => {
-  it('Y5.1 — addCustomer called with strict:false in deposit-sync customer-create branch', () => {
-    expect(STRIPPED).toMatch(/const\s+created\s*=\s*await\s+addCustomer\s*\(\s*patient\s*,\s*\{\s*strict:\s*false\s*\}\s*\)/);
+  it('Y5.1 — addCustomer called with strict:false + explicit branchId in deposit-sync customer-create branch (Phase 23.0)', () => {
+    // Phase 23.0 contract: branchId stamped explicitly from selectedBranchId.
+    expect(STRIPPED).toMatch(
+      /const\s+created\s*=\s*await\s+addCustomer\s*\(\s*patient\s*,\s*\{[^}]*strict:\s*false[^}]*branchId:\s*selectedBranchId[^}]*\}\s*\)/,
+    );
   });
 
   it('Y5.2 — proClinicId stamped from created.id', () => {
