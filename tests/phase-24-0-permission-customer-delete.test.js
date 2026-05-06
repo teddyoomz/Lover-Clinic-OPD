@@ -81,6 +81,11 @@ describe('Phase 24.0 / P — customer_delete perm key + dual gate', () => {
       // 'customer_delete' claim string as its permissionKey arg. Mentioned
       // in JSDoc + error message — legitimate canonical reference.
       'api/admin/_lib/adminAuth.js',
+      // Phase 24.0-ter (2026-05-06 evening): client wrapper switched from
+      // fetch-based to direct-Firestore for local-only workflow. Module
+      // doc references "perm_customer_delete-bearing user" verbatim as
+      // part of explaining the rule gate — legitimate canonical reference.
+      'src/lib/customerDeleteClient.js',
       'tests/phase-24-0-permission-customer-delete.test.js',
       'tests/phase-24-0-customer-delete-server.test.js',
       'tests/phase-24-0-customer-delete-modal.test.jsx',

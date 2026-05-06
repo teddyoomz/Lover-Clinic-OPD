@@ -223,16 +223,23 @@ describe('Phase 24.0 / F6 — preview endpoint integrity (Issue #1)', () => {
     expect(SERVER).toMatch(/req\.body\?\.\s*action/);
   });
 
-  it('F6.2 client wrapper exports BOTH deleteCustomerViaApi AND previewCustomerDeleteViaApi', () => {
+  it('F6.2 client wrapper exports BOTH deleteCustomerViaApi AND previewCustomerDeleteViaApi (Phase 24.0-ter: client-side Firestore)', () => {
     const CLIENT_TXT = fs.readFileSync(
       path.join(process.cwd(), 'src/lib/customerDeleteClient.js'),
       'utf-8',
     );
     expect(CLIENT_TXT).toMatch(/export\s+async\s+function\s+deleteCustomerViaApi/);
     expect(CLIENT_TXT).toMatch(/export\s+async\s+function\s+previewCustomerDeleteViaApi/);
-    // Preview wrapper must POST action: 'preview'.
-    expect(CLIENT_TXT).toMatch(/action:\s*['"]preview['"]/);
-    // Preview wrapper must hit the same endpoint URL.
-    expect(CLIENT_TXT).toMatch(/\/api\/admin\/delete-customer-cascade/);
+    // Phase 24.0-ter — wrapper now uses Firestore SDK directly (no fetch
+    // to /api/admin/*) so it works on `npm run dev` Vite without needing
+    // Vercel serverless. Verify the canonical client-side primitives are
+    // imported + the deleteCustomerCascade reuse is intact.
+    expect(CLIENT_TXT).toMatch(/import[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS,\s*deleteCustomerCascade[\s\S]*?from\s*['"][^'"]*backendClient/);
+    expect(CLIENT_TXT).toMatch(/import[\s\S]*?from\s*['"]firebase\/firestore['"]/);
+    // Audit doc id format is preserved (mirror of server endpoint).
+    expect(CLIENT_TXT).toMatch(/customer-delete-\$\{cid\}-\$\{ts\}-\$\{rand\}/);
+    // Anti-regression: NO fetch() calls to the api endpoint. Local-only
+    // workflow requires direct Firestore SDK paths.
+    expect(CLIENT_TXT).not.toMatch(/fetch\(['"]\/api\/admin\/delete-customer-cascade/);
   });
 });
