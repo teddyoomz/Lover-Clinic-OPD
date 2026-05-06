@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV18)
+## Invariants (AV1–AV19)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -135,6 +135,24 @@ expect(src).toMatch(/export async function migrateMasterUniversalToBe\(\s*\)/);
 expect(src).not.toMatch(/migrateMasterUniversalToBe\(\s*\{[^}]*branchId/);
 ```
 **Companion AV: AV17** (list spread-order) — same V12 multi-reader-sweep pattern but at READ side. Both MUST hold for branch-scoped collections.
+
+### AV19 — Destructive ops require auto-backup-ref pre-condition (V40)
+
+**Why**: V40 (2026-05-07) — `/api/admin/branch-make-fresh` wipes all branch-scoped collections + per-customer subcollection docs filtered by branchId. Without a pre-call backup, an admin misclick = irreversible production data loss. The fix: server REQUIRES `autoBackupRef` field in request body + verifies the Storage object exists via `bucket.file(autoBackupRef).exists()` BEFORE executing any delete. Pattern generalizes to other destructive bulk ops.
+
+**Grep**:
+- `api/admin/.*delete\|cleanup\|wipe\|fresh` — every destructive endpoint. Each must:
+  - Accept an `autoBackupRef` (or equivalent prior-state-snapshot) field
+  - Verify the snapshot exists in Storage/Firestore BEFORE executing
+  - Refuse with 400 on missing
+
+**Sanctioned exception**: cleanup endpoints that delete ONLY test-prefixed docs (per V33.10/11/12) don't need the gate (TEST docs are by definition disposable).
+
+**Source-grep regression**:
+```js
+expect(code).toMatch(/AUTO_BACKUP_REQUIRED|BACKUP_REF_MISSING/);
+expect(code).toMatch(/bucket\.file\(autoBackupRef\)\.exists/);
+```
 
 ## How to run
 
