@@ -318,6 +318,10 @@ export const getBeBackedMasterTypes = (...args) => raw.getBeBackedMasterTypes(..
 export const saveCustomer = (...args) => raw.saveCustomer(...args);
 export const deleteCustomerDocOnly = (...args) => raw.deleteCustomerDocOnly(...args);
 export const deleteCustomerCascade = (...args) => raw.deleteCustomerCascade(...args);
+// Phase 24.0-octies (2026-05-06 evening) — duplicate-customer lookup by
+// indexed field (citizen_id / passport_id / telephone_number / hn_no).
+// Universal collection (customer is branch-agnostic) → no branchId injection.
+export const findCustomersByField = (...args) => raw.findCustomersByField(...args);
 export const saveTreatment = (...args) => raw.saveTreatment(...args);
 export const deleteBackendTreatment = (...args) => raw.deleteBackendTreatment(...args);
 export const saveProduct = (...args) => raw.saveProduct(...args);

@@ -51,6 +51,7 @@ import {
   getCustomer,
   addCustomer,
   updateCustomerFromForm,
+  findCustomersByField,
   deleteCustomerCascade,
   createDeposit,
   updateDeposit,
@@ -195,6 +196,86 @@ const stableStr = (obj) => {
   };
   return JSON.stringify(sort(obj));
 };
+
+// Phase 24.0-septies (2026-05-06 evening) — graceful update helper.
+// Wraps updateCustomerFromForm + getCustomer so call-sites can recover
+// when the target be_customers doc was DELETED (e.g. via Phase 24.0
+// cascade-delete) but the kiosk session still holds the old id in
+// `session.brokerProClinicId`. Pre-fix: updateDoc throws "No document
+// to update" → entire handleResync / handleOpdClick fails → user sees
+// red error toast + can't sync. Now: returns notFound flag → caller
+// falls through to addCustomer recovery path.
+//
+// Returns one of:
+//   { ok: true, customerId, hn }   → update succeeded
+//   { ok: false, notFound: true }  → original doc gone; caller should re-create
+// Throws on unexpected errors (network, validation, etc.).
+async function tryUpdateExistingCustomer(customerId, patient) {
+  try {
+    await updateCustomerFromForm(customerId, patient, {});
+    const updated = await getCustomer(customerId);
+    if (!updated) return { ok: false, notFound: true };
+    return {
+      ok: true,
+      customerId: updated.id,
+      hn: updated.hn_no || updated.proClinicHN || '',
+    };
+  } catch (e) {
+    const msg = String(e?.code || e?.message || '');
+    if (/No document to update|not[-\s]?found/i.test(msg)) {
+      return { ok: false, notFound: true };
+    }
+    throw e;
+  }
+}
+
+// Phase 24.0-octies (2026-05-06 evening) — identity-based duplicate lookup.
+// User directive: "เวลาข้อมูล Frontend หลุด Sync ไม่ว่าจากกรณีใดๆ การบันทึก
+// ลงไปซ้ำ ให้ลอง mapping hn, เลขบัตร ปชช/passport, เบอร์โทรศัพธ์ ดูก่อน
+// ถ้าซ้ำกับคนไหน ก็บันทึก sync ลงไปกับคนนั้น ... แต่ถ้าไม่ซ้ำก็ทำการสร้างใหม่"
+//
+// Searches be_customers for an existing record matching ANY of:
+//   - citizen_id (Thai national ID)
+//   - passport_id (foreigner)
+//   - telephone_number
+// Multi-key lookup; if multiple distinct customers match different keys,
+// pick the one with MOST matched keys (highest-confidence). Returns:
+//   { customer, matched: [...keys] }    → single high-confidence match
+//   { ambiguous: true, candidates: [] } → multiple distinct customers; admin picks
+//   null                                  → no match (safe to create new)
+async function findExistingCustomerByIdentity(patient) {
+  if (!patient || typeof patient !== 'object') return null;
+  const queries = [];
+  if (patient.citizen_id)       queries.push(['citizen_id', patient.citizen_id]);
+  if (patient.passport_id)      queries.push(['passport_id', patient.passport_id]);
+  if (patient.telephone_number) queries.push(['telephone_number', patient.telephone_number]);
+  if (queries.length === 0) return null;
+
+  const seen = new Map();  // customerId → { id, matched: [field, ...] }
+  await Promise.all(queries.map(async ([field, value]) => {
+    const found = await findCustomersByField(field, value).catch(() => []);
+    for (const r of found) {
+      const id = String(r.id);
+      if (!seen.has(id)) seen.set(id, { id, matched: [field] });
+      else seen.get(id).matched.push(field);
+    }
+  }));
+  if (seen.size === 0) return null;
+
+  const matches = Array.from(seen.values());
+  if (matches.length === 1) {
+    const full = await getCustomer(matches[0].id).catch(() => null);
+    return full ? { customer: full, matched: matches[0].matched } : null;
+  }
+  // Multiple distinct customers — pick the one with most matched keys
+  matches.sort((a, b) => b.matched.length - a.matched.length);
+  if (matches[0].matched.length > matches[1].matched.length) {
+    const full = await getCustomer(matches[0].id).catch(() => null);
+    return full ? { customer: full, matched: matches[0].matched } : null;
+  }
+  // Tie at top — ambiguous; let admin disambiguate manually
+  return { ambiguous: true, candidates: matches };
+}
 
 // Phase 20.0 Task 5c (2026-05-06) — pure mapper from Frontend kiosk
 // depositData shape → be_deposits createDeposit/updateDeposit shape.
@@ -2318,13 +2399,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       try {
         let result;
         if (hasExistingProClinic) {
-          // Update existing be_customers doc
-          await updateCustomerFromForm(session.brokerProClinicId, patient, {});
-          // Re-read to get current state
-          const updated = await getCustomer(session.brokerProClinicId);
-          result = updated
-            ? { success: true, proClinicId: updated.id, proClinicHN: updated.hn_no || updated.proClinicHN || '' }
-            : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers' };
+          // Phase 24.0-septies — graceful update via shared helper.
+          // Detects "doc was deleted" (via Phase 24.0 cascade-delete) and
+          // signals notFound so the recovery branch below clears the
+          // stale brokerProClinicId + re-creates the customer.
+          const upd = await tryUpdateExistingCustomer(session.brokerProClinicId, patient);
+          result = upd.ok
+            ? { success: true, proClinicId: upd.customerId, proClinicHN: upd.hn }
+            : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers (อาจถูกลบไปแล้ว)' };
         } else {
           // Create new be_customers doc
           // Phase 23.0 — explicit branchId stamp ("สร้างรายการที่"). Mirrors
@@ -2344,26 +2426,59 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
           });
         } else if (result?.notFound) {
-          // HN ไม่เจอใน be_customers → ถอด HN/OPD แล้วลอง create ใหม่อัตโนมัติ
-          await updateDoc(ref, {
-            brokerProClinicId: null, brokerProClinicHN: null,
-            opdRecordedAt: null, brokerLastAutoSyncAt: null,
-            brokerStatus: null, brokerError: null, brokerJob: null,
-            patientLinkToken: null, patientLinkEnabled: false,
-          });
-          showToast('HN ไม่พบในระบบ — ถอด HN แล้ว กำลังบันทึกใหม่...');
+          // Phase 24.0-octies — identity-lookup BEFORE create.
+          // Try citizen_id / passport / phone match against be_customers.
+          // Hit → re-link to existing (idempotent). Miss → fall to addCustomer.
+          let relinked = false;
           try {
-            // Phase 23.0 — explicit branchId stamp (recovery-recreate path).
-            const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+            const existing = await findExistingCustomerByIdentity(patient);
+            if (existing && !existing.ambiguous) {
+              await updateDoc(ref, {
+                opdRecordedAt: new Date().toISOString(),
+                brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+                brokerError: null, brokerJob: null,
+                brokerProClinicId: existing.customer.id,
+                brokerProClinicHN: existing.customer.hn_no || '',
+              });
+              showToast(`พบลูกค้าซ้ำ (${existing.matched.join(', ')}) — ผูกกับ HN ${existing.customer.hn_no || existing.customer.id}`);
+              // Also UPDATE the existing customer's data with latest patient form
+              // (so kiosk-fresh edits land on the existing record).
+              try { await updateCustomerFromForm(existing.customer.id, patient, {}); } catch (e) { console.warn('relink update failed:', e); }
+              relinked = true;
+            } else if (existing?.ambiguous) {
+              await updateDoc(ref, {
+                brokerStatus: 'failed',
+                brokerError: 'พบลูกค้าซ้ำหลายคน — เปิด backend เพื่อตรวจสอบ',
+                brokerJob: null,
+              });
+              showToast('พบลูกค้าซ้ำหลายคน — เปิด backend เพื่อตรวจสอบ');
+              relinked = true;  // not really, but skip the addCustomer fallback
+            }
+          } catch (lookupErr) {
+            console.warn('identity-lookup failed; falling through to create:', lookupErr);
+          }
+
+          if (!relinked) {
+            // No existing match → ถอด HN/OPD แล้ว create ใหม่อัตโนมัติ
             await updateDoc(ref, {
-              opdRecordedAt: new Date().toISOString(),
-              brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
-              brokerError: null, brokerJob: null,
-              ...(created.id ? { brokerProClinicId: created.id } : {}),
-              ...(created.hn ? { brokerProClinicHN: created.hn } : {}),
+              brokerProClinicId: null, brokerProClinicHN: null,
+              opdRecordedAt: null, brokerLastAutoSyncAt: null,
+              brokerStatus: null, brokerError: null, brokerJob: null,
+              patientLinkToken: null, patientLinkEnabled: false,
             });
-          } catch (createErr) {
-            await updateDoc(ref, { brokerStatus: 'failed', brokerError: createErr?.message || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+            showToast('ไม่พบลูกค้าซ้ำในระบบ — กำลังสร้างใหม่...');
+            try {
+              const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+              await updateDoc(ref, {
+                opdRecordedAt: new Date().toISOString(),
+                brokerStatus: 'done', brokerFilledAt: new Date().toISOString(),
+                brokerError: null, brokerJob: null,
+                ...(created.id ? { brokerProClinicId: created.id } : {}),
+                ...(created.hn ? { brokerProClinicHN: created.hn } : {}),
+              });
+            } catch (createErr) {
+              await updateDoc(ref, { brokerStatus: 'failed', brokerError: createErr?.message || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
+            }
           }
         }
       } catch (innerErr) {
@@ -2421,18 +2536,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       let result;
       try {
         if (hasExistingProClinic) {
-          await updateCustomerFromForm(session.brokerProClinicId, patient, {});
-          const updated = await getCustomer(session.brokerProClinicId);
-          result = updated
-            ? { success: true, proClinicId: updated.id, proClinicHN: updated.hn_no || updated.proClinicHN || '' }
-            : { success: false, error: 'ไม่พบลูกค้าใน be_customers' };
+          // Phase 24.0-septies — graceful update via shared helper.
+          // Detects "doc was deleted" (Phase 24.0 cascade-delete) and signals
+          // notFound so the existing recovery branch below clears the stale
+          // brokerProClinicId. Next sync click goes through addCustomer.
+          const upd = await tryUpdateExistingCustomer(session.brokerProClinicId, patient);
+          result = upd.ok
+            ? { success: true, proClinicId: upd.customerId, proClinicHN: upd.hn }
+            : { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers (อาจถูกลบไปแล้ว)' };
         } else {
           // Phase 23.0 — explicit branchId stamp (handleResync create branch).
           const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
           result = { success: true, proClinicId: created.id, proClinicHN: created.hn || '' };
         }
       } catch (innerErr) {
-        result = { success: false, error: innerErr?.message || String(innerErr) };
+        const msg = String(innerErr?.code || innerErr?.message || '');
+        if (/No document to update|not[-\s]?found/i.test(msg)) {
+          result = { success: false, notFound: true, error: 'ไม่พบลูกค้าใน be_customers (อาจถูกลบไปแล้ว)' };
+        } else {
+          result = { success: false, error: innerErr?.message || String(innerErr) };
+        }
       }
       autoSyncInFlightRef.current.delete(sessionId);
       setBrokerPending(prev => { const n = { ...prev }; delete n[sessionId]; return n; });
@@ -2452,16 +2575,53 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           lastAutoSyncedStrRef.current[sessionId] = stableStr(d || {});
         }
       } else if (result?.notFound) {
-        // HN ไม่เจอใน ProClinic → ถอด HN/OPD ออก พร้อมบันทึกใหม่
-        setViewingSession(prev => prev?.id === sessionId
-          ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false } : prev);
-        await updateDoc(ref, {
-          brokerStatus: null, brokerError: null, brokerJob: null,
-          brokerProClinicId: null, brokerProClinicHN: null,
-          opdRecordedAt: null, brokerLastAutoSyncAt: null,
-          patientLinkToken: null, patientLinkEnabled: false,
-        });
-        showToast('HN ไม่พบใน ProClinic — ถอด HN ออกแล้ว พร้อมบันทึกใหม่');
+        // Phase 24.0-octies — identity-lookup BEFORE clearing/creating.
+        // Try citizen_id / passport / phone match against be_customers.
+        // Hit → re-link to existing (idempotent). Miss → clear stale broker
+        // fields and let user click sync again to go through addCustomer.
+        let relinked = false;
+        try {
+          const existing = await findExistingCustomerByIdentity(patient);
+          if (existing && !existing.ambiguous) {
+            const syncAt = new Date().toISOString();
+            setViewingSession(prev => prev?.id === sessionId
+              ? { ...prev, brokerStatus: 'done', brokerError: null, brokerProClinicId: existing.customer.id, brokerProClinicHN: existing.customer.hn_no || '', brokerLastAutoSyncAt: syncAt } : prev);
+            await updateDoc(ref, {
+              brokerStatus: 'done', brokerError: null, brokerJob: null,
+              brokerProClinicId: existing.customer.id,
+              brokerProClinicHN: existing.customer.hn_no || '',
+              brokerLastAutoSyncAt: syncAt, brokerFilledAt: syncAt,
+            });
+            try { await updateCustomerFromForm(existing.customer.id, patient, {}); } catch (e) { console.warn('relink update failed:', e); }
+            showToast(`พบลูกค้าซ้ำ (${existing.matched.join(', ')}) — ผูกกับ HN ${existing.customer.hn_no || existing.customer.id} เรียบร้อย`);
+            relinked = true;
+          } else if (existing?.ambiguous) {
+            setViewingSession(prev => prev?.id === sessionId
+              ? { ...prev, brokerStatus: 'failed', brokerError: 'พบลูกค้าซ้ำหลายคน — เปิด backend ตรวจสอบ' } : prev);
+            await updateDoc(ref, {
+              brokerStatus: 'failed', brokerJob: null,
+              brokerError: 'พบลูกค้าซ้ำหลายคน — เปิด backend ตรวจสอบ',
+            });
+            showToast('พบลูกค้าซ้ำหลายคน — เปิด backend เพื่อตรวจสอบ');
+            relinked = true;
+          }
+        } catch (lookupErr) {
+          console.warn('identity-lookup failed; falling through to clear+retry:', lookupErr);
+        }
+
+        if (!relinked) {
+          // No existing match → ถอด HN/OPD ออก, ให้ user กด sync อีกครั้ง
+          // (ครั้งหน้าจะไป CREATE branch เพราะ broker fields ว่าง)
+          setViewingSession(prev => prev?.id === sessionId
+            ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false } : prev);
+          await updateDoc(ref, {
+            brokerStatus: null, brokerError: null, brokerJob: null,
+            brokerProClinicId: null, brokerProClinicHN: null,
+            opdRecordedAt: null, brokerLastAutoSyncAt: null,
+            patientLinkToken: null, patientLinkEnabled: false,
+          });
+          showToast('ไม่พบลูกค้าซ้ำในระบบ — ล้าง HN เดิม กดซิงค์อีกครั้งเพื่อสร้างใหม่');
+        }
       } else {
         setViewingSession(prev => prev?.id === sessionId
           ? { ...prev, brokerStatus: 'failed', brokerError: result?.error || 'ไม่ทราบสาเหตุ' } : prev);
@@ -2518,10 +2678,26 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         showToast(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังบันทึกมัดจำ...`);
       } else if (alreadySynced) {
         // Phase 20.0 Task 5b — update existing be_customers doc.
+        // Phase 24.0-septies — if the customer doc was deleted via cascade,
+        // fall back to addCustomer so deposit sync isn't blocked.
         showToast('กำลังอัพเดทข้อมูลลูกค้า...');
-        await updateCustomerFromForm(proClinicId, patient, {});
-        await updateDoc(ref, { brokerLastAutoSyncAt: serverTimestamp() });
-        showToast('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
+        const upd = await tryUpdateExistingCustomer(proClinicId, patient);
+        if (upd.notFound) {
+          showToast('ลูกค้าเดิมถูกลบ — สร้างลูกค้าใหม่อัตโนมัติ...');
+          const created = await addCustomer(patient, { strict: false, branchId: selectedBranchId || '' });
+          if (!created?.id) throw new Error('สร้างลูกค้าไม่สำเร็จ');
+          proClinicId = created.id;
+          proClinicHN = created.hn || '';
+          await updateDoc(ref, {
+            brokerStatus: 'done', brokerError: null,
+            brokerProClinicId: proClinicId, brokerProClinicHN: proClinicHN,
+            opdRecordedAt: serverTimestamp(), brokerLastAutoSyncAt: serverTimestamp(),
+          });
+          showToast(`สร้างลูกค้าสำเร็จ HN: ${proClinicHN} — กำลังอัพเดทมัดจำ...`);
+        } else {
+          await updateDoc(ref, { brokerLastAutoSyncAt: serverTimestamp() });
+          showToast('อัพเดทข้อมูลลูกค้าสำเร็จ — กำลังอัพเดทมัดจำ...');
+        }
       } else {
         showToast('กำลังบันทึกมัดจำ...');
       }

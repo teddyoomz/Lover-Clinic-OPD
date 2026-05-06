@@ -28,9 +28,15 @@ const ADMIN_DASHBOARD = fs.readFileSync(
   path.join(ROOT, 'src/pages/AdminDashboard.jsx'),
   'utf8',
 );
+// Phase 24.0-septies (2026-05-06 evening) — line-comment strip MUST run
+// BEFORE block-comment strip. Otherwise a line like
+// `// api/proclinic/* legacy path` contains a literal `/*` that the
+// block-comment regex interprets as block-start → it consumes everything
+// until the next `*/` (potentially 10KB+ of real source code), making
+// later assertions fail spuriously.
 const STRIPPED = ADMIN_DASHBOARD
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/^\s*\/\/.*$/gm, '');
+  .replace(/^\s*\/\/.*$/gm, '')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
 
 describe('Phase 20.0 Task 5b — Y1 broker patient lifecycle calls all removed', () => {
   it('Y1.1 — broker.fillProClinic NOT called', () => {
@@ -79,19 +85,31 @@ describe('Phase 20.0 Task 5b — Y3 patient-submit (handleOpdClick + handleResyn
     expect(matches.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('Y3.2 — updateCustomerFromForm called with (brokerProClinicId, patient, {})', () => {
-    expect(STRIPPED).toMatch(/updateCustomerFromForm\s*\(\s*[^,]+,\s*patient\s*,\s*\{\s*\}\s*\)/);
+  it('Y3.2 — updateCustomerFromForm called via tryUpdateExistingCustomer helper (Phase 24.0-septies)', () => {
+    // Phase 24.0-septies (2026-05-06 evening) — updateCustomerFromForm
+    // calls now go through the shared tryUpdateExistingCustomer helper
+    // (top-level in AdminDashboard.jsx) which detects "doc was deleted"
+    // (Phase 24.0 cascade-delete) + signals notFound to caller's recovery
+    // path. The helper still calls updateCustomerFromForm + getCustomer
+    // internally — just centralized + try/catch wrapped.
+    expect(STRIPPED).toMatch(/async function tryUpdateExistingCustomer/);
+    expect(STRIPPED).toMatch(/updateCustomerFromForm\s*\(\s*customerId\s*,\s*patient\s*,\s*\{\s*\}\s*\)/);
+    // Both handleOpdClick + handleResync delegate to the helper
+    const helperCalls = (STRIPPED.match(/tryUpdateExistingCustomer\s*\(\s*session\.brokerProClinicId\s*,\s*patient\s*\)/g) || []).length;
+    expect(helperCalls).toBeGreaterThanOrEqual(2);
   });
 
-  it('Y3.3 — getCustomer called to re-read after update for proClinicId/HN response shape', () => {
-    expect(STRIPPED).toMatch(/getCustomer\s*\(\s*session\.brokerProClinicId\s*\)/);
+  it('Y3.3 — getCustomer called inside tryUpdateExistingCustomer helper (Phase 24.0-septies)', () => {
+    // Helper does updateCustomerFromForm → getCustomer round-trip.
+    expect(STRIPPED).toMatch(/await\s+updateCustomerFromForm[\s\S]{0,200}await\s+getCustomer\s*\(\s*customerId\s*\)/);
   });
 
   it('Y3.4 — result shape preserves backward-compat: {success, proClinicId, proClinicHN}', () => {
-    // Source-grep that the create+update branches build a result obj with
-    // proClinicId stamped from the be_customers doc id (created.id / updated.id).
+    // Source-grep that the create branch builds a result obj with
+    // proClinicId stamped from the be_customers doc id (created.id);
+    // the update path now uses upd.customerId from the helper return shape.
     expect(STRIPPED).toMatch(/proClinicId:\s*created\.id/);
-    expect(STRIPPED).toMatch(/proClinicId:\s*updated\.id/);
+    expect(STRIPPED).toMatch(/proClinicId:\s*upd\.customerId/);
   });
 });
 
