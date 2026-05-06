@@ -1,3 +1,4 @@
+// audit-branch-scope: customer-delete client wrapper — universal collection (be_customers id-keyed) — imports CUSTOMER_CASCADE_COLLECTIONS constant from backendClient.js (no branch-scoped read/write). Phase 24.0-ter rewrite rationale documented below.
 // ─── customerDeleteClient — Phase 24.0 (2026-05-06) ─────────────────────────
 // Phase 24.0-ter (2026-05-06 evening) — RESHAPED from fetch-based to
 // direct-Firestore client-side per user local-only directive.

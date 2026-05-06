@@ -91,13 +91,28 @@ export function kioskPatientToCanonical(d, opts = {}) {
     ? d.howFoundUs.filter(Boolean).join(', ')
     : (d.howFoundUs || '');
 
-  // ── Note — clinicalSummary + emergency relation (kiosk-only field with
-  // no canonical schema home)
+  // ── Note — clinicalSummary only (Phase 24.0-nonies: emergency relation
+  // promoted to canonical contact_1_relation field, no longer stuffed in note)
   const summary = generateClinicalSummary(d, formType, customTemplate, summaryLanguage);
-  const noteParts = [];
-  if (d.emergencyRelation) noteParts.push(`Emergency relation: ${d.emergencyRelation}`);
-  if (summary) noteParts.push(summary);
-  const noteStr = noteParts.join('\n\n');
+  const noteStr = summary || '';
+
+  // ── Gender: kiosk uses Thai labels ("ชาย"/"หญิง"/"LGBTQ+"); canonical
+  // schema uses M/F/LGBTQ codes. Translate explicitly — pre-fix:
+  // toUpperCase()-only kept "ชาย" verbatim, then normalizeCustomer's M|F
+  // enum check zeroed it. Result: "บันทึกเพศจาก Frontend ลง backend ของเรา
+  // ยังใช้ไม่ได้ ลูกค้าล่าสุดกรอกเพศชายแล้ว แต่พอบันทึกลง backend กลายเป็นเพศ -"
+  // (Phase 24.0-nonies fix).
+  function mapGender(raw) {
+    if (raw == null) return '';
+    const g = String(raw).trim();
+    if (!g) return '';
+    const upper = g.toUpperCase();
+    if (upper === 'M' || upper === 'F' || upper === 'LGBTQ') return upper;
+    if (/^male$/i.test(g) || /ชาย/.test(g)) return 'M';
+    if (/^female$/i.test(g) || /หญิง/.test(g)) return 'F';
+    if (/lgbtq/i.test(g)) return 'LGBTQ';
+    return '';  // unknown → blank (better than rejecting at validator)
+  }
 
   // ── Build canonical form
   const out = {
@@ -121,14 +136,20 @@ export function kioskPatientToCanonical(d, opts = {}) {
     postal_code: d.postalCode || '',
 
     // Demographics
-    gender: typeof d.gender === 'string' ? d.gender.trim().toUpperCase() : '',
+    gender: mapGender(d.gender),
     birthdate,
     blood_type: d.bloodType || '',
 
+    // Phase 24.0-nonies — kiosk customers default to "ลูกค้าทั่วไป" per user
+    // directive. customer_type_2 retains the thai/foreigner distinction
+    // (so backend forms can still filter / segment).
+    customer_type: 'ลูกค้าทั่วไป',
+    customer_type_2: isForeigner ? 'ต่างชาติ' : 'ไทย',
+
     // Identity (mutually exclusive — Thai vs foreigner)
     ...(isForeigner
-      ? { passport_id: idCardRaw, country: d.nationalityCountry || '', customer_type: 'foreigner' }
-      : { citizen_id: idCardRaw, country: 'ไทย', customer_type: 'thai' }),
+      ? { passport_id: idCardRaw, country: d.nationalityCountry || '' }
+      : { citizen_id: idCardRaw, country: 'ไทย' }),
 
     // Health
     symptoms: reasonsStr,
@@ -141,8 +162,11 @@ export function kioskPatientToCanonical(d, opts = {}) {
     // Emergency contact (kiosk has single contact)
     contact_1_firstname: d.emergencyName || '',
     contact_1_telephone_number: emPhoneJoined,
+    // Phase 24.0-nonies — promote emergencyRelation from note dump to
+    // canonical contact_1_relation field. Backend form has matching input.
+    contact_1_relation: d.emergencyRelation || '',
 
-    // Free-text note (clinicalSummary + emergency relation)
+    // Free-text note (clinicalSummary; emergency relation moved out)
     note: noteStr,
   };
 

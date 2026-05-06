@@ -300,7 +300,11 @@ describe('Phase 15.6 ACE.E — firestore.rules be_admin_audit lockdown', () => {
     // entirely (immutable audit ledger). Read opened to isClinicStaff() so
     // the SystemConfigAuditPanel can render — Phase 15.6 admin SDK constraint
     // for WRITE is preserved by the prefix gate.
-    const block = rulesSrc.match(/match\s+\/be_admin_audit\/\{auditId\}\s*\{[\s\S]{0,1200}\}/);
+    // Phase 24.0 (2026-05-06) — extend regex cap from 1200 → 2500 chars to
+    // accommodate the customer-delete-* prefix exception added alongside
+    // system-config-*. Block is now ~1345 chars; cap at 2500 leaves headroom
+    // for future narrow-allow exceptions.
+    const block = rulesSrc.match(/match\s+\/be_admin_audit\/\{auditId\}\s*\{[\s\S]{0,2500}\}/);
     expect(block, 'be_admin_audit block not found').not.toBeNull();
     // update + delete locked
     expect(block[0]).toMatch(/allow\s+update,\s*delete:\s*if\s+false/);

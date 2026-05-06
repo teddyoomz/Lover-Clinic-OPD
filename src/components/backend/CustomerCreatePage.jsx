@@ -446,6 +446,8 @@ export default function CustomerCreatePage({
                   <option value="">— ไม่ระบุ —</option>
                   <option value="M">ชาย</option>
                   <option value="F">หญิง</option>
+                  {/* Phase 24.0-nonies — LGBTQ+ option per user directive. */}
+                  <option value="LGBTQ">LGBTQ+</option>
                 </select>
               </div>
               <div data-field="birthdate" data-testid="customer-form-birthdate">
@@ -657,7 +659,7 @@ export default function CustomerCreatePage({
             {/* Emergency contact 1 */}
             <div>
               <div className="text-xs font-bold text-[var(--tx-heading)] mb-2 mt-3">ผู้ติดต่อฉุกเฉิน 1</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs text-[var(--tx-muted)] mb-1">ชื่อ</label>
                   <input type="text" value={form.contact_1_firstname || ''} onChange={(e) => setField('contact_1_firstname', e.target.value)} maxLength={100} data-field="contact_1_firstname" data-testid="customer-form-contact-1-firstname" className={inputCls()} />
@@ -665,6 +667,13 @@ export default function CustomerCreatePage({
                 <div>
                   <label className="block text-xs text-[var(--tx-muted)] mb-1">นามสกุล</label>
                   <input type="text" value={form.contact_1_lastname || ''} onChange={(e) => setField('contact_1_lastname', e.target.value)} maxLength={100} data-field="contact_1_lastname" className={inputCls()} />
+                </div>
+                {/* Phase 24.0-nonies — ความสัมพันธ์ canonical field (was: dumped
+                    into note as "Emergency relation: <text>"). Mirrors to
+                    patientData.emergencyRelation via buildPatientDataFromForm. */}
+                <div>
+                  <label className="block text-xs text-[var(--tx-muted)] mb-1">ความสัมพันธ์</label>
+                  <input type="text" value={form.contact_1_relation || ''} onChange={(e) => setField('contact_1_relation', e.target.value)} maxLength={100} placeholder="บิดา / มารดา / คู่สมรส" data-field="contact_1_relation" data-testid="customer-form-contact-1-relation" className={inputCls()} />
                 </div>
                 <div>
                   <label className="block text-xs text-[var(--tx-muted)] mb-1">เบอร์โทร</label>

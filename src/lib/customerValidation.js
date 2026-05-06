@@ -10,7 +10,11 @@
 // Edit-mode UI can opt into strict by passing {strict: true} which adds
 // required-field checks (firstname + hn_no).
 
-export const GENDER_OPTIONS = Object.freeze(['M', 'F', '']);  // '' = unspecified
+// Phase 24.0-nonies (2026-05-06 evening) — extend gender enum to include
+// LGBTQ+ option per user directive ("เพิ่มเพศ LGBTQ+ ใน Dropdown ...
+// ของหน้าสร้าง/แก้ไข ข้อมูลลูกค้า"). Code 'LGBTQ' (no '+' — keeps the
+// canonical schema string-safe). Display label is rendered with the '+'.
+export const GENDER_OPTIONS = Object.freeze(['M', 'F', 'LGBTQ', '']);  // '' = unspecified
 export const RECEIPT_TYPE_OPTIONS = Object.freeze(['personal', 'company', '']);
 // V33-customer-create (2026-04-27): added imageMarketing to consent ladder
 // (Rule of 3 — same shape as marketing + healthData; replaces flat
@@ -84,6 +88,11 @@ const FIELD_BOUNDS = {
   contact_1_lastname: 100,
   contact_1_lastname_en: 100,
   contact_1_telephone_number: 30,
+  // Phase 24.0-nonies (2026-05-06 evening) — emergency-contact relation
+  // promoted from note-stuffed kludge to canonical field. Mirrors to
+  // patientData.emergencyRelation via buildPatientDataFromForm.
+  contact_1_relation: 100,
+  contact_2_relation: 100,
   contact_2_firstname: 100,
   contact_2_firstname_en: 100,
   contact_2_lastname: 100,
@@ -375,10 +384,23 @@ export function normalizeCustomer(form) {
     }
   }
 
-  // Gender — normalize uppercase M/F else blank.
+  // Gender — normalize to canonical enum.
+  // Phase 24.0-nonies — accept Thai labels "ชาย"/"หญิง"/"LGBTQ+" + English
+  // synonyms; normalize to M / F / LGBTQ codes. Anything unrecognized → ''.
   if (typeof out.gender === 'string') {
-    const g = out.gender.trim().toUpperCase();
-    out.gender = g === 'M' || g === 'F' ? g : '';
+    const raw = out.gender.trim();
+    const g = raw.toUpperCase();
+    if (g === 'M' || g === 'F' || g === 'LGBTQ') {
+      out.gender = g;
+    } else if (/^MALE$/i.test(raw) || /ชาย/.test(raw)) {
+      out.gender = 'M';
+    } else if (/^FEMALE$/i.test(raw) || /หญิง/.test(raw)) {
+      out.gender = 'F';
+    } else if (/lgbtq/i.test(raw)) {
+      out.gender = 'LGBTQ';
+    } else {
+      out.gender = '';
+    }
   } else {
     out.gender = '';
   }

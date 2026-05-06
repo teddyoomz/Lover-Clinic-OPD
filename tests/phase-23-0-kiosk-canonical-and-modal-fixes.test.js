@@ -103,7 +103,10 @@ describe('Phase 23.0 / A — kioskPatientToCanonical helper', () => {
     expect(kioskPatientToCanonical({}).birthdate).toBe('');
   });
 
-  it('A.9 routes idCard to citizen_id for Thai, passport_id for foreigner', () => {
+  it('A.9 Phase 24.0-nonies — customer_type = "ลูกค้าทั่วไป" + customer_type_2 carries thai/foreigner', () => {
+    // Phase 24.0-nonies (2026-05-06 evening) — kiosk customers default to
+    // "ลูกค้าทั่วไป" per user directive. The thai/foreigner distinction
+    // moved from customer_type to customer_type_2.
     const tha = kioskPatientToCanonical({
       nationality: 'ไทย',
       idCard: '1234567890123',
@@ -111,7 +114,8 @@ describe('Phase 23.0 / A — kioskPatientToCanonical helper', () => {
     expect(tha.citizen_id).toBe('1234567890123');
     expect(tha.passport_id).toBeUndefined();
     expect(tha.country).toBe('ไทย');
-    expect(tha.customer_type).toBe('thai');
+    expect(tha.customer_type).toBe('ลูกค้าทั่วไป');
+    expect(tha.customer_type_2).toBe('ไทย');
 
     const fgn = kioskPatientToCanonical({
       nationality: 'ต่างชาติ',
@@ -121,15 +125,28 @@ describe('Phase 23.0 / A — kioskPatientToCanonical helper', () => {
     expect(fgn.passport_id).toBe('X1234567');
     expect(fgn.citizen_id).toBeUndefined();
     expect(fgn.country).toBe('United States');
-    expect(fgn.customer_type).toBe('foreigner');
+    expect(fgn.customer_type).toBe('ลูกค้าทั่วไป');
+    expect(fgn.customer_type_2).toBe('ต่างชาติ');
   });
 
-  it('A.10 normalizes gender to uppercase M/F or empty', () => {
-    expect(kioskPatientToCanonical({ gender: 'm' }).gender).toBe('M');
+  it('A.10 Phase 24.0-nonies — translates Thai gender labels (ชาย/หญิง/LGBTQ+) to canonical M/F/LGBTQ codes', () => {
+    // Pre-fix: helper upper-cased "ชาย" → "ชาย" (Thai chars unaffected by
+    // toUpperCase) → normalizeCustomer rejected non-M/F → gender stored as ''.
+    // User report: "บันทึกเพศจาก Frontend ลง backend ของเรายังใช้ไม่ได้
+    // ลูกค้าล่าสุดกรอกเพศชายแล้ว แต่พอบันทึกลง backend กลายเป็นเพศ -"
+    expect(kioskPatientToCanonical({ gender: 'ชาย' }).gender).toBe('M');
+    expect(kioskPatientToCanonical({ gender: 'หญิง' }).gender).toBe('F');
+    expect(kioskPatientToCanonical({ gender: 'LGBTQ+' }).gender).toBe('LGBTQ');
+    expect(kioskPatientToCanonical({ gender: 'lgbtq' }).gender).toBe('LGBTQ');
+    // Pass-through canonical codes
+    expect(kioskPatientToCanonical({ gender: 'M' }).gender).toBe('M');
     expect(kioskPatientToCanonical({ gender: 'F' }).gender).toBe('F');
-    expect(kioskPatientToCanonical({ gender: 'other' }).gender).toBe('OTHER');
-    // (downstream normalizeCustomer in customerValidation.js will collapse
-    // OTHER → '' — that's outside this helper's remit. Helper just upper-cases.)
+    expect(kioskPatientToCanonical({ gender: 'm' }).gender).toBe('M');
+    // English synonyms
+    expect(kioskPatientToCanonical({ gender: 'male' }).gender).toBe('M');
+    expect(kioskPatientToCanonical({ gender: 'Female' }).gender).toBe('F');
+    // Unknown / blank
+    expect(kioskPatientToCanonical({ gender: 'other' }).gender).toBe('');
     expect(kioskPatientToCanonical({}).gender).toBe('');
   });
 
@@ -162,12 +179,23 @@ describe('Phase 23.0 / A — kioskPatientToCanonical helper', () => {
     expect(kioskPatientToCanonical({ hasAllergies: 'ไม่มี' }).history_of_drug_allergy).toBe('');
   });
 
-  it('A.14 stores emergency relation in note (no canonical schema home)', () => {
+  it('A.14 Phase 24.0-nonies — emergency relation lands in canonical contact_1_relation (NOT note)', () => {
+    // Pre-fix: helper dumped "Emergency relation: <text>" into the free-form
+    // note field. Phase 24.0-nonies promotes it to canonical
+    // `contact_1_relation` so backend create/edit form has a dedicated input
+    // and the field round-trips correctly via buildPatientDataFromForm.
     const out = kioskPatientToCanonical({
       firstName: 'A', lastName: 'B',
       emergencyRelation: 'บิดา',
     });
-    expect(out.note).toContain('Emergency relation: บิดา');
+    expect(out.contact_1_relation).toBe('บิดา');
+    // Anti-regression: must NOT pollute the note with the relation prefix.
+    expect(out.note || '').not.toMatch(/Emergency relation:/);
+  });
+
+  it('A.14-bis emergency relation defaults to empty string when not provided', () => {
+    const out = kioskPatientToCanonical({ firstName: 'A', lastName: 'B' });
+    expect(out.contact_1_relation).toBe('');
   });
 
   it('A.15 includes clinicalSummary in note for downstream visibility', () => {
@@ -360,9 +388,15 @@ describe('Phase 23.0 / C — full-flow simulate kiosk submit → canonical doc',
     expect(canonical.contact_1_firstname).toBe('แม่');
     expect(canonical.contact_1_telephone_number).toBe('0987654321');
     expect(canonical.country).toBe('ไทย');
-    expect(canonical.customer_type).toBe('thai');
+    // Phase 24.0-nonies — customer_type defaults to ลูกค้าทั่วไป; thai/foreigner
+    // moved to customer_type_2.
+    expect(canonical.customer_type).toBe('ลูกค้าทั่วไป');
+    expect(canonical.customer_type_2).toBe('ไทย');
     expect(canonical.source).toBe('Facebook');
-    expect(canonical.note).toContain('Emergency relation: มารดา');
+    // Phase 24.0-nonies — emergency relation moved from note to canonical
+    // contact_1_relation field.
+    expect(canonical.contact_1_relation).toBe('มารดา');
+    expect(canonical.note || '').not.toMatch(/Emergency relation:/);
 
     // Anti-regression: no camelCase leftovers (would land on root be_customers
     // doc as garbage).
@@ -385,7 +419,8 @@ describe('Phase 23.0 / C — full-flow simulate kiosk submit → canonical doc',
     });
     expect(canonical.passport_id).toBe('X1234567');
     expect(canonical.citizen_id).toBeUndefined();
-    expect(canonical.customer_type).toBe('foreigner');
+    expect(canonical.customer_type).toBe('ลูกค้าทั่วไป');
+    expect(canonical.customer_type_2).toBe('ต่างชาติ');
     expect(canonical.country).toBe('United States');
     expect(canonical.telephone_number).toBe('+15551234567');
   });

@@ -6,7 +6,8 @@ import {
   ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
   ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
-  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2
+  Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2,
+  ClipboardCheck
 } from 'lucide-react';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
@@ -85,6 +86,16 @@ function daysUntilExpiry(expiryStr) {
   if (isNaN(exp.getTime())) return null;
   const today = new Date(thaiTodayISO() + 'T00:00:00');
   return Math.floor((exp.getTime() - today.getTime()) / 86400000);
+}
+
+// Phase 24.0-nonies (2026-05-06 evening) — Thai-friendly gender display.
+// Top-level fn (not IIFE-in-JSX per Vite OXC rule RP1 / V5 lock).
+function formatGenderTh(rawGender) {
+  const g = String(rawGender || '').trim();
+  if (g === 'M') return 'ชาย';
+  if (g === 'F') return 'หญิง';
+  if (g === 'LGBTQ') return 'LGBTQ+';
+  return g || '-';
 }
 
 function formatDob(pd) {
@@ -678,7 +689,7 @@ export default function CustomerDetailView({
               {(pd.passport || customer?.passport_id) && (
                 <InfoRow label="พาสปอร์ต" value={pd.passport || customer?.passport_id} icon={<IdCard size={11} />} />
               )}
-              <InfoRow label="เพศ" value={pd.gender || '-'} />
+              <InfoRow label="เพศ" value={formatGenderTh(pd.gender)} />
               <InfoRow label="วันเกิด" value={formatDob(pd)} />
               <InfoRow label="เบอร์โทร" value={pd.phone || '-'} icon={<Phone size={11} />} />
               <InfoRow label="กรุ๊ปเลือด" value={pd.bloodType || '-'} />
@@ -706,6 +717,27 @@ export default function CustomerDetailView({
               />
             </div>
           </div>
+
+          {/* Phase 24.0-decies (2026-05-06 evening) — prominent หมายเหตุทั่วไป
+              box per user directive: "ในหน้าข้อมูลลูกค้า แถบแสดงข้อมูลลูกค้า
+              ด้านซ้าย ให้เพิ่ม ช่อง หมายเหตุทั่วไป ที่จะแสดงข้อมูล ... ชัดๆ
+              เพราะอาจจะเป็นข้อมูลสำคัญเบื้องต้นที่แพทย์ต้องรู้". Reads from
+              canonical customer.note (post-Phase-24) OR patientData.note
+              (legacy cloned customers) — first non-empty wins. Hidden when
+              both empty (no panel clutter). */}
+          {(customer?.note || pd.note) && (
+            <div className="bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-amber-900/40 flex items-center gap-2">
+                <ClipboardCheck size={14} className="text-amber-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">หมายเหตุทั่วไป</h3>
+              </div>
+              <div className="p-3">
+                <pre className="text-xs text-[var(--tx-secondary)] whitespace-pre-wrap font-sans leading-relaxed" data-testid="customer-detail-note">
+                  {String(customer?.note || pd.note || '').trim()}
+                </pre>
+              </div>
+            </div>
+          )}
 
           {/* ── Financial Summary Card (Phase 7) ── */}
           <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">

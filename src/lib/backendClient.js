@@ -355,8 +355,13 @@ function buildPatientDataFromForm(form) {
   // Emergency contacts (camelCase aliases)
   if (form.contact_1_firstname) pd.emergencyName = form.contact_1_firstname + (form.contact_1_lastname ? ` ${form.contact_1_lastname}` : '');
   if (form.contact_1_telephone_number) pd.emergencyPhone = form.contact_1_telephone_number;
+  // Phase 24.0-nonies — canonical contact_1_relation → camelCase emergencyRelation
+  // mirror so CustomerDetailView ("ผู้ติดต่อฉุกเฉิน X (relation)") + legacy
+  // readers stay backward-compat.
+  if (form.contact_1_relation) pd.emergencyRelation = form.contact_1_relation;
   if (form.contact_2_firstname) pd.emergencyName2 = form.contact_2_firstname + (form.contact_2_lastname ? ` ${form.contact_2_lastname}` : '');
   if (form.contact_2_telephone_number) pd.emergencyPhone2 = form.contact_2_telephone_number;
+  if (form.contact_2_relation) pd.emergencyRelation2 = form.contact_2_relation;
 
   // Receipt
   if (form.receipt_type) pd.receiptType = form.receipt_type;
@@ -474,11 +479,14 @@ function buildFormFromCustomer(customer) {
     contact_1_lastname: pick('contact_1_lastname'),
     contact_1_lastname_en: pick('contact_1_lastname_en'),
     contact_1_telephone_number: pick('contact_1_telephone_number'),
+    // Phase 24.0-nonies — relation field (canonical) + camelCase mirror.
+    contact_1_relation: pick('contact_1_relation', 'emergencyRelation'),
     contact_2_firstname: pick('contact_2_firstname'),
     contact_2_firstname_en: pick('contact_2_firstname_en'),
     contact_2_lastname: pick('contact_2_lastname'),
     contact_2_lastname_en: pick('contact_2_lastname_en'),
     contact_2_telephone_number: pick('contact_2_telephone_number'),
+    contact_2_relation: pick('contact_2_relation', 'emergencyRelation2'),
     gallery_upload: Array.isArray(customer.gallery_upload)
       ? customer.gallery_upload
       : (Array.isArray(pd.gallery) ? pd.gallery : []),
