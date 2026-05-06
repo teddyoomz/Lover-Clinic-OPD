@@ -57,7 +57,7 @@ export default function SystemConfigAuditPanel() {
       unsub = onSnapshot(
         q,
         (snap) => {
-          const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
           setEntries(rows);
           setLoading(false);
         },
@@ -67,7 +67,7 @@ export default function SystemConfigAuditPanel() {
             const fb = collection(db, 'artifacts', appId, 'public', 'data', 'be_admin_audit');
             const fbQ = query(fb, where('action', '==', 'system_config_update'), limit(MAX_FETCH));
             unsub = onSnapshot(fbQ, (snap) => {
-              const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
               rows.sort((a, b) => {
                 const ta = a.executedAt?.toMillis ? a.executedAt.toMillis() : 0;
                 const tb = b.executedAt?.toMillis ? b.executedAt.toMillis() : 0;

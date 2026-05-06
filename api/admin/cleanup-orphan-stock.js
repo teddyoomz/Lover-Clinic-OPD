@@ -123,7 +123,7 @@ export default async function handler(req, res) {
       }
 
       const batchSnap = await data.collection('be_stock_batches').get();
-      const batches = batchSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const batches = batchSnap.docs.map(d => ({ ...d.data(), id: d.id }));
       const orphans = findOrphanBatches(batches, productIdSet);
 
       return res.status(200).json({

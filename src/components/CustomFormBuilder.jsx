@@ -10,7 +10,7 @@ export default function CustomFormBuilder({ db, appId, user, onBack }) {
   useEffect(() => {
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'form_templates');
     const unsub = onSnapshot(q, snap => {
-      setTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTemplates(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
     return () => unsub();
   }, [db, appId]);

@@ -489,7 +489,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const now = Date.now();
       const staleMs = 60000; // 60s = offline
       const active = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
+        .map(d => ({ ...d.data(), id: d.id }))
         .filter(d => d.lastSeen && (now - d.lastSeen) < staleMs);
       setOnlineAdmins(active);
       // Clean up stale docs silently
@@ -878,7 +878,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const unsub = onSnapshot(
       collection(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules'),
       (snap) => {
-        const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const allDocs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
         const list = allDocs
           .filter(s => !s.branchId || String(s.branchId) === String(selectedBranchId || ''))
           .sort((a, b) => {
@@ -1466,7 +1466,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // Fetch Form Templates
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'form_templates'), snap => {
-      setFormTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setFormTemplates(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
     return () => unsub();
   }, [db, appId]);

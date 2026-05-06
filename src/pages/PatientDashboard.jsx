@@ -457,7 +457,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     const unsub = onSnapshot(q, (snap) => {
       if (snap.empty) { setStatus('notfound'); return; }
       const d = snap.docs[0];
-      const data = { id: d.id, ...d.data() };
+      const data = { ...d.data(), id: d.id };
       if (!data.patientLinkEnabled) { setStatus('disabled'); return; }
       sessionIdRef.current = data.id;
       setSessionData(data);

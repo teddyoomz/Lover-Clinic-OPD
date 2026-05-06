@@ -111,7 +111,7 @@ export default async function handler(req, res) {
 
     if (action === 'list') {
       const snap = await data.collection('be_products').get();
-      const productDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const productDocs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       const testProducts = findTestProducts(productDocs);
       return res.status(200).json({
         success: true,

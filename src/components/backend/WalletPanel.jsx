@@ -69,7 +69,7 @@ export default function WalletPanel({ theme, initialCustomer, onCustomerUsed }) 
       const { collection, getDocs } = await import('firebase/firestore');
       const { db, appId } = await import('../../firebase.js');
       const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'be_customer_wallets'));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       setAllWallets(list);
     } catch (e) {
       console.warn('[WalletPanel] load wallets failed:', e);

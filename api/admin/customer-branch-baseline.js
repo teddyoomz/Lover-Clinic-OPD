@@ -129,7 +129,7 @@ export default async function handler(req, res) {
 
     if (action === 'list') {
       const customerSnap = await data.collection('be_customers').get();
-      const customers = customerSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const customers = customerSnap.docs.map(d => ({ ...d.data(), id: d.id }));
       const { untagged, total } = findUntaggedCustomers(customers);
       const summary = untagged.map(summarizeCustomerForDryRun);
       // Newest first (preserves CustomerListTab sort) so the admin sees recent

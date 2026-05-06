@@ -94,7 +94,7 @@ export default function StockAdjustPanel({ clinicSettings, theme, prefillProduct
       const col = collection(db, 'artifacts', appId, 'public', 'data', 'be_stock_adjustments');
       const q = query(col, where('branchId', '==', BRANCH_ID));
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
       setAdjustments(list);
     } catch (e) { console.error('[StockAdjustPanel] load failed:', e); setAdjustments([]); }

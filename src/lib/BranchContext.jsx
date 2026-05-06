@@ -167,7 +167,7 @@ export function BranchProvider({ children }) {
     let unsubscribe = () => {};
     try {
       unsubscribe = onSnapshot(branchesCol(), (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
         setBranches(list);
 
         // V36 (2026-04-29) — phantom-branch defensive fallback. Pre-V36

@@ -151,7 +151,7 @@ async function loadAllSnapshots(data) {
     data.collection('be_branches').get(),
   ]);
 
-  const toArr = snap => snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const toArr = snap => snap.docs.map(d => ({ ...d.data(), id: d.id }));
 
   return {
     batches: toArr(batchSnap),

@@ -480,7 +480,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
     const q = query(convsRef, orderBy('lastMessageAt', 'asc'));
     return onSnapshot(q, snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       const filtered = selectedBranchId
         ? all.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
         : all;
@@ -498,7 +498,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const valid = [];
       snap.docs.forEach(d => {
-        const data = { id: d.id, ...d.data() };
+        const data = { ...d.data(), id: d.id };
         if (data.resolvedAt && data.resolvedAt < sevenDaysAgo) {
           deleteDoc(d.ref).catch(() => {});
         } else {
@@ -587,7 +587,7 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       const msgsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations/${h.convId}/messages`);
       const q = query(msgsRef, orderBy('timestamp', 'asc'));
       const snap = await getDocs(q);
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const msgs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       setHistoryMsgs(msgs);
     } catch (err) {
       console.error('Failed to load history messages:', err);

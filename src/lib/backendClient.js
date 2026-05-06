@@ -45,7 +45,7 @@ async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } 
   const useFilter = branchId && !allBranches;
   if (!useFilter) {
     const snap = await getDocs(colRef);
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     items.sort((a, b) => {
       const cmp = (b.updatedAt || '').localeCompare(a.updatedAt || '');
       return cmp !== 0 ? cmp : (a.id || '').localeCompare(b.id || '');
@@ -62,7 +62,7 @@ async function _listWithBranchOrMerge(colRef, { branchId, allBranches = false } 
     for (const d of snap.docs) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
-      items.push({ id: d.id, ...d.data() });
+      items.push({ ...d.data(), id: d.id });
     }
   }
   items.sort((a, b) => {
@@ -107,7 +107,7 @@ async function _listWithBranch(colRef, { branchId, allBranches = false } = {}) {
     ? query(colRef, where('branchId', '==', String(branchId)))
     : colRef;
   const snap = await getDocs(ref);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
 }
 
 // ─── Base path ──────────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ export async function getCustomer(proClinicId) {
 /** Get all customers from be_customers (sorted by clonedAt desc) */
 export async function getAllCustomers() {
   const snap = await getDocs(customersCol());
-  const customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const customers = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by clonedAt descending (newest first)
   customers.sort((a, b) => {
     const tA = a.clonedAt || '';
@@ -869,7 +869,7 @@ export async function saveTreatment(treatmentId, data) {
 export async function getCustomerTreatments(customerId) {
   const q = query(treatmentsCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const treatments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const treatments = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by treatment date descending
   treatments.sort((a, b) => {
     const dA = a.detail?.treatmentDate || '';
@@ -900,7 +900,7 @@ export async function getCustomerTreatments(customerId) {
 export function listenToCustomerTreatments(customerId, onChange, onError) {
   const q = query(treatmentsCol(), where('customerId', '==', String(customerId)));
   return onSnapshot(q, (snap) => {
-    const treatments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const treatments = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     treatments.sort((a, b) => {
       const dA = a.detail?.treatmentDate || '';
       const dB = b.detail?.treatmentDate || '';
@@ -967,7 +967,7 @@ export function listenToCourseChanges(customerId, onChange, onError) {
   }
   const q = query(courseChangesCol(), where('customerId', '==', String(customerId)));
   return onSnapshot(q, (snap) => {
-    const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const entries = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     entries.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     onChange(entries);
   }, onError || (() => {}));
@@ -2204,7 +2204,7 @@ export async function getAppointmentsByMonth(yearMonth, opts = {}) {
     ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
     : appointmentsCol();
   const snap = await getDocs(ref);
-  const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Normalize `date` on every row so the month-level bubble count matches
   // the day-level list (bug 2026-04-20: drifted dates like
   // "2026-04-30T00:00:00" passed month .startsWith() but failed day
@@ -2226,7 +2226,7 @@ export async function getAppointmentsByMonth(yearMonth, opts = {}) {
 export async function getCustomerAppointments(customerId) {
   const q = query(appointmentsCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const appts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   appts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return appts;
 }
@@ -2239,7 +2239,7 @@ export async function getCustomerAppointments(customerId) {
 export function listenToCustomerAppointments(customerId, onChange, onError) {
   const q = query(appointmentsCol(), where('customerId', '==', String(customerId)));
   return onSnapshot(q, (snap) => {
-    const appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const appts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     appts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     onChange(appts);
   }, onError);
@@ -2267,7 +2267,7 @@ export async function getAppointmentsByDate(dateStr, opts = {}) {
     : appointmentsCol();
   const snap = await getDocs(ref);
   const appts = snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), id: d.id }))
     .filter(a => normalizeApptDate(a.date) === target)
     .map(a => ({ ...a, date: target })); // normalize outbound shape too
   appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
@@ -2316,7 +2316,7 @@ export function listenToAppointmentsByDate(dateStr, optsOrCallback, onChangeOrEr
     : appointmentsCol();
   return onSnapshot(q, (snap) => {
     const appts = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
+      .map(d => ({ ...d.data(), id: d.id }))
       .filter(a => normalizeApptDate(a.date) === target)
       .map(a => ({ ...a, date: target }));
     appts.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
@@ -2375,7 +2375,7 @@ export function listenToAppointmentsByMonth(yearMonth, optsOrCallback, onChangeO
     ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
     : appointmentsCol();
   return onSnapshot(q, (snap) => {
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     const filtered = all
       .map(a => {
         const iso = normalizeApptDate(a.date);
@@ -2452,7 +2452,7 @@ export function listenToCustomerFinance(customerId, onChange, onError) {
   const unsubDeposits = onSnapshot(
     query(depositsCol(), where('customerId', '==', cid)),
     (snap) => {
-      deposits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      deposits = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       depositsReady = true;
       emit();
     },
@@ -2461,7 +2461,7 @@ export function listenToCustomerFinance(customerId, onChange, onError) {
   const unsubWallets = onSnapshot(
     query(walletsCol(), where('customerId', '==', cid)),
     (snap) => {
-      wallets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      wallets = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       wallets.sort((a, b) => (a.walletTypeName || '').localeCompare(b.walletTypeName || ''));
       walletsReady = true;
       emit();
@@ -2480,7 +2480,7 @@ export function listenToCustomerFinance(customerId, onChange, onError) {
   const unsubMembership = onSnapshot(
     query(membershipsCol(), where('customerId', '==', cid)),
     (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       const now = Date.now();
       // Pick first active + not-expired (matches getCustomerMembership semantics
       // minus the lazy-write).
@@ -2706,7 +2706,7 @@ export async function getAllSales(opts = {}) {
     ? query(salesCol(), where('branchId', '==', String(branchId)))
     : salesCol();
   const snap = await getDocs(ref);
-  const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by createdAt (has time) desc — latest first
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
   return sales;
@@ -2716,7 +2716,7 @@ export async function getAllSales(opts = {}) {
 export async function getCustomerSales(customerId) {
   const q = query(salesCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
   return sales;
 }
@@ -2762,7 +2762,7 @@ export function listenToAllSales(opts, onChange, onError) {
     ? query(salesCol(), where('saleDate', '>=', since), where('branchId', '==', String(branchId)))
     : query(salesCol(), where('saleDate', '>=', since));
   return onSnapshot(q, (snap) => {
-    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
     onChange(sales);
   }, onError);
@@ -2777,7 +2777,7 @@ export function listenToAllSales(opts, onChange, onError) {
 export function listenToCustomerSales(customerId, onChange, onError) {
   const q = query(salesCol(), where('customerId', '==', String(customerId)));
   return onSnapshot(q, (snap) => {
-    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     sales.sort((a, b) => (b.createdAt || b.saleDate || '').localeCompare(a.createdAt || a.saleDate || ''));
     onChange(sales);
   }, onError);
@@ -2789,7 +2789,7 @@ export async function getSaleByTreatmentId(treatmentId) {
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
-  return { id: d.id, ...d.data() };
+  return { ...d.data(), id: d.id };
 }
 
 /**
@@ -3357,7 +3357,7 @@ async function readBeForMasterType(type) {
     }
   }
   const snap = await getDocs(collection(db, ...basePath(), conf.col));
-  return snap.docs.map(d => conf.map({ id: d.id, ...d.data() }, opts));
+  return snap.docs.map(d => conf.map({ ...d.data(), id: d.id }, opts));
 }
 
 /**
@@ -3384,7 +3384,7 @@ export async function getAllMasterDataItems(type) {
     }
   }
   const snap = await getDocs(masterDataItemsCol(type));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
 }
 
 // Test hook — expose adapter list so tests + /audit-master-data-ownership
@@ -3962,7 +3962,7 @@ export async function getDeposit(depositId) {
 export async function getCustomerDeposits(customerId) {
   const q = query(depositsCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
 }
@@ -4129,7 +4129,7 @@ export async function recalcCustomerWalletBalances(customerId) {
 export async function getCustomerWallets(customerId) {
   const q = query(walletsCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (a.walletTypeName || '').localeCompare(b.walletTypeName || ''));
   return list;
 }
@@ -4352,7 +4352,7 @@ export async function adjustWallet(customerId, walletTypeId, {
 export async function getWalletTransactions(customerId, walletTypeId = null) {
   const q = query(walletTxCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (walletTypeId) list = list.filter(tx => String(tx.walletTypeId) === String(walletTypeId));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
@@ -4582,7 +4582,7 @@ export async function getCustomerMembership(customerId) {
   const now = Date.now();
   const active = [];
   for (const d of snap.docs) {
-    const m = { id: d.id, ...d.data() };
+    const m = { ...d.data(), id: d.id };
     if (m.status === 'active') {
       if (m.expiresAt && new Date(m.expiresAt).getTime() < now) {
         // Lazy expire
@@ -4619,7 +4619,7 @@ export async function getCustomerMembership(customerId) {
 /** Get all memberships (sorted desc). */
 export async function getAllMemberships() {
   const snap = await getDocs(membershipsCol());
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
 }
@@ -4825,7 +4825,7 @@ export async function reversePointsEarned(customerId, referenceId) {
 export async function getPointTransactions(customerId) {
   const q = query(pointTxCol(), where('customerId', '==', String(customerId)));
   const snap = await getDocs(q);
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return list;
 }
@@ -4934,7 +4934,7 @@ export async function listStockBatches({ productId, branchId, status } = {}) {
   if (status) clauses.push(where('status', '==', String(status)));
   const q = clauses.length ? query(stockBatchesCol(), ...clauses) : stockBatchesCol();
   const snap = await getDocs(q);
-  const batches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const batches = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   batches.sort((a, b) => (a.receivedAt || '').localeCompare(b.receivedAt || ''));
   return batches;
 }
@@ -4954,7 +4954,7 @@ export async function listStockOrders({ branchId, status } = {}) {
     ? query(stockOrdersCol(), ...clauses)
     : stockOrdersCol();
   const snap = await getDocs(q);
-  const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const orders = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // V35.2-quater (2026-04-28) — sort newest-first per user directive
   // "ทุกหน้าที่มีตารางของระบบสต็อค ... รายการที่ทำล่าสุดต้องอยู่บนสุด".
   // createdAt is the auto-set ISO timestamp (always present; unique to ms);
@@ -5014,7 +5014,7 @@ export async function listStockMovements(filters = {}) {
 
   const q = clauses.length ? query(stockMovementsCol(), ...clauses) : stockMovementsCol();
   const snap = await getDocs(q);
-  let mvts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let mvts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
 
   if (filters.branchId != null) {
     const branchIdStr = String(filters.branchId);
@@ -6097,7 +6097,7 @@ export async function listCentralStockOrders({ centralWarehouseId, vendorId, sta
   if (status) clauses.push(where('status', '==', String(status)));
   const q = clauses.length ? query(centralStockOrdersCol(), ...clauses) : centralStockOrdersCol();
   const snap = await getDocs(q);
-  const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const orders = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // V35.2-quater (2026-04-28) — newest-first per user directive (mirror listStockOrders).
   orders.sort((a, b) =>
     (b.createdAt || '').localeCompare(a.createdAt || '') ||
@@ -7356,7 +7356,7 @@ export async function deleteCentralWarehouse(stockId) {
 /** List all warehouses (active + inactive). */
 export async function listCentralWarehouses({ includeInactive = false } = {}) {
   const snap = await getDocs(centralWarehousesCol());
-  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (!includeInactive) list = list.filter(w => w.isActive !== false);
   list.sort((a, b) => (a.stockName || '').localeCompare(b.stockName || ''));
   return list;
@@ -7767,7 +7767,7 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
 export async function listStockTransfers({ locationId, status, includeAll } = {}) {
   const clauses = [];
   const snap = await getDocs(stockTransfersCol());
-  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (locationId) {
     list = list.filter(t => t.sourceLocationId === locationId || t.destinationLocationId === locationId);
   }
@@ -8064,7 +8064,7 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
 // Same contract as listStockTransfers — `locationId` is the branch boundary.
 export async function listStockWithdrawals({ locationId, status } = {}) {
   const snap = await getDocs(stockWithdrawalsCol());
-  let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (locationId) list = list.filter(t => t.sourceLocationId === locationId || t.destinationLocationId === locationId);
   if (status != null) list = list.filter(t => Number(t.status) === Number(status));
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -8381,7 +8381,7 @@ export async function getAudience(audienceId) {
 
 export async function listAudiences() {
   const snap = await getDocs(audiencesCol());
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8401,7 +8401,7 @@ export async function listAudiences() {
  */
 export function listenToAudiences(onChange, onError) {
   return onSnapshot(audiencesCol(), (snap) => {
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     items.sort((a, b) => {
       const ua = a.updatedAt || '';
       const ub = b.updatedAt || '';
@@ -8488,7 +8488,7 @@ export async function listProductGroups({ branchId, allBranches = false } = {}) 
     ? query(productGroupsCol(), where('branchId', '==', String(branchId)))
     : productGroupsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8606,7 +8606,7 @@ export async function listProductGroupsForTreatment(productType, { branchId, all
   });
 
   const filtered = groupsSnap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), id: d.id }))
     .filter(g => {
       if ((g.status || 'ใช้งาน') !== 'ใช้งาน') return false;
       const gt = String(g.productType || '');
@@ -8702,7 +8702,7 @@ export async function listProductUnitGroups({ branchId, allBranches = false } = 
     ? query(productUnitsCol(), where('branchId', '==', String(branchId)))
     : productUnitsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8783,7 +8783,7 @@ export async function listMedicalInstruments({ branchId, allBranches = false } =
     ? query(medicalInstrumentsCol(), where('branchId', '==', String(branchId)))
     : medicalInstrumentsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8844,7 +8844,7 @@ export async function listHolidays({ branchId, allBranches = false } = {}) {
     ? query(holidaysCol(), where('branchId', '==', String(branchId)))
     : holidaysCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -8892,7 +8892,7 @@ export function listenToHolidays(optsOrCallback, onChangeOrError, maybeOnError) 
     ? query(holidaysCol(), where('branchId', '==', String(branchId)))
     : holidaysCol();
   return onSnapshot(q, (snap) => {
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     items.sort((a, b) => {
       const ua = a.updatedAt || '';
       const ub = b.updatedAt || '';
@@ -8963,7 +8963,7 @@ export async function listExamRooms({ branchId, allBranches = false, status } = 
   if (status) constraints.push(where('status', '==', String(status)));
   const ref = constraints.length ? query(examRoomsCol(), ...constraints) : examRoomsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Sort by sortOrder asc → name (Thai locale) for deterministic column order
   items.sort((a, b) =>
     (a.sortOrder || 0) - (b.sortOrder || 0) ||
@@ -8986,7 +8986,7 @@ export async function listExamRooms({ branchId, allBranches = false, status } = 
 export function listenToExamRoomsByBranch(branchId, onChange, onError) {
   const q = query(examRoomsCol(), where('branchId', '==', String(branchId || '')));
   return onSnapshot(q, (snap) => {
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     items.sort((a, b) =>
       (a.sortOrder || 0) - (b.sortOrder || 0) ||
       String(a.name || '').localeCompare(String(b.name || ''), 'th')
@@ -9045,7 +9045,7 @@ export async function getBranch(branchId) {
 
 export async function listBranches() {
   const snap = await getDocs(branchesCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   // Phase 17.2: newest-first by updatedAt then createdAt (no isDefault).
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
@@ -9103,7 +9103,7 @@ export async function getPermissionGroup(permissionGroupId) {
 
 export async function listPermissionGroups() {
   const snap = await getDocs(permissionGroupsCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
@@ -9868,7 +9868,7 @@ export async function listStaffByBranch({ branchId } = {}) {
 // Phase 14.10-tris — be_membership_types listing (was master_data/membership_types)
 export async function listMembershipTypes() {
   const snap = await getDocs(membershipTypesCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return items;
 }
@@ -9876,7 +9876,7 @@ export async function listMembershipTypes() {
 // Phase 14.10-tris — be_wallet_types listing (was master_data/wallet_types)
 export async function listWalletTypes() {
   const snap = await getDocs(walletTypesCol());
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return items;
 }
@@ -10025,7 +10025,7 @@ export async function getProduct(productId) {
 /** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat).
  *
  * Phase 24.0-vicies-novies-novies (V38, 2026-05-07): spread order swapped from
- * `{ id: d.id, ...d.data() }` to `{ ...d.data(), id: d.id }` so the Firestore
+ * the legacy `id-first` shape to `{ ...d.data(), id: d.id }` so the Firestore
  * docId always wins, even when data has a stray `id` field. Baseline-migrated
  * docs (from `branch-merge-apply.mjs` / `customer-branch-baseline.js`) carry
  * an `id` field in their data that previously OVERRODE `d.id` in the spread,
@@ -10322,7 +10322,7 @@ export async function listBankAccounts({ branchId, allBranches = false } = {}) {
     ? query(bankAccountsCol(), where('branchId', '==', String(branchId)))
     : bankAccountsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
     return (a.bankName || '').localeCompare(b.bankName || '', 'th');
@@ -10386,7 +10386,7 @@ export async function listExpenseCategories({ branchId, allBranches = false } = 
     ? query(expenseCategoriesCol(), where('branchId', '==', String(branchId)))
     : expenseCategoriesCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
   return items;
 }
@@ -10437,7 +10437,7 @@ export async function getExpense(expenseId) {
  */
 export async function listExpenses({ startDate, endDate, categoryId, branchId, allBranches = false } = {}) {
   const snap = await getDocs(expensesCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (startDate) items = items.filter(e => (e.date || '') >= startDate);
   if (endDate) items = items.filter(e => (e.date || '') <= endDate);
   if (categoryId) items = items.filter(e => e.categoryId === categoryId);
@@ -10620,7 +10620,7 @@ export async function getDocumentTemplate(templateId) {
 
 export async function listDocumentTemplates({ docType, activeOnly = false } = {}) {
   const snap = await getDocs(documentTemplatesCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (docType) items = items.filter(t => t.docType === docType);
   if (activeOnly) items = items.filter(t => t.isActive !== false);
   items.sort((a, b) => {
@@ -10760,7 +10760,7 @@ export async function getDocumentDraft(draftId) {
 
 export async function listDocumentDrafts({ templateId, customerId, staffUid, limit: maxLimit = 25 } = {}) {
   const snap = await getDocs(documentDraftsCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (templateId) items = items.filter(i => i.templateId === templateId);
   if (customerId) items = items.filter(i => i.customerId === customerId);
   if (staffUid) items = items.filter(i => i.staffUid === staffUid);
@@ -10795,7 +10795,7 @@ export async function listDocumentPrints({ limit: maxLimit = 100, customerId, do
   // Read-only client-side filter — keeps query rule-safe (no compound
   // index needed). Caller may want recent N events for a customer or doc.
   const snap = await getDocs(documentPrintsCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (customerId) items = items.filter(i => i.customerId === customerId);
   if (docType) items = items.filter(i => i.docType === docType);
   items.sort((a, b) => {
@@ -10888,7 +10888,7 @@ export async function upgradeSystemDocumentTemplates() {
     SCHEMA_VERSION,
   } = await import('./documentTemplateValidation.js');
   const snap = await getDocs(documentTemplatesCol());
-  const existing = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const existing = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   const systemByType = new Map();
   for (const t of existing) {
     if (t.isSystemDefault && t.docType) systemByType.set(t.docType, t);
@@ -10943,7 +10943,7 @@ const vendorSaleDoc = (id) => doc(db, ...basePath(), 'be_vendor_sales', String(i
 
 export async function listVendors({ activeOnly = false } = {}) {
   const snap = await getDocs(vendorsCol());
-  let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (activeOnly) items = items.filter(v => v.isActive !== false);
   items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   return items;
@@ -11048,7 +11048,7 @@ export async function listQuotations(opts = {}) {
     ? query(quotationsCol(), where('branchId', '==', String(branchId)))
     : quotationsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   // Newest first by quotationDate, then createdAt.
   items.sort((a, b) => {
     const da = (b.quotationDate || '').localeCompare(a.quotationDate || '');
@@ -11112,7 +11112,7 @@ export async function listDfGroups({ branchId, allBranches = false } = {}) {
     ? query(dfGroupsCol(), where('branchId', '==', String(branchId)))
     : dfGroupsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
   return items;
 }
@@ -11157,7 +11157,7 @@ export async function listDfStaffRates({ branchId, allBranches = false } = {}) {
     ? query(dfStaffRatesCol(), where('branchId', '==', String(branchId)))
     : dfStaffRatesCol();
   const snap = await getDocs(ref);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 }
 
 export async function saveDfStaffRates(staffId, data) {
@@ -11211,7 +11211,7 @@ export async function listStaffSchedules(filters = {}) {
     ? query(staffSchedulesCol(), where('branchId', '==', String(branchId)))
     : staffSchedulesCol();
   const snap = await getDocs(ref);
-  let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   if (staffId) items = items.filter((e) => String(e.staffId) === String(staffId));
   if (startDate) items = items.filter((e) => (e.date || '') >= startDate);
   if (endDate) items = items.filter((e) => (e.date || '') <= endDate);
@@ -11460,7 +11460,7 @@ export function listenToScheduleByDay(targetDate, onChange, staffIdsFilter, onEr
   const unsub = onSnapshot(
     branchScopedRef,
     (snap) => {
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const all = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
       // mergeFn might still be loading on the very first snapshot — fall
       // back to a sync require pattern if so. In practice the import
       // resolves microtasks before the first snapshot, but be defensive.

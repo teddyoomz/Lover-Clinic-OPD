@@ -30,10 +30,10 @@ export async function loadExpensesByDateRange({ from = '', to = '' } = {}) {
       ? query(expensesColReports(), ...conds, orderBy('date', 'desc'))
       : query(expensesColReports(), orderBy('date', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return snap.docs.map(d => ({ ...d.data(), id: d.id }));
   } catch {
     const snap = await getDocs(expensesColReports());
-    let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) items = items.filter(e => (e.date || '') >= from);
     if (to) items = items.filter(e => (e.date || '') <= to);
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -51,10 +51,10 @@ export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '' } 
       ? query(saleClaimsColReports(), ...conds, orderBy('claimDate', 'desc'))
       : query(saleClaimsColReports(), orderBy('claimDate', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return snap.docs.map(d => ({ ...d.data(), id: d.id }));
   } catch {
     const snap = await getDocs(saleClaimsColReports());
-    let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) items = items.filter(c => (c.claimDate || '') >= from);
     if (to) items = items.filter(c => (c.claimDate || '') <= to);
     items.sort((a, b) => (b.claimDate || '').localeCompare(a.claimDate || ''));
@@ -79,13 +79,13 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
       ? query(salesCol(), ...conds, orderBy('saleDate', 'desc'))
       : query(salesCol(), orderBy('saleDate', 'desc'));
     const snap = await getDocs(q);
-    let sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (!includeCancelled) sales = sales.filter(s => s.status !== 'cancelled');
     return sales;
   } catch (e) {
     // Fallback when composite index hasn't built yet
     const snap = await getDocs(salesCol());
-    let sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) sales = sales.filter(s => (s.saleDate || '') >= from);
     if (to) sales = sales.filter(s => (s.saleDate || '') <= to);
     if (!includeCancelled) sales = sales.filter(s => s.status !== 'cancelled');
@@ -108,7 +108,7 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
  */
 export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false } = {}) {
   const snap = await getDocs(treatmentsCol());
-  let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from);
   if (to) items = items.filter((t) => (t?.detail?.treatmentDate || '') <= to);
   if (!includeCancelled) items = items.filter((t) => t?.detail?.status !== 'cancelled');
@@ -129,10 +129,10 @@ export async function loadAppointmentsByDateRange({ from = '', to = '' } = {}) {
       ? query(appointmentsCol(), ...conds, orderBy('date', 'desc'))
       : query(appointmentsCol(), orderBy('date', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return snap.docs.map(d => ({ ...d.data(), id: d.id }));
   } catch (e) {
     const snap = await getDocs(appointmentsCol());
-    let appts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let appts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) appts = appts.filter(a => (a.date || '') >= from);
     if (to) appts = appts.filter(a => (a.date || '') <= to);
     appts.sort((a, b) => {
@@ -165,11 +165,11 @@ export async function loadStockBatches({ branchId = '' } = {}) {
     if (branchId) conds.push(where('branchId', '==', branchId));
     const q = query(stockBatchesCol(), ...conds);
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => getRemaining(b) > 0);
+    return snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(b => getRemaining(b) > 0);
   } catch (e) {
     const snap = await getDocs(stockBatchesCol());
     return snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
+      .map(d => ({ ...d.data(), id: d.id }))
       .filter(b => b.status === 'available' && getRemaining(b) > 0)
       .filter(b => !branchId || b.branchId === branchId);
   }
@@ -192,7 +192,7 @@ export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
   };
   const snap = await getDocs(stockBatchesCol());
   return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), id: d.id }))
     .filter(b => {
       if (getRemaining(b) <= 0) return false;
       if (b.status === 'cancelled' || b.status === 'depleted') return false;
@@ -213,7 +213,7 @@ export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
  */
 export async function loadAllCustomersForReport() {
   const snap = await getDocs(customersCol());
-  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (b.clonedAt || '').localeCompare(a.clonedAt || ''));
   return list;
 }
@@ -224,7 +224,7 @@ export async function loadAllCustomersForReport() {
  */
 export async function loadStockMovementsByDateRange({ from = '', to = '' } = {}) {
   const snap = await getDocs(stockMovementsCol());
-  let mvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let mvs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (from) mvs = mvs.filter(m => (m.createdAt || '') >= from);
   if (to) mvs = mvs.filter(m => (m.createdAt || '') <= `${to}T23:59:59Z`);
   mvs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));

@@ -106,12 +106,12 @@ export default async function handler(req, res) {
         .where('branchId', '==', String(sourceBranchId))
         .where('__name__', 'in', chunk)
         .get();
-      snap.docs.forEach(d => sourceItems.push({ id: d.id, ...d.data() }));
+      snap.docs.forEach(d => sourceItems.push({ ...d.data(), id: d.id }));
     }
 
     // 2. Read target items (full set for dedup).
     const targetSnap = await colRef.where('branchId', '==', String(targetBranchId)).get();
-    const targetItems = targetSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const targetItems = targetSnap.docs.map(d => ({ ...d.data(), id: d.id }));
     const targetDedupSet = new Set(targetItems.map(t => adapter.dedupKey(t)));
 
     // 3. Read FK collections for target branch (and source for ID→dedupKey lookup).
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
       const tSnap = await dataCol(db, col).where('branchId', '==', String(targetBranchId)).get();
       fkTargetIdSets[col] = new Set(
         fkAdapter
-          ? tSnap.docs.map(d => fkAdapter.dedupKey({ id: d.id, ...d.data() }))
+          ? tSnap.docs.map(d => fkAdapter.dedupKey({ ...d.data(), id: d.id }))
           : tSnap.docs.map(d => d.id)
       );
 
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
         const sSnap = await dataCol(db, col).where('branchId', '==', String(sourceBranchId)).get();
         const lookup = {};
         sSnap.docs.forEach(d => {
-          lookup[d.id] = fkAdapter.dedupKey({ id: d.id, ...d.data() });
+          lookup[d.id] = fkAdapter.dedupKey({ ...d.data(), id: d.id });
         });
         sourceFkLookup[col] = lookup;
       }
