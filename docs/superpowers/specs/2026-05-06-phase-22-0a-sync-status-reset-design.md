@@ -2,7 +2,12 @@
 
 > Date: 2026-05-06
 > Status: Locked (auto mode — proceeding per user "ทำให้จบ" pattern from prior phases)
-> Brainstorm decisions: Q1=B (aggressive wipe), Q2=C (full sweep), Q3=B (delete pc_* entirely)
+> Brainstorm decisions: Q1=B (aggressive STATUS wipe — DOCS PRESERVED), Q2=C (full sweep), Q3=A (clear pc_*.syncedAt only — DOCS PRESERVED)
+>
+> 🚨 SAFETY DIRECTIVE (user clarification 2026-05-06 mid-spec, verbatim):
+> "อย่าลบข้อมูลลูกค้าใน frontend นะเว้ย แค่ให้หบุด sync นะเว้ยย ข้อมูลสำคัญมากนะ"
+> → NO destructive deletes anywhere. ONLY status fields are flipped/nulled.
+> All customer / appointment / course / deposit / treatment DATA is preserved.
 > Phase ordering: 22.0a → 22.0b → 22.0c (sequential per user pick)
 
 ## Why
@@ -48,21 +53,33 @@ brokerResetMetadata: {
 
 Rationale (Q1=B locked): aggressive wipe per user — everything that ever held "synced" semantics is cleared. Forensic trail in a single nested object so future debugging can recover the prior state without polluting the doc with 8+ legacy-* siblings.
 
-### B. pc_* proxy collections — DELETE entire docs
+### B. pc_* proxy collections — clear `syncedAt` ONLY (DOCS PRESERVED)
 
-Five collections (Q3=B locked):
+Five collections (Q3=A locked per user safety directive 2026-05-06):
 
-| Collection | Doc shape | Delete count estimate |
-|---|---|---|
-| `pc_customers` | one doc per customer | 100s (legacy ProClinic mirrors) |
-| `pc_appointments` | YYYY-MM keyed with embedded `appointments[]` array | ~12-60 docs (one per month over project history) |
-| `pc_courses` | one doc per course | 100s |
-| `pc_deposits` | one doc per deposit | 10s-100s |
-| `pc_treatments` | one doc per treatment | 100s |
+| Collection | Doc shape | Action | Count estimate |
+|---|---|---|---|
+| `pc_customers` | one doc per customer | `syncedAt` → null + forensic stamp | 100s (PRESERVED) |
+| `pc_appointments` | YYYY-MM keyed with embedded `appointments[]` array | `syncedAt` → null + forensic stamp | ~12-60 docs (PRESERVED) |
+| `pc_courses` | one doc per course | `syncedAt` → null + forensic stamp | 100s (PRESERVED) |
+| `pc_deposits` | one doc per deposit | `syncedAt` → null + forensic stamp | 10s-100s (PRESERVED) |
+| `pc_treatments` | one doc per treatment | `syncedAt` → null + forensic stamp | 100s (PRESERVED) |
 
-Strategy: full collection scan + batch delete. Firestore writeBatch caps at 500 ops; partition into 400-op batches with progress logging. No forensic trail on deleted docs (the absence IS the trail; the audit doc records the count).
+🚨 **Per user safety directive ("อย่าลบข้อมูลลูกค้าใน frontend นะเว้ย แค่ให้หบุด sync นะเว้ยย ข้อมูลสำคัญมากนะ"), NO docs are deleted. Customer data, appointment history, course/deposit/treatment records ALL stay intact.** Only the `syncedAt` field flips to null so they no longer count as "synced to ProClinic". Future H-bis strip (separate phase) may re-evaluate deletion vs preservation; this phase preserves everything.
 
-Rationale: Phase 20.0 stripped the frontend's pc_* read paths entirely. These docs are inert mirrors. The queued H-bis ProClinic strip will eventually delete the writers + cookie-relay + brokerClient. Pre-deleting pc_* now reduces H-bis blast radius + matches user's aggressive-cleanup direction.
+Forensic trail stamped on each cleared doc (single nested object):
+
+```js
+proSyncedResetMetadata: {
+  resetAt: serverTimestamp(),
+  legacySyncedAt: <prior ISO timestamp or null>,
+  resetPhase: '22.0a',
+}
+```
+
+Strategy: full collection scan + batch update. Firestore writeBatch caps at 500 ops; partition into 400-op batches with progress logging. Idempotent: re-runs find docs with `syncedAt == null` → skip.
+
+Rationale: matches Q1 semantic ("flip the sync flag, keep the data"). Phase 20.0 stripped the frontend's pc_* read paths entirely; pc_* docs are inert but the data has historical/audit value, so they survive. Aligns with the user's "ข้อมูลสำคัญมากนะ" directive.
 
 ### C. be_* references — minimal, safe null-out
 
@@ -98,15 +115,15 @@ NEW `scripts/phase-22-0a-reset-sync-status.mjs` — Rule M canonical pattern:
 ```js
 {
   phase: '22.0a',
-  op: 'sync-status-reset (opd_sessions wipe + pc_* delete + be_deposits.proClinicDepositId null-out)',
+  op: 'sync-status-reset (opd_sessions wipe + pc_*.syncedAt cleared + be_deposits.proClinicDepositId null-out) — NO DELETIONS',
   scanned: { opdSessions: N, pcCustomers: P1, pcAppointments: P2, pcCourses: P3, pcDeposits: P4, pcTreatments: P5, beDeposits: D },
   modified: {
-    opdSessionsWiped: A,           // count of opd_sessions docs that had at least one wipe-target field
-    pcCustomersDeleted: B1,
-    pcAppointmentsDeleted: B2,
-    pcCoursesDeleted: B3,
-    pcDepositsDeleted: B4,
-    pcTreatmentsDeleted: B5,
+    opdSessionsWiped: A,                  // count of opd_sessions docs that had at least one wipe-target field
+    pcCustomersSyncCleared: B1,           // count of pc_customers with syncedAt cleared (DOCS PRESERVED)
+    pcAppointmentsSyncCleared: B2,
+    pcCoursesSyncCleared: B3,
+    pcDepositsSyncCleared: B4,
+    pcTreatmentsSyncCleared: B5,
     beDepositsProClinicIdNulled: C,
   },
   beforeDistribution: { opdSessions: { brokerStatus: { ... } } },
@@ -137,8 +154,10 @@ NEW `tests/phase-22-0a-sync-status-reset.test.js` — pure-helper unit tests:
 - F1.1 `mapOpdSessionWipe(doc)` returns the wipe patch (all 8 fields → null) + forensic-trail nested object
 - F1.2 idempotent: re-running on already-wiped doc returns null (no patch needed)
 - F1.3 forensic trail captures legacy values verbatim (ProClinic ID/HN/status all preserved in nested metadata)
-- F2.1 `shouldDeletePcDoc(doc)` returns true (always — Q3=B aggressive)
-- F2.2 pc_appointments YYYY-MM doc shape recognized correctly
+- F2.1 `mapPcSyncCleared(doc)` returns the patch ({syncedAt: null} + forensic-trail) when doc has non-null syncedAt
+- F2.2 idempotent: re-running on already-cleared pc_* doc returns null
+- F2.3 pc_appointments YYYY-MM doc shape recognized correctly (top-level syncedAt cleared, embedded appointments[] array preserved)
+- F2.4 NO destructive delete code path exists (anti-regression — guards against accidentally re-introducing the deletion approach)
 - F3.1 `mapBeDepositWipe(deposit)` nulls only `proClinicDepositId` + adds forensic stamps
 - F3.2 idempotent: deposit without `proClinicDepositId` → no patch
 - F4.1 audit-doc shape includes scanned + modified counts for all 3 phases
@@ -169,12 +188,14 @@ NO source code changes. NO firestore.rules changes. NO UI changes. Pure data mig
 ## Risk + rollback
 
 - **Risk: aggressive wipe loses ProClinic IDs on opd_sessions** — admin can no longer trace which session corresponds to which ProClinic record. Mitigation: forensic trail stamps `legacyBrokerProClinicId` etc. on every wiped doc, recoverable via Firestore export.
-- **Risk: pc_* deletion permanent** — once deleted, the proxy data is gone (only Firestore weekly backups recover it). Mitigation: dry-run review before --apply lets admin sample-check what will be deleted.
+- **Risk: pc_* DELETION (rejected)** — initially considered (Q3=B); REJECTED per user safety directive 2026-05-06 ("อย่าลบข้อมูลลูกค้าใน frontend นะเว้ย"). pc_*.syncedAt cleared instead; docs preserved. NO data-loss risk.
 - **Risk: re-sync flow doesn't exist yet** — Phase 22.0b/c will build it. After 22.0a, opd_sessions show "ไม่ sync" status; if admin presses sync before 22.0b ships, nothing happens (no UI button OR the button still calls the old broker which now lacks the source-of-truth flag). Acceptable per user's sequential-phase plan.
 - **Rollback**:
-  - opd_sessions wipe: restore from Firestore weekly backup; OR script-reverse using forensic trail (write `mapOpdSessionRestore(doc)` helper that reads `brokerResetMetadata.legacy*` and writes back). Reversal script can be added in 22.0a-bis if needed.
-  - pc_* deletion: restore from Firestore weekly backup. NOT script-reversible (no forensic trail on deleted docs by design).
+  - opd_sessions wipe: forensic-trail recoverable — read `brokerResetMetadata.legacy*` and write back via reverse helper. NO data loss; only status fields changed.
+  - pc_*.syncedAt cleared: forensic-trail recoverable — read `proSyncedResetMetadata.legacySyncedAt` and write back. ALL pc_* docs PRESERVED.
   - be_deposits.proClinicDepositId: forensic-trail recoverable via `legacyProClinicDepositId`.
+
+  **No phase 22.0a action causes data loss.** Worst case is a sync-status flag flip that can be reversed via forensic trail.
 
 ## Implementation order
 
