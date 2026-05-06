@@ -4329,7 +4329,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
             <div>
               <label className="text-xs text-gray-500 uppercase block mb-1">ยอดชำระ</label>
-              <input type="number" value={dep.paymentAmount || ''} onChange={e => setEditingDepositData(p => ({...p, paymentAmount: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"/>
+              {/* Phase 24.0-vicies-quater — same wheel-scroll fix as the
+                  create form. type=text + inputMode=numeric + sanitizer. */}
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={dep.paymentAmount || ''}
+                onChange={e => {
+                  const sanitized = String(e.target.value).replace(/[^\d.]/g, '');
+                  setEditingDepositData(p => ({...p, paymentAmount: sanitized}));
+                }}
+                onWheel={e => e.target.blur()}
+                className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none"
+              />
             </div>
             <div>
               <label className="text-xs text-gray-500 uppercase block mb-1">วันที่จ่าย</label>
@@ -6887,7 +6900,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* ยอดชำระ */}
                   <div>
                     <label className="text-xs text-gray-500 font-semibold block mb-1">ยอดชำระ (บาท) <span className="text-red-500">*</span></label>
-                    <input type="number" value={depositFormData.paymentAmount} onChange={e => setDepositFormData(p => ({...p, paymentAmount: e.target.value}))} placeholder="" className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
+                    {/* Phase 24.0-vicies-quater (2026-05-06) — switched from
+                        type="number" to type="text" + inputMode="numeric" +
+                        digit-sanitizer. type="number" reacts to mouse-wheel
+                        scroll + arrow keys — accidental wheel scrolled
+                        2000 → 1999, arrow ↓ took 1000 → 998 across multi-
+                        keystrokes. User report: "บั๊คการแสดงผลการจองมัดจำ
+                        ใน front end กรอก 2000 แสดง 1999 บางทีกรอก 1000
+                        แสดง 998". Sanitizer also defends against locale
+                        autofill (e.g. browser autofill of "2,000.00").
+                        onWheel blur is defense-in-depth in case some
+                        future revert reintroduces type="number". */}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={depositFormData.paymentAmount}
+                      onChange={e => {
+                        const sanitized = String(e.target.value).replace(/[^\d.]/g, '');
+                        setDepositFormData(p => ({...p, paymentAmount: sanitized}));
+                      }}
+                      onWheel={e => e.target.blur()}
+                      placeholder=""
+                      className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
+                    />
                   </div>
 
                   {/* วันที่ + เวลา */}

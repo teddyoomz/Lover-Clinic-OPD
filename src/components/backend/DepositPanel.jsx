@@ -815,8 +815,22 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>ยอดมัดจำ (บาท) *</label>
-                  <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
-                    className={inputCls} placeholder="0" min="1" />
+                  {/* Phase 24.0-vicies-quater (2026-05-06) — same wheel-scroll
+                      fix as the kiosk paymentAmount input. type="number"
+                      reacts to wheel + arrow keys causing accidental
+                      decrement (2000 → 1999, 1000 → 998). type="text" +
+                      inputMode="numeric" + sanitizer + onWheel-blur is
+                      bullet-proof. */}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={amount}
+                    onChange={e => setAmount(String(e.target.value).replace(/[^\d.]/g, ''))}
+                    onWheel={e => e.target.blur()}
+                    className={inputCls}
+                    placeholder="0"
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>ช่องทางชำระเงิน *</label>
