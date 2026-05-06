@@ -500,7 +500,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--bd)] bg-[var(--bg-elevated)]">
-                  {['เลขที่', 'ลูกค้า', 'ยอด / คงเหลือ', 'ช่องทาง', 'วันที่ชำระ', 'สถานะ', 'จัดการ'].map(h => (
+                  {['เลขที่', 'ลูกค้า', 'มัดจำสำหรับ', 'ยอด / คงเหลือ', 'ช่องทาง', 'วันที่ชำระ', 'สถานะ', 'จัดการ'].map(h => (
                     <th key={h} scope="col" className="px-3 py-2.5 text-left font-bold text-[var(--tx-muted)] uppercase tracking-wider text-xs">{h}</th>
                   ))}
                 </tr>
@@ -527,6 +527,23 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                             className="text-teal-400 hover:text-teal-300 hover:underline transition-colors">{dep.customerName || '-'}</a>
                         ) : (dep.customerName || '-')}
                         {dep.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{dep.customerHN}</span>}
+                      </td>
+                      {/* Phase 21.0-quinquies (2026-05-06 EOD) — "มัดจำสำหรับ" column
+                          surfaces the deposit's appointment purpose so admin reading
+                          the Finance.มัดจำ list sees what the customer is paying
+                          for. Sourced from dep.appointment.purpose (the same field
+                          AppointmentFormModal stamps when admin creates a deposit-
+                          booking via the embedded subform). Falls back to
+                          appointmentTo for legacy shape compat, then a friendly
+                          dash for non-appointment deposits. */}
+                      <td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[200px]" data-testid="deposit-purpose-cell">
+                        {dep.appointment?.purpose || dep.appointment?.appointmentTo ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium truncate" title={dep.appointment.purpose || dep.appointment.appointmentTo}>
+                            🎯 {dep.appointment.purpose || dep.appointment.appointmentTo}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--tx-muted)]/60 text-[11px]">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 font-mono">
                         <div className="text-emerald-400 font-bold">
