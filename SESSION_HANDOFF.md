@@ -7,12 +7,31 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-05 EOD — Phase 19.0 (15-min slots + 4-type taxonomy) LIVE in prod (V15 #22). Migration --apply complete. master IN SYNC with prod.
+- **Date last updated**: 2026-05-06 EOD — Phase 20.0 + Final ProClinic UI strip + per-branch filter + 467-doc hotfix migration. Master ahead-of-prod ~40 commits. Local-only workflow per user directive.
 - **Branch**: `master`
-- **Last commit**: `024f6dd` — fix(phase-19-0/task-10): migration script — PEM parse + artifacts path
-- **Test count**: **5463** (Phase 19.0 +69 from Task 11 batch / 0 net from phase15.7-bis assertion polish)
+- **Last commit**: `79084bc` — docs(agents): EOD wrap — ProClinic UI strip + per-branch filter complete
+- **Test count**: **5742+** (Phase 20.0 + audits + V33.13/14 + AppointmentTab roomId + SaleTab + brokerClient strip)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05). master IN SYNC. Phase 19.0 migration `--apply` ran on prod (audit `phase-19-0-migrate-appointment-types-1777987427963-c3e11db0`): 27/27 appointments migrated (18 null + 9 'sales' legacy → 'no-deposit-booking' per Option B uniform). Idempotency verified.
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~40 commits with all Phase 20.0 work. End-to-end branch isolation verified live (นครราชสีมา 68 รายการ vs พระราม 3 0 รายการ).
+
+### Session 2026-05-06 EOD — Final ProClinic UI strip + per-branch filter + hotfix
+
+Continuation after Phase 5a/5b/5c stripped `broker.*` calls — user caught residual ProClinic UI ("นำเข้าจาก ProClinic" button + URL links + edit/delete handlers in OPD history). Final strip + per-branch filter on opd_sessions/chat_conversations/be_appointments + 467-doc hotfix migration to correct branchId. Plus credential leak via `git add -A` (force-push'd clean; user accepted no rotate).
+
+**Strip scope**: handleProClinicEdit + handleProClinicDelete + 4 import handlers + 8 import state vars + entire 85-line import-from-ProClinic JSX section + 3 inline ProClinic URL `<a>` links + Cookie-Relay credentials auto-sync + UPDATE user-facing copy (4 strings).
+
+**Migration**: 75 opd_sessions + 12 chat_conversations + 380 be_appointments stamped with branchId. Hotfix re-stamped 467 docs from stale default `BR-1777095572005-ae97f911` → correct นครราชสีมา `BR-1777873556815-26df6480`.
+
+**Audit docs**:
+- be_admin_audit/phase-20-0-migrate-opd-sessions-1778006150465-44cbbb18
+- be_admin_audit/phase-20-0-migrate-chat-conversations-1778006214051-5f66c409
+- be_admin_audit/phase-20-0-fix-branch-id-mismatch-1778006625867-f28b7f0b
+
+**V37**: `git add -A` swept .env.local.prod → leak → force-push'd clean. User accepted no rotate. .gitignore now explicit. Lesson lock in `feedback_credential_leak_no_rotate.md`.
+
+**Deferred**: BackendDashboard nav restructure (move นัดหมาย + 4 appointmentType sub-tabs + deposit→Finance.มัดจำ wiring) — next chat per user.
+
+Detail: `.agents/sessions/2026-05-06-frontend-proclinic-strip-final-and-per-branch-filter.md`
 
 ### Session 2026-05-05 EOD — Phase 19.0 (appointment 15-min slots + 4-type taxonomy)
 
@@ -406,29 +425,30 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-06 EOD.
+Resume LoverClinic — continue from 2026-05-06 EOD continuation.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ac3ab4c, prod=024f6dd V15 #22 LIVE)
-3. .agents/active.md (5463 tests; 1 commit ahead-of-prod, docs-only)
-4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary; Rule M new this session)
-5. .agents/sessions/2026-05-06-phase-19-0-and-rule-m.md
+2. SESSION_HANDOFF.md (master=79084bc, prod=024f6dd FROZEN V15 #22)
+3. .agents/active.md (5742+ tests; ~40 commits ahead-of-prod)
+4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary)
+5. .agents/sessions/2026-05-06-frontend-proclinic-strip-final-and-per-branch-filter.md
 
-Status: master=ac3ab4c, 5463/5463 tests pass, prod=024f6dd (V15 #22 LIVE 2026-05-05 — Phase 19.0 LIVE: 15-min slots + 4-type taxonomy). master 1 commit ahead-of-prod: `ac3ab4c` (rules-only — Rule M + session-end wiki update; no deploy needed). Phase 19.0 migration `--apply` ran on prod (27/27 docs migrated 18 null + 9 'sales' → 'no-deposit-booking' — audit `phase-19-0-migrate-appointment-types-1777987427963-c3e11db0`).
+Status: master=79084bc, 5742+ tests pass, prod=024f6dd (V15 #22 LIVE — FROZEN per no-deploy directive 2026-05-06). master ahead-of-prod ~40 commits with all Phase 20.0 work. Frontend ProClinic strip 100% complete (UI labels + URL links + handlers + state all gone from AdminDashboard.jsx; brokerClient.js + api/proclinic/* + cookie-relay/ kept for MasterDataTab dev sync only). Per-branch filter working (verified live: นครราชสีมา 68 รายการ vs พระราม 3 0 รายการ). 467 docs migrated/hotfix (75 opd_sessions + 12 chat + 380 appointments).
 
-Next action: idle. Phase 19.0 fully shipped + migrated. Rule M (data ops via local + admin SDK + pull env) + session-end wiki auto-update locked in.
+Next action: BackendDashboard nav restructure (DEFERRED to next chat per user 2026-05-06):
+- Move "นัดหมาย" from PINNED_ITEMS to its own section in left nav
+- Add 4 appointmentType sub-tabs: จองไม่มัดจำ / จองมัดจำ / คิวรอทำหัตถการ / คิวติดตามอาการ
+- Each sub-tab filters AppointmentTab by selectedBranchId × appointmentType
+- จองมัดจำ flow also writes to be_deposits per-branch (Finance.มัดจำ wiring)
 
-Outstanding (user-triggered):
-- Update Rule B docs in `.claude/rules/01-iron-clad.md` to clarify `artifacts/{APP_ID}/public/data/` prefix on probe URLs (false-alarm during V15 #22 — root-cause = wrong URL convention, not rule drift)
-- SaleTab field-name audit (post-Phase-17.2-septies; same pattern as TFP `productType` vs `type`)
-- Full AppointmentTab roomId migration (deferred from Phase 18.0 — current grid still uses roomName strings; openCreate + occupied + apptMap rebuild)
-- LineSettings พระราม 3 per-branch redesign (per-branch chat_config doc — needs schema redesign)
-- Hard-gate Firebase custom claim (currently soft-gate)
+Outstanding (user-triggered, lower priority):
+- 🚨 H-bis ProClinic strip pre-launch (delete brokerClient.js + api/proclinic/* + cookie-relay/ + MasterDataTab) — explicitly EXCLUDED from earlier session
+- Hard-gate Firebase custom claim (deploy-coupled — skipped under no-deploy)
 - /audit-all readiness pass
-- 🚨 H-bis ProClinic strip (pre-launch — strip MasterDataTab + brokerClient + cookie-relay/ + dev-only api/proclinic/* + CloneTab)
+- Modal extraction (cosmetic refactor — AdminDashboard tabs are panels not modals)
 
-Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B (6 endpoints + V23 anon dual-step + be_exam_rooms 403 lock; URLs need `artifacts/{APP_ID}/public/data/` prefix); Rule J brainstorming HARD-GATE + ORTHOGONAL plan-mode; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); 🆕 Rule M data-ops via local + admin-SDK + pull-env (never deploy-coupled — V15 #22 lesson lock); H-quater (no master_data reads); V36.G.51 (data layer no .jsx imports — use branchSelection.js); NO real-action clicks in preview_eval; V31 silent-swallow lock.
+Rules: NO Vercel deploys (local-only directive 2026-05-06 `feedback_local_only_no_deploy.md`); Rule M data-ops via local + admin-SDK + pull-env; Rule J brainstorming HARD-GATE + plan-mode ORTHOGONAL; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature code); V36.G.51 (data layer no .jsx imports); V37 (NEVER `git add -A` — always specific files; .env.local.prod + variants now in .gitignore); credential leak in `1f40cdd` force-push'd clean — user explicit accept no-rotate per `feedback_credential_leak_no_rotate.md` (DON'T raise the leak again); NO real-action clicks in preview_eval against prod Firestore (TEST-prefixed fixtures only).
 
 /session-start
 ```
