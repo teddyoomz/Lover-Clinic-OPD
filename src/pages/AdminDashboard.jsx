@@ -57,6 +57,18 @@ import {
   cancelDeposit,
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
+// Phase 22.0b (2026-05-06 EOD) — branch-filter helpers for kiosk modals.
+// listDoctors + listStaff in scopedDataLayer are UNIVERSAL (no auto-inject);
+// fetchDepositOptions must filter the results by selectedBranchId so the
+// kiosk modal dropdowns show only the current branch's staff/doctors.
+import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUtils.js';
+// Phase 22.0b — kiosk จองมัดจำ flow now writes the paired (be_deposits +
+// be_appointments) docs alongside opd_sessions, mirroring DepositPanel's
+// pair-helper pattern so the deposit-booking is visible in BOTH
+// Finance.มัดจำ AND BackendDashboard's จองมัดจำ sub-tab. User directive:
+// "ต้องบันทึกไปในรูปแบบการจองมัดจำใน backend ได้ถูกต้อง และบันทึกมัดจำใน
+//  การเงินได้ถูกต้อง ตามสาขาที่ได้มีการ Gen QR".
+import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -1604,8 +1616,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     { value: 'referral', label: 'แนะนำ' },
     { value: 'other', label: 'อื่นๆ' },
   ]);
+  // Phase 22.0b — fetchDepositOptions captures selectedBranchId at fetch
+  // time + invalidates cache when branch switches. Doctors + staff are
+  // filtered via filterDoctorsByBranch / filterStaffByBranch (listDoctors
+  // and listStaff in scopedDataLayer are UNIVERSAL — no auto-inject).
+  // sellers + rooms are auto-injected via scopedDataLayer, so they come
+  // back already branch-scoped.
+  //
+  // assistants is populated from the SAME filtered doctors list (mirrors
+  // backend AppointmentFormModal's pattern: a doctor can be picked as an
+  // assistant for cross-role coverage). Pre-Phase-22.0b the assistants
+  // dropdown was BROKEN — depositOptions.assistants was referenced at
+  // render time but never populated.
   const fetchDepositOptions = async () => {
-    if (depositOptions) return; // already loaded
+    // Cache invalidation: if depositOptions exists AND its branch matches
+    // the current selectedBranchId, reuse. Otherwise re-fetch.
+    if (depositOptions && depositOptions._branchId === (selectedBranchId || '')) return;
     setDepositOptionsLoading(true);
     try {
       const [doctors, staff, rooms, sellers] = await Promise.all([
@@ -1614,27 +1640,43 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         listExamRooms().catch(() => []),
         listAllSellers().catch(() => []),
       ]);
+      const branchScopedDoctors = filterDoctorsByBranch(doctors || [], selectedBranchId)
+        .filter(d => d.status !== 'พักใช้งาน');
+      const branchScopedStaff = filterStaffByBranch(staff || [], selectedBranchId)
+        .filter(s => s.status !== 'พักใช้งาน');
       const timeOptions = CANONICAL_TIME_SLOTS.map(t => ({ value: t, label: t }));
+      const doctorOptions = branchScopedDoctors.map(d => ({ value: String(d.id), label: d.name || d.id }));
       const options = {
+        _branchId: selectedBranchId || '',
         paymentMethods: [...PAYMENT_METHODS_STATIC],
         sellers: (sellers || []).map(s => ({ value: String(s.id), label: s.name || s.id })),
         appointmentStartTimes: timeOptions,
         appointmentEndTimes: timeOptions,
-        doctors: (doctors || [])
-          .filter(d => d.status !== 'พักใช้งาน')
-          .map(d => ({ value: String(d.id), label: d.name || d.id })),
+        doctors: doctorOptions,
+        // Phase 22.0b — assistants populated from filtered doctors (mirror
+        // of backend AppointmentFormModal: any doctor can be chosen as an
+        // assistant). Fixes the pre-Phase 22.0b "empty assistants dropdown"
+        // bug visible in both จองมัดจำ + จองไม่มัดจำ modals.
+        assistants: doctorOptions,
         rooms: (rooms || [])
           .filter(r => r.status !== 'พักใช้งาน')
           .map(r => ({ value: String(r.id), label: r.name || r.roomName || r.id })),
-        advisors: (staff || [])
-          .filter(s => s.status !== 'พักใช้งาน')
-          .map(s => ({ value: String(s.id), label: s.name || s.id })),
+        advisors: branchScopedStaff.map(s => ({ value: String(s.id), label: s.name || s.id })),
         sources: [...CUSTOMER_SOURCES_STATIC],
       };
       setDepositOptions(options);
     } catch (e) { console.error('fetchDepositOptions:', e); }
     setDepositOptionsLoading(false);
   };
+
+  // Phase 22.0b — invalidate cached depositOptions when branch switches so
+  // the next modal-open re-fetches with the new branch's data.
+  useEffect(() => {
+    if (depositOptions && depositOptions._branchId !== (selectedBranchId || '')) {
+      setDepositOptions(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranchId]);
 
   const confirmCreateDeposit = async () => {
     if (!user) return;
@@ -1677,6 +1719,92 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), sessionDoc);
+
+      // Phase 22.0b (2026-05-06 EOD) — paired write to be_deposits +
+      // be_appointments so the kiosk-created deposit-booking is visible in
+      // BOTH Finance.มัดจำ (be_deposits) AND BackendDashboard's จองมัดจำ
+      // sub-tab (be_appointments). Pre-22.0b the kiosk write went ONLY to
+      // opd_sessions.depositData (embedded field) — invisible to backend.
+      // User directive: "ต้องบันทึกไปในรูปแบบการจองมัดจำใน backend ได้
+      // ถูกต้อง และบันทึกมัดจำในการเงินได้ถูกต้อง ตามสาขาที่ได้มีการ Gen QR
+      // และสร้างนัดประเภทต่างๆ".
+      //
+      // Best-effort try/catch — if the pair write fails the kiosk session
+      // doc still exists (admin can retry from the queue UI later). Stamps
+      // linkedDepositId / linkedAppointmentId on the session doc for
+      // forensic traceability.
+      try {
+        const amt = parseFloat(depositFormData.paymentAmount) || 0;
+        if (amt > 0) {
+          const visitPurposeText = (depositFormData.visitPurpose || []).join(', ');
+          const doctorRecord = practitioners.find(p => String(p.id) === String(depositFormData.doctor || ''));
+          const advisorRecord = practitioners.find(p => String(p.id) === String(depositFormData.consultant || ''));
+          const sellerName = depositFormData.salesperson
+            ? (depositOptions?.sellers || []).find(s => String(s.value) === String(depositFormData.salesperson))?.label || ''
+            : '';
+          const pairResult = await createDepositBookingPair({
+            depositData: {
+              customerId: '',
+              customerName: depositFormData.sessionName?.trim() || 'ลูกค้าจอง',
+              customerHN: '',
+              amount: amt,
+              paymentChannel: depositFormData.paymentChannel || '',
+              paymentDate: depositFormData.depositDate || todayISO(),
+              paymentTime: depositFormData.depositTime || '',
+              refNo: '',
+              sellers: depositFormData.salesperson
+                ? [{ id: String(depositFormData.salesperson), name: sellerName, percent: 100, total: amt }]
+                : [],
+              customerSource: '',
+              sourceDetail: '',
+              note: '',
+              hasAppointment: !!depositFormData.hasAppointment,
+              appointment: depositFormData.hasAppointment ? {
+                type: 'deposit-booking',
+                option: 'once',
+                date: depositFormData.appointmentDate || '',
+                startTime: depositFormData.appointmentStartTime || '',
+                endTime: depositFormData.appointmentEndTime || depositFormData.appointmentStartTime || '',
+                doctorId: depositFormData.doctor ? String(depositFormData.doctor) : '',
+                doctorName: doctorRecord?.name || '',
+                advisorId: depositFormData.consultant ? String(depositFormData.consultant) : '',
+                advisorName: advisorRecord?.name || '',
+                assistantIds: depositFormData.assistant ? [String(depositFormData.assistant)] : [],
+                assistantNames: [],
+                roomId: depositFormData.room ? String(depositFormData.room) : '',
+                roomName: '',
+                channel: depositFormData.appointmentChannel || '',
+                purpose: visitPurposeText,
+                note: '',
+                color: '',
+                lineNotify: false,
+              } : null,
+              paymentEvidenceUrl: '',
+              paymentEvidencePath: '',
+              branchId: selectedBranchId || '',
+            },
+            branchId: selectedBranchId || '',
+          });
+          // Stamp cross-link on the kiosk session for traceability
+          if (pairResult?.depositId) {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+              linkedDepositId: pairResult.depositId,
+              linkedAppointmentId: pairResult.appointmentId || null,
+              depositSyncStatus: 'done',
+            });
+          }
+        }
+      } catch (pairErr) {
+        console.warn('[confirmCreateDeposit] pair-helper write failed (kiosk session still saved):', pairErr);
+        // Stamp failure for diagnostics; admin can retry later via backend
+        try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+            depositSyncStatus: 'failed',
+            depositSyncError: pairErr?.message || String(pairErr),
+          });
+        } catch { /* ignore */ }
+      }
+
       setSelectedQR(sessionId);
       showToast('สร้างคิวลูกค้าจองมัดจำสำเร็จ!');
       setAdminMode('deposit', true);
@@ -1746,6 +1874,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           advisorId: noDepositFormData.advisor ? String(noDepositFormData.advisor) : '',
           advisorName: advisorRecord?.name || '',
           assistantId: noDepositFormData.assistant ? String(noDepositFormData.assistant) : '',
+          // Phase 22.0b — also pass assistantIds[] (canonical Phase 19.0+ field)
+          // so the backend listener picks up the assistant correctly. backendClient
+          // accepts both shapes for backward compat.
+          assistantIds: noDepositFormData.assistant ? [String(noDepositFormData.assistant)] : [],
           roomId: noDepositFormData.room ? String(noDepositFormData.room) : '',
           source: noDepositFormData.source || 'walk-in',
           appointmentTo: visitPurposeText,
@@ -1754,6 +1886,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // No customerId yet — kiosk session created before patient form fill.
           customerId: '',
           customerName: noDepositFormData.sessionName?.trim() || '',
+          // Phase 22.0b — explicit branchId stamp (the auto-resolver in
+          // backendClient._resolveBranchIdForWrite would also fall through
+          // to selectedBranchId, but explicit > implicit per Rule M).
+          branchId: selectedBranchId || '',
         });
         if (apptResult?.appointmentId) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
