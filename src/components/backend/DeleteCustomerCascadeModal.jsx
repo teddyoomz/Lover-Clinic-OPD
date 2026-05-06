@@ -173,23 +173,30 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
           </div>
         )}
 
-        {/* Issue #1 — cascade preview row (counts BEFORE confirm) */}
+        {/* Issue #1 — cascade preview row (counts BEFORE confirm).
+            Phase 24.0-quater: client-side cascade can't read 5 collections
+            (rules-locked). Render '?' for null counts + small notice. */}
         {cascadeCounts && (
           <div data-testid="delete-customer-cascade-preview" className="mb-4 p-2 bg-[var(--bg-card)] border border-[var(--bd)] rounded text-xs text-gray-300 font-mono">
             <div className="text-[10px] text-[var(--tx-muted)] uppercase mb-1">ข้อมูลที่จะถูกลบ:</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-              <span>{cascadeCounts.treatments} การรักษา</span>
-              <span>{cascadeCounts.sales} การขาย</span>
-              <span>{cascadeCounts.deposits} มัดจำ</span>
-              <span>{cascadeCounts.appointments} นัดหมาย</span>
-              <span>{cascadeCounts.wallets} wallet</span>
-              <span>{cascadeCounts.walletTransactions} wallet tx</span>
-              <span>{cascadeCounts.memberships} membership</span>
-              <span>{cascadeCounts.pointTransactions} point tx</span>
-              <span>{cascadeCounts.courseChanges} course changes</span>
-              <span>{cascadeCounts.linkRequests} link requests</span>
-              <span>{cascadeCounts.customerLinkTokens} link tokens</span>
+              <span>{cascadeCounts.treatments ?? '?'} การรักษา</span>
+              <span>{cascadeCounts.sales ?? '?'} การขาย</span>
+              <span>{cascadeCounts.deposits ?? '?'} มัดจำ</span>
+              <span>{cascadeCounts.appointments ?? '?'} นัดหมาย</span>
+              <span>{cascadeCounts.wallets ?? '?'} wallet</span>
+              <span>{cascadeCounts.walletTransactions ?? '?'} wallet tx</span>
+              <span>{cascadeCounts.memberships ?? '?'} membership</span>
+              <span>{cascadeCounts.pointTransactions ?? '?'} point tx</span>
+              <span>{cascadeCounts.courseChanges ?? '?'} course changes</span>
+              <span>{cascadeCounts.linkRequests ?? '?'} link requests</span>
+              <span>{cascadeCounts.customerLinkTokens ?? '?'} link tokens</span>
             </div>
+            {Object.values(cascadeCounts).some(v => v == null) && (
+              <div className="mt-2 pt-2 border-t border-[var(--bd)] text-[10px] text-amber-400/70">
+                ? = อ่าน count ไม่ได้ (rule-locked client-side); production deploy ลบครบทุก collection
+              </div>
+            )}
           </div>
         )}
         {previewError && (

@@ -43,11 +43,9 @@
 
 import { auth, db, appId } from '../firebase.js';
 import {
-  doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch,
+  doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch, deleteDoc,
 } from 'firebase/firestore';
-import {
-  CUSTOMER_CASCADE_COLLECTIONS, deleteCustomerCascade,
-} from './backendClient.js';
+import { CUSTOMER_CASCADE_COLLECTIONS } from './backendClient.js';
 import { listStaff, listDoctors } from './scopedDataLayer.js';
 import { filterStaffByBranch, filterDoctorsByBranch } from './branchScopeUtils.js';
 
@@ -66,6 +64,39 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_link_requests: 'linkRequests',
   be_customer_link_tokens: 'customerLinkTokens',
 });
+
+// Phase 24.0-quater (2026-05-06 evening) — client-side cascade incompleteness.
+// firestore.rules locks 5 of 11 collections from client-side delete:
+//   - be_link_requests        → `read, write: if false` (V32-tris-quater admin-SDK only)
+//   - be_customer_link_tokens → default-deny (V33.9 stripped explicit rule)
+//   - be_wallet_transactions  → `read, create` only — DELETE denied (audit-immutable)
+//   - be_point_transactions   → `read, create` only — DELETE denied (audit-immutable)
+//   - be_course_changes       → `read, create` only — DELETE denied (audit-immutable)
+//
+// Server endpoint (api/admin/delete-customer-cascade.js, Phase 24.0) bypasses
+// rules via firebase-admin SDK and cascades all 11. Local-dev client-side
+// path gracefully SKIPS these 5: counts return null in preview, deletes are
+// skipped in cascade, audit doc records cascadeSkipped: [...].
+//
+// Trade-off: local-dev cascade leaves orphan audit-immutable docs (small
+// volume; customer-keyed but invisible since customer doc is gone). Production
+// deploy with server endpoint cleans them via admin SDK.
+
+// READ-blocked: query will throw PERMISSION_DENIED → preview count returns null.
+const CLIENT_READ_BLOCKED = Object.freeze(new Set([
+  'be_link_requests',
+  'be_customer_link_tokens',
+]));
+
+// DELETE-blocked: query may succeed (read allowed) but writeBatch.delete()
+// will fail. Skip the delete, count is still accurate from preview.
+const CLIENT_DELETE_BLOCKED = Object.freeze(new Set([
+  'be_wallet_transactions',
+  'be_point_transactions',
+  'be_course_changes',
+  'be_link_requests',          // also read-blocked but listed for cascade-skip clarity
+  'be_customer_link_tokens',   // also read-blocked
+]));
 
 const APP_ID_FALLBACK = 'loverclinic-opd-4c39b';
 function basePath() {
@@ -191,20 +222,37 @@ export async function previewCustomerDeleteViaApi({ customerId }) {
     throw makeError('ลูกค้าถูกลบไปแล้ว หรือไม่พบในระบบ', { status: 404 });
   }
 
-  // Run 11 parallel queries against the cascade collections.
-  const queryResults = await Promise.all(
-    CUSTOMER_CASCADE_COLLECTIONS.map(name => getDocs(query(cascadeColRef(name), where('customerId', '==', cid)))),
-  );
+  // Phase 24.0-quater — query each cascade collection independently with
+  // try/catch so a single rule denial doesn't reject the whole Promise.all.
+  // Skipped collections return count=null + their key joins skippedRead[].
   const cascadeCounts = {};
-  CUSTOMER_CASCADE_COLLECTIONS.forEach((name, idx) => {
-    cascadeCounts[COL_TO_RESPONSE_KEY[name]] = queryResults[idx].size;
-  });
+  const skippedRead = [];
+  await Promise.all(CUSTOMER_CASCADE_COLLECTIONS.map(async (name) => {
+    if (CLIENT_READ_BLOCKED.has(name)) {
+      cascadeCounts[COL_TO_RESPONSE_KEY[name]] = null;
+      skippedRead.push(name);
+      return;
+    }
+    try {
+      const snap = await getDocs(query(cascadeColRef(name), where('customerId', '==', cid)));
+      cascadeCounts[COL_TO_RESPONSE_KEY[name]] = snap.size;
+    } catch (e) {
+      const msg = String(e?.code || e?.message || '');
+      if (/permission|insufficient/i.test(msg)) {
+        cascadeCounts[COL_TO_RESPONSE_KEY[name]] = null;
+        skippedRead.push(name);
+      } else {
+        throw e;  // unexpected error — re-raise
+      }
+    }
+  }));
 
   return {
     success: true,
     customerId: cid,
     cascadeCounts,
     exists: true,
+    skippedRead,    // collections where read was rules-denied client-side
   };
 }
 
@@ -275,17 +323,42 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
   if (canonicalAuth.authorizerRole === 'staff' && !inStaff) canonicalAuth.authorizerRole = 'doctor';
   else if (canonicalAuth.authorizerRole === 'doctor' && !inDoctor) canonicalAuth.authorizerRole = 'staff';
 
-  // Run cascade-count queries (used in both response + audit doc)
-  const queryResults = await Promise.all(
-    CUSTOMER_CASCADE_COLLECTIONS.map(name => getDocs(query(cascadeColRef(name), where('customerId', '==', cid)))),
-  );
+  // Phase 24.0-quater — run cascade-count queries with per-collection
+  // try/catch so a single rule denial doesn't fail the whole batch. Track
+  // which collections we'll be able to delete (refs collected) vs skip
+  // (audit-only, no client-side delete).
   const cascadeCounts = {};
+  const skippedRead = [];
+  const refsToDelete = [];  // { name, ref }
+  await Promise.all(CUSTOMER_CASCADE_COLLECTIONS.map(async (name) => {
+    if (CLIENT_READ_BLOCKED.has(name)) {
+      cascadeCounts[COL_TO_RESPONSE_KEY[name]] = null;
+      skippedRead.push(name);
+      return;
+    }
+    try {
+      const snap = await getDocs(query(cascadeColRef(name), where('customerId', '==', cid)));
+      cascadeCounts[COL_TO_RESPONSE_KEY[name]] = snap.size;
+      // Only collect refs for collections we can DELETE client-side. The
+      // audit-immutable trio (wallet_tx, point_tx, course_changes) we read
+      // for the count, but skip the delete (rule allows create-only).
+      if (!CLIENT_DELETE_BLOCKED.has(name)) {
+        snap.docs.forEach(d => refsToDelete.push({ name, ref: d.ref }));
+      }
+    } catch (e) {
+      const msg = String(e?.code || e?.message || '');
+      if (/permission|insufficient/i.test(msg)) {
+        cascadeCounts[COL_TO_RESPONSE_KEY[name]] = null;
+        skippedRead.push(name);
+      } else {
+        throw e;
+      }
+    }
+  }));
   let totalLinked = 0;
-  CUSTOMER_CASCADE_COLLECTIONS.forEach((name, idx) => {
-    const sz = queryResults[idx].size;
-    cascadeCounts[COL_TO_RESPONSE_KEY[name]] = sz;
-    totalLinked += sz;
-  });
+  for (const v of Object.values(cascadeCounts)) {
+    if (typeof v === 'number') totalLinked += v;
+  }
 
   // Build audit payload
   const fullName = [customer?.prefix, customer?.firstname, customer?.lastname]
@@ -293,6 +366,13 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
   const ts = Date.now();
   const rand = randHex(6);
   const auditId = `customer-delete-${cid}-${ts}-${rand}`;
+  // Phase 24.0-quater — record cascadeSkipped (collections that local-dev
+  // client cannot delete due to rules; production deploy via admin SDK
+  // handles them). Audit reader can use this field to verify completeness.
+  const cascadeSkipped = Array.from(new Set([
+    ...skippedRead,
+    ...CUSTOMER_CASCADE_COLLECTIONS.filter(n => CLIENT_DELETE_BLOCKED.has(n) && !skippedRead.includes(n)),
+  ]));
   const auditPayload = {
     type: 'customer-delete-cascade',
     customerId: cid,
@@ -312,6 +392,8 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
     },
     performedAt: new Date().toISOString(),
     cascadeCounts,
+    cascadeSkipped,                     // [] if all 11 cascaded; non-empty on local-dev
+    performedVia: 'client-firestore',   // distinguishes from server-admin-SDK path
     customerSnapshot: buildSnapshot(customer, cid),
   };
 
@@ -326,11 +408,25 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
     );
   }
 
-  // Now do the cascade — reuses existing chunked batch logic.
-  let deletedLinked = 0;
+  // Phase 24.0-quater — chunked batched delete of all DELETABLE refs (cap
+  // 450 per batch under Firestore's 500-write limit). Customer doc itself
+  // goes in the FINAL batch.
+  const allWrites = [...refsToDelete.map(x => x.ref), customerDocRef(cid)];
+  let deletedCount = 0;
   try {
-    const result = await deleteCustomerCascade(cid, { confirm: true });
-    deletedLinked = result?.deletedLinked || 0;
+    let batch = writeBatch(db);
+    let inBatch = 0;
+    for (const ref of allWrites) {
+      batch.delete(ref);
+      inBatch += 1;
+      deletedCount += 1;
+      if (inBatch >= 450) {
+        await batch.commit();
+        batch = writeBatch(db);
+        inBatch = 0;
+      }
+    }
+    if (inBatch > 0) await batch.commit();
   } catch (e) {
     // Cascade failed AFTER audit write succeeded. Audit doc remains as a
     // record of intent; surface the error so admin can retry / investigate.
@@ -344,7 +440,9 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
     success: true,
     customerId: cid,
     cascadeCounts,
+    cascadeSkipped,
     auditDocId: auditId,
-    totalDeletes: deletedLinked + 1,  // +1 for the customer doc itself
+    totalDeletes: deletedCount,
+    performedVia: 'client-firestore',
   };
 }

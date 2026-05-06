@@ -232,10 +232,17 @@ describe('Phase 24.0 / F6 — preview endpoint integrity (Issue #1)', () => {
     expect(CLIENT_TXT).toMatch(/export\s+async\s+function\s+previewCustomerDeleteViaApi/);
     // Phase 24.0-ter — wrapper now uses Firestore SDK directly (no fetch
     // to /api/admin/*) so it works on `npm run dev` Vite without needing
-    // Vercel serverless. Verify the canonical client-side primitives are
-    // imported + the deleteCustomerCascade reuse is intact.
-    expect(CLIENT_TXT).toMatch(/import[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS,\s*deleteCustomerCascade[\s\S]*?from\s*['"][^'"]*backendClient/);
+    // Vercel serverless. Verify the canonical client-side primitives.
+    // Phase 24.0-quater — deleteCustomerCascade reuse DROPPED in favor of
+    // inlined chunked-batched delete that gracefully skips client-locked
+    // collections (be_link_requests / be_customer_link_tokens / wallet_tx /
+    // point_tx / course_changes — rules block client delete).
+    expect(CLIENT_TXT).toMatch(/import[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS[\s\S]*?from\s*['"][^'"]*backendClient/);
     expect(CLIENT_TXT).toMatch(/import[\s\S]*?from\s*['"]firebase\/firestore['"]/);
+    expect(CLIENT_TXT).toMatch(/CLIENT_READ_BLOCKED/);
+    expect(CLIENT_TXT).toMatch(/CLIENT_DELETE_BLOCKED/);
+    expect(CLIENT_TXT).toMatch(/cascadeSkipped/);
+    expect(CLIENT_TXT).toMatch(/performedVia:\s*['"]client-firestore['"]/);
     // Audit doc id format is preserved (mirror of server endpoint).
     expect(CLIENT_TXT).toMatch(/customer-delete-\$\{cid\}-\$\{ts\}-\$\{rand\}/);
     // Anti-regression: NO fetch() calls to the api endpoint. Local-only
