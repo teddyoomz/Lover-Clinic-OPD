@@ -122,26 +122,32 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
   const assistantNames = resolveAssistantNames(appt, doctorMap);
   return (
     <>
-      {/* Purpose chip — the "นัดมาเพื่อ" the user sees first after the
-          customer name. Status-agnostic emerald. */}
+      {/* Purpose row — Phase 21.0-septies (2026-05-06 EOD continuation):
+          per user "ออกแบบให้นัดมาเพื่อชัดกว่านี้ ใหญ่พอๆกะชื่อเลยก็ได้",
+          purpose is now SAME font size as customer name (text-sm font-bold)
+          + emerald accent + 🎯 icon at the front. Color differentiates it
+          from the name (which is heading-color); size makes it equally
+          prominent so admin reading the grid sees BOTH "who" and "for what"
+          at a glance. */}
       {appt.appointmentTo && span >= 2 && (
         <p
-          className="mt-0.5 text-[10px] font-semibold text-emerald-300 truncate"
+          className="mt-0.5 text-sm font-bold text-emerald-300 leading-tight truncate"
           title={appt.appointmentTo}
           data-testid="appt-purpose"
         >
           🎯 {appt.appointmentTo}
         </p>
       )}
-      {/* Doctor row — only when there's enough vertical room. */}
+      {/* Doctor row — secondary metadata, smaller font, only when there's
+          enough vertical room. */}
       {span >= 3 && (
-        <p className="text-[10px] text-[var(--tx-muted)] truncate mt-0.5" data-testid="appt-doctor-row">
+        <p className="text-[11px] text-[var(--tx-muted)] truncate mt-0.5" data-testid="appt-doctor-row">
           👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}
         </p>
       )}
       {/* Assistant row — Phase 15.7 — needs even more vertical room. */}
       {assistantNames.length > 0 && span >= 4 && (
-        <p className="text-[10px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
+        <p className="text-[11px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
           + {assistantNames.join(', ')}
         </p>
       )}

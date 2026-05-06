@@ -43,6 +43,18 @@ describe('Phase 21.0-quinquies — Calendar grid visual polish', () => {
     expect(ACV).toMatch(/text-emerald-300/);
   });
 
+  test('Q5-septies purpose font matches customer-name size (text-sm font-bold) per user "ใหญ่พอๆกะชื่อ"', () => {
+    // Locate the purpose <p> classes — must be text-sm font-bold leading-tight
+    // (same size class as customer name; color differentiates).
+    expect(ACV).toMatch(/data-testid=['"]appt-purpose['"]/);
+    // Walk up to the className of the purpose <p>:
+    const purposeBlock = ACV.match(/<p[\s\S]{0,400}?data-testid=['"]appt-purpose['"]/);
+    expect(purposeBlock).not.toBeNull();
+    expect(purposeBlock[0]).toMatch(/text-sm/);
+    expect(purposeBlock[0]).toMatch(/font-bold/);
+    expect(purposeBlock[0]).toMatch(/leading-tight/);
+  });
+
   test('Q6 doctor row has 👨‍⚕️ icon prefix + data-testid for selectability', () => {
     expect(ACV).toMatch(/data-testid=['"]appt-doctor-row['"]/);
     expect(ACV).toMatch(/👨‍⚕️/);
