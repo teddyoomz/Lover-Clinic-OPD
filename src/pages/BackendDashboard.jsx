@@ -69,6 +69,8 @@ const ClinicReportTab        = lazy(() => import('../components/backend/reports/
 const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/PaymentSummaryTab.jsx'));
 // Phase 16.3 (2026-04-29) — System Settings tab (lazy; rarely opened by non-admin)
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
+// V40 Task 4.4 (2026-05-07) — Branch Backup tab (lazy; admin-only, rarely opened)
+const BranchBackupTab        = lazy(() => import('../components/backend/BranchBackupTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
@@ -626,6 +628,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <LinkRequestsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'system-settings' ? (
           <SystemSettingsTab />
+        ) : activeTab === 'branch-backup' ? (
+          <BranchBackupTab clinicSettings={clinicSettings} theme={theme} />
         ) : null}
         </Suspense>
       </div>

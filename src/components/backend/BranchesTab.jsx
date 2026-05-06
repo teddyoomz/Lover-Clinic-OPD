@@ -9,6 +9,7 @@ import BranchFormModal from './BranchFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { STATUS_OPTIONS } from '../../lib/branchValidation.js';
+import MakeFreshButton from './MakeFreshButton.jsx';
 
 const STATUS_BADGE = {
   ใช้งาน:   { cls: 'bg-emerald-700/20 border-emerald-700/40 text-emerald-400' },
@@ -156,6 +157,7 @@ export default function BranchesTab({ clinicSettings, theme }) {
                     className="px-3 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:border-red-700/40 hover:text-red-400 transition-all disabled:opacity-50">
                     {busy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>
+                  <MakeFreshButton branch={b} onComplete={reload} />
                 </div>
               </div>
             );
