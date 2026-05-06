@@ -173,12 +173,25 @@ describe('Phase 20.0 Task 5c — W3 mapDepositPayloadToBe pure helper', () => {
 
 describe('Phase 20.0 Task 5c — W4 deposit-sync callsites use be_* helpers', () => {
   it('W4.1 — confirmDepositSync uses createDeposit OR updateDeposit', () => {
+    // Phase 24.0-vicies-novies-bis (2026-05-07) — handleDepositSync now uses
+    // a resolved-id var (existingDepositIdForUpdate) instead of accessing
+    // session.depositProClinicId directly. The var coerces both
+    // depositProClinicId (alreadySynced path) AND linkedDepositId (kiosk
+    // customer-later path) so the SAME deposit doc gets updated whether
+    // it's a re-sync or a first-OPD-save. Pattern allows either form.
     expect(STRIPPED).toMatch(/createDeposit\s*\(\s*dataForBe\s*\)/);
-    expect(STRIPPED).toMatch(/updateDeposit\s*\(\s*session\.depositProClinicId\s*,\s*dataForBe\s*\)/);
+    expect(STRIPPED).toMatch(
+      /updateDeposit\s*\(\s*(session\.depositProClinicId|existingDepositIdForUpdate)\s*,\s*dataForBe\s*\)/,
+    );
   });
 
-  it('W4.2 — handleDepositCancel uses cancelDeposit with cancelNote', () => {
-    expect(STRIPPED).toMatch(/cancelDeposit\s*\(\s*session\.depositProClinicId\s*,\s*\{\s*cancelNote:/);
+  it('W4.2 — handleDepositCancel uses deleteDepositBookingPair (Phase 24.0-vicies-quinquies hard-delete)', () => {
+    // Phase 24.0-vicies-quinquies (2026-05-06) — switched from cancelDeposit
+    // (soft-cancel) → deleteDepositBookingPair (hard delete). User: "ในหน้า
+    // การเงินไม่ต้องแสดงเป็นยกเลิกแต่ให้ลบหายไปเลย". Phase 24.0-vicies-septies
+    // (2026-05-06) — wrapped depositId source in _coerceDepId() for legacy
+    // {depositId,success} object shape.
+    expect(STRIPPED).toMatch(/deleteDepositBookingPair\s*\(\s*depIdForCancel\s*\)/);
   });
 
   it('W4.3 — handleSaveDepositData uses updateDeposit OR createDeposit', () => {

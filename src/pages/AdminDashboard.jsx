@@ -2964,14 +2964,55 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const dep = session.depositData || {};
       const dataForBe = mapDepositPayloadToBe(dep, proClinicId, proClinicHN, patient);
 
+      // Phase 24.0-vicies-novies-bis (2026-05-07) — kiosk customer-later
+      // path: confirmCreateDeposit ALREADY created the be_deposits + (if
+      // hasAppointment) be_appointments docs at booking time, with
+      // linkedOpdSessionId stamped on both. Pre-fix this branch ALWAYS
+      // called createDeposit which created a SECOND duplicate doc — user
+      // reported "แทนที่จะแก้อันเดิม มันสร้างมัดจำใหม่" + "tab นัดหมาย ก็ไม่
+      // ได้แก้ผูกกับลูกค้าใหม่". Now: detect session.linkedDepositId (V12
+      // healing for legacy object shape via coerceId) → updateDeposit on
+      // existing doc + cascade customer to linked appointment via shared
+      // attachCustomerToOpdSessionLinks helper.
+      const coerceId = (v) => {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object' && v.depositId) return String(v.depositId);
+        return String(v);
+      };
+      const existingDepositIdForUpdate = coerceId(session.depositProClinicId)
+        || coerceId(session.linkedDepositId);
+
       let depositId;
+      let attachResult = null;
       try {
-        if (alreadySynced && session.depositProClinicId) {
-          // Update existing be_deposits doc
-          await updateDeposit(session.depositProClinicId, dataForBe);
-          depositId = session.depositProClinicId;
+        if (existingDepositIdForUpdate) {
+          // Phase 24.0-vicies-novies-bis — update existing deposit (covers
+          // both the alreadySynced re-sync path AND the kiosk customer-later
+          // first-save path where linkedDepositId was set by
+          // confirmCreateDeposit). updateDeposit applies customerId/HN/name
+          // from dataForBe atomically.
+          await updateDeposit(existingDepositIdForUpdate, dataForBe);
+          depositId = existingDepositIdForUpdate;
+          // Cascade customer to the LINKED APPOINTMENT (still has customerId='').
+          // attachCustomerToOpdSessionLinks queries by linkedOpdSessionId and
+          // filters customerId==''. The deposit (just updated above) is now
+          // filtered out; the appointment is matched + updated.
+          try {
+            const mod = await import('../lib/appointmentDepositBatch.js');
+            if (typeof mod.attachCustomerToOpdSessionLinks === 'function') {
+              attachResult = await mod.attachCustomerToOpdSessionLinks(sessionId, {
+                customerId: proClinicId,
+                customerName: dataForBe.customerName || '',
+                customerHN: proClinicHN || '',
+              });
+            }
+          } catch (attachErr) {
+            console.warn('[handleDepositSync] attach cascade failed (best-effort):', attachErr);
+          }
         } else {
-          // Create new be_deposits doc
+          // Legacy path — no linkedDepositId on session (pre Phase 24.0-
+          // vicies-novies kiosk). Create a fresh be_deposits doc.
           const created = await createDeposit(dataForBe);
           depositId = created?.depositId;
         }
@@ -2989,7 +3030,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
       lastViewedStrRef.current[session.id] = stableStr(d || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(d || {});
-      showToast(alreadySynced ? 'อัพเดทข้อมูลสำเร็จ!' : 'บันทึกมัดจำสำเร็จ!');
+      // Phase 24.0-vicies-novies-bis — surface attach count in toast so admin
+      // sees the linked appointment(s) were also auto-attached.
+      const attachedExtra = (attachResult?.appointmentCount || 0);
+      showToast(
+        alreadySynced
+          ? 'อัพเดทข้อมูลสำเร็จ!'
+          : (attachedExtra > 0
+              ? `บันทึกมัดจำสำเร็จ + ผูกนัด ${attachedExtra} รายการ!`
+              : 'บันทึกมัดจำสำเร็จ!'),
+      );
     } catch (e) {
       console.error('deposit sync error:', e);
       await updateDoc(ref, {
