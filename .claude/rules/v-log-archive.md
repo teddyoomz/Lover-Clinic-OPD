@@ -769,3 +769,73 @@ Files relevant to V38:
 - `.claude/skills/audit-anti-vibe-code/` — AV17 invariant (list spread order)
 - `.claude/rules/00-session-start.md` § 2 — V38 compact entry
 
+---
+
+### V40 — 2026-05-07 — Branch Backup / Restore / Make-Fresh shipped
+
+User asked (verbatim): "เพิ่มระบบ Backup สาขา ... สามารถกดเลือกที่จะ Backup ข้อมูลพื้นฐานต่างๆ แบบเลือกได้ หรือทั้งหมด แล้ว export ออกมาเป็นไฟล์เก็บไว้ได้ ... และเพิ่มปุ่ม กดที่นี่เพื่อทำให้เป็นสาขาใหม่ ... เป็นปุ่มที่เห็นและกดได้เฉพาะ Admin"
+
+**Goal**: ship a Backup/Restore/Make-Fresh system: admin can export selectable branch-scoped data to a JSON file (Firebase Storage + signed URL download), restore back to same branch (overwrite by ID) or clone T1 master/setup to a different branch (re-mint IDs), and one-click "Make Fresh" wipes a branch with auto-backup safety net.
+
+**Architecture (3 layers)**:
+
+1. **Helpers (Phase 1)** — pure ESM, no Firebase deps:
+   - `src/lib/branchBackupCore.js` — tier matrix (T1 master/setup, T2 transactions, T3 stock, T4 customer-attached subcollections), `resolveBackupScope`, FK remap helpers (`buildFkRemapTable`, `applyFkRemap`, `T1_FK_SPEC`), `isUniversalCollection` guard.
+   - `src/lib/branchBackupSchema.js` — file schema v1 (`BACKUP_SCHEMA_VERSION = 1`), validator (`validateBackupFile`), composer (`buildBackupFile`).
+
+2. **Endpoints (Phase 2)** — admin-gated via `verifyAdminToken`:
+   - `/api/admin/branch-backup-export` — POST → resolveBackupScope → iterate collections (T4 sentinel `'be_customers/__per_customer__'` triggers per-customer × per-subcollection traversal) → buildBackupFile → 100MB cap → Storage upload → 24h signed URL → audit doc.
+   - `/api/admin/branch-restore` — POST → load file (Storage path OR base64) → JSON.parse → validateBackupFile → overwrite mode (same-branch, preserve docIds) OR clone mode (T1-only, re-mint docIds via `${COLLECTION}_{ts}_{randHex}_{i}`, applyFkRemap, stamp canonicalIdField) → audit doc.
+   - `/api/admin/branch-make-fresh` — POST → autoBackupRef REQUIRED → `bucket.file(autoBackupRef).exists()` verify FIRST → wipe T1+T2+T3 + T4 customer-subcollections (all where branchId == target) → audit doc.
+
+3. **UI (Phase 4)**:
+   - `BranchBackupTab.jsx` — admin-only tab. Tier checkboxes (T1/T2/T3/T4) + advanced collection-level mode + "เริ่ม Backup" button + recent-result panel with signed URL download.
+   - `MakeFreshButton.jsx` — per-branch-row admin-only button (`useTabAccess` `isAdmin` gate; returns null otherwise). data-testid `make-fresh-btn-${branchId}`.
+   - `MakeFreshModal.jsx` — multi-stage modal: idle (typed-confirm gate) → backing-up → wiping → done|error. Sequence: backup endpoint FIRST, then make-fresh. Confirm button disabled UNLESS user types branch name verbatim.
+
+4. **Storage rules (Phase 3)**:
+   - `match /backups/{branchId}/{file=**} { allow read, write, delete: if request.auth != null && request.auth.token.admin == true; }`
+   - Rule B probe list extended 6 → 7 endpoints (anon write to backups/ → 403; admin write → 200).
+   - Combined deploy bundle: `firebase deploy --only firestore:rules,storage:rules`.
+
+5. **CLI mirrors (Phase 6)** — `scripts/branch-backup-export.mjs` / `branch-restore.mjs` / `branch-make-fresh.mjs`. Mirror endpoint logic for dev / emergency use. Rule M canonical pattern (env-load + admin-SDK + invocation guard).
+
+6. **Tests (Phase 5)**:
+   - 25 helper + endpoint contract assertions in `tests/branch-backup-helpers.test.js` (H1-H5).
+   - 5 Rule I round-trip flow-simulate in `tests/branch-backup-flow-simulate.test.js`.
+   - 5 Rule I clone-T1 + FK remap in `tests/branch-clone-flow-simulate.test.js`.
+   - 5 Rule I make-fresh auto-backup discipline in `tests/branch-make-fresh-flow-simulate.test.js`.
+   - Live admin-SDK e2e in `scripts/e2e-branch-backup-restore.mjs` — verified PASS on real prod with TEST-V40-PROD-* + TEST-BR-V40-* prefixes; cleanup zero orphans.
+
+**Phase 2 review fixes** (caught + locked pre-merge):
+
+- **C1 (Critical)**: dead inner `if (!t1set.has(col))` in branch-restore.js clone-T1 guard — collapsed to single condition. V21-class comment-vs-code drift; lock-in test H5.6 added.
+- **I2 (Important)**: `canonicalIdField` lookup table missing `be_product_units: 'unitId'` — added (V39-class FK remap omission). Lock-in test H5.5 added.
+- **I1 (Important)**: memory model doc comment added to branch-backup-export.js (peak heap 2-3× serialized size; UI must avoid combined T2+T3 export for high-volume branches).
+- **I3 (Important)**: scaling note added to branch-make-fresh.js (T4 wipe scans ALL customers regardless of branch — UI must warn admin before make-fresh on large customer base).
+
+**AV19 audit invariant added** — destructive ops (delete-many, wipe-branch) MUST:
+- Accept `autoBackupRef` (or equivalent prior-state-snapshot) field in request
+- Verify the snapshot exists via `bucket.file(autoBackupRef).exists()` BEFORE executing
+- Refuse with 400 + `AUTO_BACKUP_REQUIRED` / `AUTO_BACKUP_NOT_FOUND` error codes on missing
+- Sanctioned exception: cleanup endpoints touching ONLY test-prefixed docs (V33.10/11/12) don't need the gate.
+
+**Lessons**:
+
+1. **Reuse cross-branch-import adapter pattern** (V39 canonicalIdField + clone strip-stray-id) for clone-mode FK remap. Single source of truth across endpoint + CLI.
+2. **Storage rules + probe-deploy-probe extends Rule B from 6 to 7 endpoints**. Future deploys must include `firebase deploy --only firestore:rules,storage:rules` (combined) and probe BOTH rule files.
+3. **"Make Fresh" pattern = "destructive-with-auto-backup-mandatory"** is a generalizable safety pattern — codified as AV19 audit invariant.
+4. **Schema versioning at file level** (`BACKUP_SCHEMA_VERSION`) lets future schema changes be detected by `validateBackupFile` without breaking old files (forward-rejects future versions; backward-loads compatible versions).
+5. **Live admin-SDK e2e against real prod with TEST-prefixed fixtures** is the ONLY reliable way to verify Storage round-trip semantics (signed-URL TTL, Storage save/download, cross-bucket reads). Helper-output-only tests can't catch credential / bucket-name / PEM-format / API-version drift.
+6. **Phase 2 reviewer caught V21-class dead code AND V39-class FK omission** — review IS the fix. The plan text was ALMOST correct; reviewer's independent codebase verification surfaced both blind spots before merge.
+
+**Files**:
+- 14 new (3 helpers/schema + 3 endpoints + 1 audit-test + 4 UI + 3 CLI + 1 e2e + 4 flow-simulate + 1 spec)
+- 5 modified (storage.rules, navConfig.js, tabPermissions.js, BackendDashboard.jsx, BranchesTab.jsx, plus 2 test count fixes in backend-nav-config.test.js + phase11-master-data-scaffold.test.jsx)
+
+**Verify locally** (per spec §12):
+1. `npx vitest run tests/branch-backup-helpers.test.js tests/branch-backup-flow-simulate.test.js tests/branch-clone-flow-simulate.test.js tests/branch-make-fresh-flow-simulate.test.js` → ~40 assertions GREEN.
+2. `node scripts/e2e-branch-backup-restore.mjs` → live prod round-trip PASS, cleanup confirmed.
+3. `npm run build` → clean.
+4. `npm test -- --run` → full suite GREEN.
+
