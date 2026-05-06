@@ -194,19 +194,22 @@ describe('Phase 24.0-noniesdecies — kiosk handleSaveDepositData add-appointmen
     expect(ADMIN).toMatch(
       /const\s+wantsAppt\s*=\s*!!newData\?\.hasAppointment/,
     );
-    // Phase 24.0-vicies (2026-05-06) — sess optional-chained because the
-    // cascade is now un-gated and fires even when sess is undefined.
+    // Phase 24.0-vicies-sexies (2026-05-06) — replaced `sess` with
+    // `freshSess` (re-resolved at cascade time to defend against listener
+    // race) + replaced raw depIdForCascade with `freshDepId` (3-source
+    // fallback chain). Test updated to match the new gate.
     expect(ADMIN).toMatch(
-      /const\s+hasAppt\s*=\s*!!sess\??\.linkedAppointmentId/,
+      /const\s+hasAppt\s*=\s*!!freshSess\?\.linkedAppointmentId/,
     );
     expect(ADMIN).toMatch(
-      /if\s*\(wantsAppt\s*&&\s*!hasAppt\s*&&\s*depIdForCascade\)/,
+      /if\s*\(wantsAppt\s*&&\s*!hasAppt\s*&&\s*freshDepId\)/,
     );
   });
 
   it('NDF.D.2 — cascade calls createAppointmentForExistingDeposit with payload', () => {
+    // Phase 24.0-vicies-sexies — first-arg renamed depIdForCascade → freshDepId.
     expect(ADMIN).toMatch(
-      /createAppointmentForExistingDeposit\(depIdForCascade,\s*\{/,
+      /createAppointmentForExistingDeposit\(freshDepId,\s*\{/,
     );
   });
 

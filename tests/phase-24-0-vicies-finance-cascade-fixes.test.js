@@ -154,9 +154,12 @@ describe('Phase 24.0-vicies — Bug 1: handleSaveDepositData un-gated cascade', 
 
   it('VCS.C.4 — create-appointment cascade fires UN-GATED (after alreadySynced branch)', () => {
     // The cascade is now its own try/catch block AFTER the alreadySynced
-    // if/else, gated only on `wantsAppt && !hasAppt && depIdForCascade`.
+    // if/else. Phase 24.0-vicies-sexies (2026-05-06) — gate now uses
+    // `freshDepId` (re-resolved with depIdForCascade fallback) instead of
+    // raw `depIdForCascade` to defend against listener-race when the
+    // kiosk-fresh stamp hasn't echoed yet.
     expect(ADMIN).toMatch(
-      /if\s*\(wantsAppt\s*&&\s*!hasAppt\s*&&\s*depIdForCascade\)\s*\{[\s\S]{0,300}?createAppointmentForExistingDeposit/,
+      /if\s*\(wantsAppt\s*&&\s*!hasAppt\s*&&\s*freshDepId\)\s*\{[\s\S]{0,1500}?createAppointmentForExistingDeposit/,
     );
   });
 

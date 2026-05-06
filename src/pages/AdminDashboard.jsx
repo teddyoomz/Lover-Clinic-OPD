@@ -3096,28 +3096,52 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }
       }
 
-      // Phase 24.0-noniesdecies (2026-05-06) + vicies (2026-05-06 update) —
-      // auto-create be_appointments when admin edits a kiosk deposit to ADD
-      // an appointment. Cascade is now UN-GATED (fires regardless of
-      // alreadySynced) so kiosk-fresh deposits (depositSyncStatus='done' but
-      // no brokerProClinicId) reach this path.
-      // User report: "ใน Frontend tab จองมัดจำ หลังจากจองมัดจำแล้ว พอกด
-      // edit เพื่อเพิ่มนัดหมาย มันขึ้นว่านัดหมายสำเร็จ แต่พอไปดูในหน้าตาราง
-      // จองมัดจำ กลับไม่เจอ".
+      // Phase 24.0-noniesdecies (2026-05-06) + vicies (2026-05-06 update) +
+      // vicies-sexies (2026-05-06) — auto-create be_appointments when admin
+      // edits a kiosk deposit to ADD an appointment. Cascade un-gated +
+      // visible-error fix: if the cascade silently failed, the user saw
+      // 'สำเร็จ' toast but no appt in the calendar. Now: pre-validate +
+      // surface error toast on failure + read FRESH session (live listener
+      // copy) so newly-stamped linkedDepositId is visible if the kiosk
+      // create-then-edit happened in fast succession.
+      let apptCreatedSuccessfully = false;
       try {
         const wantsAppt = !!newData?.hasAppointment;
-        const hasAppt = !!sess?.linkedAppointmentId;
-        if (wantsAppt && !hasAppt && depIdForCascade) {
+        // Re-fetch fresh sess to pick up linkedDepositId stamped by
+        // confirmCreateDeposit even if the listener hasn't echoed yet.
+        const freshSess = [...depositSessions, ...archivedDepositSessions]
+          .find(s => s.id === sessionId) || sess;
+        const hasAppt = !!freshSess?.linkedAppointmentId;
+        const freshDepId = freshSess?.depositProClinicId
+          || freshSess?.linkedDepositId
+          || depIdForCascade
+          || '';
+
+        if (wantsAppt && !hasAppt && freshDepId) {
+          // Pre-validate appointment fields BEFORE calling helper. Empty
+          // date or startTime → helper throws "date + startTime required" →
+          // silent catch ate the error. Now we surface it via toast.
+          const apptDate = String(newData.appointmentDate || '').trim();
+          const apptStart = String(newData.appointmentStartTime || '').trim();
+          if (!apptDate || !apptStart) {
+            showToast('กรุณากรอกวันนัด + เวลาเริ่มก่อนบันทึก');
+            return;
+          }
           const { createAppointmentForExistingDeposit } = await import('../lib/appointmentDepositBatch.js');
           if (typeof createAppointmentForExistingDeposit === 'function') {
             const doctorRecord = practitioners.find(p => String(p.id) === String(newData.doctor || ''));
             const advisorRecord = practitioners.find(p => String(p.id) === String(newData.consultant || ''));
-            const apptResult = await createAppointmentForExistingDeposit(depIdForCascade, {
-              date: newData.appointmentDate || '',
-              startTime: newData.appointmentStartTime || '',
-              endTime: newData.appointmentEndTime || newData.appointmentStartTime || '',
+            // Phase 24.0-vicies-sexies — branch resolution prefers the
+            // session's original branch (where deposit was created) so the
+            // appt + deposit stay paired in the same branch view.
+            // selectedBranchId fallback covers the rare case where the
+            // session has no branchId stamp.
+            const apptResult = await createAppointmentForExistingDeposit(freshDepId, {
+              date: apptDate,
+              startTime: apptStart,
+              endTime: newData.appointmentEndTime || apptStart,
               customerId: '',
-              customerName: newData.customerNameTemp?.trim() || sess?.sessionName || '',
+              customerName: newData.customerNameTemp?.trim() || freshSess?.sessionName || '',
               customerHN: '',
               customerNameTemp: newData.customerNameTemp?.trim() || '',
               customerPhoneTemp: newData.customerPhoneTemp?.trim() || '',
@@ -3134,18 +3158,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               notes: '',
               appointmentColor: '',
               lineNotify: false,
-              branchId: sess?.branchId || selectedBranchId || '',
+              branchId: freshSess?.branchId || selectedBranchId || '',
             });
             if (apptResult?.appointmentId) {
               await updateDoc(ref, {
                 linkedAppointmentId: apptResult.appointmentId,
-                linkedDepositId: depIdForCascade,
+                linkedDepositId: freshDepId,
               });
+              apptCreatedSuccessfully = true;
             }
           }
         }
       } catch (apptErr) {
-        console.warn('[handleSaveDepositData] add-appointment cascade failed (best-effort):', apptErr);
+        console.warn('[handleSaveDepositData] add-appointment cascade failed:', apptErr);
+        // Phase 24.0-vicies-sexies — surface the error to the user instead
+        // of silently swallowing. User: "ขึ้นว่าสำเร็จ แต่ในตารางตามวันที่
+        // นัดไม่ปรากฎนัดหมายใดๆ" — silent-catch was the root cause.
+        showToast(`เพิ่มนัดหมายไม่สำเร็จ: ${apptErr?.message || 'unknown'}`);
+        return;
       }
 
       if (alreadySynced) {
