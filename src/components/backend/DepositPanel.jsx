@@ -535,11 +535,16 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                           AppointmentFormModal stamps when admin creates a deposit-
                           booking via the embedded subform). Falls back to
                           appointmentTo for legacy shape compat, then a friendly
-                          dash for non-appointment deposits. */}
-                      <td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[200px]" data-testid="deposit-purpose-cell">
+                          dash for non-appointment deposits.
+                          Phase 24.0-undecies (2026-05-06) — drop max-w-[200px] +
+                          truncate so multi-purpose strings ("สมรรถภาพ, อื่นๆ: ผ่ามุก")
+                          show in full. The badge wraps via whitespace-normal +
+                          break-words; title tooltip preserved as a courtesy. */}
+                      <td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[280px] align-top" data-testid="deposit-purpose-cell">
                         {dep.appointment?.purpose || dep.appointment?.appointmentTo ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium truncate" title={dep.appointment.purpose || dep.appointment.appointmentTo}>
-                            🎯 {dep.appointment.purpose || dep.appointment.appointmentTo}
+                          <span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug" title={dep.appointment.purpose || dep.appointment.appointmentTo}>
+                            <span className="shrink-0">🎯</span>
+                            <span>{dep.appointment.purpose || dep.appointment.appointmentTo}</span>
                           </span>
                         ) : (
                           <span className="text-[var(--tx-muted)]/60 text-[11px]">—</span>

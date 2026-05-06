@@ -70,6 +70,8 @@ import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUt
 // "ต้องบันทึกไปในรูปแบบการจองมัดจำใน backend ได้ถูกต้อง และบันทึกมัดจำใน
 //  การเงินได้ถูกต้อง ตามสาขาที่ได้มีการ Gen QR".
 import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
+// Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
+import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
 import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -123,6 +125,7 @@ function formatThaiAppointmentDate(isoDate) {
   const [y, m, d] = isoDate.split('-');
   return `${parseInt(d)}/${parseInt(m)}/${parseInt(y) + 543}`;
 }
+
 function renderDoctorLabel(doctors, value) {
   if (!doctors || !value) return null;
   const doc = doctors.find(o => o.value === value);
@@ -583,6 +586,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     appointmentDate: '', appointmentStartTime: '', appointmentEndTime: '',
     consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '',
     visitPurpose: [],
+    // Phase 24.0-undecies — captures the free-text detail when "อื่นๆ" is one
+    // of the visitPurpose chips. Joined into the saved `purpose` string as
+    // "อื่นๆ: <detail>" via buildVisitPurposeText so the DepositPanel
+    // "มัดจำสำหรับ" column shows the full detail.
+    visitPurposeOther: '',
   });
   const [editingDepositData, setEditingDepositData] = useState(null); // null = not editing, object = editing copy
   const [depositSaving, setDepositSaving] = useState(false); // guards against double-click duplicate ProClinic updates
@@ -594,6 +602,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     appointmentStartTime: '', appointmentEndTime: '',
     advisor: '', doctor: '', assistant: '', room: '', source: '',
     visitPurpose: [],
+    // Phase 24.0-undecies — see depositFormData.visitPurposeOther.
+    visitPurposeOther: '',
   });
   const [editingAppointment, setEditingAppointment] = useState(null); // null = creating, sessionId = editing
   const [sessionToRestore, setSessionToRestore] = useState(null);
@@ -1868,6 +1878,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         room: depositFormData.room || null,
         appointmentChannel: depositFormData.appointmentChannel || null,
         visitPurpose: depositFormData.visitPurpose || [],
+        // Phase 24.0-undecies — preserve the free-text "อื่นๆ" detail on the
+        // kiosk session so edit-mode hydration can restore the input.
+        visitPurposeOther: depositFormData.visitPurposeOther || '',
       },
     };
 
@@ -1890,7 +1903,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       try {
         const amt = parseFloat(depositFormData.paymentAmount) || 0;
         if (amt > 0) {
-          const visitPurposeText = (depositFormData.visitPurpose || []).join(', ');
+          // Phase 24.0-undecies — interpolate "อื่นๆ: <detail>" into purpose
+          // string so DepositPanel "มัดจำสำหรับ" column shows the full value.
+          const visitPurposeText = buildVisitPurposeText(
+            depositFormData.visitPurpose,
+            depositFormData.visitPurposeOther,
+          );
           const doctorRecord = practitioners.find(p => String(p.id) === String(depositFormData.doctor || ''));
           const advisorRecord = practitioners.find(p => String(p.id) === String(depositFormData.consultant || ''));
           const sellerName = depositFormData.salesperson
@@ -1970,6 +1988,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       depositTime: nowTime(), salesperson: '', hasAppointment: false,
       appointmentDate: '', appointmentStartTime: '', appointmentEndTime: '',
       consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '', visitPurpose: [],
+      visitPurposeOther: '',
     });
   };
 
@@ -1992,6 +2011,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       room: noDepositFormData.room || null,
       source: noDepositFormData.source || null,
       visitPurpose: noDepositFormData.visitPurpose || [],
+      // Phase 24.0-undecies — preserve "อื่นๆ" detail on the kiosk session.
+      visitPurposeOther: noDepositFormData.visitPurposeOther || '',
     };
 
     const sessionDoc = {
@@ -2015,7 +2036,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // appointmentProClinicId field name preserved for backward compat with
       // existing opd_sessions docs; semantics now = be_appointments doc id
       // (BA-{ts} format).
-      const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+      // Phase 24.0-undecies — interpolate "อื่นๆ: <detail>" via helper.
+      const visitPurposeText = buildVisitPurposeText(
+        noDepositFormData.visitPurpose,
+        noDepositFormData.visitPurposeOther,
+      );
       const doctorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.doctor || ''));
       const advisorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.advisor || ''));
       try {
@@ -2081,6 +2106,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       appointmentStartTime: '', appointmentEndTime: '',
       advisor: '', doctor: '', assistant: '', room: '', source: '',
       visitPurpose: [],
+      visitPurposeOther: '',
     });
   };
 
@@ -2102,10 +2128,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       room: noDepositFormData.room || null,
       source: noDepositFormData.source || null,
       visitPurpose: noDepositFormData.visitPurpose || [],
+      // Phase 24.0-undecies — preserve "อื่นๆ" detail on the kiosk session.
+      visitPurposeOther: noDepositFormData.visitPurposeOther || '',
     };
 
     // Phase 20.0 Task 3 — be_appointments shape (no ProClinic field names).
-    const visitPurposeText = (noDepositFormData.visitPurpose || []).join(', ');
+    // Phase 24.0-undecies — interpolate "อื่นๆ: <detail>" via helper.
+    const visitPurposeText = buildVisitPurposeText(
+      noDepositFormData.visitPurpose,
+      noDepositFormData.visitPurposeOther,
+    );
     const doctorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.doctor || ''));
     const advisorRecord = practitioners.find(p => String(p.id) === String(noDepositFormData.advisor || ''));
     const apptPayload = {
@@ -4981,12 +5013,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
                           {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-orange-500">กำลัง sync...</span>}
-                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: a.visitPurpose || [] }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
+                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; const parsed = parseVisitPurposeText(a.visitPurpose || [], a.visitPurposeOther || ''); setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: parsed.purposes, visitPurposeOther: parsed.other }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
                         </div>
                       )}
                       {session.appointmentData?.visitPurpose?.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          {session.appointmentData.visitPurpose.map(v => <span key={v} className={`text-[11px] px-1.5 py-0.5 rounded border ${isDark ? 'bg-orange-950/30 text-orange-400 border-orange-900/40' : 'bg-pink-50 text-pink-600 border-pink-200'}`}>{v}</span>)}
+                          {/* Phase 24.0-undecies — show "อื่นๆ: <detail>" inline
+                              instead of bare "อื่นๆ" so admin sees the full intent. */}
+                          {session.appointmentData.visitPurpose.map(v => {
+                            const isOther = v === 'อื่นๆ';
+                            const otherDetail = String(session.appointmentData.visitPurposeOther || '').trim();
+                            const label = (isOther && otherDetail) ? `อื่นๆ: ${otherDetail}` : v;
+                            return (
+                              <span key={v} className={`text-[11px] px-1.5 py-0.5 rounded border ${isDark ? 'bg-orange-950/30 text-orange-400 border-orange-900/40' : 'bg-pink-50 text-pink-600 border-pink-200'}`}>{label}</span>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -6308,7 +6349,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองมัดจำ</span>
                           <span className="text-xs text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจอง<br/>ลิงก์ถาวร</span>
                         </button>
-                        <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setEditingAppointment(null); setNoDepositFormData({ sessionName: '', appointmentDate: todayISO(), appointmentStartTime: '', appointmentEndTime: '', advisor: '', doctor: '', assistant: '', room: '', source: '', visitPurpose: [] }); setShowNoDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
+                        <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setEditingAppointment(null); setNoDepositFormData({ sessionName: '', appointmentDate: todayISO(), appointmentStartTime: '', appointmentEndTime: '', advisor: '', doctor: '', assistant: '', room: '', source: '', visitPurpose: [], visitPurposeOther: '' }); setShowNoDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-orange-950/50 text-orange-400' : 'bg-orange-50 text-orange-500'}`}>
                             <UserPlus size={16} />
                           </div>
@@ -6501,11 +6542,36 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
-                          onClick={() => setDepositFormData(p => ({...p, visitPurpose: p.visitPurpose.includes(r) ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r]}))}
+                          onClick={() => setDepositFormData(p => {
+                            const has = p.visitPurpose.includes(r);
+                            return {
+                              ...p,
+                              visitPurpose: has ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r],
+                              // Phase 24.0-undecies — clear the free-text detail
+                              // when "อื่นๆ" is unchecked so stale text doesn't
+                              // persist across toggle.
+                              visitPurposeOther: (r === 'อื่นๆ' && has) ? '' : p.visitPurposeOther,
+                            };
+                          })}
                           className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-all ${depositFormData.visitPurpose.includes(r) ? 'bg-emerald-900/40 border-emerald-600 text-emerald-300' : 'bg-[var(--bg-card)] border-[var(--bd)] text-gray-500 hover:text-gray-300'}`}
                         >{r}</button>
                       ))}
                     </div>
+                    {/* Phase 24.0-undecies — free-text detail when "อื่นๆ" is selected. */}
+                    {depositFormData.visitPurpose.includes('อื่นๆ') && (
+                      <div className="mt-3" data-testid="deposit-visit-purpose-other-wrap">
+                        <label className="text-xs text-gray-500 font-semibold block mb-1">ระบุ "อื่นๆ"</label>
+                        <input
+                          type="text"
+                          value={depositFormData.visitPurposeOther}
+                          onChange={e => setDepositFormData(p => ({...p, visitPurposeOther: e.target.value}))}
+                          placeholder="เช่น ผ่ามุก, ตรวจสุขภาพ, ฯลฯ"
+                          maxLength={120}
+                          data-testid="deposit-visit-purpose-other-input"
+                          className="w-full bg-[var(--bg-card)] border border-emerald-700/50 text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Submit */}
@@ -6616,11 +6682,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
-                          onClick={() => setNoDepositFormData(p => ({...p, visitPurpose: p.visitPurpose.includes(r) ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r]}))}
+                          onClick={() => setNoDepositFormData(p => {
+                            const has = p.visitPurpose.includes(r);
+                            return {
+                              ...p,
+                              visitPurpose: has ? p.visitPurpose.filter(x=>x!==r) : [...p.visitPurpose, r],
+                              // Phase 24.0-undecies — clear free-text detail when
+                              // "อื่นๆ" toggles off.
+                              visitPurposeOther: (r === 'อื่นๆ' && has) ? '' : p.visitPurposeOther,
+                            };
+                          })}
                           className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-all ${noDepositFormData.visitPurpose.includes(r) ? (isDark ? 'bg-orange-900/40 border-orange-600 text-orange-300' : 'bg-pink-100 border-pink-500 text-pink-700') : (isDark ? 'bg-[var(--bg-card)] border-[var(--bd)] text-gray-500 hover:text-gray-300' : 'bg-white border-pink-200 text-gray-500 hover:text-pink-600')}`}
                         >{r}</button>
                       ))}
                     </div>
+                    {/* Phase 24.0-undecies — free-text detail when "อื่นๆ" is selected. */}
+                    {noDepositFormData.visitPurpose.includes('อื่นๆ') && (
+                      <div className="mt-3" data-testid="no-deposit-visit-purpose-other-wrap">
+                        <label className="text-xs text-gray-500 font-semibold block mb-1">ระบุ "อื่นๆ"</label>
+                        <input
+                          type="text"
+                          value={noDepositFormData.visitPurposeOther}
+                          onChange={e => setNoDepositFormData(p => ({...p, visitPurposeOther: e.target.value}))}
+                          placeholder="เช่น ผ่ามุก, ตรวจสุขภาพ, ฯลฯ"
+                          maxLength={120}
+                          data-testid="no-deposit-visit-purpose-other-input"
+                          className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-orange-700/50 text-white focus:border-orange-500' : 'bg-pink-50 border border-pink-300 text-gray-900 focus:border-pink-500'}`}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Submit */}
