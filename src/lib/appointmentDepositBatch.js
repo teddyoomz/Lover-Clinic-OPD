@@ -38,12 +38,21 @@ import {
   getDoc,
   writeBatch,
   serverTimestamp,
+  query,
+  where,
+  getDocs,
+  collection,
 } from 'firebase/firestore';
 import { resolveSelectedBranchId } from './branchSelection.js';
 
 const basePath = () => ['artifacts', appId, 'public', 'data'];
 const depositDoc = (id) => doc(db, ...basePath(), 'be_deposits', String(id));
 const appointmentDoc = (id) => doc(db, ...basePath(), 'be_appointments', String(id));
+// Phase 24.0-vicies-novies (2026-05-07) — opd_sessions doc + collection refs
+// for the Backend pickLater "ส่งลิ้งค์ลูกค้า" provisioning flow.
+const opdSessionDoc = (id) => doc(db, ...basePath(), 'opd_sessions', String(id));
+const depositsCol = () => collection(db, ...basePath(), 'be_deposits');
+const appointmentsCol = () => collection(db, ...basePath(), 'be_appointments');
 
 /**
  * Phase 21.0 — branchId resolver for paired writes. Mirrors
@@ -76,6 +85,13 @@ export function buildAppointmentPairPayload({
   depositId,
   appointmentId,
   branchId,
+  // Phase 24.0-vicies-novies (2026-05-07) — when the kiosk flow already minted
+  // an opd_sessions doc (e.g. confirmCreateDeposit), the sessionId is passed
+  // through here so the be_appointments doc carries the unique-link match key
+  // bidirectionally. Used by attachCustomerToOpdSessionLinks at OPD save time
+  // to find the booking and attach the new customerId. Phone-mismatch resilient
+  // — match is sessionId-based, not phone-based.
+  linkedOpdSessionId = '',
 }) {
   const appt = depositData?.appointment || {};
   const now = new Date().toISOString();
@@ -119,6 +135,10 @@ export function buildAppointmentPairPayload({
     branchId: branchId || null,
     // Cross-link to deposit doc (queryable both directions).
     linkedDepositId: depositId,
+    // Phase 24.0-vicies-novies — bidirectional unique-link match key for the
+    // OPD-save auto-attach flow. Empty string when the booking originated
+    // outside the link-send mechanism (e.g. legacy customer-later create).
+    linkedOpdSessionId: linkedOpdSessionId || '',
     // Forensic trail — these fields tell future admins / migration scripts
     // that this appointment was spawned by a paired deposit-booking write
     // rather than created directly via AppointmentFormModal.
@@ -145,6 +165,11 @@ export function buildDepositPairPayload({
   depositId,
   appointmentId,
   branchId,
+  // Phase 24.0-vicies-novies (2026-05-07) — see buildAppointmentPairPayload for
+  // context. Stamped on both halves of the pair when the kiosk flow already
+  // minted an opd_sessions doc, so attachCustomerToOpdSessionLinks can find
+  // the deposit at OPD-save time via a single sessionId match.
+  linkedOpdSessionId = '',
 }) {
   const now = new Date().toISOString();
   const amount = Number(depositData?.amount) || 0;
@@ -183,6 +208,9 @@ export function buildDepositPairPayload({
     branchId: branchId || null,
     // Cross-link to appointment doc.
     linkedAppointmentId: appointmentId,
+    // Phase 24.0-vicies-novies — bidirectional unique-link match key (see
+    // buildAppointmentPairPayload). Empty string for legacy / non-link create.
+    linkedOpdSessionId: linkedOpdSessionId || '',
     createdAt: now,
     updatedAt: now,
   };
@@ -224,7 +252,16 @@ export function mintPairIds() {
  *   resolveSelectedBranchId() from BranchContext when omitted.
  * @returns {Promise<{depositId, appointmentId}>}
  */
-export async function createDepositBookingPair({ depositData, branchId } = {}) {
+export async function createDepositBookingPair({
+  depositData,
+  branchId,
+  // Phase 24.0-vicies-novies (2026-05-07) — kiosk callsites (confirmCreateDeposit
+  // in AdminDashboard.jsx) pass through the freshly-minted opd_sessions doc id
+  // (e.g. DEP-XXXXXX) so the paired deposit + appointment carry the unique-link
+  // match key from creation. attachCustomerToOpdSessionLinks reads this at
+  // OPD-save time to find pending bookings + cascade the new customerId.
+  linkedOpdSessionId = '',
+} = {}) {
   if (!depositData || typeof depositData !== 'object') {
     throw new Error('createDepositBookingPair: depositData required');
   }
@@ -241,12 +278,14 @@ export async function createDepositBookingPair({ depositData, branchId } = {}) {
     depositId,
     appointmentId,
     branchId: resolvedBranchId,
+    linkedOpdSessionId,
   });
   const apptPayload = buildAppointmentPairPayload({
     depositData,
     depositId,
     appointmentId,
     branchId: resolvedBranchId,
+    linkedOpdSessionId,
   });
   const batch = writeBatch(db);
   batch.set(depositDoc(depositId), depositPayload);
@@ -666,6 +705,261 @@ export async function deleteDepositBookingPair(depositId) {
   };
 }
 
+/**
+ * Phase 24.0-vicies-novies (2026-05-07) — auto-attach customer-later deposit +
+ * appointment to a newly-saved OPD customer at "บันทึกลง OPD" save time.
+ *
+ * Match key = bidirectional `linkedOpdSessionId`:
+ *   - opd_sessions has linkedDepositId / linkedAppointmentId (admin-stamped at
+ *     create time in confirmCreateDeposit / confirmCreateNoDeposit).
+ *   - be_deposits + be_appointments carry the reverse field linkedOpdSessionId
+ *     (Phase 24.0-vicies-novies addition — see buildDepositPairPayload).
+ *
+ * User directive lock (verbatim, 2026-05-07): "เวลาเราส่ง link ให้ใครอะ มัน
+ * สร้าง unique link มาอยู่แล้ว มึงก็เอาไปประกอบกับ มัดจำ กับนัดหมาย ดิวะ มัน
+ * ไม่ซ้ำกันอยู่แล้ว พอลูกค้าส่งข้อมูลมาผ่านลิ้งนั้น มันก็ไป match กับ unique
+ * link ที่บันทึกไปก่อนหน้านี้ ใน มัดจำ กับนัดหมาย".
+ *
+ * Phone-mismatch resilience: customer can type ANY phone in the OPD form —
+ * irrelevant. Match is via stamped sessionId on the deposit + appointment
+ * docs, NOT phone. ✅ "Different phone" requirement satisfied by design.
+ *
+ * Idempotent: docs with `customerId !== ''` are excluded by the WHERE clause
+ * → re-running attach for the same session is a 0-write no-op.
+ *
+ * Forensic trail: `customerLinkedAt` (ISO ts) + `customerLinkedFrom:
+ * 'opd-save-auto'` are stamped on each updated doc. `customerNameTemp` /
+ * `customerPhoneTemp` are PRESERVED so admin can audit who paid the deposit
+ * before being formally registered.
+ *
+ * @param {string} sessionId — opd_sessions doc id (the unique link).
+ * @param {Object} args
+ * @param {string} args.customerId — be_customers doc id (canonical HN-based)
+ * @param {string} args.customerName
+ * @param {string} [args.customerHN]
+ * @returns {Promise<{
+ *   sessionId: string,
+ *   depositCount: number,
+ *   appointmentCount: number,
+ *   depositIds: string[],
+ *   appointmentIds: string[],
+ * }>}
+ */
+export async function attachCustomerToOpdSessionLinks(sessionId, {
+  customerId,
+  customerName,
+  customerHN = '',
+} = {}) {
+  if (!sessionId) {
+    throw new Error('attachCustomerToOpdSessionLinks: sessionId required');
+  }
+  if (!customerId) {
+    throw new Error('attachCustomerToOpdSessionLinks: customerId required');
+  }
+  // Single-pass query for each collection. WHERE clause filters out
+  // already-attached docs (idempotency: re-running attach is a no-op).
+  const depositQ = query(
+    depositsCol(),
+    where('linkedOpdSessionId', '==', String(sessionId)),
+    where('customerId', '==', ''),
+  );
+  const apptQ = query(
+    appointmentsCol(),
+    where('linkedOpdSessionId', '==', String(sessionId)),
+    where('customerId', '==', ''),
+  );
+  const [depSnap, apptSnap] = await Promise.all([
+    getDocs(depositQ),
+    getDocs(apptQ),
+  ]);
+  const now = new Date().toISOString();
+  const customerFields = {
+    customerId: String(customerId),
+    customerName: String(customerName || ''),
+    customerHN: String(customerHN || ''),
+    // Forensic trail — Rule M pattern (preserves provenance for admin audit).
+    customerLinkedAt: now,
+    customerLinkedFrom: 'opd-save-auto',
+    updatedAt: now,
+    // NOTE: customerNameTemp + customerPhoneTemp are intentionally NOT
+    // cleared — they remain on the doc as the booking-time identity record.
+  };
+  // Atomic writeBatch — all-or-none commit. Empty-result case writes nothing.
+  const depositIds = [];
+  const appointmentIds = [];
+  if (depSnap.size === 0 && apptSnap.size === 0) {
+    return {
+      sessionId,
+      depositCount: 0,
+      appointmentCount: 0,
+      depositIds,
+      appointmentIds,
+    };
+  }
+  const batch = writeBatch(db);
+  depSnap.forEach((d) => {
+    batch.update(d.ref, customerFields);
+    depositIds.push(d.id);
+  });
+  apptSnap.forEach((d) => {
+    batch.update(d.ref, customerFields);
+    appointmentIds.push(d.id);
+  });
+  await batch.commit();
+  return {
+    sessionId,
+    depositCount: depSnap.size,
+    appointmentCount: apptSnap.size,
+    depositIds,
+    appointmentIds,
+  };
+}
+
+/**
+ * Phase 24.0-vicies-novies (2026-05-07) — Backend pickLater "ส่งลิ้งค์ลูกค้า"
+ * provisioning helper. Mints a fresh opd_sessions doc + stamps
+ * linkedOpdSessionId on the existing customer-later deposit + appointment so
+ * the booking is now wired into the unique-link match cascade.
+ *
+ * Distinct from the kiosk flow (confirmCreateDeposit) which mints the session
+ * AT booking time — this helper mints the session AFTER booking, retroactively
+ * connecting an existing customer-later pair to the OPD-save attach mechanism.
+ *
+ * Idempotent: if the deposit already has a non-empty linkedOpdSessionId, the
+ * existing sessionId is returned + alreadyProvisioned=true (no new session
+ * minted). Admin clicking "ส่งลิ้งค์ลูกค้า" twice = same URL.
+ *
+ * @param {Object} args
+ * @param {string} args.depositId — be_deposits doc id (must exist).
+ * @param {string} [args.appointmentId] — be_appointments doc id (optional —
+ *        for noDeposit-only flows where no deposit exists, the helper supports
+ *        appointment-only provisioning by passing depositId='' instead).
+ * @param {string} [args.branchId] — defaults to deposit's branchId.
+ * @param {string} [args.formType='intake'] — opd_sessions formType field.
+ * @param {string} [args.sessionName] — display label on opd_sessions queue.
+ * @param {string} [args.origin] — URL origin (e.g. https://lover-clinic-app.vercel.app);
+ *        falls back to window.location.origin then to '' (path-only URL).
+ * @returns {Promise<{
+ *   sessionId: string,
+ *   url: string,
+ *   alreadyProvisioned: boolean,
+ * }>}
+ */
+export async function provisionOpdLinkForBookingPair({
+  depositId = '',
+  appointmentId = '',
+  branchId = '',
+  formType = 'intake',
+  sessionName = '',
+  origin = '',
+} = {}) {
+  if (!depositId && !appointmentId) {
+    throw new Error('provisionOpdLinkForBookingPair: depositId OR appointmentId required');
+  }
+  // Read the source-of-truth doc to check idempotency + capture the branchId
+  // when caller didn't provide one.
+  let resolvedBranchId = branchId || '';
+  let existingSessionId = '';
+  let resolvedSessionName = sessionName || '';
+  if (depositId) {
+    const depRef = depositDoc(depositId);
+    const depSnap = await getDoc(depRef);
+    if (!depSnap.exists()) {
+      throw new Error(`provisionOpdLinkForBookingPair: deposit ${depositId} not found`);
+    }
+    const depData = depSnap.data() || {};
+    if (depData.linkedOpdSessionId && String(depData.linkedOpdSessionId).trim()) {
+      existingSessionId = String(depData.linkedOpdSessionId).trim();
+    }
+    if (!resolvedBranchId && depData.branchId) {
+      resolvedBranchId = depData.branchId;
+    }
+    if (!resolvedSessionName) {
+      resolvedSessionName = depData.customerNameTemp
+        || depData.customerName
+        || 'ลูกค้าจอง';
+    }
+  } else if (appointmentId) {
+    const apptRef = appointmentDoc(appointmentId);
+    const apptSnap = await getDoc(apptRef);
+    if (!apptSnap.exists()) {
+      throw new Error(`provisionOpdLinkForBookingPair: appointment ${appointmentId} not found`);
+    }
+    const apptData = apptSnap.data() || {};
+    if (apptData.linkedOpdSessionId && String(apptData.linkedOpdSessionId).trim()) {
+      existingSessionId = String(apptData.linkedOpdSessionId).trim();
+    }
+    if (!resolvedBranchId && apptData.branchId) {
+      resolvedBranchId = apptData.branchId;
+    }
+    if (!resolvedSessionName) {
+      resolvedSessionName = apptData.customerNameTemp
+        || apptData.customerName
+        || 'ลูกค้าจอง';
+    }
+  }
+  // Idempotent short-circuit — re-using existing session.
+  if (existingSessionId) {
+    const url = _buildOpdSessionUrl(existingSessionId, origin);
+    return { sessionId: existingSessionId, url, alreadyProvisioned: true };
+  }
+  // Mint fresh sessionId — BL-{timestamp}-{8 hex chars} (BL = Backend-Link,
+  // distinct from kiosk DEP-/ND-/CST-/PRM-/FW- prefixes). Crypto-secure
+  // suffix per Rule C2 (crypto.getRandomValues only — no insecure PRNG).
+  const ts = Date.now();
+  const buf = new Uint8Array(4);
+  globalThis.crypto.getRandomValues(buf);
+  const suffix = Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
+  const sessionId = `BL-${ts}-${suffix}`;
+  const sessionRef = opdSessionDoc(sessionId);
+  const sessionPayload = {
+    status: 'pending',
+    formType: formType || 'intake',
+    isPermanent: false,
+    branchId: resolvedBranchId || '',
+    sessionName: resolvedSessionName,
+    patientData: null,
+    // Cross-link to the backing deposit + appointment so handleOpdClick can
+    // find them at OPD-save time even without the reverse-lookup query.
+    linkedDepositId: depositId || '',
+    linkedAppointmentId: appointmentId || '',
+    createdFromBackendBooking: true,
+    createdAt: serverTimestamp(),
+  };
+  const now = new Date().toISOString();
+  const reverseStamp = {
+    linkedOpdSessionId: sessionId,
+    opdLinkProvisionedAt: now,
+    updatedAt: now,
+  };
+  const batch = writeBatch(db);
+  batch.set(sessionRef, sessionPayload);
+  if (depositId) {
+    batch.update(depositDoc(depositId), reverseStamp);
+  }
+  if (appointmentId) {
+    batch.update(appointmentDoc(appointmentId), reverseStamp);
+  }
+  await batch.commit();
+  const url = _buildOpdSessionUrl(sessionId, origin);
+  return { sessionId, url, alreadyProvisioned: false };
+}
+
+/**
+ * Compose the public patient-form URL for a given opd_sessions doc id.
+ * Helper isolated for testability — mocking window.location is awkward.
+ * Phase 24.0-vicies-novies.
+ */
+function _buildOpdSessionUrl(sessionId, origin = '') {
+  let resolvedOrigin = origin;
+  if (!resolvedOrigin && typeof window !== 'undefined' && window.location?.origin) {
+    resolvedOrigin = window.location.origin;
+  }
+  return resolvedOrigin
+    ? `${resolvedOrigin}/?session=${sessionId}`
+    : `?session=${sessionId}`;
+}
+
 // Phase 21.0 marker — institutional-memory grep target. Keep this comment
 // at end-of-file. Removed = grep guard fails (test in tests/phase-21-0-*).
 // MARKER: phase-21-0-deposit-booking-pair-helper
@@ -674,3 +968,5 @@ export async function deleteDepositBookingPair(depositId) {
 // MARKER: phase-24-0-noniesdecies-create-appointment-for-existing-deposit
 // MARKER: phase-24-0-vicies-sync-customer-temp-to-deposit
 // MARKER: phase-24-0-vicies-quinquies-delete-deposit-booking-pair
+// MARKER: phase-24-0-vicies-novies-attach-customer-to-opd-session-links
+// MARKER: phase-24-0-vicies-novies-provision-opd-link-for-booking-pair

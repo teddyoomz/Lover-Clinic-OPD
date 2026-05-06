@@ -2006,9 +2006,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 lineNotify: false,
               },
             };
+            // Phase 24.0-vicies-novies (2026-05-07) — stamp linkedOpdSessionId
+            // on BOTH halves of the pair so attachCustomerToOpdSessionLinks
+            // can find the booking at "บันทึกลง OPD" save time and cascade
+            // the new customerId. The kiosk session sessionId IS the unique
+            // link the user mentioned ("เวลาเราส่ง link ให้ใครอะ มันสร้าง
+            // unique link มาอยู่แล้ว"). Phone-mismatch resilient by design.
             pairResult = await createDepositBookingPair({
               depositData: pairPayload,
               branchId: selectedBranchId || '',
+              linkedOpdSessionId: sessionId,
             });
             depositId = pairResult?.depositId || null;
           } else {
@@ -2048,6 +2055,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               linkedAppointmentId: pairResult?.appointmentId || null,
               depositSyncStatus: 'done',
             });
+            // Phase 24.0-vicies-novies (2026-05-07) — for the deposit-only
+            // path (no pair-helper write), stamp linkedOpdSessionId on the
+            // be_deposits doc so attachCustomerToOpdSessionLinks finds it
+            // at OPD-save time. The pair-helper path already stamps both
+            // halves via createDepositBookingPair(linkedOpdSessionId:sessionId).
+            if (!pairResult) {
+              try {
+                await updateDoc(
+                  doc(db, 'artifacts', appId, 'public', 'data', 'be_deposits', depositId),
+                  {
+                    linkedOpdSessionId: sessionId,
+                    updatedAt: new Date().toISOString(),
+                  },
+                );
+              } catch (linkErr) {
+                console.warn('[confirmCreateDeposit] linkedOpdSessionId stamp failed (best-effort):', linkErr);
+              }
+            }
           }
         }
       } catch (pairErr) {
@@ -2163,10 +2188,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // backendClient._resolveBranchIdForWrite would also fall through
           // to selectedBranchId, but explicit > implicit per Rule M).
           branchId: selectedBranchId || '',
+          // Phase 24.0-vicies-novies (2026-05-07) — stamp the kiosk sessionId
+          // on the be_appointments doc so attachCustomerToOpdSessionLinks
+          // finds the no-deposit booking at OPD-save time and cascades the
+          // new customerId. Phone-mismatch resilient by design (match key
+          // is sessionId, not phone).
+          linkedOpdSessionId: sessionId,
         });
         if (apptResult?.appointmentId) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
             appointmentProClinicId: apptResult.appointmentId,
+            // Phase 24.0-vicies-novies — symmetric stamp on session doc so
+            // handleOpdClick can resolve linkedAppointmentId for direct lookup
+            // (mirrors confirmCreateDeposit kiosk pattern).
+            linkedAppointmentId: apptResult.appointmentId,
             appointmentSyncStatus: 'done',
           });
           showToast('สร้างคิวจองไม่มัดจำ + นัดหมายสำเร็จ!');
@@ -2555,6 +2590,38 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       summaryLanguage: 'en',
     });
 
+    // Phase 24.0-vicies-novies (2026-05-07) — auto-attach customer-later
+    // deposit + appointment after OPD save succeeds. The unique sessionId is
+    // the match key (per user directive: "เวลาเราส่ง link ให้ใครอะ มันสร้าง
+    // unique link มาอยู่แล้ว มึงก็เอาไปประกอบกับ มัดจำ กับนัดหมาย"). Phone-
+    // mismatch resilient — works even if customer types a different phone in
+    // the OPD form. Idempotent (re-clicking บันทึกลง OPD won't double-attach).
+    const _attachLinkedBookings = async (customerId, customerHN) => {
+      if (!customerId) return null;
+      const fname = patient.firstname || patient.firstName || '';
+      const lname = patient.lastname || patient.lastName || '';
+      const customerName = `${patient.prefix || ''} ${fname} ${lname}`.trim();
+      try {
+        const mod = await import('../lib/appointmentDepositBatch.js');
+        if (typeof mod.attachCustomerToOpdSessionLinks !== 'function') return null;
+        const r = await mod.attachCustomerToOpdSessionLinks(sessionId, {
+          customerId,
+          customerName,
+          customerHN: customerHN || '',
+        });
+        const total = (r?.depositCount || 0) + (r?.appointmentCount || 0);
+        if (total > 0) {
+          showToast(`บันทึกลง OPD สำเร็จ + ผูกนัด/มัดจำ ${total} รายการ`);
+        }
+        return r;
+      } catch (e) {
+        // V31 anti-pattern lock — classify error, don't silent-swallow.
+        console.warn('[handleOpdClick] attachCustomerToOpdSessionLinks failed (best-effort):', e);
+        showToast('บันทึก OPD สำเร็จ — ผูกนัด/มัดจำล้มเหลว กรุณาลองใหม่');
+        return null;
+      }
+    };
+
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
     const jobId = `${sessionId}_${Date.now()}`;
     const brokerJob = hasExistingProClinic
@@ -2604,6 +2671,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             ...(result.proClinicId ? { brokerProClinicId: result.proClinicId } : {}),
             ...(result.proClinicHN ? { brokerProClinicHN: result.proClinicHN } : {}),
           });
+          // Phase 24.0-vicies-novies — auto-attach customer-later bookings.
+          await _attachLinkedBookings(result.proClinicId, result.proClinicHN);
         } else if (result?.notFound) {
           // Phase 24.0-octies — identity-lookup BEFORE create.
           // Try citizen_id / passport / phone match against be_customers.
@@ -2623,6 +2692,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               // Also UPDATE the existing customer's data with latest patient form
               // (so kiosk-fresh edits land on the existing record).
               try { await updateCustomerFromForm(existing.customer.id, patient, {}); } catch (e) { console.warn('relink update failed:', e); }
+              // Phase 24.0-vicies-novies — relink path also attaches any
+              // customer-later bookings tied to this session.
+              await _attachLinkedBookings(existing.customer.id, existing.customer.hn_no || '');
               relinked = true;
             } else if (existing?.ambiguous) {
               await updateDoc(ref, {
@@ -2655,6 +2727,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 ...(created.id ? { brokerProClinicId: created.id } : {}),
                 ...(created.hn ? { brokerProClinicHN: created.hn } : {}),
               });
+              // Phase 24.0-vicies-novies — recovery-create path also attaches.
+              await _attachLinkedBookings(created.id, created.hn || '');
             } catch (createErr) {
               await updateDoc(ref, { brokerStatus: 'failed', brokerError: createErr?.message || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
             }

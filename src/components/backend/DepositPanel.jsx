@@ -8,6 +8,8 @@ import {
   AlertCircle, Ban, RotateCcw, Calendar, Clock, Users as UsersIcon, Trash2,
   // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" button icon.
   CalendarPlus,
+  // Phase 24.0-vicies-novies (2026-05-07) — "ส่งลิ้งค์ลูกค้า" button icon.
+  Send, QrCode,
 } from 'lucide-react';
 import {
   createDeposit, updateDeposit, cancelDeposit, refundDeposit, deleteDeposit,
@@ -26,10 +28,16 @@ import {
 import {
   createDepositBookingPair,
   cancelDepositBookingPair,
+  // Phase 24.0-vicies-novies (2026-05-07) — provision an opd_sessions doc +
+  // stamp linkedOpdSessionId on the deposit + linked appointment so the
+  // bookings auto-attach when admin clicks "บันทึกลง OPD" later.
+  provisionOpdLinkForBookingPair,
 } from '../../lib/appointmentDepositBatch.js';
 // Phase 24.0-noniesdecies (2026-05-06) — AppointmentFormModal in
 // create-for-existing-deposit mode (existingDepositId prop set).
 import AppointmentFormModal from './AppointmentFormModal.jsx';
+// Phase 24.0-vicies-novies (2026-05-07) — share-link modal (URL + QR + copy).
+import SendCustomerLinkModal from './SendCustomerLinkModal.jsx';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
@@ -99,6 +107,11 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   // opens in create-for-existing-deposit mode + the deposit auto-gains
   // hasAppointment=true + linkedAppointmentId on save.
   const [apptForDepositModal, setApptForDepositModal] = useState(null);
+  // Phase 24.0-vicies-novies (2026-05-07) — send-link modal state. Holds the
+  // resolved {sessionId, url, sessionName, alreadyProvisioned} after admin
+  // clicks "ส่งลิ้งค์ลูกค้า" on a customer-later deposit card.
+  const [sendLinkModal, setSendLinkModal] = useState(null);
+  const [sendLinkBusyId, setSendLinkBusyId] = useState('');
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelNote, setCancelNote] = useState('');
   const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
@@ -547,6 +560,66 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                             <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300 font-bold uppercase">ลูกค้าจอง</span>
                             {dep.customerNameTemp && <span className="text-amber-200">{dep.customerNameTemp}</span>}
                             {dep.customerPhoneTemp && <span className="text-amber-300/80 font-mono">· {dep.customerPhoneTemp}</span>}
+                            {/* Phase 24.0-vicies-novies (2026-05-07) —
+                                "ส่งลิ้งค์ลูกค้า" button. When clicked, mints
+                                an opd_sessions doc + stamps linkedOpdSessionId
+                                on this deposit + the linked appointment so
+                                the bookings auto-attach when admin clicks
+                                "บันทึกลง OPD" on the customer's submitted
+                                form later. Idempotent — re-clicking shows
+                                the same URL/QR (alreadyProvisioned=true). */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const depKey = dep.depositId || dep.id;
+                                if (!depKey || sendLinkBusyId === depKey) return;
+                                setSendLinkBusyId(depKey);
+                                try {
+                                  const r = await provisionOpdLinkForBookingPair({
+                                    depositId: depKey,
+                                    appointmentId: dep.linkedAppointmentId || '',
+                                    branchId: dep.branchId || selectedBranchId || '',
+                                    formType: 'intake',
+                                    sessionName: dep.customerNameTemp
+                                      || dep.customerName
+                                      || 'ลูกค้าจอง',
+                                  });
+                                  setSendLinkModal({
+                                    sessionId: r.sessionId,
+                                    url: r.url,
+                                    sessionName: dep.customerNameTemp || dep.customerName || 'ลูกค้าจอง',
+                                    alreadyProvisioned: r.alreadyProvisioned,
+                                  });
+                                } catch (err) {
+                                  console.warn('[DepositPanel] provisionOpdLinkForBookingPair failed:', err);
+                                  alert('สร้างลิ้งค์ไม่สำเร็จ: ' + (err?.message || String(err)));
+                                } finally {
+                                  setSendLinkBusyId('');
+                                }
+                              }}
+                              data-testid="deposit-send-link-btn"
+                              className={`ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                dep.linkedOpdSessionId
+                                  ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50'
+                                  : 'bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50'
+                              } disabled:opacity-50`}
+                              disabled={sendLinkBusyId === (dep.depositId || dep.id)}
+                              title={dep.linkedOpdSessionId
+                                ? 'ดู / พิมพ์ลิ้งค์ที่ส่งให้ลูกค้าแล้ว'
+                                : 'สร้างลิ้งค์สำหรับลูกค้ากรอกข้อมูล OPD'}
+                            >
+                              {dep.linkedOpdSessionId ? (
+                                <>
+                                  <QrCode size={10} />
+                                  ดูลิ้งค์ที่ส่งไป
+                                </>
+                              ) : (
+                                <>
+                                  <Send size={10} />
+                                  ส่งลิ้งค์ลูกค้า
+                                </>
+                              )}
+                            </button>
                           </div>
                         )}
                       </td>
@@ -658,6 +731,24 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
       {/* Modals */}
       {viewingDeposit && <DetailModal dep={viewingDeposit} isDark={isDark} onClose={() => setViewingDeposit(null)} />}
+
+      {/* Phase 24.0-vicies-novies (2026-05-07) — share-link modal for
+          customer-later deposit cards. Surfaces URL + QR + copy/print
+          helpers after provisionOpdLinkForBookingPair mints the session. */}
+      {sendLinkModal && (
+        <SendCustomerLinkModal
+          isOpen={true}
+          onClose={async () => {
+            setSendLinkModal(null);
+            // Refresh list so the linkedOpdSessionId badge flips on the row.
+            try { await loadList(); } catch { /* best-effort */ }
+          }}
+          sessionId={sendLinkModal.sessionId}
+          url={sendLinkModal.url}
+          sessionName={sendLinkModal.sessionName}
+          alreadyProvisioned={sendLinkModal.alreadyProvisioned}
+        />
+      )}
 
       {/* Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" modal.
           existingDepositId prop tells AppointmentFormModal to use

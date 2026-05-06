@@ -59,7 +59,11 @@ describe('Phase 15.7-sexies — Appointment modal delete button', () => {
 
     it('SX3.5 delete button uses Trash2 icon from lucide-react', () => {
       expect(ModalSrc).toMatch(/Trash2/);
-      expect(ModalSrc).toMatch(/Trash2,?\s*\}\s*from\s*'lucide-react'/);
+      // Phase 24.0-vicies-novies (2026-05-07) — regex relaxed: lucide-react
+      // import block now includes Send + QrCode after Trash2, so Trash2 is
+      // no longer the last symbol before `}`. Pattern updated to allow
+      // additional imports + still anchor on the lucide-react module.
+      expect(ModalSrc).toMatch(/Trash2[\s\S]*?\}\s*from\s*'lucide-react'/);
     });
 
     it('SX3.6 delete button positioned LEFT (separated from save/cancel pair via flex-1 spacer)', () => {

@@ -247,7 +247,9 @@ describe('Phase 24.0-terdecies — DepositPanel Finance display source-grep', ()
   });
 
   it('CLF.D.3 — badge label "ลูกค้าจอง" + name + phone surfaces in same render block', () => {
-    const block = DEPOSIT_PANEL.match(/data-testid="deposit-customer-temp-badge"[\s\S]{0,800}<\/div>/);
+    // Phase 24.0-vicies-novies (2026-05-07) — bound bumped {0,800} → {0,8000}
+    // because the badge block grew with the new "ส่งลิ้งค์ลูกค้า" button.
+    const block = DEPOSIT_PANEL.match(/data-testid="deposit-customer-temp-badge"[\s\S]{0,8000}?<\/div>/);
     expect(block).toBeTruthy();
     expect(block[0]).toMatch(/ลูกค้าจอง/);
     expect(block[0]).toContain('dep.customerNameTemp');

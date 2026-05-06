@@ -79,7 +79,10 @@ describe('Phase 21.0 — F1 lockedAppointmentType prop', () => {
   });
 
   test('F1.12 createDepositBookingPair imported + called when isCreatingDepositBooking', () => {
-    expect(SRC).toMatch(/import\s*\{\s*createDepositBookingPair\s*\}\s*from\s*['"]\.\.\/\.\.\/lib\/appointmentDepositBatch\.js['"]/);
+    // Phase 24.0-vicies-novies (2026-05-07) — multi-export import shape now.
+    // The import block also includes provisionOpdLinkForBookingPair so the
+    // regex must allow other imports between the braces.
+    expect(SRC).toMatch(/import\s*\{[\s\S]*?createDepositBookingPair[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/lib\/appointmentDepositBatch\.js['"]/);
     // Save handler has the isCreatingDepositBooking branch
     expect(SRC).toMatch(/else if \(isCreatingDepositBooking\)/);
     // …which builds depositData…

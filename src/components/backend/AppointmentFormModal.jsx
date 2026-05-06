@@ -25,6 +25,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, X, Loader2, CheckCircle2, AlertCircle, Trash2,
+  // Phase 24.0-vicies-novies (2026-05-07) — "ส่งลิ้งค์ลูกค้า" button icons.
+  Send, QrCode,
 } from 'lucide-react';
 // Phase 15.7-septies (2026-04-29) — open customer detail in a NEW BROWSER TAB
 // instead of in-page redirect. User: "เปิด Tab ของ Browser ใหม่... ไม่ใช่
@@ -49,7 +51,15 @@ import {
 // preserved: AppointmentFormModal (this file, when type='deposit-booking')
 // + DepositPanel both call createDepositBookingPair → identical paired
 // (be_deposits + be_appointments) shape, no drift possible.
-import { createDepositBookingPair } from '../../lib/appointmentDepositBatch.js';
+import {
+  createDepositBookingPair,
+  // Phase 24.0-vicies-novies (2026-05-07) — provision opd_sessions + stamp
+  // linkedOpdSessionId on the existing customer-later appointment + linked
+  // deposit so the bookings auto-attach when admin clicks "บันทึกลง OPD".
+  provisionOpdLinkForBookingPair,
+} from '../../lib/appointmentDepositBatch.js';
+// Phase 24.0-vicies-novies (2026-05-07) — share-link modal (URL + QR + copy).
+import SendCustomerLinkModal from './SendCustomerLinkModal.jsx';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision, TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
@@ -278,6 +288,11 @@ export default function AppointmentFormModal({
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Phase 24.0-vicies-novies (2026-05-07) — send-link modal state. Holds the
+  // resolved {sessionId, url, sessionName, alreadyProvisioned} after admin
+  // clicks "ส่งลิ้งค์ลูกค้า" on a customer-later appointment in edit mode.
+  const [sendLinkModal, setSendLinkModal] = useState(null);
+  const [sendLinkBusy, setSendLinkBusy] = useState(false);
 
   // ── Data loaders ──
   const [customers, setCustomers] = useState([]);
@@ -813,6 +828,66 @@ export default function AppointmentFormModal({
                   />
                 </div>
                 <p className="col-span-2 text-[10px] text-[var(--tx-muted)] italic mt-0.5">นัดถูกบันทึกโดยยังไม่ผูกลูกค้า — สามารถผูกข้อมูลลูกค้าจริงภายหลังได้</p>
+                {/* Phase 24.0-vicies-novies (2026-05-07) — "ส่งลิ้งค์ลูกค้า"
+                    button. Visible ONLY in edit mode (we need a saved
+                    appointmentId to provision the link). Click → mints
+                    opd_sessions + stamps linkedOpdSessionId on the appt +
+                    linked deposit so the bookings auto-attach when admin
+                    clicks "บันทึกลง OPD" on the customer's submitted form.
+                    Idempotent — re-clicking shows the same URL/QR. */}
+                {mode === 'edit' && appt && (appt.appointmentId || appt.id) && (
+                  <div className="col-span-2 mt-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (sendLinkBusy) return;
+                        setSendLinkBusy(true);
+                        try {
+                          const apptId = appt.appointmentId || appt.id;
+                          const r = await provisionOpdLinkForBookingPair({
+                            depositId: appt.linkedDepositId || appt.spawnedFromDepositId || '',
+                            appointmentId: apptId,
+                            branchId: appt.branchId || selectedBranchId || '',
+                            formType: 'intake',
+                            sessionName: formData.customerNameTemp
+                              || appt.customerNameTemp
+                              || 'ลูกค้าจอง',
+                          });
+                          setSendLinkModal({
+                            sessionId: r.sessionId,
+                            url: r.url,
+                            sessionName: formData.customerNameTemp || appt.customerNameTemp || 'ลูกค้าจอง',
+                            alreadyProvisioned: r.alreadyProvisioned,
+                          });
+                        } catch (err) {
+                          console.warn('[AppointmentFormModal] provisionOpdLinkForBookingPair failed:', err);
+                          setError('สร้างลิ้งค์ไม่สำเร็จ: ' + (err?.message || String(err)));
+                        } finally {
+                          setSendLinkBusy(false);
+                        }
+                      }}
+                      disabled={sendLinkBusy}
+                      data-testid="appt-modal-send-link-btn"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition-colors ${
+                        appt.linkedOpdSessionId
+                          ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50'
+                          : 'bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50'
+                      } disabled:opacity-50`}
+                      title={appt.linkedOpdSessionId
+                        ? 'ดู / พิมพ์ลิ้งค์ที่ส่งให้ลูกค้าแล้ว'
+                        : 'สร้างลิ้งค์สำหรับลูกค้ากรอกข้อมูล OPD จากระยะไกล'}
+                    >
+                      {sendLinkBusy ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : appt.linkedOpdSessionId ? (
+                        <QrCode size={12} />
+                      ) : (
+                        <Send size={12} />
+                      )}
+                      {appt.linkedOpdSessionId ? 'ดูลิ้งค์ที่ส่งไป' : 'ส่งลิ้งค์ลูกค้ากรอก OPD'}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : lockedCustomer || formData.customerName ? (
               <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
@@ -1227,6 +1302,20 @@ export default function AppointmentFormModal({
           </button>
         </div>
       </div>
+      {/* Phase 24.0-vicies-novies (2026-05-07) — share-link modal for the
+          pickLater section's "ส่งลิ้งค์ลูกค้า" button. Renders OUTSIDE the
+          form panel so its z-100 backdrop doesn't trap the form's outer
+          backdrop click handler. */}
+      {sendLinkModal && (
+        <SendCustomerLinkModal
+          isOpen={true}
+          onClose={() => setSendLinkModal(null)}
+          sessionId={sendLinkModal.sessionId}
+          url={sendLinkModal.url}
+          sessionName={sendLinkModal.sessionName}
+          alreadyProvisioned={sendLinkModal.alreadyProvisioned}
+        />
+      )}
     </div>
   );
 }
