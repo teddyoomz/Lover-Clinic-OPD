@@ -9242,7 +9242,7 @@ export function listenToUserPermissions(uid, onChange, onError) {
 // overwrites the same doc ids while preserving `createdAt`.
 // @dev-only — removed with MasterDataTab per rule H-bis.
 
-function mapMasterToProductGroup(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToProductGroup(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // Phase 11.9: normalize 4-option legacy type → 2-option via validator helper.
   // ProClinic API returns 'ยากลับบ้าน' / 'สินค้าสิ้นเปลือง' directly (verified
@@ -9285,7 +9285,7 @@ function mapMasterToProductGroup(src, id, now, existingCreatedAt, branchId = '')
   };
 }
 
-function mapMasterToProductUnit(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToProductUnit(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // Expected shape: { groupName|name, units: [{name, amount}] }
   // ProClinic may ship as flat { unit_name: 'amp', unit_amount: 10 } array —
@@ -9309,7 +9309,7 @@ function mapMasterToProductUnit(src, id, now, existingCreatedAt, branchId = '') 
   };
 }
 
-function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   return {
     instrumentId: id,
@@ -9329,7 +9329,7 @@ function mapMasterToMedicalInstrument(src, id, now, existingCreatedAt, branchId 
   };
 }
 
-function mapMasterToHoliday(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToHoliday(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   const type = src.type === 'weekly' ? 'weekly' : 'specific';
   const base = {
@@ -9351,7 +9351,7 @@ function mapMasterToHoliday(src, id, now, existingCreatedAt, branchId = '') {
   return base;
 }
 
-function mapMasterToBranch(src, id, now, existingCreatedAt) {
+export function mapMasterToBranch(src, id, now, existingCreatedAt) {
   if (!id) return null;
   const coerceNum = (v) => (v === '' || v == null) ? null : Number(v);
   return {
@@ -9374,7 +9374,7 @@ function mapMasterToBranch(src, id, now, existingCreatedAt) {
   };
 }
 
-function mapMasterToPermissionGroup(src, id, now, existingCreatedAt) {
+export function mapMasterToPermissionGroup(src, id, now, existingCreatedAt) {
   if (!id) return null;
   const incoming = (src.permissions && typeof src.permissions === 'object' && !Array.isArray(src.permissions)) ? src.permissions : {};
   const perms = {};
@@ -9485,7 +9485,7 @@ export async function migrateMasterPermissionGroupsToBe() {
 //     branchId, createdBy, createdAt, updatedAt }
 // Doc id = ProClinic numeric id (validator relaxed in Phase 14.x to accept).
 
-function mapMasterToDfGroup(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToDfGroup(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // ProClinic status label is ใช้งาน/พักใช้งาน; be_df_groups uses active/disabled.
   const rawStatus = String(src.status || src.df_status || '').trim();
@@ -9532,7 +9532,7 @@ export async function migrateMasterDfGroupsToBe({ branchId = '' } = {}) {
 //   { staffId, staffName, rates: [...] }
 // Doc id = staffId (ProClinic numeric id).
 
-function mapMasterToDfStaffRates(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToDfStaffRates(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   const rates = Array.isArray(src.rates) ? src.rates.map((r) => {
     const t = String(r?.type || '').toLowerCase();
@@ -9580,7 +9580,7 @@ const walletTypeDoc = (id) => doc(db, ...basePath(), 'be_wallet_types', String(i
 const membershipTypesCol = () => collection(db, ...basePath(), 'be_membership_types');
 const membershipTypeDoc = (id) => doc(db, ...basePath(), 'be_membership_types', String(id));
 
-function mapMasterToWalletType(src, id, now, existingCreatedAt) {
+export function mapMasterToWalletType(src, id, now, existingCreatedAt) {
   if (!id) return null;
   return {
     walletTypeId: String(id),
@@ -9601,7 +9601,7 @@ export async function migrateMasterWalletTypesToBe() {
   });
 }
 
-function mapMasterToMembershipType(src, id, now, existingCreatedAt) {
+export function mapMasterToMembershipType(src, id, now, existingCreatedAt) {
   if (!id) return null;
   return {
     membershipTypeId: String(id),
@@ -9636,7 +9636,7 @@ export async function migrateMasterMembershipTypesToBe() {
 const medicineLabelsCol = () => collection(db, ...basePath(), 'be_medicine_labels');
 const medicineLabelDoc = (id) => doc(db, ...basePath(), 'be_medicine_labels', String(id));
 
-function mapMasterToMedicineLabel(src, id, now, existingCreatedAt) {
+export function mapMasterToMedicineLabel(src, id, now, existingCreatedAt) {
   if (!id) return null;
   return {
     labelId: String(id),
@@ -9917,7 +9917,7 @@ export async function deleteDoctor(doctorId) {
 // permission toggles land in be_* only when a human fills the CRUD form.
 // @dev-only — part of Rule H-bis strip list.
 
-function mapMasterToStaff(src, id, now, existingCreatedAt) {
+export function mapMasterToStaff(src, id, now, existingCreatedAt) {
   if (!id) return null;
   // Split scraped "name" into first + last if possible.
   const rawName = String(src.name || src.firstname || '').trim();
@@ -9953,7 +9953,7 @@ function mapMasterToStaff(src, id, now, existingCreatedAt) {
   };
 }
 
-function mapMasterToDoctor(src, id, now, existingCreatedAt) {
+export function mapMasterToDoctor(src, id, now, existingCreatedAt) {
   if (!id) return null;
   const rawName = String(src.name || src.firstname || '').trim();
   const parts = rawName.split(/\s+/);
@@ -10151,7 +10151,7 @@ export async function deleteCourse(courseId) {
 // ─── Phase 12.2: master_data → be_* (products + courses) ───────────────────
 // @dev-only scaffolding per rule H-bis.
 
-function mapMasterToProduct(src, id, now, existingCreatedAt, branchId = '') {
+export function mapMasterToProduct(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   // ProClinic master_data may store productType as 'ยากลับบ้าน' when coming
   // from the product-group enriched sync (Phase 11.9 switched to JSON API
