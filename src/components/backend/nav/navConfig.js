@@ -199,6 +199,8 @@ export const NAV_SECTIONS = [
       { id: 'link-requests',        label: 'คำขอผูก LINE',          icon: MessageCircle, color: 'emerald', palette: 'line link request approve reject pending bot id national passport ลายน์ คำขอ ผูก อนุมัติ รอ ตรวจสอบ' },
       // Phase 16.3 (2026-04-29) — System Settings tab.
       { id: 'system-settings',      label: 'ตั้งค่าระบบ',           icon: Settings,      color: 'amber', palette: 'system settings tab visibility override default deposit points feature flag negative stock toggle ระบบ ตั้งค่า แท็บ ค่าเริ่มต้น มัดจำ คะแนน สต็อคติดลบ' },
+      // V40 (2026-05-07) — Branch Backup/Restore tab. Admin-only.
+      { id: 'branch-backup',        label: 'Backup สาขา',           icon: Database,      color: 'amber', palette: 'backup restore branch export import สาขา สำรอง นำเข้า กู้คืน branch-backup snapshot' },
     ],
   },
 ];

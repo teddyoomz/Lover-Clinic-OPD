@@ -108,6 +108,11 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // (Q2-C: NEW key `system_config_management`) so owner can grant to
   // head-of-ops without giving full admin claim. Admin bypass implicit.
   'system-settings':     { requires: ['system_config_management'] },
+
+  // V40 (2026-05-07) — Branch Backup/Restore tab. Admin-only (destructive
+  // ops: export/import/make-fresh). No separate permission key needed —
+  // admin bypass is the intended gate for this system-level tool.
+  'branch-backup':       { adminOnly: true },
 });
 
 /**

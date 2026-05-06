@@ -192,7 +192,7 @@ describe('section integrity', () => {
     expect(ids).toEqual(expect.arrayContaining(['clone', 'customers']));
   });
 
-  it('I4 master section owns Sync + 6 P11 + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 1 V32-tris-ter (line-settings) + Phase 16.3 system-settings tabs', () => {
+  it('I4 master section owns Sync + 6 P11 + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 1 V32-tris-ter (line-settings) + Phase 16.3 system-settings + V40 branch-backup tabs', () => {
     // P11.1: 6 CRUD stubs. P12.1: staff + doctors. P13.2: staff-schedules +
     // doctor-schedules (Phase 13.2.7 split, 2026-04-26).
     // P12.2: products + courses. P12.5: finance-master. P13.3: df-groups.
@@ -223,6 +223,7 @@ describe('section integrity', () => {
       'line-settings',
       'link-requests',
       'system-settings',
+      'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
     ]);
   });
 

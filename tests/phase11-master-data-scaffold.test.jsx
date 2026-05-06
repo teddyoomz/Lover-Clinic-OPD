@@ -64,6 +64,7 @@ const MASTER_STUB_IDS = [
   'line-settings',  // V32-tris-ter (2026-04-26) LINE OA settings
   'link-requests',  // V32-tris-quater (2026-04-26) LINE link-request approval queue
   'system-settings', // Phase 16.3 (2026-04-29) admin-gated system config
+  'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
 ];
 
 const MASTER_SECTION_ITEM_IDS = ['masterdata', ...MASTER_STUB_IDS];
@@ -77,9 +78,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 20 items — 1 sync + 6 P11 + 1 P18 (exam-rooms) + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings', () => {
+  it('M2 master section has exactly 21 items — 1 sync + 6 P11 + 1 P18 (exam-rooms) + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings + 1 V40 branch-backup', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(20);
+    expect(master.items.length).toBe(21);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 
