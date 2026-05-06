@@ -1,38 +1,39 @@
 ---
-updated_at: "2026-05-06 EOD — Phase 21.0 trilogy + Phase 22.0 trilogy SHIPPED"
-status: "master ahead-of-prod ~60 commits · prod=024f6dd FROZEN · 5857/5862 tests pass · local-only workflow"
-current_focus: "Idle. Phase 21.0 (appointment sub-tabs) + Phase 22.0 (sync reset + kiosk branch + schedule branch) all on origin/master."
-branch: "master (via worktree claude/unruffled-heyrovsky-f68428)"
-last_commit: "d378cf5"
-tests: 5857
+updated_at: "2026-05-06 EOD — Phase 23.0 + Phase 24.0 customer-delete trilogy SHIPPED"
+status: "master ahead-of-prod ~50 commits · prod=024f6dd FROZEN · 6056/6056 tests pass · local-only workflow"
+branch: "master"
+last_commit: "4240abc"
+tests: 6056
 production_url: "https://lover-clinic-app.vercel.app (FROZEN at V15 #22)"
 production_commit: "024f6dd"
 firestore_rules_version: 26
-storage_rules_version: 2
 ---
 
 # Active Context
 
 ## State
-- master=`d378cf5` ahead-of-prod ~60 commits · prod=`024f6dd` FROZEN per no-deploy directive 2026-05-06
-- 5857 PASS / 5862 total (5 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B PF.4)
-- Local-only workflow (no Vercel deploys; data ops via Rule M admin-SDK from local)
+- master=`4240abc` · 6056/6056 tests pass · build clean
+- prod frozen at `024f6dd` (V15 #22 LIVE 2026-05-05); no-deploy directive active
+- Local dev via `npm run dev`; data ops via Rule M admin-SDK + `vercel env pull`
 
-## What this session shipped (10 commits)
-- Phase 21.0 main + TDZ hotfix + bis/ter/quater/quinquies/sexies/septies — appointment sub-tabs (5 sub-tabs incl. ทุกประเภท overview), embedded deposit subform, position-stable refactor (empty-grid bug fix), UI polish, occupied-cell border skip, purpose-size parity. Detail: `.agents/sessions/2026-05-06-phase-21-0-appointment-sub-tabs.md` + this session's checkpoint.
-- Phase 22.0a sync-status reset (e16ed7b) — Rule M migration, **LIVE-APPLIED on prod**: 65 opd_sessions wiped + 449 pc_customers + 10 pc_appointments + 244 pc_courses syncedAt cleared = **768 docs status-flipped, 0 deletions**. Audit: `be_admin_audit/phase-22-0a-sync-status-reset-1778057983371-ceadb4fe`
-- Phase 22.0b kiosk modal branch correctness (2cec108) — fetchDepositOptions branch-filter (doctors/staff via filter helpers), assistants dropdown fix (was BROKEN), confirmCreateDeposit pair-helper wire (atomic be_deposits + be_appointments), confirmCreateNoDeposit explicit branchId stamp
-- Phase 22.0c schedule + clinic-prefs branch separation (d378cf5) — clinic_schedules.branchId stamp, list filter by branch, schedule_prefs__{branchId} per-branch doc-id, updateActiveSchedules per-schedule branchId query
-- 5 NEW test files: phase-21-0-quinquies-visual-polish (19) + phase-22-0a-sync-status-reset (23) + phase-22-0b-kiosk-modal-branch-correctness (23) + phase-22-0c-schedule-link-branch-separation (16) + phase-21-0-tab-redirect updates
+## What this session shipped
+- Phase 21.0 + 22.0 trilogies merged from side-branch (15 commits fast-forward)
+- Phase 23.0 — kiosk modal channel dropdown + 4 explicit branchId stamps + sparse-patient bug fix (V12 mirror) + cache schema-version guard
+- **Phase 24.0 customer-delete suite** (main + bis through decies, ~25 commits):
+  - Cascade delete 11 collections + audit doc + dual perm gate (`customer_delete` || isAdmin)
+  - 1-dropdown authorizer (collapsed from 3 via optgroup); HN counter monotonic-no-reuse regression-locked
+  - Client-side Firestore path (no /api/admin fetch — works on `npm run dev`) + graceful-skip 5 rule-locked collections
+  - Force-refresh token + best-effort audit + identity-based dedup recovery (citizen_id/passport/phone match before re-create)
+  - kiosk Thai gender translation (ชาย/หญิง/LGBTQ+ → M/F/LGBTQ); customer_type='ลูกค้าทั่วไป' auto; emergencyRelation → contact_1_relation canonical
+  - หมายเหตุทั่วไป amber box on CustomerDetailView left column
 
-Detail: `.agents/sessions/2026-05-06-phase-21-22-trilogy.md`
+Detail: `.agents/sessions/2026-05-06-phase-23-24-trilogy.md`
 
 ## Next action
-Idle. All 6 phases (21.0 main+bis+ter+quater+quinquies+sexies+septies + 22.0a+b+c) on origin/master. Open NEW chat to start the next directive.
+Idle. Open new chat for next directive.
 
-## Outstanding user-triggered actions
-- 🚨 H-bis ProClinic full strip (delete brokerClient.js + api/proclinic/* + cookie-relay/ + MasterDataTab + clinic_settings/proclinic_session* docs)
-- Hard-gate Firebase claim (deploy-coupled — skipped under no-deploy)
-- /audit-all (pre-release pass)
-- Modal extraction (cosmetic refactor)
-- Manual-sync-to-be_* UI button (post-22.0a sync reset prepared the data; UI not yet built)
+## Outstanding (user-triggered)
+- 🚨 H-bis ProClinic full strip (`brokerClient.js` + `api/proclinic/*` + `cookie-relay/` + `MasterDataTab` + `clinic_settings/proclinic_session*`)
+- Hard-gate Firebase custom claim (deploy-coupled — skipped under no-deploy)
+- /audit-all pre-release pass
+- BackendDashboard nav restructure (deferred from Phase 20.0 EOD)

@@ -7,12 +7,29 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-06 EOD — Phase 21.0 trilogy + Phase 22.0 trilogy SHIPPED (incl. live-applied sync-status reset migration on prod). Master ahead-of-prod ~60 commits. Local-only workflow per user directive.
+- **Date last updated**: 2026-05-06 EOD continuation 4 — Phase 23.0 + Phase 24.0 customer-delete suite SHIPPED (~30 commits). Master ahead-of-prod ~50 commits. Local-only workflow per user directive.
 - **Branch**: `master`
-- **Last commit**: `d378cf5` — feat(phase-22-0c): AdminDashboard schedule + clinic-prefs branch separation
-- **Test count**: **5857** PASS / 5862 total (5 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B PF.4)
+- **Last commit**: `4240abc` — feat(phase-24-0-nonies+decies): kiosk gender + customer_type + relation field + note box
+- **Test count**: **6056 PASS / 6056 total** (full green; previously-flaky phase15.5b PF.4 also recovered)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~60 commits.
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~50 commits.
+
+### Session 2026-05-06 EOD continuation 4 — Phase 23.0 + Phase 24.0 customer-delete suite
+
+**Phase 23.0** — kiosk modal channel dropdown (key-name mismatch fix) + 4 explicit branchId stamps on addCustomer + sparse-patient bug fix (V12 mirror — addCustomer expected canonical snake_case but received camelCase) + cache schema-version guard. NEW `kioskPatientToCanonical` helper at top of AdminDashboard wired at 3 call sites.
+
+**Phase 24.0 customer-delete suite** (main + bis through decies, ~25 commits):
+- Cascade delete 11 collections + audit doc + dual perm gate (`customer_delete` claim || isAdmin)
+- 1-dropdown authorizer (collapsed from 3 via HTML optgroup); HN counter monotonic-no-reuse regression-locked
+- Client-side Firestore path (no /api/admin fetch — works on `npm run dev` per local-only directive); server endpoint preserved for production deploy
+- Graceful-skip 5 rule-locked collections (link_requests, customer_link_tokens, wallet_tx, point_tx, course_changes); audit doc records cascadeSkipped[]
+- Force-refresh ID token + best-effort audit + identity-based dedup recovery (citizen_id/passport/phone match before re-create; tie-break to highest-confidence; ambiguous → admin disambiguates)
+- kiosk Thai gender translation (ชาย/หญิง/LGBTQ+ → M/F/LGBTQ); customer_type='ลูกค้าทั่วไป' auto; emergencyRelation → contact_1_relation canonical
+- หมายเหตุทั่วไป amber box on CustomerDetailView left column (visible to doctor)
+
+5 NEW phase-24-0-* test files (83 tests) + extensive contract updates. Build clean. NO DEPLOY.
+
+Detail: `.agents/sessions/2026-05-06-phase-23-24-trilogy.md`
 
 ### Session 2026-05-06 EOD continuation 3 — Phase 21.0 trilogy + Phase 22.0 trilogy (10 commits)
 
@@ -477,31 +494,26 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-06 EOD continuation 3.
+Resume LoverClinic — continue from 2026-05-06 EOD continuation 4.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=d378cf5, prod=024f6dd FROZEN V15 #22)
-3. .agents/active.md (5857 tests; ~60 commits ahead-of-prod)
+2. SESSION_HANDOFF.md (master=4240abc, prod=024f6dd FROZEN V15 #22)
+3. .agents/active.md (6056 tests; ~50 commits ahead-of-prod)
 4. .claude/rules/00-session-start.md (iron-clad A-M + V-summary)
-5. .agents/sessions/2026-05-06-phase-21-22-trilogy.md
+5. .agents/sessions/2026-05-06-phase-23-24-trilogy.md
 
-Status: master=d378cf5, 5857/5862 tests pass (5 pre-existing CRLF failures unrelated), prod=024f6dd FROZEN per no-deploy directive. master ahead-of-prod ~60 commits with Phase 21.0 trilogy (appointment sub-tabs incl. ทุกประเภท overview + embedded deposit subform + UI polish + position-stable refactor) + Phase 22.0 trilogy (sync-status reset LIVE-APPLIED on prod 768 docs flipped 0 deletions + kiosk modal branch correctness + schedule branch separation).
+Status: master=4240abc, 6056/6056 tests pass (full green), prod=024f6dd FROZEN per no-deploy. master ahead-of-prod ~50 commits with Phase 21/22 (merged from side-branch) + Phase 23.0 (kiosk modal channel + branchId stamps + sparse-patient V12 mirror fix + cache schema-version) + Phase 24.0 customer-delete suite (main + bis through decies, ~25 commits): cascade 11 collections + dual perm gate + 1-dropdown authorizer + client-side Firestore (no /api fetch dependency for local) + graceful-skip 5 rule-locked collections + identity-based dedup recovery + Thai gender translation + customer_type='ลูกค้าทั่วไป' + contact_1_relation canonical + หมายเหตุทั่วไป box.
 
-Next action: idle. Open new chat for next directive. Possible next directions:
-- H-bis ProClinic full strip
-- Manual-sync-to-be_* UI button (post-22.0a sync reset prepared the data)
-- /audit-all pre-release pass
-- Phase 23+ as user directs
+Next action: idle. Open new chat for next directive.
 
 Outstanding (user-triggered):
 - 🚨 H-bis ProClinic full strip (brokerClient + api/proclinic + cookie-relay + MasterDataTab + clinic_settings/proclinic_session*)
 - Hard-gate Firebase custom claim (deploy-coupled — skipped under no-deploy)
-- /audit-all readiness pass
-- Modal extraction (cosmetic)
-- Manual-sync-to-be_* UI (data prepared; UI not yet built)
+- /audit-all pre-release pass
+- BackendDashboard nav restructure (deferred from Phase 20.0 EOD)
 
-Rules: NO Vercel deploys (local-only `feedback_local_only_no_deploy.md`); Rule M data-ops local+admin-SDK+pull-env (preserves data — NEVER delete customer data per user 2026-05-06 "อย่าลบข้อมูลลูกค้าใน frontend"); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); V36.G.51 (data layer no .jsx imports); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: NO Vercel deploys (local-only `feedback_local_only_no_deploy.md`); Rule M data-ops local+admin-SDK+pull-env (preserves data — NEVER delete customer data per user 2026-05-06 "อย่าลบข้อมูลลูกค้าใน frontend"); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
