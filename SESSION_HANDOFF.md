@@ -7,12 +7,46 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-06 EOD — Phase 20.0 + Final ProClinic UI strip + per-branch filter + 467-doc hotfix migration. Master ahead-of-prod ~40 commits. Local-only workflow per user directive.
+- **Date last updated**: 2026-05-06 EOD — Phase 21.0 SHIPPED + acceptance gate 8/8 PASS. Master ahead-of-prod ~50 commits. Local-only workflow per user directive.
 - **Branch**: `master`
-- **Last commit**: `79084bc` — docs(agents): EOD wrap — ProClinic UI strip + per-branch filter complete
-- **Test count**: **5742+** (Phase 20.0 + audits + V33.13/14 + AppointmentTab roomId + SaleTab + brokerClient strip)
+- **Last commit**: `73c9fa4` — docs(agents): EOD 2026-05-06 wrap — Phase 21.0 appointment sub-tabs SHIPPED + acceptance gate 8/8 PASS (Phase 21.0 feat at `fa366f2`)
+- **Test count**: **5771** PASS / 5777 total (6 pre-existing FAIL unrelated — V33.7.G CRLF + V33.8.F CRLF + Phase 15.5B.PF.4 stale)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~40 commits with all Phase 20.0 work. End-to-end branch isolation verified live (นครราชสีมา 68 รายการ vs พระราม 3 0 รายการ).
+- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~50 commits.
+
+### Session 2026-05-06 EOD (continuation 2) — Phase 21.0 Appointment Sub-Tabs + Deposit-Booking Pair Atomicity
+
+User authorized full autonomous run: "approve และ approve review ด้วย แล้วทำให้จบ แล้วเทสตามที่บอกไปเลย จะออกไปข้างนอก ฝากด้วย แบบอยู่ในกฎเกนของเรา และใช้ได้จริงแบบที่หวัง ด้วยความสามารถสูงสุดของนาย".
+
+Workflow: Skill(brainstorming) HARD-GATE (Rule J) → 2 design Qs locked (A=section-with-4-tabs, B=uniform-calendar) → spec doc (`82dbb84`) → 7 source impl → build clean → 8 NEW test files (111 tests, all PASS) → migration script (Rule M) `--apply` (0 docs to migrate, idempotent) → acceptance gate per-branch × per-type matrix (8/8 PASS, zero leakage) → commit (`fa366f2`) + push.
+
+**Scope**:
+- Nav: move นัดหมาย from PINNED to NAV section with 4 sub-tabs (จองไม่มัดจำ / จองมัดจำ / คิวรอทำหัตถการ / คิวติดตามอาการ)
+- View: RENAME `AppointmentTab.jsx` → `AppointmentCalendarView.jsx` + `appointmentType` prop + typedDayAppts filter (defense-in-depth via `migrateLegacyAppointmentType`)
+- Modal: AppointmentFormModal `lockedAppointmentType` prop. When set='deposit-booking': hides save button + redirects admin to Finance.มัดจำ (DepositPanel = sole writer, V12 single-writer lock)
+- Pair atomicity: NEW `src/lib/appointmentDepositBatch.js` — writeBatch creates BOTH be_deposits + be_appointments docs atomically with cross-link fields (linkedAppointmentId / linkedDepositId). Closes pre-Phase-21.0 visibility gap (deposit-bookings NEVER appeared in any AppointmentTab grid before)
+- DepositPanel: routes hasAppointment=true creates to pair helper; pair-cancel for linkedAppointmentId
+- BackendDashboard: 4 new tab cases + `?tab=appointments` legacy URL redirect to `?tab=appointment-no-deposit`
+- Permissions: 4 sub-tab gates (same set as legacy 'appointments'), firstAllowedTab default updated
+- Migration (Rule M): NEW `phase-21-0-migrate-appointment-types-strict.mjs` two-phase. Result: 0 docs to migrate (Phase 19.0/20.0 already cleaned). Audit: `be_admin_audit/phase-21-0-strict-and-backfill-1778047714399-b09eefdc`
+- Acceptance gate: NEW `phase-21-0-acceptance-gate.mjs` — admin-SDK matrix verification on real prod. 2 branches (นครราชสีมา + พระราม 3) × 4 types × 2 fixtures = 16 TEST-APPT-* docs (V33.13 prefix). Result: 8/8 PASS, zero leakage. 16 fixtures cleaned.
+
+**Acceptance gate result** (per user verbatim "ทำแล้วเทสด้วยว่าแสดงจริง..."):
+```
+Branch                       | Type                | Pass
+─────────────────────────────┼─────────────────────┼─────
+นครราชสีมา (BR-1777873...)   | no-deposit-booking  |  ✓
+นครราชสีมา (BR-1777873...)   | deposit-booking     |  ✓
+นครราชสีมา (BR-1777873...)   | treatment-in        |  ✓
+นครราชสีมา (BR-1777873...)   | follow-up           |  ✓
+พระราม 3 (BR-1777885...)     | no-deposit-booking  |  ✓
+พระราม 3 (BR-1777885...)     | deposit-booking     |  ✓
+พระราม 3 (BR-1777885...)     | treatment-in        |  ✓
+พระราม 3 (BR-1777885...)     | follow-up           |  ✓
+Overall: ✓ PASS (8/8)
+```
+
+Detail: `.agents/sessions/2026-05-06-phase-21-0-appointment-sub-tabs.md`
 
 ### Session 2026-05-06 EOD — Final ProClinic UI strip + per-branch filter + hotfix
 
