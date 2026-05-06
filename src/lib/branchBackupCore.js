@@ -16,7 +16,9 @@ const T1_COLLECTIONS = Object.freeze([
   'be_products',
   'be_courses',
   'be_product_groups',
-  'be_product_unit_groups',
+  'be_product_units',         // canonical (firestore.rules + backendClient)
+  'be_product_unit_groups',   // V39 cross-branch-import adapter writes here too
+  'be_exam_rooms',            // Phase 18.0 — branch-spread per COLLECTION_MATRIX
   'be_medical_instruments',
   'be_holidays',
   'be_df_groups',
@@ -29,6 +31,8 @@ const T1_COLLECTIONS = Object.freeze([
   'be_staff_schedules',
 ]);
 
+// be_deposits + be_link_requests are scope:'global' in COLLECTION_MATRIX
+// but stamp branchId at capture, so per-branch backup is meaningful.
 /** T2 — Transactions (high volume). */
 const T2_COLLECTIONS = Object.freeze([
   'be_treatments',

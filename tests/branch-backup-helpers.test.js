@@ -19,6 +19,15 @@ describe('H1 — BSA tier matrix', () => {
     expect(TIER_MAP[BACKUP_TIER_T1]).toContain('be_promotions');
   });
 
+  it('H1.5 — T1 includes both be_product_units (rules-canonical) and be_product_unit_groups (V39 adapter target)', () => {
+    expect(TIER_MAP[BACKUP_TIER_T1]).toContain('be_product_units');
+    expect(TIER_MAP[BACKUP_TIER_T1]).toContain('be_product_unit_groups');
+  });
+
+  it('H1.6 — T1 includes be_exam_rooms (Phase 18.0 branch-spread)', () => {
+    expect(TIER_MAP[BACKUP_TIER_T1]).toContain('be_exam_rooms');
+  });
+
   it('H1.3 — T3 contains stock_movements (V34 immutable)', () => {
     expect(TIER_MAP[BACKUP_TIER_T3]).toContain('be_stock_movements');
   });
