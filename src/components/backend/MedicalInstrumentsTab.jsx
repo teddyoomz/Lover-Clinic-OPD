@@ -48,7 +48,10 @@ export default function MedicalInstrumentsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      setItems(await listMedicalInstruments({ branchId: selectedBranchId }));
+      // Phase 24.0-vicies-novies-septies (2026-05-07) — medical instruments
+      // are catalog entity (clinic-wide); migrate mapper doesn't stamp branchId.
+      // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
+      setItems(await listMedicalInstruments({ allBranches: true }));
     } catch (e) {
       setError(e.message || 'โหลดเครื่องหัตถการล้มเหลว');
       setItems([]);

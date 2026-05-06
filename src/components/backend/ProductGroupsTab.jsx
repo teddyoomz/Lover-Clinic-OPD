@@ -47,10 +47,14 @@ export default function ProductGroupsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      // Phase BS V2 — branch-scoped fetch.
+      // Phase 24.0-vicies-novies-septies (2026-05-07) — product groups +
+      // products are catalog entities (clinic-wide); migrate mappers don't
+      // stamp branchId on imported docs. Switched from per-branch filter to
+      // {allBranches:true}.
+      // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
       const [groups, products] = await Promise.all([
-        listProductGroups({ branchId: selectedBranchId }),
-        listProducts({ branchId: selectedBranchId }).catch(() => []),
+        listProductGroups({ allBranches: true }),
+        listProducts({ allBranches: true }).catch(() => []),
       ]);
       setItems(groups);
       const lookup = new Map();

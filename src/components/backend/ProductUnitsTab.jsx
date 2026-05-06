@@ -35,7 +35,10 @@ export default function ProductUnitsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      setItems(await listProductUnitGroups({ branchId: selectedBranchId }));
+      // Phase 24.0-vicies-novies-septies (2026-05-07) — product unit groups
+      // are catalog entity (clinic-wide); migrate mapper doesn't stamp branchId.
+      // audit-branch-scope: BS-1 catalog-global — not branch-scoped at read time
+      setItems(await listProductUnitGroups({ allBranches: true }));
     } catch (e) {
       setError(e.message || 'โหลดกลุ่มหน่วยล้มเหลว');
       setItems([]);
