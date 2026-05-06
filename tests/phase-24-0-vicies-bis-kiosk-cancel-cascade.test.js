@@ -28,8 +28,11 @@ const ADMIN = fs.readFileSync(
 
 describe('Phase 24.0-vicies-bis — handleDepositCancel cascade fix', () => {
   it('VBC.A.1 — depositId resolves with linkedDepositId fallback (Phase 24.0-quinquiesdecies kiosk-fresh)', () => {
+    // Phase 24.0-vicies-septies (2026-05-06) — both sources wrapped in
+    // _coerceDepId() to defend against legacy {depositId,success} object
+    // shape on broken records.
     expect(ADMIN).toMatch(
-      /const\s+depIdForCancel\s*=\s*session\.depositProClinicId\s*\|\|\s*session\.linkedDepositId\s*\|\|\s*''/,
+      /const\s+depIdForCancel\s*=\s*_coerceDepId\(session\.depositProClinicId\)[\s\S]{0,80}?\|\|\s*_coerceDepId\(session\.linkedDepositId\)/,
     );
   });
 

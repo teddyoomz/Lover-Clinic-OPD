@@ -149,8 +149,11 @@ describe('Phase 24.0-vicies-quinquies — kiosk archive (trash) cascade', () => 
 
 describe('Phase 24.0-vicies-quinquies — AppointmentCalendarView delete-handler cascade', () => {
   it('VQQ.D.1 — onDelete reads linkedDepositId with spawnedFromDepositId fallback', () => {
+    // Phase 24.0-vicies-septies (2026-05-06) — both sources wrapped in
+    // _coerceDepId() to defend against legacy {depositId,success} object
+    // shape on broken records.
     expect(VIEW).toMatch(
-      /linkedDepositId\s*=\s*formMode\.appt\.linkedDepositId\s*\n?\s*\|\|\s*formMode\.appt\.spawnedFromDepositId/,
+      /linkedDepositId\s*=\s*_coerceDepId\(formMode\.appt\.linkedDepositId\)[\s\S]{0,80}?\|\|\s*_coerceDepId\(formMode\.appt\.spawnedFromDepositId\)/,
     );
   });
 

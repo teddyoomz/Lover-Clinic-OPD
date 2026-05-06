@@ -2030,7 +2030,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 appointmentTo: visitPurposeText, // mirror for legacy readers
               } : null,
             };
-            depositId = await createDeposit(depositOnlyPayload);
+            // Phase 24.0-vicies-septies (2026-05-06) — createDeposit returns
+            // `{ depositId, success }` (an OBJECT), not the bare id string.
+            // Pre-fix stored the object literal on opd_sessions.linkedDepositId
+            // → handleSaveDepositData cascade later passed the object to
+            // createAppointmentForExistingDeposit which String()-coerced to
+            // "[object Object]" and threw "deposit [object Object] not found".
+            // User report: "เพิ่มนัดหมายไม่สำเร็จ: createAppointmentForExistingDeposit:
+            // deposit [object Object] not found".
+            const createdDeposit = await createDeposit(depositOnlyPayload);
+            depositId = createdDeposit?.depositId || null;
           }
           // Stamp cross-link on the kiosk session for traceability
           if (depositId) {
@@ -2943,7 +2952,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // cancels BOTH be_deposits + linked be_appointments via writeBatch
       // — soft-cancel (status='cancelled') preserves audit trail per
       // Rule D continuous-improvement (no hard delete on financial docs).
-      const depIdForCancel = session.depositProClinicId || session.linkedDepositId || '';
+      // Phase 24.0-vicies-septies (2026-05-06) — coerce legacy
+      // {depositId,success} object shape (from pre-fix kiosk createDeposit
+      // mis-stamp) → string id. Heals broken records on cancel without
+      // migration.
+      const _coerceDepId = (v) => (
+        !v ? '' :
+        typeof v === 'string' ? v :
+        typeof v === 'object' && v.depositId ? String(v.depositId) :
+        String(v)
+      );
+      const depIdForCancel = _coerceDepId(session.depositProClinicId)
+        || _coerceDepId(session.linkedDepositId)
+        || '';
       if (depIdForCancel) {
         try {
           // Phase 24.0-vicies-quinquies (2026-05-06) — switched from
@@ -3009,7 +3030,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // `linkedDepositId` (Phase 24.0-quinquiesdecies); patient-form-filled
       // deposits stamp `depositProClinicId`. Either resolves to the same
       // be_deposits doc — pick whichever is set.
-      let depIdForCascade = sess?.depositProClinicId || sess?.linkedDepositId || '';
+      // Phase 24.0-vicies-septies (2026-05-06) — defensive coercion. Pre-fix
+      // confirmCreateDeposit stamped the FULL object `{depositId, success}`
+      // returned by createDeposit. Existing broken sessions have linkedDepositId
+      // as an object → cascade fails with "deposit [object Object] not found".
+      // The coerceId helper extracts a string from either shape, healing
+      // legacy data on next save without a migration.
+      const coerceId = (v) => {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object' && v.depositId) return String(v.depositId);
+        return String(v);
+      };
+      let depIdForCascade = coerceId(sess?.depositProClinicId)
+        || coerceId(sess?.linkedDepositId)
+        || '';
 
       // Phase 24.0-vicies — pre-compute the visitPurposeText so both the
       // sync helper + the cascade reference the same value.
@@ -3112,8 +3147,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const freshSess = [...depositSessions, ...archivedDepositSessions]
           .find(s => s.id === sessionId) || sess;
         const hasAppt = !!freshSess?.linkedAppointmentId;
-        const freshDepId = freshSess?.depositProClinicId
-          || freshSess?.linkedDepositId
+        // Phase 24.0-vicies-septies — coerceId for legacy {depositId,success}
+        // object shape on opd_sessions (broken records from pre-fix kiosk creates).
+        const freshDepId = coerceId(freshSess?.depositProClinicId)
+          || coerceId(freshSess?.linkedDepositId)
           || depIdForCascade
           || '';
 
@@ -4089,8 +4126,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 // fresh deposits). Best-effort try/catch — archive proceeds
                 // even if cascade fails (orphan doc cleanup can be retried
                 // from Finance.มัดจำ).
-                const depIdForCancel = dSess.depositProClinicId
-                  || dSess.linkedDepositId
+                // Phase 24.0-vicies-septies — coerce legacy
+                // {depositId,success} object shape on broken records.
+                const _coerce = (v) => (
+                  !v ? '' :
+                  typeof v === 'string' ? v :
+                  typeof v === 'object' && v.depositId ? String(v.depositId) :
+                  String(v)
+                );
+                const depIdForCancel = _coerce(dSess.depositProClinicId)
+                  || _coerce(dSess.linkedDepositId)
                   || '';
                 if (depIdForCancel) {
                   try {

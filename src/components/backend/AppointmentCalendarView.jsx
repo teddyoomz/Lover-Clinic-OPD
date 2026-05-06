@@ -962,8 +962,18 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
           onDelete={formMode.mode === 'edit' && formMode.appt ? async () => {
             const id = formMode.appt.appointmentId || formMode.appt.id;
             if (!id) return;
-            const linkedDepositId = formMode.appt.linkedDepositId
-              || formMode.appt.spawnedFromDepositId
+            // Phase 24.0-vicies-septies (2026-05-06) — coerce legacy
+            // {depositId,success} object shape (broken records from pre-fix
+            // kiosk createDeposit). Pre-fix the helper called String(obj)
+            // → "[object Object]" → throws "deposit [object Object] not found".
+            const _coerceDepId = (v) => (
+              !v ? '' :
+              typeof v === 'string' ? v :
+              typeof v === 'object' && v.depositId ? String(v.depositId) :
+              String(v)
+            );
+            const linkedDepositId = _coerceDepId(formMode.appt.linkedDepositId)
+              || _coerceDepId(formMode.appt.spawnedFromDepositId)
               || '';
             if (linkedDepositId) {
               // Pair-delete: removes BOTH be_appointments + be_deposits in

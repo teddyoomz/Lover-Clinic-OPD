@@ -72,8 +72,10 @@ describe('Phase 24.0-vicies-sexies — error surfacing in add-appt cascade', () 
   });
 
   it('VSX.A.5 — freshDepId falls back through 3 sources', () => {
+    // Phase 24.0-vicies-septies (2026-05-06) — wrapped each source in
+    // coerceId() to defend against legacy {depositId,success} object shape.
     expect(ADMIN).toMatch(
-      /const\s+freshDepId\s*=\s*freshSess\?\.depositProClinicId[\s\S]{0,200}?\|\|\s*freshSess\?\.linkedDepositId[\s\S]{0,80}?\|\|\s*depIdForCascade/,
+      /const\s+freshDepId\s*=\s*coerceId\(freshSess\?\.depositProClinicId\)[\s\S]{0,200}?\|\|\s*coerceId\(freshSess\?\.linkedDepositId\)[\s\S]{0,80}?\|\|\s*depIdForCascade/,
     );
   });
 

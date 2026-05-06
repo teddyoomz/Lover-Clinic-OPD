@@ -86,10 +86,11 @@ describe('Phase 24.0-vicies-ter — deposit live card "แก้ไขนัด"
 
 describe('Phase 24.0-vicies-ter — archive (trash) action cascade-delete', () => {
   it('VTC.B.1 — depIdForCancel resolves with linkedDepositId fallback in archive branch', () => {
-    // The else-branch (archive action) of renderDepositConfirmModal now
-    // resolves depIdForCancel with the same fallback as handleDepositCancel.
+    // Phase 24.0-vicies-septies (2026-05-06) — both sources wrapped in
+    // _coerce() helper to defend against legacy {depositId,success}
+    // object shape on broken records.
     expect(ADMIN).toMatch(
-      /const\s+depIdForCancel\s*=\s*dSess\.depositProClinicId\s*\n?\s*\|\|\s*dSess\.linkedDepositId/,
+      /const\s+depIdForCancel\s*=\s*_coerce\(dSess\.depositProClinicId\)\s*\n?\s*\|\|\s*_coerce\(dSess\.linkedDepositId\)/,
     );
   });
 
