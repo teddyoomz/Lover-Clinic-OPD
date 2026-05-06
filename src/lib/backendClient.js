@@ -783,15 +783,47 @@ export async function findCustomersByField(field, value, excludeProClinicId = nu
  * customer-data removal; do NOT use this function for normal "cancel"
  * or "soft delete" operations.
  */
+/**
+ * Phase 24.0 (2026-05-06) — single source of truth for customer cascade-delete
+ * scope. Both `deleteCustomerCascade` (this file) and the server-side
+ * `/api/admin/delete-customer-cascade` endpoint reference this list (server
+ * has its own copy because firebase-admin uses a different collection-ref
+ * helper, but the COUNT and ORDER of entries MUST stay in lockstep — locked
+ * by tests/phase-24-0-customer-delete-server.test.js).
+ *
+ * Order matches the cascadeCounts response shape in the audit doc.
+ *
+ * Out-of-scope (intentional): opd_sessions (kiosk session docs reference
+ * customers via brokerProClinicId; policy-pending — leave in place);
+ * Firebase Storage objects (separate cleanup-orphan cron).
+ */
+export const CUSTOMER_CASCADE_COLLECTIONS = Object.freeze([
+  'be_treatments',
+  'be_sales',
+  'be_deposits',
+  'be_wallets',
+  'be_wallet_transactions',
+  'be_memberships',
+  'be_point_transactions',
+  'be_appointments',
+  'be_course_changes',
+  'be_link_requests',
+  'be_customer_link_tokens',
+]);
+
 export async function deleteCustomerCascade(proClinicId, opts = {}) {
   const cid = String(proClinicId);
   if (!cid) throw new Error('proClinicId required');
   if (!opts.confirm) {
     throw new Error('deleteCustomerCascade requires opts.confirm=true (destructive)');
   }
+  // Phase 24.0 (2026-05-06) — cascade extended to 11 collections (was 8).
+  // Order MUST match CUSTOMER_CASCADE_COLLECTIONS string list above so the
+  // shared constant test can lock parity between client + server.
   const cols = [
     treatmentsCol(), salesCol(), depositsCol(), walletsCol(),
     walletTxCol(), membershipsCol(), pointTxCol(), appointmentsCol(),
+    courseChangesCol(), linkRequestsCol(), customerLinkTokensCol(),
   ];
   const docs = [];
   for (const col of cols) {
@@ -3567,6 +3599,14 @@ export async function reconcileAllCustomerSummaries({ onProgress } = {}) {
 // functions wire those into Firestore + audit log.
 
 const courseChangesCol = () => collection(db, ...basePath(), 'be_course_changes');
+// Phase 24.0 (2026-05-06) — collection accessors used by deleteCustomerCascade.
+// be_link_requests: admin-mediated LINE-ID-link queue. Carries customerId on
+//   approved-row docs.
+// be_customer_link_tokens: one-time LINE link tokens (24h TTL) — V32-tris-quater
+//   doc shape carries customerId at mint time. Client-blocked rule
+//   (`read,write: if false`); admin SDK only at delete time.
+const linkRequestsCol = () => collection(db, ...basePath(), 'be_link_requests');
+const customerLinkTokensCol = () => collection(db, ...basePath(), 'be_customer_link_tokens');
 const courseChangeDoc = (id) => doc(db, ...basePath(), 'be_course_changes', String(id));
 
 /**
