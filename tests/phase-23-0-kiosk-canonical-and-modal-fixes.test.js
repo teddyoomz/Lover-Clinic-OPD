@@ -226,6 +226,23 @@ describe('Phase 23.0 / B — AdminDashboard.jsx contract guards', () => {
     expect(ADMIN).toMatch(/appointmentChannels:\s*\[\s*\.\.\.CUSTOMER_SOURCES_STATIC\s*\]/);
   });
 
+  it('B.2-bis fetchDepositOptions cache check guards against shape drift via _schemaVersion (Bug 1 hardening)', () => {
+    // After Phase 23.0 added `appointmentChannels`, the user reported the
+    // dropdown still rendered empty on a running dev server. Root cause:
+    // Vite HMR swapped the function body but React state (`depositOptions`)
+    // persisted. The cache check at the top of fetchDepositOptions used to
+    // only compare _branchId → cached options without appointmentChannels
+    // survived → dropdown stayed empty until full page reload.
+    // Hardening: bump DEPOSIT_OPTIONS_SCHEMA_VERSION on every shape change;
+    // cache check rejects stale cached options whose _schemaVersion mismatches.
+    expect(ADMIN).toMatch(/const\s+DEPOSIT_OPTIONS_SCHEMA_VERSION\s*=\s*\d+/);
+    expect(ADMIN).toMatch(/_schemaVersion:\s*DEPOSIT_OPTIONS_SCHEMA_VERSION/);
+    // Cache check MUST AND-include both branch + version equality.
+    expect(ADMIN).toMatch(
+      /depositOptions\._schemaVersion\s*===\s*DEPOSIT_OPTIONS_SCHEMA_VERSION/,
+    );
+  });
+
   it('B.3 all 4 kiosk addCustomer sites pass explicit branchId (Bug 2)', () => {
     // Pre-fix: addCustomer(patient, { strict: false }) — relied on implicit
     // resolveSelectedBranchId() inside addCustomer. Post-fix: every site

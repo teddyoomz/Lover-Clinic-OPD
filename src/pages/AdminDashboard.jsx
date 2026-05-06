@@ -1685,10 +1685,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // assistant for cross-role coverage). Pre-Phase-22.0b the assistants
   // dropdown was BROKEN — depositOptions.assistants was referenced at
   // render time but never populated.
+  // Phase 23.0 — bump on ANY shape change to depositOptions (additions /
+  // renames / removals). Cache check below invalidates when version mismatches
+  // → new fetch builds the up-to-date shape. Prevents the stale-state HMR
+  // bug class where a previously-cached options object survived a code
+  // update that added new keys (e.g. appointmentChannels in Phase 23.0).
+  const DEPOSIT_OPTIONS_SCHEMA_VERSION = 23;
   const fetchDepositOptions = async () => {
-    // Cache invalidation: if depositOptions exists AND its branch matches
-    // the current selectedBranchId, reuse. Otherwise re-fetch.
-    if (depositOptions && depositOptions._branchId === (selectedBranchId || '')) return;
+    // Cache invalidation: reuse cached options ONLY when branch AND schema
+    // version both match the current code. Otherwise re-fetch.
+    if (
+      depositOptions
+      && depositOptions._branchId === (selectedBranchId || '')
+      && depositOptions._schemaVersion === DEPOSIT_OPTIONS_SCHEMA_VERSION
+    ) return;
     setDepositOptionsLoading(true);
     try {
       const [doctors, staff, rooms, sellers] = await Promise.all([
@@ -1705,6 +1715,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const doctorOptions = branchScopedDoctors.map(d => ({ value: String(d.id), label: d.name || d.id }));
       const options = {
         _branchId: selectedBranchId || '',
+        _schemaVersion: DEPOSIT_OPTIONS_SCHEMA_VERSION,
         paymentMethods: [...PAYMENT_METHODS_STATIC],
         sellers: (sellers || []).map(s => ({ value: String(s.id), label: s.name || s.id })),
         appointmentStartTimes: timeOptions,
