@@ -200,10 +200,14 @@ describe('Phase 20.0 Flow A — A6 branch-scope auto-inject (post-Task-6)', () =
     );
   });
 
-  it('A6.2 — getAppointmentsByMonth schedule-link calls use {} (auto-inject)', () => {
+  it('A6.2 — getAppointmentsByMonth schedule-link calls use per-branch opts (Phase 22.0c)', () => {
+    // Phase 22.0c — was `{}` (auto-inject); now passes `opts` /
+    // `branchOpts` based on each schedule's stored branchId. The single
+    // assertion covers both call sites: updateActiveSchedules (opts) and
+    // post-create resync (branchOpts).
     const stripped = ADMIN_DASHBOARD
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
-    expect(stripped).toMatch(/getAppointmentsByMonth\s*\([^,]+,\s*\{\s*\}\s*\)/);
+    expect(stripped).toMatch(/getAppointmentsByMonth\s*\([^,]+,\s*(opts|branchOpts)\s*\)/);
   });
 });

@@ -61,10 +61,19 @@ describe('Phase 20.0 Task 6 — Z3 listenToAppointmentsByMonth follows selected 
     expect(STRIPPED).toMatch(/\[\s*apptMonth\s*,\s*db\s*,\s*appId\s*,\s*selectedBranchId\s*\]/);
   });
 
-  it('Z3.3 — getAppointmentsByMonth (schedule-link work) also passes empty opts (auto-inject)', () => {
-    // 3 occurrences expected: updateActiveSchedules + handleGenScheduleLink (2x)
-    const matches = STRIPPED.match(/getAppointmentsByMonth\s*\([^,]+,\s*\{\s*\}\s*\)/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+  it('Z3.3 — getAppointmentsByMonth (schedule-link work) passes per-schedule branchId opts (Phase 22.0c)', () => {
+    // Phase 22.0c (2026-05-06 EOD) — getAppointmentsByMonth in
+    // updateActiveSchedules now passes `opts` (per-schedule branchId,
+    // computed from each schedule's branchId field) instead of `{}`
+    // (auto-inject of admin's CURRENT branch). The schedule's stored
+    // branchId is the source of truth, not the admin's selectedBranchId
+    // at re-sync time.
+    // The post-create resync uses `branchOpts` keyed off selectedBranchId
+    // (the branch the schedule was just stamped with).
+    expect(STRIPPED).toMatch(/getAppointmentsByMonth\(mo,\s*opts\)/);
+    expect(STRIPPED).toMatch(/getAppointmentsByMonth\(mo,\s*branchOpts\)/);
+    expect(STRIPPED).toMatch(/const opts = sBranch \?\s*\{\s*branchId:\s*sBranch\s*\}/);
+    expect(STRIPPED).toMatch(/branchOpts = selectedBranchId \?\s*\{\s*branchId:\s*selectedBranchId\s*\}/);
   });
 
   it('Z3.4 — no remaining {allBranches: true} for these calls', () => {

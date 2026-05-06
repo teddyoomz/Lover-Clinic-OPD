@@ -737,32 +737,56 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   useEffect(() => {
     if (!db || !appId) return;
     // Load saved doctor/closed day prefs
-    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs')).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        if (d.doctorDays) setSchedDoctorDays(new Set(d.doctorDays));
-        if (d.closedDays) setSchedClosedDays(new Set(d.closedDays));
-        if (d.manualBlockedSlots) setSchedManualBlocked(d.manualBlockedSlots);
-        if (d.customDoctorHours) setSchedCustomDoctorHours(d.customDoctorHours);
-      }
+    // Phase 22.0c (2026-05-06 EOD) — per-branch schedule_prefs. Doc id
+    // suffixed with __{branchId} so admin-set prefs (closed days, doctor
+    // schedule, custom hours, manual-blocked slots) are SEPARATE per branch.
+    // Falls back to the legacy global doc 'schedule_prefs' for one
+    // load-cycle if the per-branch doc doesn't exist yet (admin's first
+    // visit to a branch reads global → first save creates the per-branch
+    // doc → subsequent reads use per-branch). User directive: "การตั้งค่า
+    // ตารางคลินิก ... จะต้องเป็นข้อมูลคนละสาขากัน".
+    const branchPrefsId = `schedule_prefs${selectedBranchId ? `__${selectedBranchId}` : ''}`;
+    const loadPrefs = async () => {
+      try {
+        let snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', branchPrefsId));
+        // Fall back to legacy global doc if per-branch doesn't exist yet
+        if (!snap.exists() && selectedBranchId) {
+          snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'));
+        }
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.doctorDays) setSchedDoctorDays(new Set(d.doctorDays));
+          if (d.closedDays) setSchedClosedDays(new Set(d.closedDays));
+          if (d.manualBlockedSlots) setSchedManualBlocked(d.manualBlockedSlots);
+          if (d.customDoctorHours) setSchedCustomDoctorHours(d.customDoctorHours);
+        }
+      } catch { /* ignore */ }
       setSchedPrefsLoaded(true);
-    }).catch(() => setSchedPrefsLoaded(true));
+    };
+    loadPrefs();
 
-    // Subscribe to schedule list
+    // Subscribe to schedule list.
+    // Phase 22.0c (2026-05-06 EOD) — branch-filter applied client-side
+    // (legacy schedule docs without branchId are kept for backward compat
+    // — admin can re-create or migrate later). Re-subscribes when
+    // selectedBranchId changes so the list reflects the active branch.
     const unsub = onSnapshot(
       collection(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules'),
       (snap) => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
-          const ta = a.createdAt?.toMillis?.() || 0;
-          const tb = b.createdAt?.toMillis?.() || 0;
-          return tb - ta;
-        });
+        const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const list = allDocs
+          .filter(s => !s.branchId || String(s.branchId) === String(selectedBranchId || ''))
+          .sort((a, b) => {
+            const ta = a.createdAt?.toMillis?.() || 0;
+            const tb = b.createdAt?.toMillis?.() || 0;
+            return tb - ta;
+          });
         setSchedList(list);
       },
       () => {}
     );
     return () => unsub();
-  }, [db, appId]);
+  }, [db, appId, selectedBranchId]);
 
   // Update bookedSlots + doctorBookedSlots in all active schedule docs after
   // an auto-sync fires. Must re-apply the SAME filter that was persisted on
@@ -783,15 +807,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // pc_appointments mirror. getAppointmentsByMonth returns { [date]: [...] }
       // grouped by date; flatten back to flat array per month for the existing
       // schedule-filter loop (preserves filter shape).
-      const uniqueMonths = Array.from(new Set(activeScheds.flatMap(s => s.months || [])));
-      const groupedByMonth = await Promise.all(uniqueMonths.map(mo =>
-        getAppointmentsByMonth(mo, {})
-      ));
-      const apptsByMonth = {};
-      uniqueMonths.forEach((mo, i) => {
-        const grouped = groupedByMonth[i] || {};
-        apptsByMonth[mo] = Object.values(grouped).flat();
-      });
+      // Phase 22.0c (2026-05-06 EOD) — keyed by `${month}|${branchId}` so
+      // each (month, branch) pair queries be_appointments separately. A
+      // schedule for branch A in month X gets only branch-A appointments;
+      // schedule for branch B in month X gets only branch-B appointments.
+      // Pre-22.0c the call passed `{}` which auto-injected the CURRENT
+      // admin's selectedBranchId — wrong because schedules can belong to
+      // any branch.
+      const monthBranchKeys = new Set();
+      for (const s of activeScheds) {
+        const sBranch = s.branchId || '';
+        for (const mo of (s.months || [])) {
+          monthBranchKeys.add(`${mo}|${sBranch}`);
+        }
+      }
+      const apptsByMonthBranch = {};
+      await Promise.all(Array.from(monthBranchKeys).map(async (key) => {
+        const [mo, sBranch] = key.split('|');
+        const opts = sBranch ? { branchId: sBranch } : { allBranches: true };
+        const grouped = await getAppointmentsByMonth(mo, opts);
+        apptsByMonthBranch[key] = Object.values(grouped || {}).flat();
+      }));
 
       for (const sched of activeScheds) {
         // Check if not expired (24hr)
@@ -812,8 +848,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const months = sched.months || [];
         const freshBookedSlots = [];
         const freshDoctorBookedSlots = [];
+        // Phase 22.0c — read appts for THIS schedule's branch (not the
+        // admin's current branch). Empty branchId = legacy schedule;
+        // falls through to allBranches in the query above.
+        const sBranch = sched.branchId || '';
         for (const mo of months) {
-          const appts = apptsByMonth[mo] || [];
+          const appts = apptsByMonthBranch[`${mo}|${sBranch}`] || [];
           appts.forEach(a => {
             if (!a.date || !a.startTime || !a.endTime) return;
             if (shouldBlockDoctorSlot(a, doctorSlotCfg)) {
@@ -852,10 +892,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   // ── Save schedule prefs to Firestore + update active schedule links ──
+  // Phase 22.0c — saves to per-branch doc id so each branch has its own
+  // prefs (closed days, doctor work days, manual-blocked slots, custom
+  // doctor hours).
   const saveSchedulePrefs = (doctorDays, closedDays, manualBlocked, customDocHours) => {
     if (!db || !appId) return;
     const cdh = customDocHours ?? schedCustomDoctorHours;
-    setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'schedule_prefs'), {
+    const branchPrefsId = `schedule_prefs${selectedBranchId ? `__${selectedBranchId}` : ''}`;
+    setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', branchPrefsId), {
+      branchId: selectedBranchId || null,
       doctorDays: [...doctorDays],
       closedDays: [...closedDays],
       manualBlockedSlots: manualBlocked,
@@ -1185,6 +1230,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         token,
         createdAt: serverTimestamp(),
         enabled: true,
+        // Phase 22.0c (2026-05-06 EOD) — stamp branchId so this schedule
+        // link is scoped to the branch where admin created it. The admin's
+        // schedule list filters by selectedBranchId; the public-page
+        // bookedSlots are pre-filtered using THIS branchId (not the
+        // current admin's selectedBranchId at re-sync time). User directive:
+        // "ลิ้งก์ตารางที่ส่งให้ลูกค้า จะต้องเป็นข้อมูลคนละสาขากัน".
+        branchId: selectedBranchId || '',
         months,
         clinicOpenTime: clinicSettings.clinicOpenTime || '10:00',
         clinicCloseTime: clinicSettings.clinicCloseTime || '19:00',
@@ -1232,8 +1284,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         try {
           const freshBookedSlots = [];
           const freshDoctorBookedSlots = [];
+          // Phase 22.0c — query per the schedule's branchId (the one we
+          // just stamped in the setDoc above). Ensures the bookedSlots
+          // resync uses ONLY this branch's appointments.
+          const branchOpts = selectedBranchId ? { branchId: selectedBranchId } : { allBranches: true };
           for (const mo of months) {
-            const grouped = await getAppointmentsByMonth(mo, {});
+            const grouped = await getAppointmentsByMonth(mo, branchOpts);
             const appts = Object.values(grouped || {}).flat();
             appts.forEach(a => {
               if (!a.date || !a.startTime || !a.endTime) return;
