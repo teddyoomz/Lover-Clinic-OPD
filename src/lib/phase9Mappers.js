@@ -5,8 +5,14 @@
 /** master_data/promotions/items → be_promotions shape. `src` comes from
  *  `listItems('promotion')` (api/proclinic/treatment.js) with: id, name,
  *  price, category, courses[], products[]. We normalize to our full
- *  27-field schema, preserving nested courses[].products[]. */
-export function buildBePromotionFromMaster(src, id, now, existingCreatedAt = null) {
+ *  27-field schema, preserving nested courses[].products[].
+ *
+ *  Phase 24.0-vicies-novies-decies (V39, 2026-05-07): added 5th `branchId`
+ *  arg per Phase BSA spec — be_promotions is branch-scoped at runtime via
+ *  `_listWithBranchOrMerge` (allBranches:true OR-merge). Without this stamp,
+ *  imported promotions are invisible in any branch view (handleMigrate forwards
+ *  branchId from selectedBranchId; pre-V39 the wrapper silently dropped it). */
+export function buildBePromotionFromMaster(src, id, now, existingCreatedAt = null, branchId = '') {
   if (!src || typeof src !== 'object') return null;
   if (!String(src.name || '').trim()) return null;
 
@@ -54,6 +60,9 @@ export function buildBePromotionFromMaster(src, id, now, existingCreatedAt = nul
     cover_image: '',
     courses,
     products,
+    // V39: branch stamp from migrate-time selectedBranchId. Defaults preserve
+    // src.branchId fallback (legacy mapper-stamped); '' when neither source.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
     migratedAt: now,
@@ -61,8 +70,9 @@ export function buildBePromotionFromMaster(src, id, now, existingCreatedAt = nul
   };
 }
 
-/** master_data/coupons/items → be_coupons shape. */
-export function buildBeCouponFromMaster(src, id, now, existingCreatedAt = null) {
+/** master_data/coupons/items → be_coupons shape.
+ *  V39 (2026-05-07): 5th `branchId` arg — be_coupons branch-scoped per BSA. */
+export function buildBeCouponFromMaster(src, id, now, existingCreatedAt = null, branchId = '') {
   if (!src || typeof src !== 'object') return null;
   const nameStr = String(src.name || src.coupon_name || '').trim();
   if (!nameStr) return null;
@@ -79,6 +89,8 @@ export function buildBeCouponFromMaster(src, id, now, existingCreatedAt = null) 
     end_date: String(src.end_date || ''),
     description: String(src.description || ''),
     branch_ids: Array.isArray(src.branch_ids) ? src.branch_ids : [],
+    // V39: branch stamp (be_coupons branch-scoped per BSA).
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
     migratedAt: now,
@@ -86,8 +98,9 @@ export function buildBeCouponFromMaster(src, id, now, existingCreatedAt = null) 
   };
 }
 
-/** master_data/vouchers/items → be_vouchers shape. */
-export function buildBeVoucherFromMaster(src, id, now, existingCreatedAt = null) {
+/** master_data/vouchers/items → be_vouchers shape.
+ *  V39 (2026-05-07): 5th `branchId` arg — be_vouchers branch-scoped per BSA. */
+export function buildBeVoucherFromMaster(src, id, now, existingCreatedAt = null, branchId = '') {
   if (!src || typeof src !== 'object') return null;
   const nameStr = String(src.name || src.voucher_name || '').trim();
   if (!nameStr) return null;
@@ -104,6 +117,8 @@ export function buildBeVoucherFromMaster(src, id, now, existingCreatedAt = null)
     period_end: String(src.period_end || ''),
     description: String(src.description || ''),
     status: src.status === 'suspended' ? 'suspended' : 'active',
+    // V39: branch stamp (be_vouchers branch-scoped per BSA).
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
     migratedAt: now,

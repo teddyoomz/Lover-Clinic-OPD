@@ -4,11 +4,12 @@
 export const productUnitsAdapter = {
   entityType: 'product-units',
   collection: 'be_product_unit_groups',
+  canonicalIdField: 'unitGroupId', // V39 (2026-05-07)
   dedupKey: (item) => `${item.name || ''}`,
   fkRefs: () => [],
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { unitGroupId, ...rest } = item;
+    const { id, unitGroupId, ...rest } = item; // V39: also strip stray `id`
     return {
       ...rest,
       branchId: String(targetBranchId),

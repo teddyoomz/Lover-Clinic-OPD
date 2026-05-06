@@ -13,6 +13,11 @@
 export const dfGroupsAdapter = {
   entityType: 'df-groups',
   collection: 'be_df_groups',
+  // V39 (2026-05-07): canonicalIdField — see productsAdapter. df-groups uses
+  // `groupId` as canonical (per saveDfGroup backendClient.js:10806).
+  // Pre-V39, cross-branch-import.js had a special-case to stamp groupId; V39
+  // generalizes via this field so all adapters use the same stamp pattern.
+  canonicalIdField: 'groupId',
   dedupKey: (item) => `${item.name || ''}`,
   fkRefs: () => [],
   clone: (item, targetBranchId, adminUid) => {

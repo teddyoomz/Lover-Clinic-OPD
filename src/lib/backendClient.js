@@ -8130,7 +8130,12 @@ export async function deletePromotion(promotionId) {
  * This is a one-way, one-time (or on-demand) migration. After running,
  * be_promotions/* becomes the source of truth for OUR CRUD UI.
  */
-export async function migrateMasterPromotionsToBe() {
+// Phase 24.0-vicies-novies-decies (V39, 2026-05-07): accept {branchId} opt
+// so MasterDataTab.handleMigrate's selectedBranchId reaches the mapper. Pre-V39
+// the wrapper was zero-arity → branchId silently dropped → imported promotions
+// landed without branchId → invisible in any branch view (per Phase BSA's
+// _listWithBranchOrMerge filter). Same fix shape as octies catalog migrate.
+export async function migrateMasterPromotionsToBe({ branchId = '' } = {}) {
   const { buildBePromotionFromMaster } = await import('./phase9Mappers.js');
   const masterSnap = await getDocs(masterDataItemsCol('promotions'));
   if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
@@ -8150,7 +8155,7 @@ export async function migrateMasterPromotionsToBe() {
       if (existing.exists()) existingCreatedAt = existing.data().createdAt || null;
     } catch {}
 
-    const doc_ = buildBePromotionFromMaster(src, id, now, existingCreatedAt);
+    const doc_ = buildBePromotionFromMaster(src, id, now, existingCreatedAt, branchId);
     if (!doc_) { skipped++; continue; }
     await setDoc(promotionDoc(id), doc_, { merge: false });
     imported++;
@@ -8198,8 +8203,9 @@ export async function deleteCoupon(couponId) {
   await deleteDoc(couponDoc(id));
 }
 
-/** Bulk-import from master_data/coupons → be_coupons. Uses pure mapper. */
-export async function migrateMasterCouponsToBe() {
+/** Bulk-import from master_data/coupons → be_coupons. Uses pure mapper.
+ *  V39 (2026-05-07): accept {branchId} opt — see migrateMasterPromotionsToBe. */
+export async function migrateMasterCouponsToBe({ branchId = '' } = {}) {
   const { buildBeCouponFromMaster } = await import('./phase9Mappers.js');
   const masterSnap = await getDocs(masterDataItemsCol('coupons'));
   if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
@@ -8211,7 +8217,7 @@ export async function migrateMasterCouponsToBe() {
     if (!id) { skipped++; continue; }
     let createdAt = null;
     try { const ex = await getDoc(couponDoc(id)); if (ex.exists()) createdAt = ex.data().createdAt; } catch {}
-    const doc_ = buildBeCouponFromMaster(src, id, now, createdAt);
+    const doc_ = buildBeCouponFromMaster(src, id, now, createdAt, branchId);
     if (!doc_) { skipped++; continue; }
     await setDoc(couponDoc(id), doc_, { merge: false });
     imported++;
@@ -8275,8 +8281,9 @@ export async function deleteVoucher(voucherId) {
   await deleteDoc(voucherDoc(id));
 }
 
-/** Bulk-import from master_data/vouchers → be_vouchers. Uses pure mapper. */
-export async function migrateMasterVouchersToBe() {
+/** Bulk-import from master_data/vouchers → be_vouchers. Uses pure mapper.
+ *  V39 (2026-05-07): accept {branchId} opt — see migrateMasterPromotionsToBe. */
+export async function migrateMasterVouchersToBe({ branchId = '' } = {}) {
   const { buildBeVoucherFromMaster } = await import('./phase9Mappers.js');
   const masterSnap = await getDocs(masterDataItemsCol('vouchers'));
   if (masterSnap.empty) return { imported: 0, skipped: 0, total: 0 };
@@ -8288,7 +8295,7 @@ export async function migrateMasterVouchersToBe() {
     if (!id) { skipped++; continue; }
     let createdAt = null;
     try { const ex = await getDoc(voucherDoc(id)); if (ex.exists()) createdAt = ex.data().createdAt; } catch {}
-    const doc_ = buildBeVoucherFromMaster(src, id, now, createdAt);
+    const doc_ = buildBeVoucherFromMaster(src, id, now, createdAt, branchId);
     if (!doc_) { skipped++; continue; }
     await setDoc(voucherDoc(id), doc_, { merge: false });
     imported++;
@@ -9525,7 +9532,7 @@ export async function migrateMasterDfGroupsToBe({ branchId = '' } = {}) {
 //   { staffId, staffName, rates: [...] }
 // Doc id = staffId (ProClinic numeric id).
 
-function mapMasterToDfStaffRates(src, id, now, existingCreatedAt) {
+function mapMasterToDfStaffRates(src, id, now, existingCreatedAt, branchId = '') {
   if (!id) return null;
   const rates = Array.isArray(src.rates) ? src.rates.map((r) => {
     const t = String(r?.type || '').toLowerCase();
@@ -9541,17 +9548,23 @@ function mapMasterToDfStaffRates(src, id, now, existingCreatedAt) {
     staffName: String(src.staffName || src.name || '').trim() || '(imported)',
     position: String(src.position || '').trim(),
     rates,
+    // V39 (2026-05-07): branch stamp from migrate-time selectedBranchId.
+    // listDfStaffRates accepts {branchId, allBranches} per BSA — without
+    // this stamp, imported rates are invisible in any branch view.
+    branchId: branchId || src.branchId || '',
     createdAt: existingCreatedAt || now,
     updatedAt: now,
   };
 }
 
-export async function migrateMasterDfStaffRatesToBe() {
+// V39 (2026-05-07): accept {branchId} opt — see migrateMasterPromotionsToBe.
+export async function migrateMasterDfStaffRatesToBe({ branchId = '' } = {}) {
   return runMasterToBeMigration({
     sourceType: 'df_staff_rates',
     targetCol: dfStaffRatesCol,
     targetDocFn: dfStaffRatesDocRef,
     mapper: mapMasterToDfStaffRates,
+    branchId,
   });
 }
 

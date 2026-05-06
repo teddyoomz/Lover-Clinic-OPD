@@ -189,14 +189,15 @@ export default async function handler(req, res) {
     for (const item of itemsToImport) {
       const newId = `${entityType.replace(/-/g, '_')}_${ts}_${crypto.randomBytes(4).toString('hex')}`.toUpperCase();
       const cloned = adapter.clone(item, targetBranchId, decoded.uid);
-      // Phase 17.1 — Batch 1 reviewer note: existing saveDfGroup stamps both
-      // `id: newId` and `groupId: newId` into the doc body. Mirror that here
-      // so legacy readers (e.g. doc.data().groupId) work for imported docs.
-      // The df-groups adapter strips `id` / `groupId` / `dfGroupId` defensively
-      // so they need to be re-stamped server-side with the freshly-minted ID.
-      if (entityType === 'df-groups') {
-        cloned.id = newId;
-        cloned.groupId = newId;
+      // V39 (2026-05-07): generic stamp via adapter.canonicalIdField.
+      // Pre-V39 was df-groups special-case; surfaced V38 silent-no-op delete
+      // bug because products/courses/etc. lacked the canonical entityId
+      // stamp → handleDelete `p.productId || p.id` resolved wrong path.
+      // Now every entity gets BOTH `id: newId` (defensive) AND
+      // `<canonicalIdField>: newId` (per-adapter — productId/courseId/etc.).
+      cloned.id = newId;
+      if (adapter.canonicalIdField) {
+        cloned[adapter.canonicalIdField] = newId;
       }
       batch.set(colRef.doc(newId), cloned);
       imported.push({ sourceId: item.id, newId });

@@ -6,6 +6,7 @@
 export const productGroupsAdapter = {
   entityType: 'product-groups',
   collection: 'be_product_groups',
+  canonicalIdField: 'groupId', // V39 (2026-05-07)
   dedupKey: (item) => `${item.productType || ''}:${item.name || ''}`,
   fkRefs: (item) => {
     const ids = Array.isArray(item.products)
@@ -15,7 +16,7 @@ export const productGroupsAdapter = {
   },
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { groupId, ...rest } = item;
+    const { id, groupId, ...rest } = item; // V39: also strip stray `id`
     return {
       ...rest,
       branchId: String(targetBranchId),

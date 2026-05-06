@@ -5,11 +5,12 @@
 export const holidaysAdapter = {
   entityType: 'holidays',
   collection: 'be_holidays',
+  canonicalIdField: 'holidayId', // V39 (2026-05-07)
   dedupKey: (item) => `${item.holidayType || 'specific'}:${item.name || ''}`,
   fkRefs: () => [],
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { holidayId, ...rest } = item;
+    const { id, holidayId, ...rest } = item; // V39: also strip stray `id`
     return {
       ...rest,
       branchId: String(targetBranchId),

@@ -4,11 +4,12 @@
 export const medicalInstrumentsAdapter = {
   entityType: 'medical-instruments',
   collection: 'be_medical_instruments',
+  canonicalIdField: 'instrumentId', // V39 (2026-05-07)
   dedupKey: (item) => `${item.name || ''}`,
   fkRefs: () => [],
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { instrumentId, ...rest } = item;
+    const { id, instrumentId, ...rest } = item; // V39: also strip stray `id`
     return {
       ...rest,
       branchId: String(targetBranchId),

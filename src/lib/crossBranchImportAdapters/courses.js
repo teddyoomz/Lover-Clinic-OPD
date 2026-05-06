@@ -11,6 +11,8 @@
 export const coursesAdapter = {
   entityType: 'courses',
   collection: 'be_courses',
+  // V39 (2026-05-07): canonicalIdField — see productsAdapter.
+  canonicalIdField: 'courseId',
   dedupKey: (item) => `${item.courseName || item.name || ''}`,
   fkRefs: (item) => {
     const ids = Array.isArray(item.items)
@@ -18,9 +20,10 @@ export const coursesAdapter = {
       : [];
     return ids.length ? [{ collection: 'be_products', ids }] : [];
   },
+  // V39 (2026-05-07): also strip stray `id` — see productsAdapter clone.
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { courseId, ...rest } = item;
+    const { id, courseId, ...rest } = item;
     return {
       ...rest,
       branchId: String(targetBranchId),

@@ -8,6 +8,9 @@
 export const productsAdapter = {
   entityType: 'products',
   collection: 'be_products',
+  // V39 (2026-05-07): canonicalIdField lets cross-branch-import.js generically
+  // stamp <field>=newId after clone. Replaces df-groups-only special-case.
+  canonicalIdField: 'productId',
   // Dedup by productType + productName (a product with same name in
   // different productType is legitimately different — e.g. "Acetin" as
   // ยา vs as สินค้าสิ้นเปลือง).
@@ -26,9 +29,13 @@ export const productsAdapter = {
   },
   // Clone: strip productId (server generates fresh), stamp branchId=target,
   // preserve createdAt+createdBy from source, new updatedAt+updatedBy=now+admin.
+  // V39 (2026-05-07): also strip stray `id` field — pre-V39, source items
+  // could carry data.id (legacy ProClinic numeric) which spread back into
+  // cloned and overrode docId in listProducts spread. Caused V38 silent-no-op
+  // delete bug. Strip ensures clean data shape.
   clone: (item, targetBranchId, adminUid) => {
     const now = new Date().toISOString();
-    const { productId, ...rest } = item;
+    const { id, productId, ...rest } = item;
     return {
       ...rest,
       branchId: String(targetBranchId),
