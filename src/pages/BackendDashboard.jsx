@@ -148,10 +148,14 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
         .finally(() => setHydrated(true));
     } else {
       // Phase 21.0 (2026-05-06) — legacy ?tab=appointments redirects to the
-      // first sub-tab (จองไม่มัดจำ). The old 'appointments' id is no longer
-      // in ALL_ITEM_IDS so without this redirect, hydration would silently
-      // fall through to the default ('clone') and bookmarks would break.
-      const resolvedTab = tab === 'appointments' ? 'appointment-no-deposit' : tab;
+      // 'appointment-all' sub-tab (semantic preservation — legacy URL was
+      // the combined all-types calendar). The old 'appointments' id is no
+      // longer in ALL_ITEM_IDS so without this redirect, hydration would
+      // silently fall through to the default ('clone') and bookmarks
+      // would break. Phase 21.0-bis: redirect target updated from
+      // 'appointment-no-deposit' to 'appointment-all' after user added
+      // the all-types overview sub-tab.
+      const resolvedTab = tab === 'appointments' ? 'appointment-all' : tab;
       if (resolvedTab && ALL_ITEM_IDS.includes(resolvedTab)) {
         setActiveTab(resolvedTab);
         if (resolvedTab === 'finance' && subtab) setFinanceSubTab(subtab);
@@ -167,10 +171,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   useEffect(() => {
     if (!hydrated || !permsLoaded) return;
     if (canAccess(activeTab)) return;
-    // Phase 21.0 (2026-05-06) — fallback uses the new 'appointment-no-deposit'
-    // sub-tab (replaces legacy 'appointments' which has been removed from
-    // navConfig). Per-branch filter is automatic via BSA.
-    const fallback = firstAllowedTab(['appointment-no-deposit', 'customers', 'reports', 'sales']);
+    // Phase 21.0 (2026-05-06) + 21.0-bis (2026-05-06 EOD) — fallback uses
+    // the 'appointment-all' overview sub-tab (combined all-types view, the
+    // semantic successor of legacy 'appointments'). Per-branch filter is
+    // automatic via BSA.
+    const fallback = firstAllowedTab(['appointment-all', 'customers', 'reports', 'sales']);
     if (fallback && fallback !== activeTab) setActiveTab(fallback);
   }, [hydrated, permsLoaded, activeTab, canAccess, firstAllowedTab]);
 
@@ -435,6 +440,18 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'appointment-all' ? (
+          // Phase 21.0-bis (2026-05-06 EOD) — combined all-types view. No
+          // appointmentType prop → AppointmentCalendarView's internal
+          // typeFilter resolves to null → typedDayAppts === dayAppts (no
+          // type filter). Calendar grid + mini-calendar dot map + week-strip
+          // count all show appointments of every type for the selected
+          // branch. This is the semantic successor of the legacy
+          // ?tab=appointments PINNED tab.
+          <AppointmentCalendarView
+            clinicSettings={clinicSettings}
+            theme={theme}
+          />
         ) : activeTab === 'appointment-no-deposit' ? (
           // Phase 21.0 (2026-05-06) — sub-tab renders the calendar grid
           // filtered to appointmentType='no-deposit-booking'. Per-branch

@@ -188,14 +188,20 @@ describe('Phase 16.3 FS.C — cross-file wiring source-grep', () => {
 });
 
 describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
-  test('D.1 — TAB_PERMISSION_MAP count is 54 (50 pre-Phase-21.0 + 4 appointment sub-tab gates)', () => {
-    // Phase 21.0 (2026-05-06) — added per-sub-tab gates for the 4 new
+  test('D.1 — TAB_PERMISSION_MAP count is 55 (50 pre-Phase-21.0 + 5 appointment sub-tab gates)', () => {
+    // Phase 21.0 (2026-05-06) — added per-sub-tab gates for the 4 typed
     // appointment views ('appointment-no-deposit' / 'appointment-deposit'
     // / 'appointment-treatment-in' / 'appointment-follow-up'). Legacy
     // 'appointments' key retained for backward-compat with anyone importing
-    // it. Final shape: 50 + 4 = 54.
+    // it. Phase 21.0-bis (2026-05-06 EOD) — added 'appointment-all' overview
+    // gate (combined all-types view, replaces legacy 'appointments' as
+    // first-preference fallback). Final shape: 50 + 1 (legacy) + 4 (typed)
+    // + 1 (overview) = no wait — 50 + 5 (4 typed + 1 overview) + 1 (legacy
+    // 'appointments') = 56? Actually the count is the literal Object.keys
+    // length: pre-21.0 was 50, +4 typed +1 overview = 55. The legacy
+    // 'appointments' key is INCLUDED in the 50 baseline (it predates 21.0).
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(54);
+    expect(count).toBe(55);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {

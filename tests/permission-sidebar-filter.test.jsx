@@ -89,10 +89,10 @@ describe('PS1 — Phase 13.5.2 sidebar/palette permission filter', () => {
       expect(dashSrc).toMatch(/if\s*\(\s*!hydrated\s*\|\|\s*!permsLoaded\s*\)\s*return/);
       expect(dashSrc).toMatch(/if\s*\(\s*canAccess\(activeTab\)\s*\)\s*return/);
       // Falls back to firstAllowedTab — Phase 21.0 (2026-05-06) updated to
-      // appointment-no-deposit (replaces legacy 'appointments' which was
-      // removed from navConfig). Match either to keep this assertion alive
-      // through future renames.
-      expect(dashSrc).toMatch(/firstAllowedTab\(\[[^\]]*(appointment-no-deposit|appointments)[^\]]*\]\)/);
+      // appointment-no-deposit, then Phase 21.0-bis (2026-05-06 EOD) updated
+      // to 'appointment-all' (overview tab). Match any of the 3 historical
+      // values to keep this assertion alive through future renames.
+      expect(dashSrc).toMatch(/firstAllowedTab\(\[[^\]]*(appointment-all|appointment-no-deposit|appointments)[^\]]*\]\)/);
     });
 
     it('PS1.A.12 handleNavigate guards via canAccess on permsLoaded', () => {

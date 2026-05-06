@@ -27,6 +27,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // Legacy 'appointments' key retained for backward-compat with any test
   // that imports it; the canonical entries are the 4 below.
   appointments:                { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
+  'appointment-all':           { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
   'appointment-no-deposit':    { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
   'appointment-deposit':       { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
   'appointment-treatment-in':  { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
@@ -180,7 +181,7 @@ export function filterAllowedTabs(tabIds, permissions, isAdmin, overrides) {
  * `reports` → `sales` → any tab. Used by BackendDashboard when the
  * requested deep-link tab is forbidden.
  */
-export function firstAllowedTab(permissions, isAdmin, candidates = ['appointment-no-deposit', 'customers', 'reports', 'sales'], overrides) {
+export function firstAllowedTab(permissions, isAdmin, candidates = ['appointment-all', 'customers', 'reports', 'sales'], overrides) {
   for (const id of candidates) {
     if (canAccessTab(id, permissions, isAdmin, overrides)) return id;
   }

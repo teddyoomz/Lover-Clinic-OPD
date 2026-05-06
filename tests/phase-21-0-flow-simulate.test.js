@@ -280,16 +280,16 @@ describe('Phase 21.0 — F5 source-grep regression guards (V21 lock-in)', () => 
     expect(SRC).toMatch(/typedDayAppts\.find/);     // doctor scroll-target
   });
 
-  test('F5.2 BackendDashboard renders 4 distinct AppointmentCalendarView instances', () => {
+  test('F5.2 BackendDashboard renders >= 5 distinct AppointmentCalendarView instances (Phase 21.0-bis added all-types overview)', () => {
     const { readFileSync } = require('node:fs');
     const BD = readFileSync('src/pages/BackendDashboard.jsx', 'utf8');
     const matches = BD.match(/<AppointmentCalendarView/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(4);
+    expect(matches.length).toBeGreaterThanOrEqual(5);
   });
 
-  test('F5.3 navConfig has section with exactly 4 appointment items', () => {
+  test('F5.3 navConfig has section with exactly 5 appointment items (Phase 21.0-bis)', () => {
     const { NAV_SECTIONS } = require('../src/components/backend/nav/navConfig.js');
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
-    expect(section.items.length).toBe(4);
+    expect(section.items.length).toBe(5);
   });
 });

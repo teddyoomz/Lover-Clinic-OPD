@@ -84,6 +84,11 @@ export const NAV_SECTIONS = [
     label: 'นัดหมาย',
     icon: CalendarDays,
     items: [
+      // Phase 21.0-bis (2026-05-06) — 'นัดหมายทุกประเภท' = legacy combined
+      // calendar (no type filter). Sits at the top so admin can land here
+      // for the cross-type overview. The old ?tab=appointments URL also
+      // redirects here (semantic preservation: legacy URL = all-types view).
+      { id: 'appointment-all',          label: 'นัดหมายทุกประเภท', icon: LayoutDashboard, color: 'sky',     palette: 'appointment all overview combined ทุกประเภท ทั้งหมด รวม นัดหมาย calendar' },
       { id: 'appointment-no-deposit',   label: 'จองไม่มัดจำ',     icon: CalendarDays,  color: 'sky',     palette: 'appointment booking no-deposit จองไม่มัดจำ จอง schedule นัด' },
       { id: 'appointment-deposit',      label: 'จองมัดจำ',       icon: CalendarCheck, color: 'emerald', palette: 'appointment booking deposit จองมัดจำ deposit-booking มัดจำ จอง' },
       { id: 'appointment-treatment-in', label: 'คิวรอทำหัตถการ', icon: Stethoscope,   color: 'sky',     palette: 'appointment treatment-in queue คิว ทำหัตถการ procedure รอ' },

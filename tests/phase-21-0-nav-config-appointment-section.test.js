@@ -23,12 +23,13 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
     expect(NAV_SECTIONS[0].label).toBe('นัดหมาย');
   });
 
-  test('N1.3 appointments-section has exactly 4 items in canonical order', () => {
+  test('N1.3 appointments-section has exactly 5 items in canonical order (Phase 21.0-bis added "ทุกประเภท" overview at top)', () => {
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
     expect(section).toBeDefined();
-    expect(section.items.length).toBe(4);
+    expect(section.items.length).toBe(5);
     const ids = section.items.map(i => i.id);
     expect(ids).toEqual([
+      'appointment-all',  // Phase 21.0-bis — combined all-types overview at TOP
       'appointment-no-deposit',
       'appointment-deposit',
       'appointment-treatment-in',
@@ -39,13 +40,15 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
   test('N1.4 sub-tab labels match user-verbatim presentation labels', () => {
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
     const labelMap = Object.fromEntries(section.items.map(i => [i.id, i.label]));
+    expect(labelMap['appointment-all']).toBe('นัดหมายทุกประเภท');  // Phase 21.0-bis
     expect(labelMap['appointment-no-deposit']).toBe('จองไม่มัดจำ');
     expect(labelMap['appointment-deposit']).toBe('จองมัดจำ');
     expect(labelMap['appointment-treatment-in']).toBe('คิวรอทำหัตถการ');
     expect(labelMap['appointment-follow-up']).toBe('คิวติดตามอาการ');
   });
 
-  test('N1.5 ALL_ITEM_IDS includes 4 new sub-tab ids', () => {
+  test('N1.5 ALL_ITEM_IDS includes 5 sub-tab ids (Phase 21.0-bis added appointment-all)', () => {
+    expect(ALL_ITEM_IDS).toContain('appointment-all');
     expect(ALL_ITEM_IDS).toContain('appointment-no-deposit');
     expect(ALL_ITEM_IDS).toContain('appointment-deposit');
     expect(ALL_ITEM_IDS).toContain('appointment-treatment-in');
@@ -56,8 +59,9 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
     expect(ALL_ITEM_IDS).not.toContain('appointments');
   });
 
-  test('N1.7 ITEM_LOOKUP resolves all 4 sub-tabs to the section', () => {
+  test('N1.7 ITEM_LOOKUP resolves all 5 sub-tabs to the section', () => {
     for (const id of [
+      'appointment-all',
       'appointment-no-deposit',
       'appointment-deposit',
       'appointment-treatment-in',
@@ -70,7 +74,8 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
     }
   });
 
-  test('N1.8 sectionOf resolves all 4 sub-tabs to "appointments-section"', () => {
+  test('N1.8 sectionOf resolves all 5 sub-tabs to "appointments-section"', () => {
+    expect(sectionOf('appointment-all')).toBe('appointments-section');
     expect(sectionOf('appointment-no-deposit')).toBe('appointments-section');
     expect(sectionOf('appointment-deposit')).toBe('appointments-section');
     expect(sectionOf('appointment-treatment-in')).toBe('appointments-section');
@@ -79,6 +84,7 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
 
   test('N1.9 itemById returns full metadata for each sub-tab (icon + color + palette)', () => {
     for (const id of [
+      'appointment-all',
       'appointment-no-deposit',
       'appointment-deposit',
       'appointment-treatment-in',
@@ -91,6 +97,11 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
       expect(typeof item.palette).toBe('string');
       expect(item.palette.length).toBeGreaterThan(0);
     }
+  });
+
+  test('N1.11 appointment-all is the FIRST item (overview at top)', () => {
+    const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
+    expect(section.items[0].id).toBe('appointment-all');
   });
 
   test('N1.10 deposit sub-tab uses emerald color (Finance.มัดจำ visual link)', () => {

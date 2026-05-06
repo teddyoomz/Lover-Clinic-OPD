@@ -79,8 +79,9 @@ describe('nav config — shape', () => {
     // appointment-no-deposit). The 4 new ids are added below.
     const legacy = ['clone', 'customers', 'masterdata', 'sales', 'finance', 'stock', 'promotions', 'coupons', 'vouchers'];
     for (const id of legacy) expect(ALL_ITEM_IDS).toContain(id);
-    // Phase 21.0 — 4 new appointment sub-tab ids replace legacy 'appointments'.
-    const phase21 = ['appointment-no-deposit', 'appointment-deposit', 'appointment-treatment-in', 'appointment-follow-up'];
+    // Phase 21.0 — 4 typed appointment sub-tab ids replace legacy 'appointments'.
+    // Phase 21.0-bis — 'appointment-all' overview added at top of section.
+    const phase21 = ['appointment-all', 'appointment-no-deposit', 'appointment-deposit', 'appointment-treatment-in', 'appointment-follow-up'];
     for (const id of phase21) expect(ALL_ITEM_IDS).toContain(id);
   });
 });
