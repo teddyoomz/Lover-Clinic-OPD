@@ -7,12 +7,33 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-06 EOD continuation 5 — Phase 24.0-undecies through vicies-octies SHIPPED (~12 commits) + NEW iron-clad **Rule N**. Master ahead-of-prod ~62 commits. Local-only workflow.
+- **Date last updated**: 2026-05-07 EOD — Phase 24.0-vicies-novies family SHIPPED (7 commits) + 2 deploys (combined mid-session, vercel-only at end). master = prod. No-deploy directive lifted mid-session.
 - **Branch**: `master`
-- **Last commit**: `f9aefb1` — feat(phase-24-0-vicies-octies): Finance ไปที่นัด button + AppointmentCalendarView initialSelectedDate
-- **Test count**: **6442 PASS / 6442 total** (full green; +386 net since last session)
+- **Last commit**: `e36811f` — fix(phase-24-0-vicies-novies-octies): migrate mappers stamp branchId from selectedBranchId — per-branch catalog isolation restored
+- **Test count**: **6646 PASS / 6646 total** (full green; +204 net since last session)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `024f6dd`** (V15 #22 LIVE 2026-05-05) — FROZEN per no-deploy directive 2026-05-06. master ahead-of-prod ~62 commits.
+- **Deploy state**: **PRODUCTION = `e36811f`** (LIVE 2026-05-07) — master in sync with prod after end-of-session vercel deploy.
+
+### Session 2026-05-07 EOD — Phase 24.0-vicies-novies family (7 commits, 2 deploys, per-branch catalog isolation fix)
+
+User-driven multi-cycle session: shipped vicies-novies → octies (skipping quinquies which was a discarded wipe-script). Mid-session pivot from no-deploy → "ยอมแล้ว ตอนนี้ deploy ไปทำใน vercel ก็ได้" → combined deploy ran. Then 3 more commits + final vercel-only deploy at end.
+
+**Major themes**:
+- **OPD-save auto-attach** (vicies-novies): customer-later deposit/appointment auto-link to new be_customer at "บันทึกลง OPD" via unique session-id (handleOpdClick post-save hook, attachCustomerToOpdSessionLinks helper, provisionOpdLinkForBookingPair helper, SendCustomerLinkModal UI)
+- **handleDepositSync duplicate fix** (bis): kiosk DEPOSIT queue path was using createDeposit on first OPD save → duplicate doc; now checks linkedDepositId + uses updateDeposit + cascades to appointment
+- **Master-data sync source switch** (ter→sexies): Trial → Production ProClinic; IMPORT_TARGET_BRANCH_ID flipped to พระราม 3 per user pivot
+- **Local-only sync orchestrator** (quater): firebase-admin + custom-token + master.js handler invocation — diagnostic path when /api/* not reachable from vite dev
+- **Per-branch catalog isolation FIX** (septies WRONG → octies CORRECT): wrong direction (allBranches:true) reverted; real fix = migrate mappers stamp branchId from selectedBranchId at migrate-time. 7 mappers + 7 wrappers + MasterDataTab handleMigrate plumbing.
+
+**Bonus diagnostics**:
+- Production ProClinic credential discovery: PROCLINIC_EMAIL was for a wrong/limited user (4/18 syncs OK); user updated env to Owner credentials
+- Vercel CLI env-pull \\n escape bug discovered + fixed in sync orchestrator's env parser
+
+**Deploys**:
+1. Combined vercel + firestore:rules with 4-endpoint Probe-Deploy-Probe (all 200 ✓)
+2. Vercel-only at end (rules diff = 0; idempotent)
+
+Detail: `.agents/sessions/2026-05-07-phase-24-0-vicies-novies-octies-saga.md`
 
 ### Session 2026-05-06 EOD continuation 5 — Phase 24.0-undecies through vicies-octies (~12 commits) + Rule N
 
@@ -518,26 +539,27 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-06 EOD continuation 5.
+Resume LoverClinic — continue from 2026-05-07 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=f9aefb1, prod=024f6dd FROZEN V15 #22)
-3. .agents/active.md (6442 tests; ~62 commits ahead-of-prod)
-4. .claude/rules/00-session-start.md (iron-clad A-N + V-summary; NEW Rule N)
-5. .agents/sessions/2026-05-06-phase-24-0-undecies-thru-vicies-octies.md
+2. SESSION_HANDOFF.md (master = prod = e36811f LIVE)
+3. .agents/active.md (6646 tests pass; master in sync with prod)
+4. .claude/rules/00-session-start.md (iron-clad A-N + V-summary)
+5. .agents/sessions/2026-05-07-phase-24-0-vicies-novies-octies-saga.md
 
-Status: master=f9aefb1, 6442/6442 tests pass (full green), prod=024f6dd FROZEN per no-deploy. master ahead-of-prod ~62 commits, this session +12 commits: Phase 24.0-undecies (visitPurpose "อื่นๆ" + Finance column wrap) → duodecies (OPD banner ดู/แก้ไขข้อมูลลูกค้า + edit-mode deep-link) → terdecies..octiesdecies (customer-later flow + cascades + branch-grid race) → noniesdecies (+ สร้างนัด button) → vicies (deposit-edit cascades) → vicies-bis (kiosk-cancel cascade + NEW Rule N) → vicies-ter (deposit-card edit-appt + archive cascade) → vicies-quater (paymentAmount wheel-scroll fix) → vicies-quinquies (HARD-delete pair) → vicies-sexies (cascade error surfacing + listener-race defense) → vicies-septies (createDeposit().depositId extract + coerceId healing) → vicies-octies (Finance ไปที่นัด button + initialSelectedDate prop). NEW iron-clad Rule N (targeted-test-only for small bugfixes).
+Status: master = prod = e36811f, 6646/6646 tests pass, LIVE on lover-clinic-app.vercel.app. This session: 7 commits (Phase 24.0-vicies-novies through octies) + 2 deploys (combined mid-session, vercel-only at end). Per-branch catalog isolation working: migrate mappers stamp branchId from selectedBranchId at migrate-time → 6 catalog tabs filter by branchId correctly.
 
-Next action: idle. Open new chat for next directive.
+Next action: idle. Awaiting user directive.
 
 Outstanding (user-triggered):
+- Optional: admin-SDK script to wipe ~328 product / ~370 course / etc. branchless zombies (legacy from earlier trial migrations) — invisible in UI but occupy storage
 - 🚨 H-bis ProClinic full strip (brokerClient + api/proclinic + cookie-relay + MasterDataTab + clinic_settings/proclinic_session*)
-- Hard-gate Firebase custom claim (deploy-coupled — skipped under no-deploy)
+- Hard-gate Firebase custom claim (deploy-coupled)
 - /audit-all pre-release pass
 - BackendDashboard nav restructure (deferred from Phase 20.0 EOD)
 
-Rules: NO Vercel deploys (local-only); Rule M data-ops local+admin-SDK+pull-env; Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature); NEW Rule N (small bugfix → targeted tests only; full suite for big/end-of-batch/pre-deploy); V37 (NEVER `git add -A`); credential leak resolved per user no-rotate accept (don't re-raise); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18 triple-repeat lock); V15 default = combined vercel + firestore:rules with Probe-Deploy-Probe (Rule B 4-endpoint URLs MUST include artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE for new features (orthogonal to plan-mode); Rule K work-first-test-last for multi-stream cycles; Rule L BSA (BS-1..BS-9); H-quater (no master_data reads in feature code); Rule M data-ops local+admin-SDK+pull-env; Rule N targeted-test-only for small bugfixes; V37 (NEVER `git add -A`); credential leak (.env.local.prod 2026-05-06) resolved per user no-rotate accept — don't re-raise; NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
