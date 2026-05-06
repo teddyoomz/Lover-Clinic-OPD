@@ -93,3 +93,34 @@ describe('H3 — FK remap (clone mode)', () => {
     expect(audit.unmapped).toContainEqual({ field: 'productId', oldId: 'UNKNOWN', collection: 'be_products' });
   });
 });
+
+import { BACKUP_SCHEMA_VERSION, validateBackupFile, buildBackupFile } from '../src/lib/branchBackupSchema.js';
+
+describe('H4 — schema validators', () => {
+  it('H4.1 — BACKUP_SCHEMA_VERSION is 1', () => {
+    expect(BACKUP_SCHEMA_VERSION).toBe(1);
+  });
+
+  it('H4.2 — validateBackupFile rejects missing meta.schemaVersion', () => {
+    expect(() => validateBackupFile({ meta: {}, collections: {} })).toThrow(/SCHEMA_VERSION_MISSING/);
+  });
+
+  it('H4.3 — validateBackupFile rejects future schemaVersion', () => {
+    expect(() => validateBackupFile({ meta: { schemaVersion: 999 }, collections: {} })).toThrow(/SCHEMA_VERSION_UNSUPPORTED/);
+  });
+
+  it('H4.4 — validateBackupFile rejects missing sourceBranchId', () => {
+    expect(() => validateBackupFile({ meta: { schemaVersion: 1 }, collections: {} })).toThrow(/SOURCE_BRANCH_ID_MISSING/);
+  });
+
+  it('H4.5 — buildBackupFile produces shape with meta + collections', () => {
+    const file = buildBackupFile({
+      sourceBranchId: 'BR-A', exportedBy: 'admin-1', scope: { tiers: ['T1'] },
+      collections: { be_products: [{ id: 'P1' }] },
+    });
+    expect(file.meta.schemaVersion).toBe(1);
+    expect(file.meta.sourceBranchId).toBe('BR-A');
+    expect(file.collections.be_products).toHaveLength(1);
+    expect(file.meta.perCollectionCounts.be_products).toBe(1);
+  });
+});
