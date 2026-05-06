@@ -10009,14 +10009,23 @@ export async function getProduct(productId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat).
+ *
+ * Phase 24.0-vicies-novies-novies (V38, 2026-05-07): spread order swapped from
+ * `{ id: d.id, ...d.data() }` to `{ ...d.data(), id: d.id }` so the Firestore
+ * docId always wins, even when data has a stray `id` field. Baseline-migrated
+ * docs (from `branch-merge-apply.mjs` / `customer-branch-baseline.js`) carry
+ * an `id` field in their data that previously OVERRODE `d.id` in the spread,
+ * causing handleDelete's `p.productId || p.id` fallback to resolve to the
+ * wrong path → silent no-op delete. Rule of 3: see listCourses + audit AV17.
+ */
 export async function listProducts({ branchId, allBranches = false } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(productsCol(), where('branchId', '==', String(branchId)))
     : productsCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
     const ob = b.orderBy ?? null;
@@ -10071,14 +10080,19 @@ export async function getCourse(courseId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat). */
+/** Phase BS V2 — accepts {branchId, allBranches}; default no filter (legacy compat).
+ *
+ * Phase 24.0-vicies-novies-novies (V38, 2026-05-07): spread order swapped — see
+ * listProducts JSDoc above for full rationale. Mirror fix to keep both catalog
+ * listers Rule-of-3 aligned. Audit AV17 enforces this pattern across listers.
+ */
 export async function listCourses({ branchId, allBranches = false } = {}) {
   const useFilter = branchId && !allBranches;
   const ref = useFilter
     ? query(coursesCol(), where('branchId', '==', String(branchId)))
     : coursesCol();
   const snap = await getDocs(ref);
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   items.sort((a, b) => {
     const oa = a.orderBy ?? null;
     const ob = b.orderBy ?? null;

@@ -677,3 +677,95 @@ Files relevant to BSA:
 - `tests/branch-scope-flow-simulate.test.js` — F1-F9 (Task 10)
 - `.claude/skills/audit-branch-scope/{SKILL.md,patterns.md}` — Audit skill (Task 9)
 
+---
+
+### V38 — 2026-05-07 — handleDelete silent no-op via spread-order override (Phase 24.0-vicies-novies-novies)
+
+User report (verbatim, 3rd round of same complaint within hours):
+> "ตอนนี้สาขาพระราม 3 ยังคงลบสิ่งเหล่านี้ ในภาพ ไม่ได้ ไม่ว่าจะบน vercel หรือ http://localhost:5173/ ซึ่งจริงๆแม่งต้องลบได้ตั้งแต่ http://localhost:5173/ เหมือนกับสาขานครราชสีมาดิ"
+
+**Background**: Phase 24.0-vicies-novies-octies (`e36811f`, ~19 minutes earlier) was a "fix" that reverted the wrong septies direction (catalog tabs → `allBranches:true`) and stamped `branchId` on migrate output. Octies's *commit message* explicitly said the fix would unblock delete via "After migrate, imported items have branchId stamped → per-branch tab filter shows them → user can click delete." It addressed VISIBILITY, not the actual delete failure.
+
+**Root cause** (Phase 1 systematic-debugging investigation):
+
+The 5 พระราม 3 products + 2 courses were NOT created by `mapMasterToProduct` (which DOES stamp `productId: id`). They were created by `scripts/branch-merge-apply.mjs` (2026-05-06) + `api/admin/customer-branch-baseline.js`. Those scripts:
+- Generate synthetic docId = `PRODUCTS_<ts>_<hex>` / `COURSES_<ts>_<hex>`
+- Copy source data verbatim — which carries ProClinic's `id` field as a stray data field
+- Stamp `_branchBaselineMigratedAt` + `_branchBaselineMigratedBy` forensic fields
+- Stamp `branchId` (target branch)
+- **Do NOT re-stamp `productId`/`courseId` to the new synthetic docId** ← original sin
+
+`listProducts` + `listCourses` did `{id: d.id, ...d.data()}` — spread order put `data.id` AFTER `id: d.id` → `data.id` (legacy ProClinic numeric like `"276"`) OVERRODE the actual Firestore docId.
+
+`handleDelete` resolved `id = p.productId || p.id`:
+- **นครราชสีมา (works)**: docId=`"1020"`, data has `productId: "1020"`, NO stray `id` → `p.productId = "1020"` → correct delete path.
+- **พระราม 3 (broken)**: docId=`"PRODUCTS_..."`, NO `productId`, data has `id: "276"` → spread sets `p.id = "276"` (overridden) → `p.productId || p.id` = `undefined || "276"` = `"276"` → `deleteDoc(productDoc("276"))` → Firestore silently no-ops on non-existent doc → `await reload()` → doc still there → user sees "ลบไม่ได้".
+
+Diag (`scripts/diag-pram3-products-courses.mjs`) confirmed exact shape:
+- พระราม 3 products: 5 docs, all with `productId: "(missing)"`, all with `id` data-field (priorIds 276/277/941/281/755)
+- พระราม 3 courses: 2 docs, all with `courseId: "(missing)"`, all with `id` data-field (priorIds 1235/24433)
+- Admin-SDK probe (TEST-DIAG-* doc create+delete) succeeded → path is healthy → bug is purely in JS-side id resolution.
+
+**Fix surfaces (3-part shipment)**:
+
+1. **Part A — Code fix** (Rule N small, 2-line spread swap):
+   ```diff
+   // backendClient.js:10019 (listProducts)
+   -   const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+   +   const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+   // backendClient.js:10081 (listCourses) — same change
+   ```
+   Effect: `p.id` always equals true Firestore docId regardless of stray `data.id`. handleDelete fallback works correctly.
+
+2. **Part B — Data fix** (Rule M one-shot, `scripts/phase-24-0-vicies-novies-novies-backfill-product-course-id.mjs`):
+   - Two-phase (dry-run by default; `--apply` commits)
+   - Decision logic via pure helper `decideBackfillAction({docId, data, entityIdField})`:
+     - `entityId === docId` → skip already-canonical
+     - `entityId !== docId` → skip mismatch (NOT auto-touched; reported)
+     - missing/empty → backfill with `entityId = docId`
+   - Forensic-trail: `_<entityId>BackfilledAt: serverTimestamp()` + `_<entityId>BackfilledFrom: priorDataIdValue`
+   - Idempotent: re-run with `--apply` after 1st apply → 0 writes
+   - Audit doc: `be_admin_audit/phase-24-0-vicies-novies-novies-backfill-<ts>-<rand>` with full counts + mismatch sample
+   - Dry-run output confirmed scope: 5 products + 2 courses (matches user screenshot exactly), 0 mismatches
+
+3. **Part C — Tests + audit invariant** (Rule I full-flow simulate + V12 multi-reader-sweep guard):
+   - NEW `tests/phase-24-0-vicies-novies-novies-list-spread-order.test.js` (S1-S7 source-grep + unit):
+     - S1.1-3: listProducts post-fix spread shape locked + V38 marker
+     - S2.1-2: listCourses mirror
+     - S3.1-3: pure simulator — post-fix spread vs PRE-fix bug repro
+     - S4.1-5: handleDelete id-resolution chain (baseline-migrated + canonical + course mirror + post-Part-B state)
+     - S5.1-5: adversarial inputs (null/empty/number/no-id/Thai-chars data fields)
+     - S6.1-8: backfill script `decideBackfillAction` + `buildBackfillPatch` 8 edge cases
+     - S7.1-4: UI handleDelete contract — ProductsTab/CoursesTab uses `p.productId || p.id` + imports from scopedDataLayer
+   - NEW `tests/phase-24-0-vicies-novies-novies-flow-simulate.test.js` (Rule I F1-F5):
+     - F1.1-3: full chain — branch-merge → list (post-fix) → handleDelete → deleteDoc receives correct docId
+     - F2.1: PRE-fix legacy spread bug reproduction (regression doc)
+     - F3.1: course path mirror
+     - F4.1-4: adversarial (multi-doc list, null id, no fields, mismatch FK)
+     - F5.1-2: lifecycle — post-Part-B backfilled docs stable across re-list; idempotent decideBackfillAction
+   - audit-anti-vibe-code **AV17** new invariant: every `snap.docs.map(d => ({ id: d.id, ...d.data() }))` flagged → migrate to `{ ...d.data(), id: d.id }`. Sanctioned exceptions via `// audit-anti-vibe-code: AV17 safe — data has no id field` comment.
+
+**Lessons** (locked into v-log + audit invariants):
+
+1. **V12 spread-order multi-reader sweep**: pattern `{id: d.id, ...d.data()}` appears 70+ times across `backendClient.js` + `src/components/backend/`. ANY collection where docs may carry an `id` data field is silently vulnerable. AV17 audit invariant catches the rest at next pre-release pass; mass sweep across all 70 callsites deferred to follow-up.
+
+2. **Octies fixed the wrong root cause**: visibility-only test bank (`tests/phase-24-0-vicies-novies-octies-migrate-stamps-branchid.test.js` from `e36811f`) asserted branchId stamped on migrate output. NEVER asserted handleDelete resolves correct docId after a real list cycle. Rule I gap: end-of-sub-phase flow-simulate MUST chain user click → handleDelete → write path, not just write-side visibility. The `+32 NEW tests` count from octies looked impressive but covered the wrong layer.
+
+3. **Baseline-migration scripts need canonical-entity-id stamp at write**: `branch-merge-apply.mjs:103-104` + `customer-branch-baseline.js:192-193` left forensic `_branchBaselineMigrated*` but skipped re-stamping `productId`/`courseId` to the new synthetic docId. Future cross-branch copy paths MUST stamp canonical entity id at the write boundary. Follow-up: extend those scripts to stamp at write (so re-running them is self-healing). Tracked separately.
+
+4. **handleDelete `p.<entity>Id || p.id` defensive shape is correct** — but only as long as `p.id` reliably equals the docId. The reader is responsible for that invariant. With the spread-swap fix, the reader honors it.
+
+5. **3-round bug = institutional smell**: User reported the SAME logical complaint 3+ times within hours (octies addressed visibility; user re-reports → V38 addresses delete). Each "fix" landed without reproducing the user's exact click. Rule I full-flow simulate IS the canonical guard against this — and it requires a runtime check that the user-visible outcome (item disappears from list after delete) actually happens, not just that the helper output looks correct.
+
+6. **Diag-first paid off**: `scripts/diag-pram3-products-courses.mjs` (read-only admin-SDK script) revealed the exact shape difference between working (นครราชสีมา) and broken (พระราม 3) docs in <30 seconds. Without that script, debugging via UI clicks would have wasted an hour. Rule M includes diagnostic scripts as a first-class tool — not just data mutations.
+
+Files relevant to V38:
+- `src/lib/backendClient.js` — Part A spread-order swap (listProducts:10019, listCourses:10081)
+- `scripts/diag-pram3-products-courses.mjs` — diagnostic that found the bug
+- `scripts/phase-24-0-vicies-novies-novies-backfill-product-course-id.mjs` — Part B backfill (Rule M one-shot)
+- `tests/phase-24-0-vicies-novies-novies-list-spread-order.test.js` — Part C unit + source-grep
+- `tests/phase-24-0-vicies-novies-novies-flow-simulate.test.js` — Part C Rule I full-flow
+- `.claude/skills/audit-anti-vibe-code/` — AV17 invariant (list spread order)
+- `.claude/rules/00-session-start.md` § 2 — V38 compact entry
+
