@@ -32,30 +32,65 @@ describe('Phase 21.0 — F1 lockedAppointmentType prop', () => {
     expect(SRC).toMatch(/safeLockedType\s*\?\s*\(/);
   });
 
-  test('F1.6 deposit-redirect banner renders when isLockedDepositType', () => {
-    expect(SRC).toMatch(/data-testid=['"]appt-deposit-redirect-banner['"]/);
-    expect(SRC).toMatch(/isLockedDepositType\s*&&\s*\(/);
-    expect(SRC).toMatch(/การจองมัดจำต้องสร้างผ่านหน้าการเงิน/);
+  test('F1.6 embedded deposit subform renders when isLockedDepositType + create mode (Phase 21.0-ter)', () => {
+    // Phase 21.0-ter (2026-05-06 EOD) — replaced the redirect-banner with
+    // an inline deposit subform. Admin can create the paired deposit-
+    // booking from this modal directly via createDepositBookingPair.
+    expect(SRC).toMatch(/data-testid=['"]appt-deposit-subform['"]/);
+    expect(SRC).toMatch(/isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]\s*&&\s*\(/);
+    expect(SRC).toMatch(/💰\s*รายละเอียดมัดจำ/);
+    // Anti-regression: the legacy redirect banner + button MUST be gone.
+    expect(SRC).not.toMatch(/appt-deposit-redirect-banner/);
+    expect(SRC).not.toMatch(/appt-deposit-redirect-button/);
+    expect(SRC).not.toMatch(/ไปสร้างมัดจำ/);
   });
 
-  test('F1.7 redirect button navigates to ?tab=finance&subtab=deposit&action=...', () => {
-    expect(SRC).toMatch(/data-testid=['"]appt-deposit-redirect-button['"]/);
-    expect(SRC).toMatch(/tab['"],\s*['"]finance['"]\)/);
-    expect(SRC).toMatch(/subtab['"],\s*['"]deposit['"]\)/);
-    expect(SRC).toMatch(/create-with-customer=/);
+  test('F1.7 deposit subform exposes amount/channel/paymentDate/note fields', () => {
+    expect(SRC).toMatch(/data-testid=['"]appt-deposit-amount['"]/);
+    expect(SRC).toMatch(/data-testid=['"]appt-deposit-channel['"]/);
+    expect(SRC).toMatch(/data-testid=['"]appt-deposit-note['"]/);
+    // depositPaymentDate uses the shared DateField component (no testid)
+    expect(SRC).toMatch(/data-field=['"]depositPaymentDate['"]/);
+    // 4 deposit fields appear in defaultFormData
+    expect(SRC).toMatch(/depositAmount:/);
+    expect(SRC).toMatch(/depositPaymentChannel:\s*['"]เงินสด['"]/);
+    expect(SRC).toMatch(/depositPaymentDate:/);
+    expect(SRC).toMatch(/depositNote:/);
   });
 
-  test('F1.8 handleSave guards against deposit-booking lock (defense-in-depth)', () => {
-    // Even if save button is hidden, programmatic submission must short-circuit.
-    expect(SRC).toMatch(/if \(isLockedDepositType\) \{[\s\S]{0,200}?return;/);
+  test('F1.8 handleSave validates deposit fields when isCreatingDepositBooking', () => {
+    expect(SRC).toMatch(/const\s+isCreatingDepositBooking\s*=\s*isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]/);
+    expect(SRC).toMatch(/parseFloat\(formData\.depositAmount\)/);
+    expect(SRC).toMatch(/scrollToFormError\(['"]depositAmount['"]/);
+    expect(SRC).toMatch(/scrollToFormError\(['"]depositPaymentChannel['"]/);
+    expect(SRC).toMatch(/scrollToFormError\(['"]depositPaymentDate['"]/);
   });
 
   test('F1.9 save payload forces appointmentType = safeLockedType when set', () => {
     expect(SRC).toMatch(/appointmentType:\s*safeLockedType\s*\|\|\s*formData\.appointmentType/);
   });
 
-  test('F1.10 save button hidden when isLockedDepositType + create mode', () => {
-    expect(SRC).toMatch(/!\(isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]\)/);
+  test('F1.10 save button always visible — deposit-booking creates route to pair-helper (Phase 21.0-ter)', () => {
+    // Anti-regression: the Phase 21.0-main hidden-save logic is gone.
+    expect(SRC).not.toMatch(/!\(isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]\)/);
+    // Save button label switches between สร้างนัดหมาย / สร้างจองมัดจำ
+    expect(SRC).toMatch(/สร้างจองมัดจำ/);
+    expect(SRC).toMatch(/สร้างนัดหมาย/);
+  });
+
+  test('F1.12 createDepositBookingPair imported + called when isCreatingDepositBooking', () => {
+    expect(SRC).toMatch(/import\s*\{\s*createDepositBookingPair\s*\}\s*from\s*['"]\.\.\/\.\.\/lib\/appointmentDepositBatch\.js['"]/);
+    // Save handler has the isCreatingDepositBooking branch
+    expect(SRC).toMatch(/else if \(isCreatingDepositBooking\)/);
+    // …which builds depositData…
+    expect(SRC).toMatch(/const\s+depositData\s*=\s*\{/);
+    // …and calls the pair helper with it
+    expect(SRC).toMatch(/createDepositBookingPair\(\s*\{\s*depositData,\s*branchId:\s*selectedBranchId\s*\}\)/);
+  });
+
+  test('F1.13 advisor auto-becomes 100% seller when set (else empty array)', () => {
+    expect(SRC).toMatch(/sellers:\s*formData\.advisorId\s*\?/);
+    expect(SRC).toMatch(/percent:\s*100/);
   });
 
   test('F1.11 Phase 21.0 marker present', () => {

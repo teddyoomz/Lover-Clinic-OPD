@@ -280,11 +280,26 @@ describe('Phase 21.0 — F5 source-grep regression guards (V21 lock-in)', () => 
     expect(SRC).toMatch(/typedDayAppts\.find/);     // doctor scroll-target
   });
 
-  test('F5.2 BackendDashboard renders >= 5 distinct AppointmentCalendarView instances (Phase 21.0-bis added all-types overview)', () => {
+  test('F5.2 BackendDashboard renders ONE shared AppointmentCalendarView with computed appointmentType prop (Phase 21.0-quater hotfix)', () => {
+    // Phase 21.0-quater — refactored from 5 separate JSX elements (one per
+    // sub-tab) to ONE element at ONE syntactic position, with the
+    // appointmentType prop computed via an inline ternary mapping activeTab
+    // → canonical type id. This forces React to REUSE the component instance
+    // across sub-tab clicks (instead of unmount+mount), preserving dayAppts
+    // state + listener subscription. Without this, every sub-tab click reset
+    // dayAppts=[] until the listener fired its first snapshot — user saw
+    // empty grid until F5.
     const { readFileSync } = require('node:fs');
     const BD = readFileSync('src/pages/BackendDashboard.jsx', 'utf8');
-    const matches = BD.match(/<AppointmentCalendarView/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(5);
+    // Match only JSX-context openings: <AppointmentCalendarView followed by
+    // whitespace + a prop OR a closing newline (excludes the literal
+    // <AppointmentCalendarView/> in comments which has `/>` immediately
+    // after the name).
+    const matches = BD.match(/<AppointmentCalendarView(?=\s)/g) || [];
+    expect(matches.length).toBe(1);
+    // The ONE element's appointmentType prop is a computed expression that
+    // maps each typed sub-tab activeTab to the canonical SSOT id.
+    expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,800}?appointmentType=\{/);
   });
 
   test('F5.3 navConfig has section with exactly 5 appointment items (Phase 21.0-bis)', () => {

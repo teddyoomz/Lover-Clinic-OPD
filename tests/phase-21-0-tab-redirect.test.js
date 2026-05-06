@@ -14,6 +14,11 @@ describe('Phase 21.0 — R1 BackendDashboard routing + redirect', () => {
   });
 
   test('R1.2 5 tab cases for the new sub-tab IDs (Phase 21.0-bis added appointment-all)', () => {
+    // Phase 21.0-quater (2026-05-06 EOD hotfix) — the 5 sub-tab strings now
+    // appear inside ONE OR-conditional `(activeTab === A || activeTab === B
+    // || ...)` so React reuses the AppointmentCalendarView instance across
+    // sub-tab clicks (avoids unmount-on-tab-change empty-grid bug). The
+    // literal `activeTab === 'X'` substring still appears for each id.
     expect(BD).toMatch(/activeTab === ['"]appointment-all['"]/);
     expect(BD).toMatch(/activeTab === ['"]appointment-no-deposit['"]/);
     expect(BD).toMatch(/activeTab === ['"]appointment-deposit['"]/);
@@ -21,21 +26,26 @@ describe('Phase 21.0 — R1 BackendDashboard routing + redirect', () => {
     expect(BD).toMatch(/activeTab === ['"]appointment-follow-up['"]/);
   });
 
-  test('R1.3 The 4 typed sub-tabs pass appointmentType prop to AppointmentCalendarView', () => {
-    expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,200}?appointmentType=['"]no-deposit-booking['"]/);
-    expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,200}?appointmentType=['"]deposit-booking['"]/);
-    expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,200}?appointmentType=['"]treatment-in['"]/);
-    expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,200}?appointmentType=['"]follow-up['"]/);
+  test('R1.3 The 4 typed sub-tabs map activeTab to canonical appointmentType in the AppointmentCalendarView prop ternary', () => {
+    // Phase 21.0-quater shape — single AppointmentCalendarView at ONE
+    // syntactic position, with appointmentType prop computed via inline
+    // ternary that maps activeTab → canonical type id. Each mapping
+    // should appear as `activeTab === 'X' ? 'Y'`.
+    expect(BD).toMatch(/activeTab === ['"]appointment-no-deposit['"]\s*\?\s*['"]no-deposit-booking['"]/);
+    expect(BD).toMatch(/activeTab === ['"]appointment-deposit['"]\s*\?\s*['"]deposit-booking['"]/);
+    expect(BD).toMatch(/activeTab === ['"]appointment-treatment-in['"]\s*\?\s*['"]treatment-in['"]/);
+    expect(BD).toMatch(/activeTab === ['"]appointment-follow-up['"]\s*\?\s*['"]follow-up['"]/);
   });
 
-  test('R1.3-bis appointment-all renders <AppointmentCalendarView /> WITHOUT appointmentType prop (combined all-types view)', () => {
-    // The all-types case body shouldn't pass appointmentType; the component's
-    // internal typeFilter resolves to null → typedDayAppts === dayAppts.
-    // Bumped char windows to cover the multi-line comment block describing
-    // the all-types semantics + the multi-line JSX.
-    const allCase = BD.match(/activeTab === ['"]appointment-all['"][\s\S]{0,1200}?<AppointmentCalendarView[\s\S]{0,500}?\/>/);
-    expect(allCase).not.toBeNull();
-    expect(allCase[0]).not.toMatch(/appointmentType=/);
+  test('R1.3-bis appointment-all falls through to undefined (no type filter) — combined all-types view', () => {
+    // Phase 21.0-quater — the type-prop ternary has no explicit
+    // 'appointment-all' → 'X' mapping; instead it falls through to
+    // `undefined` as the default. AppointmentCalendarView's internal
+    // typeFilter resolves null when prop is undefined → typedDayAppts ===
+    // dayAppts (no filter).
+    expect(BD).toMatch(/undefined\s*\/\/\s*'appointment-all'/);
+    // No `'appointment-all' ? 'X'` mapping should exist.
+    expect(BD).not.toMatch(/['"]appointment-all['"]\s*\?\s*['"][\w-]+['"]/);
   });
 
   test('R1.4 Old activeTab === "appointments" branch is REMOVED', () => {

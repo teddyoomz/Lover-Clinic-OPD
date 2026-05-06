@@ -44,6 +44,12 @@ import {
   // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
   listExamRooms,
 } from '../../lib/scopedDataLayer.js';
+// Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform routes through
+// the same atomic pair-helper DepositPanel uses. V12 single-writer lock
+// preserved: AppointmentFormModal (this file, when type='deposit-booking')
+// + DepositPanel both call createDepositBookingPair → identical paired
+// (be_deposits + be_appointments) shape, no drift possible.
+import { createDepositBookingPair } from '../../lib/appointmentDepositBatch.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { checkAppointmentCollision, TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
@@ -95,6 +101,15 @@ function defaultFormData(overrides = {}) {
     notes: '',
     appointmentColor: '',
     lineNotify: false,
+    // Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform fields,
+    // active only when appointmentType === 'deposit-booking'. Routed through
+    // createDepositBookingPair on save → atomic paired (be_deposits +
+    // be_appointments) write. Same helper DepositPanel uses → single-writer
+    // V12 lock preserved.
+    depositAmount: '',
+    depositPaymentChannel: 'เงินสด',
+    depositPaymentDate: thaiTodayISO(),
+    depositNote: '',
     recurringOption: 'once',
     recurringInterval: '',
     recurringUnit: 'วัน',
@@ -142,12 +157,15 @@ function defaultFormData(overrides = {}) {
  *        Used by the new นัดหมาย sub-tabs (AppointmentCalendarView) so admin
  *        can't miscategorize while inside a typed view.
  *
- *        Special case `lockedAppointmentType === 'deposit-booking'`:
- *        the modal hides the save button entirely and renders a redirect
- *        banner directing admin to Finance.มัดจำ (DepositPanel) — that's
- *        the canonical entry point for deposit-bookings (paired write via
- *        appointmentDepositBatch.createDepositBookingPair). Admin clicks
- *        "ไปสร้างมัดจำ" to navigate.
+ *        Special case `lockedAppointmentType === 'deposit-booking'` +
+ *        mode='create': renders an embedded deposit subform (amount +
+ *        paymentChannel + paymentDate + note) and routes save to
+ *        createDepositBookingPair → atomic paired (be_deposits +
+ *        be_appointments) write. Admin can create the full deposit-
+ *        booking pair from this single modal. (Phase 21.0-ter, 2026-05-06
+ *        EOD — replaces the prior "redirect to Finance.มัดจำ" UX per
+ *        user directive "ทำให้สร้างได้ตั้งแต่หน้าจองมัดจำเลย ... ก็มีช่อง
+ *        ให้กรอกรายละเอียดการมัดจำไปด้วยไง ง่ายๆ".)
  *
  *        When omitted (legacy callers like CustomerDetailView), behaves
  *        as today (admin picks any of 4 types from radio).
@@ -338,17 +356,30 @@ export default function AppointmentFormModal({
   }, []);
 
   const handleSave = async () => {
-    // Phase 21.0 — guard: deposit-booking creates MUST go through DepositPanel
-    // (paired writeBatch via appointmentDepositBatch.createDepositBookingPair).
-    // The modal hides the save button when isLockedDepositType, but defend
-    // against keyboard-Enter / programmatic submit by short-circuiting.
-    if (isLockedDepositType) {
-      scrollToFormError('apptCustomer', 'กรุณาสร้างจองมัดจำผ่านหน้า การเงิน → มัดจำ');
-      return;
-    }
     if (!formData.customerId) { scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า'); return; }
     if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
     if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
+    // Phase 21.0-ter (2026-05-06 EOD) — when admin creates a deposit-booking
+    // appointment, additional deposit fields are required. The save handler
+    // routes to createDepositBookingPair → atomic paired write of be_deposits
+    // + be_appointments. Edit mode (mode === 'edit') skips this guard
+    // because edits only touch appointment metadata, not the deposit doc.
+    const isCreatingDepositBooking = isLockedDepositType && mode === 'create';
+    if (isCreatingDepositBooking) {
+      const amt = parseFloat(formData.depositAmount);
+      if (!amt || amt <= 0) {
+        scrollToFormError('depositAmount', 'กรุณาระบุยอดมัดจำมากกว่า 0');
+        return;
+      }
+      if (!formData.depositPaymentChannel) {
+        scrollToFormError('depositPaymentChannel', 'กรุณาเลือกช่องทางชำระเงิน');
+        return;
+      }
+      if (!formData.depositPaymentDate) {
+        scrollToFormError('depositPaymentDate', 'กรุณาเลือกวันที่ชำระ');
+        return;
+      }
+    }
 
     // Holiday confirm (create only)
     if (mode === 'create' && !skipHolidayCheck) {
@@ -469,6 +500,65 @@ export default function AppointmentFormModal({
 
       if (mode === 'edit' && appt) {
         await updateBackendAppointment(appt.appointmentId || appt.id, payload);
+      } else if (isCreatingDepositBooking) {
+        // Phase 21.0-ter (2026-05-06 EOD) — atomic paired write via the
+        // SAME helper DepositPanel uses (V12 single-writer lock). The
+        // pair-helper handles ID minting (DEP-{ts} + BA-{ts}-{rand}),
+        // cross-link fields (linkedAppointmentId / linkedDepositId), and
+        // branchId stamping on both docs. Recurring multiplier is NOT
+        // supported here — deposit-bookings are single-occurrence by design
+        // (pre-paid for ONE visit). If admin needs recurring deposits,
+        // they should create them individually.
+        const depositData = {
+          customerId: formData.customerId,
+          customerName: formData.customerName,
+          customerHN: formData.customerHN,
+          amount: parseFloat(formData.depositAmount) || 0,
+          paymentChannel: formData.depositPaymentChannel,
+          paymentDate: formData.depositPaymentDate,
+          paymentTime: '',
+          refNo: '',
+          // Sellers — auto-include the advisor as a single 100% seller when
+          // set; otherwise empty (admin can edit in DepositPanel later).
+          sellers: formData.advisorId
+            ? [{
+                id: formData.advisorId,
+                name: formData.advisorName || '',
+                percent: 100,
+                total: parseFloat(formData.depositAmount) || 0,
+              }]
+            : [],
+          customerSource: '',
+          sourceDetail: '',
+          note: formData.depositNote || '',
+          hasAppointment: true,
+          // The embedded appointment metadata mirrors what DepositPanel
+          // builds for createDeposit. createDepositBookingPair uses this
+          // to hydrate the be_appointments doc with date / startTime /
+          // doctor / room / etc.
+          appointment: {
+            type: 'deposit-booking',
+            option: 'once',
+            date: formData.date,
+            startTime: formData.startTime,
+            endTime: formData.endTime || formData.startTime,
+            doctorId: formData.doctorId,
+            doctorName: formData.doctorName,
+            assistantIds: assistantIdsForSave,
+            assistantNames: assistantNamesForSave,
+            roomId: formData.roomId || '',
+            roomName: formData.roomName,
+            channel: formData.channel,
+            purpose: formData.appointmentTo,
+            note: formData.notes,
+            color: formData.appointmentColor || '',
+            lineNotify: !!formData.lineNotify,
+          },
+          paymentEvidenceUrl: '',
+          paymentEvidencePath: '',
+          branchId: selectedBranchId,
+        };
+        await createDepositBookingPair({ depositData, branchId: selectedBranchId });
       } else {
         // Phase 18.0 (2026-05-05) — localStorage room cache removed.
         // Recurring multiplier (create only). Same logic as AppointmentTab.
@@ -634,41 +724,88 @@ export default function AppointmentFormModal({
               </div>
             )}
           </div>
-          {/* Phase 21.0 — when admin opens this modal from the จองมัดจำ
-              sub-tab, redirect to Finance.มัดจำ where the deposit form has
-              the deposit-specific fields (amount + payment channel) and
-              the save handler routes through the appointmentDepositBatch
-              pair-write helper. */}
-          {isLockedDepositType && (
+          {/* Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform.
+              When admin opens this modal from the จองมัดจำ sub-tab (or
+              picks 'deposit-booking' from the radio), these required fields
+              appear inline. On save, the handler routes to
+              createDepositBookingPair which atomically writes the
+              be_deposits doc + the be_appointments doc with cross-link
+              fields. Replaces the prior Phase 21.0-main redirect banner
+              per user directive: "ทำให้สร้างได้ตั้งแต่หน้าจองมัดจำเลย ...
+              ก็มีช่องให้กรอกรายละเอียดการมัดจำไปด้วยไง ง่ายๆ". */}
+          {isLockedDepositType && mode === 'create' && (
             <div
-              className="rounded-lg p-3 bg-emerald-900/15 border border-emerald-700/40 text-xs space-y-2"
-              data-testid="appt-deposit-redirect-banner"
+              className="rounded-lg p-3 bg-emerald-900/15 border border-emerald-700/40 space-y-3"
+              data-testid="appt-deposit-subform"
             >
-              <p className="text-emerald-200 font-bold">การจองมัดจำต้องสร้างผ่านหน้าการเงิน → มัดจำ ของสาขานั้นๆ</p>
-              <p className="text-[var(--tx-muted)] leading-relaxed">
-                การจองมัดจำต้องระบุยอดเงินและช่องทางชำระ ระบบจะบันทึกทั้งใบมัดจำและนัดหมายไปพร้อมกันแบบอัตโนมัติ
-                ให้ปรากฏในแท็บ <span className="text-emerald-300 font-bold">จองมัดจำ</span> ของสาขานี้และ
-                ในแท็บ <span className="text-emerald-300 font-bold">การเงิน → มัดจำ</span> โดยอัตโนมัติ
+              <p className="text-xs font-bold text-emerald-200 uppercase tracking-wider">
+                💰 รายละเอียดมัดจำ
               </p>
-              <button
-                type="button"
-                data-testid="appt-deposit-redirect-button"
-                onClick={() => {
-                  const params = new URLSearchParams();
-                  params.set('backend', '1');
-                  params.set('tab', 'finance');
-                  params.set('subtab', 'deposit');
-                  if (formData.customerId) {
-                    params.set('action', `create-with-customer=${encodeURIComponent(formData.customerId)}`);
-                  } else {
-                    params.set('action', 'create');
-                  }
-                  window.location.href = `${window.location.pathname}?${params.toString()}`;
-                }}
-                className="px-3 py-1.5 rounded-md text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-600 transition-all"
-              >
-                ไปสร้างมัดจำ →
-              </button>
+              <p className="text-[10px] text-[var(--tx-muted)] leading-relaxed">
+                ระบบจะบันทึกทั้งใบมัดจำและนัดหมายพร้อมกันแบบอัตโนมัติ
+                แสดงในแท็บ <span className="text-emerald-300 font-bold">จองมัดจำ</span> และ
+                <span className="text-emerald-300 font-bold"> การเงิน → มัดจำ</span> ของสาขานี้
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div data-field="depositAmount">
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">
+                    ยอดมัดจำ (บาท) *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.depositAmount}
+                    onChange={(e) => update({ depositAmount: e.target.value })}
+                    placeholder="0"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-emerald-700/30 text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    data-testid="appt-deposit-amount"
+                  />
+                </div>
+                <div data-field="depositPaymentChannel">
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">
+                    ช่องทางชำระ *
+                  </label>
+                  <select
+                    value={formData.depositPaymentChannel}
+                    onChange={(e) => update({ depositPaymentChannel: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-emerald-700/30 text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    data-testid="appt-deposit-channel"
+                  >
+                    <option value="เงินสด">เงินสด</option>
+                    <option value="โอนธนาคาร">โอนธนาคาร</option>
+                    <option value="บัตรเครดิต">บัตรเครดิต</option>
+                    <option value="QR Payment">QR Payment</option>
+                    <option value="อื่นๆ">อื่นๆ</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div data-field="depositPaymentDate">
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">
+                    วันที่ชำระ *
+                  </label>
+                  <DateField
+                    value={formData.depositPaymentDate}
+                    onChange={(v) => update({ depositPaymentDate: v })}
+                    fieldClassName="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-emerald-700/30 text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">
+                    หมายเหตุมัดจำ
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.depositNote}
+                    onChange={(e) => update({ depositNote: e.target.value })}
+                    placeholder="(ไม่บังคับ)"
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-emerald-700/30 text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    data-testid="appt-deposit-note"
+                  />
+                </div>
+              </div>
             </div>
           )}
           {/* Advisor + Doctor + Room */}
@@ -889,18 +1026,17 @@ export default function AppointmentFormModal({
           )}
           <div className="flex-1" />
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-all">ยกเลิก</button>
-          {/* Phase 21.0 — hide save button when deposit-booking is locked
-              (admin must route through DepositPanel pair-helper). Edit-mode
-              keeps save visible because edits to existing deposit-booking
-              appts only touch metadata (no new deposit doc spawn needed). */}
-          {!(isLockedDepositType && mode === 'create') && (
-            <button onClick={handleSave} disabled={saving}
-              data-testid="appointment-form-save"
-              className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
-              {saving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
-              {mode === 'edit' ? 'บันทึก' : 'สร้างนัดหมาย'}
-            </button>
-          )}
+          {/* Phase 21.0-ter (2026-05-06 EOD) — save button always visible.
+              Deposit-booking creates now route to createDepositBookingPair
+              (atomic paired write), enabled by the embedded deposit subform
+              above. Replaces the Phase 21.0-main hidden-save-button design
+              that redirected to DepositPanel. */}
+          <button onClick={handleSave} disabled={saving}
+            data-testid="appointment-form-save"
+            className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-700 text-white hover:bg-sky-600 transition-all disabled:opacity-50 flex items-center gap-1.5">
+            {saving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
+            {mode === 'edit' ? 'บันทึก' : (isLockedDepositType && mode === 'create' ? 'สร้างจองมัดจำ' : 'สร้างนัดหมาย')}
+          </button>
         </div>
       </div>
     </div>

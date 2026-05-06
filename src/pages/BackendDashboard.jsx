@@ -440,44 +440,40 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           />
         ) : activeTab === 'masterdata' ? (
           <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
-        ) : activeTab === 'appointment-all' ? (
-          // Phase 21.0-bis (2026-05-06 EOD) — combined all-types view. No
-          // appointmentType prop → AppointmentCalendarView's internal
-          // typeFilter resolves to null → typedDayAppts === dayAppts (no
-          // type filter). Calendar grid + mini-calendar dot map + week-strip
-          // count all show appointments of every type for the selected
-          // branch. This is the semantic successor of the legacy
-          // ?tab=appointments PINNED tab.
+        ) : (activeTab === 'appointment-all' || activeTab === 'appointment-no-deposit' || activeTab === 'appointment-deposit' || activeTab === 'appointment-treatment-in' || activeTab === 'appointment-follow-up') ? (
+          // Phase 21.0 (2026-05-06) + 21.0-bis (2026-05-06 EOD) +
+          // 21.0-quater (2026-05-06 EOD continuation hotfix) — ALL 5
+          // appointment sub-tabs render a SINGLE <AppointmentCalendarView/>
+          // element at ONE syntactic position with a computed prop. This
+          // matters because React's reconciler diffs by position; if each
+          // sub-tab were its own ternary branch with its own JSX element,
+          // React would treat them as different positions → unmount + mount
+          // on every sub-tab click → fresh state, empty dayAppts → user
+          // sees an empty grid until F5 (the bug user reported "ปรากฎ
+          // ตารางเปล่าๆ ... user ต้อง refresh จอถึงเห็น"). With ONE
+          // position, React reuses the instance across activeTab changes;
+          // only the appointmentType prop updates → typedDayAppts re-derives
+          // → grid re-renders instantly with the type-filtered slice.
+          //
+          // appointmentType prop:
+          //   appointment-all          → undefined → component's internal
+          //                              typeFilter resolves to null →
+          //                              typedDayAppts === dayAppts (no filter)
+          //   appointment-no-deposit   → 'no-deposit-booking'
+          //   appointment-deposit      → 'deposit-booking'
+          //   appointment-treatment-in → 'treatment-in'
+          //   appointment-follow-up    → 'follow-up'
+          //
+          // Per-branch filter via BSA + selectedBranchId is automatic
+          // (handled inside AppointmentCalendarView's listener subscription).
           <AppointmentCalendarView
-            clinicSettings={clinicSettings}
-            theme={theme}
-          />
-        ) : activeTab === 'appointment-no-deposit' ? (
-          // Phase 21.0 (2026-05-06) — sub-tab renders the calendar grid
-          // filtered to appointmentType='no-deposit-booking'. Per-branch
-          // filter via BSA + selectedBranchId. Customer-name clicks open
-          // a new browser tab via the standard ?backend=1&customer={id}
-          // deep-link (handled inside AppointmentCalendarView).
-          <AppointmentCalendarView
-            appointmentType="no-deposit-booking"
-            clinicSettings={clinicSettings}
-            theme={theme}
-          />
-        ) : activeTab === 'appointment-deposit' ? (
-          <AppointmentCalendarView
-            appointmentType="deposit-booking"
-            clinicSettings={clinicSettings}
-            theme={theme}
-          />
-        ) : activeTab === 'appointment-treatment-in' ? (
-          <AppointmentCalendarView
-            appointmentType="treatment-in"
-            clinicSettings={clinicSettings}
-            theme={theme}
-          />
-        ) : activeTab === 'appointment-follow-up' ? (
-          <AppointmentCalendarView
-            appointmentType="follow-up"
+            appointmentType={
+              activeTab === 'appointment-no-deposit'   ? 'no-deposit-booking' :
+              activeTab === 'appointment-deposit'      ? 'deposit-booking' :
+              activeTab === 'appointment-treatment-in' ? 'treatment-in' :
+              activeTab === 'appointment-follow-up'    ? 'follow-up' :
+              undefined  // 'appointment-all' → no type filter
+            }
             clinicSettings={clinicSettings}
             theme={theme}
           />
