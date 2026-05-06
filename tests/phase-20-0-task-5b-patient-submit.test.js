@@ -89,21 +89,29 @@ describe('Phase 20.0 Task 5b — Y3 patient-submit (handleOpdClick + handleResyn
   });
 });
 
-describe('Phase 20.0 Task 5b — Y4 deleteCustomerCascade wired with confirm flag', () => {
-  it('Y4.1 — deleteCustomerCascade called with {confirm:true}', () => {
-    expect(STRIPPED).toMatch(/deleteCustomerCascade\s*\(\s*proClinicId\s*,\s*\{\s*confirm:\s*true\s*\}/);
+describe('Phase 20.0 Task 5b — Y4 cascade-delete relocated to BackendDashboard', () => {
+  // Phase 20.0 final ProClinic strip (2026-05-06) — handleProClinicDelete
+  // REMOVED from AdminDashboard. Customer cascade-delete now lives in
+  // BackendDashboard's CustomerListTab (admin-gated via deleteCustomerCascade
+  // directly). The kiosk session detail no longer offers a delete-customer
+  // path — only session-only delete (deleteSession) remains.
+
+  it('Y4.1 — handleProClinicDelete REMOVED from AdminDashboard', () => {
+    expect(STRIPPED).not.toMatch(/const\s+handleProClinicDelete\s*=/);
   });
 
-  it('Y4.2 — handleDelete strips session HN/OPD on success', () => {
-    // Locate the post-cascade updateDoc that nulls out brokerProClinicId etc.
-    expect(STRIPPED).toMatch(/brokerProClinicId:\s*null,\s*brokerProClinicHN:\s*null/);
+  it('Y4.2 — deleteCustomerCascade still imported (used by other paths if needed)', () => {
+    // Import retained — Phase 5b kept the import in case other handlers use
+    // it. Currently no AdminDashboard handler calls it (cascade-delete is
+    // BackendDashboard's responsibility).
+    expect(ADMIN_DASHBOARD).toMatch(
+      /import\s*\{[^}]*deleteCustomerCascade[^}]*\}\s*from\s*['"][^'"]*scopedDataLayer/s,
+    );
   });
 
-  it('Y4.3 — handleDelete catches not-found gracefully', () => {
-    // The catch block tolerates "not found" / "NotFound" cascade errors so
-    // session HN/OPD still strip even when the be_customers doc was already
-    // deleted out-of-band.
-    expect(STRIPPED).toMatch(/not found/);
+  it('Y4.3 — strip comment marker present in raw source (audit lock)', () => {
+    // Use raw ADMIN_DASHBOARD (not STRIPPED) — comment marker survives.
+    expect(ADMIN_DASHBOARD).toMatch(/handleProClinicDelete[\s\S]{0,300}REMOVED/);
   });
 });
 

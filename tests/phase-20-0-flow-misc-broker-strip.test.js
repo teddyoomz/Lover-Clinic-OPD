@@ -78,16 +78,33 @@ describe('Phase 20.0 Task 5a — X3 search call sites use be_* helper', () => {
     expect(STRIPPED).toMatch(/handleApptSearch[\s\S]{0,400}searchBackendCustomers\s*\(/);
   });
 
-  it('X3.2 — handleImportSearch calls searchBackendCustomers', () => {
-    expect(STRIPPED).toMatch(/handleImportSearch[\s\S]{0,400}searchBackendCustomers\s*\(/);
+  it('X3.2 — handleImportSearch REMOVED (Phase 20.0 final ProClinic strip)', () => {
+    // The "นำเข้าจาก ProClinic" UI flow was deleted in Phase 20.0 final
+    // strip. Admins manage customers via BackendDashboard's CustomerListTab
+    // (full be_* CRUD). handleImportSearch / handleImportSelect /
+    // handleImportConfirm + the JSX section all REMOVED.
+    expect(STRIPPED).not.toMatch(/const\s+handleImportSearch\s*=/);
+    expect(STRIPPED).not.toMatch(/const\s+handleImportSelect\s*=/);
+    expect(STRIPPED).not.toMatch(/const\s+handleImportConfirm\s*=/);
+    expect(STRIPPED).not.toMatch(/นำเข้าจาก ProClinic/);
+  });
+});
+
+describe('Phase 20.0 Task 5a — X4-prime courses path via getCustomer (post-import-strip)', () => {
+  it('X4-prime.1 — at least 2 getCustomer call sites remain (auto-courses-trigger + handleGetCourses)', () => {
+    // Phase 20.0 final ProClinic strip (2026-05-06) — handleImportSelect
+    // removed (was the 3rd getCustomer site). 2 sites remain.
+    const matches = STRIPPED.match(/getCustomer\s*\(/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 });
 
 describe('Phase 20.0 Task 5a — X4 courses load via getCustomer', () => {
-  it('X4.1 — at least 3 getCustomer call sites in AdminDashboard', () => {
-    // (1) auto-courses-trigger effect, (2) handleViewCourses, (3) handleImportSelect
+  it('X4.1 — at least 2 getCustomer call sites in AdminDashboard (post-import-strip)', () => {
+    // Phase 20.0 final ProClinic strip removed handleImportSelect (3rd site).
+    // 2 sites remain: auto-courses-trigger effect + handleGetCourses.
     const matches = STRIPPED.match(/getCustomer\s*\(/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(3);
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
   it('X4.2 — courses data sourced from customer.courses array', () => {

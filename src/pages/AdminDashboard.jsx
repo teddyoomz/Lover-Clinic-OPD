@@ -509,15 +509,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
-  // ─── Import from ProClinic state ──────────────────────────
-  const [showImport, setShowImport] = useState(false);
-  const [importSearch, setImportSearch] = useState('');
-  const [importResults, setImportResults] = useState(null);
-  const [importLoading, setImportLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState(null);
-  const [importPreviewLoading, setImportPreviewLoading] = useState(false);
-  const [importError, setImportError] = useState('');
-  const [importSuccess, setImportSuccess] = useState('');
+  // Phase 20.0 final ProClinic strip (2026-05-06) — Import-from-ProClinic
+  // state + handlers + JSX REMOVED. With ProClinic phasing out, the
+  // import-clone flow is obsolete. Admins manage customers via
+  // BackendDashboard's CustomerListTab.
   const [coursesPanel,  setCoursesPanel]  = useState(null); // { sessionId, patientName, hn, status, courses, expiredCourses, error }
   const brokerPendingRef = useRef(brokerPending);
   brokerPendingRef.current = brokerPending;
@@ -2528,11 +2523,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
   };
 
-  const handleProClinicEdit = (session) => {
-    const proClinicId = session.brokerProClinicId;
-    if (!proClinicId) return;
-    window.open(`${PROCLINIC_ORIGIN}/admin/customer/${proClinicId}/edit`, '_blank');
-  };
+  // Phase 20.0 final ProClinic strip (2026-05-06) — handleProClinicEdit
+  // REMOVED. Replaced by BackendDashboard's customer edit flow.
 
   // เปิด PatientDashboard ใน new tab (admin view — ไม่มี cooldown)
   const [patientViewUrl, setPatientViewUrl] = useState(null);
@@ -2678,196 +2670,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setPatientLinkLoading(false);
   };
 
-  const handleProClinicDelete = async (session) => {
-    const proClinicId = session.brokerProClinicId;
-    if (!window.confirm(`ลบลูกค้านี้ออกจาก ProClinic ด้วยใช่ไหม?\n(จะลบเฉพาะใน ProClinic — ข้อมูลใน LoverClinic ยังอยู่)`)) return;
-    const d = session.patientData || {};
-    const patient = {
-      prefix: d.prefix || '', firstName: d.firstName || '',
-      lastName: d.lastName || '', phone: d.phone || '',
-      emergencyName: d.emergencyName || '', emergencyRelation: d.emergencyRelation || '', emergencyPhone: d.emergencyPhone || '',
-    };
-    const jobId = `${session.id}_del_${Date.now()}`;
-    const brokerJob = { id: jobId, type: 'LC_DELETE_PROCLINIC', proClinicId, proClinicHN: session.brokerProClinicHN || null, patient };
-    setBrokerPending(prev => ({ ...prev, [session.id]: true }));
-    try {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), {
-        brokerJob, brokerStatus: 'pending', brokerError: null,
-      });
-    } catch(e) { console.error('delete job write:', e); }
-
-    try {
-      // Phase 20.0 Task 5b — deleteCustomerCascade (be_*) replaces
-      // broker.deleteProClinic. Cascade deletes treatments / sales / deposits
-      // / wallets / wallet-tx / memberships / point-tx / appointments owned
-      // by this customer in be_*. Confirm flag required (destructive).
-      try {
-        await deleteCustomerCascade(proClinicId, { confirm: true });
-      } catch (cascadeErr) {
-        // notFound case: customer doc no longer exists → still strip session ids
-        if (!String(cascadeErr?.message || '').includes('not found')
-            && !String(cascadeErr?.message || '').includes('NotFound')) {
-          throw cascadeErr;
-        }
-      }
-      setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-      // Strip HN/OPD from session always (deleteCustomerCascade doesn't return
-      // a "notFound" sentinel — best-effort cascade is what we want).
-      setViewingSession(prev => prev?.id === session.id
-        ? { ...prev, brokerStatus: null, brokerError: null, brokerProClinicId: null, brokerProClinicHN: null, opdRecordedAt: null, brokerLastAutoSyncAt: null, patientLinkToken: null, patientLinkEnabled: false }
-        : prev);
-      await updateDoc(ref, { opdRecordedAt: null, brokerStatus: null, brokerError: null,
-        brokerProClinicId: null, brokerProClinicHN: null, brokerLastAutoSyncAt: null, brokerJob: null,
-        patientLinkToken: null, patientLinkEnabled: false });
-    } catch(e) {
-      setBrokerPending(prev => { const n = { ...prev }; delete n[session.id]; return n; });
-      console.error('delete error:', e);
-      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id);
-      try {
-        await updateDoc(ref, { brokerStatus: null, brokerJob: null });
-      } catch (_) {}
-      showToast(`ลบไม่สำเร็จ: ${e?.message || String(e)}`);
-    }
-  };
+  // Phase 20.0 final ProClinic strip (2026-05-06) — handleProClinicDelete
+  // REMOVED. Customer cascade-delete now lives in BackendDashboard's
+  // CustomerListTab (uses deleteCustomerCascade directly with admin-gated UX).
+  // The kiosk session detail no longer offers a delete-customer path —
+  // session-only delete (deleteSession / handleDeleteSession) remains.
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
   const unreadCount = sessions.filter(s => s.isUnread).length;
-  // Use clinicSettings.proClinicOrigin (admin-configurable) with trim to prevent space bugs
-  const PROCLINIC_ORIGIN = (clinicSettings?.proClinicOrigin || 'https://proclinicth.com').trim().replace(/\/+$/, '');
-  const getProClinicUrl = (id) => id ? `${PROCLINIC_ORIGIN}/admin/customer/${id}` : null;
+  // Phase 20.0 final ProClinic strip (2026-05-06) — PROCLINIC_ORIGIN +
+  // getProClinicUrl helpers REMOVED. AdminDashboard no longer links to
+  // any ProClinic admin URL.
 
-  // ── Search be_customers (Phase 20.0 Task 5a — was Import-from-ProClinic) ──
-  // Repurposed: search by HN/phone/nationalId/name across be_customers.
-  // The "Import" wording remains on the legacy UI section but the data
-  // source is now be_customers (no ProClinic round-trip).
-  const handleImportSearch = async () => {
-    const q = importSearch.trim();
-    if (!q) return;
-    setImportLoading(true);
-    setImportResults(null);
-    setImportPreview(null);
-    setImportError('');
-    setImportSuccess('');
-    try {
-      const customers = await searchBackendCustomers(q);
-      setImportResults(customers || []);
-    } catch (err) {
-      setImportError(err.message);
-    } finally {
-      setImportLoading(false);
-    }
-  };
-
-  const handleImportSelect = async (proClinicId) => {
-    setImportPreviewLoading(true);
-    setImportPreview(null);
-    setImportError('');
-    try {
-      // Phase 20.0 Task 5a (2026-05-06) — load be_customers doc; replaces
-      // broker.fetchPatientFromProClinic + broker.getCourses parallel call.
-      const customer = await getCustomer(proClinicId);
-      if (!customer) throw new Error('ไม่พบลูกค้าใน be_customers');
-      setImportPreview({
-        patient: customer.patientData || customer,
-        proClinicId: customer.proClinicId || customer.id,
-        proClinicHN: customer.proClinicHN || customer.hn_no || customer.hn || '',
-        courses: customer.courses || [],
-        expiredCourses: customer.expiredCourses || [],
-        appointments: customer.appointments || [],
-      });
-    } catch (err) {
-      setImportError(err.message);
-    } finally {
-      setImportPreviewLoading(false);
-    }
-  };
-
-  const checkImportDuplicate = (patient, proClinicHN) => {
-    const allSessions = [...sessions, ...archivedSessions];
-    const normalPhone = (p) => (p || '').replace(/\D/g, '');
-    for (const s of allSessions) {
-      const d = s.patientData;
-      // HN match
-      if (proClinicHN && s.brokerProClinicHN === proClinicHN) {
-        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
-      }
-      // Phone match
-      if (patient.phone && d?.phone && normalPhone(patient.phone) === normalPhone(d.phone)) {
-        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
-      }
-      // ID card match
-      if (patient.idCard && d?.idCard && patient.idCard === d.idCard) {
-        return { duplicate: s, canResync: s.brokerStatus !== 'done' };
-      }
-    }
-    return { duplicate: null, canResync: false };
-  };
-
-  const handleImportConfirm = async () => {
-    if (!importPreview) return;
-    const { patient, proClinicId, proClinicHN, courses, expiredCourses, appointments } = importPreview;
-    setImportError('');
-    setImportSuccess('');
-
-    const { duplicate, canResync } = checkImportDuplicate(patient, proClinicHN);
-
-    if (duplicate && !canResync) {
-      setImportError(`ข้อมูลซ้ำกับ "${duplicate.sessionName || duplicate.id}" (${duplicate.id}) ที่มีอยู่แล้วในระบบ`);
-      return;
-    }
-
-    try {
-      if (duplicate && canResync) {
-        // Auto resync existing session
-        const sessionRef = doc(db, `artifacts/${appId}/public/data/opd_sessions`, duplicate.id);
-        await updateDoc(sessionRef, {
-          brokerProClinicId: proClinicId,
-          brokerProClinicHN: proClinicHN,
-          brokerStatus: 'done',
-          brokerError: null,
-          brokerFilledAt: new Date().toISOString(),
-          opdRecordedAt: new Date().toISOString(),
-          patientData: patient,
-          latestCourses: { courses, expiredCourses, appointments, fetchedAt: new Date().toISOString(), success: true },
-        });
-        setImportSuccess(`Resync สำเร็จ — อัพเดทข้อมูล "${duplicate.sessionName || duplicate.id}"`);
-      } else {
-        // Create new imported session
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-        for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-        const sessionId = `IMP-${code}`;
-        const sessionName = [patient.firstName, patient.lastName].filter(Boolean).join(' ') || 'นำเข้าจาก ProClinic';
-        const sessionRef = doc(db, `artifacts/${appId}/public/data/opd_sessions`, sessionId);
-        await setDoc(sessionRef, {
-          status: 'completed',
-          isArchived: true,
-          archivedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-          submittedAt: new Date().toISOString(),
-          formType: 'intake',
-          sessionName,
-          patientData: patient,
-          brokerProClinicId: proClinicId,
-          brokerProClinicHN: proClinicHN,
-          brokerStatus: 'done',
-          brokerFilledAt: new Date().toISOString(),
-          opdRecordedAt: new Date().toISOString(),
-          brokerError: null,
-          latestCourses: { courses, expiredCourses, appointments, fetchedAt: new Date().toISOString(), success: true },
-          importedFromProClinic: true,
-          importedAt: new Date().toISOString(),
-        });
-        setImportSuccess(`นำเข้าสำเร็จ — ${sessionName} (${sessionId})`);
-      }
-      setImportPreview(null);
-      setImportResults(null);
-      setImportSearch('');
-    } catch (err) {
-      setImportError(`เกิดข้อผิดพลาด: ${err.message}`);
-    }
-  };
+  // Phase 20.0 final ProClinic strip (2026-05-06) — handleImportSearch /
+  // handleImportSelect / checkImportDuplicate / handleImportConfirm
+  // REMOVED. The "นำเข้าจาก ProClinic" UI flow was for cloning
+  // ProClinic-only customers; with ProClinic gone, admins manage customers
+  // via BackendDashboard's CustomerListTab (full CRUD) — no kiosk-side
+  // import needed.
 
   // ── History page computed vars (ต้องอยู่นอก JSX — OXC parser ไม่รองรับ IIFE) ──
   const HISTORY_PAGE_SIZE = 10;
@@ -3006,7 +2826,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <ClipboardCheck size={16} className="text-[var(--opd-color)]" />
               </div>
               <div>
-                <p className="text-[11px] font-black font-semibold text-[var(--opd-color)]">บันทึกลง ProClinic เรียบร้อยแล้ว</p>
+                <p className="text-[11px] font-black font-semibold text-[var(--opd-color)]">บันทึก OPD เรียบร้อยแล้ว</p>
                 <p className="text-xs text-[var(--opd-color)] font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
                   บันทึกเมื่อ: {formatBangkokTime(viewingSession.opdRecordedAt)}
                   {viewingSession.brokerProClinicHN && (
@@ -3017,30 +2837,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </p>
                 {viewingSession.brokerLastAutoSyncAt && (
                   <p className="text-[11px] text-[var(--opd-color)] opacity-70 font-mono mt-0.5 flex items-center gap-1">
-                    🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(viewingSession.brokerLastAutoSyncAt)}
+                    🔄 ซิงค์อัตโนมัติ · {formatBangkokTime(viewingSession.brokerLastAutoSyncAt)}
                   </p>
                 )}
               </div>
               <div className="ml-auto flex items-center gap-2 flex-wrap">
-                {viewingSession.brokerProClinicId && (<>
-                  <a href={getProClinicUrl(viewingSession.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
-                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/30 transition-colors whitespace-nowrap flex items-center gap-1"
-                    title={getProClinicUrl(viewingSession.brokerProClinicId)}>
-                    ProClinic ↗
-                  </a>
+                {/* Phase 20.0 final ProClinic strip (2026-05-06) — "ProClinic ↗" /
+                     "แก้ไขใน ProClinic" / "ลบจาก ProClinic" buttons REMOVED.
+                     Patient detail/edit/delete now lives in BackendDashboard's
+                     CustomerListTab (full be_* CRUD). The "คอร์สและนัดหมาย ↗"
+                     button stays — it opens PatientDashboard view. */}
+                {viewingSession.brokerProClinicId && (
                   <button onClick={() => handleOpenPatientView(viewingSession)}
                     className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-teal-700/50 text-teal-400 hover:bg-teal-900/30 transition-colors whitespace-nowrap flex items-center gap-1">
                     <Search size={9}/> คอร์สและนัดหมาย ↗
                   </button>
-                  <button onClick={() => handleProClinicEdit(viewingSession)}
-                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-blue-700/50 text-blue-400 hover:bg-blue-900/30 transition-colors whitespace-nowrap">
-                    แก้ไขใน ProClinic
-                  </button>
-                  <button onClick={() => handleProClinicDelete(viewingSession)}
-                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-red-700/50 text-red-400 hover:bg-red-900/30 transition-colors whitespace-nowrap">
-                    ลบจาก ProClinic
-                  </button>
-                </>)}
+                )}
               </div>
             </div>
           )}
@@ -3048,7 +2860,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <div className="px-4 sm:px-6 py-3 bg-red-950/20 border-b border-red-900/40 shrink-0">
               <div className="flex items-center gap-3">
                 <X size={16} className="text-red-400 shrink-0" />
-                <p className="text-[11px] font-bold text-red-400">ส่งข้อมูลไป ProClinic ไม่สำเร็จ: {viewingSession.brokerError}</p>
+                <p className="text-[11px] font-bold text-red-400">บันทึก OPD ไม่สำเร็จ: {viewingSession.brokerError}</p>
                 <button
                   onClick={() => handleOpdClick(viewingSession)}
                   className="ml-auto text-[11px] font-black font-semibold text-red-400 hover:text-red-300 whitespace-nowrap border border-red-800 px-2 py-1 rounded"
@@ -4268,85 +4080,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <History size={20} className="text-orange-500" />
               <h2 className="text-base sm:text-lg font-bold font-semibold text-orange-500">ประวัติผู้ป่วย (Archive)</h2>
               <span className="text-xs text-[var(--tx-muted)] font-bold">{archivedSessions.length} รายการ</span>
-              <button onClick={() => { setShowImport(!showImport); setImportError(''); setImportSuccess(''); }}
-                className={`ml-auto text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${showImport ? 'bg-teal-600 text-white border-teal-500' : 'bg-teal-950/30 text-teal-400 border-teal-800/50 hover:bg-teal-900/40'}`}>
-                <UserPlus size={13}/> นำเข้าจาก ProClinic
-              </button>
             </div>
 
-            {/* Import from ProClinic section */}
-            {showImport && (
-              <div className="bg-teal-950/20 border border-teal-800/40 rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <input value={importSearch} onChange={e => setImportSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleImportSearch(); }}
-                    placeholder="ค้นหา HN, เบอร์โทร, เลขบัตร ปชช, หรือชื่อ..."
-                    className="flex-1 bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-sm text-[var(--tx-heading)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-teal-600 transition-colors" />
-                  <button onClick={handleImportSearch} disabled={importLoading || !importSearch.trim()}
-                    className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-40 flex items-center gap-1.5">
-                    {importLoading ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} ค้นหา
-                  </button>
-                </div>
-
-                {importError && <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2">{importError}</p>}
-                {importSuccess && <p className="text-xs text-green-400 bg-green-950/30 border border-green-800/40 rounded-lg px-3 py-2">{importSuccess}</p>}
-
-                {/* Search results */}
-                {importResults && !importPreview && (
-                  <div className="space-y-1">
-                    {importResults.length === 0 ? (
-                      <p className="text-xs text-[var(--tx-muted)] text-center py-3">ไม่พบผลลัพธ์ใน ProClinic</p>
-                    ) : importResults.map(c => (
-                      <div key={c.id} className="flex items-center justify-between bg-[var(--bg-hover)] rounded-lg px-3 py-2">
-                        <div>
-                          <span className="text-sm font-bold text-[var(--tx-heading)]">{c.name || `ID: ${c.id}`}</span>
-                          {c.phone && <span className="ml-2 text-xs text-[var(--tx-muted)]">{c.phone}</span>}
-                        </div>
-                        <button onClick={() => handleImportSelect(c.id)} disabled={importPreviewLoading}
-                          className="text-xs font-bold px-3 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors disabled:opacity-40">
-                          {importPreviewLoading ? <Loader2 size={12} className="animate-spin"/> : 'เลือก'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Preview */}
-                {importPreviewLoading && (
-                  <div className="flex justify-center py-6"><Loader2 size={24} className="animate-spin text-teal-400"/></div>
-                )}
-                {importPreview && (
-                  <div className="bg-[var(--bg-card)] border border-teal-800/40 rounded-xl p-4 space-y-3">
-                    <h4 className="text-sm font-bold text-teal-400 font-bold">ตรวจสอบข้อมูลก่อนนำเข้า</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div><span className="text-[var(--tx-muted)]">ชื่อ:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.prefix} {importPreview.patient.firstName} {importPreview.patient.lastName}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">HN:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.proClinicHN || '-'}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">เบอร์:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.phone || '-'}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">เลขบัตร:</span> <span className="text-[var(--tx-heading)] font-bold">{importPreview.patient.idCard || '-'}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">อายุ:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.age || '-'} ปี</span></div>
-                      <div><span className="text-[var(--tx-muted)]">เพศ:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.gender || '-'}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">จังหวัด:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.province || '-'}</span></div>
-                      <div><span className="text-[var(--tx-muted)]">แพ้ยา:</span> <span className="text-[var(--tx-heading)]">{importPreview.patient.hasAllergies === 'มี' ? importPreview.patient.allergiesDetail : 'ไม่มี'}</span></div>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-[var(--tx-muted)]">
-                      <span><Package size={12} className="inline mr-1 text-teal-400"/>{importPreview.courses.length} คอร์ส</span>
-                      <span><PackageX size={12} className="inline mr-1 text-gray-500"/>{importPreview.expiredCourses.length} หมดอายุ</span>
-                      <span><CalendarClock size={12} className="inline mr-1 text-blue-400"/>{importPreview.appointments.length} นัดหมาย</span>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button onClick={handleImportConfirm}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1.5">
-                        <UserPlus size={14}/> ยืนยันนำเข้า
-                      </button>
-                      <button onClick={() => { setImportPreview(null); setImportResults(null); }}
-                        className="px-4 py-2 bg-[var(--bg-hover)] text-[var(--tx-muted)] text-sm rounded-lg border border-[var(--bd)] hover:text-[var(--tx-heading)] transition-colors">
-                        ยกเลิก
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Phase 20.0 final ProClinic strip (2026-05-06) — "นำเข้าจาก ProClinic"
+                 button + import section REMOVED. Admins manage customers via
+                 BackendDashboard's CustomerListTab (full CRUD on be_*). */}
 
             {/* Search box */}
             <div className="relative">
@@ -4652,7 +4390,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               onClick={() => setDepositToDelete({ session, action: 'cancel' })}
                               disabled={isSyncing}
                               className="p-1.5 rounded border bg-[var(--bg-hover)] border-[var(--bd)] text-gray-400 hover:text-red-400 hover:border-red-900/50 transition-colors disabled:opacity-50"
-                              title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"
+                              title="ยกเลิกการจอง (ลบมัดจำ + ข้อมูลลูกค้า)"
                             >
                               {isSyncing && session.depositSyncStatus === 'pending' ? <Loader2 size={14} className="animate-spin"/> : <XCircle size={14}/>}
                             </button>
@@ -5556,20 +5294,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 <p className="text-[11px] text-gray-500 mt-1.5 line-clamp-2">{appt.note}</p>
                               )}
                             </div>
-                            {/* Color dot + ProClinic link */}
+                            {/* Phase 20.0 final ProClinic strip (2026-05-06) —
+                                 ProClinic external link REMOVED. Color dot only. */}
                             <div className="shrink-0 flex flex-col items-center gap-1.5 mt-1">
                               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: appt.eventColor || appt.appointmentColor || '#4FC3F7' }} />
-                              {appt.customerId && clinicSettings.proClinicOrigin && (
-                                <a
-                                  href={`${PROCLINIC_ORIGIN}/admin/customer/${appt.customerId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sky-500 hover:text-sky-300 transition-colors"
-                                  title="เปิดใน ProClinic"
-                                >
-                                  <ExternalLink size={13} />
-                                </a>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -6058,7 +5786,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {/* RP1 lift (2026-04-30) — extracted from JSX-IIFE per Vite-OXC ban. */}
                           {session.status === 'completed' && data && renderOpdButton(session)}
                           {session.formType === 'deposit' && session.serviceCompleted && (
-                            <button onClick={() => setDepositToDelete({ session, action: 'cancel' })} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 transition-colors" title="ยกเลิกการจอง (ลบมัดจำ+ลูกค้าใน ProClinic)"><XCircle size={15} /></button>
+                            <button onClick={() => setDepositToDelete({ session, action: 'cancel' })} className="p-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 hover:text-red-300 rounded-lg border border-red-900/50 transition-colors" title="ยกเลิกการจอง (ลบมัดจำ + ข้อมูลลูกค้า)"><XCircle size={15} /></button>
                           )}
                           {session.patientData && session.opdRecordedAt && session.brokerStatus === 'done' ? (
                             <button onClick={() => setSessionToDelete(session.id)} className="p-2 bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-400 rounded-lg border border-emerald-900/50 transition-colors" title="ลูกค้ามารับบริการเรียบร้อยแล้ว"><CheckCircle2 size={15} /></button>
@@ -6167,17 +5895,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             <span className="text-xs font-black font-semibold text-[var(--opd-color)]">บันทึกลง OPD Card เรียบร้อย</span>
                             <span className="text-[11px] text-[var(--opd-color)] font-mono flex items-center gap-1.5">
                               {formatBangkokTime(session.opdRecordedAt)}
-                                {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black">HN {session.brokerProClinicHN}</span>}
-                              {session.brokerProClinicId && (
-                                <a href={getProClinicUrl(session.brokerProClinicId)} target="_blank" rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                  className="px-1 py-px rounded border border-emerald-800/50 text-emerald-500 hover:text-emerald-300 font-black text-[8px] transition-colors"
-                                  title={getProClinicUrl(session.brokerProClinicId)}>↗</a>
-                              )}
+                              {/* Phase 20.0 final ProClinic strip (2026-05-06) —
+                                   external ProClinic link REMOVED. HN badge stays
+                                   (hn_no is now denormalized from be_customers). */}
+                              {session.brokerProClinicHN && <span className="px-1 py-px rounded bg-[var(--opd-btn-bg)] border border-[var(--opd-bd)] font-black">HN {session.brokerProClinicHN}</span>}
                             </span>
                             {session.brokerLastAutoSyncAt && (
                               <span className="text-[8px] text-[var(--opd-color)] opacity-70 font-mono flex items-center gap-1">
-                                🔄 แก้ไขและ sync ProClinic อัตโนมัติ · {formatBangkokTime(session.brokerLastAutoSyncAt)}
+                                🔄 ซิงค์อัตโนมัติ · {formatBangkokTime(session.brokerLastAutoSyncAt)}
                               </span>
                             )}
                           </div>
