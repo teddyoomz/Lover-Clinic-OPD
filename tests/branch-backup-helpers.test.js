@@ -124,3 +124,39 @@ describe('H4 — schema validators', () => {
     expect(file.meta.perCollectionCounts.be_products).toBe(1);
   });
 });
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+describe('H5 — endpoint contract source-grep', () => {
+  const apiDir = path.resolve('api/admin');
+  it('H5.1 — branch-backup-export.js verifies admin + uses storage', () => {
+    const code = fs.readFileSync(path.join(apiDir, 'branch-backup-export.js'), 'utf-8');
+    expect(code).toMatch(/verifyAdminToken/);
+    expect(code).toMatch(/getStorage|bucket\.file/);
+    expect(code).toMatch(/be_admin_audit/);
+    expect(code).toMatch(/getSignedUrl/);
+  });
+
+  it('H5.2 — branch-restore.js gates clone mode to T1 only', () => {
+    const code = fs.readFileSync(path.join(apiDir, 'branch-restore.js'), 'utf-8');
+    expect(code).toMatch(/CLONE_NON_T1_COLLECTION/);
+    expect(code).toMatch(/MODE_MISMATCH/);
+    expect(code).toMatch(/CLONE_TO_SAME_BRANCH/);
+    expect(code).toMatch(/applyFkRemap/);
+  });
+
+  it('H5.3 — branch-make-fresh.js refuses without autoBackupRef', () => {
+    const code = fs.readFileSync(path.join(apiDir, 'branch-make-fresh.js'), 'utf-8');
+    expect(code).toMatch(/AUTO_BACKUP_REQUIRED/);
+    expect(code).toMatch(/AUTO_BACKUP_NOT_FOUND/);
+    expect(code).toMatch(/bucket\.file\(autoBackupRef\)\.exists/);
+  });
+
+  it('H5.4 — all 3 endpoints write be_admin_audit doc (Rule M)', () => {
+    for (const f of ['branch-backup-export.js', 'branch-restore.js', 'branch-make-fresh.js']) {
+      const code = fs.readFileSync(path.join(apiDir, f), 'utf-8');
+      expect(code).toMatch(/be_admin_audit/);
+    }
+  });
+});
