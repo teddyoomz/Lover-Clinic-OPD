@@ -16,6 +16,14 @@ service firebase.storage {
       );
     }
 
+    // ─── V40 — branch backup storage (admin-only) ─────────────────────────
+    // Pattern: backups/{branchId}/*.json (manual-* + auto-pre-fresh-*)
+    // Admin SDK bypasses these (server-side endpoints write here); rule
+    // gates client-side reads via signed URLs (anonymous read OK with token).
+    match /backups/{branchId}/{file=**} {
+      allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
+    }
+
     // Default deny all
     match /{allPaths=**} {
       allow read, write: if false;
