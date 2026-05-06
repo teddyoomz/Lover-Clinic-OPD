@@ -2930,6 +2930,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const dataForBe = mapDepositPayloadToBe(
           newData, sess.brokerProClinicId, sess.brokerProClinicHN, sess.patientData,
         );
+        let depIdForCascade = sess.depositProClinicId || '';
         try {
           if (sess.depositProClinicId) {
             await updateDeposit(sess.depositProClinicId, dataForBe);
@@ -2938,12 +2939,68 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             const created = await createDeposit(dataForBe);
             if (created?.depositId) {
               await updateDoc(ref, { depositProClinicId: created.depositId });
+              depIdForCascade = created.depositId;
             }
           }
         } catch (depErr) {
           await updateDoc(ref, { depositSyncStatus: 'failed', depositSyncError: depErr?.message });
           showToast(`บันทึกในระบบแล้ว แต่อัพเดทมัดจำไม่สำเร็จ: ${depErr?.message}`);
           return;
+        }
+        // Phase 24.0-noniesdecies (2026-05-06) — auto-create be_appointments
+        // when admin edits a kiosk deposit to ADD an appointment.
+        // User report: "ใน Frontend tab จองมัดจำ หลังจากจองมัดจำแล้ว
+        // พอกด edit เพื่อเพิ่มนัดหมาย มันขึ้นว่านัดหมายสำเร็จ แต่พอไปดู
+        // ในหน้าตาราง จองมัดจำ กลับไม่เจอ".
+        // Pre-fix: handleSaveDepositData updated be_deposits only; no
+        // be_appointments doc was created → invisible in BackendDashboard's
+        // จองมัดจำ sub-tab.
+        try {
+          const wantsAppt = !!newData?.hasAppointment;
+          const hasAppt = !!sess.linkedAppointmentId;
+          if (wantsAppt && !hasAppt && depIdForCascade) {
+            const { createAppointmentForExistingDeposit } = await import('../lib/appointmentDepositBatch.js');
+            if (typeof createAppointmentForExistingDeposit === 'function') {
+              const doctorRecord = practitioners.find(p => String(p.id) === String(newData.doctor || ''));
+              const advisorRecord = practitioners.find(p => String(p.id) === String(newData.consultant || ''));
+              const visitPurposeText = buildVisitPurposeText(
+                newData.visitPurpose,
+                newData.visitPurposeOther,
+              );
+              const apptResult = await createAppointmentForExistingDeposit(depIdForCascade, {
+                date: newData.appointmentDate || '',
+                startTime: newData.appointmentStartTime || '',
+                endTime: newData.appointmentEndTime || newData.appointmentStartTime || '',
+                customerId: '',
+                customerName: newData.customerNameTemp?.trim() || sess.sessionName || '',
+                customerHN: '',
+                customerNameTemp: newData.customerNameTemp?.trim() || '',
+                customerPhoneTemp: newData.customerPhoneTemp?.trim() || '',
+                doctorId: newData.doctor ? String(newData.doctor) : '',
+                doctorName: doctorRecord?.name || '',
+                advisorId: newData.consultant ? String(newData.consultant) : '',
+                advisorName: advisorRecord?.name || '',
+                assistantIds: newData.assistant ? [String(newData.assistant)] : [],
+                assistantNames: [],
+                roomId: newData.room ? String(newData.room) : '',
+                roomName: '',
+                channel: newData.appointmentChannel || '',
+                appointmentTo: visitPurposeText,
+                notes: '',
+                appointmentColor: '',
+                lineNotify: false,
+                branchId: sess.branchId || selectedBranchId || '',
+              });
+              if (apptResult?.appointmentId) {
+                await updateDoc(ref, {
+                  linkedAppointmentId: apptResult.appointmentId,
+                  linkedDepositId: depIdForCascade,
+                });
+              }
+            }
+          }
+        } catch (apptErr) {
+          console.warn('[handleSaveDepositData] add-appointment cascade failed (best-effort):', apptErr);
         }
         await updateDoc(ref, {
           depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),

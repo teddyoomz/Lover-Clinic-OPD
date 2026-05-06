@@ -196,6 +196,13 @@ export default function AppointmentFormModal({
   enableCustomerLink = false,
   onDelete,
   lockedAppointmentType = null,
+  // Phase 24.0-noniesdecies (2026-05-06) — when set, the modal creates an
+  // appointment for an EXISTING deposit (instead of minting a new pair).
+  // DepositPanel "+ สร้างนัด" button wires this. Save path uses
+  // createAppointmentForExistingDeposit to atomically write be_appointments
+  // + update the deposit doc (hasAppointment=true + linkedAppointmentId +
+  // appointment metadata).
+  existingDepositId = '',
 }) {
   const isDark = theme !== 'light';
   // Phase 14.7.H follow-up A — branch-aware appointment writes.
@@ -600,6 +607,21 @@ export default function AppointmentFormModal({
         } catch (cascadeErr) {
           console.warn('[AppointmentFormModal] linked-deposit cascade failed (best-effort):', cascadeErr);
         }
+      } else if (isCreatingDepositBooking && existingDepositId) {
+        // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" path: deposit
+        // already exists in be_deposits (admin clicked the button on a
+        // Finance.มัดจำ row that had hasAppointment=false). Create a
+        // be_appointments doc + atomically update the existing deposit
+        // (hasAppointment=true + linkedAppointmentId + appointment metadata)
+        // via createAppointmentForExistingDeposit. Distinct from the pair-
+        // helper which mints BOTH new docs.
+        const { createAppointmentForExistingDeposit } = await import('../../lib/appointmentDepositBatch.js');
+        await createAppointmentForExistingDeposit(existingDepositId, {
+          ...payload,
+          // Force the appointment type lock so the new appt appears in the
+          // จองมัดจำ sub-tab regardless of any stale formData.appointmentType.
+          appointmentType: 'deposit-booking',
+        });
       } else if (isCreatingDepositBooking) {
         // Phase 21.0-ter (2026-05-06 EOD) — atomic paired write via the
         // SAME helper DepositPanel uses (V12 single-writer lock). The

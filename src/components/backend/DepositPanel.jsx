@@ -6,6 +6,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Wallet, Plus, Edit3, Search, Loader2, X, Eye, ArrowLeft, CheckCircle2,
   AlertCircle, Ban, RotateCcw, Calendar, Clock, Users as UsersIcon, Trash2,
+  // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" button icon.
+  CalendarPlus,
 } from 'lucide-react';
 import {
   createDeposit, updateDeposit, cancelDeposit, refundDeposit, deleteDeposit,
@@ -25,6 +27,9 @@ import {
   createDepositBookingPair,
   cancelDepositBookingPair,
 } from '../../lib/appointmentDepositBatch.js';
+// Phase 24.0-noniesdecies (2026-05-06) — AppointmentFormModal in
+// create-for-existing-deposit mode (existingDepositId prop set).
+import AppointmentFormModal from './AppointmentFormModal.jsx';
 import { calcDepositRemaining, fmtMoney } from '../../lib/financeUtils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
@@ -90,6 +95,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   // ── Modal state ─────────────────────────────────────────────────────────
   const [viewingDeposit, setViewingDeposit] = useState(null);
+  // Phase 24.0-noniesdecies (2026-05-06) — when set, AppointmentFormModal
+  // opens in create-for-existing-deposit mode + the deposit auto-gains
+  // hasAppointment=true + linkedAppointmentId on save.
+  const [apptForDepositModal, setApptForDepositModal] = useState(null);
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelNote, setCancelNote] = useState('');
   const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
@@ -579,6 +588,25 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
                           <button onClick={() => setViewingDeposit(dep)} className="p-2 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
+                          {/* Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด"
+                              button on deposit rows that DON'T yet have a linked
+                              appointment. Click → opens AppointmentFormModal in
+                              create-for-existing-deposit mode. The new appt
+                              auto-appears in BackendDashboard's จองมัดจำ
+                              sub-tab (be_appointments doc) + the deposit doc
+                              gains hasAppointment=true + linkedAppointmentId. */}
+                          {!dep.hasAppointment && !dep.linkedAppointmentId
+                            && dep.status !== 'cancelled' && dep.status !== 'refunded' && (
+                            <button
+                              onClick={() => setApptForDepositModal(dep)}
+                              data-testid="deposit-add-appointment-btn"
+                              className="p-2 rounded hover:bg-emerald-900/20 text-emerald-400"
+                              title="สร้างนัดสำหรับมัดจำนี้"
+                              aria-label="สร้างนัด"
+                            >
+                              <CalendarPlus size={13} />
+                            </button>
+                          )}
                           {canEdit && (
                             <button onClick={() => openEdit(dep)} className="p-2 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           )}
@@ -604,6 +632,40 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
       {/* Modals */}
       {viewingDeposit && <DetailModal dep={viewingDeposit} isDark={isDark} onClose={() => setViewingDeposit(null)} />}
+
+      {/* Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" modal.
+          existingDepositId prop tells AppointmentFormModal to use
+          createAppointmentForExistingDeposit instead of pair-helper. */}
+      {apptForDepositModal && (
+        <AppointmentFormModal
+          mode="create"
+          theme={isDark ? 'dark' : 'light'}
+          lockedAppointmentType="deposit-booking"
+          existingDepositId={apptForDepositModal.depositId || apptForDepositModal.id}
+          // Pre-fill from the deposit's existing customer/time/etc when
+          // available. lockedCustomer is set only when a real customer is
+          // already linked; otherwise the modal opens in pickLater mode +
+          // the form-data hydration below restores the temp identity.
+          lockedCustomer={apptForDepositModal.customerId ? {
+            id: apptForDepositModal.customerId,
+            proClinicId: apptForDepositModal.customerId,
+            proClinicHN: apptForDepositModal.customerHN || '',
+            patientData: { firstName: apptForDepositModal.customerName || '', lastName: '' },
+          } : null}
+          initialDate={apptForDepositModal.appointment?.date || apptForDepositModal.paymentDate}
+          initialStartTime={apptForDepositModal.appointment?.startTime || ''}
+          initialEndTime={apptForDepositModal.appointment?.endTime || ''}
+          initialRoomName={apptForDepositModal.appointment?.roomName || ''}
+          skipHolidayCheck
+          skipCollisionCheck
+          enableCustomerLink={false}
+          onSaved={async () => {
+            await loadList();
+            setApptForDepositModal(null);
+          }}
+          onClose={() => setApptForDepositModal(null)}
+        />
+      )}
 
       {cancelModal && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-cancel-title"

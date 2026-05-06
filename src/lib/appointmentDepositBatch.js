@@ -425,8 +425,126 @@ export async function syncAppointmentToLinkedDeposit(depositId, apptMeta = {}) {
   return { depositId, synced: true };
 }
 
+/**
+ * Phase 24.0-noniesdecies (2026-05-06) — create an appointment for an
+ * already-existing deposit. User report: "เพิ่มในหน้าการเงิน หากมัดจำไหน
+ * ไม่มีนัด ให้สามารถสร้างนัดสำหรับมัดจำนั้นได้ โดยนัดที่สร้างก็จะไปอยู่ใน
+ * หน้า จองมัดจำ เลยโดยอัตโนมัติ".
+ *
+ * Distinct from createDepositBookingPair (which mints BOTH new docs):
+ *   • The deposit doc already exists (admin clicks 'สร้างนัด' on a deposit
+ *     row in Finance.มัดจำ that has hasAppointment=false).
+ *   • Only be_appointments is newly minted.
+ *   • The deposit doc is updated atomically with hasAppointment=true,
+ *     linkedAppointmentId=newApptId, and the embedded `appointment` field
+ *     (so DepositPanel's มัดจำสำหรับ column populates immediately).
+ *
+ * Atomic via writeBatch — both writes commit together or neither does.
+ *
+ * @param {string} depositId — be_deposits doc id (must exist).
+ * @param {Object} apptPayload — same shape AppointmentFormModal builds for
+ *        createBackendAppointment (date, startTime, endTime, customerId,
+ *        customerName, customerHN, doctorId, doctorName, advisorId,
+ *        advisorName, assistantIds, assistantNames, roomId, roomName,
+ *        channel, appointmentTo, notes, appointmentColor, lineNotify,
+ *        appointmentType, branchId, etc.).
+ * @returns {Promise<{ depositId: string, appointmentId: string }>}
+ */
+export async function createAppointmentForExistingDeposit(depositId, apptPayload = {}) {
+  if (!depositId) throw new Error('createAppointmentForExistingDeposit: depositId required');
+  if (!apptPayload?.date || !apptPayload?.startTime) {
+    throw new Error('createAppointmentForExistingDeposit: apptPayload.date + startTime required');
+  }
+  const depRef = depositDoc(depositId);
+  const depSnap = await getDoc(depRef);
+  if (!depSnap.exists()) {
+    throw new Error(`createAppointmentForExistingDeposit: deposit ${depositId} not found`);
+  }
+  const depData = depSnap.data() || {};
+  // Mint a fresh appointment id matching the pair-helper's BA-{ts}-{rand}
+  // shape so admin tooling that greps appointmentId by prefix sees both.
+  const ts = Date.now();
+  const buf = new Uint8Array(2);
+  globalThis.crypto.getRandomValues(buf);
+  const suffix = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+  const appointmentId = `BA-${ts}-${suffix}`;
+  const now = new Date().toISOString();
+  const branchId = apptPayload.branchId || depData.branchId || null;
+
+  // be_appointments payload — type locked to 'deposit-booking' so the appt
+  // appears in the จองมัดจำ sub-tab (per user directive).
+  const newApptPayload = {
+    appointmentId,
+    customerId: String(apptPayload.customerId || depData.customerId || ''),
+    customerName: apptPayload.customerName || depData.customerName || '',
+    customerHN: apptPayload.customerHN || depData.customerHN || '',
+    customerNameTemp: apptPayload.customerNameTemp || depData.customerNameTemp || '',
+    customerPhoneTemp: apptPayload.customerPhoneTemp || depData.customerPhoneTemp || '',
+    date: apptPayload.date,
+    startTime: apptPayload.startTime,
+    endTime: apptPayload.endTime || apptPayload.startTime,
+    appointmentType: 'deposit-booking',
+    advisorId: apptPayload.advisorId || '',
+    advisorName: apptPayload.advisorName || '',
+    doctorId: apptPayload.doctorId || '',
+    doctorName: apptPayload.doctorName || '',
+    assistantIds: Array.isArray(apptPayload.assistantIds) ? apptPayload.assistantIds : [],
+    assistantNames: Array.isArray(apptPayload.assistantNames) ? apptPayload.assistantNames : [],
+    roomId: apptPayload.roomId || '',
+    roomName: apptPayload.roomName || '',
+    channel: apptPayload.channel || '',
+    appointmentTo: apptPayload.appointmentTo || '',
+    location: apptPayload.location || '',
+    notes: apptPayload.notes || '',
+    appointmentColor: apptPayload.appointmentColor || '',
+    lineNotify: !!apptPayload.lineNotify,
+    status: 'pending',
+    branchId,
+    linkedDepositId: depositId,
+    spawnedFromDepositId: depositId,
+    spawnedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // be_deposits update — set hasAppointment=true + cross-link + populate the
+  // embedded appointment metadata so DepositPanel renders immediately.
+  const depUpdate = {
+    hasAppointment: true,
+    linkedAppointmentId: appointmentId,
+    'appointment.type': 'deposit-booking',
+    'appointment.option': 'once',
+    'appointment.date': apptPayload.date,
+    'appointment.startTime': apptPayload.startTime,
+    'appointment.endTime': apptPayload.endTime || apptPayload.startTime,
+    'appointment.doctorId': apptPayload.doctorId || '',
+    'appointment.doctorName': apptPayload.doctorName || '',
+    'appointment.advisorId': apptPayload.advisorId || '',
+    'appointment.advisorName': apptPayload.advisorName || '',
+    'appointment.assistantIds': Array.isArray(apptPayload.assistantIds) ? apptPayload.assistantIds : [],
+    'appointment.assistantNames': Array.isArray(apptPayload.assistantNames) ? apptPayload.assistantNames : [],
+    'appointment.roomId': apptPayload.roomId || '',
+    'appointment.roomName': apptPayload.roomName || '',
+    'appointment.channel': apptPayload.channel || '',
+    'appointment.purpose': apptPayload.appointmentTo || '',
+    'appointment.appointmentTo': apptPayload.appointmentTo || '',
+    'appointment.note': apptPayload.notes || '',
+    'appointment.color': apptPayload.appointmentColor || '',
+    'appointment.lineNotify': !!apptPayload.lineNotify,
+    appointmentSyncedAt: now,
+    updatedAt: now,
+  };
+
+  const batch = writeBatch(db);
+  batch.set(appointmentDoc(appointmentId), newApptPayload);
+  batch.update(depRef, depUpdate);
+  await batch.commit();
+  return { depositId, appointmentId };
+}
+
 // Phase 21.0 marker — institutional-memory grep target. Keep this comment
 // at end-of-file. Removed = grep guard fails (test in tests/phase-21-0-*).
 // MARKER: phase-21-0-deposit-booking-pair-helper
 // MARKER: phase-24-0-septiesdecies-attach-customer-to-deposit
 // MARKER: phase-24-0-octiesdecies-sync-appt-metadata-to-deposit
+// MARKER: phase-24-0-noniesdecies-create-appointment-for-existing-deposit
