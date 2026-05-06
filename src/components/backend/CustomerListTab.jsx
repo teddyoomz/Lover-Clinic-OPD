@@ -9,6 +9,9 @@ import { hexToRgb } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';
 import BulkPrintModal from './BulkPrintModal.jsx';
+// Phase 24.0 — cascade-delete modal mounted at the list level so confirm
+// flow + onDeleted refresh + clear-detail handoff all live in one place.
+import DeleteCustomerCascadeModal from './DeleteCustomerCascadeModal.jsx';
 
 export default function CustomerListTab({ clinicSettings, theme, onViewCustomer, onCreateCustomer, refreshSignal = 0 }) {
   const ac = clinicSettings?.accentColor || '#dc2626';
@@ -25,6 +28,10 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  // Phase 24.0 — non-null while delete modal is open
+  const [deletingCustomer, setDeletingCustomer] = useState(null);
+  // Phase 24.0 — transient success banner after a delete completes
+  const [deleteStatus, setDeleteStatus] = useState('');
 
   // V33.2 — refresh when external signal increments (e.g. parent saved new customer)
   useEffect(() => {
@@ -263,6 +270,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
                       theme={theme}
                       mode="cloned"
                       onView={selectMode ? null : onViewCustomer}
+                      onDeleteClick={selectMode ? null : (cust) => setDeletingCustomer(cust)}
                     />
                   </div>
                 </div>
@@ -280,6 +288,37 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
           onClose={() => { setBulkOpen(false); exitSelectMode(); }}
         />
       )}
+
+      {/* Phase 24.0 — cascade delete modal */}
+      {deletingCustomer && (
+        <DeleteCustomerCascadeModal
+          customer={deletingCustomer}
+          onClose={() => setDeletingCustomer(null)}
+          onDeleted={(result) => {
+            setDeletingCustomer(null);
+            // Refresh the customer list (parent useEffect re-runs on
+            // refreshKey bump and re-fetches via getAllCustomers).
+            setRefreshKey((k) => k + 1);
+            // Surface a transient success banner with cascade count.
+            const cascadeCounts = result?.cascadeCounts || {};
+            const totalCascade = Object.values(cascadeCounts)
+              .reduce((a, b) => a + (Number(b) || 0), 0);
+            setDeleteStatus(`ลบลูกค้าเรียบร้อย — cascade ${totalCascade} รายการ`);
+            setTimeout(() => setDeleteStatus(''), 4000);
+          }}
+        />
+      )}
+
+      {/* Phase 24.0 — transient success banner after delete */}
+      {deleteStatus && (
+        <div
+          data-testid="delete-customer-success"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] px-5 py-3 rounded-xl bg-emerald-900/80 border border-emerald-600/60 text-emerald-100 text-sm font-bold shadow-2xl backdrop-blur"
+        >
+          {deleteStatus}
+        </div>
+      )}
+
       {/* V33.2 — CustomerCreatePage is now mounted as a sibling page in
           BackendDashboard via creatingCustomer takeover, NOT a modal here. */}
     </div>
