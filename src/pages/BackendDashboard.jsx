@@ -28,6 +28,7 @@ import CloneTab from '../components/backend/CloneTab.jsx';
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerCreatePage from '../components/backend/CustomerCreatePage.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
+import DeleteCustomerCascadeModal from '../components/backend/DeleteCustomerCascadeModal.jsx';
 import MasterDataTab from '../components/backend/MasterDataTab.jsx';
 // Phase 21.0 (2026-05-06) — renamed from AppointmentTab to AppointmentCalendarView
 // + parameterized via `appointmentType` prop so the same component renders
@@ -111,6 +112,12 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const [creatingCustomer, setCreatingCustomer] = useState(false);   // V33.2 — full-page Add Customer takeover
   const [editingCustomer, setEditingCustomer] = useState(null);      // V33.3 — full-page Edit Customer takeover (the customer doc to edit)
   const [customerListRefresh, setCustomerListRefresh] = useState(0); // bump after Save so list reloads on return
+  // Phase 24.0 (2026-05-06) — customer cascade-delete modal state. Lifted to
+  // BackendDashboard so the prominent "ลบลูกค้า" button on CustomerDetailView
+  // can fire it; CustomerListTab has its OWN parallel modal for the inline
+  // ✕ flow (different mount surface; no conflict — only one is visible at a
+  // time depending on whether viewingCustomer is set).
+  const [deletingCustomer, setDeletingCustomer] = useState(null);
   const [treatmentFormMode, setTreatmentFormMode] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [saleInitialCustomer, setSaleInitialCustomer] = useState(null);
@@ -406,6 +413,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               if (refreshed) setViewingCustomer(refreshed);
             }}
             onCustomerUpdated={(refreshed) => setViewingCustomer(refreshed)}
+            onDeleteCustomer={(cust) => setDeletingCustomer(cust)}
             onCreateSale={(cust) => {
               setSaleInitialCustomer(cust);
               setSaleMode(true);
@@ -616,6 +624,22 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             // when opening TreatmentFormPage.
             const refreshed = await getCustomer(viewingCustomer?.id || viewingCustomer?.proClinicId);
             if (refreshed) setViewingCustomer(refreshed);
+          }}
+        />
+      )}
+      {/* Phase 24.0 — cascade-delete modal for the prominent "ลบลูกค้า" button
+          on CustomerDetailView. Mounted here so the modal overlays the detail
+          view (z-80 < modal z-80 — actually equal but later in DOM = on top).
+          On success: clear viewingCustomer (closes detail view), bump
+          customerListRefresh so list reloads when admin returns to it. */}
+      {deletingCustomer && (
+        <DeleteCustomerCascadeModal
+          customer={deletingCustomer}
+          onClose={() => setDeletingCustomer(null)}
+          onDeleted={() => {
+            setDeletingCustomer(null);
+            setViewingCustomer(null);
+            setCustomerListRefresh((n) => n + 1);
           }}
         />
       )}
