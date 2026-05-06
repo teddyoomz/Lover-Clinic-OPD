@@ -322,6 +322,28 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
     return masterRoomNameSet.has(nm) ? nm : UNASSIGNED_ROOM;
   };
 
+  // Phase 21.0 (2026-05-06) — type filter (defense-in-depth: stale/missing
+  // types coerce to 'no-deposit-booking'). When typeFilter is null (no prop
+  // passed), all appointments pass through (legacy behavior).
+  //
+  // 🚨 ORDER MATTERS: apptMatchesType + typedDayAppts MUST be declared
+  // BEFORE the `rooms` useMemo below (which references typedDayAppts in
+  // its hasOrphan check). const declarations have a temporal dead zone
+  // — referencing them earlier in the function body throws a
+  // ReferenceError on first render → blank screen. Hotfix from
+  // user-reported "เข้าแล้วจอดำหมดเลย" 2026-05-06 EOD.
+  const apptMatchesType = useCallback(
+    (a) => {
+      if (!typeFilter) return true;
+      return migrateLegacyAppointmentType(a?.appointmentType) === typeFilter;
+    },
+    [typeFilter],
+  );
+  const typedDayAppts = useMemo(
+    () => dayAppts.filter(apptMatchesType),
+    [dayAppts, apptMatchesType],
+  );
+
   const rooms = useMemo(() => {
     // Phase 18.0 — column set = master rooms ONLY (sorted by sortOrder
     // then name) + virtual ไม่ระบุห้อง when (a) at least one appt resolves
@@ -330,6 +352,8 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
     // appt on an empty branch — user directive 2026-05-05: "ต้องการให้
     // user คลิ๊กลงไปในตารางแล้วสร้างนัดจากตารางเปล่าๆได้").
     // Legacy roomName strings dropped entirely.
+    // Phase 21.0 — orphan check uses typedDayAppts so the column appears
+    // only when the active sub-tab has an unassigned-room appointment.
     const ordered = branchExamRooms
       .slice()
       .sort((a, b) =>
@@ -342,22 +366,7 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
     const hasOrphan = typedDayAppts.some(a => effectiveRoom(a) === UNASSIGNED_ROOM);
     if (hasOrphan || ordered.length === 0) set.add(UNASSIGNED_ROOM);
     return [...set];
-  }, [branchExamRooms, masterRoomNameSet, dayAppts]);
-
-  // Phase 21.0 (2026-05-06) — type filter (defense-in-depth: stale/missing
-  // types coerce to 'no-deposit-booking'). When typeFilter is null (no prop
-  // passed), all appointments pass through (legacy behavior).
-  const apptMatchesType = useCallback(
-    (a) => {
-      if (!typeFilter) return true;
-      return migrateLegacyAppointmentType(a?.appointmentType) === typeFilter;
-    },
-    [typeFilter],
-  );
-  const typedDayAppts = useMemo(
-    () => dayAppts.filter(apptMatchesType),
-    [dayAppts, apptMatchesType],
-  );
+  }, [branchExamRooms, masterRoomNameSet, typedDayAppts]);
 
   // Pre-compute appointment lookup map for O(1) access in time grid.
   // Phase 15.7-bis: array-valued so duplicates at same startTime+room
