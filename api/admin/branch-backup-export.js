@@ -70,6 +70,12 @@ export default async function handler(req, res) {
   }
 
   try {
+    // V40 review I1 — memory model: this loop loads ALL branch-scoped docs into
+    // an in-memory `out` object, then JSON.stringify serializes the full file
+    // before the 100MB size check below. For very large branches (50k+ T2/T3
+    // docs), peak heap can reach 2-3× the serialized size. UI must avoid
+    // combining T2+T3 in a single export for high-volume branches; prefer
+    // per-tier exports or use the CLI script for one-shot bulk dumps.
     const { db, bucket } = getAdmin();
     const out = {};
 

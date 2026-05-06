@@ -82,6 +82,13 @@ export default async function handler(req, res) {
       deletedCounts[col] = deleted;
     }
 
+    // V40 review I3 — scaling note: this loop reads ALL be_customers docs
+    // (universal collection, not branch-scoped) regardless of which branches
+    // they actually transacted at. For 5k+ customer install, the read +
+    // subcollection scan can approach Vercel's 60s function timeout. UI MUST
+    // warn the admin before triggering make-fresh on a large customer base.
+    // Future: maintain be_customer_branch_index/{branchId} → [customerId] for
+    // O(branch-customer-count) wipes instead of O(total-customer-count).
     // T4 — per customer × per subcollection × where branchId
     const customersSnap = await dataCol(db, 'be_customers').get();
     let t4Deleted = 0;

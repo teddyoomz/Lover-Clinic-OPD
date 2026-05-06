@@ -146,6 +146,19 @@ describe('H5 — endpoint contract source-grep', () => {
     expect(code).toMatch(/applyFkRemap/);
   });
 
+  it('H5.5 — branch-restore.js canonicalIdField table covers be_product_units (V40 review I2)', () => {
+    const code = fs.readFileSync(path.join(apiDir, 'branch-restore.js'), 'utf-8');
+    expect(code).toMatch(/be_product_units:\s*'unitId'/);
+    expect(code).toMatch(/be_product_unit_groups:\s*'unitGroupId'/);
+  });
+
+  it('H5.6 — branch-restore.js clone T1 guard does not contain dead inner-if (V40 review C1)', () => {
+    const code = fs.readFileSync(path.join(apiDir, 'branch-restore.js'), 'utf-8');
+    // Guard against the dead-inner-if pattern: an outer if (!t1set.has(col) && ...)
+    // immediately containing if (!t1set.has(col)) {...} is structurally redundant.
+    expect(code).not.toMatch(/if\s*\(!t1set\.has\(col\)[^)]*\)\s*\{\s*if\s*\(!t1set\.has\(col\)\)/);
+  });
+
   it('H5.3 — branch-make-fresh.js refuses without autoBackupRef', () => {
     const code = fs.readFileSync(path.join(apiDir, 'branch-make-fresh.js'), 'utf-8');
     expect(code).toMatch(/AUTO_BACKUP_REQUIRED/);

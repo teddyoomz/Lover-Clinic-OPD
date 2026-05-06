@@ -88,15 +88,13 @@ export default async function handler(req, res) {
       ? scopeOverride
       : Object.keys(file.collections);
 
-    // Clone mode: enforce T1-only
+    // Clone mode: enforce T1-only (T4 customer-subcollection paths are blocked too;
+    // clone is master/setup data only — transactions don't make sense to clone).
     if (mode === 'clone') {
       const t1set = new Set(TIER_MAP[BACKUP_TIER_T1]);
       for (const col of writtenCollections) {
-        if (!t1set.has(col) && col !== 'be_customers/__per_customer__') {
-          if (!t1set.has(col)) {
-            // Allow only T1 collections in clone
-            return res.status(400).json({ ok: false, error: 'CLONE_NON_T1_COLLECTION', collection: col });
-          }
+        if (!t1set.has(col)) {
+          return res.status(400).json({ ok: false, error: 'CLONE_NON_T1_COLLECTION', collection: col });
         }
       }
     }
@@ -172,6 +170,7 @@ export default async function handler(req, res) {
               be_products: 'productId',
               be_courses: 'courseId',
               be_product_groups: 'groupId',
+              be_product_units: 'unitId',          // V40 review I2 — rules-canonical unit collection
               be_product_unit_groups: 'unitGroupId',
               be_medical_instruments: 'instrumentId',
               be_holidays: 'holidayId',
