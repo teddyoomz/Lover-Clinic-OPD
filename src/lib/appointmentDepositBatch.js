@@ -604,6 +604,68 @@ export async function syncCustomerTempToLinkedDeposit(depositId, {
   return { depositId, synced: true };
 }
 
+/**
+ * Phase 24.0-vicies-quinquies (2026-05-06) — HARD-delete the deposit-booking
+ * pair. Distinct from cancelDepositBookingPair (soft-cancel via status flag):
+ * this helper deletes both documents outright via writeBatch.
+ *
+ * User report: "มีบั๊คคือลบ จองมัดจำ จากหน้า frontend แล้ว ในหน้าการเงิน
+ * ไม่ต้องแสดงเป็นยกเลิกแต่ให้ลบหายไปเลย" + "ถ้าลบนัดหมาย จองมัดจำ จากหน้า
+ * นัดหมายแล้ว ถ้าไม่ลบในการเงินด้วย มันจะแสดง bubble ตรงแถบวันที่".
+ *
+ * Both bugs share root cause: soft-cancelled docs (status='cancelled') still
+ * count in getAppointmentsByMonth (no status filter) AND still render in
+ * Finance.มัดจำ list (renders all statuses including 'cancelled'). User's
+ * mental model is "ลบ" = gone-from-list; soft-cancel doesn't match.
+ *
+ * Used by:
+ *   - Kiosk handleDepositCancel (X icon — Phase 24.0-vicies-bis converted)
+ *   - Kiosk archive (trash icon in confirm modal — Phase 24.0-vicies-ter converted)
+ *   - AppointmentCalendarView delete-via-modal cascade (when appt has
+ *     linkedDepositId)
+ *
+ * Distinct from cancelDepositBookingPair which remains in use for
+ * Finance.มัดจำ admin-driven cancel flow (where audit trail of cancelled
+ * docs may matter). The kiosk + appointment-tab "delete" UIs route here
+ * for true removal.
+ *
+ * Best-effort: throws if depositId missing, gracefully handles already-gone
+ * docs (allowing the caller to retry idempotent cleanups).
+ *
+ * @param {string} depositId — be_deposits doc id
+ * @returns {Promise<{ depositId, appointmentId?: string, deleted: true, pairDeleted: boolean }>}
+ */
+export async function deleteDepositBookingPair(depositId) {
+  if (!depositId) throw new Error('deleteDepositBookingPair: depositId required');
+  const depRef = depositDoc(depositId);
+  const snap = await getDoc(depRef);
+  if (!snap.exists()) {
+    // Already deleted — idempotent. Return success with no appointmentId.
+    return { depositId, deleted: true, pairDeleted: false };
+  }
+  const data = snap.data() || {};
+  const appointmentId = data.linkedAppointmentId || '';
+  // Refuse to delete if any of the deposit's funds have been used (admin
+  // must un-apply payments first via Finance.มัดจำ refund flow). Mirrors
+  // cancelDepositBookingPair's guard so the hard-delete path can't bypass
+  // the same financial integrity check.
+  if ((Number(data.usedAmount) || 0) > 0) {
+    throw new Error(
+      'มัดจำถูกใช้ไปบางส่วนแล้ว ไม่สามารถลบได้ กรุณายกเลิกใบเสร็จที่ใช้มัดจำก่อน',
+    );
+  }
+  const batch = writeBatch(db);
+  batch.delete(depRef);
+  if (appointmentId) batch.delete(appointmentDoc(appointmentId));
+  await batch.commit();
+  return {
+    depositId,
+    appointmentId: appointmentId || undefined,
+    deleted: true,
+    pairDeleted: !!appointmentId,
+  };
+}
+
 // Phase 21.0 marker — institutional-memory grep target. Keep this comment
 // at end-of-file. Removed = grep guard fails (test in tests/phase-21-0-*).
 // MARKER: phase-21-0-deposit-booking-pair-helper
@@ -611,3 +673,4 @@ export async function syncCustomerTempToLinkedDeposit(depositId, {
 // MARKER: phase-24-0-octiesdecies-sync-appt-metadata-to-deposit
 // MARKER: phase-24-0-noniesdecies-create-appointment-for-existing-deposit
 // MARKER: phase-24-0-vicies-sync-customer-temp-to-deposit
+// MARKER: phase-24-0-vicies-quinquies-delete-deposit-booking-pair

@@ -93,19 +93,21 @@ describe('Phase 24.0-vicies-ter — archive (trash) action cascade-delete', () =
     );
   });
 
-  it('VTC.B.2 — archive branch fires cancelDepositBookingPair when depIdForCancel set', () => {
-    // The cascade lives inside the else-branch (action !== 'cancel' && action !== 'complete').
+  it('VTC.B.2 — archive branch fires deleteDepositBookingPair (Phase 24.0-vicies-quinquies hard-delete)', () => {
+    // Phase 24.0-vicies-quinquies — switched from cancelDepositBookingPair
+    // (soft-cancel) → deleteDepositBookingPair (hard delete) per user
+    // directive: ในหน้าการเงินไม่ต้องแสดงเป็นยกเลิกแต่ให้ลบหายไปเลย.
     expect(ADMIN).toMatch(
-      /if\s*\(depIdForCancel\)\s*\{[\s\S]{0,400}?cancelDepositBookingPair\(depIdForCancel,\s*\{[\s\S]{0,200}?cancelNote:\s*['"]ลบจาก kiosk \(frontend trash\)['"]/,
+      /if\s*\(depIdForCancel\)\s*\{[\s\S]{0,400}?deleteDepositBookingPair\(depIdForCancel\)/,
     );
   });
 
   it('VTC.B.3 — best-effort try/catch (failure logs but archive proceeds)', () => {
     expect(ADMIN).toMatch(
-      /try\s*\{[\s\S]{0,400}?cancelDepositBookingPair[\s\S]{0,200}?\}\s*catch\s*\(cascadeErr\)/,
+      /try\s*\{[\s\S]{0,400}?deleteDepositBookingPair[\s\S]{0,200}?\}\s*catch\s*\(cascadeErr\)/,
     );
     expect(ADMIN).toMatch(
-      /\[archive cascade\] cancelDepositBookingPair failed/,
+      /\[archive cascade\] deleteDepositBookingPair failed/,
     );
   });
 

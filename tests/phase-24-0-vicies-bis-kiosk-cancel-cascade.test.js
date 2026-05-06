@@ -49,14 +49,19 @@ describe('Phase 24.0-vicies-bis — handleDepositCancel cascade fix', () => {
     expect(block).not.toMatch(/await\s+cancelDeposit\(session\.depositProClinicId/);
   });
 
-  it('VBC.A.3 — passes cancelNote with kiosk-frontend marker', () => {
-    expect(ADMIN).toMatch(
-      /cancelDepositBookingPair\([\s\S]{0,200}?cancelNote:\s*['"]ยกเลิกจาก kiosk \(frontend\)['"]/,
-    );
+  it('VBC.A.3 — uses deleteDepositBookingPair (no cancelNote arg — Phase 24.0-vicies-quinquies)', () => {
+    // Phase 24.0-vicies-quinquies (2026-05-06) — switched from
+    // cancelDepositBookingPair (soft-cancel with cancelNote) →
+    // deleteDepositBookingPair (hard delete, no note). User: ในหน้าการเงิน
+    // ไม่ต้องแสดงเป็นยกเลิกแต่ให้ลบหายไปเลย.
+    const block = extractCancelFn();
+    expect(block).toMatch(/deleteDepositBookingPair\(depIdForCancel\)/);
+    expect(block).not.toMatch(/cancelNote:/);
   });
 
-  it('VBC.A.4 — toast message branches on pairCancelled (whether appt was linked)', () => {
-    expect(ADMIN).toMatch(/result\?\.pairCancelled/);
+  it('VBC.A.4 — toast message branches on pairDeleted (Phase 24.0-vicies-quinquies)', () => {
+    // Phase 24.0-vicies-quinquies — return shape pairCancelled → pairDeleted.
+    expect(ADMIN).toMatch(/result\?\.pairDeleted/);
     expect(ADMIN).toMatch(/ลบมัดจำ \+ นัดหมายแล้ว/);
     expect(ADMIN).toMatch(/ลบมัดจำแล้ว/);
   });

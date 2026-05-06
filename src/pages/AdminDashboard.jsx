@@ -2946,17 +2946,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const depIdForCancel = session.depositProClinicId || session.linkedDepositId || '';
       if (depIdForCancel) {
         try {
-          const { cancelDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
-          const result = await cancelDepositBookingPair(depIdForCancel, {
-            cancelNote: 'ยกเลิกจาก kiosk (frontend)',
-          });
-          if (result?.pairCancelled) {
-            showToast('ยกเลิกการจองสำเร็จ — ลบมัดจำ + นัดหมายแล้ว');
+          // Phase 24.0-vicies-quinquies (2026-05-06) — switched from
+          // cancelDepositBookingPair (soft-cancel) → deleteDepositBookingPair
+          // (HARD delete). User: "ในหน้าการเงินไม่ต้องแสดงเป็นยกเลิกแต่ให้
+          // ลบหายไปเลย" — Finance row + appointment grid bubble must vanish
+          // entirely after kiosk delete (not show as 'cancelled').
+          const { deleteDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
+          const result = await deleteDepositBookingPair(depIdForCancel);
+          if (result?.pairDeleted) {
+            showToast('ลบการจองสำเร็จ — ลบมัดจำ + นัดหมายแล้ว');
           } else {
-            showToast('ยกเลิกการจองสำเร็จ — ลบมัดจำแล้ว');
+            showToast('ลบการจองสำเร็จ — ลบมัดจำแล้ว');
           }
         } catch (cancelErr) {
-          throw new Error(cancelErr?.message || 'ยกเลิกการจองไม่สำเร็จ');
+          throw new Error(cancelErr?.message || 'ลบการจองไม่สำเร็จ');
         }
       }
 
@@ -4061,12 +4064,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   || '';
                 if (depIdForCancel) {
                   try {
-                    const { cancelDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
-                    await cancelDepositBookingPair(depIdForCancel, {
-                      cancelNote: 'ลบจาก kiosk (frontend trash)',
-                    });
+                    // Phase 24.0-vicies-quinquies — HARD delete (was soft-cancel).
+                    // User: "ในหน้าการเงินไม่ต้องแสดงเป็นยกเลิกแต่ให้ลบหายไปเลย".
+                    const { deleteDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
+                    await deleteDepositBookingPair(depIdForCancel);
                   } catch (cascadeErr) {
-                    console.warn('[archive cascade] cancelDepositBookingPair failed (best-effort):', cascadeErr);
+                    console.warn('[archive cascade] deleteDepositBookingPair failed (best-effort):', cascadeErr);
                   }
                 }
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {

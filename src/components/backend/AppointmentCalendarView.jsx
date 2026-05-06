@@ -949,10 +949,37 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
           // onDelete absent). The actual delete + close happen here so
           // AppointmentTab owns the side-effect; the day-grid auto-refreshes
           // via listenToAppointmentsByDate listener (no manual reload needed).
+          // Phase 24.0-vicies-quinquies (2026-05-06) — when admin deletes a
+          // deposit-booking appointment from this view AND the appt has a
+          // linkedDepositId, also delete the linked be_deposits doc via
+          // deleteDepositBookingPair (atomic writeBatch). Pre-fix: deleting
+          // the appt left an orphan deposit in Finance.มัดจำ + the bubble
+          // counter on the date-strip kept showing 1 because something in
+          // the deposit's embedded appointment metadata caused a phantom
+          // count. User report: "ถ้าลบนัดหมาย จองมัดจำ จากหน้านัดหมายแล้ว
+          // ถ้าไม่ลบในการเงินด้วย มันจะแสดง bubble ตรงแถบวันที่ ด้านบน
+          // ของ tab นัดหมายไปตลอด".
           onDelete={formMode.mode === 'edit' && formMode.appt ? async () => {
             const id = formMode.appt.appointmentId || formMode.appt.id;
             if (!id) return;
-            await deleteBackendAppointment(id);
+            const linkedDepositId = formMode.appt.linkedDepositId
+              || formMode.appt.spawnedFromDepositId
+              || '';
+            if (linkedDepositId) {
+              // Pair-delete: removes BOTH be_appointments + be_deposits in
+              // a single writeBatch. Best-effort — falls back to bare appt
+              // delete if the helper throws (e.g. deposit was already
+              // independently deleted).
+              try {
+                const { deleteDepositBookingPair } = await import('../../lib/appointmentDepositBatch.js');
+                await deleteDepositBookingPair(linkedDepositId);
+              } catch (pairErr) {
+                console.warn('[AppointmentCalendarView] deleteDepositBookingPair failed (falling back to bare appt delete):', pairErr);
+                await deleteBackendAppointment(id);
+              }
+            } else {
+              await deleteBackendAppointment(id);
+            }
             setFormMode(null);
             // listener auto-refreshes the day grid + the mini-calendar bubble
           } : undefined}
