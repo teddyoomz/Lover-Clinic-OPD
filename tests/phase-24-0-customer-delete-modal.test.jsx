@@ -100,12 +100,18 @@ describe('Phase 24.0 / M1 — modal render + branch-scoped roster', () => {
     expect(screen.getByText(/HN: LC-26000003/)).toBeTruthy();
   });
 
-  it('M1.2 lists 3 dropdowns (พนง / ผู้ช่วย / แพทย์)', async () => {
+  it('M1.2 lists ONE dropdown with optgroup (พนักงาน + แพทย์/ผู้ช่วยแพทย์) — Phase 24.0-bis', async () => {
+    // Phase 24.0-bis collapsed 3 dropdowns → 1 dropdown per user UX directive.
+    // Single <select> with 2 <optgroup>s allowing admin to pick any authorizer.
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
     await waitFor(() => {
       const selects = screen.getAllByRole('combobox');
-      expect(selects.length).toBe(3);
+      expect(selects.length).toBe(1);
     });
+    // Optgroup labels rendered.
+    const select = await screen.findByTestId('delete-customer-authorizer-select');
+    expect(select.querySelector('optgroup[label="พนักงาน"]')).toBeTruthy();
+    expect(select.querySelector('optgroup[label="แพทย์ / ผู้ช่วยแพทย์"]')).toBeTruthy();
   });
 
   it('M1.3 dropdowns filter by customer.branchId (BR-1 → 1 staff + 2 doctors, no พักใช้งาน)', async () => {
@@ -123,20 +129,17 @@ describe('Phase 24.0 / M1 — modal render + branch-scoped roster', () => {
   });
 });
 
-describe('Phase 24.0 / M2 — ลบถาวร button gate', () => {
-  it('M2.1 disabled until all 3 dropdowns selected', async () => {
+describe('Phase 24.0 / M2 — ลบถาวร button gate (Phase 24.0-bis: single authorizer)', () => {
+  it('M2.1 disabled until authorizer is selected', async () => {
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
     const btn = await screen.findByTestId('delete-customer-confirm');
     expect(btn.disabled).toBe(true);
 
-    // Wait for roster load (>3 = at least one real option per dropdown beyond placeholders)
+    // Wait for roster load — 1 staff (พนง A) + 2 doctors (Dr X, Dr Y) under BR-1
+    // gives ≥ 3 real options + 1 placeholder = 4 total.
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'BS-1' } });
-    expect(btn.disabled).toBe(true);  // only 1 of 3
-    fireEvent.change(selects[1], { target: { value: 'BD-1' } });
-    expect(btn.disabled).toBe(true);  // only 2 of 3
-    fireEvent.change(selects[2], { target: { value: 'BD-2' } });
+    const select = screen.getByTestId('delete-customer-authorizer-select');
+    fireEvent.change(select, { target: { value: 'BS-1' } });
     expect(btn.disabled).toBe(false);
   });
 });
@@ -154,7 +157,7 @@ describe('Phase 24.0 / M3 — ProClinic-cloned warning banner', () => {
 });
 
 describe('Phase 24.0 / M4 — submit flow', () => {
-  it('M4.1 click ลบ → calls deleteCustomerViaApi with all required fields', async () => {
+  it('M4.1 click ลบ → calls deleteCustomerViaApi with single-authorizer payload (Phase 24.0-bis)', async () => {
     const onDeleted = vi.fn();
     deleteCustomerViaApi.mockResolvedValue({
       success: true,
@@ -165,33 +168,49 @@ describe('Phase 24.0 / M4 — submit flow', () => {
     });
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={onDeleted} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'BS-1' } });
-    fireEvent.change(selects[1], { target: { value: 'BD-1' } });
-    fireEvent.change(selects[2], { target: { value: 'BD-2' } });
+    const select = screen.getByTestId('delete-customer-authorizer-select');
+    // Pick a staff member — server-authoritative role derivation should yield 'staff'.
+    fireEvent.change(select, { target: { value: 'BS-1' } });
     fireEvent.click(screen.getByTestId('delete-customer-confirm'));
     await waitFor(() => expect(deleteCustomerViaApi).toHaveBeenCalledTimes(1));
     expect(deleteCustomerViaApi).toHaveBeenCalledWith({
       customerId: 'LC-26000003',
       authorizedBy: {
-        staffId: 'BS-1', staffName: 'พนง A',
-        assistantId: 'BD-1', assistantName: 'Dr X',
-        doctorId: 'BD-2', doctorName: 'Dr Y',
+        authorizerId: 'BS-1',
+        authorizerName: 'พนง A',
+        authorizerRole: 'staff',
       },
     });
     await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
   });
 
+  it('M4.1-bis picking a doctor yields role: "doctor"', async () => {
+    const onDeleted = vi.fn();
+    deleteCustomerViaApi.mockResolvedValue({ success: true, customerId: 'LC-26000003', cascadeCounts: {}, auditDocId: 'a', totalDeletes: 1 });
+    render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={onDeleted} />);
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    const select = screen.getByTestId('delete-customer-authorizer-select');
+    fireEvent.change(select, { target: { value: 'BD-1' } });  // doctor list
+    fireEvent.click(screen.getByTestId('delete-customer-confirm'));
+    await waitFor(() => expect(deleteCustomerViaApi).toHaveBeenCalledTimes(1));
+    expect(deleteCustomerViaApi).toHaveBeenCalledWith({
+      customerId: 'LC-26000003',
+      authorizedBy: {
+        authorizerId: 'BD-1',
+        authorizerName: 'Dr X',
+        authorizerRole: 'doctor',
+      },
+    });
+  });
+
   it('M4.2 server error surfaces in red banner', async () => {
-    deleteCustomerViaApi.mockRejectedValue(Object.assign(new Error('test fail'), { userMessage: 'staffId not in branch roster' }));
+    deleteCustomerViaApi.mockRejectedValue(Object.assign(new Error('test fail'), { userMessage: 'authorizerId not in branch roster' }));
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'BS-1' } });
-    fireEvent.change(selects[1], { target: { value: 'BD-1' } });
-    fireEvent.change(selects[2], { target: { value: 'BD-2' } });
+    const select = screen.getByTestId('delete-customer-authorizer-select');
+    fireEvent.change(select, { target: { value: 'BS-1' } });
     fireEvent.click(screen.getByTestId('delete-customer-confirm'));
-    await screen.findByText(/staffId not in branch roster/);
+    await screen.findByText(/authorizerId not in branch roster/);
   });
 });
 
@@ -264,7 +283,7 @@ describe('Phase 24.0 / M6 — cascade preview row (Issue #1)', () => {
     expect(preview.textContent).toMatch(/0 link tokens/);
   });
 
-  it('M6.3 preview error shows amber banner but does NOT disable the ลบ button (3-dropdown gate independent)', async () => {
+  it('M6.3 preview error shows amber banner but does NOT disable the ลบ button (single-authorizer gate independent)', async () => {
     previewCustomerDeleteViaApi.mockRejectedValue(
       Object.assign(new Error('preview failed'), { userMessage: 'network down' })
     );
@@ -273,15 +292,13 @@ describe('Phase 24.0 / M6 — cascade preview row (Issue #1)', () => {
     await screen.findByTestId('delete-customer-preview-error');
     // The cascade-preview row should NOT have rendered.
     expect(screen.queryByTestId('delete-customer-cascade-preview')).toBeNull();
-    // Now exercise the 3-dropdown gate — failing preview must NOT block delete.
+    // Now exercise the single-authorizer gate — failing preview must NOT block delete.
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
     const btn = screen.getByTestId('delete-customer-confirm');
-    expect(btn.disabled).toBe(true);  // disabled because no dropdowns selected, NOT because of preview
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'BS-1' } });
-    fireEvent.change(selects[1], { target: { value: 'BD-1' } });
-    fireEvent.change(selects[2], { target: { value: 'BD-2' } });
-    // 3 dropdowns selected → button enabled even though preview failed.
+    expect(btn.disabled).toBe(true);  // disabled because no authorizer selected, NOT because of preview
+    const select = screen.getByTestId('delete-customer-authorizer-select');
+    fireEvent.change(select, { target: { value: 'BS-1' } });
+    // Authorizer selected → button enabled even though preview failed.
     expect(btn.disabled).toBe(false);
   });
 });

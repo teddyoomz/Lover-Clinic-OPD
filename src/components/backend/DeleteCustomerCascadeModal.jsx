@@ -1,9 +1,13 @@
 // ─── DeleteCustomerCascadeModal — Phase 24.0 (2026-05-06) ───────────────────
 // Native-styled minimal modal for cascade-delete confirmation. Body holds
-// 3 required dropdowns (พนง / ผู้ช่วย / แพทย์) populated from customer's
-// branch roster. ลบถาวร button disabled until all 3 selected.
+// ONE required dropdown grouping พนักงาน + แพทย์/ผู้ช่วยแพทย์ via <optgroup>
+// populated from customer's branch roster. ลบถาวร button disabled until
+// admin picks one authorizer.
 //
-// Spec: docs/superpowers/specs/2026-05-06-customer-delete-button-design.md §5.1.
+// Phase 24.0-bis (2026-05-06 evening) — collapsed 3 dropdowns → 1 dropdown
+// per user directive "ไม่ต้องเอามาหมดโว้ย มีช่อง Dropdown เดียวพอ แล้วเลือก
+// ได้ทั้ง พนักงาน ผู้ช่วยแพทย์ และ แพทย์". Single authorizer captured for
+// audit trail (with role label). Spec §5.1 + §13 superseded inline.
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2, Trash2, X, AlertTriangle } from 'lucide-react';
@@ -17,9 +21,9 @@ const selectCls = 'w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] t
 export default function DeleteCustomerCascadeModal({ customer, onClose, onDeleted }) {
   const [staffOptions, setStaffOptions] = useState([]);
   const [doctorOptions, setDoctorOptions] = useState([]);
-  const [staffId, setStaffId] = useState('');
-  const [assistantId, setAssistantId] = useState('');
-  const [doctorId, setDoctorId] = useState('');
+  // Phase 24.0-bis — single authorizer ID. Resolved against staffOptions OR
+  // doctorOptions on submit to derive role label (staff / doctor) for audit.
+  const [authorizerId, setAuthorizerId] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -89,22 +93,25 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
   }, [customer?.prefix, customer?.firstname, customer?.lastname]);
   const hn = customer?.hn_no || customer?.id || '';
 
-  const canSubmit = !submitting && !loading && staffId && assistantId && doctorId;
+  const canSubmit = !submitting && !loading && !!authorizerId;
 
   async function handleDelete() {
     if (!canSubmit) return;
     setError('');
     setSubmitting(true);
     try {
-      const staffRec = staffOptions.find(s => s.value === staffId);
-      const assistantRec = doctorOptions.find(d => d.value === assistantId);
-      const doctorRec = doctorOptions.find(d => d.value === doctorId);
+      // Phase 24.0-bis — resolve role from which list contains the chosen ID.
+      // Staff list checked first; then doctor list. role: 'staff' | 'doctor'.
+      const staffRec = staffOptions.find(s => s.value === authorizerId);
+      const doctorRec = doctorOptions.find(d => d.value === authorizerId);
+      const role = staffRec ? 'staff' : (doctorRec ? 'doctor' : '');
+      const authorizerName = staffRec?.label || doctorRec?.label || '';
       const result = await deleteCustomerViaApi({
         customerId: customer.id,
         authorizedBy: {
-          staffId, staffName: staffRec?.label || '',
-          assistantId, assistantName: assistantRec?.label || '',
-          doctorId, doctorName: doctorRec?.label || '',
+          authorizerId,
+          authorizerName,
+          authorizerRole: role,
         },
       });
       // Phase 24.0 (post-review hardening) — wrap onDeleted so a parent
@@ -191,29 +198,30 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
           </div>
         )}
 
-        {/* 3 required dropdowns — branch-scoped roster */}
-        <div className="space-y-3 mb-4" data-testid="delete-customer-authorizers">
-          <div>
-            <label className={labelCls}>พนักงาน <span className="text-red-500">*</span></label>
-            <select value={staffId} onChange={e => setStaffId(e.target.value)} disabled={submitting || loading} className={selectCls}>
-              <option value="">-- เลือกพนักงาน --</option>
-              {staffOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>ผู้ช่วยแพทย์ <span className="text-red-500">*</span></label>
-            <select value={assistantId} onChange={e => setAssistantId(e.target.value)} disabled={submitting || loading} className={selectCls}>
-              <option value="">-- เลือกผู้ช่วยแพทย์ --</option>
-              {doctorOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>แพทย์ <span className="text-red-500">*</span></label>
-            <select value={doctorId} onChange={e => setDoctorId(e.target.value)} disabled={submitting || loading} className={selectCls}>
-              <option value="">-- เลือกแพทย์ --</option>
-              {doctorOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+        {/* Phase 24.0-bis — single dropdown grouping พนง + แพทย์/ผู้ช่วยแพทย์ via <optgroup>.
+            Admin picks ONE authorizer (any role). Server cross-validates ID
+            against be_staff OR be_doctors at customer.branchId. */}
+        <div className="mb-4" data-testid="delete-customer-authorizers">
+          <label className={labelCls}>ผู้รับผิดชอบ <span className="text-red-500">*</span></label>
+          <select
+            value={authorizerId}
+            onChange={e => setAuthorizerId(e.target.value)}
+            disabled={submitting || loading}
+            className={selectCls}
+            data-testid="delete-customer-authorizer-select"
+          >
+            <option value="">-- เลือกผู้รับผิดชอบ --</option>
+            {staffOptions.length > 0 && (
+              <optgroup label="พนักงาน">
+                {staffOptions.map(o => <option key={`s-${o.value}`} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            )}
+            {doctorOptions.length > 0 && (
+              <optgroup label="แพทย์ / ผู้ช่วยแพทย์">
+                {doctorOptions.map(o => <option key={`d-${o.value}`} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            )}
+          </select>
         </div>
 
         {error && (

@@ -88,9 +88,32 @@ export function assertHasDeletePermission(claims) {
   return claims.admin === true || claims.customer_delete === true;
 }
 
-/** Pure helper: validate authorizedBy payload shape. */
+/** Pure helper: validate authorizedBy payload shape.
+ *
+ * Phase 24.0-bis (2026-05-06 evening) — collapsed 3-authorizer (staff +
+ * assistant + doctor) shape to single-authorizer ({authorizerId,
+ * authorizerName, authorizerRole}) per user UX directive. Backward-compat:
+ * legacy 6-field shape still accepted (silent translation to authorizerId
+ * = staffId fallback). New callers should send the 3-field shape.
+ */
 export function validateAuthorizedBy(authorizedBy) {
   if (!authorizedBy || typeof authorizedBy !== 'object') return 'authorizedBy required';
+  // Phase 24.0-bis canonical shape
+  if (typeof authorizedBy.authorizerId === 'string') {
+    if (!authorizedBy.authorizerId.trim()) return 'authorizedBy.authorizerId required (non-empty string)';
+    if (typeof authorizedBy.authorizerName !== 'string' || !authorizedBy.authorizerName.trim()) {
+      return 'authorizedBy.authorizerName required (non-empty string)';
+    }
+    if (typeof authorizedBy.authorizerRole !== 'string' || !authorizedBy.authorizerRole.trim()) {
+      return 'authorizedBy.authorizerRole required (non-empty string)';
+    }
+    if (!['staff', 'doctor'].includes(authorizedBy.authorizerRole)) {
+      return `authorizedBy.authorizerRole must be 'staff' or 'doctor' (got '${authorizedBy.authorizerRole}')`;
+    }
+    return null;
+  }
+  // Legacy 6-field shape (Phase 24.0 original spec) — accepted for
+  // backward-compat. Will be normalized at use-site to canonical shape.
   const required = ['staffId', 'staffName', 'assistantId', 'assistantName', 'doctorId', 'doctorName'];
   for (const key of required) {
     if (typeof authorizedBy[key] !== 'string' || !authorizedBy[key].trim()) {
@@ -98,6 +121,30 @@ export function validateAuthorizedBy(authorizedBy) {
     }
   }
   return null;
+}
+
+/** Pure helper: normalize legacy 6-field authorizedBy → canonical 3-field
+ * shape. Returns the same object if already canonical. Used at the audit
+ * payload assembly site so legacy callers + new callers both produce the
+ * same audit doc shape.
+ */
+export function normalizeAuthorizedBy(authorizedBy) {
+  if (!authorizedBy || typeof authorizedBy !== 'object') return null;
+  if (typeof authorizedBy.authorizerId === 'string') {
+    return {
+      authorizerId: authorizedBy.authorizerId,
+      authorizerName: authorizedBy.authorizerName,
+      authorizerRole: authorizedBy.authorizerRole,
+    };
+  }
+  // Legacy: collapse to staff (admin previously chose 1 person per role; we
+  // pick staff as the primary authorizer in the audit since that was the
+  // first dropdown in the original spec).
+  return {
+    authorizerId: authorizedBy.staffId,
+    authorizerName: authorizedBy.staffName,
+    authorizerRole: 'staff',
+  };
 }
 
 /** Pure helper: classify origin from customer doc's isManualEntry flag. */
@@ -213,26 +260,31 @@ export default async function handler(req, res) {
       return branches.includes(branchId);
     }
 
-    if (!inBranchRoster(staffMap, authorizedBy.staffId)) {
+    // Phase 24.0-bis — single-authorizer validation. Cross-check ID against
+    // BOTH staff + doctor rosters at customer.branchId; ID must exist in at
+    // least one. Role-claim from client must match the source map (server
+    // authority — admin can't fake "staff" if the ID belongs to a doctor).
+    // Legacy 6-field shape is normalized to single-authorizer below before
+    // validation; the legacy path checks staff (the primary authorizer).
+    const canonicalAuth = normalizeAuthorizedBy(authorizedBy);
+    if (!canonicalAuth) {
+      return res.status(400).json({ success: false, error: 'authorizedBy required', field: 'authorizedBy' });
+    }
+    const authStaffMatch = inBranchRoster(staffMap, canonicalAuth.authorizerId);
+    const authDoctorMatch = inBranchRoster(doctorMap, canonicalAuth.authorizerId);
+    if (!authStaffMatch && !authDoctorMatch) {
       return res.status(400).json({
         success: false,
-        error: `staffId "${authorizedBy.staffId}" not in branch ${branchId} roster`,
-        field: 'authorizedBy.staffId',
+        error: `authorizerId "${canonicalAuth.authorizerId}" not in branch ${branchId} roster`,
+        field: 'authorizedBy.authorizerId',
       });
     }
-    if (!inBranchRoster(doctorMap, authorizedBy.assistantId)) {
-      return res.status(400).json({
-        success: false,
-        error: `assistantId "${authorizedBy.assistantId}" not in branch ${branchId} roster`,
-        field: 'authorizedBy.assistantId',
-      });
-    }
-    if (!inBranchRoster(doctorMap, authorizedBy.doctorId)) {
-      return res.status(400).json({
-        success: false,
-        error: `doctorId "${authorizedBy.doctorId}" not in branch ${branchId} roster`,
-        field: 'authorizedBy.doctorId',
-      });
+    // Server-authoritative role correction: if claim says 'staff' but ID is
+    // a doctor (or vice-versa), correct silently to the actual source map.
+    if (canonicalAuth.authorizerRole === 'staff' && !authStaffMatch) {
+      canonicalAuth.authorizerRole = 'doctor';
+    } else if (canonicalAuth.authorizerRole === 'doctor' && !authDoctorMatch) {
+      canonicalAuth.authorizerRole = 'staff';
     }
 
     // Query 11 cascade collections in parallel; collect refs + counts.
@@ -320,13 +372,11 @@ export default async function handler(req, res) {
       customerFullName: fullName,
       branchId,
       origin: classifyOrigin(customer),
+      // Phase 24.0-bis canonical shape — single authorizer + role.
       authorizedBy: {
-        staffId: authorizedBy.staffId,
-        staffName: authorizedBy.staffName,
-        assistantId: authorizedBy.assistantId,
-        assistantName: authorizedBy.assistantName,
-        doctorId: authorizedBy.doctorId,
-        doctorName: authorizedBy.doctorName,
+        authorizerId: canonicalAuth.authorizerId,
+        authorizerName: canonicalAuth.authorizerName,
+        authorizerRole: canonicalAuth.authorizerRole,
       },
       performedBy: {
         uid: caller.uid || '',
