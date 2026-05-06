@@ -202,6 +202,43 @@ When the user authorizes ANY data manipulation against production Firestore — 
 
 ---
 
+**N. 🆕 Targeted-test-only for small bugfixes** (added 2026-05-06 after user directive "ไม่ต้องรัน full suite test ทุกครั้งที่แก้บั๊คอะไรเล็กๆน้อยๆแบบนี้ แค่รัน test เช็คในส่วนที่ได้แก้บั๊คไป ว่าไม่ error แล้วทำตาม user ต้องการได้จริงก็พอ ยกเว้นทำอะไรใหญ่ๆจริงๆ เพิ่ม function หรือ feature หรือมีการแก้โค๊ดมี่รบกวนโครงสร้างโดยรวมจริงๆค่อยรัน ใช้ความเหมาะสมที่นายคิดว่าดีในการตัดสินใจ"):
+
+**Default behavior**: For small bugfixes, run ONLY the targeted tests (the new test file + any pre-existing tests that lock the directly-touched code shape). Do NOT run `npm test -- --run` (full suite, ~90s for 6300+ tests) by default — wastes ~1.5 min per cycle on small fixes.
+
+**When to run full suite** (use judgment):
+- ✅ NEW exported function or component
+- ✅ NEW feature touching ≥3 source files
+- ✅ Refactor that changes a function's signature, return shape, or call protocol (V12 multi-reader-sweep risk)
+- ✅ Helper extraction (Rule of 3) — old call-site shapes change
+- ✅ Schema change on a Firestore collection
+- ✅ Pre-release / pre-deploy / pre-merge to master
+- ✅ End of a multi-phase batch (Phase 24.0-vicies-class)
+
+**When to run targeted-only**:
+- ✅ Single-line bugfix (regex, off-by-one, condition flip)
+- ✅ UI label / copy change
+- ✅ Adding a new test that doesn't change source
+- ✅ Adding a console.warn / forensic-trail field
+- ✅ Tightening a regex / validation
+- ✅ Single-callsite Edit that doesn't change function signature
+
+**Required targeted scope** (every fix, regardless of size):
+1. The NEW test file for the bugfix (always)
+2. Any test file that imports the touched module (fast grep: `grep -rln "<touched-module>" tests/`)
+3. The Phase-X-flow-simulate.test.js for the affected sub-phase (Rule I — full-flow simulate is NEVER skippable)
+
+**Anti-patterns**:
+- ❌ Skipping ALL tests because "the change is tiny" — Rule I full-flow simulate is non-negotiable
+- ❌ Running full suite for a regex tweak — wastes 90s for nothing
+- ❌ Running ONLY the new test file when the fix touches a shared helper (Rule of 3) — old call-sites can break silently
+
+**Lesson lock**: This session (Phase 24.0-undecies through vicies, ~10 commits) ran full suite ~10× for individually-small fixes. Each pass cost ~90s = 15 minutes wasted. The full-suite hits caught real V21-style locks (5 broken across the batch), BUT those would also be caught by targeted runs of the affected files (`grep -rln "<touched-module>" tests/` returns the same files). Targeted-first + full-suite-at-batch-end is the right rhythm.
+
+**Edge case**: when uncertain whether a change is "small" or "big", prefer FULL suite — false negatives (skipped + missed) are worse than false positives (ran full + wasted 90s). Use judgment.
+
+---
+
 **H-bis. Sync = DEV-ONLY scaffolding** (added 2026-04-20 after user directive "หน้าดูดทุกอย่างนี้ใช้แค่ตอน develop เท่านั้นนะ version ใช้จริงต้องถอดทิ้งหมด"):
 - **`MasterDataTab` + every "sync/ดูด ProClinic" button + every `brokerClient` import + every `api/proclinic/*` endpoint = DEV-ONLY scaffolding**. Purpose: seed test data from the trial ProClinic server so the team doesn't hand-type fixtures. Shipped to admin-dev builds ONLY.
 - **Production release (pre-launch) must STRIP**:

@@ -2930,18 +2930,38 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       await updateDoc(ref, { depositSyncStatus: 'pending' });
       showToast('กำลังยกเลิกการจอง...');
 
-      // Phase 20.0 Task 5c — cancel be_deposits doc instead of ProClinic.
-      // session.depositProClinicId field semantics now = be_deposits doc id.
-      if (session.depositProClinicId) {
+      // Phase 24.0-vicies-bis (2026-05-06) — cascade-delete both be_deposits
+      // AND be_appointments when admin cancels a kiosk deposit-booking from
+      // the frontend. User directive: "หากลบลูกค้าจองมัดจำจาก Frontend
+      // จะลบข้อมูลการมัดจำและข้อมูลการนัดหมาย (หากมี) ใน data ของลูกค้า
+      // คนนั้น ในสาขานั้นๆ ของ backend ไปด้วย".
+      //
+      // Resolve depositId with linkedDepositId fallback so kiosk-fresh
+      // deposits (Phase 24.0-quinquiesdecies stamps linkedDepositId, NOT
+      // depositProClinicId) reach the cancel path. Use
+      // cancelDepositBookingPair (Phase 21.0 helper) which atomically
+      // cancels BOTH be_deposits + linked be_appointments via writeBatch
+      // — soft-cancel (status='cancelled') preserves audit trail per
+      // Rule D continuous-improvement (no hard delete on financial docs).
+      const depIdForCancel = session.depositProClinicId || session.linkedDepositId || '';
+      if (depIdForCancel) {
         try {
-          await cancelDeposit(session.depositProClinicId, { cancelNote: 'ยกเลิกจาก kiosk' });
-          showToast('ยกเลิกการจองสำเร็จ');
+          const { cancelDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
+          const result = await cancelDepositBookingPair(depIdForCancel, {
+            cancelNote: 'ยกเลิกจาก kiosk (frontend)',
+          });
+          if (result?.pairCancelled) {
+            showToast('ยกเลิกการจองสำเร็จ — ลบมัดจำ + นัดหมายแล้ว');
+          } else {
+            showToast('ยกเลิกการจองสำเร็จ — ลบมัดจำแล้ว');
+          }
         } catch (cancelErr) {
           throw new Error(cancelErr?.message || 'ยกเลิกการจองไม่สำเร็จ');
         }
       }
 
-      // Archive the session (move to deposit history)
+      // Archive the session (move to deposit history) + clear cross-link
+      // fields so the session card no longer points at cancelled docs.
       await updateDoc(ref, {
         isArchived: true,
         archivedAt: serverTimestamp(),
@@ -2952,6 +2972,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         brokerProClinicHN: null,
         patientLinkToken: null, patientLinkEnabled: false,
         serviceCompleted: false, serviceCompletedAt: null,
+        // Phase 24.0-vicies-bis — forensic trail (preserves the cancelled
+        // doc ids so admin can audit which docs were soft-cancelled).
+        cancelledDepositId: depIdForCancel || null,
+        cancelledAppointmentId: session.linkedAppointmentId || null,
       });
       showToast('ยกเลิกการจองสำเร็จ — ย้ายไปประวัติจองแล้ว');
     } catch (e) {
