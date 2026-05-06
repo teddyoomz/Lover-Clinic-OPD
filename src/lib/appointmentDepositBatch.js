@@ -89,6 +89,14 @@ export function buildAppointmentPairPayload({
     customerId: String(depositData?.customerId || ''),
     customerName: depositData?.customerName || '',
     customerHN: depositData?.customerHN || '',
+    // Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง" temp fields.
+    // When the kiosk staff books before a customer doc exists, customerId
+    // stays '' and customerName falls through to the "ลูกค้าจอง" placeholder.
+    // The booking-time name + phone the caller gave land here so admin can
+    // contact them + identify them in Finance.มัดจำ before linking a real
+    // customer doc.
+    customerNameTemp: depositData?.customerNameTemp || '',
+    customerPhoneTemp: depositData?.customerPhoneTemp || '',
     date: appt.date || '',
     startTime: appt.startTime || '',
     endTime: appt.endTime || appt.startTime || '',
@@ -145,6 +153,9 @@ export function buildDepositPairPayload({
     customerId: String(depositData?.customerId || ''),
     customerName: depositData?.customerName || '',
     customerHN: depositData?.customerHN || '',
+    // Phase 24.0-terdecies — see buildAppointmentPairPayload for context.
+    customerNameTemp: depositData?.customerNameTemp || '',
+    customerPhoneTemp: depositData?.customerPhoneTemp || '',
     amount,
     usedAmount: 0,
     remainingAmount: amount,
@@ -303,6 +314,119 @@ export async function cancelDepositBookingPair(depositId, {
   };
 }
 
+/**
+ * Phase 24.0-septiesdecies (2026-05-06) — attach a real customer to a
+ * pre-existing customer-later deposit. Used when admin edits a deposit-
+ * booking appointment + selects a real customer (toggling pickLater off).
+ * The appointment update writes customerId/customerName/customerHN on the
+ * be_appointments doc; this helper cascades the same fields to the linked
+ * be_deposits doc so Finance.มัดจำ shows the correct customer. The temp
+ * fields (customerNameTemp / customerPhoneTemp) are preserved for forensic
+ * trail. Best-effort: throws if depositId missing OR doc doesn't exist;
+ * caller wraps in try/catch.
+ *
+ * @param {string} depositId — be_deposits doc id (from
+ *        appt.linkedDepositId / appt.spawnedFromDepositId).
+ * @param {Object} args
+ * @param {string} args.customerId — be_customers doc id (canonical HN-based)
+ * @param {string} args.customerName
+ * @param {string} [args.customerHN]
+ * @returns {Promise<{ depositId: string, attached: true }>}
+ */
+export async function attachCustomerToLinkedDeposit(depositId, {
+  customerId,
+  customerName,
+  customerHN = '',
+} = {}) {
+  if (!depositId) throw new Error('attachCustomerToLinkedDeposit: depositId required');
+  if (!customerId) throw new Error('attachCustomerToLinkedDeposit: customerId required');
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error(`attachCustomerToLinkedDeposit: deposit ${depositId} not found`);
+  }
+  const now = new Date().toISOString();
+  // Use writeBatch even for single-doc update so future cascades (e.g.
+  // wallet-tx, audit doc) can ride on the same atomic boundary.
+  const batch = writeBatch(db);
+  batch.update(ref, {
+    customerId: String(customerId),
+    customerName: String(customerName || ''),
+    customerHN: String(customerHN || ''),
+    // Forensic trail — preserves the original booking-time temp identity
+    // so admin can audit who paid the deposit before the customer was
+    // formally registered. customerNameTemp / customerPhoneTemp are kept;
+    // do NOT clear them.
+    customerLinkedAt: now,
+    customerLinkedFrom: 'appointment-modal',
+    updatedAt: now,
+  });
+  await batch.commit();
+  return { depositId, attached: true };
+}
+
+/**
+ * Phase 24.0-octiesdecies (2026-05-06) — sync appointment metadata to the
+ * linked be_deposits.appointment embedded object. User report: "พอ edit
+ * ลูกค้าที่จองมัดจำ ... ตรงนัดหมายเปลี่ยนเหตุผล ตรงตารางหน้าการเงินมัน
+ * ไม่เปลี่ยนตาม". DepositPanel "มัดจำสำหรับ" column reads
+ * dep.appointment.purpose; if AppointmentFormModal updates the be_appointments
+ * doc but the linked be_deposits.appointment.purpose stays stale, admin
+ * sees old metadata in Finance.มัดจำ until manual reload. This helper
+ * keeps both sides in sync.
+ *
+ * Best-effort cascade: throws if depositId missing or doc gone; caller
+ * wraps in try/catch. Preserves untouched fields on the deposit's embedded
+ * appointment via dotted-path updates.
+ *
+ * @param {string} depositId — be_deposits doc id (from
+ *        appt.linkedDepositId / appt.spawnedFromDepositId).
+ * @param {Object} apptMeta — same shape as the embedded `appointment` field
+ *        DepositPanel writes when creating a deposit (date, startTime,
+ *        endTime, doctorId, doctorName, advisorId, advisorName, assistantIds,
+ *        assistantNames, roomId, roomName, channel, purpose, note, color,
+ *        lineNotify). Only fields present on the input override; missing
+ *        fields are left untouched on the deposit doc.
+ * @returns {Promise<{ depositId: string, synced: true }>}
+ */
+export async function syncAppointmentToLinkedDeposit(depositId, apptMeta = {}) {
+  if (!depositId) throw new Error('syncAppointmentToLinkedDeposit: depositId required');
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error(`syncAppointmentToLinkedDeposit: deposit ${depositId} not found`);
+  }
+  const now = new Date().toISOString();
+  // Build dotted-path updates so we don't wipe sibling fields on the
+  // appointment object. Only persist fields the caller actually provided
+  // (vs. blanket-clearing missing fields).
+  const update = {
+    updatedAt: now,
+    appointmentSyncedAt: now,
+  };
+  const allowedKeys = [
+    'type', 'option',
+    'date', 'startTime', 'endTime',
+    'doctorId', 'doctorName',
+    'advisorId', 'advisorName',
+    'assistantIds', 'assistantNames',
+    'roomId', 'roomName',
+    'channel', 'purpose', 'appointmentTo',
+    'note', 'color', 'lineNotify',
+  ];
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(apptMeta, key)) {
+      update[`appointment.${key}`] = apptMeta[key];
+    }
+  }
+  const batch = writeBatch(db);
+  batch.update(ref, update);
+  await batch.commit();
+  return { depositId, synced: true };
+}
+
 // Phase 21.0 marker — institutional-memory grep target. Keep this comment
 // at end-of-file. Removed = grep guard fails (test in tests/phase-21-0-*).
 // MARKER: phase-21-0-deposit-booking-pair-helper
+// MARKER: phase-24-0-septiesdecies-attach-customer-to-deposit
+// MARKER: phase-24-0-octiesdecies-sync-appt-metadata-to-deposit

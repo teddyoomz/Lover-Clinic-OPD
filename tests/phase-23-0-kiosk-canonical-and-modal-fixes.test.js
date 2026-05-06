@@ -250,8 +250,10 @@ describe('Phase 23.0 / B — AdminDashboard.jsx contract guards', () => {
   it('B.2 fetchDepositOptions populates appointmentChannels key (Bug 1)', () => {
     // The two ช่องทางนัดหมาย dropdowns at line 6349 + 6466 read
     // depositOptions?.appointmentChannels. Pre-fix only `sources` was set →
-    // dropdowns rendered empty.
-    expect(ADMIN).toMatch(/appointmentChannels:\s*\[\s*\.\.\.CUSTOMER_SOURCES_STATIC\s*\]/);
+    // dropdowns rendered empty. Phase 24.0-quaterdecies (2026-05-06) —
+    // switched the spread source from CUSTOMER_SOURCES_STATIC to a dedicated
+    // APPT_CHANNELS_STATIC frozen array that includes "โทรศัพท์" up-front.
+    expect(ADMIN).toMatch(/appointmentChannels:\s*\[\s*\.\.\.APPT_CHANNELS_STATIC\s*\]/);
   });
 
   it('B.2-bis fetchDepositOptions cache check guards against shape drift via _schemaVersion (Bug 1 hardening)', () => {

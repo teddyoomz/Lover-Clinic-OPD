@@ -68,7 +68,10 @@ describe('Phase 22.0b — A3 confirmCreateDeposit paired-write to be_deposits + 
   });
 
   test('A3.2 pair-helper called with depositData + branchId', () => {
-    expect(SRC).toMatch(/createDepositBookingPair\(\{\s*depositData:[\s\S]{0,2000}?branchId:\s*selectedBranchId\s*\|\|\s*['"]['"]/);
+    // Phase 24.0-terdecies (2026-05-06) — depositData object grew with
+    // customerNameTemp + customerPhoneTemp fields. Lookahead bound widened
+    // 2000 → 3500 to accommodate the larger nested object literal.
+    expect(SRC).toMatch(/createDepositBookingPair\(\{\s*depositData:[\s\S]{0,3500}?branchId:\s*selectedBranchId\s*\|\|\s*['"]['"]/);
   });
 
   test('A3.3 deposit-pair only fires when amount > 0 (validation gate)', () => {
@@ -76,9 +79,14 @@ describe('Phase 22.0b — A3 confirmCreateDeposit paired-write to be_deposits + 
   });
 
   test('A3.4 hasAppointment=true → appointment field populated with date/startTime/etc', () => {
-    expect(SRC).toMatch(/hasAppointment:\s*!!depositFormData\.hasAppointment/);
-    expect(SRC).toMatch(/appointment:\s*depositFormData\.hasAppointment\s*\?/);
+    // Phase 24.0-quaterdecies (2026-05-06) — refactored to branch-on-
+    // hasAppointment. The hasAppointment=true path builds a `pairPayload`
+    // with explicit `hasAppointment: true` + nested `appointment` object;
+    // the false path (createDeposit) sets hasAppointment:false + appointment:null.
+    expect(SRC).toMatch(/if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,200}?hasAppointment:\s*true/);
     expect(SRC).toMatch(/type:\s*['"]deposit-booking['"]/);
+    // hasAppointment=false branch sets appointment:null
+    expect(SRC).toMatch(/hasAppointment:\s*false\s*,\s*\n?\s*appointment:\s*null/);
   });
 
   test('A3.5 sellers built with 100% percent when salesperson selected', () => {
@@ -86,8 +94,10 @@ describe('Phase 22.0b — A3 confirmCreateDeposit paired-write to be_deposits + 
   });
 
   test('A3.6 cross-link stamped on opd_sessions doc (linkedDepositId + linkedAppointmentId)', () => {
-    expect(SRC).toMatch(/linkedDepositId:\s*pairResult\.depositId/);
-    expect(SRC).toMatch(/linkedAppointmentId:\s*pairResult\.appointmentId/);
+    // Phase 24.0-quaterdecies — depositId is now a `let` shared across both
+    // branches; pairResult is a separate var for the appointmentId fallback.
+    expect(SRC).toMatch(/linkedDepositId:\s*depositId/);
+    expect(SRC).toMatch(/linkedAppointmentId:\s*pairResult\?\.appointmentId/);
   });
 
   test('A3.7 best-effort try/catch — pair failure does NOT block kiosk session save', () => {

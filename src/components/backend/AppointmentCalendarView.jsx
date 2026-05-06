@@ -313,15 +313,55 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
   // Legacy localStorage `appt-rooms-seen` cache is dropped — orphan
   // legacy appts (with non-master roomName) route to ไม่ระบุห้อง column
   // via the runtime fallback below.
+  //
+  // Phase 24.0-sexiesdecies (2026-05-06) — branch-switch state-staleness fix.
+  // User report: "พอกดเปลี่ยนสาขาใน branch selector แล้วตารางมันมากองกัน"
+  // (after switching branch, all appointments pile into ไม่ระบุห้อง).
+  //
+  // Root cause: race between two effects both depending on selectedBranchId:
+  //   (a) listenToAppointmentsByDate (fast — onSnapshot) emits NEW branch's
+  //       appts almost instantly with their NEW-branch roomIds
+  //   (b) listExamRooms (slower — getDocs Promise) takes 100-500ms to update
+  //       branchExamRooms with the new branch's rooms
+  // During the window in between, NEW appts try to match OLD branchExamRooms
+  // → effectiveRoom() returns UNASSIGNED → everything piles into the right-
+  // most column. Legacy "refresh fixes it" because remount re-initializes
+  // both states to [] and races finish in their natural order.
+  //
+  // Fix: tag branchExamRooms with the branchId it was loaded for + clear it
+  // immediately on switch + gate the resolver on freshness. masterRoomById /
+  // masterRoomNameSet only resolve appts when the rooms doc is fresh for the
+  // CURRENT selectedBranchId. While stale, the resolver returns
+  // UNASSIGNED-pending — but the grid render itself short-circuits via
+  // roomsReadyForBranch === false, showing a skeleton instead.
   const [branchExamRooms, setBranchExamRooms] = useState([]);
+  const [roomsBranchTag, setRoomsBranchTag] = useState(null);
+  const roomsReadyForBranch = roomsBranchTag === selectedBranchId;
   useEffect(() => {
-    if (!selectedBranchId) { setBranchExamRooms([]); return; }
+    // Clear immediately so stale OLD-branch rooms can't be used to resolve
+    // NEW-branch appts during the load window.
+    setBranchExamRooms([]);
+    setRoomsBranchTag(null);
+    if (!selectedBranchId) return;
+    let cancelled = false;
     listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
-      .then(rs => setBranchExamRooms(rs || []))
-      .catch(() => setBranchExamRooms([]));
+      .then(rs => {
+        if (cancelled) return;
+        setBranchExamRooms(rs || []);
+        setRoomsBranchTag(selectedBranchId);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBranchExamRooms([]);
+        // Tag as "ready" even on error — the branch genuinely has no rooms
+        // (or the fetch failed); UNASSIGNED column will absorb everything,
+        // which is the correct fallback for a roomless branch.
+        setRoomsBranchTag(selectedBranchId);
+      });
     // One-time legacy cache cleanup — drop the per-device cumulative
     // room-name list now that be_exam_rooms is the canonical source.
     try { window.localStorage?.removeItem(ROOMS_CACHE_KEY); } catch { /* ignore */ }
+    return () => { cancelled = true; };
   }, [selectedBranchId]);
 
   // Phase 15.7-bis (2026-04-28) — array-valued apptMap so duplicate
@@ -374,9 +414,14 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
     },
     [typeFilter],
   );
+  // Phase 24.0-sexiesdecies (2026-05-06) — gate typedDayAppts on
+  // roomsReadyForBranch so the room resolver never sees stale OLD-branch
+  // rooms when NEW-branch appts have already arrived. Sub-1s window during
+  // branch switch — once both listeners settle on the same branchId, real
+  // appts flow through. See branchExamRooms useEffect for the rationale.
   const typedDayAppts = useMemo(
-    () => dayAppts.filter(apptMatchesType),
-    [dayAppts, apptMatchesType],
+    () => (roomsReadyForBranch ? dayAppts.filter(apptMatchesType) : []),
+    [dayAppts, apptMatchesType, roomsReadyForBranch],
   );
 
   const rooms = useMemo(() => {
@@ -773,6 +818,11 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
                                     parent cell's onClick (edit modal) from firing.
                                     Phase 21.0-quinquies — bumped to text-sm + tighter
                                     leading for legibility. */}
+                                {/* Phase 24.0-septiesdecies (2026-05-06) — display
+                                    fallback chain for customer-later appts:
+                                    customerName → customerNameTemp → '-'. The
+                                    phone temp is appended in small font when
+                                    no real customer is linked yet. */}
                                 {appt.customerId ? (
                                   <a
                                     href={`/?backend=1&customer=${encodeURIComponent(String(appt.customerId))}`}
@@ -780,13 +830,22 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
                                     rel="noopener noreferrer"
                                     onClick={(e) => { e.stopPropagation(); }}
                                     className="text-sm font-bold text-[var(--tx-heading)] leading-tight truncate hover:underline underline-offset-2 hover:text-sky-300"
-                                    title={`เปิดข้อมูล ${appt.customerName || ''} ในแท็บใหม่`}
+                                    title={`เปิดข้อมูล ${appt.customerName || appt.customerNameTemp || ''} ในแท็บใหม่`}
                                     data-testid="appt-grid-customer-link"
                                   >
-                                    {appt.customerName || '-'}
+                                    {appt.customerName || appt.customerNameTemp || '-'}
                                   </a>
                                 ) : (
-                                  <span className="text-sm font-bold text-[var(--tx-heading)] leading-tight truncate">{appt.customerName || '-'}</span>
+                                  <span
+                                    className="text-sm font-bold text-[var(--tx-heading)] leading-tight truncate"
+                                    data-testid={(appt.customerNameTemp || appt.customerPhoneTemp) ? 'appt-grid-customer-temp' : undefined}
+                                    title={appt.customerPhoneTemp ? `เบอร์: ${appt.customerPhoneTemp}` : undefined}
+                                  >
+                                    {appt.customerName || appt.customerNameTemp || '-'}
+                                    {!appt.customerName && appt.customerPhoneTemp && (
+                                      <span className="ml-1.5 text-[10px] font-normal font-mono text-[var(--tx-muted)]">· {appt.customerPhoneTemp}</span>
+                                    )}
+                                  </span>
                                 )}
                                 {/* Phase 15.7-bis — collision indicator: shows when ≥2
                                     appts share this exact startTime+room key. Click on

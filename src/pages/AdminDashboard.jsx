@@ -593,6 +593,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     // "อื่นๆ: <detail>" via buildVisitPurposeText so the DepositPanel
     // "มัดจำสำหรับ" column shows the full detail.
     visitPurposeOther: '',
+    // Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง" flow: explicit
+    // booking name + phone captured AT JOIN TIME (kiosk staff types what the
+    // caller said). Persisted on opd_sessions.depositData AND on
+    // be_deposits.customerNameTemp / customerPhoneTemp via the pair-write
+    // helper. When a customer doc is later linked (Phase 24.0-Z attach
+    // flow), these fields fade into a forensic-trail role only.
+    customerNameTemp: '',
+    customerPhoneTemp: '',
   });
   const [editingDepositData, setEditingDepositData] = useState(null); // null = not editing, object = editing copy
   const [depositSaving, setDepositSaving] = useState(false); // guards against double-click duplicate ProClinic updates
@@ -606,6 +614,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     visitPurpose: [],
     // Phase 24.0-undecies — see depositFormData.visitPurposeOther.
     visitPurposeOther: '',
+    // Phase 24.0-terdecies — see depositFormData.customerNameTemp.
+    customerNameTemp: '',
+    customerPhoneTemp: '',
   });
   const [editingAppointment, setEditingAppointment] = useState(null); // null = creating, sessionId = editing
   const [sessionToRestore, setSessionToRestore] = useState(null);
@@ -1766,6 +1777,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     { value: 'referral', label: 'แนะนำ' },
     { value: 'other', label: 'อื่นๆ' },
   ]);
+  // Phase 24.0-quaterdecies (2026-05-06) — appointment channels include
+  // "โทรศัพท์" (phone call) so admin can record bookings made by phone, in
+  // addition to the customer-source channels. User: "ใน field dropdown
+  // ช่องทางนัดหมาย ของทั้ง 2 modal ให้เพิ่ม โทรศัพท์ เข้าไปด้วย".
+  const APPT_CHANNELS_STATIC = Object.freeze([
+    { value: 'phone', label: 'โทรศัพท์' },
+    { value: 'walk-in', label: 'Walk-in' },
+    { value: 'facebook', label: 'Facebook' },
+    { value: 'line', label: 'LINE' },
+    { value: 'referral', label: 'แนะนำ' },
+    { value: 'other', label: 'อื่นๆ' },
+  ]);
   // Phase 22.0b — fetchDepositOptions captures selectedBranchId at fetch
   // time + invalidates cache when branch switches. Doctors + staff are
   // filtered via filterDoctorsByBranch / filterStaffByBranch (listDoctors
@@ -1825,10 +1848,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         advisors: branchScopedStaff.map(s => ({ value: String(s.id), label: s.name || s.id })),
         sources: [...CUSTOMER_SOURCES_STATIC],
         // Phase 23.0 — ช่องทางนัดหมาย dropdown reads `appointmentChannels` key.
+        // Phase 24.0-quaterdecies — APPT_CHANNELS_STATIC includes "โทรศัพท์"
+        // (phone-call) up-front so admin can record phone bookings.
         // Pre-fix: fetchDepositOptions only set `sources` → both deposit & no-deposit
         // modal channel selects rendered with empty options (silent UX failure).
         // Same static enum is reused (walk-in / FB / LINE / referral / other).
-        appointmentChannels: [...CUSTOMER_SOURCES_STATIC],
+        appointmentChannels: [...APPT_CHANNELS_STATIC],
       };
       setDepositOptions(options);
     } catch (e) { console.error('fetchDepositOptions:', e); }
@@ -1883,6 +1908,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // Phase 24.0-undecies — preserve the free-text "อื่นๆ" detail on the
         // kiosk session so edit-mode hydration can restore the input.
         visitPurposeOther: depositFormData.visitPurposeOther || '',
+        // Phase 24.0-terdecies — preserve booking-time name + phone.
+        customerNameTemp: depositFormData.customerNameTemp?.trim() || '',
+        customerPhoneTemp: depositFormData.customerPhoneTemp?.trim() || '',
       },
     };
 
@@ -1916,24 +1944,48 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const sellerName = depositFormData.salesperson
             ? (depositOptions?.sellers || []).find(s => String(s.value) === String(depositFormData.salesperson))?.label || ''
             : '';
-          const pairResult = await createDepositBookingPair({
-            depositData: {
-              customerId: '',
-              customerName: depositFormData.sessionName?.trim() || 'ลูกค้าจอง',
-              customerHN: '',
-              amount: amt,
-              paymentChannel: depositFormData.paymentChannel || '',
-              paymentDate: depositFormData.depositDate || todayISO(),
-              paymentTime: depositFormData.depositTime || '',
-              refNo: '',
-              sellers: depositFormData.salesperson
-                ? [{ id: String(depositFormData.salesperson), name: sellerName, percent: 100, total: amt }]
-                : [],
-              customerSource: '',
-              sourceDetail: '',
-              note: '',
-              hasAppointment: !!depositFormData.hasAppointment,
-              appointment: depositFormData.hasAppointment ? {
+          const baseDepositData = {
+            customerId: '',
+            // Phase 24.0-terdecies — prefer the explicit booking-time name
+            // (customerNameTemp) over the generic ชื่อคิว/Note when both
+            // are present. Falls through to "ลูกค้าจอง" placeholder only
+            // when neither was filled.
+            customerName: depositFormData.customerNameTemp?.trim()
+              || depositFormData.sessionName?.trim()
+              || 'ลูกค้าจอง',
+            customerHN: '',
+            customerNameTemp: depositFormData.customerNameTemp?.trim() || '',
+            customerPhoneTemp: depositFormData.customerPhoneTemp?.trim() || '',
+            amount: amt,
+            paymentChannel: depositFormData.paymentChannel || '',
+            paymentDate: depositFormData.depositDate || todayISO(),
+            paymentTime: depositFormData.depositTime || '',
+            refNo: '',
+            sellers: depositFormData.salesperson
+              ? [{ id: String(depositFormData.salesperson), name: sellerName, percent: 100, total: amt }]
+              : [],
+            customerSource: '',
+            sourceDetail: '',
+            note: '',
+            paymentEvidenceUrl: '',
+            paymentEvidencePath: '',
+            branchId: selectedBranchId || '',
+          };
+          // Phase 24.0-quaterdecies (2026-05-06) — branch on hasAppointment:
+          //   true  → createDepositBookingPair (writes BOTH be_deposits +
+          //           be_appointments atomically, with appointment metadata)
+          //   false → createDeposit (writes be_deposits ONLY — no appointment
+          //           doc; user typed only ชื่อ/เบอร์/amount). The pair-helper
+          //           throws when called without hasAppointment+appointment,
+          //           which previously stamped depositSyncStatus='failed' on
+          //           opd_sessions and surfaced as "มัดจำผิดพลาด" in the UI.
+          let pairResult = null;
+          let depositId = null;
+          if (depositFormData.hasAppointment) {
+            const pairPayload = {
+              ...baseDepositData,
+              hasAppointment: true,
+              appointment: {
                 type: 'deposit-booking',
                 option: 'once',
                 date: depositFormData.appointmentDate || '',
@@ -1952,18 +2004,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 note: '',
                 color: '',
                 lineNotify: false,
-              } : null,
-              paymentEvidenceUrl: '',
-              paymentEvidencePath: '',
+              },
+            };
+            pairResult = await createDepositBookingPair({
+              depositData: pairPayload,
               branchId: selectedBranchId || '',
-            },
-            branchId: selectedBranchId || '',
-          });
+            });
+            depositId = pairResult?.depositId || null;
+          } else {
+            // Deposit-only path — no be_appointments doc, no pair atomicity.
+            // createDeposit returns the doc id directly.
+            const depositOnlyPayload = {
+              ...baseDepositData,
+              hasAppointment: false,
+              appointment: null,
+            };
+            depositId = await createDeposit(depositOnlyPayload);
+          }
           // Stamp cross-link on the kiosk session for traceability
-          if (pairResult?.depositId) {
+          if (depositId) {
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
-              linkedDepositId: pairResult.depositId,
-              linkedAppointmentId: pairResult.appointmentId || null,
+              linkedDepositId: depositId,
+              linkedAppointmentId: pairResult?.appointmentId || null,
               depositSyncStatus: 'done',
             });
           }
@@ -1991,6 +2053,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       appointmentDate: '', appointmentStartTime: '', appointmentEndTime: '',
       consultant: '', doctor: '', assistant: '', room: '', appointmentChannel: '', visitPurpose: [],
       visitPurposeOther: '',
+      customerNameTemp: '', customerPhoneTemp: '',
     });
   };
 
@@ -2015,6 +2078,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       visitPurpose: noDepositFormData.visitPurpose || [],
       // Phase 24.0-undecies — preserve "อื่นๆ" detail on the kiosk session.
       visitPurposeOther: noDepositFormData.visitPurposeOther || '',
+      // Phase 24.0-terdecies — preserve booking-time name + phone.
+      customerNameTemp: noDepositFormData.customerNameTemp?.trim() || '',
+      customerPhoneTemp: noDepositFormData.customerPhoneTemp?.trim() || '',
     };
 
     const sessionDoc = {
@@ -2066,7 +2132,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           appointmentType: 'no-deposit-booking', // Phase 19.0 explicit
           // No customerId yet — kiosk session created before patient form fill.
           customerId: '',
-          customerName: noDepositFormData.sessionName?.trim() || '',
+          // Phase 24.0-terdecies — prefer explicit booking-time name over
+          // generic ชื่อคิว/Note when both filled.
+          customerName: noDepositFormData.customerNameTemp?.trim()
+            || noDepositFormData.sessionName?.trim()
+            || '',
+          customerNameTemp: noDepositFormData.customerNameTemp?.trim() || '',
+          customerPhoneTemp: noDepositFormData.customerPhoneTemp?.trim() || '',
           // Phase 22.0b — explicit branchId stamp (the auto-resolver in
           // backendClient._resolveBranchIdForWrite would also fall through
           // to selectedBranchId, but explicit > implicit per Rule M).
@@ -2109,6 +2181,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       advisor: '', doctor: '', assistant: '', room: '', source: '',
       visitPurpose: [],
       visitPurposeOther: '',
+      customerNameTemp: '', customerPhoneTemp: '',
     });
   };
 
@@ -2132,6 +2205,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       visitPurpose: noDepositFormData.visitPurpose || [],
       // Phase 24.0-undecies — preserve "อื่นๆ" detail on the kiosk session.
       visitPurposeOther: noDepositFormData.visitPurposeOther || '',
+      // Phase 24.0-terdecies — preserve booking-time name + phone.
+      customerNameTemp: noDepositFormData.customerNameTemp?.trim() || '',
+      customerPhoneTemp: noDepositFormData.customerPhoneTemp?.trim() || '',
     };
 
     // Phase 20.0 Task 3 — be_appointments shape (no ProClinic field names).
@@ -2157,7 +2233,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       note: noDepositFormData.sessionName?.trim() || '',
       appointmentType: 'no-deposit-booking',
       customerId: session.customerId ? String(session.customerId) : '',
-      customerName: noDepositFormData.sessionName?.trim() || '',
+      // Phase 24.0-terdecies — prefer explicit booking-time name + carry the
+      // temp fields through update so admin edits to name/phone propagate.
+      customerName: noDepositFormData.customerNameTemp?.trim()
+        || noDepositFormData.sessionName?.trim()
+        || '',
+      customerNameTemp: noDepositFormData.customerNameTemp?.trim() || '',
+      customerPhoneTemp: noDepositFormData.customerPhoneTemp?.trim() || '',
     };
 
     try {
@@ -3228,6 +3310,32 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       <Edit3 size={11}/> แก้ไขข้อมูลลูกค้า ↗
                     </button>
                   </>
+                )}
+                {/* Phase 24.0-quinquiesdecies (2026-05-06) — Resync OPD button.
+                     User: "เพิ่มปุ่ม Resync OPD ในหน้า ประวัติผู้ป่วย OPD ของ
+                     Frontend ด้วย เพื่อเป็นการเช็คและ Resync ข้อมูลลงไปอีก
+                     ครั้ง เผื่อมีการแก้มาจากลูกค้า ซึ่งจะทำการเช็ค matching
+                     ก่อนเหมือน flow บันทึกอื่นๆเลย คือรู้ได้ว่าซ้ำใครก็จะไป
+                     อัพเดทคนนั้นใน backend หรือรู้ได้ว่า คนนี้ถูกลบไปแล้ว
+                     ก็จะสร้างขึ้นมาใหม่ได้".
+                     handleResync already does the full match-or-create flow:
+                     • If brokerProClinicId set → tryUpdateExistingCustomer
+                       (graceful "doc was deleted" detection → falls through
+                       to addCustomer recreate path)
+                     • Else → addCustomer (Phase 24.0-octies identity-based
+                       dedup by citizen_id / passport / phone) */}
+                {viewingSession.patientData && (
+                  <button
+                    onClick={() => handleResync(viewingSession)}
+                    disabled={!!brokerPending[viewingSession.id]}
+                    data-testid="opd-banner-resync-btn"
+                    className="text-[11px] font-black font-semibold px-2 py-1 rounded border border-violet-700/50 text-violet-400 hover:bg-violet-900/30 transition-colors whitespace-nowrap flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="เช็คข้อมูลล่าสุด + อัพเดทใน backend (จับคู่จาก HN/บัตร ปชช./เบอร์โทร อัตโนมัติ; ถ้าถูกลบไปแล้วจะสร้างใหม่)"
+                  >
+                    {brokerPending[viewingSession.id]
+                      ? <><Loader2 size={11} className="animate-spin"/> กำลัง Resync...</>
+                      : <><RotateCcw size={11}/> Resync OPD</>}
+                  </button>
                 )}
                 {viewingSession.brokerProClinicId && (
                   <button onClick={() => handleOpenPatientView(viewingSession)}
@@ -4814,6 +4922,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             {d.idCard && <span className="text-gray-500 font-mono text-xs"><CreditCard size={10} className="inline mr-1"/>{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
                           </div>
                         </div>
+                      ) : (dep?.customerNameTemp || dep?.customerPhoneTemp) ? (
+                        // Phase 24.0-terdecies — booking-time name + phone visible
+                        // before patient form is filled. Replaces the bare
+                        // "รอลูกค้ากรอกข้อมูล..." placeholder when the kiosk staff
+                        // captured at-call info.
+                        <div className="text-xs mt-2 flex flex-wrap items-center gap-2" data-testid="deposit-card-customer-temp">
+                          <span className="text-[10px] uppercase font-bold text-emerald-500/70">ลูกค้าจอง</span>
+                          {dep.customerNameTemp && <span className="text-white font-bold">{dep.customerNameTemp}</span>}
+                          {dep.customerPhoneTemp && <span className="text-gray-400 font-mono">{dep.customerPhoneTemp}</span>}
+                          <span className="text-[10px] text-gray-600 italic">· รอกรอกประวัติ</span>
+                        </div>
                       ) : (
                         <p className="text-xs text-gray-600 italic mt-1">รอลูกค้ากรอกข้อมูล...</p>
                       )}
@@ -5026,6 +5145,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             {d.idCard && <span className="text-gray-500 font-mono text-xs"><CreditCard size={10} className="inline mr-1"/>{d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
                           </div>
                         </div>
+                      ) : (session.appointmentData?.customerNameTemp || session.appointmentData?.customerPhoneTemp) ? (
+                        // Phase 24.0-terdecies — booking-time name + phone shown
+                        // before patient form is filled (mirror of deposit-card pattern).
+                        <div className="text-xs mt-2 flex flex-wrap items-center gap-2" data-testid="no-deposit-card-customer-temp">
+                          <span className={`text-[10px] uppercase font-bold ${isDark ? 'text-orange-500/70' : 'text-pink-500/70'}`}>ลูกค้าจอง</span>
+                          {session.appointmentData.customerNameTemp && <span className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{session.appointmentData.customerNameTemp}</span>}
+                          {session.appointmentData.customerPhoneTemp && <span className="text-gray-400 font-mono">{session.appointmentData.customerPhoneTemp}</span>}
+                          <span className="text-[10px] text-gray-600 italic">· รอกรอกประวัติ</span>
+                        </div>
                       ) : (
                         <p className="text-xs text-gray-600 italic mt-1">รอลูกค้ากรอกข้อมูล...</p>
                       )}
@@ -5041,7 +5169,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
                           {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-orange-500">กำลัง sync...</span>}
-                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; const parsed = parseVisitPurposeText(a.visitPurpose || [], a.visitPurposeOther || ''); setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: parsed.purposes, visitPurposeOther: parsed.other }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
+                          <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; const parsed = parseVisitPurposeText(a.visitPurpose || [], a.visitPurposeOther || ''); setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: parsed.purposes, visitPurposeOther: parsed.other, customerNameTemp: a.customerNameTemp || '', customerPhoneTemp: a.customerPhoneTemp || '' }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
                         </div>
                       )}
                       {session.appointmentData?.visitPurpose?.length > 0 && (
@@ -6377,7 +6505,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองมัดจำ</span>
                           <span className="text-xs text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจอง<br/>ลิงก์ถาวร</span>
                         </button>
-                        <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setEditingAppointment(null); setNoDepositFormData({ sessionName: '', appointmentDate: todayISO(), appointmentStartTime: '', appointmentEndTime: '', advisor: '', doctor: '', assistant: '', room: '', source: '', visitPurpose: [], visitPurposeOther: '' }); setShowNoDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
+                        <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setEditingAppointment(null); setNoDepositFormData({ sessionName: '', appointmentDate: todayISO(), appointmentStartTime: '', appointmentEndTime: '', advisor: '', doctor: '', assistant: '', room: '', source: '', visitPurpose: [], visitPurposeOther: '', customerNameTemp: '', customerPhoneTemp: '' }); setShowNoDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-orange-500/50' : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-orange-950/50 text-orange-400' : 'bg-orange-50 text-orange-500'}`}>
                             <UserPlus size={16} />
                           </div>
@@ -6458,6 +6586,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <input type="text" value={depositFormData.sessionName} onChange={e => setDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"/>
                   </div>
 
+                  {/* Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง"
+                      flow: explicit booking-time name + phone. Persisted on
+                      opd_sessions.depositData.customerNameTemp/PhoneTemp +
+                      pair-write to be_deposits + be_appointments. Visible on
+                      session card list + Finance.มัดจำ row even before a
+                      customer doc is linked. */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">ชื่อลูกค้า <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={depositFormData.customerNameTemp}
+                        onChange={e => setDepositFormData(p => ({...p, customerNameTemp: e.target.value}))}
+                        placeholder="เช่น คุณสมชาย ใจดี"
+                        maxLength={120}
+                        data-testid="deposit-customer-name-temp"
+                        className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">เบอร์โทร <span className="text-red-500">*</span></label>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        value={depositFormData.customerPhoneTemp}
+                        onChange={e => setDepositFormData(p => ({...p, customerPhoneTemp: e.target.value}))}
+                        placeholder="08x-xxx-xxxx"
+                        maxLength={20}
+                        data-testid="deposit-customer-phone-temp"
+                        className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2.5 text-sm outline-none focus:border-emerald-600 font-mono"
+                      />
+                    </div>
+                  </div>
+
                   {/* ช่องทางชำระเงิน */}
                   <div>
                     <label className="text-xs text-gray-500 font-semibold block mb-1">ช่องทางชำระเงิน</label>
@@ -6502,23 +6664,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </label>
                   </div>
 
+                  {/* Phase 24.0-quaterdecies (2026-05-06) — when "มีการนัดหมาย"
+                      is checked, the appointment subform mirrors the no-deposit
+                      modal's required-fields set: วันนัด / เริ่ม / สิ้นสุด /
+                      ที่ปรึกษา / ช่องทางนัดหมาย are required. แพทย์ /
+                      ผู้ช่วยแพทย์ / ห้องตรวจ stay optional. */}
                   {depositFormData.hasAppointment && (
                     <div className="space-y-3 pl-2 border-l-2 border-blue-900/50 ml-2">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs text-gray-500 block mb-1">วันนัด</label>
+                          <label className="text-xs text-gray-500 block mb-1">วันนัด <span className="text-red-500">*</span></label>
                           <DateField value={depositFormData.appointmentDate} onChange={v => setDepositFormData(p => ({...p, appointmentDate: v}))} fieldClassName="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-600"/>
                         </div>
                         <div className="grid grid-cols-2 gap-1">
                           <div>
-                            <label className="text-xs text-gray-500 block mb-1">เริ่ม</label>
+                            <label className="text-xs text-gray-500 block mb-1">เริ่ม <span className="text-red-500">*</span></label>
                             <select value={depositFormData.appointmentStartTime} onChange={e => setDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-2 py-2 text-xs outline-none">
                               <option value="">--</option>
                               {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
                           </div>
                           <div>
-                            <label className="text-xs text-gray-500 block mb-1">สิ้นสุด</label>
+                            <label className="text-xs text-gray-500 block mb-1">สิ้นสุด <span className="text-red-500">*</span></label>
                             <select value={depositFormData.appointmentEndTime} onChange={e => setDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-2 py-2 text-xs outline-none">
                               <option value="">--</option>
                               {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -6527,7 +6694,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">ที่ปรึกษา</label>
+                        <label className="text-xs text-gray-500 block mb-1">ที่ปรึกษา <span className="text-red-500">*</span></label>
                         <select value={depositFormData.consultant} onChange={e => setDepositFormData(p => ({...p, consultant: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none">
                           <option value="">-- เลือก --</option>
                           {(depositOptions?.advisors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -6555,7 +6722,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 block mb-1">ช่องทางนัดหมาย</label>
+                        <label className="text-xs text-gray-500 block mb-1">ช่องทางนัดหมาย <span className="text-red-500">*</span></label>
                         <select value={depositFormData.appointmentChannel} onChange={e => setDepositFormData(p => ({...p, appointmentChannel: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none">
                           <option value="">-- เลือก --</option>
                           {(depositOptions?.appointmentChannels || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -6564,9 +6731,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </div>
                   )}
 
-                  {/* นัดมาเพื่อ — visit purpose */}
+                  {/* นัดมาเพื่อ — visit purpose. Required only when hasAppointment. */}
                   <div className="border-t border-[var(--bd)] pt-4">
-                    <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ</label>
+                    <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ {depositFormData.hasAppointment && <span className="text-red-500">*</span>}</label>
                     <div className="flex flex-wrap gap-2">
                       {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
                         <button key={r} type="button"
@@ -6605,7 +6772,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Submit */}
                   <div className="flex gap-3 pt-4 border-t border-[var(--bd)]">
                     <button onClick={() => setShowDepositForm(false)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded-lg font-bold text-xs uppercase border border-[var(--bd-strong)]">ยกเลิก</button>
-                    <button onClick={confirmCreateDeposit} disabled={isGenerating || !depositFormData.paymentAmount} className="flex-1 px-4 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2">
+                    {/* Phase 24.0-quaterdecies (2026-05-06) — submit-gate
+                        mirrors the no-deposit modal's required-fields set
+                        when hasAppointment is checked: ที่ปรึกษา /
+                        ช่องทางนัดหมาย / นัดมาเพื่อ / วันนัด / เริ่ม /
+                        สิ้นสุด are required. แพทย์ / ผู้ช่วยแพทย์ / ห้องตรวจ
+                        stay optional. customerNameTemp (ชื่อลูกค้า) is
+                        required regardless. */}
+                    <button
+                      onClick={confirmCreateDeposit}
+                      disabled={
+                        isGenerating
+                        || !depositFormData.customerNameTemp?.trim()
+                        || !depositFormData.paymentAmount
+                        || (depositFormData.hasAppointment && (
+                          !depositFormData.appointmentDate
+                          || !depositFormData.appointmentStartTime
+                          || !depositFormData.appointmentEndTime
+                          || !depositFormData.consultant
+                          || !depositFormData.appointmentChannel
+                          || depositFormData.visitPurpose.length === 0
+                        ))
+                      }
+                      className="flex-1 px-4 py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
                       {isGenerating ? <><Loader2 size={14} className="animate-spin"/> สร้าง...</> : <><Banknote size={14}/> สร้างคิวจอง</>}
                     </button>
                   </div>
@@ -6633,6 +6823,39 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div>
                     <label className="text-xs text-gray-500 font-semibold block mb-1">ชื่อคิว / Note</label>
                     <input type="text" value={noDepositFormData.sessionName} onChange={e => setNoDepositFormData(p => ({...p, sessionName: e.target.value}))} placeholder="เช่น คุณ A จอง HRT" className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}/>
+                  </div>
+
+                  {/* Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง"
+                      flow: explicit booking-time name + phone (mirror of
+                      deposit modal pattern). */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">ชื่อลูกค้า <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={noDepositFormData.customerNameTemp}
+                        onChange={e => setNoDepositFormData(p => ({...p, customerNameTemp: e.target.value}))}
+                        placeholder="เช่น คุณสมชาย ใจดี"
+                        maxLength={120}
+                        data-testid="no-deposit-customer-name-temp"
+                        className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}
+                      />
+                    </div>
+                    <div>
+                      {/* Phase 24.0-quaterdecies (2026-05-06) — เบอร์โทร is OPTIONAL
+                          per user directive "ไม่จำเป็นต้องกรอก เบอร์โทร". * removed. */}
+                      <label className="text-xs text-gray-500 font-semibold block mb-1">เบอร์โทร</label>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        value={noDepositFormData.customerPhoneTemp}
+                        onChange={e => setNoDepositFormData(p => ({...p, customerPhoneTemp: e.target.value}))}
+                        placeholder="08x-xxx-xxxx"
+                        maxLength={20}
+                        data-testid="no-deposit-customer-phone-temp"
+                        className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none font-mono ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white focus:border-orange-600' : 'bg-pink-50 border border-pink-200 text-gray-900 focus:border-pink-500'}`}
+                      />
+                    </div>
                   </div>
 
                   {/* วันนัด + เวลา */}
@@ -6668,27 +6891,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     </select>
                   </div>
 
-                  {/* แพทย์ */}
+                  {/* แพทย์ — Phase 24.0-quaterdecies: optional (no *) */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">แพทย์ <span className="text-red-500">*</span></label>
+                    <label className="text-xs text-gray-500 block mb-1">แพทย์</label>
                     <select value={noDepositFormData.doctor} onChange={e => setNoDepositFormData(p => ({...p, doctor: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.doctors || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
 
-                  {/* ผู้ช่วยแพทย์ */}
+                  {/* ผู้ช่วยแพทย์ — Phase 24.0-quaterdecies: optional (no *) */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ผู้ช่วยแพทย์ <span className="text-red-500">*</span></label>
+                    <label className="text-xs text-gray-500 block mb-1">ผู้ช่วยแพทย์</label>
                     <select value={noDepositFormData.assistant} onChange={e => setNoDepositFormData(p => ({...p, assistant: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.assistants || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
 
-                  {/* ห้องตรวจ */}
+                  {/* ห้องตรวจ — Phase 24.0-quaterdecies: optional (no *) */}
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">ห้องตรวจ <span className="text-red-500">*</span></label>
+                    <label className="text-xs text-gray-500 block mb-1">ห้องตรวจ</label>
                     <select value={noDepositFormData.room} onChange={e => setNoDepositFormData(p => ({...p, room: e.target.value}))} className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                       <option value="">-- เลือก --</option>
                       {(depositOptions?.rooms || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -6744,7 +6967,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   {/* Submit */}
                   <div className={`flex gap-3 pt-4 border-t ${isDark ? 'border-[var(--bd)]' : 'border-pink-200'}`}>
                     <button onClick={() => { setShowNoDepositForm(false); setEditingAppointment(null); }} className={`flex-1 px-4 py-3 rounded-lg font-bold text-xs uppercase border ${isDark ? 'bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 border-[var(--bd-strong)]' : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-pink-200'}`}>ยกเลิก</button>
-                    <button onClick={editingAppointment ? confirmUpdateAppointment : confirmCreateNoDeposit} disabled={isGenerating || !noDepositFormData.appointmentDate || !noDepositFormData.appointmentStartTime || !noDepositFormData.appointmentEndTime || !noDepositFormData.advisor || !noDepositFormData.doctor || !noDepositFormData.assistant || !noDepositFormData.room || !noDepositFormData.source || noDepositFormData.visitPurpose.length === 0} className={`flex-1 px-4 py-3 rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2 ${isDark ? 'bg-orange-700 hover:bg-orange-600 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white'}`}>
+                    {/* Phase 24.0-quaterdecies (2026-05-06) — required-fields
+                        narrowed per user directive: doctor / assistant / room
+                        DROPPED from gate (no longer * in labels). New required:
+                        customerNameTemp (ชื่อลูกค้า). Phone stays optional. */}
+                    <button onClick={editingAppointment ? confirmUpdateAppointment : confirmCreateNoDeposit} disabled={isGenerating || !noDepositFormData.customerNameTemp?.trim() || !noDepositFormData.appointmentDate || !noDepositFormData.appointmentStartTime || !noDepositFormData.appointmentEndTime || !noDepositFormData.advisor || !noDepositFormData.source || noDepositFormData.visitPurpose.length === 0} className={`flex-1 px-4 py-3 rounded-lg font-bold text-xs uppercase disabled:opacity-50 flex items-center justify-center gap-2 ${isDark ? 'bg-orange-700 hover:bg-orange-600 text-white' : 'bg-pink-500 hover:bg-pink-600 text-white'}`}>
                       {isGenerating ? <><Loader2 size={14} className="animate-spin"/> {editingAppointment ? 'อัพเดท...' : 'สร้าง...'}</> : <><CalendarClock size={14}/> {editingAppointment ? 'อัพเดทนัดหมาย' : 'สร้างคิวจอง'}</>}
                     </button>
                   </div>

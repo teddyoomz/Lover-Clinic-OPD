@@ -521,12 +521,25 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                     <tr key={dep.depositId || dep.id || i}
                       className={`border-b border-[var(--bd)]/50 hover:bg-[var(--bg-hover)] transition-colors ${i % 2 ? 'bg-[var(--bg-card)]/30' : ''}`}>
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{dep.depositId || '-'}</td>
-                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
+                      <td className="px-3 py-2 text-[var(--tx-heading)] font-medium" data-testid="deposit-customer-cell">
                         {dep.customerId ? (
                           <a href={`/?backend=1&customer=${dep.customerId}`} target="_blank" rel="noopener noreferrer"
                             className="text-teal-400 hover:text-teal-300 hover:underline transition-colors">{dep.customerName || '-'}</a>
                         ) : (dep.customerName || '-')}
                         {dep.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{dep.customerHN}</span>}
+                        {/* Phase 24.0-terdecies (2026-05-06) — when customerId is
+                            empty (kiosk-booked / customer-later), surface the
+                            booking-time temp name + phone so admin reading the
+                            Finance.มัดจำ row knows who paid the deposit before
+                            their patient doc exists. Renders as an amber badge
+                            below the (placeholder) customerName. */}
+                        {!dep.customerId && (dep.customerNameTemp || dep.customerPhoneTemp) && (
+                          <div className="mt-1 text-[10px] flex flex-wrap items-center gap-1.5" data-testid="deposit-customer-temp-badge">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300 font-bold uppercase">ลูกค้าจอง</span>
+                            {dep.customerNameTemp && <span className="text-amber-200">{dep.customerNameTemp}</span>}
+                            {dep.customerPhoneTemp && <span className="text-amber-300/80 font-mono">· {dep.customerPhoneTemp}</span>}
+                          </div>
+                        )}
                       </td>
                       {/* Phase 21.0-quinquies (2026-05-06 EOD) — "มัดจำสำหรับ" column
                           surfaces the deposit's appointment purpose so admin reading

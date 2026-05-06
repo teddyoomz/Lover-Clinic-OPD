@@ -233,14 +233,16 @@ describe('Phase 24.0-duodecies — AdminDashboard OPD banner buttons', () => {
     // same flex container so the action row stays grouped. The label appears
     // in TWO places (a leading comment mention + the actual JSX button); use
     // the JSX-button match (with <Search size= prefix) for the ordering check.
+    // Phase 24.0-quinquiesdecies (2026-05-06) — Resync OPD button added to
+    // the same row; bound widened 3000 → 5000 to accommodate it + its tooltip.
     const viewIdx = ADMIN.indexOf('data-testid="opd-banner-view-customer-btn"');
     const editIdx = ADMIN.indexOf('data-testid="opd-banner-edit-customer-btn"');
     const courseBtnIdx = ADMIN.indexOf('<Search size={9}/> คอร์สและนัดหมาย');
     expect(viewIdx).toBeGreaterThan(0);
     expect(editIdx).toBeGreaterThan(viewIdx); // edit comes after view
     expect(courseBtnIdx).toBeGreaterThan(editIdx); // legacy course button stays last
-    // All three within ~3 KB of each other → same parent flex container.
-    expect(courseBtnIdx - viewIdx).toBeLessThan(3000);
+    // All three within ~5 KB of each other → same parent flex container.
+    expect(courseBtnIdx - viewIdx).toBeLessThan(5000);
   });
 });
 

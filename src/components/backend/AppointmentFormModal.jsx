@@ -86,6 +86,14 @@ function defaultFormData(overrides = {}) {
     startTime: '10:00',
     endTime: '10:15',  // Phase 19.0 — default 15-min duration
     customerId: '', customerName: '', customerHN: '',
+    // Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง" mode: when
+    // pickLater is true, customerId can stay '' and customerNameTemp +
+    // customerPhoneTemp become required instead. The picker UI swaps to
+    // the inline name+phone inputs. customerName falls through to the
+    // temp name on save so existing reports / lists render the temp.
+    pickLater: false,
+    customerNameTemp: '',
+    customerPhoneTemp: '',
     appointmentType: DEFAULT_APPOINTMENT_TYPE,  // Phase 19.0 — 'no-deposit-booking'
     advisorId: '', advisorName: '',
     doctorId: '', doctorName: '',
@@ -215,6 +223,12 @@ export default function AppointmentFormModal({
         customerId: appt.customerId,
         customerName: appt.customerName,
         customerHN: appt.customerHN,
+        // Phase 24.0-terdecies — restore pickLater + temp fields on edit.
+        // pickLater is implicit: TRUE iff customerId is empty AND a temp
+        // name/phone is present (legacy unlinked appts also re-hydrate).
+        pickLater: !appt.customerId && !!(appt.customerNameTemp || appt.customerPhoneTemp),
+        customerNameTemp: appt.customerNameTemp || '',
+        customerPhoneTemp: appt.customerPhoneTemp || '',
         // Phase 21.0 — lockedAppointmentType wins over appt.appointmentType
         // when set (defensive: prevents drift between sub-tab + appt type
         // mid-edit; admin can't relocate an appt to a different type by
@@ -356,7 +370,18 @@ export default function AppointmentFormModal({
   }, []);
 
   const handleSave = async () => {
-    if (!formData.customerId) { scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า'); return; }
+    // Phase 24.0-terdecies — pickLater branch: customerId stays '' but the
+    // booking-time temp name + phone become required. Both must be filled
+    // (not whitespace) so the appt has a contactable identity even before
+    // a real customer doc is linked.
+    if (formData.pickLater) {
+      const tempName = String(formData.customerNameTemp || '').trim();
+      const tempPhone = String(formData.customerPhoneTemp || '').trim();
+      if (!tempName) { scrollToFormError('apptCustomerNameTemp', 'กรุณากรอกชื่อลูกค้า'); return; }
+      if (!tempPhone) { scrollToFormError('apptCustomerPhoneTemp', 'กรุณากรอกเบอร์โทรลูกค้า'); return; }
+    } else if (!formData.customerId) {
+      scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า หรือเปิดโหมด "เลือกลูกค้าภายหลัง"'); return;
+    }
     if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
     if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
     // Phase 21.0-ter (2026-05-06 EOD) — when admin creates a deposit-booking
@@ -470,8 +495,18 @@ export default function AppointmentFormModal({
           return d ? String(d.name || '').trim() : '';
         })
         .filter(Boolean);
+      // Phase 24.0-terdecies — pickLater branch: customerId stays '' but
+      // customerName falls through to the typed-in temp name so legacy
+      // readers (calendar, lists, reports) still render an identifiable
+      // label. Temp fields ALSO ride on the payload for forensic trail.
+      const tempName = String(formData.customerNameTemp || '').trim();
+      const tempPhone = String(formData.customerPhoneTemp || '').trim();
       const payload = {
-        customerId: formData.customerId, customerName: formData.customerName, customerHN: formData.customerHN,
+        customerId: formData.pickLater ? '' : formData.customerId,
+        customerName: formData.pickLater ? tempName : formData.customerName,
+        customerHN: formData.pickLater ? '' : formData.customerHN,
+        customerNameTemp: tempName,
+        customerPhoneTemp: tempPhone,
         date: formData.date, startTime: formData.startTime, endTime: formData.endTime || formData.startTime,
         // Phase 21.0 — lockedAppointmentType wins. safeLockedType is always
         // one of APPOINTMENT_TYPE_VALUES when set; falls through to formData
@@ -500,6 +535,71 @@ export default function AppointmentFormModal({
 
       if (mode === 'edit' && appt) {
         await updateBackendAppointment(appt.appointmentId || appt.id, payload);
+        // Phase 24.0-septiesdecies + octiesdecies (2026-05-06) — TWO cascades
+        // when editing a deposit-booking appointment that has a linkedDepositId:
+        //
+        //   (1) Customer-attach (septiesdecies): when admin attaches a real
+        //       customer to a customer-later appt, propagate
+        //       customerId/customerName/customerHN to the linked deposit.
+        //       User: "ในกรณีที่เมื่อกู Edit ผูกแล้วเนี่ย ตรง tab การเงิน
+        //       จะต้องเอาเงินที่มัดจำไว้ไปผูกกับลูกค้าที่กู edit ... โดยอัตโนมัติ".
+        //
+        //   (2) Appointment-metadata sync (octiesdecies): on EVERY edit,
+        //       sync purpose/appointmentTo/date/startTime/endTime/doctor/
+        //       room/etc to the linked deposit's embedded `appointment`
+        //       object so DepositPanel "มัดจำสำหรับ" column reflects
+        //       admin's edits without manual reload. User: "พอไป edit
+        //       ตรงนัดหมายเปลี่ยนเหตุผล ตรงตารางหน้าการเงินมันไม่เปลี่ยนตาม".
+        //
+        // Both best-effort: failure logs but doesn't block the appointment
+        // update.
+        try {
+          const linkedDepositId = appt.linkedDepositId
+            || appt.spawnedFromDepositId
+            || '';
+          if (linkedDepositId) {
+            const mod = await import('../../lib/appointmentDepositBatch.js');
+            // (1) Customer-attach cascade — gated on transition.
+            const wasUnlinked = !appt.customerId
+              || !!(appt.customerNameTemp || appt.customerPhoneTemp);
+            const isNowLinked = !!payload.customerId && !formData.pickLater;
+            if (wasUnlinked && isNowLinked && typeof mod.attachCustomerToLinkedDeposit === 'function') {
+              await mod.attachCustomerToLinkedDeposit(linkedDepositId, {
+                customerId: payload.customerId,
+                customerName: payload.customerName,
+                customerHN: payload.customerHN || '',
+              });
+            }
+            // (2) Appointment-metadata sync — fires every edit.
+            if (typeof mod.syncAppointmentToLinkedDeposit === 'function') {
+              await mod.syncAppointmentToLinkedDeposit(linkedDepositId, {
+                date: payload.date,
+                startTime: payload.startTime,
+                endTime: payload.endTime,
+                doctorId: payload.doctorId,
+                doctorName: payload.doctorName,
+                advisorId: payload.advisorId,
+                advisorName: payload.advisorName,
+                assistantIds: payload.assistantIds,
+                assistantNames: payload.assistantNames,
+                roomId: payload.roomId,
+                roomName: payload.roomName,
+                channel: payload.channel,
+                // The deposit's embedded `appointment.purpose` is what
+                // DepositPanel "มัดจำสำหรับ" column reads — keep it
+                // mirrored to the appointment's appointmentTo (which is
+                // what AppointmentFormModal writes for visit purpose).
+                purpose: payload.appointmentTo,
+                appointmentTo: payload.appointmentTo,
+                note: payload.notes,
+                color: payload.appointmentColor,
+                lineNotify: payload.lineNotify,
+              });
+            }
+          }
+        } catch (cascadeErr) {
+          console.warn('[AppointmentFormModal] linked-deposit cascade failed (best-effort):', cascadeErr);
+        }
       } else if (isCreatingDepositBooking) {
         // Phase 21.0-ter (2026-05-06 EOD) — atomic paired write via the
         // SAME helper DepositPanel uses (V12 single-writer lock). The
@@ -509,10 +609,18 @@ export default function AppointmentFormModal({
         // supported here — deposit-bookings are single-occurrence by design
         // (pre-paid for ONE visit). If admin needs recurring deposits,
         // they should create them individually.
+        // Phase 24.0-septiesdecies (2026-05-06) — pickLater branch in
+        // deposit-booking creates: customerId stays '' but customerName
+        // falls through to tempName so existing readers (Finance grid,
+        // appointment grid card) render an identifiable label. Temp fields
+        // also ride on the deposit + appointment payloads via the pair
+        // helper for forensic trail + later-link reconciliation.
         const depositData = {
-          customerId: formData.customerId,
-          customerName: formData.customerName,
-          customerHN: formData.customerHN,
+          customerId: formData.pickLater ? '' : formData.customerId,
+          customerName: formData.pickLater ? tempName : formData.customerName,
+          customerHN: formData.pickLater ? '' : formData.customerHN,
+          customerNameTemp: tempName,
+          customerPhoneTemp: tempPhone,
           amount: parseFloat(formData.depositAmount) || 0,
           paymentChannel: formData.depositPaymentChannel,
           paymentDate: formData.depositPaymentDate,
@@ -623,10 +731,68 @@ export default function AppointmentFormModal({
           <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-primary)]" aria-label="ปิด"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-4">
-          {/* Customer (locked or picker) */}
+          {/* Customer (locked or picker or pick-later) */}
           <div data-field="apptCustomer">
-            <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ลูกค้า *</label>
-            {lockedCustomer || formData.customerName ? (
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider">ลูกค้า *</label>
+              {/* Phase 24.0-terdecies (2026-05-06) — "เลือกลูกค้าภายหลัง" toggle.
+                  Hidden when lockedCustomer is set (CustomerDetailView callsite
+                  always has a real customer). When ON, picker UI swaps to a pair
+                  of name + phone inputs; customerId stays '' and the typed temp
+                  name+phone persist on be_appointments.customerNameTemp /
+                  customerPhoneTemp. Admin can later attach a real customer doc
+                  via the Phase 24.0-Z attach flow. */}
+              {!lockedCustomer && (
+                <label className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--tx-muted)] cursor-pointer select-none" data-testid="appt-modal-pick-later-toggle">
+                  <input
+                    type="checkbox"
+                    checked={!!formData.pickLater}
+                    onChange={e => update({
+                      pickLater: e.target.checked,
+                      // Toggling ON clears the picked customer so the form stays
+                      // in a single source of truth (either picker OR temp).
+                      ...(e.target.checked ? { customerId: '', customerName: '', customerHN: '' } : {
+                        customerNameTemp: '',
+                        customerPhoneTemp: '',
+                      }),
+                    })}
+                    className="w-3.5 h-3.5 accent-amber-500"
+                    data-testid="appt-modal-pick-later-checkbox"
+                  />
+                  เลือกลูกค้าภายหลัง
+                </label>
+              )}
+            </div>
+            {formData.pickLater ? (
+              <div className={`grid grid-cols-2 gap-2 px-3 py-2.5 rounded-lg border ${isDark ? 'bg-amber-900/10 border-amber-700/40' : 'bg-amber-50 border-amber-300'}`}>
+                <div data-field="apptCustomerNameTemp">
+                  <label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1">ชื่อลูกค้า *</label>
+                  <input
+                    type="text"
+                    value={formData.customerNameTemp}
+                    onChange={e => update({ customerNameTemp: e.target.value })}
+                    placeholder="เช่น คุณสมชาย ใจดี"
+                    maxLength={120}
+                    data-testid="appt-modal-customer-name-temp"
+                    className="w-full px-2.5 py-1.5 rounded bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div data-field="apptCustomerPhoneTemp">
+                  <label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1">เบอร์โทร *</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={formData.customerPhoneTemp}
+                    onChange={e => update({ customerPhoneTemp: e.target.value })}
+                    placeholder="08x-xxx-xxxx"
+                    maxLength={20}
+                    data-testid="appt-modal-customer-phone-temp"
+                    className="w-full px-2.5 py-1.5 rounded bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+                <p className="col-span-2 text-[10px] text-[var(--tx-muted)] italic mt-0.5">นัดถูกบันทึกโดยยังไม่ผูกลูกค้า — สามารถผูกข้อมูลลูกค้าจริงภายหลังได้</p>
+              </div>
+            ) : lockedCustomer || formData.customerName ? (
               <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDark ? 'bg-sky-900/10 border-sky-700/30' : 'bg-sky-50 border-sky-200'}`}>
                 {/* Phase 15.7-septies (2026-04-29) — clickable customer name
                     that opens a NEW BROWSER TAB to the customer detail page.

@@ -44,7 +44,11 @@ describe('Phase 21.0 — C1 AppointmentCalendarView parameterized', () => {
   });
 
   test('C1.5 typedDayAppts useMemo derives from dayAppts.filter(apptMatchesType)', () => {
-    expect(SRC).toMatch(/typedDayAppts\s*=\s*useMemo\(\s*\(\)\s*=>\s*dayAppts\.filter\(apptMatchesType\)/);
+    // Phase 24.0-sexiesdecies (2026-05-06) — typedDayAppts now also gates on
+    // roomsReadyForBranch so room resolution can't use stale OLD-branch
+    // rooms after a branch switch. The filter expression is preserved via
+    // a ternary that returns dayAppts.filter(apptMatchesType) when ready.
+    expect(SRC).toMatch(/typedDayAppts\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(roomsReadyForBranch\s*\?\s*dayAppts\.filter\(apptMatchesType\)\s*:\s*\[\]\)/);
   });
 
   test('C1.6 apptMap derivation reads typedDayAppts (not raw dayAppts)', () => {
