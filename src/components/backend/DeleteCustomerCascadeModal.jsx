@@ -9,7 +9,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Loader2, Trash2, X, AlertTriangle } from 'lucide-react';
 import { listStaff, listDoctors } from '../../lib/scopedDataLayer.js';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
-import { deleteCustomerViaApi } from '../../lib/customerDeleteClient.js';
+import { deleteCustomerViaApi, previewCustomerDeleteViaApi } from '../../lib/customerDeleteClient.js';
 
 const labelCls = 'text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1';
 const selectCls = 'w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none disabled:opacity-50';
@@ -23,6 +23,11 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Issue #1 — cascade preview row state. Loaded on mount; informational only
+  // — failing to load preview does NOT block the delete (3-dropdown gate is
+  // independent).
+  const [cascadeCounts, setCascadeCounts] = useState(null);
+  const [previewError, setPreviewError] = useState('');
   const cancelRef = useRef(null);
 
   // Cancel-button autofocus on first render — matches DocumentPrintModal +
@@ -30,6 +35,26 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
   useEffect(() => {
     cancelRef.current?.focus();
   }, []);
+
+  // Issue #1 — fetch cascade preview counts on mount so the admin sees what
+  // will be removed BEFORE clicking ลบ. Spec §5.1 + §13. Failure to load is
+  // non-fatal — it surfaces as a warning banner but the ลบ button gate stays
+  // independent (canSubmit only depends on the 3 dropdowns).
+  useEffect(() => {
+    let cancelled = false;
+    if (!customer?.id) return;
+    (async () => {
+      try {
+        const res = await previewCustomerDeleteViaApi({ customerId: customer.id });
+        if (cancelled) return;
+        setCascadeCounts(res?.cascadeCounts || null);
+      } catch (e) {
+        if (cancelled) return;
+        setPreviewError(e?.userMessage || e?.message || 'ไม่ทราบสาเหตุ');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customer?.id]);
 
   // Load + branch-filter staff + doctor rosters once.
   useEffect(() => {
@@ -128,6 +153,31 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
         {isProClinicCloned && (
           <div className="mb-4 p-2 bg-amber-950/20 border border-amber-900/40 rounded text-xs text-amber-300 font-mono">
             ⚠️ ลูกค้าจาก ProClinic sync — การลบจะไม่ส่งผลต่อ ProClinic; หากต้องการกู้คืนต้องสร้างใหม่ด้วยมือ
+          </div>
+        )}
+
+        {/* Issue #1 — cascade preview row (counts BEFORE confirm) */}
+        {cascadeCounts && (
+          <div data-testid="delete-customer-cascade-preview" className="mb-4 p-2 bg-[var(--bg-card)] border border-[var(--bd)] rounded text-xs text-gray-300 font-mono">
+            <div className="text-[10px] text-[var(--tx-muted)] uppercase mb-1">ข้อมูลที่จะถูกลบ:</div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <span>{cascadeCounts.treatments} การรักษา</span>
+              <span>{cascadeCounts.sales} การขาย</span>
+              <span>{cascadeCounts.deposits} มัดจำ</span>
+              <span>{cascadeCounts.appointments} นัดหมาย</span>
+              <span>{cascadeCounts.wallets} wallet</span>
+              <span>{cascadeCounts.walletTransactions} wallet tx</span>
+              <span>{cascadeCounts.memberships} membership</span>
+              <span>{cascadeCounts.pointTransactions} point tx</span>
+              <span>{cascadeCounts.courseChanges} course changes</span>
+              <span>{cascadeCounts.linkRequests} link requests</span>
+              <span>{cascadeCounts.customerLinkTokens} link tokens</span>
+            </div>
+          </div>
+        )}
+        {previewError && (
+          <div data-testid="delete-customer-preview-error" className="mb-4 p-2 bg-amber-950/20 border border-amber-900/40 rounded text-xs text-amber-300">
+            โหลด preview ไม่สำเร็จ: {previewError}
           </div>
         )}
 

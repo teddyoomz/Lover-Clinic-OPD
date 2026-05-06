@@ -136,6 +136,44 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: 'customerId required', field: 'customerId' });
   }
 
+  // Phase 24.0 Issue #1 — action discriminator. action='preview' returns the
+  // 11 cascade counts WITHOUT deleting anything (no audit doc, no batch
+  // commit). Default ('delete' or absent) preserves existing behavior.
+  const action = String(req.body?.action || 'delete').trim();
+
+  if (action === 'preview') {
+    try {
+      const db = getAdminFirestore();
+      const data = dataPath(db);
+      const custRef = data.collection('be_customers').doc(customerId);
+      const custSnap = await custRef.get();
+      if (!custSnap.exists) {
+        return res.status(404).json({ success: false, error: 'ลูกค้าถูกลบไปแล้ว หรือไม่พบในระบบ' });
+      }
+      const queryResults = await Promise.all(
+        CUSTOMER_CASCADE_COLLECTIONS.map(name =>
+          data.collection(name).where('customerId', '==', customerId).get(),
+        ),
+      );
+      const cascadeCounts = {};
+      CUSTOMER_CASCADE_COLLECTIONS.forEach((name, idx) => {
+        cascadeCounts[COL_TO_RESPONSE_KEY[name]] = queryResults[idx].size;
+      });
+      // NOTE: preview branch is read-only (no batched writes, no audit doc).
+      return res.status(200).json({
+        success: true,
+        customerId,
+        cascadeCounts,
+        exists: true,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'preview failed',
+      });
+    }
+  }
+
   const authorizedBy = req.body?.authorizedBy;
   const authError = validateAuthorizedBy(authorizedBy);
   if (authError) {

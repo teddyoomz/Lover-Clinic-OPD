@@ -229,3 +229,41 @@ describe('Phase 24.0 / S6 — verifyAdminOrPermissionToken helper', () => {
     expect(TXT).toMatch(/export\s+async\s+function\s+verifyAdminOrPermissionToken/);
   });
 });
+
+// ─── S7 — action='preview' branch (Issue #1) ─────────────────────────────────
+// The endpoint must accept action='preview' and return cascade counts WITHOUT
+// deleting anything. Pre-confirm the modal can show counts to the admin.
+describe('Phase 24.0 / S7 — action=preview branch', () => {
+  const SERVER_TXT = fs.readFileSync('api/admin/delete-customer-cascade.js', 'utf-8');
+
+  it('S7.1 endpoint switches on action discriminator (action === "preview")', () => {
+    expect(SERVER_TXT).toMatch(/action\s*===\s*['"]preview['"]/);
+    // action variable derived from req.body?.action
+    expect(SERVER_TXT).toMatch(/req\.body\?\.\s*action/);
+  });
+
+  it('S7.2 preview branch returns cascadeCounts WITHOUT calling batchOp.commit (no delete)', () => {
+    // Locate the preview branch body — bounded by `if (action === 'preview')`
+    // and the start of the next `try` for the delete path.
+    const m = SERVER_TXT.match(/if\s*\(\s*action\s*===\s*['"]preview['"]\s*\)[\s\S]*?\n\s{0,4}\}\s*\n\s*\n\s*const\s+authorizedBy/);
+    expect(m).toBeTruthy();
+    const branch = m[0];
+    // Must return cascadeCounts.
+    expect(branch).toMatch(/cascadeCounts/);
+    expect(branch).toMatch(/exists:\s*true/);
+    // Must NOT batch.commit (no actual delete in preview path).
+    expect(branch).not.toMatch(/batchOp\.commit/);
+    // Must NOT iterate refsToDelete or call ref.delete.
+    expect(branch).not.toMatch(/refsToDelete/);
+  });
+
+  it('S7.3 preview branch does NOT write audit doc (no mutation = no audit)', () => {
+    const m = SERVER_TXT.match(/if\s*\(\s*action\s*===\s*['"]preview['"]\s*\)[\s\S]*?\n\s{0,4}\}\s*\n\s*\n\s*const\s+authorizedBy/);
+    expect(m).toBeTruthy();
+    const branch = m[0];
+    expect(branch).not.toMatch(/be_admin_audit/);
+    expect(branch).not.toMatch(/auditRef/);
+    expect(branch).not.toMatch(/auditPayload/);
+    expect(branch).not.toMatch(/customer-delete-\$\{customerId\}-\$\{ts\}/);
+  });
+});

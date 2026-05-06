@@ -28,10 +28,11 @@ vi.mock('../src/lib/branchScopeUtils.js', async () => {
 
 vi.mock('../src/lib/customerDeleteClient.js', () => ({
   deleteCustomerViaApi: vi.fn(),
+  previewCustomerDeleteViaApi: vi.fn(),
 }));
 
 import DeleteCustomerCascadeModal from '../src/components/backend/DeleteCustomerCascadeModal.jsx';
-import { deleteCustomerViaApi } from '../src/lib/customerDeleteClient.js';
+import { deleteCustomerViaApi, previewCustomerDeleteViaApi } from '../src/lib/customerDeleteClient.js';
 
 const customerThai = {
   id: 'LC-26000003',
@@ -51,6 +52,20 @@ const customerProClinic = {
 
 beforeEach(() => {
   deleteCustomerViaApi.mockReset();
+  previewCustomerDeleteViaApi.mockReset();
+  // Default: preview resolves with empty counts so modal renders cleanly.
+  // M6 tests override per-case.
+  previewCustomerDeleteViaApi.mockResolvedValue({
+    success: true,
+    customerId: 'LC-26000003',
+    cascadeCounts: {
+      treatments: 0, sales: 0, deposits: 0, appointments: 0,
+      wallets: 0, walletTransactions: 0, memberships: 0,
+      pointTransactions: 0, courseChanges: 0, linkRequests: 0,
+      customerLinkTokens: 0,
+    },
+    exists: true,
+  });
 });
 
 // Adaptation 6 — CustomerCard mounting tests need the useTabAccess hooks
@@ -203,5 +218,70 @@ describe('Phase 24.0 / M5 — close paths', () => {
     const xBtn = buttons.find(b => b.querySelector('svg'));
     fireEvent.click(xBtn);
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// ─── M6 — Issue #1 cascade preview row ──────────────────────────────────────
+// Spec §5.1 + §13: modal must show cascade counts BEFORE user confirms so
+// admin sees what will be removed. Preview is informational; failing to load
+// it MUST NOT block the ลบ button (3-dropdown gate is independent).
+describe('Phase 24.0 / M6 — cascade preview row (Issue #1)', () => {
+  it('M6.1 modal calls previewCustomerDeleteViaApi on mount with customerId', async () => {
+    render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
+    await waitFor(() => expect(previewCustomerDeleteViaApi).toHaveBeenCalledTimes(1));
+    expect(previewCustomerDeleteViaApi).toHaveBeenCalledWith({ customerId: 'LC-26000003' });
+  });
+
+  it('M6.2 cascade preview row renders 11 counts when preview succeeds', async () => {
+    previewCustomerDeleteViaApi.mockResolvedValue({
+      success: true,
+      customerId: 'LC-26000003',
+      cascadeCounts: {
+        treatments: 3, sales: 2, deposits: 1, appointments: 5,
+        wallets: 1, walletTransactions: 7, memberships: 1,
+        pointTransactions: 4, courseChanges: 2, linkRequests: 0,
+        customerLinkTokens: 0,
+      },
+      exists: true,
+    });
+    render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
+    const preview = await screen.findByTestId('delete-customer-cascade-preview');
+    expect(preview).toBeTruthy();
+    // Spot-check labels for each of the 11 counts.
+    expect(preview.textContent).toMatch(/3 การรักษา/);
+    expect(preview.textContent).toMatch(/2 การขาย/);
+    expect(preview.textContent).toMatch(/1 มัดจำ/);
+    expect(preview.textContent).toMatch(/5 นัดหมาย/);
+    // Note: adjacent spans concatenate with no whitespace in textContent.
+    // We assert each count+label substring; "1 wallet" overlaps with
+    // "1 wallet tx" so use the per-span boundaries directly via DOM lookup.
+    expect(preview.textContent).toContain('1 wallet');
+    expect(preview.textContent).toMatch(/7 wallet tx/);
+    expect(preview.textContent).toMatch(/1 membership/);
+    expect(preview.textContent).toMatch(/4 point tx/);
+    expect(preview.textContent).toMatch(/2 course changes/);
+    expect(preview.textContent).toMatch(/0 link requests/);
+    expect(preview.textContent).toMatch(/0 link tokens/);
+  });
+
+  it('M6.3 preview error shows amber banner but does NOT disable the ลบ button (3-dropdown gate independent)', async () => {
+    previewCustomerDeleteViaApi.mockRejectedValue(
+      Object.assign(new Error('preview failed'), { userMessage: 'network down' })
+    );
+    render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
+    // Wait for the amber preview-error banner.
+    await screen.findByTestId('delete-customer-preview-error');
+    // The cascade-preview row should NOT have rendered.
+    expect(screen.queryByTestId('delete-customer-cascade-preview')).toBeNull();
+    // Now exercise the 3-dropdown gate — failing preview must NOT block delete.
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    const btn = screen.getByTestId('delete-customer-confirm');
+    expect(btn.disabled).toBe(true);  // disabled because no dropdowns selected, NOT because of preview
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[0], { target: { value: 'BS-1' } });
+    fireEvent.change(selects[1], { target: { value: 'BD-1' } });
+    fireEvent.change(selects[2], { target: { value: 'BD-2' } });
+    // 3 dropdowns selected → button enabled even though preview failed.
+    expect(btn.disabled).toBe(false);
   });
 });

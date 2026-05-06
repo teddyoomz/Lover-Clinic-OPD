@@ -207,3 +207,23 @@ describe('Phase 24.0 / F5 — full-flow simulate (pure mirror of HN behaviour)',
     expect(hnB).not.toBe(hnA);
   });
 });
+
+describe('Phase 24.0 / F6 — preview endpoint integrity (Issue #1)', () => {
+  it('F6.1 server endpoint switches on action discriminator', () => {
+    expect(SERVER).toMatch(/action\s*===\s*['"]preview['"]/);
+    expect(SERVER).toMatch(/req\.body\?\.\s*action/);
+  });
+
+  it('F6.2 client wrapper exports BOTH deleteCustomerViaApi AND previewCustomerDeleteViaApi', () => {
+    const CLIENT_TXT = fs.readFileSync(
+      path.join(process.cwd(), 'src/lib/customerDeleteClient.js'),
+      'utf-8',
+    );
+    expect(CLIENT_TXT).toMatch(/export\s+async\s+function\s+deleteCustomerViaApi/);
+    expect(CLIENT_TXT).toMatch(/export\s+async\s+function\s+previewCustomerDeleteViaApi/);
+    // Preview wrapper must POST action: 'preview'.
+    expect(CLIENT_TXT).toMatch(/action:\s*['"]preview['"]/);
+    // Preview wrapper must hit the same endpoint URL.
+    expect(CLIENT_TXT).toMatch(/\/api\/admin\/delete-customer-cascade/);
+  });
+});

@@ -56,3 +56,53 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
   }
   return body;
 }
+
+/**
+ * Phase 24.0 Issue #1 — fetch cascade counts WITHOUT deleting. Powers the
+ * modal's pre-confirm preview row so admin sees what will be removed.
+ *
+ * Calls the same endpoint with `action: 'preview'`. Server returns
+ * { success, customerId, cascadeCounts, exists } with NO audit doc and NO
+ * mutation. Cheap.
+ *
+ * @param {object} payload
+ * @param {string} payload.customerId — be_customers/{id}
+ * @returns {Promise<{success, customerId, cascadeCounts, exists}>}
+ * @throws Error with .userMessage / .status on auth/HTTP errors
+ */
+export async function previewCustomerDeleteViaApi({ customerId }) {
+  const user = auth?.currentUser;
+  if (!user) {
+    const err = new Error('กรุณาเข้าสู่ระบบใหม่');
+    err.userMessage = 'ไม่ได้ login';
+    err.status = 401;
+    throw err;
+  }
+  const idToken = await user.getIdToken();
+
+  const res = await fetch('/api/admin/delete-customer-cascade', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ customerId, action: 'preview' }),
+  });
+
+  let body = null;
+  try { body = await res.json(); } catch { /* ignore */ }
+
+  if (!res.ok) {
+    const err = new Error(body?.error || `preview failed (HTTP ${res.status})`);
+    err.userMessage = body?.error || 'โหลด preview ล้มเหลว';
+    err.status = res.status;
+    throw err;
+  }
+  if (!body?.success) {
+    const err = new Error(body?.error || 'unexpected preview response');
+    err.userMessage = body?.error || 'โหลด preview ล้มเหลว';
+    err.status = 500;
+    throw err;
+  }
+  return body;
+}
