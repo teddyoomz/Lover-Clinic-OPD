@@ -194,10 +194,27 @@ function makeError(userMessage, opts = {}) {
   return err;
 }
 
-/** Throws with userMessage if not signed in. Returns the auth user. */
-function requireAuth() {
+/** Throws with userMessage if not signed in. Returns the auth user.
+ *
+ * Phase 24.0-quinquies (2026-05-06 evening) — force-refresh the ID token
+ * so latest custom claims (admin / perm_customer_delete) are present.
+ * Firebase auto-refreshes every ~1h but if claims were updated server-side
+ * via setCustomUserClaims AFTER the local token was cached, the cached
+ * token has stale claims → audit-doc setDoc returns PERMISSION_DENIED
+ * even though the user IS admin server-side. force=true makes a network
+ * call to fetch the latest claims.
+ */
+async function requireAuth() {
   const user = auth?.currentUser;
   if (!user) throw makeError('ไม่ได้ login — กรุณาเข้าสู่ระบบใหม่', { status: 401 });
+  try {
+    await user.getIdToken(/* forceRefresh */ true);
+  } catch (e) {
+    throw makeError(
+      'ไม่สามารถ refresh token ได้ — ลอง re-login: ' + (e?.message || e),
+      { status: 401 },
+    );
+  }
   return user;
 }
 
@@ -213,7 +230,7 @@ function requireAuth() {
  * @returns {Promise<{success, customerId, cascadeCounts, exists}>}
  */
 export async function previewCustomerDeleteViaApi({ customerId }) {
-  requireAuth();
+  await requireAuth();
   const cid = String(customerId || '').trim();
   if (!cid) throw makeError('customerId required', { status: 400, field: 'customerId' });
 
@@ -281,7 +298,7 @@ export async function previewCustomerDeleteViaApi({ customerId }) {
  * @returns {Promise<{success, customerId, cascadeCounts, auditDocId, totalDeletes}>}
  */
 export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
-  const user = requireAuth();
+  const user = await requireAuth();
   const cid = String(customerId || '').trim();
   if (!cid) throw makeError('customerId required', { status: 400, field: 'customerId' });
 
