@@ -370,11 +370,25 @@ service cloud.firestore {
         allow read: if isClinicStaff();
         // Phase 16.3 (2026-04-29) — narrow exception for system-config-*
         // audit docs. Same gate as the system_config doc itself (Q2-C).
-        allow create: if isSignedIn() &&
-                         auditId.matches('^system-config-.*') && (
-                           request.auth.token.admin == true ||
-                           request.auth.token['perm_system_config_management'] == true
-                         );
+        // Phase 24.0 (2026-05-06) — narrow exception for customer-delete-*
+        // audit docs. Server endpoint /api/admin/delete-customer-cascade
+        // uses firebase-admin SDK (bypasses rules) but we narrow-allow the
+        // client-side prefix anyway so emergency manual writes from a
+        // perm-gated admin remain possible. Same dual gate as system-config.
+        allow create: if isSignedIn() && (
+                         (
+                           auditId.matches('^system-config-.*') && (
+                             request.auth.token.admin == true ||
+                             request.auth.token['perm_system_config_management'] == true
+                           )
+                         ) ||
+                         (
+                           auditId.matches('^customer-delete-.*') && (
+                             request.auth.token.admin == true ||
+                             request.auth.token['perm_customer_delete'] == true
+                           )
+                         )
+                       );
         allow update, delete: if false;  // immutable
       }
 
