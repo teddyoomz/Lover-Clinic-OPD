@@ -198,9 +198,13 @@ export function buildDepositPairPayload({
  */
 export function mintPairIds() {
   const ts = Date.now();
-  // 4 hex chars from crypto-secure source (browser: crypto.getRandomValues;
-  // Node: globalThis.crypto.getRandomValues — both available since Node 19+).
-  const buf = new Uint8Array(2);
+  // Phase 24.0-vicies (2026-05-06) — 8 hex chars (32-bit entropy) instead
+  // of 4 (16-bit). Tight-loop callers (e.g. test fixtures generating 100
+  // ids in the same ms) can hit birthday collisions on 16-bit (~7.6% rate
+  // for 100 samples). 32-bit drops collision rate to ~2.3e-6 for 1000 ids.
+  // crypto-secure source (browser: crypto.getRandomValues; Node: globalThis
+  // since Node 19+).
+  const buf = new Uint8Array(4);
   globalThis.crypto.getRandomValues(buf);
   const suffix = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
   return {
@@ -463,8 +467,10 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
   const depData = depSnap.data() || {};
   // Mint a fresh appointment id matching the pair-helper's BA-{ts}-{rand}
   // shape so admin tooling that greps appointmentId by prefix sees both.
+  // Phase 24.0-vicies (2026-05-06) — 8 hex chars matches the bumped
+  // mintPairIds suffix length (was 4 → ~7.6% collision rate in tight loops).
   const ts = Date.now();
-  const buf = new Uint8Array(2);
+  const buf = new Uint8Array(4);
   globalThis.crypto.getRandomValues(buf);
   const suffix = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
   const appointmentId = `BA-${ts}-${suffix}`;
@@ -542,9 +548,66 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
   return { depositId, appointmentId };
 }
 
+/**
+ * Phase 24.0-vicies (2026-05-06) — sync customer temp identity (name + phone)
+ * to the linked be_deposits doc. User report: "ตรงปุ่มแก้ไขในหน้าจองไม่มัดจำ
+ * ทำให้แก้ไขชื่อและเบอร์โทรลูกค้าได้ด้วย และเมื่อแก้ในนี้ก็จะไปแก้ตรงหน้า
+ * การเงินและหน้านัดหมายด้วย" — when admin edits customer name/phone via the
+ * noDeposit-tab edit button + the session has a linkedDepositId, the deposit
+ * doc in Finance.มัดจำ should reflect the new name/phone.
+ *
+ * Distinct from attachCustomerToLinkedDeposit (Phase 24.0-septiesdecies):
+ *   • This helper does NOT touch customerId — it only syncs the displayable
+ *     name + the temp identity fields. Use this for noDeposit-edit cascades
+ *     where no real customer doc is being attached, just edited.
+ *   • attachCustomerToLinkedDeposit fires once when admin attaches a real
+ *     customer; this helper fires on every edit.
+ *
+ * Best-effort cascade: throws if depositId missing or doc gone; caller wraps
+ * in try/catch.
+ *
+ * @param {string} depositId — be_deposits doc id (from
+ *        session.linkedDepositId / session.depositProClinicId).
+ * @param {Object} args
+ * @param {string} [args.customerName] — overrides the visible label only when
+ *        provided (selective merge — undefined fields skipped).
+ * @param {string} [args.customerNameTemp]
+ * @param {string} [args.customerPhoneTemp]
+ * @returns {Promise<{ depositId: string, synced: true }>}
+ */
+export async function syncCustomerTempToLinkedDeposit(depositId, {
+  customerName,
+  customerNameTemp,
+  customerPhoneTemp,
+} = {}) {
+  if (!depositId) throw new Error('syncCustomerTempToLinkedDeposit: depositId required');
+  const ref = depositDoc(depositId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error(`syncCustomerTempToLinkedDeposit: deposit ${depositId} not found`);
+  }
+  const now = new Date().toISOString();
+  // Selective merge — only overwrite fields the caller explicitly provides.
+  // Empty strings ARE allowed (admin clearing a field) but undefined skips.
+  const update = {
+    customerTempSyncedAt: now,
+    updatedAt: now,
+  };
+  if (customerName !== undefined) update.customerName = String(customerName || '');
+  if (customerNameTemp !== undefined) update.customerNameTemp = String(customerNameTemp || '');
+  if (customerPhoneTemp !== undefined) update.customerPhoneTemp = String(customerPhoneTemp || '');
+  // Use writeBatch for consistency with the other cascade helpers + so future
+  // additions (e.g. audit doc) can ride on the same atomic boundary.
+  const batch = writeBatch(db);
+  batch.update(ref, update);
+  await batch.commit();
+  return { depositId, synced: true };
+}
+
 // Phase 21.0 marker — institutional-memory grep target. Keep this comment
 // at end-of-file. Removed = grep guard fails (test in tests/phase-21-0-*).
 // MARKER: phase-21-0-deposit-booking-pair-helper
 // MARKER: phase-24-0-septiesdecies-attach-customer-to-deposit
 // MARKER: phase-24-0-octiesdecies-sync-appt-metadata-to-deposit
 // MARKER: phase-24-0-noniesdecies-create-appointment-for-existing-deposit
+// MARKER: phase-24-0-vicies-sync-customer-temp-to-deposit

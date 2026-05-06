@@ -85,8 +85,11 @@ describe('Phase 22.0b — A3 confirmCreateDeposit paired-write to be_deposits + 
     // the false path (createDeposit) sets hasAppointment:false + appointment:null.
     expect(SRC).toMatch(/if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,200}?hasAppointment:\s*true/);
     expect(SRC).toMatch(/type:\s*['"]deposit-booking['"]/);
-    // hasAppointment=false branch sets appointment:null
-    expect(SRC).toMatch(/hasAppointment:\s*false\s*,\s*\n?\s*appointment:\s*null/);
+    // Phase 24.0-vicies (2026-05-06) — hasAppointment=false branch now
+    // attaches a minimal {type:'deposit-only',purpose,appointmentTo} when
+    // visitPurposeText is non-empty, OR null when empty. Both shapes
+    // accepted; the source must use the ternary `visitPurposeText ? {...} : null`.
+    expect(SRC).toMatch(/hasAppointment:\s*false\s*,\s*\n?\s*appointment:\s*visitPurposeText\s*\?[\s\S]{0,200}?:\s*null/);
   });
 
   test('A3.5 sellers built with 100% percent when salesperson selected', () => {

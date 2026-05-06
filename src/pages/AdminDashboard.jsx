@@ -2014,10 +2014,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           } else {
             // Deposit-only path — no be_appointments doc, no pair atomicity.
             // createDeposit returns the doc id directly.
+            // Phase 24.0-vicies (2026-05-06) — when admin selected visit-purpose
+            // chips (นัดมาเพื่อ) but NOT มีการนัดหมาย, attach a minimal embedded
+            // appointment object so DepositPanel "มัดจำสำหรับ" column shows
+            // the purpose. type='deposit-only' distinguishes from
+            // 'deposit-booking' on the calendar; BackendDashboard จองมัดจำ
+            // sub-tab queries be_appointments (NOT be_deposits), so this
+            // marker doesn't surface a phantom appointment in the grid.
             const depositOnlyPayload = {
               ...baseDepositData,
               hasAppointment: false,
-              appointment: null,
+              appointment: visitPurposeText ? {
+                type: 'deposit-only',
+                purpose: visitPurposeText,
+                appointmentTo: visitPurposeText, // mirror for legacy readers
+              } : null,
             };
             depositId = await createDeposit(depositOnlyPayload);
           }
@@ -2261,6 +2272,49 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           } else {
             showToast('บันทึกใน app แล้ว แต่อัพเดทนัดหมายไม่สำเร็จ: ' + (apptErr?.message || String(apptErr)));
           }
+        }
+        // Phase 24.0-vicies (2026-05-06) — when admin edits name/phone (or
+        // any appt metadata) on a noDeposit session that ALSO has a linked
+        // deposit (rare but possible — legacy data or future cross-linked
+        // sessions), cascade the changes to the linked be_deposits doc so
+        // Finance.มัดจำ row reflects the edits. Best-effort try/catch.
+        // User report: "ตรงปุ่มแก้ไขในหน้าจองไม่มัดจำ ทำให้แก้ไขชื่อและ
+        // เบอร์โทรลูกค้าได้ด้วย และเมื่อแก้ในนี้ก็จะไปแก้ตรงหน้าการเงิน
+        // และหน้านัดหมายด้วย".
+        try {
+          const linkedDepositId = session.linkedDepositId
+            || session.depositProClinicId
+            || '';
+          if (linkedDepositId) {
+            const mod = await import('../lib/appointmentDepositBatch.js');
+            // (a) Customer-temp sync (name + phone) — fires on every edit.
+            if (typeof mod.syncCustomerTempToLinkedDeposit === 'function') {
+              await mod.syncCustomerTempToLinkedDeposit(linkedDepositId, {
+                customerName: apptPayload.customerName,
+                customerNameTemp: apptPayload.customerNameTemp,
+                customerPhoneTemp: apptPayload.customerPhoneTemp,
+              });
+            }
+            // (b) Appointment-meta sync — purpose / date / doctor / room /
+            // etc. so Finance "มัดจำสำหรับ" column reflects the latest.
+            if (typeof mod.syncAppointmentToLinkedDeposit === 'function') {
+              await mod.syncAppointmentToLinkedDeposit(linkedDepositId, {
+                date: apptPayload.date,
+                startTime: apptPayload.startTime,
+                endTime: apptPayload.endTime,
+                doctorId: apptPayload.doctorId,
+                doctorName: apptPayload.doctorName,
+                advisorId: apptPayload.advisorId,
+                advisorName: apptPayload.advisorName,
+                roomId: apptPayload.roomId,
+                channel: apptPayload.source,
+                purpose: apptPayload.appointmentTo,
+                appointmentTo: apptPayload.appointmentTo,
+              });
+            }
+          }
+        } catch (cascadeErr) {
+          console.warn('[confirmUpdateAppointment] linked-deposit cascade failed (best-effort):', cascadeErr);
         }
       } else {
         // No appointment id yet (previous create failed) → retry creating
@@ -2923,6 +2977,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       await updateDoc(ref, { depositData: newData });
       setEditingDepositData(null);
 
+      // Phase 24.0-vicies (2026-05-06) — resolve the be_deposits doc id for
+      // cascade BEFORE the alreadySynced branch. Kiosk-fresh deposits stamp
+      // `linkedDepositId` (Phase 24.0-quinquiesdecies); patient-form-filled
+      // deposits stamp `depositProClinicId`. Either resolves to the same
+      // be_deposits doc — pick whichever is set.
+      let depIdForCascade = sess?.depositProClinicId || sess?.linkedDepositId || '';
+
+      // Phase 24.0-vicies — pre-compute the visitPurposeText so both the
+      // sync helper + the cascade reference the same value.
+      const visitPurposeTextResolved = buildVisitPurposeText(
+        newData?.visitPurpose,
+        newData?.visitPurposeOther,
+      );
+
       if (alreadySynced) {
         // Phase 20.0 Task 5c — update existing be_deposits doc.
         showToast('กำลังอัพเดทข้อมูลจอง...');
@@ -2930,7 +2998,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const dataForBe = mapDepositPayloadToBe(
           newData, sess.brokerProClinicId, sess.brokerProClinicHN, sess.patientData,
         );
-        let depIdForCascade = sess.depositProClinicId || '';
         try {
           if (sess.depositProClinicId) {
             await updateDeposit(sess.depositProClinicId, dataForBe);
@@ -2947,35 +3014,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           showToast(`บันทึกในระบบแล้ว แต่อัพเดทมัดจำไม่สำเร็จ: ${depErr?.message}`);
           return;
         }
-        // Phase 24.0-noniesdecies (2026-05-06) — auto-create be_appointments
-        // when admin edits a kiosk deposit to ADD an appointment.
-        // User report: "ใน Frontend tab จองมัดจำ หลังจากจองมัดจำแล้ว
-        // พอกด edit เพื่อเพิ่มนัดหมาย มันขึ้นว่านัดหมายสำเร็จ แต่พอไปดู
-        // ในหน้าตาราง จองมัดจำ กลับไม่เจอ".
-        // Pre-fix: handleSaveDepositData updated be_deposits only; no
-        // be_appointments doc was created → invisible in BackendDashboard's
-        // จองมัดจำ sub-tab.
-        try {
-          const wantsAppt = !!newData?.hasAppointment;
-          const hasAppt = !!sess.linkedAppointmentId;
-          if (wantsAppt && !hasAppt && depIdForCascade) {
-            const { createAppointmentForExistingDeposit } = await import('../lib/appointmentDepositBatch.js');
-            if (typeof createAppointmentForExistingDeposit === 'function') {
+      } else {
+        // Phase 24.0-vicies (2026-05-06) — kiosk-fresh deposit (no
+        // brokerProClinicId yet because patient form not filled). The
+        // alreadySynced gate skipped the cascade entirely pre-fix → admin
+        // saw "นัดหมายสำเร็จ" toast but be_appointments was never created.
+        // Now we sync the deposit doc directly (purpose / appointment.* +
+        // customer name/phone temps) without going through mapDepositPayloadToBe
+        // (which requires brokerProClinicId).
+        if (depIdForCascade) {
+          try {
+            const mod = await import('../lib/appointmentDepositBatch.js');
+            // (a) Sync embedded appointment metadata (purpose / date / time /
+            // doctor / room / etc.) so DepositPanel "มัดจำสำหรับ" column +
+            // detail panel render the new values.
+            if (typeof mod.syncAppointmentToLinkedDeposit === 'function') {
               const doctorRecord = practitioners.find(p => String(p.id) === String(newData.doctor || ''));
               const advisorRecord = practitioners.find(p => String(p.id) === String(newData.consultant || ''));
-              const visitPurposeText = buildVisitPurposeText(
-                newData.visitPurpose,
-                newData.visitPurposeOther,
-              );
-              const apptResult = await createAppointmentForExistingDeposit(depIdForCascade, {
+              await mod.syncAppointmentToLinkedDeposit(depIdForCascade, {
+                type: newData.hasAppointment ? 'deposit-booking' : 'deposit-only',
                 date: newData.appointmentDate || '',
                 startTime: newData.appointmentStartTime || '',
                 endTime: newData.appointmentEndTime || newData.appointmentStartTime || '',
-                customerId: '',
-                customerName: newData.customerNameTemp?.trim() || sess.sessionName || '',
-                customerHN: '',
-                customerNameTemp: newData.customerNameTemp?.trim() || '',
-                customerPhoneTemp: newData.customerPhoneTemp?.trim() || '',
                 doctorId: newData.doctor ? String(newData.doctor) : '',
                 doctorName: doctorRecord?.name || '',
                 advisorId: newData.consultant ? String(newData.consultant) : '',
@@ -2985,23 +3045,83 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 roomId: newData.room ? String(newData.room) : '',
                 roomName: '',
                 channel: newData.appointmentChannel || '',
-                appointmentTo: visitPurposeText,
-                notes: '',
-                appointmentColor: '',
+                purpose: visitPurposeTextResolved,
+                appointmentTo: visitPurposeTextResolved,
+                note: '',
+                color: '',
                 lineNotify: false,
-                branchId: sess.branchId || selectedBranchId || '',
               });
-              if (apptResult?.appointmentId) {
-                await updateDoc(ref, {
-                  linkedAppointmentId: apptResult.appointmentId,
-                  linkedDepositId: depIdForCascade,
-                });
-              }
+            }
+            // (b) Sync customer-temp (name + phone) so Finance row label
+            // reflects edits even before patient form is filled.
+            if (typeof mod.syncCustomerTempToLinkedDeposit === 'function') {
+              const tempName = newData.customerNameTemp?.trim() || '';
+              const tempPhone = newData.customerPhoneTemp?.trim() || '';
+              await mod.syncCustomerTempToLinkedDeposit(depIdForCascade, {
+                customerName: tempName || sess?.sessionName || 'ลูกค้าจอง',
+                customerNameTemp: tempName,
+                customerPhoneTemp: tempPhone,
+              });
+            }
+          } catch (syncErr) {
+            console.warn('[handleSaveDepositData] kiosk-fresh deposit sync failed (best-effort):', syncErr);
+          }
+        }
+      }
+
+      // Phase 24.0-noniesdecies (2026-05-06) + vicies (2026-05-06 update) —
+      // auto-create be_appointments when admin edits a kiosk deposit to ADD
+      // an appointment. Cascade is now UN-GATED (fires regardless of
+      // alreadySynced) so kiosk-fresh deposits (depositSyncStatus='done' but
+      // no brokerProClinicId) reach this path.
+      // User report: "ใน Frontend tab จองมัดจำ หลังจากจองมัดจำแล้ว พอกด
+      // edit เพื่อเพิ่มนัดหมาย มันขึ้นว่านัดหมายสำเร็จ แต่พอไปดูในหน้าตาราง
+      // จองมัดจำ กลับไม่เจอ".
+      try {
+        const wantsAppt = !!newData?.hasAppointment;
+        const hasAppt = !!sess?.linkedAppointmentId;
+        if (wantsAppt && !hasAppt && depIdForCascade) {
+          const { createAppointmentForExistingDeposit } = await import('../lib/appointmentDepositBatch.js');
+          if (typeof createAppointmentForExistingDeposit === 'function') {
+            const doctorRecord = practitioners.find(p => String(p.id) === String(newData.doctor || ''));
+            const advisorRecord = practitioners.find(p => String(p.id) === String(newData.consultant || ''));
+            const apptResult = await createAppointmentForExistingDeposit(depIdForCascade, {
+              date: newData.appointmentDate || '',
+              startTime: newData.appointmentStartTime || '',
+              endTime: newData.appointmentEndTime || newData.appointmentStartTime || '',
+              customerId: '',
+              customerName: newData.customerNameTemp?.trim() || sess?.sessionName || '',
+              customerHN: '',
+              customerNameTemp: newData.customerNameTemp?.trim() || '',
+              customerPhoneTemp: newData.customerPhoneTemp?.trim() || '',
+              doctorId: newData.doctor ? String(newData.doctor) : '',
+              doctorName: doctorRecord?.name || '',
+              advisorId: newData.consultant ? String(newData.consultant) : '',
+              advisorName: advisorRecord?.name || '',
+              assistantIds: newData.assistant ? [String(newData.assistant)] : [],
+              assistantNames: [],
+              roomId: newData.room ? String(newData.room) : '',
+              roomName: '',
+              channel: newData.appointmentChannel || '',
+              appointmentTo: visitPurposeTextResolved,
+              notes: '',
+              appointmentColor: '',
+              lineNotify: false,
+              branchId: sess?.branchId || selectedBranchId || '',
+            });
+            if (apptResult?.appointmentId) {
+              await updateDoc(ref, {
+                linkedAppointmentId: apptResult.appointmentId,
+                linkedDepositId: depIdForCascade,
+              });
             }
           }
-        } catch (apptErr) {
-          console.warn('[handleSaveDepositData] add-appointment cascade failed (best-effort):', apptErr);
         }
+      } catch (apptErr) {
+        console.warn('[handleSaveDepositData] add-appointment cascade failed (best-effort):', apptErr);
+      }
+
+      if (alreadySynced) {
         await updateDoc(ref, {
           depositSyncStatus: 'done', depositSyncError: null, depositSyncAt: serverTimestamp(),
         });

@@ -19,24 +19,30 @@ describe('Phase 24.0-quinquiesdecies — deposit-no-appointment branch', () => {
     // The fix introduces an `if (depositFormData.hasAppointment) { ... } else { ... }`
     // branch inside the try block.
     expect(ADMIN).toMatch(
-      /if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,1500}?\}\s*else\s*\{[\s\S]{0,800}?createDeposit\(/,
+      // Phase 24.0-vicies (2026-05-06) — deposit-only branch grew to attach
+      // visitPurpose-based minimal appointment object. Window widened
+      // 1500/800 → 3000/2000 to span the larger else block.
+      /if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,3000}?\}\s*else\s*\{[\s\S]{0,2000}?createDeposit\(/,
     );
   });
 
   it('DNA.A.2 — hasAppointment=true branch calls createDepositBookingPair', () => {
     expect(ADMIN).toMatch(
-      /if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,1500}?createDepositBookingPair\(/,
+      /if\s*\(depositFormData\.hasAppointment\)\s*\{[\s\S]{0,3000}?createDepositBookingPair\(/,
     );
   });
 
   it('DNA.A.3 — hasAppointment=false branch calls createDeposit (no pair-helper)', () => {
     expect(ADMIN).toMatch(
-      /\}\s*else\s*\{[\s\S]{0,800}?depositId\s*=\s*await\s+createDeposit\(/,
+      /\}\s*else\s*\{[\s\S]{0,2000}?depositId\s*=\s*await\s+createDeposit\(/,
     );
   });
 
-  it('DNA.A.4 — deposit-only payload sets hasAppointment:false + appointment:null', () => {
-    expect(ADMIN).toMatch(/hasAppointment:\s*false\s*,\s*\n?\s*appointment:\s*null/);
+  it('DNA.A.4 — deposit-only payload sets hasAppointment:false + appointment:visitPurposeText ? {...} : null', () => {
+    // Phase 24.0-vicies — appointment object is conditional on visitPurposeText
+    // (deposit-only with selected visit purpose still surfaces the purpose
+    // in Finance.มัดจำ column). Empty visitPurpose → null (anti-regression).
+    expect(ADMIN).toMatch(/hasAppointment:\s*false\s*,\s*\n?\s*appointment:\s*visitPurposeText\s*\?[\s\S]{0,200}?:\s*null/);
   });
 
   it('DNA.A.5 — baseDepositData is shared between both branches (Rule of 3)', () => {

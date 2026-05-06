@@ -194,8 +194,10 @@ describe('Phase 24.0-noniesdecies — kiosk handleSaveDepositData add-appointmen
     expect(ADMIN).toMatch(
       /const\s+wantsAppt\s*=\s*!!newData\?\.hasAppointment/,
     );
+    // Phase 24.0-vicies (2026-05-06) — sess optional-chained because the
+    // cascade is now un-gated and fires even when sess is undefined.
     expect(ADMIN).toMatch(
-      /const\s+hasAppt\s*=\s*!!sess\.linkedAppointmentId/,
+      /const\s+hasAppt\s*=\s*!!sess\??\.linkedAppointmentId/,
     );
     expect(ADMIN).toMatch(
       /if\s*\(wantsAppt\s*&&\s*!hasAppt\s*&&\s*depIdForCascade\)/,

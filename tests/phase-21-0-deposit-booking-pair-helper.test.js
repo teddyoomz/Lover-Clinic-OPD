@@ -32,10 +32,13 @@ beforeAll(async () => {
 });
 
 describe('Phase 21.0 — P1 pure helpers', () => {
-  test('P1.1 mintPairIds returns DEP-{ts} + BA-{ts}-{4hex}', () => {
+  test('P1.1 mintPairIds returns DEP-{ts} + BA-{ts}-{8hex}', () => {
+    // Phase 24.0-vicies (2026-05-06) — suffix bumped 4 → 8 hex chars
+    // (16-bit → 32-bit entropy) to drop tight-loop collision rate from
+    // ~7.6% (100 ids in same ms) to ~2.3e-6 (1000 ids).
     const { depositId, appointmentId } = helper.mintPairIds();
     expect(depositId).toMatch(/^DEP-\d{13}$/);
-    expect(appointmentId).toMatch(/^BA-\d{13}-[0-9a-f]{4}$/);
+    expect(appointmentId).toMatch(/^BA-\d{13}-[0-9a-f]{8}$/);
   });
 
   test('P1.2 mintPairIds emits unique appointment ids on repeated calls', () => {
