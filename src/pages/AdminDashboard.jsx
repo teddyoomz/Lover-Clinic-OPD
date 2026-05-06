@@ -4036,7 +4036,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <p className="text-gray-500 mb-6 text-xs">{desc}</p>
           <div className="flex gap-3">
             <button onClick={() => setDepositToDelete(null)} className="flex-1 px-4 py-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-gray-300 rounded font-bold text-xs border border-[var(--bd-strong)]">ยกเลิก</button>
-            <button onClick={() => {
+            <button onClick={async () => {
               setDepositToDelete(null);
               if (isCancel) { handleDepositCancel(dSess); }
               else if (isComplete) {
@@ -4045,8 +4045,36 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   isPermanent: false, createdAt: serverTimestamp(),
                 });
               } else {
-                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
+                // Phase 24.0-vicies-ter (2026-05-06) — archive (trash icon)
+                // also cascade-deletes the linked be_deposits + be_appointments.
+                // User report: "ลบลูกค้า จองมัดจำ จาก front end แล้ว ข้อมูล
+                // นัดหมาย และ ข้อมูลมัดจำในหน้าการเงิน ยังไม่ลบไปจาก backend
+                // ทำให้ลบได้ด้วย". Pre-fix: archive only set isArchived=true
+                // on opd_sessions; orphan deposit + appt docs lingered.
+                // Now: cancelDepositBookingPair (atomic writeBatch) on the
+                // resolved depIdForCancel (linkedDepositId fallback for kiosk-
+                // fresh deposits). Best-effort try/catch — archive proceeds
+                // even if cascade fails (orphan doc cleanup can be retried
+                // from Finance.มัดจำ).
+                const depIdForCancel = dSess.depositProClinicId
+                  || dSess.linkedDepositId
+                  || '';
+                if (depIdForCancel) {
+                  try {
+                    const { cancelDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
+                    await cancelDepositBookingPair(depIdForCancel, {
+                      cancelNote: 'ลบจาก kiosk (frontend trash)',
+                    });
+                  } catch (cascadeErr) {
+                    console.warn('[archive cascade] cancelDepositBookingPair failed (best-effort):', cascadeErr);
+                  }
+                }
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', dSess.id), {
                   isArchived: true, archivedAt: serverTimestamp(),
+                  // Forensic trail — stamp the cancelled doc ids so admin
+                  // can audit which docs were soft-cancelled by the archive.
+                  cancelledDepositId: depIdForCancel || null,
+                  cancelledAppointmentId: dSess.linkedAppointmentId || null,
                 });
               }
             }} className={`flex-1 px-4 py-3 ${confirmBg} text-white rounded font-bold text-xs ${confirmGlow}`}>{confirmLabel}</button>
@@ -5140,11 +5168,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
                       {/* Row 3: Deposit info */}
                       {dep && (
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-2 items-center">
                           {dep.paymentAmount && <span className="text-xs bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 px-2 py-0.5 rounded font-bold">฿{Number(dep.paymentAmount).toLocaleString()}</span>}
                           {dep.paymentChannel && <span className="text-xs bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{dep.paymentChannel}</span>}
                           {dep.depositDate && <span className="text-xs bg-[var(--bg-hover)] text-gray-400 border border-[var(--bd)] px-2 py-0.5 rounded">{toThaiDate(dep.depositDate)}</span>}
                           {dep.hasAppointment && <span className="text-xs bg-blue-950/30 text-blue-400 border border-blue-900/40 px-2 py-0.5 rounded flex items-center gap-1"><CalendarClock size={9}/> นัดหมาย {toThaiDate(dep.appointmentDate)}{dep.appointmentStartTime ? ` ${dep.appointmentStartTime}${dep.appointmentEndTime ? `-${dep.appointmentEndTime}` : ''}` : ''}</span>}
+                          {/* Phase 24.0-vicies-ter (2026-05-06) — "แก้ไขนัด"
+                              link mirroring the no-deposit card pattern. User
+                              directive: "ทำให้ tab จองมัดจำ มีปุ่มแก้ไขนัด
+                              ได้แบบ tab จองไม่มัดจำ". Click → opens OPD detail
+                              panel + auto-enters deposit edit mode so admin
+                              can edit appointment fields. handleSaveDepositData
+                              cascade (Phase 24.0-vicies) propagates the edit
+                              to be_deposits + be_appointments. */}
+                          {dep.hasAppointment && (
+                            <button
+                              onClick={() => {
+                                if (!depositOptions) fetchDepositOptions();
+                                handleViewSession(session);
+                                // Defer the edit-mode enter so viewingSession
+                                // is set first; setEditingDepositData reads
+                                // viewingSession.depositData via closure.
+                                setTimeout(() => {
+                                  setEditingDepositData({ ...session.depositData });
+                                }, 100);
+                              }}
+                              data-testid="deposit-card-edit-appt-link"
+                              className="text-xs font-bold underline underline-offset-2 text-blue-400 hover:text-blue-300 ml-1"
+                            >
+                              แก้ไขนัด
+                            </button>
+                          )}
                         </div>
                       )}
 
