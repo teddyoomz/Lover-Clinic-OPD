@@ -146,12 +146,26 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   //   takeover (Phase 24.0-duodecies, 2026-05-06 — added so OPD banner's
   //   "แก้ไขข้อมูลลูกค้า" button can deep-link directly into edit mode)
   // Deep link: ?backend=1&tab=finance&subtab=deposit → switch to finance tab
+  // Deep link: ?backend=1&tab=appointment-deposit&date=YYYY-MM-DD → open the
+  //   appointment-deposit calendar on a specific date (Phase 24.0-vicies-octies,
+  //   2026-05-06 — added so Finance.มัดจำ "ไปที่นัด" button can jump from a
+  //   deposit row to its linked appointment on the calendar).
+  // Phase 24.0-vicies-octies — initialApptDate hoisted to component state so
+  // AppointmentCalendarView receives it as a prop.
+  const [initialApptDate, setInitialApptDate] = useState('');
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const customerId = params.get('customer');
     const mode = params.get('mode');
     const tab = params.get('tab');
     const subtab = params.get('subtab');
+    const dateParam = params.get('date');
+    // Phase 24.0-vicies-octies — accept a date hint via ?date= in the same
+    // deep-link useEffect run. Validated as YYYY-MM-DD; non-matching values
+    // fall through to today (AppointmentCalendarView default).
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      setInitialApptDate(dateParam);
+    }
     if (customerId) {
       getCustomer(customerId)
         .then(c => {
@@ -499,6 +513,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             }
             clinicSettings={clinicSettings}
             theme={theme}
+            initialSelectedDate={initialApptDate}
           />
         ) : activeTab === 'sales' ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)}

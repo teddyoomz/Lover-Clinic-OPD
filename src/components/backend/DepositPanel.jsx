@@ -607,6 +607,32 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                               <CalendarPlus size={13} />
                             </button>
                           )}
+                          {/* Phase 24.0-vicies-octies (2026-05-06) — "ไปที่นัด"
+                              button on rows WITH a linked appointment. Click →
+                              opens new browser tab on BackendDashboard's
+                              appointment-deposit sub-tab on the appointment's
+                              date. User: "ทำให้จากหน้า tab=finance มีปุ่ม
+                              ไปที่นัด เมื่อกดก็จะเด้งไป tab=appointment-deposit
+                              ในวันนั้น นัดนั้นเลย". */}
+                          {(dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date && (
+                            <button
+                              onClick={() => {
+                                const apptDate = String(dep.appointment?.date || '').trim();
+                                if (!apptDate) return;
+                                const origin = (typeof window !== 'undefined' && window.location?.origin) || '';
+                                const url = `${origin}/?backend=1&tab=appointment-deposit&date=${encodeURIComponent(apptDate)}`;
+                                if (typeof window !== 'undefined' && typeof window.open === 'function') {
+                                  window.open(url, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                              data-testid="deposit-goto-appointment-btn"
+                              className="p-2 rounded hover:bg-blue-900/20 text-blue-400"
+                              title="ไปที่นัด (เปิดแท็บใหม่)"
+                              aria-label="ไปที่นัด"
+                            >
+                              <Calendar size={13} />
+                            </button>
+                          )}
                           {canEdit && (
                             <button onClick={() => openEdit(dep)} className="p-2 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           )}

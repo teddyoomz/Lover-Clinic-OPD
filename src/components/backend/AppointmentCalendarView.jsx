@@ -165,7 +165,15 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
  * @param {Object} [props.clinicSettings]
  * @param {string} [props.theme]
  */
-export default function AppointmentCalendarView({ appointmentType, clinicSettings, theme }) {
+export default function AppointmentCalendarView({
+  appointmentType,
+  clinicSettings,
+  theme,
+  // Phase 24.0-vicies-octies (2026-05-06) — when set, the calendar opens
+  // on this date instead of today. Used by Finance.มัดจำ "ไปที่นัด" button
+  // (BackendDashboard deep-link reads ?date=YYYY-MM-DD and passes here).
+  initialSelectedDate,
+}) {
   const isDark = theme !== 'light';
 
   // Phase 21.0 (2026-05-06) — defense-in-depth: validate the prop. Unknown
@@ -180,9 +188,25 @@ export default function AppointmentCalendarView({ appointmentType, clinicSetting
   const { branchId: selectedBranchId } = useSelectedBranch();
 
   // ── State ──
-  const [selectedDate, setSelectedDate] = useState(() => dateStr(new Date()));
+  // Phase 24.0-vicies-octies — initialSelectedDate (if set + valid YYYY-MM-DD)
+  // overrides today. Falls back to today on null/invalid input.
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const candidate = String(initialSelectedDate || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+    return dateStr(new Date());
+  });
   // Thai time (GMT+7): avoid Jan 1 boundary where UTC-negative browsers see last December.
-  const [calMonth, setCalMonth] = useState(() => { const n = bangkokNow(); return { year: n.getUTCFullYear(), month: n.getUTCMonth() }; });
+  // Phase 24.0-vicies-octies — when initialSelectedDate provided, anchor
+  // calMonth to that date's month so the mini calendar opens on the right page.
+  const [calMonth, setCalMonth] = useState(() => {
+    const candidate = String(initialSelectedDate || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
+      const [y, m] = candidate.split('-');
+      return { year: parseInt(y, 10), month: parseInt(m, 10) - 1 };
+    }
+    const n = bangkokNow();
+    return { year: n.getUTCFullYear(), month: n.getUTCMonth() };
+  });
   const [monthAppts, setMonthAppts] = useState({}); // for mini calendar dots
   const [dayAppts, setDayAppts] = useState([]); // appointments for selectedDate
   const [dayLoading, setDayLoading] = useState(false);
