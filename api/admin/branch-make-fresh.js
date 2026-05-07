@@ -33,7 +33,10 @@ function getAdmin() {
     });
   }
   cachedDb = getFirestore(app);
-  cachedBucket = getStorage(app).bucket();
+  // V40-prod-fix (2026-05-08) — pass BUCKET explicitly (mirror branch-backup-export
+  // fix). Reused-app via getApps().length > 0 may lack storageBucket → bucket()
+  // no-arg throws "Bucket name not specified or invalid".
+  cachedBucket = getStorage(app).bucket(BUCKET);
   return { db: cachedDb, bucket: cachedBucket };
 }
 function dataCol(db, collection) {

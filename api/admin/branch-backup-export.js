@@ -35,7 +35,15 @@ function getAdmin() {
     });
   }
   cachedDb = getFirestore(app);
-  cachedBucket = getStorage(app).bucket();
+  // V40-prod-fix (2026-05-08) — pass BUCKET explicitly. On Vercel, OTHER admin
+  // endpoints may have already initialized the firebase-admin app WITHOUT a
+  // storageBucket option (they don't use Storage). When this endpoint runs in
+  // the same serverless container and hits the `getApps().length > 0` branch,
+  // it reuses that app — and `bucket()` no-arg fails with "Bucket name not
+  // specified or invalid". Explicit `bucket(BUCKET)` works regardless of app
+  // config. Local e2e didn't catch this because the script init'd admin fresh
+  // with storageBucket. Diag captured live error 2026-05-08.
+  cachedBucket = getStorage(app).bucket(BUCKET);
   return { db: cachedDb, bucket: cachedBucket };
 }
 

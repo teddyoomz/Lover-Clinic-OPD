@@ -159,6 +159,20 @@ describe('H5 — endpoint contract source-grep', () => {
     expect(code).not.toMatch(/if\s*\(!t1set\.has\(col\)[^)]*\)\s*\{\s*if\s*\(!t1set\.has\(col\)\)/);
   });
 
+  it('H5.7 — all 3 endpoints pass BUCKET explicitly to getStorage().bucket() (V40-prod-fix 2026-05-08)', () => {
+    // Lock the production bug fix: bucket() no-arg fails when admin app is
+    // initialized by another endpoint without storageBucket option. The fix
+    // is to ALWAYS pass BUCKET explicitly. Live prod error captured via
+    // scripts/diag-prod-export-error.mjs: "Bucket name not specified or
+    // invalid. Specify a valid bucket name via the storageBucket option..."
+    for (const f of ['branch-backup-export.js', 'branch-restore.js', 'branch-make-fresh.js']) {
+      const code = fs.readFileSync(path.join(apiDir, f), 'utf-8');
+      expect(code).toMatch(/getStorage\(app\)\.bucket\(BUCKET\)/);
+      // Negative: no remaining no-arg bucket() call
+      expect(code).not.toMatch(/getStorage\(app\)\.bucket\(\)/);
+    }
+  });
+
   it('H5.3 — branch-make-fresh.js refuses without autoBackupRef', () => {
     const code = fs.readFileSync(path.join(apiDir, 'branch-make-fresh.js'), 'utf-8');
     expect(code).toMatch(/AUTO_BACKUP_REQUIRED/);
