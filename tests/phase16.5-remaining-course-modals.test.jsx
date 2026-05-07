@@ -29,6 +29,18 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listStaffByBranch: (...a) => listStaffByBranchMock(...a),
 }));
 
+// V49 (2026-05-08) — ExchangeCourseModal switched listCourses → listCoursesForPicker
+// (scopedDataLayer wrapper that auto-applies beCourseToMasterShape adapter).
+// Mock the wrapper directly so test fixtures pass through unchanged (mock
+// returns canonical-ish or legacy-shape — bypassing adapter for test sanity).
+vi.mock('../src/lib/scopedDataLayer.js', () => ({
+  cancelCustomerCourse: (...a) => cancelMock(...a),
+  refundCustomerCourse: (...a) => refundMock(...a),
+  exchangeCourseProduct: (...a) => exchangeMock(...a),
+  listCoursesForPicker: (...a) => listCoursesMock(...a),
+  listStaffByBranch: (...a) => listStaffByBranchMock(...a),
+}));
+
 vi.mock('../src/lib/BranchContext.jsx', () => ({
   useSelectedBranch: () => ({ branchId: 'BR-test', branches: [], selectBranch: () => {}, isReady: true }),
 }));

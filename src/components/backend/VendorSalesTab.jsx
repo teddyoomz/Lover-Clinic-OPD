@@ -17,7 +17,9 @@ import {
   listVendors, saveVendor, deleteVendor,
   listVendorSales, saveVendorSale, deleteVendorSale, transitionVendorSale,
   // Phase 14.10-tris (2026-04-26) — be_products canonical
-  listProducts,
+  // V49 (2026-05-08) — listProducts → listProductsForPicker. <option>{p.name}
+  // at line 414 was undefined on canonical be_products (uses productName).
+  listProductsForPicker,
 } from '../../lib/scopedDataLayer.js';
 import {
   emptyVendorForm, generateVendorId, validateVendor,
@@ -62,7 +64,7 @@ export default function VendorSalesTab({ clinicSettings }) {
       const [vs, ss, ps] = await Promise.all([
         listVendors(),
         listVendorSales(),
-        listProducts().catch(() => []),
+        listProductsForPicker().catch(() => []),
       ]);
       setVendors(vs);
       setSales(ss);

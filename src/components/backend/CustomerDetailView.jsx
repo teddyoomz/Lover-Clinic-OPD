@@ -15,7 +15,11 @@ import {
   addCourseRemainingQty, getCustomer, listenToCustomer,
   // Phase 14.10-tris (2026-04-26) — be_* canonical for staff/products
   // (was master_data via getAllMasterDataItems — stale ProClinic mirror).
-  listAllSellers, listProducts,
+  // V49 (2026-05-08) — listProducts → listProductsForPicker for the
+  // ProductExchangeModal sub-modal at line 1577. Pre-V49 the modal showed
+  // empty `{p.name}{p.unit}{p.price}` rows because canonical be_products uses
+  // productName/mainUnitName/price. ForPicker variant auto-adapts.
+  listAllSellers, listProductsForPicker,
   // Phase 14.7.H follow-up F — listenToCustomerFinance bundles 4 listeners
   // (deposits + wallets + points + memberships); replaces the 4-fn Promise.all.
   listenToCustomerFinance,
@@ -1574,7 +1578,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
     // the actual runtime behavior since this code shipped. Drop the broken
     // dynamic import entirely (also clears BS-1 invariant — UI files no
     // longer touch backendClient.js directly).
-    Promise.all([listProducts(), listAllSellers()])
+    Promise.all([listProductsForPicker(), listAllSellers()])
       .then(([rawP, s]) => {
         setProducts(rawP || []);
         setStaff(s);

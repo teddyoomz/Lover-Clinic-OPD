@@ -6,7 +6,10 @@ import { Plus, Trash2, Search } from 'lucide-react';
 import MarketingFormShell from './MarketingFormShell.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 // Phase 14.10-tris (2026-04-26) — be_courses canonical (was master_data mirror)
-import { saveDfGroup, listCourses } from '../../lib/scopedDataLayer.js';
+// V49 (2026-05-08) — switched listCourses → listCoursesForPicker because
+// canonical be_courses uses `courseName`+`courseCategory` not `name`+`category`.
+// Course chip search + datalist + addRate were silently empty.
+import { saveDfGroup, listCoursesForPicker } from '../../lib/scopedDataLayer.js';
 import {
   emptyDfGroupForm, generateDfGroupId, validateDfGroupStrict, normalizeDfGroup,
   STATUS_OPTIONS, RATE_TYPES, RATE_TYPE_LABEL,
@@ -23,7 +26,7 @@ export default function DfGroupFormModal({ group, onClose, onSaved, clinicSettin
 
   useEffect(() => {
     let cancelled = false;
-    listCourses().catch(() => [])
+    listCoursesForPicker().catch(() => [])
       .then((c) => { if (!cancelled) setCourses(c || []); });
     return () => { cancelled = true; };
   }, []);

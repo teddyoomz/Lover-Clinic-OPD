@@ -116,6 +116,98 @@ export const listPromotions = _autoInject(() => raw.listPromotions);
 export const listCoupons = _autoInject(() => raw.listCoupons);
 export const listVouchers = _autoInject(() => raw.listVouchers);
 
+// ─── V49 (2026-05-08) — *ForPicker variants ─────────────────────────────────
+// Auto-apply canonical→legacy shape adapters for UI pickers that read legacy
+// `{name, price, category, products, unit}` shape. Required because be_courses
+// / be_products / be_promotions canonical shapes are `courseName / salePrice
+// / courseCategory / courseProducts` and `productName / price / categoryName
+// / mainUnitName` and `promotion_name / sale_price / category_name`. Direct
+// `c.name` / `p.name` / `m.name` reads on canonical docs return undefined
+// (ALL legacy fields confirmed undefined on prod via V49 diag script).
+//
+// V49 prod-confirmed misread sites (8 victims):
+//   PromotionFormModal · DfGroupFormModal · QuotationFormModal ·
+//   ExchangeCourseModal · CustomerDetailView (ProductExchangeModal) ·
+//   MovementLogPanel · StockSeedPanel · VendorSalesTab
+//
+// Decision rule:
+//   list*ForPicker  → consumers reading LEGACY shape (pickers, modals, forms)
+//   list* (canonical) → consumers reading CANONICAL shape (admin tabs,
+//                       reports, internal logic, cross-branch import)
+//
+// AV27 audit invariant locks the boundary: if a UI file imports list*() and
+// reads `c.name|c.price|c.category|c.products|c.unit` on the result, the
+// import MUST be the *ForPicker variant. Source-grep regression guard in
+// tests/v49-canonical-shape-multi-reader-sweep.test.js.
+
+/** Pre-build a productLookup Map from canonical be_products for unit
+ * enrichment in beCourseToMasterShape. Cheap (one extra read per modal
+ * open). Returns Map<productId, {name, unit}>. Called when caller needs
+ * accurate unit display in course sub-products. Optional — adapter
+ * defaults to 'ครั้ง' when no lookup provided. */
+async function _buildProductLookup(opts = {}) {
+  try {
+    const products = await raw.listProducts(opts);
+    return new Map(
+      (products || []).map((p) => [
+        String(p.productId || p.id || ''),
+        {
+          name: p.productName || p.name || '',
+          unit: p.mainUnitName || p.unit || '',
+        },
+      ]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+/** Course picker — returns legacy `{id, name, price, products[], category, unit, ...}`.
+ * Auto-applies beCourseToMasterShape with productLookup pre-built so
+ * sub-products inherit correct units (not the default 'ครั้ง' fallback).
+ *
+ * Behavior:
+ *   - branchId auto-injects via _autoInject (current selected branch)
+ *   - listCourses({branchId}) returns canonical
+ *   - productLookup is fetched WITHOUT branchId scope (allBranches:true)
+ *     because course sub-products reference any be_products doc — including
+ *     ones from other branches IF the course was imported cross-branch.
+ *     Universal lookup avoids "missing unit" rendering when admin views a
+ *     course originally seeded at another branch.
+ *   - opts.allBranches: true → cross-branch read (rare)
+ *   - opts.productLookup: pass a pre-built Map to skip the extra fetch
+ *     (PromotionFormModal/QuotationFormModal load products separately)
+ */
+export const listCoursesForPicker = async (opts = {}) => {
+  const { productLookup: passedLookup, ...listOpts } = opts;
+  if (passedLookup === false) {
+    // Caller explicitly opts out of unit enrichment.
+    const items = await listCourses(listOpts);
+    return items.map((c) => raw.beCourseToMasterShape(c));
+  }
+  const lookup =
+    passedLookup instanceof Map
+      ? passedLookup
+      : await _buildProductLookup({ allBranches: true });
+  const items = await listCourses(listOpts);
+  return items.map((c) => raw.beCourseToMasterShape(c, { productLookup: lookup }));
+};
+
+/** Product picker — returns legacy `{id, name, price, unit, category, ...}`.
+ * Auto-applies beProductToMasterShape (V49-exported). */
+export const listProductsForPicker = async (opts = {}) => {
+  const items = await listProducts(opts);
+  return items.map(raw.beProductToMasterShape);
+};
+
+/** Promotion picker — returns legacy `{id, name, price, category, ...}`.
+ * Auto-applies bePromotionToMasterShape (V49-exported, V49-extended with
+ * price+category fields the legacy picker readers expect). */
+export const listPromotionsForPicker = async (opts = {}) => {
+  const items = await listPromotions(opts);
+  return items.map(raw.bePromotionToMasterShape);
+};
+
 // Financial
 export const listOnlineSales = _autoInject(() => raw.listOnlineSales);
 export const listSaleInsuranceClaims = _autoInject(() => raw.listSaleInsuranceClaims);

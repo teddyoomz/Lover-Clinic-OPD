@@ -7,14 +7,41 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD — V42-V48 class-of-bug 7-round saga ARCHITECTURALLY CLOSED
+- **Date last updated**: 2026-05-08 — V49 picker dropdown empty rows (canonical→legacy shape mismatch class-of-bug)
 - **Branch**: `master`
-- **Last commit**: `1442301` — fix+test(V48): Rule O universal extension + prof-grade explorative test bank
-- **Test count**: **366 V34-V48 unit + 698 e2e verification points GREEN** (166 comprehensive prof + 70 V44 + 39 V43 + 29 V46 + 28 V47)
+- **Last commit**: pending V49 — fix+test(V49): canonical→legacy *ForPicker variants + AV27 invariant
+- **Test count**: **403 unit (V34-V48 366 + V49 37) + 793 e2e verification points GREEN** (V42-V48 698 + V49 95)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `c92f924`** (V42 + V43 + V44 + V45 + V46 + V47 + V48 ALL committed but **NOT deployed**). 7 V-entries pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
-- **Iron-clad rule added**: Rule O — productId is THE only identity for stock; productName MUST be live-resolved at write time. AV20-AV26 invariant set COMPLETE.
-- **Migrations applied on prod**: V43 (3 customer.courses[i] entries restamped on LC-26000006) + V46 (2 poisoned batches restamped) + audit docs in `be_admin_audit`.
+- **Deploy state**: **PRODUCTION = `c92f924`** (V42-V49 ALL committed but **NOT deployed**). 8 V-entries pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
+- **Iron-clad rule added**: Rule O (V46-V48) + AV27 invariant (V49) — every UI consumer fetching from be_courses/products/promotions reading legacy shape MUST use *ForPicker variants. AV20-AV27 invariant set COMPLETE.
+- **Migrations applied on prod**: V43 (3 customer.courses[i] entries restamped on LC-26000006) + V46 (2 poisoned batches restamped) + V49 e2e audit doc emitted (`be_admin_audit/v49-e2e-1778174951960-167t6dnz`). All audit-doc'd in `be_admin_audit`.
+
+### Session 2026-05-08 mid-day — V49 picker dropdown empty rows fix
+
+User-reported on PromotionFormModal "ค้นหาคอร์ส / ค้นหาสินค้า" dropdowns showing empty rows with `+` icon and `0 ฿`.
+
+**Root cause**: Phase 14.10-tris (2026-04-26) switched 8 UI pickers from `master_data/*` (legacy `{name, price, category, products[], unit}` shape) to `be_courses` / `be_products` / `be_promotions` (canonical `{courseName, salePrice, courseCategory, courseProducts, productName, mainUnitName, categoryName, promotion_name, sale_price, category_name}` shape) WITHOUT updating field-name reads. Legacy fields ALL undefined on prod (verified via `scripts/v49-diag-be-courses-products-shape.mjs`).
+
+**Architectural fix** (single commit, 11 files):
+1. Exported `beProductToMasterShape` + `bePromotionToMasterShape` from `backendClient.js` (were private — V36 lesson)
+2. NEW `listCoursesForPicker` / `listProductsForPicker` / `listPromotionsForPicker` in `scopedDataLayer.js`
+3. Migrated 8 victim sites (PromotionFormModal · DfGroupFormModal · QuotationFormModal · ExchangeCourseModal · CustomerDetailView ProductExchangeModal · MovementLogPanel · StockSeedPanel · VendorSalesTab)
+4. AV27 audit invariant + V49 V-entry + iron-clad rule cross-link
+
+**Verification**:
+- Build clean
+- V49 unit tests 37/37 PASS (12 categories — source-grep + helper unit + property-based mulberry32×100 + cross-branch toString.grep + adversarial Thai/Unicode/NUL/10K + idempotency + forward-compat + class-of-bug universal classifier)
+- Live admin-SDK e2e 95/95 PASS (5 phases — canonical-shape-real, adapter-output-real, cross-branch-identity, write-fixtures-and-verify across 3 simulated branches, audit-doc emit + cleanup zero orphans)
+- preview_eval against running dev server: real prod returned 349 courses + 607 products + 4 promos all with adapter-applied legacy shape (Stapple no 22 + Testoviron + PRP fixtures verified)
+- Adjacent regression 44/44 PASS (marketing tabs + quotation + DF group + vendor sales)
+- Full suite 7302/7312 PASS (10 fail → 5 fixed via mock update + 5 PRE-EXISTING TFP regressions confirmed pre-V49 via stash-test, NOT caused by V49)
+
+**Outstanding**:
+- 🚨 V42-V49 `vercel --prod` (V18 — explicit "deploy" THIS turn)
+- TFP audit-branch-scope annotation + phase-17-2-septies block-regex fix (5 pre-existing failures — separate task)
+- H-bis ProClinic full strip + hard-gate Firebase claim + /audit-all (deferred)
+
+Detail: `.agents/active.md` + `.claude/rules/00-session-start.md` § 2 V49 entry
 
 ### Session 2026-05-08 EOD — V42-V48 class-of-bug 7-round saga ARCHITECTURALLY CLOSED
 

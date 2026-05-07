@@ -16,7 +16,15 @@ import FileUploadField from './FileUploadField.jsx';
 import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import MarketingFormShell from './MarketingFormShell.jsx';
 // Phase 14.10-tris (2026-04-26) — be_courses + be_products canonical
-import { savePromotion, listCourses, listProducts } from '../../lib/scopedDataLayer.js';
+// V49 (2026-05-08) — switched listCourses/listProducts → *ForPicker variants
+// because canonical fields (courseName/salePrice/courseProducts +
+// productName/categoryName/mainUnitName) are NOT what addCourse/addProduct +
+// filter + display read. User-reported bug: dropdown showed empty rows with
+// `+` and `0 ฿` because course.name / course.price etc. were undefined on
+// canonical be_courses docs. ForPicker auto-applies the canonical→legacy
+// adapter so existing field reads (course.name, course.price, course.products,
+// product.name, product.unit, etc.) work unchanged.
+import { savePromotion, listCoursesForPicker, listProductsForPicker } from '../../lib/scopedDataLayer.js';
 import { validatePromotion, emptyPromotionForm } from '../../lib/promotionValidation.js';
 import { scrollToField, generateMarketingId } from '../../lib/marketingUiUtils.js';
 
@@ -59,8 +67,8 @@ export default function PromotionFormModal({ promotion, onClose, onSaved, clinic
     let cancelled = false;
     setMasterLoading(true);
     Promise.all([
-      listCourses().catch(() => []),
-      listProducts().catch(() => []),
+      listCoursesForPicker().catch(() => []),
+      listProductsForPicker().catch(() => []),
     ])
       .then(([c, p]) => { if (!cancelled) { setMasterCourses(c || []); setMasterProducts(p || []); } })
       .finally(() => { if (!cancelled) setMasterLoading(false); });

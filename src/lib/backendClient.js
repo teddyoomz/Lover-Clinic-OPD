@@ -3112,7 +3112,12 @@ export async function getMasterDataMeta(type) {
 // Phase 16 will do the inverse refactor — rewire every caller to read be_*
 // directly and drop these adapters.
 
-function beProductToMasterShape(p) {
+// V49 (2026-05-08) — exported so scopedDataLayer.listProductsForPicker can
+// auto-apply this canonical→legacy adapter for UI pickers that read legacy
+// `{name, price, category, unit}` shape. Was private (V36 lesson — broken
+// dynamic import resolved to undefined → silent identity pass-through). The
+// V49 fix: export + ForPicker variant + AV27 audit invariant.
+export function beProductToMasterShape(p) {
   // Phase 11.9: also reconstruct nested `label` + surface full medication
   // labeling fields so TreatmentFormPage med modal + SaleTab see correct
   // data straight from be_products (no separate lookup needed).
@@ -3301,8 +3306,18 @@ function beDoctorToMasterShape(d) {
 // stale master_data. All 13 listed here are "user-visible green badge" in
 // MasterDataTab debug panel.
 
-function bePromotionToMasterShape(p) {
-  return { ...p, id: p.promotionId || p.id, name: p.promotion_name || p.name || '' };
+// V49 (2026-05-08) — exported for scopedDataLayer.listPromotionsForPicker.
+// Adds `price` field (legacy promotion picker readers expect `p.price` —
+// e.g. QuotationFormModal pickPrice helper) — sourced from sale_price.
+export function bePromotionToMasterShape(p) {
+  return {
+    ...p,
+    id: p.promotionId || p.id,
+    name: p.promotion_name || p.name || '',
+    price: p.sale_price ?? p.price ?? null,
+    sale_price_incl_vat: p.sale_price_incl_vat ?? null,
+    category: p.category_name || p.category || '',
+  };
 }
 function beCouponToMasterShape(c) {
   return { ...c, id: c.couponId || c.id, name: c.coupon_name || c.name || '' };

@@ -180,6 +180,70 @@ const doctors = await listDoctors();
 const allDoctors = await listDoctors({ includeHidden: true });
 ```
 
+### AV27 — UI pickers reading legacy shape MUST use *ForPicker variants (V49)
+
+**Why**: V49 (2026-05-08) — Phase 14.10-tris (2026-04-26) switched 8 UI pickers from `master_data/*` (legacy `{name, price, category, products, unit}` shape) to `be_courses` / `be_products` / `be_promotions` (canonical `{courseName, salePrice, courseCategory, courseProducts, productName, mainUnitName, categoryName, promotion_name, sale_price, category_name}` shape) WITHOUT updating field-name reads. Result: every dropdown rendered EMPTY rows with `+` icon and `0 ฿` because `c.name` / `c.price` / `c.category` / `c.products` / `p.unit` were ALL `undefined` on canonical docs (verified via `scripts/v49-diag-be-courses-products-shape.mjs` against prod). User-reported on PromotionFormModal "ค้นหาคอร์ส" + "ค้นหาสินค้า" search dropdown 2026-05-08.
+
+**8 victim sites confirmed**:
+- `PromotionFormModal.jsx` (course + product picker, multi-field misread)
+- `DfGroupFormModal.jsx` (course picker — name + category)
+- `QuotationFormModal.jsx` (course + product + promotion picker — name + category)
+- `ExchangeCourseModal.jsx` (course picker — products[] silently empty → exchange payload qty=1 unit='')
+- `CustomerDetailView.jsx` (ProductExchangeModal sub-modal — name + unit + price)
+- `MovementLogPanel.jsx` (product dropdown — name)
+- `StockSeedPanel.jsx` (product picker + form — name + unit + price multi-line)
+- `VendorSalesTab.jsx` (product dropdown — name)
+
+**The rule**: For UI consumers that fetch from `be_courses` / `be_products` / `be_promotions` and read LEGACY shape `{name, price, category, products[], unit}`, the import MUST be the `*ForPicker` variant from `scopedDataLayer.js`:
+- `listCoursesForPicker` (auto-applies `beCourseToMasterShape` + optional `productLookup` for unit enrichment)
+- `listProductsForPicker` (auto-applies `beProductToMasterShape`)
+- `listPromotionsForPicker` (auto-applies `bePromotionToMasterShape` — V49 extended with `price` + `category` fields)
+
+Direct `listCourses` / `listProducts` / `listPromotions` callsites must read CANONICAL fields (`courseName` / `salePrice` / `courseCategory` / `courseProducts` / `productName` / `mainUnitName` / `categoryName` / `promotion_name` / `sale_price` / `category_name`).
+
+**Decision rule**:
+- LEGACY shape readers → `*ForPicker` (forms, modals, dropdowns, search pickers)
+- CANONICAL shape readers → `list*` (admin tabs, reports, internal aggregators, cross-branch import)
+
+**Grep**:
+- `c\.(name|price|category|products|unit)` after `await\s+listCourses\(` in any `src/components/**` file → V49 anti-pattern; switch to `listCoursesForPicker`.
+- `p\.(name|price|category|unit)` after `await\s+listProducts\(` in any `src/components/**` file → V49 anti-pattern; switch to `listProductsForPicker`. Defensive `p.productName || p.name` is OK (sanctioned via inline comment).
+- `m\.(name|price|category)` after `await\s+listPromotions\(` → V49 anti-pattern; switch to `listPromotionsForPicker`.
+- For each UI file importing from `scopedDataLayer.js`, classify as `ForPicker user` / `Canonical user` / `Sanctioned defensive` / `Internal lib`.
+
+**Source-grep regression test pattern** (V49 lock — see `tests/v49-canonical-shape-multi-reader-sweep.test.js` CAT1 + CAT8):
+```js
+const VICTIM_FILES = [
+  'src/components/backend/PromotionFormModal.jsx',
+  'src/components/backend/DfGroupFormModal.jsx',
+  'src/components/backend/QuotationFormModal.jsx',
+  'src/components/backend/ExchangeCourseModal.jsx',
+  'src/components/backend/CustomerDetailView.jsx',
+  'src/components/backend/MovementLogPanel.jsx',
+  'src/components/backend/StockSeedPanel.jsx',
+  'src/components/backend/VendorSalesTab.jsx',
+];
+for (const f of VICTIM_FILES) {
+  const src = readFileSync(f, 'utf8');
+  // Must use ForPicker variant
+  expect(src).toMatch(/list(Courses|Products|Promotions)ForPicker/);
+  // Must NOT import legacy list*() from scopedDataLayer
+  expect(src).not.toMatch(/import[^}]*\{[^}]*\b(listCourses|listProducts|listPromotions)\b(?![A-Za-z])[^}]*\}\s*from\s*['"][^'"]*scopedDataLayer/);
+}
+```
+
+**Sanctioned exception**: defensive readers that handle BOTH canonical AND legacy via `||` fallback (e.g. `p.productName || p.name`, `composeProductDisplayName(p)` shared helper) are SAFE because they auto-adapt. Annotate inline if needed: `// audit-anti-vibe-code: AV27 safe — defensive on both canonical + legacy field names`.
+
+**Companion AV: AV22** (canonical mapper adoption at buy-fetcher) + **AV24** (productName live-resolve at write) + **AV25** (display-layer grouping). Together with AV27 they lock the entire canonical→legacy shape-mismatch class:
+- AV22 (V44): canonical mapper at buy fetcher (mapper-write boundary)
+- AV24 (V46): productName live-resolve at stock-movement write (post-write boundary)
+- AV25 (V47): display-layer grouping for course cards (post-storage rendering boundary)
+- AV27 (V49): canonical→legacy shape adapter at picker fetch (pre-render boundary)
+
+**Architectural pattern**: V49 introduces the `*ForPicker` naming convention for shape-aware variants. Future schema changes can extend the adapter without touching every consumer. Single source of truth: `beXToMasterShape(canonicalDoc) → legacyDoc`. AV27 grep ensures the boundary is honored.
+
+**Migration on encountering NEW canonical→legacy shape mismatch**: (1) verify field names via diag script (`scripts/v49-diag-*.mjs`); (2) export adapter from `backendClient.js` if private; (3) add `*ForPicker` variant in `scopedDataLayer.js`; (4) migrate consumer; (5) lock with source-grep regression test.
+
 ### AV26 — Rule O extends UNIVERSALLY: every stock-write productName must live-resolve (V48)
 
 **Why**: V48 (2026-05-08) — V46 audit only fixed 3 productName-write sites in `_deductOneItem`. Phase 1 source-grep sweep found **15+ OTHER stock-write sites** still using `productName: <doc>.productName` patterns (V46-class poisoning vulnerable): `_repayNegativeBalances`, `cancelStockOrder` CANCEL_IMPORT, `createStockAdjustment` movement+adjustment doc, `createStockTransfer` resolvedItems (POISON GATE — propagates downstream to dest batch + RECEIVE), `updateStockTransferStatus` EXPORT_TRANSFER, `createStockWithdrawal` resolvedItems POISON GATE, `updateStockWithdrawalStatus` EXPORT_WITHDRAWAL, central-stock-order CANCEL_IMPORT. ALL fixed in V48 with consistent live-resolve + fallback chain pattern.

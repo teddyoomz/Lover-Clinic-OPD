@@ -13,7 +13,10 @@ import {
 } from 'lucide-react';
 import {
   // Phase 14.10-tris (2026-04-26) — be_products canonical
-  listProducts, listStockBatches, createStockOrder,
+  // V49 (2026-05-08) — listProducts → listProductsForPicker. Form reads
+  // legacy p.name/p.unit/p.price (lines 73-75/99/158/161/291). ForPicker
+  // auto-applies beProductToMasterShape canonical→legacy adapter.
+  listProductsForPicker, listStockBatches, createStockOrder,
 } from '../../lib/scopedDataLayer.js';
 import { auth } from '../../firebase.js';
 import DateField from '../DateField.jsx';
@@ -53,7 +56,7 @@ export default function StockSeedPanel({ onClose, onSaved }) {
       // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration
       // rewrites legacy batches to real branch IDs. Strict branchId filter.
       const [prods, batches] = await Promise.all([
-        listProducts(),
+        listProductsForPicker(),
         listStockBatches({ branchId: BRANCH_ID, status: 'active' }),
       ]);
       const map = new Map();

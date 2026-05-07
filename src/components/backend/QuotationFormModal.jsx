@@ -12,7 +12,11 @@ import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import {
   saveQuotation, getAllCustomers, listAllSellers,
   // Phase 14.10-tris (2026-04-26) — be_courses/products/promotions canonical
-  listCourses, listProducts, listPromotions,
+  // V49 (2026-05-08) — switched to *ForPicker variants. Canonical be_courses
+  // /be_products/be_promotions don't have `item.name` — only `courseName /
+  // productName / promotion_name`. picker variants auto-apply the canonical→
+  // legacy adapter so addSubItem + filterPool field reads work unchanged.
+  listCoursesForPicker, listProductsForPicker, listPromotionsForPicker,
 } from '../../lib/scopedDataLayer.js';
 import {
   validateQuotationStrict, normalizeQuotation, emptyQuotationForm,
@@ -72,9 +76,9 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
     Promise.all([
       getAllCustomers().catch(() => []),
       listAllSellers({ branchId: selectedBranchId }).catch(() => []),
-      listCourses().catch(() => []),
-      listProducts().catch(() => []),
-      listPromotions().catch(() => []),
+      listCoursesForPicker().catch(() => []),
+      listProductsForPicker().catch(() => []),
+      listPromotionsForPicker().catch(() => []),
     ])
       .then(([cs, st, mc, mp, mpr]) => {
         if (cancelled) return;

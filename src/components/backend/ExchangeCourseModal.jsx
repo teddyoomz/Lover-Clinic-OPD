@@ -9,7 +9,11 @@
 
 import { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
-import { exchangeCourseProduct, listCourses, listStaffByBranch } from '../../lib/scopedDataLayer.js';
+// V49 (2026-05-08) — listCourses → listCoursesForPicker. picked.products
+// (line 77) was undefined because canonical be_courses uses `courseProducts`
+// not `products`; exchanged-course payload silently received qty=1 + unit=''.
+// Adapter populates `products[]` correctly with main + sub items.
+import { exchangeCourseProduct, listCoursesForPicker, listStaffByBranch } from '../../lib/scopedDataLayer.js';
 import ActorPicker, { resolveActorUser } from './ActorPicker.jsx';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
@@ -38,7 +42,7 @@ export default function ExchangeCourseModal({ open, row, onSuccess, onCancel }) 
     if (!open) return;
     let cancelled = false;
     setLoadingCourses(true);
-    listCourses()
+    listCoursesForPicker()
       .then((items) => { if (!cancelled) setCourses(items || []); })
       .catch((e) => { if (!cancelled) setError(e?.message || 'โหลดรายการคอร์สไม่สำเร็จ'); })
       .finally(() => { if (!cancelled) setLoadingCourses(false); });

@@ -6,7 +6,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Activity, Filter, Search, Plus, Minus, Package } from 'lucide-react';
 // Phase 14.10-tris (2026-04-26) — be_products canonical (was master_data mirror)
-import { listStockMovements, listProducts, listStockLocations } from '../../lib/scopedDataLayer.js';
+// V49 (2026-05-08) — listProducts → listProductsForPicker for the dropdown
+// at line 216 which renders `{p.name}`. Canonical be_products has productName.
+import { listStockMovements, listProductsForPicker, listStockLocations } from '../../lib/scopedDataLayer.js';
 import { fmtSlashDateTime } from '../../lib/dateFormat.js';
 import DateField from '../DateField.jsx';
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
@@ -113,7 +115,7 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
   // Load products for filter dropdown
   useEffect(() => {
     (async () => {
-      try { setProducts(await listProducts() || []); }
+      try { setProducts(await listProductsForPicker() || []); }
       catch { setProducts([]); }
     })();
   }, []);
