@@ -247,7 +247,10 @@ export default function AppointmentCalendarView({
   useEffect(() => {
     // Phase BSA leak-fix (2026-05-04): apply branch soft-gate so calendar
     // only shows doctors with access to current branch. Re-runs on switch.
-    listDoctors()
+    // V41 (2026-05-08) — opt-in for past appointment name resolution via
+    // doctorMap; doctors state includes hidden so doctorMap resolves legacy
+    // records. AV20: schedule subscription (doctorIds) filters hidden below.
+    listDoctors({ includeHidden: true })
       .then((d) => setDoctors(filterDoctorsByBranch(d || [], selectedBranchId)))
       .catch(() => setDoctors([]));
   }, [selectedBranchId]);
@@ -261,7 +264,8 @@ export default function AppointmentCalendarView({
   useEffect(() => {
     if (!selectedDate) return;
     setTodaysSchedulesLoading(true);
-    const doctorIds = doctors.map((d) => String(d.doctorId || d.id));
+    // V41 (2026-05-08) — exclude hidden doctors from schedule subscription. AV20.
+    const doctorIds = doctors.filter(d => !d.isHidden).map((d) => String(d.doctorId || d.id));
     // Phase 17.2-ter (2026-05-05) — pass selectedBranchId as 5th arg so
     // listenToScheduleByDay applies a branchId where-clause to its
     // onSnapshot subscription. Branch switch is in the deps array → effect

@@ -225,7 +225,9 @@ export default function CustomerDetailView({
   // when admin views from a different branch (Phase BSA decision 2026-05-04).
   const [doctorsList, setDoctorsList] = useState([]);
   useEffect(() => {
-    listDoctors().then(setDoctorsList).catch(() => setDoctorsList([]));
+    // V41 (2026-05-08) — opt-in for past-record name lookup. AV20: hidden
+    // doctors must still resolve on past treatments / sales / appointments.
+    listDoctors({ includeHidden: true }).then(setDoctorsList).catch(() => setDoctorsList([]));
   }, []);
   const doctorMap = useMemo(() => buildDoctorMap(doctorsList), [doctorsList]);
   // Phase 14.7.H follow-up B (2026-04-26) — appointments now flow via

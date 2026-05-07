@@ -349,16 +349,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     let cancelled = false;
     (async () => {
       try {
+        // V41 (2026-05-08) — opt-in for past-record name resolution in the
+        // practitioners panel. Filter isHidden so hidden persons don't appear
+        // as selectable options. AV20.
         const [doctors, staff] = await Promise.all([
-          listDoctors(),
-          listStaff(),
+          listDoctors({ includeHidden: true }),
+          listStaff({ includeHidden: true }),
         ]);
         if (cancelled) return;
         const docs = (doctors || [])
-          .filter(d => d.status !== 'พักใช้งาน')
+          .filter(d => d.status !== 'พักใช้งาน' && !d.isHidden)
           .map(d => ({ id: d.id, name: d.name, role: 'doctor' }));
         const assts = (staff || [])
-          .filter(s => s.status !== 'พักใช้งาน')
+          .filter(s => s.status !== 'พักใช้งาน' && !s.isHidden)
           .map(s => ({ id: s.id, name: s.name, role: 'assistant' }));
         setLivePractitioners([...docs, ...assts]);
       } catch (_) { /* silent — fallback to clinicSettings */ }
@@ -1817,16 +1820,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     ) return;
     setDepositOptionsLoading(true);
     try {
+      // V41 (2026-05-08) — opt-in for full list; filter isHidden when building
+      // picker options so hidden persons don't appear in deposit dropdowns. AV20.
       const [doctors, staff, rooms, sellers] = await Promise.all([
-        listDoctors().catch(() => []),
-        listStaff().catch(() => []),
+        listDoctors({ includeHidden: true }).catch(() => []),
+        listStaff({ includeHidden: true }).catch(() => []),
         listExamRooms().catch(() => []),
         listAllSellers().catch(() => []),
       ]);
       const branchScopedDoctors = filterDoctorsByBranch(doctors || [], selectedBranchId)
-        .filter(d => d.status !== 'พักใช้งาน');
+        .filter(d => d.status !== 'พักใช้งาน' && !d.isHidden);
       const branchScopedStaff = filterStaffByBranch(staff || [], selectedBranchId)
-        .filter(s => s.status !== 'พักใช้งาน');
+        .filter(s => s.status !== 'พักใช้งาน' && !s.isHidden);
       const timeOptions = CANONICAL_TIME_SLOTS.map(t => ({ value: t, label: t }));
       const doctorOptions = branchScopedDoctors.map(d => ({ value: String(d.id), label: d.name || d.id }));
       const options = {

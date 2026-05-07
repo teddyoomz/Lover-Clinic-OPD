@@ -674,10 +674,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             listStaff,
             listDoctors,
           } = await import('../lib/scopedDataLayer.js');
+          // V41 (2026-05-08) — opt-in for full lookup map (handles past-record
+          // name display for hidden persons) + filter visible client-side for
+          // picker dropdowns via filterDoctorsByBranch / filterStaffByBranch +
+          // !isHidden below. AV20.
           const [doctorItems, productItems, staffItems, courseItems, dfGroupItems, dfStaffRatesItems] = await Promise.all([
-            listDoctors().catch(() => []),                  // universal — soft-gate below
-            listProducts().catch(() => []),                 // auto-inject branchId
-            listStaff().catch(() => []),                    // universal — soft-gate below
+            listDoctors({ includeHidden: true }).catch(() => []),  // universal — soft-gate below
+            listProducts().catch(() => []),                        // auto-inject branchId
+            listStaff({ includeHidden: true }).catch(() => []),    // universal — soft-gate below
             listCourses().catch(() => []),                  // auto-inject branchId
             listDfGroups().catch(() => []),
             listDfStaffRates().catch(() => []),
@@ -697,8 +701,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // sellers/doctors/assistants triple-fanout all inherit the scope.
           const branchScopedStaff = filterStaffByBranch(staffItems, SELECTED_BRANCH_ID);
           const branchScopedDoctors = filterDoctorsByBranch(doctorItems, SELECTED_BRANCH_ID);
-          const allStaff = branchScopedStaff.map(s => ({ id: s.id, name: s.name, position: s.position }));
-          const allDoctors = branchScopedDoctors.filter(d => d.status !== 'พักใช้งาน');
+          // V41 (2026-05-08) — filter hidden persons OUT of picker sources. AV20.
+          const allStaff = branchScopedStaff.filter(s => !s.isHidden).map(s => ({ id: s.id, name: s.name, position: s.position }));
+          const allDoctors = branchScopedDoctors.filter(d => d.status !== 'พักใช้งาน' && !d.isHidden);
 
           // Load customer courses from be_customers (NOT from ProClinic).
           // One row per customer.courses entry — NO grouping — so each purchase
