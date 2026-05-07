@@ -19,6 +19,10 @@ const LISTER_NAME_BY_COLLECTION = {
   'be_holidays': 'listHolidays',
   'be_courses': 'listCourses',
   'be_df_groups': 'listDfGroups',
+  // Phase 17.1 marketing extension (2026-05-07) — V41 marketing adapters
+  'be_promotions': 'listPromotions',
+  'be_coupons': 'listCoupons',
+  'be_vouchers': 'listVouchers',
 };
 
 function listForCollection(collection, opts) {

@@ -262,6 +262,29 @@ describe('M5 — registry source-grep regression', () => {
       expect(cloned.id, `${t} should strip stray id`).toBeUndefined();
     }
   });
+
+  it('M5.11 CrossBranchImportModal LISTER_NAME_BY_COLLECTION has entries for all 10 adapters', async () => {
+    // Regression guard for "No lister exported from scopedDataLayer for be_X"
+    // runtime error. Every adapter.collection MUST be a key in the modal's
+    // LISTER_NAME_BY_COLLECTION map AND the value must name a function
+    // exported from scopedDataLayer. Caught live 2026-05-07 when user clicked
+    // Copy on PromotionTab — modal threw because be_promotions/coupons/vouchers
+    // were missing from the map.
+    const modalSrc = readFileSync('src/components/backend/CrossBranchImportModal.jsx', 'utf-8');
+    const scopedLayer = await import('../src/lib/scopedDataLayer.js');
+    for (const entityType of Object.keys(ADAPTERS)) {
+      const adapter = getAdapter(entityType);
+      const col = adapter.collection;
+      // 1) Map has an entry for this collection
+      const mapEntryRegex = new RegExp(`['"]${col}['"]\\s*:\\s*['"](\\w+)['"]`);
+      const match = modalSrc.match(mapEntryRegex);
+      expect(match, `LISTER_NAME_BY_COLLECTION missing entry for ${col} (${entityType})`).toBeTruthy();
+      // 2) The named lister is exported from scopedDataLayer
+      const listerName = match[1];
+      expect(scopedLayer[listerName], `scopedDataLayer.${listerName} not exported (mapped from ${col})`).toBeDefined();
+      expect(typeof scopedLayer[listerName], `scopedDataLayer.${listerName} is not a function`).toBe('function');
+    }
+  });
 });
 
 describe('M6 — UI integration source-grep (PromotionTab/CouponTab/VoucherTab)', () => {
