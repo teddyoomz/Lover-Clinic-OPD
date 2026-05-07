@@ -480,11 +480,11 @@ describe('CSS.H — TreatmentFormPage course-tick + backendDetail propagation', 
     expect(treatmentFormPageSrc).toMatch(/skipStockDeduction:\s*!!product\.skipStockDeduction/);
   });
 
-  it('H.2 backendDetail treatmentItems whitelist preserves skipStockDeduction', () => {
-    // Two whitelist sites: line ~2050 (auto-sale path) + line ~2653 (no-sale path)
-    // Both need to include skipStockDeduction.
+  it('H.2 backendDetail treatmentItems whitelist preserves skipStockDeduction (V50: 1 site, proclinic save deleted)', () => {
+    // V50 (2026-05-08) — only 1 whitelist remains (auto-sale path). The
+    // proclinic-save site (was line ~2653) was deleted in the V50 strip.
     const whitelistMatches = treatmentFormPageSrc.match(/treatmentItems[\s\S]*?\.map\(t\s*=>\s*\(\{[^}]+skipStockDeduction[^}]+\}\)\)/g);
-    expect(whitelistMatches?.length).toBeGreaterThanOrEqual(2);
+    expect(whitelistMatches?.length).toBeGreaterThanOrEqual(1);
   });
 });
 

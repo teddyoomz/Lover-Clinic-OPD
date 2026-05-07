@@ -67,7 +67,9 @@ const MASTER_STUB_IDS = [
   'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
 ];
 
-const MASTER_SECTION_ITEM_IDS = ['masterdata', ...MASTER_STUB_IDS];
+// V50 (2026-05-08) — 'masterdata' (Sync ProClinic) REMOVED from master section.
+// All master data CRUD'd via dedicated be_* tabs; no legacy ProClinic sync UI.
+const MASTER_SECTION_ITEM_IDS = [...MASTER_STUB_IDS];
 
 /* ─── navConfig: new 'master' section shape ─────────────────────────────── */
 
@@ -78,16 +80,17 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 21 items — 1 sync + 6 P11 + 1 P18 (exam-rooms) + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings + 1 V40 branch-backup', () => {
+  it('M2 master section has exactly 20 items — 6 P11 + 1 P18 (exam-rooms) + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 2 V32-tris-ter/quater LINE + 1 Phase 16.3 system-settings + 1 V40 branch-backup (V50 (2026-05-08): -1 masterdata removed)', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(21);
+    expect(master.items.length).toBe(20);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 
-  it('M3 Sync ProClinic stays as FIRST item (seed-only, not CRUD)', () => {
+  it('M3 V50 (2026-05-08) — "masterdata" REMOVED from master section (was: Sync ProClinic, now anti-regression)', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items[0].id).toBe('masterdata');
-    expect(master.items[0].label).toBe('Sync ProClinic');
+    expect(master.items.find(i => i.id === 'masterdata')).toBeUndefined();
+    // First item is now product-groups
+    expect(master.items[0].id).toBe('product-groups');
   });
 
   it('M4 every stub id is in ALL_ITEM_IDS whitelist (URL deep-link)', () => {
@@ -156,11 +159,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(NAV_SECTIONS.find(s => s.id === 'system')).toBeUndefined();
   });
 
-  it('M11 legacy "masterdata" id preserved for URL deep-link compatibility', () => {
-    // Old URLs ?backend=1&tab=masterdata must still resolve. We kept the id
-    // even though the label changed from "ข้อมูลพื้นฐาน" → "Sync ProClinic".
-    expect(ALL_ITEM_IDS).toContain('masterdata');
-    expect(ITEM_LOOKUP.has('masterdata')).toBe(true);
+  it('M11 V50 (2026-05-08) — "masterdata" id REMOVED (anti-regression). Legacy URLs ?tab=masterdata fall through to default tab.', () => {
+    expect(ALL_ITEM_IDS).not.toContain('masterdata');
+    expect(ITEM_LOOKUP.has('masterdata')).toBe(false);
   });
 });
 
@@ -256,7 +257,7 @@ vi.mock('../src/hooks/useSystemConfig.js', () => ({
 vi.mock('../src/components/backend/CloneTab.jsx', () => ({ default: () => <div data-testid="t-clone" /> }));
 vi.mock('../src/components/backend/CustomerListTab.jsx', () => ({ default: () => <div data-testid="t-customers" /> }));
 vi.mock('../src/components/backend/CustomerDetailView.jsx', () => ({ default: () => <div data-testid="t-customer-detail" /> }));
-vi.mock('../src/components/backend/MasterDataTab.jsx', () => ({ default: () => <div data-testid="t-masterdata" /> }));
+// V50 (2026-05-08) — MasterDataTab.jsx DELETED. Mock removed.
 vi.mock('../src/components/backend/AppointmentCalendarView.jsx', () => ({ default: () => <div data-testid="t-appointments" /> }));
 vi.mock('../src/components/backend/SaleTab.jsx', () => ({ default: () => <div data-testid="t-sales" /> }));
 vi.mock('../src/components/backend/FinanceTab.jsx', () => ({ default: () => <div data-testid="t-finance" /> }));
@@ -330,7 +331,7 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-permission-groups')).toBeInTheDocument();
   });
 
-  it('R7 ?tab=masterdata still renders MasterDataTab (preserved URL)', async () => {
+  it.skip('R7 V50 (2026-05-08) — ?tab=masterdata SKIPPED (MasterDataTab deleted)', async () => {
     await renderWith('masterdata');
     expect(await screen.findByTestId('t-masterdata')).toBeInTheDocument();
   });

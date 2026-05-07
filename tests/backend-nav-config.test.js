@@ -77,8 +77,12 @@ describe('nav config — shape', () => {
     // (replaced with 4 sub-tab ids). Legacy URL preservation handled by
     // BackendDashboard URL-hydration redirect (?tab=appointments → ?tab=
     // appointment-no-deposit). The 4 new ids are added below.
-    const legacy = ['clone', 'customers', 'masterdata', 'sales', 'finance', 'stock', 'promotions', 'coupons', 'vouchers'];
+    // V50 (2026-05-08) — 'clone' + 'masterdata' REMOVED (ProClinic strip).
+    const legacy = ['customers', 'sales', 'finance', 'stock', 'promotions', 'coupons', 'vouchers'];
     for (const id of legacy) expect(ALL_ITEM_IDS).toContain(id);
+    // V50 anti-regression — these MUST NOT come back without explicit reason.
+    expect(ALL_ITEM_IDS).not.toContain('clone');
+    expect(ALL_ITEM_IDS).not.toContain('masterdata');
     // Phase 21.0 — 4 typed appointment sub-tab ids replace legacy 'appointments'.
     // Phase 21.0-bis — 'appointment-all' overview added at top of section.
     const phase21 = ['appointment-all', 'appointment-no-deposit', 'appointment-deposit', 'appointment-treatment-in', 'appointment-follow-up'];
@@ -99,9 +103,11 @@ describe('ITEM_LOOKUP + helpers', () => {
 
   it('L3 sectionOf returns section id for grouped items', () => {
     expect(sectionOf('promotions')).toBe('marketing');
-    expect(sectionOf('clone')).toBe('customers');
-    // Phase 11.1: masterdata moved from deprecated 'system' → new 'master' section
-    expect(sectionOf('masterdata')).toBe('master');
+    expect(sectionOf('customers')).toBe('customers');
+    expect(sectionOf('product-groups')).toBe('master');
+    // V50 (2026-05-08) — clone + masterdata REMOVED. sectionOf returns null.
+    expect(sectionOf('clone')).toBeNull();
+    expect(sectionOf('masterdata')).toBeNull();
   });
 
   it('L4 sectionOf returns null for pinned items', () => {
@@ -185,31 +191,28 @@ describe('section integrity', () => {
     expect(ids).toEqual(expect.arrayContaining(['promotions', 'coupons', 'vouchers']));
   });
 
-  it('I3 customers section contains clone + customer list', () => {
+  it('I3 customers section — clone REMOVED (V50), customer list is the only item', () => {
     const customers = NAV_SECTIONS.find(s => s.id === 'customers');
     expect(customers).toBeTruthy();
     const ids = customers.items.map(i => i.id);
-    expect(ids).toEqual(expect.arrayContaining(['clone', 'customers']));
+    expect(ids).toEqual(expect.arrayContaining(['customers']));
+    // V50 anti-regression — Clone tab gone permanently.
+    expect(ids).not.toContain('clone');
   });
 
-  it('I4 master section owns Sync + 6 P11 + 2 P12.1 + 2 P13.2 + 2 P12.2 + 1 P12.5 + 1 P13.3 + 1 P14 + 1 V32-tris-ter (line-settings) + Phase 16.3 system-settings + V40 branch-backup tabs', () => {
-    // P11.1: 6 CRUD stubs. P12.1: staff + doctors. P13.2: staff-schedules +
-    // doctor-schedules (Phase 13.2.7 split, 2026-04-26).
-    // P12.2: products + courses. P12.5: finance-master. P13.3: df-groups.
-    // P14.1: document-templates (2026-04-25).
-    // V32-tris-ter: line-settings (2026-04-26).
-    // Phase 16.3: system-settings (2026-04-29) — admin-gated config UI.
+  it('I4 master section — V50 (2026-05-08) "masterdata" REMOVED, pure CRUD only', () => {
+    // V50: ProClinic Sync tab gone. All master data is now CRUD'd via the
+    // 20 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40).
     const master = NAV_SECTIONS.find(s => s.id === 'master');
     expect(master).toBeTruthy();
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
     expect(master.items.map(i => i.id)).toEqual([
-      'masterdata',
       'product-groups',
       'product-units',
       'medical-instruments',
       'holidays',
       'branches',
-      'exam-rooms',  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
+      'exam-rooms',
       'permission-groups',
       'staff',
       'staff-schedules',
@@ -223,18 +226,19 @@ describe('section integrity', () => {
       'line-settings',
       'link-requests',
       'system-settings',
-      'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
+      'branch-backup',
     ]);
+    // V50 anti-regression
+    expect(master.items.map(i => i.id)).not.toContain('masterdata');
   });
 
   it('I4b deprecated "system" section no longer exists (absorbed into master in Phase 11.1)', () => {
     expect(NAV_SECTIONS.find(s => s.id === 'system')).toBeUndefined();
   });
 
-  it('I4c masterdata label renamed to "Sync ProClinic" so it reads as seed-only', () => {
+  it('I4c V50 — "masterdata" item REMOVED from master section (was: Sync ProClinic)', () => {
     const md = NAV_SECTIONS.find(s => s.id === 'master').items.find(i => i.id === 'masterdata');
-    expect(md).toBeTruthy();
-    expect(md.label).toBe('Sync ProClinic');
+    expect(md).toBeUndefined(); // V50 anti-regression
   });
 });
 
