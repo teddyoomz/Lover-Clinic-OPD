@@ -50,6 +50,13 @@ const TX = {
 
 // cooldown อ่านจาก clinicSettings.patientSyncCooldownMins (set โดย admin)
 // ค่า default fallback 60 นาที ถ้ายังไม่ได้ตั้งค่า
+//
+// audit-branch-scope: BS-10 sanctioned — public-link page outside
+// BranchProvider. PatientDashboard is reachable via QR/link without
+// admin context, so it has no concept of "selected branch". Reads cs.X
+// directly per Spec #2 § 5 (V51). Post-Phase-2 migration this field
+// remains on cs as a global default; per-branch overrides apply only
+// in admin/backend surfaces.
 
 function formatSyncTime(fetchedAt, lang = 'th') {
   if (!fetchedAt) return null;

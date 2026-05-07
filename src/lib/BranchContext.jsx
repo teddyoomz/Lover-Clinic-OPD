@@ -311,14 +311,23 @@ export function resolveBranchName(branchId, branches) {
  * precedence over clinic_settings; brand assets (logo, accentColor) keep
  * coming from clinic_settings.
  *
- * Field map (be_branches → clinicSettings):
- *   branch.name      → clinic.clinicName
- *   branch.nameEn    → clinic.clinicNameEn
- *   branch.address   → clinic.address
- *   branch.phone     → clinic.phone
- *   branch.taxId     → clinic.taxId
- *   branch.licenseNo → clinic.licenseNo
- *   branch.website   → clinic.website
+ * V51 / Spec #2 (2026-05-08) — extended for per-branch settings migration.
+ * The merger now handles 13 migrated fields with 3-source cascade:
+ *
+ * 5 DEDUPLICATING fields (currently top-level on branch + cs.X):
+ *   `settings.X > flat branch.X > cs.X`
+ *   - phone, licenseNo, taxId, address, addressEn
+ *
+ * 8 NEW fields (migrating from cs.X to branch.settings.X):
+ *   `settings.X > cs.X` (no flat branch fallback; cs.X is migration source)
+ *   - clinicEmail, lineOfficialAccountUrl, patientSyncCooldownMins
+ *   - openHoursMonFri, openHoursSatSun
+ *   - chatHoursAlwaysOn, chatHoursMonFri, chatHoursSatSun
+ *
+ * Plus existing fields (V40 baseline) preserved verbatim:
+ *   - clinicName composite ("<brand> <branch>" pattern)
+ *   - clinicNameEn (from branch.nameEn)
+ *   - website (from branch.website)
  *
  * Brand fields (logo, accentColor, clinicSubtitle) come from clinicSettings
  * unchanged because be_branches doesn't store branding.
@@ -327,6 +336,12 @@ export function resolveBranchName(branchId, branches) {
  * to clinicSettings. So a branch with empty `address` doesn't blank out
  * the global address.
  *
+ * Backward-compat property: during transition (between Phase 1 commit and
+ * Phase 3 cleanup), reads work for ALL 3 shapes:
+ *   - New (post-migration): `branch.settings.X` → wins
+ *   - Mid (flat-already-existed): `branch.X` flat → wins (5 dedup fields only)
+ *   - Legacy (clinic_settings only): `cs.X` → fallback
+ *
  * @param {object} clinicSettings
  * @param {object} branch — be_branches doc (optional)
  * @returns {object} merged effective settings
@@ -334,10 +349,23 @@ export function resolveBranchName(branchId, branches) {
 export function mergeBranchIntoClinic(clinicSettings, branch) {
   const cs = clinicSettings || {};
   if (!branch || typeof branch !== 'object') return cs;
-  const pick = (branchVal, csVal) => {
+  const settings = (branch.settings && typeof branch.settings === 'object') ? branch.settings : {};
+
+  // 3-source picker for string fields (5 deduplicating fields).
+  const pickStr = (settingsVal, branchVal, csVal) => {
+    if (typeof settingsVal === 'string' && settingsVal.trim()) return settingsVal;
     if (typeof branchVal === 'string' && branchVal.trim()) return branchVal;
     return csVal;
   };
+  // 2-source picker for numeric fields (settings + cs only — no flat fallback).
+  const pickNum = (settingsVal, csVal) => {
+    if (Number.isFinite(settingsVal)) return settingsVal;
+    return csVal;
+  };
+  // 2-source picker for object fields (open/close hour pairs).
+  const pickObj = (settingsVal, csVal) =>
+    (settingsVal && typeof settingsVal === 'object') ? settingsVal : csVal;
+
   // 2026-04-28 user directive: clinic name on receipts/quotations should be
   // "<brand> <branch>" (e.g. "Lover Clinic นครราชสีมา") so customer sees
   // both the brand AND the specific branch they bought from. cs.clinicName
@@ -349,15 +377,29 @@ export function mergeBranchIntoClinic(clinicSettings, branch) {
   if (brandName && branchName) effectiveClinicName = `${brandName} ${branchName}`;
   else if (branchName) effectiveClinicName = branchName;
   else effectiveClinicName = brandName || cs.clinicName;
+
   return {
     ...cs,
     clinicName: effectiveClinicName,
-    clinicNameEn: pick(branch.nameEn, cs.clinicNameEn),
-    address: pick(branch.address, cs.address),
-    phone: pick(branch.phone, cs.phone),
-    taxId: pick(branch.taxId, cs.taxId),
-    licenseNo: pick(branch.licenseNo, cs.licenseNo),
-    website: pick(branch.website, cs.website),
+    clinicNameEn: pickStr(undefined, branch.nameEn, cs.clinicNameEn),  // nameEn stays at top-level
+    // 5 migrated fields — read settings.X > branch.X > cs.X
+    phone:        pickStr(settings.phone,     branch.phone,     cs.phone),
+    licenseNo:    pickStr(settings.licenseNo, branch.licenseNo, cs.licenseNo),
+    taxId:        pickStr(settings.taxId,     branch.taxId,     cs.taxId),
+    address:      pickStr(settings.address,   branch.address,   cs.address),
+    addressEn:    pickStr(settings.addressEn, branch.addressEn, cs.addressEn),
+    website:      pickStr(undefined,          branch.website,   cs.website),  // unchanged from V40
+    // 8 NEW fields — read settings.X > cs.X (no flat fallback; cs.X is migration source)
+    clinicEmail:             pickStr(settings.email,     undefined, cs.clinicEmail),
+    lineOfficialAccountUrl:  pickStr(settings.lineOaUrl, undefined, cs.lineOfficialAccountUrl),
+    patientSyncCooldownMins: pickNum(settings.patientSyncCooldownMins, cs.patientSyncCooldownMins),
+    openHoursMonFri:         pickObj(settings.openHours?.monFri, cs.openHoursMonFri),
+    openHoursSatSun:         pickObj(settings.openHours?.satSun, cs.openHoursSatSun),
+    chatHoursAlwaysOn:       typeof settings.chatHours?.alwaysOn === 'boolean'
+                               ? settings.chatHours.alwaysOn
+                               : !!cs.chatHoursAlwaysOn,
+    chatHoursMonFri:         pickObj(settings.chatHours?.monFri, cs.chatHoursMonFri),
+    chatHoursSatSun:         pickObj(settings.chatHours?.satSun, cs.chatHoursSatSun),
   };
 }
 
