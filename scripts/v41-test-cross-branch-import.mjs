@@ -56,6 +56,10 @@ const ORDER = [
   'product-groups',         // FK: products[].productId (filter to empty products[])
   'products',               // FK: unitId, categoryId (filter to nulls or copy after units+groups)
   'courses',                // FK: items[].productId (filter to empty items[])
+  // Phase 17.1 marketing extension (2026-05-07) — V41 marketing adapters
+  'promotions',             // FK: courses[].id + products[].id (depends on both above)
+  'coupons',                // standalone
+  'vouchers',               // standalone
 ];
 
 // Known business field per entity (used for source-preservation check)
@@ -66,13 +70,23 @@ const KNOWN_FIELD = {
   'product-groups': 'name',
   'products': 'productName',
   'courses': 'courseName',
+  'promotions': 'promotion_name',
+  'coupons': 'coupon_code',
+  'vouchers': 'voucher_name',
 };
 
-// FK collection → entity type (mirrors endpoint)
+// FK collection → entity type (mirrors endpoint).
+// Phase 17.1 marketing extension (2026-05-07) — added 'be_courses' so
+// promotions can resolve their courses[].id FK refs against be_courses
+// at target. Pre-extension this was a 3-collection assumption — caused
+// "ต้อง import ก่อน: (unknown)" symptom when promotions copy was tested
+// without first extending this map. Mirrors api/admin/cross-branch-import.js
+// FK_COLLECTION_TO_ENTITY exactly. M5.12 regression test enforces.
 const FK_C2E = {
   'be_products': 'products',
   'be_product_groups': 'product-groups',
   'be_product_unit_groups': 'product-units',
+  'be_courses': 'courses',
 };
 
 // ═══ Args parsing ═════════════════════════════════════════════════════════
