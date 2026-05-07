@@ -100,7 +100,7 @@ export const NAV_SECTIONS = [
     label: 'ลูกค้า',
     icon: UsersRound,
     items: [
-      { id: 'clone',       label: 'Clone ลูกค้า',   icon: Download, color: 'violet', palette: 'clone import proclinic ดูด นำเข้า ลูกค้า' },
+      // V50 (2026-05-08) — 'clone' tab REMOVED (CloneTab.jsx deleted; ProClinic strip).
       { id: 'customers',   label: 'ข้อมูลลูกค้า',    icon: Users,    color: 'teal',   palette: 'customer list ลูกค้า รายชื่อ' },
     ],
   },
@@ -171,14 +171,12 @@ export const NAV_SECTIONS = [
     ],
   },
   {
-    // Phase 11 Master Data Suite — renamed from old 'system' container.
-    // Old `masterdata` (ProClinic sync) stays as the FIRST item (seed-only),
-    // 6 new CRUD tabs land as stubs in 11.1 and replace one-by-one in 11.2-11.7.
+    // V50 (2026-05-08) — Master Data Suite. 'masterdata' (Sync ProClinic) REMOVED;
+    // master data is now CRUD'd via the dedicated be_* tabs below.
     id: 'master',
     label: 'ข้อมูลพื้นฐาน',
     icon: Database,
     items: [
-      { id: 'masterdata',           label: 'Sync ProClinic',   icon: Download,      color: 'amber', palette: 'sync import initial seed proclinic ข้อมูลพื้นฐาน นำเข้า master' },
       { id: 'product-groups',       label: 'กลุ่มสินค้า',        icon: FolderTree,    color: 'amber', palette: 'product group category กลุ่ม หมวดหมู่ สินค้า' },
       { id: 'product-units',        label: 'หน่วยสินค้า',         icon: Scale,         color: 'amber', palette: 'unit amp เข็ม U ครั้ง หน่วย' },
       { id: 'medical-instruments',  label: 'เครื่องหัตถการ',      icon: Wrench,        color: 'amber', palette: 'medical instrument laser hifu maintenance เครื่องมือ' },

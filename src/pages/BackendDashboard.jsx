@@ -24,12 +24,12 @@ import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
 // no longer wraps. BranchSelector still rendered here (top-bar slot).
 import BranchSelector from '../components/backend/BranchSelector.jsx';
 
-import CloneTab from '../components/backend/CloneTab.jsx';
+// V50 (2026-05-08) — CloneTab DELETED. ProClinic strip per Rule H-bis EXECUTED.
 import CustomerListTab from '../components/backend/CustomerListTab.jsx';
 import CustomerCreatePage from '../components/backend/CustomerCreatePage.jsx';
 import CustomerDetailView from '../components/backend/CustomerDetailView.jsx';
 import DeleteCustomerCascadeModal from '../components/backend/DeleteCustomerCascadeModal.jsx';
-import MasterDataTab from '../components/backend/MasterDataTab.jsx';
+// V50 (2026-05-08) — MasterDataTab DELETED. Master data CRUD via dedicated be_* tabs.
 // Phase 21.0 (2026-05-06) — renamed from AppointmentTab to AppointmentCalendarView
 // + parameterized via `appointmentType` prop so the same component renders
 // each of the 4 new นัดหมาย sub-tabs.
@@ -115,7 +115,8 @@ import { useTabAccess } from '../hooks/useTabAccess.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = useState('clone');
+  // V50 (2026-05-08) — default tab changed from 'clone' (DELETED) to 'customers'.
+  const [activeTab, setActiveTab] = useState('customers');
   const [viewingCustomer, setViewingCustomer] = useState(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);   // V33.2 — full-page Add Customer takeover
   const [editingCustomer, setEditingCustomer] = useState(null);      // V33.3 — full-page Edit Customer takeover (the customer doc to edit)
@@ -195,7 +196,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       // 'appointment-all' sub-tab (semantic preservation — legacy URL was
       // the combined all-types calendar). The old 'appointments' id is no
       // longer in ALL_ITEM_IDS so without this redirect, hydration would
-      // silently fall through to the default ('clone') and bookmarks
+      // silently fall through to the default ('customers' post-V50) and bookmarks
       // would break. Phase 21.0-bis: redirect target updated from
       // 'appointment-no-deposit' to 'appointment-all' after user added
       // the all-types overview sub-tab.
@@ -231,7 +232,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     if (viewingCustomer) {
       params.set('customer', String(viewingCustomer.proClinicId || viewingCustomer.id));
     } else {
-      if (activeTab && activeTab !== 'clone') params.set('tab', activeTab);
+      if (activeTab && activeTab !== 'customers') params.set('tab', activeTab);
       if (activeTab === 'finance' && financeSubTab) params.set('subtab', financeSubTab);
     }
     const newSearch = `?${params.toString()}`;
@@ -461,8 +462,6 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               setFinanceMode(true);
             }}
           />
-        ) : activeTab === 'clone' ? (
-          <CloneTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'customers' && creatingCustomer ? (
           /* V33.2 — full-page Add Customer takeover (replaces previous modal) */
           <CustomerCreatePage
@@ -483,8 +482,6 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               window.open(url, '_blank');
             }}
           />
-        ) : activeTab === 'masterdata' ? (
-          <MasterDataTab clinicSettings={clinicSettings} theme={theme} />
         ) : (activeTab === 'appointment-all' || activeTab === 'appointment-no-deposit' || activeTab === 'appointment-deposit' || activeTab === 'appointment-treatment-in' || activeTab === 'appointment-follow-up') ? (
           // Phase 21.0 (2026-05-06) + 21.0-bis (2026-05-06 EOD) +
           // 21.0-quater (2026-05-06 EOD continuation hotfix) — ALL 5
