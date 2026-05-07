@@ -7,12 +7,39 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-07 EOD continuation — V38 + V39 + V38-followup + comprehensive e2e + V40 design spec (5 commits this continuation).
+- **Date last updated**: 2026-05-08 EOD — V40 backup/restore enterprise-grade (5 prod-fix iterations to byte-perfect 100% on all branches incl. NaN/Infinity).
 - **Branch**: `master`
-- **Last commit**: `496a15c` — docs(spec): branch backup/restore/make-fresh design (2026-05-07)
-- **Test count**: **6757 PASS / 6757 total** (full green; +111 net this continuation)
+- **Last commit**: `0108dd7` — test(branch-backup): verifier uses jsonReviverForNonFinite + NaN-aware deepDiff (100% match achieved on all branches)
+- **Test count**: **6900 PASS / 6900 total**
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `e36811f`** (LIVE — V38 onwards NOT deployed). master is **5 commits ahead of prod**.
+- **Deploy state**: **PRODUCTION = `0108dd7`** (LIVE, fully synced). V40 backup feature + V41 staff/doctor hide both deployed earlier this session.
+
+### Session 2026-05-08 EOD — V40-prod-fix-1 thru fix-5 (enterprise-grade backup/restore)
+
+User-driven session debugging V40 bugs after V41 ship. Iterated 5 prod-fixes through systematic-debugging skill. Each fix validated on real prod via diagnostic scripts. Final state: 100% byte-perfect round-trip on every existing branch (นครราชสีมา 3,233 docs · พระราม 3 488 docs · ทดลอง 1) + simulated future branch.
+
+**Bugs fixed (in order)**:
+1. `EXPORT_FAILED` — bucket() no-arg throws on Vercel reused-app (fix: explicit `bucket(BUCKET)`)
+2. Spinner hangs — Vercel default maxDuration kills function mid-T4 (fix: parallel-batched T4 50/batch + maxDuration:60, 30.9× speedup)
+3. No Restore UI — backup file unusable from UI (fix: full RestoreSection + `/api/admin/branch-backups` endpoint)
+4. "0.00 MB" + Download opens inline (fix: smart size formatter + responseDisposition:attachment + filename)
+5. Round-trip not 100% on นครราชสีมา (fix: schemaVersion=2 sentinel encoding for NaN/Infinity, was lossy → null in v1; back-compat preserved)
+
+**Commits this session** (10): `9bbac5a` fix-1 · `5fc1c9b` fix-2 · `4b7623c` fix-3 · `0f29f53` fix-4 · `32be637` paranoid diag · `6b10c37` fix-5 schemaVersion=2 · `0108dd7` verifier reviver-aware · plus V41 ship commits earlier.
+
+**Verification on real prod** (8 diagnostic scripts):
+- Single-branch round-trip on ทดลอง 1 ✅
+- Edge-case stress (Thai+emoji+special chars+nested+null+precision) ✅
+- Multi-branch matrix: 3/3 existing + simulated future = 4/4 ✅
+- Content-Disposition + filename verified ✅
+- NaN/Infinity scanner: 1 NaN found in be_medical_instruments/2.costPrice — preserved via fix-5 sentinel encoding (no data mutation needed)
+
+**Outstanding**:
+- 🚨 H-bis ProClinic full strip (deferred from prior sessions)
+- Hard-gate Firebase custom claim (deferred)
+- /audit-all pre-release pass
+
+Detail: `.agents/sessions/2026-05-08-v40-prod-fixes-1-thru-5.md`
 
 ### Session 2026-05-07 EOD continuation — V38 + V39 + V38-followup + e2e + V40 spec (5 commits)
 

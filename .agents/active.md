@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-08 V40 SHIPPED + DEPLOYED — prod live, 6859/6859 tests pass, post-deploy e2e 7/7 PASS"
-status: "master=cea9fb6 · prod=cea9fb6 (V40 LIVE) · 6859/6859 tests pass · build clean"
+updated_at: "2026-05-08 EOD — V40 backup/restore enterprise-grade (100% bit-perfect on all branches incl. NaN/Infinity)"
+status: "master=0108dd7 · prod=0108dd7 (LIVE) · 6900/6900 tests · build clean"
 branch: "master"
-last_commit: "cea9fb6"
-tests: 6859
-production_url: "https://lover-clinic-app.vercel.app (LIVE at cea9fb6)"
-production_commit: "cea9fb6"
+last_commit: "0108dd7"
+tests: 6900
+production_url: "https://lover-clinic-app.vercel.app"
+production_commit: "0108dd7"
 firestore_rules_version: 28
 storage_rules_version: 2
 ---
@@ -13,39 +13,26 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `cea9fb6` · prod = `cea9fb6` (FULLY DEPLOYED)
-- 6859/6859 tests pass · build clean · 270 test files
-- V40 (Branch Backup/Restore/Make-Fresh) feature-complete + LIVE in production
-- 32 commits this session (V40 implementation + bonus comprehensive sweep)
-- 1 critical bug found + fixed during bonus review (BranchBackupTab `selectedBranchId` destructure mismatch)
+- master = `0108dd7` · prod = `0108dd7` (FULLY SYNCED)
+- 6900/6900 tests pass · build clean · 270 test files
+- V40 backup/restore: enterprise-grade 100% byte-perfect round-trip on every branch (incl. NaN/Infinity preservation via schemaVersion=2 sentinel encoding)
 
-## Deploy summary (2026-05-08)
-- **Firestore rules**: deployed (idempotent — no V40 changes; re-released for safety)
-- **Storage rules**: deployed (V40 NEW `match /backups/{branchId}/{file=**}` admin-only)
-- **Vercel**: deployed → `https://lover-clinic-app.vercel.app` (alias) ← `https://lover-clinic-mzdo9b9g3-teddyoomz-4523s-projects.vercel.app` (immutable URL)
-- **Probe-Deploy-Probe (Rule B)**: 4/4 unauth REST probes 200 pre-deploy + 200 post-deploy + V40 storage anon → 403 (correctly blocked) + 3 deployed admin endpoints respond 401 without token / 204 OPTIONS
-- **Post-deploy live e2e** (`scripts/e2e-branch-backup-full-sweep.mjs`): 7/7 PASS on real Firestore + Storage with TEST-prefixed fixtures, 6 items cleaned, zero orphans
+## What this session shipped (V40-prod-fix-1 through fix-5)
+- **fix-1**: explicit `bucket(BUCKET)` arg (Vercel reused-app missing storageBucket)
+- **fix-2**: parallel-batched T4 traversal (84s → 2.56s, 30.9× speedup) + `maxDuration:60` on 3 admin endpoints
+- **fix-3**: full Restore UI (file upload + storage path + target branch dropdown + mode toggle + confirm gate) + `/api/admin/branch-backups` list endpoint + V40-prod-fix-3 commit
+- **fix-4**: force browser download via `responseDisposition: attachment` on signedUrl + smart size formatter (B/KB/MB/GB) + doc count display
+- **fix-5**: schemaVersion=2 with `jsonReplacerForNonFinite` + `jsonReviverForNonFinite` — preserves NaN/Infinity bit-perfect through backup→restore (was lossy → null in v1); v1 files still accepted (back-compat)
+- 8 new diagnostic scripts (round-trip on real prod, NaN/Infinity scanner+fixer, multi-branch verifier, content-disposition probe, etc.)
+- 99/99 V40 unit tests + 4 live e2e on real prod (single-branch + edge-case stress + multi-branch matrix + paranoid download+reupload) — all 100% PASS
 
-## V40 features now LIVE in production
-- **Backup สาขา tab** (admin-only) — admin can export selectable tier (T1-T4) or per-collection backup → JSON in Firebase Storage → 24h signed URL download
-- **MakeFreshButton** (per branch row, admin-only) — typed-confirm modal → auto-pre-fresh-backup MANDATORY → wipe T1+T2+T3 + T4 customer-subcollections → restore-able from auto-backup
-- **Restore endpoint** (overwrite preserves docIds OR clone-T1 re-mints docIds + applies FK remap)
-- **3 CLI mirrors** (Rule M canonical) for dev / emergency use
+Detail: `.agents/sessions/2026-05-08-v40-prod-fixes-1-thru-5.md`
 
-## V40 coverage
-- 25 helper unit tests (H1-H5)
-- 15 Rule I flow-simulate tests (FS1-FS3)
-- 38 adversarial endpoint runtime tests (E0-E3, every error code)
-- 24 UI RTL human-flow tests (UI1-UI3)
-- 8 live admin-SDK scenarios on real prod (Task 5.4 + Bonus 3 + post-deploy verify)
-- **Total: 110 tests + 8 live scenarios + 3 deployed-endpoint smoke checks**
+## Next action
+Idle. V40 is feature-complete + enterprise-grade verified on prod. Awaiting new directive.
 
 ## Outstanding (user-triggered, none blocking)
 - 🚨 H-bis ProClinic full strip (deferred from prior sessions)
-- Hard-gate Firebase custom claim (deferred — defense-in-depth on top of existing isClinicStaff() rule)
+- Hard-gate Firebase custom claim (deferred)
 - /audit-all pre-release pass
-
-## Next action
-Idle. V40 fully shipped + deployed + verified. Awaiting new directive.
-
-Detail: `.agents/sessions/2026-05-08-v40-implementation-and-bonus-sweep.md`
+- V41 staff/doctor hide (deployed earlier this session, also LIVE)
