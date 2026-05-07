@@ -27,6 +27,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { TIER_MAP, BACKUP_TIER_T1, BACKUP_TIER_T2, BACKUP_TIER_T3, T4_SUBCOLLECTIONS } from '../src/lib/branchBackupCore.js';
+import { jsonReviverForNonFinite } from '../src/lib/branchBackupSchema.js';
 
 const envFile = existsSync('.env.local.prod') ? '.env.local.prod' : '.env.local';
 if (existsSync(envFile)) {
@@ -78,6 +79,9 @@ function normalizeForCompare(v) {
 
 function deepDiff(a, b, path = '') {
   const diffs = [];
+  // NaN-aware equality (JS: NaN !== NaN, but for our round-trip semantics
+  // both being NaN means identical for backup/restore purposes).
+  if (Number.isNaN(a) && Number.isNaN(b)) return diffs;
   if (a === b) return diffs;
   if (a === null && b !== null) return [{ path, type: 'extra', a, b }];
   if (a !== null && b === null) return [{ path, type: 'missing', a, b }];
@@ -218,10 +222,12 @@ async function partA_verifyExistingBranches(idToken) {
     cleanupStoragePaths.push(backupJson.storagePath);
     console.log(`  ✓ Backup created: ${backupJson.storagePath} (${(backupJson.sizeBytes/1024).toFixed(1)} KB)`);
 
-    // Download via real HTTPS
+    // Download via real HTTPS — parse with reviver to decode NaN/Infinity
+    // sentinels (V40-prod-fix-5 schemaVersion=2). Without reviver, sentinels
+    // would remain as objects → false-positive type diff vs live NaN values.
     const dl = await fetch(backupJson.signedUrl);
     const buf = Buffer.from(await dl.arrayBuffer());
-    const file = JSON.parse(buf.toString('utf-8'));
+    const file = JSON.parse(buf.toString('utf-8'), jsonReviverForNonFinite);
     console.log(`  ✓ Downloaded ${buf.length} bytes, parsed JSON cleanly`);
 
     // Verify Content-Disposition + sourceBranchId
