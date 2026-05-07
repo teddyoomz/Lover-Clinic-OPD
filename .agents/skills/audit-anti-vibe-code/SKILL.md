@@ -180,6 +180,56 @@ const doctors = await listDoctors();
 const allDoctors = await listDoctors({ includeHidden: true });
 ```
 
+### AV28 — No `broker.*` / `cloneOrchestrator` / `/api/proclinic/*` imports in `src/` (V50 ProClinic strip)
+
+**Why**: V50 (2026-05-08) — User-directed full ProClinic strip per "ลบ proclinic ออกอย่างสมบูรณ์". Phase 1 migrated 5 frontend files from `broker.*` runtime calls to `be_*` canonical (TreatmentFormPage saveTarget default flipped `'proclinic'` → `'backend'`, PROCLINIC MODE block deleted -177 LOC, 9 conditional broker.* sites stripped). Phase 2.2 DELETED the entire ProClinic infrastructure (-10,318 LOC): `src/lib/brokerClient.js` + `src/lib/cloneOrchestrator.js` + `src/lib/customerBranchBaselineClient.js` + `src/components/backend/CloneTab.jsx` + `src/components/backend/MasterDataTab.jsx` + `api/proclinic/**` (14 files) + `cookie-relay/**` (5 files). Phase 6 cleaned 2,599 prod docs (`master_data/*`, `broker_jobs/*`, `pc_*` × 10 collections, `clinic_settings/proclinic_session*`). Re-introducing ANY of these = V50 strip regression.
+
+**The rule**: NO file under `src/` (including `src/lib/**`, `src/components/**`, `src/pages/**`, `src/hooks/**`) may:
+1. **Import** from `brokerClient` / `cloneOrchestrator` / `customerBranchBaselineClient` (all deleted)
+2. **Fetch / axios** any URL matching `/api/proclinic/*` (endpoint dir deleted)
+3. **Call** any `broker.<method>(` namespace function (broker object no longer exists)
+4. **Read** Firestore paths under `pc_*` / `master_data/*` / `broker_jobs/*` / `clinic_settings/proclinic_session*` at runtime (collections deleted; rules cleanup pending Probe-Deploy-Probe)
+
+Comments referencing the historical migration ARE allowed (institutional memory — e.g. "was master_data via getAllMasterDataItems — stale ProClinic mirror"); only RUNTIME code paths are forbidden.
+
+**Grep**:
+```bash
+# Imports of deleted modules
+grep -rE "from ['\"][^'\"]*brokerClient['\"]" src/ api/                                # MUST be empty
+grep -rE "from ['\"][^'\"]*cloneOrchestrator['\"]" src/ api/                           # MUST be empty
+grep -rE "from ['\"][^'\"]*customerBranchBaselineClient['\"]" src/ api/                # MUST be empty
+# Fetch / axios to deleted endpoint dir
+grep -rE "['\"]\/api\/proclinic\/" src/ api/                                           # MUST be empty
+# broker namespace calls
+grep -rE "\bbroker\.(create|update|delete|get|list|search|sync|find|fetch|post|put)\(" src/ # MUST be empty
+# Runtime Firestore reads/writes against deleted collections
+grep -rE "(collection|doc|getDoc|getDocs|setDoc|updateDoc|deleteDoc|onSnapshot)\([^)]*['\"](pc_|broker_jobs|master_data|proclinic_session)" src/ api/  # MUST be empty
+```
+
+**Sanctioned exception**: NONE — V50 is a complete strip. If a future feature genuinely needs ProClinic interop, it must go through a NEW well-defined integration boundary (e.g. an `/api/external/proclinic-sync/*` endpoint with explicit dependency justification + Rule C3 lean-schema review + new audit invariant). Resurrecting `brokerClient.js` is forbidden — start fresh.
+
+**Source-grep regression test pattern** (V50 lock — see `tests/v50-av28-no-proclinic-imports.test.js`):
+```js
+const FORBIDDEN_IMPORTS = [
+  /from ['"][^'"]*brokerClient/,
+  /from ['"][^'"]*cloneOrchestrator/,
+  /from ['"][^'"]*customerBranchBaselineClient/,
+];
+const FORBIDDEN_URLS = [/['"]\/api\/proclinic\//];
+const FORBIDDEN_RUNTIME_PATHS = [
+  /(?:collection|doc|getDoc|getDocs|setDoc|updateDoc|deleteDoc|onSnapshot)\([^)]*['"](?:pc_|broker_jobs|master_data|proclinic_session)/,
+];
+// Walk every src/**/*.{js,jsx} + api/**/*.{js,mjs} except scripts/ + tests/
+// AND assert no match.
+```
+
+**Migration on encountering NEW V50-violation**: (1) revert the offending file; (2) replace the call with the be_* equivalent (likely already exists in `src/lib/backendClient.js` + `src/lib/scopedDataLayer.js`); (3) add a comment marker explaining the migration; (4) run AV28 grep to confirm clean; (5) full suite + flow-simulate verify (Rule N exception: structural change + V50 contract).
+
+**Companion AVs**:
+- AV20 (V41): default-filter at lister + opt-in (similar pattern — orphaned exports OK if never called)
+- AV28 (V50, this entry): the BSA Rule E + Rule H-quater + Rule H-bis ENFORCEMENT — V50 made the strip complete
+- (See also iron-clad rules **E** "Backend = Firestore ONLY", **H** "Data Ownership", **H-bis** "Sync = DEV-ONLY scaffolding", **H-quater** "master_data is NOT readable from feature code")
+
 ### AV27 — UI pickers reading legacy shape MUST use *ForPicker variants (V49)
 
 **Why**: V49 (2026-05-08) — Phase 14.10-tris (2026-04-26) switched 8 UI pickers from `master_data/*` (legacy `{name, price, category, products, unit}` shape) to `be_courses` / `be_products` / `be_promotions` (canonical `{courseName, salePrice, courseCategory, courseProducts, productName, mainUnitName, categoryName, promotion_name, sale_price, category_name}` shape) WITHOUT updating field-name reads. Result: every dropdown rendered EMPTY rows with `+` icon and `0 ฿` because `c.name` / `c.price` / `c.category` / `c.products` / `p.unit` were ALL `undefined` on canonical docs (verified via `scripts/v49-diag-be-courses-products-shape.mjs` against prod). User-reported on PromotionFormModal "ค้นหาคอร์ส" + "ค้นหาสินค้า" search dropdown 2026-05-08.

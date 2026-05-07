@@ -7,14 +7,43 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #2 — V50 ProClinic strip Phase 1+2 SHIPPED (4 commits, ~12K LOC removed)
+- **Date last updated**: 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 1-7 SHIPPED, H-bis EXECUTED)
 - **Branch**: `master`
-- **Last commit**: `98e5105` — refactor(V50 Phase 2.3): test bank cleanup post-ProClinic strip
-- **Test count**: 7125/7131 PASS (5 fail PRE-EXISTING TFP regressions — not V50-caused, confirmed via stash-test)
+- **Last commit**: V50.Phase 7 final (committed at end of session — V-entry + AV28 + memory updates)
+- **Test count**: 7261/7266 PASS (5 pre-existing TFP failures: BSA T6.1 + phase-17-2-septies S3 — NOT V50-caused, confirmed via stash-test)
 - **Build**: clean. BackendDashboard chunk 1018→933 KB, AdminDashboard 398→383 KB.
-- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase1-2 ALL committed but **NOT deployed**). 5 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
-- **Iron-clad rule status**: Rule O (V46-V48) + AV27 (V49) — invariant set complete. Rule **H-bis Phase 1+2 IN PROGRESS** (Phase 3-7 pending: creationBranchId + cross-branch e2e + Rule M data ops + V-entry/AV28/EXECUTED flag).
-- **Migrations applied on prod**: V43 (3 entries on LC-26000006) + V46 (2 poisoned batches) + V49 e2e audit doc.
+- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 ALL committed but **NOT deployed**). 7 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
+- **Iron-clad rule status**: Rule O (V46-V48) + AV20-AV28 invariant set complete. **Rule H-bis = EXECUTED** (was "IN PROGRESS"; V50 closes the dev-only-scaffolding strip).
+- **Migrations applied on prod**: V43 (3 entries on LC-26000006) + V46 (2 poisoned batches) + V49 e2e audit doc + V50.Phase 6 cleanup (2,599 docs DELETED + audit doc emit).
+
+### Session 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 3-7 shipped)
+
+User said "phase 5 - phase 7 ไปเลยยย จะได้จบๆ" → completed all remaining V50 phases in one push.
+
+**Phase 3** (commit `1c67baf` from EOD #3 start): cross-branch booking contract verified — existing `be_customers.branchId` already serves the creation-branch role (stamped on CREATE only, immutable thereafter). User chose Option A (skip schema, verify only) → 46 vitest + 30 e2e on real prod (3 branches × matrix; customer.branchId IMMUTABLE across 5 dotted-path edits × 3 customers; appt+deposit.branchId always from admin context).
+
+**Phase 4** (commit `59f7aa8`): kiosk → OPD-save auto-link cascade PROF-GRADE bank — 64 vitest (12 categories F1-F12: source-grep + simulator + property-based mulberry32×100 + cross-branch identity + adversarial Thai/Unicode/NUL/10K-char + idempotency + forward-compat + class-of-bug classifier + lifecycle + branch-switch chaos + V50 markers) + 53 live e2e on real prod (10 chaos scenarios A-J: no-deposit grid visibility / kiosk-delete cascade / OPD-save auto-link / deposit-pair both halves / 3-branch matrix / delete appt mid-flow / delete deposit mid-flow / duplicate name+phone / idempotency / branch-switch sharp-edge documented). 37 TEST-V50P4- fixtures + cleanup zero orphans + audit doc.
+
+**Phase 5**: full vitest 7235/7240 PASS (5 pre-existing TFP failures NOT V50-caused) + build clean.
+
+**Phase 6** (`scripts/v50-phase6-cleanup-proclinic-residue.mjs --apply`): Rule M two-phase cleanup of ProClinic residue on real prod — **2,599 docs DELETED**:
+- pc_* mirror (10 collections): 2,097 docs (pc_treatments=1132, pc_customers=450, pc_courses=244, pc_treatment_history=247, pc_appointments=14, pc_chart_templates=3, pc_form_options=2, pc_inventory=2, pc_doctors=1, pc_customer_appointments=2)
+- master_data/* (12 type subcollections + 11 parent docs): 502 docs (courses=174, products=303, staff=2, doctors=2, permission_groups=4, df_staff_rates=2, promotions=2, plus parent docs for courses/products/staff/doctors/product_groups/product_units/permission_groups/medicine_labels/staff_schedules/df_staff_rates/promotions)
+- clinic_settings/proclinic_session{,_trial}: 2 docs
+- broker_jobs/*: 0 (already empty)
+- Audit: `be_admin_audit/v50-phase6-cleanup-proclinic-residue-1778182611077-a2452825`
+
+**Phase 7** (final commit, end of session):
+- AV28 audit invariant added to `audit-anti-vibe-code` SKILL.md (no broker.* / cloneOrchestrator / /api/proclinic/* / runtime pc_*/master_data/broker_jobs reads in src/)
+- 26 regression tests in `tests/v50-av28-no-proclinic-imports.test.js` (AV28.1 forbidden imports, AV28.2 forbidden URLs, AV28.3 forbidden namespace calls, AV28.4 forbidden Firestore paths with sanctioned exceptions for orphan exports, AV28.5 deleted file existence check, AV28.6 V50 marker preservation)
+- V50 V-entry locked in `.claude/rules/00-session-start.md` § 2 above V49
+- SESSION_HANDOFF.md + `.agents/active.md` updated to reflect H-bis EXECUTED state
+
+**Iron-clad Rule H-bis flipped**: "IN PROGRESS" → **EXECUTED**. ProClinic dev-only scaffolding fully removed.
+
+**Final state**: master = POST-V50.Phase 7 · prod = c92f924 (7 commits behind). 7261/7266 vitest + build clean. Ready for combined `vercel --prod` when user authorizes.
+
+Detail: `.agents/sessions/2026-05-08-v50-proclinic-strip.md` (Phase 1-2) + this current-state entry (Phase 3-7).
 
 ### Session 2026-05-08 EOD #2 — V50 ProClinic strip Phase 1+2 SHIPPED
 
