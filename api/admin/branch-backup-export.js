@@ -9,7 +9,7 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { resolveBackupScope, T4_SUBCOLLECTIONS } from '../../src/lib/branchBackupCore.js';
-import { buildBackupFile } from '../../src/lib/branchBackupSchema.js';
+import { buildBackupFile, jsonReplacerForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -131,7 +131,10 @@ export default async function handler(req, res) {
       isAutoPreFresh,
     });
 
-    const json = JSON.stringify(file);
+    // V40-prod-fix-5 (2026-05-08) — encode NaN/Infinity via sentinel so they
+    // survive round-trip (default JSON.stringify converts them to null —
+    // lossy). Reviver in branch-restore.js decodes back. schemaVersion=2.
+    const json = JSON.stringify(file, jsonReplacerForNonFinite);
     const sizeBytes = Buffer.byteLength(json, 'utf8');
     if (sizeBytes > 100 * 1024 * 1024) {
       return res.status(413).json({ ok: false, error: 'FILE_TOO_LARGE', sizeBytes });

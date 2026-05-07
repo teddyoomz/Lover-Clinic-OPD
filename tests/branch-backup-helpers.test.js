@@ -97,8 +97,70 @@ describe('H3 — FK remap (clone mode)', () => {
 import { BACKUP_SCHEMA_VERSION, validateBackupFile, buildBackupFile } from '../src/lib/branchBackupSchema.js';
 
 describe('H4 — schema validators', () => {
-  it('H4.1 — BACKUP_SCHEMA_VERSION is 1', () => {
-    expect(BACKUP_SCHEMA_VERSION).toBe(1);
+  it('H4.1 — BACKUP_SCHEMA_VERSION is 2 (V40-prod-fix-5: NaN/Infinity sentinel encoding)', () => {
+    // schemaVersion=1 was the original (NaN/Infinity → null lossy).
+    // schemaVersion=2 added jsonReplacerForNonFinite + jsonReviverForNonFinite
+    // for bit-perfect round-trip of non-finite numbers. Backwards compat:
+    // restore endpoint still accepts v1 files.
+    expect(BACKUP_SCHEMA_VERSION).toBe(2);
+  });
+
+  it('H4.6 — jsonReplacerForNonFinite encodes NaN/Infinity as sentinel', async () => {
+    const { jsonReplacerForNonFinite } = await import('../src/lib/branchBackupSchema.js');
+    const data = { a: NaN, b: Infinity, c: -Infinity, d: 42, e: null, f: 'string' };
+    const json = JSON.stringify(data, jsonReplacerForNonFinite);
+    const parsed = JSON.parse(json);
+    expect(parsed.a).toEqual({ __number__: 'NaN' });
+    expect(parsed.b).toEqual({ __number__: 'Infinity' });
+    expect(parsed.c).toEqual({ __number__: '-Infinity' });
+    expect(parsed.d).toBe(42); // unchanged
+    expect(parsed.e).toBe(null); // unchanged
+    expect(parsed.f).toBe('string'); // unchanged
+  });
+
+  it('H4.7 — jsonReviverForNonFinite decodes sentinel back to NaN/Infinity', async () => {
+    const { jsonReviverForNonFinite } = await import('../src/lib/branchBackupSchema.js');
+    const json = JSON.stringify({
+      a: { __number__: 'NaN' },
+      b: { __number__: 'Infinity' },
+      c: { __number__: '-Infinity' },
+      d: 42,
+      e: { keep: 'normal object' },
+      f: { __number__: 'NaN', extra: 'no' }, // not a sentinel — has extra keys
+    });
+    const parsed = JSON.parse(json, jsonReviverForNonFinite);
+    expect(Number.isNaN(parsed.a)).toBe(true);
+    expect(parsed.b).toBe(Infinity);
+    expect(parsed.c).toBe(-Infinity);
+    expect(parsed.d).toBe(42);
+    expect(parsed.e).toEqual({ keep: 'normal object' });
+    // Sentinel must have EXACTLY one key — extra keys keep it as plain object
+    expect(parsed.f).toEqual({ __number__: 'NaN', extra: 'no' });
+  });
+
+  it('H4.8 — round-trip: NaN/Infinity preserved through stringify(replacer) → parse(reviver)', async () => {
+    const { jsonReplacerForNonFinite, jsonReviverForNonFinite } = await import('../src/lib/branchBackupSchema.js');
+    const original = {
+      foo: NaN,
+      bar: { nested: { deep: Infinity, array: [1, NaN, -Infinity, 'str'] } },
+      baz: 0,
+      qux: -0,
+    };
+    const json = JSON.stringify(original, jsonReplacerForNonFinite);
+    const restored = JSON.parse(json, jsonReviverForNonFinite);
+    expect(Number.isNaN(restored.foo)).toBe(true);
+    expect(restored.bar.nested.deep).toBe(Infinity);
+    expect(Number.isNaN(restored.bar.nested.array[1])).toBe(true);
+    expect(restored.bar.nested.array[2]).toBe(-Infinity);
+    expect(restored.bar.nested.array[3]).toBe('str');
+    expect(restored.baz).toBe(0);
+    // -0 becomes 0 via JSON (JSON spec) — accept that
+    expect(Object.is(restored.qux, -0) || restored.qux === 0).toBe(true);
+  });
+
+  it('H4.9 — schemaVersion=1 files still accepted (backwards compat)', () => {
+    // Files written by older deploys with schemaVersion=1 must still validate.
+    expect(() => validateBackupFile({ meta: { schemaVersion: 1, sourceBranchId: 'BR-A' }, collections: {} })).not.toThrow();
   });
 
   it('H4.2 — validateBackupFile rejects missing meta.schemaVersion', () => {
@@ -118,7 +180,7 @@ describe('H4 — schema validators', () => {
       sourceBranchId: 'BR-A', exportedBy: 'admin-1', scope: { tiers: ['T1'] },
       collections: { be_products: [{ id: 'P1' }] },
     });
-    expect(file.meta.schemaVersion).toBe(1);
+    expect(file.meta.schemaVersion).toBe(2); // V40-prod-fix-5 bumped to 2
     expect(file.meta.sourceBranchId).toBe('BR-A');
     expect(file.collections.be_products).toHaveLength(1);
     expect(file.meta.perCollectionCounts.be_products).toBe(1);

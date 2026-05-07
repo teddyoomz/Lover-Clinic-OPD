@@ -18,7 +18,7 @@ describe('FS1 — backup → overwrite-restore round-trip simulator', () => {
       collections: { be_products: [{ id: 'P1', productName: 'A' }] },
     });
     const parsed = JSON.parse(JSON.stringify(file));
-    expect(parsed.meta.schemaVersion).toBe(1);
+    expect(parsed.meta.schemaVersion).toBe(2); // V40-prod-fix-5 bumped to 2
     expect(parsed.collections.be_products[0].id).toBe('P1');
   });
 

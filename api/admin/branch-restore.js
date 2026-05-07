@@ -8,7 +8,7 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { TIER_MAP, BACKUP_TIER_T1, T1_FK_SPEC, buildFkRemapTable, applyFkRemap, isUniversalCollection } from '../../src/lib/branchBackupCore.js';
-import { validateBackupFile } from '../../src/lib/branchBackupSchema.js';
+import { validateBackupFile, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -76,8 +76,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: 'NO_SOURCE_PROVIDED' });
     }
 
+    // V40-prod-fix-5 (2026-05-08) — reviver decodes NaN/Infinity sentinels
+    // back to actual non-finite numbers. No-op on schemaVersion=1 files
+    // (no sentinels present) — backwards compatible.
     let file;
-    try { file = JSON.parse(json); } catch { return res.status(400).json({ ok: false, error: 'JSON_PARSE_FAILED' }); }
+    try { file = JSON.parse(json, jsonReviverForNonFinite); } catch { return res.status(400).json({ ok: false, error: 'JSON_PARSE_FAILED' }); }
     try { validateBackupFile(file); } catch (e) { return res.status(400).json({ ok: false, error: e.message }); }
 
     if (mode === 'overwrite' && file.meta.sourceBranchId !== targetBranchId) {
