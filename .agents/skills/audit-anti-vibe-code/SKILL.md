@@ -206,10 +206,14 @@ grep -rE "\bbroker\.(create|update|delete|get|list|search|sync|find|fetch|post|p
 grep -rE "(collection|doc|getDoc|getDocs|setDoc|updateDoc|deleteDoc|onSnapshot)\([^)]*['\"](pc_|broker_jobs|master_data|proclinic_session)" src/ api/  # MUST be empty
 ```
 
-**Sanctioned exceptions (post V50-followup, 2026-05-08)**:
-- `src/lib/backendClient.js` retains `masterDataItemsCol` helper + the `migrate*ToBe` family (`migrateMasterPromotionsToBe`, `migrateMasterCoursesToBeV2`, etc.) + their `mapMasterTo*` mappers. These are inert dead code (zero runtime callers post-V50; master_data Firestore rules removed in V50-followup); kept for narrowed sanctioned-exception scope until future cleanup deletes them outright. AV28.4 grep allows `master_data` references in `src/lib/backendClient.js` only.
-- `src/lib/phase9Mappers.js` retains `buildBe{Promotion,Coupon,Voucher}FromMaster` (used only by migrators above). Same dead-code disposition.
-- NO other src/ or api/ file may carry `master_data` / `pc_*` / `broker_jobs` / `proclinic_session` / `brokerClient` / `cloneOrchestrator` / `customerBranchBaselineClient` / `/api/proclinic/*` runtime references.
+**Sanctioned exceptions (post V50-followup-2, 2026-05-08)**: NONE. The
+V50-followup commit deleted scopedDataLayer.js master_data re-exports +
+backendClient.js master_data CRUD/read/sync helpers. The V50-followup-2
+commit deleted the remaining migrator/mapper family (`migrate*ToBe` +
+`mapMasterTo*` + `runMasterToBeMigration` + `masterDataItemsCol`) plus
+`src/lib/phase9Mappers.js` (only consumed by deleted migrators).
+Institutional-memory comments referencing the historical migration are
+allowed (AV28.4 grep operates on stripComments output).
 
 If a future feature genuinely needs ProClinic interop, it must go through a NEW well-defined integration boundary (e.g. an `/api/external/proclinic-sync/*` endpoint with explicit dependency justification + Rule C3 lean-schema review + new audit invariant). Resurrecting `brokerClient.js` is forbidden — start fresh.
 

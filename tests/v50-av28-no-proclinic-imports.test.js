@@ -199,21 +199,11 @@ describe('V50 AV28 — no Firestore reads/writes against deleted collections', (
         const src = stripComments(readSrc(f));
         if (re.test(src)) violators.push(f);
       }
-      // V50-followup (2026-05-08) — scopedDataLayer.js cleaned of all
-      // master_data re-exports. backendClient.js cleaned of CRUD/read helpers
-      // (createMasterCourse/Item, update*, delete*, getMasterDataMeta,
-      // getAllMasterDataItems, clearMasterDataItems, BE_BACKED_MASTER_TYPES,
-      // readBeForMasterType, getBeBackedMasterTypes, runMasterDataSync,
-      // masterDataDoc). REMAINING sanctioned exception: backendClient.js
-      // retains `masterDataItemsCol` + the `migrate*ToBe` family (one-shot
-      // dev migration helpers) + their `mapMasterTo*` mappers. These are
-      // dead at runtime (no UI callers; master_data Firestore rules removed
-      // in this commit) but kept as inert dead code for now — future
-      // cleanup can delete them outright. Log the path so the deviation is
-      // visible.
-      const sanctioned = ['src/lib/backendClient.js'];
-      const real = violators.filter((f) => !sanctioned.includes(f));
-      expect(real, `${label} found in non-sanctioned files: ${real.join(', ')}`).toEqual([]);
+      // V50-followup-2 (2026-05-08) — ALL master_data refs deleted. Was
+      // sanctioned: scopedDataLayer.js + backendClient.js. Now: no src/ file
+      // references master_data at runtime (institutional-memory comments are
+      // stripped before this regex runs via stripComments above).
+      expect(violators, `${label} found in: ${violators.join(', ')}`).toEqual([]);
     });
   }
 });

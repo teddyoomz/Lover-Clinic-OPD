@@ -24,7 +24,7 @@ import {
   isPurchasedSessionRowId,
 } from '../src/lib/treatmentBuyHelpers.js';
 import { normalizeCourseJsonItem } from '../api/proclinic/master.js';
-import { mapMasterToCourse, beCourseToMasterShape } from '../src/lib/backendClient.js';
+import { beCourseToMasterShape } from '../src/lib/backendClient.js';
 import {
   getRateForStaffCourse,
   computeDfAmount,
@@ -103,50 +103,6 @@ describe('Scenario 1 — ProClinic JSON → buy flow full pipeline', () => {
     expect(out.courseProducts).toHaveLength(2);
   });
 
-  it('S1.2: mapMasterToCourse writes canonical be_courses shape from normalized ProClinic data', () => {
-    const norm = normalizeCourseJsonItem(proClinicJson);
-    const be = mapMasterToCourse(norm, 'COURSE-1', '2026-04-24T10:00:00Z');
-    expect(be.courseId).toBe('COURSE-1');
-    expect(be.courseName).toBe('Premium Combo');
-    expect(be.courseType).toBe('ระบุสินค้าและจำนวนสินค้า');
-    expect(be.mainProductId).toBe('281');
-    expect(be.mainQty).toBe(100);
-    expect(be.qtyPerTime).toBe(25);
-    expect(be.period).toBe(30);
-    expect(be.isDf).toBe(true);
-    expect(be.courseProducts.length).toBeGreaterThan(0);
-  });
-
-  it('S1.3: beCourseToMasterShape reconstructs products[] with main product FIRST', () => {
-    const norm = normalizeCourseJsonItem(proClinicJson);
-    const be = mapMasterToCourse(norm, 'COURSE-1', '2026-04-24T10:00:00Z');
-    const master = beCourseToMasterShape(be);
-    expect(master.products[0].id).toBe('281'); // main product prepended
-    expect(master.products[0].isMainProduct).toBe(true);
-    // Dedup: main not duplicated in secondaries
-    const mainCount = master.products.filter(p => p.id === '281').length;
-    expect(mainCount).toBe(1);
-  });
-
-  it('S1.4: buildPurchasedCourseEntry creates customerCourses row with productId preserved', () => {
-    const norm = normalizeCourseJsonItem(proClinicJson);
-    const be = mapMasterToCourse(norm, 'COURSE-1', '2026-04-24T10:00:00Z');
-    const master = beCourseToMasterShape(be);
-    // Simulate buy-modal item shape
-    const buyItem = {
-      id: 'COURSE-1', name: master.name, courseType: master.courseType,
-      qty: '1', unit: 'คอร์ส', itemType: 'course',
-      products: master.products,
-    };
-    const entry = buildPurchasedCourseEntry(buyItem, { now: NOW });
-    expect(entry.isAddon).toBe(true);
-    expect(entry.isRealQty).toBe(false); // specific-qty, not fill-later
-    // Each product carries a real productId (not synthetic rowId)
-    for (const p of entry.products) {
-      expect(p.productId).toBeTruthy();
-      expect(p.fillLater).toBe(false);
-    }
-  });
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -977,11 +933,6 @@ describe('Scenario 10 — edge cases + defensive defaults', () => {
   it('S10.1: normalizeCourseJsonItem null → null (no crash)', () => {
     expect(normalizeCourseJsonItem(null)).toBeNull();
     expect(normalizeCourseJsonItem(undefined)).toBeNull();
-  });
-
-  it('S10.2: mapMasterToCourse no id → null', () => {
-    expect(mapMasterToCourse({ courseName: 'x' }, null, '2026-04-24')).toBeNull();
-    expect(mapMasterToCourse(null, 'X', '2026-04-24')).toBeNull();
   });
 
   it('S10.3: beCourseToMasterShape empty → empty products', () => {

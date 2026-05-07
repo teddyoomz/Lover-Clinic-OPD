@@ -1102,11 +1102,6 @@ describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.co
     expect(MASTER).toMatch(/days_before_expire:\s*item\.days_before_expire/);
   });
 
-  it('F17.2: migrateMasterCoursesToBe writes daysBeforeExpire on be_courses (accepts both casings)', () => {
-    // mapMasterToCourse must accept both src.daysBeforeExpire + src.days_before_expire
-    expect(BC).toMatch(/daysBeforeExpire:\s*numOrNull\(src\.daysBeforeExpire[^)]*src\.days_before_expire/);
-  });
-
   it('F17.3: CourseFormModal renders daysBeforeExpire field with clear ProClinic-parity label', () => {
     // Must surface "วันหมดอายุ" in the label so user knows THIS is the
     // expiry input (not some vague "ระยะเวลาใช้งาน" wording)
@@ -1385,19 +1380,4 @@ describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.co
     expect(shadowFilter({ course_type: 'เหมาตามจริง', price: 500 })).toBe(true);
   });
 
-  it('F17.14: migrate round-trip — master_data course with days_before_expire (snake) → be_courses daysBeforeExpire (camel)', () => {
-    // Mirror of mapMasterToCourse line 5845 casing bridge.
-    const numOrNull = (v) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
-    const src = { course_name: 'X', days_before_expire: 365 };
-    const mapped = { daysBeforeExpire: numOrNull(src.daysBeforeExpire != null ? src.daysBeforeExpire : src.days_before_expire) };
-    expect(mapped.daysBeforeExpire).toBe(365);
-    // camelCase source takes priority
-    const src2 = { daysBeforeExpire: 180, days_before_expire: 365 };
-    const mapped2 = { daysBeforeExpire: numOrNull(src2.daysBeforeExpire != null ? src2.daysBeforeExpire : src2.days_before_expire) };
-    expect(mapped2.daysBeforeExpire).toBe(180);
-    // both missing → null
-    const src3 = {};
-    const mapped3 = { daysBeforeExpire: numOrNull(src3.daysBeforeExpire != null ? src3.daysBeforeExpire : src3.days_before_expire) };
-    expect(mapped3.daysBeforeExpire).toBeNull();
-  });
 });

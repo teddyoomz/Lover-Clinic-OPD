@@ -46,7 +46,6 @@ import {
 } from '../src/lib/courseValidation.js';
 import {
   beCourseToMasterShape,
-  mapMasterToCourse,
 } from '../src/lib/backendClient.js';
 import {
   buildPurchasedCourseEntry,
@@ -183,72 +182,6 @@ describe('CSS.B — beCourseToMasterShape propagates flag', () => {
     const shape = beCourseToMasterShape(c);
     expect(shape.products[0].skipStockDeduction).toBe(false);
     expect(shape.products[1].skipStockDeduction).toBe(false);
-  });
-});
-
-// ============================================================================
-describe('CSS.C — mapMasterToCourse inverse round-trip', () => {
-  it('C.1 reads top-level skipStockDeduction', () => {
-    const out = mapMasterToCourse({
-      courseName: 'X', salePrice: 100,
-      skipStockDeduction: true,
-      courseProducts: [{ productId: 'P-1', productName: 'A', qty: 1 }],
-    }, 'C-1', '2026-04-28T00:00:00Z');
-    expect(out.skipStockDeduction).toBe(true);
-  });
-
-  it('C.2 accepts snake_case skip_stock_deduction', () => {
-    const out = mapMasterToCourse({
-      courseName: 'X', salePrice: 100,
-      skip_stock_deduction: true,
-      courseProducts: [{ productId: 'P-1', productName: 'A', qty: 1 }],
-    }, 'C-1', '2026-04-28T00:00:00Z');
-    expect(out.skipStockDeduction).toBe(true);
-  });
-
-  it('C.3 missing flag normalizes to false', () => {
-    const out = mapMasterToCourse({
-      courseName: 'X', salePrice: 100,
-      courseProducts: [{ productId: 'P-1', productName: 'A', qty: 1 }],
-    }, 'C-1', '2026-04-28T00:00:00Z');
-    expect(out.skipStockDeduction).toBe(false);
-    expect(out.courseProducts[0].skipStockDeduction).toBe(false);
-  });
-
-  it('C.4 sub-item flag round-trip (camelCase + snake_case)', () => {
-    const out = mapMasterToCourse({
-      courseName: 'X', salePrice: 100,
-      courseProducts: [
-        { productId: 'P-1', productName: 'A', qty: 1, skipStockDeduction: true },
-        { productId: 'P-2', productName: 'B', qty: 2, skip_stock_deduction: true },
-      ],
-    }, 'C-1', '2026-04-28T00:00:00Z');
-    expect(out.courseProducts[0].skipStockDeduction).toBe(true);
-    expect(out.courseProducts[1].skipStockDeduction).toBe(true);
-  });
-
-  it('C.5 round-trip: normalize → master shape → mapMasterToCourse → preserve flags', () => {
-    const original = {
-      ...emptyCourseForm(),
-      courseName: 'X', salePrice: 100,
-      mainProductId: 'P-MAIN', mainProductName: 'Main', mainQty: 1,
-      skipStockDeduction: true,
-      courseProducts: [
-        { productId: 'P-SUB', productName: 'S', qty: 2, skipStockDeduction: true },
-      ],
-    };
-    const normalized = normalizeCourse(original);
-    expect(normalized.skipStockDeduction).toBe(true);
-    expect(normalized.courseProducts[0].skipStockDeduction).toBe(true);
-    // Map to master shape (downstream view)
-    const master = beCourseToMasterShape({ ...normalized, courseId: 'C-1' });
-    expect(master.products[0].skipStockDeduction).toBe(true); // main
-    expect(master.products[1].skipStockDeduction).toBe(true); // sub
-    // Inverse: from master → course form (e.g. sync from ProClinic master_data)
-    // (This path uses mapMasterToCourse with master_data shape, not directly our master shape)
-    const back = mapMasterToCourse(normalized, 'C-1', '2026-04-28T00:00:00Z');
-    expect(back.skipStockDeduction).toBe(true);
-    expect(back.courseProducts[0].skipStockDeduction).toBe(true);
   });
 });
 
