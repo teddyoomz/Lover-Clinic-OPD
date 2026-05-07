@@ -43,6 +43,10 @@ import {
   TREATMENT_PRINT_DOC_TYPES,
 } from '../../lib/documentTemplateValidation.js';
 import { parseQtyString } from '../../lib/courseUtils.js';
+// V47 (2026-05-08) — group raw customer.courses[] by purchase event for
+// display parity with TFP "ข้อมูลการใช้คอร์ส" panel. Pre-V47, CustomerDetailView
+// rendered N CARDS for one logical course (one per per-product entry).
+import { groupCustomerCoursesForDetailView } from '../../lib/treatmentBuyHelpers.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
@@ -380,6 +384,23 @@ export default function CustomerDetailView({
   // Purchase History (sales linked to customer). Drop usedUpCourses
   // from the expired tab.
   const expiredCourses = useMemo(() => (customer?.expiredCourses || []), [customer?.expiredCourses]);
+
+  // V47 (2026-05-08) — Group active + expired courses by purchase event.
+  // Each be_customers.courses[i] entry is per-product (main + each sub-
+  // product). Grouping merges entries from the SAME purchase into one card
+  // with N nested product rows — matching TFP's "ข้อมูลการใช้คอร์ส" panel.
+  // Pure-helper grouping is branch-blind: works identically on every
+  // branch (current + future). Modals (add qty / exchange / share) target
+  // entry.originalIndex so they still write to the exact be_customers
+  // .courses[i] doc-array slot.
+  const activeCourseGroups = useMemo(
+    () => groupCustomerCoursesForDetailView(activeCourses),
+    [activeCourses]
+  );
+  const expiredCourseGroups = useMemo(
+    () => groupCustomerCoursesForDetailView(expiredCourses),
+    [expiredCourses]
+  );
   const appointments = customer?.appointments || [];
   // Sort treatments newest-first. `rebuildTreatmentSummary` writes them in desc order
   // on every backend save, but customers cloned from ProClinic keep ProClinic's ordering
@@ -1107,8 +1128,8 @@ export default function CustomerDetailView({
                   courseTab === 'active' ? `text-teal-400 border-b-2 border-teal-400 ${isDark ? 'bg-teal-900/10' : 'bg-teal-50'}` : 'text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]'
                 }`}>
                 <Package size={13} /> คอร์สของฉัน
-                {activeCourses.length > 0 && (
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'}`}>{activeCourses.length}</span>
+                {activeCourseGroups.length > 0 && (
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${isDark ? 'bg-teal-900/30 text-teal-400' : 'bg-teal-50 text-teal-700'}`}>{activeCourseGroups.length}</span>
                 )}
               </button>
               <button onClick={() => setCourseTab('expired')} role="tab" aria-selected={courseTab === 'expired'}
@@ -1238,30 +1259,30 @@ export default function CustomerDetailView({
                     );
                   })
                 )
-              ) : (courseTab === 'active' ? activeCourses : expiredCourses).length === 0 ? (
+              ) : (courseTab === 'active' ? activeCourseGroups : expiredCourseGroups).length === 0 ? (
                 <div className="p-8 text-center text-sm text-[var(--tx-muted)]">
                   {courseTab === 'active' ? 'ไม่มีคอร์ส' : 'ไม่มีคอร์สหมดอายุ'}
                 </div>
               ) : (
-                (courseTab === 'active' ? activeCourses : expiredCourses).map((course, i) => {
+                // V47 (2026-05-08) — render BY GROUP (one card per purchase
+                // event). Each group has 1 header + N product-row CourseItemBars.
+                // Modals receive entry.originalIndex so they target the exact
+                // be_customers.courses[i] doc-array slot.
+                (courseTab === 'active' ? activeCourseGroups : expiredCourseGroups).map((group) => {
                   // Phase 12.2b follow-up (2026-04-25): buffet = hide
-                  // "มูลค่าคงเหลือ", show days-until-expiry countdown
-                  // ("หมดอายุอีก N วัน") per user directive + ProClinic
-                  // parity. All other course types keep the existing
-                  // value + expiry layout.
-                  const isBuffetCourse = String(course.courseType || '').trim() === 'บุฟเฟต์';
-                  const daysLeft = isBuffetCourse && courseTab === 'active' ? daysUntilExpiry(course.expiry) : null;
+                  // "มูลค่าคงเหลือ", show days-until-expiry countdown.
+                  const daysLeft = group.isBuffet && courseTab === 'active' ? daysUntilExpiry(group.expiry) : null;
                   return (
-                  <div key={i} className="p-3">
+                  <div key={group.groupId} className="p-3" data-testid={`course-group-${group.groupId}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{course.name || '-'}</h4>
-                        {course.parentName && (
-                          <p className="text-[11px] text-orange-400/70 mt-0.5">{course.parentName}</p>
+                        <h4 className="text-sm font-bold text-[var(--tx-heading)] leading-tight">{group.name || '-'}</h4>
+                        {group.parentName && (
+                          <p className="text-[11px] text-orange-400/70 mt-0.5">{group.parentName}</p>
                         )}
-                        {course.expiry && (
+                        {group.expiry && (
                           <p className="text-xs text-[var(--tx-muted)] mt-0.5 flex items-center gap-1">
-                            <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {course.expiry}
+                            <Clock size={9} /> {courseTab === 'active' ? 'ใช้ได้ถึง' : 'หมดอายุ'}: {group.expiry}
                             {daysLeft != null && (
                               <span className={`ml-1 italic ${daysLeft <= 30 ? 'text-amber-400' : 'text-violet-400'}`}>
                                 {daysLeft > 0 ? `(หมดอายุอีก ${daysLeft} วัน)` : daysLeft === 0 ? '(หมดอายุวันนี้)' : `(เลยกำหนด ${Math.abs(daysLeft)} วัน)`}
@@ -1269,8 +1290,8 @@ export default function CustomerDetailView({
                             )}
                           </p>
                         )}
-                        {course.value && !isBuffetCourse && (
-                          <p className="text-xs text-[var(--tx-muted)]">มูลค่าคงเหลือ {course.value}</p>
+                        {group.value && !group.isBuffet && (
+                          <p className="text-xs text-[var(--tx-muted)]">มูลค่าคงเหลือ {group.value}</p>
                         )}
                       </div>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
@@ -1278,25 +1299,34 @@ export default function CustomerDetailView({
                           ? (isDark ? 'bg-teal-900/30 text-teal-400 border border-teal-700/40' : 'bg-teal-50 text-teal-700 border border-teal-200')
                           : (isDark ? 'bg-red-900/20 text-red-400 border border-red-700/40' : 'bg-red-50 text-red-700 border border-red-200')
                       }`}>
-                        {course.status || (courseTab === 'active' ? 'กำลังใช้งาน' : 'หมดอายุ')}
+                        {group.status || (courseTab === 'active' ? 'กำลังใช้งาน' : 'หมดอายุ')}
                       </span>
                     </div>
-                    {/* Course items — with progress bar */}
-                    {course.product && <CourseItemBar course={course} courseTab={courseTab} allCourses={allCourses}
-                      onAddQty={(idx) => { setAddQtyModal({ courseIndex: idx, courseName: course.name }); setAddQtyValue(''); }}
-                      onExchange={(idx) => { setExchangeModal({ courseIndex: idx, course }); }}
-                      onShare={(idx) => { setShareModal({ courseIndex: idx, course }); }}
-                    />}
-                    {/* Phase 12.2b follow-up (2026-04-24): pick-at-treatment
-                        placeholder — no product row yet, show a prompt
-                        with the available option count. Action happens
-                        on the treatment-form side; CustomerDetailView is
-                        read-only context here. */}
-                    {course.needsPickSelection && Array.isArray(course.availableProducts) && (
+                    {/* V47 — render ONE CourseItemBar per product entry inside
+                        the group. Modals receive entry.originalIndex so they
+                        target the exact be_customers.courses[i] doc-array
+                        slot (same contract as pre-V47 — no behavior change
+                        on action side, just visual unification). */}
+                    {group.entries.map((entry) => (
+                      entry.course.product && (
+                        <CourseItemBar
+                          key={`${group.groupId}-row-${entry.originalIndex}`}
+                          course={entry.course}
+                          courseTab={courseTab}
+                          allCourses={allCourses}
+                          onAddQty={() => { setAddQtyModal({ courseIndex: entry.originalIndex, courseName: entry.course.name }); setAddQtyValue(''); }}
+                          onExchange={() => { setExchangeModal({ courseIndex: entry.originalIndex, course: entry.course }); }}
+                          onShare={() => { setShareModal({ courseIndex: entry.originalIndex, course: entry.course }); }}
+                        />
+                      )
+                    ))}
+                    {/* Pick-at-treatment placeholder — no product row yet,
+                        show a prompt with the available option count. */}
+                    {group.needsPickSelection && Array.isArray(group.availableProducts) && (
                       <div className={`mt-2 px-2.5 py-1.5 rounded border text-[11px] flex items-center justify-between gap-2 ${isDark ? 'border-teal-800/40 bg-teal-900/10 text-teal-300' : 'border-teal-200 bg-teal-50/60 text-teal-700'}`}>
                         <span className="flex items-center gap-1.5 min-w-0">
                           <Check size={11} className="shrink-0" />
-                          <span className="truncate">เลือกสินค้าเพื่อใช้ ({course.availableProducts.length} ตัวเลือก)</span>
+                          <span className="truncate">เลือกสินค้าเพื่อใช้ ({group.availableProducts.length} ตัวเลือก)</span>
                         </span>
                         <span className="italic shrink-0 text-[10px] text-[var(--tx-muted)]">เลือกในหน้าสร้างการรักษา</span>
                       </div>

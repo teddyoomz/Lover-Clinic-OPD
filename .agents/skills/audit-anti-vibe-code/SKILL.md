@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV24)
+## Invariants (AV1–AV25)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -179,6 +179,43 @@ const doctors = await listDoctors();
 // V41 — need full map for past-record name display (AV20)
 const allDoctors = await listDoctors({ includeHidden: true });
 ```
+
+### AV25 — Every customer.courses[] reader rendering UI cards MUST go through a grouping helper (V47)
+
+**Why**: V47 (2026-05-08) — `customer.courses[]` stores 1 entry PER PRODUCT (post V44/V45 canonical design). CustomerDetailView mapped `activeCourses` 1-to-1 → user saw N CARDS for one logical course (one per per-product entry — main + each sub-product) with FULL course value stamped on each card. TFP "ข้อมูลการใช้คอร์ส" panel correctly groups via `buildCustomerCourseGroups` (form-shape) → 1 card with N nested rows. The display inconsistency confused user: "ต้องเชื่อตรงไหน?". Same V12 multi-reader-sweep family as V44/V45 (storage shape changed → every READER must be audited) but at the rendering layer that wasn't included in the original Phase 12.2b grouping rollout.
+
+**The rule**: For any UI surface that displays courses to users (Customer Detail View, TFP, future course-list panels, search results, etc.), iteration over `customer.courses[]` for CARD RENDERING is FORBIDDEN. Must go through ONE of:
+- `groupCustomerCoursesForDetailView(rawCourses)` — operates on raw `be_customers.courses[]` shape (`name` + `product` fields)
+- `mapRawCoursesToForm(rawCourses)` + `buildCustomerCourseGroups(formShape)` — form-shape chain (`courseName` + `products[]` fields)
+
+Both helpers use IDENTICAL group key (`name|linkedSaleId|linkedTreatmentId|parentName` + `__addon__|courseId` for buy-this-visit) so all views agree on "one purchase event = one card".
+
+**Grep**:
+- `customer\.courses\.map\(` or `(activeCourses|expiredCourses)\.map\(` in component files (excluding helper definitions). V47 anti-pattern when used for card rendering.
+- `groupCustomerCoursesForDetailView\(` should appear in any consumer of raw `customer.courses[]` for UI rendering.
+- `customer\.courses\.filter\(` is OK for non-rendering operations (badge counts, etc.) but should still go through grouping for any user-facing count.
+
+**Sanctioned exception**: helper internals + tests + scripts are allowed direct iteration. Annotate inline if relevant: `// audit-anti-vibe-code: AV25 safe — helper-internal access`.
+
+**Source-grep regression test pattern** (V47 lock — see `tests/v47-customer-detail-view-grouping.test.js` V47.C):
+```js
+expect(cdvSrc).toMatch(/import\s*\{\s*groupCustomerCoursesForDetailView/);
+expect(cdvSrc).toMatch(/groupCustomerCoursesForDetailView\(activeCourses\)/);
+expect(cdvSrc).toMatch(/\(\s*courseTab === 'active' \? activeCourseGroups : expiredCourseGroups\s*\)\.map\(/);
+// Anti-regression: badge MUST use group count, not raw entry count
+const badgeBlock = cdvSrc.match(/Package size=\{13\}[\s\S]+?<\/span>/);
+expect(badgeBlock?.[0]).not.toMatch(/activeCourses\.length/);
+```
+
+**Branch-blindness invariant** (V47.D): the grouping helper's `.toString()` MUST NOT contain `branchId` / `SELECTED_BRANCH` / `useSelectedBranch` references — pure JS only. Same input on every branch produces identical output.
+
+**Companion AV: AV20 (V41) + AV21 (V43) + AV22 (V44) + AV23 (V45) + AV24 (V46)**. Together they lock the entire customer-courses-display + skip-stock-deduction class:
+- AV20: lookup-map opt-in
+- AV21: denormalized-flag live-resolve
+- AV22: canonical mapper adoption
+- AV23: dedup OR-merge
+- AV24: productName live-resolve at write
+- AV25: customer.courses[] reader grouping (display parity)
 
 ### AV24 — Stock movement productName must come from be_products live-read, NEVER from batch's frozen denormalized field (V46 + Iron-clad Rule O)
 

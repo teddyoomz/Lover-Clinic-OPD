@@ -602,6 +602,124 @@ export function buildCustomerPromotionGroups(customerCourses, customerPromotions
  * @param {Array<object>} customerCourses — [{ courseId, courseName, parentName?, linkedSaleId?, linkedTreatmentId?, promotionId?, courseType?, isRealQty?, isBuffet?, isPickAtTreatment?, needsPickSelection?, availableProducts?, products: object[] }]
  * @returns {Array<{ groupId, courseName, parentName, source, linkedSaleId, linkedTreatmentId, courseType, isRealQty, isBuffet, isPickAtTreatment, needsPickSelection, availableProducts, _pickedFromCourseId, _pickGroupOptions, products: object[] }>}
  */
+/**
+ * V47 (2026-05-08) — Group RAW be_customers.courses[] entries (NOT form-shape)
+ * for the CustomerDetailView "คอร์สของฉัน" panel.
+ *
+ * Why this exists separately from `buildCustomerCourseGroups` (which works
+ * on form-shape from `mapRawCoursesToForm`): CustomerDetailView reads raw
+ * `customer.courses[]` directly (no form-shape transform). Each entry has
+ * `name` (not `courseName`), `product` (not `products[]`), and other raw
+ * field names. Pre-V47, CustomerDetailView mapped `activeCourses` 1-to-1
+ * → user saw N CARDS for one logical course (one per product entry — main
+ * + each sub-product) with FULL course value stamped on each card. TFP
+ * groups via buildCustomerCourseGroups → 1 card with N nested rows. The
+ * inconsistency confused the user: "ตรงข้อมูลเห็น 2 คอร์ส กดเข้าไปใน TFP เห็น
+ * คอร์สเดียว คืออะไร? ต้องเชื่อตรงไหน?" — V47 unifies the display.
+ *
+ * Group key (matches buildCustomerCourseGroups for cross-view consistency):
+ *   - isAddon + courseId  →  `__addon__|<courseId>` (buy-this-visit guard)
+ *   - else if all empty   →  `__fallback__|<courseId>` (legacy unique key)
+ *   - else                →  `<name>|<linkedSaleId>|<linkedTreatmentId>|<parentName>`
+ *
+ * Each group surfaces:
+ *   - groupId, groupKey: stable React keys
+ *   - name, parentName: display strings (from first entry)
+ *   - value, expiry, status, courseType: course-level metadata
+ *   - isAddon, isBuffet, isRealQty, needsPickSelection: lifecycle flags
+ *   - availableProducts: only when needsPickSelection (placeholder shape)
+ *   - entries: [{originalIndex, course}] — one per product, retains the
+ *     raw entry's array index so modals (add qty / exchange / share)
+ *     target the exact be_customers.courses[i] doc-array index.
+ *
+ * Pure — no mutations. Idempotent. Branch-blind (operates on customer
+ * doc only; no Firestore reads). Empty/null input → []. Pick-at-treatment
+ * placeholders kept as own group (NOT merged with sibling resolved entries).
+ *
+ * @param {Array<object>} rawCourses — `be_customers.courses[]` array
+ * @returns {Array<object>} groups for CustomerDetailView render
+ */
+export function groupCustomerCoursesForDetailView(rawCourses) {
+  const list = Array.isArray(rawCourses) ? rawCourses : [];
+  const out = [];
+  const indexByKey = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (!c || typeof c !== 'object') continue;
+    // Pick-at-treatment placeholders kept as their own group (each
+    // placeholder represents a single not-yet-picked customer.courses[i]
+    // entry — never merged with siblings even if same courseId).
+    if (c.needsPickSelection) {
+      out.push({
+        groupId: `cdv-pick-${i}`,
+        groupKey: `__pick__|${i}`,
+        name: c.name || '',
+        parentName: c.parentName || '',
+        value: c.value || '',
+        expiry: c.expiry || '',
+        status: c.status || '',
+        courseType: String(c.courseType || ''),
+        isAddon: !!c.isAddon,
+        isBuffet: false,
+        isRealQty: false,
+        needsPickSelection: true,
+        availableProducts: Array.isArray(c.availableProducts) ? c.availableProducts : [],
+        entries: [{ originalIndex: i, course: c }],
+      });
+      continue;
+    }
+
+    const courseName = String(c.name || '').trim();
+    const linkedSaleId = c.linkedSaleId == null ? '' : String(c.linkedSaleId);
+    const linkedTreatmentId = c.linkedTreatmentId == null ? '' : String(c.linkedTreatmentId);
+    const parentName = String(c.parentName || '').trim();
+
+    let key;
+    if (c.isAddon && c.courseId) {
+      key = `__addon__|${c.courseId}`;
+    } else {
+      const fallbackId = (!courseName && !linkedSaleId && !linkedTreatmentId)
+        ? String(c.courseId || `legacy-${i}`)
+        : '';
+      key = fallbackId
+        ? `__fallback__|${fallbackId}`
+        : `${courseName}|${linkedSaleId}|${linkedTreatmentId}|${parentName}`;
+    }
+
+    let group;
+    if (indexByKey.has(key)) {
+      group = out[indexByKey.get(key)];
+    } else {
+      group = {
+        groupId: `cdv-grp-${out.length}`,
+        groupKey: key,
+        name: courseName,
+        parentName,
+        // First-entry-wins for course-level metadata (value/expiry/status/etc).
+        // assignCourseToCustomer stamps these identically on every per-product
+        // entry, so first-entry IS canonical.
+        value: c.value || '',
+        expiry: c.expiry || '',
+        status: c.status || '',
+        courseType: String(c.courseType || ''),
+        source: c.source || '',
+        linkedSaleId: c.linkedSaleId || null,
+        linkedTreatmentId: c.linkedTreatmentId || null,
+        isAddon: !!c.isAddon,
+        isBuffet: String(c.courseType || '').trim() === 'บุฟเฟต์',
+        isRealQty: String(c.courseType || '').trim() === 'เหมาตามจริง',
+        needsPickSelection: false,
+        availableProducts: null,
+        entries: [],
+      };
+      indexByKey.set(key, out.length);
+      out.push(group);
+    }
+    group.entries.push({ originalIndex: i, course: c });
+  }
+  return out;
+}
+
 export function buildCustomerCourseGroups(customerCourses) {
   const list = Array.isArray(customerCourses) ? customerCourses : [];
   const out = [];
