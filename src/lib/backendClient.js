@@ -9672,7 +9672,7 @@ export async function getStaff(staffId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listStaff() {
+export async function listStaff({ includeHidden = false } = {}) {
   const snap = await getDocs(staffCol());
   // Phase 15.7-octies (2026-04-29) — compose `name` field at source
   // (mirror of listDoctors Phase 15.7-bis fix). be_staff stores
@@ -9682,6 +9682,11 @@ export async function listStaff() {
   // dropdown options (user report 2026-04-29: "ที่ปรึกษา ตอนนี้บั๊ค
   // ไม่แสดงอะไรเลย"). Source-level fix benefits every caller.
   // Composition order mirrors mergeSellersWithBranchFilter:8245-8250.
+  //
+  // V41 (2026-05-08) — `isHidden` filter. Default-filter `!isHidden` so
+  // every picker auto-secures; opt in `{ includeHidden: true }` from
+  // StaffTab + past-record lookup-map builders. Mirror be_products
+  // isHidden precedent (line 10273). See AV20 audit invariant.
   const items = snap.docs.map(d => {
     const data = d.data();
     const parts = [data.firstname || data.firstName || '', data.lastname || data.lastName || ''].filter(Boolean);
@@ -9689,13 +9694,14 @@ export async function listStaff() {
     const composedName = data.name || composed || data.nickname || data.fullName || '';
     return { id: d.id, ...data, name: composedName };
   });
-  items.sort((a, b) => {
+  const visible = includeHidden ? items : items.filter(s => !s.isHidden);
+  visible.sort((a, b) => {
     const ua = a.updatedAt || '';
     const ub = b.updatedAt || '';
     if (ua !== ub) return ub.localeCompare(ua);
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
-  return items;
+  return visible;
 }
 
 export async function saveStaff(staffId, data) {
@@ -9742,7 +9748,7 @@ export async function getDoctor(doctorId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-export async function listDoctors() {
+export async function listDoctors({ includeHidden = false } = {}) {
   const snap = await getDocs(doctorsCol());
   // Phase 15.7-bis (2026-04-28) — compose `name` field at source. be_doctors
   // stores firstname/lastname/nickname (ProClinic schema, lowercase) but
@@ -9752,6 +9758,10 @@ export async function listDoctors() {
   // checkboxes in pickers (user report 2026-04-28: "ไม่แสดงชื่อแพทย์และ
   // ผู้ช่วยเลย ในการนัดหมาย"). Source-level fix benefits every caller.
   // Composition order mirrors mergeSellersWithBranchFilter:7937-7942.
+  //
+  // V41 (2026-05-08) — `isHidden` filter (mirror listStaff). Both regular
+  // doctors (position:'แพทย์') and assistant doctors (position:'ผู้ช่วยแพทย์')
+  // share the same flag.
   const items = snap.docs.map(d => {
     const data = d.data();
     const parts = [data.firstname || data.firstName || '', data.lastname || data.lastName || ''].filter(Boolean);
@@ -9759,7 +9769,8 @@ export async function listDoctors() {
     const composedName = data.name || composed || data.nickname || data.fullName || '';
     return { id: d.id, ...data, name: composedName };
   });
-  items.sort((a, b) => {
+  const visible = includeHidden ? items : items.filter(d => !d.isHidden);
+  visible.sort((a, b) => {
     // Doctors first, assistants second, then newest-first by updatedAt.
     const pa = a.position === 'แพทย์' ? 0 : 1;
     const pb = b.position === 'แพทย์' ? 0 : 1;
@@ -9769,7 +9780,7 @@ export async function listDoctors() {
     if (ua !== ub) return ub.localeCompare(ua);
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   });
-  return items;
+  return visible;
 }
 
 // ─── Phase 14.10-tris (2026-04-26) — unified seller loader ──────────────
