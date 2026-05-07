@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 — V43 skip-stock-deduction live-resolve + direct-product flag + Rule M migration (committed-not-deployed-not-applied)"
-status: "master=PENDING-COMMIT · prod=c92f924 (V42 + V43 NOT yet deployed) · 67 V43 tests pass · build clean · 7118+/7126 full-suite (8 pre-existing V41 stale fixed in V43 sweep)"
+updated_at: "2026-05-08 — V43 skip-stock-deduction live-resolve APPLIED on prod (3 entries fixed) + helpers + direct-product flag committed"
+status: "master=f0effba (V43 code) + PENDING (in-array timestamp fix) · prod=c92f924 (V42 + V43 NOT yet deployed) · migration APPLIED ✅ · 67 V43 tests pass · build clean"
 branch: "master"
-last_commit: "PENDING (V43 commit drafting)"
-tests: 7118
+last_commit: "f0effba (V43 ship) + script-fix pending"
+tests: 67
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "c92f924"
 firestore_rules_version: 28
@@ -13,11 +13,11 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `PENDING` (V43 commit drafting; V42 `bf78779` + EOD `ace2487` already in master) · prod = `c92f924` (V42 + V43 NOT deployed)
-- V43 dry-run found 1 customer / 3 entries needing backfill (LC-26000006 PRP × 3 from promotion bundle)
-- Migration --apply NOT yet run (Rule M two-phase; awaits user "apply" authorization)
-- 67/67 V43 + 213/213 related-file regression + build clean
-- Full suite: 7118 → 7126 PASS (V43 sweep also fixed 8 PRE-EXISTING V41 stale tests)
+- master = `f0effba` (V43 ship) + 1 pending fix (FieldValue.serverTimestamp inside-array → ISO string) · prod = `c92f924`
+- V43 migration **APPLIED on prod** ✅ — 3 entries on LC-26000006 restamped (false→true). Diag re-confirmed 0 master-true-customer-false drift. 1355 orphans preserved (legacy ProClinic-imported, overlay no-ops safely).
+- Audit doc: `be_admin_audit/v43-backfill-customer-courses-skip-stock-1778166208462-7e87927e`
+- Idempotency verified: re-run dry-run = 0 writes
+- 67/67 V43 tests pass post-fix; build clean; full-suite 7118+ (8 V41 stale fixed in V43 sweep)
 
 ## What this session shipped (V43)
 - **Diag** (Rule M read-only): `scripts/v43-diag-customer-courses-skip-stock.mjs` confirmed root cause = denormalization-at-buy-time freeze (customer.courses[i].skipStockDeduction lags master edits)
@@ -31,14 +31,11 @@ storage_rules_version: 2
 
 ## Next action
 
-**1) Apply migration to prod** — `node scripts/v43-backfill-customer-courses-skip-stock.mjs --apply` (Rule M; needs user explicit "apply" auth). Dry-run shows 1 customer / 3 entries (LC-26000006 PRP × 3). Audit doc auto-emitted. Idempotent — re-run = 0 writes.
+**1) Deploy V42 + V43** — `vercel --prod` after user "deploy" auth (V18 — auth never rolls over). V43 live-resolve overlay needs deploy to take effect for UI users; V42 promo-qty fix from prior session also pending. Migration is already applied — deploy completes the rollout for UI surface (course-edit modal "ไม่ตัด" checkbox honored at treatment time + ProductFormModal new "ไม่ตัดสต็อค" flag visible to admin).
 
-**2) Deploy V42 + V43** — `vercel --prod` after user "deploy" auth (V18 — auth never rolls over). V43 live-resolve overlay needs deploy to take effect for UI users; V42 promo-qty fix from prior session also pending deploy.
+**2) Live e2e against prod** (optional, post-deploy): create TEST-prefixed course + customer + buy + use → verify branch-1 fires. Per V33.10/11/12 prefix discipline + `feedback_no_real_action_in_preview_eval.md`.
 
-**3) Live e2e e2e against prod** (optional, post-deploy): create TEST-prefixed course + customer + buy + use → verify branch-1 fires. Per V33.10/11/12 prefix discipline + `feedback_no_real_action_in_preview_eval.md`.
-
-## Outstanding (user-triggered, none blocking unless deploy/apply)
-- 🚨 V43 migration `--apply` (3 entries fix on LC-26000006 — instant + idempotent)
+## Outstanding (user-triggered, none blocking unless deploy)
 - 🚨 V42 + V43 `vercel --prod` (V18)
 - H-bis ProClinic full strip (deferred)
 - Hard-gate Firebase custom claim (deferred)

@@ -144,6 +144,11 @@ export function planCustomerBackfill(customerData, masterByName) {
       continue;
     }
     // Drift detected → restamp + forensic-trail fields.
+    // V43 fix #1 (2026-05-08): FieldValue.serverTimestamp() is REJECTED by
+    // Firestore Admin SDK inside arrays — "FieldValue.serverTimestamp()
+    // cannot be used inside of an array". customer.courses is an array
+    // field. Use ISO string for in-array timestamps; serverTimestamp()
+    // remains valid at customer-doc top-level (_v43LastBackfillAt below).
     dirty = true;
     perEntry.push({
       index: i,
@@ -157,7 +162,7 @@ export function planCustomerBackfill(customerData, masterByName) {
     newCourses.push({
       ...entry,
       skipStockDeduction: effective,
-      _v43BackfilledAt: FieldValue.serverTimestamp(),
+      _v43BackfilledAt: new Date().toISOString(),
       _v43BackfilledFrom: before,
     });
   }
