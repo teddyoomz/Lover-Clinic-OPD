@@ -39,7 +39,9 @@ export default function DoctorsTab({ clinicSettings, theme }) {
     setLoading(true);
     setError('');
     try {
-      setItems(await listDoctors());
+      // V41 (2026-05-08) — admin tab must show hidden doctors so admin can unhide.
+      // AV20 audit invariant: lookup-map / admin-management consumers opt in.
+      setItems(await listDoctors({ includeHidden: true }));
     } catch (e) {
       setError(e.message || 'โหลดแพทย์ล้มเหลว');
       setItems([]);
@@ -177,6 +179,11 @@ export default function DoctorsTab({ clinicSettings, theme }) {
                       {d.disabled && (
                         <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-bold bg-red-700/20 border-red-700/40 text-red-400">
                           <Ban size={10} /> disabled
+                        </span>
+                      )}
+                      {d.isHidden && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-amber-900/30 text-amber-300 border border-amber-800/40">
+                          🙈 ซ่อน
                         </span>
                       )}
                     </div>
