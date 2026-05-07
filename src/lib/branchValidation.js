@@ -38,17 +38,16 @@ export function validateBranch(form) {
   if (!nm) return ['name', 'กรุณากรอกชื่อสาขา'];
   if (nm.length > NAME_MAX_LENGTH) return ['name', `ชื่อสาขาไม่เกิน ${NAME_MAX_LENGTH} ตัวอักษร`];
 
-  // phone — required (per ProClinic). V51: accept either form.phone (legacy)
-  // or form.settings.phone (canonical post-migration). Either present must
-  // pass the regex.
-  const phoneRaw = (form.settings && typeof form.settings.phone === 'string' && form.settings.phone)
-    || (typeof form.phone === 'string' ? form.phone : '');
+  // phone — required (per ProClinic). V51 Phase 3 cleanup: settings.phone only.
+  // Legacy top-level form.phone fallback removed post-migration.
+  const phoneRaw = (form.settings && typeof form.settings.phone === 'string')
+    ? form.settings.phone : '';
   if (!phoneRaw || !phoneRaw.trim()) {
-    return ['phone', 'กรุณากรอกเบอร์ติดต่อ'];
+    return ['settings.phone', 'กรุณากรอกเบอร์ติดต่อ'];
   }
   const ph = phoneRaw.replace(/[\s-]/g, '');
   if (!PHONE_RE.test(ph)) {
-    return ['phone', 'เบอร์ติดต่อต้องเป็น 0 ตามด้วยตัวเลข 8-10 ตัว'];
+    return ['settings.phone', 'เบอร์ติดต่อต้องเป็น 0 ตามด้วยตัวเลข 8-10 ตัว'];
   }
 
   // Optional fields.
@@ -73,12 +72,14 @@ export function validateBranch(form) {
     }
   }
 
-  // Length bounds on free-text
-  if (form.address && String(form.address).length > ADDRESS_MAX_LENGTH) {
-    return ['address', `ที่อยู่เกิน ${ADDRESS_MAX_LENGTH} ตัวอักษร`];
+  // Length bounds on free-text. V51 Phase 3 cleanup: address/addressEn moved to settings.
+  const sAddress = form.settings?.address;
+  if (sAddress && String(sAddress).length > ADDRESS_MAX_LENGTH) {
+    return ['settings.address', `ที่อยู่เกิน ${ADDRESS_MAX_LENGTH} ตัวอักษร`];
   }
-  if (form.addressEn && String(form.addressEn).length > ADDRESS_MAX_LENGTH) {
-    return ['addressEn', `ที่อยู่ (EN) เกิน ${ADDRESS_MAX_LENGTH} ตัวอักษร`];
+  const sAddressEn = form.settings?.addressEn;
+  if (sAddressEn && String(sAddressEn).length > ADDRESS_MAX_LENGTH) {
+    return ['settings.addressEn', `ที่อยู่ (EN) เกิน ${ADDRESS_MAX_LENGTH} ตัวอักษร`];
   }
   if (form.note && String(form.note).length > NOTE_MAX_LENGTH) {
     return ['note', `note เกิน ${NOTE_MAX_LENGTH} ตัวอักษร`];
@@ -156,20 +157,15 @@ export function emptyBranchForm() {
   return {
     name: '',
     nameEn: '',
-    phone: '',
     website: '',
-    licenseNo: '',
-    taxId: '',
-    address: '',
-    addressEn: '',
     googleMapUrl: '',
     latitude: '',
     longitude: '',
     note: '',
     status: 'ใช้งาน',
-    // V51 (2026-05-08) — per-branch settings sub-object defaults.
-    // Migrated from clinic_settings/main per Spec #2 §3. Phase 3 will
-    // strip the legacy top-level fields once migration --apply confirmed.
+    // V51 (2026-05-08) — per-branch settings sub-object.
+    // Phase 3 cleanup (post-migration --apply): legacy top-level phone/licenseNo/
+    // taxId/address/addressEn REMOVED — those fields live in settings only now.
     settings: {
       phone: '',
       licenseNo: '',
@@ -219,17 +215,14 @@ export function normalizeBranch(form) {
     ...form,
     name: trim(form.name),
     nameEn: trim(form.nameEn),
-    phone: trim(form.phone).replace(/[\s-]/g, ''),
     website: trim(form.website),
-    licenseNo: trim(form.licenseNo),
-    taxId: trim(form.taxId),
-    address: trim(form.address),
-    addressEn: trim(form.addressEn),
     googleMapUrl: trim(form.googleMapUrl),
     latitude: coerceNum(form.latitude),
     longitude: coerceNum(form.longitude),
     note: trim(form.note),
     status: form.status || 'ใช้งาน',
     ...(settings ? { settings } : {}),
+    // V51 Phase 3 cleanup — top-level phone/licenseNo/taxId/address/addressEn
+    // REMOVED. Those fields live in settings sub-object only.
   };
 }

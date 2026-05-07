@@ -101,21 +101,9 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
     setSaving(true);
     try {
       const id = branch?.branchId || branch?.id || generateMarketingId('BR');
-      // V51 — write both top-level (legacy) AND nested settings during the
-      // transition window. Phase 3 strips the dual-write once the
-      // migration script has run + production confirmed.
-      const payload = {
-        ...form,
-        settings: {
-          ...form.settings,
-          phone: form.settings?.phone || form.phone || '',
-          licenseNo: form.settings?.licenseNo || form.licenseNo || '',
-          taxId: form.settings?.taxId || form.taxId || '',
-          address: form.settings?.address || form.address || '',
-          addressEn: form.settings?.addressEn || form.addressEn || '',
-        },
-      };
-      await saveBranch(id, payload);
+      // V51 Phase 3 cleanup — dual-write removed post-migration. form already
+      // has settings populated correctly (UI binds directly to form.settings.X).
+      await saveBranch(id, form);
       await onSaved?.();
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');
@@ -165,14 +153,14 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
 
       {/* Contact + default toggle */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div data-field="phone">
+        <div data-field="settings.phone">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
             เบอร์ติดต่อ <RequiredAsterisk />
           </label>
           <input
             type="tel"
-            value={form.phone}
-            onChange={(e) => update({ phone: e.target.value })}
+            value={form.settings?.phone || ''}
+            onChange={(e) => updateSettings({ phone: e.target.value })}
             placeholder="0812345678"
             inputMode="tel"
             pattern="0[0-9]{8,10}"
@@ -193,44 +181,44 @@ export default function BranchFormModal({ branch, onClose, onSaved, clinicSettin
 
       {/* Legal */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div data-field="licenseNo">
+        <div data-field="settings.licenseNo">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">เลขที่ใบอนุญาต</label>
           <input
             type="text"
-            value={form.licenseNo}
-            onChange={(e) => update({ licenseNo: e.target.value })}
+            value={form.settings?.licenseNo || ''}
+            onChange={(e) => updateSettings({ licenseNo: e.target.value })}
             placeholder="เลขที่ใบอนุญาต"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
-        <div data-field="taxId">
+        <div data-field="settings.taxId">
           <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">เลขประจำตัวผู้เสียภาษี</label>
           <input
             type="text"
-            value={form.taxId}
-            onChange={(e) => update({ taxId: e.target.value })}
+            value={form.settings?.taxId || ''}
+            onChange={(e) => updateSettings({ taxId: e.target.value })}
             placeholder="เลข 13 หลัก"
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
           />
         </div>
       </div>
 
-      {/* Address (TH + EN) */}
-      <div data-field="address">
+      {/* Address (TH + EN) — V51 Phase 3 cleanup: bound to settings sub-object */}
+      <div data-field="settings.address">
         <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">ที่อยู่ (ไทย)</label>
         <textarea
-          value={form.address}
-          onChange={(e) => update({ address: e.target.value })}
+          value={form.settings?.address || ''}
+          onChange={(e) => updateSettings({ address: e.target.value })}
           rows={2}
           placeholder="บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
           className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)] resize-none"
         />
       </div>
-      <div data-field="addressEn">
+      <div data-field="settings.addressEn">
         <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">ที่อยู่ (EN) — สำหรับออกเอกสารภาษาอังกฤษ</label>
         <textarea
-          value={form.addressEn}
-          onChange={(e) => update({ addressEn: e.target.value })}
+          value={form.settings?.addressEn || ''}
+          onChange={(e) => updateSettings({ addressEn: e.target.value })}
           rows={2}
           placeholder="เว้นว่างเพื่อใช้ที่อยู่ภาษาไทยแปล"
           className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)] resize-none"

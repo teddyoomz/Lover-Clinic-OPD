@@ -150,11 +150,15 @@ describe('S1: mergeBranchIntoClinic extended cascade (V51 Phase 1)', () => {
     expect(result.chatHoursSatSun).toEqual({ open: '10:00', close: '19:45' });
   });
 
-  it('S1.2 — flat branch.X wins over cs.X when settings.X missing (5 dedup fields)', () => {
+  it('S1.2 — Phase 3 cleanup: flat branch.X NO LONGER fallback (cs.X wins when settings.X missing)', () => {
+    // V51 Phase 3 (post-migration --apply): mergeBranchIntoClinic flat-fallback REMOVED.
+    // Pre-Phase-3 behavior was settings.X > flat branch.X > cs.X.
+    // Post-Phase-3 behavior is settings.X > cs.X (no flat fallback).
+    // Branches with stray flat fields (e.g. legacy data not yet swept) effectively ignored.
     const cs = { phone: 'CS', licenseNo: 'CS', taxId: 'CS', address: 'CS', addressEn: 'CS' };
     const branch = {
       branchId: 'BR-A',
-      phone: 'BRANCH',
+      phone: 'BRANCH',  // legacy stray flat field — NO LONGER consulted
       licenseNo: 'BRANCH',
       taxId: 'BRANCH',
       address: 'BRANCH',
@@ -162,11 +166,11 @@ describe('S1: mergeBranchIntoClinic extended cascade (V51 Phase 1)', () => {
       settings: {},
     };
     const result = mergeBranchIntoClinic(cs, branch);
-    expect(result.phone).toBe('BRANCH');
-    expect(result.licenseNo).toBe('BRANCH');
-    expect(result.taxId).toBe('BRANCH');
-    expect(result.address).toBe('BRANCH');
-    expect(result.addressEn).toBe('BRANCH');
+    expect(result.phone).toBe('CS');
+    expect(result.licenseNo).toBe('CS');
+    expect(result.taxId).toBe('CS');
+    expect(result.address).toBe('CS');
+    expect(result.addressEn).toBe('CS');
   });
 
   it('S1.3 — cs.X fallback for 5 dedup fields when settings + flat branch both empty', () => {
@@ -203,10 +207,12 @@ describe('S1: mergeBranchIntoClinic extended cascade (V51 Phase 1)', () => {
     expect(result.chatHoursSatSun).toEqual({ open: '10:00', close: '20:00' });
   });
 
-  it('S1.5 — empty/undefined settings.X falls through to next source (5 dedup fields)', () => {
+  it('S1.5 — Phase 3 cleanup: empty settings.X falls through to cs.X directly (no flat hop)', () => {
+    // Phase 1 behavior was settings.X (empty) → flat branch.X → cs.X.
+    // Phase 3 cleanup: settings.X (empty) → cs.X directly. Stray flat field ignored.
     const cs = { phone: 'CS' };
     const branch = { branchId: 'BR-A', phone: 'BRANCH', settings: { phone: '' } };
-    expect(mergeBranchIntoClinic(cs, branch).phone).toBe('BRANCH');
+    expect(mergeBranchIntoClinic(cs, branch).phone).toBe('CS');  // post-Phase-3
 
     const branch2 = { branchId: 'BR-A', settings: { phone: '   ' } };
     expect(mergeBranchIntoClinic({ phone: 'CS' }, branch2).phone).toBe('CS');
@@ -623,5 +629,89 @@ describe('S10: V51 institutional memory markers (V51 Phase 1)', () => {
     // BS-10 should mention V51 / Spec #2
     const bs10Skill = readFile('.claude/skills/audit-branch-scope/SKILL.md');
     expect(bs10Skill).toMatch(/V51|Spec #2/);
+  });
+});
+
+// ─── S11: Phase 3 cleanup verification (V51 post-migration) ─────────────────
+// Locks the post-cleanup state so future drift can't accidentally re-introduce
+// the dual-shape fallback. After migration --apply confirmed converged on prod,
+// the merger reads only `settings.X || cs.X` (no flat branch.X hop).
+//
+// These tests are the regression guard for Plan #2 Phase 3 (Spec #2 §10).
+
+describe('S11: Phase 3 cleanup (V51 post-migration) — flat-fallback removed', () => {
+  it('S11.1 — mergeBranchIntoClinic source has NO branch.phone/licenseNo/taxId/address/addressEn refs', () => {
+    const src = readFile('src/lib/BranchContext.jsx');
+    // Extract just the mergeBranchIntoClinic body (between function signature and the next export)
+    const fnMatch = src.match(/export function mergeBranchIntoClinic\([^)]*\)\s*\{([\s\S]+?)\n\}/);
+    expect(fnMatch).not.toBeNull();
+    const body = fnMatch[1];
+    // Phase 3 cleanup: 5 deduplicated fields read from settings.X | cs.X only.
+    // NO `branch.phone`, `branch.licenseNo`, `branch.taxId`, `branch.address` (bare),
+    // `branch.addressEn` references should appear in the cascade.
+    // Note: branch.nameEn + branch.website are NOT deduplicated (stay legacy);
+    // branch.name reads for clinicName composite (allowed).
+    expect(body).not.toMatch(/\bbranch\.phone\b/);
+    expect(body).not.toMatch(/\bbranch\.licenseNo\b/);
+    expect(body).not.toMatch(/\bbranch\.taxId\b/);
+    expect(body).not.toMatch(/\bbranch\.address\b(?!En)/);  // address but NOT addressEn
+    expect(body).not.toMatch(/\bbranch\.addressEn\b/);
+    // pickStr now takes 2 args (settings + cs), not 3 (settings + branch + cs)
+    expect(body).toMatch(/const pickStr = \(settingsVal, csVal\)/);
+  });
+
+  it('S11.2 — emptyBranchForm has NO top-level phone/licenseNo/taxId/address/addressEn (settings only)', () => {
+    const src = readFile('src/lib/branchValidation.js');
+    const fnMatch = src.match(/export function emptyBranchForm\(\)\s*\{[\s\S]+?return \{([\s\S]+?)\};\s*\n\}/);
+    expect(fnMatch).not.toBeNull();
+    const body = fnMatch[1];
+    // Top-level (outside settings sub-object) MUST NOT contain these fields
+    // Trim out settings sub-object content first
+    const settingsStart = body.indexOf('settings:');
+    const topLevelPart = settingsStart > 0 ? body.slice(0, settingsStart) : body;
+    expect(topLevelPart).not.toMatch(/^\s*phone:\s*['']/m);
+    expect(topLevelPart).not.toMatch(/^\s*licenseNo:\s*['']/m);
+    expect(topLevelPart).not.toMatch(/^\s*taxId:\s*['']/m);
+    expect(topLevelPart).not.toMatch(/^\s*address:\s*['']/m);
+    expect(topLevelPart).not.toMatch(/^\s*addressEn:\s*['']/m);
+  });
+
+  it('S11.3 — BranchFormModal handleSave does NOT have dual-write mirror for migrated fields', () => {
+    const src = readFile('src/components/backend/BranchFormModal.jsx');
+    // Pre-Phase-3 had: form.settings?.phone || form.phone || ''. Cleanup removes that.
+    expect(src).not.toMatch(/form\.settings\?\.phone\s*\|\|\s*form\.phone/);
+    expect(src).not.toMatch(/form\.settings\?\.licenseNo\s*\|\|\s*form\.licenseNo/);
+    expect(src).not.toMatch(/form\.settings\?\.taxId\s*\|\|\s*form\.taxId/);
+    expect(src).not.toMatch(/form\.settings\?\.address\s*\|\|\s*form\.address/);
+    expect(src).not.toMatch(/form\.settings\?\.addressEn\s*\|\|\s*form\.addressEn/);
+  });
+
+  it('S11.4 — BranchFormModal UI inputs bind to form.settings.X (not form.X) for migrated fields', () => {
+    const src = readFile('src/components/backend/BranchFormModal.jsx');
+    // Inputs for the 5 deduplicated fields should bind to form.settings.X
+    expect(src).toMatch(/value=\{form\.settings\?\.phone/);
+    expect(src).toMatch(/value=\{form\.settings\?\.licenseNo/);
+    expect(src).toMatch(/value=\{form\.settings\?\.taxId/);
+    expect(src).toMatch(/value=\{form\.settings\?\.address\b/);
+    expect(src).toMatch(/value=\{form\.settings\?\.addressEn/);
+    // data-field anchors should match settings.X for scrollToError compatibility
+    expect(src).toMatch(/data-field="settings\.phone"/);
+    expect(src).toMatch(/data-field="settings\.licenseNo"/);
+    expect(src).toMatch(/data-field="settings\.taxId"/);
+    expect(src).toMatch(/data-field="settings\.address"/);
+    expect(src).toMatch(/data-field="settings\.addressEn"/);
+  });
+
+  it('S11.5 — validateBranch enforces settings.phone only (no top-level form.phone fallback)', () => {
+    const src = readFile('src/lib/branchValidation.js');
+    // Phase 3 cleanup: phone validation reads from form.settings.phone only.
+    // Pre-cleanup had: form.settings.phone || form.phone fallback.
+    // Look for the phone validation block.
+    const phoneBlock = src.match(/phone — required[\s\S]+?settings\.phone\b[\s\S]+?return null/);
+    expect(phoneBlock).not.toBeNull();
+    // Should not have legacy fallback like `form.settings.phone || form.phone`
+    const phoneLine = src.match(/const phoneRaw = [^;]+;/);
+    expect(phoneLine).not.toBeNull();
+    expect(phoneLine[0]).not.toMatch(/form\.settings.*\|\|.*form\.phone/);
   });
 });

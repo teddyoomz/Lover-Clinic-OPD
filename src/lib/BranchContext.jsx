@@ -312,14 +312,15 @@ export function resolveBranchName(branchId, branches) {
  * coming from clinic_settings.
  *
  * V51 / Spec #2 (2026-05-08) — extended for per-branch settings migration.
- * The merger now handles 13 migrated fields with 3-source cascade:
+ * Phase 3 cleanup (post-migration `--apply` 2026-05-08): flat-fallback removed.
  *
- * 5 DEDUPLICATING fields (currently top-level on branch + cs.X):
- *   `settings.X > flat branch.X > cs.X`
+ * The merger now handles 13 migrated fields with 2-source cascade:
+ *   `settings.X > cs.X`
+ *
+ * 5 DEDUPLICATING fields (previously also had flat branch.X — REMOVED in Phase 3):
  *   - phone, licenseNo, taxId, address, addressEn
  *
- * 8 NEW fields (migrating from cs.X to branch.settings.X):
- *   `settings.X > cs.X` (no flat branch fallback; cs.X is migration source)
+ * 8 NEW fields (migrated from cs.X to branch.settings.X):
  *   - clinicEmail, lineOfficialAccountUrl, patientSyncCooldownMins
  *   - openHoursMonFri, openHoursSatSun
  *   - chatHoursAlwaysOn, chatHoursMonFri, chatHoursSatSun
@@ -332,15 +333,9 @@ export function resolveBranchName(branchId, branches) {
  * Brand fields (logo, accentColor, clinicSubtitle) come from clinicSettings
  * unchanged because be_branches doesn't store branding.
  *
- * Defensive: empty string from branch is treated as "not set" → falls back
- * to clinicSettings. So a branch with empty `address` doesn't blank out
- * the global address.
- *
- * Backward-compat property: during transition (between Phase 1 commit and
- * Phase 3 cleanup), reads work for ALL 3 shapes:
- *   - New (post-migration): `branch.settings.X` → wins
- *   - Mid (flat-already-existed): `branch.X` flat → wins (5 dedup fields only)
- *   - Legacy (clinic_settings only): `cs.X` → fallback
+ * Defensive: empty string from settings is treated as "not set" → falls back
+ * to clinicSettings. So a branch with empty `settings.address` doesn't blank
+ * out the global address.
  *
  * @param {object} clinicSettings
  * @param {object} branch — be_branches doc (optional)
@@ -351,13 +346,13 @@ export function mergeBranchIntoClinic(clinicSettings, branch) {
   if (!branch || typeof branch !== 'object') return cs;
   const settings = (branch.settings && typeof branch.settings === 'object') ? branch.settings : {};
 
-  // 3-source picker for string fields (5 deduplicating fields).
-  const pickStr = (settingsVal, branchVal, csVal) => {
+  // 2-source picker for string fields (settings + cs).
+  // Phase 3 cleanup (V51 post-migration): flat branch.X fallback removed.
+  const pickStr = (settingsVal, csVal) => {
     if (typeof settingsVal === 'string' && settingsVal.trim()) return settingsVal;
-    if (typeof branchVal === 'string' && branchVal.trim()) return branchVal;
     return csVal;
   };
-  // 2-source picker for numeric fields (settings + cs only — no flat fallback).
+  // 2-source picker for numeric fields (settings + cs only).
   const pickNum = (settingsVal, csVal) => {
     if (Number.isFinite(settingsVal)) return settingsVal;
     return csVal;
@@ -381,17 +376,17 @@ export function mergeBranchIntoClinic(clinicSettings, branch) {
   return {
     ...cs,
     clinicName: effectiveClinicName,
-    clinicNameEn: pickStr(undefined, branch.nameEn, cs.clinicNameEn),  // nameEn stays at top-level
-    // 5 migrated fields — read settings.X > branch.X > cs.X
-    phone:        pickStr(settings.phone,     branch.phone,     cs.phone),
-    licenseNo:    pickStr(settings.licenseNo, branch.licenseNo, cs.licenseNo),
-    taxId:        pickStr(settings.taxId,     branch.taxId,     cs.taxId),
-    address:      pickStr(settings.address,   branch.address,   cs.address),
-    addressEn:    pickStr(settings.addressEn, branch.addressEn, cs.addressEn),
-    website:      pickStr(undefined,          branch.website,   cs.website),  // unchanged from V40
-    // 8 NEW fields — read settings.X > cs.X (no flat fallback; cs.X is migration source)
-    clinicEmail:             pickStr(settings.email,     undefined, cs.clinicEmail),
-    lineOfficialAccountUrl:  pickStr(settings.lineOaUrl, undefined, cs.lineOfficialAccountUrl),
+    clinicNameEn: pickStr(branch.nameEn, cs.clinicNameEn),  // nameEn stays at top-level (not migrated)
+    // 5 deduplicated fields — read settings.X > cs.X (Phase 3 cleanup: flat fallback removed)
+    phone:        pickStr(settings.phone,     cs.phone),
+    licenseNo:    pickStr(settings.licenseNo, cs.licenseNo),
+    taxId:        pickStr(settings.taxId,     cs.taxId),
+    address:      pickStr(settings.address,   cs.address),
+    addressEn:    pickStr(settings.addressEn, cs.addressEn),
+    website:      pickStr(branch.website,     cs.website),  // unchanged from V40 (not migrated)
+    // 8 NEW fields — read settings.X > cs.X (cs.X is migration source, will be empty post-migration)
+    clinicEmail:             pickStr(settings.email,     cs.clinicEmail),
+    lineOfficialAccountUrl:  pickStr(settings.lineOaUrl, cs.lineOfficialAccountUrl),
     patientSyncCooldownMins: pickNum(settings.patientSyncCooldownMins, cs.patientSyncCooldownMins),
     openHoursMonFri:         pickObj(settings.openHours?.monFri, cs.openHoursMonFri),
     openHoursSatSun:         pickObj(settings.openHours?.satSun, cs.openHoursSatSun),
