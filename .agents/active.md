@@ -1,53 +1,51 @@
 ---
-updated_at: "2026-05-08 V40 SHIPPED — 31 commits + 1 critical bug found+fixed + live prod e2e PASS"
-status: "master=ccc677d · 6859/6859 tests pass · build clean · prod=e36811f (V38..V40 NOT deployed — 9 commits behind)"
+updated_at: "2026-05-08 V40 SHIPPED + DEPLOYED — prod live, 6859/6859 tests pass, post-deploy e2e 7/7 PASS"
+status: "master=cea9fb6 · prod=cea9fb6 (V40 LIVE) · 6859/6859 tests pass · build clean"
 branch: "master"
-last_commit: "ccc677d"
+last_commit: "cea9fb6"
 tests: 6859
-production_url: "https://lover-clinic-app.vercel.app (LIVE at e36811f)"
-production_commit: "e36811f"
-firestore_rules_version: 27
+production_url: "https://lover-clinic-app.vercel.app (LIVE at cea9fb6)"
+production_commit: "cea9fb6"
+firestore_rules_version: 28
+storage_rules_version: 2
 ---
 
 # Active Context
 
 ## State
-- master = `ccc677d` · 6859/6859 tests pass (270 test files) · build clean
-- 9 commits ahead of prod (e36811f) — V38 spread-order fix + V39 migrate-button branchId stamp + V38-followup mass-sweep + comprehensive e2e + V40 spec + V40 implementation (this session)
-- V40 fully implemented: 23 plan tasks (Phase 1-7) + 4 bonus tasks (adversarial 38 + RTL 24 + full-sweep e2e 7 + post-bonus push)
-- 1 critical bug found + fixed during bonus review: `BranchBackupTab.jsx` was destructuring `selectedBranchId` from `useSelectedBranch()` but the real hook returns `branchId` — fix changed to rename pattern (every other consumer's pattern)
-- Live admin-SDK e2e against real prod Firestore + Storage: 7/7 PASS + cleanup verified zero orphans
+- master = `cea9fb6` · prod = `cea9fb6` (FULLY DEPLOYED)
+- 6859/6859 tests pass · build clean · 270 test files
+- V40 (Branch Backup/Restore/Make-Fresh) feature-complete + LIVE in production
+- 32 commits this session (V40 implementation + bonus comprehensive sweep)
+- 1 critical bug found + fixed during bonus review (BranchBackupTab `selectedBranchId` destructure mismatch)
 
-## V40 commit chain (31 total since baseline 464c327)
-**Phase 1 (3 helpers):** `103b904` `c2e08ec` (review fix) `febe37b` `573bf4c`
-**Phase 2 (3 endpoints + smoke + review fix):** `98c6467` `42e749f` `584ed2a` `39aa11e` `eb03311`
-**Phase 3 (storage rules + Rule B):** `c5798b3` `6852611` `fd5b43b`
-**Phase 4 (UI):** `391dcb8` `0fa38a2` `800ce3f` `f832646`
-**Phase 5 (Rule I tests + live e2e):** `291d383` `eef4238` `ccdaa0b` `19873cc`
-**Phase 6 (CLI mirrors):** `396ad6e` `18a1323` `cdf46fa`
-**Phase 7 (V40 docs + AV19):** `2ae4d59` `763d17d` `5a13d22`
-**Phase 7.4 (final verify + push):** `9449680` (test count fix)
-**Bonus (post-push, second push):** `47115fb` `35aa999` `fc76e1e` `ccc677d`
+## Deploy summary (2026-05-08)
+- **Firestore rules**: deployed (idempotent — no V40 changes; re-released for safety)
+- **Storage rules**: deployed (V40 NEW `match /backups/{branchId}/{file=**}` admin-only)
+- **Vercel**: deployed → `https://lover-clinic-app.vercel.app` (alias) ← `https://lover-clinic-mzdo9b9g3-teddyoomz-4523s-projects.vercel.app` (immutable URL)
+- **Probe-Deploy-Probe (Rule B)**: 4/4 unauth REST probes 200 pre-deploy + 200 post-deploy + V40 storage anon → 403 (correctly blocked) + 3 deployed admin endpoints respond 401 without token / 204 OPTIONS
+- **Post-deploy live e2e** (`scripts/e2e-branch-backup-full-sweep.mjs`): 7/7 PASS on real Firestore + Storage with TEST-prefixed fixtures, 6 items cleaned, zero orphans
 
-## Coverage
-- Helper unit tests: 25 H1-H5
-- Rule I flow-simulate: 15 FS1-FS3
-- Adversarial endpoint runtime tests: 38 (every error path + success path on all 3 endpoints)
-- UI RTL human-flow tests: 24 (BranchBackupTab + MakeFreshButton + MakeFreshModal)
-- Live admin-SDK e2e on real prod: 7 steps + 1 round-trip = 8 scenarios PASS
-- **Total V40 test count: 110 new tests + 8 live scenarios**
+## V40 features now LIVE in production
+- **Backup สาขา tab** (admin-only) — admin can export selectable tier (T1-T4) or per-collection backup → JSON in Firebase Storage → 24h signed URL download
+- **MakeFreshButton** (per branch row, admin-only) — typed-confirm modal → auto-pre-fresh-backup MANDATORY → wipe T1+T2+T3 + T4 customer-subcollections → restore-able from auto-backup
+- **Restore endpoint** (overwrite preserves docIds OR clone-T1 re-mints docIds + applies FK remap)
+- **3 CLI mirrors** (Rule M canonical) for dev / emergency use
 
-## Outstanding (user-triggered)
-- **Deploy 9 commits to Vercel + storage:rules + firestore:rules** — say "deploy" to ship V38..V40 to prod
-  - V40 storage.rules requires `firebase deploy --only firestore:rules,storage:rules` (Phase 3.3 combined deploy bundle) — Probe-Deploy-Probe extended to 7 endpoints (V40 added admin Storage probe)
-  - vercel `--prod` for endpoints + UI
+## V40 coverage
+- 25 helper unit tests (H1-H5)
+- 15 Rule I flow-simulate tests (FS1-FS3)
+- 38 adversarial endpoint runtime tests (E0-E3, every error code)
+- 24 UI RTL human-flow tests (UI1-UI3)
+- 8 live admin-SDK scenarios on real prod (Task 5.4 + Bonus 3 + post-deploy verify)
+- **Total: 110 tests + 8 live scenarios + 3 deployed-endpoint smoke checks**
+
+## Outstanding (user-triggered, none blocking)
 - 🚨 H-bis ProClinic full strip (deferred from prior sessions)
-- Hard-gate Firebase custom claim (deploy-coupled, deferred)
+- Hard-gate Firebase custom claim (deferred — defense-in-depth on top of existing isClinicStaff() rule)
 - /audit-all pre-release pass
 
 ## Next action
-Idle. V40 is feature-complete + comprehensively tested. Awaiting:
-- "deploy" → ship V38..V40 to prod with Probe-Deploy-Probe
-- New directive
+Idle. V40 fully shipped + deployed + verified. Awaiting new directive.
 
-Detail: `.agents/sessions/2026-05-08-v40-implementation-and-bonus-sweep.md` (to be written by /session-end)
+Detail: `.agents/sessions/2026-05-08-v40-implementation-and-bonus-sweep.md`
