@@ -2,8 +2,8 @@
 // One-way data store: cloned from ProClinic, never writes back.
 // Schema matches frontend patientData format for future migration.
 
-import { db, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
+import { db, auth, appId } from '../firebase.js';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp } from 'firebase/firestore';
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
@@ -9721,9 +9721,22 @@ export async function saveStaff(staffId, data) {
   // at the caller before saveStaff is invoked.
   const { password: _drop, ...safe } = normalized;
 
+  // V41 (2026-05-08) — audit-stamp isHidden transition. Read the existing doc
+  // BEFORE the write so we can detect transition; idempotent re-saves of the
+  // same isHidden value preserve the original transition record.
+  const existingSnap = await getDoc(staffDoc(id));
+  const wasHidden = !!(existingSnap.exists?.() && existingSnap.data()?.isHidden);
+  const willBeHidden = !!safe.isHidden;
+  const auditStamps = {};
+  if (wasHidden !== willBeHidden) {
+    auditStamps.hiddenAt = willBeHidden ? serverTimestamp() : null;
+    auditStamps.hiddenBy = willBeHidden ? (auth?.currentUser?.uid || null) : null;
+  }
+
   const now = new Date().toISOString();
   await setDoc(staffDoc(id), {
     ...safe,
+    ...auditStamps,
     staffId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
@@ -9907,9 +9920,20 @@ export async function saveDoctor(doctorId, data) {
 
   const { password: _drop, ...safe } = normalized;
 
+  // V41 (2026-05-08) — audit-stamp isHidden transition (mirror saveStaff).
+  const existingSnap = await getDoc(doctorDoc(id));
+  const wasHidden = !!(existingSnap.exists?.() && existingSnap.data()?.isHidden);
+  const willBeHidden = !!safe.isHidden;
+  const auditStamps = {};
+  if (wasHidden !== willBeHidden) {
+    auditStamps.hiddenAt = willBeHidden ? serverTimestamp() : null;
+    auditStamps.hiddenBy = willBeHidden ? (auth?.currentUser?.uid || null) : null;
+  }
+
   const now = new Date().toISOString();
   await setDoc(doctorDoc(id), {
     ...safe,
+    ...auditStamps,
     doctorId: id,
     createdAt: data.createdAt || now,
     updatedAt: now,
