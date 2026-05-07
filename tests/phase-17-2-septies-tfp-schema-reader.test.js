@@ -65,18 +65,37 @@ describe('Phase 17.2-septies — TFP reader field-name + branch banner', () => {
     });
   });
 
-  describe('S3 — course .map() reads canonical fields', () => {
-    it('S3.1 courseName-first fallback present in course map', () => {
-      expect(TFP_SRC).toMatch(/c\.courseName \|\| c\.name/);
+  describe('S3 — course .map() reads canonical fields (POST-V49 update)', () => {
+    // V49 refactor (2026-05-08) moved the legacy→canonical mapping from inline
+    // `c.X || c.legacyX` chains to the `beCourseToMasterShape` adapter helper.
+    // TFP buy-fetcher now delegates to the mapper — see line 1283 dynamic import.
+    // S3.x tests updated to lock the post-V49 pattern: canonical-only field
+    // names + delegation to mapper. The pre-V49 dual-read fallbacks are no
+    // longer needed inline (adapter handles them).
+
+    it('S3.1 — TFP imports beCourseToMasterShape canonical mapper (V44/V49)', () => {
+      expect(TFP_SRC).toMatch(/beCourseToMasterShape/);
     });
-    it('S3.2 salePrice-first chain present in course map', () => {
-      expect(TFP_SRC).toMatch(/c\.salePrice != null\s*\?\s*c\.salePrice\s*:\s*c\.price/);
+
+    it('S3.2 — TFP reads canonical c.salePrice in course pricing', () => {
+      // Post-V49: c.salePrice is the canonical field (legacy c.price fallback
+      // preserved in the mapper, not in TFP). Lock that TFP DOES read salePrice.
+      expect(TFP_SRC).toMatch(/c\.salePrice/);
     });
-    it('S3.3 courseCategory-first fallback present in course map', () => {
-      expect(TFP_SRC).toMatch(/c\.courseCategory \|\| c\.category/);
+
+    it('S3.3 — TFP reads canonical c.courseName for course display', () => {
+      // Post-V49: c.courseName is canonical. Legacy c.name fallback in mapper.
+      expect(TFP_SRC).toMatch(/c\.courseName/);
     });
-    it('S3.4 courseProducts-first fallback present', () => {
-      expect(TFP_SRC).toMatch(/c\.courseProducts \|\| c\.products/);
+
+    it('S3.4 — TFP delegates legacy→canonical mapping to beCourseToMasterShape (no inline fallback chain)', () => {
+      // Anti-regression: TFP MUST NOT reintroduce inline `c.courseProducts || c.products`
+      // pattern. The mapper handles that. Inline reintroduction would be a
+      // canonical-mapper-bypass class regression (V44 / AV22 lesson).
+      expect(TFP_SRC).not.toMatch(/c\.courseProducts \|\| c\.products/);
+      // TFP's course path should rely on the mapper; assert the canonical mapper
+      // is actively invoked (loose match — `beCourseToMasterShape(` somewhere).
+      expect(TFP_SRC).toMatch(/beCourseToMasterShape\s*\(/);
     });
   });
 

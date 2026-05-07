@@ -1,3 +1,4 @@
+// audit-branch-scope: TFP buy-fetcher needs beCourseToMasterShape canonical mapper (V44 single-source contract; mapper is branch-blind pure helper). Direct backendClient.js dynamic-import sanctioned because scopedDataLayer.js does NOT re-export bare beCourseToMasterShape; only listCoursesForPicker (which uses it internally) is exposed. Refactor to listCoursesForPicker would require restructuring buy fetcher's preloaded productLookup pattern; deferred until a clean refactor pass. See V49 V-entry + audit-branch-scope BS-1.
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { flushSync } from 'react-dom';
 import { LocalInput, LocalTextarea } from './form/LocalField.jsx';
