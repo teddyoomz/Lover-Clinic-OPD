@@ -180,6 +180,7 @@ export function emptyDoctorForm() {
     minimumDfType: '',
     hasSales: false,
     disabled: false,
+    isHidden: false,
     note: '',
     status: 'ใช้งาน',
     firebaseUid: '',

@@ -159,6 +159,7 @@ export function emptyStaffForm() {
     salaryDate: '',
     hasSales: false,
     disabled: false,
+    isHidden: false,
     note: '',
     status: 'ใช้งาน',
     firebaseUid: '',
