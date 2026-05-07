@@ -164,11 +164,12 @@ describe('UI1 — BranchBackupTab', () => {
     expect(body.collections).toBeNull();
     expect(body.isAutoPreFresh).toBe(false);
 
-    // Signed URL link should appear
-    await waitFor(() => expect(screen.getByText('Download')).toBeTruthy());
-    const link = screen.getByRole('link', { name: 'Download' });
+    // V40-prod-fix-4: signed URL link with "Download ไฟล์ (.json)" label + download attr
+    await waitFor(() => expect(screen.getByText(/Download ไฟล์/)).toBeTruthy());
+    const link = screen.getByRole('link', { name: /Download ไฟล์/ });
     expect(link.getAttribute('href')).toBe('https://signed.example/backup.json');
     expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.hasAttribute('download')).toBe(true); // V40-prod-fix-4 download attr
   });
 
   it('UI1.7 backup endpoint returns ok:false → error message shown', async () => {

@@ -59,9 +59,14 @@ export default async function handler(req, res) {
       const [metadata] = await file.getMetadata();
       const name = file.name.split('/').pop();
       const isAutoPreFresh = name?.startsWith('auto-pre-fresh-') || false;
+      // V40-prod-fix-4 (2026-05-08) — force browser download via responseDisposition.
+      // Without this, clicking the URL opens JSON inline (user reported).
+      const downloadName = `loverclinic-backup-${branchId}-${name}`;
       const [signedUrl] = await file.getSignedUrl({
         action: 'read',
         expires: Date.now() + 60 * 60 * 1000, // 1h read access
+        responseDisposition: `attachment; filename="${downloadName}"`,
+        responseType: 'application/json',
       });
       return {
         storagePath: file.name,

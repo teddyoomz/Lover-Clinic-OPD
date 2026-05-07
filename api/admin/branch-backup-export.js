@@ -146,9 +146,15 @@ export default async function handler(req, res) {
       metadata: { metadata: { branchId, sourceBranchId: branchId, schemaVersion: '1', exportedBy: caller.decoded.uid } },
     });
 
+    // V40-prod-fix-4 (2026-05-08) — force browser download via responseDisposition.
+    // Without this header, browser opens JSON inline (user reported as bug).
+    // Filename pattern: loverclinic-backup-{branchId}-{ISO}.json (URL-safe).
+    const downloadName = `loverclinic-backup-${branchId}-${new Date(ts).toISOString().replace(/[:.]/g, '-')}.json`;
     const [signedUrl] = await bucket.file(storagePath).getSignedUrl({
       action: 'read',
       expires: Date.now() + 24 * 60 * 60 * 1000,
+      responseDisposition: `attachment; filename="${downloadName}"`,
+      responseType: 'application/json',
     });
 
     const auditId = `branch-backup-${ts}-${randHex()}`;

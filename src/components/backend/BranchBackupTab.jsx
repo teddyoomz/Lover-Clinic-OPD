@@ -13,6 +13,21 @@ const TIER_LABELS = {
   [BACKUP_TIER_T4]: 'T4 — Customer subcollections',
 };
 
+// V40-prod-fix-4 (2026-05-08) — smart size formatter so small files (e.g.
+// 4 KB) don't display as "0.00 MB" (user reported confusion).
+function formatBytes(b) {
+  if (!b || b < 0) return '0 B';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(2)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(2)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function totalBackupDocs(perCollectionCounts) {
+  if (!perCollectionCounts) return 0;
+  return Object.values(perCollectionCounts).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
 export default function BranchBackupTab({ theme = 'dark' }) {
   const { branchId: selectedBranchId } = useSelectedBranch();
   const [tiersChecked, setTiersChecked] = useState({ T1: true, T2: true, T3: true, T4: true });
@@ -111,16 +126,28 @@ export default function BranchBackupTab({ theme = 'dark' }) {
 
         {error && <div className="text-rose-400 text-sm">{error}</div>}
         {recent && (
-          <div className="text-emerald-400 text-sm">
-            ✓ Backup สำเร็จ — {(recent.sizeBytes / 1024 / 1024).toFixed(2)} MB
-            <a href={recent.signedUrl} target="_blank" rel="noopener noreferrer" className="ml-2 underline">Download</a>
-            <button
-              type="button"
-              onClick={() => handleQuickPickForRestore(recent.storagePath)}
-              className="ml-2 underline text-amber-300"
-            >
-              ใช้ไฟล์นี้ Restore
-            </button>
+          <div className="text-emerald-400 text-sm space-y-1">
+            <div>
+              ✓ Backup สำเร็จ — {totalBackupDocs(recent.perCollectionCounts)} docs · {formatBytes(recent.sizeBytes)}
+            </div>
+            <div className="flex gap-3 text-xs">
+              <a
+                href={recent.signedUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1 rounded bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 inline-flex items-center gap-1.5"
+              >
+                <Download size={12} /> Download ไฟล์ (.json)
+              </a>
+              <button
+                type="button"
+                onClick={() => handleQuickPickForRestore(recent.storagePath)}
+                className="px-3 py-1 rounded bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 inline-flex items-center gap-1.5"
+              >
+                <RotateCcw size={12} /> ใช้ไฟล์นี้ Restore
+              </button>
+            </div>
           </div>
         )}
       </section>
@@ -204,7 +231,7 @@ function BackupsList({ branchId, onPickForRestore }) {
               {items.map(b => (
                 <tr key={b.storagePath} className="border-t border-[var(--bd)]">
                   <td className="px-3 py-2 font-mono">{b.name}</td>
-                  <td className="px-3 py-2 text-right">{(b.size / 1024 / 1024).toFixed(2)} MB</td>
+                  <td className="px-3 py-2 text-right">{formatBytes(b.size)}</td>
                   <td className="px-3 py-2">{b.createdAt ? new Date(b.createdAt).toLocaleString('th-TH') : '-'}</td>
                   <td className="px-3 py-2">
                     {b.isAutoPreFresh ? (
@@ -214,7 +241,15 @@ function BackupsList({ branchId, onPickForRestore }) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right space-x-2 whitespace-nowrap">
-                    <a href={b.signedUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Download</a>
+                    <a
+                      href={b.signedUrl}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline"
+                    >
+                      Download
+                    </a>
                     <button
                       type="button"
                       onClick={() => onPickForRestore?.(b.storagePath)}
