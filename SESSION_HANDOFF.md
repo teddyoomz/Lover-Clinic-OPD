@@ -7,16 +7,31 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #4 — Spec #1 Rule P (class-of-bug expansion) + Spec #2 Per-branch Settings Phase 1+2 SHIPPED via merge `3ca2c30`
+- **Date last updated**: 2026-05-08 EOD #4 FINAL — Rule P + Per-branch Settings Phase 1+2+3 + TFP fixes DEPLOYED to prod (`2318557`)
 - **Branch**: `master`
-- **Last commit**: `3ca2c30` (merge: Spec #1 + Spec #2 feature branch). 7 in-feature commits + merge commit on master.
-- **Test count (targeted)**: 109/109 GREEN: per-branch-settings 49/49 + audit-branch-scope BS-1..10 16/16 + audit-class-of-bug-discipline CB-1..5 18/18 + V50 AV28 26/26. **5 pre-existing TFP failures** (BSA T6.1 + phase-17-2-septies S3) NOT touched this session.
-- **Build**: clean. BackendDashboard 933 KB · AdminDashboard 383 KB.
-- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 + EOD #3 docs + Spec #1 + Spec #2 + Plans + Rule P + per-branch settings Phase 1+2 ALL committed but **NOT deployed**). 18 commits ahead of prod, pending one combined `vercel --prod` (V18).
-- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts + interactions with Rule N/D/I). Rule H-bis = EXECUTED (V50). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED). **V51 migration NOT YET applied** (`scripts/v51-migrate-clinic-settings-to-branch.mjs` ready; user runs `--apply` LOCALLY post-merge).
-- **Phase 3 deferred** (Plan #2): cleanup dual-shape fallback ships AFTER migration `--apply` confirmed converged. Standalone commit later.
-- **Plan #1 deferred** (Tasks 3+4+8): user-level skill updates (`~/.claude/skills/{systematic-debugging,verification-before-completion}/SKILL.md` + memory file). Apply when ready.
+- **Last commit**: `2318557` (fix(vercel): drop api/proclinic/*.js functions config — V50 strip cleanup)
+- **Test count (targeted)**: 109+/109 GREEN: per-branch-settings 54/54 + audit-branch-scope BS-1..10 16/16 + audit-class-of-bug-discipline CB-1..5 18/18 + V50 AV28 26/26 + bsa-task6-ui-imports 1/1 + phase-17-2-septies 18/18. **5 pre-existing TFP failures ELIMINATED** this session.
+- **Build**: clean.
+- **Deploy state**: **PRODUCTION = `2318557`** (in sync with master). Last deploy `lover-clinic-5rb798enr` aliased to `lover-clinic-app.vercel.app`.
+- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + **V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`)**.
+- **All Plan #1 + Plan #2 in-repo + user-level work**: SHIPPED. Phase 3 cleanup landed post-migration.
+
+### Session 2026-05-08 EOD #4 FINAL — All shipped + deployed
+
+Continuation of EOD #4 — user authorized items 1+3+4+5 (migration → Phase 3 → user-level skills → TFP failures) + final deploy. All complete.
+
+**Migration `--apply`**: 3/3 branches migrated (นครราชสีมา + พระราม 3 + ทดลอง 1); 21 fields cleared from `clinic_settings/main`; idempotency confirmed; audit doc emitted.
+
+**Plan #2 Phase 3 cleanup** (`72bc885`): `mergeBranchIntoClinic` flat-fallback removed (2-arg cascade `settings.X || cs.X`); `emptyBranchForm` top-level migrated fields removed; BranchFormModal UI bound to `form.settings.X` + dual-write removed; S11 regression group (5 tests) locks the cleanup state. 54/54 tests + 34/34 audits GREEN.
+
+**Plan #1 user-level Tasks 3+4+8**: `~/.claude/skills/systematic-debugging/SKILL.md` Δ1-Δ5 + `~/.claude/skills/verification-before-completion/SKILL.md` Δ1-Δ8 + `MEMORY.md` Rule P pointer + new `feedback_class_of_bug_expansion.md`.
+
+**5 pre-existing TFP failures fixed** (`7ce9b7a`) via Rule P 7-step (eat-our-own-dogfood post-Spec #1 ship): T6.1 sanctioned annotation on TFP first line; S3.1-S3.4 updated to lock post-V49 mapper-delegation pattern + S3.4 anti-regression for V44/AV22 canonical-mapper-bypass class. Cross-file grep confirmed isolated case.
+
+**Deploy** (`2318557`): vercel.json had stale `api/proclinic/*.js` functions config (V50 deleted that dir). Build failure → 1-line fix → redeployed clean. Production live at `lover-clinic-app.vercel.app`.
+
+Detail: `.agents/sessions/2026-05-08-rule-p-and-per-branch-settings-shipped.md`
 
 ### Session 2026-05-08 EOD #4 — Rule P + Per-branch Settings Phase 1+2 SHIPPED
 
@@ -726,25 +741,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — V50 ProClinic strip COMPLETE; resume interrupted brainstorming.
+Resume LoverClinic — idle; Rule P + per-branch settings shipped + DEPLOYED.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=POST-V50 EOD #3, prod=c92f924 — 8 commits ahead)
-3. .agents/active.md (7261/7266 tests PASS · brainstorming asks PENDING)
-4. .claude/rules/00-session-start.md (iron-clad A-O + V42-V50 V-summary)
-5. .agents/sessions/2026-05-08-v50-proclinic-strip.md (Phase 1-2 detail)
+2. SESSION_HANDOFF.md (master=2318557, prod=2318557 — in sync)
+3. .agents/active.md (109+/109 targeted tests PASS · idle)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V50 V-summary; Rule P locked 2026-05-08)
+5. (if needed) .agents/sessions/2026-05-08-rule-p-and-per-branch-settings-shipped.md
 
-Status: master=POST-V50.Phase 7 + EOD #3 docs, 7261/7266 tests pass, prod=c92f924. V50 ProClinic strip COMPLETE — 7 phases shipped, ~12K LOC removed, 2,599 prod docs deleted, AV28 audit invariant + 26 regression tests, V50 V-entry locked, **Rule H-bis EXECUTED**. AdminDashboard + BackendDashboard unified on be_*. Auto-link/cascade-delete/move-appointment/BSA branch isolation preserved across all 7 phases.
+Status: master=prod=`2318557` LIVE at lover-clinic-app.vercel.app. Per-branch settings migration applied on 3 prod branches. Iron-clad Rule P + AV29 + BS-10 + CB-1..5 invariants permanent. All Plan #1+Plan #2 in-repo + user-level work shipped.
 
-Next action: invoke `Skill(brainstorming)` to resume interrupted asks (HARD-GATE Rule J): (1) NEW iron-clad rule (likely Rule P) for test-failure-class-of-bug expansion mandate + update `systematic-debugging` + `verification-before-completion` skills; (2) Per-branch settings migration — move ClinicSettingsPanel sections (LINE OA URL · CLINIC PHONE · ข้อมูลคลินิก · เวลาเปิด-ปิด · เวลาทำการแชท) into BranchFormModal CRUD, EXCLUDE เวลาแพทย์เข้า, wire frontend consumers via BranchContext, eliminate global duplicates. Brainstorming workflow STARTED at Explore phase (ClinicSettingsPanel.jsx + 17 consumers grepped) but NO Q1-Q4 asked + NO design proposed yet.
+Next: idle — awaiting user directive.
 
-Outstanding (user-triggered):
-- 🚨 V49 + V50.Phase 1-7 + EOD #3 docs vercel --prod (V18 — explicit "deploy" THIS turn) [8 commits ahead]
-- Brainstorming asks #1 + #2 (RESUME mid-flow)
-- 5 pre-existing TFP test failures (BSA T6.1 + phase-17-2-septies S3) — separate task
+Outstanding (deferred, user-triggered):
+- (optional) Clean firestore.rules of pc_*/master_data/broker_jobs/proclinic_session legacy match blocks (rules deploy + Probe-Deploy-Probe per Rule B)
+- (optional) Delete dead orphan master_data/* CRUD helpers in backendClient.js + scopedDataLayer.js (AV28.4 sanctioned exception)
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE (plan-mode is ORTHOGONAL — invoke Skill(brainstorming) FIRST); Rule K work-first-test-last; Rule L BSA + AV17; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity + productName live-resolve; V37 NEVER `git add -A`; NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..10; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only.
 
 /session-start
 ```
