@@ -38,6 +38,7 @@
   - งาน 2+ ตัวที่ไม่ติดกัน → `dispatching-parallel-agents`
   - implementation เสร็จ → `finishing-a-development-branch`
   - User explicit instruction (CLAUDE.md / iron-clad A-I) override skill behavior เมื่อ conflict (per `using-superpowers` Instruction Priority).
+- **P. 🆕 Class-of-bug expansion at every bug discovery** (2026-05-08 หลัง V42-V49 saga) — ทุก bug discovery → 7-step expansion (diagnose → classify → cross-file grep → fix all → regression test → AVxx → escalate iron-clad เมื่อ architectural). Tier 2 default artifacts. Stop = /audit-class-of-bug-discipline green + classifier 0 remaining + full suite green. ดู `.claude/rules/00-session-start.md` Rule P + `01-iron-clad.md` Rule P.
 
 ---
 

@@ -300,6 +300,8 @@ tx.set(stockMovementDoc(id), {
   - Applies to **every future master-data entity** — when we add a new entity (e.g. bank_accounts, expense_categories, document_templates), its sync + import UI lives in `MasterDataTab`, its CRUD tab is Firestore-only
   - Why: keeps Rule E clean (MasterDataTab is the ONE sanctioned exception), keeps the strip list stable (production release removes exactly one backend tab + brokerClient + api/proclinic/master dispatcher), and gives users one mental location for "refresh from ProClinic" instead of per-tab buttons
 
+- **P. 🆕 Class-of-bug expansion at every bug discovery** (2026-05-08 after V42-V49 saga 7-round class-of-bug class) — ทุก bug discovery (test red / user-report / claude-noticed / audit-red) ต้อง **7-step expansion**: diagnose → classify class-of-bug → cross-file grep → fix all in batch → regression test → AVxx invariant → escalate iron-clad rule + V-entry เมื่อ architectural. Stop = `/audit-class-of-bug-discipline` green + classifier doc 0 remaining + full suite green. Trigger discrimination **strict** (ทุก red); scope **broad** (test+user+claude+audit). NO quick fix-and-ship. **Tier 2 default artifacts** (regression test + AVxx + classifier doc); Tier 3 escalation (V-entry + iron-clad rule) เฉพาะ architectural. ดู `.claude/rules/01-iron-clad.md` Rule P (full workflow + Tier 1/2/3 artifacts + 7 anti-patterns + audit hook).
+
 ---
 
 ## 2. PAST VIOLATIONS — compact summary
