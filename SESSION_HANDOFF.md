@@ -7,15 +7,43 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 1-7 SHIPPED, H-bis EXECUTED) + 2 brainstorming asks PENDING (interrupted)
+- **Date last updated**: 2026-05-08 EOD #4 — Spec #1 Rule P (class-of-bug expansion) + Spec #2 Per-branch Settings Phase 1+2 SHIPPED via merge `3ca2c30`
 - **Branch**: `master`
-- **Last commit**: EOD #3 docs (V50 V-entry + AV28 invariant + active.md + SESSION_HANDOFF.md). V50.Phase 7 final at `0780516`.
-- **Test count**: 7261/7266 PASS (5 pre-existing TFP failures: BSA T6.1 + phase-17-2-septies S3 — NOT V50-caused, confirmed via stash-test)
-- **Build**: clean. BackendDashboard chunk 1018→933 KB, AdminDashboard 398→383 KB.
-- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 + EOD #3 docs ALL committed but **NOT deployed**). 8 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
-- **Iron-clad rule status**: Rule O (V46-V48) + AV20-AV28 invariant set complete. **Rule H-bis = EXECUTED** (was "IN PROGRESS"; V50 closes the dev-only-scaffolding strip).
-- **Migrations applied on prod**: V43 (3 entries on LC-26000006) + V46 (2 poisoned batches) + V49 e2e audit doc + V50.Phase 6 cleanup (2,599 docs DELETED + audit doc emit).
-- **Brainstorming asks PENDING** (interrupted at Explore phase — RESUME NEXT SESSION): (1) NEW iron-clad rule for test-failure-class-of-bug expansion + skill updates; (2) ClinicSettingsPanel → per-branch BranchFormModal migration with frontend wiring. Detail: `.agents/active.md`.
+- **Last commit**: `3ca2c30` (merge: Spec #1 + Spec #2 feature branch). 7 in-feature commits + merge commit on master.
+- **Test count (targeted)**: 109/109 GREEN: per-branch-settings 49/49 + audit-branch-scope BS-1..10 16/16 + audit-class-of-bug-discipline CB-1..5 18/18 + V50 AV28 26/26. **5 pre-existing TFP failures** (BSA T6.1 + phase-17-2-septies S3) NOT touched this session.
+- **Build**: clean. BackendDashboard 933 KB · AdminDashboard 383 KB.
+- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 + EOD #3 docs + Spec #1 + Spec #2 + Plans + Rule P + per-branch settings Phase 1+2 ALL committed but **NOT deployed**). 18 commits ahead of prod, pending one combined `vercel --prod` (V18).
+- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts + interactions with Rule N/D/I). Rule H-bis = EXECUTED (V50). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED). **V51 migration NOT YET applied** (`scripts/v51-migrate-clinic-settings-to-branch.mjs` ready; user runs `--apply` LOCALLY post-merge).
+- **Phase 3 deferred** (Plan #2): cleanup dual-shape fallback ships AFTER migration `--apply` confirmed converged. Standalone commit later.
+- **Plan #1 deferred** (Tasks 3+4+8): user-level skill updates (`~/.claude/skills/{systematic-debugging,verification-before-completion}/SKILL.md` + memory file). Apply when ready.
+
+### Session 2026-05-08 EOD #4 — Rule P + Per-branch Settings Phase 1+2 SHIPPED
+
+User invoked `/brainstorming` to address 2 pending asks from EOD #3. Both went through full Q&A → spec → writing-plans → subagent-driven execution → merge to master in one rollout.
+
+**Spec #1 — Rule P (Class-of-bug expansion)** — IN-REPO COMPLETE:
+- 5 commits + merge: `47a7315` Rule P body in 01-iron-clad.md → `a80ca65` compact entries → `03fea77` NEW /audit-class-of-bug-discipline skill → `67efc98` 18-test bank → `98e2f34` register in /audit-all Tier 5
+- 7-step expansion discipline: diagnose → classify → cross-file grep → fix all → regression test → AVxx invariant → escalate iron-clad when architectural
+- Tier 2 default artifacts (regression test + AVxx + classifier doc); Tier 3 (V-entry + iron-clad rule) for architectural
+- Trigger: broad (test red / user-report / claude-noticed / audit-red); discrimination: strict (every red triggers)
+
+**Spec #2 — Per-branch Settings Migration** — PHASES 1+2 SHIPPED:
+- Phase 1 (`a2618b5`): Extended `mergeBranchIntoClinic` with 13-field 3-source cascade (settings.X > flat branch.X > cs.X). Swept 7 actual consumers (spec projected 17 — most pass-through). BS-10 invariant + AV29 invariant + 49-test bank.
+- Phase 2 (`8c112d2`): Shared TimeSelect24 (Rule of 3). BranchFormModal 4 new sections. ClinicSettingsPanel 7-section deletion (610→324 LOC). branchValidation extension. NEW `scripts/v51-migrate-clinic-settings-to-branch.mjs` (Rule M canonical).
+
+**Process notes**:
+- Used `superpowers:brainstorming` (Q1-Q4 for each spec) → `writing-plans` (both plans authored) → `using-git-worktrees` (.worktrees/rule-p-and-per-branch-settings) → `subagent-driven-development` (3 implementer dispatches across batches) → merge to master with `--no-ff` to preserve history visibility
+- Worktree cleaned up post-merge; feature branch deleted
+
+**Outstanding**:
+- 🚨 Migration `--apply` (Rule M canonical workflow; runs LOCALLY from F:/LoverClinic-app; not deploy-coupled)
+- 🚨 V49+V50+specs+plans+Rule P+per-branch settings = 18 commits → combined `vercel --prod` (V18 explicit "deploy")
+- Plan #2 Phase 3 cleanup (post-migration; 1-line change)
+- Plan #1 Tasks 3+4+8 (user-level files outside repo)
+- 5 pre-existing TFP failures (separate task)
+
+Detail: `.agents/active.md` + design specs in `docs/superpowers/specs/` + plans in `docs/superpowers/plans/`
 
 ### Session 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 3-7 shipped)
 
