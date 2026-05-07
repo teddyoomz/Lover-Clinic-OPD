@@ -53,9 +53,14 @@ describe('Phase 16.3 RG.C — anti-regression', () => {
     expect(RULES).toMatch(/match \/clinic_settings\/\{settingId\}\s*\{[\s\S]{0,200}allow write:\s*if isClinicStaff\(\)/);
   });
 
-  test('C.2 — proclinic_session + proclinic_session_trial still open (cookie-relay extension write path)', () => {
-    expect(RULES).toMatch(/match \/clinic_settings\/proclinic_session\s*\{[\s\S]{0,150}allow read, write:\s*if true/);
-    expect(RULES).toMatch(/match \/clinic_settings\/proclinic_session_trial\s*\{[\s\S]{0,150}allow read, write:\s*if true/);
+  test('C.2 — proclinic_session + proclinic_session_trial blocks REMOVED (V50-followup ProClinic strip)', () => {
+    // V50-followup (2026-05-08) — cookie-relay extension was deleted in
+    // V50 Phase 2.2; ProClinic session-cookie docs cleaned in Phase 6.
+    // Specific match blocks for `clinic_settings/proclinic_session*` removed
+    // in this commit. Default-deny applies to any residual ghost docs.
+    // AV28 audit invariant locks no runtime references from src/ or api/.
+    expect(RULES).not.toMatch(/match \/clinic_settings\/proclinic_session\s*\{/);
+    expect(RULES).not.toMatch(/match \/clinic_settings\/proclinic_session_trial\s*\{/);
   });
 
   test('C.3 — isClinicStaff helper unchanged (V26 admin claim check)', () => {

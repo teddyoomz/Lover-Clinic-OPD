@@ -36,10 +36,8 @@ vi.mock('../src/lib/reportsLoaders.js', () => ({
 }));
 
 vi.mock('../src/lib/backendClient.js', () => ({
-  getAllMasterDataItems: vi.fn(async () => FIX_PRODUCTS),
-  // Phase 14.10-tris — be_* read helpers replaced legacy getAllMasterDataItems.
-  // Reuse FIX_PRODUCTS for listProducts since the StockReportTab now reads via
-  // listProducts; other helpers stub to empty arrays.
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
+  // StockReportTab reads via listProducts (canonical) — Phase 14.10-tris.
   listAllSellers: () => Promise.resolve([]),
   listProducts: () => Promise.resolve(FIX_PRODUCTS),
   listCourses: () => Promise.resolve([]),

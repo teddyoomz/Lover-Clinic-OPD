@@ -1262,13 +1262,14 @@ describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.co
   it('F17.16: TFP openBuyModal whitelist preserves courseType + daysBeforeExpire + period', () => {
     // Same pattern as F17.15 but for the in-visit buy flow (TFP has its
     // own openBuyModal because it shows a different UI).
-    // NOTE: TFP has multiple getAllMasterDataItems('courses') calls —
-    // the first one is in the useEffect that populates `options.*`, NOT
-    // the buy modal. Scan for the SECOND occurrence which is inside
-    // openBuyModal.
-    const firstIdx = TFP.indexOf("getAllMasterDataItems('courses')");
+    // V50 (2026-05-08) — anchor migrated from getAllMasterDataItems('courses')
+    // → listCourses() per AV28 ProClinic strip. TFP has multiple listCourses()
+    // calls — the first one is in the useEffect that populates `options.*`,
+    // NOT the buy modal. Scan for the SECOND occurrence which is inside
+    // openBuyModal (`else if (type === 'course')`).
+    const firstIdx = TFP.indexOf('listCourses(');
     expect(firstIdx).toBeGreaterThan(-1);
-    const openBuyIdx = TFP.indexOf("getAllMasterDataItems('courses')", firstIdx + 1);
+    const openBuyIdx = TFP.indexOf('listCourses(', firstIdx + 1);
     expect(openBuyIdx).toBeGreaterThan(-1);
     const block = TFP.slice(openBuyIdx, openBuyIdx + 1500);
     expect(block).toMatch(/courseType:\s*c\.courseType/);
@@ -1342,8 +1343,9 @@ describe('F17: course-expiry flow (ProClinic sync → be_courses → customer.co
   });
 
   it('F17.19: TFP openBuyModal filters shadow courses (same rule as SaleTab)', () => {
-    const firstIdx = TFP.indexOf("getAllMasterDataItems('courses')");
-    const openBuyIdx = TFP.indexOf("getAllMasterDataItems('courses')", firstIdx + 1);
+    // V50 (2026-05-08) — anchor migrated to listCourses() per AV28.
+    const firstIdx = TFP.indexOf('listCourses(');
+    const openBuyIdx = TFP.indexOf('listCourses(', firstIdx + 1);
     expect(openBuyIdx).toBeGreaterThan(-1);
     const block = TFP.slice(openBuyIdx, openBuyIdx + 2000);
     expect(block).toMatch(/\.filter\(c\s*=>\s*\{/);

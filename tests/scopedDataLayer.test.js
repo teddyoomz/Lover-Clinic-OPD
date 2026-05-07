@@ -112,9 +112,7 @@ vi.mock('../src/lib/backendClient.js', () => {
     getDeposit: mockLister('getDeposit'),
     getAllDeposits: mockLister('getAllDeposits'),
     getSaleByTreatmentId: mockLister('getSaleByTreatmentId'),
-    getMasterDataMeta: mockLister('getMasterDataMeta'),
     getActiveSchedulesForDate: mockLister('getActiveSchedulesForDate'),
-    getBeBackedMasterTypes: mockLister('getBeBackedMasterTypes'),
     getAudience: mockLister('getAudience'),
     getDocumentTemplate: mockLister('getDocumentTemplate'),
     listDocumentDrafts: mockLister('listDocumentDrafts'),
@@ -190,8 +188,6 @@ vi.mock('../src/lib/backendClient.js', () => {
     deleteBackendAppointment: mockLister('deleteBackendAppointment'),
     deleteDeposit: mockLister('deleteDeposit'),
     deleteMembership: mockLister('deleteMembership'),
-    deleteMasterCourse: mockLister('deleteMasterCourse'),
-    deleteMasterItem: mockLister('deleteMasterItem'),
 
     // ── BS2.9 surface-completeness mocks (Task 4-CR) ───────────────────────
     // Listeners (raw — useBranchAwareListener wraps in Task 5)

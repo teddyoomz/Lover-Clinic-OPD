@@ -54,22 +54,6 @@ service cloud.firestore {
         );
       }
 
-      // ── ProClinic session cookies (cookie-relay extension writes unauth) ──
-      // The Chrome extension PATCHes cached cookies to these docs via
-      // Firestore REST without a Firebase auth token. Same rationale as
-      // pc_* mirror + chat_conversations — Vercel serverless likewise reads
-      // these docs unauth. Read stays open (cookies are long-expiring
-      // random tokens, not user PII). Write stays open so the extension
-      // auto-sync + popup manual sync can land cookies.
-      // 2026-04-20 — explicit rules after Phase 11.2 deploy overwrote the
-      // permissive Console edit that previously granted this (V1 repeat).
-      match /clinic_settings/proclinic_session {
-        allow read, write: if true;
-      }
-      match /clinic_settings/proclinic_session_trial {
-        allow read, write: if true;
-      }
-
       // ── Form Templates (custom intake/follow-up forms — staff-authored) ──
       // Read: any signed-in user (admin + kiosk) needs to render forms.
       // Write: clinic staff only.
@@ -482,16 +466,11 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
-      // ── Master Data (products, doctors, staff, courses, promotions) ──
-      match /master_data/{type} {
-        allow read: if isSignedIn();
-        allow write: if isClinicStaff();
-
-        match /items/{itemId} {
-          allow read: if isSignedIn();
-          allow write: if isClinicStaff();
-        }
-      }
+      // V50 (2026-05-08) — `master_data/*` block REMOVED. ProClinic dev-only
+      // sync infrastructure deleted in V50 Phase 2.2 + 2,599 docs cleaned in
+      // Phase 6. Default-deny applies to any residual ghost docs; they're
+      // inert. AV28 audit invariant locks no runtime reads/writes of these
+      // collections from src/.
 
       // ── Treatment chart/image backups ──
       match /treatments/{treatmentId} {
@@ -533,53 +512,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
-      // ── ProClinic mirror (sync cache — written by api/proclinic/* REST) ──
-      // Same rationale as chat_conversations: server-side syncers have no
-      // Firebase auth context. Staff-only read keeps PII out of public access;
-      // open write is the trade until api/_lib gets a service-account helper.
-      match /pc_appointments/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_customers/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_customer_appointments/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_courses/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_doctors/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_treatments/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_treatment_history/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_chart_templates/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_form_options/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      match /pc_inventory/{docId} {
-        allow read: if isClinicStaff();
-        allow write: if true;
-      }
-      // NOTE: Phase 9 marketing (promotion/coupon/voucher) is backend-only
-      // per rule 03 — no ProClinic sync needed. pc_promotions/coupons/vouchers
-      // collections intentionally removed.
+      // V50 (2026-05-08) — `pc_*` mirror blocks REMOVED. ProClinic dev-only
+      // sync infrastructure deleted in V50 Phase 2.2; 2,097 mirror docs
+      // cleaned in Phase 6 (pc_treatments=1132 + pc_customers=450 +
+      // pc_courses=244 + pc_treatment_history=247 + pc_appointments=14 +
+      // pc_chart_templates=3 + pc_form_options=2 + pc_inventory=2 +
+      // pc_doctors=1 + pc_customer_appointments=2). Default-deny applies
+      // to any residual ghost docs; inert. AV28 audit invariant locks no
+      // runtime reads/writes from src/.
 
       // ── Chat config ──
       match /chat_config/{docId} {
@@ -604,15 +544,11 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
-      // ── ProClinic cookie relay ──
-      match /proclinic_session/{docId} {
-        allow read, write: if isClinicStaff();
-      }
-
-      // ── Broker jobs (automation relay) ──
-      match /broker_jobs/{jobId} {
-        allow read, write: if isClinicStaff();
-      }
+      // V50 (2026-05-08) — `proclinic_session/*` + `broker_jobs/*` blocks
+      // REMOVED. Cookie-relay extension (Chrome MV3) + broker-job orchestrator
+      // deleted in V50 Phase 2.2 (-10,318 LOC infrastructure strip). Default-
+      // deny applies to any residual ghost docs. AV28 audit invariant locks
+      // no runtime references from src/ or api/.
     }
   }
 }

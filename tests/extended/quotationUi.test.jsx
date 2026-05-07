@@ -42,7 +42,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listPromotions: (...a) => Promise.resolve([]),
   convertQuotationToSale: (...a) => Promise.resolve({}),
   getBackendSale: (...a) => Promise.resolve(null),
-  getAllMasterDataItems: (...a) => mockGetAllMasterDataItems(...a),
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
+  // Existing mockGetAllMasterDataItems closure is reused via listCourses /
+  // listProducts entries above — same fixture data, canonical entry point.
 }));
 
 const QuotationTab = (await import('../src/components/backend/QuotationTab.jsx')).default;

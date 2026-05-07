@@ -201,7 +201,9 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),
   deletePromotion: vi.fn(),
   savePromotion: vi.fn(),
-  getAllMasterDataItems: vi.fn(async () => []),
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
+  listCourses: vi.fn(async () => []),
+  listProducts: vi.fn(async () => []),
 }));
 vi.mock('../src/components/backend/PromotionFormModal.jsx', () => ({ default: () => null }));
 

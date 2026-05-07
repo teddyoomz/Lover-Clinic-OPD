@@ -43,7 +43,7 @@ vi.mock('../src/lib/backendClient.js', () => ({
     return () => {};
   },
   getAllCustomers: vi.fn(() => Promise.resolve([])),
-  getAllMasterDataItems: vi.fn(() => Promise.resolve({})),
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
   listHolidays: (...a) => mockListHolidays(...a),
   listenToHolidays: (onChange, onError) => {
     Promise.resolve(mockListHolidays()).then(

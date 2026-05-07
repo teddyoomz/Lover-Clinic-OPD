@@ -400,10 +400,10 @@ export const getDeposit = (...args) => raw.getDeposit(...args);
 // getAllDeposits — moved up to "Financial" group (branch-scoped). DO NOT
 // re-export as universal here; that would shadow the auto-inject wrapper.
 export const getSaleByTreatmentId = (...args) => raw.getSaleByTreatmentId(...args);
-export const getMasterDataMeta = (...args) => raw.getMasterDataMeta(...args);
+// V50 (2026-05-08) — getMasterDataMeta + getBeBackedMasterTypes re-exports
+// REMOVED (master_data dual-read shim deleted in backendClient.js post-V50).
 // getActiveSchedulesForDate — moved to branch-aware-listeners block above
 // (Phase 17.2-ter) where it auto-injects branchId at the 3rd positional arg.
-export const getBeBackedMasterTypes = (...args) => raw.getBeBackedMasterTypes(...args);
 
 // ─── Writes — re-export raw (Phase BS V2 stamping handled inside) ──────────
 
@@ -478,8 +478,9 @@ export const deleteBackendSale = (...args) => raw.deleteBackendSale(...args);
 export const deleteBackendAppointment = (...args) => raw.deleteBackendAppointment(...args);
 export const deleteDeposit = (...args) => raw.deleteDeposit(...args);
 export const deleteMembership = (...args) => raw.deleteMembership(...args);
-export const deleteMasterCourse = (...args) => raw.deleteMasterCourse(...args);
-export const deleteMasterItem = (...args) => raw.deleteMasterItem(...args);
+// V50 (2026-05-08) — deleteMasterCourse + deleteMasterItem re-exports
+// REMOVED. Underlying master_data CRUD helpers deleted in backendClient.js
+// post-V50 strip. Use deleteCourse / deleteProduct on be_* (canonical).
 
 // ─── Customer write/read operations ────────────────────────────────────────
 export const addCustomer = (...args) => raw.addCustomer(...args);

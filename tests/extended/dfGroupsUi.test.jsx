@@ -18,16 +18,15 @@ vi.mock('../src/firebase.js', () => ({ db: {}, appId: 'test-app', auth: { curren
 const mockListDfGroups = vi.fn();
 const mockDeleteDfGroup = vi.fn();
 const mockSaveDfGroup = vi.fn();
-const mockGetAllMasterDataItems = vi.fn();
+const mockListCourses = vi.fn();
 
 vi.mock('../src/lib/backendClient.js', () => ({
   listDfGroups: (...a) => mockListDfGroups(...a),
   deleteDfGroup: (...a) => mockDeleteDfGroup(...a),
   saveDfGroup: (...a) => mockSaveDfGroup(...a),
-  // Phase 14.10-tris (2026-04-26) — be_* canonical (DfGroupFormModal switched
-  // to listCourses; existing tests passed via getAllMasterDataItems mock)
-  listCourses: (...a) => mockGetAllMasterDataItems('courses', ...a),
-  getAllMasterDataItems: (...a) => mockGetAllMasterDataItems(...a),
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
+  // DfGroupFormModal uses listCourses canonical (Phase 14.10-tris).
+  listCourses: (...a) => mockListCourses(...a),
 }));
 
 const DfGroupsTab = (await import('../src/components/backend/DfGroupsTab.jsx')).default;
@@ -75,7 +74,7 @@ describe('DfGroupsTab', () => {
 describe('DfGroupFormModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAllMasterDataItems.mockResolvedValue([]);
+    mockListCourses.mockResolvedValue([]);
   });
 
   it('DU4: renders create title', async () => {

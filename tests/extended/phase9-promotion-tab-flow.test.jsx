@@ -16,11 +16,8 @@ vi.mock('../src/lib/backendClient.js', () => ({
   listPromotions: vi.fn(),
   savePromotion: vi.fn(async () => {}),
   deletePromotion: vi.fn(async () => {}),
-  getAllMasterDataItems: vi.fn(async () => []),
-  // Phase 14.10-tris — be_* read helpers replaced legacy getAllMasterDataItems
-  // for some consumers. Stub all new entry points so any consumer that swapped
-  // over still mounts. listCourses + listProducts default to [] which already
-  // matches the C15 "ยังไม่มีคอร์สใน master_data" placeholder assertion.
+  // V50 (2026-05-08) — getAllMasterDataItems removed (AV28 ProClinic strip).
+  // Phase 14.10-tris — be_* read helpers are the canonical replacement.
   listAllSellers: () => Promise.resolve([]),
   listProducts: () => Promise.resolve([]),
   listCourses: () => Promise.resolve([]),
@@ -42,7 +39,7 @@ vi.stubGlobal('crypto', {
 });
 
 import PromotionTab from '../src/components/backend/PromotionTab.jsx';
-import { listPromotions, savePromotion, deletePromotion, getAllMasterDataItems } from '../src/lib/backendClient.js';
+import { listPromotions, savePromotion, deletePromotion, listCourses } from '../src/lib/backendClient.js';
 
 const clinicSettings = { accentColor: '#dc2626' };
 
@@ -470,7 +467,7 @@ describe('PromotionTab — create + save flow', () => {
 
   it('C15 course picker shows placeholder when no master data', async () => {
     listPromotions.mockResolvedValue([]);
-    getAllMasterDataItems.mockResolvedValue([]);
+    listCourses.mockResolvedValue?.([]);  // V50 — switched from getAllMasterDataItems
     render(<PromotionTab clinicSettings={clinicSettings} />);
     await waitForLoaded();
     fireEvent.click(screen.getByText('สร้างโปรโมชัน'));

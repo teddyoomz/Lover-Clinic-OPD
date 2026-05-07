@@ -33,3 +33,6 @@ Idle — all session goals shipped + deployed. Awaiting next user directive.
 - None blocking. Optional follow-ups deferred:
   - Clean `firestore.rules` of pc_* / master_data / broker_jobs / proclinic_session legacy match blocks (rules deploy + Probe-Deploy-Probe per Rule B)
   - Delete dead orphan `master_data/*` CRUD helpers in backendClient.js + scopedDataLayer.js (sanctioned exception in AV28.4)
+
+## Institutional memory anchors
+- V50 Phase 3 — cross-branch booking contract verified (commit `1c67baf` EOD #3); existing `be_customers.branchId` already serves the creation-branch role, immutable post-CREATE. Detail in SESSION_HANDOFF.md + v-log-archive.md.

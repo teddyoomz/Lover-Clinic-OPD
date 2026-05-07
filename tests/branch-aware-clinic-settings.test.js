@@ -33,7 +33,19 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
 
   it('A.2 branch fields override clinicSettings (name/address/phone/taxId)', () => {
     const cs = { clinicName: 'Lover Clinic', address: 'Global address', phone: '02-1', taxId: 'TAX-1', accentColor: '#dc2626' };
-    const branch = { id: 'BR-1', name: 'นครราชสีมา', address: 'BA address', phone: '02-2', taxId: 'TAX-2', nameEn: 'Korat' };
+    // V51 Phase 3 cleanup (2026-05-08): merger reads from branch.settings.X
+    // (per-branch override layer); flat branch.X fallback removed. Fixture
+    // uses the post-cleanup shape. clinicName + nameEn stay top-level.
+    const branch = {
+      id: 'BR-1',
+      name: 'นครราชสีมา',
+      nameEn: 'Korat',
+      settings: {
+        address: 'BA address',
+        phone: '02-2',
+        taxId: 'TAX-2',
+      },
+    };
     const out = mergeBranchIntoClinic(cs, branch);
     // 2026-04-28: clinicName CONCATS as "<brand> <branch>" (user directive)
     expect(out.clinicName).toBe('Lover Clinic นครราชสีมา');
@@ -76,16 +88,19 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
 
   it('A.4 empty branch field falls back to clinicSettings (defensive)', () => {
     const cs = { clinicName: 'Lover Clinic', address: 'Global address', phone: '02-1' };
-    const branch = { name: 'Branch A', address: '', phone: '   ' }; // empty / whitespace
+    // V51 Phase 3 cleanup: per-branch overrides under branch.settings.X.
+    const branch = { name: 'Branch A', settings: { address: '', phone: '   ' } }; // empty / whitespace
     const out = mergeBranchIntoClinic(cs, branch);
     expect(out.clinicName).toBe('Lover Clinic Branch A');
     expect(out.address).toBe('Global address'); // empty branch → fallback
     expect(out.phone).toBe('02-1'); // whitespace branch → fallback
   });
 
-  it('A.5 licenseNo + website also flow from branch', () => {
+  it('A.5 licenseNo flows from branch.settings; website still flat (not migrated)', () => {
     const cs = {};
-    const branch = { name: 'Branch', licenseNo: 'LIC-123', website: 'https://x.test' };
+    // V51 Phase 3: licenseNo migrated under branch.settings; website remains
+    // top-level on the branch doc (V40 baseline; not in Phase 3 migration set).
+    const branch = { name: 'Branch', settings: { licenseNo: 'LIC-123' }, website: 'https://x.test' };
     const out = mergeBranchIntoClinic(cs, branch);
     expect(out.licenseNo).toBe('LIC-123');
     expect(out.website).toBe('https://x.test');
@@ -96,7 +111,8 @@ describe('BAC.A — mergeBranchIntoClinic pure helper', () => {
     // would double-concat. Determinism is on RAW inputs (always pass the
     // raw cs + branch to the helper, never the merged result).
     const cs = { clinicName: 'G', address: 'GA' };
-    const branch = { name: 'B', address: 'BA' };
+    // V51 Phase 3: address now under branch.settings.address.
+    const branch = { name: 'B', settings: { address: 'BA' } };
     const a = mergeBranchIntoClinic(cs, branch);
     const b = mergeBranchIntoClinic(cs, branch);
     expect(b).toEqual(a);

@@ -1399,36 +1399,9 @@ export async function addCourseRemainingQty(customerId, courseIndex, addQty, opt
   return courses[courseIndex];
 }
 
-// ─── Master Course CRUD (Phase 6.3) ──────────────────────────────────────
-
-/** Create a new master course template */
-export async function createMasterCourse(data) {
-  const courseId = `MC-${Date.now()}`;
-  const now = new Date().toISOString();
-  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', courseId);
-  await setDoc(ref, {
-    ...data,
-    id: courseId,
-    _createdBy: 'backend',
-    _createdAt: now,
-    _syncedAt: now,
-  });
-  return { courseId, success: true };
-}
-
-/** Update an existing master course */
-export async function updateMasterCourse(courseId, data) {
-  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', String(courseId));
-  await updateDoc(ref, { ...data, _updatedAt: new Date().toISOString() });
-  return { success: true };
-}
-
-/** Delete a master course */
-export async function deleteMasterCourse(courseId) {
-  const ref = doc(db, ...basePath(), 'master_data', 'courses', 'items', String(courseId));
-  await deleteDoc(ref);
-  return { success: true };
-}
+// V50 (2026-05-08) — Master Course CRUD (createMasterCourse / update / delete)
+// REMOVED. Per Rule H-bis, ProClinic dev-only sync infrastructure deleted.
+// Use saveCourse / deleteCourse on be_courses (canonical) instead.
 
 /** Assign a master course to a customer — creates entries in customer.courses[] */
 export async function assignCourseToCustomer(customerId, masterCourse) {
@@ -3030,80 +3003,19 @@ export async function updateSalePayment(saleId, newChannel) {
   return { success: true, newStatus, totalPaid };
 }
 
-// ─── Manual Master Data (wallet_types + membership_types) ──────────────────
-// These collections have NO ProClinic sync — CRUD only in Backend.
-// Same shape as master_data/{type}/items/{id} used by courses.
-
-/** Create a manual master data item (wallet_types or membership_types). */
-export async function createMasterItem(type, data) {
-  const prefix = type === 'wallet_types' ? 'WT' : type === 'membership_types' ? 'MCT' : 'MI';
-  const id = `${prefix}-${Date.now()}`;
-  const now = new Date().toISOString();
-  const ref = doc(db, ...basePath(), 'master_data', type, 'items', id);
-  await setDoc(ref, {
-    ...data,
-    id,
-    _createdBy: 'backend',
-    _createdAt: now,
-    _syncedAt: now,
-    _source: 'backend',
-  });
-  return { id, success: true };
-}
-
-/** Update a manual master data item. */
-export async function updateMasterItem(type, id, data) {
-  const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(id));
-  await updateDoc(ref, { ...data, _updatedAt: new Date().toISOString() });
-  return { success: true };
-}
-
-/**
- * Delete a manual master data item.
- *
- * R5: products specifically must not be hard-deleted while any active
- * batch in be_stock_batches still references them — that would orphan
- * the batch + its movement log. For `type='products'` we check for
- * active batches first; if found, soft-delete by flipping `isActive=false`
- * so historical sales/movements remain readable and the product doesn't
- * show in new-order dropdowns. Other master types (doctors, staff, etc.)
- * keep the original hard-delete behaviour.
- */
-export async function deleteMasterItem(type, id) {
-  const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(id));
-  if (type === 'products') {
-    try {
-      const batchesQ = query(
-        collection(db, ...basePath(), 'be_stock_batches'),
-        where('productId', '==', String(id)),
-        where('status', '==', 'active'),
-      );
-      const snap = await getDocs(batchesQ);
-      if (!snap.empty) {
-        await updateDoc(ref, { isActive: false, deactivatedAt: new Date().toISOString() });
-        return { success: true, softDeleted: true, linkedActiveBatches: snap.size };
-      }
-    } catch (e) {
-      // If the query itself fails (index missing etc.), fall through to the
-      // hard-delete so callers don't silently hang — but log the reason.
-      console.error('[deleteMasterItem] product batch-check failed, falling back to hard delete:', e?.message);
-    }
-  }
-  await deleteDoc(ref);
-  return { success: true };
-}
-
-// ─── Master Data Read + Sync ────────────────────────────────────────────────
-
-const masterDataDoc = (type) => doc(db, ...basePath(), 'master_data', type);
+// V50 (2026-05-08) — Manual Master Data CRUD (createMasterItem / update /
+// delete) + getMasterDataMeta + masterDataDoc REMOVED. Per Rule H-bis,
+// ProClinic dev-only sync infrastructure deleted. Use saveProduct /
+// saveCourse / saveStaff / etc. on be_* (canonical) instead.
+//
+// `masterDataItemsCol` retained below — used by remaining migrate*ToBe
+// helpers (`migrateMasterPromotionsToBe`, `migrateMasterCoursesToBeV2`,
+// etc.) which read master_data/{type}/items/* one-shot to seed be_*. Those
+// migrators have ZERO runtime callers post-V50 (MasterDataTab deleted) and
+// the master_data Firestore rule is removed in this commit — they're inert
+// dead code retained for narrowed AV28 sanctioned-exception scope. Future
+// cleanup can delete them outright.
 const masterDataItemsCol = (type) => collection(db, ...basePath(), 'master_data', type, 'items');
-
-/** Read master data metadata (count, syncedAt) */
-export async function getMasterDataMeta(type) {
-  const snap = await getDoc(masterDataDoc(type));
-  if (!snap.exists()) return null;
-  return snap.data();
-}
 
 // ─── Phase 12.11: be_* shape adapters ──────────────────────────────────────
 // For types that now have a be_* canonical collection, map the be_* doc shape
@@ -3356,120 +3268,15 @@ function beMedicineLabelToMasterShape(l) {
   return { ...l, id: l.labelId || l.id, name: l.name || '' };
 }
 
-// Types that have be_* canonical backing as of Phase 11.9 (2026-04-20).
-// Every type listed here SHOULD show green "be_*" badge in MasterDataTab
-// debug panel + getAllMasterDataItems reads be_ first.
-const BE_BACKED_MASTER_TYPES = Object.freeze({
-  // Phase 12.x — primary adapter-routed consumers (TreatmentFormPage etc)
-  products: { col: 'be_products',  map: beProductToMasterShape },
-  courses:  { col: 'be_courses',   map: beCourseToMasterShape  },
-  staff:    { col: 'be_staff',     map: beStaffToMasterShape   },
-  doctors:  { col: 'be_doctors',   map: beDoctorToMasterShape  },
-  // Phase 9 — marketing entities (consumers use direct CRUD)
-  promotions: { col: 'be_promotions', map: bePromotionToMasterShape },
-  coupons:    { col: 'be_coupons',    map: beCouponToMasterShape    },
-  vouchers:   { col: 'be_vouchers',   map: beVoucherToMasterShape   },
-  // Phase 11 — master data suite (consumers use direct CRUD)
-  product_groups:      { col: 'be_product_groups',      map: beProductGroupToMasterShape      },
-  product_units:       { col: 'be_product_units',       map: beProductUnitToMasterShape       },
-  medical_instruments: { col: 'be_medical_instruments', map: beMedicalInstrumentToMasterShape },
-  holidays:            { col: 'be_holidays',            map: beHolidayToMasterShape           },
-  branches:            { col: 'be_branches',            map: beBranchToMasterShape            },
-  permission_groups:   { col: 'be_permission_groups',   map: bePermissionGroupToMasterShape   },
-  // Phase 14.x — wallet + membership types migrate (gap audit 2026-04-24).
-  // Readers now hit be_* transparently once the migration button runs.
-  wallet_types:        { col: 'be_wallet_types',        map: beWalletTypeToMasterShape        },
-  membership_types:    { col: 'be_membership_types',    map: beMembershipTypeToMasterShape    },
-  medicine_labels:     { col: 'be_medicine_labels',     map: beMedicineLabelToMasterShape     },
-});
-
-async function readBeForMasterType(type) {
-  const conf = BE_BACKED_MASTER_TYPES[type];
-  if (!conf) return null;
-  // Phase 12.11 bug fix (2026-04-20): courses reference products by id only —
-  // preload be_products into a Map so beCourseToMasterShape can enrich each
-  // nested courseProduct with its real unit (and fall back to stored name).
-  // Single extra getDocs per getAllMasterDataItems('courses') call.
-  let opts = {};
-  if (type === 'courses') {
-    try {
-      const productSnap = await getDocs(collection(db, ...basePath(), 'be_products'));
-      const productLookup = new Map();
-      productSnap.docs.forEach(d => {
-        const p = d.data();
-        const pid = String(p.productId || d.id || '');
-        if (!pid) return;
-        productLookup.set(pid, {
-          name: p.productName || '',
-          unit: p.mainUnitName || '',
-        });
-      });
-      opts = { productLookup };
-    } catch {
-      // be_products may not exist yet (pre-seed) — fall through with empty lookup
-    }
-  }
-  const snap = await getDocs(collection(db, ...basePath(), conf.col));
-  return snap.docs.map(d => conf.map({ ...d.data(), id: d.id }, opts));
-}
-
-/**
- * Read all items from master_data/{type}/items.
- *
- * Phase 12.11 (2026-04-20): for types in BE_BACKED_MASTER_TYPES (products/
- * courses/staff/doctors), prefer the canonical be_* collection mapped back
- * to master_data shape. Falls back to master_data when be_* is empty (seed
- * phase) or unsupported type.
- *
- * This lets the user delete master_data/{type}/items after migrate and have
- * UI consumers still work — empirical proof that Phase 12 migration is
- * wired for the 4 types we covered. Other types (wallet_types,
- * membership_types, medication_groups, consumable_groups) still read
- * master_data until Phase 16 Polish.
- */
-export async function getAllMasterDataItems(type) {
-  if (BE_BACKED_MASTER_TYPES[type]) {
-    try {
-      const beItems = await readBeForMasterType(type);
-      if (Array.isArray(beItems) && beItems.length > 0) return beItems;
-    } catch {
-      // fall through to master_data
-    }
-  }
-  const snap = await getDocs(masterDataItemsCol(type));
-  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
-}
-
-// Test hook — expose adapter list so tests + /audit-master-data-ownership
-// can enumerate what's wired without duplicating the constant.
-export function getBeBackedMasterTypes() {
-  return Object.keys(BE_BACKED_MASTER_TYPES);
-}
-
-/**
- * Phase 12.11 debug helper: delete every doc in master_data/{type}/items.
- * Used to verify that UI consumers for `type` have migrated off master_data
- * and onto be_*. Batched in chunks of 400 ops (under Firestore's 500-op
- * writeBatch limit). Preserves the master_data/{type} root meta doc so the
- * sync UI still shows the type as "ever-synced".
- */
-export async function clearMasterDataItems(type) {
-  const t = String(type || '').trim();
-  if (!t) throw new Error('type required');
-  const colRef = masterDataItemsCol(t);
-  let totalDeleted = 0;
-  while (true) {
-    const snap = await getDocs(colRef);
-    if (snap.empty) break;
-    const docs = snap.docs.slice(0, 400);
-    const batch = writeBatch(db);
-    for (const d of docs) batch.delete(d.ref);
-    await batch.commit();
-    totalDeleted += docs.length;
-    if (snap.docs.length <= 400) break;
-  }
-  return { type: t, deleted: totalDeleted };
-}
+// V50 (2026-05-08) — BE_BACKED_MASTER_TYPES + readBeForMasterType +
+// getAllMasterDataItems + getBeBackedMasterTypes + clearMasterDataItems
+// REMOVED. The dual-read shim (be_* first, master_data fallback) was the
+// Phase 12.11 transition path; post-V50 strip every UI consumer reads be_*
+// directly via scopedDataLayer.list*() (or *ForPicker variants per V49).
+// The bePromotionToMasterShape / beCourseToMasterShape / etc. adapter
+// functions above are still exported for *ForPicker variants — they
+// translate canonical be_* shape to legacy {name, price, category, ...}
+// shape that UI pickers expect (V49 lock).
 
 // ─── Deposit CRUD (Phase 7) ────────────────────────────────────────────────
 
@@ -4883,35 +4690,9 @@ export async function getPointTransactions(customerId) {
   return list;
 }
 
-/** Run sync: call broker function → write metadata + items to Firestore.
- *  Same logic as ClinicSettingsPanel.jsx lines 621-644. */
-export async function runMasterDataSync(type, syncFn) {
-  const data = await syncFn();
-  if (!data?.success) return { success: false, error: data?.error || 'Sync failed' };
-  if (!data.items?.length) return { success: true, count: 0, totalPages: 0 };
-
-  // Write metadata
-  await setDoc(masterDataDoc(type), {
-    type,
-    count: data.items.length,
-    totalPages: data.totalPages || 1,
-    syncedAt: new Date().toISOString(),
-  });
-
-  // Write items in batches of 400 (Firestore limit = 500 ops per batch)
-  const BATCH_LIMIT = 400;
-  for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
-    const chunk = data.items.slice(start, start + BATCH_LIMIT);
-    const batch = writeBatch(db);
-    chunk.forEach((item, i) => {
-      const ref = doc(db, ...basePath(), 'master_data', type, 'items', String(item.id || (start + i)));
-      batch.set(ref, { ...item, _syncedAt: new Date().toISOString() });
-    });
-    await batch.commit();
-  }
-
-  return { success: true, count: data.items.length, totalPages: data.totalPages || 1 };
-}
+// V50 (2026-05-08) — runMasterDataSync REMOVED. Wrote master_data/{type} +
+// master_data/{type}/items/* via brokerClient (deleted Phase 2.2). Caller
+// was MasterDataTab.jsx (also deleted). Inert post-V50.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Phase 8 — Stock System Primitives
