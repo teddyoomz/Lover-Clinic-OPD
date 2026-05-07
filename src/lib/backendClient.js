@@ -6266,6 +6266,49 @@ export async function getStockAdjustment(adjustmentId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
+// ─── V46 (2026-05-08) — Live productName resolver (Rule O) ────────────────
+//
+// IRON-CLAD RULE O (added 2026-05-08 after the user's 4th-round skip-stock-
+// deduction class bug): productId is the ONLY identity for stock; productName
+// on stock_movement records MUST be live-resolved from be_products[productId]
+// at write time. batch.productName is denormalized display cache — frozen at
+// batch-create time + may be POISONED by older bug rounds. Movements MUST
+// NOT inherit batch.productName as authoritative.
+//
+// User-reported repro (post V45 deploy): treatment BT-1778169734111 deducted
+// productId=38699 (Stapple no 22) but movement recorded productName=
+// "ขลิบไร้เลือด (เบอร์22) 1 ครั้ง" (course name) — because the AUTO-NEG batch
+// at that productId was poisoned during a V44-era buggy buy. New movement
+// inherited poisoned name. To the user it APPEARS like "เอาชื่อมาตัดสต็อค".
+//
+// V46 fix: every stock_movement write MUST resolve productName from
+// be_products live (cached per-call to avoid N+1 reads). batch.productName
+// is NEVER used at movement write — only as a display fallback for batch
+// listings. Same goes for AUTO-NEG batch CREATION: use the resolved live
+// name to prevent batch poisoning at the source.
+
+const __productNameCache = new Map();
+async function _resolveProductNameLive(productId) {
+  if (!productId) return '';
+  const key = String(productId);
+  if (__productNameCache.has(key)) return __productNameCache.get(key);
+  try {
+    const ref = doc(db, ...basePath(), 'be_products', key);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const data = snap.data() || {};
+      const name = String(data.productName || data.name || '').trim();
+      __productNameCache.set(key, name);
+      return name;
+    }
+  } catch (e) {
+    console.warn('[_resolveProductNameLive] failed for', key, e?.message);
+  }
+  __productNameCache.set(key, '');
+  return '';
+}
+function _clearProductNameCache() { __productNameCache.clear(); }
+
 // ─── Internal: stockUtils bridge (avoids top-of-file circular-like import cost) ─
 let __stockLibCache = null;
 async function _stockLib() {
@@ -6820,14 +6863,21 @@ async function _deductOneItem({
       // sees the friendly error instead of a phantom synthetic batch.
       // V36-bis: use lookupProductId so the synthetic batch references
       // the canonical be_products doc (resolved by name fallback).
+      // V46 (2026-05-08) — Rule O: live-resolve productName from
+      // be_products[lookupProductId] for the new batch. Prevents batch
+      // poisoning at source: if item.productName was course-name (older
+      // bug round), the live read overrides it with canonical product name.
       await _assertProductExists(lookupProductId, 'negative-stock-synthetic-batch');
       const newId = _genBatchId();
       const now = new Date().toISOString();
+      const liveProductName = await _resolveProductNameLive(lookupProductId);
       negativeTargetBatch = {
         batchId: newId,
         lot: `AUTO-NEG-${Date.now()}`,
         productId: lookupProductId, // V36-bis canonical id
-        productName: item.productName,
+        // V46: prefer live-resolved name; fallback to item.productName if
+        // be_products doc lacks productName text (rare).
+        productName: liveProductName || item.productName,
         unit: item.unit || '',
         branchId,
         // Phase 15.2 location-type discriminator — synthetic batches at
@@ -6886,12 +6936,17 @@ async function _deductOneItem({
           updatedAt: now,
         });
 
+        // V46 (2026-05-08) — Rule O: live-resolve productName from
+        // be_products[productId] at write time. Batch's denormalized
+        // productName may be poisoned (frozen from older bug rounds);
+        // never use it as authoritative on the movement record.
+        const liveName = await _resolveProductNameLive(b.productId);
         tx.set(stockMovementDoc(movementId), {
           movementId,
           type: movementType,
           batchId: a.batchId,
           productId: b.productId,
-          productName: b.productName,
+          productName: liveName || item.productName || b.productName || '',
           qty: -a.takeQty,
           before: beforeRemaining,
           after: afterRemaining,
@@ -6949,12 +7004,19 @@ async function _deductOneItem({
           updatedAt: now,
         });
 
+        // V46 (2026-05-08) — Rule O: live-resolve productName for negative-
+        // overage movement. b.productName may be the POISONED stamp from an
+        // older AUTO-NEG batch creation (the user-reported repro path —
+        // course-name leaked into batch metadata via V44-era bug, then new
+        // movements inherited the wrong name). Live read sidesteps batch
+        // pollution entirely.
+        const liveNameNeg = await _resolveProductNameLive(b.productId || item.productId);
         tx.set(stockMovementDoc(movementId), {
           movementId,
           type: movementType,
           batchId: negativeTargetBatchId,
           productId: b.productId || item.productId,
-          productName: b.productName || item.productName,
+          productName: liveNameNeg || item.productName || b.productName || '',
           qty: -plan.shortfall,
           before: beforeRemaining,
           after: newRemaining,
