@@ -1,10 +1,13 @@
 import { useState, useRef } from 'react';
-import { setDoc, doc, serverTimestamp, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Cable, Wifi, Lock, RefreshCw, Stethoscope, Users, Download, DoorOpen, FileText } from 'lucide-react';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Stethoscope, FileText } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
-import { clearProClinicSession, testLogin, getDepositOptions, syncProducts, syncDoctors, syncStaff, syncCourses } from '../lib/brokerClient.js';
+// V50 (2026-05-08) — ProClinic strip. brokerClient import REMOVED.
+// Sync UI sections (Practitioners + Rooms classify + Master Data Sync +
+// ProClinic Integration credentials) deleted; admin manages those entities
+// via dedicated be_* CRUD tabs (`?tab=doctors`, `?tab=staff`, `?tab=exam-rooms`).
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = ['00', '15', '30', '45'];
@@ -36,28 +39,13 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const [logoTabLight, setLogoTabLight] = useState('upload');
   const fileInputRef = useRef(null);
   const fileInputRefLight = useRef(null);
-  const [testingConnection, setTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState('');
-  const [clearingSession, setClearingSession] = useState(false);
-  const [clearResult, setClearResult] = useState('');
-  const [practitioners, setPractitioners] = useState(() => {
-    const raw = clinicSettings?.practitioners || [];
-    const seen = new Set();
-    return raw.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
-  });
-  const [fetchingPractitioners, setFetchingPractitioners] = useState(false);
-  const [practitionerMsg, setPractitionerMsg] = useState('');
-  // Rooms: ProClinic has no doctor-vs-staff-room distinction, so admin tags each
-  // room here. Used by the schedule-link modal: พบแพทย์→doctor rooms, ไม่พบแพทย์→staff rooms.
-  const [rooms, setRooms] = useState(() => {
-    const raw = clinicSettings?.rooms || [];
-    const seen = new Set();
-    return raw.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
-  });
-  const [fetchingRooms, setFetchingRooms] = useState(false);
-  const [roomMsg, setRoomMsg] = useState('');
-  const [syncStatus, setSyncStatus] = useState({});  // { products: 'loading'|'done'|'error', ... }
-  const [syncResults, setSyncResults] = useState({}); // { products: { count, totalPages }, ... }
+  // V50 (2026-05-08) — testingConnection / clearingSession / practitioners /
+  // rooms / syncStatus / syncResults state REMOVED (sections deleted).
+  // practitioners + rooms data was historical classification of ProClinic
+  // users/rooms; consumers now read be_doctors.position + be_exam_rooms.kind
+  // (Phase 18.0) directly. Legacy `clinic_settings.practitioners` +
+  // `clinic_settings.rooms` fields preserved on disk for back-compat but
+  // never written by V50+.
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -149,8 +137,9 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
         chatCloseTime: settings.chatCloseTime || DEFAULT_CLINIC_SETTINGS.chatCloseTime,
         chatOpenTimeWeekend: settings.chatOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatOpenTimeWeekend,
         chatCloseTimeWeekend: settings.chatCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatCloseTimeWeekend,
-        practitioners: practitioners,
-        rooms: rooms,
+        // V50 (2026-05-08) — practitioners + rooms removed (sections deleted).
+        // Existing field values preserved on disk for back-compat; new
+        // saves no longer overwrite them.
         updatedAt: serverTimestamp(),
       });
       // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
@@ -183,107 +172,10 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const ac = settings.accentColor || '#dc2626';
   const acRgb = hexToRgb(ac);
 
-  // RP1 lift (2026-04-30): Master Data Sync card was inline JSX-IIFE.
-  // Hoisted here so the JSX expression below is just `{masterDataSyncCard}`
-  // (Vite-OXC ban on inline JSX-IIFE patterns).
-  const masterDataSyncCard = (() => {
-    const SYNC_TYPES = [
-      { key: 'products', label: 'ยา / บริการ / สินค้า', fn: syncProducts, icon: '💊', color: 'emerald' },
-      { key: 'doctors', label: 'แพทย์ / ผู้ช่วย', fn: syncDoctors, icon: '🩺', color: 'sky' },
-      { key: 'staff', label: 'พนักงาน', fn: syncStaff, icon: '👤', color: 'purple' },
-      { key: 'courses', label: 'คอร์ส', fn: syncCourses, icon: '📋', color: 'amber' },
-    ];
-    const colorMap = {
-      emerald: 'bg-emerald-950/30 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40',
-      sky: 'bg-sky-950/30 border-sky-800 text-sky-400 hover:bg-sky-900/40',
-      purple: 'bg-purple-950/30 border-purple-800 text-purple-400 hover:bg-purple-900/40',
-      amber: 'bg-orange-950/30 border-orange-800 text-orange-400 hover:bg-orange-900/40',
-    };
-    const isSyncing = Object.values(syncStatus).some(s => s === 'loading');
-
-    const runSync = async (key, fn) => {
-      setSyncStatus(prev => ({ ...prev, [key]: 'loading' }));
-      setSyncResults(prev => ({ ...prev, [key]: null }));
-      try {
-        const data = await fn();
-        if (data.success) {
-          // Save master data to Firestore (backup — accessible even if ProClinic is down)
-          if (db && appId && data.items?.length) {
-            try {
-              // Save metadata
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key), {
-                type: key,
-                count: data.items.length,
-                totalPages: data.totalPages,
-                syncedAt: serverTimestamp(),
-              });
-              // Save items in batches of 400 (Firestore limit = 500 ops per batch)
-              const BATCH_LIMIT = 400;
-              for (let start = 0; start < data.items.length; start += BATCH_LIMIT) {
-                const chunk = data.items.slice(start, start + BATCH_LIMIT);
-                const batch = writeBatch(db);
-                chunk.forEach((item, i) => {
-                  const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', key, 'items', String(item.id || (start + i)));
-                  batch.set(itemRef, { ...item, _syncedAt: new Date().toISOString() });
-                });
-                await batch.commit();
-              }
-            } catch (e) {
-              console.warn(`[MasterSync] Failed to save ${key} to Firestore:`, e);
-            }
-          }
-          setSyncStatus(prev => ({ ...prev, [key]: 'done' }));
-          setSyncResults(prev => ({ ...prev, [key]: { count: data.count, totalPages: data.totalPages } }));
-        } else {
-          setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
-          setSyncResults(prev => ({ ...prev, [key]: { error: data.error } }));
-        }
-      } catch (err) {
-        setSyncStatus(prev => ({ ...prev, [key]: 'error' }));
-        setSyncResults(prev => ({ ...prev, [key]: { error: err.message } }));
-      }
-    };
-
-    const runAll = async () => {
-      for (const t of SYNC_TYPES) {
-        await runSync(t.key, t.fn);
-      }
-    };
-
-    return (
-      <div className="space-y-2">
-        {SYNC_TYPES.map(t => (
-          <div key={t.key} className="flex items-center gap-3">
-            <button
-              onClick={() => runSync(t.key, t.fn)}
-              disabled={syncStatus[t.key] === 'loading'}
-              className={`px-3 py-2 rounded-lg text-sm font-bold tracking-wider transition-all flex items-center gap-2 border disabled:opacity-50 min-w-[200px] ${colorMap[t.color]}`}
-            >
-              {syncStatus[t.key] === 'loading'
-                ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync...</>
-                : <><span>{t.icon}</span> {t.label}</>
-              }
-            </button>
-            {syncStatus[t.key] === 'done' && syncResults[t.key] && (
-              <span className="text-sm text-green-500 font-bold">✓ {syncResults[t.key].count} รายการ ({syncResults[t.key].totalPages} หน้า)</span>
-            )}
-            {syncStatus[t.key] === 'error' && syncResults[t.key] && (
-              <span className="text-sm text-red-500 font-bold">✗ {syncResults[t.key].error}</span>
-            )}
-          </div>
-        ))}
-        <div className="pt-2">
-          <button
-            onClick={runAll}
-            disabled={isSyncing}
-            className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] hover:bg-[var(--bg-base)] disabled:opacity-50"
-          >
-            {isSyncing ? <><RefreshCw size={14} className="animate-spin"/> กำลัง sync ทั้งหมด...</> : <><Download size={14}/> Sync ทั้งหมด</>}
-          </button>
-        </div>
-      </div>
-    );
-  })();
+  // V50 (2026-05-08) — masterDataSyncCard IIFE removed (entire ProClinic
+  // sync UI block deleted). All master data is now CRUD'd via dedicated
+  // be_* tabs (`?tab=products`, `?tab=courses`, `?tab=doctors`, `?tab=staff`,
+  // etc.) — Rule H: be_* canonical, no ProClinic mirror needed.
 
   return (
     <div className="w-full max-w-3xl mx-auto animate-in fade-in duration-300">
@@ -692,239 +584,18 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </div>
         </div>
 
-        {/* Practitioners */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Users size={14} style={{color: '#a78bfa'}}/> แพทย์ / ผู้ช่วยแพทย์
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            ดึงรายชื่อจาก ProClinic แล้วกำหนดว่าใครเป็นแพทย์ / ผู้ช่วย — ใช้สำหรับ filter ปฏิทินและสร้างลิงก์ตารางรายคน
-          </p>
-
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              onClick={async () => {
-                setFetchingPractitioners(true);
-                setPractitionerMsg('');
-                try {
-                  const res = await getDepositOptions();
-                  if (!res.success) { setPractitionerMsg(`ดึงข้อมูลล้มเหลว: ${res.error}`); return; }
-                  const opts = res.options || {};
-                  const docs = (opts.doctors || []).map(d => ({ id: Number(d.value), name: d.label, role: 'doctor' }));
-                  const assts = (opts.assistants || []).map(d => ({ id: Number(d.value), name: d.label, role: 'assistant' }));
-                  // Deduplicate by id (same person may appear in both lists)
-                  const seenIds = new Set();
-                  const fetched = [...docs, ...assts].filter(p => {
-                    if (seenIds.has(p.id)) return false;
-                    seenIds.add(p.id);
-                    return true;
-                  });
-                  // Merge: keep existing roles for known ids
-                  const existingMap = new Map(practitioners.map(p => [p.id, p]));
-                  const merged = fetched.map(f => {
-                    const existing = existingMap.get(f.id);
-                    return existing ? { ...f, role: existing.role } : f;
-                  });
-                  setPractitioners(merged);
-                  setPractitionerMsg(`ดึงข้อมูลสำเร็จ — ${docs.length} แพทย์, ${assts.length} ผู้ช่วย`);
-                  setTimeout(() => setPractitionerMsg(''), 5000);
-                } catch (err) {
-                  setPractitionerMsg(`ดึงข้อมูลล้มเหลว: ${err.message}`);
-                } finally {
-                  setFetchingPractitioners(false);
-                }
-              }}
-              disabled={fetchingPractitioners}
-              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-purple-950/30 border border-purple-800 text-purple-400 hover:bg-purple-900/40 disabled:opacity-50"
-            >
-              {fetchingPractitioners ? <><RefreshCw size={14} className="animate-spin"/> กำลังดึง...</> : <><Download size={14}/> ดึงข้อมูลจาก ProClinic</>}
-            </button>
-            {practitionerMsg && (
-              <span className={`text-sm font-bold ${practitionerMsg.includes('สำเร็จ') ? 'text-green-500' : 'text-red-500'}`}>{practitionerMsg}</span>
-            )}
-          </div>
-
-          {practitioners.length > 0 && (
-            <div className="space-y-1.5">
-              {practitioners.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
-                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate" title={p.name}>{p.name}</span>
-                  <span className="text-xs text-gray-500 font-mono shrink-0">#{p.id}</span>
-                  <select
-                    value={p.role}
-                    aria-label={`บทบาทของ ${p.name}`}
-                    onChange={e => {
-                      setPractitioners(prev => prev.map(x => x.id === p.id ? { ...x, role: e.target.value } : x));
-                    }}
-                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none focus-visible:ring-2 focus-visible:ring-sky-500 cursor-pointer shrink-0 ${
-                      p.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-300' :
-                      p.role === 'assistant' ? 'bg-purple-950/30 border-purple-800/50 text-purple-300' :
-                      'bg-red-950/30 border-red-800/50 text-red-300'
-                    }`}
-                  >
-                    <option value="doctor">🩺 แพทย์</option>
-                    <option value="assistant">👤 ผู้ช่วย</option>
-                    <option value="hidden">❌ ซ่อน</option>
-                  </select>
-                </div>
-              ))}
-              <p className="text-xs text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
-            </div>
-          )}
-        </div>
-
-        {/* Rooms — doctor rooms vs general procedure rooms */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <DoorOpen size={14} style={{color: '#22d3ee'}}/> ห้องตรวจ / ห้องหัตถการ
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            ดึงรายชื่อห้องจาก ProClinic แล้วกำหนดว่าเป็น ห้องแพทย์ หรือ ห้องหัตถการทั่วไป — ใช้สำหรับสร้างลิงก์ตารางรายห้อง
-          </p>
-
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              onClick={async () => {
-                setFetchingRooms(true);
-                setRoomMsg('');
-                try {
-                  const res = await getDepositOptions();
-                  if (!res.success) { setRoomMsg(`ดึงข้อมูลล้มเหลว: ${res.error}`); return; }
-                  const opts = res.options || {};
-                  const fetched = (opts.rooms || []).map(r => ({ id: String(r.value), name: r.label, role: 'doctor' }));
-                  // Keep existing roles for known ids
-                  const existingMap = new Map(rooms.map(r => [String(r.id), r]));
-                  const merged = fetched.map(f => existingMap.get(f.id) ? { ...f, role: existingMap.get(f.id).role } : f);
-                  setRooms(merged);
-                  setRoomMsg(`ดึงข้อมูลสำเร็จ — ${merged.length} ห้อง`);
-                  setTimeout(() => setRoomMsg(''), 5000);
-                } catch (err) {
-                  setRoomMsg(`ดึงข้อมูลล้มเหลว: ${err.message}`);
-                } finally {
-                  setFetchingRooms(false);
-                }
-              }}
-              disabled={fetchingRooms}
-              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-cyan-950/30 border border-cyan-800 text-cyan-400 hover:bg-cyan-900/40 disabled:opacity-50"
-            >
-              {fetchingRooms ? <><RefreshCw size={14} className="animate-spin"/> กำลังดึง...</> : <><Download size={14}/> ดึงข้อมูลจาก ProClinic</>}
-            </button>
-            {roomMsg && (
-              <span className={`text-sm font-bold ${roomMsg.includes('สำเร็จ') ? 'text-green-500' : 'text-red-500'}`}>{roomMsg}</span>
-            )}
-          </div>
-
-          {rooms.length > 0 && (
-            <div className="space-y-1.5">
-              {rooms.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 bg-[var(--bg-hover)] rounded-lg px-3 py-2 border border-[var(--bd)]">
-                  <span className="text-sm text-[var(--tx-heading)] font-bold flex-1 min-w-0 truncate" title={r.name}>{r.name}</span>
-                  <span className="text-xs text-gray-500 font-mono shrink-0">#{r.id}</span>
-                  <select
-                    value={r.role}
-                    aria-label={`ประเภทของห้อง ${r.name}`}
-                    onChange={e => {
-                      setRooms(prev => prev.map(x => x.id === r.id ? { ...x, role: e.target.value } : x));
-                    }}
-                    className={`text-xs font-bold rounded-lg px-2 py-1.5 border outline-none focus-visible:ring-2 focus-visible:ring-sky-500 cursor-pointer shrink-0 ${
-                      r.role === 'doctor' ? 'bg-sky-950/30 border-sky-800/50 text-sky-300' :
-                      r.role === 'staff' ? 'bg-cyan-950/30 border-cyan-800/50 text-cyan-300' :
-                      'bg-red-950/30 border-red-800/50 text-red-300'
-                    }`}
-                  >
-                    <option value="doctor">🩺 ห้องแพทย์</option>
-                    <option value="staff">🛏️ ห้องหัตถการทั่วไป</option>
-                    <option value="hidden">❌ ซ่อน</option>
-                  </select>
-                </div>
-              ))}
-              <p className="text-xs text-gray-600 mt-2">กด "บันทึกการตั้งค่า" ด้านล่างเพื่อบันทึก</p>
-            </div>
-          )}
-        </div>
-
-        {/* Master Data Sync */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Download size={14} style={{color: '#8b5cf6'}}/> Master Data Sync
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">ดึงข้อมูลหลักจาก ProClinic (ยา, คอร์ส, แพทย์, พนักงาน) มา cache ในระบบ</p>
-
-          {masterDataSyncCard}
-        </div>
-
-        {/* ProClinic Integration */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Cable size={14} style={{color: '#06b6d4'}}/> ProClinic Integration
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">เชื่อมต่อระบบ ProClinic สำหรับส่ง/ดึงข้อมูลผู้ป่วยอัตโนมัติ ผ่าน Server API</p>
-
-          {/* ProClinic Credentials Info */}
-          <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4">
-            <div className="flex items-center gap-2 text-cyan-400 text-sm font-bold mb-2">
-              <Lock size={14} /> Credentials เก็บอย่างปลอดภัย
-            </div>
-            <p className="text-[11px] text-gray-500 leading-relaxed">
-              ProClinic URL, Email, Password เก็บใน Vercel Environment Variables
-              — ไม่อัพไป GitHub, ไม่เก็บใน Firestore
-            </p>
-            <p className="text-xs text-gray-600 mt-1.5">
-              แก้ไขที่: Vercel Dashboard → Project Settings → Environment Variables
-            </p>
-          </div>
-
-          {/* Test Connection + Clear Session Buttons */}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              onClick={async () => {
-                setTestingConnection(true);
-                setTestResult('');
-                try {
-                  const data = await testLogin();
-                  if (data.debug) console.log('[testLogin debug]', data.debug);
-                  setTestResult(data.success ? '✓ เชื่อมต่อสำเร็จ' : `✗ ${data.error}${data.debug ? '\n' + JSON.stringify(data.debug, null, 2) : ''}`);
-                } catch (err) {
-                  setTestResult(`✗ ${err.message}`);
-                } finally {
-                  setTestingConnection(false);
-                  setTimeout(() => setTestResult(''), 8000);
-                }
-              }}
-              disabled={testingConnection}
-              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-cyan-950/30 border border-cyan-800 text-cyan-400 hover:bg-cyan-900/40 disabled:opacity-50"
-            >
-              {testingConnection ? <><Wifi size={14} className="animate-pulse"/> กำลังทดสอบ...</> : <><Wifi size={14}/> ทดสอบการเชื่อมต่อ</>}
-            </button>
-            <button
-              onClick={async () => {
-                setClearingSession(true);
-                setClearResult('');
-                try {
-                  const data = await clearProClinicSession();
-                  setClearResult(data.success ? '✓ ล้าง session แล้ว — จะ login ใหม่อัตโนมัติ' : `✗ ${data.error}`);
-                } catch (err) {
-                  setClearResult(`✗ ${err.message}`);
-                } finally {
-                  setClearingSession(false);
-                  setTimeout(() => setClearResult(''), 8000);
-                }
-              }}
-              disabled={clearingSession}
-              className="px-4 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-orange-950/30 border border-orange-800 text-orange-400 hover:bg-orange-900/40 disabled:opacity-50"
-            >
-              {clearingSession ? <><RefreshCw size={14} className="animate-spin"/> กำลังล้าง...</> : <><RefreshCw size={14}/> โหลด Credentials ใหม่</>}
-            </button>
-            {(testResult || clearResult) && (
-              <span className={`text-sm font-bold ${(testResult || clearResult).startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>
-                {testResult || clearResult}
-              </span>
-            )}
-          </div>
-          <p className="mt-2 text-xs text-gray-600">
-            เปลี่ยน URL/Email/Password ใน Vercel แล้วกด "โหลด Credentials ใหม่" — ไม่ต้อง redeploy
-          </p>
-        </div>
+        {/* V50 (2026-05-08) — 3 ProClinic-coupled sections REMOVED:
+          (1) "แพทย์ / ผู้ช่วยแพทย์" classification (was: pull from ProClinic
+              + assign role) — admin manages doctors/staff via
+              `?tab=doctors` + `?tab=staff` (be_doctors / be_staff CRUD).
+          (2) "ห้องตรวจ / ห้องหัตถการ" classification (was: pull from ProClinic
+              + assign role) — admin manages exam rooms via
+              `?tab=exam-rooms` (be_exam_rooms CRUD, Phase 18.0).
+          (3) "Master Data Sync" + "ProClinic Integration" (credentials test
+              + reload) — entire ProClinic strip per Rule H-bis EXECUTED.
+          The classification data lived in be_settings.practitioners +
+          be_settings.rooms; consumers now read be_doctors.position +
+          be_exam_rooms.kind directly. */}
 
         {/* Save Button */}
         <div className="flex items-center gap-4">
