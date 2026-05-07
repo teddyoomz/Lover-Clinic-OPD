@@ -55,3 +55,7 @@ coverage/
 graphify-out/
 .graphify_python
 .graphify_version
+
+# Git worktrees (subagent-driven-development isolated workspace; 2026-05-08)
+.worktrees/
+worktrees/
