@@ -77,7 +77,8 @@ describe('CS3 — Lib-layer source-grep', () => {
     const code = read('src/lib/backendClient.js');
     expect(code).toMatch(/V41.*audit-stamp/);
     expect(code).toMatch(/wasHidden\s*!==\s*willBeHidden/);
-    expect(code).toMatch(/hiddenAt:\s*willBeHidden\s*\?\s*serverTimestamp/);
+    // Match the actual assignment shape: `auditStamps.hiddenAt = willBeHidden ? serverTimestamp()...`
+    expect(code).toMatch(/auditStamps\.hiddenAt\s*=\s*willBeHidden\s*\?\s*serverTimestamp/);
   });
 
   it('CS3.4 — saveDoctor includes V41 transition stamp logic', () => {
