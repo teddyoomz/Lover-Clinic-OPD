@@ -22,15 +22,15 @@ vi.mock('../src/firebase.js', () => ({
 }));
 
 // ─── Mock BranchContext ───────────────────────────────────────────────────
-// Return BOTH `branchId` and `selectedBranchId` so the component bug is
-// worked around and the rest of the flow can be tested.
-const branchState = vi.hoisted(() => ({ branchId: 'BR-TEST', selectedBranchId: 'BR-TEST' }));
+// Mirror the REAL hook shape: { branchId, branches, selectBranch, isReady }.
+// NO `selectedBranchId` key — the source bug is now fixed at line 16 of
+// BranchBackupTab.jsx (uses rename pattern `branchId: selectedBranchId`).
+const branchState = vi.hoisted(() => ({ branchId: 'BR-TEST' }));
 vi.mock('../src/lib/BranchContext.jsx', () => ({
   useSelectedBranch: () => ({
     branchId: branchState.branchId,
-    selectedBranchId: branchState.selectedBranchId,
-    branches: [],
-    selectBranch: () => {},
+    branches: [{ branchId: 'BR-TEST', branchName: 'TEST Branch' }],
+    selectBranch: vi.fn(),
     isReady: true,
   }),
 }));
@@ -84,7 +84,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   global.fetch.mockReset();
   branchState.branchId = 'BR-TEST';
-  branchState.selectedBranchId = 'BR-TEST';
   tabState.isAdmin = true;
 });
 
@@ -140,7 +139,6 @@ describe('UI1 — BranchBackupTab', () => {
   });
 
   it('UI1.5 clicking "เริ่ม Backup" with no branch selected shows error', async () => {
-    branchState.selectedBranchId = null;
     branchState.branchId = null;
     render(<BranchBackupTab />);
     const startBtn = screen.getByText('เริ่ม Backup');

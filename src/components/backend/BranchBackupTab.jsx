@@ -13,7 +13,7 @@ const TIER_LABELS = {
 };
 
 export default function BranchBackupTab({ theme = 'dark' }) {
-  const { selectedBranchId } = useSelectedBranch();
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [tiersChecked, setTiersChecked] = useState({ T1: true, T2: true, T3: true, T4: true });
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [collectionsChecked, setCollectionsChecked] = useState({});
