@@ -97,6 +97,22 @@ export default function DoctorFormModal({ doctor, onClose, onSaved, clinicSettin
       bodySpacing={4}
       clinicSettings={clinicSettings}
     >
+      {/* isHidden toggle */}
+      <div className="flex flex-col gap-1 p-3 rounded-lg bg-amber-900/20 border border-amber-800/40 mb-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.isHidden}
+            onChange={(e) => setForm(f => ({ ...f, isHidden: e.target.checked }))}
+            data-field="isHidden"
+            className="w-4 h-4"
+          />
+          <span className="font-medium text-amber-300">🙈 ซ่อน — ไม่แสดงรายชื่อ</span>
+        </label>
+        <div className="text-xs text-[var(--tx-muted)] ml-6">
+          เมื่อเปิด: คนนี้ยัง login + ใช้สิทธิ์ได้ปกติ แต่จะไม่ปรากฏใน dropdown / picker / รายการ ทุกที่ในระบบ (ยกเว้นในแท็บนี้ + ประวัติเก่าที่อ้างชื่อไว้แล้ว)
+        </div>
+      </div>
       {/* Position (discriminator) + license */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div data-field="position">
