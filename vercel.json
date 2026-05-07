@@ -3,9 +3,6 @@
   "outputDirectory": "dist",
   "framework": null,
   "functions": {
-    "api/proclinic/*.js": {
-      "maxDuration": 60
-    },
     "api/admin/branch-backup-export.js": {
       "maxDuration": 60
     },
