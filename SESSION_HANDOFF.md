@@ -7,14 +7,28 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 — V49 picker dropdown empty rows (canonical→legacy shape mismatch class-of-bug)
+- **Date last updated**: 2026-05-08 EOD #2 — V50 ProClinic strip Phase 1+2 SHIPPED (4 commits, ~12K LOC removed)
 - **Branch**: `master`
-- **Last commit**: pending V49 — fix+test(V49): canonical→legacy *ForPicker variants + AV27 invariant
-- **Test count**: **403 unit (V34-V48 366 + V49 37) + 793 e2e verification points GREEN** (V42-V48 698 + V49 95)
-- **Build**: clean
-- **Deploy state**: **PRODUCTION = `c92f924`** (V42-V49 ALL committed but **NOT deployed**). 8 V-entries pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
-- **Iron-clad rule added**: Rule O (V46-V48) + AV27 invariant (V49) — every UI consumer fetching from be_courses/products/promotions reading legacy shape MUST use *ForPicker variants. AV20-AV27 invariant set COMPLETE.
-- **Migrations applied on prod**: V43 (3 customer.courses[i] entries restamped on LC-26000006) + V46 (2 poisoned batches restamped) + V49 e2e audit doc emitted (`be_admin_audit/v49-e2e-1778174951960-167t6dnz`). All audit-doc'd in `be_admin_audit`.
+- **Last commit**: `98e5105` — refactor(V50 Phase 2.3): test bank cleanup post-ProClinic strip
+- **Test count**: 7125/7131 PASS (5 fail PRE-EXISTING TFP regressions — not V50-caused, confirmed via stash-test)
+- **Build**: clean. BackendDashboard chunk 1018→933 KB, AdminDashboard 398→383 KB.
+- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase1-2 ALL committed but **NOT deployed**). 5 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
+- **Iron-clad rule status**: Rule O (V46-V48) + AV27 (V49) — invariant set complete. Rule **H-bis Phase 1+2 IN PROGRESS** (Phase 3-7 pending: creationBranchId + cross-branch e2e + Rule M data ops + V-entry/AV28/EXECUTED flag).
+- **Migrations applied on prod**: V43 (3 entries on LC-26000006) + V46 (2 poisoned batches) + V49 e2e audit doc.
+
+### Session 2026-05-08 EOD #2 — V50 ProClinic strip Phase 1+2 SHIPPED
+
+User authorized H-bis pre-launch strip per "หลอมรวม Frontend สาขาไหน + Backend สาขานั้น + universal stays universal + ลบ proclinic ออกอย่างสมบูรณ์".
+
+**4 commits**: Phase 1 (`121507b`) runtime broker.* migration (5 frontend files) + Phase 2.1 (`91b044c`) ClinicSettingsPanel 3 sections strip + Phase 2.2 (`b1ecf59`) infrastructure DELETED (-10,318 LOC: brokerClient + cloneOrchestrator + customerBranchBaselineClient + CloneTab + MasterDataTab + api/proclinic/** + cookie-relay/**) + Phase 2.3 (`98e5105`) test cleanup (-1,168 LOC: 3 files updated as V50 anti-regression + 6 obsolete tests deleted).
+
+**Behavior preserved**: AdminDashboard + BackendDashboard unified on be_* (no proclinic mode). Auto-link flows (`attachCustomerToOpdSessionLinks`, `provisionOpdLinkForBookingPair`, `handleOpdClick`) + cascade-delete (`deleteCustomerCascade`, `handleDepositSync`) + move-appointment + BSA branch isolation untouched (all be_*-based).
+
+**Outstanding**:
+- 🚨 V49+V50.Phase1-2 `vercel --prod` (V18)
+- V50 Phase 3-7 (next session): be_customers.creationBranchId + cross-branch e2e + Rule M data ops (delete master_data/* + broker_jobs/* + pc_* + clinic_settings/proclinic_session*) + V-entry + AV28 + H-bis EXECUTED + final commit
+
+Detail: `.agents/sessions/2026-05-08-v50-proclinic-strip.md`
 
 ### Session 2026-05-08 mid-day — V49 picker dropdown empty rows fix
 
@@ -654,24 +668,23 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-08 EOD.
+Resume LoverClinic — continue V50 ProClinic strip from 2026-05-08 EOD #2.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=1442301, prod=c92f924 — 7 commits ahead)
-3. .agents/active.md (366 V34-V48 unit + 698 e2e verification points GREEN)
-4. .claude/rules/00-session-start.md (iron-clad A-O + V-summary, NEW Rule O)
-5. .agents/sessions/2026-05-08-v42-to-v48-class-of-bug-saga.md
+2. SESSION_HANDOFF.md (master=98e5105, prod=c92f924 — 5 commits ahead)
+3. .agents/active.md (7125/7131 tests PASS)
+4. .claude/rules/00-session-start.md (iron-clad A-O + V42-V49 V-summary)
+5. .agents/sessions/2026-05-08-v50-proclinic-strip.md
 
-Status: master=1442301 (V42-V48 7-round saga). prod=c92f924 (NOT deployed; master 7 commits ahead). Class-of-bug skip-stock-deduction + display-layer multi-reader-sweep + canonical-mapper drift ARCHITECTURALLY CLOSED via AV20-AV26 invariant set. 2 poisoned prod batches migrated (V46) + 3 customer.courses[i] entries restamped (V43). NEW iron-clad Rule O: productId is THE only identity for stock; productName MUST be live-resolved at write time. 59-test prof-grade bank in V48 catches undiscovered bugs via property-based + cross-branch + adversarial + class-of-bug universal sweep.
+Status: master=98e5105, 7125/7131 tests pass, prod=c92f924. V50 ProClinic strip Phase 1+2 SHIPPED (~12K LOC removed across 4 commits). AdminDashboard + BackendDashboard unified on be_*. 24 infrastructure files DELETED (brokerClient + cloneOrchestrator + customerBranchBaselineClient + CloneTab + MasterDataTab + api/proclinic/** + cookie-relay/**). Auto-link/cascade-delete/move-appointment/BSA branch isolation preserved.
 
-Next action: idle. Awaiting user — most likely "deploy" for V42-V48 combined.
+Next action: V50 Phase 3 — add `be_customers.creationBranchId` field stamp at addCustomer + verify cross-branch booking flow on dev server (preview_eval AdminDashboard appointment + deposit creation across 3 branches).
 
 Outstanding (user-triggered):
-- 🚨 V42-V48 `vercel --prod` (V18 — explicit "deploy" THIS turn)
-- H-bis ProClinic full strip (deferred from prior sessions)
-- Hard-gate Firebase custom claim (deploy-coupled)
-- /audit-all pre-release pass
+- 🚨 V49 + V50.Phase1-2 vercel --prod (V18 — explicit "deploy" THIS turn) [5 commits ahead of prod]
+- V50 Phase 3-7 still pending (creationBranchId + e2e bank + Rule M data ops + V-entry/AV28/H-bis EXECUTED)
+- 5 pre-existing TFP test failures (BSA T6.1 + phase-17-2-septies S3) — separate task
 
 Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + AV17; Rule M data-ops; Rule N targeted-test-only; **NEW Rule O — productId-only-identity for stock + productName live-resolve at write**; V37 (NEVER `git add -A`); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
