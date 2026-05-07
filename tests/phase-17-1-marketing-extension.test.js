@@ -263,6 +263,52 @@ describe('M5 — registry source-grep regression', () => {
     }
   });
 
+  it('M5.12 FK_COLLECTION_TO_ENTITY (modal + endpoint) covers every collection declared as FK target by any adapter', () => {
+    // Regression guard for "ต้อง import ก่อน: (unknown)" runtime symptom.
+    // Caught live 2026-05-07 — promotions declared be_courses as an FK target
+    // but neither the modal's fkEntityType ternary nor the endpoint's
+    // FK_COLLECTION_TO_ENTITY map included be_courses. Result: client-side
+    // FK lookup returned null dedupKey for every course ref → modal showed
+    // "(unknown)" + every promotion blocked from import.
+    //
+    // Computes: union of adapter.fkRefs collections referenced by sample data.
+    // Asserts: every such collection appears in BOTH the modal AND the
+    // endpoint FK maps.
+    const sampleItems = {
+      'products': { unitId: 'U-1', categoryId: 'C-1' },
+      'product-groups': { products: [{ productId: 'P-1' }] },
+      'courses': { items: [{ productId: 'P-1' }] },
+      'promotions': { courses: [{ id: 'C-1' }], products: [{ id: 'P-1' }] },
+      'coupons': {},
+      'vouchers': {},
+      // standalone (no FK)
+    };
+    const fkCollections = new Set();
+    for (const t of Object.keys(ADAPTERS)) {
+      const adapter = getAdapter(t);
+      const sample = sampleItems[t] || {};
+      for (const ref of adapter.fkRefs(sample)) {
+        if (ref?.collection) fkCollections.add(ref.collection);
+      }
+    }
+    // Modal source
+    const modalSrc = readFileSync('src/components/backend/CrossBranchImportModal.jsx', 'utf-8');
+    // Endpoint source
+    const endpointSrc = readFileSync('api/admin/cross-branch-import.js', 'utf-8');
+    for (const col of fkCollections) {
+      // Modal: fkEntityType ternary should map this collection to a non-null entity
+      expect(
+        modalSrc,
+        `modal fkEntityType ternary missing case for '${col}' (declared as FK target by adapter)`,
+      ).toMatch(new RegExp(`col\\s*===\\s*['"]${col}['"]\\s*\\?\\s*['"][\\w-]+['"]`));
+      // Endpoint: FK_COLLECTION_TO_ENTITY map should include this key
+      expect(
+        endpointSrc,
+        `endpoint FK_COLLECTION_TO_ENTITY map missing entry for '${col}'`,
+      ).toMatch(new RegExp(`['"]${col}['"]\\s*:\\s*['"][\\w-]+['"]`));
+    }
+  });
+
   it('M5.11 CrossBranchImportModal LISTER_NAME_BY_COLLECTION has entries for all 10 adapters', async () => {
     // Regression guard for "No lister exported from scopedDataLayer for be_X"
     // runtime error. Every adapter.collection MUST be a key in the modal's

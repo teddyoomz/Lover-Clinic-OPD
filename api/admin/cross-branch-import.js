@@ -119,10 +119,14 @@ export default async function handler(req, res) {
     const fkCollections = [...new Set(fkRefs.map(r => r.collection))];
 
     // Map FK collection → adapter for dedupKey computation.
+    // Phase 17.1 marketing extension (2026-05-07) — added 'be_courses' for
+    // promotions adapter (FK to courses[].id). M5.12 regression test enforces
+    // this map covers every collection any adapter declares as an FK target.
     const FK_COLLECTION_TO_ENTITY = {
       'be_products': 'products',
       'be_product_groups': 'product-groups',
       'be_product_unit_groups': 'product-units',
+      'be_courses': 'courses',
     };
     const resolveFkAdapter = (col) => {
       const ent = FK_COLLECTION_TO_ENTITY[col];

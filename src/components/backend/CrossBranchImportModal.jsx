@@ -91,16 +91,23 @@ export default function CrossBranchImportModal({ adapter, isDark, onClose, onImp
         // We need the FK adapter to compute dedupKey for source FK lookup;
         // dynamically import the registry so this stays adapter-agnostic.
         const { getAdapter } = await import('../../lib/crossBranchImportAdapters/index.js');
+        // Phase 17.1 marketing extension (2026-05-07) — added 'be_courses'
+        // entry. Promotions are the first entity to declare be_courses as an
+        // FK target. Pre-extension, only product/product-groups/product-units
+        // were FK targets. M5.12 regression test enforces this map covers all
+        // adapter.fkRefs collections.
         const fkEntityType = (
           col === 'be_products' ? 'products' :
           col === 'be_product_groups' ? 'product-groups' :
-          col === 'be_product_unit_groups' ? 'product-units' : null
+          col === 'be_product_unit_groups' ? 'product-units' :
+          col === 'be_courses' ? 'courses' : null
         );
         const fkAdapter = fkEntityType ? getAdapter(fkEntityType) : null;
         const idKey = (
           col === 'be_products' ? 'productId' :
           col === 'be_product_groups' ? 'groupId' :
-          col === 'be_product_unit_groups' ? 'unitGroupId' : 'id'
+          col === 'be_product_unit_groups' ? 'unitGroupId' :
+          col === 'be_courses' ? 'courseId' : 'id'
         );
         const srcMap = {};
         (srcFk || []).forEach(f => {
