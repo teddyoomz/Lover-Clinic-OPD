@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save, MessageCircle, Phone, Timer, Stethoscope, FileText } from 'lucide-react';
+import { setDoc, doc } from 'firebase/firestore';
+import { ArrowLeft, Settings, Type, ImageIcon, Upload, Link, Trash2, Palette, Check, Moon, Save } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, PRESET_COLORS } from '../constants.js';
 import { hexToRgb, applyThemeColor } from '../utils.js';
 import { THEMES } from '../hooks/useTheme.js';
@@ -8,29 +8,30 @@ import { THEMES } from '../hooks/useTheme.js';
 // Sync UI sections (Practitioners + Rooms classify + Master Data Sync +
 // ProClinic Integration credentials) deleted; admin manages those entities
 // via dedicated be_* CRUD tabs (`?tab=doctors`, `?tab=staff`, `?tab=exam-rooms`).
-
-const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const MINUTES = ['00', '15', '30', '45'];
-
-function TimeSelect24({ value, onChange, focusColor }) {
-  const [hh, mm] = (value || '10:00').split(':');
-  const selCls = `bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-2 py-2.5 outline-none transition-all text-sm font-mono cursor-pointer ${focusColor || 'focus:border-[var(--accent)]'}`;
-  return (
-    <div className="flex items-center gap-0.5">
-      <select value={hh} onChange={e => onChange(`${e.target.value}:${mm}`)} className={`${selCls} w-[60px] text-center rounded-r-none`}>
-        {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-      </select>
-      <span className="text-gray-500 font-mono text-sm font-bold">:</span>
-      <select value={MINUTES.includes(mm) ? mm : '00'} onChange={e => onChange(`${hh}:${e.target.value}`)} className={`${selCls} w-[56px] text-center rounded-l-none`}>
-        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-    </div>
-  );
-}
+//
+// V51 (2026-05-08) — Per-branch settings migration. 7 chain-vs-branch
+// settings sections moved from clinic_settings/main → be_branches[*].settings:
+//   1. LINE Official Account URL → settings.lineOaUrl
+//   2. Clinic Phone              → settings.phone
+//   3. Document info (6 fields)  → settings.{licenseNo,taxId,address,addressEn,email}
+//                                  + chain-level clinicName/clinicNameEn stay here
+//   4. Patient Sync Cooldown     → settings.patientSyncCooldownMins
+//   5. Open Hours                → settings.openHours.{monFri,satSun}
+//   6. Chat Hours                → settings.chatHours.{alwaysOn,monFri,satSun}
+//   7. Doctor Hours              → DEPRECATED (staff schedule replaces;
+//                                  Phase 13 + future per-doctor schedule).
+// Migration script: scripts/v51-migrate-clinic-settings-to-branch.mjs
+// (Rule M two-phase). TimeSelect24 extracted to shared module
+// `src/components/ui/TimeSelect24.jsx` (Rule of 3: BranchFormModal reuses).
+//
+// This panel now manages ONLY chain-level brand fields:
+//   - clinicName / clinicSubtitle (chain identity)
+//   - logoUrl + logoUrlLight (chain logos, Dark + Light theme)
+//   - accentColor (chain theme color)
+//   - theme toggle (Dark / Light / Auto)
 
 export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack, theme, setTheme }) {
   const [settings, setSettings] = useState({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
-  const initialCooldownRef = useRef(clinicSettings?.patientSyncCooldownMins ?? DEFAULT_CLINIC_SETTINGS.patientSyncCooldownMins);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [logoPreview, setLogoPreview] = useState(settings.logoUrl || '');
@@ -41,11 +42,10 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const fileInputRefLight = useRef(null);
   // V50 (2026-05-08) — testingConnection / clearingSession / practitioners /
   // rooms / syncStatus / syncResults state REMOVED (sections deleted).
-  // practitioners + rooms data was historical classification of ProClinic
-  // users/rooms; consumers now read be_doctors.position + be_exam_rooms.kind
-  // (Phase 18.0) directly. Legacy `clinic_settings.practitioners` +
-  // `clinic_settings.rooms` fields preserved on disk for back-compat but
-  // never written by V50+.
+  // V51 (2026-05-08) — initialCooldownRef + per-branch settings state REMOVED
+  // (sections moved to BranchFormModal). Legacy clinic_settings.* fields for
+  // those sections preserved on disk via the migration script that copies
+  // them to be_branches[*].settings before deleting from clinic_settings.
 
   const handleColorChange = (hex) => {
     setSettings(prev => ({ ...prev, accentColor: hex }));
@@ -105,61 +105,19 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMsg('');
-    const newCooldown = Math.max(0, Math.min(99999, parseInt(settings.patientSyncCooldownMins, 10) || 0));
-    const cooldownChanged = newCooldown !== initialCooldownRef.current;
     try {
+      // V51 — write only chain-level brand fields. All per-branch settings
+      // moved to be_branches[*].settings (managed via BranchFormModal).
+      // merge:true preserves any legacy fields still present on the doc
+      // until the migration script wipes them.
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_settings', 'main'), {
         clinicName: settings.clinicName.trim() || DEFAULT_CLINIC_SETTINGS.clinicName,
-        // Phase 14.2 — clinic info for document templates
-        clinicNameEn: settings.clinicNameEn?.trim() || '',
-        clinicAddress: settings.clinicAddress?.trim() || '',
-        clinicAddressEn: settings.clinicAddressEn?.trim() || '',
-        clinicLicenseNo: settings.clinicLicenseNo?.trim() || '',
-        clinicTaxId: settings.clinicTaxId?.trim() || '',
-        clinicEmail: settings.clinicEmail?.trim() || '',
         clinicSubtitle: settings.clinicSubtitle.trim(),
+        accentColor: settings.accentColor,
         logoUrl: settings.logoUrl,
         logoUrlLight: settings.logoUrlLight || '',
-        accentColor: settings.accentColor,
-        lineOfficialUrl: settings.lineOfficialUrl?.trim() || '',
-        clinicPhone: settings.clinicPhone?.trim() || '',
-        patientSyncCooldownMins: newCooldown,
-        clinicOpenTime: settings.clinicOpenTime || DEFAULT_CLINIC_SETTINGS.clinicOpenTime,
-        clinicCloseTime: settings.clinicCloseTime || DEFAULT_CLINIC_SETTINGS.clinicCloseTime,
-        clinicOpenTimeWeekend: settings.clinicOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicOpenTimeWeekend,
-        clinicCloseTimeWeekend: settings.clinicCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.clinicCloseTimeWeekend,
-        doctorStartTime: settings.doctorStartTime || DEFAULT_CLINIC_SETTINGS.doctorStartTime,
-        doctorEndTime: settings.doctorEndTime || DEFAULT_CLINIC_SETTINGS.doctorEndTime,
-        doctorStartTimeWeekend: settings.doctorStartTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorStartTimeWeekend,
-        doctorEndTimeWeekend: settings.doctorEndTimeWeekend || DEFAULT_CLINIC_SETTINGS.doctorEndTimeWeekend,
-        chatAlwaysOn: !!settings.chatAlwaysOn,
-        chatOpenTime: settings.chatOpenTime || DEFAULT_CLINIC_SETTINGS.chatOpenTime,
-        chatCloseTime: settings.chatCloseTime || DEFAULT_CLINIC_SETTINGS.chatCloseTime,
-        chatOpenTimeWeekend: settings.chatOpenTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatOpenTimeWeekend,
-        chatCloseTimeWeekend: settings.chatCloseTimeWeekend || DEFAULT_CLINIC_SETTINGS.chatCloseTimeWeekend,
-        // V50 (2026-05-08) — practitioners + rooms removed (sections deleted).
-        // Existing field values preserved on disk for back-compat; new
-        // saves no longer overwrite them.
-        updatedAt: serverTimestamp(),
-      });
-      // cooldown เปลี่ยน → clear lastCoursesAutoFetch จากทุก session เพื่อรีเซ็ตนับเวลาใหม่
-      if (cooldownChanged) {
-        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions'));
-        const batches = [];
-        let batch = writeBatch(db);
-        let count = 0;
-        snap.forEach(d => {
-          if (d.data().lastCoursesAutoFetch) {
-            batch.update(d.ref, { lastCoursesAutoFetch: null });
-            count++;
-            if (count % 400 === 0) { batches.push(batch); batch = writeBatch(db); }
-          }
-        });
-        if (count % 400 !== 0) batches.push(batch);
-        await Promise.all(batches.map(b => b.commit()));
-        initialCooldownRef.current = newCooldown;
-      }
-      setSaveMsg('บันทึกสำเร็จ!' + (cooldownChanged ? ' รีเซ็ต cooldown ทุก session แล้ว' : ''));
+      }, { merge: true });
+      setSaveMsg('บันทึกสำเร็จ!');
       setTimeout(() => setSaveMsg(''), 4000);
     } catch (err) {
       console.error(err);
@@ -327,262 +285,18 @@ export default function ClinicSettingsPanel({ db, appId, clinicSettings, onBack,
           </div>
         </div>
 
-        {/* LINE Official Account */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <MessageCircle size={14} style={{color:'#06C755'}}/> LINE Official Account
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">ลิ้งค์ที่จะแสดงให้ผู้ป่วยกด Add Friend หลังกรอกข้อมูลสำเร็จ</p>
-          <input
-            type="text"
-            value={settings.lineOfficialUrl || ''}
-            onChange={e => setSettings(prev => ({ ...prev, lineOfficialUrl: e.target.value }))}
-            placeholder="https://lin.ee/xxxxxxx"
-            className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[#06C755] transition-all text-sm font-mono"
-          />
-          {settings.lineOfficialUrl && (
-            <a href={settings.lineOfficialUrl} target="_blank" rel="noopener noreferrer"
-              className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-[#06C755] hover:underline">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#06C755"><path d="M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
-              ทดสอบลิ้งค์
-            </a>
-          )}
-        </div>
-
-        {/* Clinic Phone */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Phone size={14} style={{color: ac}}/> เบอร์โทรคลินิก (Clinic Phone)
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">เบอร์โทรที่จะแสดงให้ผู้ป่วยกดโทรได้จากหน้าข้อมูลผู้ป่วย</p>
-          <input
-            type="tel"
-            value={settings.clinicPhone || ''}
-            onChange={e => setSettings(prev => ({ ...prev, clinicPhone: e.target.value }))}
-            placeholder="02-xxx-xxxx หรือ 08x-xxx-xxxx"
-            className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono"
-          />
-        </div>
-
-        {/* Phase 14.2 — Clinic info for document templates (medical-cert / fit-to-fly / referral / etc.) */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <FileText size={14} style={{color: ac}}/> ข้อมูลคลินิก (สำหรับใบรับรองแพทย์/เอกสาร)
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            ข้อมูลเหล่านี้ปรากฏบนเอกสารที่พิมพ์ออกมา (ใบรับรองแพทย์ / ฉลากยา / Fit-to-fly / ใบส่งตัว ฯลฯ).
-            ฟิลด์ภาษาอังกฤษใช้กับเอกสารแบบ bilingual.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] text-gray-600 mb-1">ชื่อคลินิกภาษาอังกฤษ (Clinic Name EN)</label>
-              <input type="text"
-                value={settings.clinicNameEn || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicNameEn: e.target.value }))}
-                placeholder="e.g. Lover Clinic"
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
-            </div>
-            <div>
-              <label className="block text-[11px] text-gray-600 mb-1">เลขที่ใบอนุญาตประกอบกิจการสถานพยาบาล</label>
-              <input type="text"
-                value={settings.clinicLicenseNo || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicLicenseNo: e.target.value }))}
-                placeholder="เช่น 11102000xxx"
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
-            </div>
-            <div>
-              <label className="block text-[11px] text-gray-600 mb-1">เลขประจำตัวผู้เสียภาษี</label>
-              <input type="text"
-                value={settings.clinicTaxId || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicTaxId: e.target.value }))}
-                placeholder="เช่น 0xxxxxxxxxxxxx"
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] text-gray-600 mb-1">ที่อยู่คลินิก (Address TH)</label>
-              <textarea
-                value={settings.clinicAddress || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicAddress: e.target.value }))}
-                placeholder="เลขที่ ซอย ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด รหัสไปรษณีย์"
-                rows={2}
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] text-gray-600 mb-1">Address (English)</label>
-              <textarea
-                value={settings.clinicAddressEn || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicAddressEn: e.target.value }))}
-                placeholder="No., Soi, Road, Sub-district, District, Province, Postal code"
-                rows={2}
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] text-gray-600 mb-1">อีเมลคลินิก (Clinic Email — สำหรับเอกสารและการติดต่อ)</label>
-              <input type="email"
-                value={settings.clinicEmail || ''}
-                onChange={e => setSettings(prev => ({ ...prev, clinicEmail: e.target.value }))}
-                placeholder="info@clinic.com"
-                className="w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-sm font-mono" />
-            </div>
-          </div>
-        </div>
-
-        {/* Patient Sync Cooldown */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Timer size={14} style={{color: ac}}/> Patient Sync Cooldown
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            จำกัดให้ลูกค้า sync ข้อมูลคอร์สได้กี่ครั้งต่อชั่วโมง —&nbsp;
-            <span className="text-[var(--tx-heading)] font-bold">0 = ไม่จำกัด</span>,&nbsp;
-            1–99999 = นาทีต่อครั้ง (เช่น 60 = ชั่วโมงละครั้ง)<br/>
-            <span className="text-orange-600">การเปลี่ยนค่านี้จะรีเซ็ต cooldown ของทุก session ทันที</span>
-          </p>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min="0"
-              max="99999"
-              step="1"
-              value={settings.patientSyncCooldownMins ?? 60}
-              onChange={e => setSettings(prev => ({ ...prev, patientSyncCooldownMins: Math.max(0, Math.min(99999, parseInt(e.target.value, 10) || 0)) }))}
-              className="w-32 bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-4 py-3 outline-none focus:border-[var(--accent)] transition-all text-lg font-mono font-bold text-center"
-            />
-            <span className="text-sm text-gray-500">นาที</span>
-            <span className="text-xs text-gray-600">
-              {(settings.patientSyncCooldownMins ?? 60) === 0
-                ? '(ไม่จำกัด)'
-                : `(${settings.patientSyncCooldownMins ?? 60} นาทีต่อครั้ง)`}
-            </span>
-          </div>
-        </div>
-
-        {/* Clinic Hours */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Timer size={14} style={{color: ac}}/> เวลาเปิด-ปิดคลินิก
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            ใช้สำหรับคำนวณช่องเวลาว่างในตารางนัดหมายสาธารณะ (ระบบ 24 ชม.)
-          </p>
-          <div className="space-y-3" lang="en-GB">
-            <div>
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">เปิด</span>
-                  <TimeSelect24 value={settings.clinicOpenTime} onChange={v => setSettings(prev => ({ ...prev, clinicOpenTime: v }))} />
-                </div>
-                <span className="text-gray-600">—</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">ปิด</span>
-                  <TimeSelect24 value={settings.clinicCloseTime} onChange={v => setSettings(prev => ({ ...prev, clinicCloseTime: v }))} />
-                </div>
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">เปิด</span>
-                  <TimeSelect24 value={settings.clinicOpenTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, clinicOpenTimeWeekend: v }))} />
-                </div>
-                <span className="text-gray-600">—</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">ปิด</span>
-                  <TimeSelect24 value={settings.clinicCloseTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, clinicCloseTimeWeekend: v }))} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chat System Schedule */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <MessageCircle size={14} style={{color: '#3b82f6'}}/> เวลาทำการระบบแชท
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            นอกเวลาทำการ ระบบแชทจะหยุดรับข้อความและไม่มีเสียงเตือน
-          </p>
-          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
-            <input type="checkbox" checked={!!settings.chatAlwaysOn} onChange={e => setSettings(prev => ({ ...prev, chatAlwaysOn: e.target.checked }))}
-              className="w-4 h-4 rounded accent-blue-500" />
-            <span className="text-xs font-bold text-[var(--tx-heading)]">เปิดตลอด 24 ชม. (Always On)</span>
-          </label>
-          {!settings.chatAlwaysOn && (
-            <div className="space-y-3" lang="en-GB">
-              <div>
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">เปิด</span>
-                    <TimeSelect24 value={settings.chatOpenTime} onChange={v => setSettings(prev => ({ ...prev, chatOpenTime: v }))} focusColor="focus:border-blue-500" />
-                  </div>
-                  <span className="text-gray-600">—</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">ปิด</span>
-                    <TimeSelect24 value={settings.chatCloseTime} onChange={v => setSettings(prev => ({ ...prev, chatCloseTime: v }))} focusColor="focus:border-blue-500" />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">เปิด</span>
-                    <TimeSelect24 value={settings.chatOpenTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, chatOpenTimeWeekend: v }))} focusColor="focus:border-blue-500" />
-                  </div>
-                  <span className="text-gray-600">—</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">ปิด</span>
-                    <TimeSelect24 value={settings.chatCloseTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, chatCloseTimeWeekend: v }))} focusColor="focus:border-blue-500" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Doctor Hours */}
-        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-2xl border border-[var(--bd)]">
-          <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-            <Stethoscope size={14} style={{color: '#38bdf8'}}/> เวลาแพทย์เข้า
-          </h3>
-          <p className="text-[11px] text-gray-600 mb-4">
-            เวลาที่แพทย์เข้าตรวจ — ผูกกับวันที่กำหนดให้หมอเข้า ลิงก์แบบ "พบแพทย์" จะแสดงเฉพาะช่วงเวลานี้เป็นว่าง
-          </p>
-          <div className="space-y-3" lang="en-GB">
-            <div>
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">จ–ศ (วันธรรมดา)</span>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">เริ่ม</span>
-                  <TimeSelect24 value={settings.doctorStartTime} onChange={v => setSettings(prev => ({ ...prev, doctorStartTime: v }))} focusColor="focus:border-sky-500" />
-                </div>
-                <span className="text-gray-600">—</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">สิ้นสุด</span>
-                  <TimeSelect24 value={settings.doctorEndTime} onChange={v => setSettings(prev => ({ ...prev, doctorEndTime: v }))} focusColor="focus:border-sky-500" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ส–อา (เสาร์-อาทิตย์)</span>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">เริ่ม</span>
-                  <TimeSelect24 value={settings.doctorStartTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, doctorStartTimeWeekend: v }))} focusColor="focus:border-sky-500" />
-                </div>
-                <span className="text-gray-600">—</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">สิ้นสุด</span>
-                  <TimeSelect24 value={settings.doctorEndTimeWeekend} onChange={v => setSettings(prev => ({ ...prev, doctorEndTimeWeekend: v }))} focusColor="focus:border-sky-500" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* V51 (2026-05-08) — 7 per-branch settings sections MOVED to
+          BranchFormModal (Spec #2 Phase 2 + 3):
+            • LINE Official Account URL → settings.lineOaUrl
+            • Clinic Phone → settings.phone
+            • Document info (6 fields) → settings.{licenseNo,taxId,address,addressEn,email}
+            • Patient Sync Cooldown → settings.patientSyncCooldownMins
+            • Open Hours (จ-ศ + ส-อา) → settings.openHours.{monFri,satSun}
+            • Chat Hours + alwaysOn → settings.chatHours.{alwaysOn,monFri,satSun}
+            • Doctor Hours — DEPRECATED (staff schedule replaces).
+          Migration script: scripts/v51-migrate-clinic-settings-to-branch.mjs.
+          chain-level fields preserved here: clinicName, clinicSubtitle,
+          accentColor, logoUrl, logoUrlLight (above). */}
 
         {/* V50 (2026-05-08) — 3 ProClinic-coupled sections REMOVED:
           (1) "แพทย์ / ผู้ช่วยแพทย์" classification (was: pull from ProClinic

@@ -221,13 +221,13 @@ if ($count -ge 17) { "BS-8 OK ($count lines)" } else { "BS-8 FAIL — only $coun
 
 ---
 
-## Run all 8 in one shot
+## Run all 10 in one shot
 
 ```bash
 npm test -- --run tests/audit-branch-scope.test.js
 ```
 
-Expected: 9 pass (or 8 + 1 soft-pass for BS-6 until Task 10; BS-9 added Phase 17.0 2026-05-05).
+Expected: 10 pass (or 9 + 1 soft-pass for BS-6 until Task 10; BS-9 added Phase 17.0 2026-05-05; BS-10 added V51 / Spec #2 2026-05-08).
 
 ---
 
@@ -241,6 +241,7 @@ Expected: 9 pass (or 8 + 1 soft-pass for BS-6 until Task 10; BS-9 added Phase 17
 | Old master_data items showing despite being deleted | BS-2 OR BS-3 (feature code reading legacy pool) |
 | New collection's branch behavior is undocumented | BS-5 (missing COLLECTION_MATRIX entry) |
 | Layer 2/3 has no end-to-end test | BS-6 (waiting on Task 10) |
+| Phone/address/license/tax-ID/email shows GLOBAL value despite per-branch override | BS-10 (UI reads `clinicSettings.X` instead of `useEffectiveClinicSettings(clinicSettings).X`) |
 
 ## Cross-references
 
@@ -287,3 +288,52 @@ git grep -lE "from ['\""](\.\./)+lib/scopedDataLayer" -- "src/components/backend
 **If non-empty**: the new tab imports a branch-scoped lister but won't re-fetch when the user switches branches. Either (a) add `useSelectedBranch` import + `selectedBranchId` in `useCallback`/`useEffect` deps, or (b) if the tab uses `useBranchAwareListener`, add `// audit-branch-scope: BS-9 listener-driven` annotation at file top.
 
 **Why**: Phase 17.0 (2026-05-05) closed Promotion/Coupon/Voucher branch-leak gap. Without BS-9, future tabs can silently regress — `scopedDataLayer.js` auto-injects branchId at call time but React only re-runs `reload` when a dep changes; without `selectedBranchId` in deps, the tab never re-fetches after a branch switch.
+
+---
+
+## BS-10 — Migrated clinic_settings fields read via useEffectiveClinicSettings
+
+### Bash
+
+```bash
+# Find all raw clinicSettings.X reads on migrated fields, minus sanctioned
+# exceptions (ClinicSettingsPanel = delete-target Phase 2; branchBackupCore =
+# backup target; files annotated with BS-10 sanctioned).
+git grep -nE "clinicSettings\??\\.(phone|clinicEmail|lineOfficialAccountUrl|clinicLicenseNo|clinicTaxId|clinicAddress|clinicAddressEn|patientSyncCooldownMins|openHoursMonFri|openHoursSatSun|chatHoursAlwaysOn|chatHoursMonFri|chatHoursSatSun)\\b" -- "src/" \
+  | grep -v ClinicSettingsPanel \
+  | grep -v branchBackupCore \
+  | while IFS= read -r line; do
+      file="${line%%:*}"
+      grep -q "audit-branch-scope: BS-10 sanctioned" "$file" 2>/dev/null || echo "$line"
+    done
+```
+
+### PowerShell
+
+```powershell
+git grep -nE "clinicSettings\?\?\.(phone|clinicEmail|lineOfficialAccountUrl|clinicLicenseNo|clinicTaxId|clinicAddress|clinicAddressEn|patientSyncCooldownMins|openHoursMonFri|openHoursSatSun|chatHoursAlwaysOn|chatHoursMonFri|chatHoursSatSun)\b" -- "src/" |
+  Where-Object {
+    $_ -notmatch "ClinicSettingsPanel" -and
+    $_ -notmatch "branchBackupCore"
+  } |
+  ForEach-Object {
+    $file = ($_ -split ':', 2)[0]
+    $content = Get-Content -Path $file -Raw -ErrorAction SilentlyContinue
+    if ($content -notmatch "audit-branch-scope: BS-10 sanctioned") { $_ }
+  }
+```
+
+**Expected post-Phase-1**: empty.
+
+**If non-empty**: a UI consumer is reading a migrated `clinic_settings` field
+directly. Either (a) replace `clinicSettings.X` with
+`useEffectiveClinicSettings(clinicSettings).X` so the per-branch override
+applies, or (b) if the file legitimately must read raw (public-link page,
+backup endpoint, settings editor), add a top-of-file
+`// audit-branch-scope: BS-10 sanctioned — <reason>` annotation.
+
+**Why**: Spec #2 § 5 (V51, 2026-05-08) — per-branch settings migration moves
+13 fields from `clinic_settings/main` to `be_branches/{branchId}.settings`.
+The merger `mergeBranchIntoClinic` exposes them on the merged result with
+3-source cascade. Consumers reading `clinicSettings.X` directly will lose
+the per-branch override after the migration.

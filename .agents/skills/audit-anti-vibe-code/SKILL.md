@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV26)
+## Invariants (AV1–AV29)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -229,6 +229,116 @@ const FORBIDDEN_RUNTIME_PATHS = [
 - AV20 (V41): default-filter at lister + opt-in (similar pattern — orphaned exports OK if never called)
 - AV28 (V50, this entry): the BSA Rule E + Rule H-quater + Rule H-bis ENFORCEMENT — V50 made the strip complete
 - (See also iron-clad rules **E** "Backend = Firestore ONLY", **H** "Data Ownership", **H-bis** "Sync = DEV-ONLY scaffolding", **H-quater** "master_data is NOT readable from feature code")
+
+### AV29 — Per-branch settings: 17-consumer multi-reader-sweep (V51 / Spec #2)
+
+**Why**: V51 / Spec #2 (2026-05-08) — per-branch settings migration moves 13
+fields from the global `clinic_settings/main` doc to per-branch
+`be_branches/{branchId}.settings`. Goal: each branch can override clinic
+phone, email, license, tax-ID, address, addressEn, LINE OA URL, patient-sync
+cooldown, opening hours (Mon-Fri / Sat-Sun), and chat hours (always-on
+flag + Mon-Fri / Sat-Sun) independently. The merger
+`mergeBranchIntoClinic` in `src/lib/BranchContext.jsx` is the architectural
+backstop — every UI consumer of those 13 fields MUST go through
+`useEffectiveClinicSettings(clinicSettings)` (which wraps the merger
+reactively) so per-branch overrides apply at read time.
+
+This is a V12 multi-reader-sweep at the **shape boundary** of clinic
+settings. After Phase 2 ships UI + migration script, the cs.X fields will
+be removed from `clinic_settings/main`; consumers reading raw
+`clinicSettings.X` would silently start receiving `undefined` for the 8
+NEW fields and the BRANCH-DEFAULT (no override) for the 5 deduplicating
+fields.
+
+**Companion AV**: cross-references **BS-10** (audit-branch-scope SKILL.md).
+BS-10 is the source-grep boundary in scope of branch-scope; AV29 is the
+class-of-bug boundary in scope of the V12 multi-reader-sweep. Both fire
+on the same set of files. BS-10's grep is the authoritative one — AV29
+duplicates the rule for cross-skill discoverability.
+
+**The rule**: NO file under `src/components/**`, `src/pages/**`,
+`src/hooks/**`, or `src/lib/**` (excluding sanctioned exceptions) may
+read any of the 13 migrated fields directly off a raw `clinicSettings`
+prop / state / object. The 13 fields:
+
+```
+phone, clinicEmail, lineOfficialAccountUrl,
+clinicLicenseNo, clinicTaxId, clinicAddress, clinicAddressEn,
+patientSyncCooldownMins,
+openHoursMonFri, openHoursSatSun,
+chatHoursAlwaysOn, chatHoursMonFri, chatHoursSatSun
+```
+
+Reading via the merged result is mandatory:
+
+```js
+// ✅ GOOD — per-branch override applies
+const effective = useEffectiveClinicSettings(clinicSettings);
+const phone = effective.phone;
+
+// ❌ BAD — bypasses per-branch override
+const phone = clinicSettings.phone;
+```
+
+**Grep**:
+```bash
+git grep -nE "clinicSettings\??\\.(phone|clinicEmail|lineOfficialAccountUrl|clinicLicenseNo|clinicTaxId|clinicAddress|clinicAddressEn|patientSyncCooldownMins|openHoursMonFri|openHoursSatSun|chatHoursAlwaysOn|chatHoursMonFri|chatHoursSatSun)\\b" -- "src/" \
+  | grep -v ClinicSettingsPanel \
+  | grep -v branchBackupCore
+# Then for each remaining match, verify file has either:
+#   - useEffectiveClinicSettings (correct migration), OR
+#   - // audit-branch-scope: BS-10 sanctioned (sanctioned exception)
+```
+
+**17-Consumer classifier (Phase 1 sweep result, post-V51 Phase 1)**:
+
+This is the Rule P Tier 2 classifier doc enumerating every consumer +
+status. As of V51 Phase 1, the project has 7 confirmed-relevant consumer
+files. The "17" in the AV name comes from the spec's projected enumeration
+(includes pass-through props + parent components); the actual reader
+count is much narrower because most files just forward `clinicSettings`
+as a prop.
+
+| File | Reads migrated field? | Status |
+|---|---|---|
+| `src/components/ClinicSettingsPanel.jsx` | YES — clinicAddress/clinicAddressEn/clinicLicenseNo/clinicTaxId/clinicEmail/patientSyncCooldownMins | DELETE-TARGET Phase 2 (will be reduced to brand fields only) |
+| `src/pages/PatientDashboard.jsx` | YES — `clinicSettings?.patientSyncCooldownMins` × 3 sites | SANCTIONED — public-link page outside `<BranchProvider>`; tagged `// audit-branch-scope: BS-10 sanctioned` |
+| `src/components/backend/SalePrintView.jsx` | YES — `clinic.address/clinic.phone/clinic.taxId` (merged shape via `useEffectiveClinicSettings`) | MIGRATED already (V40 baseline) |
+| `src/components/backend/QuotationPrintView.jsx` | YES — `clinic.address/clinic.phone/clinic.taxId` (merged shape via `useEffectiveClinicSettings`) | MIGRATED already (V40 baseline) |
+| `src/components/backend/DocumentPrintModal.jsx` | YES — wraps `useEffectiveClinicSettings(rawClinicSettings)` then passes downstream | MIGRATED already |
+| `src/lib/documentPrintEngine.js` | YES — `clinic.{clinicEmail,clinicPhone,clinicAddress,clinicAddressEn,clinicLicenseNo,clinicTaxId}` (`clinic` is the merged result passed in from upstream callers — DocumentPrintModal / SalePrintView / QuotationPrintView) | PASS-THROUGH (downstream consumer) |
+| `src/lib/branchBackupCore.js` | NO direct read of fields — but classifies `clinic_settings` as a UNIVERSAL collection for backup tier | SANCTIONED — backup target; tagged `// audit-branch-scope: BS-10 sanctioned — backup target raw read OK` |
+| `src/lib/BranchContext.jsx` | YES (self) — source of truth for the merger | LIB DEFINITION |
+
+**Pass-through callers (no migrated-field reads — just forward
+`clinicSettings` as a prop)**: `App.jsx`, `AdminDashboard.jsx`,
+`BackendDashboard.jsx`, all 50+ backend tab files, all customer-detail
+modals. These don't read migrated fields directly so don't need
+migration. Audit BS-10 grep above confirms via post-Phase-1 zero-output.
+
+**Source-grep regression test**: `tests/per-branch-settings-multi-reader-sweep.test.js`
+groups S3 (BS-10 source-grep regression) + S4 (AV29 consumer classifier)
+lock the rule. Future drift fails the build.
+
+**Sanctioned exceptions** (annotation comments):
+
+```js
+// audit-branch-scope: BS-10 sanctioned — backup target raw read OK
+//   → branchBackupCore.js (universal collection classifier for backups)
+
+// audit-branch-scope: BS-10 sanctioned — public-link page outside BranchProvider
+//   → PatientDashboard.jsx, PatientForm.jsx, ClinicSchedule.jsx (only if needed)
+```
+
+`ClinicSettingsPanel.jsx` is NOT annotated because it's the
+delete-target for Phase 2; the audit specifically excludes it via
+`grep -v ClinicSettingsPanel`.
+
+**Phase 2 sequel**: when migration ships (per-branch UI in
+BranchFormModal + Rule M migration script), this AV becomes ENFORCEMENT
+(the cs.X fields disappear from `clinic_settings/main`; raw reads return
+undefined). Phase 3 cleanup removes the dual-shape fallback in the
+merger.
 
 ### AV27 — UI pickers reading legacy shape MUST use *ForPicker variants (V49)
 
@@ -501,7 +611,7 @@ expect(scriptSrc).toMatch(/be_admin_audit\/v43-/);
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation).
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual).
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

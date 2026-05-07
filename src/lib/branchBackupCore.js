@@ -73,6 +73,12 @@ export const TIER_MAP = Object.freeze({
   [BACKUP_TIER_T4]: T4_COLLECTIONS,
 });
 
+// audit-branch-scope: BS-10 sanctioned — backup target raw read OK.
+// `clinic_settings` is treated as a universal/global collection so its
+// raw shape (including 13 V51 migrated fields if present) is preserved
+// verbatim in backup files. The merger (mergeBranchIntoClinic) is NOT
+// applied at backup time — the raw `clinic_settings/main` doc is what
+// gets archived, and restore puts it back unchanged.
 const UNIVERSAL = new Set([
   'be_customers', 'be_staff', 'be_doctors', 'be_branches',
   'be_permission_groups', 'be_wallet_types', 'be_membership_types',

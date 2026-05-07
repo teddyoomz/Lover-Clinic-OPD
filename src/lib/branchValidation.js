@@ -19,6 +19,13 @@ export const NOTE_MAX_LENGTH = 200;
 // Thai landline/mobile: 0 followed by 8..10 digits (mirrors ProClinic regex).
 const PHONE_RE = /^0[0-9]{8,10}$/;
 const URL_RE = /^https?:\/\/.+/i;
+// V51 (2026-05-08) — per-branch settings validation regexes
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const HTTPS_URL_RE = /^https:\/\/.+/i;
+const HHMM_15_RE = /^(?:[01][0-9]|2[0-3]):(?:00|15|30|45)$/;
+// 15-minute steps locked to match TimeSelect24 component MINUTES = ['00','15','30','45']
+const COOLDOWN_MIN = 0;
+const COOLDOWN_MAX = 99999;
 
 export function validateBranch(form) {
   if (!form || typeof form !== 'object' || Array.isArray(form)) {
@@ -31,11 +38,15 @@ export function validateBranch(form) {
   if (!nm) return ['name', 'กรุณากรอกชื่อสาขา'];
   if (nm.length > NAME_MAX_LENGTH) return ['name', `ชื่อสาขาไม่เกิน ${NAME_MAX_LENGTH} ตัวอักษร`];
 
-  // phone — required (per ProClinic)
-  if (typeof form.phone !== 'string' || !form.phone.trim()) {
+  // phone — required (per ProClinic). V51: accept either form.phone (legacy)
+  // or form.settings.phone (canonical post-migration). Either present must
+  // pass the regex.
+  const phoneRaw = (form.settings && typeof form.settings.phone === 'string' && form.settings.phone)
+    || (typeof form.phone === 'string' ? form.phone : '');
+  if (!phoneRaw || !phoneRaw.trim()) {
     return ['phone', 'กรุณากรอกเบอร์ติดต่อ'];
   }
-  const ph = form.phone.replace(/[\s-]/g, '');
+  const ph = phoneRaw.replace(/[\s-]/g, '');
   if (!PHONE_RE.test(ph)) {
     return ['phone', 'เบอร์ติดต่อต้องเป็น 0 ตามด้วยตัวเลข 8-10 ตัว'];
   }
@@ -78,6 +89,66 @@ export function validateBranch(form) {
     return ['status', 'สถานะไม่ถูกต้อง'];
   }
 
+  // V51 (2026-05-08) — per-branch settings sub-object validation
+  if (form.settings != null) {
+    if (typeof form.settings !== 'object' || Array.isArray(form.settings)) {
+      return ['settings', 'settings ไม่ถูกต้อง'];
+    }
+    const s = form.settings;
+
+    // Email — must match RE if present
+    if (s.email && typeof s.email === 'string' && s.email.trim()) {
+      if (!EMAIL_RE.test(s.email.trim())) {
+        return ['settings.email', 'อีเมลไม่ถูกต้อง'];
+      }
+    }
+
+    // LINE OA URL — must start with https:// if present
+    if (s.lineOaUrl && typeof s.lineOaUrl === 'string' && s.lineOaUrl.trim()) {
+      if (!HTTPS_URL_RE.test(s.lineOaUrl.trim())) {
+        return ['settings.lineOaUrl', 'ลิงก์ LINE OA ต้องขึ้นต้นด้วย https://'];
+      }
+    }
+
+    // Cooldown — range [0, 99999]
+    if (s.patientSyncCooldownMins != null && s.patientSyncCooldownMins !== '') {
+      const c = Number(s.patientSyncCooldownMins);
+      if (!Number.isFinite(c) || c < COOLDOWN_MIN || c > COOLDOWN_MAX) {
+        return ['settings.patientSyncCooldownMins', `เวลา cooldown ต้องอยู่ในช่วง ${COOLDOWN_MIN}-${COOLDOWN_MAX} นาที`];
+      }
+    }
+
+    // openHours — HH:MM at 15-min step
+    if (s.openHours && typeof s.openHours === 'object') {
+      for (const day of ['monFri', 'satSun']) {
+        const dayCfg = s.openHours[day];
+        if (dayCfg && typeof dayCfg === 'object') {
+          if (dayCfg.open && !HHMM_15_RE.test(String(dayCfg.open))) {
+            return [`settings.openHours.${day}.open`, 'รูปแบบเวลาต้องเป็น HH:MM (ขั้น 15 นาที)'];
+          }
+          if (dayCfg.close && !HHMM_15_RE.test(String(dayCfg.close))) {
+            return [`settings.openHours.${day}.close`, 'รูปแบบเวลาต้องเป็น HH:MM (ขั้น 15 นาที)'];
+          }
+        }
+      }
+    }
+
+    // chatHours — HH:MM at 15-min step (alwaysOn boolean — no validation)
+    if (s.chatHours && typeof s.chatHours === 'object') {
+      for (const day of ['monFri', 'satSun']) {
+        const dayCfg = s.chatHours[day];
+        if (dayCfg && typeof dayCfg === 'object') {
+          if (dayCfg.open && !HHMM_15_RE.test(String(dayCfg.open))) {
+            return [`settings.chatHours.${day}.open`, 'รูปแบบเวลาต้องเป็น HH:MM (ขั้น 15 นาที)'];
+          }
+          if (dayCfg.close && !HHMM_15_RE.test(String(dayCfg.close))) {
+            return [`settings.chatHours.${day}.close`, 'รูปแบบเวลาต้องเป็น HH:MM (ขั้น 15 นาที)'];
+          }
+        }
+      }
+    }
+  }
+
   return null;
 }
 
@@ -96,12 +167,54 @@ export function emptyBranchForm() {
     longitude: '',
     note: '',
     status: 'ใช้งาน',
+    // V51 (2026-05-08) — per-branch settings sub-object defaults.
+    // Migrated from clinic_settings/main per Spec #2 §3. Phase 3 will
+    // strip the legacy top-level fields once migration --apply confirmed.
+    settings: {
+      phone: '',
+      licenseNo: '',
+      taxId: '',
+      address: '',
+      addressEn: '',
+      email: '',
+      lineOaUrl: '',
+      patientSyncCooldownMins: 10,
+      openHours: {
+        monFri: { open: '10:00', close: '20:30' },
+        satSun: { open: '10:00', close: '19:30' },
+      },
+      chatHours: {
+        alwaysOn: false,
+        monFri: { open: '10:00', close: '20:45' },
+        satSun: { open: '10:00', close: '19:45' },
+      },
+    },
   };
 }
 
 export function normalizeBranch(form) {
   const trim = (v) => typeof v === 'string' ? v.trim() : '';
   const coerceNum = (v) => (v === '' || v == null) ? null : Number(v);
+  // V51 — normalize per-branch settings sub-object alongside legacy top-level
+  let settings = form.settings;
+  if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+    const s = settings;
+    settings = {
+      ...s,
+      phone: trim(s.phone).replace(/[\s-]/g, ''),
+      licenseNo: trim(s.licenseNo),
+      taxId: trim(s.taxId),
+      address: trim(s.address),
+      addressEn: trim(s.addressEn),
+      email: trim(s.email),
+      lineOaUrl: trim(s.lineOaUrl),
+      patientSyncCooldownMins: (() => {
+        if (s.patientSyncCooldownMins == null || s.patientSyncCooldownMins === '') return 10;
+        const n = Number(s.patientSyncCooldownMins);
+        return Number.isFinite(n) ? n : 10;
+      })(),
+    };
+  }
   return {
     ...form,
     name: trim(form.name),
@@ -117,5 +230,6 @@ export function normalizeBranch(form) {
     longitude: coerceNum(form.longitude),
     note: trim(form.note),
     status: form.status || 'ใช้งาน',
+    ...(settings ? { settings } : {}),
   };
 }

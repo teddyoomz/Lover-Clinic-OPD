@@ -16,7 +16,7 @@ allowed-tools: "Read, Grep, Glob, Bash"
 
 This audit guards the seams between layers. Drift = stale data showing across branches, listeners stuck on old branch, writers losing their branchId stamp.
 
-## Scope — 9 invariants (BS-1..BS-9)
+## Scope — 10 invariants (BS-1..BS-10)
 
 | ID | Rule | Pattern |
 |---|---|---|
@@ -29,6 +29,40 @@ This audit guards the seams between layers. Drift = stale data showing across br
 | BS-7 | `scopedDataLayer.js` universal re-exports point to `raw.X` (no `_scoped` wrap, no branchId injection) | spot-check the 6 known universal exports remain raw |
 | BS-8 | Phase BS V2 + BSA Task 1-2 writers preserve `_resolveBranchIdForWrite` stamps | grep count ≥17 lines in `backendClient.js` |
 | BS-9 | Branch-switch refresh discipline — every backend tab importing `list*` from `scopedDataLayer.js` MUST also import `useSelectedBranch` AND include `selectedBranchId` in `useCallback`/`useEffect` deps (Phase 17.0, 2026-05-05). Sanctioned exception: tabs using `useBranchAwareListener` (auto-handles re-subscribe) — annotate `// audit-branch-scope: BS-9 listener-driven` | grep tabs that import scopedDataLayer; verify file imports `useSelectedBranch` or has the BS-9 annotation |
+| BS-10 | Migrated clinic_settings fields read via `useEffectiveClinicSettings` (V51 / Spec #2, 2026-05-08) — every UI consumer reading any of the 13 migrated fields MUST use `useEffectiveClinicSettings(clinicSettings)` to get the per-branch effective shape; raw `clinicSettings.X` reads on migrated fields are forbidden in feature code | `git grep -nE "clinicSettings\\??\\.(phone\|clinicEmail\|lineOfficialAccountUrl\|clinicLicenseNo\|clinicTaxId\|clinicAddress\|clinicAddressEn\|patientSyncCooldownMins\|openHoursMonFri\|openHoursSatSun\|chatHoursAlwaysOn\|chatHoursMonFri\|chatHoursSatSun)\\b" -- src/` minus `ClinicSettingsPanel.jsx` (delete-target Phase 2) + `branchBackupCore.js` (backup target — sanctioned via comment) + files annotated `// audit-branch-scope: BS-10 sanctioned` |
+
+### BS-10 Migrated field set (13 fields)
+
+The V51 / Spec #2 per-branch settings migration moves these fields from
+`clinic_settings/main` → `be_branches/{branchId}.settings`:
+
+**5 deduplicating fields** (currently exist on both flat branch.X + cs.X):
+- `phone`, `licenseNo`, `taxId`, `address`, `addressEn`
+
+**8 NEW fields** (currently only on cs.X — migrating to per-branch override):
+- `clinicEmail`, `lineOfficialAccountUrl`, `patientSyncCooldownMins`
+- `openHoursMonFri`, `openHoursSatSun`
+- `chatHoursAlwaysOn`, `chatHoursMonFri`, `chatHoursSatSun`
+
+The merger (`mergeBranchIntoClinic` in `src/lib/BranchContext.jsx`) exposes
+all 13 fields on the merged result with cascade priority `settings.X > flat
+branch.X > cs.X` (5 deduplicating) or `settings.X > cs.X` (8 NEW).
+`useEffectiveClinicSettings(clinicSettings)` is the React hook that wraps
+the merger reactively.
+
+### BS-10 Sanctioned exceptions
+
+| File | Reason | Comment |
+|---|---|---|
+| `src/components/ClinicSettingsPanel.jsx` | DELETE TARGET Phase 2 (will be reduced to brand fields only) | not annotated — file is being deleted/reduced |
+| `src/lib/branchBackupCore.js` | Backup target — raw read of `clinic_settings` is correct (backup archives source-of-truth) | `// audit-branch-scope: BS-10 sanctioned — backup target raw read OK` |
+| `src/pages/PatientDashboard.jsx` | Public-link page outside `<BranchProvider>`; no branch context exists for QR/link customers | `// audit-branch-scope: BS-10 sanctioned — public-link page outside BranchProvider` |
+
+Print engines (`documentPrintEngine.js`, `SalePrintView.jsx`,
+`QuotationPrintView.jsx`, `DocumentPrintModal.jsx`) all already either use
+`useEffectiveClinicSettings` directly OR receive the merged `clinic`
+parameter from upstream callers, so they read the merged shape — not
+considered violators.
 
 ## How to run
 
@@ -52,11 +86,13 @@ Add a file-header comment when a file legitimately must import directly. The aud
 | `// audit-branch-scope: BS-2 OR-field` | Marketing/global collections that branch-spread via `allBranches:true` doc-level field | reserved for future cross-branch features |
 | `// audit-branch-scope: BS-3 dev-only` | `getAllMasterDataItems` callsite that legitimately needs dev-only sync data | reserved — currently no callsite outside MasterDataTab |
 | `// audit-branch-scope: BS-9 listener-driven` | Tab uses `useBranchAwareListener` to handle branch-switch refresh (no `useSelectedBranch` dep needed) | tabs whose data-load is fully driven by branch-aware listeners (Phase 17.0) |
+| `// audit-branch-scope: BS-10 sanctioned — backup target raw read OK` | Backup endpoint / scope helper raw-reads `clinic_settings` for archival; merger should not be applied | `branchBackupCore.js` ONLY (Phase 2 backup target) |
+| `// audit-branch-scope: BS-10 sanctioned — public-link page outside BranchProvider` | Public-link surface (QR/link patient pages) has no admin branch context; reads cs.X directly per Spec #2 § 5 | `PatientDashboard.jsx`, `PatientForm.jsx`, `ClinicSchedule.jsx` (only when needed) |
 
 ## Arguments
 
 - `--quick` — BS-1, BS-3, BS-4, BS-8, BS-9 (5 highest-risk, most-likely-to-regress)
-- `--full` — all 9 (default; takes < 2s)
+- `--full` — all 10 (default; takes < 2s)
 
 ## Output
 
@@ -66,7 +102,7 @@ Single markdown punch list to chat. Do NOT write to disk.
 # audit-branch-scope report — <YYYY-MM-DD HH:MM>
 
 ## Summary
-- Total invariants: 9
+- Total invariants: 10
 - ✅ PASS: <count>
 - ⚠️ WARN: <count>
 - ❌ VIOLATION: <count>
@@ -77,6 +113,7 @@ Single markdown punch list to chat. Do NOT write to disk.
 ## Notes
 - BS-6: <pending|ok>
 - BS-9 (Phase 17.0): <pass|warn|fail> — branch-switch refresh discipline
+- BS-10 (V51 / Spec #2): <pass|warn|fail> — migrated clinic_settings fields via useEffectiveClinicSettings
 - Build: <clean|fail>
 ```
 

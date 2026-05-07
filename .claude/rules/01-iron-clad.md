@@ -196,4 +196,153 @@ When the user authorizes ANY data manipulation against production Firestore — 
 - Audit: `/audit-anti-vibe-code` (AV1–AV12, อยู่ใน `/audit-all`)
 - Project rule: this file
 - User memory mirrors: `feedback_continuous_improvement.md` + `feedback_anti_vibe_code.md` (don't let diverge)
+
+### Rule P — Class-of-bug expansion at every bug discovery (added 2026-05-08, after V42-V49 saga)
+
+User directive (verbatim, 2026-05-08): "ถ้า Test แล้วเจอ Failed อย่าแก้แค่ failed นั้นๆ
+แล้วจบ ให้เอา failed นั้นมาขยายผล และหาสิ่งที่เป็นไปได้ที่คล้ายๆกันเพื่อขยายผลการ
+หาบั๊คที่คล้ายๆกันหรือต่อเนื่องกันในจุดอื่นๆของโปรเจ็ค และเทสจนจบ แก้บั๊คจนหมด
+ถึงหยุด test และหยุดทำงานได้".
+
+When ANY bug surfaces — test red / user-reported / claude-noticed / audit-red — the fix
+workflow MUST follow this 7-step expansion discipline. Quick fix-and-ship of a single
+instance is **FORBIDDEN**.
+
+#### Trigger scope (broad)
+
+- **Test red**: any `npm test` / `npm run test:e2e` / focused vitest fail
+- **User-reported**: chat repro ("ไม่ตัดสต็อค" / "ไม่ขึ้น" / "เด้งจอดำ" / image)
+- **Claude-noticed**: spotting a pattern during code-read / refactor / inspection
+- **Audit-red**: any `/audit-*` skill flagging an invariant violation
+
+#### Trigger discrimination (strict)
+
+- No exception for TDD / WIP / mid-refactor reds
+- Pre-existing-known reds tracked separately in SESSION_HANDOFF "known failures" list
+  (deferred but flagged — not exempt from Rule P, just temporarily parked)
+- "Expected red" is rationalization; treat every red as a real signal
+
+#### The 7-step expansion discipline
+
+1. **Diagnose root cause** — understand the broken contract / pattern. Pure investigation;
+   NO fix proposal yet.
+
+2. **Classify class-of-bug** — match against existing AV1-AVxx in
+   `audit-anti-vibe-code` SKILL.md OR name a new class. Common classes (post-V50 baseline):
+
+   | Class | V-entry origin | AVxx |
+   |-------|----------------|------|
+   | Multi-reader-sweep (shape change broke other readers) | V12 | (uses pre-AV20 cluster) |
+   | Source-grep lock-in (test asserts broken behavior) | V21 | (uses pre-AV20 cluster) |
+   | Multi-call-site (one fix site, sibling broken) | V36-quater | (uses pre-AV20 cluster) |
+   | Staff/Doctor hide-from-lists (lookup-map opt-in) | V41 | AV20 |
+   | Promotion bundle qty multiplier | V42 | (no own AV — folded into AV21-AV23 cluster; CB-5 sanctioned exception) |
+   | Skip-stock-deduction overlay | V43 | AV21 |
+   | Buy-fetcher canonical-mapper-bypass | V44 | AV22 |
+   | Dedup-shadow OR-merge | V45 | AV23 |
+   | Rule O productName live-resolve | V46 | AV24 |
+   | Display-layer multi-reader-sweep | V47 | AV25 |
+   | Rule O universal extension | V48 | AV26 |
+   | Canonical-shape-mapper multi-reader-sweep | V49 | AV27 |
+   | No-broker-imports-post-strip | V50 | AV28 |
+
+3. **Cross-file grep** — find ALL instances of the same broken pattern PROJECT-WIDE
+   (not just same file). Examples:
+   ```bash
+   # V12 spread-order class:
+   grep -rn '{ id: d\.id, \.\.\.d\.data() }' src/lib/
+
+   # V46 denormalization class:
+   grep -rn 'productName: <doc>\.productName' src/lib/
+
+   # V49 canonical-shape class:
+   grep -rn 'list\(Courses\|Products\|Promotions\)(' src/components/backend/ | \
+     grep -v ForPicker
+   ```
+
+4. **Fix all in single batch** — single commit fixes every match. Partial fix is forbidden.
+   "Single fix" = single ROOT-CAUSE-ADDRESSING fix; spans all class instances. ONE
+   class-of-bug at a time (not multiple unrelated). No "while I'm here" improvements
+   OUTSIDE the class.
+
+5. **Source-grep regression test** — `tests/<area>-<class>.test.js` locks post-fix shape.
+   Future drift fails build. Test must:
+   - Assert post-fix shape exists at every fixed callsite
+   - Assert PRE-fix bug shape DOES NOT exist (regression guard)
+   - Assert sanctioned exceptions are explicitly tagged (not silent skips)
+
+6. **AVxx invariant** — add entry to `audit-anti-vibe-code` SKILL.md OR relevant audit
+   skill (audit-stock-flow, audit-money-flow, etc.). Permanent grep guard. Each AV entry must include:
+   - Description (1-2 lines)
+   - Grep pattern
+   - Sanctioned exceptions list
+   - Cross-link to test file
+
+7. **Iron-clad rule escalation when architectural** — IF the class is architectural
+   (denormalization → live-resolve like Rule O; ID-vs-name confusion → live-resolve;
+   secret-leak class → architectural rule), file:
+   - (a) NEW iron-clad rule letter (next available after current set)
+   - (b) V-entry in `.claude/rules/00-session-start.md` § 2 with verbose lessons archive
+     in `.claude/rules/v-log-archive.md`
+   - (c) MEMORY.md cross-link if user-level (e.g. new `feedback_*.md`)
+
+   **Threshold for "architectural"**: pattern affects ≥3 sub-systems (e.g. stock + sale
+   + treatment), or fixing one instance requires changing the WRITE-TIME contract (not
+   just READ-TIME), or pattern returns across multiple V-entries (saga signal).
+
+#### Stop condition (Tier 2 default)
+
+- **Tier 1 (always)**: regression test (Step 5) + AV invariant (Step 6) lands in commit
+- **Tier 2 (always)**: + classifier doc / classifier test that enumerates all instances +
+  sanctioned categories (V49 CAT8 universal classifier pattern). Auditable trail.
+- **Tier 3 (architectural-only)**: + V-entry + iron-clad rule entry (Step 7)
+
+The expansion is "**done**" when ALL of:
+
+1. Audit `/audit-class-of-bug-discipline` reports green for the new AVxx + classifier doc
+2. Cross-file grep shows zero remaining unfixed instances
+3. Originally-failing tests + the new regression test ALL go green
+4. Full `npm test -- --run` green (Rule N implicit override at end of expansion)
+
+#### Interaction with other rules
+
+- **Rule N** (targeted-test-only): Rule N permits targeted runs for small bugfixes.
+  **Rule P expansion REQUIRES a full `npm test -- --run` AT THE END** to verify no other
+  tests turned red. Targeted runs OK during the fix iterations; full run mandatory before
+  claiming done. **Rule N implicit override at expansion end.**
+- **Rule D** (continuous improvement): Rule D says "fix + adversarial test + audit
+  invariant". Rule P EXTENDS D with explicit cross-file grep + Tier 2 artifacts +
+  iron-clad escalation. Rule D = policy; Rule P = operational protocol.
+- **Rule I** (full-flow simulate): Rule I mandates flow-simulate at end of every
+  sub-phase. When Rule P fires DURING a sub-phase, the flow-simulate test MUST cover
+  the class-of-bug expansion path (every instance fixed) — not just the originally-
+  surfaced instance.
+- **Skill J** (Superpowers Auto-Trigger): `systematic-debugging` invocation MUST include
+  Phase 2 Step 5 + Phase 4 Sub-step 6; `verification-before-completion` invocation MUST
+  verify Tier 2 artifacts present.
+
+#### Anti-patterns
+
+- ❌ Fix one red, push, "done" — V12/V46-class failure mode
+- ❌ Skip class-of-bug grep because "the file in question is small"
+- ❌ Add regression test only without AV invariant — drift catcher missing
+- ❌ Add AV invariant only without classifier doc — auditable trail missing
+- ❌ Skip iron-clad escalation when architectural — V-entry/Rule O lessons unwritten
+- ❌ Self-attest "expansion done" without running `/audit-class-of-bug-discipline`
+- ❌ "Other instances aren't broken yet, no need to fix preemptively" — same broken
+  pattern = latent bugs
+
+#### Lesson lock (V42-V49 saga, 7 rounds)
+
+Each round practiced this discipline ad-hoc. 698 cumulative verification points across 7
+V-entries is empirical evidence that this discipline pays for itself. The saga was
+ARCHITECTURALLY CLOSED only after Rule O escalation (Tier 3 V46/V48) — proving that
+Tier 3 escalation is essential for class-of-bug elimination, not optional polish.
+
+#### Audit + Verify
+
+- **Audit**: `/audit-class-of-bug-discipline` (CB-1..CB-5 invariants).
+  Registered in `/audit-all` Tier 1.
+- **Verify**: `npm test -- --run tests/audit-class-of-bug-discipline.test.js` —
+  must be GREEN pre-deploy.
 </important>
