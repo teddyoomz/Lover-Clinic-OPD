@@ -173,6 +173,31 @@ describe('H5 — endpoint contract source-grep', () => {
     }
   });
 
+  it('H5.8 — branch-backup-export + branch-make-fresh use parallel-batched T4 traversal (V40-prod-fix-2 2026-05-08)', () => {
+    // Sequential per-customer × per-subcollection took ~84s on real prod
+    // (375 customers × 8 subs = 3000 sequential Firestore queries × 28ms).
+    // Parallel batching of 50 customers concurrent reduces to ~5s.
+    // Diag captured live timing via scripts/diag-branch-backup-timing.mjs.
+    for (const f of ['branch-backup-export.js', 'branch-make-fresh.js']) {
+      const code = fs.readFileSync(path.join(apiDir, f), 'utf-8');
+      // Positive: parallel pattern present (T4_BATCH_SIZE constant + Promise.all + flatMap)
+      expect(code).toMatch(/T4_BATCH_SIZE\s*=\s*50/);
+      expect(code).toMatch(/Promise\.all\(\s*\w+\.flatMap/);
+      // Negative: no remaining sequential `for (const cust of` over customersSnap.docs
+      expect(code).not.toMatch(/for\s*\(\s*const\s+cust\s+of\s+customersSnap\.docs\s*\)/);
+    }
+  });
+
+  it('H5.9 — vercel.json declares maxDuration for V40 admin endpoints (V40-prod-fix-2 2026-05-08)', () => {
+    // Without maxDuration config, Vercel functions default to 10s (Hobby) /
+    // 15s (Pro). T1+T2+T3+T4 backup is ~15-25s with parallel T4 → fits in
+    // 60s with margin. Make-fresh adds wipe step → still fits in 60s.
+    const cfg = JSON.parse(fs.readFileSync(path.resolve('vercel.json'), 'utf-8'));
+    expect(cfg.functions['api/admin/branch-backup-export.js']?.maxDuration).toBeGreaterThanOrEqual(60);
+    expect(cfg.functions['api/admin/branch-restore.js']?.maxDuration).toBeGreaterThanOrEqual(60);
+    expect(cfg.functions['api/admin/branch-make-fresh.js']?.maxDuration).toBeGreaterThanOrEqual(60);
+  });
+
   it('H5.3 — branch-make-fresh.js refuses without autoBackupRef', () => {
     const code = fs.readFileSync(path.join(apiDir, 'branch-make-fresh.js'), 'utf-8');
     expect(code).toMatch(/AUTO_BACKUP_REQUIRED/);

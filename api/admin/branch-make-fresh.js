@@ -92,17 +92,30 @@ export default async function handler(req, res) {
     // warn the admin before triggering make-fresh on a large customer base.
     // Future: maintain be_customer_branch_index/{branchId} → [customerId] for
     // O(branch-customer-count) wipes instead of O(total-customer-count).
-    // T4 — per customer × per subcollection × where branchId
+    //
+    // V40-prod-fix-2 (2026-05-08) — parallel-batched READ of subcollection
+    // snapshots (mirrors branch-backup-export). Read 50 customers × 8 subs
+    // concurrently → ~5s for 375 customers. DELETE batches stay sequential
+    // because each is a writeBatch.commit() that needs to land before the
+    // next BATCH_LIMIT slice (Firestore limit 500 ops/batch).
+    const T4_BATCH_SIZE = 50;
     const customersSnap = await dataCol(db, 'be_customers').get();
+    const customerDocs = customersSnap.docs;
     let t4Deleted = 0;
-    for (const cust of customersSnap.docs) {
-      for (const sub of T4_SUBCOLLECTIONS) {
-        const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+    for (let bi = 0; bi < customerDocs.length; bi += T4_BATCH_SIZE) {
+      const batch = customerDocs.slice(bi, bi + T4_BATCH_SIZE);
+      const subSnaps = await Promise.all(batch.flatMap(cust =>
+        T4_SUBCOLLECTIONS.map(async sub => {
+          const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+          return subSnap;
+        })
+      ));
+      for (const subSnap of subSnaps) {
         for (let i = 0; i < subSnap.docs.length; i += BATCH_LIMIT) {
           const slice = subSnap.docs.slice(i, i + BATCH_LIMIT);
-          const batch = db.batch();
-          for (const d of slice) batch.delete(d.ref);
-          await batch.commit();
+          const writeBatch = db.batch();
+          for (const d of slice) writeBatch.delete(d.ref);
+          await writeBatch.commit();
           t4Deleted += slice.length;
         }
       }

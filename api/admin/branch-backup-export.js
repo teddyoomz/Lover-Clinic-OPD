@@ -89,14 +89,32 @@ export default async function handler(req, res) {
 
     for (const colName of scope) {
       if (colName === 'be_customers/__per_customer__') {
-        // T4 — for every customer, query each subcollection filtered by branchId
+        // T4 — for every customer, query each subcollection filtered by branchId.
+        //
+        // V40-prod-fix-2 (2026-05-08) — parallel-batched traversal. Sequential
+        // per-customer × per-subcollection took ~84s on real prod (375 customers
+        // × 8 subs = 3000 sequential queries × 28ms each), exceeded Vercel
+        // function maxDuration → client hung on no-response. Parallel batching
+        // of 50 customers × 8 subs concurrent reduces to ~5s. Diag captured
+        // live timing via scripts/diag-branch-backup-timing.mjs (2026-05-08).
+        // Firestore handles 3000+ reads/sec — no quota concern.
+        const T4_BATCH_SIZE = 50;
         const customersSnap = await dataCol(db, 'be_customers').get();
-        for (const cust of customersSnap.docs) {
-          for (const sub of T4_SUBCOLLECTIONS) {
-            const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
-            if (subSnap.empty) continue;
-            const key = `be_customers/${cust.id}/${sub}`;
-            out[key] = subSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        const customerDocs = customersSnap.docs;
+        for (let i = 0; i < customerDocs.length; i += T4_BATCH_SIZE) {
+          const batch = customerDocs.slice(i, i + T4_BATCH_SIZE);
+          const batchResults = await Promise.all(batch.flatMap(cust =>
+            T4_SUBCOLLECTIONS.map(async sub => {
+              const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+              if (subSnap.empty) return null;
+              return {
+                key: `be_customers/${cust.id}/${sub}`,
+                docs: subSnap.docs.map(d => ({ ...d.data(), id: d.id })),
+              };
+            })
+          ));
+          for (const result of batchResults) {
+            if (result) out[result.key] = result.docs;
           }
         }
       } else {
