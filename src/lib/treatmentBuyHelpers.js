@@ -824,7 +824,143 @@ export function buildPromotionSubCourseProducts(sub, purchasedQty, opts = {}) {
     return sub.products.map(p => ({
       ...p,
       qty: computePromotionProductQty(buy, subQty, p?.qty),
+      // V43 (2026-05-08) — defensive: spread already preserves p.skipStockDeduction
+      // when present, but pin it here so a future shape change to spread-strip
+      // can't drop the flag silently. !! coerces missing → false (V14 lock).
+      skipStockDeduction: !!p?.skipStockDeduction,
     }));
   }
-  return [{ name: fallbackName, qty: buy * subQty, unit: fallbackUnit }];
+  // V43 (2026-05-08) — fallback row (sub has no per-product list) inherits the
+  // sub-course's own flag if present. Without this the no-products fallback
+  // promotion sub-course always emitted skipStockDeduction:undefined →
+  // _normalizeStockItems coerced to false → branch 1 in _deductOneItem
+  // never fired. Mirrors course-self-fallback at buildPurchasedCourseEntry:273.
+  return [{
+    name: fallbackName,
+    qty: buy * subQty,
+    unit: fallbackUnit,
+    skipStockDeduction: !!sub?.skipStockDeduction,
+  }];
+}
+
+// ─── V43 (2026-05-08) — Live-resolve helpers for skipStockDeduction ──────────
+//
+// Why this helper exists: `customer.courses[i].skipStockDeduction` is
+// denormalized at buy time. When admin edits the be_courses master AFTER a
+// customer has purchased the course, the customer's frozen entry doesn't
+// update → treatment deduct path uses stale flag → product gets deducted
+// despite "ไม่ตัดสต็อค" being CHECKED on the master.
+//
+// V43 diag (scripts/v43-diag-customer-courses-skip-stock.mjs) found 3
+// production entries on LC-26000006 with master.sub=true / customer.flag=false
+// (all 3 PRP rows from "โปรโมชัน: คอร์ส บำรุงรากผม PRP 6 ครั้ง + AHL 2 ครั้ง").
+//
+// Fix design (Q1=C hybrid):
+//   1. Backfill migration (scripts/v43-backfill-...) restamps known-bad
+//      customer.courses[i] entries from current be_courses master.
+//   2. Live-resolve overlay (overlayCustomerCoursesWithMaster) applies
+//      master flag at TFP load time so future master edits propagate
+//      without re-running migration.
+//
+// Both layers are cooperative — backfill closes the existing gap
+// definitively; live-resolve catches any future drift OR migrations that
+// missed an entry. Defense-in-depth.
+
+/**
+ * V43 (2026-05-08) — Resolve the EFFECTIVE skip-stock flag for one
+ * customer.courses[i] entry against its be_courses master.
+ *
+ * Resolution order:
+ *   1. Find masterSubProduct by productId match (canonical when both sides
+ *      carry the same be_products id).
+ *   2. Else find by productName match (fallback for legacy entries that
+ *      lost productId during ProClinic import).
+ *   3. If matched → effective = !!matched.skipStockDeduction (per-row
+ *      flag is authoritative — admin explicitly opted out THIS sub-product).
+ *   4. If sub NOT matched but masterCourse found → effective =
+ *      !!masterCourse.skipStockDeduction (course-level fallback for main
+ *      product / no-products row).
+ *   5. If masterCourse NOT found (orphan / legacy ProClinic-imported with
+ *      no be_courses master) → effective = !!customerEntry.skipStockDeduction
+ *      (preserve frozen value — no master to resolve from).
+ *
+ * Pure — input not mutated. Mirrors the diag classifier so the migration
+ * script + UI overlay + diag use the SAME resolution logic (V12 single-
+ * source contract).
+ *
+ * @param {object} customerEntry — be_customers.courses[i] entry
+ * @param {object|null} masterCourse — be_courses doc (looked up by courseName)
+ * @returns {boolean} effective flag
+ */
+export function resolveCustomerCourseSkipFlag(customerEntry, masterCourse) {
+  if (!masterCourse) return !!customerEntry?.skipStockDeduction;
+  const cId = customerEntry?.productId ? String(customerEntry.productId).trim() : '';
+  const cName = customerEntry?.product ? String(customerEntry.product).trim() : '';
+  const subs = Array.isArray(masterCourse.courseProducts) ? masterCourse.courseProducts : [];
+  let matched = null;
+  if (cId) {
+    matched = subs.find(p => String(p?.productId || '').trim() === cId) || null;
+  }
+  if (!matched && cName) {
+    matched = subs.find(p =>
+      String(p?.productName || p?.name || '').trim() === cName
+    ) || null;
+  }
+  if (matched) return !!matched.skipStockDeduction;
+  return !!masterCourse.skipStockDeduction;
+}
+
+/**
+ * V43 (2026-05-08) — Apply live-resolved skip-stock flags onto the output
+ * of `mapRawCoursesToForm`. Walks every entry's products[] and overrides
+ * `skipStockDeduction` with the master-effective value computed by
+ * `resolveCustomerCourseSkipFlag`.
+ *
+ * Builds an in-memory courseName → masterDoc index from the masterCourses
+ * array (TFP already fetches via listCourses) so per-entry lookup is O(1).
+ *
+ * Pure: returns a NEW array; input untouched. Orphan entries (no master
+ * found by courseName) are passed through unchanged so legacy ProClinic-
+ * imported customers keep their existing frozen value.
+ *
+ * Used by TFP load path right after `mapRawCoursesToForm` to close the
+ * V43 freeze-time gap. Also covers pick-at-treatment placeholders by
+ * overlaying `availableProducts[].skipStockDeduction`.
+ *
+ * @param {Array<object>} customerCoursesForForm — mapRawCoursesToForm output
+ * @param {Array<object>} masterCoursesArray — be_courses docs from listCourses
+ * @returns {Array<object>} new array with overlaid skipStockDeduction
+ */
+export function overlayCustomerCoursesWithMaster(customerCoursesForForm, masterCoursesArray) {
+  const list = Array.isArray(customerCoursesForForm) ? customerCoursesForForm : [];
+  const masters = Array.isArray(masterCoursesArray) ? masterCoursesArray : [];
+  if (list.length === 0 || masters.length === 0) return list;
+  const byName = new Map();
+  for (const m of masters) {
+    if (!m || !m.courseName) continue;
+    byName.set(String(m.courseName).trim(), m);
+  }
+  return list.map(entry => {
+    if (!entry) return entry;
+    const masterCourse = byName.get(String(entry.courseName || '').trim()) || null;
+    if (!masterCourse) return entry; // orphan — preserve frozen value
+    // Pick-at-treatment placeholder: overlay availableProducts[] flags.
+    if (entry.needsPickSelection && Array.isArray(entry.availableProducts)) {
+      const newAvail = entry.availableProducts.map(opt => {
+        const synth = { productId: opt?.productId, product: opt?.name };
+        const flag = resolveCustomerCourseSkipFlag(synth, masterCourse);
+        return { ...opt, skipStockDeduction: flag };
+      });
+      return { ...entry, availableProducts: newAvail };
+    }
+    // Standard / buffet / fill-later path: products[] length 1 typically.
+    const products = Array.isArray(entry.products) ? entry.products : [];
+    if (products.length === 0) return entry;
+    const newProducts = products.map(p => {
+      const synth = { productId: p?.productId, product: p?.name };
+      const flag = resolveCustomerCourseSkipFlag(synth, masterCourse);
+      return { ...p, skipStockDeduction: flag };
+    });
+    return { ...entry, products: newProducts };
+  });
 }

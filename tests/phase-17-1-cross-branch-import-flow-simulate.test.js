@@ -16,8 +16,11 @@ const TARGET_TABS = [
 ];
 
 describe('F1 — adapter registry', () => {
-  it('F1.1 ENTITY_TYPES has 7 entries', () => {
-    expect(ENTITY_TYPES.length).toBe(7);
+  it('F1.1 ENTITY_TYPES has 10 entries (V41 marketing extension: 7 base + 3 marketing)', () => {
+    // V41 (2026-05-08) marketing extension added 3 adapters:
+    // promotions / coupons / vouchers → registry grew 7 → 10.
+    // V43 sweep: stale count 7 surfaced during full-suite regression check.
+    expect(ENTITY_TYPES.length).toBe(10);
   });
   it('F1.2 ADAPTERS keys match ENTITY_TYPES exactly', () => {
     expect(Object.keys(ADAPTERS).sort()).toEqual([...ENTITY_TYPES].sort());

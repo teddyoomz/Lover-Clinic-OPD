@@ -124,7 +124,8 @@ describe('B2 — buildPromotionSubCourseProducts', () => {
   it('B2.5 fallback when sub has no products[]', () => {
     const sub = { name: 'CourseName', qty: 4, unit: 'ครั้ง' };
     const result = buildPromotionSubCourseProducts(sub, 2, { fallbackName: 'Promo' });
-    expect(result).toEqual([{ name: 'CourseName', qty: 8, unit: 'ครั้ง' }]);  // pQty=2 × sub.qty=4
+    // V43 (2026-05-08): fallback row now carries skipStockDeduction:false default.
+    expect(result).toEqual([{ name: 'CourseName', qty: 8, unit: 'ครั้ง', skipStockDeduction: false }]);  // pQty=2 × sub.qty=4
   });
 
   it('B2.6 fallback uses opts.fallbackName when sub.name missing', () => {
@@ -158,8 +159,10 @@ describe('B2 — buildPromotionSubCourseProducts', () => {
   });
 
   it('B2.9 null/undefined sub returns fallback', () => {
-    expect(buildPromotionSubCourseProducts(null, 1)).toEqual([{ name: '', qty: 1, unit: 'ครั้ง' }]);
-    expect(buildPromotionSubCourseProducts(undefined, 1, { fallbackName: 'X' })).toEqual([{ name: 'X', qty: 1, unit: 'ครั้ง' }]);
+    // V43 (2026-05-08): fallback row now carries `skipStockDeduction: false`
+    // by default (V14 — no undefined leaves). Inherits from sub when present.
+    expect(buildPromotionSubCourseProducts(null, 1)).toEqual([{ name: '', qty: 1, unit: 'ครั้ง', skipStockDeduction: false }]);
+    expect(buildPromotionSubCourseProducts(undefined, 1, { fallbackName: 'X' })).toEqual([{ name: 'X', qty: 1, unit: 'ครั้ง', skipStockDeduction: false }]);
   });
 });
 

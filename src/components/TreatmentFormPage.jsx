@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -720,6 +720,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               // placeholder / เหมาตามจริง / บุฟเฟต์ / specific-qty) is
               // unit-testable without mounting TreatmentFormPage.
               customerCoursesForForm = mapRawCoursesToForm(rawCourses);
+              // V43 (2026-05-08) — overlay live-resolved skipStockDeduction
+              // from be_courses master onto every customer.courses[i] entry.
+              // Closes the freeze-time gap: customer.courses[i] is denormalized
+              // at buy time, so admin edits to the master flag AFTER the
+              // purchase don't propagate. The overlay reads the current master
+              // state (already fetched as `courseItems` above) and rewrites
+              // each products[j].skipStockDeduction. Orphans (no master by
+              // courseName — legacy ProClinic-imported) preserve their frozen
+              // value, so no regression for the 1355 prod legacy entries.
+              // Diag: scripts/v43-diag-customer-courses-skip-stock.mjs reported
+              // 3 V43-bug entries on LC-26000006 (PRP at indices 0/3/6).
+              customerCoursesForForm = overlayCustomerCoursesWithMaster(
+                customerCoursesForForm,
+                courseItems || []
+              );
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 

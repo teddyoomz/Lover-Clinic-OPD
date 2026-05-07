@@ -52,7 +52,10 @@ export function validateProduct(form) {
     }
   }
 
-  for (const boolKey of ['isVatIncluded', 'isClaimDrugDiscount', 'isTakeawayProduct']) {
+  // V43 (2026-05-08) — `skipStockDeduction` added so direct product
+  // purchases can opt out of stock decrement at master level. Mirrors the
+  // course-row skipStockDeduction concept but lives on the be_products doc.
+  for (const boolKey of ['isVatIncluded', 'isClaimDrugDiscount', 'isTakeawayProduct', 'skipStockDeduction']) {
     if (form[boolKey] != null && typeof form[boolKey] !== 'boolean') {
       return [boolKey, `${boolKey} ต้องเป็น boolean`];
     }
@@ -91,6 +94,12 @@ export function emptyProductForm() {
     isVatIncluded: false,
     isClaimDrugDiscount: false,
     isTakeawayProduct: false,
+    // V43 (2026-05-08) — "ไม่ตัดสต็อค" master flag. When true, direct
+    // purchases of this product (sale lines / treatment items / medications
+    // / consumables — anything that doesn't come through a course-row)
+    // emit a SKIP movement with reason="product-skip" instead of touching
+    // the FIFO batches. Mirrors the course-row equivalent on be_courses.
+    skipStockDeduction: false,
     defaultProductUnitGroupId: '',
     stockLocation: '',
     alertDayBeforeExpire: '',
@@ -128,6 +137,9 @@ export function normalizeProduct(form) {
     isVatIncluded: !!form.isVatIncluded,
     isClaimDrugDiscount: !!form.isClaimDrugDiscount,
     isTakeawayProduct: !!form.isTakeawayProduct,
+    // V43 (2026-05-08) — !! coerce to ensure no `undefined` leaves the
+    // normalizer (V14 lock — Firestore setDoc rejects undefined fields).
+    skipStockDeduction: !!form.skipStockDeduction,
     defaultProductUnitGroupId: trim(form.defaultProductUnitGroupId),
     stockLocation: trim(form.stockLocation),
     alertDayBeforeExpire: numOrNull(form.alertDayBeforeExpire),

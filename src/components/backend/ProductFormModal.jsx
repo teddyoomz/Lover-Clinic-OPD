@@ -210,6 +210,28 @@ export default function ProductFormModal({ product, onClose, onSaved, clinicSett
         </label>
       </div>
 
+      {/* V43 (2026-05-08) — "ไม่ตัดสต็อค" master flag for direct-product
+          purchases. When checked, sales/treatments/medications/consumables
+          that consume this product emit a SKIP movement (reason="product-skip")
+          instead of touching FIFO batches. Mirrors course-row "ไม่ตัด"
+          flag. Distinguished from `stockConfig.trackStock=false` —
+          trackStock controls whether the product even has batches; this
+          flag opts a tracked product OUT of deduct on use. */}
+      <div className="flex items-center gap-3 mt-1 pt-2 border-t border-[var(--bd)]" data-field="skipStockDeduction">
+        <label className="flex items-center gap-1.5 cursor-pointer" title="ไม่ตัดสต็อค (สินค้านี้จะไม่ถูกตัดสต็อคเมื่อซื้อตรงผ่านการรักษา/การขาย/ยา/สิ้นเปลือง)">
+          <input
+            type="checkbox"
+            checked={!!form.skipStockDeduction}
+            onChange={(e) => update({ skipStockDeduction: e.target.checked })}
+            className="w-4 h-4 rounded accent-rose-500"
+          />
+          <span className="text-xs text-[var(--tx-primary)]">ไม่ตัดสต็อค</span>
+        </label>
+        <span className="text-[10px] text-[var(--tx-muted)] italic">
+          ติ๊กเมื่อ "สินค้านี้" ไม่ต้องการให้ระบบตัดสต็อคเมื่อซื้อตรง — ใช้ได้กับการขาย/การรักษา/ยา/สิ้นเปลือง (ไม่กระทบคอร์ส)
+        </span>
+      </div>
+
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div data-field="alertDayBeforeExpire">

@@ -6258,7 +6258,20 @@ async function _getProductStockConfig(productId) {
     const beRef = doc(db, ...basePath(), 'be_products', String(productId));
     const beSnap = await getDoc(beRef);
     if (!beSnap.exists()) return null;
-    return beSnap.data().stockConfig || null;
+    const data = beSnap.data() || {};
+    const cfg = data.stockConfig || null;
+    // V43 (2026-05-08) — surface doc-level `skipStockDeduction` alongside
+    // stockConfig sub-object fields. Lets `_deductOneItem` gate the
+    // direct-product master-skip path WITHOUT a second Firestore read.
+    // Existing callers (`_ensureProductTracked`, `_deductOneItem` tracked
+    // check) only inspect `cfg.trackStock` so the extra field is harmless.
+    // Return null only when product doc has neither stockConfig nor
+    // skipStockDeduction (true-empty doc — preserves prior shape contract).
+    if (!cfg && !data.skipStockDeduction) return null;
+    return {
+      ...(cfg || {}),
+      skipStockDeduction: !!data.skipStockDeduction,
+    };
   } catch {
     return null;
   }
@@ -6545,6 +6558,44 @@ async function _deductOneItem({
   }
 
   let cfg = await _getProductStockConfig(item.productId);
+
+  // V43 (2026-05-08) — direct-product master flag. After fetching
+  // be_products config, gate on its top-level `skipStockDeduction` field.
+  // Distinct from branch 1 (item.skipStockDeduction came from a course
+  // row) so the audit trail records WHICH source decided to skip — admin
+  // can audit "course-skip" vs "product-skip" in Movement Log notes.
+  // Branch 1 still gets the course-row gating; this branch handles direct
+  // product / sale / medication / consumable purchases of products whose
+  // master `be_products.skipStockDeduction === true`.
+  if (cfg && cfg.skipStockDeduction === true) {
+    const movementId = _genMovementId();
+    const now = new Date().toISOString();
+    await setDoc(stockMovementDoc(movementId), {
+      movementId,
+      type: movementType,
+      batchId: null,
+      productId: item.productId,
+      productName: item.productName,
+      qty: -item.qty,
+      before: null,
+      after: null,
+      branchId,
+      sourceDocPath: baseDocPath,
+      linkedSaleId: saleId || null,
+      linkedTreatmentId: treatmentId || null,
+      ...(extraLink || {}),
+      revenueImpact: 0,
+      costBasis: 0,
+      isPremium: item.isPremium,
+      skipped: true,
+      user,
+      note: 'ผู้ใช้ตั้งค่าให้ไม่ตัดสต็อคที่สินค้า',
+      customerId: customerId || null,
+      createdAt: now,
+    });
+    return { productId: item.productId, skipped: true, reason: 'product-skip', movements: [{ movementId }] };
+  }
+
   let tracked = cfg && cfg.trackStock === true;
 
   // V36-bis (2026-04-29) — productName fallback. User report: "ตัดรักษา

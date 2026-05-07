@@ -25,8 +25,11 @@ vi.mock('../src/lib/BranchContext.jsx', () => ({
 }));
 
 // Mock useTabAccess hooks (PromotionTab uses useHasPermission).
+// V43 sweep (2026-05-08): V41 marketing extension shipped CrossBranchImportButton
+// which calls `useTabAccess()` for the isAdmin gate. Mock now exports both.
 vi.mock('../src/hooks/useTabAccess.js', () => ({
   useHasPermission: () => true,
+  useTabAccess: () => ({ isAdmin: true, allowedTabs: [], firstAllowed: '' }),
 }));
 
 // Mock MarketingTabShell to render its children directly so RTL queries work.
