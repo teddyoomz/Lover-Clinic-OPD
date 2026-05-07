@@ -53,8 +53,10 @@ describe('Phase 20.0 Flow B — B2 be_* sources wired', () => {
   });
 
   it('B2.4 — fetchDepositOptions calls Promise.all with [listDoctors, listStaff, listExamRooms, listAllSellers]', () => {
-    expect(STRIPPED).toMatch(/Promise\.all\s*\(\s*\[\s*listDoctors\s*\(\s*\)/);
-    expect(STRIPPED).toMatch(/listStaff\s*\(\s*\)/);
+    // V41 (2026-05-08) — listDoctors/listStaff now accept optional {includeHidden}
+    // arg for past-record lookup-map context. Match either zero-arity OR opt form.
+    expect(STRIPPED).toMatch(/Promise\.all\s*\(\s*\[\s*listDoctors\s*\(/);
+    expect(STRIPPED).toMatch(/listStaff\s*\(/);
     expect(STRIPPED).toMatch(/listExamRooms\s*\(\s*\)/);
     expect(STRIPPED).toMatch(/listAllSellers\s*\(\s*\)/);
   });
@@ -180,11 +182,14 @@ describe('Phase 20.0 Flow B — B3 fetchDepositOptions builds same shape as brok
 
 describe('Phase 20.0 Flow B — B4 graceful degradation on read failure', () => {
   it('B4.1 — listDoctors().catch(() => []) — single failure does not break entire build', () => {
-    expect(STRIPPED).toMatch(/listDoctors\s*\(\s*\)\.catch\s*\(\s*\(\s*\)\s*=>\s*\[\s*\]/);
+    // V41 (2026-05-08) — listDoctors may carry {includeHidden:true} opt for
+    // past-record name lookup; preserve graceful-degradation pattern either way.
+    expect(STRIPPED).toMatch(/listDoctors\s*\([^)]*\)\.catch\s*\(\s*\(\s*\)\s*=>\s*\[\s*\]/);
   });
 
   it('B4.2 — listStaff().catch fallback', () => {
-    expect(STRIPPED).toMatch(/listStaff\s*\(\s*\)\.catch\s*\(\s*\(\s*\)\s*=>\s*\[\s*\]/);
+    // V41 (2026-05-08) — same opt allowance.
+    expect(STRIPPED).toMatch(/listStaff\s*\([^)]*\)\.catch\s*\(\s*\(\s*\)\s*=>\s*\[\s*\]/);
   });
 
   it('B4.3 — listExamRooms().catch fallback', () => {
@@ -211,8 +216,12 @@ describe('Phase 20.0 Flow B — B5 deposit-sync rewire to be_* (post-Phase-5c)',
     expect(STRIPPED).not.toMatch(/broker\.submitDeposit/);
     expect(STRIPPED).not.toMatch(/broker\.updateDeposit/);
     expect(STRIPPED).not.toMatch(/broker\.cancelDeposit/);
-    // Replacements present
+    // Phase 24.0-vicies-quinquies (2026-05-06) — switched kiosk cancel
+    // path from cancelDeposit (soft) → deleteDepositBookingPair (hard).
+    // cancelDeposit is still imported for back-compat but no longer
+    // called from AdminDashboard. Test now accepts EITHER cancelDeposit OR
+    // deleteDepositBookingPair as the cancel-replacement helper.
     expect(STRIPPED).toMatch(/createDeposit\s*\(/);
-    expect(STRIPPED).toMatch(/cancelDeposit\s*\(/);
+    expect(STRIPPED).toMatch(/deleteDepositBookingPair\s*\(|cancelDeposit\s*\(/);
   });
 });
