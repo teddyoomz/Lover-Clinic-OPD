@@ -216,7 +216,8 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
       // can render without re-mapping.
       availableProducts: rawCourseProducts.map(p => ({
         productId: p.productId != null ? String(p.productId) : (p.id != null ? String(p.id) : ''),
-        name: p.name || item.name,
+        // V44 (2026-05-08) — same dual-read as the standard products[] branch.
+        name: p.name || p.productName || item.name,
         // Default qty = configured course-product qty (what the user typed
         // at course-creation time). The pick modal pre-fills this value;
         // the doctor can edit UP to the master qty cap if they want less.
@@ -242,7 +243,13 @@ export function buildPurchasedCourseEntry(item, opts = {}) {
         return {
           rowId: `purchased-${item.id}-row-${pid || Math.random().toString(36).slice(2, 6)}`,
           productId: pid,
-          name: p.name || item.name,
+          // V44 (2026-05-08) — accept BOTH canonical `name` (from
+          // beCourseToMasterShape — used by SaleTab + V44 TFP fix) AND
+          // legacy `productName` (raw be_courses.courseProducts shape — pre-V44
+          // TFP path) before falling back to item.name (course name). Defensive
+          // multi-reader-sweep guard so any future caller feeding raw shape
+          // won't silently produce course-name-as-product-name customer entries.
+          name: p.name || p.productName || item.name,
           // เหมาตามจริง → blank remaining/total (UI shows "ระบุตอนรักษา"
           // / "เหมาตามจริง"); บุฟเฟต์ → the stored qty is kept (so
           // pre-validation and deduct-path heuristics can still read a

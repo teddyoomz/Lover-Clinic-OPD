@@ -1518,6 +1518,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // promotions via be_promotions. No master_data/* reads (Rule H-quater).
       if (saveTarget === 'backend') {
         const { listProducts, listCourses, listPromotions } = await import('../lib/scopedDataLayer.js');
+        // V44 (2026-05-08) — beCourseToMasterShape is the SINGLE-SOURCE
+        // mapper for course-buy items (canonical, includes mainProduct +
+        // courseProducts → unified products[] with `name` field). SaleTab +
+        // QuotationFormModal already use it; TFP buy fetcher previously did
+        // inline mapping that dropped main product AND used field
+        // productName→name without translation, breaking
+        // buildPurchasedCourseEntry's `p.name || item.name` fallback →
+        // customer.courses[i].product silently became courseName.
+        const { beCourseToMasterShape } = await import('../lib/backendClient.js');
         let items = [];
         let categories = [];
         if (type === 'product') {
@@ -1549,25 +1558,53 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // courseProducts. Map uses courseName-first fallback so courses
           // render with their actual name + price + category visible
           // (was "เป็นโครงเปล่าๆ" pre-fix).
+          // V44 (2026-05-08) — preload be_products into a Map so
+          // beCourseToMasterShape can enrich each course's products[] with
+          // unit + canonical name (matches SaleTab pattern). Without the
+          // Map, mainProduct enrichment falls back to '' for courses where
+          // be_courses doc lacks mainProductName text.
+          const productLookup = new Map();
+          try {
+            const allBeProducts = await listProducts();
+            for (const p of allBeProducts) {
+              productLookup.set(String(p.id), {
+                name: p.productName || p.name || '',
+                unit: p.mainUnitName || p.unit || '',
+              });
+            }
+          } catch { /* non-fatal — beCourseToMasterShape degrades gracefully */ }
           items = all
             .filter(c => {
               const ct = c.courseType || c.course_type || '';
               const price = c.salePrice != null ? Number(c.salePrice) : (c.price != null ? Number(c.price) : null);
               return !!ct && price != null && price > 0;
             })
-            .map(c => ({
-              id: c.id,
-              name: c.courseName || c.name || '',
-              price: c.salePrice != null ? c.salePrice : c.price,
-              category: c.courseCategory || c.category || '',
-              type: 'course', itemType: 'course',
-              unit: c.unit || '',
-              courseType: c.courseType || c.course_type || '',
-              products: c.courseProducts || c.products || [],
-              daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
-                : (c.days_before_expire != null ? c.days_before_expire : null),
-              period: c.period != null ? c.period : null,
-            }));
+            .map(c => {
+              // V44 — single-source via beCourseToMasterShape. Returns
+              // shape { id, name, products: [{id, name, qty, unit, isMainProduct,
+              // skipStockDeduction}], ... } where products[] correctly includes
+              // mainProduct (top-level mainProductId/Name) + sub-products
+              // (courseProducts[] mapped to {name, ...} with `name` not
+              // `productName`). Closes the V44 multi-reader-sweep gap that
+              // had buildPurchasedCourseEntry falling back to course name.
+              const shape = beCourseToMasterShape(c, { productLookup });
+              return {
+                id: shape.id,
+                name: shape.name,
+                price: shape.sale_price ?? shape.price,
+                category: shape.course_category || shape.category || '',
+                type: 'course', itemType: 'course',
+                unit: c.unit || '',
+                courseType: c.courseType || c.course_type || '',
+                products: shape.products || [],
+                daysBeforeExpire: c.daysBeforeExpire != null ? c.daysBeforeExpire
+                  : (c.days_before_expire != null ? c.days_before_expire : null),
+                period: c.period != null ? c.period : null,
+                // V44 carry top-level skipStockDeduction so confirmBuy /
+                // assignCourseToCustomer course-level fallback continues.
+                skipStockDeduction: !!c.skipStockDeduction,
+              };
+            });
           categories = [...new Set(items.map(c => c.category).filter(Boolean))].sort();
         } else if (type === 'promotion') {
           const all = await listPromotions();

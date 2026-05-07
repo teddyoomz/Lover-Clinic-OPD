@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 — V43 skip-stock-deduction live-resolve APPLIED on prod (3 entries fixed) + helpers + direct-product flag committed"
-status: "master=f0effba (V43 code) + PENDING (in-array timestamp fix) · prod=c92f924 (V42 + V43 NOT yet deployed) · migration APPLIED ✅ · 67 V43 tests pass · build clean"
+updated_at: "2026-05-08 — V44 course-buy product-name source fix (V12 multi-reader-sweep) + 70/70 cross-branch e2e + AV22 invariant"
+status: "master=PENDING (V44 commit drafting) · prod=c92f924 (V42 + V43 + V44 NOT yet deployed) · 27 V44 tests + 70/70 e2e + 0-write migration · build clean"
 branch: "master"
-last_commit: "f0effba (V43 ship) + script-fix pending"
-tests: 67
+last_commit: "PENDING (V44 commit drafting); V43 chain at d3969cb"
+tests: 27
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "c92f924"
 firestore_rules_version: 28
@@ -13,30 +13,33 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `f0effba` (V43 ship) + 1 pending fix (FieldValue.serverTimestamp inside-array → ISO string) · prod = `c92f924`
-- V43 migration **APPLIED on prod** ✅ — 3 entries on LC-26000006 restamped (false→true). Diag re-confirmed 0 master-true-customer-false drift. 1355 orphans preserved (legacy ProClinic-imported, overlay no-ops safely).
-- Audit doc: `be_admin_audit/v43-backfill-customer-courses-skip-stock-1778166208462-7e87927e`
-- Idempotency verified: re-run dry-run = 0 writes
-- 67/67 V43 tests pass post-fix; build clean; full-suite 7118+ (8 V41 stale fixed in V43 sweep)
+- master = PENDING (V44 commit drafting; V43 chain at d3969cb already pushed)
+- prod = c92f924 (V42 + V43 + V44 ALL pending deploy)
+- V44 migration dry-run = 0 entries (prod data is clean — V44 is forward-defense)
+- V44 e2e = 70/70 PASS (2 current + 1 future branches × 4 course shapes × 5 phases)
+- 27/27 V44 unit tests + 213+/213+ V42/V43/related-file regression + build clean
 
-## What this session shipped (V43)
-- **Diag** (Rule M read-only): `scripts/v43-diag-customer-courses-skip-stock.mjs` confirmed root cause = denormalization-at-buy-time freeze (customer.courses[i].skipStockDeduction lags master edits)
-- **Live-resolve overlay** (Q1=C hybrid): `overlayCustomerCoursesWithMaster` + `resolveCustomerCourseSkipFlag` in `src/lib/treatmentBuyHelpers.js`; wired in TFP load AFTER `mapRawCoursesToForm` so master edits propagate without re-running migration
-- **Backfill migration** (Q4=A Rule M): `scripts/v43-backfill-customer-courses-skip-stock.mjs` two-phase + audit doc to `be_admin_audit/v43-backfill-customer-courses-skip-stock-{ts}-{rand}` + idempotent + forensic-trail `_v43BackfilledAt` + `_v43BackfilledFrom`
-- **Direct-product master flag** (Q2=A): NEW top-level `skipStockDeduction` on be_products + ProductFormModal UI checkbox + `_getProductStockConfig` surfaces field + `_deductOneItem` branch 2 (NEW) emits `reason:'product-skip'` distinct from branch 1 `course-skip`
-- **Promotion fallback gap close** (Q3=A): `buildPromotionSubCourseProducts` no-products fallback + per-product map both carry `skipStockDeduction` defensively
-- **Tests** (67 in `tests/v43-skip-stock-deduction.test.js`): V43.A-M covering helper / migration / source-grep / Rule I full-flow / single-source contract
-- **AV21 audit invariant** added to `audit-anti-vibe-code` (lock: denormalized-flag from editable master = require live-resolve OR migration tracking)
-- **Sweep fix**: `tests/phase-17-1-cross-branch-import-flow-simulate.test.js` F1.1 count 7→10 + `tests/phase-17-0-marketing-tabs-rtl.test.jsx` mock useTabAccess (V41 marketing-extension stale tests; not V43 regression but fixed for clean full suite)
+## What this session shipped (V44)
+- **Diag** (Rule M read-only): `scripts/v44-diag-customer-courses-product-name-drift.mjs` — confirmed 0 product-mismatch-master in current prod data
+- **Source fix**: TFP buy fetcher (`TreatmentFormPage.jsx:1558+`) now uses canonical `beCourseToMasterShape` with productLookup Map (replaces inline mapping that bypassed main product + dropped name field)
+- **Defensive dual-reads**: `buildPurchasedCourseEntry` + `assignCourseToCustomer` accept `p.name || p.productName || (mainName fallback) || ''` — empty-string final fallback prevents course-name fingerprint from being written silently
+- **Migration**: `scripts/v44-backfill-customer-courses-product-name.mjs` (Rule M two-phase) — dry-run = 0 writes (prod clean)
+- **Tests**: 27 V44.A-F groups in `tests/v44-course-buy-product-name-source-fix.test.js` (canonical mapper contract + dual-read + Rule I full-flow Image 5/Image 1 reproductions + V12 multi-reader-sweep audit)
+- **e2e**: `scripts/e2e-v44-course-buy-product-name.mjs` 70/70 PASS — TEST-prefixed fixtures across 2 real branches + 1 future branch + 4 course shapes
+- **AV22 audit invariant**: "Every buy-item fetcher MUST use beCourseToMasterShape (single-source canonical mapper)"
+- **V44 V-entry** in `.claude/rules/00-session-start.md` § 2
 
 ## Next action
 
-**1) Deploy V42 + V43** — `vercel --prod` after user "deploy" auth (V18 — auth never rolls over). V43 live-resolve overlay needs deploy to take effect for UI users; V42 promo-qty fix from prior session also pending. Migration is already applied — deploy completes the rollout for UI surface (course-edit modal "ไม่ตัด" checkbox honored at treatment time + ProductFormModal new "ไม่ตัดสต็อค" flag visible to admin).
+**1) Deploy V42 + V43 + V44** — `vercel --prod` after user "deploy" auth (V18). All 3 are committed-not-deployed:
+   - V42: promotion bundle qty multiplier (4 writer sites)
+   - V43: skipStockDeduction live-resolve + direct-product flag + migration applied
+   - V44: course-buy product-name source fix (forward-defense; 0 backfill needed)
 
-**2) Live e2e against prod** (optional, post-deploy): create TEST-prefixed course + customer + buy + use → verify branch-1 fires. Per V33.10/11/12 prefix discipline + `feedback_no_real_action_in_preview_eval.md`.
+**2) Live e2e against prod** (optional, post-deploy): create TEST-prefixed course w/ main+sub + buy via TFP UI + use → verify customer panel shows main + sub names correctly. V33.10/11 prefix discipline; never touch real customer per `feedback_no_real_action_in_preview_eval.md`.
 
 ## Outstanding (user-triggered, none blocking unless deploy)
-- 🚨 V42 + V43 `vercel --prod` (V18)
+- 🚨 V42 + V43 + V44 `vercel --prod` (V18)
 - H-bis ProClinic full strip (deferred)
 - Hard-gate Firebase custom claim (deferred)
 - /audit-all pre-release pass

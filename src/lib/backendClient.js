@@ -1508,7 +1508,11 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
       needsPickSelection: true,
       availableProducts: products.map(p => ({
         productId: p.id != null ? String(p.id) : (p.productId != null ? String(p.productId) : ''),
-        name: p.name || '',
+        // V44 (2026-05-08) — dual-read name field. Same multi-reader-sweep
+        // discipline as the standard branch above. Empty-string final fallback
+        // (NOT course-name) preserves the V44 invariant: "name=courseName"
+        // is the bug signature; we never write that.
+        name: p.name || p.productName || '',
         qty: Number(p.qty) || 0,
         unit: p.unit || 'ครั้ง',
         minQty: p.minQty != null && p.minQty !== '' ? Number(p.minQty) : null,
@@ -1527,9 +1531,20 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     const qty = isRealQty
       ? buildQtyString(1, p.unit || 'ครั้ง')
       : buildQtyString(Number(p.qty) || 1, p.unit || 'ครั้ง');
+    // V44 (2026-05-08) — defensive dual-read: accept both canonical `name`
+    // (post-beCourseToMasterShape) AND legacy `productName` (raw shape).
+    // The mainProductName fallback covers the case where buildPurchasedCourseEntry
+    // already wrote name via legacy fallback (course name) — last resort
+    // reaches into the master in case the upstream chain dropped it.
+    // Empty-string final fallback is preferable to course name (the V44 bug
+    // signature) — a blank product is recoverable via UI; a course-name
+    // product silently masquerades as a real product.
+    const productName = p.name || p.productName
+      || (p.isMainProduct ? masterCourse.mainProductName : '')
+      || '';
     courses.push({
       name: masterCourse.name,
-      product: p.name,
+      product: productName,
       // Phase 12.2b follow-up (2026-04-24): capture the master product
       // id so a later-visit "tick + fill qty" flow on this customer
       // course can resolve a real be_products doc → deductStockForTreatment
