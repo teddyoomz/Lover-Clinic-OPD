@@ -424,48 +424,65 @@ describe('S4: AV29 consumer classifier — 17-consumer enumeration (V51 Phase 1)
 // ─── S5: BranchFormModal renders new sections (DEFERRED to Phase 2) ──────
 
 describe('S5: BranchFormModal renders new settings sections (Phase 2 — DEFERRED)', () => {
-  it.skip('S5.1 — BranchFormModal exposes settings.email input', () => {
+  it('S5.1 — BranchFormModal exposes settings.email input', () => {
     const src = readFile('src/components/backend/BranchFormModal.jsx');
     expect(src).toMatch(/data-field=["']settings\.email["']/);
   });
 
-  it.skip('S5.2 — BranchFormModal exposes settings.lineOaUrl input', () => {
+  it('S5.2 — BranchFormModal exposes settings.lineOaUrl input', () => {
     const src = readFile('src/components/backend/BranchFormModal.jsx');
     expect(src).toMatch(/data-field=["']settings\.lineOaUrl["']/);
   });
 
-  it.skip('S5.3 — BranchFormModal exposes settings.patientSyncCooldownMins input', () => {
+  it('S5.3 — BranchFormModal exposes settings.patientSyncCooldownMins input', () => {
     const src = readFile('src/components/backend/BranchFormModal.jsx');
     expect(src).toMatch(/data-field=["']settings\.patientSyncCooldownMins["']/);
   });
 
-  it.skip('S5.4 — BranchFormModal exposes settings.openHours sections', () => {
+  it('S5.4 — BranchFormModal exposes settings.openHours sections', () => {
     const src = readFile('src/components/backend/BranchFormModal.jsx');
-    expect(src).toMatch(/data-field=["']settings\.openHours["']/);
+    // Phase 2 ships per-day data-field anchors (settings.openHours.monFri / .satSun)
+    expect(src).toMatch(/data-field=["']settings\.openHours\.monFri["']/);
+    expect(src).toMatch(/data-field=["']settings\.openHours\.satSun["']/);
   });
 
-  it.skip('S5.5 — BranchFormModal exposes settings.chatHours sections', () => {
+  it('S5.5 — BranchFormModal exposes settings.chatHours sections', () => {
     const src = readFile('src/components/backend/BranchFormModal.jsx');
-    expect(src).toMatch(/data-field=["']settings\.chatHours["']/);
+    // Phase 2 ships per-day data-field anchors + alwaysOn anchor
+    expect(src).toMatch(/data-field=["']settings\.chatHours\.alwaysOn["']/);
+    expect(src).toMatch(/data-field=["']settings\.chatHours\.monFri["']/);
+    expect(src).toMatch(/data-field=["']settings\.chatHours\.satSun["']/);
   });
 });
 
 // ─── S6: ClinicSettingsPanel post-deletion (Phase 2 — DEFERRED) ──────────
 
 describe('S6: ClinicSettingsPanel post-Phase-2 reduction (DEFERRED)', () => {
-  it.skip('S6.1 — ClinicSettingsPanel no longer reads any of the 7 deleted sections', () => {
+  it('S6.1 — ClinicSettingsPanel no longer ACTIVELY reads any of the 7 deleted sections', () => {
     const src = readFile('src/components/ClinicSettingsPanel.jsx');
-    // Phase 2 will delete 7 sections; Phase 1 leaves them intact.
-    // Post-Phase-2 expectations:
-    expect(src).not.toMatch(/clinicLicenseNo/);
-    expect(src).not.toMatch(/clinicTaxId/);
-    expect(src).not.toMatch(/clinicAddress/);
-    expect(src).not.toMatch(/clinicAddressEn/);
-    expect(src).not.toMatch(/clinicEmail/);
-    expect(src).not.toMatch(/patientSyncCooldownMins/);
+    // Strip JS line comments + block comments first; assertions are about
+    // ACTIVE code, not migration history comments. Comments documenting the
+    // V51 migration legitimately mention the migrated field names.
+    const stripped = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // block comments
+      .replace(/\/\/.*$/gm, '');           // line comments
+    // Active code MUST NOT reference any of the migrated field names
+    expect(stripped).not.toMatch(/settings\.clinicLicenseNo/);
+    expect(stripped).not.toMatch(/settings\.clinicTaxId/);
+    expect(stripped).not.toMatch(/settings\.clinicAddress\b/);
+    expect(stripped).not.toMatch(/settings\.clinicAddressEn/);
+    expect(stripped).not.toMatch(/settings\.clinicEmail/);
+    expect(stripped).not.toMatch(/settings\.clinicPhone/);
+    expect(stripped).not.toMatch(/settings\.lineOfficialUrl/);
+    expect(stripped).not.toMatch(/settings\.patientSyncCooldownMins/);
+    expect(stripped).not.toMatch(/settings\.clinicOpenTime/);
+    expect(stripped).not.toMatch(/settings\.clinicCloseTime/);
+    expect(stripped).not.toMatch(/settings\.doctorStartTime/);
+    expect(stripped).not.toMatch(/settings\.chatOpenTime/);
+    expect(stripped).not.toMatch(/settings\.chatAlwaysOn/);
   });
 
-  it.skip('S6.2 — ClinicSettingsPanel keeps brand fields (logo / accent / subtitle / name)', () => {
+  it('S6.2 — ClinicSettingsPanel keeps brand fields (logo / accent / subtitle / name)', () => {
     const src = readFile('src/components/ClinicSettingsPanel.jsx');
     expect(src).toMatch(/logoUrl/);
     expect(src).toMatch(/accentColor/);
@@ -477,21 +494,23 @@ describe('S6: ClinicSettingsPanel post-Phase-2 reduction (DEFERRED)', () => {
 // ─── S7: Migration script (Phase 2 — DEFERRED) ───────────────────────────
 
 describe('S7: Rule M migration script (Phase 2 — DEFERRED)', () => {
-  it.skip('S7.1 — migration script exists at scripts/v51-migrate-clinic-settings-to-branch.mjs', () => {
+  it('S7.1 — migration script exists at scripts/v51-migrate-clinic-settings-to-branch.mjs', () => {
     expect(existsSync('scripts/v51-migrate-clinic-settings-to-branch.mjs')).toBe(true);
   });
 
-  it.skip('S7.2 — migration script is two-phase (default dry-run; --apply commits)', () => {
+  it('S7.2 — migration script is two-phase (default dry-run; --apply commits)', () => {
     const src = readFile('scripts/v51-migrate-clinic-settings-to-branch.mjs');
     expect(src).toMatch(/process\.argv\.includes\(['"]--apply['"]\)/);
   });
 
-  it.skip('S7.3 — migration script writes audit doc to be_admin_audit/v51-...', () => {
+  it('S7.3 — migration script writes audit doc to be_admin_audit/v51-...', () => {
     const src = readFile('scripts/v51-migrate-clinic-settings-to-branch.mjs');
-    expect(src).toMatch(/be_admin_audit\/v51-/);
+    // Audit doc id pattern: `v51-migrate-clinic-settings-${ts}-${rand}`
+    expect(src).toMatch(/v51-migrate-clinic-settings-/);
+    expect(src).toMatch(/be_admin_audit/);
   });
 
-  it.skip('S7.4 — migration script stamps forensic-trail _migratedAt + _migratedFromCs', () => {
+  it('S7.4 — migration script stamps forensic-trail _migratedAt + _migratedFromCs', () => {
     const src = readFile('scripts/v51-migrate-clinic-settings-to-branch.mjs');
     expect(src).toMatch(/_migratedAt/);
     expect(src).toMatch(/_migratedFromCs/);
