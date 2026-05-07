@@ -90,24 +90,10 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
 
       // ── New chart with template ──
       } else if (template?.imageUrl) {
-        // For ProClinic templates, fetch via proxy (CORS blocked otherwise)
-        let imgSrc = template.imageUrl;
-        if (template.isProClinic && template.imageUrl.includes('proclinicth.com')) {
-          try {
-            const broker = await import('../lib/brokerClient.js');
-            const token = await broker.getCachedIdToken();
-            const proxyRes = await fetch('/api/proclinic/treatment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ action: 'proxyImage', url: template.imageUrl }),
-            });
-            if (proxyRes.ok) {
-              const blob = await proxyRes.blob();
-              imgSrc = URL.createObjectURL(blob);
-              createdBlobUrl = imgSrc; // track for cleanup
-            }
-          } catch (e) { console.warn('[ChartCanvas] proxy failed:', e); }
-        }
+        // V50 (2026-05-08) — ProClinic image proxy branch removed. Templates
+        // come from local Firestore (be_chart_templates) or user upload —
+        // both are dataUrl/blob already, no proxy needed.
+        const imgSrc = template.imageUrl;
         const imgEl = await new Promise((resolve) => {
           const img = new window.Image();
           img.crossOrigin = 'anonymous';

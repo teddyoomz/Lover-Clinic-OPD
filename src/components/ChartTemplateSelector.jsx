@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, FileImage, Download, Upload, Loader2, Plus, Pencil, Check, ArrowUp, ArrowDown, Trash2, Image as ImageIcon } from 'lucide-react';
+import { X, FileImage, Upload, Plus, Pencil, Check, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
 import { defaultChartTemplates, chartCategories } from '../data/chartTemplates.js';
-import * as broker from '../lib/brokerClient.js';
 import { debugLog } from '../lib/debugLog.js';
+
+// V50 (2026-05-08) — Phase 1.1 ProClinic strip. Removed `import * as broker`,
+// `pcTemplates/pcBlobUrls/pcLoading` state, `loadPcTemplates` function, and
+// the "ProClinic" source tab. Templates now come from local Firestore
+// (be_chart_templates seeded from defaultChartTemplates) + user upload only.
 
 const FIRESTORE_DOC = 'pc_chart_templates';
 
@@ -11,14 +15,6 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
   const [category, setCategory] = useState('all');
   const [templates, setTemplates] = useState([]); // managed templates (Firestore)
   const [loaded, setLoaded] = useState(false);
-  const [pcTemplates, setPcTemplates] = useState([]);
-  const [pcBlobUrls, setPcBlobUrls] = useState({});
-  const [pcLoading, setPcLoading] = useState(false);
-
-  // Cleanup blob URLs on unmount to prevent memory leak
-  useEffect(() => () => {
-    Object.values(pcBlobUrls).forEach(url => { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); });
-  }, [pcBlobUrls]);
   const [editingIdx, setEditingIdx] = useState(-1);
   const [nameInput, setNameInput] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -89,32 +85,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
     updateTemplates(updated);
   };
 
-  // ProClinic templates
-  const loadPcTemplates = async () => {
-    if (pcTemplates.length > 0) return;
-    setPcLoading(true);
-    try {
-      const data = await broker.getChartTemplates();
-      if (data.success && data.templates?.length) {
-        setPcTemplates(data.templates);
-        const token = await broker.getCachedIdToken();
-        const blobMap = {};
-        await Promise.all(data.templates.map(async (tmpl) => {
-          if (!tmpl.imageUrl?.includes('proclinicth.com')) return;
-          try {
-            const res = await fetch('/api/proclinic/treatment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ action: 'proxyImage', url: tmpl.imageUrl }),
-            });
-            if (res.ok) { blobMap[tmpl.id] = URL.createObjectURL(await res.blob()); }
-          } catch (e) { debugLog('chart-template-pc', `proxyImage failed for template ${tmpl.id}`, e); }
-        }));
-        setPcBlobUrls(blobMap);
-      }
-    } catch (e) { debugLog('chart-template-pc', 'unexpected error loading ProClinic chart templates', e); }
-    setPcLoading(false);
-  };
+  // V50 (2026-05-08) — `loadPcTemplates` removed (ProClinic strip).
 
   if (!isOpen) return null;
 
@@ -135,14 +106,13 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
           <button onClick={onClose} className="text-[var(--tx-muted)] hover:text-[var(--tx-secondary)]"><X size={18} /></button>
         </div>
 
-        {/* Source tabs */}
+        {/* Source tabs — V50 (2026-05-08) ProClinic tab removed */}
         <div className="flex gap-1 px-4 py-2 border-b border-[var(--bd)]">
           {[
             { id: 'local', label: 'ของเรา', icon: FileImage },
-            { id: 'proclinic', label: 'ProClinic', icon: Download },
             { id: 'upload', label: 'อัปโหลด', icon: Upload },
           ].map(tab => (
-            <button key={tab.id} onClick={() => { setSource(tab.id); if (tab.id === 'proclinic') loadPcTemplates(); }}
+            <button key={tab.id} onClick={() => setSource(tab.id)}
               className={`text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-all ${
                 source === tab.id ? 'bg-teal-500 text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover2)]'
               }`}>
@@ -219,27 +189,7 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
             </div>
           )}
 
-          {/* ── ProClinic ── */}
-          {source === 'proclinic' && (
-            pcLoading ? (
-              <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-teal-500 mr-2" /><span className="text-xs text-[var(--tx-muted)]">กำลังโหลด...</span></div>
-            ) : pcTemplates.length === 0 ? (
-              <p className="text-center text-xs text-[var(--tx-muted)] py-12">ไม่พบ template</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {pcTemplates.map(tmpl => (
-                  <button key={tmpl.id} onClick={() => { onSelect({ ...tmpl, imageUrl: pcBlobUrls[tmpl.id] || tmpl.imageUrl, isProClinic: true }); onClose(); }} className={cardCls}>
-                    <div className="aspect-[3/4] flex items-center justify-center p-1 bg-[var(--bg-input)]">
-                      {pcBlobUrls[tmpl.id] ? <img src={pcBlobUrls[tmpl.id]} alt={tmpl.name} className="w-full h-full object-contain" /> : <ImageIcon size={32} className="text-[var(--tx-muted)]" />}
-                    </div>
-                    <div className="px-2 py-1.5 text-center border-t border-[var(--bd)]">
-                      <span className="text-xs font-bold">{tmpl.name || 'ProClinic'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )
-          )}
+          {/* V50 (2026-05-08) — ProClinic source tab + render block REMOVED. */}
 
           {/* ── อัปโหลด ── */}
           {source === 'upload' && (

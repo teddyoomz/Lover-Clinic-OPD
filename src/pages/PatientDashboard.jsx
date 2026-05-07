@@ -2,7 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
 import { hexToRgb } from '../utils.js';
-import * as broker from '../lib/brokerClient.js';
+// V50 (2026-05-08) — ProClinic strip. Migrated from `import * as broker` to
+// scopedDataLayer. be_customers docId equals proClinicId for ProClinic-cloned
+// customers; this public-link path only fires when sessionData.brokerProClinicId
+// is set (line 344) so the assumption holds. Fetches customer.courses[]
+// directly + getCustomerAppointments for the future-appointments slice.
+import { getCustomer, getCustomerAppointments } from '../lib/scopedDataLayer.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import { Package, PackageX, CalendarClock, Phone, PhoneCall, AlertCircle, Loader2,
@@ -391,7 +396,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     if (syncTimeoutRef.current) { clearTimeout(syncTimeoutRef.current); syncTimeoutRef.current = null; }
   }
 
-  // Script mode: call courses API directly and write results to Firestore
+  // V50 (2026-05-08) — be_customers fetch (no longer ProClinic API).
+  // Public-link patient course/appointment view. Customer doc ID equals
+  // brokerProClinicId for ProClinic-cloned customers (manual customers
+  // don't reach this path — gated upstream).
   async function fetchCoursesViaApi(sid, proClinicId) {
     setSyncTimedOut(false);
     setJustSynced(false);
@@ -399,21 +407,51 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     startSyncTimeout();
     try {
       const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sid);
-      // Fire-and-forget: don't block API call on Firestore write
+      // Fire-and-forget: don't block read on the Firestore stamp write
       updateDoc(ref, { lastCoursesAutoFetch: serverTimestamp(), coursesRefreshRequest: null }).catch(() => {});
-      const result = await broker.getCourses(proClinicId);
+
+      const customer = await getCustomer(String(proClinicId));
+      let courses = [];
+      let expiredCourses = [];
+      let appointments = [];
+      let patientName = '';
+      let success = !!customer;
+      let error = null;
+
+      if (customer) {
+        const allCourses = Array.isArray(customer.courses) ? customer.courses : [];
+        const today = new Date().toISOString().slice(0, 10);
+        // Active = not yet expired (or no explicit expiry). Expired = past expiry.
+        // Adapter parity with broker.getCourses output shape.
+        courses = allCourses.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
+        expiredCourses = allCourses.filter(c => c.expiryDate && String(c.expiryDate) < today);
+
+        const appts = await getCustomerAppointments(String(proClinicId)).catch(() => []);
+        // Future appointments only — public-link view shows upcoming bookings
+        appointments = (appts || []).filter(a => {
+          const d = a.appointmentDate || a.date || '';
+          return !d || String(d) >= today;
+        });
+
+        const pd = customer.patientData || {};
+        patientName = `${pd.firstName || ''} ${pd.lastName || ''}`.trim()
+          || `${customer.firstname || ''} ${customer.lastname || ''}`.trim();
+      } else {
+        success = false;
+        error = 'ไม่พบข้อมูลลูกค้า';
+      }
+
       clearSyncTimeout();
       setScriptSyncing(false);
-      // Set justSynced BEFORE Firestore write so snapshot doesn't briefly show wrong state
-      if (result?.success) setJustSynced(true);
+      if (success) setJustSynced(true);
       else setSyncTimedOut(true);
+
       await updateDoc(ref, {
         brokerStatus: 'done', brokerError: null, brokerJob: null,
         latestCourses: {
-          courses: result?.courses || [], expiredCourses: result?.expiredCourses || [],
-          appointments: result?.appointments || [], patientName: result?.patientName || '',
+          courses, expiredCourses, appointments, patientName,
           jobId: `courses_patient_${sid}_${Date.now()}`, fetchedAt: new Date().toISOString(),
-          success: !!result?.success, error: result?.error || null,
+          success, error,
         },
       });
     } catch (e) {

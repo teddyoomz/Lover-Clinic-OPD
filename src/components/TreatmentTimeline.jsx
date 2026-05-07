@@ -1,7 +1,28 @@
 import { useState, useEffect } from 'react';
 import { Stethoscope, Loader2, RefreshCw, ChevronLeft, ChevronRight, FileText,
          Edit3, Trash2, Plus, X } from 'lucide-react';
-import * as broker from '../lib/brokerClient.js';
+// V50 (2026-05-08) — ProClinic strip. Migrated from `import * as broker` to
+// scopedDataLayer be_treatments helpers. Pagination is now CLIENT-SIDE
+// (10/page) since be_treatments is bounded per customer; one fetch returns
+// all rows. getTreatment returns {id, customerId, detail, branchId, ...}
+// directly — no broker `{success, treatment}` wrapper.
+import { getCustomerTreatments, getTreatment, deleteBackendTreatment, rebuildTreatmentSummary } from '../lib/scopedDataLayer.js';
+
+// V50 — adapter: be_treatments doc shape → Timeline row shape.
+function mapBeTreatmentToTimelineRow(t) {
+  return {
+    id: t.id,
+    date: t.detail?.treatmentDate || '',
+    branch: t.branchName || t.detail?.branch || t.branchId || '',
+    doctor: t.detail?.doctorName || '',
+    assistants: (t.detail?.assistants || []).map(a =>
+      typeof a === 'string' ? a : a?.name || ''
+    ).filter(Boolean),
+    cc: t.detail?.symptoms || '',
+    dx: t.detail?.diagnosis || '',
+    treatmentInfo: t.detail?.treatmentInfo || '',
+  };
+}
 
 function VitalBadge({ label, value, isDark }) {
   return (
@@ -36,20 +57,22 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelDetail, setCancelDetail] = useState('');
 
+  // V50 (2026-05-08) — be_treatments fetch + client-side pagination.
+  const PAGE_SIZE = 10;
   const fetchPage = async (p) => {
     setLoading(true);
     setError('');
     try {
-      const data = await broker.listTreatments(customerId, p);
-      if (data.success) {
-        setTreatments(data.treatments || []);
-        setTotalPages(data.totalPages || 1);
-        setPage(data.page || p);
-      } else {
-        setError(data.error || 'ไม่สามารถดึงข้อมูลได้');
-      }
+      const all = await getCustomerTreatments(customerId);
+      const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+      const safePage = Math.min(Math.max(1, p), pages);
+      const start = (safePage - 1) * PAGE_SIZE;
+      const slice = all.slice(start, start + PAGE_SIZE);
+      setTreatments(slice.map(mapBeTreatmentToTimelineRow));
+      setTotalPages(pages);
+      setPage(safePage);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'ไม่สามารถดึงข้อมูลได้');
     } finally {
       setLoading(false);
     }
@@ -59,9 +82,9 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
     if (detailCache[treatmentId]) return;
     setDetailLoading(treatmentId);
     try {
-      const data = await broker.getTreatment(treatmentId);
-      if (data.success) {
-        setDetailCache(prev => ({ ...prev, [treatmentId]: data.treatment }));
+      const t = await getTreatment(treatmentId);
+      if (t) {
+        setDetailCache(prev => ({ ...prev, [treatmentId]: t.detail || t }));
       }
     } catch (_) {}
     setDetailLoading(null);
@@ -86,19 +109,24 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
     setCancelModalOpen(false);
     setDeletingId(cancelTarget);
     try {
-      const data = await broker.deleteTreatment(cancelTarget, cancelDetail);
-      if (data.success) {
-        // Remove card from list INSTANTLY — don't wait for API re-fetch
-        setTreatments(prev => prev.filter(t => String(t.id) !== String(cancelTarget)));
-        setExpandedId(null);
-        setDetailCache(prev => { const n = { ...prev }; delete n[cancelTarget]; return n; });
-        // Background refresh to get accurate data from ProClinic
-        fetchPage(page);
-      } else {
-        alert(data.error || 'ยกเลิกไม่สำเร็จ');
+      // V50 (2026-05-08) — deleteBackendTreatment throws on error; cancelDetail
+      // is logged for forensic trail (full be_treatments audit ledger is a
+      // future Phase 21+ task — see SESSION_HANDOFF outstanding items).
+      if (cancelDetail?.trim()) {
+        console.info('[TreatmentTimeline] cancel detail (not yet persisted):', cancelDetail);
       }
+      await deleteBackendTreatment(cancelTarget);
+      // Rebuild customer.treatmentSummary so AdminDashboard / CustomerDetailView
+      // queue + count reflect the deletion.
+      if (customerId) await rebuildTreatmentSummary(customerId);
+      // Remove card from list INSTANTLY — don't wait for API re-fetch
+      setTreatments(prev => prev.filter(t => String(t.id) !== String(cancelTarget)));
+      setExpandedId(null);
+      setDetailCache(prev => { const n = { ...prev }; delete n[cancelTarget]; return n; });
+      // Re-fetch to keep pagination + counts accurate.
+      fetchPage(page);
     } catch (e) {
-      alert(e.message);
+      alert(e.message || 'ยกเลิกไม่สำเร็จ');
     } finally {
       setDeletingId(null);
       setCancelTarget(null);
@@ -120,8 +148,9 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
           setExpandedId(tid);
           // Fetch detail immediately so user sees it without extra click
           setDetailLoading(tid);
-          broker.getTreatment(tid).then(data => {
-            if (data.success) setDetailCache(prev => ({ ...prev, [tid]: data.treatment }));
+          // V50 (2026-05-08) — be_treatments getTreatment (returns doc directly)
+          getTreatment(tid).then(t => {
+            if (t) setDetailCache(prev => ({ ...prev, [tid]: t.detail || t }));
           }).catch(() => {}).finally(() => setDetailLoading(null));
         }
       });

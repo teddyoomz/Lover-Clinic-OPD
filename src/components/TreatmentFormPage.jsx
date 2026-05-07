@@ -7,7 +7,10 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import * as broker from '../lib/brokerClient.js';
+// V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
+// runtime data fetches now go through scopedDataLayer.js (be_* canonical).
+// saveTarget default changed below from 'proclinic' to 'backend' so admin/
+// backend code paths converge — one unified system, branch-aware via BSA.
 import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
 import { debugLog } from '../lib/debugLog.js';
@@ -292,7 +295,7 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'proclinic' }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'backend' }) {
   // V35.2-sexies (2026-04-28) — guard against null/undefined customerId.
   // User report: "หน้าสร้างการรักษาใหม่ ขึ้นว่า No document to update:
   // ... be_customers/null". Root cause: caller passed null cid (e.g. when
@@ -876,183 +879,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           return;
         }
 
-        // ── PROCLINIC MODE (default) ──
-        // Edit mode: load form options + treatment detail IN PARALLEL
-        if (isEdit && treatmentId) {
-          const [formData, detail] = await Promise.all([
-            broker.getTreatmentCreateForm(customerId),
-            broker.getTreatment(treatmentId),
-          ]);
-          if (!formData.success || !formData.options) {
-            setError(formData.error || 'ไม่สามารถโหลดฟอร์มได้');
-            setLoading(false);
-            return;
-          }
-          setOptions(formData.options);
-          if (detail.success && detail.treatment) {
-            const t = detail.treatment;
-            if (t.doctorId) setDoctorId(t.doctorId);
-            if (t.assistants?.length) setAssistantIds(t.assistants.map(a => a.id || a).filter(Boolean));
-            if (t.treatmentDate) setTreatmentDate(t.treatmentDate);
-            // Health info
-            if (t.healthInfo?.bloodType) setBloodType(t.healthInfo.bloodType);
-            if (t.healthInfo?.congenitalDisease) setCongenitalDisease(t.healthInfo.congenitalDisease);
-            if (t.healthInfo?.drugAllergy) setDrugAllergy(t.healthInfo.drugAllergy);
-            // Vitals
-            if (t.vitals) setVitals(v => ({ ...v, ...t.vitals }));
-            // OPD
-            setOpd({
-              symptoms: t.symptoms || '',
-              physicalExam: t.physicalExam || '',
-              diagnosis: t.diagnosis || '',
-              treatmentInfo: t.treatmentInfo || '',
-              treatmentPlan: t.treatmentPlan || '',
-              treatmentNote: t.treatmentNote || '',
-              additionalNote: t.additionalNote || '',
-            });
-            // Treatment items from existing
-            if (t.treatmentItems?.length) {
-              setTreatmentItems(t.treatmentItems.map((item, i) => ({
-                id: `existing-${i}`,
-                name: item.name || item.product || '',
-                qty: item.qty || '1',
-                unit: item.unit || '',
-                price: item.price || '',
-              })));
-            }
-            // Treatment images from ProClinic edit page
-            if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
-            if (t.afterImages?.length) setAfterImages(t.afterImages);
-            if (t.otherImages?.length) setOtherImages(t.otherImages);
-            if (t.labItems?.length) setLabItems(t.labItems);
-            if (t.treatmentFiles?.length) {
-              setTreatmentFiles(prev => prev.map(slot => {
-                const found = t.treatmentFiles.find(f => f.slot === slot.slot);
-                return found ? { ...slot, fileId: found.fileId } : slot;
-              }));
-            }
-          }
-          // Load charts from Firestore backup (async — don't block form render)
-          if (db && appId && treatmentId) {
-            import('firebase/firestore').then(({ getDoc, doc: docRef }) => {
-              getDoc(docRef(db, 'artifacts', appId, 'public', 'data', 'treatments', String(treatmentId)))
-                .then(snap => {
-                  if (snap.exists()) {
-                    const saved = snap.data();
-                    if (saved.charts?.length) {
-                      setCharts(saved.charts.map(c => ({
-                        dataUrl: c.dataUrl || '',
-                        fabricJson: c.fabricJson || null,
-                        templateId: c.templateId || 'blank',
-                        savedAt: c.savedAt || '',
-                      })).filter(c => c.dataUrl));
-                    }
-                    if (saved.beforeImages?.length) setBeforeImages(saved.beforeImages);
-                    if (saved.afterImages?.length) setAfterImages(saved.afterImages);
-                    if (saved.otherImages?.length) setOtherImages(saved.otherImages);
-                    if (saved.labItems?.length) setLabItems(saved.labItems);
-                  }
-                }).catch(() => {});
-            });
-          }
-        } else {
-          // Create mode — load form options only
-          const formData = await broker.getTreatmentCreateForm(customerId);
-          if (!formData.success || !formData.options) {
-            setError(formData.error || 'ไม่สามารถโหลดฟอร์มได้');
-            setLoading(false);
-            return;
-          }
-          setOptions(formData.options);
-          // Pre-fill defaults from ProClinic
-          const hi = formData.options.healthInfo || {};
-          if (hi.doctorId) setDoctorId(hi.doctorId);
-          if (hi.bloodType) setBloodType(hi.bloodType);
-          if (hi.congenitalDisease) setCongenitalDisease(hi.congenitalDisease);
-          if (hi.drugAllergy) setDrugAllergy(hi.drugAllergy);
-          if (hi.treatmentHistory) setTreatmentHistory(hi.treatmentHistory);
-          const vd = formData.options.vitalsDefaults || {};
-          if (vd.weight) setVitals(v => ({ ...v, weight: vd.weight }));
-          if (vd.height) setVitals(v => ({ ...v, height: vd.height }));
-
-          // ── Fetch latest treatment for this customer ──
-          let hasPrevTreatment = false;
-          try {
-            const listRes = await broker.listTreatments(customerId, 1);
-            if (listRes.success && listRes.treatments?.length > 0) {
-              const latestId = listRes.treatments[0].id;
-              if (latestId) {
-                const detailRes = await broker.getTreatment(latestId);
-                if (detailRes.success && detailRes.treatment) {
-                  const prev = detailRes.treatment;
-                  setPrevTreatment(prev);
-                  hasPrevTreatment = true;
-                  // Override health info from latest treatment (not patientData)
-                  if (prev.healthInfo?.bloodType) setBloodType(prev.healthInfo.bloodType);
-                  if (prev.healthInfo?.congenitalDisease) setCongenitalDisease(prev.healthInfo.congenitalDisease);
-                  if (prev.healthInfo?.drugAllergy) setDrugAllergy(prev.healthInfo.drugAllergy);
-                  if (prev.healthInfo?.treatmentHistory) setTreatmentHistory(prev.healthInfo.treatmentHistory);
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('[TreatmentForm] Failed to fetch previous treatment:', e.message);
-          }
-
-          // ── First treatment — auto-fill from patientData in English ──
-          if (!hasPrevTreatment && patientData) {
-            const pd = patientData;
-            // กรุ๊ปเลือด — match by name against bloodTypeOptions
-            if (pd.bloodType && pd.bloodType !== 'ไม่ทราบ') {
-              const bto = formData.options.bloodTypeOptions || [];
-              const match = bto.find(b => b.name === pd.bloodType);
-              if (match) setBloodType(match.id);
-            }
-            // โรคประจำตัว — English
-            if (pd.hasUnderlying === 'มี') {
-              const pmh = [];
-              if (pd.ud_hypertension) pmh.push('Hypertension');
-              if (pd.ud_diabetes) pmh.push('Diabetes');
-              if (pd.ud_lung) pmh.push('Lung Disease');
-              if (pd.ud_kidney) pmh.push('Kidney Disease');
-              if (pd.ud_heart) pmh.push('Heart Disease');
-              if (pd.ud_blood) pmh.push('Blood Disease');
-              if (pd.ud_other && pd.ud_otherDetail) pmh.push(pd.ud_otherDetail);
-              if (pmh.length) setCongenitalDisease(pmh.join(', '));
-            }
-            // แพ้ยา/อาหาร
-            if (pd.hasAllergies === 'มี' && pd.allergiesDetail) {
-              setDrugAllergy(pd.allergiesDetail);
-            }
-            // ยาที่ใช้ประจำ
-            if (pd.currentMedication) {
-              setTreatmentHistory(pd.currentMedication);
-            }
-          }
-
-          // ── visitReasons → OPD symptoms (first treatment only, English) ──
-          if (!hasPrevTreatment && patientData) {
-            const pd = patientData;
-            const reasonMap = {
-              'สมรรถภาพทางเพศ': 'Erectile Dysfunction / Sexual Health',
-              'โรคระบบทางเดินปัสสาวะ': 'Urology / Urinary Tract Issues',
-              'ดูแลสุขภาพองค์รวม': 'General Health / Wellness',
-              'เสริมฮอร์โมน': 'Hormone Replacement Therapy (HRT)',
-              'โรคติดต่อทางเพศสัมพันธ์': 'STD / STI Testing & Treatment',
-              'ขลิบ': 'Circumcision',
-              'ทำหมัน': 'Vasectomy',
-              'เลาะสารเหลว': 'Foreign Body Removal (Genital)',
-            };
-            const reasons = Array.isArray(pd.visitReasons) ? pd.visitReasons : pd.visitReason ? [pd.visitReason] : [];
-            if (reasons.length) {
-              const reasonText = reasons.map(r => {
-                if (r === 'อื่นๆ') return pd.visitReasonOther ? `Other: ${pd.visitReasonOther}` : 'Other';
-                return reasonMap[r] || r;
-              }).join(', ');
-              setOpd(prev => ({ ...prev, symptoms: prev.symptoms ? prev.symptoms : reasonText }));
-            }
-          }
-        }
+        // V50 (2026-05-08) — PROCLINIC MODE block deleted (~177 lines).
+        // saveTarget defaults to 'backend' + only callsites pass 'backend';
+        // proclinic fallthrough was unreachable. Full strip per H-bis.
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1194,41 +1023,17 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // switch; this guarantees freshness even if a future cache slot is missed.
     setMedModalLoading(true);
     try {
-      if (saveTarget === 'backend') {
-        // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
-        // Phase 17.2-septies (2026-05-05) — schema-reader fix. The canonical
-        // be_products schema uses productType / productName / categoryName /
-        // mainUnitName (legacy ProClinic-mirror used type / name / category /
-        // unit). Read both with productType-first fallback so future schema
-        // additions don't silently break.
-        const { listProducts } = await import('../lib/scopedDataLayer.js');
-        const all = await listProducts();
-        setMedAllProducts(all.filter(p => (p.productType || p.type) === 'ยา').map(p => ({
-          id: p.id,
-          name: p.productName || p.name || '',
-          price: p.price,
-          unit: p.mainUnitName || p.unit || '',
-          category: p.categoryName || p.category || '',
-        })));
-      } else {
-        const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
-        if (data.success) {
-          setMedAllProducts(data.products || []);
-          if (db && appId && data.products?.length) {
-            try {
-              const items = data.products;
-              for (let i = 0; i < items.length; i += 400) {
-                const batch = writeBatch(db);
-                items.slice(i, i + 400).forEach(p => {
-                  const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'takeaway_products', 'items', String(p.id));
-                  batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-                });
-                await batch.commit();
-              }
-            } catch (_e) { console.warn('[TreatmentForm] Failed to backup takeaway products', _e); }
-          }
-        }
-      }
+      // V50 (2026-05-08) — backend-only. ProClinic broker.searchProducts branch
+      // deleted; be_products via scopedDataLayer auto-injects branchId.
+      const { listProducts } = await import('../lib/scopedDataLayer.js');
+      const all = await listProducts();
+      setMedAllProducts(all.filter(p => (p.productType || p.type) === 'ยา').map(p => ({
+        id: p.id,
+        name: p.productName || p.name || '',
+        price: p.price,
+        unit: p.mainUnitName || p.unit || '',
+        category: p.categoryName || p.category || '',
+      })));
     } catch (e) { debugLog('tfp-medmodal-load', 'unexpected error opening medication modal (open path)', e); }
     setMedModalLoading(false);
   };
@@ -1295,13 +1100,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     if (medAllProducts.length === 0) {
       setMedModalLoading(true);
       try {
-        const data = await broker.searchProducts({ productType: 'ยา', isTakeaway: true, perPage: 200 });
-        if (data.success) {
-          setMedAllProducts(data.products || []);
-          // Re-find product with label
-          const found = (data.products || []).find(p => p.id === med.id);
-          if (found) setMedModalSelected(found);
-        }
+        // V50 — be_products via scopedDataLayer
+        const { listProducts } = await import('../lib/scopedDataLayer.js');
+        const all = await listProducts();
+        const products = all.filter(p => (p.productType || p.type) === 'ยา').map(p => ({
+          id: p.id,
+          name: p.productName || p.name || '',
+          price: p.price,
+          unit: p.mainUnitName || p.unit || '',
+          category: p.categoryName || p.category || '',
+        }));
+        setMedAllProducts(products);
+        // Re-find product with label
+        const found = products.find(p => p.id === med.id);
+        if (found) setMedModalSelected(found);
       } catch (e) { debugLog('tfp-medmodal-load', 'unexpected error re-fetching products on medication edit', e); }
       setMedModalLoading(false);
     }
@@ -1313,31 +1125,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setMedGroupLoading(true);
     try {
-      if (saveTarget === 'backend') {
-        // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
-        // No master_data fallback — if user deletes all groups, they see
-        // empty state (Rule H: be_ = canonical, master_data is DEV-ONLY cache).
-        const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
-        const cached = await listProductGroupsForTreatment('ยากลับบ้าน');
-        if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
-      } else {
-        const data = await broker.getMedicationGroups('ยากลับบ้าน');
-        if (data.success && data.groups?.length) {
-          setMedGroupData(data.groups);
-          setMedGroupSelectedId(String(data.groups[0].id));
-          setMedGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
-          if (db && appId) {
-            try {
-              const batch = writeBatch(db);
-              for (const g of data.groups) {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'medication_groups', 'items', String(g.id));
-                batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
-              }
-              await batch.commit();
-            } catch (_e) { console.warn('[TreatmentForm] Failed to backup medication groups', _e); }
-        }
-      }
-      } // close else (ProClinic mode)
+      // V50 (2026-05-08) — backend-only. ProClinic broker.getMedicationGroups
+      // branch deleted; be_product_groups is the ONLY source.
+      const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
+      const cached = await listProductGroupsForTreatment('ยากลับบ้าน');
+      if (cached.length) { setMedGroupData(cached); setMedGroupSelectedId(String(cached[0].id)); setMedGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
     } catch (e) { debugLog('tfp-medgroup-load', 'unexpected error opening medication-group modal', e); }
     setMedGroupLoading(false);
   };
@@ -1385,33 +1177,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setConsModalLoading(true);
     try {
-      if (saveTarget === 'backend') {
-        // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
-        // Phase 17.2-septies (2026-05-05) — schema-reader fix (see openMedModal).
-        const { listProducts } = await import('../lib/scopedDataLayer.js');
-        const all = await listProducts();
-        setConsAllProducts(all.filter(p => (p.productType || p.type) === 'สินค้าสิ้นเปลือง').map(p => ({
-          id: p.id,
-          name: p.productName || p.name || '',
-          unit: p.mainUnitName || p.unit || '',
-          category: p.categoryName || p.category || '',
-        })));
-      } else {
-        const data = await broker.searchProducts({ productType: 'สินค้าสิ้นเปลือง', perPage: 200 });
-        if (data.success) {
-          setConsAllProducts(data.products || []);
-          if (db && appId && data.products?.length) {
-            try {
-              const batch = writeBatch(db);
-              data.products.forEach(p => {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_products', 'items', String(p.id));
-                batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-              });
-              await batch.commit();
-            } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable products', _e); }
-          }
-        }
-      }
+      // V50 (2026-05-08) — backend-only. ProClinic broker.searchProducts branch deleted.
+      const { listProducts } = await import('../lib/scopedDataLayer.js');
+      const all = await listProducts();
+      setConsAllProducts(all.filter(p => (p.productType || p.type) === 'สินค้าสิ้นเปลือง').map(p => ({
+        id: p.id,
+        name: p.productName || p.name || '',
+        unit: p.mainUnitName || p.unit || '',
+        category: p.categoryName || p.category || '',
+      })));
     } catch (e) { debugLog('tfp-cons-load', 'unexpected error opening consumable modal', e); }
     setConsModalLoading(false);
   };
@@ -1445,30 +1219,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // Phase 17.2-quinquies (2026-05-05) — drop length>0 short-circuit (see BS-9 effect).
     setConsGroupLoading(true);
     try {
-      if (saveTarget === 'backend') {
-        // Phase 11.9 (fix 2026-04-20): be_product_groups is the ONLY source.
-        // No master_data fallback — delete-in-tab must propagate here.
-        const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
-        const cached = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง');
-        if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
-      } else {
-        const data = await broker.getMedicationGroups('สินค้าสิ้นเปลือง');
-        if (data.success && data.groups?.length) {
-          setConsGroupData(data.groups);
-          setConsGroupSelectedId(String(data.groups[0].id));
-          setConsGroupChecked(new Set(data.groups[0].products.map((_, i) => i)));
-          if (db && appId) {
-            try {
-              const batch = writeBatch(db);
-              for (const g of data.groups) {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', 'consumable_groups', 'items', String(g.id));
-                batch.set(ref, { ...g, fetchedAt: new Date().toISOString() }, { merge: true });
-              }
-              await batch.commit();
-            } catch (_e) { console.warn('[TreatmentForm] Failed to backup consumable groups', _e); }
-          }
-        }
-      }
+      // V50 (2026-05-08) — backend-only. ProClinic broker.getMedicationGroups branch deleted.
+      const { listProductGroupsForTreatment } = await import('../lib/scopedDataLayer.js');
+      const cached = await listProductGroupsForTreatment('สินค้าสิ้นเปลือง');
+      if (cached.length) { setConsGroupData(cached); setConsGroupSelectedId(String(cached[0].id)); setConsGroupChecked(new Set(cached[0].products?.map((_,i)=>i)||[])); }
     } catch (e) { debugLog('tfp-consgroup-load', 'unexpected error opening consumable-group modal', e); }
     setConsGroupLoading(false);
   };
@@ -1513,10 +1267,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // additionally drains buyItems/buyCategories on branch switch.
     setBuyLoading(true);
     try {
-      // Backend mode: load from Firestore — NEVER fetch ProClinic directly.
-      // Task 7 (BSA): courses/products read via be_* listers (branch-scoped),
+      // V50 (2026-05-08) — backend-only. ProClinic broker.listItems branch deleted.
+      // BSA: courses/products read via be_* listers (branch-scoped),
       // promotions via be_promotions. No master_data/* reads (Rule H-quater).
-      if (saveTarget === 'backend') {
+      {
         const { listProducts, listCourses, listPromotions } = await import('../lib/scopedDataLayer.js');
         // V44 (2026-05-08) — beCourseToMasterShape is the SINGLE-SOURCE
         // mapper for course-buy items (canonical, includes mainProduct +
@@ -1625,28 +1379,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
         setBuyItems(prev => ({ ...prev, [type]: items }));
         setBuyCategories(prev => ({ ...prev, [type]: categories }));
-      } else {
-        // ProClinic mode: fetch from API
-        const data = await broker.listItems(type);
-        if (data.success) {
-          setBuyItems(prev => ({ ...prev, [type]: data.items || [] }));
-          setBuyCategories(prev => ({ ...prev, [type]: data.categories || [] }));
-          // Firestore backup
-          if (db && appId && data.items?.length) {
-            try {
-              const items = data.items;
-              for (let i = 0; i < items.length; i += 400) {
-                const batch = writeBatch(db);
-                items.slice(i, i + 400).forEach(p => {
-                  const ref = doc(db, 'artifacts', appId, 'public', 'data', 'master_data', `purchasable_${type}`, 'items', String(p.id));
-                  batch.set(ref, { ...p, fetchedAt: new Date().toISOString() }, { merge: true });
-                });
-                await batch.commit();
-              }
-            } catch (_e) { console.warn(`[TreatmentForm] Failed to backup ${type} items`, _e); }
-        }
       }
-      } // close else (ProClinic mode)
     } catch (e) { debugLog('tfp-buy-load', 'unexpected error opening buy-modal', e); }
     setBuyLoading(false);
   };
@@ -2944,59 +2677,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         return;
       }
 
-      // ── PROCLINIC SAVE (default) ──
-      const data = isEdit
-        ? await broker.updateTreatment(treatmentId, payload)
-        : await broker.createTreatment(customerId, payload);
-
-      if (data.success) {
-        // Save raw treatment data to our Firestore (backup — viewable even if ProClinic is down)
-        if (db && appId) {
-          try {
-            const localId = data.treatmentId || treatmentId || `local-${Date.now()}`;
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'treatments', String(localId));
-            await setDoc(docRef, {
-              proClinicId: localId,
-              customerId,
-              patientName: patientName || '',
-              mode: isEdit ? 'edit' : 'create',
-              doctorId,
-              doctorName: (options?.doctors || []).find(d => String(d.id) === String(doctorId))?.name || '',
-              assistantIds,
-              treatmentDate,
-              opd: { ...opd },
-              vitals: { ...vitals, bmi: bmi || '' },
-              healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
-              medications: medications.filter(m => m.name).map(m => ({ id: m.id, name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
-              consumables: consumables.filter(c => c.name).map(c => ({ id: c.id, name: c.name, qty: c.qty, unit: c.unit })),
-              purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
-              courseItems: Array.from(selectedCourseItems),
-              doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
-              // Phase 14.4: per-doctor-per-course DF entries (canonical)
-              dfEntries,
-              treatmentItems: treatmentItems.map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: !!t.skipStockDeduction })),
-              billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
-              insurance: { isInsuranceClaimed, benefitType, insuranceCompanyId, claimAmount: insuranceClaimAmount },
-              payment: { paymentStatus, channels: pmChannels.filter(c => c.enabled), paymentDate, paymentTime, refNo, note, saleNote },
-              sellers: pmSellers.filter(s => s.enabled),
-              medCert: { medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail },
-              charts: charts.map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson || null, templateId: c.templateId || c.template?.id || 'blank', savedAt: c.savedAt })),
-              beforeImages, afterImages, otherImages,
-              labItems: labItems.map(l => ({ ...l, pdfBase64: undefined })),
-              treatmentFiles: treatmentFiles.filter(f => f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId })),
-              syncedToProClinic: true,
-              savedAt: serverTimestamp(),
-            }, { merge: true });
-          } catch (e) {
-            console.warn('[TreatmentForm] Failed to save local backup:', e);
-          }
-        }
-        setSuccess(true);
-        const savedId = data.treatmentId || treatmentId || '';
-        setTimeout(() => { if (onSaved) onSaved(savedId); }, 1200);
-      } else {
-        setError(data.error || (isEdit ? 'บันทึกไม่สำเร็จ' : 'สร้างไม่สำเร็จ'));
-      }
+      // V50 (2026-05-08) — PROCLINIC SAVE branch deleted. saveTarget='backend'
+      // is the only path; backend save above already returned. Reaching here
+      // means saveTarget was set to a non-existent mode — fail loud so admin
+      // can investigate (rather than silently writing to ProClinic which is
+      // gone).
+      throw new Error('V50: saveTarget must be "backend" — ProClinic mode removed');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -3341,15 +3027,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 if (labProducts.length === 0) {
                   setLabModalLoading(true);
                   try {
-                    if (saveTarget === 'backend') {
-                      // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
-                      const { listProducts } = await import('../lib/scopedDataLayer.js');
-                      const all = await listProducts();
-                      setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category || '').toLowerCase().includes('lab')).map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit })));
-                    } else {
-                      const r = await broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 });
-                      if (r.success) setLabProducts(r.products || []);
-                    }
+                    // V50 (2026-05-08) — backend-only. Lab products from be_products.
+                    const { listProducts } = await import('../lib/scopedDataLayer.js');
+                    const all = await listProducts();
+                    setLabProducts(all.filter(p => (p.productType || p.type) === 'บริการ' && ((p.categoryName || p.category) || '').toLowerCase().includes('lab')).map(p => ({
+                      id: p.id,
+                      name: p.productName || p.name || '',
+                      price: p.price,
+                      unit: p.mainUnitName || p.unit || '',
+                    })));
                   } catch (e) { console.error('[TreatmentForm] lab search error:', e); }
                   setLabModalLoading(false);
                 }
@@ -3373,12 +3059,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         setLabModalDiscount(String(lab.discount || '')); setLabModalDiscountType(lab.discountType === '%' ? 'percent' : 'amount');
                         setLabModalVat(!!lab.isVatIncluded); setLabModalOpen(true);
                         if (labProducts.length === 0) {
-                          if (saveTarget === 'backend') {
-                            // Task 7 (BSA): listProducts() reads be_products with auto-injected branchId.
-                            import('../lib/scopedDataLayer.js').then(({ listProducts }) => listProducts().then(all => setLabProducts(all.filter(p => p.type === 'บริการ' && (p.category||'').toLowerCase().includes('lab')).map(p => ({ id:p.id, name:p.name, price:p.price, unit:p.unit })))));
-                          } else {
-                            broker.searchProducts({ productType: 'บริการ', serviceType: 'Lab', perPage: 50 }).then(r => { if (r.success) setLabProducts(r.products || []); });
-                          }
+                          // V50 (2026-05-08) — backend-only. Lab products from be_products.
+                          import('../lib/scopedDataLayer.js').then(({ listProducts }) => listProducts().then(all => setLabProducts(all.filter(p => (p.productType || p.type) === 'บริการ' && ((p.categoryName || p.category)||'').toLowerCase().includes('lab')).map(p => ({
+                            id: p.id,
+                            name: p.productName || p.name || '',
+                            price: p.price,
+                            unit: p.mainUnitName || p.unit || '',
+                          })))));
                         }
                       }} className="text-cyan-500 hover:text-cyan-400" aria-label={`แก้ไข Lab ${lab.productName || ''}`}><Edit3 size={12} /></button>
                       <button onClick={() => setLabItems(prev => prev.filter((_, i) => i !== li))} className="text-red-500 hover:text-red-400" aria-label={`ลบ Lab ${lab.productName || ''}`}><Trash2 size={12} /></button>
