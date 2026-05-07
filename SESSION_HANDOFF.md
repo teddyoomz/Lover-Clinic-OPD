@@ -7,12 +7,30 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD — V40 backup/restore enterprise-grade (5 prod-fix iterations to byte-perfect 100% on all branches incl. NaN/Infinity).
+- **Date last updated**: 2026-05-07 EOD — V40 trial-fresh + V41 cross-branch-import marketing extension + V42 promo bundle qty fix (in 1 mega session).
 - **Branch**: `master`
-- **Last commit**: `0108dd7` — test(branch-backup): verifier uses jsonReviverForNonFinite + NaN-aware deepDiff (100% match achieved on all branches)
-- **Test count**: **6900 PASS / 6900 total**
+- **Last commit**: `bf78779` — fix(V42): promotion bundle qty multiplier dropped at 4 writer sites
+- **Test count**: **269 PASS** (V42 + Phase 17.1 focused) · full suite TBD next session
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `0108dd7`** (LIVE, fully synced). V40 backup feature + V41 staff/doctor hide both deployed earlier this session.
+- **Deploy state**: **PRODUCTION = `c92f924`** (V42 fix at `bf78779` is committed but **NOT deployed**). Marketing extension (Phase 17.1) is LIVE. V42 needs `vercel --prod` + user re-auth (V18).
+
+### Session 2026-05-07 EOD — V40 trial-fresh + V41 marketing + V42 promo-qty fix
+
+User-driven mega session: 4 sub-projects across one continuous chat.
+
+1. **V40 trial-fresh นครราชสีมา** (`0420921`): backup → trial Make-Fresh → bit-perfect verify → real Make-Fresh. 3,233 docs wiped, 3 backups in Storage as insurance.
+2. **V41 cross-branch-import test** for 6 master-data tabs: products + courses verified on real prod (3+3 imported, edit/delete/cleanup, all V39 invariants pass).
+3. **Phase 17.1 marketing extension** (`366726c` → `b37edd3` → `c92f924` → `d965eb1`): 3 new adapters (promotions/coupons/vouchers) + UI buttons in 3 marketing tabs + 222 tests + 2 follow-up fixes (LISTER map + FK_C2E map missed `be_courses`). Deployed.
+4. **V42 promo bundle qty multiplier** (`bf78779`): 4 writer sites (TFP×3 + SaleTab) dropped `sub.qty` (course-instance multiplier inside promotion bundle). User reproduced live: 6×PRP+2×AHL config → customer got 1× of each. Helper extracted (`computePromotionProductQty` + `buildPromotionSubCourseProducts`). 46 new tests + Rule M migration applied (6 entries fixed at LC-26000006). **NOT YET DEPLOYED.**
+
+**Commits this session**: `0420921` (V40 trial), `366726c` + `b37edd3` + `c92f924` + `d965eb1` (Phase 17.1), `bf78779` (V42).
+
+**Outstanding**:
+- 🚨 **V42 needs `vercel --prod`** (V18 — auth never rolls over, user must say "deploy" again)
+- 🚨 **NEW bug at session-end** (NOT investigated): "ไม่ตัดสต็อค" flag on course/promotion items ignored at treatment-deduct time → stock still decrements all 3 products despite checkbox checked. Image showed -1/-3/-1 with note "สต็อคติดลบ — ตัดเกินคงเหลืออีก N ครั้ง". Needs investigation per branch + product. V36 has related context.
+- H-bis ProClinic full strip + hard-gate Firebase claim + /audit-all (deferred)
+
+Detail: `.agents/sessions/2026-05-07-v42-promo-qty-multiplier.md`
 
 ### Session 2026-05-08 EOD — V40-prod-fix-1 thru fix-5 (enterprise-grade backup/restore)
 
