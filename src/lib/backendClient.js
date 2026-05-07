@@ -3203,9 +3203,32 @@ export function beCourseToMasterShape(c, opts = {}) {
   if (Array.isArray(c.courseProducts)) {
     for (const cp of c.courseProducts) {
       const pid = String(cp.productId || cp.id || '');
-      // Dedup: skip if courseProducts somehow also carries the main product
-      // (ProClinic sync can include it in both places for some courses).
-      if (pid && pid === mainId) continue;
+      // V45 (2026-05-08) — DEDUP-SHADOW FIX. When a sub-row has the same
+      // productId as main, OR-merge the sub-row's per-row flags into the
+      // already-pushed main entry BEFORE skipping. Pre-V45 the sub-row's
+      // skipStockDeduction (or other per-row flags) was silently dropped
+      // because main was inserted first with `skipStockDeduction: !!c.skipStockDeduction`
+      // (top-level flag only). User-reported repro on "ขลิบไร้เลือด (เบอร์26)
+      // 1 ครั้ง" — admin set top=false + sub-row=true; dedup dropped the
+      // true → no skip movement → -1 + negative-overage. V45 OR-merge
+      // preserves user intent.
+      //
+      // Pattern affects ALL courses where admin includes main as a sub-row
+      // to set per-product overrides (14 courses on prod per V45 diag,
+      // mostly the "ขลิบ" + "PRP" + "ปรึกษา" cluster). 3 consumers benefit
+      // (TFP buy + SaleTab buy + QuotationFormModal) — single-source fix.
+      if (pid && pid === mainId) {
+        const mainEntry = products.find(p => p.isMainProduct && String(p.id) === mainId);
+        if (mainEntry) {
+          // OR-merge — any TRUE wins. skipStockDeduction is the user-reported
+          // case; defensive on isHidden too (if admin marked sub.hidden=true,
+          // main row should also be hidden from sale despite top-level being
+          // visible — same intent semantic).
+          if (cp.skipStockDeduction === true) mainEntry.skipStockDeduction = true;
+          if (cp.isHidden === true) mainEntry.isHidden = true;
+        }
+        continue;
+      }
       const enriched = productLookup?.get(pid) || {};
       products.push({
         id: pid,
