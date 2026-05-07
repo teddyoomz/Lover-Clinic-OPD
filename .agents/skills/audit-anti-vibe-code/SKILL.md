@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV19)
+## Invariants (AV1–AV20)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -152,6 +152,32 @@ expect(src).not.toMatch(/migrateMasterUniversalToBe\(\s*\{[^}]*branchId/);
 ```js
 expect(code).toMatch(/AUTO_BACKUP_REQUIRED|BACKUP_REF_MISSING/);
 expect(code).toMatch(/bucket\.file\(autoBackupRef\)\.exists/);
+```
+
+### AV20 — Lookup-map consumers must opt-in `{ includeHidden: true }` (V41)
+
+**Why**: V41 (2026-05-08) — `listStaff()` / `listDoctors()` in `src/lib/backendClient.js` default-filter `!isHidden` so every picker auto-secures (V12 multi-reader-sweep safe pattern). Past records reference staff/doctors by id; if a component's lookup map is built from a default-filtered lister, hidden persons' names render as blank in past records' display labels — silent regression.
+
+**Grep**:
+- `listStaff\(\{[^}]*\}\)` — every opt-in callsite. Must be one of: `StaffTab.jsx`, `DoctorsTab.jsx`, `CustomerDetailView.jsx`, `TreatmentFormPage.jsx`, `AdminDashboard.jsx`, `AppointmentCalendarView.jsx`. New callsites need an inline V41/AV20 comment justifying opt-in.
+- `listDoctors\(\{[^}]*\}\)` — same.
+
+**Sanctioned exception**: per-flow opt-in is allowed when (1) the component is a known lookup-map consumer (above list), or (2) the component derives a `visibleX` array client-side via `.filter(d => !d.isHidden)` for picker rendering — proving it understands the split pattern.
+
+**Source-grep regression**: `tests/staff-doctor-hide-consumer-sweep.test.js` (CS1 + CS2) locks the consumer-side classification. CS1.* asserts opt-in present in lookup-map consumers; CS2.* asserts opt-in ABSENT in picker-only consumers.
+
+**Anti-pattern (caught by AV20)**:
+```js
+// ❌ Picker-only file uses opt-in unnecessarily
+// (would leak hidden persons into picker dropdown)
+const doctors = await listDoctors({ includeHidden: true });
+
+// ✅ Picker-only file uses default
+const doctors = await listDoctors();
+
+// ✅ Lookup-map context uses opt-in (with comment)
+// V41 — need full map for past-record name display (AV20)
+const allDoctors = await listDoctors({ includeHidden: true });
 ```
 
 ## How to run
