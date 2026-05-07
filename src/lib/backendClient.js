@@ -5220,6 +5220,10 @@ async function _repayNegativeBalances({
   // consistent qty. Mirror `_deductOneItem` negative-push tx shape but in
   // reverse (qty goes UP not DOWN, status flips back to ACTIVE if was
   // depleted, never set to depleted on positive movement).
+  // V48 (2026-05-08) — Rule O extension: prefetch live product name BEFORE
+  // each tx so the movement record uses canonical product name (NOT poisoned
+  // batch.productName). Same V46 invariant as _deductOneItem extended here.
+  const liveProductName = await _resolveProductNameLive(productId);
   const repaidBatches = [];
   let totalRepaid = 0;
   for (const step of repayPlan) {
@@ -5273,7 +5277,8 @@ async function _repayNegativeBalances({
         type: movementType,
         batchId: step.batchId,
         productId: b.productId || productId,
-        productName: b.productName || '',
+        // V48 (Rule O extension) — live-resolved name overrides poisoned batch.productName
+        productName: liveProductName || b.productName || '',
         qty: repayAmt, // positive — incoming qty applied to repay
         before: beforeRemaining,
         after: newRemaining,
@@ -5293,7 +5298,7 @@ async function _repayNegativeBalances({
 
       return {
         batchId: step.batchId,
-        productName: b.productName || '',
+        productName: liveProductName || b.productName || '',
         repayAmt,
         before: beforeRemaining,
         after: newRemaining,
@@ -5621,12 +5626,15 @@ export async function cancelStockOrder(orderId, opts = {}) {
 
     // Append CANCEL_IMPORT movement
     const movementId = _genMovementId();
+    // V48 (2026-05-08) — Rule O extension: live-resolve productName from
+    // be_products[batch.productId] instead of trusting poisoned batch field.
+    const liveCancelName = await _resolveProductNameLive(batch.productId);
     wb.set(stockMovementDoc(movementId), {
       movementId,
       type: MOVEMENT_TYPES.CANCEL_IMPORT,
       batchId,
       productId: batch.productId,
-      productName: batch.productName,
+      productName: liveCancelName || batch.productName || '',
       qty: -total,
       before: total,
       after: 0,
@@ -6082,12 +6090,15 @@ export async function cancelCentralStockOrder(orderId, opts = {}) {
 
     // Append CANCEL_IMPORT movement (V14: explicit non-undefined fields).
     const movementId = _genMovementId();
+    // V48 (2026-05-08) — Rule O extension at central-stock-order cancel path.
+    // Mirror of cancelStockOrder fix.
+    const liveCentralCancelName = await _resolveProductNameLive(batch.productId);
     await setDoc(stockMovementDoc(movementId), {
       movementId,
       type: MOVEMENT_TYPES.CANCEL_IMPORT,
       batchId,
       productId: String(batch.productId || ''),
-      productName: String(batch.productName || ''),
+      productName: String(liveCentralCancelName || batch.productName || ''),
       qty: -total,
       before: total,
       after: 0,
@@ -6186,6 +6197,17 @@ export async function createStockAdjustment(p, opts = {}) {
   const user = _normalizeAuditUser(opts.user);
   const note = String(p.note || '');
 
+  // V48 (2026-05-08) — Rule O extension. Prefetch batch's productId via
+  // pre-tx getDoc, then live-resolve productName from be_products. The
+  // tx body uses `liveAdjustName` instead of poisoned `batch.productName`.
+  let liveAdjustName = '';
+  try {
+    const preBatchSnap = await getDoc(stockBatchDoc(batchId));
+    if (preBatchSnap.exists()) {
+      liveAdjustName = await _resolveProductNameLive(preBatchSnap.data()?.productId);
+    }
+  } catch { /* non-fatal — falls through to batch.productName fallback in tx */ }
+
   const result = await runTransaction(db, async (tx) => {
     const batchRef = stockBatchDoc(batchId);
     const snap = await tx.get(batchRef);
@@ -6215,12 +6237,14 @@ export async function createStockAdjustment(p, opts = {}) {
     // Append movement (immutable)
     const movementType = type === 'add' ? MOVEMENT_TYPES.ADJUST_ADD : MOVEMENT_TYPES.ADJUST_REDUCE;
     const signedQty = type === 'add' ? qty : -qty;
+    // V48 (2026-05-08) — Rule O extension: live-resolve productName for
+    // adjustment movement + adjustment doc (was using poisoned batch field).
     tx.set(stockMovementDoc(movementId), {
       movementId,
       type: movementType,
       batchId,
       productId: batch.productId,
-      productName: batch.productName,
+      productName: liveAdjustName || batch.productName || '',
       qty: signedQty,
       before: beforeRemaining,
       after: afterRemaining,
@@ -6240,7 +6264,7 @@ export async function createStockAdjustment(p, opts = {}) {
       adjustmentId,
       batchId,
       productId: batch.productId,
-      productName: batch.productName,
+      productName: liveAdjustName || batch.productName || '',
       type,
       qty,
       note,
@@ -7615,10 +7639,16 @@ export async function createStockTransfer(data, opts = {}) {
   for (const it of items) {
     const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
     const b = snap.data();
+    // V48 (2026-05-08) — Rule O extension at the POISON GATE for transfer.
+    // resolvedItems carries productName forward into destination batch +
+    // RECEIVE movement (lines 7805/7824/7829). If we trust b.productName
+    // here, poison propagates downstream. Live-resolve at this gate so
+    // every downstream consumer of resolvedItems[i].productName is canonical.
+    const liveTransferName = await _resolveProductNameLive(b.productId);
     resolvedItems.push({
       sourceBatchId: it.sourceBatchId,
       productId: b.productId,
-      productName: b.productName,
+      productName: liveTransferName || b.productName || '',
       qty: Number(it.qty),
       unit: b.unit || '',
       cost: Number(b.originalCost || 0),
@@ -7728,13 +7758,16 @@ export async function updateStockTransferStatus(transferId, newStatus, opts = {}
       const newQty = deductQtyNumeric(b.qty, item.qty);
       const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
       tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
+      // V48 (2026-05-08) — Rule O extension. liveExportName comes from
+      // the resolvedItems entry (live-resolved at create-transfer gate).
+      const liveExportName = item.productName || '';
       const mvtId = _genMovementId();
       tx.set(stockMovementDoc(mvtId), {
         movementId: mvtId,
         type: MOVEMENT_TYPES.EXPORT_TRANSFER,
         batchId: item.sourceBatchId,
         productId: b.productId,
-        productName: b.productName,
+        productName: liveExportName || b.productName || '',
         qty: -item.qty,
         before,
         after: newQty.remaining,
@@ -7983,10 +8016,14 @@ export async function createStockWithdrawal(data, opts = {}) {
   for (const it of items) {
     const snap = await getDoc(stockBatchDoc(it.sourceBatchId));
     const b = snap.data();
+    // V48 (2026-05-08) — Rule O extension at the POISON GATE for withdrawal.
+    // Mirror of createStockTransfer fix at line ~7621. resolvedItems carries
+    // productName forward into destination batch + WITHDRAWAL_CONFIRM movement.
+    const liveWithdrawName = await _resolveProductNameLive(b.productId);
     resolvedItems.push({
       sourceBatchId: it.sourceBatchId,
       productId: b.productId,
-      productName: b.productName,
+      productName: liveWithdrawName || b.productName || '',
       qty: Number(it.qty),
       unit: b.unit || '',
       cost: Number(b.originalCost || 0),
@@ -8067,13 +8104,15 @@ export async function updateStockWithdrawalStatus(withdrawalId, newStatus, opts 
       const newQty = deductQtyNumeric(b.qty, item.qty);
       const newStat = newQty.remaining <= 0 ? BATCH_STATUS.DEPLETED : BATCH_STATUS.ACTIVE;
       tx.update(bRef, { qty: newQty, status: newStat, updatedAt: now });
+      // V48 (2026-05-08) — Rule O extension. liveExportWdName from resolvedItems.
+      const liveExportWdName = item.productName || '';
       const mvtId = _genMovementId();
       tx.set(stockMovementDoc(mvtId), {
         movementId: mvtId,
         type: MOVEMENT_TYPES.EXPORT_WITHDRAWAL,
         batchId: item.sourceBatchId,
         productId: b.productId,
-        productName: b.productName,
+        productName: liveExportWdName || b.productName || '',
         qty: -item.qty,
         before,
         after: newQty.remaining,

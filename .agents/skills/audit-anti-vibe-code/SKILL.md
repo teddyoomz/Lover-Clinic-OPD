@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV25)
+## Invariants (AV1–AV26)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -179,6 +179,46 @@ const doctors = await listDoctors();
 // V41 — need full map for past-record name display (AV20)
 const allDoctors = await listDoctors({ includeHidden: true });
 ```
+
+### AV26 — Rule O extends UNIVERSALLY: every stock-write productName must live-resolve (V48)
+
+**Why**: V48 (2026-05-08) — V46 audit only fixed 3 productName-write sites in `_deductOneItem`. Phase 1 source-grep sweep found **15+ OTHER stock-write sites** still using `productName: <doc>.productName` patterns (V46-class poisoning vulnerable): `_repayNegativeBalances`, `cancelStockOrder` CANCEL_IMPORT, `createStockAdjustment` movement+adjustment doc, `createStockTransfer` resolvedItems (POISON GATE — propagates downstream to dest batch + RECEIVE), `updateStockTransferStatus` EXPORT_TRANSFER, `createStockWithdrawal` resolvedItems POISON GATE, `updateStockWithdrawalStatus` EXPORT_WITHDRAWAL, central-stock-order CANCEL_IMPORT. ALL fixed in V48 with consistent live-resolve + fallback chain pattern.
+
+**The rule** (extends AV24): for ANY Firestore write of stock_movement / stock_batch / stock_adjustment that emits `productName` field, MUST live-resolve from `be_products[productId]` BEFORE the tx body. Helper: `_resolveProductNameLive(productId)`. Pattern:
+```js
+const liveName = await _resolveProductNameLive(<productId-source>);
+// ... in tx body or setDoc:
+productName: liveName || <doc>.productName || ''
+```
+
+Or use item.productName fallback (V46-EXEMPT — caller-supplied canonical post-V44):
+```js
+productName: liveName || item.productName || <doc>.productName || ''
+```
+
+**POISON GATE pattern**: when a function builds a `resolvedItems` array that's later consumed by destination-tier batch/movement writers (e.g. transfer, withdrawal), live-resolve AT THE GATE so downstream consumers inherit canonical names. Single live-resolve fixes multiple downstream write sites.
+
+**Comprehensive grep** (V48 CAT8.1):
+```js
+// Every stockMovementDoc productName write classified into sanctioned categories:
+const writes = [...src.matchAll(/(?:tx\.set|setDoc|wb\.set)\(stockMovementDoc\([^)]+\),\s*\{[\s\S]+?productName:\s*([^,]+?),/g)];
+for (const m of writes) {
+  const expr = m[1].trim();
+  const isLiveResolve = /live(?:Name|...|CentralCancelName)/i.test(expr);
+  const isItemBased = /\b(?:item|it)\.productName/.test(expr);
+  const isReadExisting = /\bm\.productName/.test(expr); // reading existing movement
+  const isLineBased = /\b(?:line|p|t|c)\.productName/.test(expr); // sale-side category split
+  expect(isLiveResolve || isItemBased || isReadExisting || isLineBased).toBe(true);
+}
+```
+
+**Companion AV: AV24** (specific to _deductOneItem productName), **AV25** (display-layer grouping). AV26 is the UNIVERSAL stock-writer enforcement.
+
+**Sanctioned exceptions** (item.productName-based — V46-exempt):
+- `createCentralStockOrder.persistedItems` — caller-supplied input items
+- All `_normalizeStockItems` skip-paths in `_deductOneItem` (course-skip / product-skip / not-tracked)
+- Sale-side category split branches in `_normalizeStockItems` (products / medications / consumables / treatmentItems)
+- `reverseStockForSale` reading existing movement (m.productName) for INFORMATION purpose only
 
 ### AV25 — Every customer.courses[] reader rendering UI cards MUST go through a grouping helper (V47)
 
