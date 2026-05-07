@@ -7,14 +7,15 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 1-7 SHIPPED, H-bis EXECUTED)
+- **Date last updated**: 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 1-7 SHIPPED, H-bis EXECUTED) + 2 brainstorming asks PENDING (interrupted)
 - **Branch**: `master`
-- **Last commit**: V50.Phase 7 final (committed at end of session — V-entry + AV28 + memory updates)
+- **Last commit**: EOD #3 docs (V50 V-entry + AV28 invariant + active.md + SESSION_HANDOFF.md). V50.Phase 7 final at `0780516`.
 - **Test count**: 7261/7266 PASS (5 pre-existing TFP failures: BSA T6.1 + phase-17-2-septies S3 — NOT V50-caused, confirmed via stash-test)
 - **Build**: clean. BackendDashboard chunk 1018→933 KB, AdminDashboard 398→383 KB.
-- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 ALL committed but **NOT deployed**). 7 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
+- **Deploy state**: **PRODUCTION = `c92f924`** (V49 + V50.Phase 1-7 + EOD #3 docs ALL committed but **NOT deployed**). 8 commits ahead of prod, pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
 - **Iron-clad rule status**: Rule O (V46-V48) + AV20-AV28 invariant set complete. **Rule H-bis = EXECUTED** (was "IN PROGRESS"; V50 closes the dev-only-scaffolding strip).
 - **Migrations applied on prod**: V43 (3 entries on LC-26000006) + V46 (2 poisoned batches) + V49 e2e audit doc + V50.Phase 6 cleanup (2,599 docs DELETED + audit doc emit).
+- **Brainstorming asks PENDING** (interrupted at Explore phase — RESUME NEXT SESSION): (1) NEW iron-clad rule for test-failure-class-of-bug expansion + skill updates; (2) ClinicSettingsPanel → per-branch BranchFormModal migration with frontend wiring. Detail: `.agents/active.md`.
 
 ### Session 2026-05-08 EOD #3 — V50 ProClinic strip COMPLETE (Phase 3-7 shipped)
 
@@ -697,25 +698,25 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue V50 ProClinic strip from 2026-05-08 EOD #2.
+Resume LoverClinic — V50 ProClinic strip COMPLETE; resume interrupted brainstorming.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=98e5105, prod=c92f924 — 5 commits ahead)
-3. .agents/active.md (7125/7131 tests PASS)
-4. .claude/rules/00-session-start.md (iron-clad A-O + V42-V49 V-summary)
-5. .agents/sessions/2026-05-08-v50-proclinic-strip.md
+2. SESSION_HANDOFF.md (master=POST-V50 EOD #3, prod=c92f924 — 8 commits ahead)
+3. .agents/active.md (7261/7266 tests PASS · brainstorming asks PENDING)
+4. .claude/rules/00-session-start.md (iron-clad A-O + V42-V50 V-summary)
+5. .agents/sessions/2026-05-08-v50-proclinic-strip.md (Phase 1-2 detail)
 
-Status: master=98e5105, 7125/7131 tests pass, prod=c92f924. V50 ProClinic strip Phase 1+2 SHIPPED (~12K LOC removed across 4 commits). AdminDashboard + BackendDashboard unified on be_*. 24 infrastructure files DELETED (brokerClient + cloneOrchestrator + customerBranchBaselineClient + CloneTab + MasterDataTab + api/proclinic/** + cookie-relay/**). Auto-link/cascade-delete/move-appointment/BSA branch isolation preserved.
+Status: master=POST-V50.Phase 7 + EOD #3 docs, 7261/7266 tests pass, prod=c92f924. V50 ProClinic strip COMPLETE — 7 phases shipped, ~12K LOC removed, 2,599 prod docs deleted, AV28 audit invariant + 26 regression tests, V50 V-entry locked, **Rule H-bis EXECUTED**. AdminDashboard + BackendDashboard unified on be_*. Auto-link/cascade-delete/move-appointment/BSA branch isolation preserved across all 7 phases.
 
-Next action: V50 Phase 3 — add `be_customers.creationBranchId` field stamp at addCustomer + verify cross-branch booking flow on dev server (preview_eval AdminDashboard appointment + deposit creation across 3 branches).
+Next action: invoke `Skill(brainstorming)` to resume interrupted asks (HARD-GATE Rule J): (1) NEW iron-clad rule (likely Rule P) for test-failure-class-of-bug expansion mandate + update `systematic-debugging` + `verification-before-completion` skills; (2) Per-branch settings migration — move ClinicSettingsPanel sections (LINE OA URL · CLINIC PHONE · ข้อมูลคลินิก · เวลาเปิด-ปิด · เวลาทำการแชท) into BranchFormModal CRUD, EXCLUDE เวลาแพทย์เข้า, wire frontend consumers via BranchContext, eliminate global duplicates. Brainstorming workflow STARTED at Explore phase (ClinicSettingsPanel.jsx + 17 consumers grepped) but NO Q1-Q4 asked + NO design proposed yet.
 
 Outstanding (user-triggered):
-- 🚨 V49 + V50.Phase1-2 vercel --prod (V18 — explicit "deploy" THIS turn) [5 commits ahead of prod]
-- V50 Phase 3-7 still pending (creationBranchId + e2e bank + Rule M data ops + V-entry/AV28/H-bis EXECUTED)
+- 🚨 V49 + V50.Phase 1-7 + EOD #3 docs vercel --prod (V18 — explicit "deploy" THIS turn) [8 commits ahead]
+- Brainstorming asks #1 + #2 (RESUME mid-flow)
 - 5 pre-existing TFP test failures (BSA T6.1 + phase-17-2-septies S3) — separate task
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + AV17; Rule M data-ops; Rule N targeted-test-only; **NEW Rule O — productId-only-identity for stock + productName live-resolve at write**; V37 (NEVER `git add -A`); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE (plan-mode is ORTHOGONAL — invoke Skill(brainstorming) FIRST); Rule K work-first-test-last; Rule L BSA + AV17; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity + productName live-resolve; V37 NEVER `git add -A`; NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```

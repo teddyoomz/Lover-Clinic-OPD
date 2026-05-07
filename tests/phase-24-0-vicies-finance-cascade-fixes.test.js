@@ -124,19 +124,17 @@ describe('Phase 24.0-vicies — Bug 2: confirmCreateDeposit deposit-only path pe
 
 describe('Phase 24.0-vicies — Bug 1: handleSaveDepositData un-gated cascade', () => {
   it('VCS.C.1 — depIdForCascade resolves with linkedDepositId fallback', () => {
+    // Phase 24.0-vicies-septies (2026-05-06) — wrapped sources in coerceId
+    // helper to defend against legacy {depositId,success} object shape.
     expect(ADMIN).toMatch(
-      /let\s+depIdForCascade\s*=\s*sess\?\.depositProClinicId\s*\|\|\s*sess\?\.linkedDepositId\s*\|\|\s*''/,
+      /let\s+depIdForCascade\s*=\s*coerceId\(sess\?\.depositProClinicId\)[\s\S]{0,80}?\|\|\s*coerceId\(sess\?\.linkedDepositId\)/,
     );
   });
 
   it('VCS.C.2 — depIdForCascade declared BEFORE alreadySynced branch (un-gated)', () => {
-    // Find the depIdForCascade declaration + the first `if (alreadySynced)`
-    // INSIDE handleSaveDepositData (skip the cancel handler's earlier
-    // `} else if (alreadySynced)` which is unrelated).
-    const depIdIdx = ADMIN.indexOf('let depIdForCascade = sess?.depositProClinicId || sess?.linkedDepositId');
+    // Phase 24.0-vicies-septies — declaration shape changed to use coerceId().
+    const depIdIdx = ADMIN.indexOf('let depIdForCascade = coerceId(sess?.depositProClinicId)');
     expect(depIdIdx).toBeGreaterThan(0);
-    // Search for `if (alreadySynced)` AFTER depIdIdx — that's the first one
-    // inside handleSaveDepositData's main flow.
     const alreadySyncedBranchIdx = ADMIN.indexOf('if (alreadySynced)', depIdIdx);
     expect(alreadySyncedBranchIdx).toBeGreaterThan(depIdIdx);
   });

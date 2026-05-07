@@ -33,8 +33,10 @@ describe('Phase 24.0-quinquiesdecies — deposit-no-appointment branch', () => {
   });
 
   it('DNA.A.3 — hasAppointment=false branch calls createDeposit (no pair-helper)', () => {
+    // Phase 24.0-vicies-septies (2026-05-06) — extracts createdDeposit?.depositId
+    // (was bare `depositId = await createDeposit(...)` which stored whole obj).
     expect(ADMIN).toMatch(
-      /\}\s*else\s*\{[\s\S]{0,2000}?depositId\s*=\s*await\s+createDeposit\(/,
+      /\}\s*else\s*\{[\s\S]{0,2500}?const\s+createdDeposit\s*=\s*await\s+createDeposit\(/,
     );
   });
 
