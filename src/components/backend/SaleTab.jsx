@@ -30,7 +30,7 @@ import {
   // staff had empty `name`, while be_staff has proper firstname/lastname.
   listAllSellers,
 } from '../../lib/scopedDataLayer.js';
-import { flattenPromotionsForStockDeduction } from '../../lib/treatmentBuyHelpers.js';
+import { flattenPromotionsForStockDeduction, buildPromotionSubCourseProducts } from '../../lib/treatmentBuyHelpers.js';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import {
   findCouponByCode, listPromotions,
@@ -929,9 +929,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               const purchasedQty = Number(promo.qty) || 1;
               if (promo.courses?.length) {
                 for (const sub of promo.courses) {
-                  const subProds = sub.products?.length
-                    ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * purchasedQty }))
-                    : [{ name: sub.name || promo.name, qty: purchasedQty, unit: sub.unit || 'ครั้ง' }];
+                  // V42 (2026-05-07): route through buildPromotionSubCourseProducts
+                  // so sub.qty (course-instance multiplier inside the promotion
+                  // bundle) is applied. Pre-V42 only multiplied by purchasedQty,
+                  // dropping sub.qty → customer got 1× of each course instead
+                  // of N×. See V42 V-entry.
+                  const subProds = buildPromotionSubCourseProducts(sub, purchasedQty, { fallbackName: sub.name || promo.name });
                   await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'sale', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: newSaleId });
                 }
               } else if (promo.products?.length) {

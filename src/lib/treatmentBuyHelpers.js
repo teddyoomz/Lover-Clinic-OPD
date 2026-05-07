@@ -756,3 +756,75 @@ export function isCourseUsableInTreatment(c) {
   if (!Number.isFinite(remaining) || !Number.isFinite(total)) return false;
   return remaining > 0 && total > 0;
 }
+
+// ─── Phase 17.1-bis (2026-05-07) — promotion qty multiplier fix (V42) ──────
+//
+// Bug caught by user: a promotion configured `courses: [{qty:6, products:[
+// {name:'PRP', qty:1}, {name:'Tube PRP', qty:3}]}, {qty:2, products:[
+// {name:'AHL', qty:1}]}]` produced customer.courses[] entries with qty
+// 1/1/3/1 instead of 6/18/2 — the OUTER `sub.qty` (course-instance count)
+// was dropped at every writer site.
+//
+// Root cause: 4 writer sites all hardcoded `(p.qty || 1) * pQty` without
+// `sub.qty` factor. V12 multi-writer-sweep — fix all 4 by routing through
+// these shared helpers.
+//
+// Writer sites (all updated in same commit):
+//   1. TreatmentFormPage.jsx confirmBuyModal (UI display state)
+//   2. TreatmentFormPage.jsx handleSubmit auto-sale create (Firestore write)
+//   3. TreatmentFormPage.jsx handleSubmit edit→sale create (Firestore write)
+//   4. SaleTab.jsx handleSubmit (Firestore write)
+
+/**
+ * 3-level multiplier: total = purchasedQty × subCourseQty × productQty.
+ *
+ * @param {*} purchasedQty — outer buy multiplier (item.qty / promo.qty / pQty)
+ * @param {*} subCourseQty — middle multiplier (sub.qty / c.qty — INSTANCES of
+ *                            this course inside the promotion bundle)
+ * @param {*} productQty — inner per-instance qty (p.qty)
+ * @returns {number} positive integer total qty (always ≥ 1)
+ */
+export function computePromotionProductQty(purchasedQty, subCourseQty, productQty) {
+  const buy = Math.max(1, Number(purchasedQty) || 1);
+  const sub = Math.max(1, Number(subCourseQty) || 1);
+  const prod = Math.max(1, Number(productQty) || 1);
+  return buy * sub * prod;
+}
+
+/**
+ * Build the products[] array for a promotion's sub-course, with qty
+ * correctly multiplied by the 3-level factor.
+ *
+ * Used by: assignCourseToCustomer call sites (TFP×2 + SaleTab) — they pass
+ * the returned array as `{ name: sub.name, products: <returned> }` to
+ * assignCourseToCustomer, which then writes per-product entries to
+ * customer.courses[].
+ *
+ * Also reused by TFP confirmBuyModal — it converts the returned array's
+ * `qty` to `remaining/total` strings for the UI display state.
+ *
+ * @param {object|null|undefined} sub — promotion sub-course:
+ *   { id, name, qty, unit?, products?: [{ id?, productId?, name, qty, unit? }] }
+ * @param {*} purchasedQty — outer buy multiplier (default 1)
+ * @param {object} [opts]
+ * @param {string} [opts.fallbackName] — name when sub has no products[]
+ * @returns {Array<object>} new products array (input not mutated). Each entry
+ *   is the original product fields spread + `qty` overwritten with the
+ *   multiplied value. Fallback: `[{ name, qty, unit }]` single entry.
+ */
+export function buildPromotionSubCourseProducts(sub, purchasedQty, opts = {}) {
+  const buy = Math.max(1, Number(purchasedQty) || 1);
+  const subQty = Math.max(1, Number(sub?.qty) || 1);
+  // Mirror existing SaleTab inline semantic: `sub.name || promo.name` —
+  // sub.name has priority. opts.fallbackName is the next-tier fallback
+  // (typically the parent promo.name).
+  const fallbackName = sub?.name || opts.fallbackName || '';
+  const fallbackUnit = sub?.unit || 'ครั้ง';
+  if (sub?.products && sub.products.length > 0) {
+    return sub.products.map(p => ({
+      ...p,
+      qty: computePromotionProductQty(buy, subQty, p?.qty),
+    }));
+  }
+  return [{ name: fallbackName, qty: buy * subQty, unit: fallbackUnit }];
+}

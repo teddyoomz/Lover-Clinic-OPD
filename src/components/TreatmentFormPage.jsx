@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
 import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import * as broker from '../lib/brokerClient.js';
 import { thaiTodayISO } from '../utils.js';
-import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment } from '../lib/treatmentBuyHelpers.js';
+import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts } from '../lib/treatmentBuyHelpers.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -1675,22 +1675,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
       }
       // Purchased promotion → add sub-courses as bundle (no manual picking)
+      // V42 (2026-05-07): route through buildPromotionSubCourseProducts so the
+      // 3-level multiplier (item.qty × c.qty × p.qty) is applied correctly.
+      // Pre-V42 this path used `String(p.qty || 1)` — dropped both item.qty
+      // (buy-quantity) AND c.qty (course-instance count inside the promotion
+      // bundle). User reproduced live: promo with 6×PRP + 2×AHL produced
+      // customer.courses[] with 1× of each. See V42 V-entry.
       if (item.itemType === 'promotion' && item.courses?.length) {
-        const newCourseEntries = item.courses.map(c => ({
-          courseId: `promo-${item.id}-course-${c.id}`,
-          courseName: c.name,
-          promotionId: item.id,
-          isAddon: true,
-          purchasedItemId: item.id,
-          purchasedItemType: 'promotion',
-          products: (c.products || []).map(p => ({
-            rowId: `promo-${item.id}-row-${c.id}-${p.id}`,
-            name: p.name,
-            remaining: String(p.qty || 1),
-            total: String(p.qty || 1),
-            unit: p.unit || 'ครั้ง',
-          })),
-        }));
+        const newCourseEntries = item.courses.map(c => {
+          const multipliedProducts = buildPromotionSubCourseProducts(c, item.qty, { fallbackName: c.name || item.name });
+          return {
+            courseId: `promo-${item.id}-course-${c.id}`,
+            courseName: c.name,
+            promotionId: item.id,
+            isAddon: true,
+            purchasedItemId: item.id,
+            purchasedItemType: 'promotion',
+            products: multipliedProducts.map((mp, idx) => {
+              const sourceProduct = (c.products || [])[idx];
+              const productId = sourceProduct?.id != null
+                ? sourceProduct.id
+                : (sourceProduct?.productId != null ? sourceProduct.productId : `idx${idx}`);
+              return {
+                rowId: `promo-${item.id}-row-${c.id}-${productId}`,
+                name: mp.name,
+                remaining: String(mp.qty),
+                total: String(mp.qty),
+                unit: mp.unit || 'ครั้ง',
+              };
+            }),
+          };
+        });
         setOptions(prev => ({
           ...prev,
           customerCourses: [...(prev?.customerCourses || []), ...newCourseEntries],
@@ -2560,9 +2575,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const pQty = Number(promo.qty) || 1;
                 if (promo.courses?.length) {
                   for (const sub of promo.courses) {
-                    const subProds = sub.products?.length
-                      ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
-                      : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
+                    // V42 (2026-05-07): route through buildPromotionSubCourseProducts
+                    // so sub.qty (course-instance multiplier) is applied. Pre-V42
+                    // this site only multiplied by pQty, dropping sub.qty.
+                    const subProds = buildPromotionSubCourseProducts(sub, pQty, { fallbackName: sub.name || promo.name });
                     await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId });
                   }
                 } else {
@@ -2699,9 +2715,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     const pQty = Number(promo.qty) || 1;
                     if (promo.courses?.length) {
                       for (const sub of promo.courses) {
-                        const subProds = sub.products?.length
-                          ? sub.products.map(p => ({ ...p, qty: (Number(p.qty) || 1) * pQty }))
-                          : [{ name: sub.name || promo.name, qty: pQty, unit: sub.unit || 'ครั้ง' }];
+                        // V42 (2026-05-07): see auto-sale-create site above.
+                        const subProds = buildPromotionSubCourseProducts(sub, pQty, { fallbackName: sub.name || promo.name });
                         await assignCourseToCustomer(customerId, { name: sub.name || promo.name, products: subProds, source: 'treatment', parentName: `โปรโมชัน: ${promo.name}`, linkedSaleId: createRes.saleId, linkedTreatmentId: linkedTreatmentId2 });
                       }
                     } else {
