@@ -7,12 +7,35 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-07 EOD — V40 trial-fresh + V41 cross-branch-import marketing extension + V42 promo bundle qty fix (in 1 mega session).
+- **Date last updated**: 2026-05-08 EOD — V42-V48 class-of-bug 7-round saga ARCHITECTURALLY CLOSED
 - **Branch**: `master`
-- **Last commit**: `bf78779` — fix(V42): promotion bundle qty multiplier dropped at 4 writer sites
-- **Test count**: **269 PASS** (V42 + Phase 17.1 focused) · full suite TBD next session
+- **Last commit**: `1442301` — fix+test(V48): Rule O universal extension + prof-grade explorative test bank
+- **Test count**: **366 V34-V48 unit + 698 e2e verification points GREEN** (166 comprehensive prof + 70 V44 + 39 V43 + 29 V46 + 28 V47)
 - **Build**: clean
-- **Deploy state**: **PRODUCTION = `c92f924`** (V42 fix at `bf78779` is committed but **NOT deployed**). Marketing extension (Phase 17.1) is LIVE. V42 needs `vercel --prod` + user re-auth (V18).
+- **Deploy state**: **PRODUCTION = `c92f924`** (V42 + V43 + V44 + V45 + V46 + V47 + V48 ALL committed but **NOT deployed**). 7 V-entries pending one combined `vercel --prod` (V18 — needs explicit "deploy" auth THIS turn).
+- **Iron-clad rule added**: Rule O — productId is THE only identity for stock; productName MUST be live-resolved at write time. AV20-AV26 invariant set COMPLETE.
+- **Migrations applied on prod**: V43 (3 customer.courses[i] entries restamped on LC-26000006) + V46 (2 poisoned batches restamped) + audit docs in `be_admin_audit`.
+
+### Session 2026-05-08 EOD — V42-V48 class-of-bug 7-round saga ARCHITECTURALLY CLOSED
+
+User-driven 7-round mega-session resolving the entire skip-stock-deduction + display-layer-multi-reader-sweep + canonical-mapper class-of-bug. Each round triggered by user repro of remaining symptom; Phase 4.5 architectural review unlocked V46 + V48 universal Rule O extension.
+
+**V-entries shipped**:
+- V42 promo bundle qty multiplier (4 writer sites)
+- V43 skipStockDeduction overlay + direct-product flag + Rule M migration (3 entries on LC-26000006)
+- V44 course-buy product-name source fix (TFP canonical mapper adoption)
+- V45 dedup-shadow OR-merge at beCourseToMasterShape (14 affected courses)
+- V46 Rule O — productName live-resolve at movement write (3 _deductOneItem sites + 2 poisoned batches migrated)
+- V47 CustomerDetailView course grouping (NEW class: display-layer multi-reader-sweep)
+- V48 Rule O UNIVERSAL extension to ALL stock writers (7+ sites) + 59-test prof-grade bank covering 10 categories
+
+**Cumulative**: 366/366 V34-V48 unit + 698 e2e verification points + AV20-AV26 invariant set complete.
+
+**Outstanding**:
+- 🚨 V42-V48 `vercel --prod` (V18 — explicit "deploy" THIS turn)
+- H-bis ProClinic full strip + hard-gate Firebase claim + /audit-all (deferred)
+
+Detail: `.agents/sessions/2026-05-08-v42-to-v48-class-of-bug-saga.md`
 
 ### Session 2026-05-07 EOD — V40 trial-fresh + V41 marketing + V42 promo-qty fix
 
@@ -604,28 +627,26 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-07 EOD continuation.
+Resume LoverClinic — continue from 2026-05-08 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master = 496a15c, prod = e36811f — 5 commits ahead)
-3. .agents/active.md (6757 tests pass)
-4. .claude/rules/00-session-start.md (iron-clad A-N + V-summary)
-5. .agents/sessions/2026-05-07-v38-v39-e2e-v40-spec.md
+2. SESSION_HANDOFF.md (master=1442301, prod=c92f924 — 7 commits ahead)
+3. .agents/active.md (366 V34-V48 unit + 698 e2e verification points GREEN)
+4. .claude/rules/00-session-start.md (iron-clad A-O + V-summary, NEW Rule O)
+5. .agents/sessions/2026-05-08-v42-to-v48-class-of-bug-saga.md
 
-Status: master = 496a15c (V38 + V39 + V38-followup mass-sweep + comprehensive e2e + V40 design spec). 6757/6757 tests pass, build clean. prod = e36811f (V38 onwards NOT deployed; master 5 commits ahead). 479 production zombies fixed via Rule M backfill. V40 spec approved (6 Q&A locked); implementation plan ready at C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md (~30 tasks, 7 phases).
+Status: master=1442301 (V42-V48 7-round saga). prod=c92f924 (NOT deployed; master 7 commits ahead). Class-of-bug skip-stock-deduction + display-layer multi-reader-sweep + canonical-mapper drift ARCHITECTURALLY CLOSED via AV20-AV26 invariant set. 2 poisoned prod batches migrated (V46) + 3 customer.courses[i] entries restamped (V43). NEW iron-clad Rule O: productId is THE only identity for stock; productName MUST be live-resolved at write time. 59-test prof-grade bank in V48 catches undiscovered bugs via property-based + cross-branch + adversarial + class-of-bug universal sweep.
 
-Next action: idle. Awaiting user directive — likely V40 implementation OR deploy.
+Next action: idle. Awaiting user — most likely "deploy" for V42-V48 combined.
 
 Outstanding (user-triggered):
-- V40 implementation (subagent-driven recommended per plan; 7 phases ~30 tasks)
-- Deploy 5 commits (V38+V39+V38-followup+e2e+V40-spec) to Vercel — say "deploy" THIS turn
-- 🚨 H-bis ProClinic full strip
+- 🚨 V42-V48 `vercel --prod` (V18 — explicit "deploy" THIS turn)
+- H-bis ProClinic full strip (deferred from prior sessions)
 - Hard-gate Firebase custom claim (deploy-coupled)
 - /audit-all pre-release pass
-- BackendDashboard nav restructure (deferred)
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + AV17 (mass-sweep complete); H-quater; Rule M data-ops; Rule N targeted-test-only; V37 (NEVER `git add -A`); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); V15 combined vercel + firestore:rules with Probe-Deploy-Probe (artifacts/{APP_ID}/public/data/ prefix per V15 #22); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + AV17; Rule M data-ops; Rule N targeted-test-only; **NEW Rule O — productId-only-identity for stock + productName live-resolve at write**; V37 (NEVER `git add -A`); NO real-action clicks in preview_eval against prod (TEST-prefixed fixtures only).
 
 /session-start
 ```
