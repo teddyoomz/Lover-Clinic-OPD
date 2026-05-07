@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-07 EOD continuation — V38 + V39 + V38-followup + e2e + V40 spec (5 commits)"
-status: "master=496a15c · 6757/6757 tests pass · build clean · prod=e36811f (V38-only LIVE — V39+spec NOT deployed)"
+updated_at: "2026-05-08 V40 SHIPPED — 31 commits + 1 critical bug found+fixed + live prod e2e PASS"
+status: "master=ccc677d · 6859/6859 tests pass · build clean · prod=e36811f (V38..V40 NOT deployed — 9 commits behind)"
 branch: "master"
-last_commit: "496a15c"
-tests: 6757
+last_commit: "ccc677d"
+tests: 6859
 production_url: "https://lover-clinic-app.vercel.app (LIVE at e36811f)"
 production_commit: "e36811f"
 firestore_rules_version: 27
@@ -12,31 +12,42 @@ firestore_rules_version: 27
 # Active Context
 
 ## State
-- master = `496a15c` · 6757/6757 tests pass · build clean
-- 5 commits this session ahead of prod (e36811f):
-  - `4f008a3` V38 — list spread-order V12 fix (listProducts + listCourses)
-  - `d964b14` V39 — migrate-button branchId stamping (promotions/coupons/vouchers/df_staff_rates) + V38 source-patch (cross-branch-import adapters) + 70 button-coverage tests + AV18
-  - `ee40256` V38-followup — mass-sweep 85+ spread-order swaps across 17 files (AV17 complete)
-  - `b33f369` E2E — 19 migrate buttons × 30 fixtures × 122/122 assertions on real prod Firestore
-  - `496a15c` V40 spec — branch backup/restore/make-fresh design doc (374 lines)
-- Production data fixed via Rule M backfills (479 zombies stamped พระราม 3; user deleted 5+2 V38 docs via post-fix delete)
-- V40 IMPLEMENTATION PLAN at `C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md` (~30 bite-sized tasks across 7 phases)
+- master = `ccc677d` · 6859/6859 tests pass (270 test files) · build clean
+- 9 commits ahead of prod (e36811f) — V38 spread-order fix + V39 migrate-button branchId stamp + V38-followup mass-sweep + comprehensive e2e + V40 spec + V40 implementation (this session)
+- V40 fully implemented: 23 plan tasks (Phase 1-7) + 4 bonus tasks (adversarial 38 + RTL 24 + full-sweep e2e 7 + post-bonus push)
+- 1 critical bug found + fixed during bonus review: `BranchBackupTab.jsx` was destructuring `selectedBranchId` from `useSelectedBranch()` but the real hook returns `branchId` — fix changed to rename pattern (every other consumer's pattern)
+- Live admin-SDK e2e against real prod Firestore + Storage: 7/7 PASS + cleanup verified zero orphans
 
-## What this session shipped (5 commits + 1 plan)
-- **V38** silent-no-op delete fix on พระราม 3 catalog (spread-order swap in 2 listers + Rule M backfill of 5+2 docs + AV17 audit invariant + Rule I flow-simulate)
-- **V39** migrate-button branchId stamping — 4 wrapper fns + 4 mappers patched; 7 cross-branch-import adapters + endpoint generic stamping; 70 contract tests; Rule M backfill of 479 zombies (303 products + 174 courses + 2 promotions stamped พระราม 3); AV18 audit invariant
-- **V38-followup mass-sweep** — 85+ `{id: d.id, ...d.data()}` → `{...d.data(), id: d.id}` swaps across 17 files; AV17 marked COMPLETE
-- **Comprehensive e2e** — 19 buttons × happy + adversarial × deep mapping × real prod Firestore + cleanup verified (122/122 pass)
-- **V40 design spec** — Branch Backup/Restore/Make-Fresh approved via brainstorming (6 Q&A locked); spec doc + implementation plan ready
+## V40 commit chain (31 total since baseline 464c327)
+**Phase 1 (3 helpers):** `103b904` `c2e08ec` (review fix) `febe37b` `573bf4c`
+**Phase 2 (3 endpoints + smoke + review fix):** `98c6467` `42e749f` `584ed2a` `39aa11e` `eb03311`
+**Phase 3 (storage rules + Rule B):** `c5798b3` `6852611` `fd5b43b`
+**Phase 4 (UI):** `391dcb8` `0fa38a2` `800ce3f` `f832646`
+**Phase 5 (Rule I tests + live e2e):** `291d383` `eef4238` `ccdaa0b` `19873cc`
+**Phase 6 (CLI mirrors):** `396ad6e` `18a1323` `cdf46fa`
+**Phase 7 (V40 docs + AV19):** `2ae4d59` `763d17d` `5a13d22`
+**Phase 7.4 (final verify + push):** `9449680` (test count fix)
+**Bonus (post-push, second push):** `47115fb` `35aa999` `fc76e1e` `ccc677d`
 
-Detail: `.agents/sessions/2026-05-07-v38-v39-e2e-v40-spec.md`
-
-## Next action
-Idle. Open new chat for V40 implementation (subagent-driven per plan) OR new directive.
+## Coverage
+- Helper unit tests: 25 H1-H5
+- Rule I flow-simulate: 15 FS1-FS3
+- Adversarial endpoint runtime tests: 38 (every error path + success path on all 3 endpoints)
+- UI RTL human-flow tests: 24 (BranchBackupTab + MakeFreshButton + MakeFreshModal)
+- Live admin-SDK e2e on real prod: 7 steps + 1 round-trip = 8 scenarios PASS
+- **Total V40 test count: 110 new tests + 8 live scenarios**
 
 ## Outstanding (user-triggered)
-- **V40 implementation** — 7-phase plan ready at `C:\Users\oomzp\.claude\plans\sprightly-jumping-waterfall.md`; user authorizes "go" + execution mode (subagent-driven recommended)
-- **Deploy V38 + V39 + V38-followup to Vercel** — say "deploy" to ship the 4 code commits + 1 spec to prod (currently lagging behind master by 5 commits)
+- **Deploy 9 commits to Vercel + storage:rules + firestore:rules** — say "deploy" to ship V38..V40 to prod
+  - V40 storage.rules requires `firebase deploy --only firestore:rules,storage:rules` (Phase 3.3 combined deploy bundle) — Probe-Deploy-Probe extended to 7 endpoints (V40 added admin Storage probe)
+  - vercel `--prod` for endpoints + UI
 - 🚨 H-bis ProClinic full strip (deferred from prior sessions)
 - Hard-gate Firebase custom claim (deploy-coupled, deferred)
 - /audit-all pre-release pass
+
+## Next action
+Idle. V40 is feature-complete + comprehensively tested. Awaiting:
+- "deploy" → ship V38..V40 to prod with Probe-Deploy-Probe
+- New directive
+
+Detail: `.agents/sessions/2026-05-08-v40-implementation-and-bonus-sweep.md` (to be written by /session-end)
