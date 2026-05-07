@@ -6,6 +6,7 @@ import { listCoupons, deleteCoupon } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import CouponFormModal from './CouponFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 import { thaiTodayISO } from '../../utils.js';
@@ -74,6 +75,13 @@ export default function CouponTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="coupons"
+          isDark={isDark}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Ticket}
         title="คูปอง"

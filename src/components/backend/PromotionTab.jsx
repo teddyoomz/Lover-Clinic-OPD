@@ -11,6 +11,7 @@ import { listPromotions, deletePromotion } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
 
@@ -121,6 +122,13 @@ export default function PromotionTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="promotions"
+          isDark={isDark}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Tag}
         title="โปรโมชัน"

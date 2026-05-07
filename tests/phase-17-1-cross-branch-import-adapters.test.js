@@ -5,14 +5,19 @@
 import { describe, it, expect } from 'vitest';
 import { ADAPTERS, ENTITY_TYPES, getAdapter, isKnownEntityType } from '../src/lib/crossBranchImportAdapters/index.js';
 
-const REQUIRED_KEYS = ['entityType', 'collection', 'dedupKey', 'fkRefs', 'clone', 'displayRow'];
+// V39 (2026-05-07) — canonicalIdField is now part of the universal adapter
+// contract. Must be on every adapter; the generic loop must verify it.
+const REQUIRED_KEYS = ['entityType', 'collection', 'canonicalIdField', 'dedupKey', 'fkRefs', 'clone', 'displayRow'];
 
 describe('Phase 17.1 — adapter registry', () => {
-  it('A1.1 ADAPTERS has 7 entries', () => {
-    expect(Object.keys(ADAPTERS).length).toBe(7);
+  it('A1.1 ADAPTERS has 10 entries (Phase 17.1 marketing extension)', () => {
+    expect(Object.keys(ADAPTERS).length).toBe(10);
   });
-  it('A1.2 ENTITY_TYPES contains all 7 known types', () => {
-    expect(ENTITY_TYPES.sort()).toEqual(['courses', 'df-groups', 'holidays', 'medical-instruments', 'product-groups', 'product-units', 'products'].sort());
+  it('A1.2 ENTITY_TYPES contains all 10 known types', () => {
+    expect(ENTITY_TYPES.sort()).toEqual([
+      'coupons', 'courses', 'df-groups', 'holidays', 'medical-instruments',
+      'product-groups', 'product-units', 'products', 'promotions', 'vouchers',
+    ].sort());
   });
   it('A1.3 getAdapter throws on unknown', () => {
     expect(() => getAdapter('foo')).toThrow();
@@ -24,7 +29,7 @@ describe('Phase 17.1 — adapter registry', () => {
 });
 
 describe('Phase 17.1 — adapter contract conformance', () => {
-  for (const entityType of ['products', 'product-groups', 'product-units', 'medical-instruments', 'holidays', 'courses', 'df-groups']) {
+  for (const entityType of ['products', 'product-groups', 'product-units', 'medical-instruments', 'holidays', 'courses', 'df-groups', 'promotions', 'coupons', 'vouchers']) {
     describe(entityType, () => {
       const adapter = getAdapter(entityType);
 
@@ -66,20 +71,23 @@ describe('Phase 17.1 — adapter contract conformance', () => {
           : adapter.collection === 'be_holidays' ? 'holidayId'
           : adapter.collection === 'be_courses' ? 'courseId'
           : adapter.collection === 'be_df_groups' ? 'dfGroupId'
+          : adapter.collection === 'be_promotions' ? 'promotionId'
+          : adapter.collection === 'be_coupons' ? 'couponId'
+          : adapter.collection === 'be_vouchers' ? 'voucherId'
           : 'id';
-        const sourceItem = { [idField]: 'SRC-1', name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', branchId: 'BR-source' };
+        const sourceItem = { [idField]: 'SRC-1', name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall', branchId: 'BR-source' };
         const cloned = adapter.clone(sourceItem, 'BR-target', 'admin-uid');
         expect(cloned[idField]).toBeUndefined();
       });
 
       it(`clone stamps target branchId`, () => {
-        const cloned = adapter.clone({ name: 'X', productType: 'ยา', productName: 'X', courseName: 'X' }, 'BR-target', 'admin-uid');
+        const cloned = adapter.clone({ name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall' }, 'BR-target', 'admin-uid');
         expect(cloned.branchId).toBe('BR-target');
       });
 
       it(`clone preserves createdAt + createdBy`, () => {
         const cloned = adapter.clone(
-          { name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', createdAt: '2026-01-01T00:00:00Z', createdBy: 'src-admin' },
+          { name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall', createdAt: '2026-01-01T00:00:00Z', createdBy: 'src-admin' },
           'BR-target',
           'tgt-admin'
         );
@@ -88,13 +96,13 @@ describe('Phase 17.1 — adapter contract conformance', () => {
       });
 
       it(`clone sets new updatedAt + updatedBy`, () => {
-        const cloned = adapter.clone({ name: 'X', productType: 'ยา', productName: 'X', courseName: 'X' }, 'BR-target', 'tgt-admin');
+        const cloned = adapter.clone({ name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall' }, 'BR-target', 'tgt-admin');
         expect(cloned.updatedAt).toBeDefined();
         expect(cloned.updatedBy).toBe('tgt-admin');
       });
 
       it(`displayRow returns object with primary`, () => {
-        const row = adapter.displayRow({ name: 'X', productName: 'X', productType: 'ยา', courseName: 'X' });
+        const row = adapter.displayRow({ name: 'X', productName: 'X', productType: 'ยา', courseName: 'X', promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall' });
         expect(row.primary).toBeDefined();
       });
 
@@ -152,13 +160,57 @@ describe('Phase 17.1 — entity-specific dedupKey + fkRefs', () => {
     expect(a.dedupKey({ holidayType: 'specific', name: 'X' })).toBe('specific:X');
     expect(a.dedupKey({ holidayType: 'weekly', name: 'X' })).toBe('weekly:X');
   });
+
+  it('A2.promotions dedupKey is promotion_name', () => {
+    expect(getAdapter('promotions').dedupKey({ promotion_name: 'Summer Sale' })).toBe('Summer Sale');
+  });
+
+  it('A2.promotions fkRefs collects courses[].id + products[].id', () => {
+    const refs = getAdapter('promotions').fkRefs({
+      courses: [{ id: 'C-1' }, { id: 'C-2' }],
+      products: [{ id: 'P-1' }],
+    });
+    expect(refs.length).toBe(2);
+    expect(refs.find(r => r.collection === 'be_courses').ids).toEqual(['C-1', 'C-2']);
+    expect(refs.find(r => r.collection === 'be_products').ids).toEqual(['P-1']);
+  });
+
+  it('A2.promotions fkRefs returns empty when no courses/products', () => {
+    expect(getAdapter('promotions').fkRefs({})).toEqual([]);
+  });
+
+  it('A2.coupons dedupKey is coupon_code', () => {
+    expect(getAdapter('coupons').dedupKey({ coupon_code: 'SUMMER2026' })).toBe('SUMMER2026');
+  });
+
+  it('A2.coupons clone resets branch_ids to []', () => {
+    const cloned = getAdapter('coupons').clone(
+      { coupon_code: 'X', coupon_name: 'X', branch_ids: ['28', '29', '30'] },
+      'BR-target',
+      'admin-uid'
+    );
+    expect(cloned.branch_ids).toEqual([]);
+  });
+
+  it('A2.coupons fkRefs returns empty (standalone)', () => {
+    expect(getAdapter('coupons').fkRefs({})).toEqual([]);
+  });
+
+  it('A2.vouchers dedupKey is voucher_name:platform', () => {
+    expect(getAdapter('vouchers').dedupKey({ voucher_name: 'Promo', platform: 'HDmall' })).toBe('Promo:HDmall');
+    expect(getAdapter('vouchers').dedupKey({ voucher_name: 'Promo', platform: 'GoWabi' })).toBe('Promo:GoWabi');
+  });
+
+  it('A2.vouchers fkRefs returns empty (standalone)', () => {
+    expect(getAdapter('vouchers').fkRefs({})).toEqual([]);
+  });
 });
 
 describe('Phase 17.1 — V14 anti-regression (no undefined leaves in clone output)', () => {
-  for (const entityType of ['products', 'product-groups', 'product-units', 'medical-instruments', 'holidays', 'courses', 'df-groups']) {
+  for (const entityType of ['products', 'product-groups', 'product-units', 'medical-instruments', 'holidays', 'courses', 'df-groups', 'promotions', 'coupons', 'vouchers']) {
     it(`${entityType} clone output has no undefined values`, () => {
       const cloned = getAdapter(entityType).clone(
-        { name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', holidayType: 'specific', items: [], products: [] },
+        { name: 'X', productType: 'ยา', productName: 'X', courseName: 'X', holidayType: 'specific', items: [], products: [], promotion_name: 'X', coupon_code: 'X', voucher_name: 'X', platform: 'HDmall' },
         'BR-target',
         'admin-uid'
       );

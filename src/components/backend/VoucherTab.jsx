@@ -6,6 +6,7 @@ import { listVouchers, deleteVoucher } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import VoucherFormModal from './VoucherFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
+import CrossBranchImportButton from './CrossBranchImportButton.jsx';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { VOUCHER_PLATFORMS } from '../../lib/voucherValidation.js';
 import { resolveIsDark } from '../../lib/marketingUiUtils.js';
@@ -59,7 +60,7 @@ export default function VoucherTab({ clinicSettings, theme }) {
 
   const extraFilters = (
     <select value={filterPlatform} onChange={(e) => setFilterPlatform(e.target.value)}
-      className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)]">
+      className="px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)]">
       <option value="">Platform ทั้งหมด</option>
       {VOUCHER_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
     </select>
@@ -67,6 +68,13 @@ export default function VoucherTab({ clinicSettings, theme }) {
 
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <CrossBranchImportButton
+          entityType="vouchers"
+          isDark={isDark}
+          onImported={() => reload()}
+        />
+      </div>
       <MarketingTabShell
         icon={Gift}
         title="Voucher"

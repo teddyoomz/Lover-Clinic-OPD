@@ -11,6 +11,9 @@ import medicalInstrumentsAdapter from './medical-instruments.js';
 import holidaysAdapter from './holidays.js';
 import coursesAdapter from './courses.js';
 import dfGroupsAdapter from './df-groups.js';
+import promotionsAdapter from './promotions.js';
+import couponsAdapter from './coupons.js';
+import vouchersAdapter from './vouchers.js';
 
 export const ADAPTERS = {
   'products': productsAdapter,
@@ -20,6 +23,9 @@ export const ADAPTERS = {
   'holidays': holidaysAdapter,
   'courses': coursesAdapter,
   'df-groups': dfGroupsAdapter,
+  'promotions': promotionsAdapter,
+  'coupons': couponsAdapter,
+  'vouchers': vouchersAdapter,
 };
 
 export const ENTITY_TYPES = Object.keys(ADAPTERS);

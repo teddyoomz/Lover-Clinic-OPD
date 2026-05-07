@@ -1165,7 +1165,11 @@ with:
         <option value="active">ใช้งาน</option>
         <option value="suspended">พักใช้งาน</option>
       </select>
-      <CrossBranchImportButton entityType="promotions" isDark={isDark} onImported={reload} />
+      <CrossBranchImportButton
+        entityType="promotions"
+        isDark={isDark}
+        onImported={() => reload()}
+      />
     </>
   );
 ```
@@ -1232,7 +1236,11 @@ Replace with:
         <option value="percent">% ส่วนลด</option>
         <option value="baht">บาท</option>
       </select>
-      <CrossBranchImportButton entityType="coupons" isDark={isDark} onImported={reload} />
+      <CrossBranchImportButton
+        entityType="coupons"
+        isDark={isDark}
+        onImported={() => reload()}
+      />
     </>
   );
 ```
@@ -1299,7 +1307,11 @@ Replace with:
         <option value="">Platform ทั้งหมด</option>
         {VOUCHER_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
-      <CrossBranchImportButton entityType="vouchers" isDark={isDark} onImported={reload} />
+      <CrossBranchImportButton
+        entityType="vouchers"
+        isDark={isDark}
+        onImported={() => reload()}
+      />
     </>
   );
 ```
