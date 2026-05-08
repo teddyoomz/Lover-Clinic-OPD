@@ -226,6 +226,9 @@ export const listStaffByBranch = _autoInject(() => raw.listStaffByBranch);
 export const getAllSales = _autoInject(() => raw.getAllSales);
 export const getAppointmentsByDate = _autoInjectPositional(() => raw.getAppointmentsByDate);
 export const getAppointmentsByMonth = _autoInjectPositional(() => raw.getAppointmentsByMonth);
+// V64 (2026-05-08) — date-range variant for Coming-Hub view. _autoInject is
+// the right wrapper: signature is opts-only (no positional date arg).
+export const getAppointmentsByDateRange = _autoInject(() => raw.getAppointmentsByDateRange);
 
 // Stock — branch-scoped (locationId == branchId at branch tier)
 export const listStockBatches = _autoInject(() => raw.listStockBatches);

@@ -2220,6 +2220,45 @@ export async function getAppointmentsByMonth(yearMonth, opts = {}) {
   return grouped;
 }
 
+/**
+ * V64 (2026-05-08) — Get appointments by inclusive date range.
+ *
+ * Mirrors V54 (BS-13) safe-by-default pattern used by
+ * `getAppointmentsByMonth`: when caller-supplied `branchId` is falsy AND
+ * `allBranches !== true`, resolve via `resolveSelectedBranchId()`; if STILL
+ * falsy → return [] (NEVER fall back to whole-collection). This closes the
+ * cross-branch leak class that V54 documented for the AdminDashboard
+ * Frontend queue calendar pre-V54.
+ *
+ * Returns: array of `{ id, ...data }` ordered by Firestore (caller may sort).
+ *
+ * @param {Object} opts
+ * @param {string} opts.from         — inclusive YYYY-MM-DD lower bound
+ * @param {string} opts.to           — inclusive YYYY-MM-DD upper bound
+ * @param {string} [opts.branchId]   — explicit branch override
+ * @param {boolean} [opts.allBranches] — opt-out of branch filter (cross-branch read)
+ */
+export async function getAppointmentsByDateRange({ from, to, branchId = '', allBranches = false } = {}) {
+  if (!from || !to) {
+    throw new Error('getAppointmentsByDateRange: from and to are required (YYYY-MM-DD).');
+  }
+  // V54 (BS-13) — safe-by-default: see getAppointmentsByMonth comment.
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return [];
+  const useFilter = !allBranches && effectiveBranchId;
+
+  const constraints = [
+    where('date', '>=', String(from)),
+    where('date', '<=', String(to)),
+  ];
+  if (useFilter) constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  const q = query(appointmentsCol(), ...constraints);
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 /** Get all appointments for a customer */
 export async function getCustomerAppointments(customerId) {
   const q = query(appointmentsCol(), where('customerId', '==', String(customerId)));
