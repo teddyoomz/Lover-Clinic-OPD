@@ -370,6 +370,79 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     () => (cs.openHoursSatSun?.close) || clinicSettings.clinicCloseTimeWeekend || '17:00',
     [cs.openHoursSatSun, clinicSettings.clinicCloseTimeWeekend],
   );
+
+  // V59 / 2026-05-08 — live fetch of be_staff_schedules for the picked
+  // doctor (only when admin actually picks a specific doctor; "all doctors"
+  // = null skips the fetch). Cancellation guard mirrors V55 livePractitioners
+  // pattern. Cleared when doctor changes / clears.
+  useEffect(() => {
+    if (!schedSelectedDoctor) { setSchedDoctorSchedules([]); return; }
+    let cancelled = false;
+    listStaffSchedules({ branchId: selectedBranchId, staffId: schedSelectedDoctor })
+      .then((list) => { if (!cancelled) setSchedDoctorSchedules(list || []); })
+      .catch(() => { if (!cancelled) setSchedDoctorSchedules([]); });
+    return () => { cancelled = true; };
+  }, [schedSelectedDoctor, selectedBranchId]);
+
+  // V59 / 2026-05-08 — live preview of V56 auto-closure for the picked
+  // (doctor, room) combo. Returns null when admin hasn't picked both. When
+  // both picked, returns { closedCount, totalDays, isLicensed, hasShifts,
+  // doctorName, roomName } so the modal can render an inline summary.
+  // isLicensed = "picked room IS in doctor's roomIds for at least one
+  // shift in the months range"; closedCount > 0 means the saved doc will
+  // auto-close those dates.
+  const v59Preview = useMemo(() => {
+    if (!schedSelectedDoctor || !schedSelectedRoom) return null;
+    // Build datesInRange covering all months in the link window
+    const datesInRange = [];
+    const [sy, sm] = schedStartMonth.split('-').map(Number);
+    for (let i = 0; i < schedAdvanceMonths; i++) {
+      const d = new Date(sy, sm - 1 + i, 1);
+      const mo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const [yMo, mMo] = mo.split('-').map(Number);
+      const daysInMo = new Date(yMo, mMo, 0).getDate();
+      for (let dd = 1; dd <= daysInMo; dd++) {
+        datesInRange.push(`${mo}-${String(dd).padStart(2, '0')}`);
+      }
+    }
+    const closed = derivedAutoClosedDates({
+      doctorId: schedSelectedDoctor,
+      roomId: schedSelectedRoom,
+      allEntries: schedDoctorSchedules,
+      datesISO: datesInRange,
+    });
+    // Has the doctor any shift entry at all?
+    const hasShifts = Array.isArray(schedDoctorSchedules) && schedDoctorSchedules.some(
+      (s) => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday',
+    );
+    // Is the picked room in any shift's roomIds?
+    const isLicensed = Array.isArray(schedDoctorSchedules) && schedDoctorSchedules.some((s) => {
+      if (!Array.isArray(s.roomIds) || s.roomIds.length === 0) return false;
+      return s.roomIds.map(String).includes(String(schedSelectedRoom));
+    });
+    const doctorName = (practitioners || []).find(
+      (p) => String(p.id) === String(schedSelectedDoctor),
+    )?.name || '';
+    const roomName = (branchExamRooms || []).find(
+      (r) => String(r.id) === String(schedSelectedRoom),
+    )?.name || '';
+    return {
+      closedCount: closed.length,
+      totalDays: datesInRange.length,
+      isLicensed,
+      hasShifts,
+      doctorName,
+      roomName,
+    };
+  }, [
+    schedSelectedDoctor,
+    schedSelectedRoom,
+    schedStartMonth,
+    schedAdvanceMonths,
+    schedDoctorSchedules,
+    practitioners,
+    branchExamRooms,
+  ]);
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -611,6 +684,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedNoDoctorRequired, setSchedNoDoctorRequired] = useState(false);
   const [schedSelectedDoctor, setSchedSelectedDoctor] = useState(null); // practitioner id for per-doctor schedule
   const [schedSelectedRoom, setSchedSelectedRoom] = useState(null); // room id (string) — filters bookedSlots by roomId
+  // V59 / 2026-05-08 — live preview state for V56 auto-closure feedback.
+  // When admin picks a (doctor, room) combo, we fetch the doctor's
+  // be_staff_schedules + compute auto-closures via derivedAutoClosedDates
+  // so the modal can render an inline summary BEFORE save. Closes the
+  // V56 admin-trust gap ("ไม่แน่ใจว่าจะแสดงตารางหมอ ห้องที่เข้าตรวจ
+  // สัมพันธ์กับลิ้งที่ส่งให้ลูกค้าไหม").
+  const [schedDoctorSchedules, setSchedDoctorSchedules] = useState([]);
   // Only relevant for ไม่พบแพทย์ links — whether to render "หมอว่าง / หมอไม่ว่าง"
   // info badge on each slot. Default OFF per user 2026-04-19.
   const [schedShowDoctorStatus, setSchedShowDoctorStatus] = useState(false);
@@ -4287,6 +4367,48 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     className="w-4 h-4 rounded border-[var(--bd)] accent-sky-500" />
                   <span className="text-xs text-[var(--tx-body)]">แสดงสถานะ "หมอว่าง/ไม่ว่าง" ให้ลูกค้าเห็น</span>
                 </label>
+              )}
+
+              {/* V59 / 2026-05-08 — V56 auto-closure live preview. Renders
+                  ONLY when admin picked both a specific doctor and a
+                  specific room; gives visible confidence that the link
+                  will reflect doctor+room schedule correctness. Closes
+                  the V56 admin-trust gap. */}
+              {v59Preview && (
+                v59Preview.isLicensed ? (
+                  <div className="rounded-lg bg-emerald-900/20 border border-emerald-800 px-3 py-2"
+                    data-testid="v59-preview-licensed">
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">
+                      ✓ <span className="font-bold">ห้อง "{v59Preview.roomName}"</span> อยู่ในรายการที่ <span className="font-bold">{v59Preview.doctorName}</span> เข้าตรวจ
+                      {v59Preview.closedCount > 0 ? (
+                        <> — บางวันที่หมอเข้าตรวจห้องอื่น: <span className="font-bold">ปิดอัตโนมัติ {v59Preview.closedCount} วัน</span></>
+                      ) : (
+                        <> — ลิงก์จะแสดงตามตารางหมอจริงทุกวัน</>
+                      )}
+                    </p>
+                  </div>
+                ) : v59Preview.hasShifts ? (
+                  <div className="rounded-lg bg-amber-900/20 border border-amber-800 px-3 py-2"
+                    data-testid="v59-preview-mismatch">
+                    <p className="text-[11px] text-amber-300 leading-relaxed">
+                      ⚠ <span className="font-bold">ห้อง "{v59Preview.roomName}"</span> ไม่อยู่ในรายการที่ <span className="font-bold">{v59Preview.doctorName}</span> เข้าตรวจ
+                      {v59Preview.closedCount > 0 && (
+                        <> — ลูกค้าจะเห็น <span className="font-bold">"ปิด" {v59Preview.closedCount} วัน</span> (วันที่หมอเข้าห้องอื่น)</>
+                      )}
+                    </p>
+                    <p className="text-[10px] text-amber-200/70 mt-1">
+                      💡 แนะนำให้แก้ไขห้องที่หมอเข้าตรวจใน tab=doctor-schedules ก่อน หรือเลือกห้องอื่น
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] px-3 py-2"
+                    data-testid="v59-preview-no-shifts">
+                    <p className="text-[11px] text-[var(--tx-muted)] leading-relaxed">
+                      ⓘ <span className="font-bold">{v59Preview.doctorName}</span> ยังไม่มีตารางทำงานในสาขานี้ — เพิ่มที่{' '}
+                      <a href="?backend=1&tab=doctor-schedules" className="underline hover:text-[var(--tx-body)]">tab=doctor-schedules</a>
+                    </p>
+                  </div>
+                )
               )}
 
               {schedStartMonth === thaiYearMonth() && (
