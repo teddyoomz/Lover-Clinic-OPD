@@ -88,7 +88,14 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 // branch clinics. BranchProvider already at App.jsx (Phase 17.2) so this
 // component picks up the per-user-keyed selectedBranchId immediately.
 import BranchSelector from '../components/backend/BranchSelector.jsx';
-import { useSelectedBranch } from '../lib/BranchContext.jsx';
+// V55/BS-14 (2026-05-08) — useEffectiveClinicSettings merges per-branch
+// settings (V51 openHoursMonFri/SatSun + chatHours*) over global cs. The
+// schedule-link modal's saved doc + slot-build derivations now use these
+// per-branch hours so customer links carry the SELECTED branch's open hours
+// instead of the legacy global ones. User directive (verbatim 2026-05-08):
+// "ทำให้ลิ้งค์ตารางที่ส่ง สัมพันธ์กับหมอที่เข้างานจริง สัมพันธ์กับห้องตรวจนั้นๆ
+//  คือใช้ได้จริงและแสดงข้อมูลจริงๆในทุกๆการเลือกใน modal".
+import { useSelectedBranch, useEffectiveClinicSettings } from '../lib/BranchContext.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
@@ -331,7 +338,34 @@ export function mapDepositPayloadToBe(dep, customerId, customerHN, patient) {
 }
 
 export default function AdminDashboard({ db, appId, user, auth, viewingSession, setViewingSession, setPrintMode, onSimulateScan, clinicSettings = {}, theme, setTheme }) {
-  const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
+  // V55/BS-14 (2026-05-08) — merge order: DEFAULT_CLINIC_SETTINGS (safety
+  // floor) → clinicSettings prop (global Firestore doc) → per-branch overrides
+  // (V51 openHoursMonFri/SatSun, chatHours, address, phone, taxId, etc).
+  // Pre-V55 this was just default + global; V51 per-branch overrides leaked
+  // past the schedule-link modal because cs wasn't branch-merged here.
+  const cs = useEffectiveClinicSettings({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
+  // V55/BS-14 — per-branch clinic open hours helpers. Derives from V51
+  // openHoursMonFri/SatSun (per-branch); falls back to legacy global
+  // clinicOpenTime/Close (cs spread) then to '10:00'/'19:00' literal floor.
+  // Used everywhere the schedule-link modal + slot generators previously
+  // read clinicSettings.{clinicOpenTime,...} so the SELECTED BRANCH's hours
+  // drive every slot-build + saved-doc stamp.
+  const monFriOpen = useMemo(
+    () => (cs.openHoursMonFri?.open) || clinicSettings.clinicOpenTime || '10:00',
+    [cs.openHoursMonFri, clinicSettings.clinicOpenTime],
+  );
+  const monFriClose = useMemo(
+    () => (cs.openHoursMonFri?.close) || clinicSettings.clinicCloseTime || '19:00',
+    [cs.openHoursMonFri, clinicSettings.clinicCloseTime],
+  );
+  const satSunOpen = useMemo(
+    () => (cs.openHoursSatSun?.open) || clinicSettings.clinicOpenTimeWeekend || '10:00',
+    [cs.openHoursSatSun, clinicSettings.clinicOpenTimeWeekend],
+  );
+  const satSunClose = useMemo(
+    () => (cs.openHoursSatSun?.close) || clinicSettings.clinicCloseTimeWeekend || '17:00',
+    [cs.openHoursSatSun, clinicSettings.clinicCloseTimeWeekend],
+  );
   const ac = cs.accentColor;
   const acRgb = hexToRgb(ac);
   const isDark = theme === 'dark' || (theme === 'auto' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -352,22 +386,28 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // V41 (2026-05-08) — opt-in for past-record name resolution in the
         // practitioners panel. Filter isHidden so hidden persons don't appear
         // as selectable options. AV20.
+        // V55/BS-14 (2026-05-08) — additionally filter by selectedBranchId
+        // via filterDoctorsByBranch / filterStaffByBranch (mirror of the
+        // Phase 22.0b fetchDepositOptions pattern at L1830-1838) so the
+        // schedule-link modal's "เลือกแพทย์" dropdown shows ONLY doctors who
+        // actually work at the selected branch. selectedBranchId in deps so
+        // the practitioners list re-fetches on branch switch.
         const [doctors, staff] = await Promise.all([
           listDoctors({ includeHidden: true }),
           listStaff({ includeHidden: true }),
         ]);
         if (cancelled) return;
-        const docs = (doctors || [])
+        const docs = filterDoctorsByBranch(doctors || [], selectedBranchId)
           .filter(d => d.status !== 'พักใช้งาน' && !d.isHidden)
           .map(d => ({ id: d.id, name: d.name, role: 'doctor' }));
-        const assts = (staff || [])
+        const assts = filterStaffByBranch(staff || [], selectedBranchId)
           .filter(s => s.status !== 'พักใช้งาน' && !s.isHidden)
           .map(s => ({ id: s.id, name: s.name, role: 'assistant' }));
         setLivePractitioners([...docs, ...assts]);
       } catch (_) { /* silent — fallback to clinicSettings */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedBranchId]);
   const practitioners = useMemo(() => {
     if (livePractitioners) return livePractitioners;
     // Fallback: dedup clinicSettings + drop hidden
@@ -379,6 +419,33 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       seen.add(key); return true;
     });
   }, [livePractitioners, clinicSettings.practitioners]);
+  // V55/BS-14 (2026-05-08) — branch-scoped exam rooms via Phase 18.0
+  // be_exam_rooms collection. Replaces 4 legacy `clinicSettings.rooms`
+  // reads in (a) updateActiveSchedules doctorRoomIds Set, (b)
+  // handleGenScheduleLink doctorRoomIds Set, (c) selectedRoomName lookup,
+  // (d) modal render shownRooms. Re-fetches on branch switch via
+  // selectedBranchId in deps. Mirror of AppointmentFormModal:361 +
+  // AppointmentCalendarView:391 + DepositPanel:230 + fetchDepositOptions:1833.
+  // Maps be_exam_rooms.kind ('doctor'|'staff') → legacy role for callsite
+  // parity; preserves kind for forward compat.
+  const [branchExamRooms, setBranchExamRooms] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rooms = await listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' });
+        if (cancelled) return;
+        const mapped = (rooms || []).map(r => ({
+          id: r.id,
+          name: r.name,
+          role: r.kind === 'doctor' ? 'doctor' : 'staff',
+          kind: r.kind,
+        }));
+        setBranchExamRooms(mapped);
+      } catch (_) { if (!cancelled) setBranchExamRooms([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedBranchId]);
   const [sessions, setSessions] = useState([]);
   const [formTemplates, setFormTemplates] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -555,6 +622,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [schedSlotEditing, setSchedSlotEditing] = useState(false);
   const schedCalendarBackup = useRef(null); // backup for cancel
   const schedSlotBackup = useRef(null); // backup for cancel
+
+  // V55/BS-14 (2026-05-08) — when branch switches, the per-branch
+  // practitioners/rooms lists re-fetch (effects above key on selectedBranchId).
+  // If the previously-picked schedSelectedDoctor or schedSelectedRoom isn't
+  // in the new branch's set, reset to null so the modal dropdown reflects
+  // a valid selection. Without this reset the saved schedule-link doc
+  // would carry an ID that doesn't exist in the chosen branch.
+  useEffect(() => {
+    if (!livePractitioners || schedSelectedDoctor == null) return;
+    const found = livePractitioners.some(p => String(p.id) === String(schedSelectedDoctor));
+    if (!found) setSchedSelectedDoctor(null);
+  }, [livePractitioners, schedSelectedDoctor]);
+  useEffect(() => {
+    if (!Array.isArray(branchExamRooms) || schedSelectedRoom == null) return;
+    const found = branchExamRooms.some(r => String(r.id) === String(schedSelectedRoom));
+    if (!found) setSchedSelectedRoom(null);
+  }, [branchExamRooms, schedSelectedRoom]);
 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
@@ -914,7 +998,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // Admin-config sets used by the filter helpers (current, not frozen per-doc).
       const doctorIds = new Set(practitioners.filter(p => p.role === 'doctor').map(p => String(p.id)));
       const assistantIds = new Set(practitioners.filter(p => p.role === 'assistant').map(p => String(p.id)));
-      const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
+      // V55/BS-14 (2026-05-08) — be_exam_rooms branch-scoped (Phase 18.0)
+      // replaces legacy global clinicSettings.rooms. doctorRoomIds is the
+      // set of "ห้องแพทย์" room IDs in the SELECTED branch only.
+      const doctorRoomIds = new Set(branchExamRooms.filter(r => r.role === 'doctor').map(r => String(r.id)));
 
       // Phase 20.0 Task 1 — read be_appointments (canonical) instead of
       // pc_appointments mirror. getAppointmentsByMonth returns { [date]: [...] }
@@ -1177,9 +1264,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const [yy, mm, dd] = (dateStr || '').split('-').map(Number);
     const dow = new Date(Date.UTC(yy, (mm || 1) - 1, dd || 1)).getUTCDay();
     const isWknd = dow === 0 || dow === 6;
+    // V55/BS-14 — default doctor entry hours per-branch (= clinic open hours
+    // per branch). Admin per-day override via schedCustomDoctorHours still
+    // takes precedence (handled at the top of getDoctorRangesForDate).
     return [{
-      start: isWknd ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
-      end: isWknd ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00'),
+      start: isWknd ? satSunOpen : monFriOpen,
+      end: isWknd ? satSunClose : monFriClose,
     }];
   };
   // Legacy compat: return first range (used in display)
@@ -1218,8 +1308,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const [yy, mm, dd] = (dateStr || '').split('-').map(Number);
       const dow = new Date(Date.UTC(yy, (mm || 1) - 1, dd || 1)).getUTCDay();
       const isWknd = dow === 0 || dow === 6;
-      const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
-      const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+      // V55/BS-14 — clinic open hours per-branch (V51 openHoursMonFri/SatSun).
+      const openT = isWknd ? satSunOpen : monFriOpen;
+      const closeT = isWknd ? satSunClose : monFriClose;
       const allSlots = [];
       let cur = toMin(openT);
       const endMin = toMin(closeT);
@@ -1245,9 +1336,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // TZ-invariant weekday (UTC-parse).
         const [yy2, mm2, dd2] = (dateStr || '').split('-').map(Number);
         const w = [0, 6].includes(new Date(Date.UTC(yy2, (mm2 || 1) - 1, dd2 || 1)).getUTCDay());
-        const defEnd = w ? (clinicSettings.doctorEndTimeWeekend || clinicSettings.doctorEndTime || '19:00') : (clinicSettings.doctorEndTime || '19:00');
+        // V55/BS-14 — default doctor hours per-branch (= clinic open hours).
+        const defEnd = w ? satSunClose : monFriClose;
         return [{
-          start: w ? (clinicSettings.doctorStartTimeWeekend || clinicSettings.doctorStartTime || '10:00') : (clinicSettings.doctorStartTime || '10:00'),
+          start: w ? satSunOpen : monFriOpen,
           end: fromMin(toMin(defEnd) - 15),
         }];
       })();
@@ -1305,7 +1397,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // "Doctor busy" label only fires when the doctor is at their DOCTOR room
       // (per user 2026-04-19: a doctor performing Shockwave in a staff room
       // should NOT surface as "หมอไม่ว่าง" to a customer looking at an iv-drip link).
-      const doctorRoomIds = new Set((clinicSettings.rooms || []).filter(r => r.role === 'doctor').map(r => String(r.id)));
+      // V55/BS-14 (2026-05-08) — be_exam_rooms branch-scoped (Phase 18.0)
+      // replaces legacy global clinicSettings.rooms. doctorRoomIds is the
+      // set of "ห้องแพทย์" room IDs in the SELECTED branch only.
+      const doctorRoomIds = new Set(branchExamRooms.filter(r => r.role === 'doctor').map(r => String(r.id)));
       const selectedRoomStr = schedSelectedRoom ? String(schedSelectedRoom) : null;
       const filterCfg = {
         noDoctorRequired: schedNoDoctorRequired,
@@ -1320,8 +1415,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       };
       // Phase 20.0 Task 1 — read be_appointments (canonical) instead of
       // pc_appointments mirror.
+      // V55/BS-14 (2026-05-08) — pass explicit branchId opts (V52/BS-11
+      // canonical pattern + defense-in-depth on top of V54/BS-13 safe-by-
+      // default). Pre-V55 the call passed `{}` and relied on V54's
+      // resolveSelectedBranchId backstop. Explicit pass is preferred so the
+      // pre-create + post-create-resync paths use the SAME branchId source
+      // (selectedBranchId at modal-open time), preventing edge cases where
+      // resolveSelectedBranchId reads stale localStorage.
+      const preBranchOpts = selectedBranchId ? { branchId: selectedBranchId } : { allBranches: true };
       for (const mo of months) {
-        const grouped = await getAppointmentsByMonth(mo, {});
+        const grouped = await getAppointmentsByMonth(mo, preBranchOpts);
         const appts = Object.values(grouped || {}).flat();
         appts.forEach(a => {
           if (!a.date || !a.startTime || !a.endTime) return;
@@ -1351,10 +1454,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // "ลิ้งก์ตารางที่ส่งให้ลูกค้า จะต้องเป็นข้อมูลคนละสาขากัน".
         branchId: selectedBranchId || '',
         months,
-        clinicOpenTime: clinicSettings.clinicOpenTime || '10:00',
-        clinicCloseTime: clinicSettings.clinicCloseTime || '19:00',
-        clinicOpenTimeWeekend: clinicSettings.clinicOpenTimeWeekend || '10:00',
-        clinicCloseTimeWeekend: clinicSettings.clinicCloseTimeWeekend || '17:00',
+        // V55/BS-14 (2026-05-08) — saved schedule-link doc carries
+        // PER-BRANCH clinic open hours. Pre-V55 these read the legacy
+        // global clinicSettings.X — customer link from "พระราม 3" branch
+        // showed นครราชสีมา's hours. Now the saved doc reflects the
+        // branch admin actually created the link from.
+        clinicOpenTime: monFriOpen,
+        clinicCloseTime: monFriClose,
+        clinicOpenTimeWeekend: satSunOpen,
+        clinicCloseTimeWeekend: satSunClose,
         slotDurationMins: schedSlotDuration,
         noDoctorRequired: schedNoDoctorRequired,
         showFrom: schedShowFrom,
@@ -1365,15 +1473,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         doctorBookedSlots: schedNoDoctorRequired ? doctorBookedSlots : [],
         manualBlockedSlots: schedManualBlocked,
         customDoctorHours: schedCustomDoctorHours,
-        doctorStartTime: clinicSettings.doctorStartTime || '10:00',
-        doctorEndTime: clinicSettings.doctorEndTime || '19:00',
-        doctorStartTimeWeekend: clinicSettings.doctorStartTimeWeekend || '10:00',
-        doctorEndTimeWeekend: clinicSettings.doctorEndTimeWeekend || '17:00',
+        // V55/BS-14 — doctor entry hours default to per-branch clinic open
+        // hours (admin's per-day overrides via schedCustomDoctorHours
+        // are stamped separately as customDoctorHours map below). User
+        // intent: "หมอเข้าจริงๆเวลานี้" reflects the branch the link
+        // belongs to.
+        doctorStartTime: monFriOpen,
+        doctorEndTime: monFriClose,
+        doctorStartTimeWeekend: satSunOpen,
+        doctorEndTimeWeekend: satSunClose,
         selectedDoctorId: schedSelectedDoctor || null,
         selectedDoctorName: allPractitioners.find(p => p.id === schedSelectedDoctor)?.name || null,
         selectedRoomId: selectedRoomStr || null,
         selectedRoomName: selectedRoomStr
-          ? ((clinicSettings.rooms || []).find(r => String(r.id) === selectedRoomStr)?.name || null)
+          ? (branchExamRooms.find(r => String(r.id) === selectedRoomStr)?.name || null)
           : null,
         // ไม่พบแพทย์ only — whether the customer sees "หมอว่าง/ไม่ว่าง" hint.
         showDoctorStatus: schedNoDoctorRequired ? !!schedShowDoctorStatus : false,
@@ -4023,7 +4136,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const label = `${thaiMo[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
       monthOptions.push({ val, label });
     }
-    const shownRooms = (clinicSettings.rooms || []).filter(r =>
+    // V55/BS-14 (2026-05-08) — be_exam_rooms branch-scoped (Phase 18.0).
+    // Modal "เลือกห้อง" dropdown shows only rooms in the SELECTED branch
+    // matching the doctor/staff kind toggle. User reported (verbatim
+    // 2026-05-08): "modal สร้างลิ้งค์ตาราง ยังไม่ได้ดึงข้อมูลต่างๆใน modal
+    // จากสาขานั้นๆ" — pre-V55 read clinicSettings.rooms (legacy global).
+    const shownRooms = branchExamRooms.filter(r =>
       r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
     );
 
@@ -5785,8 +5903,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           const dt2 = new Date(y, m - 1, d2);
           const dow2 = dt2.getDay();
           const isWknd2 = dow2 === 0 || dow2 === 6;
-          const openT2 = isWknd2 ? (clinicSettings.clinicOpenTimeWeekend || clinicSettings.clinicOpenTime || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
-          const closeT2 = isWknd2 ? (clinicSettings.clinicCloseTimeWeekend || clinicSettings.clinicCloseTime || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+          // V55/BS-14 — appointment month-grid availability uses per-branch
+          // clinic open hours so empty-slot counts reflect the SELECTED
+          // branch (not the legacy global doc).
+          const openT2 = isWknd2 ? satSunOpen : monFriOpen;
+          const closeT2 = isWknd2 ? satSunClose : monFriClose;
           const [oH2, oM2] = openT2.split(':').map(Number);
           const [cH2, cM2] = closeT2.split(':').map(Number);
           const startMin2 = oH2 * 60 + oM2;
@@ -6452,8 +6573,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                 const bDate = new Date(schedBlockingDay);
                                 const bDow = bDate.getDay();
                                 const isWknd = bDow === 0 || bDow === 6;
-                                const openT = isWknd ? (clinicSettings.clinicOpenTimeWeekend || '10:00') : (clinicSettings.clinicOpenTime || '10:00');
-                                const closeT = isWknd ? (clinicSettings.clinicCloseTimeWeekend || '17:00') : (clinicSettings.clinicCloseTime || '19:00');
+                                // V55/BS-14 — time-slot grid for "ตั้งค่าตาราง
+                                // คลินิก" day-block UI uses per-branch
+                                // clinic open hours.
+                                const openT = isWknd ? satSunOpen : monFriOpen;
+                                const closeT = isWknd ? satSunClose : monFriClose;
                                 const slots15 = [];
                                 const [oh2, om2] = openT.split(':').map(Number);
                                 const [ch2, cm22] = closeT.split(':').map(Number);

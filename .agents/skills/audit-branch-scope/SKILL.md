@@ -1,6 +1,6 @@
 ---
 name: audit-branch-scope
-description: "Audit Branch-Scope Architecture (BSA) invariants — UI must import only from scopedDataLayer (not backendClient direct), no master_data/* reads in feature code (Rule H-quater), every branch-scoped listener wired through useBranchAwareListener, and writers preserve _resolveBranchIdForWrite stamps. Grep-checks 8 invariants and reports violations as a punch list. Use after any change to backendClient.js, scopedDataLayer.js, or BranchSelector wiring; before releases; as part of /audit-all Tier 1."
+description: "Audit Branch-Scope Architecture (BSA) invariants — UI must import only from scopedDataLayer (not backendClient direct), no master_data/* reads in feature code (Rule H-quater), every branch-scoped listener wired through useBranchAwareListener, writers preserve _resolveBranchIdForWrite stamps, report tabs respect top-right BranchSelector (BS-11), TIME_SLOTS readers derive visible slots via getVisibleTimeSlotsForDate (BS-12), raw appointment listeners safe-by-default (BS-13), schedule-link modal data sources branch-scoped (BS-14). Grep-checks 14 invariants and reports violations as a punch list. Use after any change to backendClient.js, scopedDataLayer.js, BranchSelector wiring, or AdminDashboard schedule-link modal; before releases; as part of /audit-all Tier 1."
 user-invocable: true
 argument-hint: "[--quick | --full]"
 allowed-tools: "Read, Grep, Glob, Bash"
@@ -16,7 +16,7 @@ allowed-tools: "Read, Grep, Glob, Bash"
 
 This audit guards the seams between layers. Drift = stale data showing across branches, listeners stuck on old branch, writers losing their branchId stamp.
 
-## Scope — 11 invariants (BS-1..BS-11)
+## Scope — 14 invariants (BS-1..BS-14)
 
 | ID | Rule | Pattern |
 |---|---|---|
@@ -32,10 +32,11 @@ This audit guards the seams between layers. Drift = stale data showing across br
 | **BS-11** | **Report-tab branch-refresh discipline** — every file in `src/components/backend/reports/**/*Tab.jsx` that calls a `load*` from `reportsLoaders.js` MUST either subscribe `useSelectedBranch` + pass `branchId` to loader + include `selectedBranchId` in the data-loading useEffect/useCallback deps array, OR be annotated `// audit-branch-scope: BS-11 in-page-selector` (sanctioned: `ExpenseReportTab.jsx`, `ClinicReportTab.jsx` only) OR `// audit-branch-scope: BS-11 navigation-only` (sanctioned: `ReportsHomeTab.jsx` only). V52 / 2026-05-08 | grep tabs that import reportsLoaders; verify file imports `useSelectedBranch` or has BS-11 annotation |
 | **BS-12** | **Time-axis branch-aware discipline** — every component importing `TIME_SLOTS` from `staffScheduleValidation.js` AND rendering it via `.map()` MUST also import `getVisibleTimeSlotsForDate` from `scheduleFilterUtils.js` to derive visible slots, AND read `useEffectiveClinicSettings` so the time-axis re-renders on branch switch. Sanctioned exception: `TimeSelect24.jsx` (pure 24-hour HH/MM picker for editing settings — uses local `HOURS`/`MINUTES` constants, NOT `TIME_SLOTS`, so doesn't trip this rule). V53 / 2026-05-08 | grep `TIME_SLOTS\\.map` callers; verify file also imports `getVisibleTimeSlotsForDate` |
 | **BS-13** | **Raw listener+getter safe-by-default discipline** — every raw appointment/sale getter+listener in `backendClient.js` that reads from a branch-scoped collection MUST be safe-by-default: when `branchId` opt is falsy AND `allBranches !== true` → resolve via `resolveSelectedBranchId()`. If STILL falsy → return empty (getter returns `{}` or `[]`; listener fires `onChange([])` + returns noop unsubscribe). NEVER fall back to whole-collection query unless `allBranches: true` is explicit. Safe template: `listenToScheduleByDay` (line 10572+ in backendClient.js). Sanctioned exceptions: NONE — every listener follows this pattern. V54 / 2026-05-08 | grep `getAppointmentsByMonth\|getAppointmentsByDate\|listenToAppointmentsByMonth\|listenToAppointmentsByDate` definitions; verify each contains `resolveSelectedBranchId` reference |
+| **BS-14** | **Schedule-link modal data sources branch-scoped** — AdminDashboard.jsx schedule-link modal ("สร้างลิงก์ตาราง") MUST source data per-branch: (a) `livePractitioners` filtered via `filterDoctorsByBranch + filterStaffByBranch` with `selectedBranchId` in useEffect deps; (b) exam rooms loaded via `listExamRooms({branchId, status:'ใช้งาน'})` into a `branchExamRooms` state — NOT direct `clinicSettings.rooms` reads; (c) clinic open hours via per-branch helpers (`monFriOpen/Close + satSunOpen/Close`) which derive from V51 `cs.openHoursMonFri/SatSun` (via `useEffectiveClinicSettings`); legacy `clinicSettings.{clinicOpen,clinicClose,doctorStart,doctorEnd}Time*` direct reads NOT allowed outside the V55 helper fallback chains. Defensive: `schedSelectedDoctor`/`schedSelectedRoom` reset to null on branch switch when previously-picked id isn't in new branch's set. Sanctioned exceptions: NONE — every site goes through the V55 helpers. V55 / 2026-05-08 | grep `clinicSettings\.(rooms|clinicOpenTime\|...)` in `src/pages/AdminDashboard.jsx`; verify only inside `monFriOpen/Close + satSunOpen/Close` helper memos |
 
 ## How to run
 
-1. `npm test -- --run tests/audit-branch-scope.test.js` — automated regression bank for all 8 invariants
+1. `npm test -- --run tests/audit-branch-scope.test.js` — automated regression bank for all 14 invariants
 2. For interactive investigation, run grep recipes from [patterns.md](patterns.md) and read surrounding code
 3. Decide severity per violation:
    - **PASS**: invariant holds across all paths
@@ -60,8 +61,8 @@ Add a file-header comment when a file legitimately must import directly. The aud
 
 ## Arguments
 
-- `--quick` — BS-1, BS-3, BS-4, BS-8 (4 highest-risk, most-likely-to-regress)
-- `--full` — all 8 (default; takes < 2s)
+- `--quick` — BS-1, BS-3, BS-4, BS-8, BS-14 (5 highest-risk, most-likely-to-regress)
+- `--full` — all 14 (default; takes < 2s)
 
 ## Output
 
@@ -71,7 +72,7 @@ Single markdown punch list to chat. Do NOT write to disk.
 # audit-branch-scope report — <YYYY-MM-DD HH:MM>
 
 ## Summary
-- Total invariants: 8
+- Total invariants: 14
 - ✅ PASS: <count>
 - ⚠️ WARN: <count>
 - ❌ VIOLATION: <count>

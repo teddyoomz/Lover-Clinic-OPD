@@ -7,15 +7,59 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #8 — V54 Listener safe-by-default (BS-13) — AdminDashboard branch-leak fix shipped · 7662/7662 GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #9 — V55 Schedule-link modal branch-scope (BS-14) shipped · 7735 GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V54 commit (fix(V54/BS-13): raw appointment listeners safe-by-default — AdminDashboard branch leak) — 3 commits ahead of prod (V52 + V53 + V54)
-- **Test count**: 7662/7662 + 1 skipped GREEN (full top-level + extended suite, +31 from V54). Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 + V54 NOT yet deployed). Master is 3 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
-- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52 or V53).
-- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-13** (NEW: BS-13 listener safe-by-default) + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 + V53 + V54 all read-only fixes (no data ops).
-- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 + V53 + V54 don't change rules.
+- **Last commit**: V55 commit (fix(V55/BS-14): schedule-link modal data sources branch-scoped) — 4 commits ahead of prod (V52 + V53 + V54 + V55)
+- **Test count**: 7735 GREEN (+ ~73 from V55 — 38 helper unit + 17 flow-simulate + 10 BS-14 audit + tweaks). Build clean (AdminDashboard chunk 365 KB).
+- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 + V54 + V55 NOT yet deployed). Master is 4 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, user authorizes `vercel --prod` separately.
+- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52/V53/V54/V55).
+- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-14** (NEW: BS-14 schedule-link modal data sources branch-scoped) + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings). V52 + V53 + V54 + V55 all read-only fixes (no data ops).
+- **Rule B probe list**: still 4 endpoints — V52/V53/V54/V55 don't change rules.
+
+### Session 2026-05-08 EOD #9 — V55 Schedule-link modal branch-scope (BS-14) shipped — systematic-debugging session
+
+User report (verbatim, with image of "สร้างลิงก์ตาราง" modal showing room dropdown stuck on cross-branch data):
+> "modal สร้างลิ้งค์ตาราง ยังไม่ได้ดึงข้อมูลต่างๆใน modal จากสาขานั้นๆ"
+
+User's follow-up clarifying the two-layer architecture:
+> "ทำให้ลิ้งค์ตารางที่ส่ง สัมพันธ์กับหมอที่เข้างานจริง สัมพันธ์กับห้องตรวจนั้นๆ ... แต่ว่าสำหรับการสร้างลิ้ง เมื่อนำข้อมูลจริงมาจาก backend จะต้องมาติด filter บริเวณ ตั้งค่าตารางคลินิก ทั้งการเปิดปิดวัน และเปิดปิดช่วงเวลา"
+
+= REAL data layer per-branch (doctors actually working, real exam rooms, real appointments, real clinic open hours per branch) — and admin OVERRIDES (schedClosedDays/schedManualBlocked already per-branch via Phase 22.0c) act as a "fake-busy mask" for customer-facing link.
+
+**Class-of-bug**: V12 multi-reader-sweep at AdminDashboard "Frontend" page → branch-scoped data adoption gap. Same family as V52/BS-11, V53/BS-12, V54/BS-13. Phase 22.0c covered the SAVE side (clinic_schedules.branchId stamp + schedule_prefs per-branch). Phase 22.0c did NOT cover the MODAL DATA SOURCES (doctor list + room list + clinic open hours stamped into the saved doc).
+
+**3 surface defects** (+ adjacent leaks elsewhere in AdminDashboard.jsx — same class):
+- **Bug A**: `livePractitioners` (lines 348-380) — universal `listDoctors`/`listStaff` reads NEVER filtered by branch. Fix: `filterDoctorsByBranch + filterStaffByBranch` + `selectedBranchId` in useEffect deps.
+- **Bug B**: rooms (4 sites: L917 + L1308 + L1376 + L4026) — read legacy global `clinicSettings.rooms`. Fix: NEW `branchExamRooms` state from `listExamRooms({branchId, status:'ใช้งาน'})` (Phase 18.0 canonical). Mapper: `r.kind === 'doctor' ? 'doctor' : 'staff'` → `r.role` for callsite parity.
+- **Bug C**: clinic+doctor hours (12 sites: L1181-1182 + L1221-1222 + L1248-1250 + L1354-1357 + L1368-1371 + L5788-5789 + L6455-6456) — read legacy global `clinicSettings.{clinicOpen,clinicClose,doctorStart,doctorEnd}Time*`. Fix: NEW `cs = useEffectiveClinicSettings({...DEFAULT, ...clinicSettings})` + 4 useMemo helpers (`monFriOpen/Close + satSunOpen/Close`) deriving from V51 `cs.openHoursMonFri/SatSun`. Doctor hours default = clinic open hours per branch (admin per-day overrides via `schedCustomDoctorHours` preserved).
+
+**Defensive resets** (V55 hardening):
+- When `livePractitioners` updates (branch switch refetch), if previously-picked `schedSelectedDoctor` not in new list → reset to null.
+- Same for `schedSelectedRoom` against `branchExamRooms`.
+- Pre-create `getAppointmentsByMonth(mo, preBranchOpts)` now passes EXPLICIT `{branchId: selectedBranchId}` (V52/BS-11 canonical pattern) on top of V54/BS-13 safe-by-default backstop — defense in depth.
+
+**NEW audit invariant BS-14**: every read of `clinicSettings.{rooms|clinicOpen,clinicClose,doctorStart,doctorEnd}Time*` in `src/pages/AdminDashboard.jsx` must go through V55 helpers. 10 sub-tests (BS-14.1..BS-14.10). Sanctioned exceptions: NONE — all sites go through V55 helpers (legacy `clinicSettings.X` allowed only inside the helper memos' fallback chain).
+
+**Test bank shipped** (Rule N targeted + Rule I full-flow):
+- `tests/v55-schedule-link-modal-branch-scope.test.js` — 38 helper unit + adversarial (L1-L7): mergeBranchIntoClinic + V55 hours fallback chain + be_exam_rooms.kind→role mapping + defensive reset logic + filterDoctorsByBranch backward-compat (V36 lock) + adversarial (null/undefined/Thai/numeric/string ids) + V55 source-grep markers
+- `tests/v55-schedule-link-modal-flow-simulate.test.js` — 17 Rule I full-flow (F1-F7): BranchProvider + canonical pattern → branch switch → re-fetch livePractitioners + branchExamRooms + per-branch hours + lifecycle round-trip + saved-doc shape parity
+- `tests/audit-branch-scope.test.js` extended +10 BS-14.x sub-tests
+- `audit-branch-scope` SKILL.md: 13 → 14 invariants table
+
+**Final tally**: 7662 + 1 skipped → 7735 GREEN (+~73 net). Build clean.
+
+**Methodology lessons**:
+- **Two-layer architecture is the canonical design** for customer-facing link modals — REAL data layer (per-branch from backend) × ADMIN-OVERRIDE LAYER (closedDays/manualBlocked admin can mask real-free as fake-busy). Override layer can ONLY hide availability — never claim fake-free for real-busy (would create double-booking).
+- **AdminDashboard.jsx Frontend page lagged BSA adoption** because it predates per-branch architecture (Phase 1-7) and was incrementally retrofitted (V51/V53/V54). Each retrofit closed one surface but left others. BS-14 closes the schedule-link modal surface permanently.
+- **Class-of-bug expansion at PAGE LEVEL** — V52/BS-11 was reportsLoaders, V53/BS-12 was TIME_SLOTS, V54/BS-13 was raw listeners, V55/BS-14 is AdminDashboard's clinicSettings.X reads. Each at a different audit boundary; all part of the same V12 multi-reader-sweep family.
+- **Defensive resets bridge state-vs-fresh-data** when state outlives the data source — e.g. picking a doctor in branch A then switching to B can leave a stale `schedSelectedDoctor` ID. Without auto-reset, saved doc carries cross-branch ghost ID.
+
+**Outstanding**: combined `vercel --prod` for V52 + V53 + V54 + V55 (4 commits ahead of prod; user-authorized only).
+
+Detail: V55 V-entry in `.claude/rules/v-log-archive.md`.
+
+
 
 ### Session 2026-05-08 EOD #8 — V54 Listener safe-by-default (BS-13) shipped — systematic-debugging session
 

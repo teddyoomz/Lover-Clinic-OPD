@@ -646,3 +646,172 @@ describe('BS-13 — raw listener+getter safe-by-default (V54)', () => {
     expect(c).toMatch(/\{\s*branchId:\s*selectedBranchId\s*\}/);
   });
 });
+
+// ─── BS-14 — Schedule-link modal data sources branch-scoped (V55, 2026-05-08) ──
+//
+// AdminDashboard.jsx schedule-link modal ("สร้างลิงก์ตาราง") MUST source data
+// per-branch:
+//   (a) livePractitioners filtered via filterDoctorsByBranch +
+//       filterStaffByBranch with selectedBranchId in useEffect deps
+//   (b) Exam rooms loaded via listExamRooms({branchId, status:'ใช้งาน'}) into
+//       a branchExamRooms state (NOT clinicSettings.rooms direct read)
+//   (c) Clinic open hours read via per-branch helpers (monFriOpen/Close +
+//       satSunOpen/Close) which derive from V51 cs.openHoursMonFri/SatSun;
+//       legacy clinicSettings.{clinicOpenTime,clinicCloseTime,...} direct
+//       reads NOT allowed outside the helper fallback chains.
+//
+// User report (verbatim 2026-05-08): "modal สร้างลิ้งค์ตาราง ยังไม่ได้ดึง
+// ข้อมูลต่างๆใน modal จากสาขานั้นๆ".
+//
+// Class-of-bug: V12 multi-reader-sweep at the AdminDashboard "Frontend"
+// page → branch-scoped data adoption gap. Same family as BS-11/BS-12/BS-13.
+
+describe('BS-14 — schedule-link modal branch-scope (V55)', () => {
+  const adminDashSrc = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+
+  it('BS-14.1 useEffectiveClinicSettings imported from BranchContext', () => {
+    expect(adminDashSrc).toMatch(
+      /import\s*\{[^}]*useEffectiveClinicSettings[^}]*\}\s*from\s*['"]\.\.\/lib\/BranchContext\.jsx['"]/,
+    );
+  });
+
+  it('BS-14.2 cs is computed via useEffectiveClinicSettings (NOT raw default-merge)', () => {
+    // Pre-V55: const cs = { ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings };
+    // Post-V55: const cs = useEffectiveClinicSettings({ ...DEFAULT_CLINIC_SETTINGS, ...clinicSettings });
+    expect(adminDashSrc).toMatch(
+      /const\s+cs\s*=\s*useEffectiveClinicSettings\s*\(/,
+    );
+    // Anti-regression: legacy bare-merge pattern must NOT appear (would mean
+    // cs lost the branch-merge layer).
+    const bareMerge = /const\s+cs\s*=\s*\{\s*\.\.\.DEFAULT_CLINIC_SETTINGS\s*,\s*\.\.\.clinicSettings\s*\}\s*;/;
+    expect(adminDashSrc).not.toMatch(bareMerge);
+  });
+
+  it('BS-14.3 monFriOpen/monFriClose/satSunOpen/satSunClose helpers exist with proper deps', () => {
+    // Each helper uses useMemo + cs.openHoursMonFri/SatSun + legacy fallback
+    expect(adminDashSrc).toMatch(/const\s+monFriOpen\s*=\s*useMemo\s*\(/);
+    expect(adminDashSrc).toMatch(/const\s+monFriClose\s*=\s*useMemo\s*\(/);
+    expect(adminDashSrc).toMatch(/const\s+satSunOpen\s*=\s*useMemo\s*\(/);
+    expect(adminDashSrc).toMatch(/const\s+satSunClose\s*=\s*useMemo\s*\(/);
+    // Helpers must read from cs.openHoursMonFri / cs.openHoursSatSun
+    expect(adminDashSrc).toMatch(/cs\.openHoursMonFri\?\.\s*open/);
+    expect(adminDashSrc).toMatch(/cs\.openHoursMonFri\?\.\s*close/);
+    expect(adminDashSrc).toMatch(/cs\.openHoursSatSun\?\.\s*open/);
+    expect(adminDashSrc).toMatch(/cs\.openHoursSatSun\?\.\s*close/);
+  });
+
+  it('BS-14.4 livePractitioners useEffect calls filterDoctorsByBranch + filterStaffByBranch', () => {
+    // Locate the livePractitioners-fetching useEffect
+    const effectMatch = adminDashSrc.match(
+      /useEffect\s*\(\s*\(\)\s*=>\s*\{[\s\S]{0,2000}?listDoctors\(\s*\{\s*includeHidden:\s*true\s*\}\s*\)[\s\S]{0,1500}?setLivePractitioners[\s\S]{0,500}?\}\s*,\s*\[selectedBranchId\]\s*\)/,
+    );
+    expect(effectMatch, 'livePractitioners useEffect with filterDoctorsByBranch + selectedBranchId deps not found').not.toBeNull();
+    expect(effectMatch[0]).toMatch(/filterDoctorsByBranch\(/);
+    expect(effectMatch[0]).toMatch(/filterStaffByBranch\(/);
+    expect(effectMatch[0]).toMatch(/selectedBranchId/);
+  });
+
+  it('BS-14.5 branchExamRooms state with listExamRooms branch-scoped fetch', () => {
+    // useState declaration
+    expect(adminDashSrc).toMatch(/const\s*\[\s*branchExamRooms\s*,\s*setBranchExamRooms\s*\]\s*=\s*useState\(/);
+    // Fetch with branchId + status filter, deps include selectedBranchId
+    expect(adminDashSrc).toMatch(
+      /listExamRooms\(\s*\{\s*branchId:\s*selectedBranchId\s*,\s*status:\s*['"]ใช้งาน['"]\s*\}\s*\)/,
+    );
+    // Effect deps include selectedBranchId
+    const effectBlock = adminDashSrc.match(/setBranchExamRooms[\s\S]{0,500}?\}\s*,\s*\[selectedBranchId\]\s*\)/);
+    expect(effectBlock, 'branchExamRooms useEffect missing selectedBranchId deps').not.toBeNull();
+  });
+
+  it('BS-14.6 NO direct clinicSettings.rooms reads (anti-regression — must use branchExamRooms)', () => {
+    // Find every `clinicSettings.rooms` reference
+    const lines = adminDashSrc.split('\n');
+    const violations = [];
+    lines.forEach((line, idx) => {
+      // Skip pure comment lines (// or *) — comments documenting V55 history are OK
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*')) return;
+      if (/clinicSettings\.rooms/.test(line)) {
+        violations.push(`L${idx + 1}: ${line.trim()}`);
+      }
+    });
+    expect(
+      violations,
+      `clinicSettings.rooms direct reads found (use branchExamRooms instead):\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('BS-14.7 NO direct clinicSettings.{clinicOpen|Close|doctorStart|End}Time* reads outside helper fallback chains', () => {
+    // The four V55 helpers (monFriOpen/Close + satSunOpen/Close) ARE allowed
+    // to read clinicSettings.X as legacy fallback. Anywhere else is a violation.
+    const lines = adminDashSrc.split('\n');
+    const FALLBACK_FIELDS = [
+      'clinicOpenTime',
+      'clinicCloseTime',
+      'clinicOpenTimeWeekend',
+      'clinicCloseTimeWeekend',
+      'doctorStartTime',
+      'doctorEndTime',
+      'doctorStartTimeWeekend',
+      'doctorEndTimeWeekend',
+    ];
+    const fieldsRegex = new RegExp(
+      `clinicSettings\\.(${FALLBACK_FIELDS.join('|')})\\b`,
+    );
+    // Identify the V55 helper block by line range — `monFriOpen/Close` +
+    // `satSunOpen/Close` useMemo definitions (8 lines each ≈ 32 lines total
+    // window). We mark lines whose content matches the helper ALLOWED
+    // pattern (cs.openHoursMonFri/SatSun + clinicSettings.X || '10:00').
+    const helperAllowed = /\(cs\.openHours(MonFri|SatSun)\?\.\s*(open|close)\)\s*\|\|\s*clinicSettings\.(clinicOpenTime|clinicCloseTime|clinicOpenTimeWeekend|clinicCloseTimeWeekend)/;
+    const helperDeps = /\[cs\.openHours(MonFri|SatSun)\s*,\s*clinicSettings\.(clinicOpenTime|clinicCloseTime|clinicOpenTimeWeekend|clinicCloseTimeWeekend)\]/;
+    const violations = [];
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('*')) return;
+      if (!fieldsRegex.test(line)) return;
+      // Sanctioned: inside the V55 helper memos (matches helperAllowed OR helperDeps)
+      if (helperAllowed.test(line) || helperDeps.test(line)) return;
+      violations.push(`L${idx + 1}: ${line.trim()}`);
+    });
+    expect(
+      violations,
+      `Direct clinicSettings.{Open|Close|doctorStart|End}Time* reads found (must use monFriOpen/Close + satSunOpen/Close helpers):\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('BS-14.8 handleGenScheduleLink saves clinic + doctor hours via per-branch helpers', () => {
+    // Pre-V55: clinicOpenTime: clinicSettings.clinicOpenTime || '10:00'
+    // Post-V55: clinicOpenTime: monFriOpen
+    expect(adminDashSrc).toMatch(/clinicOpenTime:\s*monFriOpen/);
+    expect(adminDashSrc).toMatch(/clinicCloseTime:\s*monFriClose/);
+    expect(adminDashSrc).toMatch(/clinicOpenTimeWeekend:\s*satSunOpen/);
+    expect(adminDashSrc).toMatch(/clinicCloseTimeWeekend:\s*satSunClose/);
+    expect(adminDashSrc).toMatch(/doctorStartTime:\s*monFriOpen/);
+    expect(adminDashSrc).toMatch(/doctorEndTime:\s*monFriClose/);
+    expect(adminDashSrc).toMatch(/doctorStartTimeWeekend:\s*satSunOpen/);
+    expect(adminDashSrc).toMatch(/doctorEndTimeWeekend:\s*satSunClose/);
+  });
+
+  it('BS-14.9 defensive reset useEffect for schedSelectedDoctor + schedSelectedRoom on branch switch', () => {
+    // When livePractitioners changes (branch switch refetch), if the picked
+    // schedSelectedDoctor isn't in the new list, reset to null.
+    expect(adminDashSrc).toMatch(
+      /useEffect\s*\(\s*\(\)\s*=>\s*\{[\s\S]{0,400}?livePractitioners[\s\S]{0,400}?setSchedSelectedDoctor\s*\(\s*null\s*\)[\s\S]{0,200}?\}\s*,\s*\[livePractitioners\s*,\s*schedSelectedDoctor\]\s*\)/,
+    );
+    // Mirror for schedSelectedRoom
+    expect(adminDashSrc).toMatch(
+      /useEffect\s*\(\s*\(\)\s*=>\s*\{[\s\S]{0,400}?branchExamRooms[\s\S]{0,400}?setSchedSelectedRoom\s*\(\s*null\s*\)[\s\S]{0,200}?\}\s*,\s*\[branchExamRooms\s*,\s*schedSelectedRoom\]\s*\)/,
+    );
+  });
+
+  it('BS-14.10 V55 marker present + handleGenScheduleLink pre-create getAppointmentsByMonth uses explicit branchId', () => {
+    expect(adminDashSrc).toMatch(/V55\/BS-14/);
+    // The pre-create appointment fetch (inside handleGenScheduleLink) must
+    // pass explicit branchId (V52/BS-11 canonical) — not bare {} that
+    // relies on V54 backstop only.
+    expect(adminDashSrc).toMatch(
+      /preBranchOpts\s*=\s*selectedBranchId\s*\?\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*:\s*\{\s*allBranches:\s*true\s*\}/,
+    );
+    expect(adminDashSrc).toMatch(/getAppointmentsByMonth\(\s*mo\s*,\s*preBranchOpts\s*\)/);
+  });
+});
