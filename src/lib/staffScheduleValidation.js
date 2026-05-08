@@ -355,6 +355,54 @@ export function derivedAutoClosedDates({ doctorId, roomId, allEntries, datesISO 
   return [...closed].sort();
 }
 
+/**
+ * V60 (2026-05-08) — derive a doctor's working days for a months-window
+ * from their `be_staff_schedules` entries. The CANONICAL "when does the
+ * doctor work" source for V55 schedule-link generation. Pure helper —
+ * accepts pre-fetched entries, no Firestore reads.
+ *
+ * Mirror of `derivedAutoClosedDates` shape (V56 / BS-15) but for the
+ * positive-side: it returns dates where the doctor HAS a working entry
+ * (recurring weekly OR per-date `work`/`halfday`). Excludes leave / holiday
+ * / sick (those should NOT show as "หมอเข้า" on customer-facing links).
+ *
+ * Designed to replace `[...schedDoctorDays]` (admin's manual paint Set
+ * from `clinic_settings/schedule_prefs__{branch}`) as the canonical
+ * source when admin has selected a specific doctor in the schedule-link
+ * modal. The legacy manual paint stays available as an admin override
+ * UNION layer (admin can still ADD ad-hoc doctor days beyond the schedule).
+ *
+ * Class-of-bug closed: V12 multi-reader-sweep at the schedule-link save
+ * boundary — V56/BS-15 introduced canonical source for room auto-closure
+ * but `doctorDays` save kept reading from legacy admin-state-only Set.
+ *
+ * @param {object} opts
+ * @param {string|null|undefined} opts.doctorId
+ * @param {Array<{staffId: string, type: string, dayOfWeek?: number, date?: string, startTime?: string, endTime?: string}>} opts.allEntries — be_staff_schedules entries (recurring + per-date mixed)
+ * @param {string[]} opts.datesISO — array of YYYY-MM-DD strings (the months window)
+ * @returns {string[]} sorted, deduplicated date strings where doctor has a working entry
+ */
+export function derivedDoctorDaysFromSchedules({ doctorId, allEntries, datesISO }) {
+  if (!doctorId || !Array.isArray(allEntries) || !Array.isArray(datesISO)) {
+    return [];
+  }
+  const result = new Set();
+  for (const dateISO of datesISO) {
+    if (typeof dateISO !== 'string' || !DATE_ISO_RE.test(dateISO)) continue;
+    const merged = mergeSchedulesForDate(dateISO, allEntries, [String(doctorId)]);
+    // Per-date override wins via mergeSchedulesForDate semantics. We only
+    // count the date as a "doctor day" when the EFFECTIVE entry is a
+    // working type (recurring / work / halfday). leave / holiday / sick
+    // explicitly EXCLUDE the date even if a recurring shift exists for
+    // that dayOfWeek — the override correctly cancels the recurring.
+    const entry = merged.find((m) => String(m.staffId) === String(doctorId));
+    if (!entry) continue;
+    if (!WORKING_TIME_TYPES.has(entry.type)) continue;
+    result.add(dateISO);
+  }
+  return [...result].sort();
+}
+
 export function generateStaffScheduleId(nowMs = Date.now()) {
   if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
     throw new Error('crypto.getRandomValues unavailable');

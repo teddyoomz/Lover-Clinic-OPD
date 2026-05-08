@@ -139,6 +139,16 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
   const doctorDaysSet = new Set(data.doctorDays || []);
   const closedDaysSet = new Set(data.closedDays || []);
+  // V60 / AV32 (2026-05-08) — defense in depth. When the saved doc has
+  // `noDoctorRequired===false` AND ZERO doctorDays for the displayed
+  // month, every day cell would render disabled (root cause of
+  // "กดดูอะไรไม่ได้เลย"). Pre-V60 admin-side bug allowed this state
+  // to ship; V60 admin-side gate prevents it for new links, but legacy
+  // links + admin-bypass routes still need a graceful empty state.
+  const monthDoctorDayCount = (data.doctorDays || []).filter(
+    (d) => typeof d === 'string' && d.startsWith(currentMonth),
+  ).length;
+  const isEmptyDoctorMonth = data.noDoctorRequired !== true && monthDoctorDayCount === 0;
   const bookedSlots = [...(data.bookedSlots || []), ...(data.manualBlockedSlots || [])];
   const doctorBookedSlots = data.doctorBookedSlots || [];
   const noDoctorRequired = data.noDoctorRequired || false;
@@ -342,6 +352,31 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
             </button>
           )}
         </div>
+
+        {/* ── V60 / AV32 (2026-05-08) — empty-doctor-month banner ──
+              Defense in depth: when noDoctorRequired===false AND zero
+              doctorDays for the displayed month, every cell is disabled
+              and customer sees a calendar that does nothing on click.
+              Surface a friendly explanation + contact prompt instead. */}
+        {isEmptyDoctorMonth && (
+          <div className="rounded-2xl border-2 px-4 py-4 text-center"
+            data-testid="schedule-empty-doctor-month"
+            style={isDark
+              ? { borderColor: '#5a2a10', background: 'linear-gradient(135deg, #1a0a00 0%, #2d1500 100%)', color: '#ffb380' }
+              : { borderColor: 'rgba(244,114,182,0.25)', background: 'linear-gradient(135deg, #fff5f7 0%, #fdf2f8 100%)', color: '#9d174d' }
+            }>
+            <p className="text-sm font-bold mb-1">
+              {lang === 'th'
+                ? 'ยังไม่มีตารางแพทย์ประจำเดือนนี้'
+                : 'No doctor schedule yet for this month'}
+            </p>
+            <p className="text-xs opacity-80">
+              {lang === 'th'
+                ? 'กรุณาติดต่อคลินิกเพื่อสอบถามตารางหรือขอลิงก์ใหม่'
+                : 'Please contact the clinic for the schedule or request a new link'}
+            </p>
+          </div>
+        )}
 
         {/* ── Calendar Card ── */}
         <div className="rounded-2xl overflow-hidden shadow-lg border-2"

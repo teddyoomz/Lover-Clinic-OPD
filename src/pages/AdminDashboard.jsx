@@ -77,7 +77,8 @@ import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurpos
 import { openCustomerInNewTab, openCustomerEditInNewTab } from '../lib/customerNavigation.js';
 import {
   TIME_SLOTS as CANONICAL_TIME_SLOTS,
-  derivedAutoClosedDates,   // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
+  derivedAutoClosedDates,        // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
+  derivedDoctorDaysFromSchedules, // V60 / AV32 (2026-05-08) — doctorDays derived from be_staff_schedules canonical source
 } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -1528,31 +1529,96 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // null (admin chose "all doctors" or "all rooms"). Pre-V56 entries
       // with no roomIds field return [] (backward-compat preserved).
       // closedDays union = admin-set schedClosedDays + V56 auto-closures.
-      let v56AutoClosed = [];
-      if (schedSelectedDoctor && schedSelectedRoom) {
+      //
+      // V60 / AV32 (2026-05-08) — fetch be_staff_schedules ONCE, reuse for
+      // BOTH V56 auto-closure AND V60 doctorDays derivation. Pre-V60 the
+      // saved doc dumped `[...schedDoctorDays]` (admin's manual paint Set)
+      // verbatim — admin who painted only March/April but generated a May
+      // link produced a doc with zero May doctorDays → every cell disabled
+      // on customer page (root cause of V60). Fix: derive from canonical
+      // `be_staff_schedules` for the months window when a specific doctor
+      // is picked; UNION with admin's manual paint scoped to the months
+      // window (preserves admin's ability to ADD ad-hoc dates beyond the
+      // schedule, but prevents prior-month manual paint from leaking into
+      // a future-month link).
+      let scheduleEntries = [];
+      if (schedSelectedDoctor) {
         try {
-          // Build every calendar date in the link's months window so
-          // derivedAutoClosedDates can iterate them day-by-day.
-          const datesInRange = [];
-          for (const mo of months) {
-            const [yMo, mMo] = mo.split('-').map(Number);
-            const daysInMo = new Date(yMo, mMo, 0).getDate();
-            for (let d = 1; d <= daysInMo; d++) {
-              datesInRange.push(`${mo}-${String(d).padStart(2, '0')}`);
-            }
-          }
-          const allEntries = await listStaffSchedules({
+          scheduleEntries = await listStaffSchedules({
             branchId: selectedBranchId,
             staffId: schedSelectedDoctor,
           });
+        } catch (e) {
+          console.warn('[V60/AV32] listStaffSchedules failed:', e?.message || e);
+        }
+      }
+      // Build every calendar date in the link's months window so the
+      // derive helpers can iterate them day-by-day.
+      const datesInRange = [];
+      for (const mo of months) {
+        const [yMo, mMo] = mo.split('-').map(Number);
+        const daysInMo = new Date(yMo, mMo, 0).getDate();
+        for (let d = 1; d <= daysInMo; d++) {
+          datesInRange.push(`${mo}-${String(d).padStart(2, '0')}`);
+        }
+      }
+      let v56AutoClosed = [];
+      if (schedSelectedDoctor && schedSelectedRoom) {
+        try {
           v56AutoClosed = derivedAutoClosedDates({
             doctorId: schedSelectedDoctor,
             roomId: schedSelectedRoom,
-            allEntries,
+            allEntries: scheduleEntries,
             datesISO: datesInRange,
           });
         } catch (e) {
           console.warn('[V56/BS-15] auto-closure derivation failed:', e?.message || e);
+        }
+      }
+      // V60 / AV32 — derive doctor working days from canonical source.
+      let derivedDoctorDays = [];
+      if (schedSelectedDoctor) {
+        try {
+          derivedDoctorDays = derivedDoctorDaysFromSchedules({
+            doctorId: schedSelectedDoctor,
+            allEntries: scheduleEntries,
+            datesISO: datesInRange,
+          });
+        } catch (e) {
+          console.warn('[V60/AV32] doctor-days derivation failed:', e?.message || e);
+        }
+      }
+      // Manual paint scoped to months window — prior-month paints (from
+      // schedule_prefs__{branch}) DON'T leak into the saved doc anymore.
+      const monthSet = new Set(months);
+      const inMonthsManualDoctorDays = [...schedDoctorDays].filter(
+        (d) => typeof d === 'string' && monthSet.has(d.slice(0, 7)),
+      );
+      const finalDoctorDays = [...new Set([
+        ...derivedDoctorDays,
+        ...inMonthsManualDoctorDays,
+      ])].sort();
+      // V60 / AV32 — pre-flight gate: when noDoctorRequired=false, refuse
+      // to save a link that would have ZERO doctor days in any month
+      // (every cell would render disabled on customer page → "กดดูอะไร
+      // ไม่ได้เลย" silent breakage). Surfaces the gap to admin before
+      // the link goes out instead of letting the customer hit a dead
+      // calendar.
+      if (!schedNoDoctorRequired) {
+        const monthsCovered = new Set(finalDoctorDays.map((d) => d.slice(0, 7)));
+        const missingMonths = months.filter((m) => !monthsCovered.has(m));
+        if (missingMonths.length > 0) {
+          const monthLabels = missingMonths.map((m) => {
+            const [yy, mm] = m.split('-').map(Number);
+            const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+            return `${thaiMonths[mm - 1]} ${yy + 543}`;
+          });
+          showToast(
+            `ยังไม่มีตารางหมอเข้าสำหรับ ${monthLabels.join(', ')} — แก้ไขตารางคลินิกหรือตารางหมอก่อนสร้างลิงก์`,
+            7000,
+          );
+          setSchedGenLoading(false);
+          return;
         }
       }
       const closedDaysUnion = [...new Set([...(schedClosedDays || []), ...v56AutoClosed])].sort();
@@ -1584,7 +1650,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         noDoctorRequired: schedNoDoctorRequired,
         showFrom: schedShowFrom,
         endDate: schedEndDay || '',
-        doctorDays: [...schedDoctorDays],
+        // V60 / AV32 (2026-05-08) — doctorDays is now derived from
+        // be_staff_schedules canonical source (when admin picks a specific
+        // doctor) UNIONed with admin's manual paint scoped to months
+        // window. Pre-V60 dumped `[...schedDoctorDays]` verbatim — the
+        // root cause of "customer can't click anything" when admin's
+        // manual paint didn't cover the link's months window.
+        doctorDays: finalDoctorDays,
         closedDays: closedDaysUnion,  // V56 / BS-15 — union of admin-set + auto-closed dates
         bookedSlots,
         doctorBookedSlots: schedNoDoctorRequired ? doctorBookedSlots : [],

@@ -7,15 +7,57 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #12 — V57+V58+V59-bis trilogy + black-screen revert recovery · 7861 + 1 skipped GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #13 — V60 schedule-link doctorDays derived from canonical source (AV32) · 7909 + 1 skipped GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: session-end docs (combined V58+V59-bis test fix + state files)
-- **Test count**: 7861 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (27 commits ahead — V52 through V59-bis NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
+- **Last commit**: V60 / AV32 — schedule-link doctorDays derived from be_staff_schedules + Rule M data fix
+- **Test count**: 7909 + 1 skipped GREEN. Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (28 commits ahead — V52 through V60 NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
 - **Probe-Deploy-Probe**: N/A — no rules change in any V-entry this session.
-- **Iron-clad rule status**: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule H-bis EXECUTED. Invariant set: AV1-AV31 + BS-1..BS-15 + CB-1..5.
-- **Migrations applied on prod**: + V57 backfill 6 be_exam_rooms.kind='doctor' (audit `be_admin_audit/v57-backfill-exam-rooms-kind-1778244093687-d334d1b6`).
+- **Iron-clad rule status**: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule M two-phase data ops + Rule H-bis EXECUTED. Invariant set: AV1-AV30 + AV32 + BS-1..BS-15 + CB-1..5 (AV31 documented in V58 V-entry, pending landing in audit-anti-vibe-code SKILL.md).
+- **Migrations applied on prod**: + V57 backfill 6 be_exam_rooms.kind='doctor' (audit `be_admin_audit/v57-backfill-exam-rooms-kind-1778244093687-d334d1b6`); + V60 backfill SCH-2f69d853fb doctorDays (18 May 2026 entries derived from doctor's recurring schedule — audit `be_admin_audit/v60-fix-schedule-link-doctor-days-1778248090403-95a64eaf`).
 - **Rule B probe list**: still 4 endpoints.
+
+### Session 2026-05-08 EOD #13 — V60 Schedule-link doctorDays from canonical source (AV32) — systematic-debugging session
+
+User report (verbatim): "http://localhost:5173/?schedule=SCH-2f69d853fb ลิ้งตารางที่ลูกค้าได้ไป กดดูอะไรไม่ได้เลย".
+
+**Root cause** (caught via systematic-debugging Phase 1-2 + admin-SDK diag): saved doc `clinic_schedules/SCH-2f69d853fb` had `noDoctorRequired:false`, `months:['2026-05']`, `selectedDoctorId:DOC-mov2p9c0... (หมอมายด์)` BUT `doctorDays:[28 entries all in 2026-03/04]`. ClinicSchedule.jsx `isDayDisabled = isPastCutoff || isClosed || (!noDoctorRequired && !isDoctor)` → every May day fails `!isDoctor` → all 31 cells disabled silently. Admin had painted prior months but never advanced UI to paint May; pre-V60 `handleGenScheduleLink:1587` dumped `[...schedDoctorDays]` verbatim without intersecting against months window.
+
+**Class-of-bug** (Rule P Step 2): V12 multi-reader-sweep at the schedule-link SAVE boundary. Same family as V52/BS-11 (reportsLoaders), V53/BS-12 (TIME_SLOTS), V54/BS-13 (raw listeners), V55/BS-14 (modal data sources), V56/BS-15 (room auto-closure derived from canonical). V60 closes the doctorDays surface — last adoption-gap in the schedule-link save path. `be_staff_schedules` is the canonical source; V56 introduced its consumption for room auto-closure but missed the doctorDays layer.
+
+**Architectural fix** (4 layers + Rule M data fix):
+1. **Pure helper** `derivedDoctorDaysFromSchedules({doctorId, allEntries, datesISO})` in `src/lib/staffScheduleValidation.js` — mirror of `derivedAutoClosedDates` shape; uses `mergeSchedulesForDate` semantics so per-date leave/holiday/sick override correctly cancels recurring weekday.
+2. **Save handler refactor** (AdminDashboard.jsx:1455+): fetches `be_staff_schedules` ONCE (consolidates V56's prior fetch into `scheduleEntries`), feeds BOTH `derivedAutoClosedDates` AND `derivedDoctorDaysFromSchedules` from same data. `finalDoctorDays = union(derived, manual-paint-scoped-to-months)` — admin's prior-month manual paint NO longer leaks into future-month link. Saved doc shape: `doctorDays: finalDoctorDays` (was `[...schedDoctorDays]`).
+3. **Pre-flight gate**: when `!schedNoDoctorRequired` AND any month has zero `doctorDays` → block save with Thai toast `"ยังไม่มีตารางหมอเข้าสำหรับ <month> — แก้ไขตารางคลินิกหรือตารางหมอก่อนสร้างลิงก์"` + early-return + `setSchedGenLoading(false)`.
+4. **Customer-side defense in depth** (`ClinicSchedule.jsx:131+`): `isEmptyDoctorMonth` derived state + banner `data-testid="schedule-empty-doctor-month"` rendered above calendar card with Thai/EN copy ("ยังไม่มีตารางแพทย์ประจำเดือนนี้ — กรุณาติดต่อคลินิก").
+5. **Rule M data fix** (`scripts/v60-fix-schedule-link-doctor-days.mjs`): two-phase dry-run + apply on real prod. Backfilled SCH-2f69d853fb to 18 May 2026 days (Sun/Mon/Wed/Sat × 4-5 occurrences from doctor's 4 recurring entries). Idempotent (re-run --apply yields 0 writes). Audit doc emitted; forensic stamps `_v60BackfilledAt` + `_v60LegacyDoctorDays`.
+
+**NEW audit invariant AV32**: any per-date set written to a customer-facing world-readable doc must derive from canonical Firestore source for the doc's window + UNION with admin-state filtered to window. Verbatim spread of admin-state Set FORBIDDEN. Source-grep anchor: `doctorDays:\s*finalDoctorDays` MUST appear in clinic_schedules setDoc shape; `doctorDays:\s*\[\.\.\.schedDoctorDays\]` MUST NOT. Companion AV: AV24 (Rule O productName live-resolve at write-time — same architectural family).
+
+**Test bank shipped**: 48 V60.X1-X7 in `tests/v60-doctor-days-derive-from-schedules.test.js`:
+- X1 (13) — `derivedDoctorDaysFromSchedules` helper unit + adversarial (empty/null inputs / wrong doctorId / leave-cancels-recurring / per-date-on-non-recurring-day / invalid date strings / multi-month / V60 marker)
+- X2 (7) — handleGenScheduleLink uses derive helper + saves finalDoctorDays + listStaffSchedules consolidated to ONE call
+- X3 (6) — ClinicSchedule.jsx empty-doctor-month banner derivation + Thai/EN copy + V60 marker
+- X4 (4) — pre-flight gate Thai copy + early-return + skipped when noDoctorRequired=true + Thai BE year conversion
+- X5 (9) — Rule M migration script canonical shape (invocation guard + canonical paths + two-phase --apply + PEM key conversion + forensic stamps + crypto.randomBytes + audit emit + atomic batch + idempotency)
+- X6 (3) — V12 multi-reader-sweep regression sweep (no verbatim spread in setDoc, ONE listStaffSchedules call, gate uses same finalDoctorDays as save)
+- X7 (6) — full-flow simulate (PRE-V60 bug repro with March/April manual paint + POST-V60 contract producing 18 May days + manual-paint-dropped + gate would PASS + gate FIRES on empty schedule + multi-month gate)
+
+**Live preview_eval verification**: SCH-2f69d853fb post-fix renders 14 May dates with 🔥 + "ว่าง 8/9" labels; click on May 9 (Sat) opens slot panel with 9 time slots. End-to-end customer flow VERIFIED working.
+
+**Cumulative**: 7861 → 7909 + 1 skipped (+48 net) all GREEN. Build clean (AdminDashboard chunk 365→370 KB, +5KB for V60 logic).
+
+**Methodology lessons**:
+- (a) **Admin-state Sets ≠ save-time canonical sources** — when a per-date set gets persisted into a customer-facing doc, derive from the canonical Firestore source FIRST then UNION with admin-state filtered to window. Same architectural pattern as Rule O (V46/V48): "the FINAL write goes through canonical-derive at write boundary".
+- (b) **Pre-flight gates surface latent bugs at admin time** — saving "whatever shape we have" turns silent breakage into noisy bug at link-share time. Adding "would this doc be functional?" check before commit is cheap insurance.
+- (c) **Defense in depth on customer side** — even with admin gate, legacy in-the-wild links predate the gate; empty-state banner is one-screen change that prevents customer confusion forever, regardless of who/what produced the broken doc.
+- (d) **BSA adoption-gap pattern at the WRITE boundary** is the mirror of READ-boundary gaps (V52-V55). When a canonical source exists, EVERY writer that derives from admin state must also derive from canonical. V56 introduced be_staff_schedules consumption at auto-closure layer but missed the doctorDays layer for 2 sub-revisions until V60.
+- (e) **Two-tier solution pattern** (data fix NOW + code fix for class) is the canonical response to "user-affected legacy artifact + recurring class-of-bug". Data fix unblocks customer in <10 min; code fix prevents recurrence in next admin save. Rule M two-phase + admin-SDK + canonical path + audit doc + forensic stamps + idempotency = the canonical Rule M template.
+- (f) **systematic-debugging Phase 1-2 caught the gap** — admin-SDK diag on the saved doc + cross-reading the disable rule in ClinicSchedule.jsx revealed root cause in ~10 min. Without the diag script, debugging via UI clicks could have wasted hours.
+
+**Outstanding**: combined `vercel --prod` for V52..V59-bis + V60 (28 commits ahead of prod; user-authorized only).
+
+Detail: V60 V-entry in `.claude/rules/00-session-start.md` § 2.
 
 ### Session 2026-05-08 EOD #12 — V57+V58+V59-bis trilogy + black-screen revert recovery
 

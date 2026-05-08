@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV30)
+## Invariants (AV1–AV32)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -643,6 +643,43 @@ expect(violations).toEqual([]);
 1. When introducing a NEW collection, EVERY field consumed downstream must be declared in the validation file at day one — even if "optional" or "default-able". V57 schema gap was a 2-month silent latent bug.
 2. Consumer-side defensive defaults are mandatory for fields where legacy docs predate the field's introduction. `?? 'most-common-value'` pattern is the canonical fix.
 3. UI form must expose every consumed field. If admin can't set it, default values get baked in at the schema layer + migration backfills existing data.
+
+### AV32 — Per-date set saved verbatim from admin-state without canonical-source derivation (V60, 2026-05-08)
+
+**Pattern**: Admin-managed paint Set (`schedDoctorDays`) dumped verbatim into a customer-facing Firestore doc whose visibility (clickable / disabled) gates per-date. When the admin-state set covers months OTHER than the link's `months[]` window, the customer-facing calendar disables every cell silently — no error, no warning, just "กดดูอะไรไม่ได้เลย".
+
+**Origin**: pre-V60 `handleGenScheduleLink` (`src/pages/AdminDashboard.jsx`) wrote `doctorDays: [...schedDoctorDays]` directly into `clinic_schedules/{token}`. The Set is the union of every date the admin ever painted on the schedule preview (across all months / branches the prefs file ever held). A May 2026 link generated from an admin who painted only March/April produced a doc with zero May `doctorDays` → `ClinicSchedule.jsx isDayDisabled = !noDoctorRequired && !isDoctor === true` for every day → calendar dead.
+
+**Class-of-bug**: V12 multi-reader-sweep family at the schedule-link save boundary. Same architectural family as **V52/BS-11** (reportsLoaders), **V53/BS-12** (TIME_SLOTS), **V54/BS-13** (raw listeners), **V55/BS-14** (modal data sources), **V56/BS-15** (canonical source for room auto-closure but NOT doctorDays). V60 closes the doctorDays surface — the LAST adoption-gap in the schedule-link save path.
+
+**Fix architecture (V60)**:
+1. **Pure helper** `derivedDoctorDaysFromSchedules({doctorId, allEntries, datesISO})` in `src/lib/staffScheduleValidation.js` — mirror of `derivedAutoClosedDates` shape; returns dates where the doctor has a working entry (recurring OR per-date `work`/`halfday`); `mergeSchedulesForDate` semantics ensure per-date leave/holiday/sick OVERRIDE recurring weekday → date excluded.
+2. **Save handler refactor** — `handleGenScheduleLink` fetches `be_staff_schedules` ONCE (consolidating V56's prior fetch), feeds BOTH `derivedAutoClosedDates` AND `derivedDoctorDaysFromSchedules` from the same `scheduleEntries` variable. `finalDoctorDays = union(derived, manual-scoped-to-months)` — manual paint outside the months window is dropped.
+3. **Pre-flight gate** — `if (!schedNoDoctorRequired) { ... }` blocks save with Thai toast `"ยังไม่มีตารางหมอเข้าสำหรับ <month> — แก้ไขตารางคลินิกหรือตารางหมอก่อนสร้างลิงก์"` when ANY month would have zero doctor days. Surfaces gap to admin BEFORE the link goes out.
+4. **Customer-side defense in depth** — `ClinicSchedule.jsx` renders an empty-state banner (`data-testid="schedule-empty-doctor-month"` + Thai/EN copy) when `noDoctorRequired !== true && monthDoctorDayCount === 0`. Legacy links still render gracefully.
+5. **Rule M data fix** — `scripts/v60-fix-schedule-link-doctor-days.mjs` derives correct doctorDays from canonical source for any in-the-wild link whose admin generated pre-V60. Two-phase dry-run + apply, audit doc, idempotent, forensic-trail (`_v60BackfilledAt` + `_v60LegacyDoctorDays`).
+
+**Anti-pattern** (forbidden by AV32): writing a per-date set to a customer-facing world-readable doc by spreading `[...adminStateSet]` verbatim, when a canonical Firestore source for that data exists AND can be derived for the saved doc's window. Always derive from canonical + UNION with admin-state filtered to window.
+
+**Source-grep regression** (`tests/v60-doctor-days-derive-from-schedules.test.js` X6.1 + X2.4):
+```js
+// FORBID verbatim spread inside the schedule-link setDoc shape
+const setDocBlock = ADMIN_DASHBOARD_SRC.match(
+  /await setDoc\(doc\(db,\s*'artifacts',\s*appId,\s*'public',\s*'data',\s*'clinic_schedules'[\s\S]{0,3500}?\}\);/,
+);
+expect(setDocBlock[0]).not.toMatch(/doctorDays:\s*\[\.\.\.schedDoctorDays\]/);
+expect(setDocBlock[0]).toMatch(/doctorDays:\s*finalDoctorDays/);
+```
+
+**Sanctioned exceptions**: NONE — any new write of a per-date set into a world-readable doc must go through canonical-derive + scoped-union OR a documented compelling reason. The gate may legitimately be skipped only when `noDoctorRequired === true` (every day is bookable; doctorDays irrelevant).
+
+**Companion AV: AV20** (default-filter at lister + opt-in). **AV24** (Rule O productName live-resolve at write-time — same "derive from canonical at write boundary" architectural family). **Class-of-bug**: V12 multi-reader-sweep at the **save boundary**, where the writer reads from a stale admin-state cache instead of the canonical source.
+
+**Lessons**:
+1. **Admin-state Sets are NOT save-time canonical sources.** They're UI scratch state — fine for paint preview, dangerous for verbatim persistence. When a per-date set gets saved into a customer-facing doc, derive from the canonical Firestore source (`be_staff_schedules`) for the doc's window FIRST, then UNION with admin-state filtered to that window.
+2. **Pre-flight gates surface latent bugs.** A save handler that just *commits whatever shape it has* turns silent breakage into a noisy bug at link-share time. Adding a "would this doc be functional?" check before commit is cheap insurance.
+3. **Defense in depth on the customer side** — even with admin-side gate, legacy in-the-wild links predate the gate. An empty-state banner is a one-screen change that prevents customer confusion forever, regardless of who/what produced the broken doc.
+4. **BSA adoption-gap pattern at the WRITE boundary** is the mirror of the READ-boundary gaps (V52-V55). When a canonical Firestore source exists, EVERY writer that derives from admin state must also derive from canonical. V56 introduced `be_staff_schedules` consumption at the auto-closure layer but missed the doctorDays layer for 2 sub-revisions until V60.
 
 ## How to run
 
