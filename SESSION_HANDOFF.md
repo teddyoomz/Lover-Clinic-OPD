@@ -7,15 +7,44 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #9 — V55 Schedule-link modal branch-scope (BS-14) shipped · 7735 GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #10 — V56 Doctor Schedule Room Assignment (BS-15) shipped · 7746 GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V55 commit (fix(V55/BS-14): schedule-link modal data sources branch-scoped) — 4 commits ahead of prod (V52 + V53 + V54 + V55)
-- **Test count**: 7735 GREEN (+ ~73 from V55 — 38 helper unit + 17 flow-simulate + 10 BS-14 audit + tweaks). Build clean (AdminDashboard chunk 365 KB).
-- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 + V54 + V55 NOT yet deployed). Master is 4 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, user authorizes `vercel --prod` separately.
-- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52/V53/V54/V55).
-- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-14** (NEW: BS-14 schedule-link modal data sources branch-scoped) + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings). V52 + V53 + V54 + V55 all read-only fixes (no data ops).
-- **Rule B probe list**: still 4 endpoints — V52/V53/V54/V55 don't change rules.
+- **Last commit**: `92e0cf9` (docs(V56/BS-15): state files + V56 V-entry compact row) — 19 commits ahead of prod (V52+V53+V54+V55+V56)
+- **Test count**: 7746 GREEN (+11 net from V56 — 25 RTL flow-simulate; some older tests removed/consolidated). Build clean (AdminDashboard chunk 365.57 KB).
+- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 through V56 NOT yet deployed). Master is 19 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, user authorizes `vercel --prod` separately.
+- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52–V56).
+- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-15** (NEW: BS-15 doctor schedule room assignment) + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings). V52 through V56 all read-only fixes (no data ops).
+- **Rule B probe list**: still 4 endpoints — V52–V56 don't change rules.
+
+### Session 2026-05-08 EOD #10 — V56 Doctor Schedule Room Assignment (BS-15) shipped — subagent-driven-development session
+
+User request: add a room assignment feature to the doctor schedule modal so each schedule entry can specify which exam room(s) the doctor will use for that shift. The saved rooms should drive the schedule-link (auto-closure when all rooms are occupied) and display as inline chips in TodaysDoctorsPanel.
+
+**Feature scope** (Tasks 1–7 via subagent-driven development, Task 8 this session):
+- **Schema**: per-shift `roomIds: string[]` on `be_staff_schedules` documents
+- **Validators** (`src/lib/scheduleValidation.js`): SS-10 — doctor+working-type entries require `roomIds` non-empty; SS-11 — assistant entries must NOT include `roomIds`
+- **Pure helpers** (`src/lib/scheduleFilterUtils.js`): `expandRoomIdsForDisplay(roomIds, examRooms)` → display objects; `derivedAutoClosedDates(staffSchedules, examRooms)` → auto-closes dates where all rooms occupied
+- **UI — ScheduleEntryFormModal** (`src/components/scheduling/ScheduleEntryFormModal.jsx`): room-checkbox list rendered below the time-slot section when entry type is doctor+working; disabled when assistant type
+- **UI — TodaysDoctorsPanel** (`src/pages/AdminDashboard.jsx`): inline chips showing room names alongside each doctor's schedule entry in the today panel
+- **Schedule-link integration** (`src/pages/AdminDashboard.jsx` `handleGenScheduleLink`): calls `derivedAutoClosedDates` to feed auto-closed dates into saved schedule-link doc
+- **BS-15 audit invariant** (`audit-branch-scope` SKILL.md): every component reading `roomIds` from `be_staff_schedules` MUST resolve room names from `be_exam_rooms` (not from stale denormalized cache); BS-14 → BS-15 (14 invariants → 15)
+
+**Test bank shipped** (Rule I full-flow simulate + Rule K work-first-test-last):
+- `tests/v56-doctor-schedule-room-assignment-flow-simulate.test.jsx` — 25 RTL tests (F1-F7 groups): schema contract + validator SS-10/SS-11 + expandRoomIdsForDisplay helper + derivedAutoClosedDates helper + ScheduleEntryFormModal checkbox render + TodaysDoctorsPanel chip render + handleGenScheduleLink auto-closure integration
+- `tests/audit-branch-scope.test.js` extended +BS-15.x sub-tests
+- `audit-branch-scope` SKILL.md: 14 → 15 invariants
+
+**Final tally**: 7735 → 7746 GREEN (+11 net). Build clean (2.28s, AdminDashboard 365.57 KB).
+
+**Methodology lessons**:
+- **Subagent-driven development** (Tasks 1–7 each a fresh subagent) with 2-stage review: each subagent ran targeted tests + build check before reporting done; orchestrator reviewed cross-task invariants at batch end.
+- **Rule K (work-first-test-last)** honored: all 7 implementation tasks completed before test bank written; test bank written in single final pass covering all 7 streams.
+- **BS-15 closes the room-assignment surface**: every `be_staff_schedules` roomIds reader must resolve names from live `be_exam_rooms` (not denormalized cache) — AV-class invariant preventing future V49-style shape drift.
+
+**Outstanding**: combined `vercel --prod` for V52+V53+V54+V55+V56 (19 commits ahead of prod; user-authorized only).
+
+Detail: V56 V-entry in `.claude/rules/00-session-start.md` § 2 + V-log compact row.
 
 ### Session 2026-05-08 EOD #9 — V55 Schedule-link modal branch-scope (BS-14) shipped — systematic-debugging session
 
