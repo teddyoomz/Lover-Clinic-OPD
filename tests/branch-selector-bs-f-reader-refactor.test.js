@@ -20,7 +20,12 @@ const aggregatorSrc = readFileSync(
 );
 
 function fnSlice(name) {
-  const start = backendClientSrc.indexOf(`export async function ${name}`);
+  // V64 (2026-05-09) — anchor on `name(` so a longer prefix-match function
+  // (e.g. getAppointmentsByDateRange) doesn't shadow the slice for the
+  // shorter name (getAppointmentsByDate). The previous helper used
+  // `indexOf('export async function ${name}')` which matched the longer
+  // function first when both exist in the same file.
+  const start = backendClientSrc.indexOf(`export async function ${name}(`);
   if (start < 0) return '';
   return backendClientSrc.slice(start, start + 1500);
 }

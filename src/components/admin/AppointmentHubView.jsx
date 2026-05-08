@@ -23,7 +23,7 @@ import {
   buildPrintHeader,
   buildPrintHTMLTemplate,
 } from '../../lib/appointmentHubPrintTemplate.js';
-import * as appointmentTypes from '../../lib/appointmentTypes.js';
+import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -186,12 +186,7 @@ export default function AppointmentHubView({
   }, [filteredAppts, summaryMap, activeTab, branchName, range.from, range.to, selectedBranchId]);
 
   const dateLabel = activeTab === 'today' ? 'นี้' : (activeTab === 'tomorrow' ? 'พรุ่งนี้' : '');
-  const typeOptions = (() => {
-    try {
-      const fn = appointmentTypes && appointmentTypes.getAppointmentTypeOptions;
-      return typeof fn === 'function' ? fn() : [];
-    } catch { return []; }
-  })();
+  const typeOptions = APPOINTMENT_TYPES.map(t => ({ value: t.value, label: t.label }));
 
   return (
     <div data-testid="appt-hub-view">

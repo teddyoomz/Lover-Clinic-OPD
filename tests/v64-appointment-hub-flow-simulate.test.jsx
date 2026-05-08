@@ -26,7 +26,12 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
 
 vi.mock('../src/lib/appointmentTypes.js', () => ({
   resolveAppointmentTypeLabel: (v) => v || '',
-  getAppointmentTypeOptions: () => [{ value: 'follow', label: 'นัดติดตาม' }],
+  // V64 (2026-05-09): View consumes APPOINTMENT_TYPES const directly
+  // (replaces earlier getAppointmentTypeOptions which doesn't exist).
+  APPOINTMENT_TYPES: [
+    { value: 'deposit-booking', label: 'จองมัดจำ' },
+    { value: 'no-deposit-booking', label: 'จองไม่มัดจำ' },
+  ],
 }));
 
 const mockUseSelectedBranch = vi.fn();
