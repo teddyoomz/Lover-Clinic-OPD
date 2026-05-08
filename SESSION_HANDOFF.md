@@ -767,24 +767,22 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — idle; Rule P + per-branch settings shipped + DEPLOYED.
+Resume LoverClinic — idle; V50 ProClinic strip COMPLETE end-to-end + DEPLOYED.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=2318557, prod=2318557 — in sync)
-3. .agents/active.md (109+/109 targeted tests PASS · idle)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V50 V-summary; Rule P locked 2026-05-08)
-5. (if needed) .agents/sessions/2026-05-08-rule-p-and-per-branch-settings-shipped.md
+2. SESSION_HANDOFF.md (master=6a1d96d, prod=ef580a6 — runtime)
+3. .agents/active.md (7333/7333 GREEN · idle)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V50 V-summary)
+5. (if needed) .agents/sessions/2026-05-08-v50-strip-complete.md
 
-Status: master=prod=`2318557` LIVE at lover-clinic-app.vercel.app. Per-branch settings migration applied on 3 prod branches. Iron-clad Rule P + AV29 + BS-10 + CB-1..5 invariants permanent. All Plan #1+Plan #2 in-repo + user-level work shipped.
+Status: master=`6a1d96d`, prod runtime=`ef580a6` LIVE at lover-clinic-app.vercel.app. firestore.rules version 29 released. AV28 sanctioned-exception list now EMPTY (no master_data / pc_* / broker_jobs / proclinic_session / brokerClient runtime references anywhere). Rule H-bis EXECUTED + COMPLETE.
 
 Next: idle — awaiting user directive.
 
-Outstanding (deferred, user-triggered):
-- (optional) Clean firestore.rules of pc_*/master_data/broker_jobs/proclinic_session legacy match blocks (rules deploy + Probe-Deploy-Probe per Rule B)
-- (optional) Delete dead orphan master_data/* CRUD helpers in backendClient.js + scopedDataLayer.js (AV28.4 sanctioned exception)
+Outstanding: none.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..10; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only.
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..10; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage).
 
 /session-start
 ```
