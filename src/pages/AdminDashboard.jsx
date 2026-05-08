@@ -56,6 +56,7 @@ import {
   createDeposit,
   updateDeposit,
   cancelDeposit,
+  listStaffSchedules,       // V56 / BS-15 — auto-closure derivation in handleGenScheduleLink
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 // Phase 22.0b (2026-05-06 EOD) — branch-filter helpers for kiosk modals.
@@ -74,7 +75,10 @@ import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
 import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
 // Phase 24.0-duodecies (2026-05-06) — open backend customer detail/edit in new tab.
 import { openCustomerInNewTab, openCustomerEditInNewTab } from '../lib/customerNavigation.js';
-import { TIME_SLOTS as CANONICAL_TIME_SLOTS } from '../lib/staffScheduleValidation.js';
+import {
+  TIME_SLOTS as CANONICAL_TIME_SLOTS,
+  derivedAutoClosedDates,   // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
+} from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
   calculateMRS, getIIEFInterpretation, generateClinicalSummary,
@@ -1440,6 +1444,41 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // 4. Generate token
       const token = 'SCH-' + Array.from(crypto.getRandomValues(new Uint8Array(5))).map(b => b.toString(16).padStart(2, '0')).join('');
 
+      // V56 / BS-15 (2026-05-08) — auto-close dates where the picked
+      // (schedSelectedDoctor, schedSelectedRoom) combo isn't licensed per
+      // the doctor's be_staff_schedules entries. Skip if either pick is
+      // null (admin chose "all doctors" or "all rooms"). Pre-V56 entries
+      // with no roomIds field return [] (backward-compat preserved).
+      // closedDays union = admin-set schedClosedDays + V56 auto-closures.
+      let v56AutoClosed = [];
+      if (schedSelectedDoctor && schedSelectedRoom) {
+        try {
+          // Build every calendar date in the link's months window so
+          // derivedAutoClosedDates can iterate them day-by-day.
+          const datesInRange = [];
+          for (const mo of months) {
+            const [yMo, mMo] = mo.split('-').map(Number);
+            const daysInMo = new Date(yMo, mMo, 0).getDate();
+            for (let d = 1; d <= daysInMo; d++) {
+              datesInRange.push(`${mo}-${String(d).padStart(2, '0')}`);
+            }
+          }
+          const allEntries = await listStaffSchedules({
+            branchId: selectedBranchId,
+            staffId: schedSelectedDoctor,
+          });
+          v56AutoClosed = derivedAutoClosedDates({
+            doctorId: schedSelectedDoctor,
+            roomId: schedSelectedRoom,
+            allEntries,
+            datesISO: datesInRange,
+          });
+        } catch (e) {
+          console.warn('[V56/BS-15] auto-closure derivation failed:', e?.message || e);
+        }
+      }
+      const closedDaysUnion = [...new Set([...(schedClosedDays || []), ...v56AutoClosed])].sort();
+
       // 5. Save schedule doc (world-readable by token — do NOT include
       //    admin-only fields like user.uid that leak internal identifiers).
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', token), {
@@ -1468,7 +1507,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         showFrom: schedShowFrom,
         endDate: schedEndDay || '',
         doctorDays: [...schedDoctorDays],
-        closedDays: [...schedClosedDays],
+        closedDays: closedDaysUnion,  // V56 / BS-15 — union of admin-set + auto-closed dates
         bookedSlots,
         doctorBookedSlots: schedNoDoctorRequired ? doctorBookedSlots : [],
         manualBlockedSlots: schedManualBlocked,
