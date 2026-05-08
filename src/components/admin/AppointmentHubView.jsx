@@ -262,6 +262,12 @@ export default function AppointmentHubView({
   }, [onConfirmAppt]);
 
   const handleCancelOptimistic = useCallback(async (appt) => {
+    // V64-fix5 (2026-05-09): confirm BEFORE optimistic update so the row
+    // doesn't visibly flash status='cancelled' then revert when user clicks
+    // 'No' on the confirm dialog. Pre-fix flow had confirm AFTER setAppts:
+    // status flipped to 'ยกเลิก' instantly → confirm dialog blocked → user
+    // says no → revert flips back to prev status → 1-2 frame jitter visible.
+    if (!window.confirm('ยกเลิกนัดนี้?')) return;
     const prevStatus = appt.status;
     setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
     try {

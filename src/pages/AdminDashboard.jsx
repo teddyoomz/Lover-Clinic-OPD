@@ -6472,7 +6472,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 // This handler is now a no-op — kept for prop-shape compat.
               }}
               onCancelAppt={(appt) => {
-                if (!window.confirm('ยกเลิกนัดนี้?')) return Promise.reject(new Error('user-cancelled'));
+                // V64-fix5 (2026-05-09): confirm dialog moved to View
+                // (handleCancelOptimistic) so it fires BEFORE optimistic
+                // update — no flash-then-revert jitter when user says 'No'.
                 return updateBackendAppointment(appt.id, { status: 'cancelled' }).then(() => {
                   showToast?.('ยกเลิกนัดสำเร็จ', 2000);
                 }).catch((e) => showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
