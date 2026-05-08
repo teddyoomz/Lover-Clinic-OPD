@@ -7,15 +7,45 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #5 — V50 ProClinic strip COMPLETE · firestore.rules cleaned · all migrators/mappers/phase9Mappers.js DELETED · combined deploy SHIPPED (`ef580a6`)
+- **Date last updated**: 2026-05-08 EOD #6 — V52 Report Tabs Branch-Scope (BS-11) shipped · 13 report tabs wired to top-right BranchSelector · 7543/7543 GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: `ef580a6` (chore(V50-followup-2): delete remaining dead migrators + mappers + phase9Mappers.js)
-- **Test count**: 7333/7333 GREEN (full top-level + extended suite). Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (in sync with master). Combined deploy SHIPPED — vercel `lover-clinic-1z9li8b98-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` + firebase rules version 29 released.
-- **Probe-Deploy-Probe**: VERIFIED. Pre-probes 1/2/3 = 200/200/200. Post-probes: chat_conversations 200 (V1 anchor preserved); pc_appointments 403 (deletion took); clinic_settings/proclinic_session 403; master_data/products 403.
-- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts) + **Rule H-bis EXECUTED + COMPLETE** (V50 + V50-followup + V50-followup-2). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5. AV28 sanctioned-exception list now EMPTY.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`).
-- **Rule B probe list**: updated to 4 endpoints (was 7) — endpoints 2/3/4 removed in V50-followup-2 (pc_appointments / proclinic_session / proclinic_session_trial — rules deleted; default-deny applies).
+- **Last commit**: V52 commit (feat(V52/BS-11): every report tab respects top-right BranchSelector) — 1 ahead of prod
+- **Test count**: 7543/7543 + 1 skipped GREEN (full top-level + extended suite, +211 from V52). Build clean (2.27s).
+- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 NOT yet deployed). Master is 1 commit ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
+- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52).
+- **Iron-clad rule status**: **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-11** (NEW: BS-11) + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 has no data ops (read-only feature).
+- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 doesn't change rules.
+
+### Session 2026-05-08 EOD #6 — V52 Report Tabs Branch-Scope (BS-11) shipped (autonomous overnight job)
+
+User directive (verbatim, before sleep): "Tab ย่อยของหน้ารายงานทั้งหมดต้องแสดงรายละเอียดของสาขานั้นๆที่เลือกไว้ใน branch selector ยกเว้น tab=expense-report และ tab=clinic-report แสดงแบบ universal ได้ ... ไม่ต้องถามอะไรผมเลย เลือกที่นาย recommend ทั้งหมด และ ผมให้ผ่าทุกการรีวิว code ของนาย ให้ทำการแก้ไข เทส ทดสอบ ได้เลย โดยไม่ต้องถามอะไรผมทั้งนั้น เพราะผมจะไปนอน และหวังว่าตื่นมา งานนี้จะเสร็จทั้งหมด"
+
+**Class-of-bug**: V12 multi-reader-sweep family at the report-tab/loader layer. 13 of 14 substantive report tabs ignored top-right BranchSelector — pre-V52 stale annotations claimed `{allBranches:true}` but flag was never actually passing.
+
+**V52 commit** (single autonomous commit):
+- `src/lib/reportsLoaders.js` — 7 loaders gain `{branchId, allBranches}` opts (additive, backward-compat preserved)
+- 13 report tabs migrated to canonical V52 pattern: `useSelectedBranch` + `branchId: selectedBranchId` to all `load*` + `selectedBranchId` in deps array. Stale annotations stripped. Raw `backendClient.js` imports migrated to `scopedDataLayer.js` (BS-1 compliance).
+- 2 EXEMPTED tabs (Expense + Clinic reports) get NEW `// audit-branch-scope: BS-11 in-page-selector` annotation (in-page multi-branch UI preserved untouched).
+- ReportsHomeTab gets NEW `// audit-branch-scope: BS-11 navigation-only` annotation.
+- RemainingCourseTab canonicalized destructure shape.
+
+**New audit invariant BS-11** (parallel to BS-9, V52):
+- Closed sanctioned-exception list (only 3 files may carry BS-11 annotations); test BS-11.7 enforces lock.
+- 9 sub-tests in `tests/audit-branch-scope.test.js` (BS-11.1..BS-11.9).
+- `audit-branch-scope` SKILL.md: 8 → 11 invariants table; new annotation table entries.
+
+**Test bank shipped**:
+- `tests/v52-reports-loaders-branch-id.test.js` (39 tests, L1-L8) — Firestore mock captures `where` clauses; verifies branchId filter + fallback path + adversarial inputs
+- `tests/v52-report-tabs-source-grep.test.js` (52 tests, G1-G4) — per-tab regression locks
+- `tests/v52-report-tabs-branch-scope-flow-simulate.test.js` (62 tests, F1-F7) — Rule I full-flow simulate using actual BranchProvider + canonical pattern
+- `tests/audit-branch-scope.test.js` extended (+11 BS-11.x sub-tests)
+
+**Final tally**: 7333 → 7543 + 1 skipped (+211 net) all GREEN. Build clean 2.27s.
+
+**Outstanding**: `vercel --prod` (user-authorized only — say "deploy" THIS turn).
+
+Detail: `docs/superpowers/specs/2026-05-08-report-tabs-branch-scope-design.md` + `docs/superpowers/plans/2026-05-08-report-tabs-branch-scope.md` + V52 V-entry in `.claude/rules/v-log-archive.md`.
 
 ### Session 2026-05-08 EOD #5 — V50 ProClinic strip COMPLETE
 

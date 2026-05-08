@@ -335,3 +335,162 @@ describe('BS-9 — branch-switch refresh discipline', () => {
     expect(allViolations).toEqual([]);
   });
 });
+
+// ─── BS-11 — Report-tab branch-refresh discipline (V52, 2026-05-08) ────────
+//
+// Every file in src/components/backend/reports/**/*Tab.jsx that calls a
+// load* from reportsLoaders.js MUST either:
+//   (a) subscribe useSelectedBranch + pass branchId to loaders + include
+//       selectedBranchId in the data-loading useEffect/useCallback deps
+//   (b) be annotated `// audit-branch-scope: BS-11 in-page-selector`
+//       (sanctioned: ExpenseReportTab.jsx + ClinicReportTab.jsx ONLY)
+//   (c) be annotated `// audit-branch-scope: BS-11 navigation-only`
+//       (sanctioned: ReportsHomeTab.jsx ONLY — no data load)
+//
+// Mirror BS-9 logic but at the reports-loader layer (BS-9 catches
+// scopedDataLayer importers; BS-11 catches reportsLoaders importers).
+
+describe('BS-11 — report-tab branch-refresh discipline (V52)', () => {
+  const reportTabFiles = fg.sync('src/components/backend/reports/**/*Tab.jsx', { cwd: process.cwd() });
+
+  // Closed sanctioned-exception list — only these 3 files may carry the
+  // BS-11 annotation comments. Anything else with the annotation fails.
+  const SANCTIONED_INPAGE_SELECTOR = [
+    'src/components/backend/reports/ExpenseReportTab.jsx',
+    'src/components/backend/reports/ClinicReportTab.jsx',
+  ];
+  const SANCTIONED_NAVIGATION_ONLY = [
+    'src/components/backend/reports/ReportsHomeTab.jsx',
+  ];
+
+  function reportTabImportsLoader(content) {
+    return /from\s+['"](\.\.\/)+lib\/reportsLoaders/.test(content);
+  }
+
+  function reportTabHasBranchSubscription(content) {
+    return /useSelectedBranch/.test(content);
+  }
+
+  function reportTabHasInPageSelectorAnnotation(content) {
+    return /audit-branch-scope:\s*BS-11 in-page-selector/.test(content);
+  }
+
+  function reportTabHasNavigationOnlyAnnotation(content) {
+    return /audit-branch-scope:\s*BS-11 navigation-only/.test(content);
+  }
+
+  function reportTabHasSelectedBranchInDeps(content) {
+    // Discover alias for branchId from useSelectedBranch destructure
+    const aliasMatch = content.match(/const\s*\{\s*branchId(?:\s*:\s*([A-Za-z_][A-Za-z0-9_]*))?\s*\}\s*=\s*useSelectedBranch\(\)/);
+    if (!aliasMatch) return false;
+    const alias = aliasMatch[1] || 'branchId';
+    // At least one useCallback / useEffect deps array must contain the alias
+    const depsRe = new RegExp(
+      `(useCallback|useEffect)\\([\\s\\S]+?\\},\\s*\\[[^\\]]*\\b${alias}\\b[^\\]]*\\]`,
+    );
+    return depsRe.test(content);
+  }
+
+  function reportTabPassesBranchIdToLoader(content) {
+    // Any load* call site passes `branchId:` (typically `branchId: selectedBranchId`)
+    return /load[A-Z][A-Za-z]+\(\s*\{[^}]*\bbranchId:/.test(content);
+  }
+
+  it('BS-11.1 every report tab importing reportsLoaders subscribes to useSelectedBranch (or is sanctioned)', () => {
+    const violations = [];
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!reportTabImportsLoader(content)) continue; // tab doesn't load — N/A
+      if (reportTabHasBranchSubscription(content)) continue; // OK
+      if (reportTabHasInPageSelectorAnnotation(content)) continue; // sanctioned
+      if (reportTabHasNavigationOnlyAnnotation(content)) continue; // sanctioned (rare)
+      violations.push(f);
+    }
+    expect(violations, `BS-11.1 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-11.2 every such tab includes selectedBranchId in data-loading hook deps', () => {
+    const violations = [];
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!reportTabImportsLoader(content)) continue;
+      if (reportTabHasInPageSelectorAnnotation(content)) continue;
+      if (reportTabHasNavigationOnlyAnnotation(content)) continue;
+      if (!reportTabHasBranchSubscription(content)) continue; // BS-11.1 catches first
+      if (!reportTabHasSelectedBranchInDeps(content)) violations.push(f);
+    }
+    expect(violations, `BS-11.2 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-11.3 every such tab passes branchId to load* call sites', () => {
+    const violations = [];
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!reportTabImportsLoader(content)) continue;
+      if (reportTabHasInPageSelectorAnnotation(content)) continue;
+      if (reportTabHasNavigationOnlyAnnotation(content)) continue;
+      if (!reportTabHasBranchSubscription(content)) continue;
+      if (!reportTabPassesBranchIdToLoader(content)) violations.push(f);
+    }
+    expect(violations, `BS-11.3 violations (must pass branchId: selectedBranchId to load* call sites):\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-11.4 SaleReportTab passes BS-11.1+11.2+11.3 (regression guard)', () => {
+    const content = readFileSync('src/components/backend/reports/SaleReportTab.jsx', 'utf8');
+    expect(reportTabImportsLoader(content)).toBe(true);
+    expect(reportTabHasBranchSubscription(content)).toBe(true);
+    expect(reportTabHasSelectedBranchInDeps(content)).toBe(true);
+    expect(reportTabPassesBranchIdToLoader(content)).toBe(true);
+  });
+
+  it('BS-11.5 RemainingCourseTab passes BS-11.1+11.2+11.3 (V52 partial-fix regression guard)', () => {
+    const content = readFileSync('src/components/backend/reports/RemainingCourseTab.jsx', 'utf8');
+    expect(reportTabImportsLoader(content)).toBe(true);
+    expect(reportTabHasBranchSubscription(content)).toBe(true);
+    expect(reportTabHasSelectedBranchInDeps(content)).toBe(true);
+    expect(reportTabPassesBranchIdToLoader(content)).toBe(true);
+  });
+
+  it('BS-11.6 sanctioned exception annotation pattern works (ExpenseReportTab via in-page-selector)', () => {
+    const content = readFileSync('src/components/backend/reports/ExpenseReportTab.jsx', 'utf8');
+    expect(reportTabHasInPageSelectorAnnotation(content)).toBe(true);
+  });
+
+  it('BS-11.7 sanctioned-exception list is closed (only 3 files have BS-11 annotations)', () => {
+    const inPageHolders = [];
+    const navOnlyHolders = [];
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (reportTabHasInPageSelectorAnnotation(content)) inPageHolders.push(f);
+      if (reportTabHasNavigationOnlyAnnotation(content)) navOnlyHolders.push(f);
+    }
+    // Normalize Windows path separators for cross-platform stability
+    const norm = (arr) => arr.map((p) => p.replace(/\\/g, '/')).sort();
+    expect(norm(inPageHolders)).toEqual(SANCTIONED_INPAGE_SELECTOR.slice().sort());
+    expect(norm(navOnlyHolders)).toEqual(SANCTIONED_NAVIGATION_ONLY.slice().sort());
+  });
+
+  it('BS-11.8 stale `audit-branch-scope: report — uses {allBranches:true}` annotation does NOT exist in any report tab (V52 anti-regression)', () => {
+    const violations = [];
+    const staleRe = /audit-branch-scope:\s*report\s*[—-]\s*uses\s*\{allBranches:true\}/;
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (staleRe.test(content)) violations.push(f);
+    }
+    expect(violations, `BS-11.8 stale annotations found (V52 should have stripped these):\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-11.9 source-grep traversal emits zero violations across all report tabs', () => {
+    const allViolations = [];
+    for (const f of reportTabFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!reportTabImportsLoader(content)) continue;
+      if (reportTabHasInPageSelectorAnnotation(content)) continue;
+      if (reportTabHasNavigationOnlyAnnotation(content)) continue;
+      if (!reportTabHasBranchSubscription(content)) allViolations.push(`${f} BS-11.1`);
+      if (!reportTabHasSelectedBranchInDeps(content)) allViolations.push(`${f} BS-11.2`);
+      if (!reportTabPassesBranchIdToLoader(content)) allViolations.push(`${f} BS-11.3`);
+    }
+    expect(allViolations).toEqual([]);
+  });
+});

@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// audit-branch-scope: BS-11 in-page-selector — has multi-branch checkbox UI in-page (V52, 2026-05-08)
 // src/components/backend/reports/ExpenseReportTab.jsx — Phase 16.7 (2026-04-29 session 33)
 // @phase 16.7
 //

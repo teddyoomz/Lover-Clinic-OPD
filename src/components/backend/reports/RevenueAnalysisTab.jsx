@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── RevenueAnalysisTab — Phase 10.7 ──────────────────────────────────────
 // Replicates ProClinic /admin/revenue-analysis-by-procedure — 10 cols +
 // type/category paid-amount summary bars (replaces deferred pie charts).
@@ -9,7 +9,7 @@
 //                  refundAmount / paidAmount
 //   Filters: period (date range) · procedure_type_name · course_category_name
 //
-// Data: be_sales.items.courses[] + master_data/courses. Firestore-only.
+// Data: be_sales.items.courses[] + be_courses. Firestore-only.
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
@@ -22,8 +22,9 @@ import {
   buildRevenueColumns,
 } from '../../../lib/revenueAnalysisAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
-// Phase 14.10-tris (2026-04-26) — be_courses canonical
-import { listCourses } from '../../../lib/backendClient.js';
+// V52 (BS-1 + BS-11): listCourses via scopedDataLayer (auto-injects branchId).
+import { listCourses } from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -38,6 +39,8 @@ const SORTABLE = {
 };
 
 export default function RevenueAnalysisTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -57,14 +60,14 @@ export default function RevenueAnalysisTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadSalesByDateRange({ from, to }),
+      loadSalesByDateRange({ from, to, branchId: selectedBranchId }),
       listCourses(),
     ])
       .then(([s, c]) => { if (!abort) { setSales(s); setCourses(c); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateRevenueByProcedure(sales, courses, {

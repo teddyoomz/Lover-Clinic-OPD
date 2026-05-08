@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── StockReportTab — Phase 10.5 ──────────────────────────────────────────
 // Replicates ProClinic /admin/report/stock (9 cols + Export File).
 // Joins be_stock_batches + master_data/products. Read-only — no mutations.
@@ -19,8 +19,9 @@ import {
   buildStockReportColumns,
 } from '../../../lib/stockReportAggregator.js';
 import { loadAllStockBatchesForReport } from '../../../lib/reportsLoaders.js';
-// Phase 14.10-tris (2026-04-26) — be_products canonical
-import { listProducts } from '../../../lib/backendClient.js';
+// V52 (BS-1 + BS-11): listProducts via scopedDataLayer (auto-injects branchId).
+import { listProducts } from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -58,6 +59,8 @@ function fmtQty(n, unit) {
 }
 
 export default function StockReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const [searchText, setSearchText] = useState('');
   const [productType, setProductType] = useState('all');
   const [productCategory, setProductCategory] = useState('all');
@@ -75,7 +78,7 @@ export default function StockReportTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadAllStockBatchesForReport(),
+      loadAllStockBatchesForReport({ branchId: selectedBranchId }),
       listProducts(),
     ])
       .then(([bs, ps]) => {
@@ -86,7 +89,7 @@ export default function StockReportTab({ clinicSettings, theme }) {
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [reloadKey]);
+  }, [selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateStockReport(batches, products, {

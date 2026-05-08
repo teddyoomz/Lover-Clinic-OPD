@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── SaleReportTab — Phase 10.2 ────────────────────────────────────────────
 // Wraps aggregateSaleReport in ReportShell with date range + status + sale type
 // + search + cancelled toggle. CSV export via downloadCSV using the SAME
@@ -10,6 +11,7 @@ import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import SaleDetailModal from './SaleDetailModal.jsx';
 import { aggregateSaleReport, buildSaleReportColumns } from '../../../lib/saleReportAggregator.js';
 import { loadSalesByDateRange, loadAllCustomersForReport, loadSaleInsuranceClaimsByDateRange } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { aggregateClaimsBySaleId } from '../../../lib/saleInsuranceClaimValidation.js';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
@@ -37,6 +39,8 @@ function fmtDateCE(iso) {
 }
 
 export default function SaleReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'last30'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -73,15 +77,17 @@ export default function SaleReportTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadSalesByDateRange({ from, to, includeCancelled }),
-      loadAllCustomersForReport(),
-      loadSaleInsuranceClaimsByDateRange({}),
+      // V52 (BS-11): all 3 loaders narrow to selectedBranchId. Claims loaded
+      // without date filter (a claim may be filed AFTER the sale date window).
+      loadSalesByDateRange({ from, to, includeCancelled, branchId: selectedBranchId }),
+      loadAllCustomersForReport({ branchId: selectedBranchId }),
+      loadSaleInsuranceClaimsByDateRange({ branchId: selectedBranchId }),
     ])
       .then(([s, c, cl]) => { if (!abort) { setAllSales(s); setAllCustomers(c); setAllClaims(cl); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, includeCancelled, reloadKey]);
+  }, [from, to, includeCancelled, selectedBranchId, reloadKey]);
 
   // Build saleId → paid total map. Only 'paid' claims count (aggregator spec).
   const claimsBySaleId = useMemo(

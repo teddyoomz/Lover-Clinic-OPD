@@ -1,3 +1,9 @@
+// V52 (2026-05-08, BS-11) — All loaders accept optional `branchId` (single)
+// or `allBranches: true` (explicit cross-branch). Backward compat preserved:
+// callers that pass neither continue to receive cross-branch data
+// (legacy behavior). Report tabs in src/components/backend/reports/*Tab.jsx
+// pass `branchId: selectedBranchId` from BranchContext.
+//
 // ─── Report data loaders — wraps backendClient with date-range queries ─────
 // Phase 10 reports load data on tab open + on date-range change. Each loader
 // returns a normalized array (sorted descending by primary date) so report
@@ -19,13 +25,32 @@ const customersCol = () => collection(db, ...basePath(), 'be_customers');
 const expensesColReports = () => collection(db, ...basePath(), 'be_expenses');
 const saleClaimsColReports = () => collection(db, ...basePath(), 'be_sale_insurance_claims');
 
+/**
+ * V52 helper — normalize branch-scope opts.
+ *  - `branchId` (string): single-branch filter (e.g. from useSelectedBranch)
+ *  - `allBranches` (bool): explicit opt-out — never filter by branch
+ *  - both falsy: legacy behavior (no filter; cross-branch data returned)
+ *
+ * Returns true if the caller wants branch filtering applied.
+ */
+function shouldFilterByBranch({ branchId, allBranches } = {}) {
+  if (allBranches === true) return false;
+  return typeof branchId === 'string' && branchId.length > 0;
+}
+
 /** Load expenses by `date` field (YYYY-MM-DD inclusive). Fallback path
- *  identical to loadSalesByDateRange — no composite index required yet. */
-export async function loadExpensesByDateRange({ from = '', to = '' } = {}) {
+ *  identical to loadSalesByDateRange — no composite index required yet.
+ *  V52: accepts `branchId` for single-branch filter. Multi-branch consumers
+ *  (expense-report) keep using their own in-aggregator `branchIds: [...]`
+ *  filter — V52 doesn't break that contract (loader filters when `branchId`
+ *  alone is passed; aggregator's `branchIds` remains aggregator-side). */
+export async function loadExpensesByDateRange({ from = '', to = '', branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   try {
     const conds = [];
     if (from) conds.push(where('date', '>=', from));
     if (to) conds.push(where('date', '<=', to));
+    if (wantBranch) conds.push(where('branchId', '==', branchId));
     const q = conds.length > 0
       ? query(expensesColReports(), ...conds, orderBy('date', 'desc'))
       : query(expensesColReports(), orderBy('date', 'desc'));
@@ -36,17 +61,21 @@ export async function loadExpensesByDateRange({ from = '', to = '' } = {}) {
     let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) items = items.filter(e => (e.date || '') >= from);
     if (to) items = items.filter(e => (e.date || '') <= to);
+    if (wantBranch) items = items.filter(e => e.branchId === branchId);
     items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return items;
   }
 }
 
-/** Load sale insurance claims by `claimDate` (YYYY-MM-DD inclusive). */
-export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '' } = {}) {
+/** Load sale insurance claims by `claimDate` (YYYY-MM-DD inclusive).
+ *  V52: accepts `branchId` for single-branch filter. */
+export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '', branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   try {
     const conds = [];
     if (from) conds.push(where('claimDate', '>=', from));
     if (to) conds.push(where('claimDate', '<=', to));
+    if (wantBranch) conds.push(where('branchId', '==', branchId));
     const q = conds.length > 0
       ? query(saleClaimsColReports(), ...conds, orderBy('claimDate', 'desc'))
       : query(saleClaimsColReports(), orderBy('claimDate', 'desc'));
@@ -57,6 +86,7 @@ export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '' } 
     let items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) items = items.filter(c => (c.claimDate || '') >= from);
     if (to) items = items.filter(c => (c.claimDate || '') <= to);
+    if (wantBranch) items = items.filter(c => c.branchId === branchId);
     items.sort((a, b) => (b.claimDate || '').localeCompare(a.claimDate || ''));
     return items;
   }
@@ -69,12 +99,17 @@ export async function loadSaleInsuranceClaimsByDateRange({ from = '', to = '' } 
  *
  * Requires composite index: be_sales (saleDate ASC, status ASC).
  * On missing-index error, falls back to client-side filter.
+ *
+ * V52 (BS-11): accepts `branchId` for single-branch filter. Cross-branch use
+ * (e.g. cross-branch insights) MUST pass `allBranches: true`.
  */
-export async function loadSalesByDateRange({ from = '', to = '', includeCancelled = false } = {}) {
+export async function loadSalesByDateRange({ from = '', to = '', includeCancelled = false, branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   try {
     const conds = [];
     if (from) conds.push(where('saleDate', '>=', from));
     if (to) conds.push(where('saleDate', '<=', to));
+    if (wantBranch) conds.push(where('branchId', '==', branchId));
     const q = conds.length > 0
       ? query(salesCol(), ...conds, orderBy('saleDate', 'desc'))
       : query(salesCol(), orderBy('saleDate', 'desc'));
@@ -88,6 +123,7 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
     let sales = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) sales = sales.filter(s => (s.saleDate || '') >= from);
     if (to) sales = sales.filter(s => (s.saleDate || '') <= to);
+    if (wantBranch) sales = sales.filter(s => s.branchId === branchId);
     if (!includeCancelled) sales = sales.filter(s => s.status !== 'cancelled');
     sales.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
     return sales;
@@ -105,12 +141,17 @@ export async function loadSalesByDateRange({ from = '', to = '', includeCancelle
  * be_treatments grows past ~10k docs.
  *
  * Excludes cancelled treatments by default (matches sale loader).
+ *
+ * V52: accepts `branchId` for single-branch filter (client-side, since
+ * the function already does a full-collection read).
  */
-export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false } = {}) {
+export async function loadTreatmentsByDateRange({ from = '', to = '', includeCancelled = false, branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   const snap = await getDocs(treatmentsCol());
   let items = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
   if (from) items = items.filter((t) => (t?.detail?.treatmentDate || '') >= from);
   if (to) items = items.filter((t) => (t?.detail?.treatmentDate || '') <= to);
+  if (wantBranch) items = items.filter((t) => t.branchId === branchId);
   if (!includeCancelled) items = items.filter((t) => t?.detail?.status !== 'cancelled');
   items.sort((a, b) => (b?.detail?.treatmentDate || '').localeCompare(a?.detail?.treatmentDate || ''));
   return items;
@@ -119,12 +160,16 @@ export async function loadTreatmentsByDateRange({ from = '', to = '', includeCan
 /**
  * Load appointments by `date` field (YYYY-MM-DD). Same fallback pattern.
  * Sorted descending by date, then ascending by startTime.
+ *
+ * V52: accepts `branchId` for single-branch filter.
  */
-export async function loadAppointmentsByDateRange({ from = '', to = '' } = {}) {
+export async function loadAppointmentsByDateRange({ from = '', to = '', branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   try {
     const conds = [];
     if (from) conds.push(where('date', '>=', from));
     if (to) conds.push(where('date', '<=', to));
+    if (wantBranch) conds.push(where('branchId', '==', branchId));
     const q = conds.length > 0
       ? query(appointmentsCol(), ...conds, orderBy('date', 'desc'))
       : query(appointmentsCol(), orderBy('date', 'desc'));
@@ -135,6 +180,7 @@ export async function loadAppointmentsByDateRange({ from = '', to = '' } = {}) {
     let appts = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     if (from) appts = appts.filter(a => (a.date || '') >= from);
     if (to) appts = appts.filter(a => (a.date || '') <= to);
+    if (wantBranch) appts = appts.filter(a => a.branchId === branchId);
     appts.sort((a, b) => {
       const c = (b.date || '').localeCompare(a.date || '');
       if (c !== 0) return c;
@@ -181,9 +227,12 @@ export async function loadStockBatches({ branchId = '' } = {}) {
  * needs to show "หมดอายุ" qty broken out per product. Cancelled/depleted batches
  * (qty.remaining === 0) ARE filtered since they carry no stock value.
  *
- * @param {{branchId?: string}} [opts]
+ * @param {{branchId?: string, allBranches?: boolean}} [opts]
+ * V52: `allBranches: true` opts out of branch filter (reserved for future
+ * cross-branch dashboards); default behavior unchanged for backward compat.
  */
-export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
+export async function loadAllStockBatchesForReport({ branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   const getRemaining = (b) => {
     const r = Number(b?.qty?.remaining);
     if (Number.isFinite(r)) return r;
@@ -196,7 +245,7 @@ export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
     .filter(b => {
       if (getRemaining(b) <= 0) return false;
       if (b.status === 'cancelled' || b.status === 'depleted') return false;
-      if (branchId && b.branchId !== branchId) return false;
+      if (wantBranch && b.branchId !== branchId) return false;
       return true;
     });
 }
@@ -210,10 +259,15 @@ export async function loadAllStockBatchesForReport({ branchId = '' } = {}) {
  * Returns plain be_customers docs; finance.* summary fields are read directly
  * by the aggregator (recalcCustomerDepositBalance + recalcCustomerWalletBalances
  * + earnPoints keep them fresh on every mutation).
+ *
+ * V52 (BS-11): accepts `branchId` for single-branch filter (creation branch
+ * per V50 Phase 3). Pass `allBranches: true` for cross-branch reports.
  */
-export async function loadAllCustomersForReport() {
+export async function loadAllCustomersForReport({ branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   const snap = await getDocs(customersCol());
-  const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  let list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  if (wantBranch) list = list.filter(c => c.branchId === branchId);
   list.sort((a, b) => (b.clonedAt || '').localeCompare(a.clonedAt || ''));
   return list;
 }
@@ -221,12 +275,16 @@ export async function loadAllCustomersForReport() {
 /**
  * Load stock movements within a date range. Sorted desc by createdAt.
  * Used by future Phase 10 movement report (deferred from v1).
+ *
+ * V52: accepts `branchId` for single-branch filter.
  */
-export async function loadStockMovementsByDateRange({ from = '', to = '' } = {}) {
+export async function loadStockMovementsByDateRange({ from = '', to = '', branchId = '', allBranches = false } = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
   const snap = await getDocs(stockMovementsCol());
   let mvs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   if (from) mvs = mvs.filter(m => (m.createdAt || '') >= from);
   if (to) mvs = mvs.filter(m => (m.createdAt || '') <= `${to}T23:59:59Z`);
+  if (wantBranch) mvs = mvs.filter(m => m.branchId === branchId);
   mvs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   return mvs;
 }

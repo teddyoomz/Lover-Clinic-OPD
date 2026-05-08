@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── CustomerReportTab — Phase 10.3 ────────────────────────────────────────
 // Replicates ProClinic /admin/report/customer (9 cols + Export File).
 // Joins be_customers + be_sales (per-customer purchase rollup).
@@ -12,6 +13,7 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { aggregateCustomerReport, buildCustomerReportColumns } from '../../../lib/customerReportAggregator.js';
 import { loadAllCustomersForReport, loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
@@ -59,6 +61,8 @@ const BADGE_COLORS = {
 };
 
 export default function CustomerReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   // Default range: ปีนี้ — purchase summary covers full year
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisYear'), []);
   const [from, setFrom] = useState(initialPreset.from);
@@ -81,18 +85,19 @@ export default function CustomerReportTab({ clinicSettings, theme }) {
   // Load both collections in parallel. Sales loaded WITHOUT date filter at
   // load time — the aggregator handles the date narrow downstream so the
   // user can change the date range without re-fetching.
+  // V52 (BS-11): both loaders narrow by selectedBranchId.
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadAllCustomersForReport(),
-      loadSalesByDateRange({ /* no range — aggregator filters in-memory */ }),
+      loadAllCustomersForReport({ branchId: selectedBranchId }),
+      loadSalesByDateRange({ branchId: selectedBranchId /* no date — aggregator filters in-memory */ }),
     ])
       .then(([cs, ss]) => { if (!abort) { setAllCustomers(cs); setAllSales(ss); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [reloadKey]);
+  }, [selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateCustomerReport(allCustomers, allSales, {

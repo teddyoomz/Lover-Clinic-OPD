@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── AppointmentReportTab — Phase 10.4 ────────────────────────────────────
 // Replicates ProClinic /admin/report/appointment (10 cols + Export File).
 // Joins be_appointments + be_customers (customerType) + master_data/staff
@@ -24,8 +24,9 @@ import {
   loadAppointmentsByDateRange,
   loadAllCustomersForReport,
 } from '../../../lib/reportsLoaders.js';
-// Phase 14.10-tris (2026-04-26) — listAllSellers (be_*) replaces master_data
-import { listAllSellers } from '../../../lib/backendClient.js';
+// V52 (BS-1 + BS-11): listAllSellers via scopedDataLayer (auto-injects branchId).
+import { listAllSellers } from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
 
@@ -76,6 +77,8 @@ function fmtDateCE(iso) {
 }
 
 export default function AppointmentReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   // Default range: this month — appointments are recency-dominant.
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
@@ -96,12 +99,14 @@ export default function AppointmentReportTab({ clinicSettings, theme }) {
 
   // Load appointments narrowed by date range; customers + staff are small
   // reference sets loaded once.
+  // V52 (BS-11): all 3 loaders narrow to selectedBranchId. listAllSellers
+  // already auto-injects via scopedDataLayer.
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadAppointmentsByDateRange({ from, to }),
-      loadAllCustomersForReport(),
+      loadAppointmentsByDateRange({ from, to, branchId: selectedBranchId }),
+      loadAllCustomersForReport({ branchId: selectedBranchId }),
       listAllSellers(),
     ])
       .then(([appts, cs, st]) => {
@@ -113,7 +118,7 @@ export default function AppointmentReportTab({ clinicSettings, theme }) {
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateAppointmentReport(appointments, customers, staff, {

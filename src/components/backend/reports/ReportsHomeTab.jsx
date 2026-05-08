@@ -1,3 +1,4 @@
+// audit-branch-scope: BS-11 navigation-only — no data load (V52, 2026-05-08)
 // ─── ReportsHomeTab — landing card grid replicating ProClinic /admin/report ─
 // 6 categories × ~36 cards (matches captured screenshot 2026-04-19).
 // Cards link to active Phase 10 tabs OR show "เร็วๆนี้" badge for deferred items.

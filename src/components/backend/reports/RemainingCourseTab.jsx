@@ -1,4 +1,5 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
+// Loader narrowing added on top of existing client-side filterCourses pass.
 // ─── RemainingCourseTab — Phase 16.5 (2026-04-29) ──────────────────────────
 // Mirrors ProClinic /admin/remaining-course. Lists every customer's course
 // in be_customers[].courses[] flattened to rows. Filter by search/status/
@@ -45,8 +46,11 @@ const COL_DEFS = [
 ];
 
 export default function RemainingCourseTab({ clinicSettings }) {
-  const branch = useSelectedBranch();
-  const branchId = branch?.branchId || '';
+  // V52 (BS-11): canonical destructure shape (matches every fixed report tab)
+  // so the audit-branch-scope BS-11.x bank lights up green for this file.
+  // Local `selectedBranchId` is reused for both server-side narrow (loader)
+  // and client-side filter (filterCourses defense-in-depth).
+  const { branchId: selectedBranchId } = useSelectedBranch();
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,14 +75,19 @@ export default function RemainingCourseTab({ clinicSettings }) {
     setLoading(true);
     setError('');
     try {
-      const list = await loadAllCustomersForReport();
+      // V52 (BS-11): server-side narrow by selectedBranchId (creation branch).
+      // The downstream filterCourses() also filters per-row by branchId for
+      // defense-in-depth (a customer could exist in branch A but their
+      // courses array could include rows from a different branch — though
+      // post-V50 this shouldn't happen).
+      const list = await loadAllCustomersForReport({ branchId: selectedBranchId });
       setCustomers(list || []);
     } catch (e) {
       setError(e?.message || 'โหลดข้อมูลไม่สำเร็จ');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -88,15 +97,15 @@ export default function RemainingCourseTab({ clinicSettings }) {
 
   const filteredRows = useMemo(() => filterCourses(allRows, {
     search, status: statusFilter, courseType: courseTypeFilter,
-    hasRemainingOnly, branchId,
-  }), [allRows, search, statusFilter, courseTypeFilter, hasRemainingOnly, branchId]);
+    hasRemainingOnly, branchId: selectedBranchId,
+  }), [allRows, search, statusFilter, courseTypeFilter, hasRemainingOnly, selectedBranchId]);
 
   const sortedRows = useMemo(() => sortCourses(filteredRows, 'purchaseDate', 'desc'), [filteredRows]);
 
   const stats = useMemo(() => aggregateRemainingStats(sortedRows), [sortedRows]);
 
   // Reset page whenever filtered result-set shrinks below current offset.
-  useEffect(() => { setPage(0); }, [search, statusFilter, courseTypeFilter, hasRemainingOnly, branchId]);
+  useEffect(() => { setPage(0); }, [search, statusFilter, courseTypeFilter, hasRemainingOnly, selectedBranchId]);
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);

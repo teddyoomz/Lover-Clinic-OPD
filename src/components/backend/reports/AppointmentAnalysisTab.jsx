@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── AppointmentAnalysisTab — Phase 10.8 ──────────────────────────────────
 // Replicates ProClinic /admin/appointment-analysis — per-advisor KPI table
 // (10 cols) + appointment breakdown (expected sales) + unexpected-sale list.
@@ -20,8 +20,9 @@ import {
   loadAppointmentsByDateRange,
   loadSalesByDateRange,
 } from '../../../lib/reportsLoaders.js';
-// Phase 14.10-tris (2026-04-26) — listAllSellers (be_*) replaces master_data
-import { listAllSellers } from '../../../lib/backendClient.js';
+// V52 (BS-1 + BS-11): listAllSellers via scopedDataLayer (auto-injects branchId).
+import { listAllSellers } from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
@@ -67,6 +68,8 @@ const SALE_PAYMENT_LABELS = {
 };
 
 export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -85,8 +88,8 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadAppointmentsByDateRange({ from, to }),
-      loadSalesByDateRange({ from, to }),
+      loadAppointmentsByDateRange({ from, to, branchId: selectedBranchId }),
+      loadSalesByDateRange({ from, to, branchId: selectedBranchId }),
       listAllSellers().catch(() => []),
     ])
       .then(([a, s, st]) => {
@@ -96,7 +99,7 @@ export default function AppointmentAnalysisTab({ clinicSettings, theme }) {
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateAppointmentAnalysis(appointments, sales, {

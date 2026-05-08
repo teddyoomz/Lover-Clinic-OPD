@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── DailyRevenueTab — Phase 10.X1 ────────────────────────────────────────
 // Closes ReportsHome card "รายรับประจำวัน". Groups be_sales by saleDate
 // → daily briefing dashboard with top-revenue day + busiest day insight
@@ -13,6 +14,7 @@ import {
   buildDailyRevenueColumns,
 } from '../../../lib/dailyRevenueAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
@@ -32,6 +34,8 @@ function dayOfWeekThai(iso) {
 }
 
 export default function DailyRevenueTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -44,12 +48,12 @@ export default function DailyRevenueTab({ clinicSettings, theme }) {
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
-    loadSalesByDateRange({ from, to, includeCancelled: true })
+    loadSalesByDateRange({ from, to, includeCancelled: true, branchId: selectedBranchId })
       .then(s => { if (!abort) setSales(s); })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateDailyRevenue(sales, { from, to }),

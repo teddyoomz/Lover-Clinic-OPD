@@ -925,3 +925,162 @@ Files relevant to V41:
 - `.claude/rules/v-log-archive.md` — this entry
 - `.agents/skills/audit-anti-vibe-code/SKILL.md` — AV20 invariant
 
+---
+
+### V52 — 2026-05-08 — Report tabs branch-scope shipped (BS-11) — autonomous overnight job
+
+User report (verbatim, before sleep):
+> "Tab ย่อยของหน้ารายงานทั้งหมดต้องแสดงรายละเอียดของสาขานั้นๆที่เลือกไว้ใน branch selector ยกเว้น tab=expense-report และ tab=clinic-report แสดงแบบ universal ได้ ... ไม่ต้องถามอะไรผมเลย เลือกที่นาย recommend ทั้งหมด และ ผมให้ผ่าทุกการรีวิว code ของนาย ให้ทำการแก้ไข เทส ทดสอบ ได้เลย โดยไม่ต้องถามอะไรผมทั้งนั้น เพราะผมจะไปนอน และหวังว่าตื่นมา งานนี้จะเสร็จทั้งหมด"
+
+= ALL report sub-tabs must respect the top-right BranchSelector except `tab=expense-report` and `tab=clinic-report` (in-page selector). Don't ask anything; pick all your recommendations; fix + test + verify autonomously; user is going to sleep, hopes the work is done by morning.
+
+**Class-of-bug**: V12 multi-reader-sweep family at the report-tab/loader layer. Same root cause as V36 / Phase 17.0 BS-9 (PromotionTab/CouponTab/VoucherTab silent-no-refresh) but at a different audit-grep boundary. BS-9 catches tabs importing branch-scoped listers from `scopedDataLayer.js`; report tabs use `reportsLoaders.js` (intermediate layer wrapping Firestore queries directly). BS-9 didn't reach them.
+
+**Audit before V52** (16 report tabs total):
+
+| Tab | Status pre-V52 |
+|---|---|
+| `reports` (ReportsHomeTab) | navigation only, no data load — N/A |
+| `reports-sale` (SaleReportTab) | BROKEN: no useSelectedBranch |
+| `reports-customer` (CustomerReportTab) | BROKEN |
+| `reports-appointment` (AppointmentReportTab) | BROKEN: stale annotation `{allBranches:true}` (a documentation lie — flag was never actually being passed; lives on scopedDataLayer not reportsLoaders) |
+| `reports-stock` (StockReportTab) | BROKEN: loader supports branchId but tab never passes it |
+| `reports-rfm` (CRMInsightTab) | BROKEN |
+| `reports-revenue` (RevenueAnalysisTab) | BROKEN |
+| `reports-appt-analysis` (AppointmentAnalysisTab) | BROKEN |
+| `reports-daily-revenue` (DailyRevenueTab) | BROKEN |
+| `reports-staff-sales` (StaffSalesTab) | BROKEN |
+| `reports-pnl` (PnLReportTab) | BROKEN |
+| `reports-df-payout` (DfPayoutReportTab) | BROKEN |
+| `reports-payment` (PaymentSummaryTab) | BROKEN |
+| `reports-remaining-course` (RemainingCourseTab) | BROKEN partial: client-side filter only (loader fetches all branches) |
+| `expense-report` (ExpenseReportTab) | EXEMPTED: in-page multi-branch checkbox UI |
+| `clinic-report` (ClinicReportTab) | EXEMPTED: in-page multi-branch checkbox UI |
+
+**13 of 14 substantive report tabs ignored the top-right BranchSelector.** Switching the selected branch had zero effect on report contents — admin saw cross-branch aggregated data regardless. The 9 stale `{allBranches:true}` annotations were documentation lies that audit BS-1 saw and passed without verifying the flag was being passed.
+
+**V52 Phase 1 — `reportsLoaders.js` foundation** (additive, backward-compat preserved):
+
+7 loaders gain `{branchId, allBranches}` opts. Helper `shouldFilterByBranch()` normalizes opts: `branchId` truthy + `allBranches: false` → filter at Firestore-`where` clause level OR client-side fallback.
+
+```js
+function shouldFilterByBranch({ branchId, allBranches } = {}) {
+  if (allBranches === true) return false;
+  return typeof branchId === 'string' && branchId.length > 0;
+}
+
+export async function loadSalesByDateRange({
+  from = '', to = '', includeCancelled = false,
+  branchId = '', allBranches = false,
+} = {}) {
+  const wantBranch = shouldFilterByBranch({ branchId, allBranches });
+  // try Firestore-where path with branchId clause; fallback client-side filter
+}
+```
+
+7 loaders updated: `loadSalesByDateRange`, `loadAppointmentsByDateRange`, `loadAllCustomersForReport`, `loadExpensesByDateRange`, `loadSaleInsuranceClaimsByDateRange`, `loadTreatmentsByDateRange`, `loadStockMovementsByDateRange`. (`loadStockBatches` and `loadAllStockBatchesForReport` already had branchId; the latter gained `allBranches: true` opt-out for future use.)
+
+**V52 Phase 2 — 13 tabs migrated to canonical V52 pattern**:
+
+```js
+// Imports
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
+
+// Component body (top of function)
+const { branchId: selectedBranchId } = useSelectedBranch();
+
+// useEffect / useCallback
+useEffect(() => {
+  Promise.all([
+    loadSalesByDateRange({ from, to, branchId: selectedBranchId }),
+    // ... other loaders ...
+  ]).then(...);
+}, [from, to, selectedBranchId, reloadKey]);  // ← selectedBranchId in deps
+```
+
+Tab-specific transformations:
+- **SaleReportTab + CustomerReportTab + AppointmentReportTab + AppointmentAnalysisTab**: 2-3 loaders each, plus migrate `listAllSellers` import from raw `backendClient.js` → `scopedDataLayer.js` (BS-1 compliance).
+- **StockReportTab**: migrate `listProducts` raw → scopedDataLayer.
+- **CRMInsightTab + DailyRevenueTab + PaymentSummaryTab + PnLReportTab**: simple loader-only changes.
+- **RevenueAnalysisTab**: migrate `listCourses` raw → scopedDataLayer.
+- **StaffSalesTab**: migrate `listStaff` + `listDoctors` raw → scopedDataLayer (universal pass-through; no semantic change).
+- **DfPayoutReportTab**: most complex — 3 loaders + 6 list*; switch ALL list* to scopedDataLayer (4 branch-scoped + 2 universal); pass branchId to all 3 loaders.
+- **RemainingCourseTab**: pre-V52 already imported `useSelectedBranch` BUT used non-canonical `branch?.branchId` access pattern + only filtered client-side. V52 (a) canonicalizes destructure shape to `const { branchId: selectedBranchId } = useSelectedBranch()`, (b) renames all references `branchId → selectedBranchId`, (c) passes `branchId: selectedBranchId` to `loadAllCustomersForReport` for server-side narrow, (d) keeps client-side `filterCourses({ branchId: selectedBranchId })` as defense-in-depth.
+
+**V52 Phase 3 — 3 tabs annotated as sanctioned exceptions**:
+- `ExpenseReportTab.jsx` + `ClinicReportTab.jsx` get NEW `// audit-branch-scope: BS-11 in-page-selector — has multi-branch checkbox UI in-page (V52, 2026-05-08)`. Their existing `useExpenseReport` / `useClinicReport` hooks pass `filter.branchIds: [...]` (array — multi-select) to aggregators, which filter internally. V52 doesn't change their functionality.
+- `ReportsHomeTab.jsx` gets NEW `// audit-branch-scope: BS-11 navigation-only — no data load (V52, 2026-05-08)`. Pure navigation card grid; no data fetch.
+
+**9 stale `// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation` annotations stripped** (DfPayoutReportTab, RevenueAnalysisTab, StaffSalesTab, StockReportTab, AppointmentReportTab, AppointmentAnalysisTab, ClinicReportTab, ExpenseReportTab, RemainingCourseTab). Replaced by accurate V52 marker comment.
+
+**V52 Phase 4 — New audit invariant BS-11** (parallel to BS-9):
+
+```
+BS-11 — Report-tab branch-refresh discipline (V52, 2026-05-08)
+       Every file in src/components/backend/reports/**/*Tab.jsx that
+       calls a load* from reportsLoaders.js MUST either:
+       (a) subscribe useSelectedBranch + pass branchId to loaders +
+           include selectedBranchId in deps, OR
+       (b) be annotated `// audit-branch-scope: BS-11 in-page-selector`
+           (sanctioned: ExpenseReportTab + ClinicReportTab ONLY), OR
+       (c) be annotated `// audit-branch-scope: BS-11 navigation-only`
+           (sanctioned: ReportsHomeTab ONLY).
+       Sanctioned exception list is closed (lock test BS-11.7).
+```
+
+9 sub-tests (BS-11.1..BS-11.9) added to `tests/audit-branch-scope.test.js`. `audit-branch-scope` SKILL.md updated: 8 → 11 invariants.
+
+**V52 Phase 5 — Test bank shipped (Rule N + Rule I)**:
+
+| Test file | Tests | Purpose |
+|---|---|---|
+| `tests/v52-reports-loaders-branch-id.test.js` | 39 (L1-L8) | Firestore mock captures `where` clauses; verifies branchId filter applied/skipped per opts; covers fallback path + adversarial inputs (null/undefined/numeric/Thai/empty/allBranches:true) |
+| `tests/v52-report-tabs-source-grep.test.js` | 52 (G1-G4) | Per-tab regression locks: imports + destructure + branchId pass-through + deps array + no stale annotations + no raw backendClient + V52 marker. Cross-cutting universal classifier (G4.1-G4.4) |
+| `tests/v52-report-tabs-branch-scope-flow-simulate.test.js` | 62 (F1-F7) | Rule I full-flow simulate: BranchProvider + useSelectedBranch + canonical pattern → loader re-fires on branch switch (mount + selectBranch(B) + multi-loader + empty + lifecycle A→B→A). Adversarial branchId inputs |
+| `tests/audit-branch-scope.test.js` | +11 BS-11.x | Audit-skill source-grep regression bank |
+
+**Cumulative test delta**: 7333 → 7543 + 1 skipped (+211 net) all GREEN. Build clean (2.27s, BackendDashboard chunk 941 KB unchanged).
+
+**V52 Phase 6 — Verification**:
+- Targeted (Rule N): 4 V52 files + audit green (~226 V52-specific assertions)
+- Full vitest: 7543/7543 + 1 skipped GREEN
+- Build: clean
+
+**Lessons**:
+
+1. **Class-of-bug expansion at the LAYER level** — V36 / Phase 17.0 BS-9 caught scopedDataLayer importers; report tabs use a different intermediate (`reportsLoaders.js`). Same root cause (V12 multi-reader-sweep) but at a different audit grep boundary. BS-11 closes the report-tab gap permanently.
+
+2. **Stale annotations are documentation lies** — the 9 `audit-branch-scope: report — uses {allBranches:true}` annotations existed since the report tabs first shipped. Audit BS-1 saw the annotation and passed; nobody verified the flag was actually being passed. Rule P 7-step Step 3 (cross-file grep) caught this when V52 audit started — the grep showed no `allBranches:true` literal in any of those 9 tabs. Annotations need to be ENFORCED by audit grep, not just present in source.
+
+3. **Backward compat is cheap when API is purely additive** — `reportsLoaders.js` 7-loader change adds optional opts (`{branchId, allBranches}`). Legacy callers pass nothing → get pre-V52 behavior. New callers pass `branchId: selectedBranchId` → get filtered behavior. Zero migration risk for non-report consumers (e.g. `useExpenseReport` which uses `branchIds: [array]` in-aggregator filter — V52 keeps that contract).
+
+4. **Closed sanctioned-exception lists prevent annotation drift** — BS-11.7 explicitly enumerates the 3 files allowed to carry BS-11 annotations. Adding a 4th file with the annotation fails the lock. Mirror of V41 / AV20 lookup-map consumer-classification pattern. Keeps the audit sharp.
+
+5. **Canonical pattern at scale = mechanical edits** — 13 tabs × ~3 line changes each = ~40 surgical edits. The canonical pattern (useSelectedBranch destructure + branchId pass-through + deps array + V52 marker) is greppable, testable, and identical across all 13 fixed tabs. Future report-tab additions just copy the pattern.
+
+6. **Sanctioned-exception annotations document INTENT, not just current behavior** — `BS-11 in-page-selector` says "this tab has its own multi-branch UI; cross-branch reads are LEGITIMATE here". Future code reviewers reading ExpenseReportTab know to verify the in-page UI still works AND that no cross-branch leak happens via other paths. The annotation is the contract.
+
+7. **Autonomous overnight execution discipline** — user pre-authorized "ไม่ต้องถามอะไรผมเลย" + sleep. Required: full spec + plan + execution + tests + commit + state-update WITHOUT mid-flow stops. Locked decisions per user "เลือกที่นาย recommend ทั้งหมด". Test failures (RemainingCourseTab non-canonical destructure shape mismatch) handled inline with a single canonicalization edit rather than asking. Build + full vitest at end of batch (Rule N implicit override at batch end).
+
+**Rule/audit update**:
+- Rule J brainstorming HARD-GATE: spec written to `docs/superpowers/specs/2026-05-08-report-tabs-branch-scope-design.md` with user-pre-approval header.
+- Rule P 7-step class-of-bug expansion: full Tier 1 + Tier 2 artifacts (regression test + AVxx + classifier doc); Tier 3 V-entry (this entry) + iron-clad NOT escalated (BS-11 invariant addition is a Tier 2 enrichment of existing BSA invariant family — not a new architectural rule).
+- Rule N: targeted-test-only during iteration; full vitest at batch end.
+- Rule I: full-flow simulate via BranchProvider + canonical pattern.
+- BS-1..BS-10 unchanged; **BS-11 NEW**.
+
+**Files relevant to V52**:
+- `src/lib/reportsLoaders.js` (7 loaders + helper)
+- 13 broken report tabs in `src/components/backend/reports/`
+- 3 sanctioned-annotation tabs (Expense + Clinic + ReportsHome)
+- `tests/audit-branch-scope.test.js` (+BS-11.x block)
+- 3 NEW test files (`tests/v52-*`)
+- `.agents/skills/audit-branch-scope/SKILL.md` (BS-11 row + annotation table)
+- `docs/superpowers/specs/2026-05-08-report-tabs-branch-scope-design.md`
+- `docs/superpowers/plans/2026-05-08-report-tabs-branch-scope.md`
+- `.claude/rules/00-session-start.md` § 2 — V52 compact entry
+- `.claude/rules/v-log-archive.md` — this entry
+- `SESSION_HANDOFF.md` + `.agents/active.md` — state update
+
+**No deploy this turn** — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately. V52 is a UI refresh-discipline change with zero rules / data ops. Master = 1 commit ahead of prod (`ef580a6`); user can deploy on wake-up.
+

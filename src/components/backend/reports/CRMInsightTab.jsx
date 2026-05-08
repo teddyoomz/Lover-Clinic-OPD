@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── CRMInsightTab — Phase 10.6 ───────────────────────────────────────────
 // Replicates ProClinic /admin/crm-insight — RFM analysis with 3 layouts:
 //   Table 1: Segment summary (segment · totalRevenue · customerCount)
@@ -13,6 +14,7 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { aggregateRFM, buildRFMColumns } from '../../../lib/rfmUtils.js';
 import { loadSalesByDateRange, loadAllCustomersForReport } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { thaiTodayISO } from '../../../utils.js';
@@ -42,6 +44,8 @@ function fmtDateCE(iso) {
 }
 
 export default function CRMInsightTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   // Default: all-time (no date filter), asOfISO = today
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisYear'), []);
   const [from, setFrom] = useState(initialPreset?.from || '');
@@ -60,14 +64,15 @@ export default function CRMInsightTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadSalesByDateRange({}),   // ALL sales; filter applied in aggregator
-      loadAllCustomersForReport(),
+      // V52 (BS-11): per-branch sales + customers (date filter still in aggregator).
+      loadSalesByDateRange({ branchId: selectedBranchId }),
+      loadAllCustomersForReport({ branchId: selectedBranchId }),
     ])
       .then(([s, c]) => { if (!abort) { setAllSales(s); setAllCustomers(c); } })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [reloadKey]);
+  }, [selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregateRFM(allCustomers, allSales, { asOfISO, from, to }),

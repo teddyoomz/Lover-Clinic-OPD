@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── Payment Summary Tab — Phase 12.8 ──────────────────────────────────────
 // Groups be_sales payment channels by canonical method, with amount + saleCount
 // + percentage. Firestore-only (Rule E).
@@ -8,10 +9,13 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { aggregatePaymentSummary, getPaymentSummaryColumns } from '../../../lib/paymentSummaryAggregator.js';
 import { loadSalesByDateRange } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
 export default function PaymentSummaryTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires when admin switches branch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -24,12 +28,12 @@ export default function PaymentSummaryTab({ clinicSettings, theme }) {
   useEffect(() => {
     let abort = false;
     setLoading(true); setError('');
-    loadSalesByDateRange({ from, to, includeCancelled: true })
+    loadSalesByDateRange({ from, to, includeCancelled: true, branchId: selectedBranchId })
       .then(s => { if (!abort) setSales(s); })
       .catch(e => { if (!abort) setError(e?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(() => aggregatePaymentSummary(sales, { from, to }), [sales, from, to]);
 

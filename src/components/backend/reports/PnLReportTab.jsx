@@ -1,3 +1,4 @@
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── P&L Report Tab — Phase 12.8 ───────────────────────────────────────────
 // Joins be_sales (revenue side) + be_expenses (expense side) into per-period
 // P&L table. Period selector: day / month / year. Firestore-only (Rule E).
@@ -8,10 +9,13 @@ import ReportShell from './ReportShell.jsx';
 import DateRangePicker, { buildPresets } from './DateRangePicker.jsx';
 import { aggregatePnLReport, getPnLColumns, PERIOD_OPTIONS } from '../../../lib/pnlReportAggregator.js';
 import { loadSalesByDateRange, loadExpensesByDateRange } from '../../../lib/reportsLoaders.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 
 export default function PnLReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find(p => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -27,14 +31,14 @@ export default function PnLReportTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadSalesByDateRange({ from, to, includeCancelled: true }),
-      loadExpensesByDateRange({ from, to }),
+      loadSalesByDateRange({ from, to, includeCancelled: true, branchId: selectedBranchId }),
+      loadExpensesByDateRange({ from, to, branchId: selectedBranchId }),
     ])
       .then(([s, e]) => { if (!abort) { setSales(s); setExpenses(e); } })
       .catch((err) => { if (!abort) setError(err?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(
     () => aggregatePnLReport({ sales, expenses, filters: { from, to, period } }),

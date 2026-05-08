@@ -1,4 +1,4 @@
-// audit-branch-scope: report — uses {allBranches:true} for cross-branch aggregation
+// V52 (2026-05-08, BS-11) — branch-scoped per top-right BranchSelector.
 // ─── DF Payout Report Tab — Phase 13.4.2 / extended Phase 16.7-bis ────────
 //
 // Per-doctor + per-assistant DF payout over a date range. Joins:
@@ -27,6 +27,8 @@ import {
   loadTreatmentsByDateRange,
   loadExpensesByDateRange,
 } from '../../../lib/reportsLoaders.js';
+// V52 (BS-1 + BS-11): all list* via scopedDataLayer (auto-injects branchId
+// for branch-scoped collections; pass-through for universal Doctors/Staff).
 import {
   listDoctors,
   listStaff,
@@ -34,7 +36,8 @@ import {
   listDfStaffRates,
   listCourses,
   listStaffSchedules,
-} from '../../../lib/backendClient.js';
+} from '../../../lib/scopedDataLayer.js';
+import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import {
   filterExpensesForExpenseReport,
   buildExpenseDoctorRows,
@@ -74,6 +77,8 @@ const ASSISTANT_COLUMNS = [
 ];
 
 export default function DfPayoutReportTab({ clinicSettings, theme }) {
+  // V52 (BS-11): subscribe so reload re-fires on top-right branch switch.
+  const { branchId: selectedBranchId } = useSelectedBranch();
   const initialPreset = useMemo(() => buildPresets().find((p) => p.id === 'thisMonth'), []);
   const [from, setFrom] = useState(initialPreset.from);
   const [to, setTo] = useState(initialPreset.to);
@@ -95,9 +100,12 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
     let abort = false;
     setLoading(true); setError('');
     Promise.all([
-      loadSalesByDateRange({ from, to }),
-      loadTreatmentsByDateRange({ from, to }).catch(() => []),
-      loadExpensesByDateRange({ from, to }).catch(() => []),
+      // V52 (BS-11): all branch-scoped loaders + listers narrow to
+      // selectedBranchId. Universal listers (listDoctors / listStaff)
+      // pass through scopedDataLayer unchanged (returns all rows).
+      loadSalesByDateRange({ from, to, branchId: selectedBranchId }),
+      loadTreatmentsByDateRange({ from, to, branchId: selectedBranchId }).catch(() => []),
+      loadExpensesByDateRange({ from, to, branchId: selectedBranchId }).catch(() => []),
       listDoctors().catch(() => []),
       listStaff().catch(() => []),
       listDfGroups().catch(() => []),
@@ -126,7 +134,7 @@ export default function DfPayoutReportTab({ clinicSettings, theme }) {
       .catch((err) => { if (!abort) setError(err?.message || 'โหลดข้อมูลล้มเหลว'); })
       .finally(() => { if (!abort) setLoading(false); });
     return () => { abort = true; };
-  }, [from, to, reloadKey]);
+  }, [from, to, selectedBranchId, reloadKey]);
 
   const out = useMemo(() => {
     // Phase 14 DF computation (canonical)
