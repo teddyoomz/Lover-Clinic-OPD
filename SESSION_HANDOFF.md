@@ -7,11 +7,33 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #20 — V52..V64 + V64-fix1..fix5 **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green) · 8150+ tests · build clean
+- **Date last updated**: 2026-05-09 EOD #21 — V64-fix8 patient name link **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8187 tests · build clean
 - **Branch**: `master`
-- **Last commit**: fix(V64-fix5): cancel button no flash — confirm BEFORE optimistic update
-- **Test count**: 8150+ passed (+ V64-fix1..fix5 incremental tests). 1 pre-existing `bsa-task7-h-quater` flake (passes standalone).
-- **Deploy state**: **PRODUCTION = `1da05bb`** (master = prod, 0 ahead). Combined deploy 2026-05-09: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build; `firebase deploy --only firestore:rules` released (idempotent — rules unchanged since prior prod). Pre-probe + post-probe both GREEN on surviving Rule B endpoints (1 chat_conversations + 5a/5b opd_sessions anon).
+- **Last commit**: feat(V64-fix8): patient name → clickable link to customer detail (new tab)
+- **Test count**: 8187 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs).
+- **Deploy state**: **PRODUCTION = `dcb6c41`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #21: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (50s exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Session #20 precedent). Cleanup: 31 probe artifacts nuked.
+
+### Session 2026-05-09 EOD #21 — V64-fix8 patient name → link to customer detail (DEPLOYED)
+
+User: "ทำให้ชื่อคนไข้ในแต่ละรายการเป็นลิ้งกดเข้าไปดูหน้าข้อมูลคนไข้ได้" (with screenshot of `/admin` V64 hub list view).
+
+V64 AppointmentHubRowCard patient name → `<a target="_blank">` opening customer detail in new browser tab via `buildCustomerDetailUrl(customerId)` (Phase 15.7-septies canonical helper, 4th UI surface adopting it — Rule of 3 lock at AdminDashboard kiosk + AppointmentFormModal + DepositPanel + MembershipPanel + V64-fix8).
+
+**Decisions**: `<a target="_blank">` over `button + onClick` (right-click/middle-click/keyboard work natively + `rel="noopener noreferrer"` security defense); conditional render (truthy customerId → `<a>`; falsy → fallback `<div>`, no `<a href="#">` dead links).
+
+**Files**: `src/components/admin/AppointmentHubRowCard.jsx` + `tests/v64-appointment-hub-rtl.test.jsx` (V64.R8 nested describe, R8.1-R8.7).
+
+**Verification**: 47/47 V64 RTL+flow-simulate GREEN; full suite 8187 passed; build clean.
+
+**Combined deploy** (Rule 02 V15) — user authorized "deploy" THIS turn:
+- vercel --prod `blbmt2300`: 50s exit 0; aliased `lover-clinic-app.vercel.app`
+- firebase --only firestore:rules `bntn8ij70`: idempotent ("already up to date, skipping upload")
+- Pre+post probe 1 + 5: 200/200 GREEN; probes 2/3/4: 403 false-positive (V50-followup-2; collections deleted)
+- Cleanup: 31 probe artifacts nuked
+
+Detail: `.agents/sessions/2026-05-09-v64-fix8-patient-name-link.md`. Production at `dcb6c41`.
+
+
 
 ### Session 2026-05-09 EOD #20 — DEPLOY V52..V64 (combined; PDP green)
 
@@ -1258,24 +1280,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — V52..V63 + V62-bis schedule-link adoption-gap series complete (9 V-entries deep).
+Resume LoverClinic — continue from 2026-05-09 EOD #21.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=<HEAD>, prod=ef580a6 — 31 ahead)
-3. .agents/active.md (8059 + 1 skipped GREEN · idle)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V63 V-summary)
-5. .agents/sessions/2026-05-08-v63-v62bis-canonical-admin-calendar.md (latest checkpoint)
+2. SESSION_HANDOFF.md (master=dcb6c41, prod=dcb6c41)
+3. .agents/active.md (8187 tests · idle)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V64 V-summary)
+5. .agents/sessions/2026-05-09-v64-fix8-patient-name-link.md (latest checkpoint)
 
-Status: master=`<HEAD>`, prod=`ef580a6` LIVE (V52..V63 + V62-bis NOT deployed yet). 8059 + 1 skipped GREEN. Build clean. AV1-AV30 + AV32 + AV33 + AV34 + AV35 + BS-1..BS-15 + CB-1..5.
+Status: master=`dcb6c41`, 8187 tests pass, prod=`dcb6c41` LIVE. Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
 
-Next: idle — awaiting (optional) combined deploy authorization. 31 commits ahead of prod (V52..V63 + V62-bis). 2 prod links backfilled via Rule M: SCH-9c201860e1 + SCH-cc3964c023.
+Next: idle — V64-fix8 patient name link DEPLOYED to prod; production stable.
 
 Outstanding (user-triggered):
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 31 commits ahead of prod.
-- (Optional) admin re-gen any other broken in-the-wild noDoctor link OR backfill via `scripts/v62-fix-schedule-link-doctor-data.mjs <TOKEN> --apply`.
+- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 still test V50-stripped collections — false-positive 403 each deploy; ignored manually per Session #20 + #21 precedent.
+- (Optional) `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs (TFP line 666 comment + Windows shell-spawn timing).
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..15; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; V58 lock — no Number() on string-ID picker values; V59-bis lock — useMemo deps must reference variables declared earlier (TDZ); preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints. AV35 (V63): admin calendars MUST drive 🔥 from canonical be_staff_schedules; toggleDay cycle = closed↔normal only.
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent.
 
 /session-start
 ```
