@@ -54,9 +54,10 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
 
   const [modal, setModal] = useState(null);
 
-  // V56/BS-15: load exam rooms on branch switch
+  // V56/BS-15: load exam rooms on branch switch.
+  // Explicit branchId pass per V52/BS-11 canonical pattern.
   useEffect(() => {
-    listExamRooms({ status: 'ใช้งาน' })
+    listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
       .then((list) => setBranchExamRooms(list || []))
       .catch(() => setBranchExamRooms([]));
   }, [selectedBranchId]);

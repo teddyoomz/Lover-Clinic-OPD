@@ -54,9 +54,11 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   // Modal state
   const [modal, setModal] = useState(null); // { kind, entry } | null
 
-  // V56/BS-15: load exam rooms on branch switch
+  // V56/BS-15: load exam rooms on branch switch.
+  // Explicit branchId pass per V52/BS-11 canonical pattern (mirrors V55
+  // AdminDashboard.jsx + every other branch-scoped UI fetch).
   useEffect(() => {
-    listExamRooms({ status: 'ใช้งาน' })
+    listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
       .then((list) => setBranchExamRooms(list || []))
       .catch(() => setBranchExamRooms([]));
   }, [selectedBranchId]);
