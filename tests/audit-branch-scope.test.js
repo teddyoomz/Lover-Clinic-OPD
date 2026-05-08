@@ -818,22 +818,13 @@ describe('BS-14 — schedule-link modal branch-scope (V55)', () => {
 
 // ─── BS-15 — Doctor schedule room-assignment integrity ────────────────────────
 describe('BS-15 — Doctor schedule room-assignment integrity', () => {
-  const validationSrc = readFileSync(
-    new URL('../src/lib/staffScheduleValidation.js', import.meta.url),
-    'utf8',
-  );
-  const modalSrc = readFileSync(
-    new URL('../src/components/backend/scheduling/ScheduleEntryFormModal.jsx', import.meta.url),
-    'utf8',
-  );
-  const panelSrc = readFileSync(
-    new URL('../src/components/backend/scheduling/TodaysDoctorsPanel.jsx', import.meta.url),
-    'utf8',
-  );
-  const adminDashSrc = readFileSync(
-    new URL('../src/pages/AdminDashboard.jsx', import.meta.url),
-    'utf8',
-  );
+  // V56 / BS-15 — bare-path readFileSync (matches rest of the file's pattern;
+  // Vitest runs with process.cwd() = project root). The new URL(..., import.meta.url)
+  // pattern previously used here failed to resolve in the jsdom environment.
+  const validationSrc = readFileSync('src/lib/staffScheduleValidation.js', 'utf8');
+  const modalSrc = readFileSync('src/components/backend/scheduling/ScheduleEntryFormModal.jsx', 'utf8');
+  const panelSrc = readFileSync('src/components/backend/scheduling/TodaysDoctorsPanel.jsx', 'utf8');
+  const adminDashSrc = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
 
   it('BS-15.1 — validateStaffScheduleStrict SS-10: doctor + working type → roomIds required', () => {
     expect(validationSrc).toMatch(
