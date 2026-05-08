@@ -4063,7 +4063,12 @@ export async function getCustomerWallets(customerId) {
  * Used by Appointment Coming-Hub view to bulk-load wallet balances for the
  * day's appointment customers without N+1 round-trips.
  *
- * NOTE: queries `where(documentId(), 'in', chunk)` per V64 task2 spec.
+ * IMPORTANT (V64 schema fix 2026-05-08): be_customer_wallets uses composite
+ * doc IDs `${customerId}__${walletTypeId}` (one doc per wallet TYPE per
+ * customer). To fetch by customerId we query the `customerId` FIELD, NOT
+ * documentId(). This mirrors getCustomerWallets:4051. A customer with N
+ * wallet types yields N docs in the result; the aggregator (V64 Task 4)
+ * sums balance per customerId.
  */
 export async function getWalletsForCustomerIds(customerIds = []) {
   const ids = [...new Set((Array.isArray(customerIds) ? customerIds : []).filter(Boolean).map(String))];
@@ -4073,7 +4078,7 @@ export async function getWalletsForCustomerIds(customerIds = []) {
   for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
   const snaps = await Promise.all(
     chunks.map(chunk =>
-      getDocs(query(walletsCol(), where(documentId(), 'in', chunk)))
+      getDocs(query(walletsCol(), where('customerId', 'in', chunk)))
     )
   );
   return snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));

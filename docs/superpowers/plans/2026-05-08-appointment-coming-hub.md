@@ -598,7 +598,11 @@ describe('V64.A buildCustomerSummaryMap — single-load aggregation (Q3=C)', () 
         { id: 'S2', customerId: 'C1', totalAmount: 5000, totalRemaining: 1500, paymentStatus: 'partial' },
       ],
       memberships: [{ id: 'M1', customerId: 'C1', tier: 'GOLD', expiresAt: '2027-04-13', status: 'active' }],
-      wallets: [{ id: 'C1', balance: 12000 }],
+      // V64 schema: composite doc id `${customerId}__${walletTypeId}`; customerId field carries the link
+      wallets: [
+        { id: 'C1__cash',   customerId: 'C1', balance: 9000,  walletTypeId: 'cash'   },
+        { id: 'C1__points', customerId: 'C1', balance: 3000,  walletTypeId: 'points' },
+      ],
       now: FIXED_NOW,
     });
     const s = m.get('C1');
@@ -821,11 +825,14 @@ export function buildCustomerSummaryMap({ customers = [], deposits = [], sales =
   }
 
   // Aggregate wallets
+  // V64 schema fix (2026-05-08): be_customer_wallets uses composite doc IDs
+  // `${customerId}__${walletTypeId}` so a customer with N wallet types
+  // produces N docs. Sum balances per customerId.
   for (const w of wallets) {
-    const id = String(w?.id || w?.customerId || '');
+    const id = String(w?.customerId || '');  // customerId FIELD, not doc.id
     const summary = out.get(id);
     if (!summary) continue;
-    summary.walletBalance = safeNum(w.balance);
+    summary.walletBalance += safeNum(w.balance);
   }
 
   return out;

@@ -26,13 +26,25 @@ describe('V64.W1 getWalletsForCustomerIds — bulk fetch via in-query (≤30 chu
     expect(mockGetDocs).not.toHaveBeenCalled();
   });
 
-  it('W1.2 single customerId → one in-query chunk', async () => {
+  it('W1.2 single customerId → one in-query chunk on customerId field (V64 schema fix — composite docID)', async () => {
     mockGetDocs.mockResolvedValue({
-      docs: [{ id: 'C1', data: () => ({ balance: 100 }) }],
+      docs: [{ id: 'C1__cash', data: () => ({ customerId: 'C1', balance: 100 }) }],
     });
     const out = await getWalletsForCustomerIds(['C1']);
-    expect(out).toEqual([{ id: 'C1', balance: 100 }]);
-    expect(mockWhere).toHaveBeenCalledWith('__name__', 'in', ['C1']);
+    expect(out).toEqual([{ id: 'C1__cash', customerId: 'C1', balance: 100 }]);
+    expect(mockWhere).toHaveBeenCalledWith('customerId', 'in', ['C1']);
+  });
+
+  it('W1.2b multiple wallets per customer (V64 schema — N docs per customer for N wallet types)', async () => {
+    mockGetDocs.mockResolvedValue({
+      docs: [
+        { id: 'C1__cash', data: () => ({ customerId: 'C1', balance: 100, walletTypeId: 'cash' }) },
+        { id: 'C1__points', data: () => ({ customerId: 'C1', balance: 50, walletTypeId: 'points' }) },
+      ],
+    });
+    const out = await getWalletsForCustomerIds(['C1']);
+    expect(out).toHaveLength(2);
+    expect(out.every(w => w.customerId === 'C1')).toBe(true);
   });
 
   it('W1.3 31 customerIds → 2 chunks (30 + 1)', async () => {
