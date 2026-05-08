@@ -24,6 +24,7 @@ import {
   buildPrintHTMLTemplate,
 } from '../../lib/appointmentHubPrintTemplate.js';
 import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
+import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -52,6 +53,7 @@ export default function AppointmentHubView({
   const [appts, setAppts] = useState([]);
   const [summaryMap, setSummaryMap] = useState(new Map());
   const [allDeposits, setAllDeposits] = useState([]);  // V64-fix4: full deposits list for per-appt linkage
+  const [allTreatments, setAllTreatments] = useState([]);  // V64-fix6: per-customer-date treatment lookup for auto-confirm + edit-button
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   // V64-fix3 (Issue 1, 2026-05-09): edit-modal state — true full modal
@@ -91,13 +93,16 @@ export default function AppointmentHubView({
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [apptList, customers, deposits, sales, memberships, schedules] = await Promise.all([
+      const [apptList, customers, deposits, sales, memberships, schedules, treatments] = await Promise.all([
         getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
         getAllCustomers(),
         getAllDeposits({ branchId: selectedBranchId }),
         getAllSales({ branchId: selectedBranchId }),
         getAllMemberships(),
         listStaffSchedules({ branchId: selectedBranchId }),
+        // V64-fix6: load treatments in same date window so auto-confirm logic
+        // can match (customerId, date, branchId) tuples client-side.
+        loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
       ]);
       const customerIds = [...new Set(apptList.map(a => String(a.customerId)).filter(Boolean))];
       const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds) : [];
@@ -106,6 +111,7 @@ export default function AppointmentHubView({
       });
       setAppts(apptList);
       setAllDeposits(deposits);
+      setAllTreatments(treatments);
       setSummaryMap(map);
       setScheduleEntries(schedules);
       if (!silent) setLoading(false);
@@ -140,6 +146,27 @@ export default function AppointmentHubView({
     }
     return map;
   }, [allDeposits]);
+
+  // V64-fix6: per-customer-date treatment lookup. Lets RowCard auto-confirm
+  // a past appt when ≥1 treatment exists for that customer+date+branch
+  // (already loaded in same wide-range window so branch is implicit).
+  // Each value is an array sorted by createdAt DESC — index 0 = latest
+  // treatment for that day, used for "แก้ไขบันทึกการรักษา" button target.
+  const treatmentsByCustomerDate = useMemo(() => {
+    const map = new Map();
+    for (const t of allTreatments) {
+      const cid = String(t?.customerId || '');
+      const date = t?.detail?.treatmentDate || '';
+      if (!cid || !date) continue;
+      const key = `${cid}|${date}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(t);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    }
+    return map;
+  }, [allTreatments]);
 
   // Per-tab filtered list (active tab)
   const filteredAppts = useMemo(() => {
@@ -344,6 +371,7 @@ export default function AppointmentHubView({
           appt={a}
           summary={summaryMap.get(String(a.customerId))}
           apptDeposit={depositByApptId.get(String(a.id))}
+          apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
           now={new Date()}
           onConfirm={handleConfirmOptimistic}
           onEdit={handleEditOpenModal}

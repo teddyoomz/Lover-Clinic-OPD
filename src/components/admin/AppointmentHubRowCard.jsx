@@ -46,18 +46,50 @@ export default function AppointmentHubRowCard({
   appt,
   summary,
   apptDeposit,  // V64-fix4 (Issue 1): linked-deposit doc if appt came from จองมัดจำ flow
+  apptDateTreatments = [],  // V64-fix6: treatments for THIS customer+date (sorted createdAt DESC)
   now = new Date(),
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
 }) {
-  const status = appt.status || 'pending';
-  const statusLabel = STATUS_LABELS[status] || status;
-  const isMissed = isMissedAppointment(appt, now);
+  const rawStatus = appt.status || 'pending';
+  // V64-fix6: treatment-aware logic. If a treatment exists for this customer
+  // on this appointment's date (any time), the system treats the appointment
+  // as effectively done — admin may have forgotten to confirm, but the
+  // treatment record is the source of truth that the customer DID come.
+  const latestTreatment = apptDateTreatments[0] || null;
+  const hasTreatmentForDay = !!latestTreatment;
+  const effectiveStatus = hasTreatmentForDay ? 'done' : rawStatus;
+  const status = effectiveStatus;  // alias used by button-set switches below
+  const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
-  const hasLinkedTreatment = !!appt.linkedTreatmentId;
+  // V64-fix6: missed badge ONLY when past date AND no treatment found.
+  // The base isMissedAppointment only checks status==='confirmed'; we extend
+  // to also flag past 'pending' (admin forgot to confirm + customer never came).
+  const baseMissed = isMissedAppointment(appt, now);
+  const todayBangkok = (() => {
+    // V64-fix6: respects injected `now` prop (test/SSR friendly).
+    // Bangkok-stable midday-UTC parse pattern.
+    const base = (now instanceof Date ? now : new Date()).getTime();
+    const d = new Date(base + 7 * 60 * 60 * 1000);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  })();
+  const isPastDate = typeof appt.date === 'string' && appt.date < todayBangkok;
+  const isMissed = !hasTreatmentForDay && (baseMissed || (isPastDate && rawStatus === 'pending'));
+  // V64-fix6: linked-treatment fallback chain — prefer latestTreatment.id
+  // (proves customer came on this date), fall back to appt.linkedTreatmentId
+  // (legacy field).
+  const linkedTreatmentId = latestTreatment?.id || appt.linkedTreatmentId || '';
+  const hasLinkedTreatment = !!linkedTreatmentId;
   // V64-fix4 (Issue 1): deposit purpose fallback chain
   const depositPurpose = apptDeposit
     ? (apptDeposit.note || apptDeposit.appointment?.appointmentTo || apptDeposit.appointment?.purpose || appt.appointmentTo || '').trim()
     : '';
+
+  // V64-fix6: helper that wraps onEditTreatment with the resolved treatment id
+  // (so the parent's existing handler receives appt.linkedTreatmentId pointing
+  // at the latest same-day treatment, not the legacy stored one).
+  const handleEditTreatmentBound = () => {
+    onEditTreatment?.({ ...appt, linkedTreatmentId });
+  };
 
   return (
     <div
@@ -162,7 +194,61 @@ export default function AppointmentHubRowCard({
               LINE
             </button>
           )}
-          {status === 'pending' && (
+          {/* V64-fix6 priority order (treatment-aware):
+              1. hasTreatmentForDay (V64-fix6: ANY same-day treatment) →
+                 "แก้ไขบันทึกการรักษา" linked to latest. Auto-confirms.
+              2. rawStatus='done' (legacy V64-fix2) → "แก้ไขการรักษา"/
+                 "บันทึกการรักษา" with linkedTreatmentId fallback toggle
+              3. pending|confirmed && isPastDate → "สร้างบันทึกการรักษา"
+                 + missed badge (V64-fix6: customer never came)
+              4. pending && !isPastDate → existing pending flow
+              5. confirmed && !isPastDate → existing confirmed flow
+              6. cancelled → read-only badge
+          */}
+          {hasTreatmentForDay && (
+            <>
+              <button
+                data-testid="row-action-edit-treatment"
+                onClick={handleEditTreatmentBound}
+                className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold"
+              >
+                แก้ไขบันทึกการรักษา
+              </button>
+              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+                แก้ไขนัด
+              </button>
+            </>
+          )}
+          {!hasTreatmentForDay && rawStatus === 'done' && (
+            <>
+              <button
+                data-testid="row-action-edit-treatment"
+                onClick={() => hasLinkedTreatment ? onEditTreatment?.(appt) : onCreateTreatment?.(appt)}
+                className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold"
+              >
+                {hasLinkedTreatment ? 'แก้ไขการรักษา' : 'บันทึกการรักษา'}
+              </button>
+              {!hasLinkedTreatment && (
+                <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+                  ยกเลิก
+                </button>
+              )}
+            </>
+          )}
+          {!hasTreatmentForDay && isPastDate && (rawStatus === 'pending' || rawStatus === 'confirmed') && (
+            <>
+              <button data-testid="row-action-create-treatment" onClick={() => onCreateTreatment?.(appt)} className="text-[11px] px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold">
+                สร้างบันทึกการรักษา
+              </button>
+              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+                แก้ไขนัด
+              </button>
+              <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+                ยกเลิก
+              </button>
+            </>
+          )}
+          {!hasTreatmentForDay && rawStatus === 'pending' && !isPastDate && (
             <>
               <button data-testid="row-action-confirm" onClick={() => onConfirm?.(appt)} className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold">
                 คอนเฟิร์มนัด
@@ -175,7 +261,7 @@ export default function AppointmentHubRowCard({
               </button>
             </>
           )}
-          {status === 'confirmed' && (
+          {!hasTreatmentForDay && rawStatus === 'confirmed' && !isPastDate && (
             <>
               <button data-testid="row-action-create-treatment" onClick={() => onCreateTreatment?.(appt)} className="text-[11px] px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold">
                 บันทึกการรักษา
@@ -188,19 +274,7 @@ export default function AppointmentHubRowCard({
               </button>
             </>
           )}
-          {status === 'done' && (
-            <>
-              <button data-testid="row-action-edit-treatment" onClick={() => hasLinkedTreatment ? onEditTreatment?.(appt) : onCreateTreatment?.(appt)} className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold">
-                {hasLinkedTreatment ? 'แก้ไขการรักษา' : 'บันทึกการรักษา'}
-              </button>
-              {!hasLinkedTreatment && (
-                <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
-                  ยกเลิก
-                </button>
-              )}
-            </>
-          )}
-          {status === 'cancelled' && (
+          {rawStatus === 'cancelled' && !hasTreatmentForDay && (
             <span className="text-[11px] text-[var(--tx-muted)] italic">ยกเลิกแล้ว</span>
           )}
         </div>

@@ -168,4 +168,62 @@ describe('V64.R AppointmentHubRowCard', () => {
     expect(screen.getByText(/ค่างชำระ 1,500 ฿/)).toBeInTheDocument();
     expect(screen.getByText(/ยอดสั่งซื้อ 100,000 ฿/)).toBeInTheDocument();
   });
+
+  // V64-fix6 — auto-confirm via same-day treatment lookup
+  describe('V64.R6 V64-fix6 — auto-confirm via apptDateTreatments', () => {
+    const apptPastPending = { id: 'A1', customerId: 'C1', date: '2026-05-07', status: 'pending' };
+    const apptPastConfirmed = { id: 'A2', customerId: 'C1', date: '2026-05-07', status: 'confirmed' };
+    const apptTodayPending = { id: 'A3', customerId: 'C1', date: '2026-05-08', status: 'pending' };
+    const sameDayTreatment = { id: 'BT-LATEST', customerId: 'C1', detail: { treatmentDate: '2026-05-07' }, createdAt: '2026-05-07T10:00:00Z' };
+
+    it('R6.1 past pending + same-day treatment → status auto-flips to เสร็จแล้ว', () => {
+      render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[sameDayTreatment]} now={FIXED_NOW} />);
+      expect(screen.getByTestId('row-status').textContent).toBe('เสร็จแล้ว');
+    });
+
+    it('R6.2 past pending + same-day treatment → "แก้ไขบันทึกการรักษา" button (no missed badge)', () => {
+      render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[sameDayTreatment]} now={FIXED_NOW} />);
+      const btn = screen.getByTestId('row-action-edit-treatment');
+      expect(btn.textContent).toMatch(/แก้ไขบันทึกการรักษา/);
+      expect(screen.queryByTestId('row-missed-chip')).not.toBeInTheDocument();
+    });
+
+    it('R6.3 past pending + NO treatment → "สร้างบันทึกการรักษา" button + missed badge', () => {
+      render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[]} now={FIXED_NOW} />);
+      const btn = screen.getByTestId('row-action-create-treatment');
+      expect(btn.textContent).toMatch(/สร้างบันทึกการรักษา/);
+      expect(screen.getByTestId('row-missed-chip')).toBeInTheDocument();
+    });
+
+    it('R6.4 past confirmed + NO treatment → still missed badge + "สร้าง" button', () => {
+      render(<AppointmentHubRowCard appt={apptPastConfirmed} summary={baseSummary} apptDateTreatments={[]} now={FIXED_NOW} />);
+      expect(screen.getByTestId('row-missed-chip')).toBeInTheDocument();
+      expect(screen.getByTestId('row-action-create-treatment').textContent).toMatch(/สร้างบันทึกการรักษา/);
+    });
+
+    it('R6.5 today pending + NO treatment → existing "คอนเฟิร์มนัด" flow', () => {
+      render(<AppointmentHubRowCard appt={apptTodayPending} summary={baseSummary} apptDateTreatments={[]} now={FIXED_NOW} />);
+      expect(screen.getByTestId('row-action-confirm')).toBeInTheDocument();
+      expect(screen.queryByTestId('row-missed-chip')).not.toBeInTheDocument();
+    });
+
+    it('R6.6 click on edit-treatment passes appt with linkedTreatmentId=latestTreatment.id', () => {
+      const fn = vi.fn();
+      render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[sameDayTreatment]} now={FIXED_NOW} onEditTreatment={fn} />);
+      fireEvent.click(screen.getByTestId('row-action-edit-treatment'));
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn.mock.calls[0][0].linkedTreatmentId).toBe('BT-LATEST');
+      expect(fn.mock.calls[0][0].id).toBe('A1');
+    });
+
+    it('R6.7 multiple same-day treatments → uses latest (sorted by createdAt DESC)', () => {
+      const earlier = { id: 'BT-EARLIER', customerId: 'C1', detail: { treatmentDate: '2026-05-07' }, createdAt: '2026-05-07T08:00:00Z' };
+      const later = { id: 'BT-LATER', customerId: 'C1', detail: { treatmentDate: '2026-05-07' }, createdAt: '2026-05-07T18:00:00Z' };
+      // Caller passes pre-sorted DESC array
+      const fn = vi.fn();
+      render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[later, earlier]} now={FIXED_NOW} onEditTreatment={fn} />);
+      fireEvent.click(screen.getByTestId('row-action-edit-treatment'));
+      expect(fn.mock.calls[0][0].linkedTreatmentId).toBe('BT-LATER');
+    });
+  });
 });

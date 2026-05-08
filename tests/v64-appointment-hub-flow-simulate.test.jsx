@@ -24,6 +24,12 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   listStaffSchedules: (...args) => mockListStaffSchedules(...args),
 }));
 
+// V64-fix6 (2026-05-09): View also loads treatments for auto-confirm logic
+const mockLoadTreatmentsByDateRange = vi.fn().mockResolvedValue([]);
+vi.mock('../src/lib/reportsLoaders.js', () => ({
+  loadTreatmentsByDateRange: (...args) => mockLoadTreatmentsByDateRange(...args),
+}));
+
 vi.mock('../src/lib/appointmentTypes.js', () => ({
   resolveAppointmentTypeLabel: (v) => v || '',
   // V64 (2026-05-09): View consumes APPOINTMENT_TYPES const directly
