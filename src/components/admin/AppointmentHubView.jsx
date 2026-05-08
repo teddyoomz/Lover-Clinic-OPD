@@ -119,33 +119,45 @@ export default function AppointmentHubView({
     return c;
   }, [activeTab, filteredAppts.length]);
 
-  // Doctor + assistant shifts for today/tomorrow header (Q2=B+D)
-  // Inline filter — does NOT depend on any external schedule helper that may
-  // not exist; works with raw be_staff_schedules entries (kind/dayOfWeek/dateISO/role).
+  // V64-fix (2026-05-09 root-cause): Doctor + assistant shifts for today/tomorrow header (Q2=B+D)
+  // Real be_staff_schedules schema (verified via preview_eval against prod):
+  //   - field `type` (NOT `kind`): 'recurring' | 'override' | 'leave' | 'sick' | 'holiday'
+  //   - field `date` (NOT `dateISO`) for non-recurring entries (YYYY-MM-DD)
+  //   - field `dayOfWeek` (0=Sun..6=Sat) for recurring entries
+  //   - NO `role` field — role is inferred from staffId (membership in doctors/assistants prop list)
+  // Bangkok TZ stable: midday-UTC parse so day-of-week stays correct across the dateline.
   const { doctorShifts, assistantShifts } = useMemo(() => {
-    const targetISO = activeTab === 'today'
-      ? new Date().toISOString().slice(0, 10)
-      : (activeTab === 'tomorrow' ? new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10) : null);
-    if (!targetISO) return { doctorShifts: [], assistantShifts: [] };
-    // dayOfWeek: 0=Sun..6=Sat
-    const dow = new Date(targetISO + 'T12:00:00Z').getUTCDay();
-    const filterShifts = (entries, role) => entries
+    if (activeTab !== 'today' && activeTab !== 'tomorrow') {
+      return { doctorShifts: [], assistantShifts: [] };
+    }
+    const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const nowMs = Date.now() + (activeTab === 'tomorrow' ? 24 * 3600 * 1000 : 0);
+    const bd = new Date(nowMs + BANGKOK_OFFSET_MS);
+    const targetISO = `${bd.getUTCFullYear()}-${String(bd.getUTCMonth() + 1).padStart(2, '0')}-${String(bd.getUTCDate()).padStart(2, '0')}`;
+    // dayOfWeek for the target Bangkok day (0=Sun..6=Sat)
+    const [yy, mm, dd] = targetISO.split('-').map(Number);
+    const dow = new Date(Date.UTC(yy, mm - 1, dd, 12, 0, 0)).getUTCDay();
+
+    const doctorIdSet = new Set((doctors || []).map(p => String(p.id)));
+    const assistantIdSet = new Set((assistants || []).map(p => String(p.id)));
+
+    const filterShifts = (entries, idSet) => entries
       .filter(e => {
-        if (e.role !== role) return false;
-        if (e.kind === 'recurring' && e.dayOfWeek === dow) return true;
-        if (e.kind === 'override' && e.dateISO === targetISO) return true;
+        if (!idSet.has(String(e.staffId))) return false;
+        // Working entries only (skip leave/sick/holiday)
+        if (e.type === 'recurring' && e.dayOfWeek === dow) return true;
+        if (e.type === 'override' && e.date === targetISO) return true;
         return false;
       })
       .map(e => ({ staffId: e.staffId, startTime: e.startTime, endTime: e.endTime }));
-    const docHrs = filterShifts(scheduleEntries, 'doctor');
-    const asstHrs = filterShifts(scheduleEntries, 'assistant');
+
     const enrich = (shifts, peopleList) => shifts.map(s => ({
       ...s,
       name: peopleList.find(p => String(p.id) === String(s.staffId))?.name || s.staffId,
     }));
     return {
-      doctorShifts: enrich(docHrs, doctors),
-      assistantShifts: enrich(asstHrs, assistants),
+      doctorShifts: enrich(filterShifts(scheduleEntries, doctorIdSet), doctors),
+      assistantShifts: enrich(filterShifts(scheduleEntries, assistantIdSet), assistants),
     };
   }, [scheduleEntries, doctors, assistants, activeTab]);
 

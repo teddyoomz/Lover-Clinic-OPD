@@ -2249,14 +2249,28 @@ export async function getAppointmentsByDateRange({ from, to, branchId = '', allB
   if (!effectiveBranchId && !allBranches) return [];
   const useFilter = !allBranches && effectiveBranchId;
 
-  const constraints = [
-    where('date', '>=', String(from)),
-    where('date', '<=', String(to)),
-  ];
-  if (useFilter) constraints.push(where('branchId', '==', String(effectiveBranchId)));
-  const q = query(appointmentsCol(), ...constraints);
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // V64-fix (2026-05-09 — root-cause): mirror getAppointmentsByMonth pattern.
+  // Server-side filter ONLY by branchId (single-field equality — uses
+  // existing single-field index). Date range applied CLIENT-SIDE via
+  // normalizeApptDate so heterogeneous stored shapes (string YYYY-MM-DD,
+  // ISO with time, Timestamp) all resolve correctly.
+  //
+  // Pre-fix bug: composite query (where(branchId,==) + where(date,>=) +
+  // where(date,<=)) requires a Firestore composite index that wasn't
+  // deployed. Query errored silently → View catch handler set appts=[]
+  // → user saw all-zero counts despite real prod data existing.
+  const ref = useFilter
+    ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
+    : appointmentsCol();
+  const snap = await getDocs(ref);
+  return snap.docs
+    .map(d => ({ ...d.data(), id: d.id }))
+    .filter(a => {
+      const iso = normalizeApptDate(a.date);
+      if (!iso) return false;
+      return iso >= String(from) && iso <= String(to);
+    })
+    .map(a => ({ ...a, date: normalizeApptDate(a.date) })); // normalize outbound shape
 }
 
 /** Get all appointments for a customer */
