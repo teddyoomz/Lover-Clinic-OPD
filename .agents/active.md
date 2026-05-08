@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-09 EOD #19 — V64 appointment coming-hub view shipped (4 tabs + cards + actions + PDF + audit)"
-status: "master=<HEAD> (+50 ahead of prod) · 8150 passed + 1 skipped + 1 pre-existing flake · build clean · NOT yet deployed"
+updated_at: "2026-05-09 EOD #20 — V52..V64 + V64-fix1..fix5 DEPLOYED to prod (combined vercel + firestore:rules; PDP green)"
+status: "master=1da05bb · prod=1da05bb · 0 ahead of prod · 8150+ passed · build clean · DEPLOYED"
 branch: "master"
 last_commit: "fix(V64): build-warning + BS-F.3 fnSlice prefix-shadow regression"
 tests: 8150
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef580a6"
+production_commit: "1da05bb"
 firestore_rules_version: 29
 storage_rules_version: 2
 ---
@@ -36,10 +36,11 @@ storage_rules_version: 2
 - Detail: `.agents/sessions/2026-05-08-v52-v53-v54-branch-scope-trilogy.md` + `.agents/sessions/2026-05-08-v57-v58-v59-bis.md`
 
 ## Next action
-Idle — awaiting user authorization for combined deploy (V52..V64 = 50 commits ahead of prod).
+Idle — V52..V64 + V64-fix1..fix5 deployed; production stable.
 
 ## Outstanding user-triggered actions
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 50 commits ahead of prod.
+- ✅ `vercel --prod` DEPLOYED 2026-05-09 (combined with firebase deploy --only firestore:rules; PDP green on probes 1 + 5a + 5b)
+- (Optional) update probe-deploy-probe.mjs to remove probes 2/3/4 (V50-followup-2 — those rules intentionally removed; script still tests them and reports false-positive 403)
 - (Optional) address pre-existing `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs (TFP line 666 comment from V50 + Windows shell-spawn timing). Either tighten the test's shell-spawn pattern OR remove `()` from TFP line 666 comment.
 
 ## V64 visual verification

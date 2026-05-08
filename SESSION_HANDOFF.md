@@ -7,11 +7,42 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #19 — V64 Appointment Coming-Hub View shipped (4 tabs + cards + actions + PDF + audit invariants) · 8150 + 1 skipped · 1 pre-existing flake · NOT yet deployed
+- **Date last updated**: 2026-05-09 EOD #20 — V52..V64 + V64-fix1..fix5 **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green) · 8150+ tests · build clean
 - **Branch**: `master`
-- **Last commit**: fix(V64): build-warning + BS-F.3 fnSlice prefix-shadow regression
-- **Test count**: 8150 passed + 1 skipped (8152) — **+92 V64 tests vs prior 8059**. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone; flakes in full-suite parallel; not V64-related).
-- **Deploy state**: **PRODUCTION = `ef580a6`** (50 commits ahead — V52..V64 NOT yet deployed). Combined deploy NOT triggered.
+- **Last commit**: fix(V64-fix5): cancel button no flash — confirm BEFORE optimistic update
+- **Test count**: 8150+ passed (+ V64-fix1..fix5 incremental tests). 1 pre-existing `bsa-task7-h-quater` flake (passes standalone).
+- **Deploy state**: **PRODUCTION = `1da05bb`** (master = prod, 0 ahead). Combined deploy 2026-05-09: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build; `firebase deploy --only firestore:rules` released (idempotent — rules unchanged since prior prod). Pre-probe + post-probe both GREEN on surviving Rule B endpoints (1 chat_conversations + 5a/5b opd_sessions anon).
+
+### Session 2026-05-09 EOD #20 — DEPLOY V52..V64 (combined; PDP green)
+
+User: "deploy" — explicit Rule B authorization for combined vercel + firestore:rules deploy.
+
+**Pre-deploy probe (Rule B, surviving endpoints post-V50-followup-2)**:
+- ✅ Probe 1 — chat_conversations POST (unauth REST): HTTP 200
+- ✅ Probe 5 — opd_sessions anon CREATE+PATCH: HTTP 200
+- (Probes 2/3/4 — pc_appointments + clinic_settings/proclinic_session{,_trial} — return 403 expected per V50-followup-2 rule removal; script `scripts/probe-deploy-probe.mjs` still tests them and reports false-positive 403; flagged for follow-up)
+
+**Build sanity**: `npm run build` clean (chunk size warning only).
+
+**Vercel `--prod`** (background `b0s6a62a7`):
+- Production: `https://lover-clinic-566ys1wx5-teddyoomz-4523s-projects.vercel.app`
+- Aliased: `https://lover-clinic-app.vercel.app` ✓
+- Build duration: ~1m
+- Exit 0
+
+**Firebase `--only firestore:rules`** (background `bgru86j8h`):
+- "released rules firestore.rules to cloud.firestore"
+- "already up to date, skipping upload" (idempotent — rules unchanged since `ef580a6`)
+- Storage rules deploy attempted via combined `--only firestore:rules,storage:rules` but failed on storage targets config (firebase.json missing storage target binding); retried firestore-only, succeeded. Storage rules deploy deferred (not changed in this batch; not blocking).
+
+**Post-deploy probe**:
+- ✅ Probe 1 chat_conversations POST: HTTP 200
+- ✅ Probe 5a opd_sessions anon CREATE: HTTP 200
+- ✅ Probe 5b opd_sessions anon PATCH: HTTP 200
+
+55 V-commits shipped: V52..V63 + V63 batch backfill + V64 spec/plan + V64 16-task implementation + V64-fix1..fix5 user-feedback iterations. Production at `1da05bb`.
+
+
 
 ### Session 2026-05-09 EOD #19 — V64 Appointment Coming-Hub View shipped
 
