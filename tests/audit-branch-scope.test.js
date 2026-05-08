@@ -873,3 +873,61 @@ describe('BS-15 — Doctor schedule room-assignment integrity', () => {
     expect(adminDashSrc).toMatch(/V56[\s/]BS-15/);
   });
 });
+
+describe('BS-16 V64 — AppointmentHub* components branch-scope discipline', () => {
+  it('BS-16.1 AppointmentHubView imports useSelectedBranch', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).toMatch(/import\s+\{[^}]*useSelectedBranch/);
+  });
+
+  it('BS-16.2 AppointmentHubView imports from scopedDataLayer (NOT raw backendClient)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).toMatch(/from ['"]\.\.\/\.\.\/lib\/scopedDataLayer\.js['"]/);
+    expect(src).not.toMatch(/from ['"]\.\.\/\.\.\/lib\/backendClient\.js['"]/);
+  });
+
+  it('BS-16.3 AppointmentHubView includes selectedBranchId in data-load deps', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).toMatch(/\[range\.from,\s*range\.to,\s*selectedBranchId\]/);
+  });
+
+  it('BS-16.4 V64 marker comment present', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).toMatch(/V64/);
+  });
+
+  it('BS-16.5 AppointmentHubFilters helper is branch-blind (no branchId in toString)', async () => {
+    const mod = await import('../src/lib/appointmentHubFilters.js');
+    for (const fnName of ['dateRangeForTab', 'applyTabFilter', 'isMissedAppointment']) {
+      expect(typeof mod[fnName]).toBe('function');
+      expect(mod[fnName].toString()).not.toMatch(/branchId/);
+    }
+  });
+
+  it('BS-16.6 AppointmentHubAggregator helper is branch-blind', async () => {
+    const mod = await import('../src/lib/appointmentHubAggregator.js');
+    expect(mod.buildCustomerSummaryMap.toString()).not.toMatch(/branchId/);
+  });
+});
+
+describe('AV36 V64 — appointment hub PDF print V32 lock', () => {
+  it('AV36.1 appointmentHubPrintTemplate.js does NOT import html2pdf', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/lib/appointmentHubPrintTemplate.js', 'utf8');
+    // Match import statements only (allow comment text mentioning html2pdf for institutional memory)
+    expect(src).not.toMatch(/import.*html2pdf/i);
+    expect(src).not.toMatch(/from ['"]html2pdf/i);
+  });
+
+  it('AV36.2 AppointmentHubView uses html2canvas + jspdf (NOT html2pdf) for export', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).not.toMatch(/from ['"]html2pdf/i);
+    expect(src).toMatch(/import\(['"]html2canvas['"]\)/);
+    expect(src).toMatch(/import\(['"]jspdf['"]\)/);
+  });
+});

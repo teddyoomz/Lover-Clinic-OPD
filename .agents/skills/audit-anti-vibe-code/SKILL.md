@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV35)
+## Invariants (AV1–AV36)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -855,6 +855,30 @@ expect(ADMIN_DASHBOARD_SRC).toMatch(/scheduleEntries\s*=\s*schedSelectedDoctor[\
 2. **Admin manual paint vs canonical source** — when the canonical source exists, drop admin's parallel mutation paths. Keep state for legacy doc loading; never mutate it via UI.
 3. **Cycle simplification reduces UX surface area** — pre-V63 toggle had 3 states (normal/doctor/closed) → 6 transitions. Post-V63 has 2 states → 1 transition. Less to test, less to misuse.
 4. **The complete schedule-link adoption-gap series (V52-V63) is 9 V-entries deep** — V52 reports / V53 time-axis / V54 raw listeners / V55 modal data sources / V56 room auto-closure / V60 save-time doctorDays specific / V61 modal UI room dropdown / V62 save-time doctorDays multi-doctor / V63 admin-UI render canonical. 9 boundaries, one canonical source-of-truth (`be_staff_schedules`).
+
+### AV36 — V64 appointment hub PDF print V32 lock (2026-05-09)
+
+**Pattern**: Every print/PDF helper introduced post-V32 MUST use `html2canvas` + `jsPDF.addImage` directly with explicit dimensions; NEVER use `html2pdf.js` orchestration (V32 blank-2nd-page bug — html2pdf's pagebreak heuristic emits a ghost page even when content fits + `pagebreak:'avoid-all'` is set). The V64 appointment hub print path (`appointmentHubPrintTemplate.js` builders + `AppointmentHubView.jsx` `handlePrint`) is the latest application of the V32 lock — it lazy-imports `html2canvas` + `jspdf` directly, renders the table HTML offscreen, captures via `html2canvas` with `scale:2`, and writes via `pdf.addImage` with paper-sized mm dimensions.
+
+**Anchor**: `src/lib/appointmentHubPrintTemplate.js` (no `html2pdf` import) + `src/components/admin/AppointmentHubView.jsx` (`handlePrint` uses `import('html2canvas')` + `import('jspdf')`).
+
+**Class-of-bug**: V21 source-grep test lock-in family (V32 4-round saga). Source-grep tests can encode broken behavior verbatim — the html2pdf path passed source-grep "uses pagebreak avoid-all" assertions while the real PDF was visibly broken. AV36 anchors on the FORBIDDEN import (`html2pdf`) so future drift fails build.
+
+**Sanctioned exceptions**: NONE.
+
+**Source-grep regression** (`tests/audit-branch-scope.test.js` AV36.1-AV36.2):
+```js
+// AV36.1 — appointmentHubPrintTemplate.js does NOT import html2pdf
+expect(printTemplateSrc).not.toMatch(/import.*html2pdf/i);
+expect(printTemplateSrc).not.toMatch(/from ['"]html2pdf/i);
+
+// AV36.2 — AppointmentHubView uses html2canvas + jspdf directly
+expect(viewSrc).not.toMatch(/from ['"]html2pdf/i);
+expect(viewSrc).toMatch(/import\(['"]html2canvas['"]\)/);
+expect(viewSrc).toMatch(/import\(['"]jspdf['"]\)/);
+```
+
+**Companion**: AV16 (source-grep visual tests insufficient — pair with runtime measurement). AV36 is the architectural backstop; AV16 is the methodological complement.
 
 ## How to run
 
