@@ -6,6 +6,7 @@
 // Spec: docs/superpowers/specs/2026-05-08-doctor-schedule-room-assignment-design.md
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   validateStaffScheduleStrict,
   expandRoomIdsForDisplay,
@@ -148,6 +149,19 @@ describe('V56.L3 — expandRoomIdsForDisplay', () => {
 
   it('L3.7 null entry → returns all doctor-rooms (defensive)', () => {
     expect(expandRoomIdsForDisplay(null, BRANCH_ROOMS)).toEqual(['r-doc-1', 'r-doc-2']);
+  });
+
+  it('L3.8 doctor entry with ALL stale ids → empty result (not full fallback)', () => {
+    // Explicit roomIds that all resolve to unknown → filtered to [] NOT
+    // all-doctor-rooms. The "all rooms" fallback only fires when roomIds is
+    // absent/empty — when the field is present but all ids are stale, the
+    // intent was "specific rooms only" so we return empty rather than
+    // silently expanding to every room.
+    const out = expandRoomIdsForDisplay(
+      { roomIds: ['r-deleted-99', 'r-deleted-98'] },
+      BRANCH_ROOMS,
+    );
+    expect(out).toEqual([]);
   });
 });
 
@@ -316,11 +330,41 @@ describe('V56.L5 — adversarial', () => {
 });
 
 describe('V56.L6 — V56/BS-15 source markers', () => {
+  const validationSrc = readFileSync('src/lib/staffScheduleValidation.js', 'utf8');
+
   it('L6.1 staffScheduleValidation.js exports expandRoomIdsForDisplay', () => {
     expect(typeof expandRoomIdsForDisplay).toBe('function');
+    // V56/BS-15 marker comment must appear in the JSDoc block for the function
+    // (institutional memory grep — mirrors V52 G-group + V54 L5.x pattern).
+    // The marker lives in the JSDoc ABOVE the function declaration.
+    expect(validationSrc).toMatch(/V56\s*\/\s*BS-15[\s\S]{0,600}?expandRoomIdsForDisplay/);
   });
 
   it('L6.2 staffScheduleValidation.js exports derivedAutoClosedDates', () => {
     expect(typeof derivedAutoClosedDates).toBe('function');
+    // Marker appears in JSDoc preceding derivedAutoClosedDates.
+    expect(validationSrc).toMatch(/V56\s*\/\s*BS-15[\s\S]{0,1200}?derivedAutoClosedDates/);
+  });
+
+  it('L6.3 SS-10 + SS-11 marker comment present in validation block', () => {
+    expect(validationSrc).toMatch(/SS-10[\s\S]{0,800}?SS-11/);
+    expect(validationSrc).toMatch(/V56\s*\/\s*BS-15/);
+  });
+});
+
+describe('V56.L7 — normalizeStaffSchedule passes staffKind + roomIds through (V21 lock)', () => {
+  const validationSrc = readFileSync('src/lib/staffScheduleValidation.js', 'utf8');
+
+  it('L7.1 normalizeStaffSchedule JSDoc locks staffKind pass-through', () => {
+    // The JSDoc before normalizeStaffSchedule explicitly names staffKind as a
+    // field that MUST NOT be stripped. If a future whitelist-style refactor
+    // drops staffKind, SS-10/SS-11 silently stop firing.
+    // Regex: JSDoc containing 'staffKind' appears before function declaration.
+    expect(validationSrc).toMatch(/staffKind[\s\S]{0,600}?normalizeStaffSchedule/);
+  });
+
+  it('L7.2 normalizeStaffSchedule JSDoc locks roomIds pass-through', () => {
+    // roomIds is the V56 schema field for doctor entries — must not be stripped.
+    expect(validationSrc).toMatch(/roomIds[\s\S]{0,600}?normalizeStaffSchedule/);
   });
 });

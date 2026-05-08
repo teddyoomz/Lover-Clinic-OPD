@@ -142,6 +142,12 @@ export function validateStaffScheduleStrict(form) {
   // on the doc) — DoctorSchedulesTab passes 'doctor', EmployeeSchedulesTab
   // passes 'assistant'. Absent staffKind → backward-compat (SS-10/SS-11
   // not enforced) so legacy callers continue working.
+  //
+  // SS-11 rejects ANY non-null roomIds value including []. Empty array
+  // is NOT a valid "no rooms" signal for assistants — the field must be
+  // absent. Defensive form initialization to [] on assistant entries is
+  // a bug; the modal save handler must strip the field entirely (see
+  // ScheduleEntryFormModal handleSubmit, Task 2).
   if (form.staffKind === 'doctor' && WORKING_TIME_TYPES.has(type)) {
     const rooms = form.roomIds;
     const valid =
@@ -171,6 +177,14 @@ export function emptyStaffScheduleForm() {
   };
 }
 
+/**
+ * V56 / BS-15 (2026-05-08) — IMPORTANT: this function MUST preserve
+ * `staffKind` (validation-only pure-parameter passed through to
+ * validateStaffScheduleStrict for SS-10/SS-11) AND `roomIds` (V56 schema
+ * field on doctor entries). Future whitelist-style refactors that drop
+ * unknown fields would silently disable SS-10/SS-11 enforcement — DO NOT
+ * strip these two fields.
+ */
 export function normalizeStaffSchedule(form) {
   if (!form || typeof form !== 'object' || Array.isArray(form)) return form;
   const out = { ...form };
@@ -311,7 +325,7 @@ export function expandRoomIdsForDisplay(entry, branchExamRooms) {
  * @param {object} opts
  * @param {string|null|undefined} opts.doctorId
  * @param {string|null|undefined} opts.roomId
- * @param {Array} opts.allEntries — all be_staff_schedules entries for the
+ * @param {Array<{staffId: string, type: string, dayOfWeek?: number, date?: string, startTime?: string, endTime?: string, roomIds?: string[]}>} opts.allEntries — all be_staff_schedules entries for the
  *   branch (recurring + per-date mixed). Pass listStaffSchedules() output.
  * @param {string[]} opts.datesISO — array of YYYY-MM-DD strings
  * @returns {string[]} sorted, deduplicated date strings to auto-close
@@ -327,7 +341,10 @@ export function derivedAutoClosedDates({ doctorId, roomId, allEntries, datesISO 
     const entry = merged.find((m) => String(m.staffId) === String(doctorId));
     if (!entry) continue; // no shift → V55 handles separately
     if (!Array.isArray(entry.roomIds) || entry.roomIds.length === 0) continue; // legacy → not closed
-    if (!entry.roomIds.map(String).includes(String(roomId))) {
+    // V56 / BS-15 — Set lookup beats .map(String).includes() in the
+    // per-date loop (O(1) vs O(roomIds.length)).
+    const roomSet = new Set(entry.roomIds.map(String));
+    if (!roomSet.has(String(roomId))) {
       closed.add(dateISO);
     }
   }
