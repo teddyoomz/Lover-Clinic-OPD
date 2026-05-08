@@ -1,6 +1,6 @@
 ---
 updated_at: "2026-05-08 EOD #17 — V63 batch backfill applied to all 7 in-the-wild schedule links + visual verify GREEN"
-status: "master=<HEAD> (+32 ahead of prod) · 8059 + 1 skipped GREEN · build clean · NOT yet deployed"
+status: "master=<HEAD> (+34 ahead of prod) · 8059 + 1 skipped GREEN · build clean · NOT yet deployed"
 branch: "master"
 last_commit: "chore(V63): batch backfill 7 schedule links + diag script + verify"
 tests: 8059
@@ -13,7 +13,7 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `<HEAD>` · prod = `ef580a6` (32 commits ahead — V52..V62 + V63 + V62-bis + V63 batch backfill)
+- master = `<HEAD>` · prod = `ef580a6` (34 commits ahead — V52..V62 + V63 + V62-bis + V63 batch backfill)
 - Invariant set: AV1-AV30 + **AV32** + **AV33** + **AV34** + **AV35** + **BS-1..BS-15** + CB-1..5 (AV31 still pending in SKILL.md from V58)
 - Iron-clad rules locked: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule N targeted-only + Rule M two-phase data ops + Rule K work-first/test-last
 
@@ -34,10 +34,10 @@ storage_rules_version: 2
 - Detail: `.agents/sessions/2026-05-08-v52-v53-v54-branch-scope-trilogy.md` + `.agents/sessions/2026-05-08-v57-v58-v59-bis.md`
 
 ## Next action
-Idle — awaiting user authorization for combined deploy (V52..V62 + V63 + V62-bis + V63 batch backfill = 32 commits ahead of prod). All Optional items finished.
+Idle — awaiting user authorization for combined deploy (V52..V62 + V63 + V62-bis + V63 batch backfill = 34 commits ahead of prod). All Optional items finished.
 
 ## Outstanding user-triggered actions
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 32 commits ahead of prod.
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 34 commits ahead of prod.
 - ~~(Optional) admin re-gen any broken in-the-wild noDoctor link OR backfill~~ → **DONE** via batch script. All 7 in-the-wild prod schedule-links canonical (idempotent re-run = 0 writes).
 - ~~(Optional) visual verify AdminDashboard /admin~~ → **DONE** via preview_eval. Customer + admin sides both render 🔥 from canonical; toggleDay simplified.
 

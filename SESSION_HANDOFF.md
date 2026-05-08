@@ -11,7 +11,7 @@
 - **Branch**: `master`
 - **Last commit**: chore(V63): batch backfill 7 schedule links + diag + verify (data op only — no source change)
 - **Test count**: 8059 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (32 commits ahead — V52 through V63 + V62-bis + V63 batch tooling NOT yet deployed). Combined deploy NOT triggered.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (34 commits ahead — V52 through V63 + V62-bis + V63 batch tooling NOT yet deployed). Combined deploy NOT triggered.
 
 ### Session 2026-05-08 EOD #17 — V63 batch backfill on prod (Rule M data op)
 
@@ -55,7 +55,7 @@ Per `feedback_no_real_action_in_preview_eval.md`: only DOM read; no clicks on ac
 - `scripts/v63-batch-fix-all-schedule-links.mjs` (NEW Rule M template)
 - `scripts/diag-v63-inspect-schedlinks.mjs` (NEW read-only diag)
 
-**Outstanding**: combined `vercel --prod` for V52..V63 + V62-bis still pending user-explicit "deploy" THIS turn. 32 commits ahead of prod (data ops + scripts + V52..V63 + V62-bis). User said "ยกเว้น deploy" so deploy NOT triggered.
+**Outstanding**: combined `vercel --prod` for V52..V63 + V62-bis still pending user-explicit "deploy" THIS turn. 34 commits ahead of prod (data ops + scripts + V52..V63 + V62-bis). User said "ยกเว้น deploy" so deploy NOT triggered.
 
 
 
