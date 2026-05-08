@@ -7,15 +7,70 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #13 — V60 schedule-link doctorDays derived from canonical source (AV32) · 7909 + 1 skipped GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #14 — V61 schedule-link modal room dropdown derived from canonical schedule (AV33) · 7992 + 1 skipped GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V60 / AV32 — schedule-link doctorDays derived from be_staff_schedules + Rule M data fix
-- **Test count**: 7909 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (28 commits ahead — V52 through V60 NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
+- **Last commit**: V61 / AV33 — schedule-link modal room dropdown driven by be_staff_schedules canonical source
+- **Test count**: 7992 + 1 skipped GREEN. Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (29 commits ahead — V52 through V61 NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
 - **Probe-Deploy-Probe**: N/A — no rules change in any V-entry this session.
-- **Iron-clad rule status**: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule M two-phase data ops + Rule H-bis EXECUTED. Invariant set: AV1-AV30 + AV32 + BS-1..BS-15 + CB-1..5 (AV31 documented in V58 V-entry, pending landing in audit-anti-vibe-code SKILL.md).
-- **Migrations applied on prod**: + V57 backfill 6 be_exam_rooms.kind='doctor' (audit `be_admin_audit/v57-backfill-exam-rooms-kind-1778244093687-d334d1b6`); + V60 backfill SCH-2f69d853fb doctorDays (18 May 2026 entries derived from doctor's recurring schedule — audit `be_admin_audit/v60-fix-schedule-link-doctor-days-1778248090403-95a64eaf`).
+- **Iron-clad rule status**: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE (brainstorming spec written + approved) + Rule K work-first/test-last + Rule M two-phase data ops + Rule H-bis EXECUTED. Invariant set: AV1-AV30 + AV32 + AV33 + BS-1..BS-15 + CB-1..5 (AV31 still pending in SKILL.md from V58).
+- **Migrations applied on prod**: + V57 backfill 6 be_exam_rooms.kind='doctor'; + V60 backfill SCH-2f69d853fb doctorDays (18 May 2026 entries). V61 has NO migration — backward-compat via dual-field (`selectedRoomId` legacy + `selectedRoomIds` V61) preserved by `shouldBlockScheduleSlot` fallback.
 - **Rule B probe list**: still 4 endpoints.
+
+### Session 2026-05-08 EOD #14 — V61 Schedule-link modal room dropdown driven by `be_staff_schedules` (AV33) — brainstormed feature
+
+User report (verbatim, with screenshot of modal):
+> "เพิ่มเงื่อนไขใน Modal สร้างลิงก์ตาราง คือ หากไม่ได้ติ๊กไม่พบแพทย์ … ลิ้งค์พบแพทย์จะแสดงแต่ห้องที่แพทย์คนนั้นๆที่เลือกใน dropdown เข้าตรวจ … หากเลือกสร้างลิ้งแบบไม่พบแพทย์ modal จะโผล่ dropdown ให้เลือกห้องที่ไม่ได้มีแพทย์เข้าตรวจ … ในระยะเวลาที่เลือก"
+
+**Class-of-bug** (Rule P): V12 multi-reader-sweep at the schedule-link MODAL UI boundary. Same family as V52/BS-11 (reportsLoaders), V53/BS-12 (TIME_SLOTS), V54/BS-13 (raw listeners), V55/BS-14 (modal data sources), V56/BS-15 (room auto-closure), V60/AV32 (save-time doctorDays). V61 closes the LAST adoption-gap — the MODAL UI dropdown filter source.
+
+**Pre-V61 root cause**: `AdminDashboard.jsx:4333` filtered `branchExamRooms.filter(r => r.role === (schedNoDoctorRequired ? 'staff' : 'doctor'))` — V57 static kind filter. Two failure modes: (a) พบแพทย์ mode showed every kind=doctor room — including rooms the selected doctor never enters; (b) ไม่พบแพทย์ mode showed every kind=staff room — including rooms doctors actually use for procedures.
+
+**Brainstorming session** (Rule J HARD-GATE): 4 design Qs locked with user before any code:
+- **Q1=B refined**: "แพทย์ทุกคน" stays; room dropdown = UNION of ALL doctors' rooms in window
+- **Q2=A**: pre-flight gate — block save with inline error when zero rooms qualify
+- **Q3=B**: keep "ทุกห้อง" placeholder = "ทุกห้องที่แพทย์เข้า" = union snapshot
+- **Q4=A**: snapshot at gen + recompute on Sync; customer link only updates on admin Sync
+
+Spec written to `docs/superpowers/specs/2026-05-08-v61-schedule-link-room-dropdown-from-schedules-design.md` (~14 KB; full architecture + helper signatures + UI changes + save shape + customer rendering + AV33 invariant + test plan).
+
+**Architectural fix (Approach A)**:
+1. **Pure helpers** in `src/lib/staffScheduleValidation.js`:
+   - `deriveDoctorRoomIdsForWindow({doctorIds, allEntries, datesISO})` — union of `roomIds` across working entries; `doctorIds=null` aggregates ALL doctors (Q1=B refined)
+   - `deriveNonDoctorRoomIdsForWindow({branchExamRooms, allEntries, datesISO})` — rooms in `branchExamRooms` (`status='ใช้งาน'`) NOT touched by any working entry in window
+2. **Modal UI** (`AdminDashboard.jsx`): `v61DatesInRange` + `v61EligibleRoomIds` + `v61EligibleRooms` useMemos; defensive reset useEffect (V55 pattern); updated label copy ("ห้องที่แพทย์เข้าตรวจ" / "ห้องที่ไม่มีแพทย์เข้าตรวจ"); empty-state banner `data-testid="v61-room-empty-state"` with 3 Thai-copy variants.
+3. **useEffect extension**: fetches branch-wide `be_staff_schedules` when `schedSelectedDoctor` is null (needed for "แพทย์ทุกคน" + ไม่พบแพทย์ modes). Pre-V61 V59-bis only fetched for specific doctor.
+4. **Save path**: `handleGenScheduleLink` pre-flight gate `if (v61EligibleRoomIds.length === 0)` blocks save with Thai toast (3 variants); `v61SelectedRoomIds` snapshot computed BEFORE the bookedSlots filter loop so the loop applies array-aware filtering; saved doc shape adds `selectedRoomIds: string[]` (legacy `selectedRoomId` preserved for backward compat).
+5. **Filter helper extension** (`scheduleFilterUtils.js shouldBlockScheduleSlot`): accepts `selectedRoomIds: string[]` alongside legacy `selectedRoomId: string`. Prefers array when present + non-empty; falls back to single. Empty/nullish array → falls back to single. Pre-V61 saved docs unaffected.
+6. **Resync recompute** (`updateActiveSchedules`): detects "ทุกห้อง" V61 saved docs (`selectedRoomId === null` + `selectedRoomIds` non-empty) and recomputes union from current `be_staff_schedules` (fetches `listStaffSchedules` per branch + `listExamRooms` for noDoctorRequired mode). Specific-pick docs preserved verbatim. Customer link only updates on admin Sync (Q4=A).
+
+**NEW audit invariant AV33**: any customer-facing schedule-link modal MUST drive its room dropdown from canonical `be_staff_schedules` data — V57 kind static filter forbidden. Source-grep anchor: `branchExamRooms.filter(r => r.role === ...)` MUST NOT appear; `deriveDoctorRoomIdsForWindow` MUST. Sanctioned exceptions: NONE. Companion AV: AV30 (V57 kind schema). SKILL.md: 32 → 33 invariants.
+
+**Test bank shipped**: 83 V61 tests in `tests/v61-schedule-link-room-from-schedules.test.js`:
+- H1-H8 (44) — pure helper unit + adversarial (Doc A specific / แพทย์ทุกคน / multi-doctor / leave cancellation / per-date overrides / nullish inputs / Thai unicode / status filter / V57 kind ignored / multi-month)
+- F1-F4 (13) — `shouldBlockScheduleSlot` extension (array preferred / backward compat / specific doctor + array / nullish entries filtered)
+- M1-M8 (15) — source-grep regression (imports + V61 markers + V57 filter removed + useMemos + defensive reset + pre-flight gate + saved doc shape + filter cfg array)
+- G1-G4 (8) — pre-flight gate (empty-state banner + label updates + resync recompute + filter helper marker)
+- X1-X8 (10) — mixed combinations matrix (real-world หมอมายด์ + แพทย์ทุกคน + ไม่พบแพทย์ shockwave-only + per-date override + multi-month + branch-isolation + resync detection + cross-helper consistency with V60)
+
+**V21-class test fixups (2 sites)**: V55.L7.2 (verbatim Thai user-directive quote restored on single line) + V59.P1.5 (relaxed to accept either V59 skip-and-clear path OR V61 branch-fetch path with V61 marker — both satisfy contract "the effect handles the null-doctor case correctly"). Same V52/V54 test-fixup pattern.
+
+**Live preview_eval verification**: V60-fixed link `SCH-2f69d853fb` post-V61 still renders 14 fire days (backward-compat preserved — `selectedRoomIds: null` falls through to existing logic without breaking).
+
+**Cumulative**: 7909 → 7992 + 1 skipped (+83 net) all GREEN. Build clean (AdminDashboard chunk 370 → 372 KB, +2 KB for V61 helpers + dropdown logic).
+
+**Methodology lessons**:
+- (a) **Static schema fields ≠ behavior-driven semantics** — V57's `kind` field captured "this room is generally a doctor room" but the schedule-link modal needs "is this room being used by a doctor in THIS window". Two different questions; one needs static metadata, the other needs canonical schedule.
+- (b) **Brainstorming HARD-GATE caught architectural drift** — Q1-Q4 locked with user before any code. Q1's "แพทย์ทุกคน" semantics, Q3's "ทุกห้อง" preservation, and Q4's snapshot+recompute pattern would have been ambiguous in code-first. Saved 4+ rounds of "almost right" iteration.
+- (c) **Snapshot + recompute pattern complete for schedule-link** — V60 doctorDays + V61 selectedRoomIds both snapshot at gen, recompute on Sync. Customer link is stable until admin syncs. Same architectural pattern as Rule O (V46/V48) "the FINAL write goes through canonical-derive at write boundary".
+- (d) **Backward-compat via dual-field** (`selectedRoomId` legacy + `selectedRoomIds` array) — prevents migration risk while progressing the schema. `shouldBlockScheduleSlot` prefers array; falls back to single. Pre-V61 prod docs continue working without intervention.
+- (e) **The complete schedule-link adoption-gap series (V52-V61)** demonstrates a single class-of-bug eliminated layer-by-layer across 7+ V-entries: V52 reports / V53 time-axis / V54 raw listeners / V55 modal data sources / V56 room auto-closure / V60 save-time doctorDays / V61 modal UI room dropdown. Each closed a different boundary; together they form a complete BSA + canonical-source story.
+- (f) **Two V21-class test fixups** show that locking PRIOR contracts in tests is brittle — when the contract evolves, fix the test, document the V61 marker, preserve institutional memory in code comments. This is now a recurring pattern (V52/V54/V61 all had test fixups).
+- (g) **Rule K work-first/test-last** — implemented all 6 source files first (helpers + modal logic + save path + resync paths + filter helper extension), reviewed shape, then wrote tests in single batch. Avoided V21 lock-in mid-stream.
+
+**Outstanding**: combined `vercel --prod` for V52..V60 + V61 (29 commits ahead of prod; user-authorized only).
+
+Detail: V61 V-entry in `.claude/rules/00-session-start.md` § 2; AV33 in `.agents/skills/audit-anti-vibe-code/SKILL.md`.
 
 ### Session 2026-05-08 EOD #13 — V60 Schedule-link doctorDays from canonical source (AV32) — systematic-debugging session
 

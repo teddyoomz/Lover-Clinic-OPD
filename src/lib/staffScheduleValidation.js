@@ -403,6 +403,111 @@ export function derivedDoctorDaysFromSchedules({ doctorId, allEntries, datesISO 
   return [...result].sort();
 }
 
+/**
+ * V61 / AV33 (2026-05-08) — derive the union of room IDs touched by
+ * working entries across a date window. Used by the schedule-link modal
+ * (`AdminDashboard.jsx handleGenScheduleLink`) to populate the room
+ * dropdown based on REAL schedule data — NOT `be_exam_rooms.kind` static
+ * filter (V57).
+ *
+ * Q1=B refined (user 2026-05-08): "แพทย์ทุกคน" + window → union of ALL
+ * doctors' rooms in window; specific doctor + window → that doctor's
+ * rooms. Customer doesn't care which doctor; cares that the room is
+ * available + some doctor will be there.
+ *
+ * - `doctorIds = ['DOC-X']`        → only that doctor's rooms (specific)
+ * - `doctorIds = ['DOC-X', 'DOC-Y']` → union of those doctors' rooms (multi-pick future-proof)
+ * - `doctorIds = null/undefined`    → ALL doctors (แพทย์ทุกคน mode aggregate)
+ *
+ * Excludes leave/holiday/sick (off-shift; no roomIds on those types).
+ * Per-date override semantics via `mergeSchedulesForDate` (per-date leave
+ * cancels recurring-weekday → that date's roomIds NOT counted).
+ *
+ * Pure JS — testable without Firestore mocks. `allEntries` should already
+ * be branch-scoped (caller's responsibility — pass branch's
+ * `be_staff_schedules` query result).
+ *
+ * Class-of-bug closed: V12 multi-reader-sweep at the schedule-link MODAL
+ * UI boundary. Sister to:
+ *   - `derivedDoctorDaysFromSchedules` (V60 / AV32) — save-time doctorDays
+ *   - `derivedAutoClosedDates` (V56 / BS-15) — save-time auto-closure
+ *
+ * @param {object} opts
+ * @param {string[]|null|undefined} opts.doctorIds — null = ALL doctors aggregated
+ * @param {Array<{staffId, type, dayOfWeek?, date?, roomIds?: string[]}>} opts.allEntries
+ * @param {string[]} opts.datesISO — array of YYYY-MM-DD strings (months window)
+ * @returns {string[]} sorted, deduped room IDs touched in window
+ */
+export function deriveDoctorRoomIdsForWindow({ doctorIds, allEntries, datesISO }) {
+  if (!Array.isArray(allEntries) || !Array.isArray(datesISO)) return [];
+  const filterIds = Array.isArray(doctorIds) && doctorIds.length > 0
+    ? doctorIds.map(String)
+    : null;
+  const result = new Set();
+  for (const dateISO of datesISO) {
+    if (typeof dateISO !== 'string' || !DATE_ISO_RE.test(dateISO)) continue;
+    // Pass null filter to mergeSchedulesForDate when aggregating ALL doctors
+    // so per-date override semantics apply to every doctor in the entries.
+    const merged = mergeSchedulesForDate(dateISO, allEntries, filterIds);
+    for (const entry of merged) {
+      if (!entry || !WORKING_TIME_TYPES.has(entry.type)) continue;
+      if (filterIds && !filterIds.includes(String(entry.staffId))) continue;
+      if (!Array.isArray(entry.roomIds)) continue;
+      for (const rid of entry.roomIds) {
+        if (rid != null && rid !== '') result.add(String(rid));
+      }
+    }
+  }
+  return [...result].sort();
+}
+
+/**
+ * V61 / AV33 (2026-05-08) — derive room IDs in `branchExamRooms` that
+ * are NOT touched by any working entry across the date window. Used by
+ * the ไม่พบแพทย์ mode dropdown.
+ *
+ * Logic:
+ *   1. Aggregate union of all `roomIds` across all working entries in
+ *      window via `deriveDoctorRoomIdsForWindow({ doctorIds: null, ... })`
+ *   2. Filter `branchExamRooms` (status='ใช้งาน') to those NOT in the union
+ *
+ * V57 `kind` field is IGNORED here — filter is schedule-DRIVEN, not
+ * kind-driven. A "kind=doctor" room that no doctor enters in this window
+ * appears here (correct: it IS a non-doctor room for THIS window). A
+ * "kind=staff" room that some doctor uses for procedures will NOT appear
+ * (correct: it IS touched by a doctor schedule).
+ *
+ * @param {object} opts
+ * @param {Array<{id, name, status?: string}>} opts.branchExamRooms
+ * @param {Array<entry>} opts.allEntries — branch-scoped be_staff_schedules
+ * @param {string[]} opts.datesISO
+ * @returns {string[]} sorted, deduped room IDs (subset of branchExamRooms ids)
+ */
+export function deriveNonDoctorRoomIdsForWindow({ branchExamRooms, allEntries, datesISO }) {
+  if (!Array.isArray(branchExamRooms) || !Array.isArray(allEntries) || !Array.isArray(datesISO)) {
+    return [];
+  }
+  const touchedRoomIds = new Set(
+    deriveDoctorRoomIdsForWindow({
+      doctorIds: null,
+      allEntries,
+      datesISO,
+    }),
+  );
+  // Candidate set: rooms with status='ใช้งาน' (active) — schema declared in
+  // examRoomValidation.js. Rooms with other status (e.g. archived) are
+  // excluded from the customer-facing picker.
+  const candidates = branchExamRooms.filter((r) =>
+    r && r.id != null && (r.status == null || r.status === 'ใช้งาน'),
+  );
+  const result = new Set();
+  for (const r of candidates) {
+    const rid = String(r.id);
+    if (!touchedRoomIds.has(rid)) result.add(rid);
+  }
+  return [...result].sort();
+}
+
 export function generateStaffScheduleId(nowMs = Date.now()) {
   if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
     throw new Error('crypto.getRandomValues unavailable');

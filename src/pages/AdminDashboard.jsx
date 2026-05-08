@@ -77,8 +77,10 @@ import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurpos
 import { openCustomerInNewTab, openCustomerEditInNewTab } from '../lib/customerNavigation.js';
 import {
   TIME_SLOTS as CANONICAL_TIME_SLOTS,
-  derivedAutoClosedDates,        // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
-  derivedDoctorDaysFromSchedules, // V60 / AV32 (2026-05-08) — doctorDays derived from be_staff_schedules canonical source
+  derivedAutoClosedDates,            // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
+  derivedDoctorDaysFromSchedules,    // V60 / AV32 (2026-05-08) — doctorDays derived from be_staff_schedules canonical source
+  deriveDoctorRoomIdsForWindow,      // V61 / AV33 (2026-05-08) — modal room dropdown driven by be_staff_schedules (specific or แพทย์ทุกคน)
+  deriveNonDoctorRoomIdsForWindow,   // V61 / AV33 (2026-05-08) — modal room dropdown for ไม่พบแพทย์ mode
 } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -640,13 +642,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // 05e210f, re-applied here with correct ordering.
   const [schedDoctorSchedules, setSchedDoctorSchedules] = useState([]);
 
-  // V59 — fetch be_staff_schedules for the picked doctor (only when admin
-  // actually picks a specific doctor; "all doctors" = null skips fetch).
+  // V59 + V61 (extended 2026-05-08) — fetch be_staff_schedules for the
+  // schedule-link modal. V59 originally fetched only the SELECTED doctor's
+  // entries; V61 extends to fetch ALL branch entries when admin uses
+  // "แพทย์ทุกคน" (Q1=B refined) OR ไม่พบแพทย์ mode (Q3=B+Q1: need to know
+  // which rooms are touched by ANY doctor to compute non-doctor rooms).
   // Cancellation guard mirrors V55 livePractitioners pattern.
   useEffect(() => {
-    if (!schedSelectedDoctor) { setSchedDoctorSchedules([]); return; }
     let cancelled = false;
-    listStaffSchedules({ branchId: selectedBranchId, staffId: schedSelectedDoctor })
+    const promise = schedSelectedDoctor
+      ? listStaffSchedules({ branchId: selectedBranchId, staffId: schedSelectedDoctor })
+      : listStaffSchedules({ branchId: selectedBranchId });
+    promise
       .then((list) => { if (!cancelled) setSchedDoctorSchedules(list || []); })
       .catch(() => { if (!cancelled) setSchedDoctorSchedules([]); });
     return () => { cancelled = true; };
@@ -705,6 +712,75 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     practitioners,
     branchExamRooms,
   ]);
+
+  // V61 / AV33 (2026-05-08) — months window dates for derive helpers.
+  // Shared between v59Preview (V56 auto-closure) + V61 eligibleRoomIds
+  // derivation. Recomputes when schedStartMonth or schedAdvanceMonths
+  // change so the dropdown re-derives on month-window change.
+  const v61DatesInRange = useMemo(() => {
+    const out = [];
+    const [sy, sm] = schedStartMonth.split('-').map(Number);
+    for (let i = 0; i < schedAdvanceMonths; i++) {
+      const d = new Date(sy, sm - 1 + i, 1);
+      const mo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const [yMo, mMo] = mo.split('-').map(Number);
+      const daysInMo = new Date(yMo, mMo, 0).getDate();
+      for (let dd = 1; dd <= daysInMo; dd++) {
+        out.push(`${mo}-${String(dd).padStart(2, '0')}`);
+      }
+    }
+    return out;
+  }, [schedStartMonth, schedAdvanceMonths]);
+
+  // V61 / AV33 — modal room dropdown options derived from canonical
+  // be_staff_schedules data (NOT V57 be_exam_rooms.kind static filter).
+  //
+  //   พบแพทย์ + specific doctor → that doctor's roomIds in window
+  //   พบแพทย์ + แพทย์ทุกคน      → union of ALL doctors' roomIds (Q1=B refined)
+  //   ไม่พบแพทย์                → rooms in branchExamRooms NOT touched by any
+  //                                doctor's schedule in window
+  //
+  // Closes V12 multi-reader-sweep at the schedule-link MODAL UI boundary.
+  // V60 closed the SAVE boundary (doctorDays); V61 closes the MODAL UI
+  // boundary (room dropdown options).
+  const v61EligibleRoomIds = useMemo(() => {
+    if (schedNoDoctorRequired) {
+      return deriveNonDoctorRoomIdsForWindow({
+        branchExamRooms,
+        allEntries: schedDoctorSchedules,
+        datesISO: v61DatesInRange,
+      });
+    }
+    return deriveDoctorRoomIdsForWindow({
+      doctorIds: schedSelectedDoctor ? [schedSelectedDoctor] : null,
+      allEntries: schedDoctorSchedules,
+      datesISO: v61DatesInRange,
+    });
+  }, [
+    schedNoDoctorRequired,
+    schedSelectedDoctor,
+    schedDoctorSchedules,
+    branchExamRooms,
+    v61DatesInRange,
+  ]);
+
+  const v61EligibleRooms = useMemo(() => {
+    if (!Array.isArray(branchExamRooms)) return [];
+    const ids = new Set(v61EligibleRoomIds.map(String));
+    return branchExamRooms.filter((r) => r && r.id != null && ids.has(String(r.id)));
+  }, [branchExamRooms, v61EligibleRoomIds]);
+
+  // V61 defensive reset (V55 pattern): when eligibleRoomIds changes (branch
+  // switch / doctor switch / mode toggle / months window change) and the
+  // previously-picked schedSelectedRoom is no longer in the eligible set,
+  // reset to null. Without this, saved doc carries a roomId that's no
+  // longer in the dropdown's set → confusing UX + potential broken link.
+  useEffect(() => {
+    if (schedSelectedRoom == null) return;
+    if (!v61EligibleRoomIds.includes(String(schedSelectedRoom))) {
+      setSchedSelectedRoom(null);
+    }
+  }, [v61EligibleRoomIds, schedSelectedRoom]);
 
   // V55/BS-14 (2026-05-08) — when branch switches, the per-branch
   // practitioners/rooms lists re-fetch (effects above key on selectedBranchId).
@@ -1116,10 +1192,79 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         // Check if not expired (24hr)
         if (sched.createdAt?.toMillis && Date.now() - sched.createdAt.toMillis() > 24 * 60 * 60 * 1000) continue;
 
+        const months = sched.months || [];
+
+        // V61 / AV33 (2026-05-08) — recompute selectedRoomIds snapshot on
+        // resync. Q4=A: customer link reflects state at last admin Sync.
+        // - Specific room pick (selectedRoomId truthy) → keep [selectedRoomId]
+        //   (admin chose specific; "ทุกห้อง" expansion would change link semantics).
+        // - "ทุกห้อง" pick (selectedRoomId null + selectedRoomIds non-empty) →
+        //   recompute the union from current be_staff_schedules in the saved
+        //   months window. Picks up newly-added rooms / drops removed ones.
+        // - Legacy pre-V61 (selectedRoomId only, no selectedRoomIds field) →
+        //   no recomputation; preserve legacy behavior.
+        let recomputedRoomIds = null;
+        const wasGenericRoomPick = (
+          (sched.selectedRoomId == null || sched.selectedRoomId === '')
+          && Array.isArray(sched.selectedRoomIds)
+          && sched.selectedRoomIds.length > 0
+        );
+        if (wasGenericRoomPick) {
+          try {
+            const sBranchForFetch = sched.branchId || '';
+            const branchEntries = sBranchForFetch
+              ? await listStaffSchedules({
+                  branchId: sBranchForFetch,
+                  ...(sched.selectedDoctorId ? { staffId: sched.selectedDoctorId } : {}),
+                })
+              : [];
+            // Build datesISO from saved.months
+            const dates = [];
+            for (const mo of months) {
+              if (typeof mo !== 'string' || !/^\d{4}-\d{2}$/.test(mo)) continue;
+              const [yMo, mMo] = mo.split('-').map(Number);
+              const daysInMo = new Date(yMo, mMo, 0).getDate();
+              for (let d = 1; d <= daysInMo; d++) {
+                dates.push(`${mo}-${String(d).padStart(2, '0')}`);
+              }
+            }
+            // For ไม่พบแพทย์ mode, need branch's full be_exam_rooms list to
+            // compute non-doctor rooms. Fetch fresh per resync.
+            if (sched.noDoctorRequired) {
+              const branchRoomsForRecompute = sBranchForFetch
+                ? await listExamRooms({ branchId: sBranchForFetch, status: 'ใช้งาน' }).catch(() => [])
+                : [];
+              recomputedRoomIds = deriveNonDoctorRoomIdsForWindow({
+                branchExamRooms: branchRoomsForRecompute,
+                allEntries: branchEntries,
+                datesISO: dates,
+              });
+            } else {
+              recomputedRoomIds = deriveDoctorRoomIdsForWindow({
+                doctorIds: sched.selectedDoctorId ? [sched.selectedDoctorId] : null,
+                allEntries: branchEntries,
+                datesISO: dates,
+              });
+            }
+          } catch (e) {
+            console.warn('[V61/AV33] resync recompute failed:', sched.token, e?.message || e);
+            recomputedRoomIds = null;
+          }
+        }
+
+        const effectiveSelectedRoomIds = recomputedRoomIds != null
+          ? recomputedRoomIds
+          : (Array.isArray(sched.selectedRoomIds) ? sched.selectedRoomIds : null);
+
+        // V61 / AV33 (2026-05-08) — pass selectedRoomIds array through to
+        // shouldBlockScheduleSlot. V61 saved docs carry the snapshot array
+        // (single-pick → 1-element; ทุกห้อง → full union, recomputed above).
+        // Pre-V61 docs carry only selectedRoomId — backward-compat fallback.
         const filterCfg = {
           noDoctorRequired: !!sched.noDoctorRequired,
           selectedDoctorId: sched.selectedDoctorId || null,
           selectedRoomId: sched.selectedRoomId || null,
+          selectedRoomIds: effectiveSelectedRoomIds,
           assistantIds,
         };
         const doctorSlotCfg = {
@@ -1128,7 +1273,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           doctorRoomIds,
         };
 
-        const months = sched.months || [];
         const freshBookedSlots = [];
         const freshDoctorBookedSlots = [];
         // Phase 22.0c — read appts for THIS schedule's branch (not the
@@ -1147,10 +1291,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             }
           });
         }
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), {
+        // V61 / AV33 — write back recomputed selectedRoomIds when admin
+        // had picked "ทุกห้อง" (recomputedRoomIds non-null). Specific-pick
+        // saved docs keep their original [selectedRoomId] verbatim.
+        const updatePayload = {
           bookedSlots: freshBookedSlots,
           doctorBookedSlots: sched.noDoctorRequired ? freshDoctorBookedSlots : [],
-        }).catch(e => console.warn('[updateActiveSchedules] write failed:', sched.token, e.message));
+        };
+        if (recomputedRoomIds != null) {
+          updatePayload.selectedRoomIds = recomputedRoomIds;
+        }
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clinic_schedules', sched.token), updatePayload)
+          .catch(e => console.warn('[updateActiveSchedules] write failed:', sched.token, e.message));
       }
     } catch (e) { console.warn('[updateActiveSchedules] failed:', e.message); }
   };
@@ -1485,10 +1637,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // set of "ห้องแพทย์" room IDs in the SELECTED branch only.
       const doctorRoomIds = new Set(branchExamRooms.filter(r => r.role === 'doctor').map(r => String(r.id)));
       const selectedRoomStr = schedSelectedRoom ? String(schedSelectedRoom) : null;
+      // V61 / AV33 (2026-05-08) — snapshot the V61 room set BEFORE the
+      // bookedSlots filter loop so the loop applies array-aware filtering.
+      // - Specific room pick → [room]
+      // - "ทุกห้อง" pick (Q3=B) → full v61EligibleRoomIds union (snapshot)
+      // The same array is saved into the doc shape below (Q4=A consistency).
+      const v61SelectedRoomIds = schedSelectedRoom
+        ? [String(schedSelectedRoom)]
+        : [...v61EligibleRoomIds];
       const filterCfg = {
         noDoctorRequired: schedNoDoctorRequired,
         selectedDoctorId: schedSelectedDoctor,
         selectedRoomId: schedSelectedRoom,
+        // V61 — array preferred when present; shouldBlockScheduleSlot
+        // backward-compat falls through to selectedRoomId for legacy.
+        selectedRoomIds: v61SelectedRoomIds,
         assistantIds,
       };
       const doctorSlotCfg = {
@@ -1621,6 +1784,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           return;
         }
       }
+      // V61 / AV33 (2026-05-08) — pre-flight gate Q2=A: refuse to save a
+      // link with zero eligible rooms (broken customer-facing dropdown
+      // would render empty calendar). Mirrors V60 doctorDays gate.
+      if (v61EligibleRoomIds.length === 0) {
+        showToast(
+          schedNoDoctorRequired
+            ? 'ไม่พบห้องที่ไม่มีแพทย์เข้าตรวจในระยะเวลาที่เลือก — แก้ไขตารางหมอก่อน'
+            : (schedSelectedDoctor
+                ? 'แพทย์ที่เลือกไม่มีตารางเข้าห้องในระยะเวลาที่เลือก — แก้ไขตารางหมอก่อน'
+                : 'ไม่พบห้องที่มีแพทย์เข้าตรวจในระยะเวลาที่เลือก — แก้ไขตารางหมอก่อน'),
+          7000,
+        );
+        setSchedGenLoading(false);
+        return;
+      }
+      // V61 / AV33 — v61SelectedRoomIds was computed earlier (before the
+      // bookedSlots filter loop) so the loop applies array-aware filtering.
+      // Q4=A: customer link reflects WHAT WAS COMPUTED AT GEN TIME; refreshed
+      // on admin Sync only (resync paths recompute via same helpers).
       const closedDaysUnion = [...new Set([...(schedClosedDays || []), ...v56AutoClosed])].sort();
 
       // 5. Save schedule doc (world-readable by token — do NOT include
@@ -1674,6 +1856,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         selectedDoctorId: schedSelectedDoctor || null,
         selectedDoctorName: allPractitioners.find(p => p.id === schedSelectedDoctor)?.name || null,
         selectedRoomId: selectedRoomStr || null,
+        // V61 / AV33 (2026-05-08) — array snapshot of room set at save time.
+        // Q3=B: "ทุกห้อง" pick saves the full union; specific pick saves a
+        // 1-element wrap. Backward-compat: pre-V61 docs keep `selectedRoomId`
+        // single; resync logic prefers the array when present + non-empty.
+        selectedRoomIds: v61SelectedRoomIds,
         selectedRoomName: selectedRoomStr
           ? (branchExamRooms.find(r => String(r.id) === selectedRoomStr)?.name || null)
           : null,
@@ -4326,13 +4513,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       monthOptions.push({ val, label });
     }
     // V55/BS-14 (2026-05-08) — be_exam_rooms branch-scoped (Phase 18.0).
-    // Modal "เลือกห้อง" dropdown shows only rooms in the SELECTED branch
-    // matching the doctor/staff kind toggle. User reported (verbatim
-    // 2026-05-08): "modal สร้างลิ้งค์ตาราง ยังไม่ได้ดึงข้อมูลต่างๆใน modal
-    // จากสาขานั้นๆ" — pre-V55 read clinicSettings.rooms (legacy global).
-    const shownRooms = branchExamRooms.filter(r =>
-      r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
-    );
+    // User reported (verbatim 2026-05-08): "modal สร้างลิ้งค์ตาราง ยังไม่ได้ดึงข้อมูลต่างๆใน modal จากสาขานั้นๆ".
+    // V55 fixed branch-scoping (per-branch be_exam_rooms instead of legacy
+    // global clinicSettings.rooms).
+    //
+    // V61 / AV33 (2026-05-08) — dropdown options now derived from CANONICAL
+    // be_staff_schedules data via v61EligibleRooms (computed via useMemo
+    // outside this render fn). Pre-V61 used `r.role` static filter which
+    // could show rooms the selected doctor never enters (พบแพทย์ mode) OR
+    // miss "kind=doctor" rooms with no doctor entries (ไม่พบแพทย์ mode).
+    // V61 closes the V12 multi-reader-sweep gap at the modal UI boundary.
+    const shownRooms = v61EligibleRooms;
 
     return (
       <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => !schedGenLoading && setShowScheduleModal(false)}>
@@ -4418,15 +4609,37 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {shownRooms.length > 0 && (
                 <div>
                   <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">
-                    เลือกห้อง ({schedNoDoctorRequired ? 'ห้องหัตถการทั่วไป' : 'ห้องแพทย์'})
+                    {/* V61 / AV33 — label reflects schedule-driven semantics:
+                        พบแพทย์ → "ห้องที่แพทย์เข้าตรวจ" (in window)
+                        ไม่พบแพทย์ → "ห้องที่ไม่มีแพทย์เข้า" (in window) */}
+                    เลือกห้อง ({schedNoDoctorRequired ? 'ห้องที่ไม่มีแพทย์เข้าตรวจ' : 'ห้องที่แพทย์เข้าตรวจ'})
                   </label>
                   <select value={schedSelectedRoom || ''} onChange={e => setSchedSelectedRoom(e.target.value || null)}
                     className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
-                    <option value="">-- ทุกห้อง (ไม่กรองห้อง) --</option>
+                    {/* V61 / AV33 — Q3=B: keep "ทุกห้อง" with semantics
+                        "ทุกห้องที่แพทย์เข้า" (saves union snapshot at gen time). */}
+                    <option value="">
+                      -- {schedNoDoctorRequired ? 'ทุกห้อง (ทั้งหมดที่ไม่มีแพทย์)' : 'ทุกห้อง (ทุกห้องที่แพทย์เข้า)'} --
+                    </option>
                     {shownRooms.map(r => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
+                </div>
+              )}
+              {/* V61 / AV33 — empty-state banner (Q2=A: pre-flight gate UI surface).
+                  When zero eligible rooms → block save + explain why. Mirrors V60
+                  customer-side empty-doctor-month banner pattern. */}
+              {shownRooms.length === 0 && (schedNoDoctorRequired || schedSelectedDoctor || practitioners.filter(p => p.role === 'doctor').length > 0) && (
+                <div data-testid="v61-room-empty-state"
+                  className="rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 py-2">
+                  <p className="text-[11px] text-amber-300 leading-relaxed">
+                    {schedNoDoctorRequired
+                      ? 'ไม่พบห้องที่ไม่มีแพทย์เข้าตรวจในระยะเวลาที่เลือก — กรุณาปรับช่วงเวลาหรือตารางหมอ'
+                      : (schedSelectedDoctor
+                          ? 'แพทย์ที่เลือกไม่มีตารางเข้าห้องในระยะเวลาที่เลือก — กรุณาแก้ไขตารางหมอก่อน'
+                          : 'ไม่พบห้องที่มีแพทย์เข้าตรวจในระยะเวลาที่เลือก — กรุณาแก้ไขตารางหมอก่อน')}
+                  </p>
                 </div>
               )}
               {schedNoDoctorRequired && (

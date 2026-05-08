@@ -50,10 +50,20 @@ describe('V59.P1 — schedDoctorSchedules state + fetch hook', () => {
     );
   });
 
-  it('P1.5 effect skips fetch when schedSelectedDoctor is null (clears state)', () => {
-    expect(adminDashSrc).toMatch(
-      /if \(!schedSelectedDoctor\) \{ setSchedDoctorSchedules\(\[\]\); return; \}/,
-    );
+  it('P1.5 effect handles schedSelectedDoctor null path', () => {
+    // V59 original behavior: skipped fetch entirely when no specific doctor
+    // picked → setSchedDoctorSchedules([]).
+    // V61 / AV33 (2026-05-08) update: extended to fetch ALL branch entries
+    // when no specific doctor (needed for "แพทย์ทุกคน" mode + ไม่พบแพทย์
+    // mode room derivation). Pre-V61 sole-pattern lock removed; new contract:
+    // either (a) skip-and-clear (legacy V59) OR (b) fetch branch-wide (V61).
+    // V61 marker in source distinguishes the new path.
+    const hasV59SkipPattern = /if \(!schedSelectedDoctor\) \{ setSchedDoctorSchedules\(\[\]\); return; \}/.test(adminDashSrc);
+    const hasV61BranchFetchPattern = /listStaffSchedules\(\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*\)/.test(adminDashSrc)
+      && /V61[\s\S]{0,400}?listStaffSchedules/.test(adminDashSrc);
+    // Either V59 legacy path OR V61 extended path is acceptable; both satisfy
+    // the contract "the effect handles the null-doctor case correctly".
+    expect(hasV59SkipPattern || hasV61BranchFetchPattern).toBe(true);
   });
 });
 

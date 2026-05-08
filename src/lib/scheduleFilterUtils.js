@@ -50,20 +50,39 @@ export function shouldBlockScheduleSlot(appointment, config) {
   const doctorStr = appointment.doctorId == null ? '' : String(appointment.doctorId);
   const roomStr = appointment.roomId == null ? '' : String(appointment.roomId);
 
-  const { noDoctorRequired, selectedDoctorId, selectedRoomId, assistantIds } = config;
-  const selRoomStr = selectedRoomId == null || selectedRoomId === '' ? null : String(selectedRoomId);
+  const { noDoctorRequired, selectedDoctorId, selectedRoomId, selectedRoomIds, assistantIds } = config;
+
+  // V61 / AV33 (2026-05-08) — `selectedRoomIds: string[]` is the V61 array
+  // shape (snapshot of doctor's roomIds union, or single-element wrap of
+  // a specific room). Prefer when present + non-empty; fall back to legacy
+  // `selectedRoomId` (single string) for pre-V61 saved docs. Empty array
+  // → no room filter (treated like null). Mirrors V60 backward-compat
+  // pattern (selectedRoomIds preferred; selectedRoomId is the legacy field).
+  let roomSet = null;
+  if (Array.isArray(selectedRoomIds) && selectedRoomIds.length > 0) {
+    roomSet = new Set(
+      selectedRoomIds
+        .filter((id) => id != null && id !== '')
+        .map(String),
+    );
+    if (roomSet.size === 0) roomSet = null;
+  }
+  if (roomSet === null && selectedRoomId != null && selectedRoomId !== '') {
+    roomSet = new Set([String(selectedRoomId)]);
+  }
   const selDoctorStr = selectedDoctorId == null || selectedDoctorId === '' ? null : String(selectedDoctorId);
 
-  // Physical room: if the link targets a specific room, that room being
-  // occupied blocks the slot regardless of who booked it.
-  const roomBusy = selRoomStr !== null && roomStr === selRoomStr;
+  // Physical room: if the link targets a specific room (or set of rooms),
+  // any of those rooms being occupied blocks the slot regardless of who
+  // booked it.
+  const roomBusy = roomSet !== null && roomSet.has(roomStr);
 
   // Person (doctor / assistant) level busy check.
   let personBusy;
   if (selDoctorStr !== null) {
     // Specific doctor picked — only their appointments count.
     personBusy = doctorStr === selDoctorStr;
-  } else if (selRoomStr !== null) {
+  } else if (roomSet !== null) {
     // Room-only filter — person-level busy doesn't apply. A different doctor
     // booking a different room must not block us.
     personBusy = false;

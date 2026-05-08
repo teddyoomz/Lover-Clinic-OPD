@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV32)
+## Invariants (AV1–AV33)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -680,6 +680,57 @@ expect(setDocBlock[0]).toMatch(/doctorDays:\s*finalDoctorDays/);
 2. **Pre-flight gates surface latent bugs.** A save handler that just *commits whatever shape it has* turns silent breakage into a noisy bug at link-share time. Adding a "would this doc be functional?" check before commit is cheap insurance.
 3. **Defense in depth on the customer side** — even with admin-side gate, legacy in-the-wild links predate the gate. An empty-state banner is a one-screen change that prevents customer confusion forever, regardless of who/what produced the broken doc.
 4. **BSA adoption-gap pattern at the WRITE boundary** is the mirror of the READ-boundary gaps (V52-V55). When a canonical Firestore source exists, EVERY writer that derives from admin state must also derive from canonical. V56 introduced `be_staff_schedules` consumption at the auto-closure layer but missed the doctorDays layer for 2 sub-revisions until V60.
+
+### AV33 — Schedule-link modal room dropdown driven by canonical schedule, not `kind` (V61, 2026-05-08)
+
+**Pattern**: Customer-facing schedule-link modal MUST derive its room-dropdown options from `be_staff_schedules` (canonical) for the months window — NOT from the static `be_exam_rooms.kind` filter (V57). Pre-V61 used `r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')` which produced two failure modes: (1) พบแพทย์ mode showed every "kind=doctor" room — including rooms the selected doctor never enters → broken customer link; (2) ไม่พบแพทย์ mode showed every "kind=staff" room — including rooms doctors actually use → wrong availability semantics.
+
+**Class-of-bug**: V12 multi-reader-sweep at the schedule-link MODAL UI boundary. Same family as V52/BS-11 (reportsLoaders), V53/BS-12 (TIME_SLOTS), V54/BS-13 (raw listeners), V55/BS-14 (modal data sources), V56/BS-15 (room auto-closure derived from canonical), V60/AV32 (save-time doctorDays). V61 closes the LAST adoption-gap in the schedule-link path — the MODAL UI dropdown filter source.
+
+**Origin**: User report (verbatim, 2026-05-08): "เพิ่มเงื่อนไขใน Modal สร้างลิงก์ตาราง คือ หากไม่ได้ติ๊กไม่พบแพทย์ … ลิ้งค์พบแพทย์จะแสดงแต่ห้องที่แพทย์คนนั้นๆที่เลือกใน dropdown เข้าตรวจ ตามในระยะเวลาในช่อง 'แสดงทั้งหมด' …". V57 had introduced `kind` field for general categorization, but the schedule-link modal needs SCHEDULE-DRIVEN data, not kind-static.
+
+**Fix architecture (V61)**:
+1. **Pure helpers** in `src/lib/staffScheduleValidation.js`:
+   - `deriveDoctorRoomIdsForWindow({ doctorIds, allEntries, datesISO })` — union of `roomIds` across working entries (`doctorIds=null` aggregates ALL doctors per "แพทย์ทุกคน" Q1=B refined)
+   - `deriveNonDoctorRoomIdsForWindow({ branchExamRooms, allEntries, datesISO })` — rooms in `branchExamRooms` (`status='ใช้งาน'`) that are NOT touched by any working entry in window
+2. **Modal UI** (`AdminDashboard.jsx`): replaced V57 kind-filter with `v61EligibleRooms` useMemo derived via the helpers; defensive reset on dep change; updated label copy ("ห้องที่แพทย์เข้าตรวจ" / "ห้องที่ไม่มีแพทย์เข้าตรวจ").
+3. **Pre-flight gate (Q2=A)**: when zero eligible rooms → block save with Thai toast (3 variants: ไม่พบแพทย์ / specific doctor / แพทย์ทุกคน). Mirrors V60 doctorDays gate.
+4. **Save shape (Q4=A snapshot)**: NEW `selectedRoomIds: string[]` field on `clinic_schedules/{token}` — single-pick = `[room]`; "ทุกห้อง" pick (Q3=B) = full union snapshot. `selectedRoomId` legacy field preserved for backward compat.
+5. **Filter helper extension** (`scheduleFilterUtils.js shouldBlockScheduleSlot`): accepts `selectedRoomIds: string[]` alongside legacy `selectedRoomId`. Prefers array when present + non-empty; falls back to single. Pre-V61 saved docs unaffected.
+6. **Resync recompute (Q4=A continuation)**: `updateActiveSchedules` detects "ทุกห้อง" saved docs (`selectedRoomId === null` + `selectedRoomIds` non-empty) and recomputes the union from current `be_staff_schedules`. Specific-pick docs are preserved verbatim. Customer link only updates on admin Sync.
+
+**Anti-pattern** (forbidden by AV33):
+```js
+// ❌ FORBIDDEN — V57 kind-based filter at modal UI
+const shownRooms = branchExamRooms.filter(r =>
+  r.role === (schedNoDoctorRequired ? 'staff' : 'doctor')
+);
+```
+
+**Source-grep regression** (`tests/v61-schedule-link-room-from-schedules.test.js`):
+```js
+// FORBID pre-V61 kind filter
+expect(ADMIN_DASHBOARD_SRC).not.toMatch(
+  /branchExamRooms\.filter\(\s*r\s*=>\s*[\s\S]{0,80}?r\.role\s*===\s*\(\s*schedNoDoctorRequired\s*\?\s*['"]staff['"]\s*:\s*['"]doctor['"]\s*\)/,
+);
+// REQUIRE V61 helpers + useMemo + pre-flight gate + saved shape
+expect(ADMIN_DASHBOARD_SRC).toMatch(/deriveDoctorRoomIdsForWindow/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/deriveNonDoctorRoomIdsForWindow/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/v61EligibleRoomIds\s*=\s*useMemo/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/v61EligibleRoomIds\.length\s*===\s*0/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/selectedRoomIds:\s*v61SelectedRoomIds/);
+```
+
+**Sanctioned exceptions**: NONE — every customer-facing schedule-link modal MUST drive its room dropdown from canonical schedule data. The V57 `kind` field is still a legitimate field on `be_exam_rooms` for OTHER consumers (general categorization, AppointmentTab room picker, etc.), but the schedule-link modal must use schedule-DRIVEN filtering.
+
+**Companion AV: AV30** (V57 kind schema) — same family of "schema field meanings". V57 says "every kind consumer must use defensive default `?? 'doctor'`"; V61/AV33 says "schedule-link modal CANNOT use kind at all — must derive from schedule data". Both AVs are coexistent: kind is for general categorization, schedule data is for actual-use semantics.
+
+**Lessons**:
+1. **Static schema fields ≠ behavior-driven semantics**. V57's `kind` field captured "this room is generally a doctor room" but the schedule-link modal needs "is this room being used by a doctor in THIS window". Two different questions; one needs static metadata, the other needs canonical schedule.
+2. **Snapshot at save + recompute on Sync** is the canonical pattern for customer-facing public-link docs (V60 doctorDays + V61 selectedRoomIds both use it). Customer link reflects last-Sync state; admin controls when refresh happens.
+3. **Backward-compat via dual-field** (`selectedRoomId` legacy + `selectedRoomIds` array) prevents migration risk. shouldBlockScheduleSlot prefers array; falls back to single.
+4. **Pre-flight gate at the WRITE boundary** is the canonical defense for save-time data validity. Mirrors V60's doctorDays gate; both prevent silent-broken customer links.
+5. **The complete schedule-link adoption-gap series (V52-V61)** demonstrates a single class-of-bug being eliminated layer-by-layer: V52 reports, V53 time-axis, V54 raw listeners, V55 modal data sources, V56 room auto-closure, V60 save-time doctorDays, V61 modal UI room dropdown. Each closed a different boundary; together they form a complete BSA + canonical-source story.
 
 ## How to run
 
