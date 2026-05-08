@@ -3064,6 +3064,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
           isArchived: true, archivedAt: serverTimestamp()
         });
+        // V64-fix2 (Issue 9): if the session is linked to an appointment
+        // (came from จองมัดจำ / จองไม่มัดจำ flows), auto-flip that appointment
+        // from 'pending' (รอยืนยัน) → 'confirmed' (ยืนยันแล้ว) at queue-arrival.
+        // Non-blocking: if the appt update fails (already-cancelled, deleted,
+        // etc.), the session-archive still succeeds.
+        const linkedApptId = session.appointmentProClinicId || session.linkedAppointmentId || '';
+        if (linkedApptId) {
+          try {
+            await updateBackendAppointment(linkedApptId, { status: 'confirmed' });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('queue-arrival auto-confirm failed (non-blocking):', e?.message || e);
+          }
+        }
       } else {
         // ไม่มีข้อมูล → ลบทิ้งเลย
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
@@ -6447,16 +6461,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               doctors={(practitioners || []).filter(p => p.role === 'doctor')}
               assistants={(practitioners || []).filter(p => p.role === 'assistant')}
               onConfirmAppt={(appt) => {
-                updateBackendAppointment(appt.id, { status: 'confirmed' }).then(() => {
+                // V64-fix2: return promise so View can chain reload after success
+                return updateBackendAppointment(appt.id, { status: 'confirmed' }).then(() => {
                   showToast?.('ยืนยันนัดสำเร็จ', 2000);
                 }).catch((e) => showToast?.('ยืนยันนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
               }}
               onEditAppt={(appt) => {
+                // V64-fix2 (Issue 2): switch to calendar view + open edit form there.
+                // The inline form lives inside the calendar IIFE (legacy structure);
+                // a proper modal extraction is deferred. Until then, redirect.
+                setApptViewMode('calendar');
+                // Pre-select the appointment's date so calendar lands on it
+                if (appt.date) setApptSelectedDate(appt.date);
                 setApptFormMode({ mode: 'edit', appointmentId: appt.id });
+                showToast?.('เปิดในมุมมองปฏิทินเพื่อแก้ไข', 1800);
               }}
               onCancelAppt={(appt) => {
-                if (!window.confirm('ยกเลิกนัดนี้?')) return;
-                updateBackendAppointment(appt.id, { status: 'cancelled' }).then(() => {
+                if (!window.confirm('ยกเลิกนัดนี้?')) return Promise.reject(new Error('user-cancelled'));
+                return updateBackendAppointment(appt.id, { status: 'cancelled' }).then(() => {
                   showToast?.('ยกเลิกนัดสำเร็จ', 2000);
                 }).catch((e) => showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
               }}

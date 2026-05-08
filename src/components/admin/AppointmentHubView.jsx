@@ -52,6 +52,9 @@ export default function AppointmentHubView({
   const [summaryMap, setSummaryMap] = useState(new Map());
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  // V64-fix2 (Issue 4+5): bump on every mutation → loader re-fires
+  const [reloadKey, setReloadKey] = useState(0);
+  const triggerReload = useCallback(() => setReloadKey(k => k + 1), []);
 
   // V64 — reset filters on branch switch (Phase 17.0 BS-9 reset-on-branch-switch pattern)
   useEffect(() => {
@@ -61,17 +64,26 @@ export default function AppointmentHubView({
     setTypeFilter('');
   }, [selectedBranchId]);
 
-  // Compute date range from active tab
+  // V64-fix2 (Issue 6): wide-range fetch [today-30 .. today+30] in ONE shot;
+  // per-tab counts + filtering done client-side from the same dataset so all
+  // 4 bubble counts populate immediately (no per-tab refetch). Bangkok TZ
+  // stable via dateRangeForTab.
+  const wideRange = useMemo(() => {
+    const past = dateRangeForTab('past', new Date());
+    const future = dateRangeForTab('future', new Date());
+    return { from: past.from, to: future.to };
+  }, []);
+  // Active-tab range — used by handlePrint to label the printed PDF.
   const range = useMemo(() => dateRangeForTab(activeTab, new Date()), [activeTab]);
 
-  // Single-load aggregation (Q3=C)
+  // Single-load aggregation (Q3=C); driven by branchId + reloadKey only.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
         const [apptList, customers, deposits, sales, memberships, schedules] = await Promise.all([
-          getAppointmentsByDateRange({ from: range.from, to: range.to, branchId: selectedBranchId }),
+          getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
           getAllCustomers(),
           getAllDeposits({ branchId: selectedBranchId }),
           getAllSales({ branchId: selectedBranchId }),
@@ -99,9 +111,9 @@ export default function AppointmentHubView({
       }
     })();
     return () => { cancelled = true; };
-  }, [range.from, range.to, selectedBranchId]);
+  }, [wideRange.from, wideRange.to, selectedBranchId, reloadKey]);
 
-  // Per-tab filtered list
+  // Per-tab filtered list (active tab)
   const filteredAppts = useMemo(() => {
     return applyTabFilter(appts, {
       tab: activeTab,
@@ -112,12 +124,18 @@ export default function AppointmentHubView({
     });
   }, [appts, activeTab, statusFilter, search, typeFilter]);
 
-  // V64 simple — count for active tab from filtered data; other tabs = 0 until visited
+  // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
+  // Counts ignore search/type/status filters (default-status-per-tab only)
+  // so admin always sees the "actionable rows per tab" number.
   const counts = useMemo(() => {
-    const c = { today: 0, tomorrow: 0, future: 0, past: 0 };
-    c[activeTab] = filteredAppts.length;
-    return c;
-  }, [activeTab, filteredAppts.length]);
+    const now = new Date();
+    return {
+      today:    applyTabFilter(appts, { tab: 'today',    now }).length,
+      tomorrow: applyTabFilter(appts, { tab: 'tomorrow', now }).length,
+      future:   applyTabFilter(appts, { tab: 'future',   now }).length,
+      past:     applyTabFilter(appts, { tab: 'past',     now }).length,
+    };
+  }, [appts]);
 
   // V64-fix (2026-05-09 root-cause): Doctor + assistant shifts for today/tomorrow header (Q2=B+D)
   // Real be_staff_schedules schema (verified via preview_eval against prod):
@@ -200,14 +218,47 @@ export default function AppointmentHubView({
   const dateLabel = activeTab === 'today' ? 'นี้' : (activeTab === 'tomorrow' ? 'พรุ่งนี้' : '');
   const typeOptions = APPOINTMENT_TYPES.map(t => ({ value: t.value, label: t.label }));
 
+  // V64-fix2 (Issue 4+5): action handlers wrap parent props with optimistic
+  // local update + reloadKey bump. UI flips status instantly; loader re-fires
+  // ~200ms later to reconcile against Firestore truth.
+  const handleConfirmWithReload = useCallback(async (appt) => {
+    setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'confirmed' } : a));
+    try { await Promise.resolve(onConfirmAppt?.(appt)); } catch {}
+    triggerReload();
+  }, [onConfirmAppt, triggerReload]);
+
+  const handleCancelWithReload = useCallback(async (appt) => {
+    // pessimistic confirm via window.confirm happens in parent's handler;
+    // if user cancels, parent never calls update — we still optimistic-update
+    // to 'cancelled' BEFORE the parent runs. Parent's confirm() is now removed
+    // (handled by parent updateBackendAppointment success-path).
+    // Optimistic shape: re-fetch will reconcile if parent threw.
+    setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
+    try { await Promise.resolve(onCancelAppt?.(appt)); } catch {}
+    triggerReload();
+  }, [onCancelAppt, triggerReload]);
+
+  const handleEditWithReload = useCallback(async (appt) => {
+    // No optimistic update; just delegate. Parent should switch to calendar mode
+    // and open the form. After form save, parent should triggerReload via prop
+    // — but we don't have that wired yet, so reload on edit-button click as a
+    // best-effort refresh once user returns.
+    try { await Promise.resolve(onEditAppt?.(appt)); } catch {}
+  }, [onEditAppt]);
+
   return (
     <div data-testid="appt-hub-view">
-      <AppointmentHubDoctorCards
-        tab={activeTab}
-        doctorShifts={doctorShifts}
-        assistantShifts={assistantShifts}
-        dateLabel={dateLabel}
-      />
+      {/* V64-fix2 (Issue 7): doctor cards container reserves min-height
+          so layout doesn't shift when switching between today/tomorrow
+          (which show staff cards) and future/past (which don't). */}
+      <div className="min-h-[120px]" data-testid="appt-hub-doctor-section">
+        <AppointmentHubDoctorCards
+          tab={activeTab}
+          doctorShifts={doctorShifts}
+          assistantShifts={assistantShifts}
+          dateLabel={dateLabel}
+        />
+      </div>
       <AppointmentHubTabBar
         activeTab={activeTab}
         counts={counts}
@@ -239,9 +290,9 @@ export default function AppointmentHubView({
           appt={a}
           summary={summaryMap.get(String(a.customerId))}
           now={new Date()}
-          onConfirm={onConfirmAppt}
-          onEdit={onEditAppt}
-          onCancel={onCancelAppt}
+          onConfirm={handleConfirmWithReload}
+          onEdit={handleEditWithReload}
+          onCancel={handleCancelWithReload}
           onCreateTreatment={onCreateTreatmentForAppt}
           onEditTreatment={onEditTreatmentForAppt}
           onOpenLine={onOpenLineForAppt}

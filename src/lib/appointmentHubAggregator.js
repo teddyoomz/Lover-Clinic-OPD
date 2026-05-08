@@ -42,16 +42,25 @@ export function buildCustomerSummaryMap({ customers = [], deposits = [], sales =
   const out = new Map();
 
   // Index customers
+  // V64-fix2 (2026-05-09): real be_customers schema is FLAT snake_case
+  // (verified via preview_eval against prod). The earlier `patientData.*`
+  // chain returned empty for all rows because patientData object exists
+  // but is empty in our schema. Fall through to flat fields with patient
+  // legacy fallback for forward-compat.
   for (const c of customers) {
     const id = String(c?.id || '');
     if (!id) continue;
     const pd = c?.patientData || {};
+    const prefix = c?.prefix || pd.prefix || '';
+    const first = c?.firstname || c?.firstName || pd.firstName || '';
+    const last = c?.lastname || c?.lastName || pd.lastName || '';
+    const fullName = [prefix, first, last].filter(Boolean).join(' ').trim();
     out.set(id, {
-      hn: c?.hn || '',
-      name: [pd.prefix, pd.firstName, pd.lastName].filter(Boolean).join(' ').trim() || pd.firstName || '',
-      gender: pd.gender || '',
-      phone: pd.phone || '',
-      customerType: (pd.customerType2 || '').trim() || 'ลูกค้าทั่วไป',
+      hn: c?.hn_no || c?.hn || c?.proClinicHN || id,
+      name: fullName || first || '',
+      gender: c?.gender || pd.gender || '',
+      phone: c?.telephone_number || c?.contact_1_telephone_number || c?.phone || pd.phone || '',
+      customerType: (c?.customer_type_2 || c?.customer_type || pd.customerType2 || '').trim() || 'ลูกค้าทั่วไป',
       membershipTier: '',
       membershipDaysLeft: 0,
       walletBalance: 0,

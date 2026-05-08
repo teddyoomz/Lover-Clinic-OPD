@@ -138,4 +138,63 @@ describe('V64.A buildCustomerSummaryMap — single-load aggregation (Q3=C)', () 
   it('A1.11 branch-blind invariant (toString.grep — no branchId reference)', () => {
     expect(buildCustomerSummaryMap.toString()).not.toMatch(/branchId/);
   });
+
+  // V64-fix2 (Issue 1, 2026-05-09): real be_customers schema is FLAT
+  // snake_case (hn_no, firstname, lastname, prefix, gender,
+  // telephone_number, customer_type_2). Earlier patientData.* assumption
+  // returned empty for ALL rows → "HN: -" + missing names. Regression bank
+  // locks the flat-field reads.
+  it('A1.12 reads flat snake_case top-level fields (V64-fix2 Issue 1)', () => {
+    const m = buildCustomerSummaryMap({
+      customers: [{
+        id: 'LC-26000006',
+        hn_no: 'LC-26000006',
+        prefix: 'นาย',
+        firstname: 'ภมรศักดิ์',
+        lastname: 'มงคล',
+        gender: 'M',
+        telephone_number: '0918314256',
+        customer_type_2: 'ลูกค้าทั่วไป',
+        patientData: {},  // empty as in real prod
+      }],
+      deposits: [], sales: [], memberships: [], wallets: [], now: FIXED_NOW,
+    });
+    const s = m.get('LC-26000006');
+    expect(s.hn).toBe('LC-26000006');
+    expect(s.name).toBe('นาย ภมรศักดิ์ มงคล');
+    expect(s.gender).toBe('M');
+    expect(s.phone).toBe('0918314256');
+    expect(s.customerType).toBe('ลูกค้าทั่วไป');
+  });
+
+  it('A1.13 falls back to contact_1_telephone_number when telephone_number missing', () => {
+    const m = buildCustomerSummaryMap({
+      customers: [{ id: 'C1', firstname: 'A', contact_1_telephone_number: '0811111111' }],
+      deposits: [], sales: [], memberships: [], wallets: [], now: FIXED_NOW,
+    });
+    expect(m.get('C1').phone).toBe('0811111111');
+  });
+
+  it('A1.14 falls back to camelCase patientData.firstName for legacy docs', () => {
+    const m = buildCustomerSummaryMap({
+      customers: [{ id: 'C1', patientData: { firstName: 'Legacy', lastName: 'Patient', gender: 'F' } }],
+      deposits: [], sales: [], memberships: [], wallets: [], now: FIXED_NOW,
+    });
+    const s = m.get('C1');
+    expect(s.name).toMatch(/Legacy/);
+    expect(s.gender).toBe('F');
+  });
+
+  it('A1.15 hn fallback chain: hn_no → hn → proClinicHN → id', () => {
+    const m1 = buildCustomerSummaryMap({
+      customers: [{ id: 'X', proClinicHN: 'PCH-1' }],
+      deposits: [], sales: [], memberships: [], wallets: [], now: FIXED_NOW,
+    });
+    expect(m1.get('X').hn).toBe('PCH-1');
+    const m2 = buildCustomerSummaryMap({
+      customers: [{ id: 'Y' }],  // no hn fields at all
+      deposits: [], sales: [], memberships: [], wallets: [], now: FIXED_NOW,
+    });
+    expect(m2.get('Y').hn).toBe('Y');  // falls through to id
+  });
 });

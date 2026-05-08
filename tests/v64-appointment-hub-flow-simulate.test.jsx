@@ -87,14 +87,20 @@ describe('V64.S full-flow simulate', () => {
     });
   });
 
-  it('S1.3 tab switch today → past triggers reload with new range', async () => {
+  it('S1.3 tab switch today → past is CLIENT-SIDE filter (no extra fetch — V64-fix2 wide-range)', async () => {
+    // V64-fix2 (Issue 6, 2026-05-09): wide-range fetch loads
+    // [today-30..today+30] once + tab-switch is client-side applyTabFilter.
+    // Pre-fix contract was tab-switch → reload; post-fix asserts the opposite
+    // — no new fetch on tab change (the filter is local).
     render(<AppointmentHubView />);
     await waitFor(() => expect(mockGetAppointmentsByDateRange).toHaveBeenCalled());
     const initialCallCount = mockGetAppointmentsByDateRange.mock.calls.length;
     fireEvent.click(screen.getByTestId('appt-hub-tab-past'));
-    await waitFor(() => {
-      expect(mockGetAppointmentsByDateRange.mock.calls.length).toBeGreaterThan(initialCallCount);
-    });
+    // Wait briefly to confirm no reload happens
+    await new Promise(r => setTimeout(r, 200));
+    expect(mockGetAppointmentsByDateRange.mock.calls.length).toBe(initialCallCount);
+    // But the active tab DID change visually
+    expect(screen.getByTestId('appt-hub-tab-past').getAttribute('data-active')).toBe('true');
   });
 
   it('S1.4 confirm button fires onConfirmAppt with appt', async () => {

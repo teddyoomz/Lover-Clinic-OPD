@@ -17,6 +17,26 @@ const STATUS_CHIP_CLS = {
   cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
 };
 
+// V64-fix2 (Issue 8): color-coded type badges per APPOINTMENT_TYPES.defaultColor
+// (Phase 19.0 SSOT). Each type gets a distinct hue + adequate dark-mode contrast.
+const TYPE_CHIP_CLS = {
+  'deposit-booking':    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+  'no-deposit-booking': 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300',
+  'treatment-in':       'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+  'follow-up':          'bg-yellow-100 text-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-300',
+};
+
+const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const THAI_DOW = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
+// V64-fix2 (Issue 3): full Thai date label "วันพฤหัสบดี ที่ 9 พฤษภาคม 2569"
+function fullThaiDate(isoYMD) {
+  if (typeof isoYMD !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(isoYMD)) return '';
+  const [y, m, d] = isoYMD.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+  return `วัน${THAI_DOW[dow]} ที่ ${d} ${THAI_MONTHS[m - 1]} ${y + 543}`;
+}
+
 function fmtMoney(n) {
   const v = Number(n) || 0;
   return v.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -82,10 +102,19 @@ export default function AppointmentHubRowCard({
       </div>
 
       {/* MIDDLE — Appointment detail */}
-      <div className="flex-1 min-w-[220px] text-xs space-y-0.5">
+      <div className="flex-1 min-w-[260px] text-xs space-y-0.5">
+        {/* V64-fix2 (Issue 3): full Thai date label, prominently */}
+        <div className="text-sm font-bold text-[var(--tx-heading)] mb-1" data-testid="row-date-full">
+          📅 {fullThaiDate(appt.date)} <span className="text-[var(--tx-muted)] font-normal">· {appt.startTime || '-'} - {appt.endTime || '-'}</span>
+        </div>
         <div className="flex items-center gap-1.5 mb-1">
           {typeLabel && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{typeLabel}</span>
+            <span
+              data-testid="row-type-chip"
+              className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${TYPE_CHIP_CLS[appt.appointmentType] || 'bg-gray-100 text-gray-800'}`}
+            >
+              {typeLabel}
+            </span>
           )}
           {isMissed && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold" data-testid="row-missed-chip">

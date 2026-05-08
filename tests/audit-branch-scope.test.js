@@ -891,7 +891,11 @@ describe('BS-16 V64 — AppointmentHub* components branch-scope discipline', () 
   it('BS-16.3 AppointmentHubView includes selectedBranchId in data-load deps', async () => {
     const fs = await import('node:fs/promises');
     const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
-    expect(src).toMatch(/\[range\.from,\s*range\.to,\s*selectedBranchId\]/);
+    // V64-fix2 (2026-05-09): wide-range fetch [today-30..today+30] in ONE shot
+    // — loader deps now `[wideRange.from, wideRange.to, selectedBranchId, reloadKey]`.
+    // Tab switch no longer triggers refetch; client-side filter only. reloadKey
+    // bumped on mutation so loader re-fires after confirm/cancel.
+    expect(src).toMatch(/\[(?:range|wideRange)\.from,\s*(?:range|wideRange)\.to,\s*selectedBranchId(?:,\s*reloadKey)?\]/);
   });
 
   it('BS-16.4 V64 marker comment present', async () => {
