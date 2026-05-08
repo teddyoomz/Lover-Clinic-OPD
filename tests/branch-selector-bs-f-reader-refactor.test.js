@@ -53,7 +53,12 @@ describe('BS-F.2 — getAppointmentsByMonth accepts opts', () => {
   });
 
   it('applies branchId filter when not allBranches', () => {
-    expect(slice).toMatch(/branchId\s*&&\s*!allBranches/);
+    // V54 (2026-05-08, BS-13) replaced `branchId && !allBranches` with the
+    // safe-by-default chain (effectiveBranchId resolves via
+    // resolveSelectedBranchId; falsy result + !allBranches → empty return).
+    // The intent of this test (filters by branchId when not allBranches)
+    // is preserved — assertion now matches the V54 chain.
+    expect(slice).toMatch(/!allBranches\s*&&\s*effectiveBranchId/);
     expect(slice).toMatch(/where\(['"]branchId['"]/);
   });
 });

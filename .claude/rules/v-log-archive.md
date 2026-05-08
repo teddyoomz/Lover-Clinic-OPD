@@ -1242,3 +1242,138 @@ BS-12 — Time-axis branch-aware discipline (V53, 2026-05-08)
 
 **No deploy this turn** — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately. V53 is a UI refresh-discipline change with zero rules / data ops. Master = 2 commits ahead of prod (`ef580a6`) — V52 + V53; user can deploy combined on wake-up.
 
+---
+
+### V54 — 2026-05-08 — Listener safe-by-default (BS-13) — AdminDashboard branch-leak fix (systematic-debugging session)
+
+User report (verbatim):
+> "tab นัดหมายใน Frontend ยังไม่แยกดึงข้อมูลเป็นสาขาๆ"
+
+= "the appointments tab in Frontend doesn't yet separate-fetch by branch."
+
+**Surface identified**: `AdminDashboard.jsx` (the patient-queue dashboard at `/admin` — Phase 1-7 admin "Frontend" page, distinct from `BackendDashboard` tabs). The Appointment Manager queue calendar renders the month's appointments via `listenToAppointmentsByMonth` — and showed ALL branches' appointments steady-state regardless of top-right BranchSelector.
+
+**Root cause** (3-layer V21 chain caught via systematic-debugging skill Phase 1-2):
+
+| Layer | File:line | Defect |
+|---|---|---|
+| 1. Comment-vs-code drift (V21) | `AdminDashboard.jsx:713-715` | Comment claimed "Phase 20.0 Task 6 — auto-inject selectedBranchId; pass {} so the scopedDataLayer wrapper resolves the current branch" — wrapper is plain passthrough (no auto-inject) |
+| 2. Wrapper passthrough | `scopedDataLayer.js:307` | `listenToAppointmentsByMonth = (...args) => raw.listenToAppointmentsByMonth(...args)` — pure passthrough; no `_autoInject` wrapper |
+| 3. Safe-by-default-FAILED | `backendClient.js:2361` | `useFilter = undefined && !false` falsy → query = WHOLE `be_appointments` collection; NO `where('branchId',...)` clause |
+
+**Result**: AdminDashboard's queue calendar subscribed to ALL branches' appointments forever. Re-subscribe on `selectedBranchId` change still passed `{}` → still ALL branches. **Steady-state cross-branch leak in production-shipped code.**
+
+**Why agent-based static audit missed it**: V52/V53 audits accepted the comment text "scopedDataLayer wrapper resolves the current branch" at face value without VERIFYING the wrapper actually performed auto-inject. The 3-layer drift was layered exactly to slip past comment-trust audits.
+
+**Class-of-bug** (Rule P Step 2):
+- V21 comment-vs-code drift family (V36-quater, V44 cluster — comments promised X, code did Y)
+- **NEW: "Raw listener safe-by-default-FAILED" sub-class** — the data layer falls back to whole-collection query when branchId is falsy. Safe template existed (`listenToScheduleByDay`) but siblings didn't adopt it.
+
+**Cross-file grep** (Rule P Step 3):
+- `listenToAppointmentsByMonth({})`: only AdminDashboard.jsx:711 (steady-state bug)
+- `listenToAppointmentsByDate({branchId: ...})`: AppointmentCalendarView passes branchId explicitly — but race-window during initial-mount when localStorage cache empty; same backstop fix closes both
+- `getAppointmentsByMonth`/`getAppointmentsByDate` raw: covered via `_autoInjectPositional` in scopedDataLayer; direct backendClient callers in tests + clinicReportAggregator pass `{allBranches: true}` (explicit)
+- `listenToAllSales`/`listenToExamRoomsByBranch`/`listenToHolidays`: no broken callers (used through `useBranchAwareListener`)
+- `listenToScheduleByDay`: already safe-by-default (line 10572+) — **the safe template**
+
+**V54 architectural fix** (mirror `listenToScheduleByDay` safe template in 4 sibling functions):
+
+```js
+// Canonical pattern (mirrors listenToScheduleByDay:10581-10588)
+const effectiveBranchId = (typeof branchId === 'string' && branchId)
+  ? branchId
+  : (allBranches ? null : resolveSelectedBranchId());
+if (!effectiveBranchId && !allBranches) {
+  // Listener: onChange?.([]); return () => {};
+  // Getter: return {} (grouped) or [] (list)
+}
+const useFilter = !allBranches && effectiveBranchId;
+const q = useFilter
+  ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
+  : appointmentsCol();
+```
+
+4 functions updated in `backendClient.js`:
+1. `getAppointmentsByMonth` (line 2188+) — getter, returns `{}` when safe-by-default empty
+2. `getAppointmentsByDate` (line 2248+) — getter, returns `[]`
+3. `listenToAppointmentsByDate` (line 2278+) — listener, fires `onChange([])` + returns noop
+4. `listenToAppointmentsByMonth` (line 2342+) — listener, same
+
+Plus `AdminDashboard.jsx:716` — pass `{ branchId: selectedBranchId }` explicitly (V52/BS-11 canonical pattern; defense-in-depth so backstop catches anyone who forgets, AND explicit pattern documents the contract).
+
+**NEW audit invariant BS-13**:
+
+```
+BS-13 — Raw listener+getter safe-by-default discipline (V54, 2026-05-08)
+        Every raw appointment getter+listener in backendClient.js that
+        reads from a branch-scoped collection MUST be safe-by-default:
+        when `branchId` opt is falsy AND `allBranches !== true` →
+        resolve via `resolveSelectedBranchId()`. If STILL falsy → return
+        empty (getter `{}`/`[]`; listener `onChange([])` + noop unsub).
+        NEVER fall back to whole-collection query unless `allBranches: true`
+        is explicit. Safe template: `listenToScheduleByDay` (line 10572+).
+        Sanctioned exceptions: NONE — every listener follows this rule.
+```
+
+7 sub-tests (BS-13.x) added to `tests/audit-branch-scope.test.js`. SKILL.md: 12 → 13 invariants.
+
+**Test bank shipped (Rule N targeted)**:
+
+| Test file | Tests | Purpose |
+|---|---|---|
+| `tests/v54-listener-safe-by-default.test.js` | 24 (L1-L5) | 4 functions × 4-6 scenarios (explicit branchId / allBranches:true / `{}`+resolved / `{}`+null / legacy positional / invalid input) + V54 source-grep markers |
+| `tests/audit-branch-scope.test.js` | +7 BS-13.x | Audit-skill regression: each fn body contains `resolveSelectedBranchId` reference + V54 marker; safe-template anchor; AdminDashboard + AppointmentCalendarView caller regression guards |
+
+**Test fixups** (Rule P Step 5 + V21 lock-in correction): 4 pre-existing tests asserted the broken `{}` opts pattern (V21 source-grep tests that locked broken behavior):
+
+- `tests/phase-20-0-task-6-branch-selector-frontend.test.jsx` Z3.1 — assertion pattern `{ }` → `{ branchId: selectedBranchId }`
+- `tests/phase-20-0-flow-a-queue-read-source.test.jsx` A6.1 — same
+- `tests/phase-22-0c-schedule-link-branch-separation.test.js` S5.1 — increased char window 500 → 1500 (V54 marker comments grew the block)
+- `tests/branch-selector-bs-f-reader-refactor.test.js` BS-F.2 — `branchId && !allBranches` → `!allBranches && effectiveBranchId` (V54 chain pattern)
+
+Each fixup carries V54 marker comment explaining the pre-V54 V21 drift + post-V54 contract.
+
+**Rule I full-flow simulate**: existing V52 BS-9 + V53 BS-12 flow-simulate test banks already cover BranchProvider switch → re-subscribe behavior in AppointmentCalendarView (which uses identical pattern). Plus V54.L4.4 explicitly named "CLOSES PRE-V54 ADMIN LEAK" simulates the AdminDashboard scenario at unit level. Rule N targeted-only justified for small bugfix where flow is covered by existing tests.
+
+**Cumulative regression**: 7631 → 7662 + 1 skipped (+31 net) all GREEN. Build clean.
+
+**Verification (Rule N → full)**:
+- Targeted: 134 V54-related tests green (24 unit + 7 BS-13 audit + 4 fixed + 99 sibling tests in same files)
+- Full vitest: 7662/7662 + 1 skipped GREEN (1 transient flake on first run, cleared on retry)
+- Build: clean
+
+**Lessons**:
+
+1. **systematic-debugging Phase 1-2 catches what static audit misses** — V52/V53 audits accepted comment text at face value. The 3-layer V21 drift was layered to slip past comment-trust audits. Adding BS-13 anchored on `resolveSelectedBranchId` REFERENCE (not comment text) prevents recurrence — even if a future commit adds a misleading comment, the audit grep on actual code references catches it.
+
+2. **3-layer V21 drift requires backstop at the data layer** — caller comment lies + wrapper passthrough + safe-by-default-FAILED stack up. Architectural backstop (safe-by-default in backendClient.js) closes the gap permanently regardless of caller mistakes or comment drift. This is the same pattern as Rule O (V46/V48): "the FINAL stock-movement write goes through live-resolve" — applied here as "the FINAL appointment query goes through resolveSelectedBranchId".
+
+3. **Test fixups are first-class artifacts** — 4 pre-existing tests asserted the broken `{}` contract (V21 source-grep tests that locked broken behavior). Updated each with V54 marker comment explaining the pre-V54 V21 drift + post-V54 contract. Same pattern as V52 stale-annotation strip + V53 BS-12 invariant. Tests need to evolve with the contract, not lock prior mistakes.
+
+4. **Defense-in-depth pattern** — 2 fix layers (backstop at data layer + explicit pattern at caller) are belt-and-suspenders. Either alone would close the bug; both together make recurrence ~impossible. AdminDashboard caller fix is "the V52/BS-11 canonical pattern"; backendClient backstop is "the safe-by-default architectural guarantee".
+
+5. **Agent-based static audit has a known blind spot for comment-vs-code drift** — sub-agents reading code excerpts may accept claim-comments at face value if the actual code path looks reasonable. Mitigation: audit invariants must anchor on STRUCTURAL elements (function references, AST patterns) NOT on comment text. BS-13's anchor on `resolveSelectedBranchId` reference (not comment) is the canonical pattern — mirror in future audit invariants.
+
+6. **V21 family ≠ "fix one, ship" — Tier 3 V-entry mandatory for architectural backstops** — even though only 1 active broken caller (AdminDashboard.jsx:711) was found, the ARCHITECTURAL backstop is necessary because next caller might also forget. The backstop is the only way to make "forget safely" actually safe. V46/V48 Rule O is the precedent.
+
+**Rule/audit update**:
+- systematic-debugging Phase 1-4 + Rule P 7-step + Rule J brainstorming HARD-GATE all honored
+- Rule N targeted-test-only during iteration; full vitest at batch end
+- Rule of 3: 4 victim functions in 1 file with single canonical pattern (mirror existing safe template)
+- BS-1..BS-12 unchanged; **BS-13 NEW**
+
+**Files relevant to V54**:
+- `src/lib/backendClient.js` (4 functions safe-by-default)
+- `src/pages/AdminDashboard.jsx:716` (caller fix)
+- `tests/audit-branch-scope.test.js` (+BS-13.x block)
+- 1 NEW test file (`tests/v54-listener-safe-by-default.test.js`)
+- 4 V21-class test fixups (Z3.1, A6.1, S5.1, BS-F.2)
+- `.agents/skills/audit-branch-scope/SKILL.md` (BS-13 row)
+- `docs/superpowers/specs/2026-05-08-listener-safe-by-default-design.md`
+- `docs/superpowers/plans/2026-05-08-listener-safe-by-default.md`
+- `.claude/rules/00-session-start.md` § 2 — V54 compact entry
+- `.claude/rules/v-log-archive.md` — this entry
+- `SESSION_HANDOFF.md` + `.agents/active.md` — state update
+
+**No deploy this turn** — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately. V54 is a pure logic fix with zero rules / data ops. Master = 3 commits ahead of prod (`ef580a6`) — V52 + V53 + V54; user can deploy combined on wake-up.
+

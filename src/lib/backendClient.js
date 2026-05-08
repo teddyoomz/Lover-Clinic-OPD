@@ -2187,9 +2187,19 @@ function normalizeApptDate(rawDate) {
  */
 export async function getAppointmentsByMonth(yearMonth, opts = {}) {
   const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
+  // V54 (BS-13, 2026-05-08) — safe-by-default: when caller-supplied branchId
+  // is falsy AND allBranches !== true, resolve via resolveSelectedBranchId();
+  // if STILL falsy → return empty (NEVER fall back to whole-collection).
+  // Mirrors listenToScheduleByDay safe template. Closes V54 AdminDashboard
+  // cross-branch leak (admin's Frontend queue calendar pre-V54 saw all
+  // branches because empty {} opts → useFilter=false → whole collection).
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return {};
+  const useFilter = !allBranches && effectiveBranchId;
   const ref = useFilter
-    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
   const snap = await getDocs(ref);
   const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
@@ -2249,9 +2259,14 @@ export async function getAppointmentsByDate(dateStr, opts = {}) {
   const target = normalizeApptDate(dateStr);
   if (!target) return [];
   const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
+  // V54 (BS-13) — safe-by-default; see getAppointmentsByMonth comment.
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return [];
+  const useFilter = !allBranches && effectiveBranchId;
   const ref = useFilter
-    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
   const snap = await getDocs(ref);
   const appts = snap.docs
@@ -2298,9 +2313,17 @@ export function listenToAppointmentsByDate(dateStr, optsOrCallback, onChangeOrEr
     return () => {};
   }
   const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
+  // V54 (BS-13) — safe-by-default; mirrors listenToScheduleByDay pattern.
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) {
+    onChange?.([]);
+    return () => {};
+  }
+  const useFilter = !allBranches && effectiveBranchId;
   const q = useFilter
-    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
   return onSnapshot(q, (snap) => {
     const appts = snap.docs
@@ -2358,9 +2381,17 @@ export function listenToAppointmentsByMonth(yearMonth, optsOrCallback, onChangeO
     return () => {};
   }
   const { branchId, allBranches = false } = opts || {};
-  const useFilter = branchId && !allBranches;
+  // V54 (BS-13) — safe-by-default; AdminDashboard pre-V54 leak fix.
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) {
+    onChange?.([]);
+    return () => {};
+  }
+  const useFilter = !allBranches && effectiveBranchId;
   const q = useFilter
-    ? query(appointmentsCol(), where('branchId', '==', String(branchId)))
+    ? query(appointmentsCol(), where('branchId', '==', String(effectiveBranchId)))
     : appointmentsCol();
   return onSnapshot(q, (snap) => {
     const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));

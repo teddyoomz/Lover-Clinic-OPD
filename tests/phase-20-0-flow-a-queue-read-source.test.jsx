@@ -191,12 +191,15 @@ describe('Phase 20.0 Flow A — A6 branch-scope auto-inject (post-Task-6)', () =
   // Task-6 invariants. A6 here verifies Phase 1's transition is complete
   // (no {allBranches:true} placeholder remains for these calls).
 
-  it('A6.1 — listenToAppointmentsByMonth uses {} opts (auto-inject branch)', () => {
+  it('A6.1 — listenToAppointmentsByMonth uses explicit {branchId: selectedBranchId} (V54/BS-13 fix)', () => {
+    // Pre-V54 asserted {} — relied on phantom scopedDataLayer auto-inject
+    // (V21 comment-vs-code drift). V54 (2026-05-08) made the contract
+    // explicit + added safe-by-default backstop in backendClient.js.
     const stripped = ADMIN_DASHBOARD
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
     expect(stripped).toMatch(
-      /listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*\}\s*,/s,
+      /listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*,/s,
     );
   });
 

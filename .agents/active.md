@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 EOD #7 — V53 Per-branch open hours → time-axis filter (BS-12) shipped"
-status: "master=<v53-commit> (+1 ahead of prod ef580a6) · 7637/7637 + 1 skipped GREEN · build clean · NOT yet deployed"
+updated_at: "2026-05-08 EOD #8 — V54 Listener safe-by-default (BS-13) — AdminDashboard branch leak fix"
+status: "master=<v54-commit> (+3 ahead of prod ef580a6) · 7662/7662 + 1 skipped GREEN · build clean · NOT yet deployed"
 branch: "master"
-last_commit: "feat(V53/BS-12): per-branch open hours drive time-axis everywhere"
-tests: 7637
+last_commit: "fix(V54/BS-13): raw appointment listeners safe-by-default (AdminDashboard branch leak)"
+tests: 7662
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "ef580a6"
 firestore_rules_version: 29
@@ -13,54 +13,52 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = V53 commit · prod = `ef580a6` (V52 + V53 NOT yet deployed; user authorizes separately)
-- Iron-clad **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** — both honored
-- Invariant set: AV1-AV29 + **BS-1..BS-12** (NEW: BS-12 time-axis branch-aware) + CB-1..5
-- AV28 sanctioned-exception list still EMPTY (no `master_data` runtime references)
-- Rule H-bis EXECUTED + COMPLETE (V50 + V50-followup + V50-followup-2)
+- master = V54 commit · prod = `ef580a6` (V52 + V53 + V54 NOT yet deployed; user authorizes separately)
+- Iron-clad **systematic-debugging** (Phase 1-4) + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE**
+- Invariant set: AV1-AV29 + **BS-1..BS-13** (NEW: BS-13 listener safe-by-default) + CB-1..5
 
-## What EOD #7 shipped (autonomous overnight job continuation)
-**User directive (verbatim)**: "ทำให้เวลาเปิด-ปิดของแต่ละสาขา มีผลกับตารางแพทย์ ตารางนัดหมาย และ modal ที่จะไปดึงเวลานัดจากสาขานั้นทั้งหมด ... แค่เวลาที่เปิดเปิดคลินิก ไม่ต้องแสดงตั้งแต่ 8 โมง ถึง 4 ทุ่ม ถ้าคลินิกมันเปิดแค่ 11 โมง ถึง 3 ทุ่ม"
+## What EOD #8 shipped (systematic-debugging session)
+**User report (verbatim)**: "tab นัดหมายใน Frontend ยังไม่แยกดึงข้อมูลเป็นสาขาๆ"
 
-**Class-of-bug**: parallel to V52 BS-11 — V51 shipped per-branch openHours schema but the canonical TIME_SLOTS time-axis (08:15–22:00 hardcoded) was rendered raw in 4 surfaces, ignoring per-branch settings.
+**Root cause** (3-layer V21 chain):
+1. AdminDashboard.jsx:713-715 comment claimed "scopedDataLayer wrapper resolves the current branch"
+2. scopedDataLayer.js:307 `listenToAppointmentsByMonth` is plain passthrough (NOT auto-inject)
+3. backendClient.js:2361 `useFilter = undefined && !false` falsy → query = WHOLE be_appointments collection
 
-**Architectural fix (V53)**:
-- `src/lib/scheduleFilterUtils.js` — 3 NEW pure helpers: `getOpenHoursForDate`, `getVisibleTimeSlotsForDate`, `isTimeOutsideOpenHours`. Bangkok-TZ-stable day-bucket (midday-UTC parse to avoid TZ shift edge case). Q1=A: legacy out-of-hours appts auto-expand visible range + `hasOutsideAppts: true` flag for chip rendering.
-- 4 victim files wired to canonical V53 pattern: `useEffectiveClinicSettings(undefined)` + `useMemo` on `cs.openHoursMonFri/SatSun` + `visibleSlots.map(...)` replaces `TIME_SLOTS.map(...)`:
-  1. `AppointmentCalendarView.jsx` — grid filter + closed-day banner + orange "นอกเวลา" chip on legacy appt cards
-  2. `AppointmentFormModal.jsx` — start/end picker filter + warning hint + closed-day banner inside modal
-  3. `scheduling/ScheduleEntryFormModal.jsx` — picker filter + DOW_ANCHOR_DATE map for `kind === 'recurring'` (no concrete date)
-  4. `DepositPanel.jsx` — picker filter for embedded deposit-booking sub-form (4th surface discovered via audit-grep regression test)
-- Each victim file preserves legacy current value as a hidden option so legacy edits don't lose data when current value is outside new open range.
+Result: AdminDashboard's queue calendar (the patient-queue "Frontend" page at `/admin`) showed ALL branches' appointments steady-state, regardless of top-right BranchSelector.
 
-**NEW audit invariant BS-12** (parallel to BS-9, BS-11):
-- Every component importing `TIME_SLOTS` from `staffScheduleValidation.js` AND mapping it MUST also import `getVisibleTimeSlotsForDate` AND read `cs.openHoursMonFri/SatSun` (deps array hint)
-- 7 sub-tests in `tests/audit-branch-scope.test.js` (BS-12.1..BS-12.7)
-- `audit-branch-scope` SKILL.md: 11 → 12 invariants
-- Sanctioned exception: `TimeSelect24.jsx` (uses HOURS/MINUTES, not TIME_SLOTS — naturally exempt from grep)
+**V54 architectural fix** (mirror `listenToScheduleByDay` safe template):
+- `backendClient.js` 4 functions safe-by-default: `getAppointmentsByMonth` + `getAppointmentsByDate` + `listenToAppointmentsByDate` + `listenToAppointmentsByMonth`. When `branchId` falsy AND `!allBranches` → resolve via `resolveSelectedBranchId()`. If still falsy → return empty (`{}` / `[]` / `onChange([])` + noop unsub). NEVER falls back to whole-collection query.
+- `AdminDashboard.jsx:716` — pass `{ branchId: selectedBranchId }` explicitly (V52/BS-11 canonical pattern; defense-in-depth).
+- Closes the AppointmentCalendarView initial-mount race window too (cold-load with localStorage empty no longer leaks cross-branch data).
 
-**Test bank shipped (Rule N + Rule I)**:
-- `tests/v53-open-hours-helpers.test.js` (33 tests, L1-L3) — Bangkok TZ + closed/reversed/missing detection + auto-expand + adversarial inputs
-- `tests/v53-open-hours-source-grep.test.js` (41 tests, G1-G6) — per-victim regression locks + canonical V53 wiring + V12 anti-regression sweep
-- `tests/v53-open-hours-flow-simulate.test.js` (7 tests, F1-F7) — Rule I full-flow simulate using actual BranchProvider + canonical pattern → branch switch + date change + closed-branch + auto-expand + lifecycle A→B→A
-- `tests/audit-branch-scope.test.js` extended (+7 BS-12.x sub-tests)
+**NEW audit invariant BS-13**: every raw appointment getter+listener in backendClient.js MUST be safe-by-default; anchor on resolveSelectedBranchId reference + V54/BS-13 marker. Closed sanctioned-exception list (none — all 4 follow the rule).
 
-**Cumulative test delta**: 7543 → 7637 + 1 skipped (+94 net) all GREEN.
+**Test bank (Rule N targeted + Rule I covered by V52/V53 existing flow-simulates)**:
+- `tests/v54-listener-safe-by-default.test.js` (24 tests, L1-L5) — 4 functions × 4-6 scenarios + V54 marker verification
+- `tests/audit-branch-scope.test.js` extended (+7 BS-13.x sub-tests)
+- 4 V21-class regression tests fixed (Z3.1, A6.1, S5.1, BS-F.2) — they had locked the broken `{}` opts pattern; updated to lock V54 explicit-branchId contract
 
-**Build**: clean (BackendDashboard chunk size unchanged from V52).
+**Final tally**: 7631 → 7662 + 1 skipped (+31 net) all GREEN. Build clean.
 
 ## Next action
-Idle — V53 shipped + committed + pushed. Awaiting user wake-up + (optional) deploy authorization.
+Idle — V54 shipped + committed + pushed. Awaiting user wake-up + (optional) deploy authorization for combined V52 + V53 + V54.
 
 ## Outstanding user-triggered actions
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). V52 + V53 both pending.
-- (Optional) visual verification: set branch openHours to 11:30–20:30 → AppointmentCalendarView grid renders only those rows; modal pickers shrink dropdown.
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). V52 + V53 + V54 all pending.
+- (Optional) visual verification: open `/admin`, switch top-right BranchSelector → Appointment Manager queue calendar should show ONLY current branch's appointments.
 
 ## Institutional memory anchors
-- V53 / BS-12 — closes the time-axis class-of-bug at the canonical TIME_SLOTS layer. Future surfaces importing TIME_SLOTS must wire through `getVisibleTimeSlotsForDate` to be branch-aware. Rule of 3 leverage (1 helper module → 4 victim files).
-- V52 / BS-11 — closes the report-tab class-of-bug gap (BS-9 only covered scopedDataLayer importers; report tabs use reportsLoaders).
+- V54 / BS-13 — closes the listener safe-by-default-FAILED class permanently. Future raw appointment fetches in backendClient.js fail audit unless they resolve via resolveSelectedBranchId + return empty when no branch.
+- V53 / BS-12 — closes the time-axis class-of-bug at the canonical TIME_SLOTS layer.
+- V52 / BS-11 — closes the report-tab class-of-bug gap.
 - V50 Phase 3 — cross-branch booking contract verified (commit `1c67baf` EOD #3); existing `be_customers.branchId` already serves the creation-branch role, immutable post-CREATE.
-- V50-followup-2 — full ProClinic strip COMPLETE (no `master_data` / `pc_*` / `broker_jobs` / `proclinic_session` / `brokerClient` runtime references anywhere). Future ProClinic interop must go through a NEW well-defined integration boundary.
-- Spec V53: `docs/superpowers/specs/2026-05-08-per-branch-open-hours-time-axis-design.md`
-- Plan V53: `docs/superpowers/plans/2026-05-08-per-branch-open-hours-time-axis.md`
-- V-entry: see `.claude/rules/v-log-archive.md` V53 + `00-session-start.md` § 2 row.
+- V50-followup-2 — full ProClinic strip COMPLETE.
+- Spec V54: `docs/superpowers/specs/2026-05-08-listener-safe-by-default-design.md`
+- Plan V54: `docs/superpowers/plans/2026-05-08-listener-safe-by-default.md`
+- V-entry: see `.claude/rules/v-log-archive.md` V54 + `00-session-start.md` § 2 row.
+
+## Methodology lessons (V54)
+- **systematic-debugging Phase 1-2 caught what static audit missed**: V52/V53 audits saw "comment says auto-inject ✓" without VERIFYING the wrapper actually performs auto-inject. This is the V21 comment-vs-code drift family — fixed structurally by adding BS-13 audit anchored on `resolveSelectedBranchId` reference (not on comment text).
+- **3-layer V21 drift requires backstop at the data layer**: comment lies + wrapper passthrough + safe-by-default-FAILED stack up. The architectural backstop (safe-by-default in backendClient.js) closes the gap permanently regardless of caller mistakes or comment drift.
+- **Test fixups are first-class**: 4 pre-existing tests asserted the broken contract (locked `{}` opts pattern). Updated each with V54 marker comment explaining the pre-V54 V21 drift + post-V54 contract. Same pattern as V52 stale-annotation strip + V53 BS-12 invariant addition.

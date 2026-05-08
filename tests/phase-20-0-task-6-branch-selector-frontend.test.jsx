@@ -51,9 +51,13 @@ describe('Phase 20.0 Task 6 — Z2 selectedBranchId observed via useSelectedBran
 });
 
 describe('Phase 20.0 Task 6 — Z3 listenToAppointmentsByMonth follows selected branch', () => {
-  it('Z3.1 — listener call passes empty opts {} so scopedDataLayer auto-injects selectedBranchId', () => {
-    // Pre-Task-6 used {allBranches: true}; Task 6 swaps to {} (auto-inject).
-    expect(STRIPPED).toMatch(/listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*\}\s*,/);
+  it('Z3.1 — listener call passes explicit { branchId: selectedBranchId } (V54/BS-13 fix)', () => {
+    // Pre-V54 this asserted {} relying on PHANTOM scopedDataLayer auto-inject
+    // (V21 comment-vs-code drift — wrapper is plain passthrough). V54
+    // (2026-05-08) closes the leak: caller passes branchId EXPLICITLY
+    // (V52/BS-11 canonical pattern); backendClient.js raw listener is also
+    // safe-by-default in case anyone forgets. See tests/v54-listener-safe-by-default.test.js.
+    expect(STRIPPED).toMatch(/listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*,/);
   });
 
   it('Z3.2 — listener useEffect deps include selectedBranchId so subscription re-fires on branch switch', () => {

@@ -7,15 +7,53 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #7 — V53 Per-branch open hours → time-axis filter (BS-12) shipped · 4 victim surfaces wired · 7631/7631 GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #8 — V54 Listener safe-by-default (BS-13) — AdminDashboard branch-leak fix shipped · 7662/7662 GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V53 commit (feat(V53/BS-12): per-branch open hours drive time-axis everywhere) — 2 commits ahead of prod (V52 + V53)
-- **Test count**: 7631/7631 + 1 skipped GREEN (full top-level + extended suite, +88 from V53). Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 NOT yet deployed). Master is 2 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
+- **Last commit**: V54 commit (fix(V54/BS-13): raw appointment listeners safe-by-default — AdminDashboard branch leak) — 3 commits ahead of prod (V52 + V53 + V54)
+- **Test count**: 7662/7662 + 1 skipped GREEN (full top-level + extended suite, +31 from V54). Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 + V54 NOT yet deployed). Master is 3 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
 - **Probe-Deploy-Probe**: N/A this turn (no rules change in V52 or V53).
-- **Iron-clad rule status**: **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-12** (NEW: BS-12 time-axis) + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 + V53 both have no data ops (read-only features).
-- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 + V53 don't change rules.
+- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-13** (NEW: BS-13 listener safe-by-default) + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 + V53 + V54 all read-only fixes (no data ops).
+- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 + V53 + V54 don't change rules.
+
+### Session 2026-05-08 EOD #8 — V54 Listener safe-by-default (BS-13) shipped — systematic-debugging session
+
+User report (verbatim): "tab นัดหมายใน Frontend ยังไม่แยกดึงข้อมูลเป็นสาขาๆ"
+
+= "the appointments tab in Frontend doesn't yet separate-fetch by branch"
+
+**Surface identified**: AdminDashboard.jsx (the `/admin` patient-queue dashboard, the original Phase 1-7 admin "Frontend" page — distinct from BackendDashboard tabs). The Appointment Manager queue calendar uses `listenToAppointmentsByMonth` to render the month's appointments — and showed ALL branches' appointments steady-state regardless of top-right BranchSelector.
+
+**Root cause** (3-layer V21 chain caught via systematic-debugging Phase 1-2):
+1. **Comment-vs-code drift (V21)** at `AdminDashboard.jsx:713-715` — comment claimed "scopedDataLayer wrapper resolves the current branch"; wrapper is plain passthrough
+2. **Wrapper passthrough** at `scopedDataLayer.js:307` — `listenToAppointmentsByMonth = (...args) => raw.listenToAppointmentsByMonth(...args)`, NO auto-inject
+3. **Safe-by-default-FAILED** at `backendClient.js:2361` — `useFilter = undefined && !false` falsy → query = WHOLE be_appointments collection (no where-clause)
+
+**Class-of-bug**: V21 comment-vs-code drift family + NEW "Raw listener safe-by-default-FAILED" sub-class. Same pattern repeated at 3 layers; agent-based static audit missed the gap because it accepted the comment text at face value without verifying the wrapper actually performed auto-inject. The safe template (`listenToScheduleByDay`) existed (line 10572+) but siblings didn't adopt it.
+
+**V54 architectural fix** (mirror `listenToScheduleByDay` pattern in 4 sibling functions in backendClient.js):
+- `getAppointmentsByMonth` + `getAppointmentsByDate` + `listenToAppointmentsByDate` + `listenToAppointmentsByMonth`
+- Pattern: `effectiveBranchId = (typeof branchId === 'string' && branchId) ? branchId : (allBranches ? null : resolveSelectedBranchId());` then `if (!effectiveBranchId && !allBranches) return ...;` — empty `{}` for grouped getter, `[]` for list getter, `onChange([])` + noop unsubscribe for listeners. NEVER falls back to whole-collection query unless `allBranches: true` is explicit.
+- Plus AdminDashboard.jsx:716 — pass `{ branchId: selectedBranchId }` explicitly (V52/BS-11 canonical pattern; defense-in-depth).
+
+**NEW audit invariant BS-13**: every raw appointment getter+listener in backendClient.js MUST be safe-by-default. Closed sanctioned-exception list (none — all 4 follow the rule). Anchor on `resolveSelectedBranchId` reference + V54/BS-13 marker comment. 7 sub-tests in `tests/audit-branch-scope.test.js` (BS-13.x).
+
+**Test bank shipped**:
+- `tests/v54-listener-safe-by-default.test.js` (24 tests, L1-L5) — 4 functions × 4-6 scenarios + V54 source-grep markers
+- `tests/audit-branch-scope.test.js` extended (+7 BS-13.x sub-tests)
+- 4 pre-existing V21-class regression tests fixed (Z3.1, A6.1, S5.1, BS-F.2) — they had locked the broken `{}` opts pattern; updated to lock V54 explicit-branchId contract with V54 marker comments explaining the drift
+
+**Final tally**: 7631 → 7662 + 1 skipped (+31 net) all GREEN. Build clean.
+
+**Methodology lessons**:
+- **systematic-debugging Phase 1-2 caught what static audit missed** — V52/V53 audits saw "comment says auto-inject ✓" without VERIFYING the wrapper actually performs auto-inject. The V21 comment-vs-code drift was layered 3 deep (caller comment → scopedDataLayer comment → backendClient pattern). Adding BS-13 anchored on `resolveSelectedBranchId` reference (not comment text) closes the gap structurally.
+- **3-layer V21 drift requires backstop at the data layer** — comment lies + wrapper passthrough + safe-by-default-FAILED stack up. Architectural backstop (safe-by-default in backendClient.js) closes the gap permanently regardless of caller mistakes or comment drift.
+- **Test fixups are first-class artifacts** — 4 pre-existing tests asserted the broken contract. Updated each with V54 marker comment explaining the pre-V54 V21 drift + post-V54 contract. Same pattern as V52 stale-annotation strip + V53 BS-12 invariant.
+
+**Outstanding**: combined `vercel --prod` for V52 + V53 + V54 (3 commits ahead of prod; user-authorized only).
+
+Detail: `docs/superpowers/specs/2026-05-08-listener-safe-by-default-design.md` + `docs/superpowers/plans/2026-05-08-listener-safe-by-default.md` + V54 V-entry in `.claude/rules/v-log-archive.md`.
 
 ### Session 2026-05-08 EOD #7 — V53 Per-Branch Open Hours → Time-Axis Filter (BS-12) shipped
 

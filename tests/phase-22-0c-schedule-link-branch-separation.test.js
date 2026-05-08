@@ -86,7 +86,9 @@ describe('Phase 22.0c — S4 updateActiveSchedules per-schedule branchId query',
 describe('Phase 22.0c — S5 listenToAppointmentsByMonth queue-listener (Phase 20.0 baseline preserved)', () => {
   test('S5.1 selectedBranchId still in deps array', () => {
     // Phase 20.0 Task 6 already added this; 22.0c verifies it stayed.
-    expect(SRC).toMatch(/listenToAppointmentsByMonth\([\s\S]{0,500}?\}, \[apptMonth, db, appId, selectedBranchId\]\);/);
+    // V54 (2026-05-08) — increased char window because explicit
+    // {branchId: selectedBranchId} + V54 marker comments grew the block.
+    expect(SRC).toMatch(/listenToAppointmentsByMonth\([\s\S]{0,1500}?\}, \[apptMonth, db, appId, selectedBranchId\]\);/);
   });
 });
 

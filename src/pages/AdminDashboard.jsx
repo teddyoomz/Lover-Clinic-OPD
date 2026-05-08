@@ -710,10 +710,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     if (!db || !appId) return;
     const unsub = listenToAppointmentsByMonth(
       apptMonth,
-      // Phase 20.0 Task 6 — auto-inject selectedBranchId; pass {} so the
-      // scopedDataLayer wrapper resolves the current branch. allBranches
-      // dropped — Frontend queue calendar now follows top-right BranchSelector.
-      {},
+      // V54 (BS-13, 2026-05-08) — pass selectedBranchId EXPLICITLY (V52/BS-11
+      // canonical pattern). Pre-V54 the comment claimed "scopedDataLayer
+      // wrapper resolves the current branch" but the wrapper is plain
+      // passthrough — combined with backendClient.js's safe-by-default-FAILED,
+      // {} opts caused the queue calendar to subscribe to the WHOLE
+      // be_appointments collection (cross-branch leak). Defense-in-depth:
+      // backendClient.js raw listener is now safe-by-default (resolves via
+      // resolveSelectedBranchId), AND callers pass branchId explicitly.
+      { branchId: selectedBranchId },
       (appts) => {
         setApptData({ appointments: appts, syncedAt: new Date().toISOString() });
       },

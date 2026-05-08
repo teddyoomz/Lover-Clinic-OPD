@@ -583,3 +583,66 @@ describe('BS-12 — time-axis branch-aware discipline (V53)', () => {
     expect(allViolations).toEqual([]);
   });
 });
+
+// ─── BS-13 — Raw listener+getter safe-by-default discipline (V54, 2026-05-08) ───
+//
+// Every raw appointment getter+listener in backendClient.js that reads a
+// branch-scoped collection MUST resolve falsy branchId via
+// resolveSelectedBranchId(); if still falsy → return empty (NEVER fall
+// back to whole-collection query unless allBranches:true is explicit).
+//
+// Safe template: listenToScheduleByDay (line 10572+).
+// Pre-V54 BUG: AdminDashboard listenToAppointmentsByMonth({}) → whole
+// collection → cross-branch leak in queue calendar.
+
+describe('BS-13 — raw listener+getter safe-by-default (V54)', () => {
+  const SAFE_FNS = [
+    'getAppointmentsByMonth',
+    'getAppointmentsByDate',
+    'listenToAppointmentsByMonth',
+    'listenToAppointmentsByDate',
+  ];
+  const backendClientSrc = readFileSync('src/lib/backendClient.js', 'utf8');
+
+  for (const fn of SAFE_FNS) {
+    it(`BS-13.x ${fn} body contains resolveSelectedBranchId fallback`, () => {
+      // Find the function definition
+      const fnDefRe = new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${fn}\\s*\\(`);
+      const startMatch = fnDefRe.exec(backendClientSrc);
+      expect(startMatch, `${fn} definition not found in backendClient.js`).toBeTruthy();
+
+      // Capture the function body up to the next top-level export or function
+      const startIdx = startMatch.index;
+      // Find next `export function` after this one
+      const nextDefRe = /\n(?:export\s+)?(?:async\s+)?function\s+\w+\s*\(/g;
+      nextDefRe.lastIndex = startIdx + startMatch[0].length;
+      const nextMatch = nextDefRe.exec(backendClientSrc);
+      const endIdx = nextMatch ? nextMatch.index : Math.min(startIdx + 4000, backendClientSrc.length);
+      const body = backendClientSrc.slice(startIdx, endIdx);
+
+      // Must reference resolveSelectedBranchId (safe-by-default fallback)
+      expect(body, `${fn} body missing resolveSelectedBranchId fallback`).toMatch(/resolveSelectedBranchId/);
+      // Must have V54/BS-13 marker
+      expect(body, `${fn} body missing V54/BS-13 marker comment`).toMatch(/V54|BS-13/);
+    });
+  }
+
+  it('BS-13.5 listenToScheduleByDay (safe template) still has the canonical fallback', () => {
+    // Anchor test — if the safe template ever loses its fallback, V54 should
+    // catch it. listenToScheduleByDay is the original safe-by-default model.
+    expect(backendClientSrc).toMatch(/listenToScheduleByDay/);
+    expect(backendClientSrc).toMatch(/effectiveBranchId\s*=\s*branchId\s*!==\s*undefined/);
+  });
+
+  it('BS-13.6 AdminDashboard.jsx passes branchId explicitly (V54 caller fix)', () => {
+    const c = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+    expect(c).toMatch(/listenToAppointmentsByMonth/);
+    expect(c).toMatch(/\{\s*branchId:\s*selectedBranchId\s*\}/);
+  });
+
+  it('BS-13.7 AppointmentCalendarView.jsx still passes branchId explicitly (V52 regression guard)', () => {
+    const c = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
+    expect(c).toMatch(/listenToAppointmentsByDate/);
+    expect(c).toMatch(/\{\s*branchId:\s*selectedBranchId\s*\}/);
+  });
+});
