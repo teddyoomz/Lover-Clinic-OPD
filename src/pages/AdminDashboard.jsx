@@ -77,10 +77,12 @@ import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurpos
 import { openCustomerInNewTab, openCustomerEditInNewTab } from '../lib/customerNavigation.js';
 import {
   TIME_SLOTS as CANONICAL_TIME_SLOTS,
-  derivedAutoClosedDates,            // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
-  derivedDoctorDaysFromSchedules,    // V60 / AV32 (2026-05-08) — doctorDays derived from be_staff_schedules canonical source
-  deriveDoctorRoomIdsForWindow,      // V61 / AV33 (2026-05-08) — modal room dropdown driven by be_staff_schedules (specific or แพทย์ทุกคน)
-  deriveNonDoctorRoomIdsForWindow,   // V61 / AV33 (2026-05-08) — modal room dropdown for ไม่พบแพทย์ mode
+  derivedAutoClosedDates,              // V56 / BS-15 (2026-05-08) — auto-closure helper for schedule-link gen
+  derivedDoctorDaysFromSchedules,      // V60 / AV32 (2026-05-08) — doctorDays derived from be_staff_schedules (specific doctor)
+  deriveDoctorRoomIdsForWindow,        // V61 / AV33 (2026-05-08) — modal room dropdown driven by be_staff_schedules (specific or แพทย์ทุกคน)
+  deriveNonDoctorRoomIdsForWindow,     // V61 / AV33 (2026-05-08) — modal room dropdown for ไม่พบแพทย์ mode
+  derivedDoctorDaysAcrossWindow,       // V62 / AV34 (2026-05-08) — multi-doctor doctorDays for noDoctor + ทุกคน modes (showDoctorStatus overlay)
+  derivedDoctorWorkingHoursPerDate,    // V62 / AV34 (2026-05-08) — per-date doctor hours map for customDoctorHours
 } from '../lib/staffScheduleValidation.js';
 import {
   hexToRgb, getReasons, getHrtGoals, calculateADAM, calculateIIEFScore,
@@ -1751,16 +1753,66 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           console.warn('[V60/AV32] doctor-days derivation failed:', e?.message || e);
         }
       }
+      // V62 / AV34 (2026-05-08) — extend doctorDays + per-date hours
+      // derivation to ALL link modes (including noDoctorRequired). Pre-V62
+      // bug: noDoctorRequired link had `doctorDays: []` saved → 🔥 emoji
+      // never rendered + showDoctorStatus overlay never fired (because
+      // isSlotWithinDoctorHours requires doctorDaysSet.has(date)). User
+      // case (SCH-9c201860e1, shockwave link with showDoctorStatus=true)
+      // showed clean shockwave availability but ZERO doctor info → customer
+      // couldn't know "doctor is also free, I could pivot to consultation".
+      //
+      // V62 derives doctorDays + customDoctorHours from be_staff_schedules
+      // for the link's effective doctor set:
+      //   - พบแพทย์ specific doctor → that doctor's days + hours (V60 case)
+      //   - พบแพทย์ ทุกคน           → union of ALL doctors
+      //   - ไม่พบแพทย์              → union of ALL doctors (so customer can
+      //                                see when ANY doctor is on-shift, in
+      //                                case they want to switch to a
+      //                                consultation booking)
+      //
+      // The doctor-id filter `v62DoctorIdsForDerivation` mirrors the room
+      // filter (V61) — null = aggregate all branch doctors.
+      const v62DoctorIdsForDerivation = schedSelectedDoctor ? [schedSelectedDoctor] : null;
+      let v62MultiDoctorDays = [];
+      let v62DoctorHoursPerDate = {};
+      try {
+        v62MultiDoctorDays = derivedDoctorDaysAcrossWindow({
+          doctorIds: v62DoctorIdsForDerivation,
+          allEntries: scheduleEntries,
+          datesISO: datesInRange,
+        });
+        v62DoctorHoursPerDate = derivedDoctorWorkingHoursPerDate({
+          doctorIds: v62DoctorIdsForDerivation,
+          allEntries: scheduleEntries,
+          datesISO: datesInRange,
+        });
+      } catch (e) {
+        console.warn('[V62/AV34] doctor-days/hours derivation failed:', e?.message || e);
+      }
       // Manual paint scoped to months window — prior-month paints (from
       // schedule_prefs__{branch}) DON'T leak into the saved doc anymore.
       const monthSet = new Set(months);
       const inMonthsManualDoctorDays = [...schedDoctorDays].filter(
         (d) => typeof d === 'string' && monthSet.has(d.slice(0, 7)),
       );
+      // V62 / AV34 — union V60 derived (specific doctor) + V62 multi-doctor
+      // (ALL doctors path for noDoctor + ทุกคน modes) + admin manual paint.
+      // The two derivations overlap in the "specific doctor" case (V60
+      // returns subset of V62); Set dedup handles it cleanly. For noDoctor
+      // mode V60 returns []; V62 fills the gap with all-doctors union.
       const finalDoctorDays = [...new Set([
         ...derivedDoctorDays,
+        ...v62MultiDoctorDays,
         ...inMonthsManualDoctorDays,
       ])].sort();
+      // V62 / AV34 — merge derived per-date hours with admin manual overrides.
+      // Admin override wins (admin-set per-day exception always trumps the
+      // raw schedule data, e.g. for ad-hoc "clinic closes early" days).
+      const v62MergedCustomDoctorHours = {
+        ...v62DoctorHoursPerDate,
+        ...(schedCustomDoctorHours || {}),
+      };
       // V60 / AV32 — pre-flight gate: when noDoctorRequired=false, refuse
       // to save a link that would have ZERO doctor days in any month
       // (every cell would render disabled on customer page → "กดดูอะไร
@@ -1843,7 +1895,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         bookedSlots,
         doctorBookedSlots: schedNoDoctorRequired ? doctorBookedSlots : [],
         manualBlockedSlots: schedManualBlocked,
-        customDoctorHours: schedCustomDoctorHours,
+        // V62 / AV34 (2026-05-08) — customDoctorHours now MERGES V62-derived
+        // per-date doctor hours (from be_staff_schedules) with admin's
+        // per-day overrides. Pre-V62 saved only admin overrides → customer-
+        // side overlay used clinic hours as default for noDoctor mode →
+        // wrong "หมอ ว่าง" coverage. V62 fixes by storing actual doctor
+        // hours per-date from canonical source.
+        customDoctorHours: v62MergedCustomDoctorHours,
         // V55/BS-14 — doctor entry hours default to per-branch clinic open
         // hours (admin's per-day overrides via schedCustomDoctorHours
         // are stamped separately as customDoctorHours map below). User

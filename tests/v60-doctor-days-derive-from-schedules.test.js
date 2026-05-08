@@ -205,8 +205,10 @@ describe('V60.X1 — derivedDoctorDaysFromSchedules helper unit', () => {
 // ─── X2. handleGenScheduleLink wires derive helper ─────────────────────
 describe('V60.X2 — handleGenScheduleLink uses derived helper + saves finalDoctorDays', () => {
   it('X2.1 — AdminDashboard imports derivedDoctorDaysFromSchedules', () => {
-    // Multi-line import block; span via [\s\S].
-    expect(ADMIN_DASHBOARD_SRC).toMatch(/derivedDoctorDaysFromSchedules[\s\S]{0,400}?from\s+['"][^'"]+staffScheduleValidation/);
+    // Multi-line import block; span via [\s\S]. Window bumped to 1200 in V62
+    // since the import block grew with derivedDoctorDaysAcrossWindow +
+    // derivedDoctorWorkingHoursPerDate (V62/AV34) + multi-line comments.
+    expect(ADMIN_DASHBOARD_SRC).toMatch(/derivedDoctorDaysFromSchedules[\s\S]{0,1200}?from\s+['"][^'"]+staffScheduleValidation/);
   });
 
   it('X2.2 — handleGenScheduleLink calls derivedDoctorDaysFromSchedules', () => {
@@ -351,8 +353,11 @@ describe('V60.X6 — V12 multi-reader-sweep regression sweep', () => {
     // with monthSet); FORBID it in the schedule-link setDoc shape directly.
     // Anchor on the clinic_schedules path to skip unrelated setDoc calls
     // (opd_sessions, etc.).
+    // Window bumped 3500 → 5000 in V62 since the setDoc payload grew with
+    // selectedRoomIds + multi-line V61/V62 comments. Anchor on
+    // clinic_schedules path to skip unrelated setDoc calls.
     const setDocBlock = ADMIN_DASHBOARD_SRC.match(
-      /await setDoc\(doc\(db,\s*'artifacts',\s*appId,\s*'public',\s*'data',\s*'clinic_schedules'[\s\S]{0,3500}?\}\);/,
+      /await setDoc\(doc\(db,\s*'artifacts',\s*appId,\s*'public',\s*'data',\s*'clinic_schedules'[\s\S]{0,5000}?\}\);/,
     );
     expect(setDocBlock).toBeTruthy();
     expect(setDocBlock[0]).not.toMatch(/doctorDays:\s*\[\.\.\.schedDoctorDays\]/);

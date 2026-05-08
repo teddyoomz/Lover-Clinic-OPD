@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV33)
+## Invariants (AV1–AV34)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -731,6 +731,62 @@ expect(ADMIN_DASHBOARD_SRC).toMatch(/selectedRoomIds:\s*v61SelectedRoomIds/);
 3. **Backward-compat via dual-field** (`selectedRoomId` legacy + `selectedRoomIds` array) prevents migration risk. shouldBlockScheduleSlot prefers array; falls back to single.
 4. **Pre-flight gate at the WRITE boundary** is the canonical defense for save-time data validity. Mirrors V60's doctorDays gate; both prevent silent-broken customer links.
 5. **The complete schedule-link adoption-gap series (V52-V61)** demonstrates a single class-of-bug being eliminated layer-by-layer: V52 reports, V53 time-axis, V54 raw listeners, V55 modal data sources, V56 room auto-closure, V60 save-time doctorDays, V61 modal UI room dropdown. Each closed a different boundary; together they form a complete BSA + canonical-source story.
+
+### AV34 — Schedule-link doctorDays + customDoctorHours derived for ALL modes (V62, 2026-05-08)
+
+**Pattern**: Customer-facing schedule-link doc MUST populate `doctorDays` (calendar 🔥-emoji days) AND `customDoctorHours` (per-date `[{start,end}]` ranges) from `be_staff_schedules` for ALL link modes — including ไม่พบแพทย์ + showDoctorStatus mode where admin doesn't pick a specific doctor. Pre-V62 only ran the V60 derivation when `schedSelectedDoctor` was set; ไม่พบแพทย์ links saved `doctorDays: []` + clinic-hours-as-doctor-hours fallback → `isSlotWithinDoctorHours` always returned false → "หมอว่าง / หมอไม่ว่าง" overlay never fired.
+
+**Class-of-bug**: V12 multi-reader-sweep at the schedule-link SAVE boundary, narrowed-derivation gap. V60 closed the WRITE-time derivation for SPECIFIC-doctor mode but did NOT extend to multi-doctor modes (ไม่พบแพทย์ + แพทย์ทุกคน) where the customer overlay still depends on doctor schedule data. V62 closes the gap.
+
+**Origin**: User report (verbatim, 2026-05-08, with 2 screenshots): "ลิ้งนี้ยังไม่แสดงสถานะหมอ ทั้งๆที่เป็นลิ้งที่ติ๊กเลือกว่าจะแสดงสถานะหมอว่าง/ไม่ว่าง ด้วย ทั้ง emoji ไฟลุกในปฏิทินในช่องวันที่หมอเข้าก็ไม่แสดง และในช่องตารางแต่ละวัน ถ้าหมอว่างอยู่ในเวลาเดียวกันนั้น ไม่ว่าหมอจะเข้าตรวจอยู่ห้องไหนในคลินิกนั้นวันนั้นเวลานั้น ก็ให้แสดงว่าหมอว่างด้วย ... และวันที่ 9 ในภาพที่ 2 นอกจากจะแสดงว่าห้องช็อคเวฟไม่ว่างแล้ว ก็ให้แสดงให้ลูกค้ารู้ด้วยว่าหมอก็ไม่ว่างอยู่เหมือนกันในอีกห้องหนึ่ง". Diag of SCH-9c201860e1 confirmed `doctorDays:0`, `doctorStartTime:'11:30'` (clinic), `doctorEndTime:'20:30'` (clinic) — all wrong.
+
+**Fix architecture (V62)**:
+1. **NEW pure helpers** in `src/lib/staffScheduleValidation.js`:
+   - `derivedDoctorDaysAcrossWindow({ doctorIds, allEntries, datesISO })` — multi-doctor extension of V60. `doctorIds=null` aggregates ALL doctors (ไม่พบแพทย์ + แพทย์ทุกคน modes).
+   - `derivedDoctorWorkingHoursPerDate({ doctorIds, allEntries, datesISO })` — returns `{[dateISO]: [{start,end},...]}` from working entries; off-shift types excluded; multi-doctor non-overlapping windows kept as separate ranges.
+2. **Save handler** (`AdminDashboard.jsx handleGenScheduleLink`):
+   - `v62DoctorIdsForDerivation = schedSelectedDoctor ? [schedSelectedDoctor] : null`
+   - V62 derivations called UNCONDITIONALLY (no schedSelectedDoctor gate); `finalDoctorDays = union(V60 specific, V62 multi-doctor, manual paint)` — Set dedup handles overlap.
+   - `v62MergedCustomDoctorHours = { ...v62DoctorHoursPerDate, ...(schedCustomDoctorHours || {}) }` — admin's per-day overrides win on collision.
+   - Saved doc shape: `customDoctorHours: v62MergedCustomDoctorHours` (was `schedCustomDoctorHours` only).
+3. **Customer-side render** (`ClinicSchedule.jsx`):
+   - Doctor-status badge JSX condition `slot.doctorSlot && !slot.booked && (` → `slot.doctorSlot && (` — overlay always renders within doctor hours regardless of slot booked state.
+   - Outer `opacity-30` dim moved from card to inner time-text wrapper only — badge stays at full opacity when slot busy.
+4. **Rule M data fix** (`scripts/v62-fix-schedule-link-doctor-data.mjs`): backfills any in-the-wild link that has `noDoctorRequired=true + doctorDays=[]` (or specific-doctor with stale data). Two-phase dry-run + apply, audit doc, idempotent. SCH-9c201860e1 backfilled to 18 May 2026 days + 22 customDoctorHours keys (18 derived + 4 admin overrides).
+
+**Anti-pattern** (forbidden by AV34):
+```js
+// ❌ FORBIDDEN — only deriving doctor data when specific doctor picked
+let derivedDoctorDays = [];
+if (schedSelectedDoctor) {  // ← gate skips noDoctor mode → BUG
+  derivedDoctorDays = derivedDoctorDaysFromSchedules({ doctorId: schedSelectedDoctor, ... });
+}
+
+// ❌ FORBIDDEN — overlay hidden when slot booked
+{slot.doctorSlot && !slot.booked && (
+  <Badge>{slot.doctorBusy ? 'หมอไม่ว่าง' : 'หมอว่าง'}</Badge>
+)}
+```
+
+**Source-grep regression** (`tests/v62-doctor-days-and-hours-from-schedules.test.js` M3.2):
+```js
+expect(CLINIC_SCHEDULE_SRC).not.toMatch(/slot\.doctorSlot\s*&&\s*!slot\.booked\s*&&\s*\(/);
+expect(CLINIC_SCHEDULE_SRC).toMatch(/slot\.doctorSlot\s*&&\s*\(/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/v62MultiDoctorDays\s*=\s*derivedDoctorDaysAcrossWindow/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/v62DoctorHoursPerDate\s*=\s*derivedDoctorWorkingHoursPerDate/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/customDoctorHours:\s*v62MergedCustomDoctorHours/);
+```
+
+**Sanctioned exceptions**: NONE — every customer-facing schedule-link save MUST derive doctor data from canonical source for ALL link modes. The derivation is multi-doctor by default; specific doctor is just `doctorIds=[X]` filter.
+
+**Companion AV: AV32** (V60 doctorDays derived from schedules — specific-doctor case). V62 extends V60's pattern to multi-doctor modes. Both AVs coexist: AV32 handles selectedDoctorId-set; AV34 handles selectedDoctorId-null (ไม่พบแพทย์ + แพทย์ทุกคน).
+
+**Lessons**:
+1. **A narrow derivation is a future bug magnet** — V60 only fired when `schedSelectedDoctor` was set. The "user might select a doctor" assumption silently broke ไม่พบแพทย์ mode where admin INTENTIONALLY doesn't select. Generalize derivation early; gate the OUTPUT not the INPUT.
+2. **Customer overlay needs FULL display matrix** — pre-V62 hid overlay when slot booked. User wanted ALL 4 cells of (slot busy/free × doctor busy/free) visible so customer can pivot from shockwave-link to consultation. Booked + free-doctor is a productive state, not a dead end.
+3. **Snapshot at save is the canonical pattern for customer-facing public-link docs** — V60 doctorDays + V61 selectedRoomIds + V62 customDoctorHours all use this. Customer link reflects last-Sync state; admin controls when refresh happens.
+4. **CSS opacity placement matters for layered information** — applying `opacity-30` to the OUTER card dimmed the doctor badge along with the slot text. Move the dim to the inner element that should be dimmed; siblings stay at full opacity. Layering the visual hierarchy this way preserves multi-info display when slot has multiple statuses.
+5. **The complete schedule-link adoption-gap series (V52-V62)** demonstrates a single class-of-bug eliminated layer-by-layer: V52 reports / V53 time-axis / V54 raw listeners / V55 modal data sources / V56 room auto-closure / V60 save-time doctorDays specific / V61 modal UI room dropdown / V62 save-time doctorDays + customDoctorHours multi-doctor. 8 V-entries, 8 boundaries, one canonical source-of-truth (`be_staff_schedules`).
 
 ## How to run
 

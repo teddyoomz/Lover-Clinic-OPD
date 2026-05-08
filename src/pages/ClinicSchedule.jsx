@@ -575,10 +575,15 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
 
                 return (
                   <div key={slot.start}
-                    className={`flex items-center rounded-xl px-4 py-3 transition-all ${(isDark && slot.booked) || (!isDark && slot.booked) ? 'opacity-30' : ''}`}
+                    className="flex items-center rounded-xl px-4 py-3 transition-all"
                     style={slotStyle}>
+                    {/* V62 / AV34 — split inner time text (dimmed when
+                        booked) from the doctor-status badge (always full
+                        opacity). User case: shockwave busy + doctor busy →
+                        both indicators must be readable; pre-V62 outer
+                        opacity-30 dimmed everything including the badge. */}
                     <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <div>
+                      <div className={slot.booked ? 'opacity-40' : ''}>
                         <span className={`text-lg font-bold tabular-nums ${slot.booked ? (isDark ? 'text-gray-600' : 'text-gray-400') : (isDark ? 'text-orange-100' : 'text-gray-800')}`}>
                           {slot.start}
                         </span>
@@ -587,11 +592,18 @@ export default function ClinicSchedule({ token, clinicSettings, theme, setTheme 
                           {slot.end}
                         </span>
                       </div>
-                      {slot.doctorSlot && !slot.booked && (
-                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                      {/* V62 / AV34 (2026-05-08) — overlay renders even when
+                          slot.booked. User directive: customer should see
+                          "หมอไม่ว่าง" alongside "ไม่ว่าง" on a busy slot, AND
+                          "หมอว่าง" on a free shockwave slot when the doctor
+                          is on-shift (so customer can pivot to consultation).
+                          Pre-V62 condition `&& !slot.booked` hid the overlay
+                          when slot booked → customer couldn't see doctor info. */}
+                      {slot.doctorSlot && (
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm ${
                           slot.doctorBusy
-                            ? (isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600')
-                            : (isDark ? 'bg-sky-900/50 text-sky-300' : 'bg-pink-100 text-pink-600')
+                            ? (isDark ? 'bg-orange-900/70 text-orange-200 border border-orange-700/50' : 'bg-orange-100 text-orange-700 border border-orange-300')
+                            : (isDark ? 'bg-sky-900/70 text-sky-200 border border-sky-700/50' : 'bg-emerald-100 text-emerald-700 border border-emerald-300')
                         }`}>
                           {slot.doctorBusy ? t.doctorBusy : t.doctorFree}
                         </span>

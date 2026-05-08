@@ -508,6 +508,113 @@ export function deriveNonDoctorRoomIdsForWindow({ branchExamRooms, allEntries, d
   return [...result].sort();
 }
 
+/**
+ * V62 / AV34 (2026-05-08) — multi-doctor extension of V60's
+ * `derivedDoctorDaysFromSchedules`. Returns the days where AT LEAST ONE
+ * of the specified doctors has a working entry. When `doctorIds` is
+ * null/empty, aggregates ALL doctors in `allEntries` (used for ไม่พบแพทย์
+ * mode + พบแพทย์ ทุกคน mode).
+ *
+ * V60's helper accepts only single `doctorId: string`. This new helper
+ * extends that contract for the noDoctorRequired mode where admin
+ * doesn't pick a specific doctor but the customer-facing overlay still
+ * needs to show "หมอเข้าวันนี้" (🔥 emoji + per-day hours) so the
+ * customer can decide whether to pivot from shockwave-room booking to
+ * a doctor consultation.
+ *
+ * Class-of-bug closed: BUG REPRODUCED on prod link SCH-9c201860e1
+ * (noDoctorRequired:true + showDoctorStatus:true + selectedRoom=shockwave)
+ * had `doctorDays: []` saved → 🔥 emoji never rendered, overlay never
+ * fired (isSlotWithinDoctorHours requires doctorDaysSet.has(date)).
+ *
+ * @param {object} opts
+ * @param {string[]|null|undefined} opts.doctorIds — null = ALL doctors in entries
+ * @param {Array<entry>} opts.allEntries
+ * @param {string[]} opts.datesISO
+ * @returns {string[]} sorted, deduped date strings
+ */
+export function derivedDoctorDaysAcrossWindow({ doctorIds, allEntries, datesISO }) {
+  if (!Array.isArray(allEntries) || !Array.isArray(datesISO)) return [];
+  const filterIds = Array.isArray(doctorIds) && doctorIds.length > 0
+    ? doctorIds.map(String)
+    : null;
+  const result = new Set();
+  for (const dateISO of datesISO) {
+    if (typeof dateISO !== 'string' || !DATE_ISO_RE.test(dateISO)) continue;
+    const merged = mergeSchedulesForDate(dateISO, allEntries, filterIds);
+    for (const entry of merged) {
+      if (!entry || !WORKING_TIME_TYPES.has(entry.type)) continue;
+      if (filterIds && !filterIds.includes(String(entry.staffId))) continue;
+      result.add(dateISO);
+      break; // once any entry counts, this date qualifies
+    }
+  }
+  return [...result].sort();
+}
+
+/**
+ * V62 / AV34 (2026-05-08) — derive per-date doctor working-hour ranges
+ * from `be_staff_schedules` for the schedule-link customer-side overlay.
+ *
+ * Output shape: `{ [dateISO]: [{start, end}, ...] }` — array of working
+ * windows per date, deduped + sorted by start time. Multiple ranges
+ * per date when multiple doctors have non-overlapping schedules (e.g.
+ * Doc A 10:00-14:00 + Doc B 16:00-20:00 → [{start:'10:00',end:'14:00'},
+ * {start:'16:00',end:'20:00'}]).
+ *
+ * `getDoctorRangesForDate` (scheduleFilterUtils.js) already supports
+ * array shape — it iterates ranges and `isSlotWithinDoctorHours` checks
+ * if slot fits in ANY range (`.some()` semantics). So multi-doctor
+ * union "just works" for customer rendering.
+ *
+ * Used by `handleGenScheduleLink` to populate `customDoctorHours` map
+ * on the saved schedule-link doc. Pre-V62, customDoctorHours was admin's
+ * per-day overrides ONLY; the default fallback `doctorStartTime/EndTime`
+ * was CLINIC hours (V55 retrofit). For noDoctorRequired + showDoctorStatus
+ * mode this caused the overlay to use clinic hours (e.g. 11:30-20:30)
+ * instead of the doctor's actual hours (e.g. 13:30-19:30) → wrong "หมอ
+ * ว่าง" coverage.
+ *
+ * Excludes leave/holiday/sick (off-shift). Per-date override semantics
+ * via `mergeSchedulesForDate` (per-date leave cancels recurring weekday).
+ *
+ * @param {object} opts
+ * @param {string[]|null|undefined} opts.doctorIds — null = ALL doctors
+ * @param {Array<entry>} opts.allEntries
+ * @param {string[]} opts.datesISO
+ * @returns {Object<string, Array<{start: string, end: string}>>}
+ */
+export function derivedDoctorWorkingHoursPerDate({ doctorIds, allEntries, datesISO }) {
+  if (!Array.isArray(allEntries) || !Array.isArray(datesISO)) return {};
+  const filterIds = Array.isArray(doctorIds) && doctorIds.length > 0
+    ? doctorIds.map(String)
+    : null;
+  const result = {};
+  for (const dateISO of datesISO) {
+    if (typeof dateISO !== 'string' || !DATE_ISO_RE.test(dateISO)) continue;
+    const merged = mergeSchedulesForDate(dateISO, allEntries, filterIds);
+    const seen = new Set();
+    const ranges = [];
+    for (const entry of merged) {
+      if (!entry || !WORKING_TIME_TYPES.has(entry.type)) continue;
+      if (filterIds && !filterIds.includes(String(entry.staffId))) continue;
+      const start = typeof entry.startTime === 'string' ? entry.startTime : '';
+      const end = typeof entry.endTime === 'string' ? entry.endTime : '';
+      if (!start || !end) continue;
+      if (!TIME_HHMM_RE.test(start) || !TIME_HHMM_RE.test(end)) continue;
+      const key = `${start}|${end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ranges.push({ start, end });
+    }
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a.start.localeCompare(b.start));
+      result[dateISO] = ranges;
+    }
+  }
+  return result;
+}
+
 export function generateStaffScheduleId(nowMs = Date.now()) {
   if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
     throw new Error('crypto.getRandomValues unavailable');
