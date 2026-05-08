@@ -139,4 +139,26 @@ describe('V64.S full-flow simulate', () => {
     const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
     expect(src).toMatch(/V64/);
   });
+
+  it('S1.8 V64-fix3 (Issue 1) — View imports + renders AppointmentFormModal for edit', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(src).toMatch(/import\s+AppointmentFormModal\s+from\s+['"]\.\.\/backend\/AppointmentFormModal\.jsx['"]/);
+    // Renders conditional modal block for edit
+    expect(src).toMatch(/\{editingAppt\s*&&\s*\(/);
+    expect(src).toMatch(/<AppointmentFormModal[\s\S]{0,200}mode=["']edit["']/);
+  });
+
+  it('S1.9 V64-fix3 (Issue 2) — confirm/cancel handlers DO NOT bump a reload-key', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    // Forbidden: triggerReload identifier (was the flash trigger)
+    expect(src).not.toMatch(/triggerReload\s*\(/);
+    // Forbidden: setReloadKey calls in handlers
+    expect(src).not.toMatch(/setReloadKey\s*\(/);
+    // Required: optimistic-update via setAppts(prev => prev.map(...))
+    expect(src).toMatch(/setAppts\(prev\s*=>\s*prev\.map/);
+    // Required: revert-on-error path
+    expect(src).toMatch(/revert/i);
+  });
 });

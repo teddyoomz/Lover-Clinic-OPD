@@ -6466,15 +6466,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   showToast?.('ยืนยันนัดสำเร็จ', 2000);
                 }).catch((e) => showToast?.('ยืนยันนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
               }}
-              onEditAppt={(appt) => {
-                // V64-fix2 (Issue 2): switch to calendar view + open edit form there.
-                // The inline form lives inside the calendar IIFE (legacy structure);
-                // a proper modal extraction is deferred. Until then, redirect.
-                setApptViewMode('calendar');
-                // Pre-select the appointment's date so calendar lands on it
-                if (appt.date) setApptSelectedDate(appt.date);
-                setApptFormMode({ mode: 'edit', appointmentId: appt.id });
-                showToast?.('เปิดในมุมมองปฏิทินเพื่อแก้ไข', 1800);
+              onEditAppt={() => {
+                // V64-fix3 (Issue 1, 2026-05-09): View opens AppointmentFormModal
+                // locally (mode='edit', appt). NO redirect to calendar mode.
+                // This handler is now a no-op — kept for prop-shape compat.
               }}
               onCancelAppt={(appt) => {
                 if (!window.confirm('ยกเลิกนัดนี้?')) return Promise.reject(new Error('user-cancelled'));

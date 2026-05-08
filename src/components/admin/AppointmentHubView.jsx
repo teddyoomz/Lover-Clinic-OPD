@@ -28,6 +28,7 @@ import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
 import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
+import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
 
 export default function AppointmentHubView({
   // Action handlers passed from AdminDashboard (existing helpers)
@@ -52,9 +53,14 @@ export default function AppointmentHubView({
   const [summaryMap, setSummaryMap] = useState(new Map());
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  // V64-fix2 (Issue 4+5): bump on every mutation → loader re-fires
-  const [reloadKey, setReloadKey] = useState(0);
-  const triggerReload = useCallback(() => setReloadKey(k => k + 1), []);
+  // V64-fix3 (Issue 1, 2026-05-09): edit-modal state — true full modal
+  // (mirrors backend tab=appointment-all UX). Replaces V64-fix2's
+  // calendar-mode redirect.
+  const [editingAppt, setEditingAppt] = useState(null);
+  // V64-fix3 (Issue 2): drop triggerReload — caused entire-list flash on
+  // mutation. Optimistic local update + revert-on-error is enough; full
+  // reconcile happens on next branch switch.
+  const [reloadKey] = useState(0);
 
   // V64 — reset filters on branch switch (Phase 17.0 BS-9 reset-on-branch-switch pattern)
   useEffect(() => {
@@ -218,33 +224,52 @@ export default function AppointmentHubView({
   const dateLabel = activeTab === 'today' ? 'นี้' : (activeTab === 'tomorrow' ? 'พรุ่งนี้' : '');
   const typeOptions = APPOINTMENT_TYPES.map(t => ({ value: t.value, label: t.label }));
 
-  // V64-fix2 (Issue 4+5): action handlers wrap parent props with optimistic
-  // local update + reloadKey bump. UI flips status instantly; loader re-fires
-  // ~200ms later to reconcile against Firestore truth.
-  const handleConfirmWithReload = useCallback(async (appt) => {
+  // V64-fix3 (Issue 2, 2026-05-09): pure optimistic update — NO reload
+  // (no flash). On error → revert. Status update only changes the row's
+  // status field in local state; React re-renders just that row's chip +
+  // button set. Reconcile happens on next branch switch / page reload.
+  const handleConfirmOptimistic = useCallback(async (appt) => {
+    const prevStatus = appt.status;
     setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'confirmed' } : a));
-    try { await Promise.resolve(onConfirmAppt?.(appt)); } catch {}
-    triggerReload();
-  }, [onConfirmAppt, triggerReload]);
+    try {
+      await Promise.resolve(onConfirmAppt?.(appt));
+    } catch {
+      // Parent's onConfirmAppt swallows errors via toast; if it rejects, revert.
+      setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: prevStatus } : a));
+    }
+  }, [onConfirmAppt]);
 
-  const handleCancelWithReload = useCallback(async (appt) => {
-    // pessimistic confirm via window.confirm happens in parent's handler;
-    // if user cancels, parent never calls update — we still optimistic-update
-    // to 'cancelled' BEFORE the parent runs. Parent's confirm() is now removed
-    // (handled by parent updateBackendAppointment success-path).
-    // Optimistic shape: re-fetch will reconcile if parent threw.
+  const handleCancelOptimistic = useCallback(async (appt) => {
+    const prevStatus = appt.status;
     setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
-    try { await Promise.resolve(onCancelAppt?.(appt)); } catch {}
-    triggerReload();
-  }, [onCancelAppt, triggerReload]);
+    try {
+      await Promise.resolve(onCancelAppt?.(appt));
+    } catch {
+      setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: prevStatus } : a));
+    }
+  }, [onCancelAppt]);
 
-  const handleEditWithReload = useCallback(async (appt) => {
-    // No optimistic update; just delegate. Parent should switch to calendar mode
-    // and open the form. After form save, parent should triggerReload via prop
-    // — but we don't have that wired yet, so reload on edit-button click as a
-    // best-effort refresh once user returns.
-    try { await Promise.resolve(onEditAppt?.(appt)); } catch {}
-  }, [onEditAppt]);
+  // V64-fix3 (Issue 1): open full modal in-place. Replaces calendar-mode
+  // redirect from V64-fix2. AppointmentFormModal handles its own save flow
+  // via createBackendAppointment / updateBackendAppointment.
+  const handleEditOpenModal = useCallback((appt) => {
+    setEditingAppt(appt);
+  }, []);
+
+  const handleModalSaved = useCallback((savedOrId) => {
+    // Modal calls onSaved with the saved appointment doc OR the id; either
+    // way, we close + optimistic-merge if data provided.
+    setEditingAppt(null);
+    if (savedOrId && typeof savedOrId === 'object' && savedOrId.id) {
+      setAppts(prev => prev.map(a => a.id === savedOrId.id ? { ...a, ...savedOrId } : a));
+    }
+  }, []);
+
+  const handleModalDelete = useCallback(async (appt) => {
+    // Optimistic remove from local state; Firestore delete handled by modal.
+    setAppts(prev => prev.filter(a => a.id !== appt.id));
+    setEditingAppt(null);
+  }, []);
 
   return (
     <div data-testid="appt-hub-view">
@@ -290,14 +315,28 @@ export default function AppointmentHubView({
           appt={a}
           summary={summaryMap.get(String(a.customerId))}
           now={new Date()}
-          onConfirm={handleConfirmWithReload}
-          onEdit={handleEditWithReload}
-          onCancel={handleCancelWithReload}
+          onConfirm={handleConfirmOptimistic}
+          onEdit={handleEditOpenModal}
+          onCancel={handleCancelOptimistic}
           onCreateTreatment={onCreateTreatmentForAppt}
           onEditTreatment={onEditTreatmentForAppt}
           onOpenLine={onOpenLineForAppt}
         />
       ))}
+      {/* V64-fix3 (Issue 1): full edit modal — same component used by
+          backend tab=appointment-all + CustomerDetailView. */}
+      {editingAppt && (
+        <AppointmentFormModal
+          mode="edit"
+          appt={editingAppt}
+          skipHolidayCheck={true}
+          skipCollisionCheck={true}
+          existingAppointments={appts}
+          onSaved={handleModalSaved}
+          onClose={() => setEditingAppt(null)}
+          onDelete={handleModalDelete}
+        />
+      )}
     </div>
   );
 }
