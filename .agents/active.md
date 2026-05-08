@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 EOD #17 — V63 batch backfill applied to all 7 in-the-wild schedule links + visual verify GREEN"
-status: "master=<HEAD> (+34 ahead of prod) · 8059 + 1 skipped GREEN · build clean · NOT yet deployed"
+updated_at: "2026-05-09 EOD #19 — V64 appointment coming-hub view shipped (4 tabs + cards + actions + PDF + audit)"
+status: "master=<HEAD> (+50 ahead of prod) · 8150 passed + 1 skipped + 1 pre-existing flake · build clean · NOT yet deployed"
 branch: "master"
-last_commit: "chore(V63): batch backfill 7 schedule links + diag script + verify"
-tests: 8059
+last_commit: "fix(V64): build-warning + BS-F.3 fnSlice prefix-shadow regression"
+tests: 8150
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "ef580a6"
 firestore_rules_version: 29
@@ -13,12 +13,14 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `<HEAD>` · prod = `ef580a6` (34 commits ahead — V52..V62 + V63 + V62-bis + V63 batch backfill)
-- Invariant set: AV1-AV30 + **AV32** + **AV33** + **AV34** + **AV35** + **BS-1..BS-15** + CB-1..5 (AV31 still pending in SKILL.md from V58)
+- master = `<HEAD>` · prod = `ef580a6` (50 commits ahead — V52..V63 + V63 batch backfill + V64 spec/plan/16-tasks/fixes)
+- Invariant set: AV1-AV30 + **AV32-AV36** + **BS-1..BS-16** + CB-1..5 (AV31 pending in SKILL.md from V58)
 - Iron-clad rules locked: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule N targeted-only + Rule M two-phase data ops + Rule K work-first/test-last
+- V64 brainstorming-driven shipment: 5 Qs (A/B+D/C/A/C) locked → spec + plan → 16 tasks via subagent-driven-development → 92 NEW tests cumulative
 
-## What this session shipped (11 V-entries + batch data ops — overnight → late-night)
-- **V63 batch backfill (Rule M data op)** (`<HEAD>`) — Applied V62 canonical derive-and-merge logic to ALL 7 in-the-wild `clinic_schedules` docs on prod. Pre-state: all 7 had stale March/April manual paint (28 entries each, 4 customDoctorHours keys) that didn't match their `months: ['2026-05']` window — useless for customer rendering. V62/V60 prior backfills had been overwritten (likely by subsequent admin link-regen that re-stamped local schedDoctorDays state). NEW `scripts/v63-batch-fix-all-schedule-links.mjs` (Rule M two-phase + admin-SDK + canonical paths + audit doc + idempotent + forensic stamps `_v62BackfilledAt`/`_v62LegacyDoctorDays`/`_v62LegacyCustomDoctorHours`). DRY-RUN identified 7 writes; --APPLY committed atomically + audit `be_admin_audit/v63-batch-fix-schedule-links-1778256189781-958becd1`. Re-run dry-run = 7/7 OK idempotent. Result: 6 noDoctor/all+specific links → 18 May days + 22 hours keys (BR-1777873556815); 1 link → 0 days (BR-1777885958735, no May doctor schedule — expected). Visual verify on AdminDashboard /admin tab=นัดหมาย via preview_eval read-only: 🔥 emoji count 37 (≈18 doctorDays × 2 calendars + legend); subtitle "ปิดคิว · ปิดช่วงเวลา" (V63 simplified, no "หมอเข้า ·"); button "แก้ไขปิดคิว" (V63 simplified); legend hint "หมอเข้า (จากตารางหมอ)" present; legacy "แก้ไขตารางหมอเข้า/ปิดคิว" absent. Customer-side SCH-cc3964c023 also confirmed 🔥 on doctor days. Diag script `scripts/diag-v63-inspect-schedlinks.mjs` (read-only) committed for future audit reproducibility.
+## What this session shipped
+- **V64 — Appointment Coming-Hub View** (16 tasks, 18 commits) — ProClinic-faithful 4-tab list view (วันนี้ · พรุ่งนี้ · ล่วงหน้า 30 วัน · ย้อนหลัง 30 วัน) at top of `/admin` `adminMode==='appointment'` with `[📋 รายการ] [📅 ปฏิทิน]` toggle preserving existing calendar. Q1=A list-first / Q2=B+D doctors+assistants header / Q3=C single-load Map<customerId, summary> / Q4=A smart per-tab defaults + missed-chip / Q5=C jsPDF export. NEW backend helpers (`getAppointmentsByDateRange` V54 BS-13 mirror; `getWalletsForCustomerIds` bulk-via-customerId-field with composite-doc-id schema fix); NEW lib helpers (`appointmentHubFilters` Bangkok-TZ-stable; `appointmentHubAggregator` multi-wallet sum; `appointmentHubPrintTemplate` V32-locked); 4 NEW presentational components + orchestrator View; AdminDashboard surgical wrap (existing 600-LOC calendar IIFE UNCHANGED; new state `apptViewMode`); BS-16 + AV36 audit invariants; 92 NEW tests (B1+W1 unit, F1-F6 filter, A aggregator, P print, R RTL, S Rule I flow simulate). Spec at `docs/superpowers/specs/2026-05-08-appointment-coming-hub-design.md`; plan at `docs/superpowers/plans/2026-05-08-appointment-coming-hub.md`; checkpoint at `.agents/sessions/2026-05-09-v64-appointment-coming-hub.md`.
+- **V63 batch backfill (Rule M data op)** (`9fbf85b`) — Applied V62 canonical derive-and-merge logic to ALL 7 in-the-wild `clinic_schedules` docs on prod. Pre-state: all 7 had stale March/April manual paint (28 entries each, 4 customDoctorHours keys) that didn't match their `months: ['2026-05']` window — useless for customer rendering. V62/V60 prior backfills had been overwritten (likely by subsequent admin link-regen that re-stamped local schedDoctorDays state). NEW `scripts/v63-batch-fix-all-schedule-links.mjs` (Rule M two-phase + admin-SDK + canonical paths + audit doc + idempotent + forensic stamps `_v62BackfilledAt`/`_v62LegacyDoctorDays`/`_v62LegacyCustomDoctorHours`). DRY-RUN identified 7 writes; --APPLY committed atomically + audit `be_admin_audit/v63-batch-fix-schedule-links-1778256189781-958becd1`. Re-run dry-run = 7/7 OK idempotent. Result: 6 noDoctor/all+specific links → 18 May days + 22 hours keys (BR-1777873556815); 1 link → 0 days (BR-1777885958735, no May doctor schedule — expected). Visual verify on AdminDashboard /admin tab=นัดหมาย via preview_eval read-only: 🔥 emoji count 37 (≈18 doctorDays × 2 calendars + legend); subtitle "ปิดคิว · ปิดช่วงเวลา" (V63 simplified, no "หมอเข้า ·"); button "แก้ไขปิดคิว" (V63 simplified); legend hint "หมอเข้า (จากตารางหมอ)" present; legacy "แก้ไขตารางหมอเข้า/ปิดคิว" absent. Customer-side SCH-cc3964c023 also confirmed 🔥 on doctor days. Diag script `scripts/diag-v63-inspect-schedlinks.mjs` (read-only) committed for future audit reproducibility.
 - **V63 + V62-bis / AV35** (`8af7ab4`) — AdminDashboard calendars (image-1 Frontend appt + image-2 ตั้งค่าตารางคลินิก) render 🔥 from CANONICAL `be_staff_schedules` (NOT `schedDoctorDays` admin paint). NEW state `allBranchScheduleEntries` + useMemo `canonicalDoctorDays` derived via `derivedDoctorDaysAcrossWindow`. `toggleDay` cycle simplified `normal ↔ closed` only (drops "doctor" toggle). UI legend updated. **V62-bis**: `handleGenScheduleLink` fetch ungated — pre-V62-bis `if (schedSelectedDoctor)` gated input → empty scheduleEntries → V62 derivation on []. Post-V62-bis ternary always-fetch. SCH-cc3964c023 backfilled. AV35 invariant. +20 V63 + 3 V62-bis tests + 1 V60.X2.3 fixup. 7992 → 8059 + 1 skipped GREEN. 9 V-entries deep in schedule-link adoption-gap series (V52-V63).
 - **V62 / AV34** (`c4df4bb`) — Schedule-link `doctorDays` + `customDoctorHours` derived for ALL modes (including ไม่พบแพทย์ + showDoctorStatus). User reported (with 2 screenshots) that SCH-9c201860e1 had no 🔥 emoji + no "หมอว่าง" overlay despite showDoctorStatus=true. Diag: doctorDaysCount=0 + doctorStartTime=clinic-hours fallback. Pre-V62 only ran V60 derivation when `schedSelectedDoctor` set; ไม่พบแพทย์ + แพทย์ทุกคน bypassed → overlay never fired. Fix: NEW helpers `derivedDoctorDaysAcrossWindow` + `derivedDoctorWorkingHoursPerDate` (multi-doctor extension of V60); `handleGenScheduleLink` runs derivations unconditionally; `customDoctorHours` saves merged map (V62 derived + admin overrides); ClinicSchedule overlay condition relaxed (`slot.doctorSlot && (`) so badge renders when slot busy too; outer opacity moved to inner wrapper only. Rule M backfill: SCH-9c201860e1 → 18 doctorDays + 22 customDoctorHours keys. AV34 invariant. +44 V62 tests + 2 V60 V21-class fixups. 7992 → 8036. Live preview verified: 14 fire-days, "หมอว่าง" badges 13:30-19:30 (matches actual doctor hours, not clinic hours), "ไม่ว่าง" + "หมอไม่ว่าง" together on May 9 15:30-18:30 (image-2 spec).
 - **V61 / AV33** (`1c143f1`) — Schedule-link modal room dropdown driven by `be_staff_schedules` canonical source (replaces pre-V61 V57 `r.role` static kind filter). User reported (with screenshot): พบแพทย์ mode should show only rooms the selected doctor enters in window; ไม่พบแพทย์ mode should show only rooms NO doctor enters. Brainstormed Q1-Q4 with user (B refined / A / B / A); spec at `docs/superpowers/specs/2026-05-08-v61-schedule-link-room-dropdown-from-schedules-design.md`. NEW pure helpers `deriveDoctorRoomIdsForWindow` + `deriveNonDoctorRoomIdsForWindow` in `staffScheduleValidation.js`. Modal: useEffect extension for branch-wide fetch + `v61EligibleRoomIds` useMemo + dropdown JSX + defensive reset + pre-flight gate (3 Thai-copy variants) + empty-state banner (`data-testid="v61-room-empty-state"`). Save: `selectedRoomIds: string[]` snapshot field on saved doc (V61 NEW; legacy `selectedRoomId` preserved for backward compat). `shouldBlockScheduleSlot` extended to accept array — prefers when present + non-empty. Resync: `updateActiveSchedules` detects "ทุกห้อง" V61 saved docs and recomputes union from current `be_staff_schedules`; specific-pick docs preserved. AV33 invariant locks the contract. +83 V61 tests + 2 V21-class fixups (V55.L7.2 + V59.P1.5). 7909 → 7992. Live preview_eval: V60-fixed link still renders 14 fire days (backward-compat preserved).
@@ -34,12 +36,21 @@ storage_rules_version: 2
 - Detail: `.agents/sessions/2026-05-08-v52-v53-v54-branch-scope-trilogy.md` + `.agents/sessions/2026-05-08-v57-v58-v59-bis.md`
 
 ## Next action
-Idle — awaiting user authorization for combined deploy (V52..V62 + V63 + V62-bis + V63 batch backfill = 34 commits ahead of prod). All Optional items finished.
+Idle — awaiting user authorization for combined deploy (V52..V64 = 50 commits ahead of prod).
 
 ## Outstanding user-triggered actions
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 34 commits ahead of prod.
-- ~~(Optional) admin re-gen any broken in-the-wild noDoctor link OR backfill~~ → **DONE** via batch script. All 7 in-the-wild prod schedule-links canonical (idempotent re-run = 0 writes).
-- ~~(Optional) visual verify AdminDashboard /admin~~ → **DONE** via preview_eval. Customer + admin sides both render 🔥 from canonical; toggleDay simplified.
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 50 commits ahead of prod.
+- (Optional) address pre-existing `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs (TFP line 666 comment from V50 + Windows shell-spawn timing). Either tighten the test's shell-spawn pattern OR remove `()` from TFP line 666 comment.
+
+## V64 visual verification
+
+User can verify at running dev server `http://localhost:5173/admin`:
+- Click `นัดหมาย` tab → see new `[📋 รายการ] [📅 ปฏิทิน]` toggle pill at top
+- List view default: 4 tabs (วันนี้/พรุ่งนี้/ล่วงหน้า 30 วัน/ย้อนหลัง 30 วัน) with bubble counts
+- Today/tomorrow tabs: doctors+assistants header cards (canonical `be_staff_schedules`)
+- Per-row card: HN + name + gender + phone + chips (GOLD days · Wallet · มัดจำ · ค่างชำระ · ยอดสั่งซื้อ) + appt detail + status-conditional buttons
+- Click `[📅 ปฏิทิน]` → existing calendar block renders unchanged
+- BranchSelector switch → list reloads with new branch + filters reset
 
 ## Institutional memory anchors
 - V63 + V62-bis / AV35 — AdminDashboard calendars MUST drive 🔥 from canonical `be_staff_schedules` via `canonicalDoctorDays` useMemo; `toggleDay` cycle = closed↔normal only; `handleGenScheduleLink` fetch ungated (always fetches branch-wide when no specific doctor).

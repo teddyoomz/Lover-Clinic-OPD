@@ -7,11 +7,72 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #17 — V63 batch backfill applied to ALL 7 in-the-wild schedule-links + visual verify GREEN · 8059 + 1 skipped · NOT yet deployed
+- **Date last updated**: 2026-05-09 EOD #19 — V64 Appointment Coming-Hub View shipped (4 tabs + cards + actions + PDF + audit invariants) · 8150 + 1 skipped · 1 pre-existing flake · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: chore(V63): batch backfill 7 schedule links + diag + verify (data op only — no source change)
-- **Test count**: 8059 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (34 commits ahead — V52 through V63 + V62-bis + V63 batch tooling NOT yet deployed). Combined deploy NOT triggered.
+- **Last commit**: fix(V64): build-warning + BS-F.3 fnSlice prefix-shadow regression
+- **Test count**: 8150 passed + 1 skipped (8152) — **+92 V64 tests vs prior 8059**. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone; flakes in full-suite parallel; not V64-related).
+- **Deploy state**: **PRODUCTION = `ef580a6`** (50 commits ahead — V52..V64 NOT yet deployed). Combined deploy NOT triggered.
+
+### Session 2026-05-09 EOD #19 — V64 Appointment Coming-Hub View shipped
+
+User directive (verbatim, with 3 ProClinic screenshots of `/admin/appointment/coming?tab={today,tomorrow,future,past}`):
+> "ต่อไป เนรมิต tap นัดหมายใน frontend แต่ละสาขา ของเรา เพิ่มข้อมูลเหล่านี้ ข้างบนสุดของ tap นัดหมายของเรา เหมือน Proclinic ที่ส่งให้ดูในรูป เพื่อเป็นที่รวมนัดหมาย โดยมีทั้ง Tap วันนี้, พรุ่งนี้, ล่วงหน้า 30 วัน, ย้อนหลัง 30 วัน และ bubble แสดงว่าแต่ละวันมีกี่นัด และองค์ประกอบอื่นๆเหมือนเค้าเป๊ะๆ และใช้งานได้ทุกปุ่มเหมือนเค้าเป๊ะๆทุกสาขา ... แล้วเนรมิตมันขึ้นมาอย่างสุดความสามารถ พร้อมเทสการใช้งานจริงทุกรูปแบบ"
+
+**Brainstorming HARD-GATE honored** (Rule J): 5 design Qs locked with user before any code. Q1=A (list-first default; `[📋 รายการ][📅 ปฏิทิน]` toggle preserves calendar) · Q2=B+D (doctors row primary + assistants row below; today/tomorrow tabs only) · Q3=C (single-load aggregation; ~6 batched queries; O(1) lookup; ZERO N+1) · Q4=A (smart per-tab defaults + auto-missed-chip on past tab + dropdown override) · Q5=C (jsPDF export via `documentPrintEngine.js`-style direct html2canvas+jsPDF; V32 lock).
+
+**Triangle Rule scan**:
+- **Leg A** (ProClinic): user-supplied screenshots showed 4-tab list layout + doctor-cards header + per-row status-conditional buttons + search + 3 dropdowns + 2 right-side buttons (พิมพ์ตารางนัดหมาย + เพิ่มคิว Walk-in)
+- **Leg B** (memory): V52..V63 schedule-link adoption-gap series (BSA + canonical-source patterns); V54 BS-13 safe-by-default; V63 derivedDoctorDaysAcrossWindow
+- **Leg C** (our code): `AdminDashboard.jsx:6413` `adminMode==='appointment'` block currently renders only the calendar grid; `apptData.appointments`, `practitioners`, `branchExamRooms`, `useEffectiveClinicSettings`, V63 `canonicalDoctorDays`, `selectedBranchId` all available
+
+**Architecture** (16 tasks via subagent-driven-development on master per repo convention):
+
+7 NEW source files (3 lib helpers + 4 React components + 1 orchestrator):
+- `src/lib/appointmentHubFilters.js` — pure per-tab predicates + missed-inference (Bangkok-TZ-stable midday-UTC parse, V53 BS-12 mirror)
+- `src/lib/appointmentHubAggregator.js` — single-load Map<customerId, summary> with multi-wallet sum
+- `src/lib/appointmentHubPrintTemplate.js` — pure HTML/data builder; V32 lock
+- `src/components/admin/AppointmentHubView.jsx` — orchestrator (state + 6-loader Promise.all + handlePrint)
+- `src/components/admin/AppointmentHubDoctorCards.jsx` — Q2 header today/tomorrow only
+- `src/components/admin/AppointmentHubTabBar.jsx` — 4 pills with bubble counts
+- `src/components/admin/AppointmentHubFilterBar.jsx` — search + 3 filter dropdowns + 2 right-side buttons
+- `src/components/admin/AppointmentHubRowCard.jsx` — per-row card with status-conditional buttons
+
+5 NEW test files (92 tests cumulative):
+- `tests/v64-get-appointments-by-date-range.test.js` (6)
+- `tests/v64-get-wallets-for-customer-ids.test.js` (7 — incl. W1.2b multi-wallet repro after schema fix)
+- `tests/v64-appointment-hub-filters.test.js` (25)
+- `tests/v64-appointment-hub-aggregator.test.js` (11)
+- `tests/v64-appointment-hub-pdf-template.test.js` (4)
+- `tests/v64-appointment-hub-rtl.test.jsx` (24)
+- `tests/v64-appointment-hub-flow-simulate.test.jsx` (7 Rule I)
+- 8 sub-tests appended to `tests/audit-branch-scope.test.js` (BS-16 ×6 + AV36 ×2)
+
+2 NEW backend lib helpers (in `backendClient.js` + re-exported via `scopedDataLayer.js`):
+- `getAppointmentsByDateRange({from, to, branchId, allBranches})` — V54 BS-13 safe-by-default mirror
+- `getWalletsForCustomerIds(customerIds)` — bulk via `where('customerId', 'in', chunk)` chunks of 30 (composite doc-id schema fix; aggregator sums per customer)
+
+1 MODIFIED:
+- `src/pages/AdminDashboard.jsx` — surgical wrap of existing ~600-LOC calendar IIFE with view-toggle pill + conditional render. Calendar block UNCHANGED.
+
+NEW audit invariants:
+- **BS-16** (audit-branch-scope) — AppointmentHub* components branch-scope discipline (15 → 16 invariants)
+- **AV36** (audit-anti-vibe-code) — V64 PDF print V32 lock universal (35 → 36 invariants)
+
+**V64 schema-fix lesson lock** (Task 2 — flagged by implementer subagent's pre-flight verification):
+`be_customer_wallets` uses composite doc IDs `${customerId}__${walletTypeId}` with `customerId` as a FIELD. Initial spec wrongly used `where(documentId(), 'in', [customerIds])` which would have returned zero matches against real prod data. Implementer subagent caught this mismatch via grep of `getCustomerWallets:4051` canonical pattern; corrected to `where('customerId', 'in', chunk)`; aggregator updated to SUM balances per customerId across N wallet types. Saved a downstream V12 multi-reader-sweep round when the View loaded zero wallets in production.
+
+**Verification**:
+- 92/92 V64 tests GREEN (targeted)
+- 8150/8152 full-suite GREEN (was 8059; +92 net)
+- 1 pre-existing flake `bsa-task7-h-quater-fix.test.js T7.regression-guard` — passes standalone, flakes in full-suite parallel runs because of Windows shell-spawn timing in `execSync('git grep ... 2>/dev/null || true')`. TFP line 666 comment from V50 has matched the regex for months; the test design is brittle to bash-vs-cmd shell. Not V64-related; deferred.
+- `npm run build` CLEAN (post-fix: removed `IMPORT_IS_UNDEFINED` warning by replacing `getAppointmentTypeOptions` import with direct `APPOINTMENT_TYPES` const consumption)
+
+**Commits** (18 V64-related, atop V63 batch backfill):
+spec `9ba30a9` · plan `3615f04` · 14 task commits + 2 fix commits — see `.agents/sessions/2026-05-09-v64-appointment-coming-hub.md` for full SHA list.
+
+Outstanding: combined `vercel --prod` for V52..V64 still pending user-explicit "deploy" THIS turn. 50 commits ahead of prod.
+
+
 
 ### Session 2026-05-08 EOD #17 — V63 batch backfill on prod (Rule M data op)
 
