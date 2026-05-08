@@ -870,22 +870,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — idle; V50 ProClinic strip COMPLETE end-to-end + DEPLOYED.
+Resume LoverClinic — V52+V53+V54 branch-scope trilogy shipped + pushed; awaiting deploy authorization.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=6a1d96d, prod=ef580a6 — runtime)
-3. .agents/active.md (7333/7333 GREEN · idle)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V50 V-summary)
-5. (if needed) .agents/sessions/2026-05-08-v50-strip-complete.md
+2. SESSION_HANDOFF.md (master=eee8003, prod=ef580a6 — 3 ahead)
+3. .agents/active.md (7662 + 1 skipped GREEN · idle)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V54 V-summary)
+5. .agents/sessions/2026-05-08-v52-v53-v54-branch-scope-trilogy.md (this session checkpoint)
 
-Status: master=`6a1d96d`, prod runtime=`ef580a6` LIVE at lover-clinic-app.vercel.app. firestore.rules version 29 released. AV28 sanctioned-exception list now EMPTY (no master_data / pc_* / broker_jobs / proclinic_session / brokerClient runtime references anywhere). Rule H-bis EXECUTED + COMPLETE.
+Status: master=`eee8003`, prod=`ef580a6` LIVE (V52+V53+V54 NOT deployed yet). 7662 + 1 skipped GREEN. Build clean. AV1-AV29 + BS-1..BS-13 + CB-1..5. NEW BS-11 (report-tab branch-refresh) + BS-12 (time-axis branch-aware) + BS-13 (raw listener safe-by-default).
 
-Next: idle — awaiting user directive.
+Next: idle — awaiting user wake-up + (optional) combined deploy authorization for V52+V53+V54.
 
-Outstanding: none.
+Outstanding (user-triggered):
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 3 commits ahead of prod.
+- (Optional) visual verify: branch-switch on report tabs / time-axis grid / AdminDashboard queue calendar.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..10; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..13; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage). systematic-debugging Phase 1-2 catches what static audit misses (V54 lesson — anchor invariants on STRUCTURAL refs not comment text).
 
 /session-start
 ```
