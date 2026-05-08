@@ -1084,3 +1084,161 @@ BS-11 — Report-tab branch-refresh discipline (V52, 2026-05-08)
 
 **No deploy this turn** — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately. V52 is a UI refresh-discipline change with zero rules / data ops. Master = 1 commit ahead of prod (`ef580a6`); user can deploy on wake-up.
 
+---
+
+### V53 — 2026-05-08 — Per-branch open hours → time-axis filter (BS-12) — autonomous continuation
+
+User report (verbatim):
+> "ทำให้เวลาเปิด-เปิดของแต่ละสาขา มีผลกับตารางแพทย์ ตารางนัดหมาย และ modal ที่จะไปดึงเวลานัดจากสาขานั้นทั้งหมด.. ก็คือ แสดงในเวลาใน ตารางแพทย์ ตารางผู้ช่วย ตารางพนักงงาน รวมถึง ในหน้า ตารางนัดหมาย ทั้งหมดทุก tab และทุก modal ที่มาดึงเวลานัดหมายจากสาขานั้นๆ แค่เวลาที่เปิดเปิดคลินิก ไม่ต้องแสดงตั้งแต่ 8 โมง ถึง 4 ทุ่ม ถ้าคลินิกมันเปิดแค่ 11 โมง ถึง 3 ทุ่ม"
+
+= Make per-branch open-close hours drive the time-axis displayed in doctor schedule, assistant schedule, staff schedule, and appointment calendar (all tabs + every modal that pulls appointment times). Only show open hours.
+
+**Class-of-bug**: parallel to V52 BS-11 — V51 shipped per-branch openHours schema (`clinic_settings/{branchId}.settings.openHours.{monFri,satSun}.{open,close}`) but the canonical TIME_SLOTS axis (08:15–22:00 hardcoded, 56 slots × 15 min) was rendered raw in 4 surfaces, ignoring per-branch settings. Same V12 multi-reader-sweep family at the time-axis layer (one shared constant — `TIME_SLOTS` — consumed by 4 components, none branch-aware before V53).
+
+**Pre-V53 audit (4 victim surfaces)**:
+
+| Surface | File | Render call | Status |
+|---|---|---|---|
+| Appointment grid (canonical) | `AppointmentCalendarView.jsx` lines 785–945 | `TIME_SLOTS.map(...)` | BROKEN |
+| Appt picker — start | `AppointmentFormModal.jsx` lines 951–954 | `TIME_SLOTS.map(...)` | BROKEN |
+| Appt picker — end | `AppointmentFormModal.jsx` lines 958–961 | `TIME_SLOTS.map(...)` | BROKEN |
+| Schedule entry — start | `scheduling/ScheduleEntryFormModal.jsx` lines 168–173 | `TIME_SLOTS.map(...)` | BROKEN |
+| Schedule entry — end | `scheduling/ScheduleEntryFormModal.jsx` lines 179–184 | `TIME_SLOTS.map(...)` | BROKEN |
+| Deposit booking — start | `DepositPanel.jsx` lines 1099–1102 | `TIME_SLOTS.map(...)` | BROKEN (4th surface — discovered via audit-grep test G2.1 after initial scoping found only 3) |
+| Deposit booking — end | `DepositPanel.jsx` lines 1105–1108 | `TIME_SLOTS.map(...)` | BROKEN |
+
+Doctor/Employee schedule tabs use chip-per-date rendering (no continuous time-axis) — modals that create/edit entries are the time-filter surfaces for those.
+
+**V53 architectural fix**:
+
+1. **Helpers** in `src/lib/scheduleFilterUtils.js` (3 NEW pure JS functions, ~150 LOC additive):
+
+   ```js
+   getOpenHoursForDate(dateISO, mergedSettings)
+     → { open: 'HH:MM', close: 'HH:MM' } | null
+
+   getVisibleTimeSlotsForDate({ dateISO, mergedSettings, allTimeSlots, includeAppointments })
+     → { slots, openRange, isClosed, hasOutsideAppts, expandedFrom }
+
+   isTimeOutsideOpenHours(time, dateISO, mergedSettings)
+     → boolean
+   ```
+
+   Pure JS, no Firestore, no React. Branch-blind (callers pass `mergedSettings`).
+
+2. **Bangkok TZ midday-UTC parse**: initial implementation used `T00:00:00+07:00` but `getUTCDay()` then returns the previous-day-UTC (because midnight Bangkok = 17:00 UTC of prior day). Fix: parse YYYY-MM-DD as `Date.UTC(y, mo, d, 12, 0, 0)` (midday UTC) so the day stays in the current Bangkok-local day regardless of test machine TZ. Caught by L1.6/L1.7/L1.8 in helper unit tests during initial test run; fixed before any victim wiring.
+
+3. **Q1=A locked** (user choice): legacy appts outside new open hours auto-expand visible range + `hasOutsideAppts: true` flag → AppointmentCalendarView renders orange "นอกเวลา" chip on each affected appt card. Admin can see + click to reschedule. Data NEVER hidden.
+
+4. **4 victim files** wired to canonical V53 pattern:
+
+   ```jsx
+   // 1. Import
+   import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
+   import { getVisibleTimeSlotsForDate, isTimeOutsideOpenHours } from '../../lib/scheduleFilterUtils.js';
+
+   // 2. Hook (top of component body)
+   const cs = useEffectiveClinicSettings(undefined);
+
+   // 3. Memoize visible slots (deps: openHours fields + selected date)
+   const visible = useMemo(
+     () => getVisibleTimeSlotsForDate({
+       dateISO: selectedDate,
+       mergedSettings: cs,
+       allTimeSlots: TIME_SLOTS,
+       includeAppointments: appts, // grid only — modals don't pass this
+     }),
+     [selectedDate, cs?.openHoursMonFri, cs?.openHoursSatSun, appts]
+   );
+
+   // 4. Replace TIME_SLOTS.map with visible.slots.map
+   {visible.slots.map(t => /* ... */)}
+
+   // 5. Closed-day banner
+   {visible.isClosed && <ClosureBanner reason="closed-hours" />}
+
+   // 6. Per-card chip (AppointmentCalendarView only)
+   {isTimeOutsideOpenHours(appt.startTime, selectedDate, cs) && <Chip>นอกเวลา</Chip>}
+   ```
+
+   Each victim preserves legacy current value as a hidden `<option>` so legacy edits don't lose data when current value is outside new open range.
+
+5. **DOW_ANCHOR_DATE pattern** (ScheduleEntryFormModal): `kind === 'recurring'` entries don't have a concrete date, only `dayOfWeek` (0-6). To resolve the monFri vs satSun bucket, synthesize a Bangkok-anchor date per dow:
+
+   ```js
+   const DOW_ANCHOR_DATE = {
+     0: '2026-01-04', // Sun
+     1: '2026-01-05', // Mon
+     ...
+     6: '2026-01-10', // Sat
+   };
+   ```
+
+   Pure JS, deterministic, doesn't pollute the helper API.
+
+**NEW audit invariant BS-12** (parallel to BS-9, BS-11):
+
+```
+BS-12 — Time-axis branch-aware discipline (V53, 2026-05-08)
+        Every component importing TIME_SLOTS from staffScheduleValidation.js
+        AND mapping it MUST also import getVisibleTimeSlotsForDate from
+        scheduleFilterUtils.js + read cs.openHoursMonFri/SatSun (deps array
+        hint). Sanctioned exception: TimeSelect24.jsx (uses local
+        HOURS/MINUTES constants, not TIME_SLOTS — naturally exempt from grep).
+```
+
+7 sub-tests (BS-12.1..BS-12.7) added to `tests/audit-branch-scope.test.js`. SKILL.md: 11 → 12 invariants. Closed sanctioned-exception list (currently empty — TimeSelect24 self-exempts via grep semantics).
+
+**Test bank shipped (Rule N + Rule I)**:
+
+| Test file | Tests | Purpose |
+|---|---|---|
+| `tests/v53-open-hours-helpers.test.js` | 33 (L1-L3) | Bangkok TZ + closed/reversed/missing detection + auto-expand + adversarial inputs (null/numeric/Thai/empty) |
+| `tests/v53-open-hours-source-grep.test.js` | 41 (G1-G6) | Per-victim regression locks + V12 anti-regression sweep across all backend components + helper export checks |
+| `tests/v53-open-hours-flow-simulate.test.js` | 7 (F1-F7) | Rule I full-flow with actual BranchProvider + canonical pattern → branch switch + date change + closed-branch + auto-expand + lifecycle A→B→A + isTimeOutsideOpenHours flag tracking |
+| `tests/audit-branch-scope.test.js` | +7 BS-12.x | Audit-skill source-grep regression bank |
+
+**Cumulative regression**: 7543 → 7631 + 1 skipped (+88 net) all GREEN. Build clean.
+
+**Verification (Rule N → full)**:
+- Targeted (during iteration): 113 V53-specific assertions across 4 test files all green
+- Full vitest: 7631/7631 + 1 skipped GREEN
+- Build: clean
+
+**Lessons**:
+
+1. **Class-of-bug expansion at SHARED-CONSTANT level** — V52 caught reportsLoaders consumers; V53 catches the canonical `TIME_SLOTS` constant at `staffScheduleValidation.js`. Same root cause family (V12 multi-reader-sweep) at a different boundary. BS-12 closes the time-axis surface permanently. The pattern: when a single shared constant is imported by N consumers, every consumer's render path is a potential drift site — audit-grep at the import boundary catches them all.
+
+2. **Bangkok TZ midday-UTC parse is the canonical pattern** — `T00:00:00+07:00` shifts to UTC previous day (`getUTCDay()` returns wrong day-of-week, e.g. 2026-01-10 (Sat in Bangkok) → 2026-01-09 (Fri in UTC) → bucket = monFri ❌). Use `Date.UTC(y, mo, d, 12, 0, 0)` (midday UTC) so the day stays in the current Bangkok-local day regardless of test/server TZ. Codified in helper internal `_getDayBucket` + explicit unit tests L1.11/L1.12. Future date-of-week computations in this codebase should mirror this pattern.
+
+3. **Auto-expand for legacy data preserves visibility (Q1=A)** — When admin changes branch hours, existing appts at old times stay visible inside the auto-expanded grid + chip warning. Hide-mode (Q1=B) would lose data visibility silently and force admin to "remember" appts that may need reschedule. Auto-expand respects "data first" principle.
+
+4. **Audit grep at canonical-constant import-site = single anchor for class-of-bug** — BS-12's anchor is `TIME_SLOTS.map(...)`. Future code that re-imports and maps the constant without also importing the helper fails build. Mirror of V52 BS-11 (anchor was reportsLoaders import) and V36 BS-9 (anchor was scopedDataLayer import). Single anchor per class-of-bug = trivially auditable invariant.
+
+5. **DepositPanel discovered via audit, not initial scoping** — Explore agent's initial scan surfaced 3 victim files (Calendar + AppointmentForm + ScheduleEntry). Audit-grep regression test (G2.1: "TIME_SLOTS.map outside victim files") caught DepositPanel as a 4th. **Test as discovery tool** — same methodology as V48 source-grep classifier that found `central-stock-order line 6098` (a site missed in the initial V46 scan). The audit grep is both a regression guard AND a discovery tool for unknown-unknowns.
+
+6. **DOW_ANCHOR_DATE pattern for date-less buckets** — When bucket-resolution needs day-of-week but caller has `dayOfWeek` (0-6) instead of `dateISO`, synthesize a Bangkok-anchor date per dow. Doesn't pollute the helper API (still takes `dateISO`); caller does the lookup. Reusable for any future module that needs day-of-week → bucket without a calendar date.
+
+7. **Preserved-legacy-option pattern for safe value handling** — When time picker filters narrow the dropdown and the current value is outside the new range, render the current value as an additional `<option>` (gated by `!visibleSlots.includes(...)`). Admin sees the legacy value AND can pick a new in-range value. Avoids select-rendering inconsistency (browser might show empty when current value isn't in options) AND avoids data clobbering on save.
+
+**Rule/audit update**:
+- Rule J brainstorming HARD-GATE: spec written + user approved ("ok").
+- Rule P 7-step class-of-bug expansion: full Tier 1 (regression test + AVxx) + Tier 2 (classifier doc — V53 source-grep G2.1 acts as classifier) + Tier 3 (V-entry escalation — this entry); iron-clad rule NOT created (BS-12 is enrichment of existing BSA invariant family, not a new architectural rule).
+- Rule N: targeted-test-only during iteration; full vitest at batch end.
+- Rule I: full-flow simulate via BranchProvider chain (F1-F7).
+- BS-1..BS-11 unchanged; **BS-12 NEW**.
+
+**Files relevant to V53**:
+- `src/lib/scheduleFilterUtils.js` (3 helpers + Bangkok TZ midday-UTC fix)
+- 4 victim files (AppointmentCalendarView + AppointmentFormModal + ScheduleEntryFormModal + DepositPanel)
+- `tests/audit-branch-scope.test.js` (+BS-12.x block)
+- 3 NEW test files (`tests/v53-*`)
+- `.agents/skills/audit-branch-scope/SKILL.md` (BS-12 row + sanctioned annotation note)
+- `docs/superpowers/specs/2026-05-08-per-branch-open-hours-time-axis-design.md`
+- `docs/superpowers/plans/2026-05-08-per-branch-open-hours-time-axis.md`
+- `.claude/rules/00-session-start.md` § 2 — V53 compact entry
+- `.claude/rules/v-log-archive.md` — this entry
+- `SESSION_HANDOFF.md` + `.agents/active.md` — state update
+
+**No deploy this turn** — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately. V53 is a UI refresh-discipline change with zero rules / data ops. Master = 2 commits ahead of prod (`ef580a6`) — V52 + V53; user can deploy combined on wake-up.
+

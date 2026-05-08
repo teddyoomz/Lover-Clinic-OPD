@@ -7,7 +7,7 @@
 // Switches input fields based on `kind` prop. Reuses TIME_SLOTS dropdown
 // + DateField + DAY_OF_WEEK_LABEL from validation module.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import DateField from '../../DateField.jsx';
 import RequiredAsterisk from '../../ui/RequiredAsterisk.jsx';
@@ -18,6 +18,26 @@ import {
   validateStaffScheduleStrict,
   generateStaffScheduleId,
 } from '../../../lib/staffScheduleValidation.js';
+// V53 (2026-05-08, BS-12) — per-branch openHours filter the start/end pickers.
+// For recurring entries (no date, only dayOfWeek), synthesize a Bangkok-anchor
+// date so the helper can derive the monFri vs satSun bucket consistently.
+import {
+  getVisibleTimeSlotsForDate,
+  isTimeOutsideOpenHours,
+} from '../../../lib/scheduleFilterUtils.js';
+import { useEffectiveClinicSettings } from '../../../lib/BranchContext.jsx';
+
+// V53 — Jan 2026 anchor dates for each day-of-week (Bangkok). Used when
+// kind === 'recurring' (no concrete date, only dayOfWeek 0-6).
+const DOW_ANCHOR_DATE = {
+  0: '2026-01-04', // Sun
+  1: '2026-01-05', // Mon
+  2: '2026-01-06', // Tue
+  3: '2026-01-07', // Wed
+  4: '2026-01-08', // Thu
+  5: '2026-01-09', // Fri
+  6: '2026-01-10', // Sat
+};
 
 const KIND_TITLE = {
   recurring: 'งานประจำสัปดาห์',
@@ -62,6 +82,24 @@ export default function ScheduleEntryFormModal({
   const [form, setForm] = useState(() => initialEntry || defaultEntry(kind, staffId, staffName));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // V53 (BS-12) — branch-reactive merged settings + visible time-slots
+  // filtered by branch's openHours for the active date / dayOfWeek bucket.
+  // Modal is rendered without clinicSettings prop; useEffectiveClinicSettings
+  // pulls branch.settings via context regardless.
+  const cs = useEffectiveClinicSettings(undefined);
+  const dateForBucket = (kind === 'recurring')
+    ? (DOW_ANCHOR_DATE[Number(form.dayOfWeek)] || DOW_ANCHOR_DATE[1])
+    : (form.date || DOW_ANCHOR_DATE[1]);
+  const visibleTime = useMemo(
+    () => getVisibleTimeSlotsForDate({
+      dateISO: dateForBucket,
+      mergedSettings: cs,
+      allTimeSlots: TIME_SLOTS,
+    }),
+    [dateForBucket, cs?.openHoursMonFri, cs?.openHoursSatSun],
+  );
+  const visibleSlots = visibleTime.slots;
 
   useEffect(() => {
     if (open) {
@@ -169,8 +207,17 @@ export default function ScheduleEntryFormModal({
                   onChange={(e) => setForm({ ...form, startTime: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-primary)]"
                   data-testid="schedule-form-start-time">
-                  {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {/* V53 (BS-12) — filtered by branch openHours for selected date / dayOfWeek */}
+                  {visibleSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {form.startTime && !visibleSlots.includes(form.startTime) && (
+                    <option key={`legacy-${form.startTime}`} value={form.startTime}>{form.startTime}</option>
+                  )}
                 </select>
+                {isTimeOutsideOpenHours(form.startTime, dateForBucket, cs) && (
+                  <p className="text-[10px] text-amber-400 mt-1" data-testid="schedule-modal-startTime-warning">
+                    ⚠ นอกเวลาเปิดสาขา
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block">
@@ -180,7 +227,10 @@ export default function ScheduleEntryFormModal({
                   onChange={(e) => setForm({ ...form, endTime: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-primary)]"
                   data-testid="schedule-form-end-time">
-                  {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {visibleSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {form.endTime && !visibleSlots.includes(form.endTime) && (
+                    <option key={`legacy-${form.endTime}`} value={form.endTime}>{form.endTime}</option>
+                  )}
                 </select>
               </div>
             </div>

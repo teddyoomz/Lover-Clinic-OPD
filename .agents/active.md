@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 EOD #6 — V52 Report Tabs Branch-Scope (BS-11) shipped — autonomous overnight job complete"
-status: "master=<v52-commit> (+1 ahead of prod ef580a6) · 7543/7543 + 1 skipped GREEN · build clean (2.27s) · NOT yet deployed"
+updated_at: "2026-05-08 EOD #7 — V53 Per-branch open hours → time-axis filter (BS-12) shipped"
+status: "master=<v53-commit> (+1 ahead of prod ef580a6) · 7637/7637 + 1 skipped GREEN · build clean · NOT yet deployed"
 branch: "master"
-last_commit: "feat(V52/BS-11): every report tab respects top-right BranchSelector"
-tests: 7543
+last_commit: "feat(V53/BS-12): per-branch open hours drive time-axis everywhere"
+tests: 7637
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "ef580a6"
 firestore_rules_version: 29
@@ -13,53 +13,54 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = V52 commit · prod = `ef580a6` (1 commit behind master, awaiting user-authorized deploy)
-- Iron-clad **Rule J brainstorming HARD-GATE** — user pre-authorized autonomous execution
-- Iron-clad **Rule P 7-step class-of-bug expansion** — Tier 2 + Tier 3 artifacts shipped
-- Invariant set: AV1-AV29 + BS-1..BS-11 + CB-1..5
-- AV28 + BS-1..BS-10 still hold (no master_data runtime references)
-- BS-11 NEW: report-tab branch-refresh discipline locked
+- master = V53 commit · prod = `ef580a6` (V52 + V53 NOT yet deployed; user authorizes separately)
+- Iron-clad **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** — both honored
+- Invariant set: AV1-AV29 + **BS-1..BS-12** (NEW: BS-12 time-axis branch-aware) + CB-1..5
+- AV28 sanctioned-exception list still EMPTY (no `master_data` runtime references)
+- Rule H-bis EXECUTED + COMPLETE (V50 + V50-followup + V50-followup-2)
 
-## What EOD #6 shipped (autonomous overnight job)
-**User directive (verbatim, before sleep)**: "Tab ย่อยของหน้ารายงานทั้งหมดต้องแสดงรายละเอียดของสาขานั้นๆที่เลือกไว้ใน branch selector ยกเว้น tab=expense-report และ tab=clinic-report แสดงแบบ universal ได้ ... ไม่ต้องถามอะไรผมเลย เลือกที่นาย recommend ทั้งหมด และ ผมให้ผ่าทุกการรีวิว code ของนาย ให้ทำการแก้ไข เทส ทดสอบ ได้เลย โดยไม่ต้องถามอะไรผมทั้งนั้น"
+## What EOD #7 shipped (autonomous overnight job continuation)
+**User directive (verbatim)**: "ทำให้เวลาเปิด-ปิดของแต่ละสาขา มีผลกับตารางแพทย์ ตารางนัดหมาย และ modal ที่จะไปดึงเวลานัดจากสาขานั้นทั้งหมด ... แค่เวลาที่เปิดเปิดคลินิก ไม่ต้องแสดงตั้งแต่ 8 โมง ถึง 4 ทุ่ม ถ้าคลินิกมันเปิดแค่ 11 โมง ถึง 3 ทุ่ม"
 
-**Class-of-bug**: Same V12 multi-reader-sweep family as Phase 17.0 (BS-9), at a different layer. 13 of 14 substantive report tabs ignored the top-right BranchSelector — admin saw cross-branch aggregated data regardless of selected branch. Pre-V52 stale annotations claimed `{allBranches:true}` but that flag was never actually being passed (it lives on scopedDataLayer, not reportsLoaders).
+**Class-of-bug**: parallel to V52 BS-11 — V51 shipped per-branch openHours schema but the canonical TIME_SLOTS time-axis (08:15–22:00 hardcoded) was rendered raw in 4 surfaces, ignoring per-branch settings.
 
-**Architectural fix**:
-- `src/lib/reportsLoaders.js` — 7 loaders gain `{branchId, allBranches}` opts (additive, backward-compat preserved). Helper `shouldFilterByBranch()` normalizes opts.
-- 13 broken report tabs migrated to canonical V52 pattern: `useSelectedBranch` + `branchId: selectedBranchId` to all load* + `selectedBranchId` in deps array.
-- 9 stale `audit-branch-scope: report — uses {allBranches:true}` annotations stripped (documentation lies — flag wasn't actually passing).
-- 4 raw `backendClient.js` imports in report tabs migrated to `scopedDataLayer.js` (BS-1 compliance).
-- 2 EXEMPTED tabs (ExpenseReportTab + ClinicReportTab) get NEW `// audit-branch-scope: BS-11 in-page-selector` annotation (kept their existing in-page multi-branch UI untouched).
-- 1 navigation-only tab (ReportsHomeTab) gets NEW `// audit-branch-scope: BS-11 navigation-only` annotation.
-- RemainingCourseTab canonicalized destructure shape: `branch?.branchId` → `const { branchId: selectedBranchId } = useSelectedBranch()`.
+**Architectural fix (V53)**:
+- `src/lib/scheduleFilterUtils.js` — 3 NEW pure helpers: `getOpenHoursForDate`, `getVisibleTimeSlotsForDate`, `isTimeOutsideOpenHours`. Bangkok-TZ-stable day-bucket (midday-UTC parse to avoid TZ shift edge case). Q1=A: legacy out-of-hours appts auto-expand visible range + `hasOutsideAppts: true` flag for chip rendering.
+- 4 victim files wired to canonical V53 pattern: `useEffectiveClinicSettings(undefined)` + `useMemo` on `cs.openHoursMonFri/SatSun` + `visibleSlots.map(...)` replaces `TIME_SLOTS.map(...)`:
+  1. `AppointmentCalendarView.jsx` — grid filter + closed-day banner + orange "นอกเวลา" chip on legacy appt cards
+  2. `AppointmentFormModal.jsx` — start/end picker filter + warning hint + closed-day banner inside modal
+  3. `scheduling/ScheduleEntryFormModal.jsx` — picker filter + DOW_ANCHOR_DATE map for `kind === 'recurring'` (no concrete date)
+  4. `DepositPanel.jsx` — picker filter for embedded deposit-booking sub-form (4th surface discovered via audit-grep regression test)
+- Each victim file preserves legacy current value as a hidden option so legacy edits don't lose data when current value is outside new open range.
 
-**New audit invariant BS-11** (parallel to BS-9):
-- Every `src/components/backend/reports/**/*Tab.jsx` calling `load*` from reportsLoaders.js MUST subscribe `useSelectedBranch` + pass `branchId` + include `selectedBranchId` in deps, OR be annotated `BS-11 in-page-selector` (sanctioned: 2 files) OR `BS-11 navigation-only` (sanctioned: 1 file).
-- 9 sub-tests in `tests/audit-branch-scope.test.js` (BS-11.1..BS-11.9). Closed sanctioned-list lock prevents drift.
-- `audit-branch-scope` SKILL.md updated: 8 → 11 invariants. New annotation table entries.
+**NEW audit invariant BS-12** (parallel to BS-9, BS-11):
+- Every component importing `TIME_SLOTS` from `staffScheduleValidation.js` AND mapping it MUST also import `getVisibleTimeSlotsForDate` AND read `cs.openHoursMonFri/SatSun` (deps array hint)
+- 7 sub-tests in `tests/audit-branch-scope.test.js` (BS-12.1..BS-12.7)
+- `audit-branch-scope` SKILL.md: 11 → 12 invariants
+- Sanctioned exception: `TimeSelect24.jsx` (uses HOURS/MINUTES, not TIME_SLOTS — naturally exempt from grep)
 
-**Test bank (Rule I + Rule N)**:
-- `tests/v52-reports-loaders-branch-id.test.js` (39 tests across L1-L8) — Firestore mock captures `where` clauses; verifies `branchId` filter applied/skipped per opts; covers fallback path + adversarial inputs.
-- `tests/v52-report-tabs-source-grep.test.js` (52 tests across G1-G4) — per-tab regression locks: import shape + destructure + branchId pass-through + deps array + no stale annotations + no raw backendClient + V52 marker. Cross-cutting universal classifier.
-- `tests/v52-report-tabs-branch-scope-flow-simulate.test.js` (62 tests across F1-F7) — Rule I full-flow simulate: BranchProvider + useSelectedBranch + canonical pattern → loader re-fires on branch switch (A → B, multi-loader, empty branchId, A → B → A lifecycle). Adversarial branchId inputs.
-- `tests/audit-branch-scope.test.js` extended (+11 BS-11.x tests).
+**Test bank shipped (Rule N + Rule I)**:
+- `tests/v53-open-hours-helpers.test.js` (33 tests, L1-L3) — Bangkok TZ + closed/reversed/missing detection + auto-expand + adversarial inputs
+- `tests/v53-open-hours-source-grep.test.js` (41 tests, G1-G6) — per-victim regression locks + canonical V53 wiring + V12 anti-regression sweep
+- `tests/v53-open-hours-flow-simulate.test.js` (7 tests, F1-F7) — Rule I full-flow simulate using actual BranchProvider + canonical pattern → branch switch + date change + closed-branch + auto-expand + lifecycle A→B→A
+- `tests/audit-branch-scope.test.js` extended (+7 BS-12.x sub-tests)
 
-**Cumulative test delta**: 7333 → 7543 + 1 skipped (+211 net) all GREEN.
+**Cumulative test delta**: 7543 → 7637 + 1 skipped (+94 net) all GREEN.
 
-**Build**: clean in 2.27s (BackendDashboard chunk 941 KB, no growth from V52).
-
-**No deploy**: per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations. User goes to sleep — they authorize `vercel --prod` separately when they wake up.
+**Build**: clean (BackendDashboard chunk size unchanged from V52).
 
 ## Next action
-Idle — V52 shipped + committed + pushed (pending). Awaiting user wake-up + deploy authorization if desired.
+Idle — V53 shipped + committed + pushed. Awaiting user wake-up + (optional) deploy authorization.
 
 ## Outstanding user-triggered actions
-- 🚨 `vercel --prod` (V18 — explicit "deploy" authorization required THIS turn)
-- (Optional) visual verification: switch branches in top-right BranchSelector on any report tab and observe data refetches
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). V52 + V53 both pending.
+- (Optional) visual verification: set branch openHours to 11:30–20:30 → AppointmentCalendarView grid renders only those rows; modal pickers shrink dropdown.
 
 ## Institutional memory anchors
-- V52 / BS-11 — closes the report-tab class-of-bug gap that was parallel to V36/Phase 17.0 BS-9 (which only covered scopedDataLayer importers). Future report tabs that import reportsLoaders fail audit unless they wire useSelectedBranch + selectedBranchId in deps OR carry sanctioned BS-11 annotation.
-- Spec: `docs/superpowers/specs/2026-05-08-report-tabs-branch-scope-design.md`
-- Plan: `docs/superpowers/plans/2026-05-08-report-tabs-branch-scope.md`
-- V-entry: see `.claude/rules/v-log-archive.md` V52 + `00-session-start.md` § 2 row.
+- V53 / BS-12 — closes the time-axis class-of-bug at the canonical TIME_SLOTS layer. Future surfaces importing TIME_SLOTS must wire through `getVisibleTimeSlotsForDate` to be branch-aware. Rule of 3 leverage (1 helper module → 4 victim files).
+- V52 / BS-11 — closes the report-tab class-of-bug gap (BS-9 only covered scopedDataLayer importers; report tabs use reportsLoaders).
+- V50 Phase 3 — cross-branch booking contract verified (commit `1c67baf` EOD #3); existing `be_customers.branchId` already serves the creation-branch role, immutable post-CREATE.
+- V50-followup-2 — full ProClinic strip COMPLETE (no `master_data` / `pc_*` / `broker_jobs` / `proclinic_session` / `brokerClient` runtime references anywhere). Future ProClinic interop must go through a NEW well-defined integration boundary.
+- Spec V53: `docs/superpowers/specs/2026-05-08-per-branch-open-hours-time-axis-design.md`
+- Plan V53: `docs/superpowers/plans/2026-05-08-per-branch-open-hours-time-axis.md`
+- V-entry: see `.claude/rules/v-log-archive.md` V53 + `00-session-start.md` § 2 row.

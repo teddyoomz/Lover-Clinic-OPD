@@ -494,3 +494,92 @@ describe('BS-11 — report-tab branch-refresh discipline (V52)', () => {
     expect(allViolations).toEqual([]);
   });
 });
+
+// ─── BS-12 — Time-axis branch-aware discipline (V53, 2026-05-08) ───────────
+//
+// Every component file under src/components/ that imports TIME_SLOTS from
+// staffScheduleValidation.js AND uses TIME_SLOTS.map(...) MUST also import
+// getVisibleTimeSlotsForDate from scheduleFilterUtils.js. The helper derives
+// visible slots from per-branch openHours; without it, the component shows
+// the hardcoded 08:15-22:00 axis regardless of branch settings.
+//
+// Sanctioned exception: TimeSelect24.jsx (uses local HOURS/MINUTES, not
+// TIME_SLOTS) — so it never trips the grep.
+
+describe('BS-12 — time-axis branch-aware discipline (V53)', () => {
+  const componentFiles = fg.sync('src/components/**/*.{jsx,js}', { cwd: process.cwd() });
+
+  function fileImportsTimeSlots(content) {
+    return /import\s*\{[^}]*\bTIME_SLOTS\b[^}]*\}\s*from\s+['"][^'"]*staffScheduleValidation/.test(content);
+  }
+
+  function fileMapsTimeSlots(content) {
+    return /TIME_SLOTS\.map\s*\(/.test(content);
+  }
+
+  function fileImportsHelper(content) {
+    return /getVisibleTimeSlotsForDate/.test(content);
+  }
+
+  it('BS-12.1 every TIME_SLOTS.map caller also imports getVisibleTimeSlotsForDate', () => {
+    const violations = [];
+    for (const f of componentFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!fileImportsTimeSlots(content)) continue;
+      if (!fileMapsTimeSlots(content)) continue;
+      if (!fileImportsHelper(content)) violations.push(f);
+    }
+    expect(violations, `BS-12.1 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-12.2 every such file uses useMemo with cs.openHours* in deps', () => {
+    const violations = [];
+    for (const f of componentFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!fileImportsTimeSlots(content)) continue;
+      if (!fileMapsTimeSlots(content)) continue;
+      // openHoursMonFri or openHoursSatSun must appear (deps array hint)
+      if (!/openHoursMonFri/.test(content) || !/openHoursSatSun/.test(content)) {
+        violations.push(f);
+      }
+    }
+    expect(violations, `BS-12.2 violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('BS-12.3 AppointmentCalendarView passes BS-12.1+BS-12.2 (regression guard)', () => {
+    const c = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
+    expect(fileImportsTimeSlots(c)).toBe(true);
+    expect(fileImportsHelper(c)).toBe(true);
+    expect(c).toMatch(/openHoursMonFri/);
+    expect(c).toMatch(/openHoursSatSun/);
+  });
+
+  it('BS-12.4 AppointmentFormModal passes BS-12.1+BS-12.2 (regression guard)', () => {
+    const c = readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+    expect(fileImportsTimeSlots(c)).toBe(true);
+    expect(fileImportsHelper(c)).toBe(true);
+  });
+
+  it('BS-12.5 ScheduleEntryFormModal passes BS-12.1+BS-12.2 (regression guard)', () => {
+    const c = readFileSync('src/components/backend/scheduling/ScheduleEntryFormModal.jsx', 'utf8');
+    expect(fileImportsTimeSlots(c)).toBe(true);
+    expect(fileImportsHelper(c)).toBe(true);
+  });
+
+  it('BS-12.6 DepositPanel passes BS-12.1+BS-12.2 (regression guard)', () => {
+    const c = readFileSync('src/components/backend/DepositPanel.jsx', 'utf8');
+    expect(fileImportsTimeSlots(c)).toBe(true);
+    expect(fileImportsHelper(c)).toBe(true);
+  });
+
+  it('BS-12.7 source-grep traversal emits zero violations across all components', () => {
+    const allViolations = [];
+    for (const f of componentFiles) {
+      const content = readFileSync(f, 'utf8');
+      if (!fileImportsTimeSlots(content)) continue;
+      if (!fileMapsTimeSlots(content)) continue;
+      if (!fileImportsHelper(content)) allViolations.push(`${f} BS-12.1`);
+    }
+    expect(allViolations).toEqual([]);
+  });
+});

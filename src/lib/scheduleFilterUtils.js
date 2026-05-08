@@ -216,3 +216,212 @@ export function getClinicHoursForDate(dateStr, scheduleDoc) {
     close: isWknd ? (scheduleDoc.clinicCloseTimeWeekend || scheduleDoc.clinicCloseTime || '17:00') : (scheduleDoc.clinicCloseTime || '19:00'),
   };
 }
+
+// ─── V53 (BS-12, 2026-05-08) — Per-branch open hours → admin time-axis ────
+//
+// V51 shipped per-branch clinic_settings.openHours.{monFri,satSun}.{open,close}.
+// useEffectiveClinicSettings() merges branch + clinic + flat sources and emits
+// flat fields `openHoursMonFri` + `openHoursSatSun`. These helpers consume that
+// merged shape to drive admin-side time-axis filtering for AppointmentCalendarView,
+// AppointmentFormModal, and ScheduleEntryFormModal.
+//
+// Distinct from getClinicHoursForDate above — that helper reads schedule-link
+// docs (customer-facing, scheduleDoc.clinicOpenTime/Weekend pattern). V53 reads
+// V51 per-branch merged settings (admin-facing, openHoursMonFri/SatSun pattern).
+// Two patterns coexist because they answer different questions in different
+// surfaces; merging would require migrating the schedule-link doc shape too,
+// which is out of V53 scope (Rule C3 lean schema — don't touch what works).
+
+/**
+ * Resolve day-of-week for a 'YYYY-MM-DD' date → 'monFri' | 'satSun'.
+ *
+ * The YYYY-MM-DD string is assumed to be a Bangkok-local calendar date
+ * (admins always type/store dates in Bangkok TZ; the date string itself
+ * has no timezone component). Parses as midday UTC to avoid any TZ-shift
+ * edge case (T00:00:00+07:00 would shift to previous day in UTC and
+ * break getUTCDay).
+ *
+ * @internal
+ */
+function _getDayBucket(dateISO) {
+  if (!dateISO || typeof dateISO !== 'string') return 'monFri';
+  const m = dateISO.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return 'monFri';
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const date = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+  if (isNaN(date.getTime())) return 'monFri';
+  const dow = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  return (dow === 0 || dow === 6) ? 'satSun' : 'monFri';
+}
+
+/**
+ * Is this hours-window effectively "closed"?
+ * Closed when: object missing/null OR fields missing/non-string OR open===close
+ * OR close < open (reversed/invalid).
+ *
+ * @internal
+ */
+function _isClosedHours(hours) {
+  if (!hours || typeof hours !== 'object') return true;
+  const o = hours.open;
+  const c = hours.close;
+  if (typeof o !== 'string' || typeof c !== 'string') return true;
+  if (!o || !c) return true;
+  if (o === c) return true;
+  if (c < o) return true;
+  return false;
+}
+
+/**
+ * Resolve the open-hours window for a given date based on the branch's
+ * monFri vs satSun bucket. Returns null when closed.
+ *
+ * @param {string} dateISO — 'YYYY-MM-DD'
+ * @param {object} mergedSettings — output of useEffectiveClinicSettings()
+ *   Reads: openHoursMonFri, openHoursSatSun (V51 merge layer fields).
+ * @returns {{open:string, close:string} | null}
+ */
+export function getOpenHoursForDate(dateISO, mergedSettings) {
+  if (!mergedSettings || typeof mergedSettings !== 'object') return null;
+  const bucket = _getDayBucket(dateISO);
+  const hours = bucket === 'satSun'
+    ? mergedSettings.openHoursSatSun
+    : mergedSettings.openHoursMonFri;
+  if (_isClosedHours(hours)) return null;
+  return { open: hours.open, close: hours.close };
+}
+
+/**
+ * Derive the visible time-slot list for a given date + branch.
+ *
+ * Filters allTimeSlots to [open, close] inclusive. When includeAppointments is
+ * provided, scans for any appt whose startTime/endTime falls outside the open
+ * range — if found, expands the visible range to include those times AND sets
+ * `hasOutsideAppts: true` so callers (e.g. AppointmentCalendarView) can render
+ * an orange "นอกเวลาเปิด" warning chip.
+ *
+ * Q1=A user choice (2026-05-08): show legacy out-of-hours appts in the grid
+ * (auto-expand) so admin can see + reschedule them; do not hide.
+ *
+ * @param {object} opts
+ * @param {string} opts.dateISO
+ * @param {object} opts.mergedSettings — useEffectiveClinicSettings() output
+ * @param {string[]} opts.allTimeSlots — canonical TIME_SLOTS (08:15..22:00)
+ * @param {Array<{startTime?:string, endTime?:string}>} [opts.includeAppointments]
+ *   When provided, scans for out-of-hours appts and auto-expands range.
+ *
+ * @returns {{
+ *   slots: string[],
+ *   openRange: {open:string, close:string} | null,
+ *   isClosed: boolean,
+ *   hasOutsideAppts: boolean,
+ *   expandedFrom: 'open-hours' | 'closed' | 'legacy-expand' | 'fallback'
+ * }}
+ */
+export function getVisibleTimeSlotsForDate({
+  dateISO,
+  mergedSettings,
+  allTimeSlots,
+  includeAppointments = [],
+} = {}) {
+  const safeAll = Array.isArray(allTimeSlots) ? allTimeSlots : [];
+
+  // Fallback: no settings → return all TIME_SLOTS (legacy behavior preserved
+  // for unmigrated/test branches; production branches all migrated by V51).
+  if (!mergedSettings || typeof mergedSettings !== 'object') {
+    return {
+      slots: safeAll,
+      openRange: null,
+      isClosed: false,
+      hasOutsideAppts: false,
+      expandedFrom: 'fallback',
+    };
+  }
+
+  const openRange = getOpenHoursForDate(dateISO, mergedSettings);
+
+  // Closed day → empty grid. Caller renders banner.
+  if (!openRange) {
+    return {
+      slots: [],
+      openRange: null,
+      isClosed: true,
+      hasOutsideAppts: false,
+      expandedFrom: 'closed',
+    };
+  }
+
+  // Compute extended range from legacy appointments (Q1=A auto-expand).
+  let lo = openRange.open;
+  let hi = openRange.close;
+  let hasOutsideAppts = false;
+
+  for (const a of includeAppointments) {
+    if (!a || typeof a !== 'object') continue;
+    const start = a.startTime;
+    const end = a.endTime;
+    if (typeof start === 'string' && start.length >= 4 && start < lo) {
+      lo = start;
+      hasOutsideAppts = true;
+    }
+    if (typeof end === 'string' && end.length >= 4 && end > hi) {
+      hi = end;
+      hasOutsideAppts = true;
+    }
+    // start time AFTER close (booked late) — expand upper bound
+    if (typeof start === 'string' && start.length >= 4 && start > openRange.close) {
+      if (start > hi) hi = start;
+      hasOutsideAppts = true;
+    }
+  }
+
+  // Filter allTimeSlots to [lo, hi] inclusive. String comparison works because
+  // 'HH:MM' format is naturally lexicographic.
+  const slots = safeAll.filter((t) => t >= lo && t <= hi);
+
+  return {
+    slots,
+    openRange,
+    isClosed: false,
+    hasOutsideAppts,
+    expandedFrom: hasOutsideAppts ? 'legacy-expand' : 'open-hours',
+  };
+}
+
+/**
+ * Does this time fall outside the branch's open-hours for that date?
+ *
+ * Used by:
+ *   - AppointmentCalendarView: chip-flag legacy appts whose startTime is outside
+ *   - AppointmentFormModal / ScheduleEntryFormModal: warning hint below picker
+ *     when current value (legacy edit) is outside range
+ *
+ * Returns:
+ *   - false when settings missing (no opinion — preserves legacy behavior)
+ *   - true when settings present + day closed (any time is outside on closed day)
+ *   - true when time < open OR time > close (inclusive boundaries)
+ *
+ * @param {string} time — 'HH:MM' format
+ * @param {string} dateISO — 'YYYY-MM-DD'
+ * @param {object} mergedSettings — useEffectiveClinicSettings() output
+ * @returns {boolean}
+ */
+export function isTimeOutsideOpenHours(time, dateISO, mergedSettings) {
+  if (typeof time !== 'string' || time.length < 4) return false;
+  if (!mergedSettings || typeof mergedSettings !== 'object') return false;
+
+  const range = getOpenHoursForDate(dateISO, mergedSettings);
+
+  // Closed day with settings present → any time is outside the (empty) window.
+  // Caller still renders the closed-day banner separately; this fn is for the
+  // out-of-hours chip on a per-time-string basis.
+  if (!range) {
+    // Only flag as "outside" if branch HAS openHours configured (otherwise
+    // mergedSettings is fallback-shaped and we return false above)
+    return Boolean(mergedSettings.openHoursMonFri || mergedSettings.openHoursSatSun);
+  }
+
+  return time < range.open || time > range.close;
+}

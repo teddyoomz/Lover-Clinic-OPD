@@ -45,10 +45,17 @@ import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
-import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { useSelectedBranch, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
 import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
+// V53 (2026-05-08, BS-12) — per-branch openHours filter the deposit-booking
+// time pickers (DepositPanel embeds an inline appt subform when admin
+// opts to pair the deposit with a booking).
+import {
+  getVisibleTimeSlotsForDate,
+  isTimeOutsideOpenHours,
+} from '../../lib/scheduleFilterUtils.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
@@ -161,6 +168,20 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [apptDate, setApptDate] = useState(todayStr());
   const [apptStartTime, setApptStartTime] = useState('10:00');
   const [apptEndTime, setApptEndTime] = useState('10:30');
+
+  // V53 (BS-12) — branch-reactive merged settings + visible time-slots
+  // filtered by openHours for the active appt date. Re-fires when admin
+  // changes the deposit appt date OR switches branch on the top-right selector.
+  const cs = useEffectiveClinicSettings(undefined);
+  const visibleTime = useMemo(
+    () => getVisibleTimeSlotsForDate({
+      dateISO: apptDate,
+      mergedSettings: cs,
+      allTimeSlots: TIME_SLOTS,
+    }),
+    [apptDate, cs?.openHoursMonFri, cs?.openHoursSatSun],
+  );
+  const visibleSlots = visibleTime.slots;
   const [apptDoctorId, setApptDoctorId] = useState('');
   const [apptDoctorName, setApptDoctorName] = useState('');
   const [apptAssistantIds, setApptAssistantIds] = useState([]);
@@ -1098,13 +1119,25 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       <div>
                         <label className={labelCls}>เริ่ม *</label>
                         <select value={apptStartTime} onChange={e => setApptStartTime(e.target.value)} className={inputCls}>
-                          {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                          {/* V53 (BS-12) — filtered by branch openHours for selected date */}
+                          {visibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                          {apptStartTime && !visibleSlots.includes(apptStartTime) && (
+                            <option key={`legacy-${apptStartTime}`} value={apptStartTime}>{apptStartTime}</option>
+                          )}
                         </select>
+                        {isTimeOutsideOpenHours(apptStartTime, apptDate, cs) && (
+                          <p className="text-[10px] text-amber-400 mt-1" data-testid="deposit-modal-startTime-warning">
+                            ⚠ นอกเวลาเปิดสาขา
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className={labelCls}>สิ้นสุด</label>
                         <select value={apptEndTime} onChange={e => setApptEndTime(e.target.value)} className={inputCls}>
-                          {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                          {visibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                          {apptEndTime && !visibleSlots.includes(apptEndTime) && (
+                            <option key={`legacy-${apptEndTime}`} value={apptEndTime}>{apptEndTime}</option>
+                          )}
                         </select>
                       </div>
                     </div>

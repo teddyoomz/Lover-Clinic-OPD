@@ -7,15 +7,50 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #6 — V52 Report Tabs Branch-Scope (BS-11) shipped · 13 report tabs wired to top-right BranchSelector · 7543/7543 GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #7 — V53 Per-branch open hours → time-axis filter (BS-12) shipped · 4 victim surfaces wired · 7631/7631 GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V52 commit (feat(V52/BS-11): every report tab respects top-right BranchSelector) — 1 ahead of prod
-- **Test count**: 7543/7543 + 1 skipped GREEN (full top-level + extended suite, +211 from V52). Build clean (2.27s).
-- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 NOT yet deployed). Master is 1 commit ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
-- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52).
-- **Iron-clad rule status**: **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-11** (NEW: BS-11) + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 has no data ops (read-only feature).
-- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 doesn't change rules.
+- **Last commit**: V53 commit (feat(V53/BS-12): per-branch open hours drive time-axis everywhere) — 2 commits ahead of prod (V52 + V53)
+- **Test count**: 7631/7631 + 1 skipped GREEN (full top-level + extended suite, +88 from V53). Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 + V53 NOT yet deployed). Master is 2 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, default = local + admin-SDK migrations; user authorizes `vercel --prod` separately.
+- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52 or V53).
+- **Iron-clad rule status**: **Rule J brainstorming HARD-GATE** + **Rule P 7-step class-of-bug expansion** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-12** (NEW: BS-12 time-axis) + CB-1..5.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`). V52 + V53 both have no data ops (read-only features).
+- **Rule B probe list**: still 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage) — V52 + V53 don't change rules.
+
+### Session 2026-05-08 EOD #7 — V53 Per-Branch Open Hours → Time-Axis Filter (BS-12) shipped
+
+User directive (verbatim): "ทำให้เวลาเปิด-ปิดของแต่ละสาขา มีผลกับตารางแพทย์ ตารางนัดหมาย และ modal ที่จะไปดึงเวลานัดจากสาขานั้นทั้งหมด ... แค่เวลาที่เปิดเปิดคลินิก ไม่ต้องแสดงตั้งแต่ 8 โมง ถึง 4 ทุ่ม ถ้าคลินิกมันเปิดแค่ 11 โมง ถึง 3 ทุ่ม"
+
+= "Make per-branch open-close hours drive the time-axis displayed in doctor schedule, assistant schedule, staff schedule, and appointment calendar (all tabs + every modal that pulls appointment times). Only show open hours."
+
+**Class-of-bug**: parallel to V52 BS-11 — V51 shipped per-branch openHours schema but the canonical TIME_SLOTS axis (08:15–22:00 hardcoded) was rendered raw in 4 surfaces, ignoring per-branch settings. Same V12 multi-reader-sweep family at the time-axis layer.
+
+**V53 commit** (single autonomous commit):
+- `src/lib/scheduleFilterUtils.js` — 3 NEW pure helpers: `getOpenHoursForDate`, `getVisibleTimeSlotsForDate`, `isTimeOutsideOpenHours`. Bangkok-TZ-stable day-bucket via midday-UTC parse (avoids T00:00:00+07:00 → previous-day-UTC edge case).
+- 4 victim files wired to canonical V53 pattern: `useEffectiveClinicSettings(undefined)` + `useMemo` on `cs.openHoursMonFri/SatSun` + `visibleSlots.map(...)` replaces `TIME_SLOTS.map(...)`:
+  1. `AppointmentCalendarView.jsx` — grid filter + closed-day banner + orange "นอกเวลา" chip on legacy appt cards
+  2. `AppointmentFormModal.jsx` — start/end picker filter + warning hint + closed-day banner inside modal
+  3. `scheduling/ScheduleEntryFormModal.jsx` — picker filter + DOW_ANCHOR_DATE map for `kind === 'recurring'` (no concrete date)
+  4. `DepositPanel.jsx` — picker filter for embedded deposit-booking sub-form (4th surface discovered via audit-grep regression test)
+- Q1=A locked: legacy appts outside new open hours auto-expand visible range + orange chip flag — admin can see + reschedule (data preserved).
+
+**New audit invariant BS-12** (parallel to BS-9, BS-11, V53):
+- Every component importing `TIME_SLOTS` from `staffScheduleValidation.js` AND mapping it MUST also import `getVisibleTimeSlotsForDate` AND read `cs.openHoursMonFri/SatSun` (deps array hint)
+- 7 sub-tests in `tests/audit-branch-scope.test.js` (BS-12.1..BS-12.7)
+- `audit-branch-scope` SKILL.md: 11 → 12 invariants
+- Sanctioned exception: `TimeSelect24.jsx` (uses HOURS/MINUTES local constants, naturally exempt from grep)
+
+**Test bank shipped**:
+- `tests/v53-open-hours-helpers.test.js` (33 tests, L1-L3) — Bangkok TZ + closed/reversed/missing detection + auto-expand + adversarial inputs
+- `tests/v53-open-hours-source-grep.test.js` (41 tests, G1-G6) — per-victim regression + V12 anti-regression sweep
+- `tests/v53-open-hours-flow-simulate.test.js` (7 tests, F1-F7) — Rule I full-flow with actual BranchProvider + canonical pattern
+- `tests/audit-branch-scope.test.js` extended (+7 BS-12.x sub-tests)
+
+**Final tally**: 7543 → 7631 + 1 skipped (+88 net) all GREEN. Build clean.
+
+**Outstanding**: combined `vercel --prod` for V52 + V53 (2 commits ahead of prod; user-authorized only — say "deploy" THIS turn).
+
+Detail: `docs/superpowers/specs/2026-05-08-per-branch-open-hours-time-axis-design.md` + `docs/superpowers/plans/2026-05-08-per-branch-open-hours-time-axis.md` + V53 V-entry in `.claude/rules/v-log-archive.md`.
 
 ### Session 2026-05-08 EOD #6 — V52 Report Tabs Branch-Scope (BS-11) shipped (autonomous overnight job)
 

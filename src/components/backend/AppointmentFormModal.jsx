@@ -71,8 +71,15 @@ import {
 } from '../../lib/appointmentTypes.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
-import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
+import { useSelectedBranch, resolveBranchName, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
+// V53 (2026-05-08, BS-12) — per-branch openHours filter the time-picker dropdowns
+// + warn admin when editing a legacy appt whose time falls outside current open hours.
+import {
+  getVisibleTimeSlotsForDate,
+  getOpenHoursForDate,
+  isTimeOutsideOpenHours,
+} from '../../lib/scheduleFilterUtils.js';
 
 // Phase 19.0 (2026-05-06) — TIME_SLOTS imported from canonical
 // staffScheduleValidation; APPT_TYPES replaced by APPOINTMENT_TYPES SSOT.
@@ -222,6 +229,12 @@ export default function AppointmentFormModal({
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
   const currentBranchName = resolveBranchName(selectedBranchId, branches) || (selectedBranchId === 'main' ? 'สาขาหลัก (main)' : selectedBranchId || 'สาขาหลัก');
 
+  // V53 (BS-12) — branch-reactive merged settings. Modal isn't passed
+  // clinicSettings as a prop (parent calls clinic-level fields rarely);
+  // hook still works because mergeBranchIntoClinic merges branch.settings
+  // when clinicSettings is undefined. Re-renders on branch + form.date change.
+  const cs = useEffectiveClinicSettings(undefined);
+
   // Phase 21.0 (2026-05-06) — validate lockedAppointmentType prop. Unknown
   // values fall through to null (no lock applied). isLockedDepositType
   // gates the deposit-redirect banner + save-button hiding.
@@ -293,6 +306,23 @@ export default function AppointmentFormModal({
   // clicks "ส่งลิ้งค์ลูกค้า" on a customer-later appointment in edit mode.
   const [sendLinkModal, setSendLinkModal] = useState(null);
   const [sendLinkBusy, setSendLinkBusy] = useState(false);
+
+  // V53 (BS-12) — visible time-slot list filtered by branch openHours for
+  // the currently selected date. Modal pickers should ONLY offer in-range
+  // slots; legacy edits still see the full 56 list because the warning hint
+  // below renders when current value is outside (admin can pick a new
+  // valid slot from the filtered list). Re-fires when admin changes the
+  // date inside the modal OR switches branch on the top-right selector.
+  const visibleTime = useMemo(
+    () => getVisibleTimeSlotsForDate({
+      dateISO: formData.date,
+      mergedSettings: cs,
+      allTimeSlots: TIME_SLOTS,
+    }),
+    [formData.date, cs?.openHoursMonFri, cs?.openHoursSatSun],
+  );
+  const visibleSlots = visibleTime.slots;
+  const isClosedDay = visibleTime.isClosed;
 
   // ── Data loaders ──
   const [customers, setCustomers] = useState([]);
@@ -950,17 +980,42 @@ export default function AppointmentFormModal({
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">เริ่ม *</label>
               <select value={formData.startTime} onChange={e => update({ startTime: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                {/* V53 (BS-12) — filtered by branch openHours for selected date */}
+                {visibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                {/* Preserve legacy value as a hidden option so the select shows
+                    the current value even when it falls outside the new open
+                    range (admin can re-pick from the filtered list). */}
+                {formData.startTime && !visibleSlots.includes(formData.startTime) && (
+                  <option key={`legacy-${formData.startTime}`} value={formData.startTime}>{formData.startTime}</option>
+                )}
               </select>
+              {isTimeOutsideOpenHours(formData.startTime, formData.date, cs) && (
+                <p className="text-[10px] text-amber-400 mt-1" data-testid="appt-modal-startTime-warning">
+                  ⚠ เวลานี้อยู่นอกช่วงเปิดสาขา — เลือกเวลาในช่วงเปิดเพื่อความถูกต้อง
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สิ้นสุด</label>
               <select value={formData.endTime} onChange={e => update({ endTime: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                {visibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                {formData.endTime && !visibleSlots.includes(formData.endTime) && (
+                  <option key={`legacy-${formData.endTime}`} value={formData.endTime}>{formData.endTime}</option>
+                )}
               </select>
             </div>
           </div>
+          {/* V53 (BS-12) — closed-day banner inside the modal. When the
+              selected date falls on a closed bucket (open===close OR invalid),
+              admin sees a banner above the form. Save still allowed (admin
+              may know what they're doing for special cases). */}
+          {isClosedDay && (
+            <div data-testid="appt-modal-closed-hours-banner"
+              className="text-xs text-amber-200 bg-amber-700/15 border border-amber-600/40 rounded-lg px-3 py-2">
+              ⚠ <span className="font-bold">นอกเวลาเปิดทำการของสาขา</span> สำหรับวันที่เลือก — บันทึกได้แต่อยู่นอกชั่วโมงเปิด
+            </div>
+          )}
           {/* Appointment Type — Phase 21.0: when sub-tab passes
               lockedAppointmentType, render a static chip (no radio, no edit)
               so admin can't miscategorize while inside a typed view. When

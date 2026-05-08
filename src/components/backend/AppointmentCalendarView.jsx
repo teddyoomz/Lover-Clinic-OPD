@@ -58,6 +58,16 @@ import {
 // to doctorMap lookup for legacy appts that lack assistantNames denorm.
 import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
 import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
+// V53 (2026-05-08, BS-12) — per-branch openHours filter the visible time grid
+// + flag legacy out-of-hours appts. Helper is pure JS; reads V51 merged
+// settings via useEffectiveClinicSettings (branch-reactive on top-right
+// BranchSelector switch).
+import {
+  getVisibleTimeSlotsForDate,
+  getOpenHoursForDate,
+  isTimeOutsideOpenHours,
+} from '../../lib/scheduleFilterUtils.js';
+import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -186,6 +196,12 @@ export default function AppointmentCalendarView({
 
   // Phase BS — branch-scoped appointment fetches.
   const { branchId: selectedBranchId } = useSelectedBranch();
+
+  // V53 (BS-12) — branch-reactive merged clinic settings (V51). When admin
+  // switches the top-right BranchSelector, useEffectiveClinicSettings re-emits
+  // the new branch's openHoursMonFri/SatSun, which feeds the visible useMemo
+  // below. selectedDate change also re-runs (Mon→Sat bucket switch).
+  const cs = useEffectiveClinicSettings(clinicSettings);
 
   // ── State ──
   // Phase 24.0-vicies-octies — initialSelectedDate (if set + valid YYYY-MM-DD)
@@ -450,6 +466,23 @@ export default function AppointmentCalendarView({
   const typedDayAppts = useMemo(
     () => (roomsReadyForBranch ? dayAppts.filter(apptMatchesType) : []),
     [dayAppts, apptMatchesType, roomsReadyForBranch],
+  );
+
+  // V53 (BS-12) — visible time-slot range driven by per-branch openHours.
+  // Reads cs.openHoursMonFri / cs.openHoursSatSun (V51 merged shape) and
+  // returns { slots, openRange, isClosed, hasOutsideAppts }. When admin
+  // switches branch → useEffectiveClinicSettings re-emits → this useMemo
+  // recomputes → grid + closed banner re-render. Legacy appts outside
+  // open hours auto-expand the visible range AND set hasOutsideAppts=true
+  // so the per-card chip lights up (Q1=A user choice 2026-05-08).
+  const visibleTime = useMemo(
+    () => getVisibleTimeSlotsForDate({
+      dateISO: selectedDate,
+      mergedSettings: cs,
+      allTimeSlots: TIME_SLOTS,
+      includeAppointments: typedDayAppts,
+    }),
+    [selectedDate, cs?.openHoursMonFri, cs?.openHoursSatSun, typedDayAppts],
   );
 
   const rooms = useMemo(() => {
@@ -720,6 +753,21 @@ export default function AppointmentCalendarView({
         {/* Phase 11.8 wiring: Holiday banner. Warns admin that the selected
             date is a clinic closure (specific-date or weekly day-of-week).
             Non-blocking — bookings still allowed but flagged. */}
+        {/* V53 (BS-12, 2026-05-08) — closed-hours banner. Appears when the
+            current branch has no open-hours for the selected day's bucket
+            (open===close OR reversed/missing). Distinct from the holiday
+            banner above; both can co-exist if needed. */}
+        {visibleTime.isClosed && (
+          <div data-testid="appt-closed-hours-banner"
+            className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-700/15 border border-amber-600/40">
+            <CalendarX size={18} className="flex-shrink-0 text-amber-300" />
+            <div className="flex-1 text-xs text-amber-200">
+              <span className="font-bold">นอกเวลาเปิดทำการของสาขา</span>
+              <span className="ml-2 text-amber-300/80">— ตั้งเวลาเปิด-ปิดสาขาที่ tab=branches</span>
+              <span className="ml-2 text-[11px] opacity-75">· ระบบยังเปิดให้จองได้ แต่อยู่นอกชั่วโมงเปิดสาขา</span>
+            </div>
+          </div>
+        )}
         {currentHoliday && (
           <div data-testid="appt-holiday-banner"
             className="flex items-center gap-2 px-4 py-3 rounded-lg bg-rose-700/15 border border-rose-600/40">
@@ -782,7 +830,9 @@ export default function AppointmentCalendarView({
                   showed through the translucent status-bg. User report:
                   "ลูกค้าลากคิวยาว ... เอาเส้นขาวๆในพื้นที่สีส้มออกไปปป". */}
               <div className="relative">
-                {TIME_SLOTS.map((time) => {
+                {/* V53 (BS-12) — visibleTime.slots derived from per-branch
+                    openHours; auto-expanded when legacy appts fall outside. */}
+                {visibleTime.slots.map((time) => {
                   const isHour     = time.endsWith(':00');
                   const isHalfHour = time.endsWith(':30');
                   // Per-cell border style — applied to time-label + each
@@ -809,6 +859,11 @@ export default function AppointmentCalendarView({
                         const endIdx = appt.endTime ? TIME_SLOTS.indexOf(appt.endTime) : startIdx + 1;
                         const span = Math.max(1, endIdx - startIdx);
                         const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
+                        // V53 (BS-12) — flag this appt's startTime as "outside
+                        // current branch open hours" so admin sees an orange
+                        // chip + can reschedule. Helper returns false when
+                        // settings are missing (no opinion → no chip).
+                        const apptOutsideHours = isTimeOutsideOpenHours(appt.startTime, selectedDate, cs);
                         // Phase 21.0-sexies — appointment-block FIRST row keeps
                         // the per-row top border (so the row above ends with a
                         // visible line). Subsequent rows under the block are
@@ -841,6 +896,20 @@ export default function AppointmentCalendarView({
                               }}>
                               <div className="flex items-center gap-1.5">
                                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot} shadow-md`} style={{ boxShadow: `0 0 6px ${st.accent}` }} />
+                                {/* V53 (BS-12) — out-of-hours chip for legacy
+                                    appts whose startTime falls outside the
+                                    branch's current open hours. Click on the
+                                    parent cell still opens the edit modal so
+                                    admin can reschedule. */}
+                                {apptOutsideHours && (
+                                  <span
+                                    title="นัดนี้อยู่นอกเวลาเปิดสาขาปัจจุบัน — แตะเพื่อแก้ไขเวลา"
+                                    data-testid="appt-outside-hours-chip"
+                                    className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded font-bold border bg-amber-900/40 text-amber-300 border-amber-700/50 flex-shrink-0"
+                                  >
+                                    ⚠ นอกเวลา
+                                  </span>
+                                )}
                                 {/* Customer name = clickable link to customer detail
                                     in a NEW BROWSER TAB. e.stopPropagation prevents the
                                     parent cell's onClick (edit modal) from firing.
