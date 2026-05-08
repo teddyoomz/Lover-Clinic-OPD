@@ -6,6 +6,11 @@
 //
 // Switches input fields based on `kind` prop. Reuses TIME_SLOTS dropdown
 // + DateField + DAY_OF_WEEK_LABEL from validation module.
+//
+// V56 / BS-15 (2026-05-08): staffKind prop drives room-checkbox box
+// visibility + SS-10/SS-11 validation. branchExamRooms is fetched + passed
+// by parent tab (DoctorSchedulesTab / EmployeeSchedulesTab) — modal is pure
+// presentation, no listExamRooms call here.
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
@@ -59,14 +64,47 @@ const KIND_TYPES = {
   ],
 };
 
-function defaultEntry(kind, staffId, staffName) {
+// V56 / BS-15 — updated to accept staffKind + doctorRoomIds so doctor entries
+// are seeded with all current branch doctor-rooms (admin can untick to narrow).
+// Assistant entries omit the roomIds field entirely per SS-11.
+function defaultEntry(kind, staffId, staffName, staffKind, doctorRoomIds) {
+  const seedRooms = (staffKind === 'doctor' && Array.isArray(doctorRoomIds))
+    ? [...doctorRoomIds]
+    : undefined;
   if (kind === 'recurring') {
-    return { type: 'recurring', staffId, staffName, dayOfWeek: 1, startTime: '09:00', endTime: '17:00', date: '' };
+    return {
+      type: 'recurring',
+      staffId,
+      staffName,
+      dayOfWeek: 1,
+      startTime: '09:00',
+      endTime: '17:00',
+      date: '',
+      ...(seedRooms !== undefined && { roomIds: seedRooms }),
+    };
   }
   if (kind === 'override') {
-    return { type: 'work', staffId, staffName, date: '', dayOfWeek: null, startTime: '09:00', endTime: '17:00' };
+    return {
+      type: 'work',
+      staffId,
+      staffName,
+      date: '',
+      dayOfWeek: null,
+      startTime: '09:00',
+      endTime: '17:00',
+      ...(seedRooms !== undefined && { roomIds: seedRooms }),
+    };
   }
-  return { type: 'leave', staffId, staffName, date: '', dayOfWeek: null, note: '', startTime: '', endTime: '' };
+  return {
+    type: 'leave',
+    staffId,
+    staffName,
+    date: '',
+    dayOfWeek: null,
+    note: '',
+    startTime: '',
+    endTime: '',
+  };
 }
 
 export default function ScheduleEntryFormModal({
@@ -78,8 +116,25 @@ export default function ScheduleEntryFormModal({
   onClose,
   onSave,         // async (entry) => Promise<void>
   branchId = '',
+  // V56 / BS-15 (2026-05-08) — staffKind drives room-box visibility +
+  // SS-10/SS-11 validation. branchExamRooms is fetched + passed by parent
+  // tab (DoctorSchedulesTab / EmployeeSchedulesTab) — modal is pure
+  // presentation, no listExamRooms call here.
+  staffKind = 'doctor',
+  branchExamRooms = [],
 }) {
-  const [form, setForm] = useState(() => initialEntry || defaultEntry(kind, staffId, staffName));
+  // V56 / BS-15 — doctor-kind rooms only (matches V55 schedule-link
+  // shownRooms pattern). Memoized so identity is stable across renders.
+  const doctorRoomIds = useMemo(
+    () => (branchExamRooms || [])
+      .filter((r) => r && r.kind === 'doctor')
+      .map((r) => String(r.id)),
+    [branchExamRooms],
+  );
+
+  const [form, setForm] = useState(() =>
+    initialEntry || defaultEntry(kind, staffId, staffName, staffKind, doctorRoomIds),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -103,15 +158,37 @@ export default function ScheduleEntryFormModal({
 
   useEffect(() => {
     if (open) {
-      setForm(initialEntry || defaultEntry(kind, staffId, staffName));
+      setForm(initialEntry || defaultEntry(kind, staffId, staffName, staffKind, doctorRoomIds));
       setError('');
     }
-  }, [open, kind, staffId, staffName, initialEntry]);
+    // NOTE: doctorRoomIds intentionally NOT in deps — branch switch handled
+    // by parent re-mounting modal with new branchExamRooms; in-modal-open
+    // switch handled by the branchExamRooms useEffect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, kind, staffId, staffName, initialEntry, staffKind]);
+
+  // V56 / BS-15 — when branchExamRooms changes (parent re-fetched after
+  // branch switch while modal open), drop any roomIds in form state that
+  // no longer exist in the new branch's room set. Forces admin to re-pick
+  // when current ticks become stale. Doctor + working type only.
+  useEffect(() => {
+    if (staffKind !== 'doctor') return;
+    if (!Array.isArray(form.roomIds)) return;
+    const allowed = new Set(doctorRoomIds);
+    const filtered = form.roomIds.filter((rid) => allowed.has(String(rid)));
+    if (filtered.length !== form.roomIds.length) {
+      setForm((prev) => ({ ...prev, roomIds: filtered }));
+    }
+  }, [doctorRoomIds, staffKind, form.roomIds]);
 
   if (!open) return null;
 
   const allowedTypes = KIND_TYPES[kind] || [];
   const showTime = form.type === 'recurring' || form.type === 'work' || form.type === 'halfday';
+
+  // V56 / BS-15 — save button disabled when doctor + working type + no rooms
+  const roomsRequired = staffKind === 'doctor' && showTime;
+  const roomsEmpty = !Array.isArray(form.roomIds) || form.roomIds.length === 0;
 
   const handleSubmit = async (ev) => {
     ev.preventDefault();
@@ -119,15 +196,24 @@ export default function ScheduleEntryFormModal({
     setError('');
     try {
       const id = form.id || generateStaffScheduleId();
+      // V56 / BS-15 — assistant entries MUST NOT carry roomIds; strip
+      // defensively in case form state has stale leftover.
+      const cleanedForm = staffKind === 'assistant' ? (() => {
+        const { roomIds: _drop, ...rest } = form;
+        return rest;
+      })() : form;
       const payload = {
-        ...form,
+        ...cleanedForm,
         id,
         scheduleId: id,
         staffId,
         staffName,
         branchId,
       };
-      const fail = validateStaffScheduleStrict(payload);
+      // V56 / BS-15 — pass staffKind so validateStaffScheduleStrict
+      // enforces SS-10 (doctor → roomIds required) + SS-11 (assistant
+      // → roomIds forbidden). Pure-validator parameter; not stored.
+      const fail = validateStaffScheduleStrict({ ...payload, staffKind });
       if (fail) { setError(fail[1]); setSaving(false); return; }
       await onSave?.(payload);
       onClose?.();
@@ -236,6 +322,71 @@ export default function ScheduleEntryFormModal({
             </div>
           )}
 
+          {/* V56 / BS-15 — Room checkbox box (doctor + working type only) */}
+          {staffKind === 'doctor' && showTime && (
+            <div data-testid="schedule-form-rooms-box">
+              <label className="text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block">
+                ห้องตรวจ <RequiredAsterisk />
+              </label>
+              <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg-input)] p-2 space-y-1">
+                {doctorRoomIds.length === 0 ? (
+                  <p className="text-[11px] text-amber-400">
+                    ไม่มีห้องตรวจในสาขานี้ — เพิ่มที่{' '}
+                    <a href="?tab=exam-rooms" className="underline hover:text-amber-300">
+                      ตั้งค่า → ห้องตรวจ
+                    </a>
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex gap-1.5 mb-1">
+                      <button type="button"
+                        onClick={() => setForm({ ...form, roomIds: [...doctorRoomIds] })}
+                        className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-900/40 border border-emerald-700 text-emerald-300 hover:bg-emerald-800/40"
+                        data-testid="schedule-form-rooms-select-all">
+                        ✓ เลือกทั้งหมด
+                      </button>
+                      <button type="button"
+                        onClick={() => setForm({ ...form, roomIds: [] })}
+                        className="px-2 py-1 rounded text-[10px] font-bold bg-rose-900/30 border border-rose-800 text-rose-300 hover:bg-rose-800/40"
+                        data-testid="schedule-form-rooms-clear-all">
+                        ✗ ยกเลิกทั้งหมด
+                      </button>
+                    </div>
+                    {(branchExamRooms || []).filter((r) => r && r.kind === 'doctor').map((r) => {
+                      const checked = (form.roomIds || []).map(String).includes(String(r.id));
+                      return (
+                        <label key={r.id}
+                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[var(--bg-hover)] cursor-pointer"
+                          data-testid={`schedule-form-room-row-${r.id}`}>
+                          <input type="checkbox" checked={checked}
+                            onChange={(e) => {
+                              const cur = (form.roomIds || []).map(String);
+                              const next = e.target.checked
+                                ? [...new Set([...cur, String(r.id)])]
+                                : cur.filter((x) => x !== String(r.id));
+                              setForm({ ...form, roomIds: next });
+                            }}
+                            className="w-4 h-4 rounded border-[var(--bd)]" />
+                          <span className="text-xs text-[var(--tx-primary)]">{r.name}</span>
+                        </label>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* V56 / BS-15 — Assistant info chip (replaces room box) */}
+          {staffKind === 'assistant' && showTime && (
+            <div className="rounded-lg bg-amber-900/20 border border-amber-800 px-3 py-2"
+              data-testid="schedule-form-assistant-info">
+              <p className="text-[11px] text-amber-300">
+                ℹ ผู้ช่วยทำงานทุกห้องอัตโนมัติ — ไม่ต้องเลือกห้อง
+              </p>
+            </div>
+          )}
+
           {/* Note (leave + override) */}
           {kind !== 'recurring' && (
             <div>
@@ -260,7 +411,8 @@ export default function ScheduleEntryFormModal({
               className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]">
               ยกเลิก
             </button>
-            <button type="submit" disabled={saving}
+            <button type="submit"
+              disabled={saving || (roomsRequired && roomsEmpty)}
               className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-50 inline-flex items-center gap-1.5"
               data-testid="schedule-form-submit">
               {saving && <Loader2 size={12} className="animate-spin" />}
