@@ -7,11 +7,57 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #16 — V63 + V62-bis: AdminDashboard calendar canonical doctor-days + handleGenScheduleLink fetch ungated (AV35) · 8059 + 1 skipped GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #17 — V63 batch backfill applied to ALL 7 in-the-wild schedule-links + visual verify GREEN · 8059 + 1 skipped · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V63 + V62-bis / AV35 — AdminDashboard calendar canonical doctor-days + handleGenScheduleLink fetch ungated
+- **Last commit**: chore(V63): batch backfill 7 schedule links + diag + verify (data op only — no source change)
 - **Test count**: 8059 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (31 commits ahead — V52 through V63 + V62-bis NOT yet deployed). Combined deploy NOT triggered.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (32 commits ahead — V52 through V63 + V62-bis + V63 batch tooling NOT yet deployed). Combined deploy NOT triggered.
+
+### Session 2026-05-08 EOD #17 — V63 batch backfill on prod (Rule M data op)
+
+User: "ทำ Optional ยกเว้น deploy ให้จบๆ" — finish all optional items except the deploy.
+
+Two optional items closed:
+
+**1. Backfill all in-the-wild schedule links** — V63 batch script applied V62 derive-and-merge logic to ALL 7 `clinic_schedules` docs on prod. Pre-state inspection (via NEW `scripts/diag-v63-inspect-schedlinks.mjs` read-only) revealed every doc had stale 28-entry March/April manual paint that didn't match their `months: ['2026-05']` window. V62/V60 earlier backfills had been overwritten — likely by subsequent admin "Generate Schedule Link" or "Sync" calls that re-stamped local `schedDoctorDays` state into the saved doc.
+
+NEW `scripts/v63-batch-fix-all-schedule-links.mjs` (Rule M canonical template):
+- Two-phase (dry-run default; `--apply` commits)
+- admin-SDK + canonical `artifacts/{APP_ID}/public/data/clinic_schedules` paths + PEM key conversion (Rule M lock)
+- Iterates ALL clinic_schedules docs; skips inactive
+- For each: re-derive via V62 helpers (`derivedDoctorDaysAcrossWindow` + `derivedDoctorWorkingHoursPerDate`); union with prior manual paint scoped to months; admin overrides win on hours collision
+- Idempotency: re-run with `--apply` after first apply yields 0 writes
+- Forensic stamps `_v62BackfilledAt` + `_v62LegacyDoctorDays` + `_v62LegacyCustomDoctorHours`
+- Atomic batch commit (chunked at 200/batch — Firestore caps at 500/batch); audit doc emit
+- Crypto-secure random for audit-doc id
+
+Result on prod (audit `be_admin_audit/v63-batch-fix-schedule-links-1778256189781-958becd1`):
+- **7 docs updated**:
+  - 6 BR-1777873556815 links (mix of noDoctor/all + specific-doctor): days 28→18, hours 4→22 each
+  - 1 BR-1777885958735 link: days 28→0 (no May doctor schedule for that branch — expected)
+- Re-run dry-run: 7/7 OK idempotent, 0 writes pending
+- Customer-side proof: SCH-cc3964c023 (test link) renders 🔥 on May 9-31 doctor days correctly
+
+**2. Visual verify AdminDashboard /admin** — preview_eval read-only inspection of running dev server (port 5173, logged-in admin):
+
+| Contract | Expected | Actual |
+|---|---|---|
+| 🔥 fire-emoji count on /admin tab=นัดหมาย | ~36 (18 days × 2 calendars + legend chip) | **37** ✓ |
+| Subtitle (V63 simplified) | "ปิดคิว · ปิดช่วงเวลา" | ✓ present |
+| Subtitle (legacy V62) absent | "หมอเข้า · ปิดคิว · ปิดช่วงเวลา" | ✓ absent |
+| Button label (V63 simplified) | "แก้ไขปิดคิว" | ✓ present |
+| Button (legacy) absent | "แก้ไขตารางหมอเข้า/ปิดคิว" | ✓ absent |
+| Legend hint | "หมอเข้า (จากตารางหมอ)" | ✓ present |
+
+Per `feedback_no_real_action_in_preview_eval.md`: only DOM read; no clicks on action buttons that mutate prod data. Console errors are pre-existing always-on listener noise (timestamps from earlier session boot — not V63-related).
+
+**Files added (data ops only — no source change to React app)**:
+- `scripts/v63-batch-fix-all-schedule-links.mjs` (NEW Rule M template)
+- `scripts/diag-v63-inspect-schedlinks.mjs` (NEW read-only diag)
+
+**Outstanding**: combined `vercel --prod` for V52..V63 + V62-bis still pending user-explicit "deploy" THIS turn. 32 commits ahead of prod (data ops + scripts + V52..V63 + V62-bis). User said "ยกเว้น deploy" so deploy NOT triggered.
+
+
 
 ### Session 2026-05-08 EOD #16 — V63 + V62-bis (AV35)
 
