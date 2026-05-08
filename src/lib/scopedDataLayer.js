@@ -252,6 +252,8 @@ export const getAllCustomers = (...args) => raw.getAllCustomers(...args);
 // any customer regardless of selected branch.
 export const searchBackendCustomers = (...args) => raw.searchBackendCustomers(...args);
 export const getCustomerWallets = (...args) => raw.getCustomerWallets(...args);
+// V64 (2026-05-08) — bulk-fetch wallets for Appointment Coming-Hub view
+export const getWalletsForCustomerIds = (...args) => raw.getWalletsForCustomerIds(...args);
 export const getWalletBalance = (...args) => raw.getWalletBalance(...args);
 export const getWalletTransactions = (...args) => raw.getWalletTransactions(...args);
 export const getCustomerMembership = (...args) => raw.getCustomerMembership(...args);

@@ -3,7 +3,7 @@
 // Schema matches frontend patientData format for future migration.
 
 import { db, auth, appId } from '../firebase.js';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
@@ -4053,6 +4053,30 @@ export async function getCustomerWallets(customerId) {
   const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
   list.sort((a, b) => (a.walletTypeName || '').localeCompare(b.walletTypeName || ''));
   return list;
+}
+
+/**
+ * V64 (2026-05-08) — bulk fetch wallets for many customerIds. Chunks input
+ * into groups of 30 (Firestore 'in' query cap) and Promise.all's the chunks.
+ * Deduplicates input. Universal (no branchId — wallets are customer-attached).
+ *
+ * Used by Appointment Coming-Hub view to bulk-load wallet balances for the
+ * day's appointment customers without N+1 round-trips.
+ *
+ * NOTE: queries `where(documentId(), 'in', chunk)` per V64 task2 spec.
+ */
+export async function getWalletsForCustomerIds(customerIds = []) {
+  const ids = [...new Set((Array.isArray(customerIds) ? customerIds : []).filter(Boolean).map(String))];
+  if (ids.length === 0) return [];
+  const CHUNK = 30;
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
+  const snaps = await Promise.all(
+    chunks.map(chunk =>
+      getDocs(query(walletsCol(), where(documentId(), 'in', chunk)))
+    )
+  );
+  return snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));
 }
 
 /** Get balance for a specific wallet (0 if wallet missing). */
