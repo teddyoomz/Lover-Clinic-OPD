@@ -97,6 +97,7 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 // branch clinics. BranchProvider already at App.jsx (Phase 17.2) so this
 // component picks up the per-user-keyed selectedBranchId immediately.
 import BranchSelector from '../components/backend/BranchSelector.jsx';
+import AppointmentHubView from '../components/admin/AppointmentHubView.jsx';
 // V55/BS-14 (2026-05-08) — useEffectiveClinicSettings merges per-branch
 // settings (V51 openHoursMonFri/SatSun + chatHours*) over global cs. The
 // schedule-link modal's saved doc + slot-build derivations now use these
@@ -381,7 +382,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // Phase 20.0 Task 6 (2026-05-06) — observe BranchContext so be_*
   // listeners + reads can include selectedBranchId in their deps array
   // and auto-resubscribe on branch switch.
-  const { branchId: selectedBranchId } = useSelectedBranch();
+  const { branchId: selectedBranchId, branches } = useSelectedBranch();
   // Live practitioners — Phase 20.0 Task 2 (2026-05-06): rewired from
   // broker.getLivePractitioners (ProClinic 5-min cache) to be_* parallel
   // listStaff() + listDoctors() reads. listStaff = assistants/staff,
@@ -585,6 +586,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   // ── Appointment calendar state ──
   const [apptMonth, setApptMonth] = useState(() => thaiYearMonth());
+  const [apptViewMode, setApptViewMode] = useState('list');  // V64 — 'list' | 'calendar'
   const [apptData, setApptData] = useState(null);
   const [apptSelectedDate, setApptSelectedDate] = useState(null);
   const [apptSlotDuration, setApptSlotDuration] = useState(60);
@@ -6410,7 +6412,70 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
           )}
         </div>
-      ) : adminMode === 'appointment' ? renderJsxBlock(() => {
+      ) : adminMode === 'appointment' ? (
+        <div>
+          {/* V64 — view-toggle pill */}
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              data-testid="appt-view-toggle-list"
+              onClick={() => setApptViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                apptViewMode === 'list'
+                  ? 'bg-sky-600 border-sky-600 text-white'
+                  : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400'
+              }`}
+            >
+              📋 รายการ
+            </button>
+            <button
+              type="button"
+              data-testid="appt-view-toggle-calendar"
+              onClick={() => setApptViewMode('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                apptViewMode === 'calendar'
+                  ? 'bg-sky-600 border-sky-600 text-white'
+                  : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400'
+              }`}
+            >
+              📅 ปฏิทิน
+            </button>
+          </div>
+          {apptViewMode === 'list' ? (
+            <AppointmentHubView
+              branchName={(branches || []).find(b => b.id === selectedBranchId)?.name || ''}
+              doctors={(practitioners || []).filter(p => p.role === 'doctor')}
+              assistants={(practitioners || []).filter(p => p.role === 'assistant')}
+              onConfirmAppt={(appt) => {
+                updateBackendAppointment(appt.id, { status: 'confirmed' }).then(() => {
+                  showToast?.('ยืนยันนัดสำเร็จ', 2000);
+                }).catch((e) => showToast?.('ยืนยันนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
+              }}
+              onEditAppt={(appt) => {
+                setApptFormMode({ mode: 'edit', appointmentId: appt.id });
+              }}
+              onCancelAppt={(appt) => {
+                if (!window.confirm('ยกเลิกนัดนี้?')) return;
+                updateBackendAppointment(appt.id, { status: 'cancelled' }).then(() => {
+                  showToast?.('ยกเลิกนัดสำเร็จ', 2000);
+                }).catch((e) => showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
+              }}
+              onCreateTreatmentForAppt={(appt) => {
+                setTreatmentFormMode({ mode: 'create', appointmentId: appt.id, customerId: appt.customerId });
+              }}
+              onEditTreatmentForAppt={(appt) => {
+                setTreatmentFormMode({ mode: 'edit', treatmentId: appt.linkedTreatmentId });
+              }}
+              onOpenLineForAppt={(appt) => {
+                if (!appt.customerLineUserId) return;
+                window.open(`https://line.me/R/oaMessage/@loverclinic/?customer=${appt.customerHN || appt.customerId}`, '_blank');
+              }}
+              onAddWalkIn={() => {
+                setSessionModalTab?.('standard');
+                setShowSessionModal(true);
+              }}
+            />
+          ) : renderJsxBlock(() => {
         // ── Appointment Calendar ──
         const [y, m] = apptMonth.split('-').map(Number);
         const firstDayOfMonth = new Date(y, m - 1, 1);
@@ -7354,7 +7419,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             )}
           </div>
         );
-      }) : (
+      })}
+        </div>
+      ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 xl:gap-8">
           <div className="xl:col-span-1" id="qr-panel">
             <div className="bg-[var(--bg-surface)] p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-[var(--bd)] text-center sticky top-8 shadow-[var(--shadow-panel)] flex flex-col items-center">
