@@ -357,6 +357,27 @@ describe('V62.M4 — V62 fix script Rule M canonical shape', () => {
   });
 });
 
+describe('V62-bis (2026-05-08) — handleGenScheduleLink fetches branch-wide entries when no specific doctor', () => {
+  it('M-bis.1 — fetch is NOT gated on schedSelectedDoctor (V62-bis fix)', () => {
+    // Pre-V62-bis: `if (schedSelectedDoctor) { scheduleEntries = await listStaffSchedules({...staffId}) }`
+    // → noDoctor + แพทย์ทุกคน modes got empty scheduleEntries → V62 derivedDoctorDays=[]
+    // Post-V62-bis: ternary fetch — both branches always fetch
+    expect(ADMIN_DASHBOARD_SRC).toMatch(
+      /scheduleEntries\s*=\s*schedSelectedDoctor[\s\S]{0,400}?listStaffSchedules\([\s\S]{0,200}?:\s*await listStaffSchedules\(/,
+    );
+  });
+
+  it('M-bis.2 — V62-bis marker comment present', () => {
+    expect(ADMIN_DASHBOARD_SRC).toMatch(/V62-bis/);
+  });
+
+  it('M-bis.3 — branch-wide listStaffSchedules call (no staffId param)', () => {
+    expect(ADMIN_DASHBOARD_SRC).toMatch(
+      /listStaffSchedules\(\{\s*branchId:\s*selectedBranchId\s*\}\)/,
+    );
+  });
+});
+
 describe('V62.M5 — V60 helper still exists (backward compat preservation)', () => {
   it('M5.1 — derivedDoctorDaysFromSchedules still exported', () => {
     expect(SCHEDULE_VALIDATION_SRC).toMatch(/export function derivedDoctorDaysFromSchedules/);

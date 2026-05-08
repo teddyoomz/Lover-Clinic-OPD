@@ -772,6 +772,46 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return branchExamRooms.filter((r) => r && r.id != null && ids.has(String(r.id)));
   }, [branchExamRooms, v61EligibleRoomIds]);
 
+  // V63 / AV35 (2026-05-08) — branch-wide be_staff_schedules entries for the
+  // AdminDashboard "Frontend" calendar 🔥-emoji rendering. Replaces admin's
+  // manual paint Set (schedDoctorDays) which is now READ-ONLY per V63.
+  // User directive: "ดึงวันหมอเข้ามาแสดงเป็นอีโมจิไฟในปฏิทิน tab นัดหมาย
+  // ของ frontend อันนี้ด้วย ... ส่วนปฏิทินด้านล่าง ให้ทำได้แค่ปิดวัน
+  // ไม่สามารถกำหนดวันหมอเข้าได้แล้ว" — schedDoctorDays paint dropped;
+  // canonical source = be_staff_schedules.
+  //
+  // Cancellation guard mirrors V55 livePractitioners pattern.
+  const [allBranchScheduleEntries, setAllBranchScheduleEntries] = useState([]);
+  useEffect(() => {
+    if (!selectedBranchId) { setAllBranchScheduleEntries([]); return; }
+    let cancelled = false;
+    listStaffSchedules({ branchId: selectedBranchId })
+      .then((list) => { if (!cancelled) setAllBranchScheduleEntries(list || []); })
+      .catch(() => { if (!cancelled) setAllBranchScheduleEntries([]); });
+    return () => { cancelled = true; };
+  }, [selectedBranchId]);
+
+  // V63 / AV35 — derived doctor days for the visible appointment calendar
+  // month (apptMonth). Used by both image-1 (Frontend appointment tab
+  // calendar at line ~6602) and image-2 (ตั้งค่าตารางคลินิก calendar at
+  // line ~7044). Pre-V63 these read schedDoctorDays (admin's manual paint
+  // Set) which is no longer authoritative.
+  const canonicalDoctorDays = useMemo(() => {
+    if (!apptMonth || !/^\d{4}-\d{2}$/.test(apptMonth)) return new Set();
+    const [yy, mm] = apptMonth.split('-').map(Number);
+    const dim = new Date(yy, mm, 0).getDate();
+    const datesISO = [];
+    for (let d = 1; d <= dim; d++) {
+      datesISO.push(`${apptMonth}-${String(d).padStart(2, '0')}`);
+    }
+    const days = derivedDoctorDaysAcrossWindow({
+      doctorIds: null,                 // ALL doctors in branch
+      allEntries: allBranchScheduleEntries,
+      datesISO,
+    });
+    return new Set(days);
+  }, [apptMonth, allBranchScheduleEntries]);
+
   // V61 defensive reset (V55 pattern): when eligibleRoomIds changes (branch
   // switch / doctor switch / mode toggle / months window change) and the
   // previously-picked schedSelectedRoom is no longer in the eligible set,
@@ -1411,30 +1451,31 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setSchedBlockingDay(null);
   };
 
-  // ── Toggle day: normal → doctor → closed → normal (or forced action for drag) ──
+  // ── Toggle day: normal ↔ closed ──
+  // V63 / AV35 (2026-05-08) — drop "doctor" cycle. User directive:
+  // "ส่วนปฏิทินด้านล่าง ให้ทำได้แค่ปิดวัน ไม่สามารถกำหนดวันหมอเข้าได้แล้ว".
+  // Doctor days now read-only from canonical be_staff_schedules
+  // (canonicalDoctorDays useMemo). Calendar toggle is closed/normal only;
+  // the 🔥 emoji is still rendered when canonical schedule has working
+  // entry, but admin can NO longer paint/un-paint it manually.
   const toggleDay = (dateStr, forceAction) => {
-    let newDoc, newClosed;
-    const action = forceAction || (schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor');
-    if (action === 'doctor') {
-      newDoc = new Set(schedDoctorDays); newDoc.add(dateStr);
-      newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
-    } else if (action === 'closed') {
-      newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
+    let newClosed;
+    const action = forceAction || (schedClosedDays.has(dateStr) ? 'normal' : 'closed');
+    if (action === 'closed') {
       newClosed = new Set(schedClosedDays); newClosed.add(dateStr);
     } else {
-      newDoc = new Set(schedDoctorDays); newDoc.delete(dateStr);
       newClosed = new Set(schedClosedDays); newClosed.delete(dateStr);
     }
-    setSchedDoctorDays(newDoc);
     setSchedClosedDays(newClosed);
     // Don't auto-save — user must click save button
     return action;
   };
 
   // ── Drag handlers for day toggle ──
+  // V63 / AV35 — drag cycle simplified to closed ↔ normal.
   const handleDayPointerDown = (dateStr, e) => {
     e.preventDefault();
-    const action = schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor';
+    const action = schedClosedDays.has(dateStr) ? 'normal' : 'closed';
     dayDragRef.current = { active: true, action, touched: new Set([dateStr]) };
     toggleDay(dateStr, action);
   };
@@ -1706,16 +1747,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // window (preserves admin's ability to ADD ad-hoc dates beyond the
       // schedule, but prevents prior-month manual paint from leaking into
       // a future-month link).
+      // V62-bis (2026-05-08) — fetch branch-wide entries when no specific
+      // doctor selected. Mirrors V61 useEffect line ~654 extension.
+      // Pre-V62-bis gated fetch on schedSelectedDoctor → noDoctor mode
+      // (and พบแพทย์ + แพทย์ทุกคน) got empty scheduleEntries → V62
+      // derivedDoctorDays = []. Bug surfaced when user generated
+      // SCH-cc3964c023 (noDoctor + showDoctorStatus=false + selected
+      // shockwave room) — fresh link still had doctorDays=[] post-V62
+      // because V62 derivation ran on empty input.
       let scheduleEntries = [];
-      if (schedSelectedDoctor) {
-        try {
-          scheduleEntries = await listStaffSchedules({
-            branchId: selectedBranchId,
-            staffId: schedSelectedDoctor,
-          });
-        } catch (e) {
-          console.warn('[V60/AV32] listStaffSchedules failed:', e?.message || e);
-        }
+      try {
+        scheduleEntries = schedSelectedDoctor
+          ? await listStaffSchedules({ branchId: selectedBranchId, staffId: schedSelectedDoctor })
+          : await listStaffSchedules({ branchId: selectedBranchId });
+      } catch (e) {
+        console.warn('[V60/AV32 + V62-bis] listStaffSchedules failed:', e?.message || e);
       }
       // Build every calendar date in the link's months window so the
       // derive helpers can iterate them day-by-day.
@@ -6599,7 +6645,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     const isToday = dateStr === todayStr;
                     const dow = (calStart + i) % 7;
                     const isWeekend = dow >= 5;
-                    const isDoc = schedDoctorDays.has(dateStr);
+                    // V63 / AV35 (2026-05-08) — read from canonicalDoctorDays
+                    // (derived from be_staff_schedules via useMemo above) NOT
+                    // schedDoctorDays admin manual paint. User directive: pull
+                    // doctor-days from canonical source for fire emoji.
+                    const isDoc = canonicalDoctorDays.has(dateStr);
                     const isClosed = schedClosedDays.has(dateStr);
 
                     let cellBg = normalCellBg;
@@ -6972,7 +7022,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         </div>
                         <div>
                           <h3 className="text-sm font-bold text-[var(--tx-heading)] tracking-wide">ตั้งค่าตารางคลินิก</h3>
-                          <p className="text-xs text-[var(--tx-muted)]">หมอเข้า · ปิดคิว · ปิดช่วงเวลา</p>
+                          {/* V63 / AV35 (2026-05-08) — subtitle dropped "หมอเข้า"
+                              since admin can no longer paint it manually.
+                              Doctor days = canonical from be_staff_schedules. */}
+                          <p className="text-xs text-[var(--tx-muted)]">ปิดคิว · ปิดช่วงเวลา</p>
                         </div>
                       </div>
                       {/* Summary badges */}
@@ -6982,9 +7035,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {blockedCount > 0 && <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isDark ? 'bg-orange-950/40 border border-orange-900/40 text-orange-400' : 'bg-orange-100 border border-orange-200 text-orange-600'}`}>{blockedCount} slot ปิด</span>}
                       </div>
                     </div>
-                    {/* Legend */}
+                    {/* Legend — V63 / AV35: "หมอเข้า" is now READ-ONLY
+                        (canonical source: be_staff_schedules). Admin paint
+                        only toggles ปิดคิว ↔ ปกติ. The legend keeps "หมอเข้า"
+                        chip for visual reference (still rendered) but appends
+                        "(จากตารางหมอ)" hint to clarify it's not editable here. */}
                     <div className="flex flex-wrap gap-3 mt-3 text-xs text-[var(--tx-muted)]">
-                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-sky-600' : 'bg-sky-400'}`} /> หมอเข้า</span>
+                      <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-sky-600' : 'bg-sky-400'}`} /> หมอเข้า <span className="opacity-60">(จากตารางหมอ)</span></span>
                       <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-red-600' : 'bg-red-400'}`} /> ปิดคิว</span>
                       <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-emerald-700' : 'bg-emerald-400'}`} /> ปกติ</span>
                       <span className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm inline-block ${isDark ? 'bg-orange-600' : 'bg-orange-400'}`} /> ปิดช่วงเวลา</span>
@@ -6993,9 +7050,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {/* Calendar edit/save/cancel buttons */}
                     <div className="flex items-center gap-2 mt-3">
                       {!schedCalendarEditing ? (
-                        <button onClick={() => { if (confirm('ต้องการแก้ไขตารางหมอเข้า/ปิดคิว?')) startCalendarEdit(); }}
+                        <button onClick={() => { if (confirm('ต้องการแก้ไขปิดคิว?')) startCalendarEdit(); }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-400 hover:bg-sky-900/40' : 'bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100'}`}>
-                          <Edit3 size={11} /> แก้ไขตารางหมอเข้า/ปิดคิว
+                          {/* V63 / AV35 — admin can only toggle closed/normal now */}
+                          <Edit3 size={11} /> แก้ไขปิดคิว
                         </button>
                       ) : (
                         <>
@@ -7007,7 +7065,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-950/40 border border-red-900/50 text-red-400 hover:bg-red-900/40 transition-all">
                             <XCircle size={11} /> ยกเลิก
                           </button>
-                          <span className="text-[11px] text-sky-400 ml-auto">กำลังแก้ไข — กดวันที่เพื่อเปลี่ยนสถานะ</span>
+                          {/* V63 / AV35 — cycle simplified to closed ↔ normal */}
+                          <span className="text-[11px] text-sky-400 ml-auto">กำลังแก้ไข — กดวันที่เพื่อสลับ ปกติ ↔ ปิดคิว</span>
                         </>
                       )}
                     </div>
@@ -7041,7 +7100,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                               {Array.from({ length: dim }).map((_, i) => {
                                 const day = i + 1;
                                 const ds = `${mo}-${String(day).padStart(2, '0')}`;
-                                const isDoc = schedDoctorDays.has(ds);
+                                // V63 / AV35 (2026-05-08) — canonical doctor
+                                // days (read-only, from be_staff_schedules).
+                                // Admin can no longer toggle "doctor day" via
+                                // this calendar — only closed/normal cycle
+                                // remains. 🔥 emoji shows when doctor has
+                                // schedule entry (canonical source).
+                                const isDoc = canonicalDoctorDays.has(ds);
                                 const isCl = schedClosedDays.has(ds);
                                 const hasBlocked = schedManualBlocked.some(b => b.date === ds);
                                 const dow = (calS + i) % 7;

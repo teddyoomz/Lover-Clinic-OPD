@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV34)
+## Invariants (AV1–AV35)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -787,6 +787,74 @@ expect(ADMIN_DASHBOARD_SRC).toMatch(/customDoctorHours:\s*v62MergedCustomDoctorH
 3. **Snapshot at save is the canonical pattern for customer-facing public-link docs** — V60 doctorDays + V61 selectedRoomIds + V62 customDoctorHours all use this. Customer link reflects last-Sync state; admin controls when refresh happens.
 4. **CSS opacity placement matters for layered information** — applying `opacity-30` to the OUTER card dimmed the doctor badge along with the slot text. Move the dim to the inner element that should be dimmed; siblings stay at full opacity. Layering the visual hierarchy this way preserves multi-info display when slot has multiple statuses.
 5. **The complete schedule-link adoption-gap series (V52-V62)** demonstrates a single class-of-bug eliminated layer-by-layer: V52 reports / V53 time-axis / V54 raw listeners / V55 modal data sources / V56 room auto-closure / V60 save-time doctorDays specific / V61 modal UI room dropdown / V62 save-time doctorDays + customDoctorHours multi-doctor. 8 V-entries, 8 boundaries, one canonical source-of-truth (`be_staff_schedules`).
+
+### AV35 — AdminDashboard calendar fire-emoji + doctor-day cycle driven by canonical `be_staff_schedules` (V63, 2026-05-08)
+
+**Pattern**: AdminDashboard's "Frontend" appointment calendar (image-1, line ~6602) + "ตั้งค่าตารางคลินิก" prefs calendar (image-2, line ~7044) MUST render the 🔥 doctor-day emoji from canonical `be_staff_schedules` data (via `canonicalDoctorDays` useMemo + `derivedDoctorDaysAcrossWindow` helper) — NOT from admin's manual paint Set (`schedDoctorDays`). Admin's "doctor day" toggle in the prefs calendar is REMOVED — `toggleDay` + `handleDayPointerDown` cycle simplified to `closed ↔ normal` only.
+
+**Class-of-bug**: V12 multi-reader-sweep at AdminDashboard CALENDAR RENDER boundary. The schedule-link adoption-gap series (V52-V63) is now 9 V-entries deep; V63 closes the admin-UI rendering gap (admin can no longer paint doctor days; canonical source drives the visual indicator).
+
+**Companion bug fixed (V62-bis)**: `handleGenScheduleLink` pre-V62-bis fetched `scheduleEntries` ONLY when `schedSelectedDoctor` was set. For noDoctor mode without specific doctor (or แพทย์ทุกคน mode), scheduleEntries=[] → V62 derivation ran on empty input → doctorDays still saved as []. User generated SCH-cc3964c023 (noDoctor + showDoctorStatus=false) and 🔥 emoji didn't render. V62-bis: drop the `if (schedSelectedDoctor)` gate; always fetch (ternary: branch-wide when no specific doctor).
+
+**Origin**: User report (verbatim, 2026-05-08): "เปลี่ยน emoji ไฟ ที่หมอเข้า ให้เห็นกับลิ้งที่ไม่ได้ติ๊กให้แสดงสถานะหมอด้วย ... ดึงวันหมอเข้ามาแสดงเป็นอีโมจิไฟในปฏิทิน tab นัดหมายของ frontend อันนี้ด้วย ... ส่วนปฏิทินด้านล่าง ให้ทำได้แค่ปิดวัน ไม่สามารถกำหนดวันหมอเข้าได้แล้ว". Multiple bugs surfaced on `SCH-cc3964c023` (fresh post-V62 link with empty doctorDays).
+
+**Fix architecture (V63 + V62-bis)**:
+1. **V63 — canonical doctor days in AdminDashboard render**:
+   - NEW state `allBranchScheduleEntries` + useEffect to load `listStaffSchedules({branchId: selectedBranchId})` whenever branch changes
+   - NEW useMemo `canonicalDoctorDays = new Set(derivedDoctorDaysAcrossWindow({doctorIds: null, allEntries, datesISO}))` for the apptMonth window
+   - Replace `schedDoctorDays.has(...)` → `canonicalDoctorDays.has(...)` at both render sites (image-1 line ~6602, image-2 line ~7044)
+2. **V63 — drop "doctor day" toggle from prefs calendar**:
+   - `toggleDay` cycle: was `normal → doctor → closed → normal`; now `normal ↔ closed` only
+   - `handleDayPointerDown` action ternary: was `schedDoctorDays.has ? 'closed' : schedClosedDays.has ? 'normal' : 'doctor'`; now `schedClosedDays.has ? 'normal' : 'closed'`
+   - `setSchedDoctorDays` mutations REMOVED from toggleDay (state remains for legacy prefs-doc backward-compat at load)
+3. **V63 — UI legend updates**:
+   - Subtitle: `หมอเข้า · ปิดคิว · ปิดช่วงเวลา` → `ปิดคิว · ปิดช่วงเวลา`
+   - Legend chip: `หมอเข้า` → `หมอเข้า (จากตารางหมอ)` (read-only hint)
+   - Edit button: `แก้ไขตารางหมอเข้า/ปิดคิว` → `แก้ไขปิดคิว`
+   - Edit-mode hint: `กดวันที่เพื่อเปลี่ยนสถานะ` → `กดวันที่เพื่อสลับ ปกติ ↔ ปิดคิว`
+4. **V62-bis — drop fetch gate in `handleGenScheduleLink`**:
+   - Pre-V62-bis: `if (schedSelectedDoctor) { scheduleEntries = await listStaffSchedules({...staffId}); }` ← scheduleEntries=[] when no specific doctor
+   - Post-V62-bis: ternary `scheduleEntries = schedSelectedDoctor ? await listStaffSchedules({branchId, staffId}) : await listStaffSchedules({branchId})` ← always fetches; branch-wide when no specific doctor
+
+**Anti-pattern** (forbidden by AV35):
+```js
+// ❌ FORBIDDEN — admin calendar reads from manual paint Set instead of canonical
+const isDoc = schedDoctorDays.has(dateStr);  // pre-V63 admin manual paint
+
+// ❌ FORBIDDEN — toggleDay cycles through 'doctor' action (admin can't paint anymore)
+const action = forceAction || (schedDoctorDays.has(dateStr) ? 'closed' : schedClosedDays.has(dateStr) ? 'normal' : 'doctor');
+
+// ❌ FORBIDDEN — fetch scheduleEntries gated on schedSelectedDoctor (V62-bis)
+let scheduleEntries = [];
+if (schedSelectedDoctor) {
+  scheduleEntries = await listStaffSchedules({branchId, staffId: schedSelectedDoctor});
+}
+```
+
+**Source-grep regression** (`tests/v63-canonical-doctor-days-admin-calendar.test.js`):
+```js
+// V63 admin calendar uses canonicalDoctorDays
+expect(ADMIN_DASHBOARD_SRC).toMatch(/canonicalDoctorDays\s*=\s*useMemo/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/const\s+isDoc\s*=\s*canonicalDoctorDays\.has\(dateStr\)/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/const\s+isDoc\s*=\s*canonicalDoctorDays\.has\(ds\)/);
+
+// toggleDay cycle simplified
+expect(ADMIN_DASHBOARD_SRC).not.toMatch(/const\s+action\s*=\s*forceAction\s*\|\|\s*\([\s\S]{0,200}?:\s*'doctor'\s*\)/);
+expect(ADMIN_DASHBOARD_SRC).toMatch(/const\s+action\s*=\s*forceAction\s*\|\|\s*\(schedClosedDays\.has\(dateStr\)\s*\?\s*'normal'\s*:\s*'closed'\)/);
+
+// V62-bis fetch ungated
+expect(ADMIN_DASHBOARD_SRC).toMatch(/scheduleEntries\s*=\s*schedSelectedDoctor[\s\S]{0,400}?listStaffSchedules\([\s\S]{0,200}?:\s*await listStaffSchedules\(/);
+```
+
+**Sanctioned exceptions**: NONE for the canonical-source rule. `schedDoctorDays` state still exists for backward-compat reading from legacy prefs docs at load — but is never mutated by toggle paths post-V63.
+
+**Companion AV: AV32** (V60 doctorDays save-time derivation specific-doctor) + **AV34** (V62 doctorDays save-time multi-doctor) + AV35 (V63 admin-render canonical). Together they form the complete schedule-link canonical-source family.
+
+**Lessons**:
+1. **A narrow fetch is a future bug magnet** — V62-bis lesson: even if downstream derivation runs unconditionally, gating the INPUT fetch on `if (schedSelectedDoctor)` produces empty output for non-specific modes. Always fetch the data; let downstream filter.
+2. **Admin manual paint vs canonical source** — when the canonical source exists, drop admin's parallel mutation paths. Keep state for legacy doc loading; never mutate it via UI.
+3. **Cycle simplification reduces UX surface area** — pre-V63 toggle had 3 states (normal/doctor/closed) → 6 transitions. Post-V63 has 2 states → 1 transition. Less to test, less to misuse.
+4. **The complete schedule-link adoption-gap series (V52-V63) is 9 V-entries deep** — V52 reports / V53 time-axis / V54 raw listeners / V55 modal data sources / V56 room auto-closure / V60 save-time doctorDays specific / V61 modal UI room dropdown / V62 save-time doctorDays multi-doctor / V63 admin-UI render canonical. 9 boundaries, one canonical source-of-truth (`be_staff_schedules`).
 
 ## How to run
 

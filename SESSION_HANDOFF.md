@@ -7,11 +7,32 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #15 — V62 schedule-link doctorDays + customDoctorHours derived for ALL modes (AV34) · 8036 + 1 skipped GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #16 — V63 + V62-bis: AdminDashboard calendar canonical doctor-days + handleGenScheduleLink fetch ungated (AV35) · 8059 + 1 skipped GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: V62 / AV34 — schedule-link doctorDays + customDoctorHours derived for ALL modes (incl. ไม่พบแพทย์)
-- **Test count**: 8036 + 1 skipped GREEN. Build clean.
-- **Deploy state**: **PRODUCTION = `ef580a6`** (30 commits ahead — V52 through V62 NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
+- **Last commit**: V63 + V62-bis / AV35 — AdminDashboard calendar canonical doctor-days + handleGenScheduleLink fetch ungated
+- **Test count**: 8059 + 1 skipped GREEN. Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (31 commits ahead — V52 through V63 + V62-bis NOT yet deployed). Combined deploy NOT triggered.
+
+### Session 2026-05-08 EOD #16 — V63 + V62-bis (AV35)
+
+User: "เปลี่ยน emoji ไฟ ที่หมอเข้า ให้เห็นกับลิ้งที่ไม่ได้ติ๊กให้แสดงสถานะหมอด้วย ... ดึงวันหมอเข้ามาแสดงเป็นอีโมจิไฟในปฏิทิน tab นัดหมาย ของ frontend อันนี้ด้วย ... ส่วนปฏิทินด้านล่าง ให้ทำได้แค่ปิดวัน ไม่สามารถกำหนดวันหมอเข้าได้แล้ว"
+Plus follow-up: SCH-cc3964c023 (fresh post-V62 noDoctor link with showDoctorStatus=false) STILL had `doctorDaysCount: 0` → 🔥 didn't render.
+
+**V62-bis fix**: `handleGenScheduleLink` fetch was gated `if (schedSelectedDoctor) { scheduleEntries = await listStaffSchedules({...staffId}) }` → empty entries for noDoctor + ทุกคน modes → V62 derivation on []. Post-V62-bis: ternary always-fetch.
+
+**V63 fix (admin-side)**: NEW state `allBranchScheduleEntries` + useMemo `canonicalDoctorDays` derived from `be_staff_schedules`. Replace `schedDoctorDays.has(...)` → `canonicalDoctorDays.has(...)` at image-1 (Frontend appt calendar) + image-2 (ตั้งค่าตารางคลินิก) render sites. `toggleDay` cycle simplified to closed↔normal only (drops "doctor" toggle). UI legend updates: subtitle, legend chip "(จากตารางหมอ)", button label "แก้ไขปิดคิว".
+
+**Rule M data fix**: SCH-cc3964c023 backfilled to 18 doctorDays + 22 customDoctorHours keys.
+
+**Tests**: +20 V63.M1-M6 + 3 V62-bis.M-bis.1-3 + 1 V60.X2.3 fixup (1 → ≤2 listStaffSchedules tokens). Cumulative: 7992 → 8059 + 1 skipped (+67 net) all GREEN. Build clean.
+
+**NEW audit invariant AV35**: AdminDashboard calendars MUST drive 🔥 from canonical via `canonicalDoctorDays`; `toggleDay` cycle = closed↔normal only; `handleGenScheduleLink` fetch ungated. Companion AV32 + AV34 + AV35 = complete schedule-link canonical-source family. SKILL.md: 34 → 35.
+
+The schedule-link adoption-gap series (V52-V63) is now **9 V-entries deep** — one canonical source-of-truth (`be_staff_schedules`), 9 boundaries closed.
+
+Detail: V63 V-entry compact in `.claude/rules/00-session-start.md` § 2; AV35 in `.agents/skills/audit-anti-vibe-code/SKILL.md`; checkpoint `.agents/sessions/2026-05-08-v63-v62bis-canonical-admin-calendar.md`.
+
+
 
 ### Session 2026-05-08 EOD #15 — V62 doctorDays + customDoctorHours derived for ALL link modes (AV34)
 
@@ -1099,24 +1120,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — V52+V53+V54 branch-scope trilogy shipped + pushed; awaiting deploy authorization.
+Resume LoverClinic — V52..V63 + V62-bis schedule-link adoption-gap series complete (9 V-entries deep).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=eee8003, prod=ef580a6 — 3 ahead)
-3. .agents/active.md (7662 + 1 skipped GREEN · idle)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V54 V-summary)
-5. .agents/sessions/2026-05-08-v52-v53-v54-branch-scope-trilogy.md (this session checkpoint)
+2. SESSION_HANDOFF.md (master=<HEAD>, prod=ef580a6 — 31 ahead)
+3. .agents/active.md (8059 + 1 skipped GREEN · idle)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V63 V-summary)
+5. .agents/sessions/2026-05-08-v63-v62bis-canonical-admin-calendar.md (latest checkpoint)
 
-Status: master=`eee8003`, prod=`ef580a6` LIVE (V52+V53+V54 NOT deployed yet). 7662 + 1 skipped GREEN. Build clean. AV1-AV29 + BS-1..BS-13 + CB-1..5. NEW BS-11 (report-tab branch-refresh) + BS-12 (time-axis branch-aware) + BS-13 (raw listener safe-by-default).
+Status: master=`<HEAD>`, prod=`ef580a6` LIVE (V52..V63 + V62-bis NOT deployed yet). 8059 + 1 skipped GREEN. Build clean. AV1-AV30 + AV32 + AV33 + AV34 + AV35 + BS-1..BS-15 + CB-1..5.
 
-Next: idle — awaiting user wake-up + (optional) combined deploy authorization for V52+V53+V54.
+Next: idle — awaiting (optional) combined deploy authorization. 31 commits ahead of prod (V52..V63 + V62-bis). 2 prod links backfilled via Rule M: SCH-9c201860e1 + SCH-cc3964c023.
 
 Outstanding (user-triggered):
-- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 3 commits ahead of prod.
-- (Optional) visual verify: branch-switch on report tabs / time-axis grid / AdminDashboard queue calendar.
+- 🚨 `vercel --prod` (V18 — explicit "deploy" THIS turn). 31 commits ahead of prod.
+- (Optional) admin re-gen any other broken in-the-wild noDoctor link OR backfill via `scripts/v62-fix-schedule-link-doctor-data.mjs <TOKEN> --apply`.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..13; Rule M data-ops; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage). systematic-debugging Phase 1-2 catches what static audit misses (V54 lesson — anchor invariants on STRUCTURAL refs not comment text).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule P 7-step on every bug discovery (Tier 2 default artifacts); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..15; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; V37 NEVER `git add -A`; V58 lock — no Number() on string-ID picker values; V59-bis lock — useMemo deps must reference variables declared earlier (TDZ); preview_eval against prod uses TEST-prefixed fixtures only. Probe list (Rule B) = 4 endpoints. AV35 (V63): admin calendars MUST drive 🔥 from canonical be_staff_schedules; toggleDay cycle = closed↔normal only.
 
 /session-start
 ```

@@ -216,16 +216,22 @@ describe('V60.X2 — handleGenScheduleLink uses derived helper + saves finalDoct
     expect(ADMIN_DASHBOARD_SRC).toMatch(/derivedDoctorDaysFromSchedules\(\s*\{[\s\S]{0,400}?doctorId:\s*schedSelectedDoctor/);
   });
 
-  it('X2.3 — listStaffSchedules fetched ONCE within handleGenScheduleLink, reused by both V56 + V60 derivations', () => {
+  it('X2.3 — listStaffSchedules fetched ONCE at RUNTIME within handleGenScheduleLink (ternary branches OK)', () => {
     // After V60 refactor, the listStaffSchedules call lives outside the V56 branch
     // and feeds both derivedAutoClosedDates AND derivedDoctorDaysFromSchedules.
-    // Anchor on the full function declaration for exact scoping.
+    // V62-bis (2026-05-08) — fetch ungated for noDoctor/ทุกคน modes; uses
+    // ternary (one branch fetches with staffId, the other branch fetches
+    // branch-wide). Source has 2 listStaffSchedules tokens (mutually exclusive
+    // at runtime). The intent of the test is "no duplicate fetch" — both
+    // ternary branches resolve to ONE await at runtime, so {1, 2} both satisfy
+    // the contract; the upper bound is 2 (V62-bis ternary).
     const region = ADMIN_DASHBOARD_SRC.match(
       /const handleGenScheduleLink\s*=\s*async[\s\S]+?await setDoc\(doc\(db,\s*'artifacts',\s*appId,\s*'public',\s*'data',\s*'clinic_schedules'/,
     );
     expect(region).toBeTruthy();
     const calls = (region[0].match(/listStaffSchedules\(/g) || []).length;
-    expect(calls).toBe(1);
+    expect(calls).toBeLessThanOrEqual(2);
+    expect(calls).toBeGreaterThanOrEqual(1);
   });
 
   it('X2.4 — saved doc shape uses finalDoctorDays (NOT raw [...schedDoctorDays])', () => {
