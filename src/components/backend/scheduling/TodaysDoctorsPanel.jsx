@@ -47,7 +47,8 @@ export default function TodaysDoctorsPanel({
   // Build per-doctor info: WORKING shifts (recurring/work/halfday) only —
   // exclude leave/holiday/sick which mean "not working".
   const roomNameById = new Map(
-    (branchExamRooms || []).filter((r) => r && r.kind === 'doctor').map((r) => [String(r.id), r.name]),
+    // V57 / AV30 — defensive default `kind ?? 'doctor'` for legacy rooms.
+    (branchExamRooms || []).filter((r) => r && (r.kind ?? 'doctor') === 'doctor').map((r) => [String(r.id), r.name]),
   );
   const todaysDoctors = (todaysSchedules || [])
     .filter((s) => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday')

@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV29)
+## Invariants (AV1–AV30)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -608,6 +608,41 @@ expect(scriptSrc).toMatch(/be_admin_audit\/v43-/);
 **Sanctioned exception**: short-lived flags that the master never edits post-copy (e.g. `customer.courses[i].assignedAt` is a write-once timestamp; not a sync target). Mark with `// audit-anti-vibe-code: AV21 safe — master-immutable field` annotation.
 
 **Companion AV: AV13** (long-lived auth bug class) + **AV17** (list spread-order V12). Same V12 multi-reader-sweep family but at the **denormalized-master-flag** level rather than read-shape or write-direction.
+
+### AV30 — Schema-vs-consumer drift on optional enum fields (V57, 2026-05-08)
+
+**Pattern**: A schema field that consumers FILTER on but the validation file never declared, the UI never exposed, and existing data never carried. Consumers silently exclude all legacy data because the strict-equality filter `r.kind === 'doctor'` returns false for `kind: undefined`.
+
+**Origin**: Phase 18.0 introduced `be_exam_rooms` collection. `examRoomValidation.js` defined name + nameEn + note + status + sortOrder — NOT `kind`. `ExamRoomFormModal` had no kind picker. Yet V55 added a `r.kind === 'doctor' ? 'doctor' : 'staff'` mapper (AdminDashboard schedule-link), and V56 added 4 more consumers (modal/panel/handleGenScheduleLink) that all filter `r.kind === 'doctor'`. Diagnostic 2026-05-08 confirmed all 6 prod rooms had `kind: undefined` → silently excluded from doctor-mode UIs.
+
+**Fix architecture (V57)**:
+1. **Schema** — declare the field at validation level: `KIND_OPTIONS = Object.freeze([...])` + emptyForm default + validate enum + normalize coerce
+2. **UI** — expose a picker so admin can set per-doc (radio + Thai labels)
+3. **Defensive default in consumers** — `(r.kind ?? 'doctor') === 'doctor'` so legacy data degrades gracefully (treated as the most-common case)
+4. **Migration** — Rule M backfill stamps the default value on existing docs (idempotent, audit-emit, dry-run+apply)
+
+**Anti-pattern** (forbidden by AV30): bare `r.kind === 'doctor'` filter without `?? 'doctor'` defensive default in consumer code that reads from a collection where the field could be missing on legacy docs.
+
+**Source-grep regression** (`tests/v57-exam-room-kind.test.js` V57.K2):
+```js
+// Every consumer site must use defensive default
+expect(src).toMatch(/r\.kind\s*\?\?\s*['"]doctor['"]/);
+// Bare `r.kind === 'doctor'` strict filter forbidden anywhere outside helper memos
+const violations = lines.filter((line) =>
+  /\br\.kind\s*===\s*['"]doctor['"]/.test(line)
+  && !/r\.kind\s*\?\?\s*['"]doctor['"]/.test(line)
+  && !line.trim().startsWith('//'));
+expect(violations).toEqual([]);
+```
+
+**Sanctioned exceptions**: NONE — every consumer goes through defensive default. The migration script can use bare `kind === 'doctor'` for backfill-skip logic (only applies when reading the doc to decide whether to write).
+
+**Companion AV: AV20** (Staff/Doctor hide-from-lists default-filter pattern — same "missing-flag = default-semantic" architecture; both use empty/missing → the "most permissive" default). **Class-of-bug**: V21 schema-vs-consumer drift family (consumer assumes a field that schema never enforced).
+
+**Lessons**:
+1. When introducing a NEW collection, EVERY field consumed downstream must be declared in the validation file at day one — even if "optional" or "default-able". V57 schema gap was a 2-month silent latent bug.
+2. Consumer-side defensive defaults are mandatory for fields where legacy docs predate the field's introduction. `?? 'most-common-value'` pattern is the canonical fix.
+3. UI form must expose every consumed field. If admin can't set it, default values get baked in at the schema layer + migration backfills existing data.
 
 ## How to run
 

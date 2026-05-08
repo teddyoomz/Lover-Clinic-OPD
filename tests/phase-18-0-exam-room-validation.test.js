@@ -16,7 +16,9 @@ describe('Phase 18.0 — examRoomValidation pure helpers', () => {
   describe('V1 emptyExamRoomForm', () => {
     it('V1.1 returns shape with all fields defaulted', () => {
       const f = emptyExamRoomForm();
-      expect(f).toEqual({ name: '', nameEn: '', note: '', status: 'ใช้งาน', sortOrder: 0 });
+      // V57 / AV30 (2026-05-08) — `kind: 'doctor'` added as default;
+      // see tests/v57-exam-room-kind.test.js for full V57 contract.
+      expect(f).toEqual({ name: '', nameEn: '', note: '', status: 'ใช้งาน', kind: 'doctor', sortOrder: 0 });
     });
     it('V1.2 returns a fresh object each call (no shared ref)', () => {
       const a = emptyExamRoomForm();
@@ -105,7 +107,9 @@ describe('Phase 18.0 — examRoomValidation pure helpers', () => {
       const out = normalizeExamRoom({
         name: '  ห้องดริป  ', nameEn: ' Drip ', note: ' line ', status: '', sortOrder: '4',
       });
-      expect(out).toEqual({ name: 'ห้องดริป', nameEn: 'Drip', note: 'line', status: 'ใช้งาน', sortOrder: 4 });
+      // V57 / AV30 — kind defaults to 'doctor' when missing (back-compat
+      // for legacy rooms pre-V57; see tests/v57-exam-room-kind.test.js).
+      expect(out).toEqual({ name: 'ห้องดริป', nameEn: 'Drip', note: 'line', status: 'ใช้งาน', kind: 'doctor', sortOrder: 4 });
     });
     it('V7.2 sortOrder unparseable falls back to 0', () => {
       const out = normalizeExamRoom({ name: 'X', sortOrder: 'abc' });

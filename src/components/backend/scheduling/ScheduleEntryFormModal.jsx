@@ -126,8 +126,10 @@ export default function ScheduleEntryFormModal({
   // V56 / BS-15 — doctor-kind rooms only (matches V55 schedule-link
   // shownRooms pattern). Memoized so identity is stable across renders.
   const doctorRoomIds = useMemo(
+    // V57 / AV30 — defensive default `kind ?? 'doctor'` for legacy rooms
+    // (pre-V57 schema gap — see examRoomValidation.js header).
     () => (branchExamRooms || [])
-      .filter((r) => r && r.kind === 'doctor')
+      .filter((r) => r && (r.kind ?? 'doctor') === 'doctor')
       .map((r) => String(r.id)),
     [branchExamRooms],
   );
@@ -355,7 +357,8 @@ export default function ScheduleEntryFormModal({
                         ✗ ยกเลิกทั้งหมด
                       </button>
                     </div>
-                    {(branchExamRooms || []).filter((r) => r && r.kind === 'doctor').map((r) => {
+                    {/* V57 / AV30 — defensive default for legacy rooms */}
+                    {(branchExamRooms || []).filter((r) => r && (r.kind ?? 'doctor') === 'doctor').map((r) => {
                       const checked = (form.roomIds || []).map(String).includes(String(r.id));
                       return (
                         <label key={r.id}

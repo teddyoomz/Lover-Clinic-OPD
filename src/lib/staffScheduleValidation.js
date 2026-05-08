@@ -302,7 +302,11 @@ export function mergeSchedulesForDate(targetDate, entries, staffIdsFilter) {
  */
 export function expandRoomIdsForDisplay(entry, branchExamRooms) {
   const branchRooms = Array.isArray(branchExamRooms) ? branchExamRooms : [];
-  const doctorRooms = branchRooms.filter((r) => r && r.kind === 'doctor');
+  // V57 / AV30 — defensive default `kind ?? 'doctor'` so legacy
+  // be_exam_rooms entries (Phase 18.0 pre-V57 schema gap) are treated as
+  // doctor-rooms. V57 backfill stamps `kind: 'doctor'` on existing rooms;
+  // this guard keeps consumers working before/during/after migration.
+  const doctorRooms = branchRooms.filter((r) => r && (r.kind ?? 'doctor') === 'doctor');
   const allDoctorIds = doctorRooms.map((r) => String(r.id));
   if (!entry || !Array.isArray(entry.roomIds) || entry.roomIds.length === 0) {
     return allDoctorIds;

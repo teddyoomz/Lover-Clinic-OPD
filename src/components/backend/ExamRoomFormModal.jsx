@@ -7,6 +7,8 @@ import RequiredAsterisk from '../ui/RequiredAsterisk.jsx';
 import { saveExamRoom } from '../../lib/scopedDataLayer.js';
 import {
   STATUS_OPTIONS,
+  KIND_OPTIONS,
+  KIND_LABEL,
   NAME_MAX_LENGTH,
   NOTE_MAX_LENGTH,
   validateExamRoom,
@@ -93,6 +95,40 @@ export default function ExamRoomFormModal({ room, onClose, onSaved, clinicSettin
           onChange={(e) => update({ note: e.target.value })}
           className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)] resize-none"
         />
+      </div>
+
+      {/* V57 / AV30 — kind picker. Drives the V55 schedule-link
+          'เลือกห้อง' dropdown filter (doctor mode vs ไม่ต้องพบแพทย์ mode)
+          + V56 doctor-schedules modal room-checkbox box (only doctor-kind
+          rooms appear). Default 'doctor' since most clinic rooms are
+          ห้องแพทย์. */}
+      <div data-field="kind">
+        <label className="block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider">
+          ประเภทห้อง <RequiredAsterisk />
+        </label>
+        <div className="flex gap-2">
+          {KIND_OPTIONS.map((k) => {
+            const checked = (form.kind || 'doctor') === k;
+            return (
+              <label key={k}
+                className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                  checked
+                    ? 'bg-emerald-900/30 border-emerald-700 text-emerald-200'
+                    : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-primary)] hover:border-[var(--accent)]'
+                }`}
+                data-testid={`exam-room-kind-${k}`}>
+                <input type="radio" name="exam-room-kind" value={k}
+                  checked={checked}
+                  onChange={() => update({ kind: k })}
+                  className="w-4 h-4" />
+                <span className="text-sm font-medium">{KIND_LABEL[k]}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-[var(--tx-muted)] mt-1">
+          ห้องแพทย์ = ใช้สำหรับนัดที่ต้องพบแพทย์ &nbsp;·&nbsp; ห้องหัตถการทั่วไป = ไม่ต้องพบแพทย์ (เช่น ห้องช็อคเวฟ)
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -442,8 +442,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         const mapped = (rooms || []).map(r => ({
           id: r.id,
           name: r.name,
-          role: r.kind === 'doctor' ? 'doctor' : 'staff',
-          kind: r.kind,
+          // V57 / AV30 — defensive default `kind ?? 'doctor'` for legacy
+          // be_exam_rooms entries (Phase 18.0 pre-V57 had no kind field).
+          role: (r.kind ?? 'doctor') === 'doctor' ? 'doctor' : 'staff',
+          kind: r.kind ?? 'doctor',
         }));
         setBranchExamRooms(mapped);
       } catch (_) { if (!cancelled) setBranchExamRooms([]); }
