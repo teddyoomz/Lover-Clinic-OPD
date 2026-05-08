@@ -226,4 +226,87 @@ describe('V64.R AppointmentHubRowCard', () => {
       expect(fn.mock.calls[0][0].linkedTreatmentId).toBe('BT-LATER');
     });
   });
+
+  // V64-fix8 (2026-05-09) — patient name → clickable link that opens
+  // customer detail page in a NEW BROWSER TAB. Mirrors Phase 15.7-septies
+  // pattern (buildCustomerDetailUrl + target="_blank" + rel="noopener noreferrer").
+  describe('V64.R8 V64-fix8 — patient name link to customer detail', () => {
+    it('R8.1 name renders as <a href> when customerId present', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'LC-26000006', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.tagName).toBe('A');
+      expect(link.getAttribute('href')).toMatch(/[?&]customer=LC-26000006/);
+      expect(link.getAttribute('href')).toMatch(/[?&]backend=1/);
+    });
+
+    it('R8.2 anchor opens in new tab with rel=noopener noreferrer (security defense)', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'LC-26000006', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toMatch(/noopener/);
+      expect(link.getAttribute('rel')).toMatch(/noreferrer/);
+    });
+
+    it('R8.3 anchor encodes customerId in URL', () => {
+      // V33-aware: customerId may include special chars; encodeURIComponent must apply
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'CUST/ABC#1', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.getAttribute('href')).toMatch(/customer=CUST%2FABC%231/);
+    });
+
+    it('R8.4 fallback to <div> when customerId is absent (no clickable link)', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: '', date: '2026-05-08', status: 'pending', customerName: 'Walk-in' }}
+        summary={null}
+        now={FIXED_NOW}
+      />);
+      const node = screen.getByTestId('row-name');
+      expect(node.tagName).toBe('DIV');
+      expect(node.getAttribute('href')).toBe(null);
+      expect(node.textContent).toBe('Walk-in');
+    });
+
+    it('R8.5 anchor displays summary.name (preferred over appt.customerName)', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'LC-26000006', date: '2026-05-08', status: 'pending', customerName: 'Stale Name' }}
+        summary={{ ...baseSummary, name: 'นาย ภูมรศักดิ์ มงคล' }}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.textContent).toBe('นาย ภูมรศักดิ์ มงคล');
+    });
+
+    it('R8.6 anchor carries data-customer-id attribute equal to appt.customerId', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'LC-26000011', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.getAttribute('data-customer-id')).toBe('LC-26000011');
+    });
+
+    it('R8.7 anchor falls back to appt.customerName when summary missing', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'LC-26000006', date: '2026-05-08', status: 'pending', customerName: 'Backup Name' }}
+        summary={null}
+        now={FIXED_NOW}
+      />);
+      const link = screen.getByTestId('row-name');
+      expect(link.tagName).toBe('A');
+      expect(link.textContent).toBe('Backup Name');
+    });
+  });
 });

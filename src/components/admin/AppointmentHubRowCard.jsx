@@ -2,6 +2,13 @@
 import React from 'react';
 import { isMissedAppointment } from '../../lib/appointmentHubFilters.js';
 import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
+// V64-fix8 (2026-05-09): patient name → clickable link that opens the
+// customer detail page in a NEW BROWSER TAB. Mirrors the Phase 15.7-septies
+// pattern already used at AppointmentFormModal + AdminDashboard kiosk
+// "ดูข้อมูลลูกค้า" + DepositPanel + MembershipPanel. <a target="_blank">
+// chosen over button-with-onClick so right-click / middle-click / keyboard
+// activation behave naturally.
+import { buildCustomerDetailUrl } from '../../lib/customerNavigation.js';
 
 const STATUS_LABELS = {
   pending: 'รอยืนยัน',
@@ -107,9 +114,23 @@ export default function AppointmentHubRowCard({
             </span>
           )}
         </div>
-        <div className="font-bold text-sm text-[var(--tx-heading)]" data-testid="row-name">
-          {summary?.name || appt.customerName || '-'}
-        </div>
+        {appt.customerId ? (
+          <a
+            href={buildCustomerDetailUrl(appt.customerId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-sm text-[var(--tx-heading)] hover:underline hover:text-sky-500 cursor-pointer inline-block"
+            data-testid="row-name"
+            data-customer-id={appt.customerId}
+            title="เปิดข้อมูลลูกค้าใน tab ใหม่"
+          >
+            {summary?.name || appt.customerName || '-'}
+          </a>
+        ) : (
+          <div className="font-bold text-sm text-[var(--tx-heading)]" data-testid="row-name">
+            {summary?.name || appt.customerName || '-'}
+          </div>
+        )}
         <div className="text-xs text-[var(--tx-muted)] flex flex-wrap gap-x-3 gap-y-1 mt-1">
           {summary?.gender && <span>เพศ: {summary.gender}</span>}
           {summary?.phone && <span>📞 {summary.phone}</span>}
