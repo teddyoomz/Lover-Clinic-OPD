@@ -7,15 +7,29 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #10 — V56 Doctor Schedule Room Assignment (BS-15) shipped · 7746 GREEN · NOT yet deployed
+- **Date last updated**: 2026-05-08 EOD #12 — V57+V58+V59-bis trilogy + black-screen revert recovery · 7861 + 1 skipped GREEN · NOT yet deployed
 - **Branch**: `master`
-- **Last commit**: `92e0cf9` (docs(V56/BS-15): state files + V56 V-entry compact row) — 19 commits ahead of prod (V52+V53+V54+V55+V56)
-- **Test count**: 7746 GREEN (+11 net from V56 — 25 RTL flow-simulate; some older tests removed/consolidated). Build clean (AdminDashboard chunk 365.57 KB).
-- **Deploy state**: **PRODUCTION = `ef580a6`** (V52 through V56 NOT yet deployed). Master is 19 commits ahead. Combined deploy NOT triggered — per `feedback_local_only_no_deploy.md`, user authorizes `vercel --prod` separately.
-- **Probe-Deploy-Probe**: N/A this turn (no rules change in V52–V56).
-- **Iron-clad rule status**: **systematic-debugging Phase 1-4** + **Rule P 7-step class-of-bug expansion** + **Rule J brainstorming HARD-GATE** + **Rule H-bis EXECUTED + COMPLETE**. Invariant set: AV1-AV29 + **BS-1..BS-15** (NEW: BS-15 doctor schedule room assignment) + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings). V52 through V56 all read-only fixes (no data ops).
-- **Rule B probe list**: still 4 endpoints — V52–V56 don't change rules.
+- **Last commit**: session-end docs (combined V58+V59-bis test fix + state files)
+- **Test count**: 7861 + 1 skipped GREEN. Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (27 commits ahead — V52 through V59-bis NOT yet deployed). Combined deploy NOT triggered — `feedback_local_only_no_deploy.md`.
+- **Probe-Deploy-Probe**: N/A — no rules change in any V-entry this session.
+- **Iron-clad rule status**: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule H-bis EXECUTED. Invariant set: AV1-AV31 + BS-1..BS-15 + CB-1..5.
+- **Migrations applied on prod**: + V57 backfill 6 be_exam_rooms.kind='doctor' (audit `be_admin_audit/v57-backfill-exam-rooms-kind-1778244093687-d334d1b6`).
+- **Rule B probe list**: still 4 endpoints.
+
+### Session 2026-05-08 EOD #12 — V57+V58+V59-bis trilogy + black-screen revert recovery
+
+Three V-entries shipped + one instructive React TDZ revert.
+
+**V57 / AV30** (`103e9da`) — Exam Room Kind Schema Completion. User: "ไม่มีห้องตรวจได้ยังไง?" — modal showed empty-state despite 6 rooms in prod. Diag: all 6 rooms had `kind: undefined` (Phase 18.0 schema gap — never declared `kind` field; V55+V56 consumers filtered `r.kind === 'doctor'` strict). Multi-layer fix Approach A: schema (KIND_OPTIONS + emptyForm default + validate enum + normalize coerce) + UI (radio picker ห้องแพทย์/ห้องหัตถการทั่วไป) + 5 consumer defensive defaults `(r.kind ?? 'doctor')` + Rule M backfill (6 prod rooms stamped, audit-doc-emit, idempotent). +26 tests, AV30 invariant.
+
+**V58 / AV31** (`41abd19`) — Doctor picker snap-back. User (frustrated): "มันเลือกไม่ได้โว้ย ... เด้งกลับมาเป็นแพทย์ทุกคน". Root: `Number("DOC-...")` → NaN → falsy → `<select value={NaN || ''}>` reverts default. 1-line fix: drop `Number()` coercion. +11 tests. AV31 invariant. Bug pre-dated V55 (legacy ProClinic numeric-ID assumption).
+
+**V59-bis** (`7ae231e`) — V56 auto-closure inline preview (3 color-coded states: green licensed / amber mismatch / neutral no-shifts). First attempt (`51929f1`) crashed frontend with black screen — useMemo deps referenced `practitioners`/`branchExamRooms`/`schedDoctorSchedules` declared 100-300 lines later → JS Temporal Dead Zone → ReferenceError silently caught by React → empty root. Reverted in `05e210f` per Rule A. Re-applied with hooks placed AFTER all deps (line ~632 instead of ~394). PLACEMENT NOTE comment template added. +22 tests.
+
+A5.2 regex window bumped 3000 → 6000 (pre-existing test-side flake from grown fetchDepositOptions).
+
+Detail: `.agents/sessions/2026-05-08-v57-v58-v59-bis.md`.
 
 ### Session 2026-05-08 EOD #10 — V56 Doctor Schedule Room Assignment (BS-15) shipped — subagent-driven-development session
 

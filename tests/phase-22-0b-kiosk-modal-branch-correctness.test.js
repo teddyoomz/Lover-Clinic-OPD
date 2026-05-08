@@ -134,7 +134,11 @@ describe('Phase 22.0b — A5 Phase markers + anti-regression', () => {
     // The pre-22.0b shape `(doctors || []).filter(d => d.status !== 'พักใช้งาน').map(...)`
     // (without filterDoctorsByBranch) MUST NOT reappear. Match the Phase
     // 22.0b shape: filterDoctorsByBranch BEFORE the status filter.
-    const fetchBlock = SRC.match(/const fetchDepositOptions = async \(\)[\s\S]{0,3000}?setDepositOptionsLoading\(false\)/);
+    // Window bumped 3000 → 6000 — fetchDepositOptions has grown across
+    // V41 + Phase 22.0b + Phase 23.0 + Phase 24.0-quaterdecies (appt
+    // channels + ApptChannels static). Regression-guarded by the
+    // filterDoctorsByBranch + filterStaffByBranch existence assertions.
+    const fetchBlock = SRC.match(/const fetchDepositOptions = async \(\)[\s\S]{0,6000}?setDepositOptionsLoading\(false\)/);
     expect(fetchBlock).not.toBeNull();
     expect(fetchBlock[0]).toMatch(/filterDoctorsByBranch/);
     expect(fetchBlock[0]).toMatch(/filterStaffByBranch/);
