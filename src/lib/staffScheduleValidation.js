@@ -136,6 +136,22 @@ export function validateStaffScheduleStrict(form) {
     return ['id', 'id ต้องเป็น STFSCH-MMYY-8hex'];
   }
 
+  // V56 / BS-15 (2026-05-08) — SS-10 doctor + working type requires
+  // non-empty roomIds[]. SS-11 assistant entries forbid roomIds field.
+  // staffKind is a caller-provided pure-validator parameter (NOT stored
+  // on the doc) — DoctorSchedulesTab passes 'doctor', EmployeeSchedulesTab
+  // passes 'assistant'. Absent staffKind → backward-compat (SS-10/SS-11
+  // not enforced) so legacy callers continue working.
+  if (form.staffKind === 'doctor' && WORKING_TIME_TYPES.has(type)) {
+    const rooms = form.roomIds;
+    const valid =
+      Array.isArray(rooms) && rooms.length >= 1 && rooms.every((r) => typeof r === 'string' && r.length > 0);
+    if (!valid) return ['roomIds', 'ต้องเลือกห้องอย่างน้อย 1 ห้อง'];
+  }
+  if (form.staffKind === 'assistant' && form.roomIds != null) {
+    return ['roomIds', 'ผู้ช่วยไม่ต้องเลือกห้อง'];
+  }
+
   return null;
 }
 
@@ -255,6 +271,67 @@ export function mergeSchedulesForDate(targetDate, entries, staffIdsFilter) {
     }
   }
   return result;
+}
+
+/**
+ * V56 / BS-15 (2026-05-08) — resolve a schedule entry's effective room ids
+ * for display purposes (TodaysDoctorsPanel chips). Pure helper.
+ *
+ * - Doctor entry with non-empty roomIds → filter to ids present in
+ *   branchExamRooms (silent stale-skip) → return that filtered list.
+ * - Legacy entry (no roomIds) OR assistant entry → return all branch
+ *   doctor-kind room ids (the "ทุกห้อง" semantic).
+ *
+ * @param {{roomIds?: string[]}} entry
+ * @param {Array<{id: string, kind: string}>} branchExamRooms
+ * @returns {string[]} resolved room ids
+ */
+export function expandRoomIdsForDisplay(entry, branchExamRooms) {
+  const branchRooms = Array.isArray(branchExamRooms) ? branchExamRooms : [];
+  const doctorRooms = branchRooms.filter((r) => r && r.kind === 'doctor');
+  const allDoctorIds = doctorRooms.map((r) => String(r.id));
+  if (!entry || !Array.isArray(entry.roomIds) || entry.roomIds.length === 0) {
+    return allDoctorIds;
+  }
+  const allowed = new Set(allDoctorIds);
+  return entry.roomIds.filter((rid) => allowed.has(String(rid))).map(String);
+}
+
+/**
+ * V56 / BS-15 (2026-05-08) — derive auto-closure dates for V55 schedule
+ * link generation. For each date in datesISO, resolves the picked
+ * doctor's effective schedule entry (recurring + per-date override) and
+ * checks whether picked roomId is in entry.roomIds. If NOT licensed,
+ * the date is added to the auto-closure result.
+ *
+ * Legacy entries (no roomIds) → not closed (preserves pre-V56 behavior).
+ * If doctor has no entry on a date (no shift) → not closed by THIS rule
+ * (V55's existing closure mechanisms handle "no shift" separately).
+ *
+ * @param {object} opts
+ * @param {string|null|undefined} opts.doctorId
+ * @param {string|null|undefined} opts.roomId
+ * @param {Array} opts.allEntries — all be_staff_schedules entries for the
+ *   branch (recurring + per-date mixed). Pass listStaffSchedules() output.
+ * @param {string[]} opts.datesISO — array of YYYY-MM-DD strings
+ * @returns {string[]} sorted, deduplicated date strings to auto-close
+ */
+export function derivedAutoClosedDates({ doctorId, roomId, allEntries, datesISO }) {
+  if (!doctorId || !roomId || !Array.isArray(allEntries) || !Array.isArray(datesISO)) {
+    return [];
+  }
+  const closed = new Set();
+  for (const dateISO of datesISO) {
+    if (typeof dateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) continue;
+    const merged = mergeSchedulesForDate(dateISO, allEntries, [String(doctorId)]);
+    const entry = merged.find((m) => String(m.staffId) === String(doctorId));
+    if (!entry) continue; // no shift → V55 handles separately
+    if (!Array.isArray(entry.roomIds) || entry.roomIds.length === 0) continue; // legacy → not closed
+    if (!entry.roomIds.map(String).includes(String(roomId))) {
+      closed.add(dateISO);
+    }
+  }
+  return [...closed].sort();
 }
 
 export function generateStaffScheduleId(nowMs = Date.now()) {
