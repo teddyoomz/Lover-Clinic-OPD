@@ -815,3 +815,70 @@ describe('BS-14 — schedule-link modal branch-scope (V55)', () => {
     expect(adminDashSrc).toMatch(/getAppointmentsByMonth\(\s*mo\s*,\s*preBranchOpts\s*\)/);
   });
 });
+
+// ─── BS-15 — Doctor schedule room-assignment integrity ────────────────────────
+describe('BS-15 — Doctor schedule room-assignment integrity', () => {
+  const validationSrc = readFileSync(
+    new URL('../src/lib/staffScheduleValidation.js', import.meta.url),
+    'utf8',
+  );
+  const modalSrc = readFileSync(
+    new URL('../src/components/backend/scheduling/ScheduleEntryFormModal.jsx', import.meta.url),
+    'utf8',
+  );
+  const panelSrc = readFileSync(
+    new URL('../src/components/backend/scheduling/TodaysDoctorsPanel.jsx', import.meta.url),
+    'utf8',
+  );
+  const adminDashSrc = readFileSync(
+    new URL('../src/pages/AdminDashboard.jsx', import.meta.url),
+    'utf8',
+  );
+
+  it('BS-15.1 — validateStaffScheduleStrict SS-10: doctor + working type → roomIds required', () => {
+    expect(validationSrc).toMatch(
+      /if\s*\(\s*form\.staffKind\s*===\s*['"]doctor['"]\s*&&\s*WORKING_TIME_TYPES\.has\(type\)\s*\)/,
+    );
+    expect(validationSrc).toMatch(
+      /return\s*\[\s*['"]roomIds['"]\s*,\s*['"]ต้องเลือกห้องอย่างน้อย 1 ห้อง['"]\s*\]/,
+    );
+  });
+
+  it('BS-15.2 — validateStaffScheduleStrict SS-11: assistant → roomIds forbidden', () => {
+    expect(validationSrc).toMatch(
+      /if\s*\(\s*form\.staffKind\s*===\s*['"]assistant['"]\s*&&\s*form\.roomIds\s*!=\s*null\s*\)/,
+    );
+    expect(validationSrc).toMatch(
+      /return\s*\[\s*['"]roomIds['"]\s*,\s*['"]ผู้ช่วยไม่ต้องเลือกห้อง['"]\s*\]/,
+    );
+  });
+
+  it('BS-15.3 — ScheduleEntryFormModal gates room-checkbox to doctor + working type', () => {
+    expect(modalSrc).toMatch(/staffKind\s*===\s*['"]doctor['"]\s*&&\s*showTime/);
+  });
+
+  it('BS-15.4 — ScheduleEntryFormModal passes staffKind into validateStaffScheduleStrict', () => {
+    expect(modalSrc).toMatch(
+      /validateStaffScheduleStrict\s*\(\s*\{\s*\.\.\.payload\s*,\s*staffKind\s*\}\s*\)/,
+    );
+  });
+
+  it('BS-15.5 — TodaysDoctorsPanel imports expandRoomIdsForDisplay and renders room chips', () => {
+    expect(panelSrc).toMatch(/import\s*\{[^}]*expandRoomIdsForDisplay[^}]*\}\s*from/);
+    expect(panelSrc).toMatch(/expandRoomIdsForDisplay\s*\(\s*s\s*,\s*branchExamRooms\s*\)/);
+    expect(panelSrc).toMatch(/todays-doctor-chips-/);
+  });
+
+  it('BS-15.6 — AdminDashboard imports derivedAutoClosedDates and merges into closedDays', () => {
+    expect(adminDashSrc).toMatch(/derivedAutoClosedDates/);
+    expect(adminDashSrc).toMatch(/closedDaysUnion/);
+    expect(adminDashSrc).toMatch(/closedDays\s*:\s*closedDaysUnion/);
+  });
+
+  it('BS-15.7 — V56/BS-15 markers present in all four wired files', () => {
+    expect(validationSrc).toMatch(/V56\s*\/\s*BS-15/);
+    expect(modalSrc).toMatch(/V56\s*\/\s*BS-15/);
+    expect(panelSrc).toMatch(/V56\s*\/\s*BS-15/);
+    expect(adminDashSrc).toMatch(/V56[\s/]BS-15/);
+  });
+});
