@@ -589,6 +589,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     { value: 'ขลิบ', th: 'ขลิบ', en: 'Circumcision' },
     { value: 'ทำหมัน', th: 'ทำหมัน', en: 'Vasectomy' },
     { value: 'เลาะสารเหลว', th: 'เลาะสารเหลว', en: 'Foreign Body Removal (Genital)' },
+    { value: 'เสริมขนาด', th: 'เสริมขนาด', en: 'Penile Enhancement / Augmentation' },
     { value: 'อื่นๆ', th: 'อื่นๆ', en: 'Others' }
   ];
 

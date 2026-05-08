@@ -51,6 +51,7 @@ export default function AppointmentHubView({
 
   const [appts, setAppts] = useState([]);
   const [summaryMap, setSummaryMap] = useState(new Map());
+  const [allDeposits, setAllDeposits] = useState([]);  // V64-fix4: full deposits list for per-appt linkage
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   // V64-fix3 (Issue 1, 2026-05-09): edit-modal state — true full modal
@@ -83,41 +84,62 @@ export default function AppointmentHubView({
   const range = useMemo(() => dateRangeForTab(activeTab, new Date()), [activeTab]);
 
   // Single-load aggregation (Q3=C); driven by branchId + reloadKey only.
+  // V64-fix4: factored loader into reusable function so silent-reload (post-modal-save)
+  // can refetch WITHOUT setLoading(true) flash. Initial mount + branch switch
+  // still call setLoading(true) for the first paint; subsequent silent refreshes
+  // skip it.
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const [apptList, customers, deposits, sales, memberships, schedules] = await Promise.all([
+        getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
+        getAllCustomers(),
+        getAllDeposits({ branchId: selectedBranchId }),
+        getAllSales({ branchId: selectedBranchId }),
+        getAllMemberships(),
+        listStaffSchedules({ branchId: selectedBranchId }),
+      ]);
+      const customerIds = [...new Set(apptList.map(a => String(a.customerId)).filter(Boolean))];
+      const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds) : [];
+      const map = buildCustomerSummaryMap({
+        customers, deposits, sales, memberships, wallets, now: new Date(),
+      });
+      setAppts(apptList);
+      setAllDeposits(deposits);
+      setSummaryMap(map);
+      setScheduleEntries(schedules);
+      if (!silent) setLoading(false);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('AppointmentHubView load failed:', e);
+      if (!silent) {
+        setAppts([]);
+        setLoading(false);
+      }
+    }
+  }, [wideRange.from, wideRange.to, selectedBranchId]);
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     (async () => {
-      try {
-        const [apptList, customers, deposits, sales, memberships, schedules] = await Promise.all([
-          getAppointmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
-          getAllCustomers(),
-          getAllDeposits({ branchId: selectedBranchId }),
-          getAllSales({ branchId: selectedBranchId }),
-          getAllMemberships(),
-          listStaffSchedules({ branchId: selectedBranchId }),
-        ]);
-        if (cancelled) return;
-        const customerIds = [...new Set(apptList.map(a => String(a.customerId)).filter(Boolean))];
-        const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds) : [];
-        if (cancelled) return;
-        const map = buildCustomerSummaryMap({
-          customers, deposits, sales, memberships, wallets, now: new Date(),
-        });
-        setAppts(apptList);
-        setSummaryMap(map);
-        setScheduleEntries(schedules);
-        setLoading(false);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('AppointmentHubView load failed:', e);
-        if (!cancelled) {
-          setAppts([]);
-          setLoading(false);
-        }
-      }
+      await loadAll();
+      if (cancelled) return;
     })();
     return () => { cancelled = true; };
-  }, [wideRange.from, wideRange.to, selectedBranchId, reloadKey]);
+  }, [loadAll, reloadKey]);
+
+  // V64-fix4: per-appointment deposit lookup. Lets RowCard show
+  // "💰 มัดจำ {amount} — เพื่อ {purpose}" chip when an appointment is
+  // linked to a deposit (came from จองมัดจำ flow).
+  const depositByApptId = useMemo(() => {
+    const map = new Map();
+    for (const d of allDeposits) {
+      if (d?.linkedAppointmentId && d.status === 'active') {
+        map.set(String(d.linkedAppointmentId), d);
+      }
+    }
+    return map;
+  }, [allDeposits]);
 
   // Per-tab filtered list (active tab)
   const filteredAppts = useMemo(() => {
@@ -256,20 +278,21 @@ export default function AppointmentHubView({
     setEditingAppt(appt);
   }, []);
 
-  const handleModalSaved = useCallback((savedOrId) => {
-    // Modal calls onSaved with the saved appointment doc OR the id; either
-    // way, we close + optimistic-merge if data provided.
+  const handleModalSaved = useCallback(() => {
+    // V64-fix4 (Issue 3): modal's onSaved is called with no args. We can't
+    // optimistic-merge without the saved doc; instead silently refetch (no
+    // setLoading flash) so the row reflects the new status/details
+    // immediately + smoothly.
     setEditingAppt(null);
-    if (savedOrId && typeof savedOrId === 'object' && savedOrId.id) {
-      setAppts(prev => prev.map(a => a.id === savedOrId.id ? { ...a, ...savedOrId } : a));
-    }
-  }, []);
+    loadAll({ silent: true });
+  }, [loadAll]);
 
   const handleModalDelete = useCallback(async (appt) => {
     // Optimistic remove from local state; Firestore delete handled by modal.
     setAppts(prev => prev.filter(a => a.id !== appt.id));
     setEditingAppt(null);
-  }, []);
+    loadAll({ silent: true });  // reconcile after delete
+  }, [loadAll]);
 
   return (
     <div data-testid="appt-hub-view">
@@ -314,6 +337,7 @@ export default function AppointmentHubView({
           key={a.id}
           appt={a}
           summary={summaryMap.get(String(a.customerId))}
+          apptDeposit={depositByApptId.get(String(a.id))}
           now={new Date()}
           onConfirm={handleConfirmOptimistic}
           onEdit={handleEditOpenModal}

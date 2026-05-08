@@ -8022,7 +8022,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="border-t border-[var(--bd)] pt-4">
                     <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ {depositFormData.hasAppointment && <span className="text-red-500">*</span>}</label>
                     <div className="flex flex-wrap gap-2">
-                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
+                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','เสริมขนาด','อื่นๆ'].map(r => (
                         <button key={r} type="button"
                           onClick={() => setDepositFormData(p => {
                             const has = p.visitPurpose.includes(r);
@@ -8218,7 +8218,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className={`border-t pt-4 ${isDark ? 'border-[var(--bd)]' : 'border-pink-200'}`}>
                     <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ <span className="text-red-500">*</span></label>
                     <div className="flex flex-wrap gap-2">
-                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','อื่นๆ'].map(r => (
+                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','เสริมขนาด','อื่นๆ'].map(r => (
                         <button key={r} type="button"
                           onClick={() => setNoDepositFormData(p => {
                             const has = p.visitPurpose.includes(r);

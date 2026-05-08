@@ -388,6 +388,7 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
       'ขลิบ': 'Circumcision',
       'ทำหมัน': 'Vasectomy',
       'เลาะสารเหลว': 'Foreign Body Removal (Genital)',
+      'เสริมขนาด': 'Penile Enhancement / Augmentation',
     };
     const goalMap = {
       'ออกกำลังกาย': 'Fitness / Bodybuilding',

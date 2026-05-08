@@ -45,6 +45,7 @@ function fmtMoney(n) {
 export default function AppointmentHubRowCard({
   appt,
   summary,
+  apptDeposit,  // V64-fix4 (Issue 1): linked-deposit doc if appt came from จองมัดจำ flow
   now = new Date(),
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
 }) {
@@ -53,6 +54,10 @@ export default function AppointmentHubRowCard({
   const isMissed = isMissedAppointment(appt, now);
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
   const hasLinkedTreatment = !!appt.linkedTreatmentId;
+  // V64-fix4 (Issue 1): deposit purpose fallback chain
+  const depositPurpose = apptDeposit
+    ? (apptDeposit.note || apptDeposit.appointment?.appointmentTo || apptDeposit.appointment?.purpose || appt.appointmentTo || '').trim()
+    : '';
 
   return (
     <div
@@ -107,13 +112,23 @@ export default function AppointmentHubRowCard({
         <div className="text-sm font-bold text-[var(--tx-heading)] mb-1" data-testid="row-date-full">
           📅 {fullThaiDate(appt.date)} <span className="text-[var(--tx-muted)] font-normal">· {appt.startTime || '-'} - {appt.endTime || '-'}</span>
         </div>
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           {typeLabel && (
             <span
               data-testid="row-type-chip"
               className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${TYPE_CHIP_CLS[appt.appointmentType] || 'bg-gray-100 text-gray-800'}`}
             >
               {typeLabel}
+            </span>
+          )}
+          {/* V64-fix4 (Issue 1): per-appt linked deposit chip — amount + purpose */}
+          {apptDeposit && (
+            <span
+              data-testid="row-deposit-chip"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 font-bold"
+              title={`เลขมัดจำ: ${apptDeposit.id || apptDeposit.depositId || '-'}`}
+            >
+              💰 มัดจำ {fmtMoney(apptDeposit.amount)} ฿{depositPurpose ? ` · เพื่อ ${depositPurpose}` : ''}
             </span>
           )}
           {isMissed && (
