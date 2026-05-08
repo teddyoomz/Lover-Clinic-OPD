@@ -2,7 +2,7 @@
 // Mutations call BACK into AdminDashboard via props (no new mutation logic).
 // Branch-scope: BSA Layer 2 routing via scopedDataLayer.js + reset on branch switch.
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import {
   getAppointmentsByDateRange,
@@ -32,6 +32,11 @@ import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
 
 export default function AppointmentHubView({
+  // V64-fix7 (2026-05-09): caller-provided counter that bumps after any
+  // treatment-related mutation (TFP onSaved + CustomerDetailView delete).
+  // View includes in loadAll deps so missed-badge + button-set update
+  // real-time after admin creates/edits/deletes a treatment.
+  treatmentDataVersion = 0,
   // Action handlers passed from AdminDashboard (existing helpers)
   onConfirmAppt,
   onEditAppt,
@@ -100,9 +105,15 @@ export default function AppointmentHubView({
         getAllSales({ branchId: selectedBranchId }),
         getAllMemberships(),
         listStaffSchedules({ branchId: selectedBranchId }),
-        // V64-fix6: load treatments in same date window so auto-confirm logic
-        // can match (customerId, date, branchId) tuples client-side.
-        loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, branchId: selectedBranchId }),
+        // V64-fix6 evolved (2026-05-09): load ALL branches' treatments
+        // (allBranches:true) so auto-confirm is branch-blind. Reasons:
+        //   1. Legacy treatments may lack branchId field → strict filter
+        //      excludes them → false-negative missed-badge.
+        //   2. Clinic semantic — if customer has a treatment on date X
+        //      ANYWHERE, the appointment for them on date X is auto-confirmed
+        //      (they came in real life regardless of which branch recorded it).
+        // Lookup is keyed by customerId|date; cross-branch overlap is correct.
+        loadTreatmentsByDateRange({ from: wideRange.from, to: wideRange.to, allBranches: true }),
       ]);
       const customerIds = [...new Set(apptList.map(a => String(a.customerId)).filter(Boolean))];
       const wallets = customerIds.length > 0 ? await getWalletsForCustomerIds(customerIds) : [];
@@ -133,6 +144,15 @@ export default function AppointmentHubView({
     })();
     return () => { cancelled = true; };
   }, [loadAll, reloadKey]);
+
+  // V64-fix7: silent reload when treatmentDataVersion bumps (post-TFP save
+  // or treatment delete elsewhere). Skip first render (version=0 = baseline).
+  const treatmentDataVersionPrev = useRef(treatmentDataVersion);
+  useEffect(() => {
+    if (treatmentDataVersion === treatmentDataVersionPrev.current) return;
+    treatmentDataVersionPrev.current = treatmentDataVersion;
+    loadAll({ silent: true });
+  }, [treatmentDataVersion, loadAll]);
 
   // V64-fix4: per-appointment deposit lookup. Lets RowCard show
   // "💰 มัดจำ {amount} — เพื่อ {purpose}" chip when an appointment is

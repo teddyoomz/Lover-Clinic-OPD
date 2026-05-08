@@ -6460,6 +6460,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               branchName={(branches || []).find(b => b.id === selectedBranchId)?.name || ''}
               doctors={(practitioners || []).filter(p => p.role === 'doctor')}
               assistants={(practitioners || []).filter(p => p.role === 'assistant')}
+              /* V64-fix7 (2026-05-09): bump-on-mutation token. AdminDashboard's
+               * existing treatmentRefreshKey state increments on:
+               *  - TFP onSaved (line 7745: setTreatmentRefreshKey(k => k + 1))
+               *  - CustomerDetailView treatment delete (already wired)
+               * View includes this in loadAll deps → silent reload → row
+               * auto-flips to 'แก้ไขบันทึกการรักษา' + missed badge clears
+               * the moment treatment is created/edited/deleted anywhere. */
+              treatmentDataVersion={treatmentRefreshKey}
               onConfirmAppt={(appt) => {
                 // V64-fix2: return promise so View can chain reload after success
                 return updateBackendAppointment(appt.id, { status: 'confirmed' }).then(() => {
@@ -6480,7 +6488,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 }).catch((e) => showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
               }}
               onCreateTreatmentForAppt={(appt) => {
-                setTreatmentFormMode({ mode: 'create', appointmentId: appt.id, customerId: appt.customerId });
+                // V64-fix7 (2026-05-09): pass appt.date so TFP locks the
+                // treatment date to the appointment day. Was defaulting to
+                // today, breaking past-missed-appt cascade — admin clicked
+                // "สร้างบันทึกการรักษา" on 2026-05-07 missed appt → TFP
+                // defaulted to 2026-05-09 → new treatment dated 2026-05-09 →
+                // 2026-05-07 row STILL showed missed badge.
+                setTreatmentFormMode({
+                  mode: 'create',
+                  appointmentId: appt.id,
+                  customerId: appt.customerId,
+                  appointmentDate: appt.date || '',
+                });
               }}
               onEditTreatmentForAppt={(appt) => {
                 setTreatmentFormMode({ mode: 'edit', treatmentId: appt.linkedTreatmentId });
@@ -7726,6 +7745,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           treatmentId={treatmentFormMode.treatmentId}
           patientName={treatmentFormMode.patientName}
           patientData={treatmentFormMode.patientData}
+          initialTreatmentDate={treatmentFormMode.appointmentDate || ''}
           isDark={isDark}
           db={db}
           appId={appId}

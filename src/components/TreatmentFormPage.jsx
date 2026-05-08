@@ -296,7 +296,7 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'backend' }) {
+export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'backend', initialTreatmentDate = '' }) {
   // V35.2-sexies (2026-04-28) — guard against null/undefined customerId.
   // User report: "หน้าสร้างการรักษาใหม่ ขึ้นว่า No document to update:
   // ... be_customers/null". Root cause: caller passed null cid (e.g. when
@@ -408,7 +408,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [assistantIds, setAssistantIds] = useState([]);
   // Thai time (GMT+7) — browser-local date drifts to yesterday for non-Thai
   // browsers, and `.toISOString()` always returns UTC. Canonical helper in utils.js.
-  const [treatmentDate, setTreatmentDate] = useState(() => thaiTodayISO());
+  // V64-fix7 (2026-05-09): when caller passes initialTreatmentDate (e.g.
+  // V64 hub's "สร้างบันทึกการรักษา" button on a past appointment row),
+  // lock the form date to the appointment date so the new treatment is
+  // correctly associated with that day. Falls back to today otherwise.
+  const [treatmentDate, setTreatmentDate] = useState(() => (
+    typeof initialTreatmentDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(initialTreatmentDate)
+      ? initialTreatmentDate
+      : thaiTodayISO()
+  ));
 
   // Doctor fees (ค่ามือแพทย์) — LEGACY (Phase 12.x flat fee per doctor).
   // Kept for backward-compat on existing treatments. Phase 14.4 (2026-04-24)
