@@ -57,10 +57,15 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   // V56/BS-15: load exam rooms on branch switch.
   // Explicit branchId pass per V52/BS-11 canonical pattern (mirrors V55
   // AdminDashboard.jsx + every other branch-scoped UI fetch).
+  // Cancellation guard — rapid branch switch (A → B before A's response
+  // lands) must not stamp the stale A-rooms over B's. Mirror of V55
+  // livePractitioners pattern.
   useEffect(() => {
+    let cancelled = false;
     listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
-      .then((list) => setBranchExamRooms(list || []))
-      .catch(() => setBranchExamRooms([]));
+      .then((list) => { if (!cancelled) setBranchExamRooms(list || []); })
+      .catch(() => { if (!cancelled) setBranchExamRooms([]); });
+    return () => { cancelled = true; };
   }, [selectedBranchId]);
 
   // Load doctors — re-runs on branch switch (Phase BSA leak-fix 2026-05-04)

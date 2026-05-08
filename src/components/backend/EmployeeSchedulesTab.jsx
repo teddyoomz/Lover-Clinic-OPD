@@ -56,10 +56,13 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
 
   // V56/BS-15: load exam rooms on branch switch.
   // Explicit branchId pass per V52/BS-11 canonical pattern.
+  // Cancellation guard against stale-fetch race (mirror of DoctorSchedulesTab).
   useEffect(() => {
+    let cancelled = false;
     listExamRooms({ branchId: selectedBranchId, status: 'ใช้งาน' })
-      .then((list) => setBranchExamRooms(list || []))
-      .catch(() => setBranchExamRooms([]));
+      .then((list) => { if (!cancelled) setBranchExamRooms(list || []); })
+      .catch(() => { if (!cancelled) setBranchExamRooms([]); });
+    return () => { cancelled = true; };
   }, [selectedBranchId]);
 
   const loadStaff = useCallback(async () => {

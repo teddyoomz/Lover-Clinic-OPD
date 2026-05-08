@@ -171,15 +171,18 @@ export default function ScheduleEntryFormModal({
   // branch switch while modal open), drop any roomIds in form state that
   // no longer exist in the new branch's room set. Forces admin to re-pick
   // when current ticks become stale. Doctor + working type only.
+  // Functional setForm updater reads `prev.roomIds` from React's snapshot
+  // at dispatch time → `form.roomIds` is NOT in deps array → effect fires
+  // ONLY on doctorRoomIds / staffKind change (not on every roomIds tick).
   useEffect(() => {
     if (staffKind !== 'doctor') return;
-    if (!Array.isArray(form.roomIds)) return;
-    const allowed = new Set(doctorRoomIds);
-    const filtered = form.roomIds.filter((rid) => allowed.has(String(rid)));
-    if (filtered.length !== form.roomIds.length) {
-      setForm((prev) => ({ ...prev, roomIds: filtered }));
-    }
-  }, [doctorRoomIds, staffKind, form.roomIds]);
+    setForm((prev) => {
+      if (!Array.isArray(prev.roomIds)) return prev;
+      const allowed = new Set(doctorRoomIds);
+      const filtered = prev.roomIds.filter((rid) => allowed.has(String(rid)));
+      return filtered.length === prev.roomIds.length ? prev : { ...prev, roomIds: filtered };
+    });
+  }, [doctorRoomIds, staffKind]);
 
   if (!open) return null;
 
