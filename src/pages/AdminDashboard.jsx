@@ -4248,7 +4248,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               {!schedNoDoctorRequired && practitioners.filter(p => p.role === 'doctor').length > 0 && (
                 <div>
                   <label className="text-xs text-[var(--tx-muted)] font-bold font-semibold mb-1 block">เลือกแพทย์</label>
-                  <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value ? Number(e.target.value) : null)}
+                  {/* V58 / AV31 (2026-05-08) — DO NOT wrap e.target.value in Number().
+                      Legacy ProClinic used numeric staff IDs ("1234"); modern be_doctors uses
+                      string IDs ("DOC-..."/"ASST-..." from generateMarketingId). Number("DOC-...")
+                      → NaN → falsy → <select value={NaN || ''}> snaps back to "all doctors"
+                      default. Bug pre-dated V55 by months — pre-V55 worked because schedule-link
+                      modal data was tied to ProClinic numeric IDs; once branchExamRooms /
+                      livePractitioners switched to be_doctors string IDs in V55, the click
+                      handler started silently destroying admin's selection. Single-site bug:
+                      only this picker has string IDs (room picker at line 4265 already uses
+                      bare e.target.value); audit AV31 grep guards future regressions. */}
+                  <select value={schedSelectedDoctor || ''} onChange={e => setSchedSelectedDoctor(e.target.value || null)}
                     className={`w-full bg-[var(--bg-hover)] border border-[var(--bd)] rounded-lg px-3 py-2 text-xs text-[var(--tx-body)] ${isDark ? '[color-scheme:dark]' : ''}`}>
                     <option value="">-- แพทย์ทุกคน (รวมนัดแพทย์ทุกคน) --</option>
                     {practitioners.filter(p => p.role === 'doctor').map(p => (
