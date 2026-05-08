@@ -32,9 +32,14 @@ both atomically. Both rule files must be probe-tested.
 
 ทุกครั้งที่จะ `firebase deploy --only firestore:rules` — ไม่มีข้อยกเว้น:
 1. `curl -X POST $BASE/$PREFIX/chat_conversations?documentId=test-probe-$(date +%s) -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-2. `curl -X PATCH $BASE/$PREFIX/pc_appointments/test-probe?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200
-3. `curl -X PATCH $BASE/$PREFIX/clinic_settings/proclinic_session?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay extension writes)
-4. `curl -X PATCH $BASE/$PREFIX/clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe -d '{"fields":{"probe":{"booleanValue":true}}}'` → ต้อง 200 (cookie-relay trial mode)
+
+**V50-followup-2 (2026-05-08) — probes 2/3/4 REMOVED**: pc_appointments,
+clinic_settings/proclinic_session, clinic_settings/proclinic_session_trial.
+ProClinic dev-only sync infrastructure was deleted in V50; matching rules
+were dropped in V50-followup. These endpoints now return 403 (default-deny)
+post-deploy — that's the intended state, NOT a regression. The probe list
+is now 4 endpoints: 1 + 5 + 6 + 7 below.
+
 5. **V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
    ```
    # Step A: provision anonymous ID token
@@ -80,22 +85,20 @@ both atomically. Both rule files must be probe-tested.
      # → expect 200
    ```
 8. `firebase deploy --only firestore:rules,storage:rules`
-9. รัน probe 1-7 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+9. รัน probe 1, 5, 6, 7 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
 10. ลบ probe docs ทิ้ง:
-   - DELETE `$BASE/$PREFIX/pc_appointments/test-probe-{TS}` x 2 (anon allowed)
-   - PATCH `$BASE/$PREFIX/clinic_settings/proclinic_session*` ด้วย `{"fields":{}}` เพื่อ strip probe field
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
    - DELETE `$BASE/$PREFIX/be_exam_rooms/test-probe-{TS}` x 2 (clinic-staff)
      → For periodic admin cleanup: PermissionGroupsTab "ลบ test-probe ค้าง" button
      → Calls `/api/admin/cleanup-test-probes` (admin-only, firebase-admin Firestore SDK)
    - V27 fix: CREATE step now uses isArchived=true so docs hide from queue UI even before cleanup
+   - V50-followup-2 (2026-05-08): pc_appointments / proclinic_session* probe artifacts no longer exist (default-deny on those collections)
 
 **Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)
-- `pc_*` collection — ProClinic mirror sync (`api/proclinic/courses.js` + อื่นๆ)
-- `clinic_settings/proclinic_session` + `_trial` — Cookie Relay Chrome Extension (PATCH via REST ตรง, ไม่มี Bearer token)
 - `opd_sessions/{id}` whitelisted-field updates — PatientForm submit + PatientDashboard course-refresh from anon-auth (signInAnonymously) reachable via `?session=` / `?patient=` QR/link routes
+- ~~`pc_*` collection~~ + ~~`clinic_settings/proclinic_session*`~~ — REMOVED V50-followup (2026-05-08); ProClinic dev-only sync infrastructure deleted
 
 ถ้า probe ตัวใดตัวหนึ่ง 403 = ลืมเปิด rule = ระบบพัง. Probe list นี้ต้องเพิ่มขึ้นเมื่อมี unauth-write หรือ anon-auth-write path ใหม่. Deploy ทุกครั้ง = อ่าน list นี้ก่อน.
 

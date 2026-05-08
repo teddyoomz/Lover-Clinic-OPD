@@ -1,38 +1,35 @@
 ---
-updated_at: "2026-05-08 EOD #4 FINAL — Rule P + Per-branch Settings Phase 1+2+3 + TFP fixes DEPLOYED"
-status: "master=2318557 (in sync with prod) · 109+/109 targeted tests PASS · build clean · per-branch migration applied on 3 prod branches"
+updated_at: "2026-05-08 EOD #5 — V50 ProClinic strip COMPLETE · firestore.rules cleaned · all migrators deleted · DEPLOYED"
+status: "master=ef580a6 (in sync with prod) · 7333/7333 GREEN · build clean · combined deploy successful (vercel + firestore:rules) · Probe-Deploy-Probe verified"
 branch: "master"
-last_commit: "fix(vercel): drop api/proclinic/*.js functions config (2318557)"
-tests: 109
+last_commit: "chore(V50-followup-2): delete remaining dead migrators + mappers + phase9Mappers.js (ef580a6)"
+tests: 7333
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "2318557"
-firestore_rules_version: 28
+production_commit: "ef580a6"
+firestore_rules_version: 29
 storage_rules_version: 2
 ---
 
 # Active Context
 
 ## State
-- master = `2318557` · prod = `2318557` (deployed, in sync)
-- Iron-clad **Rule P locked** + AV29 + BS-10 + CB-1..5 invariants permanent
-- Per-branch settings live: 3 prod branches migrated (audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`)
+- master = `ef580a6` · prod = `ef580a6` (combined deploy COMPLETE)
+- Iron-clad **Rule P locked** + AV1-AV29 + BS-1..10 + CB-1..5 invariants permanent
+- AV28 sanctioned-exception list now EMPTY — ZERO `master_data` runtime references in src/ or api/
+- Rule H-bis EXECUTED + COMPLETE (V50 + V50-followup + V50-followup-2)
 
-## What this session shipped (detail in checkpoint)
-- Spec #1 (Rule P methodology) — 7-step + Tier 1/2/3 + new `/audit-class-of-bug-discipline` skill (CB-1..5)
-- Spec #2 (per-branch settings) — Phases 1+2+3 all shipped: `mergeBranchIntoClinic` 13-field cascade → 7-consumer sweep → UI + migration script → cleanup dual-shape fallback
-- Migration `--apply` ran locally (Rule M canonical): 3 branches migrated, 21 fields cleared from `clinic_settings/main`, idempotent verified
-- Plan #1 user-level Tasks 3+4+8 applied (`~/.claude/skills/{systematic-debugging,verification-before-completion}/SKILL.md` + `MEMORY.md` + new `feedback_class_of_bug_expansion.md`)
-- 5 pre-existing TFP failures fixed (BSA T6.1 + Phase 17.2-septies S3.1-S3.4) via Rule P 7-step (eat-our-own-dogfood)
-- `vercel.json` cleaned of dead V50-stripped `api/proclinic/*.js` functions config (build failure → fix → redeploy)
-- Detail: `.agents/sessions/2026-05-08-rule-p-and-per-branch-settings-shipped.md`
+## What EOD #5 shipped (this session)
+- **V50-followup** (`f9c7b7d`) — Cleaned `firestore.rules` (5 legacy match blocks removed: pc_* × 10 + master_data + proclinic_session/{docId} + broker_jobs + clinic_settings/proclinic_session*) + deleted master_data CRUD/read/sync helpers from backendClient.js + 4 scopedDataLayer re-exports + 9 test files updated + 1 deleted. 4 pre-existing failures surfaced + fixed via Rule P 7-step (BAC.A.2/A.5 fixture shape post-Phase-3 + Phase 16.3 RG.C.2 anti-regression flip + V50 Phase 3 F1.12 active.md anchor).
+- **V50-followup-2** (`ef580a6`) — Deleted remaining dead migrators (~2,200 LOC): all migrate*ToBe family (19 functions) + mapMasterTo* mappers (16) + runMasterToBeMigration helper + masterDataItemsCol + IMPORT_TARGET_BRANCH_ID. Deleted src/lib/phase9Mappers.js + 4 dead-code test files. Stripped CSS.C / S1.2-S10.2 / F17.2-F17.14 sub-tests from shared files. AV28 sanctioned exception now EMPTY.
+- **Combined deploy** — vercel --prod + firebase deploy --only firestore:rules. Probe-Deploy-Probe verified: chat_conversations 200→200 (V1 anchor preserved); pc_appointments 200→403 (deletion took effect); clinic_settings/proclinic_session 200→403; master_data/products 403 (deletion took effect).
+- **Rule B probe list** updated in 01-iron-clad.md — endpoints 2/3/4 removed (rules deleted); list shrunk 7→4 endpoints (chat_conversations + opd_sessions anon + be_exam_rooms + backups Storage).
 
 ## Next action
-Idle — all session goals shipped + deployed. Awaiting next user directive.
+Idle — all session goals shipped + deployed + probes verified. Awaiting next user directive.
 
 ## Outstanding user-triggered actions
-- None blocking. Optional follow-ups deferred:
-  - Clean `firestore.rules` of pc_* / master_data / broker_jobs / proclinic_session legacy match blocks (rules deploy + Probe-Deploy-Probe per Rule B)
-  - Delete dead orphan `master_data/*` CRUD helpers in backendClient.js + scopedDataLayer.js (sanctioned exception in AV28.4)
+- None blocking.
 
 ## Institutional memory anchors
 - V50 Phase 3 — cross-branch booking contract verified (commit `1c67baf` EOD #3); existing `be_customers.branchId` already serves the creation-branch role, immutable post-CREATE. Detail in SESSION_HANDOFF.md + v-log-archive.md.
+- V50-followup-2 — full ProClinic strip COMPLETE (no `master_data` / `pc_*` / `broker_jobs` / `proclinic_session` / `brokerClient` runtime references anywhere). Future ProClinic interop must go through a NEW well-defined integration boundary (e.g. `/api/external/proclinic-sync/*` with explicit Rule C3 lean-schema review).

@@ -7,15 +7,41 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-08 EOD #4 FINAL — Rule P + Per-branch Settings Phase 1+2+3 + TFP fixes DEPLOYED to prod (`2318557`)
+- **Date last updated**: 2026-05-08 EOD #5 — V50 ProClinic strip COMPLETE · firestore.rules cleaned · all migrators/mappers/phase9Mappers.js DELETED · combined deploy SHIPPED (`ef580a6`)
 - **Branch**: `master`
-- **Last commit**: `2318557` (fix(vercel): drop api/proclinic/*.js functions config — V50 strip cleanup)
-- **Test count (targeted)**: 109+/109 GREEN: per-branch-settings 54/54 + audit-branch-scope BS-1..10 16/16 + audit-class-of-bug-discipline CB-1..5 18/18 + V50 AV28 26/26 + bsa-task6-ui-imports 1/1 + phase-17-2-septies 18/18. **5 pre-existing TFP failures ELIMINATED** this session.
-- **Build**: clean.
-- **Deploy state**: **PRODUCTION = `2318557`** (in sync with master). Last deploy `lover-clinic-5rb798enr` aliased to `lover-clinic-app.vercel.app`.
-- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5.
-- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + **V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`)**.
-- **All Plan #1 + Plan #2 in-repo + user-level work**: SHIPPED. Phase 3 cleanup landed post-migration.
+- **Last commit**: `ef580a6` (chore(V50-followup-2): delete remaining dead migrators + mappers + phase9Mappers.js)
+- **Test count**: 7333/7333 GREEN (full top-level + extended suite). Build clean.
+- **Deploy state**: **PRODUCTION = `ef580a6`** (in sync with master). Combined deploy SHIPPED — vercel `lover-clinic-1z9li8b98-teddyoomz-4523s-projects.vercel.app` aliased to `lover-clinic-app.vercel.app` + firebase rules version 29 released.
+- **Probe-Deploy-Probe**: VERIFIED. Pre-probes 1/2/3 = 200/200/200. Post-probes: chat_conversations 200 (V1 anchor preserved); pc_appointments 403 (deletion took); clinic_settings/proclinic_session 403; master_data/products 403.
+- **Iron-clad rule status**: **Rule P locked** (class-of-bug expansion at every bug discovery — 7-step + Tier 1/2/3 artifacts) + **Rule H-bis EXECUTED + COMPLETE** (V50 + V50-followup + V50-followup-2). Invariant set: AV1-AV29 + BS-1..10 + CB-1..5. AV28 sanctioned-exception list now EMPTY.
+- **Migrations applied on prod**: V43 + V46 + V49 + V50.Phase 6 (2,599 docs DELETED) + V51 (per-branch settings — 3 branches migrated, audit `v51-migrate-clinic-settings-1778193783207-8b3611d4`).
+- **Rule B probe list**: updated to 4 endpoints (was 7) — endpoints 2/3/4 removed in V50-followup-2 (pc_appointments / proclinic_session / proclinic_session_trial — rules deleted; default-deny applies).
+
+### Session 2026-05-08 EOD #5 — V50 ProClinic strip COMPLETE
+
+User directives: "Clean firestore.rules + Delete dead orphan master_data/*" → "แค่ครั้งนี้อนุญาตให้ deploy ได้เลย เมื่อถึงเวลา" → "Optional follow-up: delete remaining dead migrators (migrate*ToBe family + mapMasterTo* mappers + phase9Mappers.js)".
+
+**V50-followup** (commit `f9c7b7d`):
+- firestore.rules cleaned (5 legacy match blocks removed): pc_* × 10 + master_data + proclinic_session/{docId} + broker_jobs/{jobId} + clinic_settings/proclinic_session*
+- backendClient.js — deleted master_data CRUD/read/sync helpers (createMasterCourse/Item, update*, delete*, getMasterDataMeta, getAllMasterDataItems, clearMasterDataItems, BE_BACKED_MASTER_TYPES, readBeForMasterType, getBeBackedMasterTypes, runMasterDataSync, masterDataDoc)
+- scopedDataLayer.js — removed 4 dead re-exports (getMasterDataMeta + getBeBackedMasterTypes + deleteMasterCourse + deleteMasterItem)
+- AV28.4 sanctioned exception NARROWED to backendClient.js only
+- Tests: deleted phase12-11-be-shape-adapters; updated 9 test files (mock fixture cleanup + source-grep anchor migration)
+- 4 pre-existing failures surfaced + fixed via Rule P 7-step
+
+**V50-followup-2** (commit `ef580a6`):
+- Deleted ~2,200 LOC of dead migrators + mappers from backendClient.js: 19 migrate*ToBe functions + 16 mapMasterTo* mappers + runMasterToBeMigration helper + masterDataItemsCol + IMPORT_TARGET_BRANCH_ID const
+- Deleted src/lib/phase9Mappers.js + 4 dead-code test files (courseMigrate / migrate-master-staff-schedules / phase9-migration-mappers / schedule-synced-data-wiring)
+- Stripped sub-tests from 3 shared test files (CSS.C / S1.2-S10.2 / F17.2-F17.14)
+- AV28 sanctioned exception now EMPTY — ZERO master_data runtime references anywhere
+
+**Combined deploy**:
+- vercel --prod + firebase deploy --only firestore:rules in parallel
+- Both completed cleanly; aliased + rules version 29 released
+- Probe-Deploy-Probe per Rule B: 3 pre-probes 200/200/200; 4 post-probes 200/403/403/403 (matching expectations)
+- Rule B probe list updated in 01-iron-clad.md to remove deleted endpoints
+
+Detail: this entry + commit messages on `f9c7b7d` and `ef580a6`.
 
 ### Session 2026-05-08 EOD #4 FINAL — All shipped + deployed
 
