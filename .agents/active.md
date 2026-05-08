@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-08 EOD #10 — V56 Doctor Schedule Room Assignment (BS-15) shipped"
-status: "master=92e0cf9 (+19 ahead of prod) · 7746 GREEN · build clean · NOT yet deployed"
+updated_at: "2026-05-08 EOD #11 — V57 Exam Room Kind Schema Completion (AV30) shipped + backfill applied"
+status: "master=<v57-final> (+21 ahead of prod) · 7828 GREEN · build clean · backfill applied to 6 prod rooms · NOT yet deployed"
 branch: "master"
-last_commit: "docs(V56/BS-15): state files + V56 V-entry compact row"
-tests: 7746
+last_commit: "feat(V57/AV30): exam room kind field schema completion"
+tests: 7828
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "ef580a6"
 firestore_rules_version: 29
@@ -17,7 +17,8 @@ storage_rules_version: 2
 - Invariant set: AV1-AV29 + **BS-1..BS-15** (NEW this session: BS-11/BS-12/BS-13/BS-14/BS-15) + CB-1..5
 - Iron-clad rules locked: systematic-debugging Phase 1-4 + Rule P 7-step + Rule J HARD-GATE + Rule N targeted-only
 
-## What this session shipped (5 V-entries — autonomous overnight + morning)
+## What this session shipped (6 V-entries — autonomous overnight + morning + afternoon)
+- **V57 / AV30** (`<v57-final>`) — Exam Room Kind Schema Completion: user reported "ไม่มีห้องตรวจได้ยังไง?" — V56 modal showed empty-state placeholder despite 6 doctor-rooms in prod. Root cause: Phase 18.0 schema-vs-consumer drift (kind field never declared in examRoomValidation.js + ExamRoomFormModal had no picker, but V55 mapper + V56 consumers all filtered `r.kind === 'doctor'` strictly). Multi-layer fix (Approach A): schema (KIND_OPTIONS + emptyForm default + validate enum + normalize coerce) + UI (radio picker ห้องแพทย์/ห้องหัตถการทั่วไป) + 5 consumer defensive defaults `(r.kind ?? 'doctor') === 'doctor'` + Rule M backfill (6 prod rooms stamped kind:'doctor', idempotent, audit doc emit) + AV30 invariant (audit-anti-vibe-code AV29 → AV30). +26 tests (V57.K1-K5).
 - **V56 / BS-15** (`92e0cf9`) — Doctor Schedule Room Assignment: per-shift `roomIds: string[]` on `be_staff_schedules`; SS-10 (doctor+working→roomIds required) + SS-11 (assistant→roomIds forbidden) validators; `expandRoomIdsForDisplay` + `derivedAutoClosedDates` pure helpers; room-checkbox UI in ScheduleEntryFormModal; inline chips in TodaysDoctorsPanel; auto-closure integration in handleGenScheduleLink; BS-15 audit invariant (14→15). +11 net tests (7735→7746, 25 RTL flow-simulate). Subagent-driven Tasks 1–7.
 - **V55 / BS-14** (`d54b201`) — Schedule-link modal branch-scope: Bug A (filter livePractitioners by branch) + Bug B (rooms via listExamRooms({branchId,status:'ใช้งาน'}) → branchExamRooms) + Bug C (12 hours sites use per-branch helpers monFriOpen/Close + satSunOpen/Close via useEffectiveClinicSettings) + defensive reset of schedSelectedDoctor/Room on branch switch + explicit branchId on pre-create getAppointmentsByMonth. +65 tests (38 helper + 17 flow-simulate + 10 BS-14 audit). Real-data layer × admin-mask layer architecture honored (real per-branch data filtered through schedClosedDays/schedManualBlocked admin override per Phase 22.0c).
 - **V54 / BS-13** (`eee8003`) — Raw appointment listeners safe-by-default: AdminDashboard `/admin` queue calendar pre-V54 leaked all branches' appts. 4 fns in backendClient.js mirror `listenToScheduleByDay` template. +31 tests + 4 V21-class test fixups.

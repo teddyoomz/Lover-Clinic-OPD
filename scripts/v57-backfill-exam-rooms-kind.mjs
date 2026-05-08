@@ -21,38 +21,51 @@
 //
 // Idempotent — re-run with --apply yields 0 writes after first apply.
 
-import 'dotenv/config';
-import { config as loadEnv } from 'dotenv';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
-
-// Load .env.local.prod (Vercel env pull) — Rule M canonical pattern.
-loadEnv({ path: '.env.local.prod' });
+import path from 'node:path';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const APPLY = process.argv.includes('--apply');
 
-function initAdmin() {
-  if (!process.env.FIREBASE_ADMIN_PROJECT_ID) {
-    throw new Error('FIREBASE_ADMIN_PROJECT_ID missing — run `vercel env pull .env.local.prod --environment=production` first');
+// Rule M canonical inline env loader — no dotenv dep. Mirrors
+// scripts/v43-backfill-customer-courses-skip-stock.mjs pattern.
+function loadEnvLocal() {
+  const envPath = path.resolve(process.cwd(), '.env.local.prod');
+  const txt = readFileSync(envPath, 'utf8');
+  const out = {};
+  for (const line of txt.split(/\r?\n/)) {
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    const k = line.slice(0, eq).trim();
+    let v = line.slice(eq + 1).trim();
+    if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+    out[k] = v;
   }
-  // Rule M PEM key conversion — .env.local.prod stores literal `\n` escapes.
-  const pemKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
-  return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      privateKey: pemKey,
-    }),
-  });
+  return out;
+}
+
+function initFirestore() {
+  if (getApps().length > 0) return getFirestore();
+  const env = loadEnvLocal();
+  const projectId = env.FIREBASE_ADMIN_PROJECT_ID || APP_ID;
+  const clientEmail = env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const rawKey = env.FIREBASE_ADMIN_PRIVATE_KEY;
+  if (!clientEmail || !rawKey) {
+    throw new Error('FIREBASE_ADMIN_* missing in .env.local.prod — run `vercel env pull .env.local.prod --environment=production` first');
+  }
+  const privateKey = rawKey.split('\\n').join('\n');
+  initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  return getFirestore();
 }
 
 async function main() {
   console.log(`[V57/AV30] backfill be_exam_rooms.kind — ${APPLY ? 'APPLY' : 'DRY-RUN'}`);
-  initAdmin();
-  const db = getFirestore();
+  const db = initFirestore();
 
   // Rule M canonical path — production data lives at
   // artifacts/{APP_ID}/public/data/{collection}.
