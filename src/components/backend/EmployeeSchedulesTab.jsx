@@ -15,6 +15,7 @@ import {
   listStaffSchedules,
   saveStaffSchedule,
   deleteStaffSchedule,
+  listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import MonthCalendarGrid from './scheduling/MonthCalendarGrid.jsx';
 import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
@@ -43,11 +44,22 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
 
+  // V56/BS-15 (2026-05-08) — exam rooms for current branch (passed to modal;
+  // assistant entries show an info chip instead of checkboxes)
+  const [branchExamRooms, setBranchExamRooms] = useState([]);
+
   const today = useMemo(() => new Date(), []);
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
 
   const [modal, setModal] = useState(null);
+
+  // V56/BS-15: load exam rooms on branch switch
+  useEffect(() => {
+    listExamRooms({ status: 'ใช้งาน' })
+      .then((list) => setBranchExamRooms(list || []))
+      .catch(() => setBranchExamRooms([]));
+  }, [selectedBranchId]);
 
   const loadStaff = useCallback(async () => {
     setStaffLoading(true);
@@ -240,6 +252,8 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
         />
       </div>
 
+      {/* V56/BS-15: staffKind='assistant' + branchExamRooms show info chip
+          (assistant entries cover all rooms automatically — no selection needed) */}
       <ScheduleEntryFormModal
         open={!!modal}
         kind={modal?.kind}
@@ -249,6 +263,8 @@ export default function EmployeeSchedulesTab({ clinicSettings }) {
         onClose={closeModal}
         onSave={handleSaveEntry}
         branchId={selectedBranchId}
+        staffKind="assistant"
+        branchExamRooms={branchExamRooms}
       />
     </div>
   );

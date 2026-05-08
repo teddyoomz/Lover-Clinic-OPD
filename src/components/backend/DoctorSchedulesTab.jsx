@@ -14,6 +14,7 @@ import {
   listStaffSchedules,
   saveStaffSchedule,
   deleteStaffSchedule,
+  listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import MonthCalendarGrid from './scheduling/MonthCalendarGrid.jsx';
 import ScheduleSidebarPanel from './scheduling/ScheduleSidebarPanel.jsx';
@@ -42,6 +43,9 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
 
+  // V56/BS-15 (2026-05-08) — exam rooms for current branch, passed to modal
+  const [branchExamRooms, setBranchExamRooms] = useState([]);
+
   // Calendar nav state
   const today = useMemo(() => new Date(), []);
   const [calYear, setCalYear] = useState(today.getFullYear());
@@ -49,6 +53,13 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
 
   // Modal state
   const [modal, setModal] = useState(null); // { kind, entry } | null
+
+  // V56/BS-15: load exam rooms on branch switch
+  useEffect(() => {
+    listExamRooms({ status: 'ใช้งาน' })
+      .then((list) => setBranchExamRooms(list || []))
+      .catch(() => setBranchExamRooms([]));
+  }, [selectedBranchId]);
 
   // Load doctors — re-runs on branch switch (Phase BSA leak-fix 2026-05-04)
   const loadDoctors = useCallback(async () => {
@@ -254,6 +265,7 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
         />
       </div>
 
+      {/* V56/BS-15: staffKind='doctor' + branchExamRooms enable room-assignment UI */}
       <ScheduleEntryFormModal
         open={!!modal}
         kind={modal?.kind}
@@ -263,6 +275,8 @@ export default function DoctorSchedulesTab({ clinicSettings }) {
         onClose={closeModal}
         onSave={handleSaveEntry}
         branchId={selectedBranchId}
+        staffKind="doctor"
+        branchExamRooms={branchExamRooms}
       />
     </div>
   );
