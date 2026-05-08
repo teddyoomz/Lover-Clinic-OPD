@@ -13,6 +13,10 @@
 // onDoctorClick(doctorId) — caller filters the time grid.
 
 import { User } from 'lucide-react';
+// V56 / BS-15 (2026-05-08) — chip rendering uses expandRoomIdsForDisplay
+// to silent-skip stale ids and fall back to all branch doctor-rooms for
+// legacy (pre-V56) entries.
+import { expandRoomIdsForDisplay } from '../../../lib/staffScheduleValidation.js';
 
 function fmtThaiDate(dateISO) {
   if (!dateISO) return '';
@@ -36,9 +40,15 @@ export default function TodaysDoctorsPanel({
   loading = false,
   onDoctorClick,           // (doctorId) => void
   isDark = true,
+  // V56 / BS-15 — branch-scoped exam rooms for chip rendering. When empty,
+  // panel renders 'ทุกห้อง' chip (back-compat).
+  branchExamRooms = [],
 }) {
   // Build per-doctor info: WORKING shifts (recurring/work/halfday) only —
   // exclude leave/holiday/sick which mean "not working".
+  const roomNameById = new Map(
+    (branchExamRooms || []).filter((r) => r && r.kind === 'doctor').map((r) => [String(r.id), r.name]),
+  );
   const todaysDoctors = (todaysSchedules || [])
     .filter((s) => s.type === 'recurring' || s.type === 'work' || s.type === 'halfday')
     .map((s) => {
@@ -48,11 +58,23 @@ export default function TodaysDoctorsPanel({
       const lastname = doc.lastname || doc.lastName || '';
       const nick = doc.nickname ? ` (${doc.nickname})` : '';
       const display = `${firstname} ${lastname}`.trim() + nick;
+      // V56 / BS-15 — resolve room ids for display.
+      const resolvedIds = expandRoomIdsForDisplay(s, branchExamRooms);
+      const explicit = Array.isArray(s.roomIds) && s.roomIds.length > 0;
+      // Legacy entry (no roomIds) OR resolution returns the full doctor-room
+      // set → render single 'ทุกห้อง' chip. Otherwise render one chip per id.
+      const isAllRooms =
+        !explicit ||
+        (resolvedIds.length > 0 && resolvedIds.length === roomNameById.size && resolvedIds.every((rid) => roomNameById.has(rid)));
+      const chips = isAllRooms
+        ? [{ id: '__all__', name: 'ทุกห้อง' }]
+        : resolvedIds.map((rid) => ({ id: rid, name: roomNameById.get(rid) || rid }));
       return {
         doctorId: String(doc.doctorId || doc.id),
         name: display || doc.name || `แพทย์ ${s.staffId}`,
         startTime: s.startTime,
         endTime: s.endTime,
+        chips,
         sourceEntry: s,
       };
     })
@@ -96,6 +118,17 @@ export default function TodaysDoctorsPanel({
                 <p className="text-[11px] text-[var(--tx-muted)] font-mono">
                   {doc.startTime} - {doc.endTime}
                 </p>
+                {/* V56 / BS-15 — inline chips (wrap if many) */}
+                {doc.chips && doc.chips.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1" data-testid={`todays-doctor-chips-${doc.doctorId}`}>
+                    {doc.chips.map((chip) => (
+                      <span key={chip.id}
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${isDark ? 'bg-sky-950/40 border border-sky-900/50 text-sky-300' : 'bg-sky-50 border border-sky-200 text-sky-700'}`}>
+                        {chip.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </button>
           ))}

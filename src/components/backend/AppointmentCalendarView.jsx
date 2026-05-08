@@ -676,6 +676,7 @@ export default function AppointmentCalendarView({
           todaysSchedules={todaysSchedules}
           loading={todaysSchedulesLoading}
           isDark={isDark}
+          branchExamRooms={branchExamRooms}
           onDoctorClick={(doctorId) => {
             // For now, scroll the time grid to the first appointment block
             // for that doctor (or no-op if none). Future: filter UI.
