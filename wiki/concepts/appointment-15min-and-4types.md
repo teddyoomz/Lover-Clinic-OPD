@@ -1,13 +1,13 @@
 ---
-title: Appointment 15-min slots + 4-type taxonomy (Phase 19.0)
+title: Appointment 15-min slots + 4→5-type taxonomy (Phase 19.0 + 25.0a)
 type: concept
 date-created: 2026-05-06
-date-updated: 2026-05-06
-tags: [phase-19-0, appointments, ssot, rule-of-3, taxonomy]
+date-updated: 2026-05-09
+tags: [phase-19-0, phase-25-0, appointments, ssot, rule-of-3, taxonomy, walk-in]
 source-count: 2
 ---
 
-# Appointment 15-min slots + 4-type taxonomy (Phase 19.0)
+# Appointment 15-min slots + 4→5-type taxonomy (Phase 19.0 + Phase 25.0a)
 
 > Phase 19.0 (V15 #22, 2026-05-05) shrunk the minimum appointment slot from 30 → 15 min and replaced the 2-type taxonomy (`'sales'` / `'followup'`) with 4 types (`'deposit-booking'` / `'no-deposit-booking'` / `'treatment-in'` / `'follow-up'`). Same paint, sharper grid + finer semantic categorization. Net source diff: ~17 files modified + 3 new lib + 1 new script + 9 new test files.
 
@@ -62,6 +62,20 @@ Production audit: `artifacts/loverclinic-opd-4c39b/public/data/be_admin_audit/ph
 - Spec: `docs/superpowers/specs/2026-05-06-phase-19-0-appointment-15min-and-4types-design.md`
 - Plan: `docs/superpowers/plans/2026-05-06-phase-19-0-appointment-15min-and-4types.md`
 
+## Phase 25.0a evolution — Walk-in 5th type (2026-05-09)
+
+User added 5th type `walk-in` for drop-in patients. Inverted flow vs other 4 types: customer arrives FIRST → admin records to `be_customers` via "บันทึกลง OPD" → THEN `AppointmentFormModal` pops with type/customer/channel/branch LOCKED. The other 4 types create appointments BEFORE the customer arrives (booking semantics).
+
+Three integrations:
+1. **SSOT**: `appointmentTypes.js` adds 5th frozen entry (`{value:'walk-in', label:'Walk-in', defaultColor:'น้ำตาลอ่อน', order:4}`). All auto-scaling consumers (AppointmentFormModal radio / AppointmentReportTab filter / V64 hub typeOptions / appointmentReportAggregator) pick it up via `APPOINTMENT_TYPES.map`/`resolveAppointmentTypeLabel` — zero edits.
+2. **Backend sub-tab**: `nav/navConfig.js` adds `appointment-walk-in` below `appointment-follow-up` (Footprints icon, amber palette). `BackendDashboard.jsx` tab guard + activeTab→type mapper extended.
+3. **Frontend "คิว Walk-IN" tab → modal-create flow**: `AdminDashboard.jsx` "บันทึกลง OPD" button (renderOpdButton) → existing customer-save logic → NEW `_maybeOpenWalkInModal` helper (gated `adminMode === 'dashboard'`) → `<AppointmentFormModal>` mounted with `lockedAppointmentType='walk-in'` + NEW `lockedChannel='Walk-in'` (mirror of Phase 21.0 lockedAppointmentType pattern) + `lockedCustomer={just-saved}` + `initialDate=thaiTodayISO()` + `skipCollisionCheck=true`. Saved appointment auto-displays in V64 hub วันนี้ tab via existing `getAppointmentsByDateRange` + `sortApptsByDateTimeAsc` + `appointmentDataVersion` real-time refresh (no V64 hub edits).
+
+`lockedChannel` prop (NEW Phase 25.0c) on `AppointmentFormModal` is the new Rule of 3 mirror — same locked-chip-with-🔒 UX as `lockedAppointmentType`. Validates against `CHANNELS` list (CHANNELS includes `'Walk-in'` since pre-fix shipping). Save payload: `channel: safeLockedChannel || formData.channel` (lock wins).
+
+Migration: NONE needed for Phase 25.0a. No legacy walk-in docs exist; Phase 19.0's idempotent `migrateLegacyAppointmentType` already handles future drift via Option B Uniform fallback.
+
 ## History
 
 - 2026-05-06 — Phase 19.0 shipped (V15 #22). 16+ commits across Tasks 1-11 + 4 polish + post-deploy script fix. Migration `--apply` complete on prod.
+- 2026-05-09 — Phase 25.0a shipped (NOT YET DEPLOYED to prod). 14 files modified (6 source + 8 test). 4 NEW Phase 25.0 test files (44 tests). 5 EXISTING Phase 19/21 tests updated for 4→5 type expansion. 141/141 targeted GREEN; full suite 8242/8245 (1 pre-existing flake + 1 pending; 0 regressions). Master 1 ahead of prod.

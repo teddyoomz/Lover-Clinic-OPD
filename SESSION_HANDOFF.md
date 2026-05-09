@@ -7,11 +7,43 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #22 — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8199 tests · build clean
+- **Date last updated**: 2026-05-09 EOD #23 — Phase 25.0 Walk-in 5th appointment type + frontend tab rename + OPD-save → modal flow shipped (NOT YET DEPLOYED) · 8242/8245 + 1 pending · build clean
 - **Branch**: `master`
-- **Last commit**: feat(V64-fix14): mobile responsive polish + count text equal weight
-- **Test count**: 8199 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs). 1 pending.
-- **Deploy state**: **PRODUCTION = `ad7ee0e`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #22: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (60s exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Sessions #20-#22 precedent). Cleanup: 4 probe artifacts nuked.
+- **Last commit**: feat(Phase 25.0): Walk-in 5th appointment type + frontend tab rename + OPD-save → modal flow
+- **Test count**: 8242 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs). 1 pending.
+- **Deploy state**: master = `141f927` · prod = `ad7ee0e` (1 commit ahead). **NOT YET DEPLOYED** — awaiting explicit "deploy" THIS turn per Rule V18. Phase 25.0 batch is fully committed + pushed to `origin/master`, full suite green, build clean. Combined deploy ready when user authorizes.
+
+### Session 2026-05-09 EOD #23 — Phase 25.0 Walk-in 5th appointment type + Walk-in queue integration (NOT YET DEPLOYED)
+
+User directive (4 tasks):
+1. Add 'walk-in' as 5th appointment type with backend tab below 'ติดตามอาการ'; wire ทุก modal/dropdown/chip/filter ที่เกี่ยวกับประเภทนัดหมาย.
+2. Rename frontend "คิว"/"หน้าคิว" tab → "คิว Walk-IN".
+3. When admin clicks "บันทึกลง OPD" in Walk-IN tab → modal สร้างนัด เด้งขึ้นมา ดึงข้อมูลจากสาขานั้นๆ; LOCK type=walk-in / customer / channel=Walk-in / branch; status default=รอยืนยัน (NOT locked); other fields editable.
+4. Walk-in saved appointments แสดงใน V64 hub วันนี้ tab เรียงตามเวลา.
+
+**Brainstorming HARD-GATE honored** (Rule J): 2 clarifying Qs locked before code — (Q1) customer-linking strategy = use existing `lockedCustomer` (auto-provisioned by existing OPD-save flow); (Q2) 5th color = น้ำตาลอ่อน / amber.
+
+**14 files modified** (+511/-31): 6 source + 8 test (4 NEW Phase 25.0 + 4 EXISTING updated for 4→5 type expansion).
+
+**Phase 25.0a — SSOT + UI wiring**: `appointmentTypes.js` 5th frozen entry `{value:'walk-in', label:'Walk-in', defaultColor:'น้ำตาลอ่อน', order:4}`; `AppointmentHubRowCard` TYPE_CHIP_CLS amber-100/950; `nav/navConfig.js` NEW `appointment-walk-in` sub-tab below `appointment-follow-up` (Footprints icon, amber); `BackendDashboard.jsx` tab guard + activeTab→type mapper extended. Auto-scaling consumers (form modals / report filter / hub typeOptions / aggregator) pick up via `APPOINTMENT_TYPES.map`/`resolveAppointmentTypeLabel`.
+
+**Phase 25.0b — Frontend tab rename**: AdminDashboard mobile (line ~5548) "คิว" → "คิว Walk-IN"; desktop (line ~5585) "หน้าคิว" → "คิว Walk-IN". Internal mode key `'dashboard'` unchanged.
+
+**Phase 25.0c — "บันทึกลง OPD" → AppointmentFormModal locked-fields flow**:
+- `AppointmentFormModal.jsx` NEW `lockedChannel` prop (mirror of Phase 21.0 `lockedAppointmentType` pattern): safeLockedChannel validation against CHANNELS list + payload override (lock wins) + UI ternary (locked → static read-only chip with 🔒 + `data-testid="locked-channel-chip"`; unlocked → existing `<select>`).
+- `AdminDashboard.jsx` NEW `_maybeOpenWalkInModal` helper gated on `adminMode === 'dashboard'`, wired at all 3 customer-save success branches (addCustomer / relink-existing / recovery-create). State `walkInModal = { sessionId, customerId, customerHN, patientData }`. Modal mounts with `mode='create'` + `lockedAppointmentType='walk-in'` + `lockedChannel='Walk-in'` + `lockedCustomer={just-saved}` + `initialDate=thaiTodayISO()` + `skipCollisionCheck=true`. patientData passed THROUGH from `session.patientData` (B.11 V12 anti-regression — no inline rebuild).
+
+**Phase 25.0d — V64 hub วันนี้ auto-display**: NO file edits. Walk-in appointments auto-appear via existing `getAppointmentsByDateRange` wide-range fetch + `applyTabFilter('today')` + `sortApptsByDateTimeAsc` + V64-fix9 `appointmentDataVersion` counter (real-time refresh on `listenToAppointmentsByMonth` callback).
+
+**Tests**: 4 NEW Phase 25.0 test files (44 tests: SSOT 16 + lockedChannel 9 + tab rename 5 + flow-simulate 14). 5 EXISTING tests updated (Phase 19/21 — 4→5 type expansion via N_TYPES parameterization; nav section count 5→6). 141/141 targeted Phase 19/21/23/25 GREEN; full suite 8242/8245 (1 pre-existing flake + 1 pending; 0 Phase 25.0 regressions). Build clean.
+
+**Wiki updates**: UPDATED `entities/appointment-types-ssot.md` (4-type → 5-type taxonomy + Phase 25.0a history line) + UPDATED `concepts/appointment-15min-and-4types.md` (Phase 25.0a evolution section + `lockedChannel` Rule of 3 mirror documentation) + appended `log.md` 2026-05-09 ingest entry.
+
+**Rule of 3 reached** — `lockedChannel` is the 3rd member of the locked-field prop family on AppointmentFormModal (after `lockedCustomer` + Phase 21.0 `lockedAppointmentType`). Future locked-X props MUST mirror the `safeLockedX = ALLOWED.includes(prop) ? prop : null` validation + payload-override + chip-render-with-🔒 + `data-locked-X` attr pattern.
+
+Detail: future checkpoint at `.agents/sessions/2026-05-09-phase-25-0-walk-in.md` (deferred until session-end). Production at `ad7ee0e` (unchanged this session).
+
+
 
 ### Session 2026-05-09 EOD #22 — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign (DEPLOYED)
 
@@ -1302,24 +1334,27 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-09 EOD #22.
+Resume LoverClinic — continue from 2026-05-09 EOD #23.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ad7ee0e, prod=ad7ee0e)
-3. .agents/active.md (8199 tests · idle)
+2. SESSION_HANDOFF.md (master=141f927 · prod=ad7ee0e — 1 ahead)
+3. .agents/active.md (8242 tests · NOT YET DEPLOYED)
 4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V64 V-summary)
-5. .agents/sessions/2026-05-09-v64-fix9-to-fix14-hub-overhaul.md (latest checkpoint)
+5. wiki/index.md (read first for code-architecture queries; Phase 25.0a updated entity + concept pages)
 
-Status: master=`ad7ee0e`, 8199 tests pass, prod=`ad7ee0e` LIVE. Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
+Status: master=`141f927`, 8242 tests pass, prod=`ad7ee0e` LIVE (1 commit behind). Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5. Phase 25.0 Walk-in 5th appointment type committed + pushed but NOT YET DEPLOYED.
 
-Next: idle — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign DEPLOYED to prod; production stable.
+Next: 🚨 Phase 25.0 awaiting explicit "deploy" THIS turn (Rule V18). Combined deploy ready (vercel --prod + firebase --only firestore:rules; firestore.rules unchanged so deploy is idempotent).
 
 Outstanding (user-triggered):
-- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 still test V50-stripped collections — false-positive 403 each deploy; ignored manually per Sessions #20-#22 precedent.
-- (Optional) `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs (TFP line 666 comment + Windows shell-spawn timing).
+- 🚨 **Phase 25.0 deploy** — 1 commit ahead; user types "deploy" to ship.
+- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 false-positive trim.
+- (Optional) `bsa-task7-h-quater-fix` flake.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent. **NEW V64-fix11 — `src/components/admin/_apptHubStyles.js`** is the single source of truth for hub buttons / tabs / accent bars / status chips (3-tier: PRIMARY ember / SECONDARY sky ghost / DESTRUCTIVE rose ghost / + LINE brand). Future Appointment Hub additions MUST import from there (Rule of 3 lock).
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent.
+
+NEW Phase 25.0 institutional memory: **`lockedChannel` prop on AppointmentFormModal** is the 3rd member of the locked-field prop family (after `lockedCustomer` + Phase 21.0 `lockedAppointmentType`). Future locked-X props MUST mirror the `safeLockedX = ALLOWED.includes(prop) ? prop : null` validation + payload-override + chip-render-with-🔒 + `data-locked-X` attr pattern. Walk-in flow inversion: customer recorded FIRST (existing OPD-save) → `_maybeOpenWalkInModal` gated on `adminMode === 'dashboard'` → modal pops with full be_customers doc as `lockedCustomer`. V64 hub `_apptHubStyles.js` (V64-fix11) shared module unchanged.
 
 /session-start
 ```

@@ -1,15 +1,15 @@
 ---
-title: appointmentTypes.js — 4-type taxonomy SSOT
+title: appointmentTypes.js — 5-type taxonomy SSOT
 type: entity
 date-created: 2026-05-06
-date-updated: 2026-05-06
-tags: [phase-19-0, ssot, lib, appointments]
+date-updated: 2026-05-09
+tags: [phase-19-0, phase-25-0, ssot, lib, appointments, walk-in]
 source-count: 2
 ---
 
-# `src/lib/appointmentTypes.js` — 4-type taxonomy SSOT
+# `src/lib/appointmentTypes.js` — 5-type taxonomy SSOT
 
-> Pure JS module shipped Phase 19.0 (commit `ef4c003`, 2026-05-06). Single source of truth for the appointment-type taxonomy. Replaces the 2-value `'sales'` / `'followup'` enum scattered across 7+ consumers. No Firestore, no React — safe for tests / server / migration scripts / UI.
+> Pure JS module shipped Phase 19.0 (commit `ef4c003`, 2026-05-06) — extended Phase 25.0a (2026-05-09) with 5th type `walk-in`. Single source of truth for the appointment-type taxonomy. Replaces the 2-value `'sales'` / `'followup'` enum scattered across 7+ consumers. No Firestore, no React — safe for tests / server / migration scripts / UI.
 
 ## Exports
 
@@ -23,7 +23,7 @@ source-count: 2
 | `isLegacyAppointmentType(value)` | `(string\|null) => boolean` | True for `'sales'` / `'followup'` / `'follow'` / `'consult'` / `'treatment'` / null / empty |
 | `migrateLegacyAppointmentType(value)` | `(string\|null) => string` | Option B uniform: legacy → DEFAULT; new values pass through (idempotent) |
 
-## The 4 types
+## The 5 types
 
 ```js
 [
@@ -31,8 +31,11 @@ source-count: 2
   { value: 'no-deposit-booking', label: 'จองไม่มัดจำ',  defaultColor: 'ส้มอ่อน',      order: 1 },
   { value: 'treatment-in',       label: 'เข้าทำหัตถการ', defaultColor: 'น้ำเงินอ่อน',  order: 2 },
   { value: 'follow-up',          label: 'ติดตามอาการ',   defaultColor: 'เหลืองอ่อน',  order: 3 },
+  { value: 'walk-in',            label: 'Walk-in',       defaultColor: 'น้ำตาลอ่อน',   order: 4 },  // Phase 25.0a
 ]
 ```
+
+Phase 25.0a (2026-05-09) `walk-in` added as the 5th type. Drop-in patients (no advance booking). Inverted flow: customer arrives FIRST → admin records to be_customers via "บันทึกลง OPD" → THEN AppointmentFormModal pops with type/customer/channel/branch locked. Backend sub-tab `appointment-walk-in` lives below `appointment-follow-up` in `nav/navConfig.js`. Default color `น้ำตาลอ่อน` (warm earth/amber Tailwind family) — distinct from the existing 4 + matches Editorial Ember theme + NOT red per Thai-culture iron-clad.
 
 ## Consumers (after Phase 19.0)
 
@@ -60,3 +63,4 @@ source-count: 2
 ## History
 
 - 2026-05-06 (commit `ef4c003`) — Created. Task 1 of Phase 19.0 plan. 88 lines.
+- 2026-05-09 (Phase 25.0a) — Added 5th type `walk-in` per user directive. New backend sub-tab `appointment-walk-in` below `appointment-follow-up`. AppointmentHubRowCard `TYPE_CHIP_CLS` extended with amber-100/950 for walk-in. BackendDashboard tab guard + activeTab→type mapper extended. AppointmentFormModal radio + AppointmentReportTab filter + Hub typeOptions auto-scaled via `APPOINTMENT_TYPES.map`/`resolveAppointmentTypeLabel`. NEW companion: `lockedChannel` prop on AppointmentFormModal (mirror of `lockedAppointmentType` Phase 21.0 pattern) — used by AdminDashboard kiosk "บันทึกลง OPD" flow to lock channel='Walk-in'.
