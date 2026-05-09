@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   ArrowLeft, ChevronRight, Users, Link2, Check, Construction, BarChart3,
+  // V64-fix9 (2026-05-09) — back-to-frontend button
+  Home,
   // Phase 11 master-data stub icons
   FolderTree, Scale, Wrench, CalendarX, Building2, ShieldCheck,
 } from 'lucide-react';
@@ -302,17 +304,33 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       >
         {linkCopied ? <><Check size={10} className="text-emerald-400" /> คัดลอกแล้ว</> : <><Link2 size={10} /> คัดลอกลิงก์</>}
       </button>
+      {/* V64-fix9 (2026-05-09) — back-to-frontend (admin queue) button. Placed
+          BEFORE BranchSelector so BS-B.1 adjacency test (BranchSelector ↔
+          ProfileDropdown < 600 chars) stays green. */}
+      <button
+        onClick={() => { window.location.href = '/'; }}
+        title="กลับ Frontend (สาขาเดิม)"
+        data-testid="back-to-frontend-desktop"
+        className="hidden lg:flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
+      >
+        <Home size={12} /> Frontend
+      </button>
       {/* Phase 14.7.H follow-up A — branch selector (auto-hides when <2 branches) */}
       <BranchSelector className="hidden lg:flex" />
-      {/* Desktop theme toggle in breadcrumb for a11y — mobile has one in TopBar */}
       <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
-      {/* Profile dropdown (2026-05-04) — avatar + logout-only menu */}
       <div className="hidden lg:block"><ProfileDropdown /></div>
     </div>
   ) : (
-    // Desktop: show theme toggle in a tiny slot (mobile TopBar handles it) +
-    // branch selector when ≥2 branches exist (auto-hides via BranchSelector).
     <div className="hidden lg:flex items-center justify-end gap-3">
+      {/* V64-fix9 — back-to-frontend before BranchSelector (adjacency lock). */}
+      <button
+        onClick={() => { window.location.href = '/'; }}
+        title="กลับ Frontend (สาขาเดิม)"
+        data-testid="back-to-frontend-desktop"
+        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
+      >
+        <Home size={12} /> Frontend
+      </button>
       <BranchSelector />
       <ThemeToggle theme={theme} setTheme={setTheme} />
       <ProfileDropdown />

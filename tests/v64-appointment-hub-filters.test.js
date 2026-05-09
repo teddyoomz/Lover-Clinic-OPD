@@ -5,6 +5,7 @@ import {
   applyTabFilter,
   isMissedAppointment,
   matchesSearchText,
+  sortApptsByDateTimeAsc,
 } from '../src/lib/appointmentHubFilters.js';
 
 const FIXED_NOW = new Date('2026-05-08T07:00:00+07:00');
@@ -107,5 +108,80 @@ describe('V64.F Bangkok TZ midday-UTC parse (V53 BS-12 mirror)', () => {
   it('F6.2 23:59 Bangkok stays in current day', () => {
     const lateNight = new Date('2026-05-08T23:59:00+07:00');
     expect(dateRangeForTab('today', lateNight)).toEqual({ from: '2026-05-08', to: '2026-05-08' });
+  });
+});
+
+// V64-fix9 (2026-05-09) — sortApptsByDateTimeAsc helper
+describe('V64.F9 sortApptsByDateTimeAsc — earliest queue first at top', () => {
+  it('F9.1 same date, sorts by startTime ASC', () => {
+    const result = sortApptsByDateTimeAsc([
+      { id: 'B', date: '2026-05-08', startTime: '17:30' },
+      { id: 'A', date: '2026-05-08', startTime: '09:00' },
+      { id: 'C', date: '2026-05-08', startTime: '12:15' },
+    ]);
+    expect(result.map(r => r.id)).toEqual(['A', 'C', 'B']);
+  });
+
+  it('F9.2 different dates, sorts by date ASC primary', () => {
+    const result = sortApptsByDateTimeAsc([
+      { id: 'C', date: '2026-05-12', startTime: '08:00' },
+      { id: 'A', date: '2026-05-09', startTime: '17:00' },
+      { id: 'B', date: '2026-05-10', startTime: '12:00' },
+    ]);
+    expect(result.map(r => r.id)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('F9.3 same date+time → stable order preserved', () => {
+    const result = sortApptsByDateTimeAsc([
+      { id: 'X', date: '2026-05-08', startTime: '10:00' },
+      { id: 'Y', date: '2026-05-08', startTime: '10:00' },
+    ]);
+    // Both could appear in either order — stability not strictly guaranteed
+    // by Array.sort across engines, but lengths + content correct.
+    expect(result.length).toBe(2);
+    expect(result.map(r => r.id).sort()).toEqual(['X', 'Y']);
+  });
+
+  it('F9.4 missing date or startTime → empty string sorts to bottom', () => {
+    const result = sortApptsByDateTimeAsc([
+      { id: 'B', date: '2026-05-08', startTime: '09:00' },
+      { id: 'A', startTime: '08:00' },                   // no date
+      { id: 'C', date: '2026-05-08' },                   // no time
+    ]);
+    // 'A' (no date) sorts to top because '' < '2026-05-08'
+    // Within '2026-05-08' rows: 'C' (no time '') < 'B' ('09:00')
+    expect(result.map(r => r.id)).toEqual(['A', 'C', 'B']);
+  });
+
+  it('F9.5 returns NEW array (does NOT mutate input)', () => {
+    const input = [
+      { id: 'B', date: '2026-05-09', startTime: '10:00' },
+      { id: 'A', date: '2026-05-08', startTime: '09:00' },
+    ];
+    const inputBefore = [...input];
+    const result = sortApptsByDateTimeAsc(input);
+    expect(input).toEqual(inputBefore);  // input unchanged
+    expect(result).not.toBe(input);      // different reference
+  });
+
+  it('F9.6 empty array', () => {
+    expect(sortApptsByDateTimeAsc([])).toEqual([]);
+  });
+
+  it('F9.7 non-array input → []', () => {
+    expect(sortApptsByDateTimeAsc(null)).toEqual([]);
+    expect(sortApptsByDateTimeAsc(undefined)).toEqual([]);
+    expect(sortApptsByDateTimeAsc('not array')).toEqual([]);
+  });
+
+  it('F9.8 ล่วงหน้า 30 วัน scenario — multi-day spread, all sorted ASC', () => {
+    const result = sortApptsByDateTimeAsc([
+      { id: 'D', date: '2026-05-25', startTime: '10:00' },
+      { id: 'A', date: '2026-05-10', startTime: '14:00' },
+      { id: 'B', date: '2026-05-10', startTime: '16:00' },
+      { id: 'C', date: '2026-05-15', startTime: '09:00' },
+    ]);
+    // May 10 14:00 → May 10 16:00 → May 15 09:00 → May 25 10:00
+    expect(result.map(r => r.id)).toEqual(['A', 'B', 'C', 'D']);
   });
 });

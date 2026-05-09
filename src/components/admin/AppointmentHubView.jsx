@@ -16,6 +16,7 @@ import {
 import {
   applyTabFilter,
   dateRangeForTab,
+  sortApptsByDateTimeAsc,
 } from '../../lib/appointmentHubFilters.js';
 import { buildCustomerSummaryMap } from '../../lib/appointmentHubAggregator.js';
 import {
@@ -37,6 +38,12 @@ export default function AppointmentHubView({
   // View includes in loadAll deps so missed-badge + button-set update
   // real-time after admin creates/edits/deletes a treatment.
   treatmentDataVersion = 0,
+  // V64-fix9 (2026-05-09): caller-provided counter bumping every time
+  // AdminDashboard's listenToAppointmentsByMonth listener fires (any
+  // be_appointments change in current month — create/edit/cancel). View
+  // silently re-fetches wide range so all 4 tab bubble counts + active
+  // list update real-time without F5. Mirror of treatmentDataVersion.
+  appointmentDataVersion = 0,
   // Action handlers passed from AdminDashboard (existing helpers)
   onConfirmAppt,
   onEditAppt,
@@ -154,6 +161,16 @@ export default function AppointmentHubView({
     loadAll({ silent: true });
   }, [treatmentDataVersion, loadAll]);
 
+  // V64-fix9 (2026-05-09): silent reload when appointmentDataVersion bumps
+  // (post-be_appointments mutation upstream — kiosk create / edit / cancel).
+  // Mirror of V64-fix7 pattern. Skip first render (version=0 = baseline).
+  const appointmentDataVersionPrev = useRef(appointmentDataVersion);
+  useEffect(() => {
+    if (appointmentDataVersion === appointmentDataVersionPrev.current) return;
+    appointmentDataVersionPrev.current = appointmentDataVersion;
+    loadAll({ silent: true });
+  }, [appointmentDataVersion, loadAll]);
+
   // V64-fix4: per-appointment deposit lookup. Lets RowCard show
   // "💰 มัดจำ {amount} — เพื่อ {purpose}" chip when an appointment is
   // linked to a deposit (came from จองมัดจำ flow).
@@ -189,14 +206,17 @@ export default function AppointmentHubView({
   }, [allTreatments]);
 
   // Per-tab filtered list (active tab)
+  // V64-fix9 (2026-05-09): sort by date+startTime ASC via sortApptsByDateTimeAsc
+  // — earliest queue first at top. User: "เรียงแบบลูกค้าที่จะต้องมาถึงก่อนอยู่บน".
   const filteredAppts = useMemo(() => {
-    return applyTabFilter(appts, {
+    const filtered = applyTabFilter(appts, {
       tab: activeTab,
       now: new Date(),
       statusOverride: statusFilter,
       search,
       typeFilter,
     });
+    return sortApptsByDateTimeAsc(filtered);
   }, [appts, activeTab, statusFilter, search, typeFilter]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
@@ -349,21 +369,23 @@ export default function AppointmentHubView({
 
   return (
     <div data-testid="appt-hub-view">
-      {/* V64-fix2 (Issue 7): doctor cards container reserves min-height
-          so layout doesn't shift when switching between today/tomorrow
-          (which show staff cards) and future/past (which don't). */}
-      <div className="min-h-[120px]" data-testid="appt-hub-doctor-section">
-        <AppointmentHubDoctorCards
-          tab={activeTab}
-          doctorShifts={doctorShifts}
-          assistantShifts={assistantShifts}
-          dateLabel={dateLabel}
-        />
-      </div>
+      {/* V64-fix9 (2026-05-09): doctor cards moved INSIDE TabBar rightContent
+          so the area above the tabs is no longer empty on future/past tabs
+          (where DoctorCards returns null). Per user directive: "เอา badge
+          แสดงแพทย์เข้ามาไว้ถัดไปจาก tab ย้อนหลัง 30 วัน น่าจะดีกว่า". The
+          DoctorCards component still self-hides when tab !== today/tomorrow. */}
       <AppointmentHubTabBar
         activeTab={activeTab}
         counts={counts}
         onTabChange={setActiveTab}
+        rightContent={
+          <AppointmentHubDoctorCards
+            tab={activeTab}
+            doctorShifts={doctorShifts}
+            assistantShifts={assistantShifts}
+            dateLabel={dateLabel}
+          />
+        }
       />
       <AppointmentHubFilterBar
         search={search}

@@ -1,4 +1,7 @@
 // V64 — 4 tab pills with bubble counts (Q4=A).
+// V64-fix9 (2026-05-09): added `rightContent` slot for inline doctor-cards
+// badge. Per user directive: "เอา badge แสดงแพทย์เข้ามาไว้ถัดไปจาก tab
+// ย้อนหลัง 30 วัน". Renders in same flex row; wraps below on narrow screens.
 import React from 'react';
 
 const TABS = [
@@ -8,9 +11,9 @@ const TABS = [
   { key: 'past', label: 'ย้อนหลัง 30 วัน' },
 ];
 
-export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange }) {
+export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange, rightContent = null }) {
   return (
-    <div className="flex gap-2 mb-3 flex-wrap" data-testid="appt-hub-tabbar">
+    <div className="flex gap-2 mb-3 flex-wrap items-center" data-testid="appt-hub-tabbar">
       {TABS.map(t => {
         const active = t.key === activeTab;
         const count = Number(counts[t.key] || 0);
@@ -34,6 +37,11 @@ export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChan
           </button>
         );
       })}
+      {rightContent && (
+        <div className="ml-auto flex items-center" data-testid="appt-hub-tabbar-right">
+          {rightContent}
+        </div>
+      )}
     </div>
   );
 }

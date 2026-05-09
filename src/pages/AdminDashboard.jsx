@@ -480,6 +480,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const { totalUnread: chatUnread } = useChatUnread(db, appId);
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { mode, customerId, treatmentId, patientName }
   const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
+  // V64-fix9 (2026-05-09): appointmentDataVersion bumps every time the
+  // listenToAppointmentsByMonth listener fires (new appt created, edited,
+  // cancelled, etc.). AppointmentHubView listens to this prop and silently
+  // re-fetches its wide [today-30..today+30] range so all 4 tab bubble counts
+  // + the active list update real-time without F5. Mirror of treatmentRefreshKey.
+  const [appointmentDataVersion, setAppointmentDataVersion] = useState(0);
   const [autoExpandTreatmentId, setAutoExpandTreatmentId] = useState('');
 
   // ─── Chat schedule: check if within operating hours ─────
@@ -1008,6 +1014,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       { branchId: selectedBranchId },
       (appts) => {
         setApptData({ appointments: appts, syncedAt: new Date().toISOString() });
+        // V64-fix9 — real-time bump for AppointmentHubView silent reload
+        setAppointmentDataVersion(v => v + 1);
       },
       () => { setApptData(null); }
     );
@@ -6468,6 +6476,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                * auto-flips to 'แก้ไขบันทึกการรักษา' + missed badge clears
                * the moment treatment is created/edited/deleted anywhere. */
               treatmentDataVersion={treatmentRefreshKey}
+              /* V64-fix9 (2026-05-09): real-time tab refresh on appt mutation.
+               * AdminDashboard's listenToAppointmentsByMonth fires on every
+               * be_appointments change for the current month → bumps this
+               * counter → AppointmentHubView silently re-fetches wide range. */
+              appointmentDataVersion={appointmentDataVersion}
               onConfirmAppt={(appt) => {
                 // V64-fix2: return promise so View can chain reload after success
                 return updateBackendAppointment(appt.id, { status: 'confirmed' }).then(() => {

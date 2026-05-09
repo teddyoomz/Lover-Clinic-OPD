@@ -1,6 +1,32 @@
 // V64 — appointment hub per-tab filter helpers (pure JS).
 // Q4=A: smart per-tab defaults + missed-inference + dropdown override.
 // Bangkok TZ stable via midday-UTC parse pattern (V53 BS-12).
+//
+// V64-fix9 (2026-05-09): + sortApptsByDateTimeAsc helper. Per user directive
+// "ทำให้เรียงแบบลูกค้าที่จะต้องมาถึงก่อนอยู่บน": earliest queue first at top.
+// Same comparator works for all 4 tabs — within วันนี้/พรุ่งนี้ all rows
+// share `date` so startTime drives; across ล่วงหน้า/ย้อนหลัง 30 วัน, date
+// primary + time tie-breaker.
+
+/**
+ * Sort an array of appointments by `date` then `startTime`, ascending.
+ * Returns a NEW array; does not mutate input. Empty/missing fields treated
+ * as empty string (sort to bottom).
+ *
+ * @param {Array<{date?:string, startTime?:string}>} appts
+ * @returns {Array}
+ */
+export function sortApptsByDateTimeAsc(appts) {
+  if (!Array.isArray(appts)) return [];
+  return [...appts].sort((a, b) => {
+    const ad = String(a?.date || '');
+    const bd = String(b?.date || '');
+    if (ad !== bd) return ad.localeCompare(bd);
+    const at = String(a?.startTime || '');
+    const bt = String(b?.startTime || '');
+    return at.localeCompare(bt);
+  });
+}
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 

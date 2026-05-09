@@ -114,12 +114,16 @@ export default function AppointmentHubRowCard({
             </span>
           )}
         </div>
+        {/* V64-fix9 (2026-05-09): patient name color = sky-600 (light) / sky-300 (dark)
+            — eye-catching, on-theme (not red per Thai-culture iron-clad), bumped to
+            text-base for prominence. User: "แสดงชื่อลูกค้าสีอื่นเด่นๆให้เข้าตีม
+            แต่ห้ามสีแดง". */}
         {appt.customerId ? (
           <a
             href={buildCustomerDetailUrl(appt.customerId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-bold text-sm text-[var(--tx-heading)] hover:underline hover:text-sky-500 cursor-pointer inline-block"
+            className="font-bold text-base text-sky-700 dark:text-sky-300 hover:underline hover:text-sky-500 cursor-pointer inline-block"
             data-testid="row-name"
             data-customer-id={appt.customerId}
             title="เปิดข้อมูลลูกค้าใน tab ใหม่"
@@ -127,7 +131,7 @@ export default function AppointmentHubRowCard({
             {summary?.name || appt.customerName || '-'}
           </a>
         ) : (
-          <div className="font-bold text-sm text-[var(--tx-heading)]" data-testid="row-name">
+          <div className="font-bold text-base text-sky-700 dark:text-sky-300" data-testid="row-name">
             {summary?.name || appt.customerName || '-'}
           </div>
         )}
@@ -161,9 +165,17 @@ export default function AppointmentHubRowCard({
 
       {/* MIDDLE — Appointment detail */}
       <div className="flex-1 min-w-[260px] text-xs space-y-0.5">
-        {/* V64-fix2 (Issue 3): full Thai date label, prominently */}
-        <div className="text-sm font-bold text-[var(--tx-heading)] mb-1" data-testid="row-date-full">
-          📅 {fullThaiDate(appt.date)} <span className="text-[var(--tx-muted)] font-normal">· {appt.startTime || '-'} - {appt.endTime || '-'}</span>
+        {/* V64-fix2 (Issue 3): full Thai date label, prominently
+            V64-fix9 (2026-05-09): time bumped to text-base + amber-emphasis chip
+            so it's readable at a glance — user: "เน้นแสดง เวลา ให้ชัดเจนด้วย". */}
+        <div className="text-sm font-bold text-[var(--tx-heading)] mb-1 flex flex-wrap items-center gap-2" data-testid="row-date-full">
+          <span>📅 {fullThaiDate(appt.date)}</span>
+          <span
+            className="text-base font-mono font-black px-2 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-200 dark:border-amber-800/50"
+            data-testid="row-time-emphasis"
+          >
+            🕐 {appt.startTime || '-'} - {appt.endTime || '-'}
+          </span>
         </div>
         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           {typeLabel && (
@@ -193,9 +205,23 @@ export default function AppointmentHubRowCard({
         <div className="text-[var(--tx-muted)]">ที่ปรึกษา: <span className="text-[var(--tx-heading)]">{appt.advisor || '-'}</span></div>
         <div className="text-[var(--tx-muted)]">แพทย์: <span className="text-[var(--tx-heading)]">{appt.doctorName || '-'}</span></div>
         <div className="text-[var(--tx-muted)]">ผู้ช่วย: <span className="text-[var(--tx-heading)]">{(appt.assistantNames || []).join(', ') || appt.assistantName || '-'}</span></div>
-        <div className="text-[var(--tx-muted)]">เวลานัด: <span className="text-[var(--tx-heading)]">{appt.startTime || '-'} - {appt.endTime || '-'}</span></div>
         <div className="text-[var(--tx-muted)]">ห้องตรวจ: <span className="text-[var(--tx-heading)]">{appt.roomName || '-'}</span></div>
-        <div className="text-[var(--tx-muted)]">นัดมาเพื่อ: <span className="text-[var(--tx-heading)]">{appt.appointmentTo || '-'}</span></div>
+        {/* V64-fix9 (2026-05-09): "นัดมาเพื่อ" prominent — purpose is critical
+            info; was buried as last muted line. User: "แสดงนัดมาเพื่อชัดๆ
+            เด่นๆ เพราะเป็นข้อมูลสำคัญเหมือนกัน". Bumped to sm bold + emerald
+            chip so admin can see the purpose at a glance.
+            Note: redundant "เวลานัด:" row removed (duplicate of top time chip
+            after V64-fix9 emphasis). */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="row-purpose-block">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)]">นัดมาเพื่อ</span>
+          <span
+            className="text-sm font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50 max-w-full truncate"
+            data-testid="row-purpose"
+            title={appt.appointmentTo || ''}
+          >
+            {appt.appointmentTo || '—'}
+          </span>
+        </div>
       </div>
 
       {/* RIGHT — Status + Actions */}

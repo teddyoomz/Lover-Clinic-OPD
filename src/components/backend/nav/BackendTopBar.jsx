@@ -3,14 +3,19 @@
 //   ☰ hamburger — opens mobile drawer
 //   breadcrumb — section > current tab
 //   🔍 search    — opens cmdk palette (full-screen sheet on mobile)
+//   🏠 back-to-frontend — V64-fix9 — return to /admin queue (mobile-friendly)
+//   🌿 BranchSelector — V64-fix9 — switch branch (was desktop-only via
+//      "hidden lg:flex" in BackendDashboard breadcrumbSlot; mobile users
+//      had no way to change branch without going to a desktop)
 //   theme toggle (desktop already has one — hide on desktop where TopBar is
 //                 not rendered)
 //
 // Safe-area-inset-top for iOS notch.
 
-import { Menu, Search, ChevronRight } from 'lucide-react';
+import { Menu, Search, ChevronRight, Home } from 'lucide-react';
 import { itemById, sectionOf, NAV_SECTIONS } from './navConfig.js';
 import ThemeToggle from '../../ThemeToggle.jsx';
+import BranchSelector from '../BranchSelector.jsx';
 import { hexToRgb } from '../../../utils.js';
 
 export default function BackendTopBar({
@@ -62,6 +67,18 @@ export default function BackendTopBar({
         {/* Note: for pinned items (sectionOf = null) the breadcrumb collapses
             to just the tab name — intentional since pinned = top-level. */}
 
+        {/* V64-fix9 (2026-05-09): back-to-frontend (admin queue at "/")
+            — same branch is preserved via BranchProvider's per-uid localStorage. */}
+        <button
+          onClick={() => { window.location.href = '/'; }}
+          aria-label="กลับ Frontend (หน้าคิวลูกค้า)"
+          title="กลับ Frontend (สาขาเดิม)"
+          data-testid="back-to-frontend-mobile"
+          className="p-2 rounded-lg text-[var(--tx-primary)] hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
+        >
+          <Home size={18} />
+        </button>
+
         {/* Search (opens cmdk palette) */}
         <button
           onClick={onOpenPalette}
@@ -70,6 +87,13 @@ export default function BackendTopBar({
         >
           <Search size={18} />
         </button>
+
+        {/* V64-fix9 (2026-05-09): BranchSelector visible on mobile (was
+            "hidden lg:flex" desktop-only in BackendDashboard breadcrumbSlot).
+            Auto-hides itself when <2 branches exist (BranchSelector internal). */}
+        <div className="flex-shrink-0" data-testid="branch-selector-mobile">
+          <BranchSelector />
+        </div>
 
         {/* Theme toggle */}
         <div className="flex-shrink-0">

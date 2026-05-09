@@ -309,4 +309,63 @@ describe('V64.R AppointmentHubRowCard', () => {
       expect(link.textContent).toBe('Backup Name');
     });
   });
+
+  // V64-fix9 (2026-05-09) — visual emphasis + on-theme color
+  describe('V64.R9 V64-fix9 — visual emphasis (time chip + purpose chip + name color)', () => {
+    it('R9.1 row-time-emphasis chip rendered with amber styling + start-end times', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', startTime: '16:30', endTime: '17:30', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const time = screen.getByTestId('row-time-emphasis');
+      expect(time).toBeInTheDocument();
+      expect(time.textContent).toMatch(/16:30/);
+      expect(time.textContent).toMatch(/17:30/);
+      expect(time.className).toMatch(/amber/);
+    });
+
+    it('R9.2 row-purpose chip renders appointmentTo with emerald emphasis', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', status: 'pending', appointmentTo: 'รักษาสิว' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const purpose = screen.getByTestId('row-purpose');
+      expect(purpose).toBeInTheDocument();
+      expect(purpose.textContent).toBe('รักษาสิว');
+      expect(purpose.className).toMatch(/emerald/);
+    });
+
+    it('R9.3 row-purpose chip shows em-dash when appointmentTo missing', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      expect(screen.getByTestId('row-purpose').textContent).toBe('—');
+    });
+
+    it('R9.4 patient name uses sky color (NOT red — Thai-culture iron-clad)', () => {
+      render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      const name = screen.getByTestId('row-name');
+      expect(name.className).toMatch(/sky-/);
+      expect(name.className).not.toMatch(/(text-red|text-rose)/);
+    });
+
+    it('R9.5 redundant "เวลานัด:" row removed (V64-fix9 — info now in top time chip)', () => {
+      const { container } = render(<AppointmentHubRowCard
+        appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', startTime: '16:30', endTime: '17:30', status: 'pending' }}
+        summary={baseSummary}
+        now={FIXED_NOW}
+      />);
+      // The middle column should NOT have a separate "เวลานัด:" muted line
+      // (was duplicate of the top emphasized chip).
+      expect(container.textContent).not.toMatch(/เวลานัด:/);
+    });
+  });
 });
