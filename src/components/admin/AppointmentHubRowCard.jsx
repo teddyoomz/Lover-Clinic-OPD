@@ -139,25 +139,42 @@ export default function AppointmentHubRowCard({
           {summary?.gender && <span>เพศ: {summary.gender}</span>}
           {summary?.phone && <span>📞 {summary.phone}</span>}
         </div>
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        {/* V64-fix10 (2026-05-09): finance chips bumped to text-xs + font-bold +
+            border + dark-mode variants + emoji prefix. User: "badge มัดจำ +
+            Wallet ขอชัดกว่านี้". All 4 finance chips treated consistently so
+            visual hierarchy holds across themes. Text format unchanged so
+            R4.11 RTL assertion (`Wallet 12,000 ฿` etc.) still matches. */}
+        <div className="flex flex-wrap gap-1.5 mt-2" data-testid="row-finance-chips">
           {summary?.walletBalance > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
-              Wallet {fmtMoney(summary.walletBalance)} ฿
+            <span
+              data-testid="row-chip-wallet"
+              className="text-xs font-bold px-2 py-1 rounded bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/50 dark:text-blue-200 dark:border-blue-700/60"
+            >
+              💰 Wallet {fmtMoney(summary.walletBalance)} ฿
             </span>
           )}
           {summary?.activeDepositTotal > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800">
-              มัดจำ {fmtMoney(summary.activeDepositTotal)} ฿
+            <span
+              data-testid="row-chip-deposit"
+              className="text-xs font-bold px-2 py-1 rounded bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-950/50 dark:text-orange-200 dark:border-orange-700/60"
+            >
+              🏷️ มัดจำ {fmtMoney(summary.activeDepositTotal)} ฿
             </span>
           )}
           {summary?.outstandingTotal > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
-              ค่างชำระ {fmtMoney(summary.outstandingTotal)} ฿
+            <span
+              data-testid="row-chip-outstanding"
+              className="text-xs font-bold px-2 py-1 rounded bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:border-rose-700/60"
+            >
+              ⚠️ ค่างชำระ {fmtMoney(summary.outstandingTotal)} ฿
             </span>
           )}
           {summary?.lifetimeSaleTotal > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-              ยอดสั่งซื้อ {fmtMoney(summary.lifetimeSaleTotal)} ฿
+            <span
+              data-testid="row-chip-lifetime"
+              className="text-xs font-bold px-2 py-1 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-700/60"
+            >
+              📈 ยอดสั่งซื้อ {fmtMoney(summary.lifetimeSaleTotal)} ฿
             </span>
           )}
         </div>
