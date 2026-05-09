@@ -35,7 +35,13 @@ export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChan
         );
       })}
       {rightContent && (
-        <div className="ml-auto flex items-center" data-testid="appt-hub-tabbar-right">
+        // V64-fix12 (2026-05-09): mx-auto centers in remaining space (after
+        // tabs, before right edge) instead of ml-auto pinning to far right.
+        // User: "ชิดขวามันไกลไป มองไม่เห็น" — wide screens pushed the doctor
+        // badge to ~95% of viewport; mx-auto puts it at the midpoint of
+        // post-tab whitespace (visually around 50–65% mark) where the eye
+        // actually lands when scanning.
+        <div className="mx-auto flex items-center" data-testid="appt-hub-tabbar-right">
           {rightContent}
         </div>
       )}
