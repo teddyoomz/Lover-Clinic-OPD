@@ -59,6 +59,11 @@ import {
   listStaffSchedules,       // V56 / BS-15 — auto-closure derivation in handleGenScheduleLink
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
+// Phase 25.0c (2026-05-09) — Walk-in OPD-save → appointment-create modal flow.
+// Reused from BackendDashboard's tab=appointment-all. Imported eagerly here
+// because handleOpdClick can open it on click; no lazy boundary needed
+// (modal is small + already built).
+import AppointmentFormModal from '../components/backend/AppointmentFormModal.jsx';
 // Phase 22.0b (2026-05-06 EOD) — branch-filter helpers for kiosk modals.
 // listDoctors + listStaff in scopedDataLayer are UNIVERSAL (no auto-inject);
 // fetchDepositOptions must filter the results by selectedBranchId so the
@@ -920,6 +925,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [pushLoading, setPushLoading] = useState(false);
   const [globalPushMuted, setGlobalPushMuted] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
+  // Phase 25.0c (2026-05-09) — Walk-in OPD-save → appointment-create modal.
+  // After admin clicks "บันทึกลง OPD" on the คิว Walk-IN tab and customer
+  // is saved to be_customers, this state holds the data needed to render
+  // <AppointmentFormModal> with type+channel+customer+branch locked.
+  const [walkInModal, setWalkInModal] = useState(null);
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
   // Phase 20.0 final ProClinic strip (2026-05-06) — Import-from-ProClinic
@@ -3223,6 +3233,30 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     // unique link มาอยู่แล้ว มึงก็เอาไปประกอบกับ มัดจำ กับนัดหมาย"). Phone-
     // mismatch resilient — works even if customer types a different phone in
     // the OPD form. Idempotent (re-clicking บันทึกลง OPD won't double-attach).
+    // Phase 25.0c (2026-05-09) — after customer is saved to be_customers, if
+    // admin is on the คิว Walk-IN tab (adminMode === 'dashboard'), open the
+    // Walk-in appointment-create modal with type+channel+customer+branch
+    // LOCKED. Per user directive: walk-in customers are recorded in DB FIRST
+    // (this OPD-save step), THEN appointment-create modal pops. Other tabs
+    // (จองมัดจำ / จองไม่มัดจำ) already have appointments BEFORE OPD-save.
+    //
+    // patientData is passed THROUGH from session.patientData (the kiosk
+    // form's raw shape — already has prefix/firstName/lastName fields).
+    // We do NOT rebuild it inline (B.11 V12 anti-regression — see V-entry
+    // archive for the inline-camelCase-builder anti-pattern).
+    // AppointmentFormModal reads patientData.{prefix,firstName,lastName}
+    // for customerName render.
+    const _maybeOpenWalkInModal = (customerId, customerHN) => {
+      if (adminMode !== 'dashboard') return;
+      if (!customerId) return;
+      setWalkInModal({
+        sessionId,
+        customerId,
+        customerHN: customerHN || '',
+        patientData: d || {},
+      });
+    };
+
     const _attachLinkedBookings = async (customerId, customerHN) => {
       if (!customerId) return null;
       const fname = patient.firstname || patient.firstName || '';
@@ -3300,6 +3334,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           });
           // Phase 24.0-vicies-novies — auto-attach customer-later bookings.
           await _attachLinkedBookings(result.proClinicId, result.proClinicHN);
+          // Phase 25.0c (2026-05-09) — Walk-in OPD-save → modal-create flow.
+          _maybeOpenWalkInModal(result.proClinicId, result.proClinicHN);
         } else if (result?.notFound) {
           // Phase 24.0-octies — identity-lookup BEFORE create.
           // Try citizen_id / passport / phone match against be_customers.
@@ -3322,6 +3358,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               // Phase 24.0-vicies-novies — relink path also attaches any
               // customer-later bookings tied to this session.
               await _attachLinkedBookings(existing.customer.id, existing.customer.hn_no || '');
+              // Phase 25.0c — Walk-in modal on relink success too.
+              _maybeOpenWalkInModal(existing.customer.id, existing.customer.hn_no || '');
               relinked = true;
             } else if (existing?.ambiguous) {
               await updateDoc(ref, {
@@ -3356,6 +3394,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               });
               // Phase 24.0-vicies-novies — recovery-create path also attaches.
               await _attachLinkedBookings(created.id, created.hn || '');
+              // Phase 25.0c — Walk-in modal on recovery-create success too.
+              _maybeOpenWalkInModal(created.id, created.hn || '');
             } catch (createErr) {
               await updateDoc(ref, { brokerStatus: 'failed', brokerError: createErr?.message || 'สร้างใหม่ไม่สำเร็จ', brokerJob: null });
             }
@@ -5545,7 +5585,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
-            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
+            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว Walk-IN', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
@@ -5582,7 +5622,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
           <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}}>
-            <Activity size={16} /> หน้าคิว
+            <Activity size={16} /> คิว Walk-IN
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
           <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
@@ -8490,6 +8530,38 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       {/* ── Schedule Link Modal — RP1 lift (2026-04-30) extracted from JSX-IIFE per Vite-OXC ban. ── */}
       {showScheduleModal && renderScheduleModal()}
+
+      {/* Phase 25.0c (2026-05-09) — Walk-in appointment-create modal. Opens
+          after admin clicks "บันทึกลง OPD" on the คิว Walk-IN tab, customer
+          is saved to be_customers, and adminMode === 'dashboard'. Locks
+          type='walk-in' / channel='Walk-in' / customer / branch (via context).
+          User: "เด้ง modal สร้างนัดหมาย ... ดึงข้อมูลจากสาขานั้นๆมา แล้วล็อค
+          ประเภทเป็น walk-in, ล็อคชื่อลูกค้า, ไม่ล็อคสถานะแต่ตั้ง default
+          เป็นรอยืนยัน, ล็อคช่องทางนัดหมายเป็น walk-in, ล็อคสาขาเป็นสาขา
+          ที่สร้างคิว, ส่วนอันอื่นๆไม่ล็อค". */}
+      {walkInModal && (
+        <AppointmentFormModal
+          mode="create"
+          lockedAppointmentType="walk-in"
+          lockedChannel="Walk-in"
+          lockedCustomer={{
+            id: walkInModal.customerId,
+            proClinicId: walkInModal.customerId,
+            proClinicHN: walkInModal.customerHN,
+            patientData: walkInModal.patientData,
+          }}
+          initialDate={thaiTodayISO()}
+          skipCollisionCheck={true}
+          skipHolidayCheck={true}
+          existingAppointments={[]}
+          theme={theme}
+          onSaved={() => {
+            showToast('สร้างนัดหมาย Walk-in สำเร็จ', 2500);
+            setWalkInModal(null);
+          }}
+          onClose={() => setWalkInModal(null)}
+        />
+      )}
 
     </div>
   );

@@ -213,6 +213,11 @@ export default function AppointmentFormModal({
   enableCustomerLink = false,
   onDelete,
   lockedAppointmentType = null,
+  // Phase 25.0c (2026-05-09) — Walk-in flow lock. When set to one of CHANNELS,
+  // the channel field is replaced by a static read-only chip (mirror
+  // lockedAppointmentType UX) + the saved doc carries `channel: lockedChannel`.
+  // Used by AdminDashboard kiosk "บันทึกลง OPD" to lock channel='Walk-in'.
+  lockedChannel = null,
   // Phase 24.0-noniesdecies (2026-05-06) — when set, the modal creates an
   // appointment for an EXISTING deposit (instead of minting a new pair).
   // DepositPanel "+ สร้างนัด" button wires this. Save path uses
@@ -243,6 +248,11 @@ export default function AppointmentFormModal({
     : null;
   const isLockedDepositType = safeLockedType === 'deposit-booking';
 
+  // Phase 25.0c (2026-05-09) — validate lockedChannel prop. Mirror of
+  // safeLockedType pattern. Only values in the CHANNELS list are honored;
+  // anything else falls through to null (no lock).
+  const safeLockedChannel = CHANNELS.includes(lockedChannel) ? lockedChannel : null;
+
   // ── Form data ──
   const [formData, setFormData] = useState(() => {
     if (mode === 'edit' && appt) {
@@ -271,7 +281,10 @@ export default function AppointmentFormModal({
         assistantIds: appt.assistantIds || [],
         roomId: appt.roomId || '',  // Phase 18.0
         roomName: appt.roomName || '',
-        channel: appt.channel || '',
+        // Phase 25.0c (2026-05-09) — lockedChannel wins over appt.channel
+        // (defensive: prevents channel drift on edit from inside a locked
+        // context like the Walk-in OPD-save flow).
+        channel: safeLockedChannel || appt.channel || '',
         appointmentTo: appt.appointmentTo || '',
         location: appt.location || '',
         expectedSales: appt.expectedSales || '',
@@ -296,6 +309,8 @@ export default function AppointmentFormModal({
       roomName: initialRoomName || '',
       // Phase 21.0 — pre-fill type from lock so payload + UI start in sync.
       appointmentType: safeLockedType || DEFAULT_APPOINTMENT_TYPE,
+      // Phase 25.0c — pre-fill channel from lock so payload + UI start in sync.
+      ...(safeLockedChannel ? { channel: safeLockedChannel } : {}),
       ...cInit,
     });
   });
@@ -570,7 +585,10 @@ export default function AppointmentFormModal({
         assistantNames: assistantNamesForSave,
         roomId: formData.roomId || '',  // Phase 18.0 — FK to be_exam_rooms
         roomName: formData.roomName,    // snapshot (deletion-safe historical display)
-        channel: formData.channel, appointmentTo: formData.appointmentTo,
+        // Phase 25.0c (2026-05-09) — lockedChannel wins over formData.channel
+        // (mirror of safeLockedType pattern at line 581).
+        channel: safeLockedChannel || formData.channel,
+        appointmentTo: formData.appointmentTo,
         // Phase 15.7-octies (2026-04-29) — location is now LOCKED to the
         // current branch (resolved via useSelectedBranch + resolveBranchName).
         // Falls back to formData.location for legacy edit-mode appts that
@@ -1204,11 +1222,26 @@ export default function AppointmentFormModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทางนัดหมาย</label>
-              <select value={formData.channel} onChange={e => update({ channel: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                <option value="">ไม่ระบุ</option>
-                {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              {/* Phase 25.0c (2026-05-09) — when lockedChannel set, render
+                  static read-only chip (mirror lockedAppointmentType UX at
+                  line 1025+). User: "ล็อคช่องทางนัดหมายเป็น walk-in". */}
+              {safeLockedChannel ? (
+                <div
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-xs font-bold text-[var(--tx-heading)] flex items-center gap-2"
+                  data-locked-channel={safeLockedChannel}
+                  data-testid="locked-channel-chip"
+                  title="ช่องทางนัดหมายถูกล็อค"
+                >
+                  <span aria-hidden="true">🔒</span>
+                  <span>{safeLockedChannel}</span>
+                </div>
+              ) : (
+                <select value={formData.channel} onChange={e => update({ channel: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+                  <option value="">ไม่ระบุ</option>
+                  {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานะ</label>

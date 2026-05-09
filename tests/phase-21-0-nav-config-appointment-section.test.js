@@ -23,10 +23,11 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
     expect(NAV_SECTIONS[0].label).toBe('นัดหมาย');
   });
 
-  test('N1.3 appointments-section has exactly 5 items in canonical order (Phase 21.0-bis added "ทุกประเภท" overview at top)', () => {
+  test('N1.3 appointments-section has exactly 6 items in canonical order (Phase 25.0a added "appointment-walk-in" at bottom)', () => {
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
     expect(section).toBeDefined();
-    expect(section.items.length).toBe(5);
+    // Phase 25.0a (2026-05-09) — bumped 5 → 6 (added 'appointment-walk-in').
+    expect(section.items.length).toBe(6);
     const ids = section.items.map(i => i.id);
     expect(ids).toEqual([
       'appointment-all',  // Phase 21.0-bis — combined all-types overview at TOP
@@ -34,6 +35,7 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
       'appointment-deposit',
       'appointment-treatment-in',
       'appointment-follow-up',
+      'appointment-walk-in',  // Phase 25.0a — Walk-in queue (drop-in) at BOTTOM
     ]);
   });
 

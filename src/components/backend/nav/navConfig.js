@@ -56,6 +56,8 @@ import {
   FileText as FileTextIcon,
   // V32-tris-ter (2026-04-26) LINE settings tab icon
   MessageCircle,
+  // Phase 25.0a (2026-05-09) walk-in appointment tab icon — drop-in / footprints metaphor
+  Footprints,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -93,6 +95,10 @@ export const NAV_SECTIONS = [
       { id: 'appointment-deposit',      label: 'จองมัดจำ',       icon: CalendarCheck, color: 'emerald', palette: 'appointment booking deposit จองมัดจำ deposit-booking มัดจำ จอง' },
       { id: 'appointment-treatment-in', label: 'คิวรอทำหัตถการ', icon: Stethoscope,   color: 'sky',     palette: 'appointment treatment-in queue คิว ทำหัตถการ procedure รอ' },
       { id: 'appointment-follow-up',    label: 'คิวติดตามอาการ', icon: Activity,      color: 'amber',   palette: 'appointment follow-up queue คิว ติดตาม อาการ' },
+      // Phase 25.0a (2026-05-09) — walk-in: drop-in patients recorded via the
+      // frontend "คิว Walk-IN" tab → "บันทึกลง OPD" → modal-create. Sub-tab
+      // shows ALL walk-in appointments (calendar view filtered to walk-in only).
+      { id: 'appointment-walk-in',      label: 'คิว Walk-in',    icon: Footprints,    color: 'amber',   palette: 'appointment walk-in queue คิว วอล์คอิน drop-in walkin' },
     ],
   },
   {

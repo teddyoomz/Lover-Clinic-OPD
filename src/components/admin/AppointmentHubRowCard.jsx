@@ -23,11 +23,14 @@ const STATUS_LABELS = {
 
 // V64-fix2 (Issue 8) preserved — appointment type chip uses APPOINTMENT_TYPES.defaultColor
 // (Phase 19.0 SSOT). V64-fix11 refines with borders + dark-mode contrast tuning.
+// Phase 25.0a (2026-05-09) — added 'walk-in' 5th type (warm amber/น้ำตาลอ่อน, distinct
+// from existing 4 + matches Editorial Ember theme + NOT red per Thai-culture iron-clad).
 const TYPE_CHIP_CLS = {
   'deposit-booking':    'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-800/60',
   'no-deposit-booking': 'bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-950/50 dark:text-orange-200 dark:border-orange-800/60',
   'treatment-in':       'bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/50 dark:text-blue-200 dark:border-blue-800/60',
   'follow-up':          'bg-yellow-100 text-yellow-900 border border-yellow-300 dark:bg-yellow-950/50 dark:text-yellow-200 dark:border-yellow-800/60',
+  'walk-in':            'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800/60',
 };
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];

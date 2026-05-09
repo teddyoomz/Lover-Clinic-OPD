@@ -500,7 +500,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               window.open(url, '_blank');
             }}
           />
-        ) : (activeTab === 'appointment-all' || activeTab === 'appointment-no-deposit' || activeTab === 'appointment-deposit' || activeTab === 'appointment-treatment-in' || activeTab === 'appointment-follow-up') ? (
+        ) : (activeTab === 'appointment-all' || activeTab === 'appointment-no-deposit' || activeTab === 'appointment-deposit' || activeTab === 'appointment-treatment-in' || activeTab === 'appointment-follow-up' || activeTab === 'appointment-walk-in') ? (
           // Phase 21.0 (2026-05-06) + 21.0-bis (2026-05-06 EOD) +
           // 21.0-quater (2026-05-06 EOD continuation hotfix) — ALL 5
           // appointment sub-tabs render a SINGLE <AppointmentCalendarView/>
@@ -523,6 +523,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           //   appointment-deposit      → 'deposit-booking'
           //   appointment-treatment-in → 'treatment-in'
           //   appointment-follow-up    → 'follow-up'
+          //   appointment-walk-in      → 'walk-in' (Phase 25.0a, 2026-05-09)
           //
           // Per-branch filter via BSA + selectedBranchId is automatic
           // (handled inside AppointmentCalendarView's listener subscription).
@@ -532,6 +533,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
               activeTab === 'appointment-deposit'      ? 'deposit-booking' :
               activeTab === 'appointment-treatment-in' ? 'treatment-in' :
               activeTab === 'appointment-follow-up'    ? 'follow-up' :
+              activeTab === 'appointment-walk-in'      ? 'walk-in' :
               undefined  // 'appointment-all' → no type filter
             }
             clinicSettings={clinicSettings}

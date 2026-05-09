@@ -16,9 +16,10 @@ import { readFileSync } from 'node:fs';
 const SRC = readFileSync('src/lib/appointmentTypes.js', 'utf8');
 
 describe('Phase 19.0 — appointmentTypes SSOT', () => {
-  test('A1.1 APPOINTMENT_TYPES is frozen with 4 entries', () => {
+  test('A1.1 APPOINTMENT_TYPES is frozen with 5 entries (Phase 25.0a — added walk-in)', () => {
     expect(Object.isFrozen(APPOINTMENT_TYPES)).toBe(true);
-    expect(APPOINTMENT_TYPES).toHaveLength(4);
+    // Phase 25.0a (2026-05-09) — bumped from 4 to 5 (added 'walk-in').
+    expect(APPOINTMENT_TYPES).toHaveLength(5);
   });
 
   test('A1.2 each entry is frozen with value/label/defaultColor/order', () => {
@@ -31,15 +32,15 @@ describe('Phase 19.0 — appointmentTypes SSOT', () => {
     }
   });
 
-  test('A1.3 values are exactly the 4 phase-19.0 keys', () => {
+  test('A1.3 values are exactly the 5 keys (Phase 19.0 + Phase 25.0a walk-in)', () => {
     expect(APPOINTMENT_TYPE_VALUES).toEqual([
-      'deposit-booking', 'no-deposit-booking', 'treatment-in', 'follow-up',
+      'deposit-booking', 'no-deposit-booking', 'treatment-in', 'follow-up', 'walk-in',
     ]);
   });
 
-  test('A1.4 Thai labels match spec', () => {
+  test('A1.4 Thai labels match spec (Phase 25.0a — added "Walk-in")', () => {
     const labels = APPOINTMENT_TYPES.map((t) => t.label);
-    expect(labels).toEqual(['จองมัดจำ', 'จองไม่มัดจำ', 'เข้าทำหัตถการ', 'ติดตามอาการ']);
+    expect(labels).toEqual(['จองมัดจำ', 'จองไม่มัดจำ', 'เข้าทำหัตถการ', 'ติดตามอาการ', 'Walk-in']);
   });
 
   test('A1.5 default colors map to spec', () => {

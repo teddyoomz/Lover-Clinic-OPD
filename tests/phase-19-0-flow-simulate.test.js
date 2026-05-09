@@ -19,8 +19,9 @@ const AGG_SRC = readFileSync('src/lib/appointmentReportAggregator.js', 'utf8');
 const ADMIN_SRC = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
 
 describe('Phase 19.0 — Rule I full-flow simulate', () => {
-  test('F1.1 master types loaded — 4 values present', () => {
-    expect(APPOINTMENT_TYPE_VALUES.length).toBe(4);
+  test('F1.1 master types loaded — 5 values present (Phase 25.0a — added walk-in)', () => {
+    // Phase 25.0a (2026-05-09) — bumped from 4 to 5.
+    expect(APPOINTMENT_TYPE_VALUES.length).toBe(5);
   });
 
   test('F2.1 form modal references APPOINTMENT_TYPES (radio rendering)', () => {

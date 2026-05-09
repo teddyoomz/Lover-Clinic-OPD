@@ -41,9 +41,13 @@ function simulateListenerEmit(allAppts, selectedBranchId) {
   });
 }
 
-// Build a mock dataset: 2 branches × 4 types × 2 appts each = 16 docs total.
+// Build a mock dataset: 2 branches × N types × 2 appts each = 4N docs total.
+// Phase 25.0a (2026-05-09) — N bumped 4 → 5 (added walk-in); dataset = 20.
 const BRANCHES = ['BR-A', 'BR-B'];
-const TYPES = APPOINTMENT_TYPE_VALUES.slice(); // 4 types
+const TYPES = APPOINTMENT_TYPE_VALUES.slice(); // 5 types (Phase 25.0a)
+const N_TYPES = TYPES.length;
+const DATASET_SIZE = BRANCHES.length * N_TYPES * 2;
+const PER_BRANCH_SUM = N_TYPES * 2;
 function fakeAppt(branchId, type, idx) {
   return {
     appointmentId: `BA-${branchId}-${type}-${idx}`,
@@ -73,9 +77,9 @@ function buildDataset() {
 }
 
 describe('Phase 21.0 — F1 per-branch × per-type isolation matrix', () => {
-  test('F1.1 dataset shape: 2 branches × 4 types × 2 appts = 16', () => {
+  test('F1.1 dataset shape: 2 branches × N types × 2 appts (Phase 25.0a — 5 types → 20)', () => {
     const data = buildDataset();
-    expect(data.length).toBe(16);
+    expect(data.length).toBe(DATASET_SIZE);
   });
 
   test('F1.2 BR-A × no-deposit-booking shows ONLY 2 appts (both BR-A + type)', () => {
@@ -138,22 +142,22 @@ describe('Phase 21.0 — F1 per-branch × per-type isolation matrix', () => {
     }
   });
 
-  test('F1.9 Total per-branch count = 8 (sum across 4 sub-tabs)', () => {
+  test('F1.9 Total per-branch count = 2*N (sum across N sub-tabs; Phase 25.0a — 10)', () => {
     const data = buildDataset();
     for (const b of BRANCHES) {
       const branched = simulateListenerEmit(data, b);
       let sum = 0;
       for (const t of TYPES) sum += branched.filter(makeApptMatchesType(t)).length;
-      expect(sum).toBe(8);
+      expect(sum).toBe(PER_BRANCH_SUM);
     }
   });
 
-  test('F1.10 Total cross-branch (no filter) = 16', () => {
+  test('F1.10 Total cross-branch (no filter) = 2*PER_BRANCH_SUM (Phase 25.0a — 20)', () => {
     const data = buildDataset();
     const branched = simulateListenerEmit(data, null);
     let sum = 0;
     for (const t of TYPES) sum += branched.filter(makeApptMatchesType(t)).length;
-    expect(sum).toBe(16);
+    expect(sum).toBe(DATASET_SIZE);
   });
 });
 
@@ -302,9 +306,11 @@ describe('Phase 21.0 — F5 source-grep regression guards (V21 lock-in)', () => 
     expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,800}?appointmentType=\{/);
   });
 
-  test('F5.3 navConfig has section with exactly 5 appointment items (Phase 21.0-bis)', () => {
+  test('F5.3 navConfig has section with exactly 6 appointment items (Phase 25.0a — added walk-in sub-tab)', () => {
     const { NAV_SECTIONS } = require('../src/components/backend/nav/navConfig.js');
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
-    expect(section.items.length).toBe(5);
+    // Phase 25.0a (2026-05-09) — bumped 5 → 6 (added 'appointment-walk-in').
+    // Items: appointment-all + no-deposit + deposit + treatment-in + follow-up + walk-in.
+    expect(section.items.length).toBe(6);
   });
 });

@@ -8,7 +8,13 @@
 // migration scripts, and UI.
 
 /**
- * 4-value appointment-type taxonomy. Frozen.
+ * 5-value appointment-type taxonomy. Frozen.
+ *
+ * Phase 25.0a (2026-05-09) — added 'walk-in' (5th type) per user directive
+ * to record drop-in patients in the unified V64 hub. Walk-in flow inverts
+ * the normal sequence: customer arrives FIRST → admin records customer to
+ * be_customers via "บันทึกลง OPD" → THEN appointment-creation modal pops
+ * with type/customer/channel/branch locked.
  *
  * - value: storage key (string, written to be_appointments.appointmentType)
  * - label: Thai display label (rendered in dropdowns, chips, reports)
@@ -21,6 +27,7 @@ export const APPOINTMENT_TYPES = Object.freeze([
   Object.freeze({ value: 'no-deposit-booking', label: 'จองไม่มัดจำ',  defaultColor: 'ส้มอ่อน',      order: 1 }),
   Object.freeze({ value: 'treatment-in',       label: 'เข้าทำหัตถการ', defaultColor: 'น้ำเงินอ่อน',   order: 2 }),
   Object.freeze({ value: 'follow-up',          label: 'ติดตามอาการ',   defaultColor: 'เหลืองอ่อน',   order: 3 }),
+  Object.freeze({ value: 'walk-in',            label: 'Walk-in',       defaultColor: 'น้ำตาลอ่อน',   order: 4 }),
 ]);
 
 export const APPOINTMENT_TYPE_VALUES = Object.freeze(
