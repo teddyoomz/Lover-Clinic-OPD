@@ -7,11 +7,27 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #23 — Phase 25.0 Walk-in 5th appointment type + frontend tab rename + OPD-save → modal flow shipped (NOT YET DEPLOYED) · 8242/8245 + 1 pending · build clean
+- **Date last updated**: 2026-05-09 EOD #24 — Phase 25.0 Walk-in 5th appointment type **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8242 tests · build clean
 - **Branch**: `master`
-- **Last commit**: feat(Phase 25.0): Walk-in 5th appointment type + frontend tab rename + OPD-save → modal flow
+- **Last commit**: docs(agents+wiki): Phase 25.0 status docs — Walk-in 5th type shipped (NOT YET DEPLOYED)
 - **Test count**: 8242 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs). 1 pending.
-- **Deploy state**: master = `141f927` · prod = `ad7ee0e` (1 commit ahead). **NOT YET DEPLOYED** — awaiting explicit "deploy" THIS turn per Rule V18. Phase 25.0 batch is fully committed + pushed to `origin/master`, full suite green, build clean. Combined deploy ready when user authorizes.
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #24: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Sessions #20-#24 precedent). Cleanup: 4 probe artifacts nuked.
+
+### Session 2026-05-09 EOD #24 — Phase 25.0 Walk-in DEPLOY (combined; PDP green)
+
+User: "deploy" — explicit Rule B authorization for combined vercel + firestore:rules deploy.
+
+Phase 25.0 Walk-in 5th appointment type (committed earlier as `141f927`) shipped to prod alongside `ccef3c2` docs commit. Combined deploy succeeded:
+- vercel --prod `byhtrp18g`: exit 0; aliased https://lover-clinic-app.vercel.app
+- firebase --only firestore:rules `bjvx0u08h`: idempotent ("already up to date, skipping upload"; rules unchanged from `1da05bb`)
+- Pre+post probe 1 + 5: 200/200 GREEN; probes 2/3/4 = 403 V50-followup-2 false-positive (collections deleted, ignored per precedent)
+- Cleanup: 4 probe artifacts nuked (chat_conversations 2 + opd_sessions 2)
+
+Live surfaces: 5th appointment type 'walk-in' (น้ำตาลอ่อน amber) + backend nav sub-tab `appointment-walk-in` below 'ติดตามอาการ' (Footprints icon) + frontend tab rename 'คิว'/'หน้าคิว' → 'คิว Walk-IN' (mobile + desktop) + 'บันทึกลง OPD' click → AppointmentFormModal with type/customer/channel/branch LOCKED + V64 hub วันนี้ auto-displays walk-in sorted by time + NEW `lockedChannel` prop on AppointmentFormModal (3rd member of locked-field family; Rule of 3 reached).
+
+Detail: `.agents/sessions/2026-05-09-phase-25-0-walk-in.md`. Production at `ccef3c2`.
+
+
 
 ### Session 2026-05-09 EOD #23 — Phase 25.0 Walk-in 5th appointment type + Walk-in queue integration (NOT YET DEPLOYED)
 
@@ -1334,27 +1350,26 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-09 EOD #23.
+Resume LoverClinic — continue from 2026-05-09 EOD #24.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=141f927 · prod=ad7ee0e — 1 ahead)
-3. .agents/active.md (8242 tests · NOT YET DEPLOYED)
+2. SESSION_HANDOFF.md (master=ccef3c2, prod=ccef3c2)
+3. .agents/active.md (8242 tests · idle)
 4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V64 V-summary)
-5. wiki/index.md (read first for code-architecture queries; Phase 25.0a updated entity + concept pages)
+5. .agents/sessions/2026-05-09-phase-25-0-walk-in.md (latest checkpoint)
 
-Status: master=`141f927`, 8242 tests pass, prod=`ad7ee0e` LIVE (1 commit behind). Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5. Phase 25.0 Walk-in 5th appointment type committed + pushed but NOT YET DEPLOYED.
+Status: master=`ccef3c2`, 8242 tests pass, prod=`ccef3c2` LIVE (Phase 25.0 Walk-in 5th appointment type DEPLOYED). Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
 
-Next: 🚨 Phase 25.0 awaiting explicit "deploy" THIS turn (Rule V18). Combined deploy ready (vercel --prod + firebase --only firestore:rules; firestore.rules unchanged so deploy is idempotent).
+Next: idle — Phase 25.0 deployed; production stable.
 
 Outstanding (user-triggered):
-- 🚨 **Phase 25.0 deploy** — 1 commit ahead; user types "deploy" to ship.
 - (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 false-positive trim.
-- (Optional) `bsa-task7-h-quater-fix` flake.
+- (Optional) `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent.
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` canonical for "navigate to customer detail".
 
-NEW Phase 25.0 institutional memory: **`lockedChannel` prop on AppointmentFormModal** is the 3rd member of the locked-field prop family (after `lockedCustomer` + Phase 21.0 `lockedAppointmentType`). Future locked-X props MUST mirror the `safeLockedX = ALLOWED.includes(prop) ? prop : null` validation + payload-override + chip-render-with-🔒 + `data-locked-X` attr pattern. Walk-in flow inversion: customer recorded FIRST (existing OPD-save) → `_maybeOpenWalkInModal` gated on `adminMode === 'dashboard'` → modal pops with full be_customers doc as `lockedCustomer`. V64 hub `_apptHubStyles.js` (V64-fix11) shared module unchanged.
+Phase 25.0 institutional memory: **`lockedChannel` prop on AppointmentFormModal** is the 3rd locked-field. Future locked-X props MUST mirror `safeLockedX = ALLOWED.includes(prop) ? prop : null` validation + payload-override + chip-render-with-🔒 + `data-locked-X` attr pattern. Walk-in flow INVERTS the normal sequence: record customer FIRST (existing OPD-save) → `_maybeOpenWalkInModal` gated on `adminMode === 'dashboard'` → modal pops with full be_customers doc as `lockedCustomer`. V64 hub วันนี้ auto-displays walk-in via existing infrastructure (zero edits needed).
 
 /session-start
 ```
