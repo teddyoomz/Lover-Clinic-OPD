@@ -1,8 +1,11 @@
 // V64 — 4 tab pills with bubble counts (Q4=A).
-// V64-fix9 (2026-05-09): added `rightContent` slot for inline doctor-cards
-// badge. Per user directive: "เอา badge แสดงแพทย์เข้ามาไว้ถัดไปจาก tab
-// ย้อนหลัง 30 วัน". Renders in same flex row; wraps below on narrow screens.
+// V64-fix9 (2026-05-09): added `rightContent` slot for inline doctor-cards.
+// V64-fix11 (2026-05-09): redesigned per "Editorial Ember" direction —
+// active tab = ember gradient (matches primary CTA), inactive = ghost with
+// ember-tinted hover. Sky-blue (pre-fix11) too generic — felt ProClinic.
+
 import React from 'react';
+import { TAB_ACTIVE, TAB_INACTIVE, BUBBLE_ACTIVE, BUBBLE_INACTIVE } from './_apptHubStyles.js';
 
 const TABS = [
   { key: 'today', label: 'วันนี้' },
@@ -24,16 +27,10 @@ export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChan
             data-testid={`appt-hub-tab-${t.key}`}
             data-active={active ? 'true' : 'false'}
             onClick={() => onTabChange?.(t.key)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${
-              active
-                ? 'bg-sky-600 border-sky-600 text-white'
-                : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-700/50'
-            }`}
+            className={active ? TAB_ACTIVE : TAB_INACTIVE}
           >
             <span>{t.label}</span>
-            <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${active ? 'bg-white text-sky-700' : 'bg-sky-100 text-sky-700'}`}>
-              {count}
-            </span>
+            <span className={active ? BUBBLE_ACTIVE : BUBBLE_INACTIVE}>{count}</span>
           </button>
         );
       })}

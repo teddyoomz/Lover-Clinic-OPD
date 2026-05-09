@@ -162,7 +162,10 @@ describe('V64.R AppointmentHubRowCard', () => {
 
   it('R4.11 customer summary chips rendered when present', () => {
     render(<AppointmentHubRowCard appt={{ id: 'A1', customerId: 'C1', date: '2026-05-08', status: 'pending' }} summary={baseSummary} now={FIXED_NOW} />);
-    expect(screen.getByText(/GOLD คงเหลือ 340 วัน/)).toBeInTheDocument();
+    // V64-fix11 (2026-05-09) — copy refined to "GOLD · เหลือ N วัน" (more compact);
+    // assertion relaxed to GOLD…340 วัน to be format-flexible across future
+    // microcopy iterations. Tier + days remaining are the contract.
+    expect(screen.getByText(/GOLD.*340 วัน/)).toBeInTheDocument();
     expect(screen.getByText(/Wallet 12,000 ฿/)).toBeInTheDocument();
     expect(screen.getByText(/มัดจำ 5,000 ฿/)).toBeInTheDocument();
     expect(screen.getByText(/ค่างชำระ 1,500 ฿/)).toBeInTheDocument();

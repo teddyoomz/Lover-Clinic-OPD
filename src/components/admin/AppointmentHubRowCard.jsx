@@ -1,14 +1,18 @@
 // V64 — per-row appointment card with customer summary + appt detail + status-conditional buttons.
+// V64-fix11 (2026-05-09): "Editorial Ember" redesign — left-edge status accent bar
+// (peripheral-vision indicator), card gradient surface + warm hover border, button
+// 3-tier overhaul (ember PRIMARY / sky SECONDARY / rose DESTRUCTIVE / LINE brand).
+// Pre-fix11 buttons used solid bg-emerald-600/sky-600/amber-500 — generic Bootstrap-
+// feeling. User: "ฝากเปลี่ยนรูปแบบหรือสีของปุ่มทุกปุ่ม ... สไตล์ปุ่มมันเหมือน
+// proclinic เป๊ะ".
 import React from 'react';
 import { isMissedAppointment } from '../../lib/appointmentHubFilters.js';
 import { resolveAppointmentTypeLabel } from '../../lib/appointmentTypes.js';
-// V64-fix8 (2026-05-09): patient name → clickable link that opens the
-// customer detail page in a NEW BROWSER TAB. Mirrors the Phase 15.7-septies
-// pattern already used at AppointmentFormModal + AdminDashboard kiosk
-// "ดูข้อมูลลูกค้า" + DepositPanel + MembershipPanel. <a target="_blank">
-// chosen over button-with-onClick so right-click / middle-click / keyboard
-// activation behave naturally.
 import { buildCustomerDetailUrl } from '../../lib/customerNavigation.js';
+import {
+  BTN_PRIMARY, BTN_SECONDARY, BTN_DESTRUCTIVE, BTN_LINE,
+  CARD_SURFACE, ACCENT_BAR_BASE, ACCENT_BAR, STATUS_CHIP_CLS,
+} from './_apptHubStyles.js';
 
 const STATUS_LABELS = {
   pending: 'รอยืนยัน',
@@ -17,26 +21,18 @@ const STATUS_LABELS = {
   cancelled: 'ยกเลิก',
 };
 
-const STATUS_CHIP_CLS = {
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-  confirmed: 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300',
-  done: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
-  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-};
-
-// V64-fix2 (Issue 8): color-coded type badges per APPOINTMENT_TYPES.defaultColor
-// (Phase 19.0 SSOT). Each type gets a distinct hue + adequate dark-mode contrast.
+// V64-fix2 (Issue 8) preserved — appointment type chip uses APPOINTMENT_TYPES.defaultColor
+// (Phase 19.0 SSOT). V64-fix11 refines with borders + dark-mode contrast tuning.
 const TYPE_CHIP_CLS = {
-  'deposit-booking':    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
-  'no-deposit-booking': 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300',
-  'treatment-in':       'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
-  'follow-up':          'bg-yellow-100 text-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-300',
+  'deposit-booking':    'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-800/60',
+  'no-deposit-booking': 'bg-orange-100 text-orange-900 border border-orange-300 dark:bg-orange-950/50 dark:text-orange-200 dark:border-orange-800/60',
+  'treatment-in':       'bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/50 dark:text-blue-200 dark:border-blue-800/60',
+  'follow-up':          'bg-yellow-100 text-yellow-900 border border-yellow-300 dark:bg-yellow-950/50 dark:text-yellow-200 dark:border-yellow-800/60',
 };
 
 const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const THAI_DOW = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 
-// V64-fix2 (Issue 3): full Thai date label "วันพฤหัสบดี ที่ 9 พฤษภาคม 2569"
 function fullThaiDate(isoYMD) {
   if (typeof isoYMD !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(isoYMD)) return '';
   const [y, m, d] = isoYMD.split('-').map(Number);
@@ -52,78 +48,77 @@ function fmtMoney(n) {
 export default function AppointmentHubRowCard({
   appt,
   summary,
-  apptDeposit,  // V64-fix4 (Issue 1): linked-deposit doc if appt came from จองมัดจำ flow
-  apptDateTreatments = [],  // V64-fix6: treatments for THIS customer+date (sorted createdAt DESC)
+  apptDeposit,
+  apptDateTreatments = [],
   now = new Date(),
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
 }) {
   const rawStatus = appt.status || 'pending';
-  // V64-fix6: treatment-aware logic. If a treatment exists for this customer
-  // on this appointment's date (any time), the system treats the appointment
-  // as effectively done — admin may have forgotten to confirm, but the
-  // treatment record is the source of truth that the customer DID come.
   const latestTreatment = apptDateTreatments[0] || null;
   const hasTreatmentForDay = !!latestTreatment;
   const effectiveStatus = hasTreatmentForDay ? 'done' : rawStatus;
-  const status = effectiveStatus;  // alias used by button-set switches below
+  const status = effectiveStatus;
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
-  // V64-fix6: missed badge ONLY when past date AND no treatment found.
-  // The base isMissedAppointment only checks status==='confirmed'; we extend
-  // to also flag past 'pending' (admin forgot to confirm + customer never came).
   const baseMissed = isMissedAppointment(appt, now);
   const todayBangkok = (() => {
-    // V64-fix6: respects injected `now` prop (test/SSR friendly).
-    // Bangkok-stable midday-UTC parse pattern.
     const base = (now instanceof Date ? now : new Date()).getTime();
     const d = new Date(base + 7 * 60 * 60 * 1000);
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
   })();
   const isPastDate = typeof appt.date === 'string' && appt.date < todayBangkok;
   const isMissed = !hasTreatmentForDay && (baseMissed || (isPastDate && rawStatus === 'pending'));
-  // V64-fix6: linked-treatment fallback chain — prefer latestTreatment.id
-  // (proves customer came on this date), fall back to appt.linkedTreatmentId
-  // (legacy field).
   const linkedTreatmentId = latestTreatment?.id || appt.linkedTreatmentId || '';
   const hasLinkedTreatment = !!linkedTreatmentId;
-  // V64-fix4 (Issue 1): deposit purpose fallback chain
   const depositPurpose = apptDeposit
     ? (apptDeposit.note || apptDeposit.appointment?.appointmentTo || apptDeposit.appointment?.purpose || appt.appointmentTo || '').trim()
     : '';
 
-  // V64-fix6: helper that wraps onEditTreatment with the resolved treatment id
-  // (so the parent's existing handler receives appt.linkedTreatmentId pointing
-  // at the latest same-day treatment, not the legacy stored one).
   const handleEditTreatmentBound = () => {
     onEditTreatment?.({ ...appt, linkedTreatmentId });
   };
 
+  // V64-fix11: accent-bar key derives from PRIORITY (missed > status). Missed
+  // overrides done so admin sees the urgency even on past completed records
+  // that lack treatment data.
+  const accentKey = isMissed ? 'missed' : effectiveStatus;
+  const accentClass = ACCENT_BAR[accentKey] || ACCENT_BAR.pending;
+
   return (
     <div
-      className="border border-[var(--bd)] rounded-xl bg-[var(--bg-card)] p-3 mb-2 flex flex-col md:flex-row gap-3"
+      className={`${CARD_SURFACE} flex flex-col md:flex-row gap-4`}
       data-testid="appt-hub-row"
       data-appt-id={appt.id}
+      data-status-accent={accentKey}
     >
+      {/* V64-fix11 — left-edge status accent bar (3px gradient). Peripheral
+          vision: admin scans the queue + sees urgency colour from edge. */}
+      <span aria-hidden="true" data-testid="row-accent-bar" className={`${ACCENT_BAR_BASE} ${accentClass}`} />
+
       {/* LEFT — Customer */}
-      <div className="flex-1 min-w-[260px]">
-        <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-          <span className="text-[11px] text-[var(--tx-muted)]" data-testid="row-hn">HN: {summary?.hn || '-'}</span>
+      <div className="flex-1 min-w-[260px] pl-2">
+        <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
+          <span
+            className="text-[10px] font-mono font-bold uppercase tracking-widest text-[var(--tx-muted)]"
+            data-testid="row-hn"
+          >
+            HN · {summary?.hn || '-'}
+          </span>
           {summary?.membershipTier && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800">
-              {summary.membershipTier} คงเหลือ {summary.membershipDaysLeft} วัน
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-100 text-yellow-900 border border-yellow-300 dark:bg-yellow-950/50 dark:text-yellow-200 dark:border-yellow-800/60">
+              {summary.membershipTier} · เหลือ {summary.membershipDaysLeft} วัน
             </span>
           )}
         </div>
-        {/* V64-fix9 (2026-05-09): patient name color = sky-600 (light) / sky-300 (dark)
-            — eye-catching, on-theme (not red per Thai-culture iron-clad), bumped to
-            text-base for prominence. User: "แสดงชื่อลูกค้าสีอื่นเด่นๆให้เข้าตีม
-            แต่ห้ามสีแดง". */}
+
+        {/* V64-fix9: patient name sky-blue (Thai-culture iron-clad: NOT red).
+            V64-fix11: bumped to text-lg + font-black for editorial weight. */}
         {appt.customerId ? (
           <a
             href={buildCustomerDetailUrl(appt.customerId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-bold text-base text-sky-700 dark:text-sky-300 hover:underline hover:text-sky-500 cursor-pointer inline-block"
+            className="font-black text-lg text-sky-700 dark:text-sky-300 hover:underline hover:text-sky-500 cursor-pointer inline-block leading-tight"
             data-testid="row-name"
             data-customer-id={appt.customerId}
             title="เปิดข้อมูลลูกค้าใน tab ใหม่"
@@ -131,20 +126,18 @@ export default function AppointmentHubRowCard({
             {summary?.name || appt.customerName || '-'}
           </a>
         ) : (
-          <div className="font-bold text-base text-sky-700 dark:text-sky-300" data-testid="row-name">
+          <div className="font-black text-lg text-sky-700 dark:text-sky-300 leading-tight" data-testid="row-name">
             {summary?.name || appt.customerName || '-'}
           </div>
         )}
-        <div className="text-xs text-[var(--tx-muted)] flex flex-wrap gap-x-3 gap-y-1 mt-1">
-          {summary?.gender && <span>เพศ: {summary.gender}</span>}
+
+        <div className="text-xs text-[var(--tx-muted)] flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+          {summary?.gender && <span>เพศ {summary.gender}</span>}
           {summary?.phone && <span>📞 {summary.phone}</span>}
         </div>
-        {/* V64-fix10 (2026-05-09): finance chips bumped to text-xs + font-bold +
-            border + dark-mode variants + emoji prefix. User: "badge มัดจำ +
-            Wallet ขอชัดกว่านี้". All 4 finance chips treated consistently so
-            visual hierarchy holds across themes. Text format unchanged so
-            R4.11 RTL assertion (`Wallet 12,000 ฿` etc.) still matches. */}
-        <div className="flex flex-wrap gap-1.5 mt-2" data-testid="row-finance-chips">
+
+        {/* V64-fix10: finance chips bumped to text-xs + font-bold + border + emoji */}
+        <div className="flex flex-wrap gap-1.5 mt-2.5" data-testid="row-finance-chips">
           {summary?.walletBalance > 0 && (
             <span
               data-testid="row-chip-wallet"
@@ -181,58 +174,63 @@ export default function AppointmentHubRowCard({
       </div>
 
       {/* MIDDLE — Appointment detail */}
-      <div className="flex-1 min-w-[260px] text-xs space-y-0.5">
-        {/* V64-fix2 (Issue 3): full Thai date label, prominently
-            V64-fix9 (2026-05-09): time bumped to text-base + amber-emphasis chip
-            so it's readable at a glance — user: "เน้นแสดง เวลา ให้ชัดเจนด้วย". */}
-        <div className="text-sm font-bold text-[var(--tx-heading)] mb-1 flex flex-wrap items-center gap-2" data-testid="row-date-full">
-          <span>📅 {fullThaiDate(appt.date)}</span>
+      <div className="flex-1 min-w-[260px] text-xs space-y-1">
+        {/* V64-fix9: time bumped to text-base + amber-emphasis chip */}
+        <div className="text-sm font-bold text-[var(--tx-heading)] mb-1.5 flex flex-wrap items-center gap-2" data-testid="row-date-full">
+          <span className="text-[var(--tx-muted)]">📅</span>
+          <span className="text-[var(--tx-heading)]">{fullThaiDate(appt.date)}</span>
           <span
-            className="text-base font-mono font-black px-2 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-200 dark:border-amber-800/50"
+            className="text-base font-mono font-black px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-300 dark:border-amber-800/60 shadow-sm"
             data-testid="row-time-emphasis"
           >
-            🕐 {appt.startTime || '-'} - {appt.endTime || '-'}
+            {appt.startTime || '-'} – {appt.endTime || '-'}
           </span>
         </div>
+
         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           {typeLabel && (
             <span
               data-testid="row-type-chip"
-              className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${TYPE_CHIP_CLS[appt.appointmentType] || 'bg-gray-100 text-gray-800'}`}
+              className={`text-[10px] px-2 py-0.5 rounded font-bold ${TYPE_CHIP_CLS[appt.appointmentType] || 'bg-gray-100 text-gray-800'}`}
             >
               {typeLabel}
             </span>
           )}
-          {/* V64-fix4 (Issue 1): per-appt linked deposit chip — amount + purpose */}
           {apptDeposit && (
             <span
               data-testid="row-deposit-chip"
-              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 font-bold"
+              className="text-[10px] px-2 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700/60 font-bold"
               title={`เลขมัดจำ: ${apptDeposit.id || apptDeposit.depositId || '-'}`}
             >
               💰 มัดจำ {fmtMoney(apptDeposit.amount)} ฿{depositPurpose ? ` · เพื่อ ${depositPurpose}` : ''}
             </span>
           )}
           {isMissed && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold" data-testid="row-missed-chip">
-              ไม่มาตามนัด
+            <span
+              className="text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800/60 font-bold uppercase tracking-wider"
+              data-testid="row-missed-chip"
+            >
+              ⚠ ไม่มาตามนัด
             </span>
           )}
         </div>
-        <div className="text-[var(--tx-muted)]">ที่ปรึกษา: <span className="text-[var(--tx-heading)]">{appt.advisor || '-'}</span></div>
-        <div className="text-[var(--tx-muted)]">แพทย์: <span className="text-[var(--tx-heading)]">{appt.doctorName || '-'}</span></div>
-        <div className="text-[var(--tx-muted)]">ผู้ช่วย: <span className="text-[var(--tx-heading)]">{(appt.assistantNames || []).join(', ') || appt.assistantName || '-'}</span></div>
-        <div className="text-[var(--tx-muted)]">ห้องตรวจ: <span className="text-[var(--tx-heading)]">{appt.roomName || '-'}</span></div>
-        {/* V64-fix9 (2026-05-09): "นัดมาเพื่อ" prominent — purpose is critical
-            info; was buried as last muted line. User: "แสดงนัดมาเพื่อชัดๆ
-            เด่นๆ เพราะเป็นข้อมูลสำคัญเหมือนกัน". Bumped to sm bold + emerald
-            chip so admin can see the purpose at a glance.
-            Note: redundant "เวลานัด:" row removed (duplicate of top time chip
-            after V64-fix9 emphasis). */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="row-purpose-block">
+
+        <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+          <dt className="text-[var(--tx-muted)]">ที่ปรึกษา</dt>
+          <dd className="text-[var(--tx-heading)]">{appt.advisor || '-'}</dd>
+          <dt className="text-[var(--tx-muted)]">แพทย์</dt>
+          <dd className="text-[var(--tx-heading)]">{appt.doctorName || '-'}</dd>
+          <dt className="text-[var(--tx-muted)]">ผู้ช่วย</dt>
+          <dd className="text-[var(--tx-heading)]">{(appt.assistantNames || []).join(', ') || appt.assistantName || '-'}</dd>
+          <dt className="text-[var(--tx-muted)]">ห้องตรวจ</dt>
+          <dd className="text-[var(--tx-heading)]">{appt.roomName || '-'}</dd>
+        </dl>
+
+        {/* V64-fix9: "นัดมาเพื่อ" prominent — emerald chip + uppercase label */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="row-purpose-block">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)]">นัดมาเพื่อ</span>
           <span
-            className="text-sm font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50 max-w-full truncate"
+            className="text-sm font-bold px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800/60 max-w-full truncate"
             data-testid="row-purpose"
             title={appt.appointmentTo || ''}
           >
@@ -243,7 +241,10 @@ export default function AppointmentHubRowCard({
 
       {/* RIGHT — Status + Actions */}
       <div className="flex md:flex-col gap-2 items-end justify-start min-w-[200px]">
-        <span className={`text-[11px] px-2 py-1 rounded-full font-bold ${STATUS_CHIP_CLS[status] || ''}`} data-testid="row-status">
+        <span
+          className={`text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${STATUS_CHIP_CLS[status] || ''}`}
+          data-testid="row-status"
+        >
           {statusLabel}
         </span>
         <div className="flex gap-1.5 flex-wrap justify-end">
@@ -253,32 +254,37 @@ export default function AppointmentHubRowCard({
               data-testid="row-action-line"
               onClick={() => onOpenLine?.(appt)}
               title="LINE"
-              className="text-[11px] px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded font-bold"
+              className={BTN_LINE}
             >
               LINE
             </button>
           )}
-          {/* V64-fix6 priority order (treatment-aware):
-              1. hasTreatmentForDay (V64-fix6: ANY same-day treatment) →
-                 "แก้ไขบันทึกการรักษา" linked to latest. Auto-confirms.
-              2. rawStatus='done' (legacy V64-fix2) → "แก้ไขการรักษา"/
-                 "บันทึกการรักษา" with linkedTreatmentId fallback toggle
-              3. pending|confirmed && isPastDate → "สร้างบันทึกการรักษา"
-                 + missed badge (V64-fix6: customer never came)
-              4. pending && !isPastDate → existing pending flow
-              5. confirmed && !isPastDate → existing confirmed flow
+          {/* V64-fix6 priority order preserved (treatment-aware):
+              1. hasTreatmentForDay → "แก้ไขบันทึกการรักษา" (PRIMARY ember)
+              2. rawStatus='done' → "แก้ไขการรักษา"/"บันทึกการรักษา" (PRIMARY)
+              3. pending|confirmed && isPastDate → "สร้างบันทึกการรักษา" + missed
+              4. pending && !isPastDate → "คอนเฟิร์มนัด" (PRIMARY) + edit + cancel
+              5. confirmed && !isPastDate → "บันทึกการรักษา" (PRIMARY) + edit + cancel
               6. cancelled → read-only badge
+             V64-fix11 — buttons mapped to 3-tier:
+                PRIMARY (ember): confirm / record-treatment / save (positive "go")
+                SECONDARY (sky): edit-appointment (navigation/contextual)
+                DESTRUCTIVE (rose ghost): cancel
           */}
           {hasTreatmentForDay && (
             <>
               <button
                 data-testid="row-action-edit-treatment"
                 onClick={handleEditTreatmentBound}
-                className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold"
+                className={BTN_PRIMARY}
               >
                 แก้ไขบันทึกการรักษา
               </button>
-              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-edit"
+                onClick={() => onEdit?.(appt)}
+                className={BTN_SECONDARY}
+              >
                 แก้ไขนัด
               </button>
             </>
@@ -288,12 +294,16 @@ export default function AppointmentHubRowCard({
               <button
                 data-testid="row-action-edit-treatment"
                 onClick={() => hasLinkedTreatment ? onEditTreatment?.(appt) : onCreateTreatment?.(appt)}
-                className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold"
+                className={BTN_PRIMARY}
               >
                 {hasLinkedTreatment ? 'แก้ไขการรักษา' : 'บันทึกการรักษา'}
               </button>
               {!hasLinkedTreatment && (
-                <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+                <button
+                  data-testid="row-action-cancel"
+                  onClick={() => onCancel?.(appt)}
+                  className={BTN_DESTRUCTIVE}
+                >
                   ยกเลิก
                 </button>
               )}
@@ -301,45 +311,83 @@ export default function AppointmentHubRowCard({
           )}
           {!hasTreatmentForDay && isPastDate && (rawStatus === 'pending' || rawStatus === 'confirmed') && (
             <>
-              <button data-testid="row-action-create-treatment" onClick={() => onCreateTreatment?.(appt)} className="text-[11px] px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold">
+              <button
+                data-testid="row-action-create-treatment"
+                onClick={() => onCreateTreatment?.(appt)}
+                className={BTN_PRIMARY}
+              >
                 สร้างบันทึกการรักษา
               </button>
-              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-edit"
+                onClick={() => onEdit?.(appt)}
+                className={BTN_SECONDARY}
+              >
                 แก้ไขนัด
               </button>
-              <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-cancel"
+                onClick={() => onCancel?.(appt)}
+                className={BTN_DESTRUCTIVE}
+              >
                 ยกเลิก
               </button>
             </>
           )}
           {!hasTreatmentForDay && rawStatus === 'pending' && !isPastDate && (
             <>
-              <button data-testid="row-action-confirm" onClick={() => onConfirm?.(appt)} className="text-[11px] px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold">
+              <button
+                data-testid="row-action-confirm"
+                onClick={() => onConfirm?.(appt)}
+                className={BTN_PRIMARY}
+              >
                 คอนเฟิร์มนัด
               </button>
-              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-edit"
+                onClick={() => onEdit?.(appt)}
+                className={BTN_SECONDARY}
+              >
                 แก้ไขนัด
               </button>
-              <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-cancel"
+                onClick={() => onCancel?.(appt)}
+                className={BTN_DESTRUCTIVE}
+              >
                 ยกเลิก
               </button>
             </>
           )}
           {!hasTreatmentForDay && rawStatus === 'confirmed' && !isPastDate && (
             <>
-              <button data-testid="row-action-create-treatment" onClick={() => onCreateTreatment?.(appt)} className="text-[11px] px-2 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded font-bold">
+              <button
+                data-testid="row-action-create-treatment"
+                onClick={() => onCreateTreatment?.(appt)}
+                className={BTN_PRIMARY}
+              >
                 บันทึกการรักษา
               </button>
-              <button data-testid="row-action-edit" onClick={() => onEdit?.(appt)} className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-edit"
+                onClick={() => onEdit?.(appt)}
+                className={BTN_SECONDARY}
+              >
                 แก้ไขนัด
               </button>
-              <button data-testid="row-action-cancel" onClick={() => onCancel?.(appt)} className="text-[11px] px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded font-bold">
+              <button
+                data-testid="row-action-cancel"
+                onClick={() => onCancel?.(appt)}
+                className={BTN_DESTRUCTIVE}
+              >
                 ยกเลิก
               </button>
             </>
           )}
           {rawStatus === 'cancelled' && !hasTreatmentForDay && (
-            <span className="text-[11px] text-[var(--tx-muted)] italic">ยกเลิกแล้ว</span>
+            <span className="text-[11px] text-[var(--tx-muted)] italic px-2 py-1 border border-dashed border-[var(--bd)] rounded">
+              ยกเลิกแล้ว
+            </span>
           )}
         </div>
       </div>

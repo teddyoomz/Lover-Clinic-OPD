@@ -399,12 +399,21 @@ export default function AppointmentHubView({
         onAddWalkIn={onAddWalkIn}
         resultCount={filteredAppts.length}
       />
+      {/* V64-fix11 (2026-05-09): loading + empty states upgraded with editorial weight. */}
       {loading && (
-        <div className="text-xs text-[var(--tx-muted)] italic mb-2">กำลังโหลด…</div>
+        <div className="flex items-center justify-center gap-2 py-6 text-xs text-[var(--tx-muted)]">
+          <span className="inline-block w-3 h-3 border-2 border-orange-700/40 border-t-orange-500 rounded-full animate-spin" aria-hidden="true" />
+          <span className="italic">กำลังโหลด…</span>
+        </div>
       )}
       {!loading && filteredAppts.length === 0 && (
-        <div className="text-xs text-[var(--tx-muted)] italic text-center py-6 border border-dashed border-[var(--bd)] rounded-lg" data-testid="appt-hub-empty">
-          — ไม่มีรายการนัดหมาย —
+        <div
+          className="text-center py-10 border border-dashed border-[var(--bd)] rounded-xl bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)]"
+          data-testid="appt-hub-empty"
+        >
+          <div className="text-3xl mb-2 opacity-40" aria-hidden="true">🗓️</div>
+          <div className="text-sm font-bold text-[var(--tx-heading)]">ไม่มีรายการนัดหมาย</div>
+          <div className="text-xs text-[var(--tx-muted)] italic mt-1">ลองเปลี่ยน tab หรือ ปรับตัวกรอง</div>
         </div>
       )}
       {!loading && filteredAppts.map(a => (
