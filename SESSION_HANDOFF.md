@@ -7,11 +7,33 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #21 — V64-fix8 patient name link **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8187 tests · build clean
+- **Date last updated**: 2026-05-09 EOD #22 — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8199 tests · build clean
 - **Branch**: `master`
-- **Last commit**: feat(V64-fix8): patient name → clickable link to customer detail (new tab)
-- **Test count**: 8187 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs).
-- **Deploy state**: **PRODUCTION = `dcb6c41`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #21: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (50s exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Session #20 precedent). Cleanup: 31 probe artifacts nuked.
+- **Last commit**: feat(V64-fix14): mobile responsive polish + count text equal weight
+- **Test count**: 8199 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs). 1 pending.
+- **Deploy state**: **PRODUCTION = `ad7ee0e`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #22: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (60s exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Sessions #20-#22 precedent). Cleanup: 4 probe artifacts nuked.
+
+### Session 2026-05-09 EOD #22 — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign (DEPLOYED)
+
+User flow across the day: 8 hub UX requests (real-time refresh / sort / time emphasis / purpose emphasis / patient name color / doctor badge relocation / mobile branch selector / กลับ Frontend) → finance chip prominence → "Re Design / Renovate ปุ่มทุกปุ่ม ... สไตล์เหมือน proclinic เป๊ะ" → doctor badge relocation iterations (mx-auto → FilterBar header) → mobile responsive + count text equal weight → "deploy + end session".
+
+6 V64-fix commits shipped + DEPLOYED:
+- **V64-fix9** (`9b90bb7`) — 8-task UX polish (real-time `appointmentDataVersion` counter + sort + chip emphasis + sky name + compact doctor chips + mobile BranchSelector in BackendTopBar + Home/Frontend button mobile+desktop). +13 tests.
+- **V64-fix10** (`6dbe23c`) — 4 finance chips bumped (text-xs + font-bold + border + dark variants + emoji). data-testid `row-chip-{wallet,deposit,outstanding,lifetime}`.
+- **V64-fix11** (`780a750`) — "Editorial Ember" redesign per `.impeccable.md` Design Context. NEW `_apptHubStyles.js` shared module (3 button tiers: PRIMARY ember gradient / SECONDARY sky outline ghost / DESTRUCTIVE rose ghost / + LINE brand `#06C755`). Tab pills (ember active / ghost inactive). Card surface (gradient + warm hover border). Status accent bar (3px gradient LEFT edge: missed → red, pending → amber, confirmed → sky, done → emerald, cancelled → gray). Patient name → text-lg font-black. HN → font-mono uppercase tracking-widest. Detail block → `<dl><dt><dd>` grid. R4.11 regex relaxed for refined "GOLD · เหลือ N วัน".
+- **V64-fix12** (`642c79a`) — doctor badge `ml-auto` → `mx-auto` (center of remaining space).
+- **V64-fix13** (`1166367`) — doctor badge moved from TabBar.rightContent → FilterBar.doctorBadge (beside "รายการนัดหมาย" heading). Chips bumped to text-sm + px-3 py-1.5 + rounded-lg + shadow + font-black mono time. Reserved `min-h-[44px]` slot (no UI jump on tab switch).
+- **V64-fix14** (`ad7ee0e`) — "N คน" count text → `text-sm font-black text-tx-heading` (peer of heading; data-testid `appt-hub-result-count`). RowCard mobile responsive: LEFT/MIDDLE `min-w-0 md:min-w-[260px]`; RIGHT section always `flex flex-col` (was `flex md:flex-col` causing horizontal crowd); items-start md:items-end; button group `md:justify-end`; RIGHT min-w only on md+.
+
+**Combined deploy** (Rule 02 V15 — user authorized "deploy" THIS turn):
+- vercel --prod `b10eyz1c1`: 60s exit 0; aliased `lover-clinic-app.vercel.app`
+- firebase --only firestore:rules `bw5qzsp0e`: idempotent ("already up to date, skipping upload")
+- Pre+post probe 1 + 5: 200/200 GREEN; probes 2/3/4 = 403 V50-followup-2 false-positive (collections deleted, ignored)
+- Cleanup: 4 probe artifacts nuked (chat_conversations 2 + opd_sessions 2)
+
+Detail: `.agents/sessions/2026-05-09-v64-fix9-to-fix14-hub-overhaul.md`. Production at `ad7ee0e`.
+
+
 
 ### Session 2026-05-09 EOD #21 — V64-fix8 patient name → link to customer detail (DEPLOYED)
 
@@ -1280,24 +1302,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-09 EOD #21.
+Resume LoverClinic — continue from 2026-05-09 EOD #22.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=dcb6c41, prod=dcb6c41)
-3. .agents/active.md (8187 tests · idle)
+2. SESSION_HANDOFF.md (master=ad7ee0e, prod=ad7ee0e)
+3. .agents/active.md (8199 tests · idle)
 4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V64 V-summary)
-5. .agents/sessions/2026-05-09-v64-fix8-patient-name-link.md (latest checkpoint)
+5. .agents/sessions/2026-05-09-v64-fix9-to-fix14-hub-overhaul.md (latest checkpoint)
 
-Status: master=`dcb6c41`, 8187 tests pass, prod=`dcb6c41` LIVE. Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
+Status: master=`ad7ee0e`, 8199 tests pass, prod=`ad7ee0e` LIVE. Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
 
-Next: idle — V64-fix8 patient name link DEPLOYED to prod; production stable.
+Next: idle — V64-fix9..fix14 hub UX overhaul + Editorial Ember redesign DEPLOYED to prod; production stable.
 
 Outstanding (user-triggered):
-- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 still test V50-stripped collections — false-positive 403 each deploy; ignored manually per Session #20 + #21 precedent.
+- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 still test V50-stripped collections — false-positive 403 each deploy; ignored manually per Sessions #20-#22 precedent.
 - (Optional) `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs (TFP line 666 comment + Windows shell-spawn timing).
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent.
+Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` is canonical for "navigate to customer detail" — NEVER reinvent. **NEW V64-fix11 — `src/components/admin/_apptHubStyles.js`** is the single source of truth for hub buttons / tabs / accent bars / status chips (3-tier: PRIMARY ember / SECONDARY sky ghost / DESTRUCTIVE rose ghost / + LINE brand). Future Appointment Hub additions MUST import from there (Rule of 3 lock).
 
 /session-start
 ```
