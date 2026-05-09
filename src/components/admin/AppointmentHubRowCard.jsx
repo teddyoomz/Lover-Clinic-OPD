@@ -95,8 +95,10 @@ export default function AppointmentHubRowCard({
           vision: admin scans the queue + sees urgency colour from edge. */}
       <span aria-hidden="true" data-testid="row-accent-bar" className={`${ACCENT_BAR_BASE} ${accentClass}`} />
 
-      {/* LEFT — Customer */}
-      <div className="flex-1 min-w-[260px] pl-2">
+      {/* LEFT — Customer
+          V64-fix14: min-w-0 on mobile so card can shrink below 260px on
+          narrow viewports without horizontal overflow. */}
+      <div className="flex-1 min-w-0 md:min-w-[260px] pl-2">
         <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
           <span
             className="text-[10px] font-mono font-bold uppercase tracking-widest text-[var(--tx-muted)]"
@@ -173,8 +175,8 @@ export default function AppointmentHubRowCard({
         </div>
       </div>
 
-      {/* MIDDLE — Appointment detail */}
-      <div className="flex-1 min-w-[260px] text-xs space-y-1">
+      {/* MIDDLE — Appointment detail (min-w-0 mobile per V64-fix14) */}
+      <div className="flex-1 min-w-0 md:min-w-[260px] text-xs space-y-1">
         {/* V64-fix9: time bumped to text-base + amber-emphasis chip */}
         <div className="text-sm font-bold text-[var(--tx-heading)] mb-1.5 flex flex-wrap items-center gap-2" data-testid="row-date-full">
           <span className="text-[var(--tx-muted)]">📅</span>
@@ -239,15 +241,20 @@ export default function AppointmentHubRowCard({
         </div>
       </div>
 
-      {/* RIGHT — Status + Actions */}
-      <div className="flex md:flex-col gap-2 items-end justify-start min-w-[200px]">
+      {/* RIGHT — Status + Actions
+          V64-fix14: always flex-col (was `flex md:flex-col` causing status +
+          buttons to crowd horizontally on mobile narrow). On mobile section
+          is full-width so items-start (left-align), on desktop md+ it's a
+          right rail so md:items-end. min-w only on desktop so card collapses
+          cleanly on mobile. */}
+      <div className="flex flex-col gap-2 items-start md:items-end justify-start md:min-w-[200px]">
         <span
           className={`text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${STATUS_CHIP_CLS[status] || ''}`}
           data-testid="row-status"
         >
           {statusLabel}
         </span>
-        <div className="flex gap-1.5 flex-wrap justify-end">
+        <div className="flex gap-1.5 flex-wrap md:justify-end">
           {appt.customerLineUserId && (
             <button
               type="button"

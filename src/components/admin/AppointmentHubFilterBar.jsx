@@ -35,13 +35,20 @@ export default function AppointmentHubFilterBar({
     <div className="mb-4" data-testid="appt-hub-filterbar">
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <h2 className="text-sm font-black uppercase tracking-wider text-[var(--tx-heading)]">รายการนัดหมาย</h2>
-        <span className="text-[11px] font-mono text-[var(--tx-muted)]">
+        {/* V64-fix14 (2026-05-09): count bumped to match heading size + weight.
+            User: "ตัวอักษร 2 คน มันเล็กไปด้วย ทำให้ตัวมันเท่ากับ รายการนัดหมาย ได้เลย".
+            Pre-fix14 was text-[11px] font-mono muted — visually demoted; now
+            text-sm font-black heading-color so count reads as a peer of the
+            section label. */}
+        <span
+          className="text-sm font-black text-[var(--tx-heading)]"
+          data-testid="appt-hub-result-count"
+        >
           {resultCount} คน
         </span>
         {/* V64-fix13: doctor-badge slot — min-h-[44px] reserves space so UI
             doesn't jump when switching between today/tomorrow (with doctor
-            chips) and future/past (without). The 44px = chip text-sm +
-            py-1.5 + border + a few pixels of safety. */}
+            chips) and future/past (without). */}
         <div
           className="ml-2 flex items-center gap-2 flex-wrap min-h-[44px]"
           data-testid="appt-hub-doctor-slot"
