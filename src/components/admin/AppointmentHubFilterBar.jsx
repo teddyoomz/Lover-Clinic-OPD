@@ -25,14 +25,29 @@ export default function AppointmentHubFilterBar({
   statusFilter, onStatusFilterChange,
   onPrint, onAddWalkIn,
   resultCount = 0,
+  // V64-fix13 (2026-05-09): doctor-cards badge slot moved here from TabBar
+  // rightContent. User: "ขอย้าย หมอมายด์ 13:30-19:30 ลงมา 1 row มาอยู่
+  // row รายการนัดหมาย เว้นนิดหน่อยพอสวยงาม". Reserved min-height on the
+  // slot so layout doesn't shift when switching to tabs without doctors.
+  doctorBadge = null,
 }) {
   return (
     <div className="mb-4" data-testid="appt-hub-filterbar">
-      <div className="flex items-baseline gap-2 mb-3">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <h2 className="text-sm font-black uppercase tracking-wider text-[var(--tx-heading)]">รายการนัดหมาย</h2>
         <span className="text-[11px] font-mono text-[var(--tx-muted)]">
-          {resultCount} {resultCount === 1 ? 'คน' : 'คน'}
+          {resultCount} คน
         </span>
+        {/* V64-fix13: doctor-badge slot — min-h-[44px] reserves space so UI
+            doesn't jump when switching between today/tomorrow (with doctor
+            chips) and future/past (without). The 44px = chip text-sm +
+            py-1.5 + border + a few pixels of safety. */}
+        <div
+          className="ml-2 flex items-center gap-2 flex-wrap min-h-[44px]"
+          data-testid="appt-hub-doctor-slot"
+        >
+          {doctorBadge}
+        </div>
       </div>
       <div className="flex gap-2 flex-wrap items-center">
         <div className="relative flex-1 min-w-[200px]">

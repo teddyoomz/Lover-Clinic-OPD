@@ -369,23 +369,15 @@ export default function AppointmentHubView({
 
   return (
     <div data-testid="appt-hub-view">
-      {/* V64-fix9 (2026-05-09): doctor cards moved INSIDE TabBar rightContent
-          so the area above the tabs is no longer empty on future/past tabs
-          (where DoctorCards returns null). Per user directive: "เอา badge
-          แสดงแพทย์เข้ามาไว้ถัดไปจาก tab ย้อนหลัง 30 วัน น่าจะดีกว่า". The
-          DoctorCards component still self-hides when tab !== today/tomorrow. */}
+      {/* V64-fix13 (2026-05-09): doctor-cards badge moved from TabBar.rightContent
+          to FilterBar.doctorBadge — sits beside "รายการนัดหมาย" heading with
+          reserved min-height so layout stays stable across tab switches.
+          User: "ขอย้าย หมอมายด์ ลงมา 1 row มาอยู่ row รายการนัดหมาย เว้น
+          นิดหน่อยพอสวยงาม + Reserve พื้นที่ไว้ ไม่ให้ UI เลื่อนขึ้นๆลงๆ". */}
       <AppointmentHubTabBar
         activeTab={activeTab}
         counts={counts}
         onTabChange={setActiveTab}
-        rightContent={
-          <AppointmentHubDoctorCards
-            tab={activeTab}
-            doctorShifts={doctorShifts}
-            assistantShifts={assistantShifts}
-            dateLabel={dateLabel}
-          />
-        }
       />
       <AppointmentHubFilterBar
         search={search}
@@ -398,6 +390,14 @@ export default function AppointmentHubView({
         onPrint={handlePrint}
         onAddWalkIn={onAddWalkIn}
         resultCount={filteredAppts.length}
+        doctorBadge={
+          <AppointmentHubDoctorCards
+            tab={activeTab}
+            doctorShifts={doctorShifts}
+            assistantShifts={assistantShifts}
+            dateLabel={dateLabel}
+          />
+        }
       />
       {/* V64-fix11 (2026-05-09): loading + empty states upgraded with editorial weight. */}
       {loading && (
