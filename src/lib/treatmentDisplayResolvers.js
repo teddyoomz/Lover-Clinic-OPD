@@ -15,7 +15,7 @@
 // doctorId / assistants[].id / branchId MUST use these helpers. Direct reads
 // (detail.doctorId || / a.name || a.id) outside this module are forbidden.
 
-import { formatBadgeTime } from './formatBadgeTime.js';
+import { formatBadgeTime, toBadgeMs } from './formatBadgeTime.js';
 
 function _trimmedString(v) {
   return typeof v === 'string' ? v.trim() : '';
@@ -128,8 +128,12 @@ export function getTreatmentLifecycle(t) {
   if (cStage) stages.push({ key: 'completed', time: cTime || null });
 
   stages.sort((a, b) => {
-    const am = a.time ? new Date(a.time).getTime() : Infinity;
-    const bm = b.time ? new Date(b.time).getTime() : Infinity;
+    // Phase 28 (2026-05-14) — Bangkok-stable sort using toBadgeMs which handles
+    // BOTH ISO strings AND Firestore Timestamp objects ({toDate} / {seconds,nanoseconds}).
+    // Code quality reviewer flagged: `new Date(fsTimestamp).getTime()` returns NaN,
+    // breaking sort for production data where serverTimestamp() writes FS Timestamps.
+    const am = a.time ? toBadgeMs(a.time) : Infinity;
+    const bm = b.time ? toBadgeMs(b.time) : Infinity;
     return am - bm;
   });
   return stages;

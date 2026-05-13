@@ -61,6 +61,25 @@ describe('Phase 28 · getTreatmentLifecycle', () => {
     expect(getTreatmentLifecycle(undefined)).toEqual([]);
     expect(getTreatmentLifecycle({})).toEqual([]);
   });
+  it('R1.6 sorts correctly when timestamps are Firestore Timestamp objects', () => {
+    const fsTs = (iso) => ({ toDate: () => new Date(iso) });
+    const t = {
+      vitalsignsRecordedAt: fsTs('2026-05-14T04:23:00Z'), // latest
+      doctorRecordedAt: fsTs('2026-05-14T04:00:00Z'),     // earliest
+      completedAt: fsTs('2026-05-14T04:10:00Z'),
+    };
+    const lc = getTreatmentLifecycle(t);
+    expect(lc.map(s => s.key)).toEqual(['doctor', 'completed', 'vitalsigns']);
+  });
+  it('R1.7 sorts correctly when timestamps are {seconds, nanoseconds} POJOs (REST API shape)', () => {
+    const sec = (sec) => ({ seconds: sec, nanoseconds: 0 });
+    const t = {
+      vitalsignsRecordedAt: sec(1747200000), // 2025-05-14
+      doctorRecordedAt: sec(1747100000),     // earlier
+    };
+    const lc = getTreatmentLifecycle(t);
+    expect(lc[0].key).toBe('doctor');
+  });
 });
 
 describe('Phase 28 · getTreatmentStatusLabel', () => {

@@ -60,12 +60,8 @@ import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/date
 // Phase 24.0 — dual gate (permission OR admin) for ลบลูกค้า button
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
-// Phase 27.2 (2026-05-14) — lifecycle-badge helpers.
-// Phase 28 (2026-05-14) — extracted to src/lib/formatBadgeTime.js for Rule C1
-// reuse (CDV stacked badges + computeRowAction in treatmentDisplayResolvers
-// + future timeline widgets). Re-exported here so any external module that
-// historically imported them from CDV still resolves (defensive).
-export { toBadgeMs, formatBadgeTime } from '../../lib/formatBadgeTime.js';
+// Phase 28 (2026-05-14): formatBadgeTime + toBadgeMs moved to src/lib/formatBadgeTime.js (Rule C1).
+// No re-export — no external consumers found via grep at extraction time.
 
 // Phase 26.1c (V26.1, 2026-05-13) — Editor-attribution role labels (Thai).
 // Maps editedByRole values from EditAttributionModal back to display text.
