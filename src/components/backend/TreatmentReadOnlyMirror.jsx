@@ -24,6 +24,7 @@ import {
   resolveBranchDisplayName,
 } from '../../lib/treatmentDisplayResolvers.js';
 import { listDoctors, listStaff, listBranches } from '../../lib/scopedDataLayer.js';
+import { EditTreatmentBranchModal } from './EditAttributionModal.jsx';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -329,6 +330,7 @@ export default function TreatmentReadOnlyMirror({
   const [doctorMap, setDoctorMap] = useState(() => new Map());
   const [staffMap, setStaffMap] = useState(() => new Map());
   const [branchMap, setBranchMap] = useState(() => new Map());
+  const [editBranchOpen, setEditBranchOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -550,13 +552,26 @@ export default function TreatmentReadOnlyMirror({
                 />
               </FieldRow>
               <FieldRow label="สาขา">
-                <input
-                  type="text"
-                  disabled
-                  value={branchName}
-                  className={disabledInputCls}
-                  style={inputStyle()}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    disabled
+                    value={branchName}
+                    className={disabledInputCls}
+                    style={inputStyle()}
+                  />
+                  {treatmentDoc?.id && (
+                    <button
+                      type="button"
+                      onClick={() => setEditBranchOpen(true)}
+                      className="px-2 py-1 rounded text-xs border border-[var(--bd)] hover:bg-[var(--bg-hover)] whitespace-nowrap"
+                      title="แก้ไขสาขาที่รักษา (สำหรับ admin แก้ประวัติเก่า)"
+                      data-testid="edit-branch-attribution"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
               </FieldRow>
             </div>
 
@@ -1015,6 +1030,16 @@ export default function TreatmentReadOnlyMirror({
           <div className="h-4" />
         </div>
       </div>
+      {editBranchOpen && treatmentDoc?.id && (
+        <EditTreatmentBranchModal
+          treatment={treatmentDoc}
+          onClose={() => setEditBranchOpen(false)}
+          onSaved={() => {
+            setEditBranchOpen(false);
+            // The treatment doc listener in parent will refresh the prop automatically.
+          }}
+        />
+      )}
     </>
   );
 }
