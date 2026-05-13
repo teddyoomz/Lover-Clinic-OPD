@@ -1037,6 +1037,20 @@ export default function CustomerDetailView({
                                   <span>แพทย์ลงบันทึก</span>
                                 </span>
                               )}
+                              {/* Phase 26.2f-pre — vitals-recorded chip (mirror doctor-recorded chip).
+                                  Renders when treatment.status === 'vitalsigns-recorded' (admin saved
+                                  vitals only; doctor has not yet completed). Teal styling distinct
+                                  from amber doctor-recorded chip. */}
+                              {t.status === 'vitalsigns-recorded' && (
+                                <span
+                                  data-testid={`treatment-status-chip-vitalsigns-recorded-${t.id}`}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-teal-950 border-teal-800 text-teal-100' : 'bg-teal-100 border-teal-200 text-teal-900'}`}
+                                  title="บันทึกข้อมูลซักประวัติ"
+                                >
+                                  <Activity size={10} />
+                                  <span>บันทึกข้อมูลซักประวัติ</span>
+                                </span>
+                              )}
                               <span className="ml-auto text-[var(--tx-muted)] flex-shrink-0">
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </span>
