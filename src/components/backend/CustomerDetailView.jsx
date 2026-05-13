@@ -52,6 +52,8 @@ import { parseQtyString } from '../../lib/courseUtils.js';
 // rendered N CARDS for one logical course (one per per-product entry).
 import { groupCustomerCoursesForDetailView } from '../../lib/treatmentBuyHelpers.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
+// Phase 28 (2026-05-14) — Rule C1 extraction; CDV uses these for badge display.
+import { toBadgeMs, formatBadgeTime } from '../../lib/formatBadgeTime.js';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
@@ -59,37 +61,11 @@ import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/date
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
 // Phase 27.2 (2026-05-14) — lifecycle-badge helpers.
-// Treatment doc has multiple stage timestamps (vitalsignsRecordedAt /
-// doctorRecordedAt / completedAt / recordedAt legacy / editedAt). For the
-// CDV stacked-badge display we need (a) a uniform millisecond accessor
-// across Firestore Timestamp / ISO string / {seconds, nanoseconds} object,
-// and (b) a HH:MM Thai-locale formatter. Pure helpers — branch-blind.
-export function toBadgeMs(ts) {
-  if (!ts) return 0;
-  if (typeof ts === 'string') {
-    const n = new Date(ts).getTime();
-    return Number.isNaN(n) ? 0 : n;
-  }
-  if (typeof ts.toDate === 'function') {
-    try { return ts.toDate().getTime(); } catch { return 0; }
-  }
-  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
-  if (ts instanceof Date) return ts.getTime();
-  return 0;
-}
-export function formatBadgeTime(ts) {
-  const ms = toBadgeMs(ts);
-  if (!ms) return '';
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return '';
-  // HH:MM in Bangkok timezone (24h)
-  return date.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Bangkok',
-  });
-}
+// Phase 28 (2026-05-14) — extracted to src/lib/formatBadgeTime.js for Rule C1
+// reuse (CDV stacked badges + computeRowAction in treatmentDisplayResolvers
+// + future timeline widgets). Re-exported here so any external module that
+// historically imported them from CDV still resolves (defensive).
+export { toBadgeMs, formatBadgeTime } from '../../lib/formatBadgeTime.js';
 
 // Phase 26.1c (V26.1, 2026-05-13) — Editor-attribution role labels (Thai).
 // Maps editedByRole values from EditAttributionModal back to display text.

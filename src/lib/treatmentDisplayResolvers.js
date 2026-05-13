@@ -5,11 +5,17 @@
 // pattern (V46/AV24) — fallback chain LIVE map → cached name → empty.
 // NEVER returns a raw doc ID (DOC-/STAFF-/BR- prefix).
 //
+// Phase 28 (2026-05-14) — extended with 6 lifecycle/display helpers for
+// treatment-history redesign (status label, stepper, relative date, group,
+// row action). See "Phase 28" block below.
+//
 // Pure JS. Branch-blind. No Firestore deps — caller passes pre-built Maps.
 //
 // Audit: AV42 (audit-anti-vibe-code) — every component displaying treatment
 // doctorId / assistants[].id / branchId MUST use these helpers. Direct reads
 // (detail.doctorId || / a.name || a.id) outside this module are forbidden.
+
+import { formatBadgeTime } from './formatBadgeTime.js';
 
 function _trimmedString(v) {
   return typeof v === 'string' ? v.trim() : '';
@@ -79,4 +85,246 @@ export function resolveAssistantsDisplay(assistants, doctorMap, staffMap) {
     .map((a) => resolveAssistantDisplayName(a, doctorMap, staffMap))
     .filter(Boolean)
     .join(', ');
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 28 (2026-05-14) — treatment history redesign helpers
+//
+// 6 pure helpers extracted/derived from CDV.jsx inline logic to enable
+// rich timeline UI (status labels, stepper, relative date, grouping,
+// row action). Pure JS · branch-blind · no React/Firestore deps.
+//
+// Audit anchor: tests/phase-28-treatment-history-resolvers.test.js
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Phase 28 (2026-05-14) — derive lifecycle stages array for a treatment.
+ * Stages: vitalsigns / doctor / completed.
+ * Sorted by time ascending; entries without time go to end (Infinity).
+ * Tolerant fallback per Phase 27.2-ter logic (mirrors CDV inline pre-compute
+ * at lines 1067-1095 — extracted here for Rule C1 reuse + testability).
+ *
+ * @param {object} t — treatmentSummary entry
+ * @returns {Array<{key: 'vitalsigns'|'doctor'|'completed', time: string|null}>}
+ */
+export function getTreatmentLifecycle(t) {
+  if (!t || typeof t !== 'object') return [];
+  const stages = [];
+  const vStage = !!t.vitalsignsRecordedAt || t.status === 'vitalsigns-recorded';
+  const vTime = t.vitalsignsRecordedAt
+    || (t.status === 'vitalsigns-recorded' ? t.recordedAt : null);
+  if (vStage) stages.push({ key: 'vitalsigns', time: vTime || null });
+
+  const dStage = !!t.doctorRecordedAt || t.status === 'doctor-recorded';
+  const dTime = t.doctorRecordedAt
+    || (t.status === 'doctor-recorded' ? t.recordedAt : null);
+  if (dStage) stages.push({ key: 'doctor', time: dTime || null });
+
+  const cStage = !!t.completedAt
+    || (!t.status && (!!t.editedAt || !!t.recordedAt || !!t.editedByName));
+  const cTime = t.completedAt
+    || (!t.status && t.editedAt ? t.editedAt : null)
+    || (!t.status && t.recordedAt ? t.recordedAt : null);
+  if (cStage) stages.push({ key: 'completed', time: cTime || null });
+
+  stages.sort((a, b) => {
+    const am = a.time ? new Date(a.time).getTime() : Infinity;
+    const bm = b.time ? new Date(b.time).getTime() : Infinity;
+    return am - bm;
+  });
+  return stages;
+}
+
+/**
+ * Phase 28 (2026-05-14) — Thai status label per 9-case lifecycle vocabulary.
+ * Pure derivation from getTreatmentLifecycle output (key set only — not times).
+ * `isLatest` differentiates "รอแพทย์บันทึก" (queue head) vs "ซักประวัติเท่านั้น"
+ * (older row that never advanced).
+ *
+ * @param {object} t — treatmentSummary entry
+ * @param {boolean} [isLatest=false]
+ * @returns {string} Thai status label
+ */
+export function getTreatmentStatusLabel(t, isLatest = false) {
+  const lc = getTreatmentLifecycle(t);
+  if (lc.length === 0) return 'ยังไม่บันทึก';
+  const has = (k) => lc.some((s) => s.key === k);
+  const hasV = has('vitalsigns');
+  const hasD = has('doctor');
+  const hasC = has('completed');
+
+  if (hasV && hasD && hasC) return 'เสร็จสิ้น · ครบ 3 ขั้น';
+  if (hasV && hasC && !hasD) return 'เสร็จสิ้น · ข้ามแพทย์';
+  if (hasD && hasC && !hasV) return 'เสร็จสิ้น · ข้ามซักประวัติ';
+  if (hasV && hasD && !hasC) return 'ครบขั้นแพทย์ · รอบันทึก';
+  if (hasC && !hasV && !hasD) return 'เสร็จสิ้น · ตรงเข้าบันทึก';
+  if (hasD && !hasV && !hasC) return 'แพทย์บันทึกแล้ว · รอเสร็จ';
+  if (hasV && !hasD && !hasC) return isLatest ? 'รอแพทย์บันทึก' : 'ซักประวัติเท่านั้น';
+  return 'ยังไม่บันทึก';
+}
+
+/**
+ * Phase 28 (2026-05-14) — context-aware stepper labels (3 dots).
+ * Pure derivation from lifecycle KEYS only (timestamps ignored).
+ *
+ *   t = vitals position label
+ *   a = doctor position label
+ *   e = completed position label (always "เสร็จ")
+ *
+ * Vitals position:
+ *   - "ซักประวัติ" if vitals done OR no later stage done (default)
+ *   - "ข้าม"     if any later stage (doctor or completed) done WITHOUT vitals
+ *
+ * Doctor position:
+ *   - "แพทย์"      if doctor done
+ *   - "ข้ามแพทย์"  if vitals + completed done but NO doctor (skip-doctor path)
+ *   - "รอแพทย์"    if only vitals done (waiting for doctor)
+ *   - "ข้าม"       otherwise (no relevant signal)
+ *
+ * @param {Array<{key:string, time?:string}>} lifecycle
+ * @returns {{t:string, a:string, e:string}}
+ */
+export function getStepLabels(lifecycle) {
+  const lc = Array.isArray(lifecycle) ? lifecycle : [];
+  const has = (k) => lc.some((s) => s && s.key === k);
+  const hasV = has('vitalsigns');
+  const hasD = has('doctor');
+  const hasC = has('completed');
+
+  // Vitals slot
+  let tLabel;
+  if (hasV) tLabel = 'ซักประวัติ';
+  else if (hasD || hasC) tLabel = 'ข้าม';
+  else tLabel = 'ซักประวัติ';
+
+  // Doctor slot
+  let aLabel;
+  if (hasD) aLabel = 'แพทย์';
+  else if (hasV && hasC && !hasD) aLabel = 'ข้ามแพทย์';
+  else if (hasV && !hasC) aLabel = 'รอแพทย์';
+  else aLabel = 'ข้าม';
+
+  return { t: tLabel, a: aLabel, e: 'เสร็จ' };
+}
+
+/**
+ * Phase 28 (2026-05-14) — Bangkok-stable relative-date label.
+ *
+ * Parses YYYY-MM-DD inputs as midday-UTC (`Date.UTC(y, mo-1, d, 12, 0, 0)`)
+ * to keep the day stable in Bangkok-local regardless of test/server TZ
+ * (per Rule on TZ — V53/Bangkok midday-UTC parse pattern).
+ *
+ * Buckets:
+ *   0       → "วันนี้"
+ *   1       → "เมื่อวาน"
+ *   2-6     → "{N} วันที่แล้ว"
+ *   7-29    → "{floor(N/7)} สัปดาห์ที่แล้ว"
+ *   30-364  → "{floor(N/30)} เดือนที่แล้ว"
+ *   ≥365    → "{floor(N/365)} ปีที่แล้ว"
+ *
+ * Returns '' for invalid inputs OR future dates.
+ *
+ * @param {string} dateISO    'YYYY-MM-DD' for the past date
+ * @param {string} todayISO   'YYYY-MM-DD' for "today" reference
+ * @returns {string}
+ */
+export function computeRelativeThaiDateLabel(dateISO, todayISO) {
+  const past = _parseISOMiddayUTC(dateISO);
+  const today = _parseISOMiddayUTC(todayISO);
+  if (past == null || today == null) return '';
+  const diffMs = today - past;
+  if (diffMs < 0) return '';
+  const daysAgo = Math.round(diffMs / (24 * 60 * 60 * 1000));
+  if (daysAgo === 0) return 'วันนี้';
+  if (daysAgo === 1) return 'เมื่อวาน';
+  if (daysAgo < 7) return `${daysAgo} วันที่แล้ว`;
+  if (daysAgo < 30) return `${Math.floor(daysAgo / 7)} สัปดาห์ที่แล้ว`;
+  if (daysAgo < 365) return `${Math.floor(daysAgo / 30)} เดือนที่แล้ว`;
+  return `${Math.floor(daysAgo / 365)} ปีที่แล้ว`;
+}
+
+/**
+ * Internal — parse 'YYYY-MM-DD' string as midday-UTC.
+ * Returns ms or null on invalid input.
+ */
+function _parseISOMiddayUTC(s) {
+  if (typeof s !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const ms = Date.UTC(y, mo - 1, d, 12, 0, 0);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Phase 28 (2026-05-14) — interleave date headers between consecutive same-date
+ * rows. Caller pre-sorts rows (typically by `t.date` desc); this helper does
+ * NOT re-sort — it groups consecutive same-date rows under one header.
+ *
+ * Output shape:
+ *   [
+ *     { type: 'header', date: 'YYYY-MM-DD', count: N },
+ *     { type: 'row',    t: <row1> },
+ *     { type: 'row',    t: <row2> },
+ *     ...
+ *   ]
+ *
+ * Rows with missing/falsy `date` field are bucketed under date `''`.
+ *
+ * @param {Array<{date?:string}>} rows
+ * @returns {Array<{type:'header'|'row', date?:string, count?:number, t?:object}>}
+ */
+export function groupTreatmentsByDate(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const out = [];
+  // Bucket consecutive same-date rows
+  const groups = [];
+  let currentDate = null;
+  let currentBucket = null;
+  for (const r of rows) {
+    const date = (r && typeof r.date === 'string') ? r.date : '';
+    if (date !== currentDate) {
+      currentDate = date;
+      currentBucket = { date, rows: [] };
+      groups.push(currentBucket);
+    }
+    currentBucket.rows.push(r);
+  }
+  for (const g of groups) {
+    out.push({ type: 'header', date: g.date, count: g.rows.length });
+    for (const r of g.rows) {
+      out.push({ type: 'row', t: r });
+    }
+  }
+  return out;
+}
+
+/**
+ * Phase 28 (2026-05-14) — primary action-button copy for a treatment row.
+ *
+ * Pure derivation from a getTreatmentLifecycle output:
+ *   - empty/null/undefined         → { kind: 'unknown',     label: '' }
+ *   - lifecycle has 'completed'    → { kind: 'completed',   label: '✓ บันทึก HH:MM' }
+ *                                     (or '✓ บันทึกแล้ว' when time missing)
+ *   - lifecycle non-empty otherwise→ { kind: 'in-progress', label: '⌛ in progress' }
+ *
+ * @param {Array<{key:string, time?:string|null}>} lifecycle
+ * @returns {{kind:'unknown'|'in-progress'|'completed', label:string}}
+ */
+export function computeRowAction(lifecycle) {
+  if (!Array.isArray(lifecycle) || lifecycle.length === 0) {
+    return { kind: 'unknown', label: '' };
+  }
+  const completed = lifecycle.find((s) => s && s.key === 'completed');
+  if (completed) {
+    const timeStr = completed.time ? formatBadgeTime(completed.time) : '';
+    return {
+      kind: 'completed',
+      label: timeStr ? `✓ บันทึก ${timeStr}` : '✓ บันทึกแล้ว',
+    };
+  }
+  return { kind: 'in-progress', label: '⌛ in progress' };
 }
