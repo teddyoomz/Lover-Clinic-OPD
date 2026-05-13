@@ -22,7 +22,7 @@
 // Dead code removed: local ImageGridColumn, Lightbox, Accordion, formatThaiDateFull,
 // imageUrl, and lightbox state (panel has own internal lightbox state).
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { X, Activity, Edit3, Stethoscope } from 'lucide-react';
 import TreatmentReadOnlyPanel from './TreatmentReadOnlyPanel.jsx';
 
