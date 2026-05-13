@@ -998,6 +998,24 @@ export default function CustomerDetailView({
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                                   style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>ล่าสุด</span>
                               )}
+                              {/* V26.0 Phase 26.0e (2026-05-13) — doctor-recorded chip.
+                                  Shows when treatment was saved via "บันทึกสำหรับแพทย์"
+                                  (status === 'doctor-recorded' set by Phase 26.0b
+                                  handleSubmit + preserved in summary by Phase 26.0e
+                                  rebuildTreatmentSummary extension). Admin sees this
+                                  chip → knows the treatment still needs course-items /
+                                  consumables / DF / billing pieces. canAddNewItems
+                                  flag (Phase 26.0c) unlocks the missing UI in edit mode. */}
+                              {t.status === 'doctor-recorded' && (
+                                <span
+                                  data-testid={`treatment-status-chip-doctor-recorded-${t.id}`}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
+                                  title="แพทย์ลงบันทึก — admin ต้องมาเติมคอร์ส / สินค้า / ค่ามือ / บิล"
+                                >
+                                  <Stethoscope size={10} />
+                                  <span>แพทย์ลงบันทึก</span>
+                                </span>
+                              )}
                               <span className="ml-auto text-[var(--tx-muted)] flex-shrink-0">
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </span>

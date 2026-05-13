@@ -279,13 +279,28 @@ export default function TreatmentTimelineModal({
                     className={`grid grid-cols-1 md:grid-cols-12 gap-5 pb-6 ${globalIndex < totalCount - 1 ? 'border-b border-[var(--bd)]' : ''}`}>
                     {/* LEFT: meta + items (3/12) */}
                     <div className="md:col-span-4 lg:col-span-3 space-y-3">
-                      {/* Date + ล่าสุด badge */}
+                      {/* Date + ล่าสุด badge + V26.0 doctor-recorded chip */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <Calendar size={14} style={{ color: '#2EC4B6' }} />
                         <span className="text-sm font-bold text-[var(--tx-heading)]">{formatThaiDateFull(t.date) || '-'}</span>
                         {isLatest && (
                           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                             style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>ล่าสุด</span>
+                        )}
+                        {/* V26.0 Phase 26.0e (2026-05-13) — doctor-recorded chip mirror.
+                            Same data source (summary.status from rebuildTreatmentSummary
+                            Phase 26.0e extension) + same styling as CustomerDetailView.
+                            Admin sees the chip whether they're in CDV treatment list OR
+                            the timeline modal — single source of truth. */}
+                        {t.status === 'doctor-recorded' && (
+                          <span
+                            data-testid={`treatment-status-chip-doctor-recorded-${t.id}`}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
+                            title="แพทย์ลงบันทึก"
+                          >
+                            <Stethoscope size={10} />
+                            <span>แพทย์ลงบันทึก</span>
+                          </span>
                         )}
                       </div>
 

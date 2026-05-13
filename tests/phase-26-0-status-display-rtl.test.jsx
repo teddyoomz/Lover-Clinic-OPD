@@ -44,4 +44,55 @@ describe('Phase 26.0 — Status display RTL', () => {
       expect(TFP_SOURCE).toMatch(/การรักษานี้บันทึกโดยแพทย์/);
     });
   });
+
+  describe('D2 — CustomerDetailView status chip', () => {
+    const CDV_PATH = join(process.cwd(), 'src/components/backend/CustomerDetailView.jsx');
+    const CDV_SOURCE = readFileSync(CDV_PATH, 'utf-8');
+
+    it('D2.1 — chip data-testid pattern present', () => {
+      expect(CDV_SOURCE).toMatch(/data-testid=\{\s*`treatment-status-chip-doctor-recorded-/);
+    });
+
+    it('D2.2 — chip gated on t.status === doctor-recorded', () => {
+      const chipIdx = CDV_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
+      expect(chipIdx).toBeGreaterThan(-1);
+      const before = CDV_SOURCE.slice(Math.max(0, chipIdx - 400), chipIdx);
+      expect(before).toMatch(/t\.status\s*===\s*['"]doctor-recorded['"]/);
+    });
+
+    it('D2.3 — chip Thai label "แพทย์ลงบันทึก"', () => {
+      const chipIdx = CDV_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
+      const region = CDV_SOURCE.slice(chipIdx, chipIdx + 800);
+      expect(region).toContain('แพทย์ลงบันทึก');
+    });
+  });
+
+  describe('D3 — TreatmentTimelineModal status chip', () => {
+    const TTM_PATH = join(process.cwd(), 'src/components/backend/TreatmentTimelineModal.jsx');
+    const TTM_SOURCE = readFileSync(TTM_PATH, 'utf-8');
+
+    it('D3.1 — chip data-testid pattern present', () => {
+      expect(TTM_SOURCE).toMatch(/data-testid=\{\s*`treatment-status-chip-doctor-recorded-/);
+    });
+
+    it('D3.2 — chip gated on t.status === doctor-recorded', () => {
+      const chipIdx = TTM_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
+      expect(chipIdx).toBeGreaterThan(-1);
+      const before = TTM_SOURCE.slice(Math.max(0, chipIdx - 400), chipIdx);
+      expect(before).toMatch(/t\.status\s*===\s*['"]doctor-recorded['"]/);
+    });
+  });
+
+  describe('D4 — rebuildTreatmentSummary preserves status', () => {
+    const BC_PATH = join(process.cwd(), 'src/lib/backendClient.js');
+    const BC_SOURCE = readFileSync(BC_PATH, 'utf-8');
+
+    it('D4.1 — status field included in summary mapper output', () => {
+      // Find the rebuildTreatmentSummary block + assert status: t.status || null pattern
+      const fnIdx = BC_SOURCE.indexOf('function rebuildTreatmentSummary');
+      expect(fnIdx).toBeGreaterThan(-1);
+      const region = BC_SOURCE.slice(fnIdx, fnIdx + 1500);
+      expect(region).toMatch(/status:\s*t\.status\s*\|\|\s*null/);
+    });
+  });
 });

@@ -1088,6 +1088,12 @@ export async function rebuildTreatmentSummary(customerId) {
     cc: t.detail?.symptoms || '',
     dx: t.detail?.diagnosis || '',
     createdBy: t.createdBy || 'cloned',
+    // V26.0 Phase 26.0e (2026-05-13) — preserve `status` in summary so
+    // CustomerDetailView treatment cards + TreatmentTimelineModal rows
+    // can render the amber "แพทย์ลงบันทึก" chip when status === 'doctor-recorded'.
+    // Top-level `status` is set by createBackendTreatment / updateBackendTreatment
+    // (Phase 26.0b extension); null fallback keeps legacy summaries unaffected.
+    status: t.status || null,
   }));
   await updateCustomer(customerId, {
     treatmentSummary: summary,
