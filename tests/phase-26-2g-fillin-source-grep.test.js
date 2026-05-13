@@ -79,7 +79,12 @@ describe('G2 — AV40 universal classifier (no direct patientData.ud_* reads out
     // to consume derivePatientCongenitalDisease + derivePatientCongenitalDiseaseEnglish helpers.
     // See tests/phase-26-2g-fillin-followup-source-grep.test.js G3 for the refactor lock.
   ]);
-  const PATTERN = /patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/;
+  // Phase 26.2g-fillin-bis (2026-05-13) — extended PATTERN to include canonical
+  // be_customers.patientData fields. Direct reads of canonical fields in
+  // src/components|src/pages are forbidden; consumers must use resolvePatient*
+  // from src/lib/patientHealthMapping.js. bloodType NOT included — legitimate
+  // canonical read at TFP:1018 + AdminDashboard chips (identity field).
+  const PATTERN = /patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy|allergiesDetail|congenitalDisease|drugAllergy|foodAllergy|beforeTreatment|pregnanted)/;
 
   function* walkFiles(dir) {
     for (const name of readdirSync(dir)) {

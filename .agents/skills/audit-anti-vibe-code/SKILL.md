@@ -1103,6 +1103,8 @@ declared chronic + medication in PatientForm. User reported (verbatim):
 
 **Pattern**: Direct reads of the following `patientData` keys are forbidden
 in `src/components/**` AND `src/pages/**`:
+
+KIOSK-shape fields (live on `opd_session.patientData`; consumed by `src/utils.js` OPD print):
 - `patientData.ud_diabetes` / `patientData.ud_hypertension` /
   `patientData.ud_lung` / `patientData.ud_kidney` /
   `patientData.ud_heart` / `patientData.ud_blood` /
@@ -1110,21 +1112,38 @@ in `src/components/**` AND `src/pages/**`:
 - `patientData.hasUnderlying`
 - `patientData.currentMedication`
 - `patientData.pregnancy`
+- `patientData.allergiesDetail`
 
-Consumers MUST import + use:
-- `derivePatientCongenitalDisease(patientData)` →
-  comma-joined Thai chronic-disease labels (UI order); empty string when
-  patient declared no underlying or fields are absent
-- `derivePatientTreatmentHistory(patientData)` →
-  `' / '`-joined pregnancy + medication parts with locked label prefixes;
-  empty string when pregnancy is sentinel + medication is empty
+CANONICAL-shape fields (live on `be_customers.patientData`; consumed by TFP via Phase 26.2g-fillin-bis):
+- `patientData.congenitalDisease` (string — admin typed OR kiosk pre-derived)
+- `patientData.drugAllergy` (string)
+- `patientData.foodAllergy` (string)
+- `patientData.beforeTreatment` (string)
+- `patientData.pregnanted` (boolean)
 
-Both helpers live in `src/lib/patientHealthMapping.js` along with the
-frozen `UD_LABELS` map and the locked `PREGNANCY_LABEL_PREFIX` +
-`MEDICATION_LABEL_PREFIX` constants.
+Consumers MUST import + use canonical helpers from `src/lib/patientHealthMapping.js`:
 
-**Anchor regex**:
-`/patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/`
+For `src/utils.js` OPD print (kiosk-shape consumer — Phase 26.2g-fillin-followup):
+- `derivePatientCongenitalDisease(patientData)` → comma-joined Thai labels
+- `derivePatientCongenitalDiseaseEnglish(patientData)` → English variant
+- `derivePatientTreatmentHistory(patientData)` → pregnancy + medication compose
+
+For TFP create-mode auto-fill (canonical consumer — Phase 26.2g-fillin-bis 2026-05-13):
+- `resolvePatientCongenitalDisease(patientData)` → canonical congenitalDisease string
+- `resolvePatientDrugAllergy(patientData)` → compose drugAllergy + foodAllergy
+- `resolvePatientTreatmentHistory(patientData)` → compose beforeTreatment + pregnanted
+
+Phase 26.2g-fillin (2026-05-13) originally pointed `derivePatient*` at TFP — V21
+architectural-error no-op because kiosk-shape fields don't exist on
+`be_customers.patientData`. Phase 26.2g-fillin-bis (2026-05-13) corrects with
+canonical resolvers.
+
+NOTE: `patientData.bloodType` is NOT in the forbidden list — legitimate canonical
+read at `TreatmentFormPage.jsx:1018` + AdminDashboard chips. Identity field,
+doesn't need resolver wrapping.
+
+**Anchor regex** (extended Phase 26.2g-fillin-bis 2026-05-13):
+`/patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy|allergiesDetail|congenitalDisease|drugAllergy|foodAllergy|beforeTreatment|pregnanted)/`
 
 **Sanctioned exceptions** (closed list — adding a 3rd file fails the lock test):
 - `src/pages/PatientForm.jsx` — writer of these fields (kiosk + admin manual)
