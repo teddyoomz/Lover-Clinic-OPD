@@ -7,11 +7,63 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 EOD — **V55 BRUTAL PRE-DEPLOY TEST BANK SHIPPED + DEPLOYED** · 8928 tests + 1 skipped · build clean · master = prod
+- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 27 saga SHIPPED to master** · 9013+ tests + 1 skipped · build clean · ~32 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `e8086de` test(V55 brutal pre-deploy): property-based + fuzz + snapshot + AV41 + stress (+372 tests)
-- **Test count**: **8928 passed** + 1 skipped. 0 failures. No remaining known flakes.
-- **Deploy state**: **PRODUCTION = `e8086de`** (master == prod, 96-commit queue cleared via combined V15 deploy). HTTP 200 smoke verified, TTFB 799ms.
+- **Last commit**: `9819c2e` fix(Phase 27.2-sexies): CDV mapper V12 multi-reader-sweep — TRUE root cause of badge flash-revert
+- **Test count**: **9013 passed** + 1 skipped. 0 failures.
+- **Deploy state**: **PRODUCTION = `e8086de`** (V55 brutal pre-deploy ship was last deploy). Master ~32 commits ahead with Phase 27.x. NOT YET DEPLOYED.
+
+### Session 2026-05-14 LATE EOD — Phase 27 saga SHIPPED (branchId + display + layout + badges)
+
+8 sub-phases shipped this session (Phase 27.0 → 27.2-sexies). Two prod Firestore migrations applied via Rule M (18 treatments backfilled + 4 customer summaries rebuilt). One V12 multi-reader-sweep regression caught + fixed at end (Phase 27.2-sexies = round 3 on `CustomerDetailView.jsx` after Phase 26.0e + 26.1).
+
+Key features:
+- Treatment doc gets `branchId` + per-stage lifecycle timestamps stamped at save (vitals / doctor / completed each own discrete timestamp)
+- TFP unified sticky header: back + title + history tabs (centered) + branch chip + swap button — all in one row
+- CDV stacked lifecycle badges with HH:MM timestamps (ซักประวัติ / แพทย์บันทึก / บันทึกแล้ว) sorted by time
+- Always-editable vitals + doctor save buttons (each click updates that stage's timestamp)
+- `useLayoutPreference` reusable hook + sticky `LayoutSwapButton` (CSS-only swap preserves DOM tab order)
+- AV42 audit invariant + EditTreatmentBranchModal redesigned with proper modal chrome
+- New testing tools (fast-check property-based, snapshot, AV41 global.fetch audit) all integrated
+
+Detail: `.agents/sessions/2026-05-14-phase-27-saga.md`. NOT YET DEPLOYED — awaiting explicit "deploy" per V18.
+
+#### Resume Prompt — Phase 27 saga shipped, ~32 commits ahead of prod
+
+```
+Resume LoverClinic — continue from 2026-05-14 LATE-EOD.
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=9819c2e, prod=e8086de · ~32 commits ahead · NOT DEPLOYED)
+3. .agents/active.md (9013 tests · Phase 27 saga complete)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-14-phase-27-saga.md (latest checkpoint)
+
+Status: master=`9819c2e`, 9013 tests pass + 1 skip, prod=`e8086de` LIVE. Build clean.
+Phase 27.0 + 27.1 + 27.2 + 5 follow-up fixes SHIPPED to master. 2 prod migrations applied.
+
+Next: choose ONE
+1. Deploy combined ~32 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. New phase / feature.
+3. (optional) Phase 27.2-septies — extract shared buildTreatmentSummaryEntry(t) helper to eliminate V12 multi-reader-sweep structurally on CDV mapper.
+
+Outstanding (user-triggered):
+- Deploy auth: ~32 commits ahead. Per V18, explicit "deploy" THIS turn.
+
+Rules: V18 deploy auth per turn; V15 combined deploy; Rule B Probe-Deploy-Probe; Rule J brainstorming HARD-GATE; Rule N targeted-test-only; Rule P class-of-bug expansion.
+
+Institutional memory caught this session:
+- V12 multi-reader-sweep on CDV mapper STRIKES THRICE (status / editor / lifecycle).
+  Structural fix candidate: extract shared mapper. Code comment warning at
+  CDV.jsx:497-504 wasn't enough; needs structural backstop.
+- "Test in browser before claiming fixed" lesson reinforced via user feedback.
+  mcp Preview + admin-SDK diag could have caught the strip pattern on round 1.
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-14 LATE EOD — V55 brutal pre-deploy bank + combined V15 deploy SHIPPED
 
