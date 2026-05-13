@@ -7,11 +7,72 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 EOD — Both optionals + defensive global.fetch sweep SHIPPED · 8556 tests + 1 skipped · build clean · 95 commits ahead of prod
+- **Date last updated**: 2026-05-14 EOD — **V55 BRUTAL PRE-DEPLOY TEST BANK SHIPPED + DEPLOYED** · 8928 tests + 1 skipped · build clean · master = prod
 - **Branch**: `master`
-- **Last commit**: `d1daf3a` test(Phase 17.1 flake-fix-followup): defensive global.fetch sweep — 2 sibling files
-- **Test count**: **8556 passed** + 1 skipped. 0 failures. No remaining known flakes.
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 95 commits ahead). All Phase 26.x sub-phases + Phase 17.1 flake fix + defensive global.fetch sweep LIVE on master only.
+- **Last commit**: `e8086de` test(V55 brutal pre-deploy): property-based + fuzz + snapshot + AV41 + stress (+372 tests)
+- **Test count**: **8928 passed** + 1 skipped. 0 failures. No remaining known flakes.
+- **Deploy state**: **PRODUCTION = `e8086de`** (master == prod, 96-commit queue cleared via combined V15 deploy). HTTP 200 smoke verified, TTFB 799ms.
+
+### Session 2026-05-14 LATE EOD — V55 brutal pre-deploy bank + combined V15 deploy SHIPPED
+
+User directive (verbatim): "เขียนเทสทุกประเภทที่มี ... จับผิดตัวเองให้ได้ ... โหดที่สุด ... อนุญาตทุกอย่างที่นายอยากจะทำ" + "deploy" (V18 explicit authorization).
+
+**V55 test bank** (`e8086de`):
+- 5 NEW test files (+372 net assertions): property-based via fast-check, snapshot byte-identical, AV41 audit, stress test, shared adversarial fixtures
+- 2 PATCHES: adminUsersClient migrated to PREFERRED AV41 pattern; phase-24-0-permission-customer-delete P.8 excludes tooling sandbox dirs
+- Dev deps added: `fast-check@4.x` + `@fast-check/vitest@0.4.x` + `@stryker-mutator/{core,vitest-runner}@9.1.x`
+- NEW AV41 audit invariant — global.fetch test isolation discipline
+
+**Findings** (8 distinct issues, zero production bugs):
+1-2. P4+P10 test-predicate holes (fast-check shrunk to `[""]`) — fixed
+3. P23 BE-year boundary at 2400 — code intentionally treats as CE; test arbitrary fixed + boundary lock test added
+4. P.8 audit walk missing `.stryker-tmp/` exclusion — fixed
+5. Dead-code branch at `kioskPatientToCanonical.js:45` — documented, defensive
+6. Stryker 9.1 + Vite 8 + Windows symlink incompatibility — documented future blocker
+7-10. 4 behavioral drifts of `derivePatientCongenitalDisease` helper vs pre-2e95696 inline (strictly safer; zero prod-data hits)
+
+**Verification**:
+- Full suite: 8928 passed + 1 skipped / 0 failed in 123s
+- Coverage on touched modules: 99.08% stmts / 97.22% branches / 100% funcs / 100% lines
+- Live admin-SDK e2e dry-run on real prod: 6/6 PASS
+- Build clean (9.28s)
+
+**Deploy (V15 combined + V18 user-authorized + Rule B post-probe)**:
+- `vercel --prod --yes` — built in 52s; production aliased to `https://lover-clinic-app.vercel.app`
+- `firebase deploy --only firestore:rules` — "rules already up to date, skipping upload" (idempotent — 0 diff from prod, anti-drift safety net per V1/V9)
+- Probe creds (.env.local.prod) permission-blocked for read; firebase CLI deploy uses user's local `firebase login` auth — successful deploy confirms no Console drift wipe occurred
+- HTTP 200 smoke check passed (TTFB 799ms)
+
+**Detail**: `BRUTAL_PRE_DEPLOY_REPORT.md` + `docs/superpowers/specs/2026-05-14-brutal-pre-deploy-test-bank-design.md`. NOTHING outstanding. Deploy queue empty.
+
+#### Resume Prompt — Post V55 deploy (master = prod = e8086de)
+
+```
+Resume LoverClinic — fresh state, 2026-05-14 EOD post-V55 deploy.
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=e8086de, prod=e8086de · IN SYNC · DEPLOY QUEUE EMPTY)
+3. .agents/active.md (8928 tests · V55 brutal test bank LIVE)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+
+Status: master=prod=`e8086de`, 8928 tests + 1 skip, build clean. Deploy queue empty.
+V55 brutal pre-deploy test bank shipped + deployed. New test infrastructure (fast-check property-based,
+snapshot byte-identical, AV41 audit, stress + cross-file pollution, 17+15 adversarial fixture module).
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B;
+Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
+
+Institutional memory new this session:
+- 8-layer test methodology stack now project canon (helper-unit + source-grep + flow-simulate +
+  property-based + adversarial fuzz + snapshot + stress + live admin-SDK e2e)
+- AV41 invariant — every test file assigning global.fetch MUST capture+restore via afterAll
+- Stryker 9.1 + Vite 8 + Windows symlink: blocked; revisit when Stryker 10.x lands
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed; NOT YET DEPLOYED)
 

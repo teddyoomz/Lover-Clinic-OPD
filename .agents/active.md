@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-14 EOD — Both optionals + defensive global.fetch sweep SHIPPED"
-status: "master=d1daf3a · prod=ccef3c2 · 95 commits ahead · 8556 passed · build clean"
+updated_at: "2026-05-14 EOD — V55 brutal pre-deploy test bank SHIPPED + DEPLOYED"
+status: "master=e8086de · prod=e8086de · IN SYNC · 8928 passed + 1 skip · build clean"
 branch: "master"
-last_commit: "d1daf3a test(Phase 17.1 flake-fix-followup): defensive global.fetch sweep — 2 sibling files"
-tests: 8556
+last_commit: "e8086de test(V55 brutal pre-deploy): property-based + fuzz + snapshot + AV41 + stress (+372 tests)"
+tests: 8928
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ccef3c2"
+production_commit: "e8086de"
 firestore_rules_version: 29
 storage_rules_version: 2
 ---
@@ -13,56 +13,56 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `d1daf3a` · prod = `ccef3c2` (95 commits ahead — all bis saga + Phase 17.1 flake fix + defensive global.fetch sweep LIVE on master; NOT deployed)
-- 8556 tests + 1 skipped + 0 fail. Build clean.
-- Live admin-SDK e2e --apply 6/6 PASS verified on real prod Firestore (audit doc `be_admin_audit/phase-26-2g-fillin-bis-e2e-1778691063475-ff6ea920`).
+- master = prod = `e8086de` (96-commit queue cleared in one combined deploy).
+- 8928 tests + 1 skipped + 0 fail. Build clean.
+- Vercel deploy verified HTTP 200, TTFB 799ms on https://lover-clinic-app.vercel.app
+- Firebase rules redeploy idempotent — "latest version already up to date, skipping upload".
 
 ## What this session shipped
-**Phase 26.2g-fillin-bis** (V21 architectural-error correction for the no-op):
-- NEW 3 `resolvePatient*` helpers in `src/lib/patientHealthMapping.js` (canonical reads on be_customers.patientData).
-- TFP create-mode auto-fill swapped derive→resolve. Pre-existing `setDrugAllergy(patientData.allergiesDetail)` no-op removed.
-- 5-layer test bank +62 net assertions (unit R1-R4 + source-grep G4 + flow-simulate FB1-FB6 + RTL + live admin-SDK e2e on real prod with audit doc).
-- AV40 extended to lock both kiosk-shape AND canonical-shape direct reads.
-- V-entry transparently acknowledges Phase 26.2g-fillin was V21 no-op.
+**V55 brutal pre-deploy test bank** (user directive "ทุกประเภทที่มี / จับผิดตัวเอง / โหดที่สุด"):
 
-**Phase 26.2g-fillin-bis-followup** (Rule of 3 close):
-- `src/lib/kioskPatientToCanonical.js:46-55` inline ud_* derivation → `derivePatientCongenitalDisease(d)` helper call.
-- Byte-identical contract verified across 5 scenarios via node REPL.
-- +4 G5 source-grep assertions in `tests/phase-26-2g-fillin-bis-followup-kiosk-canonical-source-grep.test.js`.
-- V12 multi-reader-sweep class for kiosk-shape ud_* derivation **FULLY CLOSED project-wide** (3 inline sites → 0).
+NEW infrastructure:
+- `fast-check@4.x` + `@fast-check/vitest@0.4.x` (property-based with shrinking)
+- `@stryker-mutator/{core,vitest-runner}@9.1.x` (installed; mutation testing blocked by Windows symlink + Vite 8 / Rolldown sandbox incompatibility — documented for future)
+- `tests/helpers/adversarialFixtures.js` (17 ADVERSARIAL_STRINGS + 15 ADVERSARIAL_NON_STRINGS)
+- AV41 audit invariant — global.fetch test isolation discipline
 
-**Phase 17.1 flake fix** (intermittent under full-suite load):
-- Root cause: 4 test files assign `global.fetch` without afterAll restore + scope-narrow beforeEach only resets fetchMock.
-- Defensive fixes in `tests/phase-17-1-cross-branch-import-rtl.test.jsx`: `ORIGINAL_FETCH` capture + afterAll restore + `afterEach vi.clearAllMocks()` + `WAIT_FOR_OPTS={timeout:3000}` applied to all 13 waitFor sites.
-- 8/8 isolated runs GREEN post-fix; full-suite 8556 GREEN.
+NEW test files (+372 net assertions, 8556 → 8928):
+1. `tests/v55-1-property-based-patient-health-mapping.test.js` — 343 tests (P1-P26 + A1-A6 + D1-D6)
+2. `tests/v55-1-snapshot-byte-identical.test.js` — 25 tests (OPD print Thai+EN + kioskPatientToCanonical shape)
+3. `tests/v55-1-global-fetch-isolation-audit.test.js` — 4 audit tests (AV41 classifier)
+4. `tests/v55-1-stress-fetch-pollution.test.js` — 53 tests (50-iter survival + 100-cycle mockReset)
 
-**Defensive global.fetch sweep (hygiene)** — `d1daf3a`:
-- Applied Phase 17.1 pattern to 2 sibling files: `branch-backup-ui-rtl.test.jsx` (RTL — afterAll + WAIT_FOR_OPTS on 14 sites) + `phase15.5b-withdrawal-approval-endpoint.test.js` (endpoint — afterAll inside PF describe).
-- `extended/adminUsersClient.test.js` ALREADY had `afterEach(() => delete global.fetch)` — skipped.
-- All 4 codebase files that assign global.fetch now restore properly. Cross-file pollution eliminated.
-- Full-suite 8556 GREEN unchanged.
+PATCHES:
+- `tests/extended/adminUsersClient.test.js` — migrated to PREFERRED AV41 pattern
+- `tests/phase-24-0-permission-customer-delete.test.js` P.8 — exclude tooling sandbox dirs
 
-## Next action
-Choose ONE in next chat:
-1. **Deploy combined 95 commits** — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
-2. **New phase / feature** — user specifies priority.
-3. **Probe-Deploy-Probe maintenance** — investigate probes 2/3/4 false-positive.
+Bugs caught + fixed (8 total):
+1. P4 Thai trim predicate hole (`"".split(", ") = [""]` false-positive) — fast-check shrunk to `[""]`
+2. P10 English same predicate hole — same fix
+3. P23 BE-year boundary at 2400 — test arbitrary excluded strict-inequality boundary; documented intentional code design
+4. P.8 audit walk missing `.stryker-tmp/` exclusion — false-positive from mutation testing sandbox
+5. Dead-code branch identified at `kioskPatientToCanonical.js:45` (documented, defensive coding preserved)
+6. Stryker 9.1 + Vite 8 + Windows symlink tooling blocker (documented for future)
+7-10. 4 behavioral drifts documented (helper trim/typeof/null-safety strictly safer than pre-2e95696 inline — zero prod-data hits)
 
-## Outstanding user-triggered actions
-- **Deploy auth**: 95 commits ahead. Combined deploy per V15 + Rule B.
+Zero production code bugs in shipped commits.
+
+DEPLOY (V15 combined + V18 user-authorized):
+- Vercel `vercel --prod --yes` — built in 52s, aliased to `lover-clinic-app.vercel.app`
+- Firebase `firebase deploy --only firestore:rules` — idempotent (file unchanged from prod since rules unmodified across 95+ commits)
+- HTTP 200 smoke check passed
 
 ## Carried institutional memory
-- saveMode='vitals' = 5th locked-X family member (Phase 26.2f AV37 extension).
-- Panel + Mirror co-exist for TimelineModal vs TFP split-screen (Phase 26.2f AV38 + AV39).
-- `extractDisplayString` = canonical fix for [object Object] rendering (Phase 26.2).
-- `toDateSafely` = canonical fix for Firestore Timestamp → React child crash (Phase 26.2f3).
-- `derivePatient*` helpers consume KIOSK-shape patientData (opd_session.patientData where hasUnderlying/ud_*/etc. exist). Three consumers (utils.js Thai + utils.js English + kioskPatientToCanonical Thai canonical) — all via canonical helper post-Phase 26.2g-fillin-bis-followup; **NO inline ud_* push patterns remain project-wide**.
-- `resolvePatient*` helpers consume CANONICAL patientData (be_customers.patientData where buildPatientDataFromForm has projected admin/kiosk data to canonical camelCase). TFP create-mode auto-fill is the canonical consumer.
-- be_customers.patientData has ONE shape (canonical camelCase) regardless of write path. opd_sessions.patientData has the kiosk shape. Different surfaces; different helpers.
-- `UD_LABELS_EN` formal-clinical labels intentionally distinct from PatientForm UI labels.
-- 3-stage save workflow: vitals → doctor → null/complete (Phase 26.2f).
-- AV40 = patientData reads centralized via patientHealthMapping. Forbidden direct-reads: BOTH kiosk-shape AND canonical-shape outside sanctioned (PatientForm writer + AdminDashboard chips + utils.js OPD print + kioskPatientToCanonical via helper).
-- V21-class regex windows drift when comments expand — bump windows + V21 marker comment.
-- Rule P "ONE class-of-bug at a time" + sanctioned tech-debt + follow-up plan = canonical rhythm.
-- V21 architectural error — helpers reading fields that don't exist on target doc shape ALWAYS return ''. Only Rule I flow-simulate + 1-line preview_eval against real data BEFORE shipping helper-consumer pairing catches it.
-- **NEW lesson (Phase 17.1 flake fix 2026-05-14)**: When a test file assigns `global.X` (e.g. global.fetch), CAPTURE the original at module-load and RESTORE in afterAll. Under vitest worker parallelism, cross-file global pollution causes intermittent flakes. Plus `afterEach(vi.clearAllMocks())` + extended `waitFor` timeout via `WAIT_FOR_OPTS={timeout:3000}` for RTL tests under load. Pattern applies to all 4 files in this codebase that assign global.fetch; defensive sweep deferred as hygiene task.
+- Property-based testing via `@fast-check/vitest` is now project canon — fast-check's shrinking surfaces minimal failing inputs, caught 3 test predicate bugs in 1 session.
+- AV41 — every test file assigning `global.fetch` MUST capture+restore via afterAll (PREFERRED) OR afterEach delete (ACCEPTABLE). Audit test classifies all fetch-mocking files; VIOLATORS=0.
+- Snapshot byte-identical contracts via `toMatchInlineSnapshot` lock OPD print Thai+English output across 8 scenarios; future label drift caught at PR diff.
+- Adversarial fuzz fixture module reusable: NFC/NFD/NUL/10K/astral/zero-width/SQL/XSS/path-traversal + non-string types.
+- 8-layer test methodology stack established (helper-unit + source-grep + Rule I flow-simulate + property-based + adversarial fuzz + snapshot + stress + live admin-SDK e2e).
+- Stryker 9.1 + Vite 8 + Windows symlink incompatibility — revisit when Stryker 10.x lands with Rolldown native support.
+
+## Next action
+None pending. Deploy queue empty. Ready for next user directive.
+
+## Outstanding user-triggered actions
+None.
