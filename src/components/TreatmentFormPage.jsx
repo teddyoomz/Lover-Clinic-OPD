@@ -765,7 +765,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           const sorted = (all || []).slice().sort((a, b) => {
             const dA = a.detail?.treatmentDate || '';
             const dB = b.detail?.treatmentDate || '';
-            return dB.localeCompare(dA);
+            const dateCmp = dB.localeCompare(dA);
+            if (dateCmp !== 0) return dateCmp;
+            // Phase 26.2f-followup (2026-05-13) — same-date tiebreak: most-recent
+            // createdAt ts first, then treatmentId/id desc (BT-<unix-ms> →
+            // lexicographic desc = chronological desc). Fixes "ล่าสุด" badge
+            // pointing at an older treatment when multiple fall on same date.
+            const tsA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+            const tsB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+            if (tsA !== tsB) return tsB - tsA;
+            const idA = a.treatmentId || a.id || '';
+            const idB = b.treatmentId || b.id || '';
+            return idB.localeCompare(idA);
           });
           const filtered = (isEdit && treatmentId)
             ? sorted.filter(t => (t.treatmentId || t.id) !== treatmentId)
@@ -2015,7 +2026,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // re-submit doesn't surface yesterday's aria-invalid on inputs the
     // user has since corrected.
     setFieldErrors({});
-    if (!doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
+    // Phase 26.2f-followup (V26.2f, 2026-05-13) — doctor-required check skipped for
+    // both saveMode='doctor' (doctor-save itself) AND saveMode='vitals' (admin
+    // vitals-save doesn't need doctor selected). Only 'staff' (default) requires it.
+    if (saveMode === 'staff' && !doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
     if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
     // Phase 12.2b Step 7 (2026-04-24): fill-later treatment items (from
     // เหมาตามจริง / เลือกสินค้าตามจริง courses) must have qty entered
@@ -3230,6 +3244,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               <VitalsGrid vitals={vitals} onFieldChange={setVitalField} bmi={bmi} inputCls={inputCls} labelCls={labelCls} />
             </FormSection>
 
+            {/* Phase 26.2f-followup (V26.2f, 2026-05-13) — vitals-save button in LEFT
+                column immediately after Vital Signs section. Moved from RIGHT column so
+                the button lives next to the data it saves. Subtitle <p> dropped per
+                user direction. */}
+            {!isEdit && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => handleSubmit('vitals')}
+                  data-testid="tfp-vitals-save-btn"
+                  disabled={saving}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <Activity size={16} />
+                  บันทึกข้อมูลซักประวัติ
+                </button>
+              </div>
+            )}
+
             {/* Consent & Med Cert */}
             <FormSection isDark={isDark}>
               <SectionHeader icon={ClipboardList} title="ใบรับรองแพทย์" isDark={isDark} accent="#06b6d4" />
@@ -3290,53 +3323,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               </div>
             </FormSection>
 
-            {/* ════ Phase 26.2f-pre (V26.2f, 2026-05-13) — NEW vitals-save button ════
-                Mirror of Phase 26.0d doctor-save button pattern. Admin clicks to
-                create a treatment record with only Vital Signs filled. Status
-                stamps 'vitalsigns-recorded'; subsequent doctor-save transitions
-                to 'doctor-recorded'; admin's final regular-save clears status. */}
-            {!isEdit && (
-              <div className="mb-3">
-                <button
-                  type="button"
-                  onClick={() => handleSubmit('vitals')}
-                  data-testid="tfp-vitals-save-btn"
-                  disabled={saving}
-                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <Activity size={16} />
-                  บันทึกข้อมูลซักประวัติ
-                </button>
-                <p className="mt-1.5 text-[10px] text-[var(--tx-muted)] text-center">
-                  บันทึกเฉพาะ Vital Signs · ไม่ต้องเลือกแพทย์ · admin จะกลับมา key ข้อมูลที่เหลือทีหลัง
-                </p>
-              </div>
-            )}
-
             {/* ════ Phase 26.0d (V26.0, 2026-05-13) — doctor-save button ════
                 "บันทึกสำหรับแพทย์" — records OPD/vitals/charts/meds/DF only;
                 skips course-items + consumables + purchasedItems + auto-sale.
                 Phase 26.2f-pre: gate extended to allow edit mode when status is
                 'vitalsigns-recorded' (transition from vitals to doctor stage).
                 Otherwise stays create-only per Phase 26.0d. */}
+            {/* Phase 26.2f-followup (V26.2f, 2026-05-13) — doctor-save button restyled to
+                teal to match vitals-save button. Wrapper container sky-blue box dropped. */}
             {(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') && (
-              <div
-                className={`mt-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 py-3 rounded-lg border ${isDark ? 'bg-sky-950/30 border-sky-800' : 'bg-sky-50/50 border-sky-200'}`}
-              >
+              <div className="mb-3">
                 <button
                   type="button"
                   onClick={() => handleSubmit('doctor')}
                   disabled={saving}
                   data-testid="tfp-doctor-save-btn"
                   data-save-mode="doctor"
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed border ${isDark ? 'bg-sky-900 border-sky-600 text-sky-200 hover:bg-sky-800' : 'bg-white border-sky-300 text-sky-700 hover:bg-sky-100'}`}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <Stethoscope className="w-4 h-4" />
                   <span>บันทึกสำหรับแพทย์</span>
                 </button>
-                <p className={`text-xs text-center sm:text-left ${isDark ? 'text-sky-200/70' : 'text-gray-500'}`}>
-                  บันทึกเฉพาะ OPD / ยา / ค่ามือ — admin มาเติมคอร์ส / สินค้า / บิลทีหลัง
-                </p>
               </div>
             )}
           </div>
