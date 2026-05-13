@@ -1,8 +1,8 @@
 ---
-updated_at: "2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed)"
-status: "master=e71dbf9 · prod=ccef3c2 · 94 commits ahead · 8556 passed · build clean"
+updated_at: "2026-05-14 EOD — Both optionals + defensive global.fetch sweep SHIPPED"
+status: "master=d1daf3a · prod=ccef3c2 · 95 commits ahead · 8556 passed · build clean"
 branch: "master"
-last_commit: "e71dbf9 test(Phase 17.1 flake fix): defensive isolation against full-suite-load flake"
+last_commit: "d1daf3a test(Phase 17.1 flake-fix-followup): defensive global.fetch sweep — 2 sibling files"
 tests: 8556
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "ccef3c2"
@@ -13,7 +13,7 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `e71dbf9` · prod = `ccef3c2` (94 commits ahead — Phase 26.0+26.1+26.2+26.2f+26.2g-fillin+26.2g-fillin-followup+26.2g-fillin-bis+26.2g-fillin-bis-followup+Phase 17.1 flake fix all LIVE on master; NOT deployed)
+- master = `d1daf3a` · prod = `ccef3c2` (95 commits ahead — all bis saga + Phase 17.1 flake fix + defensive global.fetch sweep LIVE on master; NOT deployed)
 - 8556 tests + 1 skipped + 0 fail. Build clean.
 - Live admin-SDK e2e --apply 6/6 PASS verified on real prod Firestore (audit doc `be_admin_audit/phase-26-2g-fillin-bis-e2e-1778691063475-ff6ea920`).
 
@@ -36,15 +36,20 @@ storage_rules_version: 2
 - Defensive fixes in `tests/phase-17-1-cross-branch-import-rtl.test.jsx`: `ORIGINAL_FETCH` capture + afterAll restore + `afterEach vi.clearAllMocks()` + `WAIT_FOR_OPTS={timeout:3000}` applied to all 13 waitFor sites.
 - 8/8 isolated runs GREEN post-fix; full-suite 8556 GREEN.
 
+**Defensive global.fetch sweep (hygiene)** — `d1daf3a`:
+- Applied Phase 17.1 pattern to 2 sibling files: `branch-backup-ui-rtl.test.jsx` (RTL — afterAll + WAIT_FOR_OPTS on 14 sites) + `phase15.5b-withdrawal-approval-endpoint.test.js` (endpoint — afterAll inside PF describe).
+- `extended/adminUsersClient.test.js` ALREADY had `afterEach(() => delete global.fetch)` — skipped.
+- All 4 codebase files that assign global.fetch now restore properly. Cross-file pollution eliminated.
+- Full-suite 8556 GREEN unchanged.
+
 ## Next action
 Choose ONE in next chat:
-1. **Deploy combined 94 commits** — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+1. **Deploy combined 95 commits** — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
 2. **New phase / feature** — user specifies priority.
-3. **Defensive global.fetch sweep** — extend the Phase 17.1 afterAll pattern to the other 3 files that assign global.fetch (branch-backup-ui-rtl + phase15.5b-withdrawal-approval-endpoint + extended/adminUsersClient). Hygiene; not blocking.
-4. **Probe-Deploy-Probe maintenance** — investigate probes 2/3/4 false-positive.
+3. **Probe-Deploy-Probe maintenance** — investigate probes 2/3/4 false-positive.
 
 ## Outstanding user-triggered actions
-- **Deploy auth**: 94 commits ahead. Combined deploy per V15 + Rule B.
+- **Deploy auth**: 95 commits ahead. Combined deploy per V15 + Rule B.
 
 ## Carried institutional memory
 - saveMode='vitals' = 5th locked-X family member (Phase 26.2f AV37 extension).

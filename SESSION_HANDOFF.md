@@ -7,11 +7,11 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed) · 8556 tests + 1 skipped · build clean · 94 commits ahead of prod
+- **Date last updated**: 2026-05-14 EOD — Both optionals + defensive global.fetch sweep SHIPPED · 8556 tests + 1 skipped · build clean · 95 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `e71dbf9` test(Phase 17.1 flake fix): defensive isolation against full-suite-load flake
-- **Test count**: **8556 passed** + 1 skipped. 0 failures. No remaining known flakes (Phase 17.1 defensively fixed).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 94 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup + 26.2g-fillin-bis + 26.2g-fillin-bis-followup + Phase 17.1 flake fix LIVE on master only.
+- **Last commit**: `d1daf3a` test(Phase 17.1 flake-fix-followup): defensive global.fetch sweep — 2 sibling files
+- **Test count**: **8556 passed** + 1 skipped. 0 failures. No remaining known flakes.
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 95 commits ahead). All Phase 26.x sub-phases + Phase 17.1 flake fix + defensive global.fetch sweep LIVE on master only.
 
 ### Session 2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed; NOT YET DEPLOYED)
 
@@ -50,23 +50,22 @@ Detail: V-entries in `.claude/rules/00-session-start.md` § 2 (Phase 26.2g-filli
 #### Resume Prompt — Both optionals closed
 
 ```
-Resume LoverClinic — continue from 2026-05-14 EOD (Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED).
+Resume LoverClinic — continue from 2026-05-14 EOD (all optionals + defensive sweep SHIPPED).
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=aa4d94e, prod=ccef3c2 · 94 commits ahead · NOT DEPLOYED)
-3. .agents/active.md (8556 tests · both optionals closed)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary incl. Phase 17.1 flake fix + bis-followup)
-5. .agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md (latest checkpoint; bis-followup + flake fix added to this session)
+2. SESSION_HANDOFF.md (master=d1daf3a, prod=ccef3c2 · 95 commits ahead · NOT DEPLOYED)
+3. .agents/active.md (8556 tests · saga complete)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md (latest checkpoint)
 
-Status: master=`aa4d94e`, 8556 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
-Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin / 26.2g-fillin-followup / 26.2g-fillin-bis / 26.2g-fillin-bis-followup / Phase 17.1 flake fix all SHIPPED to master; NOT deployed. 94 commits ahead.
+Status: master=`d1daf3a`, 8556 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+All bis saga + Phase 17.1 flake fix + defensive global.fetch sweep SHIPPED to master; NOT deployed. 95 commits ahead. No remaining known flakes.
 
 Next: choose ONE
-1. Deploy combined 94 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+1. Deploy combined 95 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
 2. New phase / feature.
-3. Defensive global.fetch sweep — extend Phase 17.1 afterAll pattern to other 3 files (branch-backup-ui-rtl + phase15.5b-withdrawal-approval-endpoint + extended/adminUsersClient). Hygiene task; not blocking.
-4. Probe-Deploy-Probe maintenance.
+3. Probe-Deploy-Probe maintenance.
 
 Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
 
