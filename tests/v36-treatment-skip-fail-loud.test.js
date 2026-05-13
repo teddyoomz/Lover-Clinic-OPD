@@ -234,7 +234,11 @@ describe('V36.H — V36-bis productName fallback resolution', () => {
 
 describe('V36.J — V36-bis course-history audit fix (deductCourseItems after createBackendTreatment)', () => {
   test('J.1 — deductCourseItems is called AFTER createBackendTreatment in TFP handleSubmit', () => {
-    const createIdx = TFP.indexOf('createBackendTreatment(customerId, backendDetail)');
+    // V26.0 Phase 26.0b (2026-05-13) — payload variable name changed from
+    // `backendDetail` to `finalBackendDetail` after the v26StatusPatch spread.
+    // Regex updated to match either name; V36-bis ordering contract preserved.
+    // V21-class regex fixup.
+    const createIdx = TFP.search(/createBackendTreatment\(customerId,\s*(finalBackendDetail|backendDetail)\)/);
     const deductIdx = TFP.indexOf('await deductCourseItems(customerId, existingDeductions');
     expect(createIdx).toBeGreaterThan(0);
     expect(deductIdx).toBeGreaterThan(0);

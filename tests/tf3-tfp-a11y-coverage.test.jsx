@@ -59,7 +59,13 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
     });
 
     test('TF3.A.6 — handleSubmit clears fieldErrors at start (re-submit safety)', () => {
-      const m = TFP.match(/handleSubmit = async \(\)[\s\S]{0,400}?setFieldErrors\(\{\}\)/);
+      // V26.0 Phase 26.0a (2026-05-13) — handleSubmit signature changed from
+      // `async ()` to `async (eventOrSaveMode)` + ~17-line Phase 26.0a comment
+      // block + preventDefault guard between declaration and setFieldErrors({})
+      // (now ~1500+ chars). Regex updated to accept either signature; window
+      // expanded to 2500 chars; setFieldErrors({}) early-clear contract preserved.
+      // V21-class regex fixup.
+      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*\)[\s\S]{0,2500}?setFieldErrors\(\{\}\)/);
       expect(m).toBeTruthy();
     });
   });
