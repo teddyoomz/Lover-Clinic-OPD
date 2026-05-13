@@ -24,7 +24,7 @@ const TFP_PATH = join(process.cwd(), 'src/components/TreatmentFormPage.jsx');
 const TFP_SOURCE = readFileSync(TFP_PATH, 'utf-8');
 
 // ─── Pure simulator: mirrors handleSubmit gate logic ─────────────────
-function simulateHandleSubmit({ saveMode, mode, isEdit, formData, existingTreatment = null, hasSale }) {
+function simulateHandleSubmit({ saveMode, mode, isEdit, formData, existingTreatment = null, hasSale, editorContext = null }) {
   // Returns { writes: [...], skipped: [...] } describing what fired
   const writes = [];
   const skipped = [];
@@ -41,7 +41,16 @@ function simulateHandleSubmit({ saveMode, mode, isEdit, formData, existingTreatm
           recordedAt: '<serverTimestamp>',
         }),
       }
-    : { status: '<deleteField>' };
+    : {
+        status: '<deleteField>',
+        // V26.1 — editor attribution spread (mirrors TFP v26StatusPatch staff branch)
+        ...(editorContext ? {
+          editedBy: editorContext.uid,
+          editedByName: editorContext.name,
+          editedByRole: editorContext.role,
+          editedAt: '<serverTimestamp>',
+        } : {}),
+      };
 
   writes.push({ kind: 'treatment-doc', op: isEdit ? 'update' : 'create', patch: statusPatch });
 
@@ -346,6 +355,87 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
       expect(tw.patch.status).toBe('doctor-recorded');
       expect(tw.patch.recordedBy).toBe('test-uid-mock');
       expect(tw.patch.recordedAt).toBe('<serverTimestamp>');
+    });
+  });
+
+  // ─── Phase 26.1 — Editor-attribution modal simulator ─────────────────
+  /**
+   * Simulates the V26.1 edit-save-with-modal flow:
+   * 1. Staff clicks save in edit mode → handleSubmit fires with no editorContext
+   * 2. needsEditorAttribution guard returns early → modal opens
+   * 3. User picks → modal-confirm re-invokes handleSubmit with editorContext
+   * 4. v26StatusPatch stamps editedBy/At/Name/Role + status:deleteField
+   */
+  function simulateEditSaveWithModal({ saveMode, mode, isEdit, formData, existingTreatment = null, editorContext = null }) {
+    const needsEditorAttribution = isEdit && saveMode === 'staff';
+    if (needsEditorAttribution && !editorContext) {
+      return { stage: 'modal-opened', writes: [], skipped: ['everything-pending-modal-confirm'] };
+    }
+    // Re-invoke from modal confirm OR no-modal needed → fall through to existing simulator
+    return simulateHandleSubmit({ saveMode, mode, isEdit, formData, existingTreatment, hasSale: false, editorContext });
+  }
+
+  describe('F9 — Phase 26.1 edit-save with editor-attribution modal', () => {
+    it('F9.1 — staff edit save WITHOUT editorContext: modal opens, no writes', () => {
+      const result = simulateEditSaveWithModal({
+        saveMode: 'staff', mode: 'edit', isEdit: true,
+        existingTreatment: { id: 'TR-1', status: 'doctor-recorded' },
+        formData: { treatmentItems: [], consumables: [], medications: [], purchasedItems: [] },
+        editorContext: null,
+      });
+      expect(result.stage).toBe('modal-opened');
+      expect(result.writes).toHaveLength(0);
+      expect(result.skipped).toContain('everything-pending-modal-confirm');
+    });
+
+    it('F9.2 — staff edit save WITH editorContext: writes editedBy/Name/Role to patch', () => {
+      const result = simulateEditSaveWithModal({
+        saveMode: 'staff', mode: 'edit', isEdit: true,
+        existingTreatment: { id: 'TR-1', status: 'doctor-recorded' },
+        formData: { treatmentItems: [], consumables: [], medications: [], purchasedItems: [] },
+        editorContext: { uid: 'staff-1', name: 'ปุ๊ก', role: 'staff' },
+      });
+      const tw = result.writes.find(w => w.kind === 'treatment-doc');
+      expect(tw).toBeDefined();
+      expect(tw.patch.editedBy).toBe('staff-1');
+      expect(tw.patch.editedByName).toBe('ปุ๊ก');
+      expect(tw.patch.editedByRole).toBe('staff');
+      expect(tw.patch.editedAt).toBeDefined();
+    });
+
+    it('F9.3 — doctor-save bypasses modal (saveMode=doctor skips needsEditorAttribution)', () => {
+      const result = simulateEditSaveWithModal({
+        saveMode: 'doctor', mode: 'edit', isEdit: true,
+        existingTreatment: { id: 'TR-1', status: 'doctor-recorded' },
+        formData: { treatmentItems: [], consumables: [], medications: [], purchasedItems: [] },
+        editorContext: null,
+      });
+      expect(result.stage).not.toBe('modal-opened');
+      const tw = result.writes.find(w => w.kind === 'treatment-doc');
+      expect(tw.patch.status).toBe('doctor-recorded');
+    });
+
+    it('F9.4 — create mode bypasses modal (mode=create skips needsEditorAttribution)', () => {
+      const result = simulateEditSaveWithModal({
+        saveMode: 'staff', mode: 'create', isEdit: false,
+        formData: { treatmentItems: [], consumables: [], medications: [], purchasedItems: [] },
+        editorContext: null,
+      });
+      expect(result.stage).not.toBe('modal-opened');
+      const tw = result.writes.find(w => w.kind === 'treatment-doc');
+      expect(tw.patch.editedBy).toBeUndefined();
+    });
+
+    it('F9.5 — Phase 26.0 v26StatusPatch contract preserved (status cleared on staff save)', () => {
+      const result = simulateEditSaveWithModal({
+        saveMode: 'staff', mode: 'edit', isEdit: true,
+        existingTreatment: { id: 'TR-1', status: 'doctor-recorded' },
+        formData: { treatmentItems: [], consumables: [], medications: [], purchasedItems: [] },
+        editorContext: { uid: 'doc-1', name: 'หมอมายด์', role: 'doctor' },
+      });
+      const tw = result.writes.find(w => w.kind === 'treatment-doc');
+      expect(tw.patch.status).toBe('<deleteField>');
+      expect(tw.patch.editedByName).toBe('หมอมายด์');
     });
   });
 });
