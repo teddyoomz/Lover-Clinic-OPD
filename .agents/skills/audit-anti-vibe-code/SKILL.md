@@ -1045,6 +1045,53 @@ no inputs + no save-button text + lightbox preserved).
 read-only contract for the historical view side; AV37 is the doctor-save
 gate discipline for the editable side.
 
+---
+
+### AV39 — Phase 26.2f TreatmentReadOnlyMirror read-only contract (V26.2f, 2026-05-13)
+
+**Pattern**: `src/components/backend/TreatmentReadOnlyMirror.jsx` is the
+comprehensive treatment mirror extracted in Phase 26.2f — a full read-only
+replica of the treatment form layout, used by the TFP split-screen left
+panel to display the previously-saved treatment alongside the live edit form.
+
+The mirror MUST remain read-only at all times:
+- NO `onEditTreatment` prop reference in code body (comments OK) — the mirror
+  has no edit callback; edit is triggered at the TFP level, not inside the mirror
+- Every `<input>` tag MUST carry the `disabled` attribute (standalone or
+  `disabled={true}`) — prevents browser interaction even if CSS is stripped
+- Every `<textarea>` tag MUST carry the `disabled` attribute
+- Every `<select>` tag MUST carry the `disabled` attribute
+- NO "บันทึก" inside `<button>` direct text (no save buttons)
+- `onChange` handlers, if any, MUST be no-op lambdas `() => {}`
+
+Permitted:
+- Internal `Lightbox` component for image zoom (read interaction, not edit)
+- `mirror-img-zoom-*` testid on image zoom trigger buttons
+- `<button>` for accordion toggle / close / lightbox controls (UI-only)
+- Fully disabled form structure that visually mirrors TFP layout
+
+**Anchor**: `src/components/backend/TreatmentReadOnlyMirror.jsx`. The mirror
+uses standalone `disabled` attributes on its own line inside multi-line JSX
+tags — the AV39 regex `/<input\b[^>]*>/g` (character class `[^>]*` matches
+newlines) correctly captures multi-line tags.
+
+**Class-of-bug**: V21 source-grep test lock-in family + read-only contract
+violation. A future commit that adds an editable input to the mirror
+(e.g. to make it a "live preview" instead of a static read-only view) would
+violate AV39 — caught at audit-grep.
+
+**Sanctioned exceptions**: NONE.
+
+**Source-grep regression**: `tests/audit-branch-scope.test.js` AV39.1-AV39.8 —
+8 sub-tests locking each invariant (file exists + no edit props + all inputs
+disabled + all textareas disabled + all selects disabled + no save buttons +
+onChange handlers are no-ops + internal Lightbox + mirror-img-zoom testid).
+
+**Companion**: AV38 (TreatmentReadOnlyPanel condensed-view contract — no
+inputs at all). AV39 is the full-mirror contract that allows disabled inputs
+for structural fidelity; AV38 forbids inputs entirely for the minimal panel.
+AV37 (Phase 26.0 + 26.1 doctor-save gates) covers the editable counterpart.
+
 ## How to run
 
 1. Run each grep pattern; classify hits.

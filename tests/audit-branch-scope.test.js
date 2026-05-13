@@ -1160,3 +1160,100 @@ describe('AV38 Phase 26.2 — TreatmentReadOnlyPanel read-only contract', () => 
     expect(src).toMatch(/setLightbox/);
   });
 });
+
+// ─── AV39 — Phase 26.2f TreatmentReadOnlyMirror read-only contract (V26.2f, 2026-05-13)
+describe('AV39 Phase 26.2f — TreatmentReadOnlyMirror read-only contract', () => {
+  const MIRROR_PATH = 'src/components/backend/TreatmentReadOnlyMirror.jsx';
+
+  it('AV39.1 TreatmentReadOnlyMirror exists at canonical path', async () => {
+    const fs = await import('node:fs/promises');
+    const stat = await fs.stat(MIRROR_PATH).catch(() => null);
+    expect(stat?.isFile()).toBe(true);
+  });
+
+  it('AV39.2 source does NOT contain onEditTreatment prop reference (read-only contract)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // /* ... */
+      .replace(/\/\/[^\n]*/g, '');         // //  ...
+    expect(code).not.toMatch(/onEditTreatment/);
+  });
+
+  it('AV39.3 every <input> tag carries disabled attribute', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    // [^>]* matches newlines inside multi-line JSX tags
+    const inputMatches = [...code.matchAll(/<input\b[^>]*>/g)];
+    for (const m of inputMatches) {
+      expect(m[0]).toMatch(/\bdisabled\b/);
+    }
+    // Mirror must have at least one input (proves the check is exercised)
+    expect(inputMatches.length).toBeGreaterThan(0);
+  });
+
+  it('AV39.4 every <textarea> tag carries disabled attribute', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    const taMatches = [...code.matchAll(/<textarea\b[^>]*>/g)];
+    for (const m of taMatches) {
+      expect(m[0]).toMatch(/\bdisabled\b/);
+    }
+    // Mirror must have at least one textarea
+    expect(taMatches.length).toBeGreaterThan(0);
+  });
+
+  it('AV39.5 every <select> tag carries disabled attribute', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    const selMatches = [...code.matchAll(/<select\b[^>]*>/g)];
+    for (const m of selMatches) {
+      expect(m[0]).toMatch(/\bdisabled\b/);
+    }
+    // Mirror must have at least one select
+    expect(selMatches.length).toBeGreaterThan(0);
+  });
+
+  it('AV39.6 source does NOT contain save buttons (no บันทึก/Save in <button> direct text)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/<button[^<]*>[^<]*บันทึก/);
+    expect(code).not.toMatch(/<button[^>]*>\s*Save/i);
+  });
+
+  it('AV39.7 onChange handlers in Mirror are no-ops (vacuously passes — Mirror has NONE)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    // Any onChange found must be a no-op arrow function
+    const onChangeMatches = [...code.matchAll(/onChange\s*=\s*\{([^}]+)\}/g)];
+    for (const m of onChangeMatches) {
+      // Allow only: {() => {}} style no-ops
+      expect(m[1].trim()).toMatch(/^\(\s*\)\s*=>\s*\{?\s*\}?$/);
+    }
+    // 0 onChange handlers is acceptable (vacuous pass)
+  });
+
+  it('AV39.8 Mirror defines internal Lightbox component and uses mirror-img-zoom testid', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(MIRROR_PATH, 'utf8');
+    // Mirror has its own internal Lightbox function (not external state setLightbox)
+    expect(src).toMatch(/function Lightbox/);
+    // Mirror uses mirror-img-zoom testid pattern for image zoom buttons
+    expect(src).toMatch(/mirror-img-zoom/);
+  });
+});
