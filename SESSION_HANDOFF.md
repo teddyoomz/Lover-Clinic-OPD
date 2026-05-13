@@ -7,11 +7,89 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin-followup SHIPPED (utils.js Rule-of-3 close + UD_LABELS_EN + AV40 shrunk 3→2) · 8490 tests + 1 skipped · build clean · 79+ commits ahead of prod
+- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin-bis SHIPPED (canonical resolvers; corrects Phase 26.2g-fillin V21 no-op) · 8552 tests + 1 skipped · build clean · 91+ commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `551f5ae` feat(audit AV40 update Task 4): utils.js dropped from sanctioned list (Task 6 session-end docs commit lands next)
-- **Test count**: **8490 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 79+ commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup LIVE on master only.
+- **Last commit**: `b6c6253` feat(audit AV40 Phase 26.2g-fillin-bis Task 7): extend forbidden-read list to canonical fields (Task 9 session-end docs commit lands next)
+- **Test count**: **8552 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 91+ commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup + 26.2g-fillin-bis LIVE on master only.
+
+### Session 2026-05-13 EOD — Phase 26.2g-fillin-bis SHIPPED (NOT YET DEPLOYED)
+
+User surfaced Phase 26.2g-fillin no-op by manually testing admin-edit → TFP create flow on LC-26000001 (ง่วง / พารา / ขนมถ้วย). Screenshot showed all 3 health textareas empty. Investigation traced to V21 architectural error — Phase 26.2g-fillin helpers read kiosk-shape fields on canonical-only `be_customers.patientData`.
+
+**Commits this session** (10 total: spec + 9 task commits; session-end commit lands next):
+- `b6c6253` Task 7: AV40 extension (canonical fields) + G2.1 PATTERN
+- Task 6: live admin-SDK e2e script (Rule M, 6 scenarios dry-run verified)
+- Task 5: RTL auto-fill scenarios (incl. LC-26000001 user fixture R-SC5)
+- Task 4: Rule I flow-simulate FB1-FB6 (chains REAL helpers across REAL data path)
+- Task 3: G4 source-grep regression locks (NEW bis-named suite)
+- Task 2 review: V21 fixup on G1 group (asserted broken derive* pattern; rewritten)
+- Task 2: TFP refactor (derive→resolve + removed pre-existing allergiesDetail no-op)
+- Task 1 review: M1+M2 follow-ups (branch-coverage gap + JSDoc precision)
+- Task 1: resolvePatient* helpers + 3 label-prefix constants + 30 unit assertions
+- Spec commit
+
+**(A) Architectural correction**: `updateCustomerFromForm:586` ENTIRELY REBUILDS patientData via `buildPatientDataFromForm` which writes ONLY canonical camelCase fields. Kiosk-shape lives on `opd_sessions.patientData`; `kioskPatientToCanonical` PRE-DERIVES to canonical strings BEFORE customer doc write. Phase 26.2g-fillin helpers always returned '' for ALL customers.
+
+**(B) NEW `resolvePatient*` helpers** in `src/lib/patientHealthMapping.js` (~70 LOC):
+- `resolvePatientCongenitalDisease(pd)` → canonical congenitalDisease (direct read, trimmed)
+- `resolvePatientDrugAllergy(pd)` → compose admin drugAllergy + foodAllergy (asymmetric prefix)
+- `resolvePatientTreatmentHistory(pd)` → compose beforeTreatment + pregnanted (locked prefixes)
++ 3 NEW label-prefix constants (BEFORE_TREATMENT_LABEL_PREFIX / DRUG_ALLERGY_LABEL_PREFIX / FOOD_ALLERGY_LABEL_PREFIX)
+
+**(C) TFP refactor**: Swap derive→resolve imports + auto-fill block. Remove pre-existing `setDrugAllergy(patientData.allergiesDetail)` line (also no-op all along).
+
+**(D) Existing `derivePatient*` helpers UNTOUCHED**: legitimate consumer in `src/utils.js` OPD print (consumes opd_session.patientData where kiosk-shape exists). Phase 26.2g-fillin-followup refactor remains valid.
+
+**(E) AV40 extended**: both shapes locked. Forbidden direct reads of canonical fields (congenitalDisease/drugAllergy/foodAllergy/beforeTreatment/pregnanted) in src/components|src/pages added to PATTERN. bloodType exempt — identity field.
+
+**Tests**: 5-layer bank +62 net assertions (unit R1-R4 30 + source-grep G4 6 + flow-simulate FB1-FB6 19 + RTL 7 + live admin-SDK e2e dry-run 6 scenarios). Cumulative: 8490 → 8552 + 1 skipped. Build clean.
+
+**Lessons** (institutional memory):
+- V21 architectural error — helpers reading fields that don't exist on target doc shape ALWAYS return '' silently. Source-grep + unit tests cannot catch it; only Rule I flow-simulate + 1-line preview_eval against real data BEFORE shipping helper-consumer pairing catches it.
+- be_customers.patientData has ONE shape regardless of write path. opd_sessions.patientData has the kiosk shape. Different consumer surfaces; different helpers.
+- Phase 26.2g-fillin-followup (utils.js Rule-of-3) was legitimate — wrong consumer pairing was the issue, not the helpers themselves.
+- 5-layer test bank with live admin-SDK e2e is the architectural verification layer that catches what unit tests miss.
+- V21 anti-pattern can fire at task boundaries within the same phase (Task 2 swap invalidated Task 1's existing G1 source-grep tests; caught by reviewer; fixed inline with anti-regression).
+- Transparent V-entry acknowledgment of mistakes prevents recurrence (future reviewers grep for "Phase 26.2g-fillin was a no-op" and avoid the architectural mistake).
+
+Detail: `.agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md`. NOT yet deployed. 91+ commits ahead.
+
+#### Resume Prompt — Phase 26.2g-fillin-bis SHIPPED
+
+```
+Resume LoverClinic — continue from 2026-05-13 EOD (Phase 26.2g-fillin-bis SHIPPED).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=<NEW HEAD SHA>, prod=ccef3c2 · 91+ commits ahead · NOT DEPLOYED)
+3. .agents/active.md (8552 tests · Phase 26.2g-fillin-bis DONE)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary incl. Phase 26.2g-fillin no-op acknowledgment)
+5. .agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md (latest checkpoint)
+
+Status: master=`<NEW HEAD SHA>`, 8552 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin / 26.2g-fillin-followup / 26.2g-fillin-bis all SHIPPED to master; NOT deployed. 91+ commits ahead.
+
+Next: choose ONE
+1. Deploy combined 91+ commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. Run `--apply` live e2e — node scripts/e2e-phase-26-2g-fillin-bis.mjs --apply (Rule M; 6 TEST-prefixed customer docs + audit doc; cleanup automatic).
+3. New phase / feature.
+4. kioskPatientToCanonical Rule-of-3 close (deferred follow-up).
+5. Probe-Deploy-Probe maintenance.
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
+
+Phase 26.2g-fillin-bis institutional memory:
+- resolvePatient* (NEW) = canonical patientData reader for TFP (be_customers.patientData)
+- derivePatient* (existing) = kiosk-shape consumer for utils.js OPD print (opd_session.patientData)
+- Two helper families serve two consumer surfaces — DO NOT mix them
+- Phase 26.2g-fillin was V21 architectural-error no-op; bis corrects it
+- 5-layer test bank with live admin-SDK e2e catches what unit tests miss
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-13 EOD — Phase 26.2g-fillin-followup SHIPPED (NOT YET DEPLOYED)
 
