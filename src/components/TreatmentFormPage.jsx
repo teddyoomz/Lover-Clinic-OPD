@@ -2022,69 +2022,77 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
       // ── BACKEND SAVE ──
       if (saveTarget === 'backend') {
-        // Validate course deductions against LIVE Firestore data.
-        // Since rows are no longer grouped, validate each row against the exact
-        // Firestore course entry at its `courseIndex`.
-        if (selectedCourseItems.size > 0) {
-          try {
-            const { getCustomer: fetchLiveCustomer } = await import('../lib/scopedDataLayer.js');
-            const { parseQtyString } = await import('../lib/courseUtils.js');
-            const liveCustomer = await fetchLiveCustomer(customerId);
-            const liveCourses = liveCustomer?.courses || [];
-            const overDeductions = [];
-            for (const rowId of selectedCourseItems) {
-              for (const course of (options?.customerCourses || [])) {
-                const product = course.products?.find(p => p.rowId === rowId);
-                if (product) {
-                  // Phase 12.2b follow-up (2026-04-24): fill-later
-                  // (เหมาตามจริง) courses don't have meaningful "remaining"
-                  // — the doctor enters actual product usage at treatment
-                  // time, and the course consumes to 0 on save via the
-                  // deductCourseItems short-circuit. Skip the pre-check
-                  // for these rows; the backend zero-out handles
-                  // lifecycle, and stock deduction uses treatment qty
-                  // directly (be_products batch, not course balance).
-                  const liveC = typeof product.courseIndex === 'number'
-                    ? liveCourses[product.courseIndex]
-                    : null;
-                  const liveIsRealQty = String(liveC?.courseType || '').trim() === 'เหมาตามจริง';
-                  const inMemoryIsRealQty = !!(product.fillLater || course.isRealQty);
-                  if (liveIsRealQty || inMemoryIsRealQty) continue;
-                  // Phase 12.2b follow-up (2026-04-25): buffet courses
-                  // have unlimited usage until date-expiry. No
-                  // over-deduct is possible; skip the remaining check.
-                  const liveIsBuffet = String(liveC?.courseType || '').trim() === 'บุฟเฟต์';
-                  const inMemoryIsBuffet = !!(product.isBuffet || course.isBuffet);
-                  if (liveIsBuffet || inMemoryIsBuffet) continue;
-                  const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
-                  const isPurchased = isPurchasedSessionRowId(rowId);
-                  // After de-grouping: each row = one customer.courses entry, so validate
-                  // against the row's own remaining. For existing entries we verify against
-                  // LIVE Firestore remaining at the exact courseIndex (race-safe).
-                  let remaining;
-                  if (isPurchased) {
-                    remaining = parseFloat(product.remaining) || 0;
-                  } else if (liveC) {
-                    const { remaining: liveRem } = parseQtyString(liveC.qty);
-                    remaining = liveRem;
-                  } else {
-                    remaining = parseFloat(product.remaining) || 0;
-                  }
-                  if (deductAmt > remaining) {
-                    overDeductions.push(`• "${product.name}" คงเหลือ${isPurchased ? '' : 'จริง'} ${remaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
+        // V26.0 Phase 26.0b — doctor-save gate: skip course over-deduction
+        // validation when saveMode === 'doctor'. Doctor-save records OPD/meds/DF
+        // only; admin finalizes course items + bill later (canAddNewItems unlocks
+        // edit-mode for status='doctor-recorded'). Without this gate, the validator
+        // would fire against selectedCourseItems that the doctor may have touched
+        // but won't actually deduct in this save path.
+        if (saveMode !== 'doctor') {
+          // Validate course deductions against LIVE Firestore data.
+          // Since rows are no longer grouped, validate each row against the exact
+          // Firestore course entry at its `courseIndex`.
+          if (selectedCourseItems.size > 0) {
+            try {
+              const { getCustomer: fetchLiveCustomer } = await import('../lib/scopedDataLayer.js');
+              const { parseQtyString } = await import('../lib/courseUtils.js');
+              const liveCustomer = await fetchLiveCustomer(customerId);
+              const liveCourses = liveCustomer?.courses || [];
+              const overDeductions = [];
+              for (const rowId of selectedCourseItems) {
+                for (const course of (options?.customerCourses || [])) {
+                  const product = course.products?.find(p => p.rowId === rowId);
+                  if (product) {
+                    // Phase 12.2b follow-up (2026-04-24): fill-later
+                    // (เหมาตามจริง) courses don't have meaningful "remaining"
+                    // — the doctor enters actual product usage at treatment
+                    // time, and the course consumes to 0 on save via the
+                    // deductCourseItems short-circuit. Skip the pre-check
+                    // for these rows; the backend zero-out handles
+                    // lifecycle, and stock deduction uses treatment qty
+                    // directly (be_products batch, not course balance).
+                    const liveC = typeof product.courseIndex === 'number'
+                      ? liveCourses[product.courseIndex]
+                      : null;
+                    const liveIsRealQty = String(liveC?.courseType || '').trim() === 'เหมาตามจริง';
+                    const inMemoryIsRealQty = !!(product.fillLater || course.isRealQty);
+                    if (liveIsRealQty || inMemoryIsRealQty) continue;
+                    // Phase 12.2b follow-up (2026-04-25): buffet courses
+                    // have unlimited usage until date-expiry. No
+                    // over-deduct is possible; skip the remaining check.
+                    const liveIsBuffet = String(liveC?.courseType || '').trim() === 'บุฟเฟต์';
+                    const inMemoryIsBuffet = !!(product.isBuffet || course.isBuffet);
+                    if (liveIsBuffet || inMemoryIsBuffet) continue;
+                    const deductAmt = Number(treatmentItems.find(t => t.id === rowId)?.qty || 1);
+                    const isPurchased = isPurchasedSessionRowId(rowId);
+                    // After de-grouping: each row = one customer.courses entry, so validate
+                    // against the row's own remaining. For existing entries we verify against
+                    // LIVE Firestore remaining at the exact courseIndex (race-safe).
+                    let remaining;
+                    if (isPurchased) {
+                      remaining = parseFloat(product.remaining) || 0;
+                    } else if (liveC) {
+                      const { remaining: liveRem } = parseQtyString(liveC.qty);
+                      remaining = liveRem;
+                    } else {
+                      remaining = parseFloat(product.remaining) || 0;
+                    }
+                    if (deductAmt > remaining) {
+                      overDeductions.push(`• "${product.name}" คงเหลือ${isPurchased ? '' : 'จริง'} ${remaining} ${product.unit} — ต้องการตัด ${deductAmt}`);
+                    }
                   }
                 }
               }
+              if (overDeductions.length > 0) {
+                const msg = `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`;
+                scrollToError('courseSection', msg);
+                setSaving(false);
+                return;
+              }
+            } catch (e) {
+              console.warn('[TreatmentForm] course validation check failed:', e);
+              // Don't block save if validation check itself fails — let deduction handle it
             }
-            if (overDeductions.length > 0) {
-              const msg = `คอร์สคงเหลือไม่พอ:\n${overDeductions.join('\n')}`;
-              scrollToError('courseSection', msg);
-              setSaving(false);
-              return;
-            }
-          } catch (e) {
-            console.warn('[TreatmentForm] course validation check failed:', e);
-            // Don't block save if validation check itself fails — let deduction handle it
           }
         }
 
@@ -2155,7 +2163,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const existingDeductions = (backendDetail.courseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
         const oldExisting = (existingCourseItems || []).filter(ci => !isPurchasedSessionRowId(ci.rowId));
         const oldPurchased = (existingCourseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
-        if (isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
+        // V26.0 Phase 26.0b — doctor-save gate: skip reverseCourseDeduction.
+        // Doctor-save doesn't touch course balances on save (skips deductCourseItems
+        // below). Mirror: skip the reverse so we don't refund a balance that was
+        // never deducted in this save path.
+        if (saveMode !== 'doctor' && isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/scopedDataLayer.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
           if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
@@ -2198,16 +2210,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }
         }
 
+        // V26.0 Phase 26.0b — status routing + forensic trail.
+        // Doctor-save:      stamp status='doctor-recorded' + recordedBy=uid + recordedAt=serverTimestamp()
+        // Staff/admin save: clear status via deleteField() (drops the field from the doc shape).
+        //                   recordedBy + recordedAt INTENTIONALLY OMITTED from this patch so any
+        //                   prior values are PRESERVED — admin finalize keeps the forensic trail
+        //                   "who recorded the OPD card and when?" per spec § 3 semantics matrix.
+        // Patch is appended AFTER clean() (which is JSON.parse(JSON.stringify(...))) because
+        // Firestore sentinels deleteField() + serverTimestamp() don't survive a JSON round-trip.
+        const v26StatusPatch = saveMode === 'doctor' ? {
+          status: 'doctor-recorded',
+          recordedBy: auth.currentUser?.uid || null,
+          recordedAt: serverTimestamp(),
+        } : {
+          status: deleteField(),
+        };
+        const finalBackendDetail = { ...backendDetail, ...v26StatusPatch };
         const result = isEdit
-          ? await updateBackendTreatment(treatmentId, backendDetail)
-          : await createBackendTreatment(customerId, backendDetail);
+          ? await updateBackendTreatment(treatmentId, finalBackendDetail)
+          : await createBackendTreatment(customerId, finalBackendDetail);
         await rebuildTreatmentSummary(customerId);
 
         // V36-bis (2026-04-29) — deductCourseItems moved here so we have
         // the real treatmentId (from result.treatmentId on create OR from
         // treatmentId prop on edit). The audit emit (kind='use') at
         // backendClient.js:938 fires only when opts.treatmentId is set.
-        if (existingDeductions.length > 0) {
+        // V26.0 Phase 26.0b — doctor-save gate: skip deductCourseItems entirely.
+        // Course balances are touched only when admin finalizes (saveMode='staff'
+        // on a treatment that was previously status='doctor-recorded' OR a normal
+        // staff save). Doctor-save records OPD/meds/DF only.
+        if (saveMode !== 'doctor' && existingDeductions.length > 0) {
           const newTid = result.treatmentId || treatmentId;
           const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
           const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
@@ -2260,7 +2292,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // with `!isEdit` so create-mode always deducts.
         try {
           // 1) consumables + treatmentItems → type 6
-          if (stockChanged) {
+          // V26.0 Phase 26.0b — doctor-save gate: skip consumables/treatmentItems
+          // deduct. Admin records consumables when finalizing (canAddNewItems edit
+          // path). Per Q2 spec decision, meds (call 2 below) stay UNGATED — doctor
+          // dispenses meds at OPD time and stock decrements immediately.
+          if (saveMode !== 'doctor' && stockChanged) {
             await deductStockForTreatment(newTreatmentId, {
               consumables: backendDetail.consumables || [],
               treatmentItems: backendDetail.treatmentItems || [],
@@ -2271,6 +2307,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             });
           }
           // 2) take-home meds → type 7 (only when no auto-sale takes them)
+          // NOTE: intentionally NOT saveMode-gated per Q2 — meds always deduct
+          // when the doctor enters them (auto-sale handles them when hasSale).
           if (stockChanged && !hasSale && (backendDetail.medications || []).length > 0) {
             await deductStockForTreatment(newTreatmentId, {
               medications: backendDetail.medications || [],
@@ -2285,7 +2323,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
 
         // Auto-create sale invoice when treatment has billing items (hasSale)
-        if (hasSale && !isEdit) {
+        // V26.0 Phase 26.0b — doctor-save gate: skip the entire auto-sale chain
+        // (createBackendSale + deductStockForSale + applyDepositToSale +
+        // deductWallet + earnPoints + assignCourseToCustomer + promo-assign).
+        // Doctor-save defers all billing/sale creation to admin finalize.
+        if (saveMode !== 'doctor' && hasSale && !isEdit) {
           try {
             const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/scopedDataLayer.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
@@ -2443,7 +2485,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         }
 
         // Phase 7: On EDIT, if a linked sale exists, reverse & reapply deposits + wallet + points
-        if (hasSale && isEdit) {
+        // V26.0 Phase 26.0b — doctor-save gate: skip the edit-mode sale sync chain.
+        // Per spec § 5.1.F doctor-save button is hidden in edit mode, so this gate
+        // is a defensive backstop — if a future code path invokes handleSubmit('doctor')
+        // in edit mode (e.g. via API), this prevents accidentally touching the linked
+        // sale's deposits/wallet/points/stock.
+        if (saveMode !== 'doctor' && hasSale && isEdit) {
           try {
             const {
               getSaleByTreatmentId, updateBackendSale,
@@ -2702,8 +2749,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // `preferNewest: true` — iterate last→first so the just-assigned course entries
         // (always pushed to the end by assignCourseToCustomer) get deducted, not any
         // older entries with the same name+product from prior treatments.
+        // V26.0 Phase 26.0b — doctor-save gate: skip purchased-course deductions.
+        // Doctor-save doesn't run the auto-sale chain that assigns these purchased
+        // courses, so the deduct path is moot. Admin's later finalize save re-runs
+        // BOTH the assignCourseToCustomer chain AND this purchased-deduction step.
         const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
-        if (purchasedDeductions.length > 0) {
+        if (saveMode !== 'doctor' && purchasedDeductions.length > 0) {
           try {
             const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
             // Phase 16.5-quater — same treatment-deduction audit emit

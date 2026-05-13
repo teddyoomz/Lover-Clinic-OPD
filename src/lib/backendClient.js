@@ -984,21 +984,42 @@ export async function getTreatment(treatmentId) {
 export async function createBackendTreatment(customerId, detail) {
   const treatmentId = `BT-${Date.now()}`;
   const now = new Date().toISOString();
+  // V26.0 Phase 26.0b — extract top-level status routing fields out of `detail`
+  // so they live on the treatment doc root (where `getBackendTreatment` exposes
+  // them + spec § 3 mandates). status='doctor-recorded' means a doctor saved the
+  // OPD-only sub-form; admin must finalize courses/consumables/billing later.
+  // recordedBy + recordedAt = forensic trail preserved across admin finalize.
+  const { status, recordedBy, recordedAt, ...detailRest } = detail || {};
+  const topLevelPatch = {};
+  if (status !== undefined) topLevelPatch.status = status;
+  if (recordedBy !== undefined) topLevelPatch.recordedBy = recordedBy;
+  if (recordedAt !== undefined) topLevelPatch.recordedAt = recordedAt;
   await setDoc(treatmentDoc(treatmentId), {
     treatmentId,
     customerId: String(customerId),
-    detail: { ...detail, createdBy: 'backend', createdAt: now },
+    detail: { ...detailRest, createdBy: 'backend', createdAt: now },
     createdBy: 'backend',
     createdAt: now,
+    ...topLevelPatch,
   });
   return { treatmentId, success: true };
 }
 
 /** Update an existing backend treatment */
 export async function updateBackendTreatment(treatmentId, detail) {
+  // V26.0 Phase 26.0b — same top-level extraction as createBackendTreatment.
+  // On admin finalize (saveMode='staff'), `status: deleteField()` clears the
+  // doctor-recorded flag; recordedBy + recordedAt are OMITTED from the patch
+  // so prior values are preserved (forensic trail per spec § 3).
+  const { status, recordedBy, recordedAt, ...detailRest } = detail || {};
+  const topLevelPatch = {};
+  if (status !== undefined) topLevelPatch.status = status;
+  if (recordedBy !== undefined) topLevelPatch.recordedBy = recordedBy;
+  if (recordedAt !== undefined) topLevelPatch.recordedAt = recordedAt;
   await updateDoc(treatmentDoc(treatmentId), {
-    detail,
+    detail: detailRest,
     updatedAt: new Date().toISOString(),
+    ...topLevelPatch,
   });
   return { success: true };
 }
