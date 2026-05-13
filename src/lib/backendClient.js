@@ -994,6 +994,10 @@ export async function createBackendTreatment(customerId, detail) {
   const {
     status, recordedBy, recordedAt,
     editedBy, editedByName, editedByRole, editedAt,
+    // Phase 27.2 (2026-05-14) — discrete per-stage lifecycle timestamps
+    vitalsignsRecordedAt, vitalsignsRecordedBy,
+    doctorRecordedAt, doctorRecordedBy,
+    completedAt, completedBy,
     ...detailRest
   } = detail || {};
   const topLevelPatch = {};
@@ -1005,6 +1009,13 @@ export async function createBackendTreatment(customerId, detail) {
   if (editedByName !== undefined) topLevelPatch.editedByName = editedByName;
   if (editedByRole !== undefined) topLevelPatch.editedByRole = editedByRole;
   if (editedAt !== undefined) topLevelPatch.editedAt = editedAt;
+  // Phase 27.2 (2026-05-14) — per-stage lifecycle timestamps for stacked-badge display in CDV
+  if (vitalsignsRecordedAt !== undefined) topLevelPatch.vitalsignsRecordedAt = vitalsignsRecordedAt;
+  if (vitalsignsRecordedBy !== undefined) topLevelPatch.vitalsignsRecordedBy = vitalsignsRecordedBy;
+  if (doctorRecordedAt !== undefined) topLevelPatch.doctorRecordedAt = doctorRecordedAt;
+  if (doctorRecordedBy !== undefined) topLevelPatch.doctorRecordedBy = doctorRecordedBy;
+  if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
+  if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
   await setDoc(treatmentDoc(treatmentId), {
     treatmentId,
     customerId: String(customerId),
@@ -1026,6 +1037,10 @@ export async function updateBackendTreatment(treatmentId, detail) {
   const {
     status, recordedBy, recordedAt,
     editedBy, editedByName, editedByRole, editedAt,
+    // Phase 27.2 (2026-05-14) — discrete per-stage lifecycle timestamps
+    vitalsignsRecordedAt, vitalsignsRecordedBy,
+    doctorRecordedAt, doctorRecordedBy,
+    completedAt, completedBy,
     ...detailRest
   } = detail || {};
   const topLevelPatch = {};
@@ -1037,6 +1052,13 @@ export async function updateBackendTreatment(treatmentId, detail) {
   if (editedByName !== undefined) topLevelPatch.editedByName = editedByName;
   if (editedByRole !== undefined) topLevelPatch.editedByRole = editedByRole;
   if (editedAt !== undefined) topLevelPatch.editedAt = editedAt;
+  // Phase 27.2 (2026-05-14) — per-stage lifecycle timestamps for stacked-badge display in CDV
+  if (vitalsignsRecordedAt !== undefined) topLevelPatch.vitalsignsRecordedAt = vitalsignsRecordedAt;
+  if (vitalsignsRecordedBy !== undefined) topLevelPatch.vitalsignsRecordedBy = vitalsignsRecordedBy;
+  if (doctorRecordedAt !== undefined) topLevelPatch.doctorRecordedAt = doctorRecordedAt;
+  if (doctorRecordedBy !== undefined) topLevelPatch.doctorRecordedBy = doctorRecordedBy;
+  if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
+  if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
   await updateDoc(treatmentDoc(treatmentId), {
     detail: detailRest,
     updatedAt: new Date().toISOString(),
@@ -1121,6 +1143,25 @@ export async function rebuildTreatmentSummary(customerId) {
     editedBy: t.editedBy || null,
     editedByName: t.editedByName || '',
     editedByRole: t.editedByRole || '',
+    // Phase 27.2 (2026-05-14) — per-stage lifecycle timestamps for CDV
+    // stacked-badge display. User directive "ทำให้ Badge แต่ละสถานะไม่หายไป
+    // คือแสดงซ้อนกันได้ในลิสต์เลย ... แต่แสดงเวลากำกับของแต่ละอย่างไว้ด้วย
+    // แล้วเรียง badge ตามเวลาด้วย".
+    // Each stage has its own discrete timestamp so the lifecycle journey
+    // is preserved across admin finalize (which used to overwrite recordedAt).
+    // Legacy treatments without these fields fall back at display time:
+    //   - status='vitalsigns-recorded' + recordedAt → infer vitalsignsRecordedAt
+    //   - status='doctor-recorded' + recordedAt → infer doctorRecordedAt
+    //   - editedAt present (any save) → use as "บันทึกแล้ว" fallback time
+    vitalsignsRecordedAt: t.vitalsignsRecordedAt || null,
+    vitalsignsRecordedBy: t.vitalsignsRecordedBy || null,
+    doctorRecordedAt: t.doctorRecordedAt || null,
+    doctorRecordedBy: t.doctorRecordedBy || null,
+    completedAt: t.completedAt || null,
+    completedBy: t.completedBy || null,
+    recordedAt: t.recordedAt || null, // legacy fallback
+    editedAt: t.editedAt || null,
+    createdAt: t.createdAt || null,
   }));
   await updateCustomer(customerId, {
     treatmentSummary: summary,

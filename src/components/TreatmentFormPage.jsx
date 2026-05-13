@@ -441,6 +441,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // reference to `loadedTreatment?.status` resolved here since TFP has no
   // full-doc state — only individually destructured fields from existing.detail.
   const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
+  // Phase 27.2 (2026-05-14) — completedAt timestamp from edit-mode load.
+  // Used by v26StatusPatch to preserve "first completion" time across
+  // re-edits (Rule: completedAt is set ONCE per treatment, never updated).
+  const [loadedTreatmentCompletedAt, setLoadedTreatmentCompletedAt] = useState(null);
   // Phase 26.2a (V26.2, 2026-05-13) — customer.note display above doctor-save button.
   const [customerNote, setCustomerNote] = useState('');
   // Phase 26.2b (V26.2, 2026-05-13) — History tab strip: top-5 recent treatments.
@@ -933,6 +937,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             // loadedTreatmentStatus state declaration) can unlock add-ops
             // when admin finalizes a doctor-recorded treatment.
             if (existing?.status) setLoadedTreatmentStatus(existing.status);
+            // Phase 27.2 (2026-05-14) — capture completedAt so submit handler
+            // can preserve it (won't re-stamp on subsequent edits).
+            if (existing?.completedAt) setLoadedTreatmentCompletedAt(existing.completedAt);
             if (existing?.detail) {
               const t = existing.detail;
               if (t.doctorId) setDoctorId(t.doctorId);
@@ -2395,6 +2402,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           ...(isEdit && loadedTreatmentStatus === 'doctor-recorded' ? {} : {
             recordedBy: auth.currentUser?.uid || null,
             recordedAt: serverTimestamp(),
+            // Phase 27.2 (2026-05-14) — discrete per-stage timestamp so the
+            // doctor-stage time survives admin finalize (which would otherwise
+            // preserve the generic recordedAt but lose stage attribution).
+            doctorRecordedAt: serverTimestamp(),
+            doctorRecordedBy: auth.currentUser?.uid || null,
           }),
         } : saveMode === 'vitals' ? {
           // Phase 26.2f — vitals-save records front-desk / nurse vitals signs.
@@ -2404,9 +2416,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           status: 'vitalsigns-recorded',
           recordedBy: auth.currentUser?.uid || null,
           recordedAt: serverTimestamp(),
+          // Phase 27.2 (2026-05-14) — discrete per-stage timestamp
+          vitalsignsRecordedAt: serverTimestamp(),
+          vitalsignsRecordedBy: auth.currentUser?.uid || null,
         } : {
           // Phase 26.0b — admin/staff save clears status (preserves recordedBy/At)
           status: deleteField(),
+          // Phase 27.2 (2026-05-14) — stamp completedAt + completedBy ONLY when
+          // not already set (first completion). Subsequent edits update editedAt
+          // below (preserves the "first completed at" moment). User directive:
+          // "เมื่อพนักงานแก้ไข TFP แล้วให้ขึ้น badge บันทึกแล้วสีเขียวด้วย".
+          ...(loadedTreatmentCompletedAt ? {} : {
+            completedAt: serverTimestamp(),
+            completedBy: auth.currentUser?.uid || null,
+          }),
           // Phase 26.1 (V26.1, 2026-05-13) — editor attribution from EditAttributionModal.
           // When `editorContext` is present (modal-confirmed edit-save, set by Task 5),
           // stamp 4 fields for CDV "· แก้ไขโดย: X (role)" display. When absent

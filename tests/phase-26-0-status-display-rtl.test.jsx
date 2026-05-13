@@ -57,17 +57,27 @@ describe('Phase 26.0 — Status display RTL', () => {
       expect(CDV_SOURCE).toMatch(/data-testid=\{\s*`treatment-status-chip-doctor-recorded-/);
     });
 
-    it('D2.2 — chip gated on t.status === doctor-recorded', () => {
+    it('D2.2 — chip rendered when doctor-recorded stage applies (new field OR legacy status)', () => {
+      // Phase 27.2 (2026-05-14) — chip is now rendered from a stacked lifecycle
+      // badge loop. Verify (1) the chip exists, (2) somewhere in the file the
+      // gate is "doctorRecordedAt OR (status === doctor-recorded)". Both
+      // assertions confirm the contract: chip renders only when treatment
+      // has passed through doctor stage (via new field or legacy status).
       const chipIdx = CDV_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
       expect(chipIdx).toBeGreaterThan(-1);
-      const before = CDV_SOURCE.slice(Math.max(0, chipIdx - 400), chipIdx);
-      expect(before).toMatch(/t\.status\s*===\s*['"]doctor-recorded['"]/);
+      // Lifecycle accumulator establishes the gate; chip renders when
+      // lifecycle contains a 'doctor' entry. Anti-regression: the gate must
+      // be present (file-wide check).
+      expect(CDV_SOURCE).toMatch(/doctorRecordedAt[\s\S]{0,200}status\s*===\s*['"]doctor-recorded['"]/);
     });
 
-    it('D2.3 — chip Thai label "แพทย์ลงบันทึก"', () => {
+    it('D2.3 — chip Thai label "แพทย์บันทึก" (Phase 27.2 reworded from "แพทย์ลงบันทึก")', () => {
+      // Phase 27.2 (2026-05-14) — per user directive "บันทึกซักประวัติ , แพทย์บันทึก
+      // , บันทึกแล้ว" — shortened from "แพทย์ลงบันทึก" to "แพทย์บันทึก" for the
+      // stacked-badge display so all three labels are visually parallel.
       const chipIdx = CDV_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
       const region = CDV_SOURCE.slice(chipIdx, chipIdx + 800);
-      expect(region).toContain('แพทย์ลงบันทึก');
+      expect(region).toContain('แพทย์บันทึก');
     });
   });
 

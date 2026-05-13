@@ -58,6 +58,39 @@ import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/date
 // Phase 24.0 — dual gate (permission OR admin) for ลบลูกค้า button
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
+// Phase 27.2 (2026-05-14) — lifecycle-badge helpers.
+// Treatment doc has multiple stage timestamps (vitalsignsRecordedAt /
+// doctorRecordedAt / completedAt / recordedAt legacy / editedAt). For the
+// CDV stacked-badge display we need (a) a uniform millisecond accessor
+// across Firestore Timestamp / ISO string / {seconds, nanoseconds} object,
+// and (b) a HH:MM Thai-locale formatter. Pure helpers — branch-blind.
+export function toBadgeMs(ts) {
+  if (!ts) return 0;
+  if (typeof ts === 'string') {
+    const n = new Date(ts).getTime();
+    return Number.isNaN(n) ? 0 : n;
+  }
+  if (typeof ts.toDate === 'function') {
+    try { return ts.toDate().getTime(); } catch { return 0; }
+  }
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  if (ts instanceof Date) return ts.getTime();
+  return 0;
+}
+export function formatBadgeTime(ts) {
+  const ms = toBadgeMs(ts);
+  if (!ms) return '';
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return '';
+  // HH:MM in Bangkok timezone (24h)
+  return date.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Bangkok',
+  });
+}
+
 // Phase 26.1c (V26.1, 2026-05-13) — Editor-attribution role labels (Thai).
 // Maps editedByRole values from EditAttributionModal back to display text.
 // Used in row meta "· แก้ไขโดย: <name> (<role>)".
@@ -1000,6 +1033,20 @@ export default function CustomerDetailView({
                     const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
                     const isBackendCreated = detail?.createdBy === 'backend' || t.createdBy === 'backend';
                     const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment);
+                    // Phase 27.2 (2026-05-14) — pre-compute lifecycle badges for this row.
+                    // Hoisted out of JSX (no IIFE-in-JSX per Vite OXC crash rule / V21).
+                    const treatmentLifecycle = [];
+                    const _vAt = t.vitalsignsRecordedAt
+                      || (t.status === 'vitalsigns-recorded' ? t.recordedAt : null);
+                    if (_vAt) treatmentLifecycle.push({ key: 'vitalsigns', time: _vAt });
+                    const _dAt = t.doctorRecordedAt
+                      || (t.status === 'doctor-recorded' ? t.recordedAt : null);
+                    if (_dAt) treatmentLifecycle.push({ key: 'doctor', time: _dAt });
+                    const _cAt = t.completedAt
+                      || (!t.status && t.editedAt ? t.editedAt : null)
+                      || (!t.status && !t.vitalsignsRecordedAt && !t.doctorRecordedAt && t.recordedAt ? t.recordedAt : null);
+                    if (_cAt) treatmentLifecycle.push({ key: 'completed', time: _cAt });
+                    treatmentLifecycle.sort((a, b) => toBadgeMs(a.time) - toBadgeMs(b.time));
                     return (
                       <div key={t.id || globalIndex}
                         data-testid={`treatment-row-${t.id}`}
@@ -1019,38 +1066,60 @@ export default function CustomerDetailView({
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                                   style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>ล่าสุด</span>
                               )}
-                              {/* V26.0 Phase 26.0e (2026-05-13) — doctor-recorded chip.
-                                  Shows when treatment was saved via "บันทึกสำหรับแพทย์"
-                                  (status === 'doctor-recorded' set by Phase 26.0b
-                                  handleSubmit + preserved in summary by Phase 26.0e
-                                  rebuildTreatmentSummary extension). Admin sees this
-                                  chip → knows the treatment still needs course-items /
-                                  consumables / DF / billing pieces. canAddNewItems
-                                  flag (Phase 26.0c) unlocks the missing UI in edit mode. */}
-                              {t.status === 'doctor-recorded' && (
-                                <span
-                                  data-testid={`treatment-status-chip-doctor-recorded-${t.id}`}
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
-                                  title="แพทย์ลงบันทึก — admin ต้องมาเติมคอร์ส / สินค้า / ค่ามือ / บิล"
-                                >
-                                  <Stethoscope size={10} />
-                                  <span>แพทย์ลงบันทึก</span>
-                                </span>
-                              )}
-                              {/* Phase 26.2f-pre — vitals-recorded chip (mirror doctor-recorded chip).
-                                  Renders when treatment.status === 'vitalsigns-recorded' (admin saved
-                                  vitals only; doctor has not yet completed). Teal styling distinct
-                                  from amber doctor-recorded chip. */}
-                              {t.status === 'vitalsigns-recorded' && (
-                                <span
-                                  data-testid={`treatment-status-chip-vitalsigns-recorded-${t.id}`}
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-teal-950 border-teal-800 text-teal-100' : 'bg-teal-100 border-teal-200 text-teal-900'}`}
-                                  title="บันทึกข้อมูลซักประวัติ"
-                                >
-                                  <Activity size={10} />
-                                  <span>บันทึกข้อมูลซักประวัติ</span>
-                                </span>
-                              )}
+                              {/* Phase 27.2 (2026-05-14) — stacked lifecycle badges.
+                                  User directive: "ทำให้ Badge แต่ละสถานะไม่หายไป คือแสดงซ้อนกัน
+                                  ได้ในลิสต์เลย เช่น บันทึกซักประวัติ , แพทย์บันทึก , บันทึกแล้ว
+                                  ... แต่แสดงเวลากำกับของแต่ละอย่างไว้ด้วย แล้วเรียง badge ตามเวลาด้วย".
+                                  Each lifecycle stage gets its own discrete timestamp field
+                                  (vitalsignsRecordedAt / doctorRecordedAt / completedAt). Pre-
+                                  computed as `treatmentLifecycle` above (V21/Vite-OXC: no IIFE
+                                  inside JSX — variable hoisted to function body). */}
+                              {treatmentLifecycle.map((b) => {
+                                const timeStr = formatBadgeTime(b.time);
+                                if (b.key === 'vitalsigns') {
+                                  return (
+                                    <span
+                                      key={b.key}
+                                      data-testid={`treatment-status-chip-vitalsigns-recorded-${t.id}`}
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-teal-950 border-teal-800 text-teal-100' : 'bg-teal-100 border-teal-200 text-teal-900'}`}
+                                      title={`บันทึกซักประวัติ — ${timeStr || '(ไม่ทราบเวลา)'}`}
+                                    >
+                                      <Activity size={10} />
+                                      <span>ซักประวัติ</span>
+                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
+                                    </span>
+                                  );
+                                }
+                                if (b.key === 'doctor') {
+                                  return (
+                                    <span
+                                      key={b.key}
+                                      data-testid={`treatment-status-chip-doctor-recorded-${t.id}`}
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
+                                      title={`แพทย์บันทึก — ${timeStr || '(ไม่ทราบเวลา)'}`}
+                                    >
+                                      <Stethoscope size={10} />
+                                      <span>แพทย์บันทึก</span>
+                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
+                                    </span>
+                                  );
+                                }
+                                if (b.key === 'completed') {
+                                  return (
+                                    <span
+                                      key={b.key}
+                                      data-testid={`treatment-status-chip-completed-${t.id}`}
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-emerald-950 border-emerald-800 text-emerald-100' : 'bg-emerald-100 border-emerald-200 text-emerald-900'}`}
+                                      title={`บันทึกแล้ว — ${timeStr || '(ไม่ทราบเวลา)'}`}
+                                    >
+                                      <Check size={10} />
+                                      <span>บันทึกแล้ว</span>
+                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })}
                               <span className="ml-auto text-[var(--tx-muted)] flex-shrink-0">
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </span>
