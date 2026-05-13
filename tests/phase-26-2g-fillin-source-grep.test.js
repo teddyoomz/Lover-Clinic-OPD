@@ -10,35 +10,56 @@ import { join } from 'path';
 const TFP_PATH = 'src/components/TreatmentFormPage.jsx';
 const tfp = readFileSync(TFP_PATH, 'utf8');
 
-describe('G1 — TFP wiring', () => {
-  it('G1.1 — TFP imports both helpers from patientHealthMapping.js', () => {
-    expect(tfp).toMatch(/import\s*\{[^}]*derivePatientCongenitalDisease[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
-    expect(tfp).toMatch(/import\s*\{[^}]*derivePatientTreatmentHistory[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
+// G1 group updated Phase 26.2g-fillin-bis (2026-05-13): TFP swapped from
+// derivePatient* (Phase 26.2g-fillin — was a V21 architectural-error no-op
+// reading kiosk-shape fields that don't exist on be_customers.patientData)
+// → resolvePatient* (canonical reads). Tests now lock the post-bis pattern
+// + include anti-regression guards on the removed pre-bis patterns
+// (derivePatient* calls + patientData.allergiesDetail read).
+describe('G1 — TFP wiring (Phase 26.2g-fillin-bis: resolve* canonical readers)', () => {
+  it('G1.1 — TFP imports 3 resolvePatient* helpers from patientHealthMapping.js', () => {
+    expect(tfp).toMatch(/import\s*\{[^}]*resolvePatientCongenitalDisease[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
+    expect(tfp).toMatch(/import\s*\{[^}]*resolvePatientDrugAllergy[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
+    expect(tfp).toMatch(/import\s*\{[^}]*resolvePatientTreatmentHistory[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
+    // Anti-regression: pre-bis derive* imports MUST NOT reappear in TFP
+    // (they read kiosk-shape fields that don't exist on be_customers.patientData)
+    expect(tfp).not.toMatch(/import\s*\{[^}]*derivePatientCongenitalDisease[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
+    expect(tfp).not.toMatch(/import\s*\{[^}]*derivePatientTreatmentHistory[^}]*\}\s*from\s*['"][^'"]*patientHealthMapping(?:\.js)?['"]/);
   });
 
-  it('G1.2 — Both helpers called inside the create-mode auto-fill block', () => {
-    // The block: `if (patientData) { ... setBloodType ... setDrugAllergy ... derive... }`
-    // Look for both derive calls within ~1500 chars of the bloodType setter (same block).
+  it('G1.2 — All 3 resolvers called inside the create-mode auto-fill block', () => {
+    // The block: `if (patientData) { ... setBloodType ... if (!isEdit) { resolve*... } }`
+    // Look for all 3 resolver calls within ~1500 chars of the bloodType setter.
     const bloodTypeIdx = tfp.indexOf('setBloodType(patientData.bloodType)');
     expect(bloodTypeIdx).toBeGreaterThan(0);
     const window = tfp.slice(bloodTypeIdx, bloodTypeIdx + 1500);
-    expect(window).toContain('derivePatientCongenitalDisease(patientData)');
-    expect(window).toContain('derivePatientTreatmentHistory(patientData)');
+    expect(window).toContain('resolvePatientCongenitalDisease(patientData)');
+    expect(window).toContain('resolvePatientDrugAllergy(patientData)');
+    expect(window).toContain('resolvePatientTreatmentHistory(patientData)');
     expect(window).toContain('setCongenitalDisease(');
+    expect(window).toContain('setDrugAllergy(');
     expect(window).toContain('setTreatmentHistory(');
+    // Anti-regression: pre-bis derive* function calls MUST NOT reappear
+    expect(window).not.toContain('derivePatientCongenitalDisease(patientData)');
+    expect(window).not.toContain('derivePatientTreatmentHistory(patientData)');
+    // Anti-regression: pre-Phase-26.2g-fillin no-op MUST NOT reappear
+    // (patientData.allergiesDetail is kiosk-shape, doesn't exist on be_customers)
+    expect(window).not.toContain('setDrugAllergy(patientData.allergiesDetail)');
   });
 
-  it('G1.3 — Both call-sites gated by !isEdit (no edit-mode auto-fill)', () => {
-    // The new derive calls live inside `if (!isEdit) { ... }` — verify by
-    // grepping for that exact gate within the bloodType→derive window.
+  it('G1.3 — All 3 resolver call-sites gated by !isEdit (no edit-mode auto-fill)', () => {
+    // The 3 resolver calls live inside `if (!isEdit) { ... }` — verify by
+    // grepping for that exact gate within the bloodType→resolver window.
     const bloodTypeIdx = tfp.indexOf('setBloodType(patientData.bloodType)');
     const window = tfp.slice(bloodTypeIdx, bloodTypeIdx + 1500);
-    // The inner gate must appear before the derive calls
+    // The inner gate must appear before each resolver call
     const innerGateIdx = window.indexOf('if (!isEdit)');
-    const congenitalCallIdx = window.indexOf('derivePatientCongenitalDisease');
-    const historyCallIdx = window.indexOf('derivePatientTreatmentHistory');
+    const congenitalCallIdx = window.indexOf('resolvePatientCongenitalDisease');
+    const allergyCallIdx = window.indexOf('resolvePatientDrugAllergy');
+    const historyCallIdx = window.indexOf('resolvePatientTreatmentHistory');
     expect(innerGateIdx).toBeGreaterThan(-1);
     expect(congenitalCallIdx).toBeGreaterThan(innerGateIdx);
+    expect(allergyCallIdx).toBeGreaterThan(innerGateIdx);
     expect(historyCallIdx).toBeGreaterThan(innerGateIdx);
   });
 });
