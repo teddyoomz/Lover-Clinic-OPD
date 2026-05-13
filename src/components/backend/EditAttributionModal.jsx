@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { listStaff, listDoctors } from '../../lib/scopedDataLayer.js';
+import { listStaff, listDoctors, listBranches, updateBackendTreatment } from '../../lib/scopedDataLayer.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 /**
@@ -171,6 +171,54 @@ export default function EditAttributionModal({ isOpen, onConfirm, onCancel, isDa
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 27.0 Task 6 — Branch correction modal.
+ * Lets admin correct a treatment's branchId after the fact (fix historical mis-tags).
+ * Props: treatment {id, detail}, onClose, onSaved
+ */
+export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
+  const [editedBranchId, setEditedBranchId] = useState(treatment?.detail?.branchId || '');
+  const [branches, setBranches] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listBranches({ allBranches: true })
+      .then(list => { if (!cancelled) setBranches(Array.isArray(list) ? list : []); })
+      .catch(() => { if (!cancelled) setBranches([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateBackendTreatment(treatment.id, {
+        ...treatment.detail,
+        branchId: editedBranchId,
+      });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <select
+        aria-label="สาขาที่รักษา"
+        value={editedBranchId}
+        onChange={e => setEditedBranchId(e.target.value)}
+      >
+        {branches.map(b => (
+          <option key={b.branchId} value={b.branchId}>{b.name}</option>
+        ))}
+      </select>
+      <button onClick={handleSave} disabled={saving}>บันทึก</button>
+      <button onClick={onClose}>ยกเลิก</button>
     </div>
   );
 }
