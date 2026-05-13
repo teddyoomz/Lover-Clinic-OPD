@@ -3104,7 +3104,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         : 'max-w-6xl mx-auto px-4 py-4'
       }>
         {/* Phase 26.2 Task 5 — LEFT panel wrapper for conditional split-screen */}
-        <div className="flex-1 min-w-0">
+        <div className={selectedHistoryTreatmentId ? 'lg:w-1/2 lg:min-w-0' : ''}>
         <div className={selectedHistoryTreatmentId ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
 
           {/* ════ LEFT PANEL ════ */}
@@ -5122,39 +5122,56 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         </div>{/* end flex-1 min-w-0 LEFT panel wrapper (Phase 26.2 Task 5) */}
 
         {/* Phase 26.2 Task 5 — RIGHT panel: history read-only (desktop only) */}
-        <aside className="hidden lg:block w-[480px] flex-shrink-0 sticky top-[52px] self-start">
-          {selectedHistoryTreatmentId && (
-            <TreatmentReadOnlyPanel
-              treatment={historyTreatments.find(t => t.treatmentId === selectedHistoryTreatmentId) || null}
-              fullDoc={historyFullDoc}
-              isDark={isDark}
-              ac={accent}
-              acRgb={accentRgb}
-              isLatest={false}
-              showCloseButton
-              onClose={() => handleHistoryTabClick(selectedHistoryTreatmentId)}
-            />
-          )}
-        </aside>
-
-        {/* Phase 26.2 Task 5 — Mobile fallback: history modal overlay (<lg) */}
-        <div className="lg:hidden">
-          {selectedHistoryTreatmentId && (
-            <div className="fixed inset-0 z-[200] flex flex-col overflow-y-auto"
-              style={{ background: isDark ? 'rgba(0,0,0,0.92)' : 'rgba(255,255,255,0.96)' }}>
+        {selectedHistoryTreatmentId && (
+          <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+            <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
               <TreatmentReadOnlyPanel
-                treatment={historyTreatments.find(t => t.treatmentId === selectedHistoryTreatmentId) || null}
+                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
                 fullDoc={historyFullDoc}
                 isDark={isDark}
                 ac={accent}
                 acRgb={accentRgb}
-                isLatest={false}
-                showCloseButton
-                onClose={() => handleHistoryTabClick(selectedHistoryTreatmentId)}
+                isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
+                showCloseButton={true}
+                onClose={() => {
+                  setSelectedHistoryTreatmentId(null);
+                  setHistoryFullDoc(null);
+                }}
               />
             </div>
-          )}
-        </div>
+          </aside>
+        )}
+
+        {/* Phase 26.2 Task 5 — Mobile fallback: history modal overlay (<lg) */}
+        {selectedHistoryTreatmentId && (
+          <div
+            className="lg:hidden fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-2 sm:p-4"
+            onClick={() => {
+              setSelectedHistoryTreatmentId(null);
+              setHistoryFullDoc(null);
+            }}
+          >
+            <div
+              className={`max-w-2xl w-full rounded-t-xl sm:rounded-xl max-h-[90vh] overflow-y-auto p-4 ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white'}`}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="tfp-history-modal-fallback"
+            >
+              <TreatmentReadOnlyPanel
+                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
+                fullDoc={historyFullDoc}
+                isDark={isDark}
+                ac={accent}
+                acRgb={accentRgb}
+                isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
+                showCloseButton={true}
+                onClose={() => {
+                  setSelectedHistoryTreatmentId(null);
+                  setHistoryFullDoc(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
     </div>
   );
 }
