@@ -54,6 +54,10 @@ import { groupCustomerCoursesForDetailView } from '../../lib/treatmentBuyHelpers
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 // Phase 28 (2026-05-14) — Rule C1 extraction; CDV uses these for badge display.
 import { toBadgeMs, formatBadgeTime } from '../../lib/formatBadgeTime.js';
+// Phase 28 Task 4 (2026-05-14) — ROLE_LABEL_TH extracted to shared lib for
+// TreatmentHistoryRow consumption (Rule C1). Original definition lived here
+// since Phase 26.1c.
+import { ROLE_LABEL_TH } from '../../lib/roleLabels.js';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
@@ -66,11 +70,8 @@ import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 // Phase 26.1c (V26.1, 2026-05-13) — Editor-attribution role labels (Thai).
 // Maps editedByRole values from EditAttributionModal back to display text.
 // Used in row meta "· แก้ไขโดย: <name> (<role>)".
-const ROLE_LABEL_TH = {
-  doctor: 'แพทย์',
-  assistant: 'ผู้ช่วย',
-  staff: 'พนักงาน',
-};
+// Phase 28 Task 4 (2026-05-14) — extracted to src/lib/roleLabels.js (Rule C1)
+// for shared use by TreatmentHistoryRow.
 
 // ─── Helper: format Thai date ───────────────────────────────────────────────
 // Short/full Thai-BE formatters delegate to the shared `fmtThaiDate` helper.
