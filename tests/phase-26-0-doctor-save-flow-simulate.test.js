@@ -282,11 +282,14 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
   });
 
   describe('F7 — adversarial: doctor-save invocation in edit mode', () => {
-    it('F7.1 — doctor-save button hidden in edit mode per source-grep', () => {
+    it('F7.1 — doctor-save button gate contains !isEdit condition (Phase 26.2f-pre: extended to allow vitalsigns-recorded edit)', () => {
+      // Phase 26.2f-pre extended the gate from `{!isEdit &&` to
+      // `{(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') &&`
+      // V21-class fixup: update regex to accept the new extended shape.
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
-      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 500), btnIdx);
-      expect(before).toMatch(/\{\s*!isEdit\s*&&/);
+      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
+      expect(before).toMatch(/\(\s*!isEdit\s*\|\|/);
     });
 
     it('F7.2 — saveMode=doctor on EDIT mode silently preserves prior recordedBy', () => {

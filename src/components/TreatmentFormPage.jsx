@@ -7,7 +7,7 @@ import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip,
-         AlertCircle, ClipboardCheck, Calendar } from 'lucide-react';
+         AlertCircle, ClipboardCheck, Calendar, Activity } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
@@ -462,8 +462,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // since TFP has no full-doc state variable. Placed AFTER the state
   // declaration to avoid a temporal dead zone reference error (const is
   // not hoisted).
+  // Phase 26.2f-pre — extended canAddNewItems to also unlock when status
+  // is 'vitalsigns-recorded' (admin saved vitals only; doctor or admin
+  // can now add items in subsequent edit cycles).
   const canAddNewItems = (mode === 'create')
-    || (loadedTreatmentStatus === 'doctor-recorded');
+    || (loadedTreatmentStatus === 'doctor-recorded')
+    || (loadedTreatmentStatus === 'vitalsigns-recorded');
 
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
@@ -3286,13 +3290,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               </div>
             </FormSection>
 
+            {/* ════ Phase 26.2f-pre (V26.2f, 2026-05-13) — NEW vitals-save button ════
+                Mirror of Phase 26.0d doctor-save button pattern. Admin clicks to
+                create a treatment record with only Vital Signs filled. Status
+                stamps 'vitalsigns-recorded'; subsequent doctor-save transitions
+                to 'doctor-recorded'; admin's final regular-save clears status. */}
+            {!isEdit && (
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => handleSubmit('vitals')}
+                  data-testid="tfp-vitals-save-btn"
+                  disabled={saving}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  <Activity size={16} />
+                  บันทึกข้อมูลซักประวัติ
+                </button>
+                <p className="mt-1.5 text-[10px] text-[var(--tx-muted)] text-center">
+                  บันทึกเฉพาะ Vital Signs · ไม่ต้องเลือกแพทย์ · admin จะกลับมา key ข้อมูลที่เหลือทีหลัง
+                </p>
+              </div>
+            )}
+
             {/* ════ Phase 26.0d (V26.0, 2026-05-13) — doctor-save button ════
                 "บันทึกสำหรับแพทย์" — records OPD/vitals/charts/meds/DF only;
                 skips course-items + consumables + purchasedItems + auto-sale.
-                Hidden in edit mode (doctor-save semantic is create-only;
-                editing a doctor-recorded treatment uses the normal save
-                button + canAddNewItems flag unlocks the missing pieces). */}
-            {!isEdit && (
+                Phase 26.2f-pre: gate extended to allow edit mode when status is
+                'vitalsigns-recorded' (transition from vitals to doctor stage).
+                Otherwise stays create-only per Phase 26.0d. */}
+            {(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') && (
               <div
                 className={`mt-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 py-3 rounded-lg border ${isDark ? 'bg-sky-950/30 border-sky-800' : 'bg-sky-50/50 border-sky-200'}`}
               >

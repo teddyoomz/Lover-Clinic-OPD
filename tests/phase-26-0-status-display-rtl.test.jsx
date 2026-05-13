@@ -16,12 +16,16 @@ describe('Phase 26.0 — Status display RTL', () => {
       expect(TFP_SOURCE).toContain('บันทึกสำหรับแพทย์');
     });
 
-    it('D1.3 — doctor-save button hidden in edit mode (wrapped in {!isEdit && ...})', () => {
-      // Find the button JSX block + check for {!isEdit && wrapper within 500 chars before
+    it('D1.3 — doctor-save button gate contains !isEdit condition (Phase 26.2f-pre: extended to allow vitalsigns-recorded edit)', () => {
+      // Phase 26.2f-pre extended the gate from `{!isEdit &&` to
+      // `{(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') &&`
+      // so that doctor-save is also available when completing a vitals-only
+      // treatment in edit mode. Test updated per V21-class fixup protocol.
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
-      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 500), btnIdx);
-      expect(before).toMatch(/\{\s*!isEdit\s*&&/);
+      const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
+      // Accept either the old shape (plain !isEdit) or the new extended shape
+      expect(before).toMatch(/\(\s*!isEdit\s*\|\|/);
     });
 
     it('D1.4 — edit-mode banner source-grep: tfp-doctor-recorded-banner data-testid', () => {
