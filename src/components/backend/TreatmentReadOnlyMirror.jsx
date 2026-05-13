@@ -111,8 +111,12 @@ function Lightbox({ src, label, onClose }) {
 
 // ─── ImageGridColumn ───────────────────────────────────────────────────────
 
-function ImageGridColumn({ images, label, onZoom }) {
+function ImageGridColumn({ images, label, onZoom, testidPrefix }) {
   if (!images?.length) return null;
+  // testidPrefix overrides the default "mirror-img-zoom-{label}" pattern
+  // Used by chart callers to emit "mirror-chart-zoom-{i}" per AV39 spec
+  const resolveTestid = (idx) =>
+    testidPrefix ? `${testidPrefix}-${idx}` : `mirror-img-zoom-${label}-${idx}`;
   return (
     <div className="space-y-1">
       <p className="text-xs font-medium" style={{ color: 'var(--tx-muted)' }}>{label}</p>
@@ -121,7 +125,7 @@ function ImageGridColumn({ images, label, onZoom }) {
           <button
             key={idx}
             type="button"
-            data-testid="timeline-img-zoom"
+            data-testid={resolveTestid(idx)}
             className="aspect-square overflow-hidden rounded border cursor-zoom-in hover:opacity-80 transition"
             style={{ borderColor: 'var(--bd)' }}
             onClick={() => onZoom?.(src, `${label} ${idx + 1}`)}
@@ -202,10 +206,21 @@ function StatusBadge({ status }) {
     draft: { label: 'ร่าง', cls: 'bg-yellow-500/20 text-yellow-400' },
     saved: { label: 'บันทึกแล้ว', cls: 'bg-green-500/20 text-green-400' },
     cancelled: { label: 'ยกเลิก', cls: 'bg-red-500/20 text-red-400' },
+    'doctor-recorded': { label: 'หมอบันทึกแล้ว', cls: 'bg-blue-500/20 text-blue-400' },
+    'vitalsigns-recorded': { label: 'วัดสัญญาณชีพแล้ว', cls: 'bg-purple-500/20 text-purple-400' },
   };
   const s = map[status] || { label: status || '—', cls: 'bg-gray-500/20 text-gray-400' };
+  // testid for audit-spec AV39: mirror-status-chip-{status} for known status values
+  const testid = status === 'doctor-recorded'
+    ? 'mirror-status-chip-doctor-recorded'
+    : status === 'vitalsigns-recorded'
+      ? 'mirror-status-chip-vitalsigns-recorded'
+      : undefined;
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>
+    <span
+      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.cls}`}
+      {...(testid ? { 'data-testid': testid } : {})}
+    >
       {s.label}
     </span>
   );
@@ -396,7 +411,7 @@ export default function TreatmentReadOnlyMirror({
       <div
         className="flex flex-col h-full overflow-hidden"
         style={{ background: 'var(--bg-card)', color: 'var(--tx-primary)' }}
-        data-testid="treatment-readonly-mirror"
+        data-testid="treatment-read-only-mirror"
       >
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div
@@ -435,6 +450,7 @@ export default function TreatmentReadOnlyMirror({
           {showCloseButton && (
             <button
               type="button"
+              data-testid="treatment-read-only-mirror-close"
               onClick={onClose}
               className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10 transition"
               aria-label="ปิด"
@@ -889,6 +905,7 @@ export default function TreatmentReadOnlyMirror({
                     images={chartImages}
                     label="Chart"
                     onZoom={handleZoom}
+                    testidPrefix="mirror-chart-zoom"
                   />
                 )}
                 {/* Render charts array (objects with dataUrl) that aren't in chartImages */}
@@ -897,6 +914,7 @@ export default function TreatmentReadOnlyMirror({
                     images={charts.filter(c => c.dataUrl).map(c => c.dataUrl)}
                     label="Chart (detail)"
                     onZoom={handleZoom}
+                    testidPrefix="mirror-chart-zoom"
                   />
                 )}
                 {charts.some(c => c.templateId) && (
