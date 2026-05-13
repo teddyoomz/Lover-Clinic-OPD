@@ -7,11 +7,38 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 — Phase 26.0 Doctor-Save (บันทึกสำหรับแพทย์) **COMPLETE** (NOT YET DEPLOYED) · 8297 tests + 1 skipped · build clean · 10 commits ahead of prod
+- **Date last updated**: 2026-05-13 — Phase 26.0 + Phase 26.1 **BOTH COMPLETE** (NOT YET DEPLOYED) · 8320 tests + 1 skipped · build clean · 21+ commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `13b9551` fix(Phase 26.0-test-fixups): V21-class regex updates for 3 stale tests post Task 2
-- **Test count**: **8297 passed** (+55 net from 8242 baseline) + 1 skipped. 0 failures. bsa-task7-h-quater flake did NOT surface in this run.
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master `13b9551` is 10 commits ahead). Phase 26.0 awaiting user `deploy` authorization per Rule V18 (per-turn explicit deploy required). When ready: combined `vercel --prod` + `firebase deploy --only firestore:rules` (rules unchanged but combined per V15 directive).
+- **Last commit**: `559d0cb` feat(Phase 26.1c): AV37 audit invariant extension — editor attribution (Task 10 docs commit pending after this entry)
+- **Test count**: **8320 passed** (+78 net from 8242 Phase 25.0 baseline; Phase 26.0 +55 → Phase 26.1 +23) + 1 skipped. 0 failures. bsa-task7-h-quater flake did NOT surface.
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 21+ commits ahead). Phase 26.0 + 26.1 awaiting user `deploy` authorization per Rule V18. When ready: combined `vercel --prod` + `firebase deploy --only firestore:rules` (rules unchanged but combined per V15 directive).
+
+### Session 2026-05-13 (continued) — Phase 26.1 TFP Polish + Editor-Attribution Modal (NOT YET DEPLOYED)
+
+User directive (3 items from screenshot of CDV treatment history):
+1. NEW modal on staff edit-save to pick editor (พนักงาน/ผู้ช่วย/แพทย์ per branch)
+2. Phase 26.0e "แพทย์ลงบันทึก" chip missing in CDV list
+3. Remove top-right "ยืนยันการรักษา" button (non-functional)
+
+**Brainstorming HARD-GATE honored** (Rule J): 3 Qs locked — Q1 trigger = edit mode only; Q2 picker = single + merged list with role labels; Q3 display = inline row meta.
+
+**11 files modified** (~600 LOC): 4 source + 7 test/wiki/audit. 10 task commits across 3 sub-phases via subagent-driven execution.
+
+**Phase 26.1a — Bug + cleanup** (`0af6a65`): CDV summary mapper V12 reader-sweep fix (add status + editedBy/Name/Role to local useMemo at line 432-442) + top-right button removal (TFP:2888-2893). Smallest atomic commit.
+
+**Phase 26.1b — Modal + RTL** (`97a50df`): NEW `EditAttributionModal.jsx` (176 LOC) + `tests/edit-attribution-modal-rtl.test.jsx` E1-E5 (5 assertions). Single picker, merged list, branch filter via doc.branchIds[].
+
+**Phase 26.1c — Integration** (`7e4f88a` + `476304d` + `6b3f768` + `550b771` + `afe37a9` + `559d0cb`): handleSubmit signature `(eventOrSaveMode, options = {})` + v26StatusPatch staff branch editor stamping + backendClient.js 4-field top-level extraction + rebuildTreatmentSummary preservation + CDV row meta inline display + ROLE_LABEL_TH constant. Tests: G3.1-G3.6 + D5.1-D5.4 + F9.1-F9.5. AV37.9-AV37.11 audit ext + AV37.1 V21 fixup (let-based branch tree contract).
+
+**Rule of 3 status**: `EditAttributionModal` is 2nd member of "pick-a-person-before-action" pattern family (1st = `ActorConfirmModal`); not yet a Rule of 3 trigger.
+
+**Tests**: Phase 26.0 baseline 8297 → Phase 26.1 final **8320** (+23 net: 5 E + 6 G3 + 4 D5 + 5 F9 + 3 AV37). Build clean. Combined Phase 26.0 + 26.1 = 21+ commits ahead of prod (`ccef3c2`).
+
+Detail: future checkpoint at `.agents/sessions/2026-05-13-phase-26-1-tfp-polish.md` (deferred until session-end).
+
+NOT yet deployed — user authorizes `vercel --prod` separately per Rule V18.
+
+
 
 ### Session 2026-05-13 — Phase 26.0 Doctor-Save + Admin Finalize-Mode (NOT YET DEPLOYED)
 

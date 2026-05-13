@@ -159,9 +159,85 @@ Baseline: 8242 (Phase 25.0). Phase 26.0 final: **8297 passed + 1 skipped** (+55 
 - `13b9551` Task 8 V21 test fixups
 - (Task 9 — this commit)
 
+## Phase 26.1 — Editor-attribution modal (2026-05-13 — same day)
+
+Follow-up sub-phase to Phase 26.0. 3 items shipped:
+
+### A. V12 multi-reader-sweep fix at CDV summary mapper
+
+Phase 26.0e correctly added `status: t.status || null` to `rebuildTreatmentSummary` (the writer in `backendClient.js`) so customer.treatmentSummary stored in Firestore DOES carry status. But the **READER** at `src/components/backend/CustomerDetailView.jsx:432-442` was overlooked — the in-component useMemo recomputes summary locally from `treatments[]` and stripped top-level fields. Result: `paginatedTreatments` had no `status` → chip never rendered. Phase 26.1a fixed with a 1-line addition (plus 3 editor fields for forward-prep).
+
+This is the V12 reader-sweep pattern: every writer fix MUST be paired with a sweep of every reader. Tests D5.1 lock the contract permanently.
+
+### B. Top-right "ยืนยันการรักษา" button removed
+
+TFP:2888-2893 (sticky header) — user reported non-functional; removed. Bottom save button at TFP:4816+ is the canonical save path.
+
+### C. NEW editor-attribution modal
+
+Trigger: `isEdit && saveMode === 'staff' && !editorContext`. Doctor-save and create-mode bypass.
+
+`EditAttributionModal` (NEW component at `src/components/backend/EditAttributionModal.jsx`) is the 2nd member of the "pick a person before action" pattern family (1st = `ActorConfirmModal` for stock state-flip confirmations). Rule of 3 not yet reached.
+
+Schema additions on `be_treatments` (additive — no migration):
+
+| Field | Type | Set when | Display |
+|---|---|---|---|
+| `editedBy` | uid string | modal-confirmed staff edit-save | (not displayed; ref only) |
+| `editedByName` | display name | same | CDV row meta inline + TimelineModal mirror (future) |
+| `editedByRole` | 'doctor' / 'assistant' / 'staff' | same | "(แพทย์)" / "(ผู้ช่วย)" / "(พนักงาน)" via ROLE_LABEL_TH |
+| `editedAt` | Timestamp | same | (not displayed; audit trail) |
+
+Overwrite-on-each-edit (no history array — YAGNI). Future "edit log" feature can extend.
+
+### handleSubmit signature evolution
+
+| Phase | Signature |
+|---|---|
+| Pre-26.0 | `async ()` |
+| 26.0a | `async (eventOrSaveMode)` |
+| 26.1 | `async (eventOrSaveMode, options = {})` |
+
+Defensive coercion preserved across all phases. `options.editorContext` plus the internal re-invoke object form `{saveMode, editorContext}` are the Phase 26.1 additions.
+
+### Files (Phase 26.1)
+
+Source (4 modified + 1 NEW):
+- `src/components/backend/EditAttributionModal.jsx` (NEW — 176 LOC)
+- `src/components/backend/CustomerDetailView.jsx` (summary mapper + ROLE_LABEL_TH + row meta)
+- `src/components/TreatmentFormPage.jsx` (button removal + signature ext + state + mount + v26StatusPatch ext)
+- `src/lib/backendClient.js` (top-level extraction × 2 + rebuildTreatmentSummary ext)
+- `.agents/skills/audit-anti-vibe-code/SKILL.md` (AV37 ext)
+
+Tests:
+- `tests/edit-attribution-modal-rtl.test.jsx` (NEW — E1-E5)
+- `tests/phase-26-0-doctor-save-source-grep.test.js` (G3 block: G3.1-G3.6)
+- `tests/phase-26-0-status-display-rtl.test.jsx` (D5 block: D5.1-D5.4)
+- `tests/phase-26-0-doctor-save-flow-simulate.test.js` (F9 block: F9.1-F9.5)
+- `tests/audit-branch-scope.test.js` (AV37.9-AV37.11 + AV37.1 V21 fixup)
+- `tests/tf3-tfp-a11y-coverage.test.jsx` (TF3.A.6 V21 fixup window 2500→4000)
+
+### Test count delta
+
+Phase 26.0 final: 8297. Phase 26.1 final: **8320 + 1 skipped** (+23 net).
+
+10 task commits across 3 sub-phases (26.1a, 26.1b, 26.1c):
+- `0af6a65` Task 1 — CDV summary mapper fix + remove top-right button
+- `97a50df` Task 2 — EditAttributionModal + E1-E5
+- `7e4f88a` Task 3 — handleSubmit signature ext (G3.4-G3.5)
+- `476304d` Task 4 — v26StatusPatch + backendClient ext (G3.6 + D5.4)
+- `6b3f768` Task 5 — TFP modal state + mount + wire (G3.1-G3.3)
+- `550b771` Task 6 — CDV row meta + ROLE_LABEL_TH (D5.1-D5.3)
+- `afe37a9` Task 7 — F9 flow-simulate (5 tests)
+- `559d0cb` Task 8 — AV37.9-AV37.11 + SKILL.md
+- (Task 9 — full vitest + build verify)
+- (Task 10 — this commit)
+
 ## See also
 
-- Spec: `docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md`
-- Plan: `docs/superpowers/plans/2026-05-13-phase-26-0-doctor-save.md`
+- Spec Phase 26.0: `docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md`
+- Plan Phase 26.0: `docs/superpowers/plans/2026-05-13-phase-26-0-doctor-save.md`
+- **Spec Phase 26.1**: `docs/superpowers/specs/2026-05-13-phase-26-1-tfp-polish-editor-attribution-design.md`
+- **Plan Phase 26.1**: `docs/superpowers/plans/2026-05-13-phase-26-1-tfp-polish-editor-attribution.md`
 - Phase 25.0c lockedChannel: `concepts/appointment-15min-and-4types.md`
 - Phase 21.0 locked-X family: spec history at `docs/superpowers/specs/2026-05-08-walk-in-5th-type-design.md` (referenced)

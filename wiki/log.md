@@ -58,3 +58,15 @@ Test bank: G1+G2 (handleSubmit + UI source-grep) + D1+D2+D3+D4 (RTL chip + banne
 Full suite: 8242 → 8297 + 1 skipped (+55 net) all GREEN. Build clean. NOT YET DEPLOYED — awaiting user `deploy` authorization per Rule V18.
 
 Cross-references locked: `treatment-status-and-doctor-save` cites Phase 25.0c lockedChannel + Phase 21.0 lockedAppointmentType (Rule of 3 chain). Future TreatmentFormPage saveMode variants (e.g., draft-save) should land on this concept page first.
+
+## [2026-05-13] ingest | Phase 26.1 — TFP Polish + Editor-Attribution Modal
+
+Follow-up to Phase 26.0 (same-day). 3 items: (A) V12 multi-reader-sweep fix at CDV summary mapper — Phase 26.0e fixed the writer but missed the in-component reader, so the amber "แพทย์ลงบันทึก" chip never rendered. (B) Removed broken top-right "ยืนยันการรักษา" button at TFP:2888-2893. (C) NEW EditAttributionModal on staff edit-save — single picker, merged list (staff + doctors + assistants per branch), inline role labels. Records 4 top-level fields (editedBy/Name/Role/At) and displays "· แก้ไขโดย: X (role)" inline in CDV row meta.
+
+Updated `concepts/treatment-status-and-doctor-save.md` with Phase 26.1 section. handleSubmit signature evolution table added (Pre-26.0 → 26.0a → 26.1). AV37 audit invariant extended with 3 new sub-tests (AV37.9-AV37.11) + 1 V21-class regex fixup on AV37.1 (let-based branch tree contract). Total AV37 coverage: 11 sub-tests across both 26.0 + 26.1.
+
+10 task commits across 3 sub-phases (26.1a bug+cleanup, 26.1b modal+RTL, 26.1c TFP integration + display + flow + audit). ~600 LOC delta across 11 files. Tests delta: +23 net (Phase 26.0 8297 → Phase 26.1 8320 + 1 skipped). Build clean. NOT YET DEPLOYED.
+
+Rule of 3 status: `EditAttributionModal` is 2nd member of "pick-a-person-before-action" pattern family (1st = `ActorConfirmModal`). Future 3rd similar modal should consider extracting a shared `<PersonPickerModal>` base.
+
+Subagent-driven execution mode (same pattern as Phase 26.0). Each task: implementer subagent → verify → commit + push. 2 V21-class regex fixups landed during Tasks 3 + 4 + 8 (TF3.A.6 window 2500→4000, F7.3 let-based shape, AV37.1 let-based shape).
