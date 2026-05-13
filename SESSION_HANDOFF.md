@@ -7,11 +7,25 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 — Phase 26.0 + 26.1 + 26.2 + **26.2f** COMPLETE (NOT YET DEPLOYED) · 8447 tests + 1 skipped · build clean · 51 commits ahead of prod · 1 known flake (Phase 17.1 cross-branch-import-rtl, intermittent under full-suite load)
+- **Date last updated**: 2026-05-13 LATE EOD — Phase 26.2f DONE + 3 followups + Phase 26.2g-fillin BRAINSTORMED (impl pending next chat) · 8447 tests + 1 skipped · build clean · 50 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `<NEW_SHA>` docs(Phase 26.2f Task 10): wiki + log + SESSION_HANDOFF + active.md
-- **Test count**: **8447 passed** (+205 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures. 1 known flake (Phase 17.1 intermittent, pre-existing).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 51 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f implementation complete, awaiting combined deploy. TreatmentReadOnlyMirror + vitals-save + 3-stage status machine LIVE on master, NOT on prod.
+- **Last commit**: `6d134a5` fix(Phase 26.2f-followup3): REAL crash fix — Firestore Timestamp handling
+- **Test count**: **8447 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 50 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f LIVE on master only.
+
+### Session 2026-05-13 LATE — Phase 26.2f-followups + Phase 26.2g-fillin brainstormed (NOT YET DEPLOYED)
+
+User-reported bugs after Phase 26.2f shipped (TreatmentReadOnlyMirror live in TFP split-screen). 3 followup commits + 1 brainstorming session for the next phase.
+
+**followup #1 (`68b4bb6`)** — 5 fixes: history tab sort tiebreak by `createdAt.toMillis()` desc + `treatmentId/id` lexicographic desc when same date; doctor-required validation at TFP:2029 gated to `saveMode === 'staff'` only (vitals-save + doctor-save bypass); vitals-save button moved from RIGHT col (above doctor-save) → LEFT col (under Vital Signs box); subtitle dropped; doctor-save theme matched vitals-save teal.
+
+**followup #2 (`b127961`)** — 3 fixes: Mirror top-level type-check guard + `detail` always defaulted to `{}` via type-check at destructure; ใบรับรองแพทย์ FormSection moved from LEFT col → RIGHT col immediately before doctor-save button; doctor-save color teal #2EC4B6 → royal purple #7c3aed (vitals-save stays teal, distinct visual identity).
+
+**followup #3 (`6d134a5`) — REAL crash fix**: previous followup #2 was a misdiagnosis. ACTUAL root cause of black-screen-on-tab-click: `formatThaiDateFull/Only` at Mirror lines 29-57 couldn't handle Firestore Timestamp objects (`{seconds, nanoseconds}` or `.toDate()`/.toMillis()`). Old code did `new Date(timestampObject)` → Invalid Date → `isNaN` guard returned the RAW Timestamp object → React tried to render the object as JSX child → throws "Objects are not valid as a React child (found: object with keys {seconds, nanoseconds})" → error boundary → black screen. NEW `toDateSafely(value)` helper handles 5 input forms (Timestamp w/ toDate, Timestamp w/ toMillis, plain {seconds,nanoseconds}, Date, string/number). Returns null on unrecognized → formatters return `'—'` (safe string), never raw object.
+
+**Brainstorming for Phase 26.2g-fillin (NEXT CHAT)**: user reports TFP create mode doesn't auto-fill chronic disease / drug allergy / food allergy from customer.patientData. Q1 locked — data lives in STRUCTURED `patientData` fields (NOT customer.note). Design proposed (not yet approved): NEW `src/lib/patientHealthMapping.js` with `derivePatientCongenitalDisease(pd)` (from `hasUnderlying + ud_diabetes/hypertension/lung/kidney/heart/blood/other + ud_otherDetail`) and `derivePatientTreatmentHistory(pd)` (from `currentMedication + pregnancy`). TFP load useEffect lines ~1018-1019 extended to setCongenitalDisease + setTreatmentHistory in create mode. ~12-15 NEW test assertions estimated. User pivoted to crash-fix priority before approval — pick up next chat.
+
+Detail: `.agents/sessions/2026-05-13-phase-26-2f-mirror.md`. NOT yet deployed. 50 commits ahead.
 
 ### Session 2026-05-13 — Phase 26.2 TFP Split-Screen History + Customer.Note (COMPLETE, NOT YET DEPLOYED)
 
@@ -1479,26 +1493,27 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-09 EOD #24.
+Resume LoverClinic — continue from 2026-05-13 LATE EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=ccef3c2, prod=ccef3c2)
-3. .agents/active.md (8242 tests · idle)
-4. .claude/rules/00-session-start.md (iron-clad A-P + V42-V64 V-summary)
-5. .agents/sessions/2026-05-09-phase-25-0-walk-in.md (latest checkpoint)
+2. SESSION_HANDOFF.md (master=6d134a5, prod=ccef3c2 · 50 commits ahead · not deployed)
+3. .agents/active.md (8447 tests · Phase 26.2g-fillin PENDING)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-13-phase-26-2f-mirror.md (latest checkpoint)
 
-Status: master=`ccef3c2`, 8242 tests pass, prod=`ccef3c2` LIVE (Phase 25.0 Walk-in 5th appointment type DEPLOYED). Build clean. AV1-AV30 + AV32-AV36 + BS-1..BS-16 + CB-1..5.
+Status: master=`6d134a5`, 8447 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean. Phase 26.0/26.1/26.2/26.2f all SHIPPED to master, NOT deployed. 50 commits ahead.
 
-Next: idle — Phase 25.0 deployed; production stable.
+Next: **Phase 26.2g-fillin** — auto-fill `congenitalDisease` + `treatmentHistory` from `patientData.ud_*` + `currentMedication` on TFP create. Brainstorming spec drafted in prior chat (user confirmed structured patientData source). PICK UP from approving the design + writing-plans + implement. Design summary in .agents/active.md "Next action" section.
 
 Outstanding (user-triggered):
-- (Optional) `scripts/probe-deploy-probe.mjs` probes 2/3/4 false-positive trim.
-- (Optional) `bsa-task7-h-quater-fix` flake — passes standalone, flakes in full-suite parallel runs.
+- Deploy auth: 50 commits ahead — combined `vercel --prod` + `firebase deploy --only firestore:rules` per V15.
+- Phase 26.2g-fillin: approve design → writing-plans → subagent-driven execute.
+- (Optional) probe-deploy-probe.mjs probes 2/3/4 false-positive; Phase 17.1 cross-branch-import-rtl flake.
 
-Rules: every deploy needs explicit "deploy" THIS turn (V4/V7/V18); Rule 02 V15 combined (vercel + firebase parallel + Probe-Deploy-Probe); Rule P 7-step on every bug discovery (Tier 2 default); Rule J brainstorming HARD-GATE; Rule K work-first-test-last; Rule L BSA + BS-1..16; Rule M data-ops local + admin-SDK; Rule N targeted-test-only; Rule O productId-identity; Phase 15.7-septies pattern: `buildCustomerDetailUrl` canonical for "navigate to customer detail".
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
 
-Phase 25.0 institutional memory: **`lockedChannel` prop on AppointmentFormModal** is the 3rd locked-field. Future locked-X props MUST mirror `safeLockedX = ALLOWED.includes(prop) ? prop : null` validation + payload-override + chip-render-with-🔒 + `data-locked-X` attr pattern. Walk-in flow INVERTS the normal sequence: record customer FIRST (existing OPD-save) → `_maybeOpenWalkInModal` gated on `adminMode === 'dashboard'` → modal pops with full be_customers doc as `lockedCustomer`. V64 hub วันนี้ auto-displays walk-in via existing infrastructure (zero edits needed).
+Phase 26.2f institutional memory: **`toDateSafely(value)` is canonical helper** for any "value might be Firestore Timestamp object" rendering. 5-form coverage (.toDate / .toMillis / plain {seconds,nanoseconds} / Date / string-number). Returns null on unrecognized → caller renders safe fallback. Without this, raw Timestamp objects passed to React as JSX child throws "Objects are not valid as a React child" → black screen. Companion to `extractDisplayString` (Phase 26.2f Mirror) for [object Object] fix. **3-stage save workflow**: vitals → doctor → null/complete; saveMode='vitals' is 5th locked-X family member; AV37/38/39 audit invariants lock the contracts.
 
 /session-start
 ```
