@@ -7,11 +7,84 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 LATE EOD — Phase 26.2f DONE + 3 followups + Phase 26.2g-fillin BRAINSTORMED (impl pending next chat) · 8447 tests + 1 skipped · build clean · 50 commits ahead of prod
+- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin SHIPPED (patientHealthMapping + TFP wire + AV40 + V21 fixup) · 8474 tests + 1 skipped · build clean · 71 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `6d134a5` fix(Phase 26.2f-followup3): REAL crash fix — Firestore Timestamp handling
-- **Test count**: **8447 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 50 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f LIVE on master only.
+- **Last commit**: `f978de6` test(Phase 26.2g-fillin Task 8 fixup): D6.2 + D6.3 V21-class window bump
+- **Test count**: **8474 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 71 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin LIVE on master only.
+
+### Session 2026-05-13 EOD — Phase 26.2g-fillin SHIPPED (NOT YET DEPLOYED)
+
+User approved Phase 26.2g-fillin design (carried from prior session's brainstorming) and selected subagent-driven execution. 9 tasks shipped with 2-stage review (spec compliance + code quality) per task. Single user-reported bug surface ("TFP create แล้วโรคประจำตัว + ประวัติยา ไม่ขึ้นทั้งที่ลูกค้ากรอกใน PatientForm") closed via architectural extraction to a shared lib.
+
+**Commits this session** (8 total, `7d19077` → `f978de6`):
+- `7d19077` docs: spec + plan with pre-flight Rule P Step 3 grep result
+- `311b814` feat(Task 2+3): NEW `src/lib/patientHealthMapping.js` (~95 LOC) + TDD test bank (17 assertions L1.1-L3.2)
+- `7e6f7eb` test(M1 review): 3 typeof-guard regression locks (L1.10 + L2.7 + L2.8)
+- `7e839c3` feat(Task 4): wire helpers into `TreatmentFormPage.jsx` create-mode auto-fill at lines 1024-1034
+- `9555e19` test(Task 5): G1+G2 source-grep regression (TFP wiring locks + AV40 universal classifier)
+- `692b705` test(Task 6): Rule I flow-simulate F1.1-F1.3 (positive + gates-close + edit-mode bypass)
+- `d4fcb6a` feat(audit): AV40 audit invariant in `audit-anti-vibe-code/SKILL.md`
+- `f978de6` test(Task 8 fixup): D6.2 + D6.3 V21-class 800-char → 2000-char window bump (pre-existing Phase 26.2f-followup tiebreak comment had pushed `.slice(0, 5)` past 800; test count of 8447 in active.md was stale on this drift)
+
+**(A) `src/lib/patientHealthMapping.js`** — NEW pure-JS module (~95 LOC) with 2 derive functions:
+- `derivePatientCongenitalDisease(patientData)` → comma-joined Thai chronic-disease labels in PatientForm UI order (Hypertension/Diabetes/Lung/Kidney/Heart/Blood) gated by `hasUnderlying === 'มี'`; `ud_other` + `ud_otherDetail` appended (trimmed); empty when patient declared no underlying
+- `derivePatientTreatmentHistory(patientData)` → ` / `-joined "การตั้งครรภ์: <value>" + "ยาที่ใช้ประจำ: <trimmed value>" with sentinel-skip on `'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์'`
+- Frozen `UD_LABELS` map + locked `PREGNANCY_LABEL_PREFIX` / `MEDICATION_LABEL_PREFIX` constants for tests + admin recognition in textarea
+- Defensive `typeof` guards on every nullable field (`pregnancy`, `currentMedication`, `ud_otherDetail`); private `_isPlainObject` outer-arg guard
+
+**(B) TFP wiring** — `TreatmentFormPage.jsx:1024-1034` extends the existing `if (patientData) { !isEdit }` block. Existing `setBloodType` + `setDrugAllergy` preserved verbatim; new nested `if (!isEdit) { const derived... if (derived) setter(...) }` adds the two new auto-fills. Edit-mode untouched (lines 927-932 still restore from `t.healthInfo.*`). Vitals-save bypass unchanged (saveMode='vitals' runs on submit, not on mount-time load).
+
+**(C) AV40 audit invariant** — `audit-anti-vibe-code/SKILL.md` extended. Anchor regex `/patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/`. Closed sanctioned-exception list (3 files): `PatientForm.jsx` (writer), `AdminDashboard.jsx:4504-4533` (display chips), `src/utils.js:345-356+415-426` (OPD print builder — tech-debt for future Rule-of-3 refactor). Source-grep regression in `tests/phase-26-2g-fillin-source-grep.test.js` G2.1.
+
+**(D) V21-class fixup** — Phase 26.2f-followup (`68b4bb6`) added multi-line same-date tiebreak comment + sort logic in TFP, pushing `filter` and `.slice(0, 5)` past 800-char window in `phase-26-2-split-screen-rtl.test.jsx` D6.2 + D6.3. Pre-existing latent failure (active.md count of 8447 was stale). Bumped 800 → 2000 + V21 marker comment explaining Phase 26.2f-followup origin. Contract preserved (`filter` + `treatmentId` + `.slice(0, 5)` all still present; only search window grew).
+
+**Pre-flight Rule P Step 3 grep** bounded the class-of-bug. 3 callers found: TFP (target), AdminDashboard.jsx (display chips, sanctioned), src/utils.js (OPD print builder, sanctioned tech-debt). No fourth caller.
+
+**Tests**: 27 new (20 unit L1.1-L3.2 + 4 source-grep G1.1-G2.1 + 3 Rule I flow-simulate F1.1-F1.3). Cumulative: 8447 → 8474 + 1 skipped (delta correctly accounts for 8447 baseline + 27 new = 8474, with 2 V21-fixup tests bumping windows but not adding new assertions). Build clean (2.64s, BackendDashboard chunk 904.98 KB unchanged).
+
+**Subagent-driven discipline**: 9 tasks, fresh subagent per task, 2-stage review (spec compliance + code quality) on Tasks 2+3 / 4 / 5. Tasks 6+7+8+9 reduced review surface (verbatim plan content + verification-only nature). 1 M1 minor finding addressed inline (typeof-guard regression locks). 1 V21 fixup applied inline at Task 8 (Phase 26.2f-followup latent drift).
+
+**Lessons** (Rule D continuous improvement):
+- V12 multi-reader-sweep applies at SINGLE-BLOCK boundary too — when an auto-fill block sets N derived fields and N-2 land, the missing 2 are the silent bug
+- Sentinel-value handling for radio-default fields (pregnancy `'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์'`) deserves an explicit named constant to prevent literal-string drift
+- Locked label-prefix constants give admin a visible auto-fill origin in the textarea AND make tests deterministic
+- Rule of 3 awareness — `src/utils.js` OPD print builders carry the SAME inline derivation (Thai + English) but with different output shape; sanctioned as tech-debt for follow-up
+- Subagent-driven 2-stage review caught 1 M1 (typeof-guard regression locks missing — implementation correct, tests didn't lock the contract)
+- V21-class regex windows drift when comments expand — bump windows + add V21 marker comment explaining the origin (mirrors Phase 26.2f's L7.2 + P1.5 fixups)
+- active.md test count can be stale on latent V21 fixups; running full suite at task batch end is the only way to catch this (Rule N's "small fix + shared file → full suite at batch end" applies even when the helper is small but new)
+
+Detail: `.agents/sessions/2026-05-13-phase-26-2g-fillin.md`. NOT yet deployed. 71 commits ahead.
+
+#### Resume Prompt — Phase 26.2g-fillin SHIPPED
+
+```
+Resume LoverClinic — continue from 2026-05-13 EOD (Phase 26.2g-fillin SHIPPED).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=f978de6, prod=ccef3c2 · 71 commits ahead · NOT DEPLOYED)
+3. .agents/active.md (8474 tests · Phase 26.2g-fillin DONE)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-13-phase-26-2g-fillin.md (latest checkpoint)
+
+Status: master=`f978de6`, 8474 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin all SHIPPED to master; NOT deployed. 71 commits ahead.
+
+Next: choose ONE
+1. Deploy combined 71 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. New phase / feature — user specifies priority.
+3. Probe-Deploy-Probe maintenance — probes 2/3/4 false-positive or Phase 17.1 flake.
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
+
+Phase 26.2g-fillin institutional memory:
+- `derivePatientCongenitalDisease` + `derivePatientTreatmentHistory` = canonical helpers for patientData health-info → TFP-state derivation (`src/lib/patientHealthMapping.js`)
+- AV40 = patientData.ud_* / hasUnderlying / currentMedication / pregnancy reads centralized via patientHealthMapping helpers (sanctioned: PatientForm.jsx + AdminDashboard.jsx + src/utils.js tech-debt)
+- V21 windows in source-grep tests drift when comments expand — bump windows + V21 marker
+
+/session-start
+```
 
 ### Session 2026-05-13 LATE — Phase 26.2f-followups + Phase 26.2g-fillin brainstormed (NOT YET DEPLOYED)
 
