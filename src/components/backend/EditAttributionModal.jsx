@@ -206,7 +206,10 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
         ...treatment.detail,
         branchId: editedBranchId,
       });
-      onSaved();
+      // Phase 27.0-bis (2026-05-14) — pass new branchId to parent so it can
+      // update its display state immediately (optimistic refresh) instead
+      // of waiting for a refetch. User report: 'ไม่แสดงผลทันที' — fixed.
+      onSaved(editedBranchId);
     } catch (e) {
       setError(e?.message || 'บันทึกไม่สำเร็จ');
     } finally {

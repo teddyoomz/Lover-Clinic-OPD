@@ -331,6 +331,13 @@ export default function TreatmentReadOnlyMirror({
   const [staffMap, setStaffMap] = useState(() => new Map());
   const [branchMap, setBranchMap] = useState(() => new Map());
   const [editBranchOpen, setEditBranchOpen] = useState(false);
+  // Phase 27.0-bis (2026-05-14) — optimistic branch override.
+  // After EditTreatmentBranchModal saves, display refreshes IMMEDIATELY
+  // (without waiting for parent refetch) by reading from this override.
+  // Parent's historyFullDoc state will sync on next history-tab re-click;
+  // here we just keep the Mirror visually consistent post-save.
+  // User report: "กดแก้ไขสาขาแล้วไม่แสดงผลทันที" — fixed by this override.
+  const [branchIdOverride, setBranchIdOverride] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,7 +398,9 @@ export default function TreatmentReadOnlyMirror({
   const doctorId = detail.doctorId || '';
   const resolvedDoctor = resolveDoctorDisplayName(doctorId, doctorMap, detail.doctorName);
   const doctorName = resolvedDoctor || '—';  // '—' placeholder for empty
-  const branchId = detail.branchId || '';
+  // Phase 27.0-bis — prefer the optimistic override (post-save) over the
+  // doc's branchId so display refreshes immediately after the modal saves.
+  const branchId = (branchIdOverride != null ? branchIdOverride : detail.branchId) || '';
   const resolvedBranch = resolveBranchDisplayName(branchId, branchMap, detail.branchName);
   const branchName = resolvedBranch || '—';
   const chiefComplaint = detail.chiefComplaint || detail.cc || '';
@@ -1034,9 +1043,13 @@ export default function TreatmentReadOnlyMirror({
         <EditTreatmentBranchModal
           treatment={treatmentDoc}
           onClose={() => setEditBranchOpen(false)}
-          onSaved={() => {
+          onSaved={(newBranchId) => {
+            // Phase 27.0-bis (2026-05-14) — set optimistic override so the
+            // display refreshes IMMEDIATELY without waiting for a parent
+            // refetch. Parent's historyFullDoc will sync on next tab re-click.
+            // User report: "กดแก้ไขสาขาแล้วไม่แสดงผลทันที" — fixed.
+            setBranchIdOverride(typeof newBranchId === 'string' ? newBranchId : null);
             setEditBranchOpen(false);
-            // The treatment doc listener in parent will refresh the prop automatically.
           }}
         />
       )}
