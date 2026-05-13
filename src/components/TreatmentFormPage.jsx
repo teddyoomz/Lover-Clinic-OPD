@@ -807,8 +807,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 courseItems || []
               );
               // Phase 26.2a (V26.2, 2026-05-13) — stamp customer note for display above doctor-save button.
-              const patientData = custData?.patientData || {};
-              setCustomerNote(custData?.note || patientData?.note || '');
+              setCustomerNote(custData?.note || custData?.patientData?.note || patientData?.note || '');
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
@@ -3153,7 +3152,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* ════ Phase 26.2a (V26.2, 2026-05-13) — customer note display ════ */}
             {customerNote && (
-              <div data-testid="tfp-customer-note" className="mt-3 bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden">
+              <div data-testid="tfp-customer-note" className="mb-3 bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-amber-900/40 flex items-center gap-2">
                   <ClipboardCheck size={14} className="text-amber-400" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">หมายเหตุทั่วไป</h3>
