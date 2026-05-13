@@ -10,6 +10,8 @@
 // derive* helpers — read KIOSK-SHAPE fields (hasUnderlying / ud_* / pregnancy /
 //   currentMedication / allergiesDetail) from opd_session.patientData. Used by:
 //   - src/utils.js OPD print builders (Thai + English helpers — Phase 26.2g-fillin-followup, 2026-05-13)
+//   - src/lib/kioskPatientToCanonical.js (Phase 26.2g-fillin-bis-followup, 2026-05-13 —
+//     Rule of 3 close; 3rd inline ud_* derivation site eliminated)
 //
 // resolve* helpers — read CANONICAL camelCase fields (congenitalDisease /
 //   drugAllergy / foodAllergy / beforeTreatment / pregnanted) from

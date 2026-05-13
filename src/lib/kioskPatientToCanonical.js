@@ -19,6 +19,7 @@
 // (handleResync) + :2535 (handleDepositSync). Extracted to shared helper.
 
 import { generateClinicalSummary } from '../utils.js';
+import { derivePatientCongenitalDisease } from './patientHealthMapping.js';
 
 /**
  * Convert kiosk PatientForm patientData → canonical snake_case customer form.
@@ -43,17 +44,14 @@ export function kioskPatientToCanonical(d, opts = {}) {
   const reasons = Array.isArray(d.visitReasons) ? d.visitReasons : (d?.reasons || []);
   const reasonsStr = Array.isArray(reasons) ? reasons.filter(Boolean).join(', ') : String(reasons || '');
 
-  const pmh = [];
-  if (d.hasUnderlying === 'มี') {
-    if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-    if (d.ud_diabetes)     pmh.push('เบาหวาน');
-    if (d.ud_lung)         pmh.push('โรคปอด');
-    if (d.ud_kidney)       pmh.push('โรคไต');
-    if (d.ud_heart)        pmh.push('โรคหัวใจ');
-    if (d.ud_blood)        pmh.push('โรคโลหิต');
-    if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-  }
-  const underlyingStr = pmh.join(', ');
+  // Phase 26.2g-fillin-bis-followup (2026-05-13) — Rule of 3 close:
+  // inline ud_* derivation extracted to shared helper. Output byte-identical
+  // for typical PatientForm-sanitized inputs (radio/text values, strings, no
+  // surrounding whitespace). Helper adds defensive typeof + trim guards on
+  // ud_otherDetail (strictly safer; no behavior change for real kiosk data).
+  // Same pattern previously applied to src/utils.js OPD print builders in
+  // Phase 26.2g-fillin-followup. Third caller of the pattern; Rule of 3 closes.
+  const underlyingStr = derivePatientCongenitalDisease(d);
   const allergiesStr = d.hasAllergies === 'มี' ? (d.allergiesDetail || '') : '';
 
   // ── Phone — preserve country code if international
