@@ -184,14 +184,21 @@ describe('D6 — TFP history tab strip (source-grep)', () => {
 
   it('D6.2 — isEdit guard: current treatment excluded from history list (filter by treatmentId)', () => {
     const idx = TFP_SOURCE.indexOf('getCustomerTreatments');
-    const region = TFP_SOURCE.slice(idx, idx + 800);
+    // V21-class window fixup (Phase 26.2g-fillin, 2026-05-13): window bumped
+    // 800 → 2000 after Phase 26.2f-followup (`68b4bb6`) added multi-line
+    // same-date tiebreak comment + sort logic that pushed `filter` past 800.
+    // The contract (`filter` + `treatmentId` reachable from getCustomerTreatments
+    // call site) is preserved; only the search window grew.
+    const region = TFP_SOURCE.slice(idx, idx + 2000);
     expect(region).toMatch(/filter/);
     expect(region).toMatch(/treatmentId/);
   });
 
   it('D6.3 — history slice(0, 5) limits to top-5', () => {
     const idx = TFP_SOURCE.indexOf('getCustomerTreatments');
-    const region = TFP_SOURCE.slice(idx, idx + 800);
+    // V21-class window fixup (Phase 26.2g-fillin, 2026-05-13): same as D6.2 —
+    // tiebreak comment + sort logic pushed `.slice(0, 5)` from ~700 to ~1347.
+    const region = TFP_SOURCE.slice(idx, idx + 2000);
     expect(region).toMatch(/\.slice\s*\(\s*0\s*,\s*5\s*\)/);
   });
 });
