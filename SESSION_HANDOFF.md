@@ -7,11 +7,70 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin SHIPPED (patientHealthMapping + TFP wire + AV40 + V21 fixup) · 8474 tests + 1 skipped · build clean · 71 commits ahead of prod
+- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin-followup SHIPPED (utils.js Rule-of-3 close + UD_LABELS_EN + AV40 shrunk 3→2) · 8490 tests + 1 skipped · build clean · 79+ commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `f978de6` test(Phase 26.2g-fillin Task 8 fixup): D6.2 + D6.3 V21-class window bump
-- **Test count**: **8474 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 71 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin LIVE on master only.
+- **Last commit**: `551f5ae` feat(audit AV40 update Task 4): utils.js dropped from sanctioned list (Task 6 session-end docs commit lands next)
+- **Test count**: **8490 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 79+ commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup LIVE on master only.
+
+### Session 2026-05-13 EOD — Phase 26.2g-fillin-followup SHIPPED (NOT YET DEPLOYED)
+
+User chose the optional Rule-of-3 follow-up (`src/utils.js:345-356+415-426` flagged as sanctioned tech-debt in Phase 26.2g-fillin AV40). Brainstormed Approach A (mirror helper + caller wrap) + formal-clinical EN labels (preserve current utils.js output verbatim) → spec → plan → subagent-driven execution.
+
+**Commits this session** (6 total: spec + 5 tasks; session-end docs commit lands next):
+- `7b0d421` docs: design spec for utils.js Rule-of-3 refactor
+- `037bcc7` feat(Task 1): UD_LABELS_EN + derivePatientCongenitalDiseaseEnglish + 12 unit tests
+- `1336bc4` test(Task 1 review fix): file-header CLOSED → PENDING (V21 comment-vs-code drift caught by code-quality reviewer)
+- `839aa38` feat(Task 2): utils.js OPD print builders consume helpers + header flip back to CLOSED
+- `1995e6e` test(Task 3): G3.1-G3.4 source-grep regression locks
+- `551f5ae` feat(Task 4): AV40 sanctioned-list shrink (3 → 2; utils.js dropped)
+
+**(A) `src/lib/patientHealthMapping.js` extension** — NEW `UD_LABELS_EN` frozen map with formal clinical labels (Hypertension / Diabetes Mellitus / Lung Disease / Chronic Kidney Disease / Heart Disease / Hematological Disease) intentionally MORE FORMAL than PatientForm UI labels. NEW pure helper `derivePatientCongenitalDiseaseEnglish` mirrors the Thai version with `UD_LABELS_EN` (same gates: `hasUnderlying === 'มี'` wins; ud_other + ud_otherDetail trimming; typeof guards). ~30 LOC added after existing exports.
+
+**(B) `src/utils.js` refactor** — 2 inline `if (d.ud_X) pmh.push(...)` blocks (10 lines each, Thai + English) collapsed to 2 lines each that call the helpers and wrap with the existing OPD-print prefix + fallback. Output BYTE-IDENTICAL for OPD print recipients (verified via node REPL on full-flags + empty cases). Surrounding allergy + currentMedication lines preserved verbatim (different shape, out of scope).
+
+**(C) AV40 sanctioned-exception list update** — `src/utils.js` REMOVED (now uses helpers). List shrinks 3 → 2 (PatientForm.jsx writer + AdminDashboard.jsx display chips remain). V12 multi-reader-sweep class for `patientData.ud_*` fully closed project-wide.
+
+**Subagent-driven discipline** — 6 tasks. Task 1 + Task 2 had 2-stage review (spec compliance + code quality). Task 1 code-quality reviewer caught V21 comment-vs-code drift (file header declared `utils.js Rule-of-3 tech-debt CLOSED` BEFORE Task 2 actually refactored utils.js — the comment was a lie at Task 1's SHA). Inline review-fix flipped to PENDING; Task 2 flipped back to CLOSED when refactor landed. Task 2 reviewer flagged stale AV40 SKILL.md entry — Task 4 (next in plan sequence) closed it. Tasks 3-5 ran inline due to verbatim plan content + low review surface.
+
+**Tests**: +16 new (12 L1.1-EN..L1.12-EN unit + 4 G3 source-grep). Cumulative: 8474 → 8490 + 1 skipped. Build clean.
+
+**Lessons**: (a) Rule P "ONE class-of-bug at a time" + sanctioned tech-debt + follow-up plan is canonical rhythm for partial-scope refactors. (b) Byte-identical output is the right contract when refactoring builders shipping to external recipients. (c) Intentional label drift between contexts (formal clinical vs lay-friendly UI) deserves separate frozen constants rather than forced unification. (d) The existing helper's pure-derivation contract was preserved by NOT adding a `lang` param (Approach B rejected) — separation of concerns intact. (e) V21 comment-vs-code drift can fire BETWEEN tasks of the same phase — inter-task state correctness deserves explicit attention.
+
+Detail: `.agents/sessions/2026-05-13-phase-26-2g-fillin-followup.md`. NOT yet deployed. 79+ commits ahead.
+
+#### Resume Prompt — Phase 26.2g-fillin-followup SHIPPED
+
+```
+Resume LoverClinic — continue from 2026-05-13 EOD (Phase 26.2g-fillin-followup SHIPPED).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=<NEW HEAD SHA>, prod=ccef3c2 · 79+ commits ahead · NOT DEPLOYED)
+3. .agents/active.md (8490 tests · Phase 26.2g-fillin-followup DONE)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-13-phase-26-2g-fillin-followup.md (latest checkpoint)
+
+Status: master=`<NEW HEAD SHA>`, 8490 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin / 26.2g-fillin-followup all SHIPPED to master; NOT deployed. 79+ commits ahead.
+
+Next: choose ONE
+1. Deploy combined 79+ commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. New phase / feature — user specifies priority.
+3. Probe-Deploy-Probe maintenance — probes 2/3/4 false-positive or Phase 17.1 flake.
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
+
+Phase 26.2g-fillin-followup institutional memory:
+- derivePatientCongenitalDiseaseEnglish + UD_LABELS_EN formal clinical labels = canonical helpers for English OPD print
+- V12 multi-reader-sweep for patientData.ud_* fully closed project-wide
+- AV40 sanctioned list = 2 entries (PatientForm.jsx + AdminDashboard.jsx)
+- Rule P partial-scope refactor + sanctioned tech-debt + follow-up plan rhythm
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-13 EOD — Phase 26.2g-fillin SHIPPED (NOT YET DEPLOYED)
 
