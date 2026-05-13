@@ -1092,6 +1092,71 @@ inputs at all). AV39 is the full-mirror contract that allows disabled inputs
 for structural fidelity; AV38 forbids inputs entirely for the minimal panel.
 AV37 (Phase 26.0 + 26.1 doctor-save gates) covers the editable counterpart.
 
+### AV40 — `patientData.ud_*` reads centralized via `patientHealthMapping.js` (Phase 26.2g-fillin, 2026-05-13)
+
+**Class-of-bug**: V12 multi-reader-sweep family at TFP create-mode auto-fill
+boundary. Pre-Phase 26.2g-fillin, `TreatmentFormPage.jsx:1018-1019` set
+`bloodType` + `drugAllergy` from `patientData.*` while `congenitalDisease`
++ `treatmentHistory` were silently dropped despite the patient having
+declared chronic + medication in PatientForm. User reported (verbatim):
+"TFP create แล้วโรคประจำตัว + ประวัติยา ไม่ขึ้นทั้งที่ลูกค้ากรอกใน PatientForm".
+
+**Pattern**: Direct reads of the following `patientData` keys are forbidden
+in `src/components/**` AND `src/pages/**`:
+- `patientData.ud_diabetes` / `patientData.ud_hypertension` /
+  `patientData.ud_lung` / `patientData.ud_kidney` /
+  `patientData.ud_heart` / `patientData.ud_blood` /
+  `patientData.ud_other` / `patientData.ud_otherDetail`
+- `patientData.hasUnderlying`
+- `patientData.currentMedication`
+- `patientData.pregnancy`
+
+Consumers MUST import + use:
+- `derivePatientCongenitalDisease(patientData)` →
+  comma-joined Thai chronic-disease labels (UI order); empty string when
+  patient declared no underlying or fields are absent
+- `derivePatientTreatmentHistory(patientData)` →
+  `' / '`-joined pregnancy + medication parts with locked label prefixes;
+  empty string when pregnancy is sentinel + medication is empty
+
+Both helpers live in `src/lib/patientHealthMapping.js` along with the
+frozen `UD_LABELS` map and the locked `PREGNANCY_LABEL_PREFIX` +
+`MEDICATION_LABEL_PREFIX` constants.
+
+**Anchor regex**:
+`/patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/`
+
+**Sanctioned exceptions** (closed list — adding a 4th file fails the lock test):
+- `src/pages/PatientForm.jsx` — writer of these fields (kiosk + admin manual)
+- `src/pages/AdminDashboard.jsx` — display chips at lines ~4504-4533
+  (`d.ud_*` JSX literals + `d.pregnancy` chip-color logic); pure display,
+  not transform
+- `src/utils.js` — Thai + English PMH builders at lines ~345-356 + ~415-426
+  inside the OPD print builder; pre-existing inline derivation with
+  different output shape ("ปฏิเสธ" / "No known" fallback). **Tech-debt**:
+  future Rule-of-3 refactor to consume `derivePatientCongenitalDisease`
+  is welcome but was out of scope for Phase 26.2g-fillin. This file is
+  outside the G2.1 walk (only `src/components` + `src/pages`) so no test
+  change needed; reviewers must NOT add new direct `ud_*` reads in
+  `src/utils.js` either — refactor toward the helper instead.
+
+**Source-grep regression**: `tests/phase-26-2g-fillin-source-grep.test.js`
+G2.1 walks `src/components` + `src/pages` and asserts the offender list
+is empty (modulo sanctioned set). G1.1-G1.3 also lock TFP wiring (imports
++ call-sites inside the create-mode block + `!isEdit` gate).
+
+**Class-of-bug**: V12 multi-reader-sweep at SINGLE-BLOCK boundary — when
+an auto-fill block sets N derived fields and N-2 land, the missing 2 are
+the silent bug. Same family as V52 (BS-11 report tabs reportsLoaders),
+V36 (multi-call-site), V44 (canonical-mapper bypass). The architectural
+fix is centralizing the derivation in `src/lib/patientHealthMapping.js`
+so future patient-health additions land in the lib + are auto-discoverable
+by consumers.
+
+**Companion**: AV20 (Staff/Doctor hide-from-lists lookup-map sanctioned
+exception pattern). AV40 mirrors AV20's "writer + display-chip sanctioned
+exception list" pattern at the patientData read boundary.
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
@@ -1104,7 +1169,7 @@ AV37 (Phase 26.0 + 26.1 doctor-save gates) covers the editable counterpart.
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation).
 **HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
-**MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI).
+**MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 
 ## Example violations from historical commits
@@ -1116,3 +1181,4 @@ AV37 (Phase 26.0 + 26.1 doctor-save gates) covers the editable counterpart.
 - AV9 — dozens of ad-hoc `new Date().toISOString().slice(0,10)` display sites migrated to `thaiTodayISO()` `71e513f`.
 - AV17 — `listProducts` + `listCourses` spread order swapped to `{...d.data(), id: d.id}` in V38 (2026-05-07). 5 พระราม 3 products + 2 courses had stray `data.id` overriding docId → handleDelete silent no-op. **V38-followup mass-sweep** (commit after V39, 2026-05-07) extended the fix to all 85+ callsites across 15 files; full suite 6757/6757 PASS post-sweep.
 - AV18 — V39 (2026-05-07) patched 4 migrate fns (promotions/coupons/vouchers/df_staff_rates) + 4 mappers (`buildBe{Promotion,Coupon,Voucher}FromMaster` + `mapMasterToDfStaffRates`) to accept `{branchId}` opt. 479 zombie docs backfilled to พระราม 3 via `scripts/phase-24-0-vicies-novies-decies-backfill-zombie-branchid.mjs --apply`. Audit doc `be_admin_audit/phase-24-0-vicies-novies-decies-backfill-zombie-branchid-1778102599138-4d7618f4`.
+- AV40 — Phase 26.2g-fillin (2026-05-13) NEW `src/lib/patientHealthMapping.js` with `derivePatientCongenitalDisease` + `derivePatientTreatmentHistory` pure helpers. TFP create-mode auto-fill at `TreatmentFormPage.jsx:1024-1034` extended to call both helpers gated by `!isEdit`. Sanctioned exceptions: `PatientForm.jsx` (writer) + `AdminDashboard.jsx:4504-4533` (display chips) + `src/utils.js:345-356,415-426` (OPD print builder tech-debt). Source-grep regression: `tests/phase-26-2g-fillin-source-grep.test.js` G1+G2.
