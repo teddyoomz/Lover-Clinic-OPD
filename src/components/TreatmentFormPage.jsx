@@ -7,7 +7,7 @@ import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip,
-         AlertCircle, ClipboardCheck } from 'lucide-react';
+         AlertCircle, ClipboardCheck, Calendar } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
@@ -427,6 +427,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
   // Phase 26.2a (V26.2, 2026-05-13) — customer.note display above doctor-save button.
   const [customerNote, setCustomerNote] = useState('');
+  // Phase 26.2b (V26.2, 2026-05-13) — History tab strip: top-5 recent treatments.
+  const [historyTreatments, setHistoryTreatments] = useState([]);
+  const [selectedHistoryTreatmentId, setSelectedHistoryTreatmentId] = useState(null);
+  const [historyFullDoc, setHistoryFullDoc] = useState(null);
+  // handleHistoryTabClick — toggle: re-click active tab clears selection.
+  const handleHistoryTabClick = (id) => {
+    if (selectedHistoryTreatmentId === id) {
+      setSelectedHistoryTreatmentId(null);
+      setHistoryFullDoc(null);
+    } else {
+      setSelectedHistoryTreatmentId(id);
+      setHistoryFullDoc(null);
+    }
+  };
   // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Unlocks add-ops
   // (course-items / consumables / purchasedItems / auto-sale) when admin
   // is finalizing a treatment that was previously doctor-saved (status set
@@ -722,6 +736,27 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     })();
     return () => { cancelled = true; };
   }, [isBackend, customerId]);
+
+  // ── Phase 26.2b — load top-5 recent treatments for history tab strip ───
+  useEffect(() => {
+    if (!customerId || !isEdit) { setHistoryTreatments([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getCustomerTreatments } = await import('../lib/scopedDataLayer.js');
+        const all = await getCustomerTreatments(customerId);
+        if (!cancelled) {
+          const filtered = (all || [])
+            .filter(t => t.treatmentId !== treatmentId && t.treatmentId !== undefined)
+            .slice(0, 5);
+          setHistoryTreatments(filtered);
+        }
+      } catch (e) {
+        if (!cancelled) setHistoryTreatments([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customerId, treatmentId, isEdit]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -2958,6 +2993,46 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               (Phase 26.0d) under OPD Card unchanged. */}
         </div>
       </div>
+
+      {/* ── Phase 26.2b (V26.2, 2026-05-13) — History tab strip ──────────────
+          Top-5 most recent treatments for this customer (cross-branch).
+          Only shown in edit mode when history is available.
+          Toggle: click active tab → deselects (null). */}
+      {isEdit && historyTreatments && historyTreatments.length > 0 && (() => {
+        // inline helper — dd/mm from YYYY-MM-DD (no new export needed, Rule C lean)
+        const formatThaiDateShort = (iso) =>
+          iso ? iso.slice(5).split('-').reverse().join('/') : '-';
+        return (
+          <div
+            data-testid="tfp-history-tab-strip"
+            className={`sticky top-[49px] z-[9] border-b ${isDark ? 'bg-[#0d0d0d]/95 border-[#1e1e1e]' : 'bg-gray-50/95 border-gray-200'} backdrop-blur-sm`}
+          >
+            <div className="max-w-6xl mx-auto px-4 flex items-center gap-1 overflow-x-auto py-1.5 scrollbar-hide">
+              <Calendar size={13} className="text-gray-500 flex-shrink-0 mr-1" />
+              {historyTreatments.map((t) => {
+                const isActive = selectedHistoryTreatmentId === t.treatmentId;
+                return (
+                  <button
+                    key={t.treatmentId}
+                    data-testid={`tfp-history-tab-${t.treatmentId}`}
+                    onClick={() => handleHistoryTabClick(t.treatmentId)}
+                    className={`flex-shrink-0 px-2.5 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
+                      isActive
+                        ? 'bg-[var(--accent,#2EC4B6)] text-white'
+                        : isDark
+                          ? 'bg-[#1a1a1a] text-gray-400 hover:text-gray-200 hover:bg-[#222]'
+                          : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200'
+                    }`}
+                    style={isActive ? { backgroundColor: accentColor } : undefined}
+                  >
+                    {formatThaiDateShort(t.date)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Phase 26.0d (V26.0, 2026-05-13) — edit-mode banner ──────────────
           Amber banner shown when admin opens a treatment that was originally

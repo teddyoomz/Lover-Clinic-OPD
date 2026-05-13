@@ -169,3 +169,29 @@ describe('E6 — TreatmentReadOnlyPanel', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── D6: TFP history tab strip source-grep (Node fs) ─────────────────────────
+
+describe('D6 — TFP history tab strip (source-grep)', () => {
+  const { readFileSync } = require('fs');
+  const { join } = require('path');
+  const TFP_SOURCE = readFileSync(join(process.cwd(), 'src/components/TreatmentFormPage.jsx'), 'utf-8');
+
+  it('D6.1 — historyTreatments.length render guard and .map call present', () => {
+    expect(TFP_SOURCE).toMatch(/historyTreatments\s*&&\s*historyTreatments\.length\s*>/);
+    expect(TFP_SOURCE).toMatch(/historyTreatments\.map\s*\(/);
+  });
+
+  it('D6.2 — isEdit guard: current treatment excluded from history list (filter by treatmentId)', () => {
+    const idx = TFP_SOURCE.indexOf('getCustomerTreatments');
+    const region = TFP_SOURCE.slice(idx, idx + 800);
+    expect(region).toMatch(/filter/);
+    expect(region).toMatch(/treatmentId/);
+  });
+
+  it('D6.3 — history slice(0, 5) limits to top-5', () => {
+    const idx = TFP_SOURCE.indexOf('getCustomerTreatments');
+    const region = TFP_SOURCE.slice(idx, idx + 800);
+    expect(region).toMatch(/\.slice\s*\(\s*0\s*,\s*5\s*\)/);
+  });
+});

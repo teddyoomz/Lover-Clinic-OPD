@@ -43,4 +43,29 @@ describe('Phase 26.2 — split-screen + customer.note source-grep', () => {
       expect(region).toMatch(/border-amber-900\/40/);
     });
   });
+
+  describe('Item G4 — history tab strip state + fetch + JSX', () => {
+    it('G4.1 — historyTreatments state declared with useState([])', () => {
+      expect(TFP_SOURCE).toMatch(/const\s+\[historyTreatments,\s*setHistoryTreatments\]\s*=\s*useState\(\s*\[\s*\]\s*\)/);
+    });
+    it('G4.2 — selectedHistoryTreatmentId state declared with useState(null)', () => {
+      expect(TFP_SOURCE).toMatch(/const\s+\[selectedHistoryTreatmentId,\s*setSelectedHistoryTreatmentId\]\s*=\s*useState\(\s*null\s*\)/);
+    });
+    it('G4.3 — historyFullDoc state declared with useState(null)', () => {
+      expect(TFP_SOURCE).toMatch(/const\s+\[historyFullDoc,\s*setHistoryFullDoc\]\s*=\s*useState\(\s*null\s*\)/);
+    });
+    it('G4.4 — history fetch useEffect calls getCustomerTreatments with customerId', () => {
+      expect(TFP_SOURCE).toMatch(/getCustomerTreatments\s*\(\s*customerId\s*\)/);
+    });
+    it('G4.5 — tab strip renders data-testid="tfp-history-tab-${id}"', () => {
+      expect(TFP_SOURCE).toMatch(/data-testid=\{`tfp-history-tab-\$\{/);
+    });
+    it('G4.6 — handleHistoryTabClick toggles selection (re-click clears to null)', () => {
+      expect(TFP_SOURCE).toMatch(/handleHistoryTabClick/);
+      // toggle: re-click active tab → null
+      const idx = TFP_SOURCE.indexOf('handleHistoryTabClick');
+      const region = TFP_SOURCE.slice(idx, idx + 400);
+      expect(region).toMatch(/null/);
+    });
+  });
 });
