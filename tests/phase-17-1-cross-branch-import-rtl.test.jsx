@@ -2,9 +2,20 @@
 // Mount CrossBranchImportModal with mocked adapter + scopedDataLayer +
 // branches; simulate source-pick + select + Import + verify endpoint POST.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { act } from 'react';
+
+// Phase 26.2g-fillin-bis-followup-2 (2026-05-13) — defensive isolation against
+// intermittent full-suite-load flake. 4 test files (this + branch-backup-ui-rtl
+// + phase15.5b-withdrawal-approval-endpoint + extended/adminUsersClient) all
+// assign global.fetch without afterAll restore. Under vitest worker parallelism
+// this CAN leak mock instances across files mid-test. Defensive fixes here:
+//   - afterAll restores original global.fetch
+//   - afterEach calls vi.clearAllMocks for full mock-state isolation
+//   - WAIT_FOR_OPTS = {timeout: 3000} gives ~3x headroom over default 1000ms
+const ORIGINAL_FETCH = global.fetch;
+const WAIT_FOR_OPTS = { timeout: 3000 };
 
 // Mock scopedDataLayer.
 vi.mock('../src/lib/scopedDataLayer.js', () => ({
@@ -55,17 +66,30 @@ beforeEach(() => {
   branchState.branchId = 'BR-B';
 });
 
+afterEach(() => {
+  // Full mock-state isolation prevents call-log leakage across tests within
+  // this file when running under parallel-worker load.
+  vi.clearAllMocks();
+});
+
+afterAll(() => {
+  // Restore original global.fetch (preferably undefined) to prevent leakage
+  // into subsequent test files that may also set global.fetch.
+  if (ORIGINAL_FETCH === undefined) delete global.fetch;
+  else global.fetch = ORIGINAL_FETCH;
+});
+
 describe('Phase 17.1 RTL — CrossBranchImportModal', () => {
   it('R1.1 renders source-branch dropdown', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
   });
 
   it('R1.2 source dropdown excludes the current target branch', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     const select = screen.getByTestId('cross-branch-source-picker');
     const options = Array.from(select.querySelectorAll('option'));
     const values = options.map(o => o.value);
@@ -76,21 +100,21 @@ describe('Phase 17.1 RTL — CrossBranchImportModal', () => {
   it('R1.3 selecting source branch fetches preview rows', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.change(screen.getByTestId('cross-branch-source-picker'), { target: { value: 'BR-A' } });
     });
-    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-1')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-1')).toBeTruthy(), WAIT_FOR_OPTS);
   });
 
   it('R1.4 duplicate row (Acetin in target) renders with status=dup', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.change(screen.getByTestId('cross-branch-source-picker'), { target: { value: 'BR-A' } });
     });
-    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-1')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-1')).toBeTruthy(), WAIT_FOR_OPTS);
     const dupRow = screen.getByTestId('cross-branch-row-P-1');
     expect(dupRow.getAttribute('data-status')).toBe('dup');
   });
@@ -98,11 +122,11 @@ describe('Phase 17.1 RTL — CrossBranchImportModal', () => {
   it('R1.5 importable row (Aloe not in target) renders with status=ok', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.change(screen.getByTestId('cross-branch-source-picker'), { target: { value: 'BR-A' } });
     });
-    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy(), WAIT_FOR_OPTS);
     const okRow = screen.getByTestId('cross-branch-row-P-2');
     expect(okRow.getAttribute('data-status')).toBe('ok');
   });
@@ -110,11 +134,11 @@ describe('Phase 17.1 RTL — CrossBranchImportModal', () => {
   it('R1.6 select-all toggles importable rows only', async () => {
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.change(screen.getByTestId('cross-branch-source-picker'), { target: { value: 'BR-A' } });
     });
-    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.click(screen.getByTestId('cross-branch-select-all'));
     });
@@ -131,18 +155,18 @@ describe('Phase 17.1 RTL — CrossBranchImportModal', () => {
     const onImported = vi.fn();
     const adapter = getAdapter('products');
     render(<CrossBranchImportModal adapter={adapter} isDark={true} onClose={() => {}} onImported={onImported} />);
-    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('cross-branch-source-picker')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.change(screen.getByTestId('cross-branch-source-picker'), { target: { value: 'BR-A' } });
     });
-    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId('cross-branch-row-P-2')).toBeTruthy(), WAIT_FOR_OPTS);
     await act(async () => {
       fireEvent.click(screen.getByTestId('cross-branch-row-checkbox-P-2'));
     });
     await act(async () => {
       fireEvent.click(screen.getByTestId('cross-branch-import-confirm-btn'));
     });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1), WAIT_FOR_OPTS);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/admin/cross-branch-import');
     expect(init.method).toBe('POST');
