@@ -18,6 +18,12 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  resolveDoctorDisplayName,
+  resolveAssistantsDisplay,
+  resolveBranchDisplayName,
+} from '../../lib/treatmentDisplayResolvers.js';
+import { listDoctors, listStaff, listBranches } from '../../lib/scopedDataLayer.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -317,6 +323,28 @@ export default function TreatmentReadOnlyMirror({
 }) {
   const [lightbox, setLightbox] = useState(null); // { src, label }
 
+  // Phase 27.0 (2026-05-14) — live-resolve doctor/assistant/branch names via
+  // treatmentDisplayResolvers (AV42). NEVER fall back to raw doc ID.
+  // V41 lookup-map pattern: include hidden persons for past-record display.
+  const [doctorMap, setDoctorMap] = useState(() => new Map());
+  const [staffMap, setStaffMap] = useState(() => new Map());
+  const [branchMap, setBranchMap] = useState(() => new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      listDoctors({ includeHidden: true }).catch(() => []),
+      listStaff({ includeHidden: true }).catch(() => []),
+      listBranches({ allBranches: true }).catch(() => []),
+    ]).then(([doctors, staff, branches]) => {
+      if (cancelled) return;
+      setDoctorMap(new Map(doctors.map((d) => [String(d.id), d])));
+      setStaffMap(new Map(staff.map((s) => [String(s.id), s])));
+      setBranchMap(new Map(branches.map((b) => [String(b.branchId || b.id), b])));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Phase 26.2f-followup2 — defensive guard against malformed treatmentDoc
   if (treatmentDoc != null && typeof treatmentDoc !== 'object') {
     return null;
@@ -357,9 +385,13 @@ export default function TreatmentReadOnlyMirror({
 
   // OPD card
   const treatmentDate = detail.treatmentDate || '';
+  // Phase 27.0 (2026-05-14) — resolver migration. NEVER fall back to raw ID.
   const doctorId = detail.doctorId || '';
-  const doctorName = detail.doctorName || doctorId || '—';
-  const branchName = detail.branchName || detail.branchId || '—';
+  const resolvedDoctor = resolveDoctorDisplayName(doctorId, doctorMap, detail.doctorName);
+  const doctorName = resolvedDoctor || '—';  // '—' placeholder for empty
+  const branchId = detail.branchId || '';
+  const resolvedBranch = resolveBranchDisplayName(branchId, branchMap, detail.branchName);
+  const branchName = resolvedBranch || '—';
   const chiefComplaint = detail.chiefComplaint || detail.cc || '';
   const symptoms = detail.symptoms || '';
   const physicalExam = detail.physicalExam || '';
@@ -371,7 +403,8 @@ export default function TreatmentReadOnlyMirror({
 
   // Assistants — stored as [{id, name}]
   const assistants = detail.assistants || [];
-  const assistantsDisplay = assistants.map(a => (a.name || a.id || a)).filter(Boolean).join(', ');
+  const resolvedAssistants = resolveAssistantsDisplay(assistants, doctorMap, staffMap);
+  const assistantsDisplay = resolvedAssistants || '—';
 
   // Health info
   const bloodType = health.bloodType || '';
