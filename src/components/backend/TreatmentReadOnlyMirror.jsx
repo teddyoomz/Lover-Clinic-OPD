@@ -26,34 +26,51 @@ const THAI_MONTHS_SHORT = [
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
 ];
 
-function formatThaiDateFull(isoStr) {
-  if (!isoStr) return '—';
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    const day = d.getDate();
-    const mon = THAI_MONTHS_SHORT[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${day} ${mon} ${year} ${hh}:${mm}`;
-  } catch {
-    return isoStr;
+// Phase 26.2f-followup3 — handle Firestore Timestamp objects.
+// recordedAt/editedAt/savedAt are Timestamps ({seconds, nanoseconds}) not strings.
+// Without this conversion, isNaN(new Date(timestampObject).getTime()) returns true
+// and the OLD code returned the raw Timestamp OBJECT, which React then tried to
+// render as a child → "Objects are not valid as a React child" → black screen.
+function toDateSafely(value) {
+  if (!value) return null;
+  // Firestore Timestamp — has .toDate() method
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    try { return value.toDate(); } catch { return null; }
   }
+  // Firestore Timestamp serialized — has .toMillis()
+  if (typeof value === 'object' && typeof value.toMillis === 'function') {
+    try { return new Date(value.toMillis()); } catch { return null; }
+  }
+  // Plain {seconds, nanoseconds} shape (already-fetched snapshot data form)
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
-function formatThaiDateOnly(isoStr) {
-  if (!isoStr) return '—';
-  try {
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    const day = d.getDate();
-    const mon = THAI_MONTHS_SHORT[d.getMonth()];
-    const year = d.getFullYear() + 543;
-    return `${day} ${mon} ${year}`;
-  } catch {
-    return isoStr;
-  }
+function formatThaiDateFull(value) {
+  const d = toDateSafely(value);
+  if (!d) return '—';
+  const day = d.getDate();
+  const mon = THAI_MONTHS_SHORT[d.getMonth()];
+  const year = d.getFullYear() + 543;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day} ${mon} ${year} ${hh}:${mm}`;
+}
+
+function formatThaiDateOnly(value) {
+  const d = toDateSafely(value);
+  if (!d) return '—';
+  const day = d.getDate();
+  const mon = THAI_MONTHS_SHORT[d.getMonth()];
+  const year = d.getFullYear() + 543;
+  return `${day} ${mon} ${year}`;
 }
 
 function hexToRgb(hex) {
