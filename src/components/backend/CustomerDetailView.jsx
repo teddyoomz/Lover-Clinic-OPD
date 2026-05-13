@@ -3,9 +3,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  ArrowLeft, User, Phone, MapPin, Calendar, Stethoscope, Package,
-  Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText, ChevronDown,
-  ChevronUp, ChevronLeft, ChevronRight, Activity, Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
+  // Phase 28 Task 8 (2026-05-14) — Stethoscope/Activity/ChevronDown/ChevronUp/
+  // ChevronLeft/ChevronRight removed: only consumed by the inline treatment-
+  // history block which is now <TreatmentHistoryCard /> (composer owns its
+  // own icon imports). Other icons retained — still used by sales / finance /
+  // appointments / courses panels.
+  ArrowLeft, User, Phone, MapPin, Calendar, Package,
+  Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText,
+  Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2,
   ClipboardCheck
 } from 'lucide-react';
@@ -52,17 +57,20 @@ import { parseQtyString } from '../../lib/courseUtils.js';
 // rendered N CARDS for one logical course (one per per-product entry).
 import { groupCustomerCoursesForDetailView } from '../../lib/treatmentBuyHelpers.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
-// Phase 28 (2026-05-14) — Rule C1 extraction; CDV uses these for badge display.
-import { toBadgeMs, formatBadgeTime } from '../../lib/formatBadgeTime.js';
-// Phase 28 Task 4 (2026-05-14) — ROLE_LABEL_TH extracted to shared lib for
-// TreatmentHistoryRow consumption (Rule C1). Original definition lived here
-// since Phase 26.1c.
-import { ROLE_LABEL_TH } from '../../lib/roleLabels.js';
+// Phase 28 (2026-05-14) — Rule C1 extraction; CDV originally used these for
+// badge display. Phase 28 Task 8 (2026-05-14) — these imports were the inline
+// block's only consumers; both moved to TreatmentHistoryRow / Stepper. Imports
+// removed here. Re-exports never needed (no external CDV consumers found via
+// grep at extraction time).
 // Phase 28 Task 5 (2026-05-14) — DetailField + TreatmentDetailExpanded extracted
 // to ./treatment-history/TreatmentDetailComponents.jsx (Rule C1) so that
 // TreatmentHistoryExpandedBody can render the same body inside the redesigned
 // row. CDV consumes both via this import (was inline definitions).
 import { DetailField, TreatmentDetailExpanded } from './treatment-history/TreatmentDetailComponents.jsx';
+// Phase 28 Task 8 (2026-05-14) — top-level treatment-history card composer
+// replaces the inline ~290-line block previously here in CDV. Pure render-
+// layer migration; all state hooks remain in CDV and pass through as props.
+import { TreatmentHistoryCard } from './treatment-history/TreatmentHistoryCard.jsx';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
@@ -88,9 +96,9 @@ function formatThaiDateFull(dateStr) {
   return fmtThaiDate(dateStr, { monthStyle: 'full' });
 }
 
-function formatThaiDate(dateStr) {
-  return fmtThaiDate(dateStr);
-}
+// Phase 28 Task 8 (2026-05-14) — local `formatThaiDate(dateStr)` removed:
+// dead after the inline treatment-history block was extracted (only consumer).
+// `formatThaiDateFull` is still used by sales + appointment panels.
 
 /**
  * Phase 12.2b follow-up (2026-04-25): days-until-expiry countdown for
@@ -525,17 +533,11 @@ export default function CustomerDetailView({
     return treatmentSummary.slice(start, start + TREATMENT_PAGE_SIZE);
   }, [treatmentSummary, treatmentPage]);
 
-  // Compact page-number array. ≤7 pages → show all; otherwise show first /
-  // current ± 1 / last with stable de-duplication and sort. Ellipsis is
-  // computed at render-time by inspecting gaps between adjacent entries.
-  const treatmentPageNumbers = useMemo(() => {
-    if (treatmentTotalPages <= 7) {
-      return Array.from({ length: treatmentTotalPages }, (_, i) => i + 1);
-    }
-    const candidates = [1, treatmentPage - 1, treatmentPage, treatmentPage + 1, treatmentTotalPages]
-      .filter(p => p >= 1 && p <= treatmentTotalPages);
-    return Array.from(new Set(candidates)).sort((a, b) => a - b);
-  }, [treatmentPage, treatmentTotalPages]);
+  // Phase 28 Task 8 (2026-05-14) — `treatmentPageNumbers` useMemo removed:
+  // it lived only inside the inline pagination block, which is now extracted
+  // to TreatmentHistoryCard (which computes its own pageNumbers internally).
+  // `treatmentTotalPages` + `paginatedTreatments` are kept because the two
+  // useEffects below still need them for safety (auto-clamp + auto-fold).
 
   // Auto-clamp current page if the list shrunk (e.g. delete on page 7 of 7
   // → no longer 7 pages). Also re-fold any expanded treatment that scrolls
@@ -975,309 +977,31 @@ export default function CustomerDetailView({
             </div>
           </div>
 
-          {/* Treatment History — Phase 14.7.D (2026-04-26) ProClinic-fidelity:
-              card-per-row with always-visible action chips, 5-per-page
-              pagination, prev/next + page-number nav.
-              Header has 3 CTAs (พิมพ์เอกสาร / + บันทึกการรักษา / ดูไทม์ไลน์);
-              the timeline button is a placeholder until Phase 14.7.E ships. */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden"
-            data-testid="treatment-history-card">
-            <div className="px-4 py-3 border-b border-[var(--bd)] flex items-center gap-2 flex-wrap">
-              <Stethoscope size={16} style={{ color: ac }} />
-              <h3 className="text-sm font-bold text-[var(--tx-heading)]">ประวัติการรักษา</h3>
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>
-                {customer?.treatmentCount || treatmentSummary.length}
-              </span>
-              <div className="ml-auto flex items-center gap-1.5">
-                {/* V33.3 (2026-04-27) — "เลขบัตร" + "ผูก LINE" buttons MOVED
-                    into profile card (left column). Edit ALL customer data
-                    (incl. nationalId/passport) via the new full-page edit. */}
-                <button onClick={() => setPrintDocOpen(true)}
-                  data-testid="print-document-btn"
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                  style={{ color: '#a78bfa', borderColor: 'rgba(167,139,250,0.3)', backgroundColor: 'rgba(167,139,250,0.08)' }}
-                  title="พิมพ์ใบรับรอง / ฉลากยา / เอกสารอื่นๆ">
-                  <Printer size={11} /> พิมพ์เอกสาร
-                </button>
-                {onCreateTreatment && (
-                  <button onClick={onCreateTreatment}
-                    data-testid="create-treatment-btn"
-                    className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, #56CCF2, #2D9CDB)' }}
-                    title="สร้างใบบันทึกการรักษาใหม่">
-                    <Plus size={11} /> บันทึกการรักษา
-                  </button>
-                )}
-                {/* Phase 14.7.E (live as of 2026-04-26) — orange matches
-                    ProClinic btn-secondary #FF9F1C (verified opd.js scan).
-                    Opens TreatmentTimelineModal with image-led 3/9 grid. */}
-                <button onClick={() => setShowTimeline(true)}
-                  data-testid="show-timeline-btn"
-                  className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-white transition-all flex items-center gap-1 hover:shadow-md active:scale-95"
-                  style={{ background: 'linear-gradient(135deg, #FF9F1C, #E17B0A)' }}
-                  title="ดูไทม์ไลน์รวม (รูป Before/After/อื่นๆ)">
-                  <Activity size={11} /> ดูไทม์ไลน์
-                </button>
-              </div>
-            </div>
-
-            {treatmentsError && (
-              <div className={`px-4 py-3 text-xs flex items-center gap-2 border-b border-[var(--bd)] ${isDark ? 'text-orange-400 bg-orange-900/10' : 'text-orange-700 bg-orange-50'}`}>
-                <AlertCircle size={13} /> {treatmentsError}
-              </div>
-            )}
-            {treatmentSummary.length === 0 && !treatmentsError ? (
-              <div className="p-12 text-center" data-testid="treatment-history-empty">
-                <Stethoscope size={32} className="mx-auto mb-3 text-[var(--tx-muted)] opacity-40" />
-                <p className="text-sm font-bold text-[var(--tx-secondary)]">ยังไม่มีประวัติการรักษา</p>
-                <p className="text-xs text-[var(--tx-muted)] mt-1">กดปุ่ม "บันทึกการรักษา" เพื่อสร้างรายการแรก</p>
-              </div>
-            ) : (
-              <>
-                <div className="divide-y divide-[var(--bd)]" data-testid="treatment-history-list">
-                  {paginatedTreatments.map((t, pageIndex) => {
-                    const globalIndex = (treatmentPage - 1) * TREATMENT_PAGE_SIZE + pageIndex;
-                    const isExpanded = expandedTreatment === t.id;
-                    const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
-                    const isBackendCreated = detail?.createdBy === 'backend' || t.createdBy === 'backend';
-                    const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment);
-                    // Phase 27.2 (2026-05-14) — pre-compute lifecycle badges.
-                    // Hoisted out of JSX (no IIFE-in-JSX per V21/Vite-OXC).
-                    // Phase 27.2-ter (2026-05-14) — tolerant fallback per user
-                    // report "ไม่เห็นซัก badge เหมือนจะเห็นแว๊ปๆ": render badge
-                    // even when timestamp is null (old summary entries without
-                    // recordedAt/editedAt still get a badge by stage detection).
-                    const treatmentLifecycle = [];
-                    const _vStage = !!t.vitalsignsRecordedAt || t.status === 'vitalsigns-recorded';
-                    const _vTime = t.vitalsignsRecordedAt
-                      || (t.status === 'vitalsigns-recorded' ? t.recordedAt : null);
-                    if (_vStage) treatmentLifecycle.push({ key: 'vitalsigns', time: _vTime });
-                    const _dStage = !!t.doctorRecordedAt || t.status === 'doctor-recorded';
-                    const _dTime = t.doctorRecordedAt
-                      || (t.status === 'doctor-recorded' ? t.recordedAt : null);
-                    if (_dStage) treatmentLifecycle.push({ key: 'doctor', time: _dTime });
-                    // Completed stage: explicit completedAt, OR legacy (status cleared
-                    // with any save evidence — editedAt/recordedAt/editedByName).
-                    const _cStage = !!t.completedAt
-                      || (!t.status && (!!t.editedAt || !!t.recordedAt || !!t.editedByName));
-                    const _cTime = t.completedAt
-                      || (!t.status && t.editedAt ? t.editedAt : null)
-                      || (!t.status && t.recordedAt ? t.recordedAt : null);
-                    if (_cStage) treatmentLifecycle.push({ key: 'completed', time: _cTime });
-                    // Sort by time; entries without time go to end (Infinity)
-                    treatmentLifecycle.sort((a, b) => {
-                      const am = a.time ? toBadgeMs(a.time) : Infinity;
-                      const bm = b.time ? toBadgeMs(b.time) : Infinity;
-                      return am - bm;
-                    });
-                    return (
-                      <div key={t.id || globalIndex}
-                        data-testid={`treatment-row-${t.id}`}
-                        className={`group transition-colors ${isExpanded ? 'bg-[var(--bg-elevated)]/40' : 'hover:bg-[var(--bg-hover)]'}`}>
-                        {/* Header row: marker + summary + always-visible action chips */}
-                        <div className="px-4 py-3 flex items-start gap-3">
-                          <div className="mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 border-2"
-                            style={{ borderColor: globalIndex === 0 ? ac : 'var(--bd-strong)', backgroundColor: globalIndex === 0 ? ac : 'transparent' }}
-                            aria-label={globalIndex === 0 ? 'รายการล่าสุด' : undefined} />
-                          <button onClick={() => setExpandedTreatment(isExpanded ? null : t.id)}
-                            className="flex-1 min-w-0 text-left"
-                            data-testid={`treatment-toggle-${t.id}`}
-                            aria-expanded={isExpanded}>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-[var(--tx-heading)]">{formatThaiDateFull(t.date) || '-'}</span>
-                              {globalIndex === 0 && (
-                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                                  style={{ backgroundColor: `rgba(${acRgb},0.15)`, color: ac }}>ล่าสุด</span>
-                              )}
-                              {/* Phase 27.2 (2026-05-14) — stacked lifecycle badges.
-                                  User directive: "ทำให้ Badge แต่ละสถานะไม่หายไป คือแสดงซ้อนกัน
-                                  ได้ในลิสต์เลย เช่น บันทึกซักประวัติ , แพทย์บันทึก , บันทึกแล้ว
-                                  ... แต่แสดงเวลากำกับของแต่ละอย่างไว้ด้วย แล้วเรียง badge ตามเวลาด้วย".
-                                  Each lifecycle stage gets its own discrete timestamp field
-                                  (vitalsignsRecordedAt / doctorRecordedAt / completedAt). Pre-
-                                  computed as `treatmentLifecycle` above (V21/Vite-OXC: no IIFE
-                                  inside JSX — variable hoisted to function body). */}
-                              {treatmentLifecycle.map((b) => {
-                                const timeStr = formatBadgeTime(b.time);
-                                if (b.key === 'vitalsigns') {
-                                  return (
-                                    <span
-                                      key={b.key}
-                                      data-testid={`treatment-status-chip-vitalsigns-recorded-${t.id}`}
-                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-teal-950 border-teal-800 text-teal-100' : 'bg-teal-100 border-teal-200 text-teal-900'}`}
-                                      title={`บันทึกซักประวัติ — ${timeStr || '(ไม่ทราบเวลา)'}`}
-                                    >
-                                      <Activity size={10} />
-                                      <span>ซักประวัติ</span>
-                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
-                                    </span>
-                                  );
-                                }
-                                if (b.key === 'doctor') {
-                                  return (
-                                    <span
-                                      key={b.key}
-                                      data-testid={`treatment-status-chip-doctor-recorded-${t.id}`}
-                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
-                                      title={`แพทย์บันทึก — ${timeStr || '(ไม่ทราบเวลา)'}`}
-                                    >
-                                      <Stethoscope size={10} />
-                                      <span>แพทย์บันทึก</span>
-                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
-                                    </span>
-                                  );
-                                }
-                                if (b.key === 'completed') {
-                                  return (
-                                    <span
-                                      key={b.key}
-                                      data-testid={`treatment-status-chip-completed-${t.id}`}
-                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 border ${isDark ? 'bg-emerald-950 border-emerald-800 text-emerald-100' : 'bg-emerald-100 border-emerald-200 text-emerald-900'}`}
-                                      title={`บันทึกแล้ว — ${timeStr || '(ไม่ทราบเวลา)'}`}
-                                    >
-                                      <Check size={10} />
-                                      <span>บันทึกแล้ว</span>
-                                      {timeStr && <span className="opacity-70 font-mono">{timeStr}</span>}
-                                    </span>
-                                  );
-                                }
-                                return null;
-                              })}
-                              <span className="ml-auto text-[var(--tx-muted)] flex-shrink-0">
-                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs text-[var(--tx-muted)]">
-                              {t.branch && <span>{t.branch}</span>}
-                              {t.doctor && <span className="font-semibold text-[var(--tx-secondary)]">· {t.doctor}</span>}
-                              {t.assistants?.length > 0 && <span>· {t.assistants.join(', ')}</span>}
-                              {/* V26.1 Phase 26.1c (2026-05-13) — last-editor attribution. Shown only when
-                                  editedByName present (legacy treatments stay null → skip cleanly). Italic
-                                  + slightly muted to differentiate from the primary doctor/assistant meta. */}
-                              {t.editedByName && (
-                                <span
-                                  data-testid={`treatment-edited-by-${t.id}`}
-                                  className="italic opacity-80"
-                                >
-                                  · แก้ไขโดย: {t.editedByName}
-                                  {t.editedByRole && ROLE_LABEL_TH[t.editedByRole] && ` (${ROLE_LABEL_TH[t.editedByRole]})`}
-                                </span>
-                              )}
-                            </div>
-                            {t.cc && <p className="mt-1 text-xs text-[var(--tx-secondary)] truncate"><span className="text-[var(--tx-muted)] font-semibold">CC:</span> {t.cc}</p>}
-                            {t.dx && <p className="text-xs text-[var(--tx-muted)] truncate"><span className="font-semibold">DX:</span> {t.dx}</p>}
-                          </button>
-
-                          {/* Always-visible per-card action chips (backend-created only).
-                              Stop propagation so clicking a chip doesn't toggle the
-                              expansion. Hover-fade on desktop; always-visible on mobile. */}
-                          {showActions && (
-                            <div className="flex flex-shrink-0 gap-1 self-start opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              {onEditTreatment && (
-                                <button onClick={(e) => { e.stopPropagation(); onEditTreatment(t.id); }}
-                                  data-testid={`treatment-edit-${t.id}`}
-                                  title="แก้ไข"
-                                  aria-label="แก้ไขการรักษา"
-                                  className="p-1.5 rounded border border-sky-700/40 text-sky-400 bg-sky-900/10 hover:bg-sky-900/20 transition-all">
-                                  <Edit3 size={11} />
-                                </button>
-                              )}
-                              {onDeleteTreatment && (
-                                <button onClick={(e) => { e.stopPropagation(); onDeleteTreatment(t.id); }}
-                                  data-testid={`treatment-delete-${t.id}`}
-                                  title="ยกเลิก / ลบ"
-                                  aria-label="ลบการรักษา"
-                                  className="p-1.5 rounded border border-red-700/40 text-red-400 bg-red-900/10 hover:bg-red-900/20 transition-all">
-                                  <Trash2 size={11} />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Expanded detail */}
-                        {isExpanded && (
-                          <div className="px-4 pb-4 pl-10">
-                            {treatmentsLoading && !detail ? (
-                              <div className="flex items-center gap-2 text-xs text-[var(--tx-muted)] py-2">
-                                <Loader2 size={12} className="animate-spin" /> กำลังโหลด...
-                              </div>
-                            ) : detail?.detail ? (
-                              <TreatmentDetailExpanded detail={detail.detail} ac={ac} acRgb={acRgb} isDark={isDark} />
-                            ) : (
-                              <div className="bg-[var(--bg-elevated)] rounded-lg p-3 space-y-2">
-                                {t.cc && <DetailField label="อาการ (CC)" value={t.cc} />}
-                                {t.dx && <DetailField label="วินิจฉัย (DX)" value={t.dx} />}
-                                <p className="text-xs text-[var(--tx-muted)]">ไม่มีข้อมูลรายละเอียดเพิ่มเติม</p>
-                              </div>
-                            )}
-                            {/* Per-treatment dual print buttons (Phase 14.2.B) */}
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'cert' })}
-                                data-testid={`treatment-print-cert-${t.id}`}
-                                className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-sky-700 hover:bg-sky-600 text-white transition-all">
-                                <Printer size={12} /> พิมพ์ใบรับรองแพทย์ ▾
-                              </button>
-                              <button onClick={() => setPrintPerTreatment({ treatmentId: t.id, type: 'record' })}
-                                data-testid={`treatment-print-record-${t.id}`}
-                                className="text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white transition-all">
-                                <Printer size={12} /> พิมพ์การรักษา ▾
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination footer — visible only when ≥ 2 pages. */}
-                {treatmentTotalPages > 1 && (
-                  <div className="px-4 py-3 border-t border-[var(--bd)] flex items-center justify-between gap-2 flex-wrap"
-                    data-testid="treatment-history-pagination">
-                    <span className="text-xs text-[var(--tx-muted)]">
-                      แสดง <span className="font-bold text-[var(--tx-secondary)]">{(treatmentPage - 1) * TREATMENT_PAGE_SIZE + 1}–{Math.min(treatmentPage * TREATMENT_PAGE_SIZE, treatmentSummary.length)}</span>
-                      {' '}จาก <span className="font-bold text-[var(--tx-secondary)]">{treatmentSummary.length}</span> รายการ
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setTreatmentPage(p => Math.max(1, p - 1))} disabled={treatmentPage === 1}
-                        data-testid="treatment-page-prev"
-                        title="หน้าก่อนหน้า"
-                        aria-label="หน้าก่อนหน้า"
-                        className="p-1.5 rounded border border-[var(--bd)] text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                        <ChevronLeft size={12} />
-                      </button>
-                      {treatmentPageNumbers.map((p, idx) => {
-                        const prev = treatmentPageNumbers[idx - 1];
-                        const showEllipsis = prev !== undefined && p - prev > 1;
-                        return (
-                          <span key={p} className="flex items-center gap-1">
-                            {showEllipsis && <span className="text-[var(--tx-muted)] text-xs px-1">…</span>}
-                            <button onClick={() => setTreatmentPage(p)}
-                              data-testid={`treatment-page-${p}`}
-                              aria-label={`หน้า ${p}`}
-                              aria-current={p === treatmentPage ? 'page' : undefined}
-                              className={`min-w-[28px] px-2 py-1 rounded text-xs font-bold transition-all ${p === treatmentPage ? 'text-white' : 'text-[var(--tx-muted)] hover:bg-[var(--bg-hover)]'}`}
-                              style={p === treatmentPage ? { backgroundColor: ac } : {}}>
-                              {p}
-                            </button>
-                          </span>
-                        );
-                      })}
-                      <button onClick={() => setTreatmentPage(p => Math.min(treatmentTotalPages, p + 1))} disabled={treatmentPage === treatmentTotalPages}
-                        data-testid="treatment-page-next"
-                        title="หน้าถัดไป"
-                        aria-label="หน้าถัดไป"
-                        className="p-1.5 rounded border border-[var(--bd)] text-[var(--tx-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                        <ChevronRight size={12} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          {/* Treatment History — Phase 28 Task 8 (2026-05-14): inline 290-line
+              block extracted to <TreatmentHistoryCard />. All state hooks remain
+              here in CDV; composer is pure presentational. See spec
+              docs/superpowers/specs/2026-05-14-treatment-history-redesign-design.md. */}
+          <TreatmentHistoryCard
+            customer={customer}
+            treatmentSummary={treatmentSummary}
+            treatments={treatments}
+            expandedTreatment={expandedTreatment}
+            setExpandedTreatment={setExpandedTreatment}
+            onCreateTreatment={onCreateTreatment}
+            onEditTreatment={onEditTreatment}
+            onDeleteTreatment={onDeleteTreatment}
+            treatmentPage={treatmentPage}
+            setTreatmentPage={setTreatmentPage}
+            treatmentsLoading={treatmentsLoading}
+            treatmentsError={treatmentsError}
+            setPrintDocOpen={setPrintDocOpen}
+            setShowTimeline={setShowTimeline}
+            setPrintPerTreatment={setPrintPerTreatment}
+            ac={ac}
+            acRgb={acRgb}
+            isDark={isDark}
+            todayISO={thaiTodayISO()}
+          />
         </div>
 
         {/* ════════════════════ RIGHT: Courses ════════════════════ */}
