@@ -73,10 +73,14 @@ describe('Phase 26.2 — split-screen + customer.note source-grep', () => {
     it('G4.8 — right panel aside: hidden lg:block (desktop-only)', () => {
       expect(TFP_SOURCE).toMatch(/<aside\s+className=[`"'][^`"']*hidden\s+lg:block/);
     });
-    it('G4.9 — TreatmentReadOnlyPanel imported + used in TFP', () => {
-      // V21-class fixup (Phase 26.2 Task 5): path includes .jsx extension; regex allows optional extension after component name
-      expect(TFP_SOURCE).toMatch(/import\s+TreatmentReadOnlyPanel\s+from\s+['"][^'"]*TreatmentReadOnlyPanel(?:\.jsx)?['"]/);
-      expect(TFP_SOURCE).toMatch(/<TreatmentReadOnlyPanel/);
+    it('G4.9 — TreatmentReadOnlyMirror imported + used in TFP (Phase 26.2g Task 8: swapped Panel → Mirror)', () => {
+      // Phase 26.2g (V26.2g, 2026-05-13) — swapped Panel → Mirror in TFP split-screen
+      // TreatmentReadOnlyPanel stays for TimelineModal only (condensed shape suits per-row list)
+      expect(TFP_SOURCE).toMatch(/import\s+TreatmentReadOnlyMirror\s+from\s+['"][^'"]*TreatmentReadOnlyMirror(?:\.jsx)?['"]/);
+      expect(TFP_SOURCE).toMatch(/<TreatmentReadOnlyMirror/);
+      // Anti-regression: Panel must NOT appear in TFP (Mirror is the split-screen component now)
+      expect(TFP_SOURCE).not.toMatch(/import\s+TreatmentReadOnlyPanel\s+from/);
+      expect(TFP_SOURCE).not.toMatch(/<TreatmentReadOnlyPanel/);
     });
   });
 });

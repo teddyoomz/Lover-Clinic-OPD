@@ -21,7 +21,7 @@ import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import EditAttributionModal from './backend/EditAttributionModal.jsx';
-import TreatmentReadOnlyPanel from './backend/TreatmentReadOnlyPanel.jsx';
+import TreatmentReadOnlyMirror from './backend/TreatmentReadOnlyMirror.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // Phase 14.7.H follow-up A — branch-aware sale + stock writes.
@@ -5054,24 +5054,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         {selectedHistoryTreatmentId && (
           <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
             <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
-              <TreatmentReadOnlyPanel
-                treatmentSummary={(() => {
-                  const found = historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId);
-                  if (!found) return {};
-                  return {
-                    id: found.id || found.treatmentId,
-                    treatmentId: found.treatmentId,
-                    date: found.detail?.treatmentDate || '',
-                    cc: found.detail?.symptoms || '',
-                    dx: found.detail?.diagnosis || '',
-                    doctor: found.detail?.doctor || '',
-                    branch: found.detail?.branchName || found.branchName || '',
-                    status: found.status || '',
-                    assistants: found.detail?.assistants || [],
-                  };
-                })()}
-                treatmentFull={historyFullDoc}
-                treatmentsLoading={!historyFullDoc}
+              <TreatmentReadOnlyMirror
+                treatmentDoc={historyFullDoc}
                 theme={isDark ? 'dark' : 'light'}
                 accentColor={accent}
                 isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
@@ -5217,24 +5201,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               onClick={(e) => e.stopPropagation()}
               data-testid="tfp-history-modal-fallback"
             >
-              <TreatmentReadOnlyPanel
-                treatmentSummary={(() => {
-                  const found = historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId);
-                  if (!found) return {};
-                  return {
-                    id: found.id || found.treatmentId,
-                    treatmentId: found.treatmentId,
-                    date: found.detail?.treatmentDate || '',
-                    cc: found.detail?.symptoms || '',
-                    dx: found.detail?.diagnosis || '',
-                    doctor: found.detail?.doctor || '',
-                    branch: found.detail?.branchName || found.branchName || '',
-                    status: found.status || '',
-                    assistants: found.detail?.assistants || [],
-                  };
-                })()}
-                treatmentFull={historyFullDoc}
-                treatmentsLoading={!historyFullDoc}
+              <TreatmentReadOnlyMirror
+                treatmentDoc={historyFullDoc}
                 theme={isDark ? 'dark' : 'light'}
                 accentColor={accent}
                 isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
