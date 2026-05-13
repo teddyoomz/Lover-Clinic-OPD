@@ -5008,11 +5008,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
             <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
               <TreatmentReadOnlyPanel
-                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
-                fullDoc={historyFullDoc}
-                isDark={isDark}
-                ac={accent}
-                acRgb={accentRgb}
+                treatmentSummary={(() => {
+                  const found = historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId);
+                  if (!found) return {};
+                  return {
+                    id: found.id || found.treatmentId,
+                    treatmentId: found.treatmentId,
+                    date: found.detail?.treatmentDate || '',
+                    cc: found.detail?.symptoms || '',
+                    dx: found.detail?.diagnosis || '',
+                    doctor: found.detail?.doctor || '',
+                    branch: found.detail?.branchName || found.branchName || '',
+                    status: found.status || '',
+                    assistants: found.detail?.assistants || [],
+                  };
+                })()}
+                treatmentFull={historyFullDoc}
+                treatmentsLoading={!historyFullDoc}
+                theme={isDark ? 'dark' : 'light'}
+                accentColor={accent}
                 isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
                 showCloseButton={true}
                 onClose={() => {
@@ -5157,11 +5171,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               data-testid="tfp-history-modal-fallback"
             >
               <TreatmentReadOnlyPanel
-                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
-                fullDoc={historyFullDoc}
-                isDark={isDark}
-                ac={accent}
-                acRgb={accentRgb}
+                treatmentSummary={(() => {
+                  const found = historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId);
+                  if (!found) return {};
+                  return {
+                    id: found.id || found.treatmentId,
+                    treatmentId: found.treatmentId,
+                    date: found.detail?.treatmentDate || '',
+                    cc: found.detail?.symptoms || '',
+                    dx: found.detail?.diagnosis || '',
+                    doctor: found.detail?.doctor || '',
+                    branch: found.detail?.branchName || found.branchName || '',
+                    status: found.status || '',
+                    assistants: found.detail?.assistants || [],
+                  };
+                })()}
+                treatmentFull={historyFullDoc}
+                treatmentsLoading={!historyFullDoc}
+                theme={isDark ? 'dark' : 'light'}
+                accentColor={accent}
                 isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
                 showCloseButton={true}
                 onClose={() => {
