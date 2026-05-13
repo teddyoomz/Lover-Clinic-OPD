@@ -1175,6 +1175,62 @@ by consumers.
 exception pattern). AV40 mirrors AV20's "writer + display-chip sanctioned
 exception list" pattern at the patientData read boundary.
 
+---
+
+### AV42 — Treatment display resolver discipline (Phase 27.0, 2026-05-14)
+
+Treatment doctor/assistant/branch display names MUST live-resolve via
+`src/lib/treatmentDisplayResolvers.js` helpers. Direct fallback chains that
+leak raw doc IDs into the UI when the denormalized cache is stale are
+**forbidden** outside the sanctioned set.
+
+**Forbidden patterns** (outside sanctioned set):
+- `detail.doctorId || '<string-literal>'` — leaks raw doctorId as display text
+- `|| doctorId ||` — raw ID in a display fallback chain
+- `a.name || a.id` — assistant raw ID as display fallback
+
+**Grep anchors**:
+```
+grep -rn "detail\.doctorId\s*||\s*['\"]" src/
+grep -rn "a\.name\s*||\s*a\.id" src/
+```
+
+**Sanctioned set** (closed list — add only via Rule P class-of-bug expansion):
+1. `src/lib/treatmentDisplayResolvers.js` — the resolver module itself
+2. `src/components/backend/TreatmentReadOnlyMirror.jsx` — read-only display consumer
+3. `src/components/backend/TreatmentReadOnlyPanel.jsx` — read-only display consumer
+4. `src/components/backend/EditAttributionModal.jsx` — attribution edit modal
+5. `src/components/TreatmentFormPage.jsx` — treatment form create/edit
+6. `src/lib/clinicReportAggregator.js` — **sanctioned exception**: uses
+   `detail.doctorId || ''` as an internal key for building a `saleToDoctor`
+   Map (ID extraction for report keying, never displayed raw to users).
+   Annotate with `// audit-anti-vibe-code: AV42 sanctioned — ID key extraction, not display`.
+
+**Resolver fallback chain** (correct pattern):
+```js
+// LIVE map (from listDoctors({includeHidden:true})) → cached name (save-time
+// denormalized snapshot) → '' (caller renders '—' or placeholder).
+// NEVER returns a raw doc ID.
+resolveDoctorDisplayName(detail.doctorId, doctorMap, detail.doctorName)
+resolveBranchDisplayName(detail.branchId, branchMap, detail.branchName)
+resolveAssistantsDisplay(detail.assistants, doctorMap, staffMap)
+```
+
+**Anti-pattern (forbidden)**:
+```js
+// ❌ BAD — leaks raw doctorId when cache is stale
+const doctorDisplay = detail.doctorName || detail.doctorId || '—';
+// ❌ BAD — a.id leaks raw staff ID when a.name is empty
+assistants.map(a => a.name || a.id).join(', ')
+```
+
+**Mirror**: Rule O (V46/AV24) applies at the stock-movement WRITE layer;
+AV42 applies at the treatment-attribution READ/DISPLAY layer. Both enforce
+live-resolve over frozen denormalized caches.
+
+**Regression test**: `tests/phase-27-0-av42-source-grep.test.js` (AV42.1–AV42.4)
+**Flow-simulate**: `tests/phase-27-0-treatment-branch-flow-simulate.test.js` (FB1–FB5)
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
