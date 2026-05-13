@@ -16,16 +16,21 @@ describe('Phase 26.0 — Status display RTL', () => {
       expect(TFP_SOURCE).toContain('บันทึกสำหรับแพทย์');
     });
 
-    it('D1.3 — doctor-save button gate contains !isEdit condition (Phase 26.2f-pre: extended to allow vitalsigns-recorded edit)', () => {
-      // Phase 26.2f-pre extended the gate from `{!isEdit &&` to
-      // `{(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') &&`
-      // so that doctor-save is also available when completing a vitals-only
-      // treatment in edit mode. Test updated per V21-class fixup protocol.
+    it('D1.3 — doctor-save button is always visible (Phase 27.2-bis: gate removed for re-edit)', () => {
+      // Phase 27.2-bis (2026-05-14) — user directive "ทำให้ปุ่มข้อมูลซักประวัติ
+      // สามารถแก้ไขได้เรื่อยๆ เหมือนปุ่มลงบันทึกแพทย์". Doctor button gate
+      // (was `!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded'`)
+      // REMOVED so admin can re-save doctor info at any time. Each click
+      // updates doctorRecordedAt to the latest save time.
+      // Test inverted: assert the button block does NOT have the old gate
+      // immediately above its <div> opener (sanity check the removal landed).
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
       const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
-      // Accept either the old shape (plain !isEdit) or the new extended shape
-      expect(before).toMatch(/\(\s*!isEdit\s*\|\|/);
+      // Old conditional gate must NOT appear immediately above
+      expect(before).not.toMatch(/\(\s*!isEdit\s*\|\|\s*loadedTreatmentStatus\s*===\s*['"]vitalsigns-recorded['"]\s*\)\s*&&\s*\(\s*\n\s*<div/);
+      // Phase 27.2-bis marker comment present
+      expect(before).toMatch(/Phase 27\.2-bis/);
     });
 
     it('D1.4 — edit-mode banner source-grep: tfp-doctor-recorded-banner data-testid', () => {

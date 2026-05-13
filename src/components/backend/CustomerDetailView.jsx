@@ -1033,20 +1033,35 @@ export default function CustomerDetailView({
                     const detail = treatments.find(tr => tr.treatmentId === t.id || tr.id === t.id);
                     const isBackendCreated = detail?.createdBy === 'backend' || t.createdBy === 'backend';
                     const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment);
-                    // Phase 27.2 (2026-05-14) — pre-compute lifecycle badges for this row.
-                    // Hoisted out of JSX (no IIFE-in-JSX per Vite OXC crash rule / V21).
+                    // Phase 27.2 (2026-05-14) — pre-compute lifecycle badges.
+                    // Hoisted out of JSX (no IIFE-in-JSX per V21/Vite-OXC).
+                    // Phase 27.2-ter (2026-05-14) — tolerant fallback per user
+                    // report "ไม่เห็นซัก badge เหมือนจะเห็นแว๊ปๆ": render badge
+                    // even when timestamp is null (old summary entries without
+                    // recordedAt/editedAt still get a badge by stage detection).
                     const treatmentLifecycle = [];
-                    const _vAt = t.vitalsignsRecordedAt
+                    const _vStage = !!t.vitalsignsRecordedAt || t.status === 'vitalsigns-recorded';
+                    const _vTime = t.vitalsignsRecordedAt
                       || (t.status === 'vitalsigns-recorded' ? t.recordedAt : null);
-                    if (_vAt) treatmentLifecycle.push({ key: 'vitalsigns', time: _vAt });
-                    const _dAt = t.doctorRecordedAt
+                    if (_vStage) treatmentLifecycle.push({ key: 'vitalsigns', time: _vTime });
+                    const _dStage = !!t.doctorRecordedAt || t.status === 'doctor-recorded';
+                    const _dTime = t.doctorRecordedAt
                       || (t.status === 'doctor-recorded' ? t.recordedAt : null);
-                    if (_dAt) treatmentLifecycle.push({ key: 'doctor', time: _dAt });
-                    const _cAt = t.completedAt
+                    if (_dStage) treatmentLifecycle.push({ key: 'doctor', time: _dTime });
+                    // Completed stage: explicit completedAt, OR legacy (status cleared
+                    // with any save evidence — editedAt/recordedAt/editedByName).
+                    const _cStage = !!t.completedAt
+                      || (!t.status && (!!t.editedAt || !!t.recordedAt || !!t.editedByName));
+                    const _cTime = t.completedAt
                       || (!t.status && t.editedAt ? t.editedAt : null)
-                      || (!t.status && !t.vitalsignsRecordedAt && !t.doctorRecordedAt && t.recordedAt ? t.recordedAt : null);
-                    if (_cAt) treatmentLifecycle.push({ key: 'completed', time: _cAt });
-                    treatmentLifecycle.sort((a, b) => toBadgeMs(a.time) - toBadgeMs(b.time));
+                      || (!t.status && t.recordedAt ? t.recordedAt : null);
+                    if (_cStage) treatmentLifecycle.push({ key: 'completed', time: _cTime });
+                    // Sort by time; entries without time go to end (Infinity)
+                    treatmentLifecycle.sort((a, b) => {
+                      const am = a.time ? toBadgeMs(a.time) : Infinity;
+                      const bm = b.time ? toBadgeMs(b.time) : Infinity;
+                      return am - bm;
+                    });
                     return (
                       <div key={t.id || globalIndex}
                         data-testid={`treatment-row-${t.id}`}

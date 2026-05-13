@@ -282,14 +282,18 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
   });
 
   describe('F7 — adversarial: doctor-save invocation in edit mode', () => {
-    it('F7.1 — doctor-save button gate contains !isEdit condition (Phase 26.2f-pre: extended to allow vitalsigns-recorded edit)', () => {
-      // Phase 26.2f-pre extended the gate from `{!isEdit &&` to
-      // `{(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') &&`
-      // V21-class fixup: update regex to accept the new extended shape.
+    it('F7.1 — doctor-save button is always visible (Phase 27.2-bis: gate removed for re-edit)', () => {
+      // Phase 27.2-bis (2026-05-14) — user directive: doctor-save button no
+      // longer gated; admin can re-save doctor info at any time. Each click
+      // updates doctorRecordedAt to the latest save time. Mirror V21 fixup
+      // from D1.3 in phase-26-0-status-display-rtl.test.jsx.
       const btnIdx = TFP_SOURCE.indexOf('tfp-doctor-save-btn');
       expect(btnIdx).toBeGreaterThan(-1);
       const before = TFP_SOURCE.slice(Math.max(0, btnIdx - 600), btnIdx);
-      expect(before).toMatch(/\(\s*!isEdit\s*\|\|/);
+      // Old conditional gate must NOT appear immediately above
+      expect(before).not.toMatch(/\(\s*!isEdit\s*\|\|\s*loadedTreatmentStatus\s*===\s*['"]vitalsigns-recorded['"]\s*\)\s*&&\s*\(\s*\n\s*<div/);
+      // Phase 27.2-bis marker comment present near button
+      expect(before).toMatch(/Phase 27\.2-bis/);
     });
 
     it('F7.2 — saveMode=doctor on EDIT mode silently preserves prior recordedBy', () => {

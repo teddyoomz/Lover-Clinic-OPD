@@ -2392,49 +2392,33 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         //                   "who recorded the OPD card and when?" per spec § 3 semantics matrix.
         // Patch is appended AFTER clean() (which is JSON.parse(JSON.stringify(...))) because
         // Firestore sentinels deleteField() + serverTimestamp() don't survive a JSON round-trip.
+        // Phase 27.2-bis (2026-05-14) — per user directive "time stamp ก็จะ
+        // อัพเดทตามการแก้ไขล่าสุด เหมือนกันทุกปุ่มบันทึก": every save mode
+        // ALWAYS updates its corresponding stage timestamp (no preservation
+        // gates). Each badge in CDV reflects the LATEST time that stage was
+        // saved, not the first. Stage attribution survives stage transitions
+        // because each stage has its own discrete timestamp field.
         const v26StatusPatch = saveMode === 'doctor' ? {
           status: 'doctor-recorded',
-          // V26.0 spec § 5.1.C — preserve existing forensic trail when re-saving a
-          // doctor-recorded treatment in doctor-mode (path currently NOT UI-reachable
-          // per § 5.1.F but spec semantics matrix mandates this guard for forward
-          // compat). loadedTreatmentStatus === 'doctor-recorded' is the proxy signal
-          // that recordedBy/At already exist on the doc (set by the original doctor-save).
-          ...(isEdit && loadedTreatmentStatus === 'doctor-recorded' ? {} : {
-            recordedBy: auth.currentUser?.uid || null,
-            recordedAt: serverTimestamp(),
-            // Phase 27.2 (2026-05-14) — discrete per-stage timestamp so the
-            // doctor-stage time survives admin finalize (which would otherwise
-            // preserve the generic recordedAt but lose stage attribution).
-            doctorRecordedAt: serverTimestamp(),
-            doctorRecordedBy: auth.currentUser?.uid || null,
-          }),
+          recordedBy: auth.currentUser?.uid || null,
+          recordedAt: serverTimestamp(),
+          doctorRecordedAt: serverTimestamp(),
+          doctorRecordedBy: auth.currentUser?.uid || null,
         } : saveMode === 'vitals' ? {
-          // Phase 26.2f — vitals-save records front-desk / nurse vitals signs.
-          // Mirrors the doctor-save forensic-fields pattern (recordedBy + recordedAt)
-          // but stamps status='vitalsigns-recorded' so downstream gates can distinguish.
-          // All deduction/sale/stock/course writes are skipped (gates above).
           status: 'vitalsigns-recorded',
           recordedBy: auth.currentUser?.uid || null,
           recordedAt: serverTimestamp(),
-          // Phase 27.2 (2026-05-14) — discrete per-stage timestamp
           vitalsignsRecordedAt: serverTimestamp(),
           vitalsignsRecordedBy: auth.currentUser?.uid || null,
         } : {
-          // Phase 26.0b — admin/staff save clears status (preserves recordedBy/At)
+          // admin/staff save clears status (advances to "completed" state)
           status: deleteField(),
-          // Phase 27.2 (2026-05-14) — stamp completedAt + completedBy ONLY when
-          // not already set (first completion). Subsequent edits update editedAt
-          // below (preserves the "first completed at" moment). User directive:
-          // "เมื่อพนักงานแก้ไข TFP แล้วให้ขึ้น badge บันทึกแล้วสีเขียวด้วย".
-          ...(loadedTreatmentCompletedAt ? {} : {
-            completedAt: serverTimestamp(),
-            completedBy: auth.currentUser?.uid || null,
-          }),
+          // Phase 27.2-bis — always stamp completedAt to latest staff save
+          // (was previously gated on !loadedTreatmentCompletedAt; user wants
+          // each click to refresh the badge time).
+          completedAt: serverTimestamp(),
+          completedBy: auth.currentUser?.uid || null,
           // Phase 26.1 (V26.1, 2026-05-13) — editor attribution from EditAttributionModal.
-          // When `editorContext` is present (modal-confirmed edit-save, set by Task 5),
-          // stamp 4 fields for CDV "· แก้ไขโดย: X (role)" display. When absent
-          // (create-mode staff save OR legacy callsite), no fields written —
-          // backward compat.
           ...(editorContext ? {
             editedBy: editorContext.uid,
             editedByName: editorContext.name,
@@ -3338,20 +3322,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 column immediately after Vital Signs section. Moved from RIGHT column so
                 the button lives next to the data it saves. Subtitle <p> dropped per
                 user direction. */}
-            {!isEdit && (
-              <div className="mb-3">
-                <button
-                  type="button"
-                  onClick={() => handleSubmit('vitals')}
-                  data-testid="tfp-vitals-save-btn"
-                  disabled={saving}
-                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <Activity size={16} />
-                  บันทึกข้อมูลซักประวัติ
-                </button>
-              </div>
-            )}
+            {/* Phase 27.2-bis (2026-05-14) — vitals button always visible per user
+                directive: "ทำให้ปุ่มข้อมูลซักประวัติสามารถแก้ไขได้เรื่อยๆ เหมือนปุ่ม
+                ลงบันทึกแพทย์ แต่ time stamp ก็จะอัพเดทตามการแก้ไขล่าสุด เหมือนกัน
+                ทุกปุ่มบันทึก". Was gated on !isEdit; now always shown so staff
+                can re-edit vitals at any time. Each click updates vitalsignsRecordedAt. */}
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={() => handleSubmit('vitals')}
+                data-testid="tfp-vitals-save-btn"
+                disabled={saving}
+                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Activity size={16} />
+                บันทึกข้อมูลซักประวัติ
+              </button>
+            </div>
 
           </div>
 
@@ -3423,21 +3410,24 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 Otherwise stays create-only per Phase 26.0d. */}
             {/* Phase 26.2f-followup2 (V26.2f, 2026-05-13) — doctor-save button restyled to
                 royal purple to visually distinguish it from the teal vitals-save button. */}
-            {(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') && (
-              <div className="mb-3">
-                <button
-                  type="button"
-                  onClick={() => handleSubmit('doctor')}
-                  disabled={saving}
-                  data-testid="tfp-doctor-save-btn"
-                  data-save-mode="doctor"
-                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#7c3aed] hover:bg-[#6d28d9] active:bg-[#5b21b6] shadow-[0_0_18px_rgba(124,58,237,0.3)] disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <Stethoscope className="w-4 h-4" />
-                  <span>บันทึกสำหรับแพทย์</span>
-                </button>
-              </div>
-            )}
+            {/* Phase 27.2-bis (2026-05-14) — doctor button always visible too
+                (gate removed; can re-edit at any TFP open). Each click updates
+                doctorRecordedAt. The previous gate `!isEdit ||
+                loadedTreatmentStatus === 'vitalsigns-recorded'` hid the
+                button after doctor-recorded → blocked re-edits. Now always shown. */}
+            <div className="mb-3">
+              <button
+                type="button"
+                onClick={() => handleSubmit('doctor')}
+                disabled={saving}
+                data-testid="tfp-doctor-save-btn"
+                data-save-mode="doctor"
+                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#7c3aed] hover:bg-[#6d28d9] active:bg-[#5b21b6] shadow-[0_0_18px_rgba(124,58,237,0.3)] disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Stethoscope className="w-4 h-4" />
+                <span>บันทึกสำหรับแพทย์</span>
+              </button>
+            </div>
           </div>
         </div>
 
