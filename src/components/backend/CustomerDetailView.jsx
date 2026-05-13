@@ -58,6 +58,15 @@ import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/date
 // Phase 24.0 — dual gate (permission OR admin) for ลบลูกค้า button
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 
+// Phase 26.1c (V26.1, 2026-05-13) — Editor-attribution role labels (Thai).
+// Maps editedByRole values from EditAttributionModal back to display text.
+// Used in row meta "· แก้ไขโดย: <name> (<role>)".
+const ROLE_LABEL_TH = {
+  doctor: 'แพทย์',
+  assistant: 'ผู้ช่วย',
+  staff: 'พนักงาน',
+};
+
 // ─── Helper: format Thai date ───────────────────────────────────────────────
 // Short/full Thai-BE formatters delegate to the shared `fmtThaiDate` helper.
 // `formatThaiDateFull` additionally guards against already-formatted strings
@@ -1036,6 +1045,18 @@ export default function CustomerDetailView({
                               {t.branch && <span>{t.branch}</span>}
                               {t.doctor && <span className="font-semibold text-[var(--tx-secondary)]">· {t.doctor}</span>}
                               {t.assistants?.length > 0 && <span>· {t.assistants.join(', ')}</span>}
+                              {/* V26.1 Phase 26.1c (2026-05-13) — last-editor attribution. Shown only when
+                                  editedByName present (legacy treatments stay null → skip cleanly). Italic
+                                  + slightly muted to differentiate from the primary doctor/assistant meta. */}
+                              {t.editedByName && (
+                                <span
+                                  data-testid={`treatment-edited-by-${t.id}`}
+                                  className="italic opacity-80"
+                                >
+                                  · แก้ไขโดย: {t.editedByName}
+                                  {t.editedByRole && ROLE_LABEL_TH[t.editedByRole] && ` (${ROLE_LABEL_TH[t.editedByRole]})`}
+                                </span>
+                              )}
                             </div>
                             {t.cc && <p className="mt-1 text-xs text-[var(--tx-secondary)] truncate"><span className="text-[var(--tx-muted)] font-semibold">CC:</span> {t.cc}</p>}
                             {t.dx && <p className="text-xs text-[var(--tx-muted)] truncate"><span className="font-semibold">DX:</span> {t.dx}</p>}

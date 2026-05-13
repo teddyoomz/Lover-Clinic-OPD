@@ -97,6 +97,35 @@ describe('Phase 26.0 — Status display RTL', () => {
   });
 
   describe('D5 — Phase 26.1 editor-attribution display + summary preservation', () => {
+    it('D5.1 — CDV summary mapper includes status + editedBy + editedByName + editedByRole (Task 1 fix)', () => {
+      const CDV_PATH = join(process.cwd(), 'src/components/backend/CustomerDetailView.jsx');
+      const CDV_SOURCE = readFileSync(CDV_PATH, 'utf-8');
+      const fnIdx = CDV_SOURCE.indexOf('const treatmentSummary = useMemo');
+      expect(fnIdx).toBeGreaterThan(-1);
+      const region = CDV_SOURCE.slice(fnIdx, fnIdx + 2000);
+      expect(region).toMatch(/status:\s*t\.status\s*\|\|\s*null/);
+      expect(region).toMatch(/editedBy:\s*t\.editedBy\s*\|\|\s*null/);
+      expect(region).toMatch(/editedByName:\s*t\.editedByName\s*\|\|\s*['"]['"]/);
+      expect(region).toMatch(/editedByRole:\s*t\.editedByRole\s*\|\|\s*['"]['"]/);
+    });
+
+    it('D5.2 — CDV row meta renders "· แก้ไขโดย: <name>" when editedByName present', () => {
+      const CDV_PATH = join(process.cwd(), 'src/components/backend/CustomerDetailView.jsx');
+      const CDV_SOURCE = readFileSync(CDV_PATH, 'utf-8');
+      expect(CDV_SOURCE).toMatch(/data-testid={`treatment-edited-by-/);
+      expect(CDV_SOURCE).toMatch(/แก้ไขโดย/);
+      expect(CDV_SOURCE).toMatch(/t\.editedByName\s*&&/);
+    });
+
+    it('D5.3 — ROLE_LABEL_TH constant defined with doctor/assistant/staff keys', () => {
+      const CDV_PATH = join(process.cwd(), 'src/components/backend/CustomerDetailView.jsx');
+      const CDV_SOURCE = readFileSync(CDV_PATH, 'utf-8');
+      expect(CDV_SOURCE).toMatch(/ROLE_LABEL_TH\s*=\s*\{/);
+      expect(CDV_SOURCE).toMatch(/doctor:\s*['"]แพทย์['"]/);
+      expect(CDV_SOURCE).toMatch(/assistant:\s*['"]ผู้ช่วย['"]/);
+      expect(CDV_SOURCE).toMatch(/staff:\s*['"]พนักงาน['"]/);
+    });
+
     it('D5.4 — rebuildTreatmentSummary preserves editedBy/Name/Role fields', () => {
       const BC_PATH = join(process.cwd(), 'src/lib/backendClient.js');
       const BC_SOURCE = readFileSync(BC_PATH, 'utf-8');
