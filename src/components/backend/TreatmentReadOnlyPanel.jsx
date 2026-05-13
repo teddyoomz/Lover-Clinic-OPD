@@ -31,6 +31,12 @@ import {
 } from 'lucide-react';
 import { fmtThaiDate, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
 import { hexToRgb } from '../../utils.js';
+import {
+  resolveDoctorDisplayName,
+  resolveAssistantsDisplay,
+  resolveBranchDisplayName,
+} from '../../lib/treatmentDisplayResolvers.js';
+import { listDoctors, listStaff, listBranches } from '../../lib/scopedDataLayer.js';
 
 // ─── Local helpers (mirror TreatmentTimelineModal.jsx) ──────────────────────
 
@@ -208,6 +214,28 @@ export default function TreatmentReadOnlyPanel({
   // Local lightbox state — self-contained; no prop threading needed
   const [lightbox, setLightbox] = useState(null); // { src, label } | null
 
+  // Phase 27.0 (2026-05-14) — live-resolve doctor/assistant/branch names via
+  // treatmentDisplayResolvers (AV42). NEVER fall back to raw doc ID.
+  // V41 lookup-map pattern: include hidden persons for past-record display.
+  const [doctorMap, setDoctorMap] = useState(() => new Map());
+  const [staffMap, setStaffMap] = useState(() => new Map());
+  const [branchMap, setBranchMap] = useState(() => new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      listDoctors({ includeHidden: true }).catch(() => []),
+      listStaff({ includeHidden: true }).catch(() => []),
+      listBranches({ allBranches: true }).catch(() => []),
+    ]).then(([doctors, staff, branches]) => {
+      if (cancelled) return;
+      setDoctorMap(new Map(doctors.map((d) => [String(d.id), d])));
+      setStaffMap(new Map(staff.map((s) => [String(s.id), s])));
+      setBranchMap(new Map(branches.map((b) => [String(b.branchId || b.id), b])));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Esc: close lightbox first, then call onClose if provided
   useEffect(() => {
     const onKey = (e) => {
@@ -222,6 +250,18 @@ export default function TreatmentReadOnlyPanel({
   const t = treatmentSummary || {};
   const fullDoc = treatmentFull || null;
   const detail = fullDoc?.detail || null;
+
+  // Phase 27.0 (2026-05-14) — resolver migration. NEVER fall back to raw ID.
+  // Fallback to treatmentSummary pre-resolved strings if detail not yet loaded.
+  const doctorId = detail?.doctorId || '';
+  const resolvedDoctor = resolveDoctorDisplayName(doctorId, doctorMap, t.doctor);
+  const doctorName = resolvedDoctor || t.doctor || '—';
+  const branchId = detail?.branchId || '';
+  const resolvedBranch = resolveBranchDisplayName(branchId, branchMap, t.branch);
+  const branchName = resolvedBranch || t.branch || '—';
+  const assistants = detail?.assistants || [];
+  const resolvedAssistants = resolveAssistantsDisplay(assistants, doctorMap, staffMap);
+  const assistantsDisplay = resolvedAssistants || (t.assistants?.join(', ')) || '—';
 
   const beforeImages = detail?.beforeImages || [];
   const afterImages = detail?.afterImages || [];
@@ -276,22 +316,22 @@ export default function TreatmentReadOnlyPanel({
 
         {/* Meta row: branch + doctor + assistants */}
         <div className="space-y-1 text-xs">
-          {t.branch && (
+          {branchName !== '—' && (
             <div className="flex items-center gap-1.5 text-[var(--tx-secondary)]">
               <MapPin size={11} style={{ color: ac }} />
-              <span>{t.branch}</span>
+              <span>{branchName}</span>
             </div>
           )}
-          {t.doctor && (
+          {doctorName !== '—' && (
             <div className="flex items-center gap-1.5 text-[var(--tx-secondary)]">
               <Stethoscope size={11} style={{ color: ac }} />
-              <span className="font-semibold">{t.doctor}</span>
+              <span className="font-semibold">{doctorName}</span>
             </div>
           )}
-          {t.assistants?.length > 0 && (
+          {assistantsDisplay !== '—' && (
             <div className="flex items-center gap-1.5 text-[var(--tx-muted)]">
               <User size={11} style={{ color: ac }} />
-              <span>{t.assistants.join(', ')}</span>
+              <span>{assistantsDisplay}</span>
             </div>
           )}
         </div>
