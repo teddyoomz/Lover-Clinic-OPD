@@ -1,7 +1,8 @@
 ---
-tags: [treatment, status, doctor-save, phase-26-0, locked-x-family]
+tags: [treatment, status, doctor-save, phase-26-0, locked-x-family, vitals-save, phase-26-2f]
 date: 2026-05-13
-source-count: 1
+date-updated: 2026-05-13
+source-count: 2
 ---
 
 # Treatment Status & Doctor-Save Pattern
@@ -232,6 +233,64 @@ Phase 26.0 final: 8297. Phase 26.1 final: **8320 + 1 skipped** (+23 net).
 - `559d0cb` Task 8 — AV37.9-AV37.11 + SKILL.md
 - (Task 9 — full vitest + build verify)
 - (Task 10 — this commit)
+
+## Phase 26.2f-pre — 3-stage workflow (2026-05-13)
+
+Status state machine extended to **3 stages** with a new vitals-save entry point:
+
+```
+[new treatment, status=undefined]
+        │
+        ▼  nurse/staff presses "บันทึกข้อมูลผู้ป่วยเบื้องต้น"
+        │  saveMode='vitals', handleSubmit('vitals')
+        ▼
+[status='vitalsigns-recorded']   ← canAddNewItems=true (doctor can add items)
+        │
+        ▼  doctor presses "บันทึกสำหรับแพทย์"
+        │  saveMode='doctor', handleSubmit('doctor')
+        ▼
+[status='doctor-recorded']       ← canAddNewItems=true (admin can still add)
+        │
+        ▼  admin presses regular "บันทึก"
+        │  status=deleteField() (cleared), editedBy/Name/Role/At stamped
+        ▼
+[status=undefined / cleared]     ← treatment finalized
+```
+
+**Vitals-save button**: visible in create mode only (`{!isEdit && ...}`). Located
+at right column top (where หมายเหตุทั่วไป previously lived — layout reordered in
+26.2f). Button label "บันทึกข้อมูลผู้ป่วยเบื้องต้น", indigo/violet styling,
+`data-testid="tfp-vitals-save-btn"`.
+
+**`canAddNewItems` 3-branch gate** (`src/components/TreatmentFormPage.jsx`):
+```js
+const canAddNewItems =
+  mode === 'create' ||
+  loadedTreatmentStatus === 'doctor-recorded' ||
+  loadedTreatmentStatus === 'vitalsigns-recorded';
+```
+
+**Status chips** (CustomerDetailView + TreatmentTimelineModal):
+- `'vitalsigns-recorded'` → amber chip "บันทึกข้อมูลเบื้องต้น" (nurse)
+- `'doctor-recorded'` → sky chip "แพทย์ลงบันทึก" (doctor)
+- `undefined` / cleared → no chip (finalized, normal)
+
+**AV37 extensions (.12–.17)**: `saveMode='vitals'` payload routing,
+`'vitalsigns-recorded'` stamping, `canAddNewItems` 3-branch gate, vitals button
+data-testid, `extractDisplayString` usage in mirror, mirror layout order.
+
+**AV39** (NEW): `extractDisplayString` must wrap all populated-object fields in
+`TreatmentReadOnlyMirror.jsx` to prevent `[object Object]` rendering. See
+[tfp-readonly-mirror.md](tfp-readonly-mirror.md).
+
+### Phase 26.2f commit log (11 commits, 2026-05-13)
+
+Baseline: Phase 26.2 @ 8356 tests. Final: **8447 tests** (+91 net). 51 commits
+ahead of prod `ccef3c2`. NOT YET DEPLOYED.
+
+- `ed55b37` Task 1 — scaffold TreatmentReadOnlyMirror + extractDisplayString
+- `...` Tasks 2-9 — vitals-save gate + UI + status + canAddNewItems + AV37 ext + AV39 + flow-simulate + source-grep
+- `39b38ae` Task 9 — full vitest 8447 PASS + build clean
 
 ## See also
 

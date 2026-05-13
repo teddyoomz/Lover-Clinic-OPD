@@ -57,6 +57,16 @@ Test bank: G1+G2 (handleSubmit + UI source-grep) + D1+D2+D3+D4 (RTL chip + banne
 
 Full suite: 8242 → 8297 + 1 skipped (+55 net) all GREEN. Build clean. NOT YET DEPLOYED — awaiting user `deploy` authorization per Rule V18.
 
+## [2026-05-13] ingest | Phase 26.2f — TFP Read-Only Mirror + Vitals-Save
+
+`TreatmentReadOnlyMirror` (~947 LOC) replaces `TreatmentReadOnlyPanel` in TFP split-screen aside. Full mirror of TFP layout with all inputs disabled — doctor can compare historical visit field-by-field alongside live form. `extractDisplayString` helper prevents `[object Object]` rendering for populated-object fields (doctor/assistant Firestore objects). Layout reordered: หมายเหตุทั่วไป → left column; vitals-save button takes right column top.
+
+`saveMode='vitals'` = 5th locked-X family member. Stamps `status: 'vitalsigns-recorded'`. `canAddNewItems` extended to 3-branch gate. Full 3-stage status machine: vitals-save → doctor-save → admin finalize.
+
+AV37 extended (.12–.17). AV38 existing (covers both Panel + Mirror). AV39 NEW (extractDisplayString). Tests: **8447 PASS** (+91 net). Build clean. 51 commits ahead of prod `ccef3c2`. NOT YET DEPLOYED.
+
+New pages: `wiki/concepts/tfp-readonly-mirror.md` (NEW). Updated: `wiki/concepts/treatment-status-and-doctor-save.md`.
+
 Cross-references locked: `treatment-status-and-doctor-save` cites Phase 25.0c lockedChannel + Phase 21.0 lockedAppointmentType (Rule of 3 chain). Future TreatmentFormPage saveMode variants (e.g., draft-save) should land on this concept page first.
 
 ## [2026-05-13] ingest | Phase 26.1 — TFP Polish + Editor-Attribution Modal

@@ -7,11 +7,11 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 — Phase 26.0 + 26.1 + **26.2** COMPLETE (NOT YET DEPLOYED) · 8356 tests + 1 skipped · build clean · 43 commits ahead of prod · 1 known flake (Phase 17.1 cross-branch-import-rtl, intermittent under full-suite load)
+- **Date last updated**: 2026-05-13 — Phase 26.0 + 26.1 + 26.2 + **26.2f** COMPLETE (NOT YET DEPLOYED) · 8447 tests + 1 skipped · build clean · 51 commits ahead of prod · 1 known flake (Phase 17.1 cross-branch-import-rtl, intermittent under full-suite load)
 - **Branch**: `master`
-- **Last commit**: `<NEW_SHA>` docs(wiki+agents): Phase 26.2 wiki concept page + log + SESSION_HANDOFF + active.md
-- **Test count**: **8356 passed** (+114 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures. 1 known flake (Phase 17.1 intermittent, pre-existing).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 43 commits ahead). Phase 26.0 + 26.1 + 26.2 implementation complete, awaiting combined deploy. TreatmentReadOnlyPanel + split-screen history + customer.note LIVE on master, NOT on prod.
+- **Last commit**: `<NEW_SHA>` docs(Phase 26.2f Task 10): wiki + log + SESSION_HANDOFF + active.md
+- **Test count**: **8447 passed** (+205 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures. 1 known flake (Phase 17.1 intermittent, pre-existing).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 51 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f implementation complete, awaiting combined deploy. TreatmentReadOnlyMirror + vitals-save + 3-stage status machine LIVE on master, NOT on prod.
 
 ### Session 2026-05-13 — Phase 26.2 TFP Split-Screen History + Customer.Note (COMPLETE, NOT YET DEPLOYED)
 
@@ -36,6 +36,30 @@ User directive: "ทำต่อ Phase 26.2 ตามแผน" — execute the 
 **Tests**: Phase 26.1 baseline 8320 → Phase 26.2 final **8356** (+36 net). Build clean. 43 commits ahead of prod (`ccef3c2`). Awaiting `deploy` authorization.
 
 Detail: wiki concept page at `wiki/concepts/tfp-split-screen-history.md`. Flow-simulate: `tests/phase26-2-flow-simulate.test.js`. AV38: `tests/v38-av38-treatment-read-only-panel.test.js`.
+
+---
+
+### Session 2026-05-13 — Phase 26.2f TFP Read-Only Mirror + Vitals-Save (COMPLETE, NOT YET DEPLOYED)
+
+User directive: follow-up to Phase 26.2 — replace TreatmentReadOnlyPanel aside with a full-mirror component + add vitals-save entry point for nurses/staff.
+
+**4 implementation items shipped** (11 commits, Tasks 1-10 including this doc commit):
+
+**(A) TreatmentReadOnlyMirror** (`src/components/TreatmentReadOnlyMirror.jsx`, ~947 LOC): NEW component replacing `TreatmentReadOnlyPanel` in TFP split-screen aside. Full mirror of TFP form layout — every section, tab, and field rendered in disabled/readOnly state. `extractDisplayString(val)` helper at top prevents `[object Object]` for doctor/assistant Firestore populated-object fields. AV38 read-only contract: no edit/delete props, no enabled inputs, no save buttons. Lightbox (zoom) permitted.
+
+**(B) saveMode='vitals'** — 5th locked-X family member in TFP payload-shape-routing. `handleSubmit('vitals')` skips course-items, consumables, purchasedItems, auto-sale (identical gates to saveMode='doctor'). Stamps `status: 'vitalsigns-recorded'`, `recordedBy: auth.currentUser.uid`, `recordedAt: serverTimestamp()`. Vitals-save button on right column with nurse/admin scope — amber styling, ClipboardList icon, hidden from doctor-only sessions.
+
+**(C) canAddNewItems 3-branch extension**: `mode==='create' || status==='doctor-recorded' || status==='vitalsigns-recorded'`. When doctor opens a vitals-recorded treatment, course-items + consumables sections unlock exactly as for doctor-recorded.
+
+**(D) Layout reorder**: หมายเหตุทั่วไป (general note) moved from right column top → left column (beneath course-items/consumables). Vitals-save button occupies the right column slot vacated. Mirror reflects this reorder.
+
+**AV37** extended (.12–.17): saveMode='vitals' routing + 'vitalsigns-recorded' stamping + 3-branch canAddNewItems gate + vitals button testid + extractDisplayString usage + layout order.
+**AV38** (existing): read-only contract covers BOTH TreatmentReadOnlyPanel AND TreatmentReadOnlyMirror.
+**AV39** (NEW): extractDisplayString must appear ≥5 times in TreatmentReadOnlyMirror.jsx. Direct `{treatment.doctor}` JSX is violation.
+
+**Tests**: Phase 26.2 baseline 8356 → Phase 26.2f final **8447** (+91 net). Build clean. 51 commits ahead of prod (`ccef3c2`). Awaiting `deploy` authorization.
+
+Detail: wiki concept page at `wiki/concepts/tfp-readonly-mirror.md`. 3-stage workflow section appended to `wiki/concepts/treatment-status-and-doctor-save.md`. AV37 ext + AV39: `tests/audit-anti-vibe-code.test.js`. Mirror AV38: `tests/v38-av38-treatment-read-only-panel.test.js`.
 
 ---
 
