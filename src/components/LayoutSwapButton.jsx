@@ -6,6 +6,14 @@
 //
 // pointer-events on wrapper = none + on button = auto → button is clickable
 // but rest of wrapper area is click-through (doesn't block clicks on panels).
+//
+// Phase 27.1-bis (2026-05-14) — user feedback "ตกไปอยู่ตรงกลางต้องเลื่อนลง
+// ถึงจะเจอ ใช้ลำบาก ให้ fix ข้างบนเลย": moved from vertically-centered
+// (top-1/2 -translate-y-1/2) to STICKY at top (sticky top-3) so the button
+// stays visible at the top of the viewport during page scroll. No more
+// scrolling-to-find. Stays inside its containing block (the split-screen
+// outer wrapper); when user scrolls past the wrapper entirely it scrolls
+// away naturally.
 
 import { ArrowLeftRight } from 'lucide-react';
 
@@ -16,10 +24,14 @@ export function LayoutSwapButton({ onSwap, position, visible = true, isDark = tr
     : 'สลับ — ฟอร์มไปซ้าย / ประวัติไปขวา';
   return (
     <div
-      className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+      // Phase 27.1-bis: sticky top-3 keeps button visible during scroll; outer
+      // div spans full width via left-0 right-0 so it occupies no flex space
+      // (absolute positioning); inner sticky child stays at top of viewport.
+      className="hidden lg:flex absolute left-0 right-0 top-0 z-10 justify-center"
       style={{ pointerEvents: 'none' }}
       data-testid="layout-swap-button-wrapper"
     >
+      <div className="sticky top-3" style={{ pointerEvents: 'none' }}>
       <button
         type="button"
         onClick={onSwap}
@@ -40,6 +52,7 @@ export function LayoutSwapButton({ onSwap, position, visible = true, isDark = tr
       >
         <ArrowLeftRight size={18} />
       </button>
+      </div>
     </div>
   );
 }
