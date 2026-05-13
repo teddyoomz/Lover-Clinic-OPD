@@ -36,6 +36,12 @@ import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUt
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
 import { computeTreatmentBilling, computeBmi, formatBaht } from '../lib/treatmentBilling.js';
+// Phase 26.2g-fillin (2026-05-13) — derive congenital disease + treatment history
+// from structured patientData fields for TFP create-mode auto-fill.
+import {
+  derivePatientCongenitalDisease,
+  derivePatientTreatmentHistory,
+} from '../lib/patientHealthMapping.js';
 // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. `auth` needed for
 // `recordedBy: auth.currentUser?.uid` forensic stamp when doctor saves a
 // treatment (status='doctor-recorded'). See spec
@@ -1013,10 +1019,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               }
             }
           }
-          // Pre-fill from patient data
+          // Pre-fill from patient data (Phase 26.2g-fillin — extended to chronic + treatment-history)
           if (patientData) {
             if (patientData.bloodType && !isEdit) setBloodType(patientData.bloodType);
             if (patientData.allergiesDetail && !isEdit) setDrugAllergy(patientData.allergiesDetail);
+            // Phase 26.2g-fillin (V12 multi-reader-sweep close): derive congenital + treatment-history
+            // from structured patientData (ud_* + currentMedication + pregnancy). Create-mode only.
+            if (!isEdit) {
+              const derivedCongenital = derivePatientCongenitalDisease(patientData);
+              if (derivedCongenital) setCongenitalDisease(derivedCongenital);
+              const derivedHistory = derivePatientTreatmentHistory(patientData);
+              if (derivedHistory) setTreatmentHistory(derivedHistory);
+            }
           }
           setLoading(false);
           return;
