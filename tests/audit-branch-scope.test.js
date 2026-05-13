@@ -935,3 +935,73 @@ describe('AV36 V64 — appointment hub PDF print V32 lock', () => {
     expect(src).toMatch(/import\(['"]jspdf['"]\)/);
   });
 });
+
+// ─── AV37 — Phase 26.0 doctor-save gate discipline (V26.0, 2026-05-13) ─────
+// Every deduction / sale-creation call site in TFP handleSubmit MUST be gated
+// on `saveMode !== 'doctor'`. Medications (type 7) stock deduction is the
+// sanctioned exception (KEPT for doctor-save per Q2 brainstorming).
+// `canAddNewItems` flag replaces `!isEdit` at 5+ UI add-op sites so admin
+// finalize-mode unlocks the missing pieces on doctor-recorded treatments.
+describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
+  it('AV37.1 handleSubmit signature accepts saveMode arg with defensive coercion', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/const\s+saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/);
+  });
+
+  it('AV37.2 status doctor-recorded literal appears ≥2× (stamp + check + chip + banner readers)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    const matches = src.match(/['"]doctor-recorded['"]/g) || [];
+    // TFP minimum: status: 'doctor-recorded' (stamp) + loadedTreatmentStatus === 'doctor-recorded' (check)
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('AV37.3 recordedBy + recordedAt referenced at status-stamp site', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/recordedBy:\s*auth\.currentUser/);
+    expect(src).toMatch(/recordedAt:\s*serverTimestamp/);
+  });
+
+  it('AV37.4 deleteField() referenced for admin clear path', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/status:\s*deleteField\s*\(\s*\)/);
+  });
+
+  it('AV37.5 canAddNewItems flag declared with correct definition', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/const\s+canAddNewItems\s*=\s*\(\s*mode\s*===\s*['"]create['"]/);
+    expect(src).toMatch(/loadedTreatmentStatus\s*===\s*['"]doctor-recorded['"]/);
+  });
+
+  it('AV37.6 canAddNewItems used ≥5 times (1 declaration + 4+ UI gates)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    const refs = src.match(/canAddNewItems/g) || [];
+    expect(refs.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('AV37.7 meds deductStockForTreatment NOT saveMode-gated (sanctioned per Q2)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    const callsRe = /await\s+deductStockForTreatment\s*\(/g;
+    const matches = [...src.matchAll(callsRe)];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    // 2nd call = medications (type 7). MUST NOT have saveMode-gate immediately preceding.
+    const medsMatch = matches[1];
+    const before = src.slice(Math.max(0, medsMatch.index - 300), medsMatch.index);
+    expect(/saveMode\s*!==\s*['"]doctor['"]/.test(before)).toBe(false);
+  });
+
+  it('AV37.8 rebuildTreatmentSummary preserves status field for chip rendering', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/lib/backendClient.js', 'utf8');
+    const fnIdx = src.indexOf('function rebuildTreatmentSummary');
+    expect(fnIdx).toBeGreaterThan(-1);
+    const region = src.slice(fnIdx, fnIdx + 1500);
+    expect(region).toMatch(/status:\s*t\.status\s*\|\|\s*null/);
+  });
+});

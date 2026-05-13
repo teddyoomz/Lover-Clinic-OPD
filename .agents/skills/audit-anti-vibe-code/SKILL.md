@@ -880,6 +880,66 @@ expect(viewSrc).toMatch(/import\(['"]jspdf['"]\)/);
 
 **Companion**: AV16 (source-grep visual tests insufficient — pair with runtime measurement). AV36 is the architectural backstop; AV16 is the methodological complement.
 
+### AV37 — TFP doctor-save gate discipline (V26.0, 2026-05-13)
+
+**Pattern**: Every `await deductCourseItems(`, `await createBackendSale(`,
+`await assignCourseToCustomer(`, `await applyDepositToSale(`,
+`await deductWallet(`, `await earnPoints(` in
+`src/components/TreatmentFormPage.jsx` `handleSubmit` MUST be preceded
+by `saveMode !== 'doctor'` gate within the enclosing-gate block
+(practical window 16000 chars for the edit-mode sale-sync nested chain).
+
+`await deductStockForTreatment(` — the FIRST call (consumables /
+treatmentItems, type 6) MUST be saveMode-gated; the SECOND call
+(medications, type 7) MUST NOT be saveMode-gated (sanctioned exception
+per Phase 26.0 Q2 brainstorming — doctor records meds for the patient).
+
+`status: 'doctor-recorded'` stamping pattern must be present:
+- `saveMode === 'doctor'` ternary in v26StatusPatch
+- `recordedBy: auth.currentUser?.uid` + `recordedAt: serverTimestamp()` for doctor-save
+- `deleteField()` for admin save (clears status; preserves prior recordedBy/At as forensic trail)
+
+Phase 26.0c UI gates: `canAddNewItems = (mode === 'create') || (loadedTreatmentStatus === 'doctor-recorded')`
+declared at top of TFP render; replaces every `!isEdit && <AddBtn>` pattern at 5+
+UI sites (med add buttons, med grid swap, consumable add, consumable grid swap,
+course/purchase picker trigger).
+
+Phase 26.0e: `rebuildTreatmentSummary` in `src/lib/backendClient.js` MUST preserve
+`status: t.status || null` in the summary mapper output. CustomerDetailView +
+TreatmentTimelineModal chips read from `summary.status` — drift here = chip
+silently missing.
+
+**Anchor**: `src/components/TreatmentFormPage.jsx` (handleSubmit gates +
+v26StatusPatch + canAddNewItems flag) + `src/lib/backendClient.js`
+(rebuildTreatmentSummary status field).
+
+**Class-of-bug**: V12 multi-writer-sweep at handleSubmit boundary. A new
+deduction or sale-create call site added to handleSubmit in the future
+without the saveMode gate = double-deduct on admin finalize (doctor-save
+already deducted; admin's normal save would deduct again).
+
+**Sanctioned exceptions**:
+- `deductStockForTreatment` 2nd call (medications, type 7) — KEPT for both
+  saveModes per Q2.
+- Doctor-save button itself uses `{!isEdit && ...}` — doctor-save semantic
+  is create-only (admin finalizes via regular "บันทึก").
+- `isEdit` references in save-path branching (handleSubmit's existing
+  edit-vs-create logic) — NOT replaced with `canAddNewItems`. Only UI
+  add-op sites get the swap.
+- `isEdit` references in header banner text ("สร้างการรักษา" vs "แก้ไขการรักษา")
+  + save-button label ("ยืนยันการรักษา" vs "บันทึกการแก้ไข") + empty-state
+  placeholders — semantically tied to mode, not add-capability.
+
+**Source-grep regression** (`tests/audit-branch-scope.test.js` AV37.1-AV37.8):
+8 sub-tests lock the architectural contract. See test file for exact regex
+patterns + assertion shape. Cross-references: `tests/phase-26-0-doctor-save-source-grep.test.js`
+(G1+G2) + `tests/phase-26-0-status-display-rtl.test.jsx` (D1+D2+D3+D4).
+
+**Companion**: AV20 (default-filter at lister + opt-in pattern from V41 hide-from-lists).
+Phase 26.0 `saveMode` arg is the 4th member of the lockedX/payload-shape-routing
+family — see `wiki/concepts/treatment-status-and-doctor-save.md` for the Rule of 3
+discussion (saveMode + lockedCustomer + lockedAppointmentType + lockedChannel).
+
 ## How to run
 
 1. Run each grep pattern; classify hits.
