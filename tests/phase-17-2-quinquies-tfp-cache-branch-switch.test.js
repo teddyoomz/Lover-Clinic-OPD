@@ -67,9 +67,14 @@ describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () 
       // The pre-fix shape was `}, [customerId, treatmentId, isEdit]);`
       // After the fix it should NEVER appear standalone — only the extended
       // 4-dep form should be present.
+      // V21-class fixup (Phase 26.2 Task 4): history-fetch useEffect legitimately uses
+      // [customerId, treatmentId, isEdit] (3 deps — history re-fetches on these; no
+      // SELECTED_BRANCH_ID needed since history is customer-level, not branch-level).
+      // Exactly 1 occurrence is now the correct contract (the history-fetch useEffect).
+      // The form-data useEffect (the target of Q2.1) correctly has the 4-dep extended array.
       const legacyOnly = /\}, \[customerId, treatmentId, isEdit\]\);/g;
       const matches = TFP_SRC.match(legacyOnly) || [];
-      expect(matches.length).toBe(0);
+      expect(matches.length).toBe(1);
     });
   });
 

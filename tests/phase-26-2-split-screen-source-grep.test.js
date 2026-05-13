@@ -67,5 +67,16 @@ describe('Phase 26.2 — split-screen + customer.note source-grep', () => {
       const region = TFP_SOURCE.slice(idx, idx + 400);
       expect(region).toMatch(/null/);
     });
+    it('G4.7 — split-screen outer wrapper: max-w-[2000px] lg:flex when active', () => {
+      expect(TFP_SOURCE).toMatch(/selectedHistoryTreatmentId\s*\?\s*['"`]max-w-\[2000px\]\s+lg:flex/);
+    });
+    it('G4.8 — right panel aside: hidden lg:block (desktop-only)', () => {
+      expect(TFP_SOURCE).toMatch(/<aside\s+className=[`"'][^`"']*hidden\s+lg:block/);
+    });
+    it('G4.9 — TreatmentReadOnlyPanel imported + used in TFP', () => {
+      // V21-class fixup (Phase 26.2 Task 5): path includes .jsx extension; regex allows optional extension after component name
+      expect(TFP_SOURCE).toMatch(/import\s+TreatmentReadOnlyPanel\s+from\s+['"][^'"]*TreatmentReadOnlyPanel(?:\.jsx)?['"]/);
+      expect(TFP_SOURCE).toMatch(/<TreatmentReadOnlyPanel/);
+    });
   });
 });

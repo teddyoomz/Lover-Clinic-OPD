@@ -21,6 +21,7 @@ import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
 import EditAttributionModal from './backend/EditAttributionModal.jsx';
+import TreatmentReadOnlyPanel from './backend/TreatmentReadOnlyPanel.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // Phase 14.7.H follow-up A — branch-aware sale + stock writes.
@@ -336,6 +337,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // dead zone reference error. See the Phase 26.0a comment block below
   // the `loadedTreatmentStatus` state for full rationale.
   const accent = isDark ? '#a78bfa' : '#7c3aed';
+  const accentRgb = isDark ? '167,139,250' : '124,58,237';
   // Phase 14.7.H follow-up A + Phase 17.2 — resolve current branch for sale
   // + stock writes. BranchProvider is hoisted to App.jsx (Phase 17.2), so
   // SELECTED_BRANCH_ID always resolves to a real branchId (or null until
@@ -3097,8 +3099,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       )}
 
       {/* ── Two-Column Layout ─────────────────────────────────────────────── */}
-      <div className="max-w-6xl mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={selectedHistoryTreatmentId
+        ? 'max-w-[2000px] lg:flex lg:gap-4 mx-auto px-4 py-4'
+        : 'max-w-6xl mx-auto px-4 py-4'
+      }>
+        {/* Phase 26.2 Task 5 — LEFT panel wrapper for conditional split-screen */}
+        <div className="flex-1 min-w-0">
+        <div className={selectedHistoryTreatmentId ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
 
           {/* ════ LEFT PANEL ════ */}
           <div className="space-y-4">
@@ -5112,6 +5119,42 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         onCancel={handleEditAttributionCancel}
         isDark={isDark}
       />
+        </div>{/* end flex-1 min-w-0 LEFT panel wrapper (Phase 26.2 Task 5) */}
+
+        {/* Phase 26.2 Task 5 — RIGHT panel: history read-only (desktop only) */}
+        <aside className="hidden lg:block w-[480px] flex-shrink-0 sticky top-[52px] self-start">
+          {selectedHistoryTreatmentId && (
+            <TreatmentReadOnlyPanel
+              treatment={historyTreatments.find(t => t.treatmentId === selectedHistoryTreatmentId) || null}
+              fullDoc={historyFullDoc}
+              isDark={isDark}
+              ac={accent}
+              acRgb={accentRgb}
+              isLatest={false}
+              showCloseButton
+              onClose={() => handleHistoryTabClick(selectedHistoryTreatmentId)}
+            />
+          )}
+        </aside>
+
+        {/* Phase 26.2 Task 5 — Mobile fallback: history modal overlay (<lg) */}
+        <div className="lg:hidden">
+          {selectedHistoryTreatmentId && (
+            <div className="fixed inset-0 z-[200] flex flex-col overflow-y-auto"
+              style={{ background: isDark ? 'rgba(0,0,0,0.92)' : 'rgba(255,255,255,0.96)' }}>
+              <TreatmentReadOnlyPanel
+                treatment={historyTreatments.find(t => t.treatmentId === selectedHistoryTreatmentId) || null}
+                fullDoc={historyFullDoc}
+                isDark={isDark}
+                ac={accent}
+                acRgb={accentRgb}
+                isLatest={false}
+                showCloseButton
+                onClose={() => handleHistoryTabClick(selectedHistoryTreatmentId)}
+              />
+            </div>
+          )}
+        </div>
     </div>
   );
 }
