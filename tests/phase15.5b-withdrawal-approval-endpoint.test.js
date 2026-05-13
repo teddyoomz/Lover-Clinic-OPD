@@ -12,9 +12,14 @@
 //   PF — client wrapper (mocked fetch) — Bearer header, error surface
 //   PG — UI button visibility / wiring (RTL render of WithdrawalDetailModal)
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+// Phase 17.1 flake-fix-followup (2026-05-14) — capture original global.fetch
+// at module-load so afterAll in PF describe can restore. Prevents cross-file
+// pollution under vitest worker parallelism.
+const ORIGINAL_FETCH = global.fetch;
 
 const API_PATH = join(process.cwd(), 'api', 'admin', 'stock-withdrawal-approve.js');
 const CLIENT_PATH = join(process.cwd(), 'src', 'lib', 'stockWithdrawalApprovalClient.js');
@@ -367,6 +372,12 @@ describe('Phase 15.5B.PE — server logic (mocked firebase-admin)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 describe('Phase 15.5B.PF — client wrapper', () => {
   let mockFetch;
+
+  afterAll(() => {
+    // Phase 17.1 flake-fix-followup: restore original global.fetch
+    if (ORIGINAL_FETCH === undefined) delete global.fetch;
+    else global.fetch = ORIGINAL_FETCH;
+  });
 
   beforeEach(() => {
     vi.resetModules();

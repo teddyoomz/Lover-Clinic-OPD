@@ -9,8 +9,15 @@
 // "กรุณาเลือกสาขา" — this is reported as a source bug in the task summary.
 
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+
+// Phase 17.1 flake-fix-followup (2026-05-14) — defensive global.fetch isolation.
+// Capture original at module-load + restore in afterAll prevents cross-file
+// pollution under vitest worker parallelism. Plus WAIT_FOR_OPTS gives 3x headroom
+// over default 1000ms timeout for RTL tests under full-suite load.
+const ORIGINAL_FETCH = global.fetch;
+const WAIT_FOR_OPTS = { timeout: 3000 };
 
 // ─── Mock firebase auth ───────────────────────────────────────────────────
 vi.mock('../src/firebase.js', () => ({
@@ -79,6 +86,12 @@ const mockMakeFreshOk = () =>
     ok: true,
     json: async () => okMakeFreshJson(),
   });
+
+afterAll(() => {
+  // Phase 17.1 flake-fix-followup: restore original global.fetch
+  if (ORIGINAL_FETCH === undefined) delete global.fetch;
+  else global.fetch = ORIGINAL_FETCH;
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -153,7 +166,7 @@ describe('UI1 — BranchBackupTab', () => {
     const startBtn = screen.getByText('เริ่ม Backup');
     await act(async () => { fireEvent.click(startBtn); });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1), WAIT_FOR_OPTS);
 
     const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe('/api/admin/branch-backup-export');
@@ -165,7 +178,7 @@ describe('UI1 — BranchBackupTab', () => {
     expect(body.isAutoPreFresh).toBe(false);
 
     // V40-prod-fix-4: signed URL link with "Download ไฟล์ (.json)" label + download attr
-    await waitFor(() => expect(screen.getByText(/Download ไฟล์/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Download ไฟล์/)).toBeTruthy(), WAIT_FOR_OPTS);
     const link = screen.getByRole('link', { name: /Download ไฟล์/ });
     expect(link.getAttribute('href')).toBe('https://signed.example/backup.json');
     expect(link.getAttribute('target')).toBe('_blank');
@@ -179,7 +192,7 @@ describe('UI1 — BranchBackupTab', () => {
     });
     render(<BranchBackupTab />);
     await act(async () => { fireEvent.click(screen.getByText('เริ่ม Backup')); });
-    await waitFor(() => expect(screen.getByText('quota exceeded')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('quota exceeded')).toBeTruthy(), WAIT_FOR_OPTS);
     // No signed URL link
     expect(screen.queryByRole('link', { name: 'Download' })).toBeNull();
   });
@@ -197,11 +210,11 @@ describe('UI1 — BranchBackupTab', () => {
       // First 4 are tier boxes (disabled in advanced mode), rest are collections
       const firstCollBox = collectionBoxes[4];
       fireEvent.click(firstCollBox);
-    });
+    }, WAIT_FOR_OPTS);
 
     await act(async () => { fireEvent.click(screen.getByText('เริ่ม Backup')); });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1), WAIT_FOR_OPTS);
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
     // collections should be an array (not null) since advancedOpen is true
     expect(Array.isArray(body.collections)).toBe(true);
@@ -237,7 +250,7 @@ describe('UI2 — MakeFreshButton', () => {
     const btn = screen.getByTestId('make-fresh-btn-BR-TEST');
     await act(async () => { fireEvent.click(btn); });
     // Modal should appear with the branch name heading
-    await waitFor(() => expect(screen.getByText('ทำให้เป็นสาขาใหม่')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ทำให้เป็นสาขาใหม่')).toBeTruthy(), WAIT_FOR_OPTS);
   });
 
   it('UI2.4 button label text includes "สาขาใหม่"', () => {
@@ -256,14 +269,14 @@ describe('UI2 — MakeFreshButton', () => {
 
     // Open modal
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-btn-BR-TEST')); });
-    await waitFor(() => expect(screen.getByTestId('make-fresh-confirm-input')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('make-fresh-confirm-input')).toBeTruthy(), WAIT_FOR_OPTS);
 
     // Type branch name and confirm
     fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาทดสอบ' } });
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
     // Wait for done phase and click close
-    await waitFor(() => expect(screen.getByText('เสร็จสิ้น')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('เสร็จสิ้น')).toBeTruthy(), WAIT_FOR_OPTS);
     fireEvent.click(screen.getByText('ปิด'));
 
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -311,7 +324,7 @@ describe('UI3 — MakeFreshModal', () => {
     fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาโมดอล' } });
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2), WAIT_FOR_OPTS);
     const firstCall = global.fetch.mock.calls[0];
     expect(firstCall[0]).toBe('/api/admin/branch-backup-export');
     const firstBody = JSON.parse(firstCall[1].body);
@@ -327,7 +340,7 @@ describe('UI3 — MakeFreshModal', () => {
     fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาโมดอล' } });
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2), WAIT_FOR_OPTS);
     const secondCall = global.fetch.mock.calls[1];
     expect(secondCall[0]).toBe('/api/admin/branch-make-fresh');
     const secondBody = JSON.parse(secondCall[1].body);
@@ -341,7 +354,7 @@ describe('UI3 — MakeFreshModal', () => {
     fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาโมดอล' } });
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
-    await waitFor(() => expect(screen.getByText(/bucket not found/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/bucket not found/)).toBeTruthy(), WAIT_FOR_OPTS);
     // fetch was called exactly once (backup only, no make-fresh)
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch.mock.calls[0][0]).toBe('/api/admin/branch-backup-export');
@@ -356,7 +369,7 @@ describe('UI3 — MakeFreshModal', () => {
     fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาโมดอล' } });
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
-    await waitFor(() => expect(screen.getByText('เสร็จสิ้น')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('เสร็จสิ้น')).toBeTruthy(), WAIT_FOR_OPTS);
     // deletedCounts: 5 + 2 = 7 docs
     expect(screen.getByText(/7 docs/)).toBeTruthy();
     // autoBackupRef shown
@@ -386,7 +399,7 @@ describe('UI3 — MakeFreshModal', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
     // Component should now be in backing-up phase
-    await waitFor(() => expect(screen.getByText('1/2 กำลังสำรอง...')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1/2 กำลังสำรอง...')).toBeTruthy(), WAIT_FOR_OPTS);
 
     // Resolve backup to avoid leaking promise
     await act(async () => {
@@ -406,7 +419,7 @@ describe('UI3 — MakeFreshModal', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
 
     // Wait for wiping phase
-    await waitFor(() => expect(screen.getByText('1/2 สำรองสำเร็จ')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1/2 สำรองสำเร็จ')).toBeTruthy(), WAIT_FOR_OPTS);
     expect(screen.getByText('2/2 กำลังลบ...')).toBeTruthy();
 
     // Resolve make-fresh to avoid leaking promise
