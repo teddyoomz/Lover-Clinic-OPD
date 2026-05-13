@@ -27,6 +27,25 @@ export const THAI_MONTHS = [
   { value: '10', label: 'ตุลาคม' }, { value: '11', label: 'พฤศจิกายน' }, { value: '12', label: 'ธันวาคม' }
 ];
 
+/**
+ * Phase 28 (2026-05-14) — format YYYY-MM-DD as Thai Buddhist year (พ.ศ.) full date.
+ * Example: '2026-05-14' → '14 พฤษภาคม 2569'.
+ * Uses THAI_MONTHS[idx].label (canonical [{value,label}] shape from utils.js).
+ * Returns '' for invalid input (missing, malformed, out-of-range).
+ */
+export function formatThaiDateFull(dateISO) {
+  if (!dateISO || typeof dateISO !== 'string') return '';
+  const m = dateISO.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  const year = Number(m[1]);
+  const monthIdx = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  if (year < 1900 || year > 3000 || monthIdx < 0 || monthIdx > 11 || day < 1 || day > 31) return '';
+  const monthEntry = THAI_MONTHS[monthIdx];
+  if (!monthEntry || !monthEntry.label) return '';
+  return `${day} ${monthEntry.label} ${year + 543}`;
+}
+
 export const EN_MONTHS = [
   { value: '01', label: 'January' }, { value: '02', label: 'February' }, { value: '03', label: 'March' },
   { value: '04', label: 'April' }, { value: '05', label: 'May' }, { value: '06', label: 'June' },
