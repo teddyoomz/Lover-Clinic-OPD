@@ -36,11 +36,11 @@ import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUt
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
 import { computeTreatmentBilling, computeBmi, formatBaht } from '../lib/treatmentBilling.js';
-// Phase 26.2g-fillin (2026-05-13) — derive congenital disease + treatment history
-// from structured patientData fields for TFP create-mode auto-fill.
+// Phase 26.2g-fillin-bis (2026-05-13) — canonical resolver reads for TFP auto-fill.
 import {
-  derivePatientCongenitalDisease,
-  derivePatientTreatmentHistory,
+  resolvePatientCongenitalDisease,
+  resolvePatientDrugAllergy,
+  resolvePatientTreatmentHistory,
 } from '../lib/patientHealthMapping.js';
 // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. `auth` needed for
 // `recordedBy: auth.currentUser?.uid` forensic stamp when doctor saves a
@@ -1019,17 +1019,23 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               }
             }
           }
-          // Pre-fill from patient data (Phase 26.2g-fillin — extended to chronic + treatment-history)
+          // Pre-fill from patient data (Phase 26.2g-fillin-bis — canonical resolver reads)
           if (patientData) {
             if (patientData.bloodType && !isEdit) setBloodType(patientData.bloodType);
-            if (patientData.allergiesDetail && !isEdit) setDrugAllergy(patientData.allergiesDetail);
-            // Phase 26.2g-fillin (V12 multi-reader-sweep close): derive congenital + treatment-history
-            // from structured patientData (ud_* + currentMedication + pregnancy). Create-mode only.
             if (!isEdit) {
-              const derivedCongenital = derivePatientCongenitalDisease(patientData);
-              if (derivedCongenital) setCongenitalDisease(derivedCongenital);
-              const derivedHistory = derivePatientTreatmentHistory(patientData);
-              if (derivedHistory) setTreatmentHistory(derivedHistory);
+              // Phase 26.2g-fillin-bis (2026-05-13) — read CANONICAL patientData fields
+              // directly via resolvePatient* helpers. Phase 26.2g-fillin derivePatient*
+              // approach was a no-op: kiosk-shape fields (ud_*/hasUnderlying/
+              // allergiesDetail/currentMedication/pregnancy) don't exist on
+              // be_customers.patientData. kioskPatientToCanonical pre-derives kiosk
+              // → canonical strings BEFORE customer doc creation; admin form writes
+              // canonical directly. resolvePatient* read those canonical strings.
+              const congenital = resolvePatientCongenitalDisease(patientData);
+              if (congenital) setCongenitalDisease(congenital);
+              const allergy = resolvePatientDrugAllergy(patientData);
+              if (allergy) setDrugAllergy(allergy);
+              const history = resolvePatientTreatmentHistory(patientData);
+              if (history) setTreatmentHistory(history);
             }
           }
           setLoading(false);
