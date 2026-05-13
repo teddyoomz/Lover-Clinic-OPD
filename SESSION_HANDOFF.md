@@ -7,11 +7,49 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-09 EOD #24 — Phase 25.0 Walk-in 5th appointment type **DEPLOYED to prod** (combined vercel --prod + firebase deploy --only firestore:rules; PDP green on probe 1 + 5) · 8242 tests · build clean
+- **Date last updated**: 2026-05-13 — Phase 26.0 Doctor-Save (บันทึกสำหรับแพทย์) **COMPLETE** (NOT YET DEPLOYED) · 8297 tests + 1 skipped · build clean · 10 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: docs(agents+wiki): Phase 25.0 status docs — Walk-in 5th type shipped (NOT YET DEPLOYED)
-- **Test count**: 8242 passed. 1 pre-existing `bsa-task7-h-quater` flake (passes standalone, flakes in full-suite parallel runs). 1 pending.
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master = prod, 0 ahead). Combined deploy 2026-05-09 #24: `vercel --prod` aliased `lover-clinic-app.vercel.app` to new build (exit 0); `firebase deploy --only firestore:rules` released idempotently (rules unchanged from `1da05bb`). Pre+post probes 1 + 5 GREEN; 2/3/4 false-positive 403 per V50-followup-2 (collections deleted; ignored manually per Sessions #20-#24 precedent). Cleanup: 4 probe artifacts nuked.
+- **Last commit**: `13b9551` fix(Phase 26.0-test-fixups): V21-class regex updates for 3 stale tests post Task 2
+- **Test count**: **8297 passed** (+55 net from 8242 baseline) + 1 skipped. 0 failures. bsa-task7-h-quater flake did NOT surface in this run.
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master `13b9551` is 10 commits ahead). Phase 26.0 awaiting user `deploy` authorization per Rule V18 (per-turn explicit deploy required). When ready: combined `vercel --prod` + `firebase deploy --only firestore:rules` (rules unchanged but combined per V15 directive).
+
+### Session 2026-05-13 — Phase 26.0 Doctor-Save + Admin Finalize-Mode (NOT YET DEPLOYED)
+
+User directive (verbatim): "ในหน้า TFP เพิ่มระบบใหม่ คือ ปุ่ม บันทึกสำหรับแพทย์ ... จะไม่สามารถกดบันทึกตรงส่วนของ ข้อมูลการใช้คอร์ส และ สินค้าสิ้นเปลือง ได้ ... และเมื่อ admin กลับมากดแก้ไข ... จะสามารถกดเข้ามาแก้ไข อื่นๆได้ทั้งหมด เช่นเรื่อง ซื้อคอร์ส ตัดการรักษา ซื้อสินค้าหน้าร้าน ใส่ค่ามือ".
+
+**Brainstorming HARD-GATE honored** (Rule J): 4 clarifying Qs locked before code — Q1 button gate = Open-to-all (no auth-context wiring) + stamp recordedBy=uid; Q2 skip scope = Keep meds + DF (skip course-items + consumables + purchasedItems + auto-sale); Q3 status field = Single 'doctor-recorded' + cleared on admin save; Q4 unlock = Status-derived canAddNewItems flag. **Approach A1** locked (single handleSubmit + explicit gates) over A2 (separate handler — too much refactor) + A3 (filter payload — implicit-skip risk).
+
+**Subagent-driven mode** (Rule J): 9 tasks executed with implementer + spec-review + quality-review checkpoints. 10 commits across tasks 26.0a..26.0g-fixups.
+
+**Phase 26.0a — Scaffold** (`c54c63d`): `auth` import + `canAddNewItems = (mode==='create') || (loadedTreatmentStatus === 'doctor-recorded')` flag + `saveMode` defensive coercion in handleSubmit signature.
+
+**Phase 26.0b — handleSubmit gates + status stamping** (`3605eaf` + `db8da4d` + `dad99bb`): 8 explicit gates wrapping deduction/sale-creation call sites with `saveMode !== 'doctor'` (plan called for 6; implementer found 2 more). Meds deductStockForTreatment (type 7) KEPT UNGATED per Q2 sanctioned exception. v26StatusPatch stamps `status: 'doctor-recorded'` + `recordedBy` + `recordedAt` on doctor-save; admin save clears via `deleteField()` (preserves recordedBy/At forensic trail). 2 fixups: spec § 5.1.C edit-mode preserve via `loadedTreatmentStatus === 'doctor-recorded'` proxy + V21-class S2.5 regex evolution in treatment-stock-diff test.
+
+**Phase 26.0c — UI gates** (`7b584e2`): canAddNewItems replaces `!isEdit` at 6 actual edit blocks across 5 logical sites (med add Pattern α + med grid Pattern β + course picker α + course read-only β + consumable add α + consumable grid β). Carefully separated from save-path/title/banner `isEdit` uses. 40 canAddNewItems references total.
+
+**Phase 26.0d — Doctor-save button + edit-mode banner** (`85e1a9e`): "บันทึกสำหรับแพทย์" button (Stethoscope icon + sky styling + `data-testid="tfp-doctor-save-btn"`) under OPD Card additionalNote, before Chart. Hidden in edit mode (`{!isEdit && ...}`). Amber banner with AlertCircle + Thai instruction at top of form when `loadedTreatmentStatus === 'doctor-recorded'`.
+
+**Phase 26.0e — Status chips** (`034c866`): Amber "แพทย์ลงบันทึก" chip in CustomerDetailView treatment cards + TreatmentTimelineModal row headers. `rebuildTreatmentSummary` extended to preserve `status: t.status || null` so chips have data source.
+
+**Phase 26.0f — AV37 audit invariant** (`1b0fc47`): NEW AV37 entry in `audit-anti-vibe-code/SKILL.md` + 8 sub-tests in `tests/audit-branch-scope.test.js` (AV37.1-AV37.8) locking signature coercion + status stamping + meds sanctioned exception + canAddNewItems flag + summary preservation. Catches future V12 multi-writer-sweep violations permanently.
+
+**Phase 26.0g — Rule I flow-simulate** (`b0e1573`): NEW `tests/phase-26-0-doctor-save-flow-simulate.test.js` with F1-F8 groups (19 assertions). Pure simulator mirroring TFP handleSubmit gate logic; chains doctor-save → admin opens edit → canAddNewItems unlocks → admin adds items → admin saves; asserts cumulative state. Source-grep anchors at F2.1 + F7.1 verify simulator agrees with TFP source.
+
+**Phase 26.0 test fixups** (`13b9551`): 3 V21-class regex updates — TF3.A.6 (handleSubmit signature evolution `async ()` → `async (eventOrSaveMode)` + window 400 → 2500 chars) + V36.J.1 (payload var `backendDetail` → `finalBackendDetail`) + V50.F1.12 (active.md sliding-window — accepts any phase marker).
+
+**Rule of 3 reached** — `saveMode` arg joins `lockedCustomer` + `lockedAppointmentType` + `lockedChannel` as 4th member of payload-shape-routing family on TFP/AppointmentFormModal. Future locked-X / save-mode variants MUST mirror: defensive coercion + explicit gates at every site + AV invariant + flow-simulate F-tests + source-grep regression.
+
+**Backward compat preserved** — Legacy treatments (~5000+) stay `status: undefined` = no chip = "completed" behavior. NO data migration. NO firestore.rules change. NO Rule B Probe-Deploy-Probe trigger. NO Rule M data ops.
+
+**Files**: 4 source modified (TFP + CustomerDetailView + TreatmentTimelineModal + backendClient.js) + 3 NEW test files (G1+G2 source-grep, D1+D2+D3+D4 RTL, F1-F8 flow-simulate) + AV37 invariant + wiki concept page + spec + plan. ~810 LOC delta across 12 files.
+
+Spec: `docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md`. Plan: `docs/superpowers/plans/2026-05-13-phase-26-0-doctor-save.md`. Wiki concept: `wiki/concepts/treatment-status-and-doctor-save.md`. Detail: future checkpoint at `.agents/sessions/2026-05-13-phase-26-0-doctor-save.md` (deferred until session-end).
+
+NOT yet deployed — user authorizes `vercel --prod` separately per Rule V18. Production at `ccef3c2` (unchanged this session).
+
+
+
+
 
 ### Session 2026-05-09 EOD #24 — Phase 25.0 Walk-in DEPLOY (combined; PDP green)
 

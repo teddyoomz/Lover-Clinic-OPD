@@ -42,3 +42,19 @@ User requested 4-task batch: (1) add `walk-in` 5th appointment type with backend
 Production this entry: UPDATED entity page `entities/appointment-types-ssot.md` (4-type → 5-type taxonomy + Phase 25.0a history line) + UPDATED concept page `concepts/appointment-15min-and-4types.md` (Phase 25.0a evolution section with the inverted-flow semantic + `lockedChannel` Rule of 3 mirror documentation). Index NOT changed (existing pages updated, no new pages). NEW `lockedChannel` prop on `AppointmentFormModal` is the canonical mirror of Phase 21.0's `lockedAppointmentType` — same locked-chip-with-🔒 UX, validates against `CHANNELS` list, save-payload override pattern. AdminDashboard's NEW `_maybeOpenWalkInModal` helper gated on `adminMode === 'dashboard'`, called at all 3 customer-save success branches (addCustomer / relink-existing / recovery-create-after-notFound). Master 1 ahead of prod — awaiting explicit "deploy" THIS turn per Rule V18.
 
 Cross-references locked: `appointment-types-ssot` ↔ `appointment-15min-and-4types` (Phase 19.0 + 25.0a evolution). `lockedChannel` (NEW Phase 25.0c) is the third member of the locked-field prop family on AppointmentFormModal (after `lockedCustomer` + `lockedAppointmentType` Phase 21.0) — Rule of 3 reached; future locked-X props can mirror the safeLocked* validation + chip-render pattern. V64 hub auto-displays walk-in via existing infrastructure (`appointmentDataVersion` real-time + `sortApptsByDateTimeAsc` + TYPE_CHIP_CLS amber) — zero edits needed for Phase 25.0d.
+
+## [2026-05-13] ingest | Phase 26.0 — Doctor-Save (บันทึกสำหรับแพทย์) + Admin Finalize-Mode
+
+Created `concepts/treatment-status-and-doctor-save.md` documenting the new asymmetric save flow on TreatmentFormPage. Doctor-save records OPD/vitals/charts/meds/DF only (per Q2 — meds + DF KEPT; course-items + consumables + purchasedItems + auto-sale SKIPPED). Admin finalize unlocks via `canAddNewItems = (mode==='create') || (loadedTreatmentStatus === 'doctor-recorded')` flag derived from `treatment.status === 'doctor-recorded'` set by Phase 26.0b doctor-save.
+
+`saveMode` joins the locked-X / payload-shape-routing architectural family as 4th member (after `lockedCustomer` + `lockedAppointmentType` + Phase 25.0c `lockedChannel`). Future "save-mode" / "lockedX" variants MUST mirror: defensive coercion at entry + explicit gates at every site + AV invariant + flow-simulate F-tests + source-grep regression.
+
+10 commits across 9 tasks. Approach A1 (single handleSubmit + explicit gates) locked over A2 (separate handler — too much refactor) and A3 (filter payload — implicit-skip risk). Status field additive on `be_treatments`; legacy treatments stay `status: undefined` (no chip) — no Rule M data migration, no Rule B firestore.rules deploy needed.
+
+NEW AV37 audit invariant in `audit-anti-vibe-code/SKILL.md` + 8 sub-tests in `tests/audit-branch-scope.test.js`. AV37 locks the doctor-save gate discipline permanently — any new deduction/sale-create call site added to handleSubmit in future MUST be saveMode-gated; meds (type 7) sanctioned exception preserved.
+
+Test bank: G1+G2 (handleSubmit + UI source-grep) + D1+D2+D3+D4 (RTL chip + banner + summary) + F1-F8 (Rule I full-flow simulate). 3 V21-class test fixups in TF3.A.6 + V36.J.1 + V50.F1.12 (legitimate source contract evolution).
+
+Full suite: 8242 → 8297 + 1 skipped (+55 net) all GREEN. Build clean. NOT YET DEPLOYED — awaiting user `deploy` authorization per Rule V18.
+
+Cross-references locked: `treatment-status-and-doctor-save` cites Phase 25.0c lockedChannel + Phase 21.0 lockedAppointmentType (Rule of 3 chain). Future TreatmentFormPage saveMode variants (e.g., draft-save) should land on this concept page first.
