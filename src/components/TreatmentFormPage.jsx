@@ -7,7 +7,7 @@ import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
-import { doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
 // saveTarget default changed below from 'proclinic' to 'backend' so admin/
@@ -33,6 +33,12 @@ import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUt
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
 import { computeTreatmentBilling, computeBmi, formatBaht } from '../lib/treatmentBilling.js';
+// Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. `auth` needed for
+// `recordedBy: auth.currentUser?.uid` forensic stamp when doctor saves a
+// treatment (status='doctor-recorded'). See spec
+// docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md
+// section 5.1 (TFP changes) and v-log V26.0 entry.
+import { auth } from '../firebase.js';
 
 // ── data-field tag registry (TF2 audit, 2026-05-04) ────────────────────────
 //
@@ -323,6 +329,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     );
   }
   const isEdit = mode === 'edit';
+  // Note: `canAddNewItems` flag is declared lower (after the
+  // `loadedTreatmentStatus` useState declaration) to avoid a temporal
+  // dead zone reference error. See the Phase 26.0a comment block below
+  // the `loadedTreatmentStatus` state for full rationale.
   const accent = isDark ? '#a78bfa' : '#7c3aed';
   // Phase 14.7.H follow-up A + Phase 17.2 — resolve current branch for sale
   // + stock writes. BranchProvider is hoisted to App.jsx (Phase 17.2), so
@@ -402,6 +412,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   };
   const [options, setOptions] = useState(null);
   const [prevTreatment, setPrevTreatment] = useState(null);
+  // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Captures the
+  // top-level `status` field from the loaded treatment doc when in edit mode
+  // (set by the edit-mode load function below, around line 787). Drives the
+  // `canAddNewItems` flag so admin can finalize a doctor-recorded treatment
+  // by adding course-items / consumables / purchasedItems / auto-sale that
+  // the doctor-save path intentionally skipped. Initial value `undefined`
+  // (no value loaded yet); becomes string when an existing.status is found
+  // (e.g. 'doctor-recorded' | 'completed'). Pre-flight finding: spec/plan
+  // reference to `loadedTreatment?.status` resolved here since TFP has no
+  // full-doc state — only individually destructured fields from existing.detail.
+  const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
+  // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Unlocks add-ops
+  // (course-items / consumables / purchasedItems / auto-sale) when admin
+  // is finalizing a treatment that was previously doctor-saved (status set
+  // to 'doctor-recorded' by the doctor-save path — see spec section 5.1).
+  // Currently equals `!isEdit` because no doctor-recorded treatments exist
+  // yet (the doctor-save button/path activates in Task 3). Future Tasks
+  // 2-9 will swap 5 JSX `!isEdit && (...)` gates to `canAddNewItems && (...)`.
+  // Pre-flight finding: uses `loadedTreatmentStatus` state (set during
+  // edit-mode load) instead of plan's `loadedTreatment?.status` reference
+  // since TFP has no full-doc state variable. Placed AFTER the state
+  // declaration to avoid a temporal dead zone reference error (const is
+  // not hoisted).
+  const canAddNewItems = (mode === 'create')
+    || (loadedTreatmentStatus === 'doctor-recorded');
 
   // Doctor & Date
   const [doctorId, setDoctorId] = useState('');
@@ -785,6 +820,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // Edit mode: load existing backend treatment
           if (isEdit && treatmentId) {
             const existing = await getBackendTreatment(treatmentId);
+            // Phase 26.0a (V26.0, 2026-05-13) — capture top-level status field
+            // (e.g. 'doctor-recorded' | 'completed' | undefined) so the
+            // canAddNewItems flag (computed at top of render, after the
+            // loadedTreatmentStatus state declaration) can unlock add-ops
+            // when admin finalizes a doctor-recorded treatment.
+            if (existing?.status) setLoadedTreatmentStatus(existing.status);
             if (existing?.detail) {
               const t = existing.detail;
               if (t.doctorId) setDoctorId(t.doctorId);
@@ -1845,7 +1886,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     }, 50);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (eventOrSaveMode) => {
+    // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Defensive
+    // coercion: any value OTHER than the literal string 'doctor' resolves
+    // to 'staff' default. Backward-compat: existing callers pass either
+    // nothing or a form submit Event (handlers in onClick/onSubmit), both
+    // of which → 'staff'. Future Task 2 will add explicit gates around
+    // course-deduct / sale-create / consumables-deduct using this var.
+    // Future Task 3 will wire a "บันทึกสำหรับแพทย์" button that calls
+    // handleSubmit('doctor').
+    const saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : 'staff';
+    // If invoked as a form submit handler, suppress default behavior so the
+    // page doesn't navigate. No-op when called programmatically with a
+    // saveMode string (or no argument).
+    if (eventOrSaveMode && typeof eventOrSaveMode.preventDefault === 'function') {
+      eventOrSaveMode.preventDefault();
+    }
     // TF3 a11y polish — clear stale per-field errors at submit start so
     // re-submit doesn't surface yesterday's aria-invalid on inputs the
     // user has since corrected.
