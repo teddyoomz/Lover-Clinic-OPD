@@ -114,7 +114,11 @@ describe('F4 — TFP modal cache reset on branch change', () => {
   it('F4.2 destructures branchId as SELECTED_BRANCH_ID (Phase 14.7.H wiring)', () => {
     // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
     // destructured fields (branches: branchList).
-    expect(tfpContent).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 27.0 (2026-05-14) V21-class fixup — Task 5 added selectedBranchId as a sanctioned alias
+    // alongside SELECTED_BRANCH_ID in the same destructure (dual-alias:
+    // `branchId: selectedBranchId, branchId: SELECTED_BRANCH_ID` — both resolve to the same value).
+    // Accept either single-alias or dual-alias destructure shape.
+    expect(tfpContent).toMatch(/const\s*\{[^}]*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
   });
 
   it('F4.3 useEffect clears all 4 modal caches keyed on SELECTED_BRANCH_ID', () => {

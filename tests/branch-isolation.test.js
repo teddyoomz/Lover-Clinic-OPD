@@ -196,7 +196,10 @@ describe('BR3: SaleTab + 4 stock panels + TreatmentFormPage source branchId from
     expect(src).toMatch(/useSelectedBranch/);
     // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
     // destructured fields (branches: branchList for branch banner).
-    expect(src).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 27.0 (2026-05-14) V21-class fixup — Task 5 added selectedBranchId alias alongside
+    // SELECTED_BRANCH_ID in the same destructure (both resolve to the same branchId value;
+    // backward compat preserved). Accept either single-alias or dual-alias shape.
+    expect(src).toMatch(/const\s*\{[^}]*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
     // 5 call sites that previously had `branchId: 'main'` now use SELECTED_BRANCH_ID
     const occurrences = src.match(/branchId:\s*SELECTED_BRANCH_ID/g) || [];
     expect(occurrences.length).toBeGreaterThanOrEqual(5);

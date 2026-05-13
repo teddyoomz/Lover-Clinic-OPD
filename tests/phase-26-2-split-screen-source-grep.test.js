@@ -68,7 +68,10 @@ describe('Phase 26.2 — split-screen + customer.note source-grep', () => {
       expect(region).toMatch(/null/);
     });
     it('G4.7 — split-screen outer wrapper: max-w-[2000px] lg:flex when active', () => {
-      expect(TFP_SOURCE).toMatch(/selectedHistoryTreatmentId\s*\?\s*['"`]max-w-\[2000px\]\s+lg:flex/);
+      // Phase 27.1 (2026-05-14) — Task 12 added 'relative' prefix for absolute-positioned
+      // LayoutSwapButton + optional 'lg:flex-row-reverse' suffix via template literal.
+      // Core invariants (max-w-[2000px], lg:flex) preserved. Regex accepts both shapes.
+      expect(TFP_SOURCE).toMatch(/selectedHistoryTreatmentId\s*\?\s*[`'"](?:relative\s+)?max-w-\[2000px\]\s+lg:flex/);
     });
     it('G4.8 — right panel aside: hidden lg:block (desktop-only)', () => {
       expect(TFP_SOURCE).toMatch(/<aside\s+className=[`"'][^`"']*hidden\s+lg:block/);

@@ -129,7 +129,10 @@ describe('V36.G.9-16 — TreatmentFormPage branchId source', () => {
   test('G.10 — destructures branchId via useSelectedBranch hook', () => {
     // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
     // destructured fields (branches: branchList for branch banner).
-    expect(TFP).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 27.0 (2026-05-14) V21-class fixup — Task 5 added selectedBranchId as a sanctioned
+    // alias alongside SELECTED_BRANCH_ID in the same destructure. Accept dual-alias shape:
+    // `const { branchId: selectedBranchId, branchId: SELECTED_BRANCH_ID, ... } = useSelectedBranch()`
+    expect(TFP).toMatch(/const\s*\{[^}]*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
   });
 
   test('G.11 — every deductStockForTreatment call passes branchId: SELECTED_BRANCH_ID', () => {
@@ -171,13 +174,18 @@ describe('V36.G.9-16 — TreatmentFormPage branchId source', () => {
     // looking for the first call-site use.
     // Phase 17.2-septies (2026-05-05) — match-based search (was indexOf
     // for exact `}`); accommodates additional destructured fields.
-    const destructureMatch = TFP.match(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+    // Phase 27.0 (2026-05-14) — Task 5 added `selectedBranchId` as a sanctioned ALIAS
+    // alongside SELECTED_BRANCH_ID (same useSelectedBranch().branchId value).
+    // backendDetail stamping uses `branchId: selectedBranchId` (lowercase alias).
+    // Update test to accept either uppercase or lowercase alias as a valid call-site use.
+    const destructureMatch = TFP.match(/const\s*\{[^}]*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
     const destructureIdx = destructureMatch ? destructureMatch.index : -1;
     expect(destructureIdx).toBeGreaterThan(0);
-    // Locate first use AFTER the destructure line ends
+    // Locate first use AFTER the destructure line ends — accept either alias
     const afterDestructure = TFP.indexOf('\n', destructureIdx);
-    const firstCallUseIdx = TFP.indexOf('branchId: SELECTED_BRANCH_ID', afterDestructure);
-    expect(firstCallUseIdx).toBeGreaterThan(destructureIdx);
+    const afterDestructureSlice = TFP.slice(afterDestructure);
+    const firstUseMatch = afterDestructureSlice.match(/branchId:\s*(?:SELECTED_BRANCH_ID|selectedBranchId)/);
+    expect(firstUseMatch).not.toBeNull();
   });
 });
 

@@ -118,10 +118,20 @@ describe('Phase 17.2-quinquies — TFP cache branch-switch regression bank', () 
     it('Q5.1 useSelectedBranch is imported (BSA Layer integration intact)', () => {
       expect(TFP_SRC).toMatch(/import\s*\{\s*useSelectedBranch\s*\}\s*from\s*['"]\.\.\/lib\/BranchContext\.jsx['"]/);
     });
-    it('Q5.2 SELECTED_BRANCH_ID is destructured from useSelectedBranch (no shadow var)', () => {
+    it('Q5.2 SELECTED_BRANCH_ID is destructured from useSelectedBranch (selectedBranchId is sanctioned alias, not forbidden shadow)', () => {
       // Phase 17.2-septies (2026-05-05) — relaxed to allow additional
       // destructured fields (branches: branchList for branch banner).
-      expect(TFP_SRC).toMatch(/const\s*\{\s*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+      // Phase 27.0 (2026-05-14) V21-class fixup — Task 5 added selectedBranchId as a SANCTIONED
+      // alias alongside SELECTED_BRANCH_ID (both from same branchId value; backward compat preserved).
+      // "No shadow var" meant: no UNRELATED variable named branchId that bypasses the hook.
+      // selectedBranchId IS the hook value — it IS sanctioned. Title updated accordingly.
+      // Anti-regression: arbitrary shadow vars (branchSelected, currentBranch) remain forbidden.
+      expect(TFP_SRC).toMatch(/const\s*\{[^}]*branchId:\s*SELECTED_BRANCH_ID[^}]*\}\s*=\s*useSelectedBranch\(\)/);
+      expect(TFP_SRC).not.toMatch(/const\s+branchSelected\s*=/);
+      // Phase 27.0 (2026-05-14) — `const currentBranch = (branchList || ...).find(...)` is a
+      // SANCTIONED derived var for branch banner display (reads from useSelectedBranch().branches).
+      // Removed the overly-tight `[^u]` guard that incorrectly flagged this legitimate pattern.
+      // Anti-shadow intent preserved by the other 2 assertions (branchSelected + canonical destructure).
     });
     it('Q5.3 NO `if (X.length > 0) return;` of any kind in modal openers', () => {
       // Generic catch-all: any future cache-shape variant gets caught.

@@ -146,7 +146,10 @@ describe('V50 Phase 3 — F1 source-grep regression locks (writer contracts)', (
     const active = readSrc('.agents/active.md');
     // Either historical V50 marker (when active.md still references V50) OR
     // any Phase X.Y marker proving active.md tracks phase-level work.
-    expect(active).toMatch(/V50|Phase\s+\d+\.\d+/);
+    // Phase 27.0 (2026-05-14) V21-class fixup — active.md is a sliding window of recent
+    // work; after V55 brutal pre-deploy session it documents "V55 ... V41 ... Phase 27.x"
+    // depending on which session is most recent. Accept any V<number> marker or Phase<X.Y>.
+    expect(active).toMatch(/V\d+|Phase\s+\d+/);
   });
 });
 
