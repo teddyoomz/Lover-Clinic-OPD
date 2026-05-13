@@ -7,11 +7,25 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 — Phase 26.0 + Phase 26.1 **BOTH COMPLETE** (NOT YET DEPLOYED) · 8320 tests + 1 skipped · build clean · 21+ commits ahead of prod
+- **Date last updated**: 2026-05-13 EOD — Phase 26.0 + 26.1 DONE · Phase 26.2 spec+plan committed (NOT executed) · 8320 tests + 1 skipped · build clean · 23 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `559d0cb` feat(Phase 26.1c): AV37 audit invariant extension — editor attribution (Task 10 docs commit pending after this entry)
-- **Test count**: **8320 passed** (+78 net from 8242 Phase 25.0 baseline; Phase 26.0 +55 → Phase 26.1 +23) + 1 skipped. 0 failures. bsa-task7-h-quater flake did NOT surface.
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 21+ commits ahead). Phase 26.0 + 26.1 awaiting user `deploy` authorization per Rule V18. When ready: combined `vercel --prod` + `firebase deploy --only firestore:rules` (rules unchanged but combined per V15 directive).
+- **Last commit**: `fa22018` docs(superpowers/plans): Phase 26.2 implementation plan — TFP split-screen history + customer.note
+- **Test count**: **8320 passed** (+78 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures.
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 23 commits ahead). Phase 26.0 + 26.1 implementation complete, awaiting deploy. Phase 26.2 spec+plan only (8 implementation tasks pending; user chose subagent-driven mode but session ended for context).
+
+### Session 2026-05-13 EOD — Phase 26.0 + 26.1 + 26.2 saga (3 sub-phases same-day)
+
+Doctor-save (26.0) → editor-attribution + V12 fix (26.1) → split-screen history + customer.note (26.2 spec+plan only). 23 commits across the saga.
+
+**Phase 26.0 Doctor-Save** (11 commits, deployed Tasks 1-9): NEW "บันทึกสำหรับแพทย์" button under OPD Card (Phase 26.0d, sky styling, Stethoscope icon, hidden in edit mode). NEW `saveMode` arg on handleSubmit with defensive coercion + status='doctor-recorded' + recordedBy/recordedAt forensic trail + canAddNewItems flag (mode==='create' || status==='doctor-recorded') replaces !isEdit at 5+ UI sites. AV37 audit invariant + F1-F8 flow-simulate. +55 tests.
+
+**Phase 26.1 TFP Polish + Editor-Attribution** (10 commits): V12 multi-reader-sweep fix at CDV `treatmentSummary` useMemo (Phase 26.0e fixed writer in rebuildTreatmentSummary but missed reader — chip never rendered). Removed broken top-right "ยืนยันการรักษา" button at TFP:2888. NEW `EditAttributionModal` (single picker, merged staff+doctors+assistants per branch, role labels inline). handleSubmit signature extended `(eventOrSaveMode, options={})` accepts internal `{saveMode, editorContext}` re-invoke. 4 new top-level fields (editedBy/Name/Role/At) on be_treatments. CDV row meta inline "· แก้ไขโดย: X (role)" display + ROLE_LABEL_TH constant. AV37.9-AV37.11 ext. +23 tests.
+
+**Phase 26.2 Split-Screen History + Customer.Note** (2 docs commits, implementation NOT executed): Spec + plan committed. 5 items locked from brainstorming: (A) header tab strip 5 recent cross-branch treatments, (B) split-screen 50/50 lg+ (modal popup <lg), (C) NEW `TreatmentReadOnlyPanel` extracted from TimelineModal row with AV38 read-only contract, (D) TimelineModal refactor consumes panel (DRY), (E) `customer.note` display above doctor-save button mirroring CDV Phase 24.0-decies amber box. ~660 LOC estimated, 8 tasks planned. User chose subagent-driven execution. Context limit reached — deferred to next chat.
+
+Detail: `.agents/sessions/2026-05-13-phase-26-0-thru-26-2.md`. NOT deployed — combined Phase 26.0 + 26.1 + 26.2 = 23+ commits ready for user `deploy` authorization (Rule V15 combined).
+
+
 
 ### Session 2026-05-13 (continued) — Phase 26.1 TFP Polish + Editor-Attribution Modal (NOT YET DEPLOYED)
 
