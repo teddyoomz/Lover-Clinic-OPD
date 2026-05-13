@@ -21,6 +21,9 @@ import path from 'path';
 const ROOT = path.resolve(__dirname, '..');
 const READ = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const SRC = READ('src/components/backend/TreatmentTimelineModal.jsx');
+// Phase 26.2 Task 3: panel extracted to TreatmentReadOnlyPanel.jsx
+// TL2/TL3/TL6(partial)/TL9 patterns now live in PANEL, not SRC.
+const PANEL = READ('src/components/backend/TreatmentReadOnlyPanel.jsx');
 const VIEW = READ('src/components/backend/CustomerDetailView.jsx');
 
 // ─── Pure helpers (mirror inline component logic so we can chain) ──────────
@@ -101,78 +104,82 @@ describe('TL1: modal shell + a11y', () => {
 // ─── TL2: image grid rendering ─────────────────────────────────────────────
 
 describe('TL2: image grid (0 / 1 / N images per slot)', () => {
+  // Phase 26.2 Task 3: ImageGridColumn + Lightbox + carousel are now in
+  // TreatmentReadOnlyPanel.jsx (PANEL). SRC delegates entirely to the panel.
+
   it('TL2.1: ImageGridColumn handles empty list (placeholder)', () => {
-    expect(SRC).toMatch(/valid\.length === 0/);
-    expect(SRC).toMatch(/<ImageIcon size=/);
+    expect(PANEL).toMatch(/valid\.length === 0/);
+    expect(PANEL).toMatch(/<ImageIcon size=/);
   });
 
   it('TL2.2: single image renders without thumbnail row', () => {
-    expect(SRC).toMatch(/valid\.length === 1/);
+    expect(PANEL).toMatch(/valid\.length === 1/);
   });
 
   it('TL2.3: multi-image carousel uses activeIdx state + thumbnail row', () => {
-    expect(SRC).toMatch(/setActiveIdx/);
-    expect(SRC).toMatch(/aria-current=\{isActive\s*\?\s*['"]true['"]\s*:\s*undefined\}/);
-    expect(SRC).toMatch(/data-testid=\{`timeline-img-thumb-\$\{i\}`\}/);
+    expect(PANEL).toMatch(/setActiveIdx/);
+    expect(PANEL).toMatch(/aria-current=\{isActive\s*\?\s*['"]true['"]\s*:\s*undefined\}/);
+    expect(PANEL).toMatch(/data-testid=\{`timeline-img-thumb-\$\{i\}`\}/);
   });
 
   it('TL2.4: heading reads "<label> (N รูป)" when N>1, plain label otherwise', () => {
-    expect(SRC).toMatch(/valid\.length\s*>\s*1\s*\?\s*`\$\{label\}\s*\(\$\{valid\.length\}\s*รูป\)`/);
+    expect(PANEL).toMatch(/valid\.length\s*>\s*1\s*\?\s*`\$\{label\}\s*\(\$\{valid\.length\}\s*รูป\)`/);
   });
 
   it('TL2.5: 3 columns rendered in fixed order: OPD/อื่นๆ → Before → After', () => {
-    expect(SRC).toMatch(/label="OPD\/อื่นๆ"\s+images=\{otherImages\}/);
-    expect(SRC).toMatch(/label="Before"\s+images=\{beforeImages\}/);
-    expect(SRC).toMatch(/label="After"\s+images=\{afterImages\}/);
+    expect(PANEL).toMatch(/label="OPD\/อื่นๆ"\s+images=\{otherImages\}/);
+    expect(PANEL).toMatch(/label="Before"\s+images=\{beforeImages\}/);
+    expect(PANEL).toMatch(/label="After"\s+images=\{afterImages\}/);
   });
 
-  it('TL2.6: image preview via in-modal Lightbox (V21 — <a target="_blank"> blocked by Chrome for data: URLs)', () => {
+  it('TL2.6: image preview via in-panel Lightbox (V21 — <a target="_blank"> blocked by Chrome for data: URLs)', () => {
     // V21 (2026-04-26): images stored as base64 dataUrls; Chrome blocks
     // top-frame navigation to data: URLs from <a href>. Replaced anchor
     // wrapper with <button onClick={() => onZoom(src, label)}> + lightbox.
-    expect(SRC).toMatch(/data-testid="timeline-img-zoom"/);
-    expect(SRC).toMatch(/onZoom\?\.\(/);
-    expect(SRC).toMatch(/cursor-zoom-in/);
+    // Phase 26.2 Task 3: lightbox now lives inside TreatmentReadOnlyPanel (PANEL).
+    expect(PANEL).toMatch(/data-testid="timeline-img-zoom"/);
+    expect(PANEL).toMatch(/onZoom\?\.\(/);
+    expect(PANEL).toMatch(/cursor-zoom-in/);
     // Anti-regression: NO <a target="_blank"> wrapper around timeline images.
-    // (Other anchors elsewhere in the codebase are fine — this is file-scoped.)
-    expect(SRC).not.toMatch(/<a [^>]*target="_blank"[^>]*>\s*<img/);
+    expect(PANEL).not.toMatch(/<a [^>]*target="_blank"[^>]*>\s*<img/);
   });
 
   it('TL2.7: thumbnail click resets to that index (controlled state)', () => {
-    expect(SRC).toMatch(/onClick=\{\(\)\s*=>\s*setActiveIdx\(i\)\}/);
+    expect(PANEL).toMatch(/onClick=\{\(\)\s*=>\s*setActiveIdx\(i\)\}/);
   });
 
   it('TL2.8: useEffect resets activeIdx when image count changes', () => {
-    expect(SRC).toMatch(/useEffect\(\(\)\s*=>\s*\{\s*setActiveIdx\(0\)\s*;?\s*\},\s*\[valid\.length\]\)/);
+    expect(PANEL).toMatch(/useEffect\(\(\)\s*=>\s*\{\s*setActiveIdx\(0\)\s*;?\s*\},\s*\[valid\.length\]\)/);
   });
 });
 
 // ─── TL3: accordion gates ──────────────────────────────────────────────────
 
 describe('TL3: accordions (medications / consumables) only render when populated', () => {
+  // Phase 26.2 Task 3: Accordion component + its render logic moved to PANEL.
   it('TL3.1: Accordion early-return on empty items (no DOM noise)', () => {
-    expect(SRC).toMatch(/if\s*\(!items\s*\|\|\s*items\.length === 0\)\s*return null/);
+    expect(PANEL).toMatch(/if\s*\(!items\s*\|\|\s*items\.length === 0\)\s*return null/);
   });
 
   it('TL3.2: medications wired as ยากลับบ้าน', () => {
-    expect(SRC).toMatch(/title="ยากลับบ้าน"\s+items=\{medications\}/);
+    expect(PANEL).toMatch(/title="ยากลับบ้าน"\s+items=\{medications\}/);
   });
 
   it('TL3.3: consumables wired as สินค้าสิ้นเปลือง', () => {
-    expect(SRC).toMatch(/title="สินค้าสิ้นเปลือง"\s+items=\{consumables\}/);
+    expect(PANEL).toMatch(/title="สินค้าสิ้นเปลือง"\s+items=\{consumables\}/);
   });
 
   it('TL3.4: native <details>/<summary> used (no JS framework dep)', () => {
-    expect(SRC).toMatch(/<details/);
-    expect(SRC).toMatch(/<summary/);
+    expect(PANEL).toMatch(/<details/);
+    expect(PANEL).toMatch(/<summary/);
   });
 
   it('TL3.5: accordion controlled-state mirrors native open via onToggle', () => {
-    expect(SRC).toMatch(/onToggle=\{\(e\)\s*=>\s*setOpen\(e\.target\.open\)\}/);
+    expect(PANEL).toMatch(/onToggle=\{\(e\)\s*=>\s*setOpen\(e\.target\.open\)\}/);
   });
 
   it('TL3.6: accordion testid pattern uses title (Thai labels OK as data-testid)', () => {
-    expect(SRC).toMatch(/data-testid=\{`timeline-accordion-\$\{title\}`\}/);
+    expect(PANEL).toMatch(/data-testid=\{`timeline-accordion-\$\{title\}`\}/);
   });
 });
 
@@ -229,13 +236,14 @@ describe('TL5: wire-through to existing CustomerDetailView handlers', () => {
 
 describe('TL6: adversarial inputs (defensive null/missing/empty handling)', () => {
   it('TL6.1: missing detail → fullDoc is null → component still renders summary row', () => {
+    // Phase 26.2 Task 3: detail rendering moved to PANEL (TreatmentReadOnlyPanel.jsx).
     // The grep guards ensure detail?. is used everywhere; the runtime path
     // is verified by the imageUrl pure helper below.
-    expect(SRC).toMatch(/detail\?\.beforeImages/);
-    expect(SRC).toMatch(/detail\?\.afterImages/);
-    expect(SRC).toMatch(/detail\?\.otherImages/);
-    expect(SRC).toMatch(/detail\?\.treatmentItems/);
-    expect(SRC).toMatch(/detail\?\.treatmentNote/);
+    expect(PANEL).toMatch(/detail\?\.beforeImages/);
+    expect(PANEL).toMatch(/detail\?\.afterImages/);
+    expect(PANEL).toMatch(/detail\?\.otherImages/);
+    expect(PANEL).toMatch(/detail\?\.treatmentItems/);
+    expect(PANEL).toMatch(/detail\?\.treatmentNote/);
   });
 
   it('TL6.2: imageUrl helper falls back to "" for null / undefined / empty', () => {
@@ -271,24 +279,28 @@ describe('TL6: adversarial inputs (defensive null/missing/empty handling)', () =
   });
 
   it('TL6.7: empty-string dataUrl filtered out (would render broken img otherwise)', () => {
-    // The component filters via .filter(img => imageUrl(img))
-    expect(SRC).toMatch(/\.filter\(img\s*=>\s*imageUrl\(img\)\)/);
+    // Phase 26.2 Task 3: filter logic moved to PANEL (ImageGridColumn uses imageUrl filter).
+    expect(PANEL).toMatch(/\.filter\(img\s*=>\s*imageUrl\(img\)\)/);
     expect(imageUrl({ dataUrl: '', id: 1 })).toBe('');
     expect(imageUrl({ dataUrl: undefined })).toBe('');
   });
 
   it('TL6.8: treatments without treatmentItems renders meta only (no rendering crash)', () => {
-    expect(SRC).toMatch(/courseItems\.length\s*>\s*0/);
+    // Phase 26.2 Task 3: courseItems render guard moved to PANEL.
+    expect(PANEL).toMatch(/courseItems\.length\s*>\s*0/);
   });
 
   it('TL6.9: "ล่าสุด" badge only on globalIndex===0 (not pageIndex)', () => {
+    // isLatest is COMPUTED in SRC (modal iterates treatmentSummary with globalIndex).
+    // isLatest is CONSUMED + RENDERED in PANEL (shows "ล่าสุด" badge when true).
     expect(SRC).toMatch(/isLatest = globalIndex === 0/);
-    expect(SRC).toMatch(/isLatest\s*&&\s*\(/);
+    expect(PANEL).toMatch(/isLatest\s*&&\s*\(/);
   });
 
   it('TL6.10: treatmentsLoading guard renders spinner instead of empty image grid', () => {
-    expect(SRC).toMatch(/isLoading = treatmentsLoading\s*&&\s*!fullDoc/);
-    expect(SRC).toMatch(/isLoading\s*\?/);
+    // Phase 26.2 Task 3: loading guard lives in PANEL (panel receives treatmentsLoading prop).
+    expect(PANEL).toMatch(/isLoading = treatmentsLoading\s*&&\s*!fullDoc/);
+    expect(PANEL).toMatch(/isLoading\s*\?/);
   });
 });
 
@@ -380,64 +392,69 @@ describe('TL8: source-grep regression guards (Rule I)', () => {
 // onEditTreatment() so the modal yields to the edit page.
 
 describe('TL9: V21 lightbox + close-on-edit', () => {
-  it('TL9.1: Lightbox helper component declared in same file (no extra import surface)', () => {
-    expect(SRC).toMatch(/function Lightbox\(/);
+  it('TL9.1: Lightbox helper component declared in PANEL file (no extra import surface)', () => {
+    // Phase 26.2 Task 3: Lightbox moved from TreatmentTimelineModal → TreatmentReadOnlyPanel.
+    expect(PANEL).toMatch(/function Lightbox\(/);
   });
 
   it('TL9.2: Lightbox renders only when src truthy (early-return on null)', () => {
-    expect(SRC).toMatch(/if\s*\(!src\)\s*return null/);
+    expect(PANEL).toMatch(/if\s*\(!src\)\s*return null/);
   });
 
   it('TL9.3: Lightbox is z-[110] (above modal z-[100])', () => {
-    expect(SRC).toMatch(/z-\[110\][\s\S]{0,400}data-testid="timeline-lightbox"/);
+    expect(PANEL).toMatch(/z-\[110\][\s\S]{0,400}data-testid="timeline-lightbox"/);
   });
 
   it('TL9.4: Lightbox a11y — role="dialog" + aria-modal + aria-label', () => {
     // Lightbox aria-label uses interpolation
-    expect(SRC).toMatch(/role="dialog"[\s\S]{0,300}data-testid="timeline-lightbox"/);
-    expect(SRC).toMatch(/aria-label=\{`ขยายรูป \$\{label \|\| ''\}`\}/);
+    expect(PANEL).toMatch(/role="dialog"[\s\S]{0,300}data-testid="timeline-lightbox"/);
+    expect(PANEL).toMatch(/aria-label=\{`ขยายรูป \$\{label \|\| ''\}`\}/);
   });
 
   it('TL9.5: lightbox state initialized to null + setLightbox setter', () => {
-    expect(SRC).toMatch(/\[lightbox,\s*setLightbox\]\s*=\s*useState\(null\)/);
+    // Phase 26.2 Task 3: lightbox state lives in PANEL (panel manages its own lightbox).
+    expect(PANEL).toMatch(/\[lightbox,\s*setLightbox\]\s*=\s*useState\(null\)/);
   });
 
   it('TL9.6: Esc handler closes lightbox first; modal close only when no lightbox', () => {
     // Pattern: if (lightbox) setLightbox(null); else onClose?.();
-    expect(SRC).toMatch(/if\s*\(lightbox\)\s*setLightbox\(null\)/);
-    expect(SRC).toMatch(/else\s*onClose\?\.\(\)/);
+    // Phase 26.2 Task 3: Esc handler moved to PANEL (panel handles its own lightbox Esc internally).
+    expect(PANEL).toMatch(/if\s*\(lightbox\)\s*setLightbox\(null\)/);
+    expect(PANEL).toMatch(/else\s*onClose\?\.\(\)/);
   });
 
   it('TL9.7: backdrop click on lightbox stops propagation (no double-close to modal)', () => {
     // Lightbox outer onClick: e.stopPropagation() THEN onClose()
-    expect(SRC).toMatch(/onClick=\{\(e\)\s*=>\s*\{\s*e\.stopPropagation\(\);\s*onClose\?\.\(\);\s*\}\}/);
+    expect(PANEL).toMatch(/onClick=\{\(e\)\s*=>\s*\{\s*e\.stopPropagation\(\);\s*onClose\?\.\(\);\s*\}\}/);
   });
 
   it('TL9.8: lightbox close X button + image inner stop-propagation (image click does NOT close)', () => {
-    expect(SRC).toMatch(/data-testid="timeline-lightbox-close"/);
+    expect(PANEL).toMatch(/data-testid="timeline-lightbox-close"/);
     // Image element has its own stopPropagation so clicking the image
     // doesn't bubble to the backdrop close.
-    expect(SRC).toMatch(/<img[\s\S]{0,400}onClick=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/);
+    expect(PANEL).toMatch(/<img[\s\S]{0,400}onClick=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/);
   });
 
   it('TL9.9: ImageGridColumn accepts onZoom prop + fires it on big-image click', () => {
-    expect(SRC).toMatch(/function ImageGridColumn\(\{[^}]*onZoom[^}]*\}\)/);
+    // Phase 26.2 Task 3: ImageGridColumn moved to PANEL.
+    expect(PANEL).toMatch(/function ImageGridColumn\(\{[^}]*onZoom[^}]*\}\)/);
     // Both single-image and carousel-active-image variants fire onZoom.
-    const occurrences = SRC.match(/onZoom\?\.\(/g) || [];
+    const occurrences = PANEL.match(/onZoom\?\.\(/g) || [];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
   });
 
   it('TL9.10: parent passes onZoom to all 3 ImageGridColumn instances (OPD/อื่นๆ + Before + After)', () => {
+    // Phase 26.2 Task 3: The 3 ImageGridColumn instances live in PANEL.
     // Setter must wrap into the {src, label} shape the lightbox state expects.
-    const grids = SRC.match(/<ImageGridColumn\b/g) || [];
+    const grids = PANEL.match(/<ImageGridColumn\b/g) || [];
     expect(grids.length).toBe(3);
-    const wirings = SRC.match(/onZoom=\{[^}]*setLightbox\([^)]*\)[^}]*\}/g) || [];
+    const wirings = PANEL.match(/onZoom=\{[^}]*setLightbox\([^)]*\)[^}]*\}/g) || [];
     expect(wirings.length).toBe(3);
   });
 
   it('TL9.11: zoom-button uses cursor-zoom-in + button (not anchor) so dataUrl works', () => {
-    expect(SRC).toMatch(/cursor-zoom-in/);
-    expect(SRC).toMatch(/<button[\s\S]{0,300}data-testid="timeline-img-zoom"/);
+    expect(PANEL).toMatch(/cursor-zoom-in/);
+    expect(PANEL).toMatch(/<button[\s\S]{0,300}data-testid="timeline-img-zoom"/);
   });
 
   it('TL9.12: NO <a target="_blank"> wrapping a timeline image (anti-regression)', () => {
@@ -449,7 +466,8 @@ describe('TL9: V21 lightbox + close-on-edit', () => {
   });
 
   it('TL9.14: V21 marker present in file (so future readers see why the indirection)', () => {
-    expect(SRC).toMatch(/V21/);
+    // Phase 26.2 Task 3: V21 marker now lives in PANEL header comments (lines 52, 118).
+    expect(PANEL).toMatch(/V21/);
   });
 
   it('TL9.15: TreatmentFormPage z-[80] still less than timeline modal z-[100] — wireup proves dependency', () => {
@@ -460,6 +478,6 @@ describe('TL9: V21 lightbox + close-on-edit', () => {
     const tfp = READ('src/components/TreatmentFormPage.jsx');
     expect(tfp).toMatch(/z-\[80\]/);
     expect(SRC).toMatch(/z-\[100\]/);
-    expect(SRC).toMatch(/z-\[110\]/); // lightbox above modal
+    expect(PANEL).toMatch(/z-\[110\]/); // lightbox above modal, now in PANEL
   });
 });
