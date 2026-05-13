@@ -3491,7 +3491,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           {/* ── Take-Home Medications ──────────────────────────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={Pill} title="สั่งยากลับบ้าน" isDark={isDark} accent="#10b981">
-              {!isEdit && (
+              {/* Phase 26.0c (V26.0, 2026-05-13) — gate on canAddNewItems so admin can
+                  ADD new meds when finalizing a doctor-recorded treatment. Legacy
+                  edit-mode behaviour preserved (canAddNewItems === !isEdit when
+                  loadedTreatmentStatus !== 'doctor-recorded'). */}
+              {canAddNewItems && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                   <ActionBtn color="#3b82f6" isDark={isDark} onClick={openMedGroupModal}>
                     <Plus size={10} /> กลุ่มยากลับบ้าน
@@ -3740,21 +3744,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             {medications.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-4">{isEdit ? 'ไม่พบยากลับบ้าน' : 'ยังไม่มีรายการยากลับบ้าน — กด "ยากลับบ้าน" เพื่อค้นหาและเพิ่ม'}</p>
             ) : (
+              /* Phase 26.0c (V26.0, 2026-05-13) — Pattern β grid swap: gate
+                 editable (12-col, price + actions) vs read-only (10-col) layout
+                 on canAddNewItems instead of !isEdit. doctor-recorded edits get
+                 the editable shape so admin can adjust per-item before finalize. */
               <div className="space-y-2">
-                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
-                  <div className={isEdit ? 'col-span-4' : 'col-span-4'}>รายการ</div>
-                  <div className={isEdit ? 'col-span-3' : 'col-span-3'}>วิธีรับประทาน</div>
-                  <div className={isEdit ? 'col-span-3' : 'col-span-2'}>จำนวน</div>
-                  {!isEdit && <div className="col-span-2">ราคาต่อหน่วย</div>}
-                  {!isEdit && <div className="col-span-1"></div>}
+                <div className={`grid ${canAddNewItems ? 'grid-cols-12' : 'grid-cols-10'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
+                  <div className={canAddNewItems ? 'col-span-4' : 'col-span-4'}>รายการ</div>
+                  <div className={canAddNewItems ? 'col-span-3' : 'col-span-3'}>วิธีรับประทาน</div>
+                  <div className={canAddNewItems ? 'col-span-2' : 'col-span-3'}>จำนวน</div>
+                  {canAddNewItems && <div className="col-span-2">ราคาต่อหน่วย</div>}
+                  {canAddNewItems && <div className="col-span-1"></div>}
                 </div>
                 {medications.map((med, i) => (
-                  <div key={i} data-field={`medications[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`} {...ariaErrProps(`medications[${i}]`)}>
-                    <div className={`${isEdit ? 'col-span-4' : 'col-span-4'} text-xs font-bold truncate px-1`}>{med.name}</div>
-                    <div className={`${isEdit ? 'col-span-3' : 'col-span-3'} text-xs text-gray-400 truncate px-1`}>{med.dosage || '-'}</div>
-                    <div className={`${isEdit ? 'col-span-3' : 'col-span-2'} text-xs text-center`}>{med.qty} {med.unit}</div>
-                    {!isEdit && <div className="col-span-2 text-xs text-center">{med.isPremium ? <span className="text-green-500">ของแถม</span> : med.unitPrice}</div>}
-                    {!isEdit && (
+                  <div key={i} data-field={`medications[${i}]`} className={`grid ${canAddNewItems ? 'grid-cols-12' : 'grid-cols-10'} gap-2 items-center py-1 border-b ${isDark ? 'border-[#1a1a1a]' : 'border-gray-100'}`} {...ariaErrProps(`medications[${i}]`)}>
+                    <div className={`${canAddNewItems ? 'col-span-4' : 'col-span-4'} text-xs font-bold truncate px-1`}>{med.name}</div>
+                    <div className={`${canAddNewItems ? 'col-span-3' : 'col-span-3'} text-xs text-gray-400 truncate px-1`}>{med.dosage || '-'}</div>
+                    <div className={`${canAddNewItems ? 'col-span-2' : 'col-span-3'} text-xs text-center`}>{med.qty} {med.unit}</div>
+                    {canAddNewItems && <div className="col-span-2 text-xs text-center">{med.isPremium ? <span className="text-green-500">ของแถม</span> : med.unitPrice}</div>}
+                    {canAddNewItems && (
                       <div className="col-span-1 flex items-center justify-center gap-1">
                         <button onClick={() => editMedication(i)} aria-label={`แก้ไขยา ${med.name}`} className="text-blue-400 hover:text-blue-300 transition-colors"><Edit3 size={11} /></button>
                         <button onClick={() => removeMed(i)} aria-label={`ลบยา ${med.name}`} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={11} /></button>
@@ -3770,7 +3778,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           {<div data-field="courseSection" {...ariaErrProps('courseSection')}><FormSection isDark={isDark}>
             <FieldError field="courseSection" />
             <SectionHeader icon={ShoppingCart} title="ข้อมูลการใช้คอร์ส" isDark={isDark} accent="#f97316">
-              {!isEdit && (
+              {/* Phase 26.0c (V26.0, 2026-05-13) — gate on canAddNewItems so admin
+                  can ADD course/product/promotion purchases when finalizing a
+                  doctor-recorded treatment. */}
+              {canAddNewItems && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                   <ActionBtn color="#14b8a6" isDark={isDark} onClick={() => openBuyModal('course')}>
                     <Plus size={10} /> ซื้อคอร์ส
@@ -3785,8 +3796,12 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               )}
             </SectionHeader>
 
-            {isEdit ? (
-              /* ── Edit mode: read-only treatment items table (matching ProClinic) ── */
+            {/* Phase 26.0c (V26.0, 2026-05-13) — Pattern β branch swap: gate
+                interactive 3-column picker vs read-only items table on
+                canAddNewItems instead of isEdit. doctor-recorded edits get the
+                interactive shape so admin can pick course/product/promotion. */}
+            {!canAddNewItems ? (
+              /* ── Read-only (locked) mode: treatment items table (matching ProClinic) ── */
               <div>
                 <p className="text-xs font-bold text-gray-500 mb-2">รายการรักษา</p>
                 <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -3805,7 +3820,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 </div>
               </div>
             ) : (
-              /* ── Create mode: interactive 3-column grid ── */
+              /* ── Add-allowed mode: interactive 3-column grid ── */
               <div>
                 <p className="text-xs text-gray-500 mb-3">คอร์ส/สินค้า/โปรโมชัน</p>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -4250,7 +4265,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           {/* ── Consumables (สินค้าสิ้นเปลือง) ────────────────────────────── */}
           <FormSection isDark={isDark}>
             <SectionHeader icon={Package} title="สินค้าสิ้นเปลือง" isDark={isDark} accent="#eab308">
-              {!isEdit && (
+              {/* Phase 26.0c (V26.0, 2026-05-13) — gate on canAddNewItems so admin
+                  can ADD consumables when finalizing a doctor-recorded treatment. */}
+              {canAddNewItems && (
                 <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                   <ActionBtn color="#3b82f6" isDark={isDark} onClick={openConsGroupModal}>
                     <Plus size={10} /> กลุ่มสินค้าสิ้นเปลือง
@@ -4399,23 +4416,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             {consumables.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-4">{isEdit ? 'ไม่พบสินค้าสิ้นเปลือง' : 'ยังไม่มีรายการสินค้าสิ้นเปลือง — กด "สินค้าสิ้นเปลือง" เพื่อค้นหาและเพิ่ม'}</p>
             ) : (
+              /* Phase 26.0c (V26.0, 2026-05-13) — Pattern β grid swap: gate
+                 editable (12-col, qty input + delete) vs read-only (10-col)
+                 layout on canAddNewItems instead of !isEdit. doctor-recorded
+                 edits get the editable shape so admin can adjust consumable
+                 qtys before finalize. */
               <div className="space-y-2">
-                <div className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
-                  <div className={isEdit ? 'col-span-5' : 'col-span-6'}>รายการ</div>
-                  <div className={isEdit ? 'col-span-3' : 'col-span-3'}>จำนวน</div>
-                  <div className={isEdit ? 'col-span-2' : 'col-span-2'}>หน่วย</div>
-                  {!isEdit && <div className="col-span-1"></div>}
+                <div className={`grid ${canAddNewItems ? 'grid-cols-12' : 'grid-cols-10'} gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-500 px-1`}>
+                  <div className={canAddNewItems ? 'col-span-6' : 'col-span-5'}>รายการ</div>
+                  <div className={canAddNewItems ? 'col-span-3' : 'col-span-3'}>จำนวน</div>
+                  <div className={canAddNewItems ? 'col-span-2' : 'col-span-2'}>หน่วย</div>
+                  {canAddNewItems && <div className="col-span-1"></div>}
                 </div>
                 {consumables.map((item, i) => (
-                  <div key={i} data-field={`consumables[${i}]`} className={`grid ${isEdit ? 'grid-cols-10' : 'grid-cols-12'} gap-2 items-center`} {...ariaErrProps(`consumables[${i}]`)}>
-                    <div className={`${isEdit ? 'col-span-5' : 'col-span-6'} text-xs font-bold truncate px-1`}>{item.name}</div>
-                    {isEdit ? (
+                  <div key={i} data-field={`consumables[${i}]`} className={`grid ${canAddNewItems ? 'grid-cols-12' : 'grid-cols-10'} gap-2 items-center`} {...ariaErrProps(`consumables[${i}]`)}>
+                    <div className={`${canAddNewItems ? 'col-span-6' : 'col-span-5'} text-xs font-bold truncate px-1`}>{item.name}</div>
+                    {!canAddNewItems ? (
                       <div className="col-span-3 text-xs text-center">{item.qty}</div>
                     ) : (
                       <input value={item.qty} onChange={e => { updateConsumable(i, 'qty', e.target.value); clearFieldError(`consumables[${i}]`); }} className={`${inputCls} col-span-3 text-center`} placeholder="1" aria-label={`จำนวนสินค้าสิ้นเปลือง ${item.name}`} />
                     )}
-                    <div className={`${isEdit ? 'col-span-2' : 'col-span-2'} text-xs text-gray-500 px-1`}>{item.unit}</div>
-                    {!isEdit && (
+                    <div className={`${canAddNewItems ? 'col-span-2' : 'col-span-2'} text-xs text-gray-500 px-1`}>{item.unit}</div>
+                    {canAddNewItems && (
                       <button onClick={() => removeConsumable(i)} aria-label={`ลบสินค้าสิ้นเปลือง ${item.name}`} className="col-span-1 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors">
                         <Trash2 size={12} />
                       </button>

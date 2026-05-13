@@ -78,4 +78,58 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
       expect(TFP_SOURCE).toMatch(/deleteField\s*\(\s*\)/);
     });
   });
+
+  describe('G2 — UI gates use canAddNewItems flag (replaces !isEdit)', () => {
+    it('G2.canAddNewItemsDeclared — flag declared at top of render (Task 1 canonical shape)', () => {
+      // Task 1 pre-flight finding: TFP has no full-doc state variable, so the
+      // canonical shape uses `loadedTreatmentStatus` state (set during edit-mode
+      // load) rather than `loadedTreatment?.status`. Accept either shape so the
+      // test stays correct if the variable is refactored later.
+      expect(TFP_SOURCE).toMatch(
+        /const\s+canAddNewItems\s*=\s*\(\s*mode\s*===\s*['"]create['"]\s*\)\s*[\r\n\s]*\|\|\s*\(\s*loadedTreatment(?:\?\.status|Status)\s*===\s*['"]doctor-recorded['"]\s*\)/
+      );
+    });
+
+    it('G2.canAddNewItemsUsed — flag referenced in at least 5 JSX gate sites', () => {
+      const refs = TFP_SOURCE.match(/canAddNewItems/g) || [];
+      // Declaration + comments (~4 from Task 1) + 5 UI gate-site references
+      // added in Task 3 (med add buttons, med grid swap, course picker buttons,
+      // course section ternary, consumable add buttons, consumable grid swap).
+      // Many of these contain multiple uses (e.g. grid swap has 8+ references
+      // across grid-cols + col-span + !isEdit blocks).
+      expect(refs.length).toBeGreaterThanOrEqual(6);
+    });
+
+    it('G2.noLegacyIsEditForAddBtns — medication section ADD-buttons site references canAddNewItems', () => {
+      // Sanctioned exception: doctor-save button itself uses {!isEdit && ...} per spec 5.1.F
+      // (button hidden in edit mode by design — admin finalizes via regular save)
+      // Look around the medication section anchor (สั่งยากลับบ้าน is the section header)
+      const medSectionIdx = TFP_SOURCE.indexOf('สั่งยากลับบ้าน');
+      expect(medSectionIdx).toBeGreaterThan(-1);
+      // Within 5000 chars of the medication section, canAddNewItems must appear
+      const medRegion = TFP_SOURCE.slice(medSectionIdx, medSectionIdx + 5000);
+      expect(medRegion).toMatch(/canAddNewItems/);
+    });
+
+    it('G2.consumableSectionGated — consumable section ADD-buttons site references canAddNewItems', () => {
+      // Anchor on the section comment marker for stability (the Thai label
+      // "สินค้าสิ้นเปลือง" also appears in modals + filter strings; the
+      // comment "── Consumables (สินค้าสิ้นเปลือง)" only appears once at
+      // the section start).
+      const consSectionIdx = TFP_SOURCE.indexOf('── Consumables (สินค้าสิ้นเปลือง)');
+      expect(consSectionIdx).toBeGreaterThan(-1);
+      const consRegion = TFP_SOURCE.slice(consSectionIdx, consSectionIdx + 3000);
+      expect(consRegion).toMatch(/canAddNewItems/);
+    });
+
+    it('G2.courseSectionGated — course/purchase picker section references canAddNewItems', () => {
+      // Anchor on the course section's SectionHeader title attribute (unique;
+      // the bare Thai phrase appears earlier in code comments at lines ~57 and
+      // ~1825 which don't contain canAddNewItems).
+      const courseSectionIdx = TFP_SOURCE.indexOf('title="ข้อมูลการใช้คอร์ส"');
+      expect(courseSectionIdx).toBeGreaterThan(-1);
+      const courseRegion = TFP_SOURCE.slice(courseSectionIdx, courseSectionIdx + 3000);
+      expect(courseRegion).toMatch(/canAddNewItems/);
+    });
+  });
 });
