@@ -72,6 +72,17 @@ describe('L1 — derivePatientCongenitalDisease', () => {
     expect(Object.isFrozen(UD_LABELS)).toBe(true);
     expect(UD_LABELS.ud_diabetes).toBe('เบาหวาน');
   });
+
+  it('L1.10 — non-string ud_otherDetail is silently omitted (typeof-guard lock)', () => {
+    // Lock the `typeof patientData.ud_otherDetail === 'string'` defensive guard.
+    // Without this guard, .trim() on a number/null would throw at runtime.
+    expect(derivePatientCongenitalDisease({ hasUnderlying: 'มี', ud_other: true, ud_otherDetail: 99 }))
+      .toBe('');
+    expect(derivePatientCongenitalDisease({ hasUnderlying: 'มี', ud_other: true, ud_otherDetail: null }))
+      .toBe('');
+    expect(derivePatientCongenitalDisease({ hasUnderlying: 'มี', ud_other: true, ud_otherDetail: [] }))
+      .toBe('');
+  });
 });
 
 describe('L2 — derivePatientTreatmentHistory', () => {
@@ -108,6 +119,20 @@ describe('L2 — derivePatientTreatmentHistory', () => {
       .toBe('ยาที่ใช้ประจำ: Asprin');
     // pure whitespace → drop entirely
     expect(derivePatientTreatmentHistory({ currentMedication: '   ' })).toBe('');
+  });
+
+  it('L2.7 — non-string pregnancy field value is silently ignored (typeof-guard lock)', () => {
+    // Lock the `typeof patientData.pregnancy === 'string'` defensive guard.
+    expect(derivePatientTreatmentHistory({ pregnancy: 42 })).toBe('');
+    expect(derivePatientTreatmentHistory({ pregnancy: null })).toBe('');
+    expect(derivePatientTreatmentHistory({ pregnancy: true })).toBe('');
+  });
+
+  it('L2.8 — non-string currentMedication field value is silently ignored (typeof-guard lock)', () => {
+    // Lock the `typeof patientData.currentMedication === 'string'` defensive guard.
+    expect(derivePatientTreatmentHistory({ currentMedication: 0 })).toBe('');
+    expect(derivePatientTreatmentHistory({ currentMedication: [] })).toBe('');
+    expect(derivePatientTreatmentHistory({ currentMedication: null })).toBe('');
   });
 });
 
