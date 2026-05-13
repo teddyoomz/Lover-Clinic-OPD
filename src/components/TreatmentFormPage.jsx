@@ -5001,6 +5001,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             </button>
           </div>
         </div>
+        </div>{/* end LEFT panel wrapper (Phase 26.2 Task 5) */}
+
+        {/* Phase 26.2 Task 5 — RIGHT panel: history read-only (desktop only) */}
+        {selectedHistoryTreatmentId && (
+          <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+            <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
+              <TreatmentReadOnlyPanel
+                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
+                fullDoc={historyFullDoc}
+                isDark={isDark}
+                ac={accent}
+                acRgb={accentRgb}
+                isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
+                showCloseButton={true}
+                onClose={() => {
+                  setSelectedHistoryTreatmentId(null);
+                  setHistoryFullDoc(null);
+                }}
+              />
+            </div>
+          </aside>
+        )}
       </div>
 
       {/* ── DF Entry Modal (Phase 14.4) ─────────────────────────────────── */}
@@ -5119,28 +5141,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         onCancel={handleEditAttributionCancel}
         isDark={isDark}
       />
-        </div>{/* end flex-1 min-w-0 LEFT panel wrapper (Phase 26.2 Task 5) */}
-
-        {/* Phase 26.2 Task 5 — RIGHT panel: history read-only (desktop only) */}
-        {selectedHistoryTreatmentId && (
-          <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
-            <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
-              <TreatmentReadOnlyPanel
-                treatment={historyTreatments.find(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) || {}}
-                fullDoc={historyFullDoc}
-                isDark={isDark}
-                ac={accent}
-                acRgb={accentRgb}
-                isLatest={historyTreatments.findIndex(t => (t.treatmentId || t.id) === selectedHistoryTreatmentId) === 0}
-                showCloseButton={true}
-                onClose={() => {
-                  setSelectedHistoryTreatmentId(null);
-                  setHistoryFullDoc(null);
-                }}
-              />
-            </div>
-          </aside>
-        )}
 
         {/* Phase 26.2 Task 5 — Mobile fallback: history modal overlay (<lg) */}
         {selectedHistoryTreatmentId && (
