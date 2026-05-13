@@ -5,15 +5,26 @@
 // at TreatmentFormPage.jsx:1016-1020 where bloodType + drugAllergy auto-fill
 // shipped but congenitalDisease + treatmentHistory never did.
 //
-// Pure JS, branch-blind. Used by:
-//   - TreatmentFormPage.jsx (create-mode auto-fill — Thai helper)
+// Pure JS, branch-blind.
+//
+// derive* helpers — read KIOSK-SHAPE fields (hasUnderlying / ud_* / pregnancy /
+//   currentMedication / allergiesDetail) from opd_session.patientData. Used by:
 //   - src/utils.js OPD print builders (Thai + English helpers — Phase 26.2g-fillin-followup, 2026-05-13)
+//
+// resolve* helpers — read CANONICAL camelCase fields (congenitalDisease /
+//   drugAllergy / foodAllergy / beforeTreatment / pregnanted) from
+//   be_customers.patientData (written by buildPatientDataFromForm for both
+//   admin + kiosk paths; kiosk pre-derived via kioskPatientToCanonical).
+//   Used by:
+//   - TreatmentFormPage.jsx (create-mode auto-fill — Phase 26.2g-fillin-bis, 2026-05-13)
+//
 // Tests:
 //   - tests/phase-26-2g-fillin-patient-health-mapping.test.js
 //   - tests/phase-26-2g-fillin-source-grep.test.js
 //   - tests/phase-26-2g-fillin-flow-simulate.test.js
 //   - tests/phase-26-2g-fillin-followup-english-helper.test.js
 //   - tests/phase-26-2g-fillin-followup-source-grep.test.js
+//   - tests/phase-26-2g-fillin-bis-resolver-helpers.test.js
 //
 // Audit: AV40 (no direct patientData.ud_* reads in components/pages outside
 // PatientForm writer + AdminDashboard pregnancy/chronic display chips).
@@ -24,6 +35,13 @@ const PREGNANCY_SENTINEL = 'ไม่เกี่ยวข้อง/ไม่ไ
 
 export const PREGNANCY_LABEL_PREFIX = 'การตั้งครรภ์: ';
 export const MEDICATION_LABEL_PREFIX = 'ยาที่ใช้ประจำ: ';
+
+// Phase 26.2g-fillin-bis (2026-05-13) — canonical resolver prefix constants.
+// Used by resolvePatientDrugAllergy + resolvePatientTreatmentHistory to compose
+// admin-shape canonical patientData fields with disambiguation labels.
+export const BEFORE_TREATMENT_LABEL_PREFIX = 'การรักษาก่อนหน้า: ';
+export const DRUG_ALLERGY_LABEL_PREFIX     = 'แพ้ยา: ';
+export const FOOD_ALLERGY_LABEL_PREFIX     = 'แพ้อาหาร: ';
 
 // UI order matches PatientForm.jsx:1095-1102 (Hypertension / Diabetes / Lung
 // / Kidney / Heart / Blood). Frozen so consumers can rely on key + label
@@ -143,5 +161,65 @@ export function derivePatientTreatmentHistory(patientData) {
     parts.push(`${MEDICATION_LABEL_PREFIX}${med}`);
   }
 
+  return parts.join(' / ');
+}
+
+// ─── Phase 26.2g-fillin-bis: canonical resolver helpers ─────────────────────
+// These read CANONICAL camelCase fields on be_customers.patientData which are
+// written by buildPatientDataFromForm for both admin AND kiosk paths.
+// (Kiosk-shape ud_* / pregnancy / etc. are pre-derived to canonical strings
+// via kioskPatientToCanonical before the customer doc write.)
+// Tests: tests/phase-26-2g-fillin-bis-resolver-helpers.test.js (R1-R4)
+
+/**
+ * Return the canonical congenitalDisease string from be_customers.patientData.
+ * Trims whitespace; returns '' for non-string / empty / whitespace-only.
+ */
+export function resolvePatientCongenitalDisease(patientData) {
+  if (!_isPlainObject(patientData)) return '';
+  return typeof patientData.congenitalDisease === 'string'
+    ? patientData.congenitalDisease.trim()
+    : '';
+}
+
+/**
+ * Compose a display string from canonical drugAllergy + foodAllergy fields.
+ *
+ * Asymmetric prefix rule (R2 contract):
+ *   - drug + food → 'แพ้ยา: <drug> / แพ้อาหาร: <food>'  (both prefixed)
+ *   - drug only   → '<drug>'                              (raw — TFP label provides context)
+ *   - food only   → 'แพ้อาหาร: <food>'                   (prefixed for disambiguation)
+ *   - neither     → ''
+ */
+export function resolvePatientDrugAllergy(patientData) {
+  if (!_isPlainObject(patientData)) return '';
+  const drug = typeof patientData.drugAllergy === 'string'
+    ? patientData.drugAllergy.trim() : '';
+  const food = typeof patientData.foodAllergy === 'string'
+    ? patientData.foodAllergy.trim() : '';
+  if (drug && food) {
+    return `${DRUG_ALLERGY_LABEL_PREFIX}${drug} / ${FOOD_ALLERGY_LABEL_PREFIX}${food}`;
+  }
+  if (drug) return drug;
+  if (food) return `${FOOD_ALLERGY_LABEL_PREFIX}${food}`;
+  return '';
+}
+
+/**
+ * Compose a display string from canonical beforeTreatment + pregnanted fields.
+ *
+ * Insertion order is FIXED: beforeTreatment first, pregnancy second.
+ * pregnanted must be STRICTLY boolean true (not truthy) to emit the pregnancy entry.
+ * Returns '' when both inputs are empty / falsy.
+ */
+export function resolvePatientTreatmentHistory(patientData) {
+  if (!_isPlainObject(patientData)) return '';
+  const parts = [];
+  const before = typeof patientData.beforeTreatment === 'string'
+    ? patientData.beforeTreatment.trim() : '';
+  if (before) parts.push(`${BEFORE_TREATMENT_LABEL_PREFIX}${before}`);
+  if (patientData.pregnanted === true) {
+    parts.push(`${PREGNANCY_LABEL_PREFIX}กำลังตั้งครรภ์`);
+  }
   return parts.join(' / ');
 }
