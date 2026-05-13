@@ -756,17 +756,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         const { getCustomerTreatments } = await import('../lib/scopedDataLayer.js');
         const all = await getCustomerTreatments(customerId);
         if (!cancelled) {
-          const filtered = (all || [])
-            .filter(t => t.treatmentId !== treatmentId && t.treatmentId !== undefined)
-            .slice(0, 5);
-          setHistoryTreatments(filtered);
+          const sorted = (all || []).slice().sort((a, b) => {
+            const dA = a.detail?.treatmentDate || '';
+            const dB = b.detail?.treatmentDate || '';
+            return dB.localeCompare(dA);
+          });
+          const filtered = (isEdit && treatmentId)
+            ? sorted.filter(t => (t.treatmentId || t.id) !== treatmentId)
+            : sorted;
+          setHistoryTreatments(filtered.slice(0, 5));
         }
       } catch (e) {
         if (!cancelled) setHistoryTreatments([]);
       }
     })();
     return () => { cancelled = true; };
-  }, [customerId, treatmentId]);
+  }, [customerId, treatmentId, isEdit]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
