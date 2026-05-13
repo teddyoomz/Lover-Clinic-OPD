@@ -53,7 +53,10 @@ describe('G2 — AV40 universal classifier (no direct patientData.ud_* reads out
   const SANCTIONED = new Set([
     'src/pages/PatientForm.jsx',          // writer (kiosk + admin manual)
     'src/pages/AdminDashboard.jsx',       // display chips lines ~4504-4533
-    // src/utils.js sanctioned separately (lives outside walkFiles(src/components|src/pages))
+    // src/utils.js was previously sanctioned (lived outside walkFiles(src/components|src/pages))
+    // but is no longer a direct reader — refactored Phase 26.2g-fillin-followup (2026-05-13)
+    // to consume derivePatientCongenitalDisease + derivePatientCongenitalDiseaseEnglish helpers.
+    // See tests/phase-26-2g-fillin-followup-source-grep.test.js G3 for the refactor lock.
   ]);
   const PATTERN = /patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/;
 

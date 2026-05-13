@@ -1126,19 +1126,18 @@ frozen `UD_LABELS` map and the locked `PREGNANCY_LABEL_PREFIX` +
 **Anchor regex**:
 `/patientData\.(?:ud_|hasUnderlying|currentMedication|pregnancy)/`
 
-**Sanctioned exceptions** (closed list — adding a 4th file fails the lock test):
+**Sanctioned exceptions** (closed list — adding a 3rd file fails the lock test):
 - `src/pages/PatientForm.jsx` — writer of these fields (kiosk + admin manual)
 - `src/pages/AdminDashboard.jsx` — display chips at lines ~4504-4533
   (`d.ud_*` JSX literals + `d.pregnancy` chip-color logic); pure display,
   not transform
-- `src/utils.js` — Thai + English PMH builders at lines ~345-356 + ~415-426
-  inside the OPD print builder; pre-existing inline derivation with
-  different output shape ("ปฏิเสธ" / "No known" fallback). **Tech-debt**:
-  future Rule-of-3 refactor to consume `derivePatientCongenitalDisease`
-  is welcome but was out of scope for Phase 26.2g-fillin. This file is
-  outside the G2.1 walk (only `src/components` + `src/pages`) so no test
-  change needed; reviewers must NOT add new direct `ud_*` reads in
-  `src/utils.js` either — refactor toward the helper instead.
+- ~~`src/utils.js`~~ — **REFACTORED Phase 26.2g-fillin-followup (2026-05-13)**.
+  Thai + English PMH builders now consume `derivePatientCongenitalDisease`
+  + `derivePatientCongenitalDiseaseEnglish` helpers. Output BYTE-IDENTICAL
+  for OPD print recipients (formal-clinical EN labels preserved). V12
+  multi-reader-sweep class fully closed for `patientData.ud_*` project-wide.
+  Future direct `ud_*` reads in `src/utils.js` are forbidden — would fail
+  G3.2 anti-regression grep in `tests/phase-26-2g-fillin-followup-source-grep.test.js`.
 
 **Source-grep regression**: `tests/phase-26-2g-fillin-source-grep.test.js`
 G2.1 walks `src/components` + `src/pages` and asserts the offender list
@@ -1181,4 +1180,5 @@ exception list" pattern at the patientData read boundary.
 - AV9 — dozens of ad-hoc `new Date().toISOString().slice(0,10)` display sites migrated to `thaiTodayISO()` `71e513f`.
 - AV17 — `listProducts` + `listCourses` spread order swapped to `{...d.data(), id: d.id}` in V38 (2026-05-07). 5 พระราม 3 products + 2 courses had stray `data.id` overriding docId → handleDelete silent no-op. **V38-followup mass-sweep** (commit after V39, 2026-05-07) extended the fix to all 85+ callsites across 15 files; full suite 6757/6757 PASS post-sweep.
 - AV18 — V39 (2026-05-07) patched 4 migrate fns (promotions/coupons/vouchers/df_staff_rates) + 4 mappers (`buildBe{Promotion,Coupon,Voucher}FromMaster` + `mapMasterToDfStaffRates`) to accept `{branchId}` opt. 479 zombie docs backfilled to พระราม 3 via `scripts/phase-24-0-vicies-novies-decies-backfill-zombie-branchid.mjs --apply`. Audit doc `be_admin_audit/phase-24-0-vicies-novies-decies-backfill-zombie-branchid-1778102599138-4d7618f4`.
-- AV40 — Phase 26.2g-fillin (2026-05-13) NEW `src/lib/patientHealthMapping.js` with `derivePatientCongenitalDisease` + `derivePatientTreatmentHistory` pure helpers. TFP create-mode auto-fill at `TreatmentFormPage.jsx:1024-1034` extended to call both helpers gated by `!isEdit`. Sanctioned exceptions: `PatientForm.jsx` (writer) + `AdminDashboard.jsx:4504-4533` (display chips) + `src/utils.js:345-356,415-426` (OPD print builder tech-debt). Source-grep regression: `tests/phase-26-2g-fillin-source-grep.test.js` G1+G2.
+- AV40 — Phase 26.2g-fillin (2026-05-13) NEW `src/lib/patientHealthMapping.js` with `derivePatientCongenitalDisease` + `derivePatientTreatmentHistory` pure helpers. TFP create-mode auto-fill at `TreatmentFormPage.jsx:1024-1034` extended to call both helpers gated by `!isEdit`. Sanctioned exceptions: `PatientForm.jsx` (writer) + `AdminDashboard.jsx:4504-4533` (display chips). Source-grep regression: `tests/phase-26-2g-fillin-source-grep.test.js` G1+G2.
+- AV40 follow-up — Phase 26.2g-fillin-followup (2026-05-13) extended `patientHealthMapping.js` with `derivePatientCongenitalDiseaseEnglish` + `UD_LABELS_EN` frozen map (formal clinical labels preserved verbatim from `src/utils.js`). Refactored both `src/utils.js` OPD print builders (Thai + English) to consume helpers — 20 inline lines → 4 (2 per builder). `src/utils.js` dropped from AV40 sanctioned list. Anti-regression locks: `tests/phase-26-2g-fillin-followup-source-grep.test.js` G3.1-G3.4. V12 multi-reader-sweep class fully closed for `patientData.ud_*` project-wide.
