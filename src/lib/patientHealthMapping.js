@@ -6,17 +6,19 @@
 // shipped but congenitalDisease + treatmentHistory never did.
 //
 // Pure JS, branch-blind. Used by:
-//   - TreatmentFormPage.jsx (create-mode auto-fill)
+//   - TreatmentFormPage.jsx (create-mode auto-fill — Thai helper)
+//   - src/utils.js OPD print builders (Thai + English helpers — Phase 26.2g-fillin-followup, 2026-05-13)
 // Tests:
 //   - tests/phase-26-2g-fillin-patient-health-mapping.test.js
 //   - tests/phase-26-2g-fillin-source-grep.test.js
 //   - tests/phase-26-2g-fillin-flow-simulate.test.js
+//   - tests/phase-26-2g-fillin-followup-english-helper.test.js
+//   - tests/phase-26-2g-fillin-followup-source-grep.test.js
 //
 // Audit: AV40 (no direct patientData.ud_* reads in components/pages outside
 // PatientForm writer + AdminDashboard pregnancy/chronic display chips).
-// Tech-debt note: src/utils.js OPD print builders (lines ~345-356 + ~415-426)
-// still have inline derivation with a different output shape; future Rule-of-3
-// refactor opportunity is welcome but out of scope for Phase 26.2g-fillin.
+// utils.js Rule-of-3 tech-debt CLOSED by Phase 26.2g-fillin-followup (2026-05-13)
+// — both OPD print builders now consume helpers.
 
 const PREGNANCY_SENTINEL = 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์';
 
@@ -33,6 +35,20 @@ export const UD_LABELS = Object.freeze({
   ud_kidney:       'โรคไต',
   ud_heart:        'โรคหัวใจ',
   ud_blood:        'โรคโลหิต',
+});
+
+// UI order matches UD_LABELS (Thai). Formal clinical labels — intentionally
+// MORE FORMAL than PatientForm.jsx UI labels (which are lay-friendly:
+// 'Diabetes' / 'Kidney Disease' / 'Blood Disease'). OPD print is clinical
+// documentation; formal labels are appropriate. The drift is intentional.
+// Frozen so consumers can rely on key + label stability.
+export const UD_LABELS_EN = Object.freeze({
+  ud_hypertension: 'Hypertension',
+  ud_diabetes:     'Diabetes Mellitus',
+  ud_lung:         'Lung Disease',
+  ud_kidney:       'Chronic Kidney Disease',
+  ud_heart:        'Heart Disease',
+  ud_blood:        'Hematological Disease',
 });
 
 function _isPlainObject(v) {
@@ -56,6 +72,39 @@ export function derivePatientCongenitalDisease(patientData) {
   const parts = [];
   for (const key of Object.keys(UD_LABELS)) {
     if (patientData[key]) parts.push(UD_LABELS[key]);
+  }
+  if (patientData.ud_other) {
+    const detail = typeof patientData.ud_otherDetail === 'string'
+      ? patientData.ud_otherDetail.trim()
+      : '';
+    if (detail) parts.push(detail);
+  }
+  return parts.join(', ');
+}
+
+/**
+ * English-locale mirror of derivePatientCongenitalDisease. Returns comma-joined
+ * formal-clinical English labels for chronic-disease flags.
+ *
+ * Returns '' when:
+ *   - patientData is not a plain object
+ *   - hasUnderlying !== 'มี'  (NOTE: gate key value is Thai 'มี' regardless of
+ *                              caller's UI language — patientData shape is
+ *                              language-agnostic; only OUTPUT labels differ)
+ *   - all UD_LABELS_EN keys are falsy AND ud_otherDetail is empty/whitespace
+ *
+ * Standard flag labels emit first (UI order, matching UD_LABELS), then
+ * ud_otherDetail (trimmed) if present.
+ *
+ * Used by: src/utils.js (Thai + English OPD print builders — line ~345 + ~415).
+ */
+export function derivePatientCongenitalDiseaseEnglish(patientData) {
+  if (!_isPlainObject(patientData)) return '';
+  if (patientData.hasUnderlying !== 'มี') return '';
+
+  const parts = [];
+  for (const key of Object.keys(UD_LABELS_EN)) {
+    if (patientData[key]) parts.push(UD_LABELS_EN[key]);
   }
   if (patientData.ud_other) {
     const detail = typeof patientData.ud_otherDetail === 'string'
