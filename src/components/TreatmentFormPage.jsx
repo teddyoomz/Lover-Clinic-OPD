@@ -42,6 +42,9 @@ import {
   resolvePatientDrugAllergy,
   resolvePatientTreatmentHistory,
 } from '../lib/patientHealthMapping.js';
+// Phase 27.1 (2026-05-14) — TFP layout swap: hook + floating button for split-screen.
+import { useLayoutPreference } from '../hooks/useLayoutPreference.js';
+import { LayoutSwapButton } from './LayoutSwapButton.jsx';
 // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. `auth` needed for
 // `recordedBy: auth.currentUser?.uid` forensic stamp when doctor saves a
 // treatment (status='doctor-recorded'). See spec
@@ -351,6 +354,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Phase 27.0 (2026-05-14) — selectedBranchId alias used in backendDetail write path.
   // SELECTED_BRANCH_ID kept for banner + display usages elsewhere in this file.
   const { branchId: selectedBranchId, branchId: SELECTED_BRANCH_ID, branches: branchList } = useSelectedBranch();
+  // Phase 27.1 (2026-05-14) — TFP split-screen layout swap (form-left/history-right
+  // default; admin can flip per-device). Reusable hook keyed by 'tfp'.
+  const { position: tfpLayout, swap: swapTfpLayout, isPrimaryLeft: isFormLeft } = useLayoutPreference('tfp', 'left');
   // Phase 17.2-septies (2026-05-05) — branch indicator banner. User directive:
   // "ทำให้แสดงสาขาตรงด้านบนของหน้า TFP ทั้งสร้างทั้งแก้ไขเลย user จะได้ไม่
   // สับสน ตัวมึงเองจะได้ไม่สับสนด้วย". Resolved at render time so any branch
@@ -3160,10 +3166,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       )}
 
       {/* ── Two-Column Layout ─────────────────────────────────────────────── */}
+      {/* Phase 27.1 (2026-05-14) — Layout swap: relative + conditional lg:flex-row-reverse */}
       <div className={selectedHistoryTreatmentId
-        ? 'max-w-[2000px] lg:flex lg:gap-4 mx-auto px-4 py-4'
+        ? `relative max-w-[2000px] lg:flex lg:gap-4 mx-auto px-4 py-4 ${isFormLeft ? '' : 'lg:flex-row-reverse'}`
         : 'max-w-6xl mx-auto px-4 py-4'
       }>
+        {/* Phase 27.1 (2026-05-14) — floating swap button between panels (visible only when split active) */}
+        {selectedHistoryTreatmentId && (
+          <LayoutSwapButton
+            onSwap={swapTfpLayout}
+            position={tfpLayout}
+            visible={true}
+            isDark={isDark}
+          />
+        )}
         {/* Phase 26.2 Task 5 — LEFT panel wrapper for conditional split-screen */}
         <div className={selectedHistoryTreatmentId ? 'lg:w-1/2 lg:min-w-0' : ''}>
         <div className={selectedHistoryTreatmentId ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
