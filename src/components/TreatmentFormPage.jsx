@@ -6,7 +6,8 @@ import DepositPicker from './backend/DepositPicker.jsx';
 import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
-         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip } from 'lucide-react';
+         Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip,
+         AlertCircle } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
@@ -2893,6 +2894,26 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         </div>
       </div>
 
+      {/* ── Phase 26.0d (V26.0, 2026-05-13) — edit-mode banner ──────────────
+          Amber banner shown when admin opens a treatment that was originally
+          saved via "บันทึกสำหรับแพทย์" (status === 'doctor-recorded').
+          Instructs admin to add the missing pieces (courses / products /
+          DF / bill). `canAddNewItems` flag unlocks the 6 UI add-op sites. */}
+      {loadedTreatmentStatus === 'doctor-recorded' && (
+        <div className="max-w-6xl mx-auto px-4 pt-3">
+          <div
+            data-testid="tfp-doctor-recorded-banner"
+            className={`px-4 py-3 rounded-lg border text-sm flex items-center gap-2 ${isDark ? 'bg-amber-950 border-amber-800 text-amber-100' : 'bg-amber-50 border-amber-200 text-amber-900'}`}
+          >
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              <strong>การรักษานี้บันทึกโดยแพทย์</strong> —
+              กรุณาเติมข้อมูลคอร์ส / สินค้า / ค่ามือ / ใบเสร็จให้ครบ แล้วกดบันทึก
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ── Branch indicator (Phase 17.2-septies) ────────────────────────── */}
       {currentBranch && (
         <div className="max-w-6xl mx-auto px-4 pt-3">
@@ -3063,6 +3084,33 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 ))}
               </div>
             </FormSection>
+
+            {/* ════ Phase 26.0d (V26.0, 2026-05-13) — doctor-save button ════
+                "บันทึกสำหรับแพทย์" — records OPD/vitals/charts/meds/DF only;
+                skips course-items + consumables + purchasedItems + auto-sale.
+                Hidden in edit mode (doctor-save semantic is create-only;
+                editing a doctor-recorded treatment uses the normal save
+                button + canAddNewItems flag unlocks the missing pieces). */}
+            {!isEdit && (
+              <div
+                className={`mt-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 py-3 rounded-lg border ${isDark ? 'bg-sky-950/30 border-sky-800' : 'bg-sky-50/50 border-sky-200'}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleSubmit('doctor')}
+                  disabled={saving}
+                  data-testid="tfp-doctor-save-btn"
+                  data-save-mode="doctor"
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed border ${isDark ? 'bg-sky-900 border-sky-600 text-sky-200 hover:bg-sky-800' : 'bg-white border-sky-300 text-sky-700 hover:bg-sky-100'}`}
+                >
+                  <Stethoscope className="w-4 h-4" />
+                  <span>บันทึกสำหรับแพทย์</span>
+                </button>
+                <p className={`text-xs text-center sm:text-left ${isDark ? 'text-sky-200/70' : 'text-gray-500'}`}>
+                  บันทึกเฉพาะ OPD / ยา / ค่ามือ — admin มาเติมคอร์ส / สินค้า / บิลทีหลัง
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
