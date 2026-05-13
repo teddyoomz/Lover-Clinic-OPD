@@ -24,10 +24,16 @@ export function LayoutSwapButton({ onSwap, position, visible = true, isDark = tr
     : 'สลับ — ฟอร์มไปซ้าย / ประวัติไปขวา';
   return (
     <div
-      // Phase 27.1-bis: sticky top-3 keeps button visible during scroll; outer
-      // div spans full width via left-0 right-0 so it occupies no flex space
-      // (absolute positioning); inner sticky child stays at top of viewport.
-      className="hidden lg:flex absolute left-0 right-0 top-0 z-10 justify-center"
+      // Phase 27.1-bis (2026-05-14, second user iteration) — user feedback:
+      // "ปุ่มมันยังไม่ fix ติดกับที่ มันเลื่อนตามการ scroll ของฝั่งกรอก TFP".
+      // The previous attempt set `absolute left-0 right-0 top-0` which made
+      // the wrapper only as tall as the button — sticky had no room to stick.
+      // Fix: extend the wrapper across the FULL height of the relative parent
+      // (inset-x-0 inset-y-0). Now sticky inner has the full split-screen
+      // height as its containing block; it stays pinned at top-3 of viewport
+      // while the user scrolls the page (form panel scrolls with the page;
+      // right panel is its own sticky `top-[120px]` scroll context).
+      className="hidden lg:flex absolute inset-x-0 inset-y-0 z-10 justify-center items-start"
       style={{ pointerEvents: 'none' }}
       data-testid="layout-swap-button-wrapper"
     >
