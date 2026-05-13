@@ -1,3 +1,12 @@
+// Phase 26.2g-fillin-followup (2026-05-13) — Rule-of-3 close:
+// OPD print builders below consume the shared patientHealthMapping helpers
+// instead of inlining the ud_* → label mapping. Output BYTE-IDENTICAL for
+// OPD print recipients (formal-clinical EN labels preserved).
+import {
+  derivePatientCongenitalDisease,
+  derivePatientCongenitalDiseaseEnglish,
+} from './lib/patientHealthMapping.js';
+
 export const hexToRgb = (hex) => {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -341,17 +350,9 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     parts.push(`อาการสำคัญ         : ${ccList.join(', ')}`);
     parts.push(sep);
 
-    let pmh = [];
-    if (d.hasUnderlying === 'มี') {
-      if (d.ud_hypertension) pmh.push('ความดันโลหิตสูง');
-      if (d.ud_diabetes) pmh.push('เบาหวาน');
-      if (d.ud_lung) pmh.push('โรคปอด');
-      if (d.ud_kidney) pmh.push('โรคไต');
-      if (d.ud_heart) pmh.push('โรคหัวใจ');
-      if (d.ud_blood) pmh.push('โรคโลหิต');
-      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-    }
-    parts.push(`ประวัติโรคประจำตัว  : ${pmh.length > 0 ? pmh.join(', ') : 'ปฏิเสธโรคประจำตัว'}`);
+    // Phase 26.2g-fillin-followup (2026-05-13) — Rule of 3 close: use helper
+    const chronicTh = derivePatientCongenitalDisease(d);
+    parts.push(`ประวัติโรคประจำตัว  : ${chronicTh || 'ปฏิเสธโรคประจำตัว'}`);
     parts.push(`ประวัติการแพ้ยา/อาหาร : ${d.hasAllergies === 'มี' ? `แพ้ ${d.allergiesDetail}` : 'ปฏิเสธประวัติการแพ้ยาและอาหาร'}`);
     parts.push(`ยาที่ใช้ประจำ       : ${d.currentMedication || 'ไม่มี'}`);
 
@@ -411,17 +412,9 @@ export const generateClinicalSummary = (d, formType = 'intake', customTemplate =
     parts.push(`Chief Complaint     : ${ccList.join(', ')}`);
     parts.push(sep);
 
-    let pmh = [];
-    if (d.hasUnderlying === 'มี') {
-      if (d.ud_hypertension) pmh.push('Hypertension');
-      if (d.ud_diabetes) pmh.push('Diabetes Mellitus');
-      if (d.ud_lung) pmh.push('Lung Disease');
-      if (d.ud_kidney) pmh.push('Chronic Kidney Disease');
-      if (d.ud_heart) pmh.push('Heart Disease');
-      if (d.ud_blood) pmh.push('Hematological Disease');
-      if (d.ud_other && d.ud_otherDetail) pmh.push(d.ud_otherDetail);
-    }
-    parts.push(`Past Medical History: ${pmh.length > 0 ? pmh.join(', ') : 'No known underlying diseases'}`);
+    // Phase 26.2g-fillin-followup (2026-05-13) — Rule of 3 close: use helper
+    const chronicEn = derivePatientCongenitalDiseaseEnglish(d);
+    parts.push(`Past Medical History: ${chronicEn || 'No known underlying diseases'}`);
     parts.push(`Drug and Food Allergy: ${d.hasAllergies === 'มี' ? `Allergy to ${d.allergiesDetail}` : 'No known drug or food allergies'}`);
     parts.push(`Current Medications : ${d.currentMedication || 'None'}`);
 

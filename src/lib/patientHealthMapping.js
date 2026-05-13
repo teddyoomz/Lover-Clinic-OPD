@@ -17,9 +17,8 @@
 //
 // Audit: AV40 (no direct patientData.ud_* reads in components/pages outside
 // PatientForm writer + AdminDashboard pregnancy/chronic display chips).
-// utils.js Rule-of-3 tech-debt PENDING — Phase 26.2g-fillin-followup Task 2
-// will refactor both OPD print builders to consume helpers (not yet committed
-// at the Task 1 SHA; this comment flips to CLOSED at the Task 2 commit).
+// utils.js Rule-of-3 tech-debt CLOSED by Phase 26.2g-fillin-followup (2026-05-13)
+// — both OPD print builders now consume helpers.
 
 const PREGNANCY_SENTINEL = 'ไม่เกี่ยวข้อง/ไม่ได้ตั้งครรภ์';
 
