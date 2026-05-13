@@ -506,6 +506,24 @@ export default function CustomerDetailView({
         editedBy: t.editedBy || null,
         editedByName: t.editedByName || '',
         editedByRole: t.editedByRole || '',
+        // Phase 27.2-sexies (2026-05-14) — V12 multi-reader-sweep round 3.
+        // Phase 27.2 added per-stage lifecycle timestamps to rebuildTreatmentSummary
+        // (backendClient.js) but this in-component mapper STRIPPED them when
+        // `treatments[]` state populated. Result: badges flashed correct (from
+        // customer.treatmentSummary fallback) then reverted to single-badge
+        // (because the stripped primary-path summary fed CDV after listener fired).
+        // User report: "UI ที่ถูกต้องมันกระพริบขึ้นมาแปปนึง ต้องกด refresh ดูรัวๆ".
+        // Add all 9 lifecycle fields to keep this mapper in sync with the Firestore
+        // writer. Anti-regression via AV43 source-grep test.
+        vitalsignsRecordedAt: t.vitalsignsRecordedAt || null,
+        vitalsignsRecordedBy: t.vitalsignsRecordedBy || null,
+        doctorRecordedAt: t.doctorRecordedAt || null,
+        doctorRecordedBy: t.doctorRecordedBy || null,
+        completedAt: t.completedAt || null,
+        completedBy: t.completedBy || null,
+        recordedAt: t.recordedAt || null,
+        editedAt: t.editedAt || null,
+        createdAt: t.createdAt || null,
       }));
     } else {
       list = [...(customer?.treatmentSummary || [])];
