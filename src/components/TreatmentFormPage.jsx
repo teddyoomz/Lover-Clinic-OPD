@@ -348,7 +348,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // + stock writes. BranchProvider is hoisted to App.jsx (Phase 17.2), so
   // SELECTED_BRANCH_ID always resolves to a real branchId (or null until
   // BranchContext snapshot resolves; callers guard via isReady).
-  const { branchId: SELECTED_BRANCH_ID, branches: branchList } = useSelectedBranch();
+  // Phase 27.0 (2026-05-14) — selectedBranchId alias used in backendDetail write path.
+  // SELECTED_BRANCH_ID kept for banner + display usages elsewhere in this file.
+  const { branchId: selectedBranchId, branchId: SELECTED_BRANCH_ID, branches: branchList } = useSelectedBranch();
   // Phase 17.2-septies (2026-05-05) — branch indicator banner. User directive:
   // "ทำให้แสดงสาขาตรงด้านบนของหน้า TFP ทั้งสร้างทั้งแก้ไขเลย user จะได้ไม่
   // สับสน ตัวมึงเองจะได้ไม่สับสนด้วย". Resolved at render time so any branch
@@ -2259,6 +2261,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             const a = [...(options?.doctors || []), ...(options?.assistants || [])].find(x => String(x.id) === String(aid));
             return { id: aid, name: a?.name || '' };
           }),
+          // Phase 27.0 (2026-05-14) — stamp branchId from BranchSelector context so
+          // TreatmentReadOnlyMirror can display "สาขา <name>" without a separate lookup.
+          // branchName is intentionally omitted — render-side resolveBranchDisplayName
+          // (AV42) live-resolves at render time, so no allBranches fetch is needed here.
+          // Empty selectedBranchId (admin on "all branches" view) saves as '';
+          // admin can correct via EditAttributionModal (Phase 27.0 Task 6).
+          branchId: selectedBranchId || '',
           symptoms: opd.symptoms, physicalExam: opd.physicalExam, diagnosis: opd.diagnosis,
           treatmentInfo: opd.treatmentInfo, treatmentPlan: opd.treatmentPlan,
           treatmentNote: opd.treatmentNote, additionalNote: opd.additionalNote,
