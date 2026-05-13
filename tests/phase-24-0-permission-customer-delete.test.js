@@ -102,7 +102,15 @@ describe('Phase 24.0 / P — customer_delete perm key + dual gate', () => {
             || e.name === 'graphify-out' || e.name === '.agents'
             || e.name === 'docs' || e.name === 'memory' || e.name === '.claude'
             || e.name === 'cookie-relay' || e.name === 'broker_jobs'
-            || e.name === 'functions' || e.name === '.vercel') continue;
+            || e.name === 'functions' || e.name === '.vercel'
+            // V55.6 (2026-05-14): exclude tooling sandbox dirs that mirror
+            // sanctioned source files. Stryker mutation-test runs create
+            // `.stryker-tmp/sandbox-*/` with copies of customer_delete sources;
+            // those copies aren't violators of the audit invariant — they're
+            // working artifacts of the mutation-test pipeline. Same for any
+            // future bundler/sandbox tooling.
+            || e.name === '.stryker-tmp' || e.name === '.tmp_scan'
+            || e.name === '.next' || e.name === 'coverage') continue;
           walk(p, results);
         } else if (/\.(js|jsx|ts|tsx)$/.test(e.name)) {
           results.push(p);

@@ -1,5 +1,12 @@
 // ─── Phase 12.1 · adminUsersClient tests — token injection + error handling
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, afterAll } from 'vitest';
+
+// V55.3 (AV41 alignment): canonical capture + afterAll restore pattern,
+// mirroring Phase 17.1 flake-fix-followup. Previously used afterEach delete
+// which is incomplete under vitest worker parallelism (cross-file pollution
+// risk per V-entry "Phase 17.1 flake fix"). Keep the afterEach delete too —
+// belt-and-suspenders defense in depth.
+const ORIGINAL_FETCH = global.fetch;
 
 const { mockAuth } = vi.hoisted(() => ({
   mockAuth: { currentUser: { getIdToken: vi.fn() } },
@@ -21,6 +28,14 @@ describe('adminUsersClient', () => {
   });
 
   afterEach(() => { delete global.fetch; });
+
+  afterAll(() => {
+    // V55.3 (AV41): restore captured original to prevent leakage into
+    // subsequent test files that may also set global.fetch under vitest
+    // worker parallelism.
+    if (ORIGINAL_FETCH === undefined) delete global.fetch;
+    else global.fetch = ORIGINAL_FETCH;
+  });
 
   it('AC1: sends Bearer token from current user', async () => {
     global.fetch.mockResolvedValueOnce({

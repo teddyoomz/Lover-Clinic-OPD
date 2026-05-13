@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "V55.5 — Stryker mutation testing config (2026-05-14). Scoped to today's shipped helpers ONLY (patientHealthMapping + kioskPatientToCanonical). Full-suite mutation = hours; scoped = ~5-15 min.",
+  "packageManager": "npm",
+  "reporters": ["progress", "clear-text", "html"],
+  "testRunner": "vitest",
+  "coverageAnalysis": "off",
+  "_vitest_note": "configFile omitted — Stryker 9.1 + Vite 8 + Rolldown bundler cannot resolve relative config paths from sandbox; let vitest auto-detect vitest.config.js at project root via fallback",
+  "mutate": [
+    "src/lib/patientHealthMapping.js",
+    "src/lib/kioskPatientToCanonical.js"
+  ],
+  "thresholds": {
+    "high": 85,
+    "low": 70,
+    "break": 60
+  },
+  "timeoutMS": 10000,
+  "concurrency": 4,
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "graphify-out",
+    "scripts",
+    "docs",
+    "wiki",
+    ".agents",
+    ".agents/**",
+    ".claude",
+    ".claude/**",
+    ".tmp_scan",
+    ".tmp_scan/**",
+    ".stryker-tmp",
+    "tests/e2e",
+    "cookie-relay",
+    "cookie-relay/**",
+    "public",
+    "scraper-output",
+    "*.html"
+  ],
+  "tempDirName": ".stryker-tmp",
+  "htmlReporter": {
+    "fileName": ".stryker-tmp/mutation-report.html"
+  }
+}
