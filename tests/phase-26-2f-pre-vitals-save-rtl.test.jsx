@@ -30,9 +30,23 @@ describe('V2 Phase 26.2f-pre — vitals-save RTL contract', () => {
     expect(PANEL).toMatch(/data-testid[^>]*vitalsigns-recorded/);
   });
 
-  // ── V2.3 — CustomerDetailView references vitalsigns-recorded status ───────
-  it('V2.3 CustomerDetailView has vitalsigns-recorded status reference', () => {
-    // CDV must reference the new status so the badge/chip RTL test has a target
-    expect(CDV).toMatch(/vitalsigns-recorded/);
+  // ── V2.3 — CustomerDetailView routes vitalsigns status (Phase 28 fixup) ───
+  it('V2.3 (Phase 28 fixup) CustomerDetailView routes vitalsigns status through HistoryCard → resolver → stepper', () => {
+    // Phase 28 (2026-05-14) — V21 lock-in fixup. The inline treatment-history
+    // block in CDV (which used to reference 'vitalsigns-recorded' for the
+    // chip/badge render) was extracted to <TreatmentHistoryCard /> + child
+    // components. The status literal moved to the centralized resolver
+    // (src/lib/treatmentDisplayResolvers.js) which TreatmentLifecycleStepper
+    // consumes via getTreatmentLifecycle.
+    //
+    // The original V2.3 intent ("CDV surfaces vitalsigns status so RTL has a
+    // target") is preserved through the wiring: CDV passes treatments[] to
+    // <TreatmentHistoryCard /> which renders the row + stepper. RTL tests
+    // can target the stepper's testids (treatment-lifecycle-stepper, stepper-dot)
+    // instead of an inline CDV chip that no longer exists.
+    const RESOLVERS = readFileSync('src/lib/treatmentDisplayResolvers.js', 'utf8');
+    expect(RESOLVERS).toMatch(/status\s*===\s*['"]vitalsigns-recorded['"]/);
+    expect(CDV).toMatch(/<TreatmentHistoryCard\b/);
+    expect(CDV).toMatch(/treatments=\{treatments\}/);
   });
 });

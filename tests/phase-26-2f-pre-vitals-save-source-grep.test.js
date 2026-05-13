@@ -106,9 +106,32 @@ describe('V1 Phase 26.2f-pre — vitals-save source-grep', () => {
     expect(PANEL).toMatch(/data-testid.*vitalsigns-recorded/);
   });
 
-  // ── CustomerDetailView vitals chip ──────────────────────────────────────
-  it('V1.14 CustomerDetailView references vitalsigns-recorded status', () => {
-    expect(CDV).toMatch(/vitalsigns-recorded/);
+  // ── CustomerDetailView vitals chip (Phase 28 fixup — moved through HistoryRow → resolver) ──
+  it('V1.14 (Phase 28 fixup) CustomerDetailView routes vitalsigns status into TreatmentLifecycleStepper via summary mapper', () => {
+    // Phase 28 (2026-05-14) — V21 lock-in fixup. The 290-line inline
+    // treatment-history block in CustomerDetailView.jsx was extracted to
+    // <TreatmentHistoryCard /> + <TreatmentHistoryRow /> + <TreatmentLifecycleStepper />.
+    // CDV no longer references the literal status string 'vitalsigns-recorded' — that
+    // gate is now centralized in src/lib/treatmentDisplayResolvers.js
+    // (getTreatmentLifecycle), which TreatmentLifecycleStepper consumes.
+    //
+    // The original V21 anti-regression intent ("CDV must surface vitalsigns status
+    // through to the rendered chip/badge for RTL queries") is preserved because:
+    //   1. CDV's treatmentSummary mapper preserves t.status (locked by D5.1)
+    //   2. CDV passes treatments[] verbatim to <TreatmentHistoryCard />
+    //   3. TreatmentHistoryCard → TreatmentHistoryRow → TreatmentLifecycleStepper
+    //      consumes the lifecycle (which reads `status === 'vitalsigns-recorded'`)
+    //   4. The vitalsigns-recorded chip itself lives in TreatmentReadOnlyPanel
+    //      (V1.12 + V1.13 already lock that, both still passing)
+    //
+    // Asserting the resolver gate + the CDV → HistoryCard wiring preserves the
+    // contract WITHOUT re-adding the orphan literal to CDV.
+    const RESOLVERS = readFileSync('src/lib/treatmentDisplayResolvers.js', 'utf8');
+    expect(RESOLVERS).toMatch(/status\s*===\s*['"]vitalsigns-recorded['"]/);
+    // CDV must wire treatments[] into TreatmentHistoryCard (the entry point that
+    // ultimately renders the lifecycle stepper).
+    expect(CDV).toMatch(/<TreatmentHistoryCard\b/);
+    expect(CDV).toMatch(/treatments=\{treatments\}/);
   });
 
   // ── saveMode vitals branch skips all deduction writes ───────────────────
