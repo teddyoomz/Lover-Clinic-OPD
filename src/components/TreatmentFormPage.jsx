@@ -20,6 +20,7 @@ import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
 import DfEntryModal from './backend/DfEntryModal.jsx';
 import PickProductsModal from './backend/PickProductsModal.jsx';
+import EditAttributionModal from './backend/EditAttributionModal.jsx';
 import { buildDefaultRows, generateDfEntryId } from '../lib/dfEntryValidation.js';
 import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // Phase 14.7.H follow-up A — branch-aware sale + stock writes.
@@ -484,6 +485,26 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // the user has explicitly deleted. Re-picking that doctor later won't
   // resurrect the entry — respect the manual dismissal.
   const [dfDismissedIds, setDfDismissedIds] = useState(() => new Set());
+
+  // Phase 26.1c (V26.1, 2026-05-13) — Editor attribution modal state.
+  // Triggered when admin clicks save in edit mode + staff saveMode (not
+  // doctor-save, not create-mode). Modal opens, suspends handleSubmit, and
+  // re-invokes handleSubmit with editorContext on user confirm.
+  const [editAttributionModal, setEditAttributionModal] = useState({ isOpen: false });
+
+  const handleEditAttributionConfirm = (editorCtx) => {
+    setEditAttributionModal({ isOpen: false });
+    // Re-invoke handleSubmit synchronously with the editor context via the
+    // V26.1 internal object form. This re-enters handleSubmit fresh — the
+    // `needsEditorAttribution` guard now passes (editorContext present) and
+    // the save flow proceeds normally with the editor stamping in v26StatusPatch.
+    handleSubmit({ saveMode: 'staff', editorContext: editorCtx });
+  };
+
+  const handleEditAttributionCancel = () => {
+    setEditAttributionModal({ isOpen: false });
+    // No save. Admin can re-click the save button to retry; form state preserved.
+  };
 
   // Health Info
   const [bloodType, setBloodType] = useState('');
@@ -1954,6 +1975,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         if (!pmChannels.some(c => c.enabled && c.method)) { scrollToError('paymentChannels', 'กรุณาเลือกช่องทางชำระเงิน'); return; }
         if (!pmChannels.some(c => c.enabled && parseFloat(c.amount) > 0)) { scrollToError('paymentChannels', 'กรุณากรอกจำนวนเงินที่ชำระ'); return; }
       }
+    }
+    // Phase 26.1c (V26.1, 2026-05-13) — Editor attribution gate. When admin
+    // clicks save in edit-mode + staff saveMode, suspend the rest of handleSubmit
+    // and open the modal. User picks → onConfirm fires → handleSubmit re-invokes
+    // with editorContext → this guard passes (editorContext truthy) → save proceeds.
+    const needsEditorAttribution = isEdit && saveMode === 'staff';
+    if (needsEditorAttribution && !editorContext) {
+      setEditAttributionModal({ isOpen: true });
+      return;  // Suspend; modal-confirm handler re-enters with editorContext
     }
     setSaving(true);
     setError('');
@@ -4961,6 +4991,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           }}
         />
       )}
+
+      {/* Phase 26.1c (V26.1, 2026-05-13) — Editor attribution modal */}
+      <EditAttributionModal
+        isOpen={editAttributionModal.isOpen}
+        onConfirm={handleEditAttributionConfirm}
+        onCancel={handleEditAttributionCancel}
+        isDark={isDark}
+      />
     </div>
   );
 }

@@ -134,6 +134,23 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
   });
 
   describe('G3 — Phase 26.1 editor-attribution modal integration source-grep', () => {
+    it('G3.1 — editAttributionModal state declared with isOpen + pendingSave shape', () => {
+      expect(TFP_SOURCE).toMatch(/const\s+\[editAttributionModal,\s*setEditAttributionModal\]\s*=\s*useState/);
+      expect(TFP_SOURCE).toMatch(/isOpen:\s*false/);  // initial state
+    });
+
+    it('G3.2 — needsEditorAttribution guard exists in handleSubmit', () => {
+      expect(TFP_SOURCE).toMatch(/(needsEditorAttribution|isEdit\s*&&\s*saveMode\s*===\s*['"]staff['"])/);
+      // Guard must check: edit mode AND staff saveMode AND no editorContext yet
+      expect(TFP_SOURCE).toMatch(/!editorContext/);
+    });
+
+    it('G3.3 — EditAttributionModal mounted when isOpen', () => {
+      expect(TFP_SOURCE).toMatch(/<EditAttributionModal/);
+      // Import path must reference EditAttributionModal; .jsx extension permitted.
+      expect(TFP_SOURCE).toMatch(/import\s+EditAttributionModal\s+from\s+['"][^'"]*EditAttributionModal[^'"]*['"]/);
+    });
+
     it('G3.4 — handleSubmit signature accepts (eventOrSaveMode, options) form', () => {
       // V26.1 — extends Phase 26.0a defensive coercion to support internal
       // re-invoke from EditAttributionModal confirmation with editor context.
