@@ -70,3 +70,17 @@ Updated `concepts/treatment-status-and-doctor-save.md` with Phase 26.1 section. 
 Rule of 3 status: `EditAttributionModal` is 2nd member of "pick-a-person-before-action" pattern family (1st = `ActorConfirmModal`). Future 3rd similar modal should consider extracting a shared `<PersonPickerModal>` base.
 
 Subagent-driven execution mode (same pattern as Phase 26.0). Each task: implementer subagent → verify → commit + push. 2 V21-class regex fixups landed during Tasks 3 + 4 + 8 (TF3.A.6 window 2500→4000, F7.3 let-based shape, AV37.1 let-based shape).
+
+## [2026-05-13] ingest | Phase 26.2 — TFP Split-Screen History + customer.note
+
+Same-day continuation of Phase 26.0 + 26.1. 5-item implementation: (A) 5-tab history strip in TFP header showing top-5 cross-branch recent treatments; (B) 50/50 split-screen on lg+ / modal fallback on mobile; (C) NEW `TreatmentReadOnlyPanel` component extracted from TimelineModal row JSX (~374 LOC, strict AV38 read-only contract); (D) TimelineModal DRY refactor to consume TreatmentReadOnlyPanel; (E) `customer.note` shown in amber callout above doctor-save button via triple-fallback chain.
+
+14 implementation commits + 2 spec/plan commits (from prior day) = 16 total Phase 26.x docs-to-code commits. Tests: +36 net (8320 → 8356 + 1 skipped). Build clean. 43 commits ahead of prod. NOT YET DEPLOYED — awaiting user `deploy` authorization per Rule V18. 1 known flake: Phase 17.1 `cross-branch-import-rtl` intermittent under full-suite load (pre-existing).
+
+NEW concept page: `concepts/tfp-split-screen-history.md` (this entry). Documents split-screen layout architecture, historyTreatments state shape, TreatmentReadOnlyPanel AV38 read-only contract, customer.note triple-fallback chain, file inventory.
+
+AV38 audit invariant: no `onEditTreatment`/`onDeleteTreatment` props, no `<input>`/`<textarea>`, no "บันทึก" inside `<button>`, Lightbox permitted. Source-grep regression lock in `tests/v38-av38-treatment-read-only-panel.test.js`.
+
+Subagent-driven execution (same pattern as Phase 26.0 + 26.1): Tasks 1-7 each had implementer subagent → spec-review subagent catching 18+ deviations → fix → commit + push.
+
+Cross-references: `tfp-split-screen-history` ↔ `treatment-status-and-doctor-save` (Phase 26.0 saveMode + 26.1 editedBy attribution sit alongside the Phase 26.2 split-screen in the same TFP). TreatmentReadOnlyPanel = 2nd consumer of the read-only viewing pattern (1st = TimelineModal inline row; future 3rd = Rule of 3 trigger for shared abstraction).

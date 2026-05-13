@@ -7,11 +7,37 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 EOD — Phase 26.0 + 26.1 DONE · Phase 26.2 spec+plan committed (NOT executed) · 8320 tests + 1 skipped · build clean · 23 commits ahead of prod
+- **Date last updated**: 2026-05-13 — Phase 26.0 + 26.1 + **26.2** COMPLETE (NOT YET DEPLOYED) · 8356 tests + 1 skipped · build clean · 43 commits ahead of prod · 1 known flake (Phase 17.1 cross-branch-import-rtl, intermittent under full-suite load)
 - **Branch**: `master`
-- **Last commit**: `fa22018` docs(superpowers/plans): Phase 26.2 implementation plan — TFP split-screen history + customer.note
-- **Test count**: **8320 passed** (+78 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures.
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 23 commits ahead). Phase 26.0 + 26.1 implementation complete, awaiting deploy. Phase 26.2 spec+plan only (8 implementation tasks pending; user chose subagent-driven mode but session ended for context).
+- **Last commit**: `<NEW_SHA>` docs(wiki+agents): Phase 26.2 wiki concept page + log + SESSION_HANDOFF + active.md
+- **Test count**: **8356 passed** (+114 from 8242 Phase 25.0 baseline) + 1 skipped. 0 failures. 1 known flake (Phase 17.1 intermittent, pre-existing).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 43 commits ahead). Phase 26.0 + 26.1 + 26.2 implementation complete, awaiting combined deploy. TreatmentReadOnlyPanel + split-screen history + customer.note LIVE on master, NOT on prod.
+
+### Session 2026-05-13 — Phase 26.2 TFP Split-Screen History + Customer.Note (COMPLETE, NOT YET DEPLOYED)
+
+User directive: "ทำต่อ Phase 26.2 ตามแผน" — execute the 8-task subagent-driven plan committed in the previous context.
+
+**5 implementation items shipped** (14 commits, subagent-driven Tasks 1-8):
+
+**(A) HistoryTabStrip** (`dda99cf` + subsequent): 5-tab strip at top of TFP form showing top-5 cross-branch recent treatments via `query(treatmentsCol(), where('customerId','==', ...), orderBy('createdAt','desc'), limit(5))`. Tab label = treatment date + primary course/item name (truncated). State: `historyTreatments`, `selectedHistoryTreatmentId`, `historyLoading`.
+
+**(B) Split-screen layout** (`lg:flex lg:gap-4` outer + `<main lg:w-1/2>` form + `<aside hidden lg:block lg:w-1/2 lg:sticky lg:top-[120px] lg:overflow-y-auto>` panel): On lg+ screens the selected history treatment displays in a read-only panel to the right of the form at 50/50. Mobile (<lg): `historyPanelOpen` state drives a `<dialog>` / modal fallback. State: `historyFullDoc`, `historyPanelOpen`.
+
+**(C) TreatmentReadOnlyPanel** (`src/components/TreatmentReadOnlyPanel.jsx`, ~374 LOC): NEW component extracted from per-row JSX in `TreatmentTimelineModal`. Renders single treatment doc read-only: doctor info, treatment items, notes, chart attachments (Lightbox), before/after images. AV38 read-only contract enforced: no `onEditTreatment`/`onDeleteTreatment` props, no `<input>`/`<textarea>`, no "บันทึก" in buttons; Lightbox permitted. Source-grep regression lock in `tests/v38-av38-treatment-read-only-panel.test.js`.
+
+**(D) TimelineModal DRY refactor**: `TreatmentTimelineModal` per-row render block replaced with `<TreatmentReadOnlyPanel treatment={t} />`. TreatmentReadOnlyPanel = 2nd consumer (TimelineModal + TFP split-screen). Rule of 3 NOT yet triggered (2 consumers; 3rd would).
+
+**(E) customer.note display**: Amber callout box `bg-amber-500/10 border border-amber-500/30 text-amber-200` above "บันทึกสำหรับแพทย์" button in TFP. Triple-fallback chain: `custData?.note ?? custData?.patientData?.note ?? patientData?.note ?? ''`. Read-only, no edit affordance. Mirrors CDV Phase 24.0-decies pattern.
+
+**AV38 audit invariant**: NEW in `audit-anti-vibe-code/SKILL.md`. Forbids edit/delete props + inputs + save buttons on TreatmentReadOnlyPanel. Source-grep regression lock `tests/v38-av38-treatment-read-only-panel.test.js`. Sanctioned exception: Lightbox (zoom = read operation).
+
+**Spec-review**: 18+ spec deviation corrections applied during subagent execution (Tailwind class drift, missing state vars, wrong query limit, fallback chain order).
+
+**Tests**: Phase 26.1 baseline 8320 → Phase 26.2 final **8356** (+36 net). Build clean. 43 commits ahead of prod (`ccef3c2`). Awaiting `deploy` authorization.
+
+Detail: wiki concept page at `wiki/concepts/tfp-split-screen-history.md`. Flow-simulate: `tests/phase26-2-flow-simulate.test.js`. AV38: `tests/v38-av38-treatment-read-only-panel.test.js`.
+
+---
 
 ### Session 2026-05-13 EOD — Phase 26.0 + 26.1 + 26.2 saga (3 sub-phases same-day)
 
