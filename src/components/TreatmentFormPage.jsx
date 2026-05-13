@@ -438,9 +438,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       setHistoryFullDoc(null);
     } else {
       setSelectedHistoryTreatmentId(id);
-      setHistoryFullDoc(null);
+      setHistoryFullDoc(null); // show loading state until fetch resolves
+      import('../lib/scopedDataLayer.js')
+        .then(({ getTreatment: getBackendTreatment }) => getBackendTreatment(id))
+        .then(setHistoryFullDoc)
+        .catch(() => setHistoryFullDoc(null));
     }
   };
+  // Phase 26.2b inline helper — dd/mm from YYYY-MM-DD (Rule C lean: no new export)
+  const formatThaiDateShort = (iso) =>
+    iso ? iso.slice(5).split('-').reverse().join('/') : '-';
   // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Unlocks add-ops
   // (course-items / consumables / purchasedItems / auto-sale) when admin
   // is finalizing a treatment that was previously doctor-saved (status set
@@ -738,8 +745,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   }, [isBackend, customerId]);
 
   // ── Phase 26.2b — load top-5 recent treatments for history tab strip ───
+  // Fires in BOTH create + edit modes. In edit mode, excludes the current
+  // treatmentId so the strip doesn't show the treatment being viewed.
+  // In create mode, treatmentId is null/undefined so the filter is a no-op.
   useEffect(() => {
-    if (!customerId || !isEdit) { setHistoryTreatments([]); return; }
+    if (!customerId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -756,7 +766,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       }
     })();
     return () => { cancelled = true; };
-  }, [customerId, treatmentId, isEdit]);
+  }, [customerId, treatmentId]);
 
   // ── Load form data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -2994,45 +3004,49 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         </div>
       </div>
 
-      {/* ── Phase 26.2b (V26.2, 2026-05-13) — History tab strip ──────────────
-          Top-5 most recent treatments for this customer (cross-branch).
-          Only shown in edit mode when history is available.
-          Toggle: click active tab → deselects (null). */}
-      {isEdit && historyTreatments && historyTreatments.length > 0 && (() => {
-        // inline helper — dd/mm from YYYY-MM-DD (no new export needed, Rule C lean)
-        const formatThaiDateShort = (iso) =>
-          iso ? iso.slice(5).split('-').reverse().join('/') : '-';
-        return (
-          <div
-            data-testid="tfp-history-tab-strip"
-            className={`sticky top-[49px] z-[9] border-b ${isDark ? 'bg-[#0d0d0d]/95 border-[#1e1e1e]' : 'bg-gray-50/95 border-gray-200'} backdrop-blur-sm`}
-          >
-            <div className="max-w-6xl mx-auto px-4 flex items-center gap-1 overflow-x-auto py-1.5 scrollbar-hide">
-              <Calendar size={13} className="text-gray-500 flex-shrink-0 mr-1" />
-              {historyTreatments.map((t) => {
-                const isActive = selectedHistoryTreatmentId === t.treatmentId;
+      {/* Phase 26.2 (V26.2, 2026-05-13) — History tab strip.
+          Shows top-5 recent treatments (cross-branch). Click → split-screen
+          on lg+ viewport OR modal popup on <lg. Re-click same tab → dismiss.
+          Hidden when historyTreatments empty (no customer history yet). */}
+      {historyTreatments && historyTreatments.length > 0 && (
+        <div className={`sticky top-[52px] z-[9] border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}
+          data-testid="tfp-history-tab-strip"
+        >
+          <div className="max-w-6xl mx-auto px-4 py-2">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx-muted)] whitespace-nowrap">
+                ประวัติ:
+              </span>
+              {historyTreatments.map((t, i) => {
+                const tid = t.treatmentId || t.id;
+                const active = selectedHistoryTreatmentId === tid;
+                const cc = t.detail?.symptoms || '';
                 return (
                   <button
-                    key={t.treatmentId}
-                    data-testid={`tfp-history-tab-${t.treatmentId}`}
-                    onClick={() => handleHistoryTabClick(t.treatmentId)}
-                    className={`flex-shrink-0 px-2.5 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                      isActive
-                        ? 'bg-[var(--accent,#2EC4B6)] text-white'
-                        : isDark
-                          ? 'bg-[#1a1a1a] text-gray-400 hover:text-gray-200 hover:bg-[#222]'
-                          : 'bg-white text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200'
+                    key={tid}
+                    onClick={() => handleHistoryTabClick(tid)}
+                    data-testid={`tfp-history-tab-${tid}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      active
+                        ? 'bg-purple-700 text-white shadow-[0_0_12px_rgba(168,85,247,0.3)]'
+                        : 'text-[var(--tx-muted)] hover:text-purple-400 hover:bg-[var(--bg-hover)] border border-[var(--bd)]'
                     }`}
-                    style={isActive ? { backgroundColor: accentColor } : undefined}
                   >
-                    {formatThaiDateShort(t.date)}
+                    <Calendar size={11} />
+                    <span>{formatThaiDateShort(t.detail?.treatmentDate || t.date || '')}</span>
+                    {i === 0 && <span className="text-[9px] opacity-70">· ล่าสุด</span>}
+                    {cc && (
+                      <span className="text-[10px] opacity-60 max-w-[100px] truncate">
+                        · {cc}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ── Phase 26.0d (V26.0, 2026-05-13) — edit-mode banner ──────────────
           Amber banner shown when admin opens a treatment that was originally
