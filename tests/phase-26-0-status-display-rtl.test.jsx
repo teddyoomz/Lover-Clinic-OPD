@@ -68,17 +68,20 @@ describe('Phase 26.0 — Status display RTL', () => {
   });
 
   describe('D3 — TreatmentTimelineModal status chip', () => {
-    const TTM_PATH = join(process.cwd(), 'src/components/backend/TreatmentTimelineModal.jsx');
-    const TTM_SOURCE = readFileSync(TTM_PATH, 'utf-8');
+    // Phase 26.2c (V26.2, 2026-05-13) — chip moved to TreatmentReadOnlyPanel
+    // Task 3 (c48dae9) DRY-refactored the chip JSX out of TreatmentTimelineModal.jsx
+    // into TreatmentReadOnlyPanel.jsx. Redirect source-grep to the panel file.
+    const PANEL_PATH = join(process.cwd(), 'src/components/backend/TreatmentReadOnlyPanel.jsx');
+    const PANEL_SOURCE = readFileSync(PANEL_PATH, 'utf-8');
 
     it('D3.1 — chip data-testid pattern present', () => {
-      expect(TTM_SOURCE).toMatch(/data-testid=\{\s*`treatment-status-chip-doctor-recorded-/);
+      expect(PANEL_SOURCE).toMatch(/data-testid=\{\s*`treatment-status-chip-doctor-recorded-/);
     });
 
     it('D3.2 — chip gated on t.status === doctor-recorded', () => {
-      const chipIdx = TTM_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
+      const chipIdx = PANEL_SOURCE.indexOf('treatment-status-chip-doctor-recorded');
       expect(chipIdx).toBeGreaterThan(-1);
-      const before = TTM_SOURCE.slice(Math.max(0, chipIdx - 400), chipIdx);
+      const before = PANEL_SOURCE.slice(Math.max(0, chipIdx - 400), chipIdx);
       expect(before).toMatch(/t\.status\s*===\s*['"]doctor-recorded['"]/);
     });
   });
