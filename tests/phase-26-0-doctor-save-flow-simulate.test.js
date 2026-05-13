@@ -294,9 +294,21 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
     });
 
     it('F7.3 — non-doctor / non-staff saveMode value coerces to staff (defensive)', () => {
-      // Simulator + TFP both coerce via `(arg === 'doctor') ? 'doctor' : 'staff'`
-      // Source-grep verifies the TFP coercion shape
-      expect(TFP_SOURCE).toMatch(/const\s+saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/);
+      // Phase 26.0a (V26.0): single-line ternary
+      //   `const saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : 'staff'`
+      // Phase 26.1c (V26.1, 2026-05-13): expanded to a let-based branch tree
+      // to support a 2nd object form `{saveMode, editorContext}` for the
+      // EditAttributionModal internal re-invoke. The defensive coercion
+      // semantic is PRESERVED: any string other than 'doctor' → 'staff';
+      // any non-string non-object → 'staff' (untouched default).
+      //
+      // V21-class fixup (Phase 26.1c): test pattern updated to lock the
+      // new canonical shape — the `let saveMode = 'staff'` default + the
+      // string-branch coercion `(eventOrSaveMode === 'doctor') ? 'doctor' : 'staff'`
+      // inside `if (typeof eventOrSaveMode === 'string')`. Both halves
+      // together preserve the F7.3 defensive contract.
+      expect(TFP_SOURCE).toMatch(/let\s+saveMode\s*=\s*['"]staff['"]/);
+      expect(TFP_SOURCE).toMatch(/\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/);
     });
   });
 

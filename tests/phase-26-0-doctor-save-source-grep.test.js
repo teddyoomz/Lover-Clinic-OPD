@@ -132,4 +132,22 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
       expect(courseRegion).toMatch(/canAddNewItems/);
     });
   });
+
+  describe('G3 — Phase 26.1 editor-attribution modal integration source-grep', () => {
+    it('G3.4 — handleSubmit signature accepts (eventOrSaveMode, options) form', () => {
+      // V26.1 — extends Phase 26.0a defensive coercion to support internal
+      // re-invoke from EditAttributionModal confirmation with editor context.
+      // Original Phase 26.0 form: handleSubmit = async (eventOrSaveMode) => {}
+      // V26.1 form:               handleSubmit = async (eventOrSaveMode, options = {}) => {}
+      expect(TFP_SOURCE).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*options\s*=\s*\{\s*\}\s*\)/);
+    });
+
+    it('G3.5 — editorContext extracted from options OR from internal re-invoke object form', () => {
+      // Accepts either:
+      //   options.editorContext  OR
+      //   eventOrSaveMode being a plain object with .saveMode + .editorContext
+      // Source must reference editorContext at handleSubmit body
+      expect(TFP_SOURCE).toMatch(/editorContext/);
+    });
+  });
 });

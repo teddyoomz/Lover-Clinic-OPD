@@ -65,7 +65,15 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
       // (now ~1500+ chars). Regex updated to accept either signature; window
       // expanded to 2500 chars; setFieldErrors({}) early-clear contract preserved.
       // V21-class regex fixup.
-      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*\)[\s\S]{0,2500}?setFieldErrors\(\{\}\)/);
+      //
+      // V26.1 Phase 26.1c (2026-05-13) — signature extended to
+      // `async (eventOrSaveMode, options = {})` + ~20 LOC branch tree for
+      // editor-attribution modal internal re-invoke. Total prelude now
+      // ~3000+ chars between declaration and setFieldErrors({}) early-clear.
+      // Regex updated to accept the optional `, options = {}` 2nd param;
+      // window bumped 2500 → 4000 chars. V21-class regex fixup (Phase 26.1c).
+      // setFieldErrors({}) early-clear contract preserved.
+      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*(?:,\s*options\s*=\s*\{\s*\}\s*)?\)[\s\S]{0,4000}?setFieldErrors\(\{\}\)/);
       expect(m).toBeTruthy();
     });
   });

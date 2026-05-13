@@ -1887,22 +1887,43 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     }, 50);
   };
 
-  const handleSubmit = async (eventOrSaveMode) => {
+  const handleSubmit = async (eventOrSaveMode, options = {}) => {
     // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Defensive
     // coercion: any value OTHER than the literal string 'doctor' resolves
     // to 'staff' default. Backward-compat: existing callers pass either
     // nothing or a form submit Event (handlers in onClick/onSubmit), both
-    // of which → 'staff'. Future Task 2 will add explicit gates around
+    // of which → 'staff'. Phase 26.0b added explicit gates around
     // course-deduct / sale-create / consumables-deduct using this var.
-    // Future Task 3 will wire a "บันทึกสำหรับแพทย์" button that calls
-    // handleSubmit('doctor').
-    const saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : 'staff';
-    // If invoked as a form submit handler, suppress default behavior so the
-    // page doesn't navigate. No-op when called programmatically with a
-    // saveMode string (or no argument).
-    if (eventOrSaveMode && typeof eventOrSaveMode.preventDefault === 'function') {
+    //
+    // Phase 26.1 (V26.1, 2026-05-13) — Editor-attribution modal extension.
+    // handleSubmit may be re-invoked internally after EditAttributionModal
+    // confirms with `{saveMode, editorContext}` object form. Defensive
+    // coercion preserved: string 'doctor' / Event / undefined / null still
+    // resolve to original behavior. The NEW object form is recognized only
+    // when eventOrSaveMode is a plain object WITHOUT preventDefault (i.e.,
+    // not a React SyntheticEvent).
+    let saveMode = 'staff';
+    let editorContext = options.editorContext || null;
+
+    if (typeof eventOrSaveMode === 'string') {
+      // Phase 26.0 form: handleSubmit('doctor') OR handleSubmit('staff')
+      saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : 'staff';
+    } else if (
+      eventOrSaveMode &&
+      typeof eventOrSaveMode === 'object' &&
+      typeof eventOrSaveMode.preventDefault !== 'function'
+    ) {
+      // Phase 26.1 internal re-invoke: handleSubmit({saveMode, editorContext})
+      saveMode = (eventOrSaveMode.saveMode === 'doctor') ? 'doctor' : 'staff';
+      if (eventOrSaveMode.editorContext) {
+        editorContext = eventOrSaveMode.editorContext;
+      }
+    } else if (eventOrSaveMode && typeof eventOrSaveMode.preventDefault === 'function') {
+      // Phase 26.0 form: handleSubmit(SyntheticEvent) from form submit
       eventOrSaveMode.preventDefault();
+      // saveMode stays 'staff' default
     }
+    // else: handleSubmit() with no arg → saveMode = 'staff', editorContext = null
     // TF3 a11y polish — clear stale per-field errors at submit start so
     // re-submit doesn't surface yesterday's aria-invalid on inputs the
     // user has since corrected.
