@@ -62,12 +62,12 @@ Resume LoverClinic — continue from 2026-05-13 EOD (Phase 26.2g-fillin-bis SHIP
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=<NEW HEAD SHA>, prod=ccef3c2 · 91+ commits ahead · NOT DEPLOYED)
+2. SESSION_HANDOFF.md (master=9fb962e, prod=ccef3c2 · 91+ commits ahead · NOT DEPLOYED)
 3. .agents/active.md (8552 tests · Phase 26.2g-fillin-bis DONE)
 4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary incl. Phase 26.2g-fillin no-op acknowledgment)
 5. .agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md (latest checkpoint)
 
-Status: master=`<NEW HEAD SHA>`, 8552 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+Status: master=`9fb962e`, 8552 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
 Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin / 26.2g-fillin-followup / 26.2g-fillin-bis all SHIPPED to master; NOT deployed. 91+ commits ahead.
 
 Next: choose ONE
