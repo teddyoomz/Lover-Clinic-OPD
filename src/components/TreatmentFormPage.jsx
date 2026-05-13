@@ -3066,24 +3066,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           Replaces the prior standalone orange branch banner below the
           history tab strip — chip is more compact, integrated, and elegant. */}
       <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}>
+        {/* Phase 27.1-sexies (2026-05-14) — 3-zone flex layout: LEFT (back +
+            title) takes flex-1, CENTER (history tabs) is naturally centered,
+            RIGHT (branch chip + swap) takes flex-1 justify-end. User: "เอา
+            ประวัติไว้ตรงกลางของ row เลย". */}
         <div className="max-w-[2000px] mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
-            <ArrowLeft size={16} />
-          </button>
-          <div className="flex-shrink-0 min-w-0 max-w-[200px] lg:max-w-[260px]">
-            <h2 className="text-base font-bold flex items-center gap-2 truncate" style={{ color: accent }}>
-              {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
-              <span className="truncate">{isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}</span>
-            </h2>
-            {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
+          {/* LEFT ZONE — flex-1 so center can be true-centered between left + right */}
+          <div className="flex-1 min-w-0 flex items-center gap-3">
+            <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
+              <ArrowLeft size={16} />
+            </button>
+            <div className="min-w-0 max-w-[200px] lg:max-w-[260px]">
+              <h2 className="text-base font-bold flex items-center gap-2 truncate" style={{ color: accent }}>
+                {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
+                <span className="truncate">{isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}</span>
+              </h2>
+              {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
+            </div>
           </div>
 
-          {/* Phase 27.1-quinquies (2026-05-14) — history tab strip MERGED into title bar.
-              User: "เอา tab selector ประวัติขึ้นไปด้วย". Single horizontal row holds
-              everything: back + title + history tabs (scrollable middle) + branch chip
-              + swap button. Removes the previous separate sticky-below row. */}
+          {/* CENTER ZONE — history tab strip (truly centered between left + right) */}
           {historyTreatments && historyTreatments.length > 0 && (
-            <div className="flex-1 min-w-0 overflow-x-auto" data-testid="tfp-history-tab-strip">
+            <div className="hidden md:flex flex-shrink min-w-0 overflow-x-auto" data-testid="tfp-history-tab-strip">
               <div className="flex items-center gap-2 whitespace-nowrap">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx-muted)] flex-shrink-0">
                   ประวัติ:
@@ -3117,38 +3121,36 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               </div>
             </div>
           )}
-          {/* Spacer when no history (push branch chip to the right) */}
-          {(!historyTreatments || historyTreatments.length === 0) && <div className="flex-1" />}
 
-          {/* Phase 27.1-quater — branch chip (was standalone orange banner) */}
-          {currentBranch && (
-            <div
-              data-testid="tfp-branch-indicator"
-              data-branch-id={SELECTED_BRANCH_ID || ''}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap ${
-                isDark
-                  ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
-                  : 'bg-orange-50 border-orange-200 text-orange-700'
-              }`}
-              title={`สาขา: ${currentBranch.name || ''}${currentBranch.nameEn ? ' (' + currentBranch.nameEn + ')' : ''} · ${SELECTED_BRANCH_ID || ''}`}
-            >
-              <span className="opacity-60 font-semibold">สาขา</span>
-              <span>{currentBranch.name || '(ไม่มีชื่อ)'}</span>
-              {currentBranch.nameEn && (
-                <span className="opacity-50 text-[10px] font-medium">{currentBranch.nameEn}</span>
-              )}
-            </div>
-          )}
-
-          {/* Phase 27.1-quater — layout swap button (was floating between panels) */}
-          {selectedHistoryTreatmentId && (
-            <LayoutSwapButton
-              onSwap={swapTfpLayout}
-              position={tfpLayout}
-              visible={true}
-              isDark={isDark}
-            />
-          )}
+          {/* RIGHT ZONE — branch chip + swap button (flex-1 + justify-end for true-center balance) */}
+          <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+            {currentBranch && (
+              <div
+                data-testid="tfp-branch-indicator"
+                data-branch-id={SELECTED_BRANCH_ID || ''}
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap ${
+                  isDark
+                    ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
+                    : 'bg-orange-50 border-orange-200 text-orange-700'
+                }`}
+                title={`สาขา: ${currentBranch.name || ''}${currentBranch.nameEn ? ' (' + currentBranch.nameEn + ')' : ''} · ${SELECTED_BRANCH_ID || ''}`}
+              >
+                <span className="opacity-60 font-semibold">สาขา</span>
+                <span>{currentBranch.name || '(ไม่มีชื่อ)'}</span>
+                {currentBranch.nameEn && (
+                  <span className="opacity-50 text-[10px] font-medium">{currentBranch.nameEn}</span>
+                )}
+              </div>
+            )}
+            {selectedHistoryTreatmentId && (
+              <LayoutSwapButton
+                onSwap={swapTfpLayout}
+                position={tfpLayout}
+                visible={true}
+                isDark={isDark}
+              />
+            )}
+          </div>
 
           {/* V26.1 (2026-05-13) — top-right "ยืนยันการรักษา" button REMOVED.
               User report: button no longer functional. Bottom save button at
@@ -5126,7 +5128,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
         {/* Phase 26.2 Task 5 — RIGHT panel: history read-only (desktop only) */}
         {selectedHistoryTreatmentId && (
-          <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[120px] lg:self-start lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+          <aside className="hidden lg:block lg:w-1/2 lg:min-w-0 lg:sticky lg:top-[68px] lg:self-start lg:max-h-[calc(100vh-88px)] lg:overflow-y-auto">
+            {/* Phase 27.1-quinquies (2026-05-14) — sticky offset updated from
+                top-[120px]/max-h-(100vh-140px) to top-[68px]/max-h-(100vh-88px)
+                to match the new unified single-row header height (~60px + 8px
+                breathing). User report: 'box ขวาเตี้ยกว่า' — fixed. */}
             <div className={`rounded-xl p-4 border border-[var(--bd)] ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white shadow-sm'}`}>
               <TreatmentReadOnlyMirror
                 treatmentDoc={historyFullDoc}
