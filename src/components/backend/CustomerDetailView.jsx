@@ -439,6 +439,18 @@ export default function CustomerDetailView({
         cc: t.detail?.symptoms || '',
         dx: t.detail?.diagnosis || '',
         createdBy: t.createdBy || 'cloned',
+        // V26.1 (2026-05-13) — V12 multi-reader-sweep fix.
+        // Phase 26.0e correctly added `status` to rebuildTreatmentSummary (backendClient.js
+        // writer at line 1080+) so customer.treatmentSummary stored in Firestore HAS status.
+        // This in-component mapper was overlooked — it strips top-level fields when
+        // recomputing locally from `treatments[]` array. Resulting `paginatedTreatments`
+        // had no `status` field, so the amber "แพทย์ลงบันทึก" chip at row meta never rendered.
+        // Phase 26.1 adds 4 top-level fields: status (chip) + editedBy/Name/Role (NEW
+        // editor-attribution display landing in Tasks 6).
+        status: t.status || null,
+        editedBy: t.editedBy || null,
+        editedByName: t.editedByName || '',
+        editedByRole: t.editedByRole || '',
       }));
     } else {
       list = [...(customer?.treatmentSummary || [])];

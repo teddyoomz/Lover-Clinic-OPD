@@ -2885,12 +2885,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             </h2>
             {patientName && <p className="text-sm text-gray-500 truncate">{patientName}</p>}
           </div>
-          <button onClick={handleSubmit} disabled={saving}
-            className="px-5 py-2.5 rounded-lg text-sm font-bold text-white disabled:opacity-50 transition-all flex items-center gap-2 hover:opacity-90 active:scale-[0.98]"
-            style={{ backgroundColor: accent }}>
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            {saving ? 'กำลังบันทึก...' : isEdit ? 'บันทึก' : 'ยืนยันการรักษา'}
-          </button>
+          {/* V26.1 (2026-05-13) — top-right "ยืนยันการรักษา" button REMOVED.
+              User report: button no longer functional. Bottom save button at
+              line ~4816+ is the canonical save path. Doctor-save button
+              (Phase 26.0d) under OPD Card unchanged. */}
         </div>
       </div>
 
