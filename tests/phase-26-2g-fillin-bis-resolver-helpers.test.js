@@ -88,6 +88,13 @@ describe('R2 — resolvePatientDrugAllergy', () => {
     expect(resolvePatientDrugAllergy({ drugAllergy: '', foodAllergy: '   ' })).toBe('');
   });
 
+  it('R2.6b — both fields explicit empty strings → "" (branch-coverage completeness)', () => {
+    // Explicit both-empty-string lock: completes the 4-branch coverage matrix
+    // alongside R2.1 (absent fields) + R2.5 (drug-only trimmed) + R2.6
+    // (drug-empty + food-whitespace).
+    expect(resolvePatientDrugAllergy({ drugAllergy: '', foodAllergy: '' })).toBe('');
+  });
+
   it('R2.7 — both with surrounding whitespace → trimmed prefixed', () => {
     expect(resolvePatientDrugAllergy({ drugAllergy: '  พารา  ', foodAllergy: '  ขนมถ้วย  ' }))
       .toBe('แพ้ยา: พารา / แพ้อาหาร: ขนมถ้วย');

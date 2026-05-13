@@ -209,8 +209,13 @@ export function resolvePatientDrugAllergy(patientData) {
  * Compose a display string from canonical beforeTreatment + pregnanted fields.
  *
  * Insertion order is FIXED: beforeTreatment first, pregnancy second.
- * pregnanted must be STRICTLY boolean true (not truthy) to emit the pregnancy entry.
- * Returns '' when both inputs are empty / falsy.
+ *
+ * Returns '' when both inputs are absent/empty (beforeTreatment trims to empty
+ * OR non-string + pregnanted is NOT === true). pregnanted MUST be STRICTLY
+ * boolean true to emit the pregnancy entry — false, null, undefined, 1,
+ * 'true' (string), or other truthy non-true values produce no pregnancy output.
+ * This matches buildPatientDataFromForm's `typeof form.pregnanted === 'boolean'`
+ * gate which only writes true/false to this canonical field.
  */
 export function resolvePatientTreatmentHistory(patientData) {
   if (!_isPlainObject(patientData)) return '';
