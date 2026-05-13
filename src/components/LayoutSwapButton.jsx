@@ -1,19 +1,14 @@
 // src/components/LayoutSwapButton.jsx
 //
-// Phase 27.1 (2026-05-14) — floating swap button at column divider.
-// Click → onSwap(). Visible only when split-screen active (caller passes
-// visible=true). Touch target ≥ 44px (WCAG 2.5.5 via w-11 h-11).
+// Phase 27.1 (2026-05-14) — inline swap button.
+// Phase 27.1-quater (2026-05-14, user iteration 3) — refactored from
+// floating sticky/absolute to inline button so parent can render it
+// inside a sticky header (consolidated TFP header redesign per user
+// directive "เอา badge แสดงสาขาในหน้า TFP รวมถึง Tab ประวัติ และปุ่ม
+// สลับข้างไปไว้บน Header"). Parent decides placement; component is
+// pure render.
 //
-// pointer-events on wrapper = none + on button = auto → button is clickable
-// but rest of wrapper area is click-through (doesn't block clicks on panels).
-//
-// Phase 27.1-bis (2026-05-14) — user feedback "ตกไปอยู่ตรงกลางต้องเลื่อนลง
-// ถึงจะเจอ ใช้ลำบาก ให้ fix ข้างบนเลย": moved from vertically-centered
-// (top-1/2 -translate-y-1/2) to STICKY at top (sticky top-3) so the button
-// stays visible at the top of the viewport during page scroll. No more
-// scrolling-to-find. Stays inside its containing block (the split-screen
-// outer wrapper); when user scrolls past the wrapper entirely it scrolls
-// away naturally.
+// Touch target ≥ 44px (WCAG 2.5.5 via w-11 h-11) preserved for desktop.
 
 import { ArrowLeftRight } from 'lucide-react';
 
@@ -23,43 +18,26 @@ export function LayoutSwapButton({ onSwap, position, visible = true, isDark = tr
     ? 'สลับ — ฟอร์มไปขวา / ประวัติไปซ้าย'
     : 'สลับ — ฟอร์มไปซ้าย / ประวัติไปขวา';
   return (
-    <div
-      // Phase 27.1-bis (2026-05-14, second user iteration) — user feedback:
-      // "ปุ่มมันยังไม่ fix ติดกับที่ มันเลื่อนตามการ scroll ของฝั่งกรอก TFP".
-      // The previous attempt set `absolute left-0 right-0 top-0` which made
-      // the wrapper only as tall as the button — sticky had no room to stick.
-      // Fix: extend the wrapper across the FULL height of the relative parent
-      // (inset-x-0 inset-y-0). Now sticky inner has the full split-screen
-      // height as its containing block; it stays pinned at top-3 of viewport
-      // while the user scrolls the page (form panel scrolls with the page;
-      // right panel is its own sticky `top-[120px]` scroll context).
-      className="hidden lg:flex absolute inset-x-0 inset-y-0 z-10 justify-center items-start"
-      style={{ pointerEvents: 'none' }}
-      data-testid="layout-swap-button-wrapper"
+    <button
+      type="button"
+      onClick={onSwap}
+      data-testid="layout-swap-button"
+      aria-label={label}
+      title={label}
+      className={`
+        hidden lg:flex items-center justify-center
+        w-9 h-9 rounded-full
+        border ${isDark ? 'border-[#333] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}
+        shadow-sm
+        hover:scale-110 active:scale-95
+        transition-all duration-150
+        text-purple-500 hover:bg-purple-500/10
+        focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
+        focus:ring-offset-transparent
+      `}
     >
-      <div className="sticky top-3" style={{ pointerEvents: 'none' }}>
-      <button
-        type="button"
-        onClick={onSwap}
-        data-testid="layout-swap-button"
-        aria-label={label}
-        title={label}
-        style={{ pointerEvents: 'auto' }}
-        className={`
-          flex items-center justify-center
-          w-11 h-11 rounded-full
-          border-2 ${isDark ? 'border-[#333] bg-[#1a1a1a]' : 'border-gray-200 bg-white'}
-          shadow-lg
-          hover:scale-110 active:scale-95
-          transition-all duration-150
-          text-purple-500 hover:bg-purple-500/10
-          focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
-        `}
-      >
-        <ArrowLeftRight size={18} />
-      </button>
-      </div>
-    </div>
+      <ArrowLeftRight size={16} />
+    </button>
   );
 }
 

@@ -184,6 +184,7 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
   const [editedBranchId, setEditedBranchId] = useState(treatment?.detail?.branchId || '');
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +194,12 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
     return () => { cancelled = true; };
   }, []);
 
+  const currentBranchName = branches.find(b => b.branchId === treatment?.detail?.branchId)?.name || '—';
+  const newBranchName = branches.find(b => b.branchId === editedBranchId)?.name || '—';
+  const hasChange = editedBranchId !== (treatment?.detail?.branchId || '');
+
   const handleSave = async () => {
+    setError('');
     setSaving(true);
     try {
       await updateBackendTreatment(treatment.id, {
@@ -201,24 +207,103 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
         branchId: editedBranchId,
       });
       onSaved();
+    } catch (e) {
+      setError(e?.message || 'บันทึกไม่สำเร็จ');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div>
-      <select
-        aria-label="สาขาที่รักษา"
-        value={editedBranchId}
-        onChange={e => setEditedBranchId(e.target.value)}
+    // Phase 27.0-bis (2026-05-14, user iteration) — proper modal chrome
+    // per user directive "UI ปุ่ม ตอนกดแก้ไขสาขาน่าเกลียดมาก". Was bare
+    // <div> with raw select + buttons; now matches project canonical modal
+    // pattern (fixed overlay, centered card, header/body/footer, accent
+    // styling consistent with other backend modals).
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      data-testid="edit-treatment-branch-modal-overlay"
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-[var(--bd)] bg-[var(--bg-card)] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        {branches.map(b => (
-          <option key={b.branchId} value={b.branchId}>{b.name}</option>
-        ))}
-      </select>
-      <button onClick={handleSave} disabled={saving}>บันทึก</button>
-      <button onClick={onClose}>ยกเลิก</button>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center gap-3 bg-orange-500/5">
+          <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-400">
+            🏥
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-[var(--tx-heading)]">แก้ไขสาขาที่รักษา</h2>
+            <p className="text-xs text-[var(--tx-muted)] mt-0.5">สำหรับ admin แก้ไขประวัติเก่าให้สาขาถูกต้อง</p>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+          {/* Current → New summary */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2 py-1 rounded-md bg-[var(--bg-hover)] text-[var(--tx-muted)] font-semibold">
+              เดิม: {currentBranchName}
+            </span>
+            {hasChange && (
+              <>
+                <span className="text-[var(--tx-muted)]">→</span>
+                <span className="px-2 py-1 rounded-md bg-orange-500/15 text-orange-400 font-bold">
+                  ใหม่: {newBranchName}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Branch picker */}
+          <label className="block">
+            <span className="text-xs font-semibold text-[var(--tx-muted)] block mb-1.5">
+              เลือกสาขาที่ถูกต้อง
+            </span>
+            <select
+              aria-label="สาขาที่รักษา"
+              value={editedBranchId}
+              onChange={e => setEditedBranchId(e.target.value)}
+              disabled={saving}
+              className="w-full px-3 py-2.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-input)] text-[var(--tx-primary)] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50"
+            >
+              <option value="">— เลือกสาขา —</option>
+              {branches.map(b => (
+                <option key={b.branchId} value={b.branchId}>{b.name}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Error */}
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-[var(--bd)] flex items-center justify-end gap-2 bg-[var(--bg-hover)]/30">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-xs font-bold border border-[var(--bd)] text-[var(--tx-muted)] hover:bg-[var(--bg-hover)] transition-all disabled:opacity-50"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !hasChange || !editedBranchId}
+            className="px-5 py-2 rounded-lg text-xs font-black bg-orange-500 text-white hover:bg-orange-400 shadow-lg shadow-orange-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

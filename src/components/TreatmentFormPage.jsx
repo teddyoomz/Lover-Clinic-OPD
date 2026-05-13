@@ -3058,7 +3058,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
   return (
     <div className={`fixed inset-0 z-[80] overflow-y-auto ${isDark ? 'bg-[#0a0a0a] text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────────
+          Phase 27.1-quater (2026-05-14, user iteration 3) — unified header
+          per user directive: "เอา badge แสดงสาขาในหน้า TFP รวมถึง Tab ประวัติ
+          และปุ่ม สลับข้างไปไว้บน Header". Title + customer name on left;
+          branch chip + layout-swap button on right (when split-screen active).
+          Replaces the prior standalone orange branch banner below the
+          history tab strip — chip is more compact, integrated, and elegant. */}
       <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}>
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
@@ -3071,6 +3077,37 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             </h2>
             {patientName && <p className="text-sm text-gray-500 truncate">{patientName}</p>}
           </div>
+
+          {/* Phase 27.1-quater — branch chip (was standalone orange banner) */}
+          {currentBranch && (
+            <div
+              data-testid="tfp-branch-indicator"
+              data-branch-id={SELECTED_BRANCH_ID || ''}
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border whitespace-nowrap ${
+                isDark
+                  ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
+                  : 'bg-orange-50 border-orange-200 text-orange-700'
+              }`}
+              title={`สาขา: ${currentBranch.name || ''}${currentBranch.nameEn ? ' (' + currentBranch.nameEn + ')' : ''} · ${SELECTED_BRANCH_ID || ''}`}
+            >
+              <span className="opacity-60 font-semibold">สาขา</span>
+              <span>{currentBranch.name || '(ไม่มีชื่อ)'}</span>
+              {currentBranch.nameEn && (
+                <span className="opacity-50 text-[10px] font-medium">{currentBranch.nameEn}</span>
+              )}
+            </div>
+          )}
+
+          {/* Phase 27.1-quater — layout swap button (was floating between panels) */}
+          {selectedHistoryTreatmentId && (
+            <LayoutSwapButton
+              onSwap={swapTfpLayout}
+              position={tfpLayout}
+              visible={true}
+              isDark={isDark}
+            />
+          )}
+
           {/* V26.1 (2026-05-13) — top-right "ยืนยันการรักษา" button REMOVED.
               User report: button no longer functional. Bottom save button at
               line ~4816+ is the canonical save path. Doctor-save button
@@ -3142,21 +3179,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         </div>
       )}
 
-      {/* ── Branch indicator (Phase 17.2-septies) ────────────────────────── */}
-      {currentBranch && (
-        <div className="max-w-6xl mx-auto px-4 pt-3">
-          <div
-            className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-2 ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-700'}`}
-            data-testid="tfp-branch-indicator"
-            data-branch-id={SELECTED_BRANCH_ID || ''}
-          >
-            <span className="opacity-70">สาขา:</span>
-            <span className="text-base">{currentBranch.name || '(ไม่มีชื่อ)'}</span>
-            {currentBranch.nameEn && <span className="opacity-50 text-[10px]">{currentBranch.nameEn}</span>}
-            <span className="ml-auto opacity-30 text-[10px] font-mono">{SELECTED_BRANCH_ID || ''}</span>
-          </div>
-        </div>
-      )}
+      {/* Phase 27.1-quater (2026-05-14) — standalone branch indicator REMOVED.
+          Replaced by compact chip in the unified sticky header above. */}
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (
@@ -3168,18 +3192,13 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       {/* ── Two-Column Layout ─────────────────────────────────────────────── */}
       {/* Phase 27.1 (2026-05-14) — Layout swap: relative + conditional lg:flex-row-reverse */}
       <div className={selectedHistoryTreatmentId
-        ? `relative max-w-[2000px] lg:flex lg:gap-4 mx-auto px-4 py-4 ${isFormLeft ? '' : 'lg:flex-row-reverse'}`
+        ? `max-w-[2000px] lg:flex lg:gap-4 mx-auto px-4 py-4 ${isFormLeft ? '' : 'lg:flex-row-reverse'}`
         : 'max-w-6xl mx-auto px-4 py-4'
       }>
-        {/* Phase 27.1 (2026-05-14) — floating swap button between panels (visible only when split active) */}
-        {selectedHistoryTreatmentId && (
-          <LayoutSwapButton
-            onSwap={swapTfpLayout}
-            position={tfpLayout}
-            visible={true}
-            isDark={isDark}
-          />
-        )}
+        {/* Phase 27.1-quater (2026-05-14) — LayoutSwapButton MOVED to unified
+            sticky header. Was here as floating absolute-sticky between panels;
+            now it sits next to the branch chip in the header for a cohesive,
+            world-class top-bar UX. */}
         {/* Phase 26.2 Task 5 — LEFT panel wrapper for conditional split-screen */}
         <div className={selectedHistoryTreatmentId ? 'lg:w-1/2 lg:min-w-0' : ''}>
         <div className={selectedHistoryTreatmentId ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>

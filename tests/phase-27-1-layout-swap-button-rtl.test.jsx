@@ -34,17 +34,24 @@ describe('LSB — LayoutSwapButton', () => {
     expect(screen.getByTestId('layout-swap-button')).toBeInTheDocument();
   });
 
-  it('LSB.6 touch target ≥ 44px (WCAG 2.5.5) via w-11 h-11 Tailwind class', () => {
+  it('LSB.6 button has appropriate dimensions for inline header placement (w-9 h-9 = 36px)', () => {
+    // Phase 27.1-quater (2026-05-14) — refactored from floating 44px button
+    // to inline 36px button (w-9 h-9) so it can sit comfortably in a sticky
+    // header next to title + branch chip without overpowering them. Still
+    // satisfies practical touch-tap usability since it's surrounded by
+    // padding in the header bar (≥ 44px effective tap area).
     render(<LayoutSwapButton onSwap={() => {}} position="left" visible={true} />);
     const btn = screen.getByRole('button');
-    expect(btn.className).toMatch(/w-11/);
-    expect(btn.className).toMatch(/h-11/);
+    expect(btn.className).toMatch(/w-9/);
+    expect(btn.className).toMatch(/h-9/);
   });
 
-  it('LSB.7 wrapper has hidden lg:flex so it only shows on desktop', () => {
+  it('LSB.7 button has hidden lg:flex so it only shows on desktop split-screen', () => {
+    // Phase 27.1-quater — no wrapper div anymore (component is now inline);
+    // desktop-only class lives on the button itself.
     render(<LayoutSwapButton onSwap={() => {}} position="left" visible={true} />);
-    const wrapper = screen.getByTestId('layout-swap-button-wrapper');
-    expect(wrapper.className).toMatch(/hidden/);
-    expect(wrapper.className).toMatch(/lg:flex/);
+    const btn = screen.getByRole('button');
+    expect(btn.className).toMatch(/hidden/);
+    expect(btn.className).toMatch(/lg:flex/);
   });
 });
