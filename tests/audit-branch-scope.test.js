@@ -954,9 +954,13 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
     const phase260Pattern = /const\s+saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/;
     const phase261Pattern = /let\s+saveMode\s*=\s*['"]staff['"]/;
     const phase261Coercion = /saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/;
+    // Phase 26.2f-pre extended the coercion to include 'vitals' as a 3rd branch:
+    // saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : (eventOrSaveMode === 'vitals') ? 'vitals' : 'staff'
+    const phase262fCoercion = /saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*\(\s*eventOrSaveMode\s*===\s*['"]vitals['"]\s*\)/;
     const matchesPhase260 = phase260Pattern.test(src);
     const matchesPhase261 = phase261Pattern.test(src) && phase261Coercion.test(src);
-    expect(matchesPhase260 || matchesPhase261).toBe(true);
+    const matchesPhase262f = phase261Pattern.test(src) && phase262fCoercion.test(src);
+    expect(matchesPhase260 || matchesPhase261 || matchesPhase262f).toBe(true);
   });
 
   it('AV37.2 status doctor-recorded literal appears ≥2× (stamp + check + chip + banner readers)', async () => {
@@ -1039,6 +1043,61 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
     expect(src).toMatch(/if\s*\(\s*editedByName\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedByName/);
     expect(src).toMatch(/if\s*\(\s*editedByRole\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedByRole/);
     expect(src).toMatch(/if\s*\(\s*editedAt\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedAt/);
+  });
+
+  // ── AV37.12–17 — Phase 26.2f-pre vitals-save extension (2026-05-13) ───────
+
+  it('AV37.12 saveMode "vitals" coercion present in TFP (string-arg path)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/eventOrSaveMode\s*===\s*['"]vitals['"]\s*\)\s*\?\s*['"]vitals['"]/);
+  });
+
+  it('AV37.13 v26StatusPatch vitals branch stamps vitalsigns-recorded + recordedBy/At', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/status\s*:\s*['"]vitalsigns-recorded['"]/);
+    expect(src).toMatch(/recordedBy\s*:\s*auth\.currentUser/);
+    expect(src).toMatch(/recordedAt\s*:\s*serverTimestamp\s*\(\s*\)/);
+  });
+
+  it('AV37.14 dual gate saveMode !== "doctor" && saveMode !== "vitals" present ≥1×', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    const matches = src.match(
+      /saveMode\s*!==\s*['"]doctor['"]\s*&&\s*saveMode\s*!==\s*['"]vitals['"]/g
+    ) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('AV37.15 every saveMode !== "doctor" gate also has the vitals extension (no bare gates)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    const doctorGates = src.match(/saveMode\s*!==\s*['"]doctor['"]/g) || [];
+    const dualGates = src.match(
+      /saveMode\s*!==\s*['"]doctor['"]\s*&&\s*saveMode\s*!==\s*['"]vitals['"]/g
+    ) || [];
+    expect(doctorGates.length).toBe(dualGates.length);
+  });
+
+  it('AV37.16 canAddNewItems includes vitalsigns-recorded check', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/loadedTreatmentStatus\s*===\s*['"]vitalsigns-recorded['"]/);
+    // Verify the declaration (not a comment) has all three conditions
+    const declIdx = src.indexOf('const canAddNewItems');
+    expect(declIdx).toBeGreaterThan(-1);
+    const region = src.slice(declIdx, declIdx + 500);
+    expect(region).toMatch(/mode\s*===\s*['"]create['"]/);
+    expect(region).toMatch(/['"]doctor-recorded['"]/);
+    expect(region).toMatch(/['"]vitalsigns-recorded['"]/);
+  });
+
+  it('AV37.17 vitals-save button present in TFP with correct testid + calls handleSubmit("vitals")', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/data-testid\s*=\s*['"]tfp-vitals-save-btn['"]/);
+    expect(src).toMatch(/handleSubmit\s*\(\s*['"]vitals['"]\s*\)/);
   });
 });
 

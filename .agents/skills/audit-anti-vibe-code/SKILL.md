@@ -969,6 +969,42 @@ Phase 26.0 `saveMode` arg is the 4th member of the lockedX/payload-shape-routing
 family — see `wiki/concepts/treatment-status-and-doctor-save.md` for the Rule of 3
 discussion (saveMode + lockedCustomer + lockedAppointmentType + lockedChannel).
 
+### AV37 extension — Phase 26.2f-pre vitals-save (2026-05-13)
+
+Phase 26.2f-pre extends AV37 with the vitals-save pathway (`saveMode === 'vitals'`),
+the 5th member of the saveMode routing family:
+
+- **Coercion** (`handleSubmit`): 3-way ternary — `(=== 'doctor') ? 'doctor' : (=== 'vitals') ? 'vitals' : 'staff'`.
+  Both string-arg path and object-arg path (`eventOrSaveMode.saveMode === 'vitals'`)
+  must be present.
+- **v26StatusPatch vitals branch**: when `saveMode === 'vitals'` → stamps
+  `status: 'vitalsigns-recorded'` + `recordedBy: auth.currentUser` + `recordedAt: serverTimestamp()`.
+- **Dual gate**: every deduction/sale/stock/course callsite must carry
+  `saveMode !== 'doctor' && saveMode !== 'vitals'`. No bare `!== 'doctor'` allowed
+  without the vitals extension. Count of `!== 'doctor'` gates MUST equal count of
+  dual-gate occurrences (V1.7 regression lock).
+- **`canAddNewItems`**: declaration `const canAddNewItems =` must include all three
+  conditions: `mode === 'create'`, `'doctor-recorded'`, `'vitalsigns-recorded'`.
+- **UI button**: `data-testid="tfp-vitals-save-btn"` + `handleSubmit('vitals')` present
+  in TFP JSX.
+- **TreatmentReadOnlyPanel**: `data-testid` attribute containing `vitalsigns-recorded`
+  for chip RTL queryability.
+- **CustomerDetailView**: references `vitalsigns-recorded` status for badge/chip
+  display.
+
+3-stage treatment status machine: `undefined` (create) → `vitalsigns-recorded`
+(vitals-save) → `doctor-recorded` (doctor-save) → cleared (admin regular save).
+
+Source-grep regression: AV37.12–AV37.17 in `tests/audit-branch-scope.test.js`.
+Full flow-simulate: `tests/phase-26-2f-pre-vitals-save-flow-simulate.test.js` (F11.1–F11.5).
+Source-grep guards: `tests/phase-26-2f-pre-vitals-save-source-grep.test.js` (V1.1–V1.15).
+RTL contract: `tests/phase-26-2f-pre-vitals-save-rtl.test.jsx` (V2.1–V2.3).
+
+Sanctioned exceptions:
+- `recordedAt: serverTimestamp()` appearing once covers both doctor and vitals branches
+  (a single AV37.3 check for ≥1 occurrence remains valid; vitals branch may share
+  the same pattern literal, satisfying the count-based lock).
+
 ### AV38 — TreatmentReadOnlyPanel read-only contract (V26.2, 2026-05-13)
 
 **Pattern**: `src/components/backend/TreatmentReadOnlyPanel.jsx` is the canonical
