@@ -208,9 +208,21 @@ export default function CustomerDetailView({
   const customer = liveCustomer || customerProp;
   const customerId = customer?.id || customer?.proClinicId || null;
   useEffect(() => {
-    // Reset liveCustomer when the prop changes (admin clicks a different
-    // customer in the list) so we don't show stale courses[] from the
-    // previous customer while the new listener spins up.
+    // Phase 27.2-quinquies (2026-05-14) — fix flash-revert bug.
+    // User report: "UI ใหม่ถูกครอบด้วย UI เก่า ... กระพริบ ต้องกด refresh
+    // ดูรัวๆ". Pre-fix dep array was `[customerId, customerProp]` — every
+    // parent re-render (BackendDashboard listener fires, search input
+    // keystroke, etc.) created a NEW customerProp OBJECT REFERENCE even
+    // when data was identical. Object.is(prevProp, newProp) returned false
+    // → effect re-fired → `setLiveCustomer(customerProp)` OVERWROTE the
+    // fresh listener data with the stale prop → flash-revert pattern.
+    //
+    // Fix: dep array is now `[customerId]` only. Effect re-fires ONLY when
+    // a different customer is selected (canonical "reset to prop" trigger).
+    // Listener inside this effect handles all subsequent in-place updates.
+    // customerProp is intentionally read at effect-fire time without being
+    // in the dep array — same-customer prop-reference churn no longer
+    // triggers spurious resets.
     setLiveCustomer(customerProp);
     if (!customerId) return;
     const unsubscribe = listenToCustomer(
@@ -219,7 +231,8 @@ export default function CustomerDetailView({
       (err) => console.warn('[CustomerDetailView] customer listener failed:', err),
     );
     return () => unsubscribe();
-  }, [customerId, customerProp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
   const pd = customer?.patientData || {};
 
   const [treatments, setTreatments] = useState([]);
