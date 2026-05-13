@@ -111,20 +111,19 @@ describe('Phase 17.2-septies — TFP reader field-name + branch banner', () => {
       expect(TFP_SRC).toMatch(/branchList\s*\|\|\s*\[\]\)\.find\(b\s*=>\s*\(b\.branchId\s*\|\|\s*b\.id\)\s*===\s*SELECTED_BRANCH_ID\)/);
     });
     it('S4.4 banner is NOT gated on isEdit (renders in both create + edit)', () => {
-      // Phase 27.1-quater (2026-05-14) — branch indicator moved from standalone
-      // orange banner BELOW history strip INTO compact chip in the sticky
-      // header. The chip is still gated only on `{currentBranch && (` —
-      // no isEdit gate. The data-testid="tfp-branch-indicator" anchor is
-      // the canonical location regardless of placement.
+      // Phase 27.1-quinquies (2026-05-14) — header now packs title + history
+      // tabs + branch chip + swap button all in one row. Use "── Error ──"
+      // (next major section comment) as the header-end anchor — stable
+      // across header iterations.
       const headerStart = TFP_SRC.indexOf('── Header ──');
-      const headerEnd = TFP_SRC.indexOf('History tab strip', headerStart);
+      const headerEnd = TFP_SRC.indexOf('── Error ──', headerStart);
       expect(headerStart).toBeGreaterThan(0);
       expect(headerEnd).toBeGreaterThan(headerStart);
       const headerBlock = TFP_SRC.slice(headerStart, headerEnd);
       expect(headerBlock).toMatch(/data-testid="tfp-branch-indicator"/);
       expect(headerBlock).toMatch(/\{currentBranch && \(/);
-      expect(headerBlock).not.toMatch(/\{isEdit && /);
-      expect(headerBlock).not.toMatch(/\{!isEdit && /);
+      expect(headerBlock).not.toMatch(/\{isEdit && \(/);
+      expect(headerBlock).not.toMatch(/\{!isEdit && \(/);
     });
     it('S4.5 chip shows branch name (raw branchId moved to title attribute for hover diagnostic)', () => {
       // Phase 27.1-quater — branch chip in header. Raw branchId no longer
@@ -135,19 +134,22 @@ describe('Phase 17.2-septies — TFP reader field-name + branch banner', () => {
       expect(TFP_SRC).toMatch(/title=\{`สาขา:\s*\$\{currentBranch\.name[^`]*\$\{SELECTED_BRANCH_ID/);
     });
     it('S4.6 chip placement: inside the sticky header (with title + customer name)', () => {
-      // Phase 27.1-quater — branch chip lives in the unified sticky header
-      // alongside title + customer name + swap button. Replaces the prior
-      // standalone "── Branch indicator ──" block (removed).
+      // Phase 27.1-quinquies — unified sticky header packs everything:
+      // back + title + history tabs + branch chip + swap button.
+      // Branch chip + history tab strip both live inside the same header
+      // block, ending before "── Error ──".
       const headerStart = TFP_SRC.indexOf('── Header ──');
-      // Search for chip + history strip starting AFTER headerStart so we find
-      // the in-header occurrence, not an earlier comment elsewhere in the file.
       const chipMatch = TFP_SRC.indexOf('data-testid="tfp-branch-indicator"', headerStart);
-      const headerCloseEstimate = TFP_SRC.indexOf('History tab strip', headerStart);
+      const headerEnd = TFP_SRC.indexOf('── Error ──', headerStart);
       expect(headerStart).toBeGreaterThan(0);
       expect(chipMatch).toBeGreaterThan(headerStart);
-      expect(chipMatch).toBeLessThan(headerCloseEstimate);
+      expect(chipMatch).toBeLessThan(headerEnd);
       // Anti-regression: prior standalone "── Branch indicator (Phase 17.2-septies)" block removed
       expect(TFP_SRC).not.toMatch(/── Branch indicator \(Phase 17\.2-septies\)/);
+      // Anti-regression: history tab strip is INSIDE the header now, not a separate sticky
+      const stripMatch = TFP_SRC.indexOf('data-testid="tfp-history-tab-strip"', headerStart);
+      expect(stripMatch).toBeGreaterThan(headerStart);
+      expect(stripMatch).toBeLessThan(headerEnd);
     });
   });
 

@@ -3066,17 +3066,59 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           Replaces the prior standalone orange branch banner below the
           history tab strip — chip is more compact, integrated, and elegant. */}
       <div className={`sticky top-0 z-10 border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}>
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
+        <div className="max-w-[2000px] mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={onClose} aria-label="ปิด" className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${isDark ? 'hover:bg-[#1a1a1a]' : 'hover:bg-gray-100'}`}>
             <ArrowLeft size={16} />
           </button>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: accent }}>
+          <div className="flex-shrink-0 min-w-0 max-w-[200px] lg:max-w-[260px]">
+            <h2 className="text-base font-bold flex items-center gap-2 truncate" style={{ color: accent }}>
               {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
-              {isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}
+              <span className="truncate">{isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}</span>
             </h2>
-            {patientName && <p className="text-sm text-gray-500 truncate">{patientName}</p>}
+            {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
           </div>
+
+          {/* Phase 27.1-quinquies (2026-05-14) — history tab strip MERGED into title bar.
+              User: "เอา tab selector ประวัติขึ้นไปด้วย". Single horizontal row holds
+              everything: back + title + history tabs (scrollable middle) + branch chip
+              + swap button. Removes the previous separate sticky-below row. */}
+          {historyTreatments && historyTreatments.length > 0 && (
+            <div className="flex-1 min-w-0 overflow-x-auto" data-testid="tfp-history-tab-strip">
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx-muted)] flex-shrink-0">
+                  ประวัติ:
+                </span>
+                {historyTreatments.map((t, i) => {
+                  const tid = t.treatmentId || t.id;
+                  const active = selectedHistoryTreatmentId === tid;
+                  const cc = t.detail?.symptoms || '';
+                  return (
+                    <button
+                      key={tid}
+                      onClick={() => handleHistoryTabClick(tid)}
+                      data-testid={`tfp-history-tab-${tid}`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 flex-shrink-0 ${
+                        active
+                          ? 'bg-purple-700 text-white shadow-[0_0_12px_rgba(168,85,247,0.3)]'
+                          : 'text-[var(--tx-muted)] hover:text-purple-400 hover:bg-[var(--bg-hover)] border border-[var(--bd)]'
+                      }`}
+                    >
+                      <Calendar size={11} />
+                      <span>{formatThaiDateShort(t.detail?.treatmentDate || t.date || '')}</span>
+                      {i === 0 && <span className="text-[9px] opacity-70">· ล่าสุด</span>}
+                      {cc && (
+                        <span className="text-[10px] opacity-60 max-w-[80px] truncate">
+                          · {cc}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Spacer when no history (push branch chip to the right) */}
+          {(!historyTreatments || historyTreatments.length === 0) && <div className="flex-1" />}
 
           {/* Phase 27.1-quater — branch chip (was standalone orange banner) */}
           {currentBranch && (
@@ -3115,49 +3157,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         </div>
       </div>
 
-      {/* Phase 26.2 (V26.2, 2026-05-13) — History tab strip.
-          Shows top-5 recent treatments (cross-branch). Click → split-screen
-          on lg+ viewport OR modal popup on <lg. Re-click same tab → dismiss.
-          Hidden when historyTreatments empty (no customer history yet). */}
-      {historyTreatments && historyTreatments.length > 0 && (
-        <div className={`sticky top-[52px] z-[9] border-b backdrop-blur-sm ${isDark ? 'bg-[#0a0a0a]/95 border-[#222]' : 'bg-white/95 border-gray-200'}`}
-          data-testid="tfp-history-tab-strip"
-        >
-          <div className="max-w-6xl mx-auto px-4 py-2">
-            <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx-muted)] whitespace-nowrap">
-                ประวัติ:
-              </span>
-              {historyTreatments.map((t, i) => {
-                const tid = t.treatmentId || t.id;
-                const active = selectedHistoryTreatmentId === tid;
-                const cc = t.detail?.symptoms || '';
-                return (
-                  <button
-                    key={tid}
-                    onClick={() => handleHistoryTabClick(tid)}
-                    data-testid={`tfp-history-tab-${tid}`}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                      active
-                        ? 'bg-purple-700 text-white shadow-[0_0_12px_rgba(168,85,247,0.3)]'
-                        : 'text-[var(--tx-muted)] hover:text-purple-400 hover:bg-[var(--bg-hover)] border border-[var(--bd)]'
-                    }`}
-                  >
-                    <Calendar size={11} />
-                    <span>{formatThaiDateShort(t.detail?.treatmentDate || t.date || '')}</span>
-                    {i === 0 && <span className="text-[9px] opacity-70">· ล่าสุด</span>}
-                    {cc && (
-                      <span className="text-[10px] opacity-60 max-w-[100px] truncate">
-                        · {cc}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Phase 27.1-quinquies (2026-05-14) — separate sticky history tab strip
+          REMOVED. Now inlined into the title bar above. */}
 
       {/* ── Phase 26.0d (V26.0, 2026-05-13) — edit-mode banner ──────────────
           Amber banner shown when admin opens a treatment that was originally
