@@ -2220,8 +2220,15 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Firestore sentinels deleteField() + serverTimestamp() don't survive a JSON round-trip.
         const v26StatusPatch = saveMode === 'doctor' ? {
           status: 'doctor-recorded',
-          recordedBy: auth.currentUser?.uid || null,
-          recordedAt: serverTimestamp(),
+          // V26.0 spec § 5.1.C — preserve existing forensic trail when re-saving a
+          // doctor-recorded treatment in doctor-mode (path currently NOT UI-reachable
+          // per § 5.1.F but spec semantics matrix mandates this guard for forward
+          // compat). loadedTreatmentStatus === 'doctor-recorded' is the proxy signal
+          // that recordedBy/At already exist on the doc (set by the original doctor-save).
+          ...(isEdit && loadedTreatmentStatus === 'doctor-recorded' ? {} : {
+            recordedBy: auth.currentUser?.uid || null,
+            recordedAt: serverTimestamp(),
+          }),
         } : {
           status: deleteField(),
         };
