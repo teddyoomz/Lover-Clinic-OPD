@@ -935,6 +935,35 @@ already deducted; admin's normal save would deduct again).
 patterns + assertion shape. Cross-references: `tests/phase-26-0-doctor-save-source-grep.test.js`
 (G1+G2) + `tests/phase-26-0-status-display-rtl.test.jsx` (D1+D2+D3+D4).
 
+### AV37 extension — Phase 26.1 editor-attribution (2026-05-13)
+
+Phase 26.1 extends AV37 with editor-attribution modal contract:
+
+- `handleSubmit` signature becomes `async (eventOrSaveMode, options = {})`
+  with new `options.editorContext` arg. Internal re-invoke via plain object
+  `{saveMode, editorContext}` form is recognized when eventOrSaveMode lacks
+  `preventDefault`. All Phase 26.0 forms (string / Event / undefined) still
+  resolve identically.
+- `editedBy / editedByName / editedByRole / editedAt` fields stamped to
+  TOP LEVEL of be_treatments doc (not nested in detail). createBackendTreatment
+  + updateBackendTreatment extend the Phase 26.0b extraction pattern.
+- `rebuildTreatmentSummary` preserves the 4 editor fields in summary array
+  for CDV row meta display.
+- CDV summary mapper in CustomerDetailView.jsx line 432-442 includes the
+  4 fields — V12 multi-reader-sweep miss from Phase 26.0e fixed in
+  Phase 26.1a.
+- `ROLE_LABEL_TH = { doctor, assistant, staff }` constant at top of CDV
+  for inline meta display.
+
+Source-grep regression: AV37.9 (modal exists) + AV37.10 (signature ext)
++ AV37.11 (top-level extraction). All in `tests/audit-branch-scope.test.js`.
+
+Sanctioned exceptions:
+- `editorContext` may be null on create-mode staff save (no modal triggered) —
+  the spread `...(editorContext ? {} : {})` writes nothing in that branch.
+- Legacy treatments without editedBy fields render no inline meta —
+  defensive `t.editedByName && ...` gate at CDV row meta.
+
 **Companion**: AV20 (default-filter at lister + opt-in pattern from V41 hide-from-lists).
 Phase 26.0 `saveMode` arg is the 4th member of the lockedX/payload-shape-routing
 family — see `wiki/concepts/treatment-status-and-doctor-save.md` for the Rule of 3

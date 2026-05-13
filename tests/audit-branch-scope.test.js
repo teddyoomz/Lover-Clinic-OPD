@@ -946,7 +946,17 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
   it('AV37.1 handleSubmit signature accepts saveMode arg with defensive coercion', async () => {
     const fs = await import('node:fs/promises');
     const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
-    expect(src).toMatch(/const\s+saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/);
+    // Phase 26.1 (V26.1) — signature extended to (eventOrSaveMode, options = {}).
+    // Defensive coercion preserved via let-binding + conditional branches.
+    // Accept either the Phase 26.0a single-line ternary OR the Phase 26.1
+    // multi-branch form. Both lock the same "defensive coercion to 'staff'
+    // default unless explicit 'doctor' string" contract.
+    const phase260Pattern = /const\s+saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/;
+    const phase261Pattern = /let\s+saveMode\s*=\s*['"]staff['"]/;
+    const phase261Coercion = /saveMode\s*=\s*\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/;
+    const matchesPhase260 = phase260Pattern.test(src);
+    const matchesPhase261 = phase261Pattern.test(src) && phase261Coercion.test(src);
+    expect(matchesPhase260 || matchesPhase261).toBe(true);
   });
 
   it('AV37.2 status doctor-recorded literal appears ≥2× (stamp + check + chip + banner readers)', async () => {
@@ -1003,5 +1013,31 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
     expect(fnIdx).toBeGreaterThan(-1);
     const region = src.slice(fnIdx, fnIdx + 1500);
     expect(region).toMatch(/status:\s*t\.status\s*\|\|\s*null/);
+  });
+
+  it('AV37.9 EditAttributionModal exists at canonical path', async () => {
+    const fs = await import('node:fs/promises');
+    try {
+      const stat = await fs.stat('src/components/backend/EditAttributionModal.jsx');
+      expect(stat.isFile()).toBe(true);
+    } catch (e) {
+      expect.fail('EditAttributionModal.jsx missing at canonical path');
+    }
+  });
+
+  it('AV37.10 TFP handleSubmit signature accepts (eventOrSaveMode, options) (Phase 26.1 ext)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(src).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*options\s*=\s*\{\s*\}\s*\)/);
+    expect(src).toMatch(/editorContext/);
+  });
+
+  it('AV37.11 editedBy/At/Name/Role land in top-level treatment doc (not nested in detail)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile('src/lib/backendClient.js', 'utf8');
+    expect(src).toMatch(/if\s*\(\s*editedBy\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedBy/);
+    expect(src).toMatch(/if\s*\(\s*editedByName\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedByName/);
+    expect(src).toMatch(/if\s*\(\s*editedByRole\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedByRole/);
+    expect(src).toMatch(/if\s*\(\s*editedAt\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedAt/);
   });
 });
