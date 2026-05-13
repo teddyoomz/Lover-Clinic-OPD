@@ -969,6 +969,46 @@ Phase 26.0 `saveMode` arg is the 4th member of the lockedX/payload-shape-routing
 family — see `wiki/concepts/treatment-status-and-doctor-save.md` for the Rule of 3
 discussion (saveMode + lockedCustomer + lockedAppointmentType + lockedChannel).
 
+### AV38 — TreatmentReadOnlyPanel read-only contract (V26.2, 2026-05-13)
+
+**Pattern**: `src/components/backend/TreatmentReadOnlyPanel.jsx` is the canonical
+read-only treatment view extracted from TreatmentTimelineModal in Phase 26.2.
+Used by TFP split-screen right panel AND TimelineModal (Rule of 3 prep —
+2 consumers post-Phase-26.2).
+
+The panel MUST NOT contain any edit/delete primitives:
+- NO `onEditTreatment` or `onDeleteTreatment` prop references (in code body —
+  comments OK)
+- NO `<input>` or `<textarea>` tags (any form input is forbidden)
+- NO "บันทึก" inside `<button>` tags (no save buttons; the chip text
+  "แพทย์ลงบันทึก" rendered in a `<span>` is permitted)
+
+Permitted:
+- Lightbox + setLightbox (image zoom is read interaction, not edit)
+- File-open via existing `<img>` rendering / `<a href={dataUrl}>` patterns
+- Browser-native select + copy (no special copy buttons needed)
+- `<button>` for accordion toggle / close button / lightbox controls (UI-only)
+- `<button>` rendering the "แพทย์ลงบันทึก" status chip via `<span>` (display only)
+
+**Anchor**: `src/components/backend/TreatmentReadOnlyPanel.jsx`. Future panels
+following this pattern (e.g., "ReadOnlySalePanel" for sale history comparison)
+SHOULD mirror the contract — AV38 grep template is reusable.
+
+**Class-of-bug**: V21 source-grep test lock-in family + read-only contract
+violation. A future commit that adds an edit button to the panel directly
+(instead of wrapping the panel with a modal-level edit button as TimelineModal
+does in Phase 26.2c) would violate AV38 — caught at audit-grep.
+
+**Sanctioned exceptions**: NONE.
+
+**Source-grep regression**: `tests/audit-branch-scope.test.js` AV38.1-AV38.6 —
+6 sub-tests locking each invariant (file exists + no edit/delete props +
+no inputs + no save-button text + lightbox preserved).
+
+**Companion**: AV37 (Phase 26.0 + 26.1 doctor-save invariants). AV38 is the
+read-only contract for the historical view side; AV37 is the doctor-save
+gate discipline for the editable side.
+
 ## How to run
 
 1. Run each grep pattern; classify hits.

@@ -1041,3 +1041,63 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
     expect(src).toMatch(/if\s*\(\s*editedAt\s*!==\s*undefined\s*\)\s*topLevelPatch\.editedAt/);
   });
 });
+
+// ─── AV38 — Phase 26.2 TreatmentReadOnlyPanel read-only contract (V26.2, 2026-05-13)
+describe('AV38 Phase 26.2 — TreatmentReadOnlyPanel read-only contract', () => {
+  const PANEL_PATH = 'src/components/backend/TreatmentReadOnlyPanel.jsx';
+
+  it('AV38.1 TreatmentReadOnlyPanel exists at canonical path', async () => {
+    const fs = await import('node:fs/promises');
+    const stat = await fs.stat(PANEL_PATH).catch(() => null);
+    expect(stat?.isFile()).toBe(true);
+  });
+
+  it('AV38.2 source does NOT contain onEditTreatment prop reference (read-only contract)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(PANEL_PATH, 'utf8');
+    // Allow occurrences in JSDoc/comments only — strip those first
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // /* ... */
+      .replace(/\/\/[^\n]*/g, '');         // //  ...
+    expect(code).not.toMatch(/onEditTreatment/);
+  });
+
+  it('AV38.3 source does NOT contain onDeleteTreatment prop reference', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(PANEL_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/onDeleteTreatment/);
+  });
+
+  it('AV38.4 source does NOT contain <input> or <textarea> tags (no form inputs)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(PANEL_PATH, 'utf8');
+    // Strip comments first — line 11 has "NO <input>..." in a comment
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // /* ... */
+      .replace(/\/\/[^\n]*/g, '');         // //  ...
+    expect(code).not.toMatch(/<input/i);
+    expect(code).not.toMatch(/<textarea/i);
+  });
+
+  it('AV38.5 source does NOT contain "บันทึก" inside <button> tags (no save buttons; chip text in spans OK)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(PANEL_PATH, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    // Only match if บันทึก is DIRECT text of a <button> (not wrapped in a child <span>).
+    // The chip "แพทย์ลงบันทึก" is in a <span>, so [^<]* won't reach it from a <button> open tag.
+    expect(code).not.toMatch(/<button[^<]*>[^<]*บันทึก/);
+    expect(code).not.toMatch(/<button[^>]*>\s*Save/i);
+  });
+
+  it('AV38.6 Lightbox preserved (image zoom is permitted)', async () => {
+    const fs = await import('node:fs/promises');
+    const src = await fs.readFile(PANEL_PATH, 'utf8');
+    expect(src).toMatch(/lightbox/i);
+    expect(src).toMatch(/setLightbox/);
+  });
+});
