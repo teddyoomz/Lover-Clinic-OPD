@@ -3263,35 +3263,6 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               </div>
             )}
 
-            {/* Consent & Med Cert */}
-            <FormSection isDark={isDark}>
-              <SectionHeader icon={ClipboardList} title="ใบรับรองแพทย์" isDark={isDark} accent="#06b6d4" />
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={medCertActuallyCome} onChange={e => setMedCertActuallyCome(e.target.checked)} className="rounded border-gray-400" />
-                  ผู้ป่วยมารักษาวันนี้จริง
-                </label>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={medCertIsRest} onChange={e => setMedCertIsRest(e.target.checked)} className="rounded border-gray-400" />
-                  ให้หยุดพัก
-                </label>
-                {medCertIsRest && (
-                  <div className="ml-6">
-                    <label className={labelCls}>ระยะเวลาหยุดพัก</label>
-                    <LocalInput value={medCertPeriod} onCommit={setMedCertPeriod} className={inputCls} placeholder="เช่น 3 วัน" />
-                  </div>
-                )}
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input type="checkbox" checked={medCertIsOther} onChange={e => setMedCertIsOther(e.target.checked)} className="rounded border-gray-400" />
-                  อื่นๆ
-                </label>
-                {medCertIsOther && (
-                  <div className="ml-6">
-                    <LocalTextarea value={medCertOtherDetail} onCommit={setMedCertOtherDetail} rows={2} className={`${inputCls} resize-none`} placeholder="รายละเอียด" />
-                  </div>
-                )}
-              </div>
-            </FormSection>
           </div>
 
           {/* ════ RIGHT PANEL — OPD Card ════ */}
@@ -3323,14 +3294,45 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               </div>
             </FormSection>
 
+            {/* Consent & Med Cert — Phase 26.2f-followup2: moved from LEFT column to RIGHT
+                column so it sits immediately above the doctor-save button. */}
+            <FormSection isDark={isDark}>
+              <SectionHeader icon={ClipboardList} title="ใบรับรองแพทย์" isDark={isDark} accent="#06b6d4" />
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={medCertActuallyCome} onChange={e => setMedCertActuallyCome(e.target.checked)} className="rounded border-gray-400" />
+                  ผู้ป่วยมารักษาวันนี้จริง
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={medCertIsRest} onChange={e => setMedCertIsRest(e.target.checked)} className="rounded border-gray-400" />
+                  ให้หยุดพัก
+                </label>
+                {medCertIsRest && (
+                  <div className="ml-6">
+                    <label className={labelCls}>ระยะเวลาหยุดพัก</label>
+                    <LocalInput value={medCertPeriod} onCommit={setMedCertPeriod} className={inputCls} placeholder="เช่น 3 วัน" />
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={medCertIsOther} onChange={e => setMedCertIsOther(e.target.checked)} className="rounded border-gray-400" />
+                  อื่นๆ
+                </label>
+                {medCertIsOther && (
+                  <div className="ml-6">
+                    <LocalTextarea value={medCertOtherDetail} onCommit={setMedCertOtherDetail} rows={2} className={`${inputCls} resize-none`} placeholder="รายละเอียด" />
+                  </div>
+                )}
+              </div>
+            </FormSection>
+
             {/* ════ Phase 26.0d (V26.0, 2026-05-13) — doctor-save button ════
                 "บันทึกสำหรับแพทย์" — records OPD/vitals/charts/meds/DF only;
                 skips course-items + consumables + purchasedItems + auto-sale.
                 Phase 26.2f-pre: gate extended to allow edit mode when status is
                 'vitalsigns-recorded' (transition from vitals to doctor stage).
                 Otherwise stays create-only per Phase 26.0d. */}
-            {/* Phase 26.2f-followup (V26.2f, 2026-05-13) — doctor-save button restyled to
-                teal to match vitals-save button. Wrapper container sky-blue box dropped. */}
+            {/* Phase 26.2f-followup2 (V26.2f, 2026-05-13) — doctor-save button restyled to
+                royal purple to visually distinguish it from the teal vitals-save button. */}
             {(!isEdit || loadedTreatmentStatus === 'vitalsigns-recorded') && (
               <div className="mb-3">
                 <button
@@ -3339,7 +3341,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   disabled={saving}
                   data-testid="tfp-doctor-save-btn"
                   data-save-mode="doctor"
-                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#2EC4B6] hover:bg-[#26a89c] active:bg-[#1f8f86] shadow-[0_0_18px_rgba(46,196,182,0.25)] disabled:opacity-50 disabled:cursor-not-allowed`}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white transition-all bg-[#7c3aed] hover:bg-[#6d28d9] active:bg-[#5b21b6] shadow-[0_0_18px_rgba(124,58,237,0.3)] disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <Stethoscope className="w-4 h-4" />
                   <span>บันทึกสำหรับแพทย์</span>

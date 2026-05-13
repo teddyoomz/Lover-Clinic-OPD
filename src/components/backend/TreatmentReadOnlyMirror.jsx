@@ -300,6 +300,11 @@ export default function TreatmentReadOnlyMirror({
 }) {
   const [lightbox, setLightbox] = useState(null); // { src, label }
 
+  // Phase 26.2f-followup2 — defensive guard against malformed treatmentDoc
+  if (treatmentDoc != null && typeof treatmentDoc !== 'object') {
+    return null;
+  }
+
   // ── Esc closes lightbox first, then panel ─────────────────────────────
   useEffect(() => {
     function onKey(e) {
@@ -321,7 +326,7 @@ export default function TreatmentReadOnlyMirror({
 
   // ── Extract data from Firestore document ─────────────────────────────
   const doc = treatmentDoc || {};
-  const detail = doc.detail || {};
+  const detail = (treatmentDoc?.detail && typeof treatmentDoc.detail === 'object') ? treatmentDoc.detail : {};
   const health = detail.healthInfo || {};
   const vitals = detail.vitals || {};
 
