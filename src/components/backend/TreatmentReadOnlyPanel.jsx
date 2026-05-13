@@ -116,12 +116,11 @@ function ImageGridColumn({ label, images, isDark, onZoom }) {
 
 // ─── Lightbox overlay (z-[110]) ─────────────────────────────────────────────
 // Copy from TreatmentTimelineModal.jsx (V21 fix companion).
+// NOTE: Esc handling is intentionally NOT here — the parent TreatmentReadOnlyPanel
+// owns a prioritized chain (lightbox first → onClose second) so Task 5 split-screen
+// consumers get correct two-step behaviour. Duplicate child handler removed
+// Phase 26.2b-review.
 function Lightbox({ src, label, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
   if (!src) return null;
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
@@ -242,7 +241,7 @@ export default function TreatmentReadOnlyPanel({
       <div className="md:col-span-4 lg:col-span-3 space-y-3">
         {/* Date + ล่าสุด badge + doctor-recorded chip */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Calendar size={14} style={{ color: '#2EC4B6' }} />
+          <Calendar size={14} style={{ color: ac }} />
           <span className="text-sm font-bold text-[var(--tx-heading)]">{formatThaiDateFull(t.date) || '-'}</span>
           {isLatest && (
             <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
@@ -265,19 +264,19 @@ export default function TreatmentReadOnlyPanel({
         <div className="space-y-1 text-xs">
           {t.branch && (
             <div className="flex items-center gap-1.5 text-[var(--tx-secondary)]">
-              <MapPin size={11} style={{ color: '#2EC4B6' }} />
+              <MapPin size={11} style={{ color: ac }} />
               <span>{t.branch}</span>
             </div>
           )}
           {t.doctor && (
             <div className="flex items-center gap-1.5 text-[var(--tx-secondary)]">
-              <Stethoscope size={11} style={{ color: '#2EC4B6' }} />
+              <Stethoscope size={11} style={{ color: ac }} />
               <span className="font-semibold">{t.doctor}</span>
             </div>
           )}
           {t.assistants?.length > 0 && (
             <div className="flex items-center gap-1.5 text-[var(--tx-muted)]">
-              <User size={11} style={{ color: '#2EC4B6' }} />
+              <User size={11} style={{ color: ac }} />
               <span>{t.assistants.join(', ')}</span>
             </div>
           )}
