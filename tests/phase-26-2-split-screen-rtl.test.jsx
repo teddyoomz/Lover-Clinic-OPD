@@ -72,15 +72,16 @@ describe('E6 — TreatmentReadOnlyPanel', () => {
     TreatmentReadOnlyPanel = mod.default;
   });
 
-  // E6.1 — renders treatment data correctly
+  // E6.1 — renders treatment data correctly (including ล่าสุด badge + แพทย์ลงบันทึก chip)
   it('E6.1 renders treatment summary and detail data', () => {
     render(
       <TreatmentReadOnlyPanel
-        treatmentSummary={TREATMENT_SUMMARY}
+        treatmentSummary={{ ...TREATMENT_SUMMARY, status: 'doctor-recorded' }}
         treatmentFull={TREATMENT_FULL}
         treatmentsLoading={false}
         theme="dark"
         accentColor="#2EC4B6"
+        isLatest={true}
       />
     );
 
@@ -101,6 +102,12 @@ describe('E6 — TreatmentReadOnlyPanel', () => {
 
     // DX visible
     expect(screen.getByText('วินิจฉัย X')).toBeTruthy();
+
+    // ล่าสุด badge visible (isLatest=true)
+    expect(screen.getByText('ล่าสุด')).toBeTruthy();
+
+    // แพทย์ลงบันทึก chip visible (status='doctor-recorded')
+    expect(screen.getByText('แพทย์ลงบันทึก')).toBeTruthy();
 
     // No edit button — AV38 read-only contract
     expect(screen.queryByTestId('timeline-edit-T-001')).toBeNull();
