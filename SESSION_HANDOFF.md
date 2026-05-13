@@ -7,11 +7,78 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-13 EOD — Phase 26.2g-fillin-bis SHIPPED (canonical resolvers; corrects Phase 26.2g-fillin V21 no-op) · 8552 tests + 1 skipped · build clean · 91+ commits ahead of prod
+- **Date last updated**: 2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed) · 8556 tests + 1 skipped · build clean · 94 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `b6c6253` feat(audit AV40 Phase 26.2g-fillin-bis Task 7): extend forbidden-read list to canonical fields (Task 9 session-end docs commit lands next)
-- **Test count**: **8552 passed** + 1 skipped. 0 failures. 1 known flake (Phase 17.1, intermittent).
-- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 91+ commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup + 26.2g-fillin-bis LIVE on master only.
+- **Last commit**: `e71dbf9` test(Phase 17.1 flake fix): defensive isolation against full-suite-load flake
+- **Test count**: **8556 passed** + 1 skipped. 0 failures. No remaining known flakes (Phase 17.1 defensively fixed).
+- **Deploy state**: **PRODUCTION = `ccef3c2`** (master 94 commits ahead). Phase 26.0 + 26.1 + 26.2 + 26.2f + 26.2g-fillin + 26.2g-fillin-followup + 26.2g-fillin-bis + 26.2g-fillin-bis-followup + Phase 17.1 flake fix LIVE on master only.
+
+### Session 2026-05-14 EOD — Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED (both optionals closed; NOT YET DEPLOYED)
+
+User authorized both optional follow-ups ("ทำ Optional ให้หมด"). Shipped 2 commits + this session-end-docs commit (3 total this session).
+
+**(A) Phase 26.2g-fillin-bis-followup — kioskPatientToCanonical Rule-of-3 close** (`2e95696`):
+- 3rd inline ud_* → label derivation site eliminated. Saga complete:
+  1. src/utils.js OPD print Thai builder (Phase 26.2g-fillin-followup)
+  2. src/utils.js OPD print English builder (Phase 26.2g-fillin-followup)
+  3. src/lib/kioskPatientToCanonical.js Thai canonical projection (THIS COMMIT)
+- Refactor: 10-line inline → 1-line `derivePatientCongenitalDisease(d)` helper call.
+- Byte-identical contract verified via node REPL across 5 scenarios (all 6 flags + ud_other detail / single flag / hasUnderlying='ไม่มี' / ud_other no detail / empty).
+- Helper adds defensive typeof + trim guards on ud_otherDetail (strictly safer; no behavior change for real PatientForm-sanitized data).
+- NEW `tests/phase-26-2g-fillin-bis-followup-kiosk-canonical-source-grep.test.js` G5.1-G5.4 (4 assertions).
+- patientHealthMapping.js file header updated to list new consumer.
+- V12 multi-reader-sweep class for kiosk-shape ud_* derivation **FULLY CLOSED project-wide** — no inline ud_* push patterns remain in any consumer.
+
+**(B) Phase 17.1 flake fix — defensive isolation against full-suite-load flake** (`e71dbf9`):
+- Active.md flagged "intermittent under full-suite load". 5/5 PASS in isolation pre-fix.
+- Root cause: 4 test files (branch-backup-ui-rtl, phase-17-1-cross-branch-import-rtl, phase15.5b-withdrawal-approval-endpoint, extended/adminUsersClient) assign `global.fetch` without afterAll restore. Cross-file pollution under vitest worker parallelism.
+- Defensive fixes in Phase 17.1 RTL test:
+  - `const ORIGINAL_FETCH = global.fetch` (capture at module-load)
+  - `afterAll(() => { if (ORIGINAL_FETCH === undefined) delete global.fetch; else global.fetch = ORIGINAL_FETCH; })`
+  - `afterEach(() => { vi.clearAllMocks(); })` (full mock-state isolation; beforeEach was scope-narrow with only fetchMock.mockReset())
+  - `WAIT_FOR_OPTS = { timeout: 3000 }` applied to all 13 `waitFor` sites (3x headroom over vitest's default 1000ms; absorbs worker-pool contention)
+- 8/8 isolated runs GREEN post-fix; full-suite 8556 GREEN.
+
+**Tests**: +4 net assertions (G5 source-grep for kioskPatientToCanonical refactor). Phase 17.1 fix is structural — test count unchanged. Cumulative: 8552 → 8556 + 1 skipped.
+
+**Lessons** (institutional memory):
+- Rule of 3 (3 inline duplicates → extract) was satisfied across the 3-phase Phase 26.2g-fillin saga: utils.js Thai + utils.js English + kioskPatientToCanonical Thai canonical. All 3 now consume the canonical `derivePatientCongenitalDisease` helper.
+- When a test file assigns `global.X`, CAPTURE the original at module-load + RESTORE in afterAll. Plus `afterEach(vi.clearAllMocks())` + extended `waitFor` timeout for RTL tests under load. Defensive pattern applies to all 4 files identified; sweep deferred as hygiene.
+
+Detail: V-entries in `.claude/rules/00-session-start.md` § 2 (Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix). NOT yet deployed. 94 commits ahead.
+
+#### Resume Prompt — Both optionals closed
+
+```
+Resume LoverClinic — continue from 2026-05-14 EOD (Phase 26.2g-fillin-bis-followup + Phase 17.1 flake fix SHIPPED).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=<NEW HEAD SHA>, prod=ccef3c2 · 94 commits ahead · NOT DEPLOYED)
+3. .agents/active.md (8556 tests · both optionals closed)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary incl. Phase 17.1 flake fix + bis-followup)
+5. .agents/sessions/2026-05-13-phase-26-2g-fillin-bis.md (latest checkpoint; bis-followup + flake fix added to this session)
+
+Status: master=`<NEW HEAD SHA>`, 8556 tests pass + 1 skip, prod=`ccef3c2` LIVE. Build clean.
+Phase 26.0 / 26.1 / 26.2 / 26.2f / 26.2g-fillin / 26.2g-fillin-followup / 26.2g-fillin-bis / 26.2g-fillin-bis-followup / Phase 17.1 flake fix all SHIPPED to master; NOT deployed. 94 commits ahead.
+
+Next: choose ONE
+1. Deploy combined 94 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. New phase / feature.
+3. Defensive global.fetch sweep — extend Phase 17.1 afterAll pattern to other 3 files (branch-backup-ui-rtl + phase15.5b-withdrawal-approval-endpoint + extended/adminUsersClient). Hygiene task; not blocking.
+4. Probe-Deploy-Probe maintenance.
+
+Rules: no deploy without "deploy" THIS turn (V18); V15 combined; Probe-Deploy-Probe Rule B; Rule J brainstorming HARD-GATE; Rule N targeted-test-only.
+
+Institutional memory closed this session:
+- V12 multi-reader-sweep for kiosk-shape ud_* derivation FULLY CLOSED project-wide (3 inline sites → 0)
+- Rule of 3 saga complete (utils.js Thai + utils.js English + kioskPatientToCanonical Thai canonical)
+- Phase 17.1 flake defensively fixed via global.fetch capture+restore + clearAllMocks + extended waitFor timeout
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-13 EOD — Phase 26.2g-fillin-bis SHIPPED (NOT YET DEPLOYED)
 
