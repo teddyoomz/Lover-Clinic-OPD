@@ -7,7 +7,7 @@ import WalletPicker from './backend/WalletPicker.jsx';
 import { ArrowLeft, Loader2, Stethoscope, Heart, Thermometer, ClipboardList,
          Pill, ShoppingCart, DollarSign, Shield, CreditCard, Check, Plus, Trash2,
          Search, Package, Edit3, RotateCcw, Camera, X, ImageIcon, FlaskConical, Copy, Paperclip,
-         AlertCircle } from 'lucide-react';
+         AlertCircle, ClipboardCheck } from 'lucide-react';
 import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 // V50 (2026-05-08) — ProClinic strip. `import * as broker` removed. All
 // runtime data fetches now go through scopedDataLayer.js (be_* canonical).
@@ -425,6 +425,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // reference to `loadedTreatment?.status` resolved here since TFP has no
   // full-doc state — only individually destructured fields from existing.detail.
   const [loadedTreatmentStatus, setLoadedTreatmentStatus] = useState(undefined);
+  // Phase 26.2a (V26.2, 2026-05-13) — customer.note display above doctor-save button.
+  const [customerNote, setCustomerNote] = useState('');
   // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Unlocks add-ops
   // (course-items / consumables / purchasedItems / auto-sale) when admin
   // is finalizing a treatment that was previously doctor-saved (status set
@@ -804,6 +806,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 customerCoursesForForm,
                 courseItems || []
               );
+              // Phase 26.2a (V26.2, 2026-05-13) — stamp customer note for display above doctor-save button.
+              const patientData = custData?.patientData || {};
+              setCustomerNote(custData?.note || patientData?.note || '');
             } catch (e) { console.error('[TreatmentForm] product parse error:', e); }
           }
 
@@ -3145,6 +3150,21 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 ))}
               </div>
             </FormSection>
+
+            {/* ════ Phase 26.2a (V26.2, 2026-05-13) — customer note display ════ */}
+            {customerNote && (
+              <div data-testid="tfp-customer-note" className="mt-3 bg-amber-950/10 border border-amber-900/40 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-amber-900/40 flex items-center gap-2">
+                  <ClipboardCheck size={14} className="text-amber-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">หมายเหตุทั่วไป</h3>
+                </div>
+                <div className="p-3">
+                  <pre className="text-xs text-[var(--tx-secondary)] whitespace-pre-wrap font-sans leading-relaxed">
+                    {String(customerNote || '').trim()}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             {/* ════ Phase 26.0d (V26.0, 2026-05-13) — doctor-save button ════
                 "บันทึกสำหรับแพทย์" — records OPD/vitals/charts/meds/DF only;
