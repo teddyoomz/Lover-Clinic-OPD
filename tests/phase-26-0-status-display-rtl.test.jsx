@@ -95,4 +95,17 @@ describe('Phase 26.0 — Status display RTL', () => {
       expect(region).toMatch(/status:\s*t\.status\s*\|\|\s*null/);
     });
   });
+
+  describe('D5 — Phase 26.1 editor-attribution display + summary preservation', () => {
+    it('D5.4 — rebuildTreatmentSummary preserves editedBy/Name/Role fields', () => {
+      const BC_PATH = join(process.cwd(), 'src/lib/backendClient.js');
+      const BC_SOURCE = readFileSync(BC_PATH, 'utf-8');
+      const fnIdx = BC_SOURCE.indexOf('function rebuildTreatmentSummary');
+      expect(fnIdx).toBeGreaterThan(-1);
+      const region = BC_SOURCE.slice(fnIdx, fnIdx + 2000);
+      expect(region).toMatch(/editedBy:\s*t\.editedBy\s*\|\|\s*null/);
+      expect(region).toMatch(/editedByName:\s*t\.editedByName\s*\|\|\s*['"]['"]/);
+      expect(region).toMatch(/editedByRole:\s*t\.editedByRole\s*\|\|\s*['"]['"]/);
+    });
+  });
 });

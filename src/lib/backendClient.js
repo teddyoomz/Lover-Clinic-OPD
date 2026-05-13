@@ -989,11 +989,22 @@ export async function createBackendTreatment(customerId, detail) {
   // them + spec § 3 mandates). status='doctor-recorded' means a doctor saved the
   // OPD-only sub-form; admin must finalize courses/consumables/billing later.
   // recordedBy + recordedAt = forensic trail preserved across admin finalize.
-  const { status, recordedBy, recordedAt, ...detailRest } = detail || {};
+  // V26.1 Phase 26.1c (2026-05-13) — also extract editor attribution fields
+  // (editedBy + editedByName + editedByRole + editedAt) for CDV row meta display.
+  const {
+    status, recordedBy, recordedAt,
+    editedBy, editedByName, editedByRole, editedAt,
+    ...detailRest
+  } = detail || {};
   const topLevelPatch = {};
   if (status !== undefined) topLevelPatch.status = status;
   if (recordedBy !== undefined) topLevelPatch.recordedBy = recordedBy;
   if (recordedAt !== undefined) topLevelPatch.recordedAt = recordedAt;
+  // V26.1 Phase 26.1c (2026-05-13) — editor attribution top-level fields
+  if (editedBy !== undefined) topLevelPatch.editedBy = editedBy;
+  if (editedByName !== undefined) topLevelPatch.editedByName = editedByName;
+  if (editedByRole !== undefined) topLevelPatch.editedByRole = editedByRole;
+  if (editedAt !== undefined) topLevelPatch.editedAt = editedAt;
   await setDoc(treatmentDoc(treatmentId), {
     treatmentId,
     customerId: String(customerId),
@@ -1011,11 +1022,21 @@ export async function updateBackendTreatment(treatmentId, detail) {
   // On admin finalize (saveMode='staff'), `status: deleteField()` clears the
   // doctor-recorded flag; recordedBy + recordedAt are OMITTED from the patch
   // so prior values are preserved (forensic trail per spec § 3).
-  const { status, recordedBy, recordedAt, ...detailRest } = detail || {};
+  // V26.1 Phase 26.1c (2026-05-13) — also extract editor attribution fields.
+  const {
+    status, recordedBy, recordedAt,
+    editedBy, editedByName, editedByRole, editedAt,
+    ...detailRest
+  } = detail || {};
   const topLevelPatch = {};
   if (status !== undefined) topLevelPatch.status = status;
   if (recordedBy !== undefined) topLevelPatch.recordedBy = recordedBy;
   if (recordedAt !== undefined) topLevelPatch.recordedAt = recordedAt;
+  // V26.1 Phase 26.1c (2026-05-13) — editor attribution top-level fields
+  if (editedBy !== undefined) topLevelPatch.editedBy = editedBy;
+  if (editedByName !== undefined) topLevelPatch.editedByName = editedByName;
+  if (editedByRole !== undefined) topLevelPatch.editedByRole = editedByRole;
+  if (editedAt !== undefined) topLevelPatch.editedAt = editedAt;
   await updateDoc(treatmentDoc(treatmentId), {
     detail: detailRest,
     updatedAt: new Date().toISOString(),
@@ -1094,6 +1115,12 @@ export async function rebuildTreatmentSummary(customerId) {
     // Top-level `status` is set by createBackendTreatment / updateBackendTreatment
     // (Phase 26.0b extension); null fallback keeps legacy summaries unaffected.
     status: t.status || null,
+    // V26.1 Phase 26.1c (2026-05-13) — preserve editor attribution for
+    // CDV row meta display "· แก้ไขโดย: X (role)". Top-level fields written
+    // by createBackendTreatment + updateBackendTreatment via top-level extraction.
+    editedBy: t.editedBy || null,
+    editedByName: t.editedByName || '',
+    editedByRole: t.editedByRole || '',
   }));
   await updateCustomer(customerId, {
     treatmentSummary: summary,

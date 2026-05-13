@@ -2252,7 +2252,19 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             recordedAt: serverTimestamp(),
           }),
         } : {
+          // Phase 26.0b — admin/staff save clears status (preserves recordedBy/At)
           status: deleteField(),
+          // Phase 26.1 (V26.1, 2026-05-13) — editor attribution from EditAttributionModal.
+          // When `editorContext` is present (modal-confirmed edit-save, set by Task 5),
+          // stamp 4 fields for CDV "· แก้ไขโดย: X (role)" display. When absent
+          // (create-mode staff save OR legacy callsite), no fields written —
+          // backward compat.
+          ...(editorContext ? {
+            editedBy: editorContext.uid,
+            editedByName: editorContext.name,
+            editedByRole: editorContext.role,
+            editedAt: serverTimestamp(),
+          } : {}),
         };
         const finalBackendDetail = { ...backendDetail, ...v26StatusPatch };
         const result = isEdit

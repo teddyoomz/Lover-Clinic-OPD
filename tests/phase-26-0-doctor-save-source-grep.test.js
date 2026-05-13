@@ -149,5 +149,13 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
       // Source must reference editorContext at handleSubmit body
       expect(TFP_SOURCE).toMatch(/editorContext/);
     });
+
+    it('G3.6 — v26StatusPatch includes editedBy + editedByName + editedByRole + editedAt conditional spread (saveMode=staff)', () => {
+      // V26.1 extends v26StatusPatch staff branch with editorContext spread
+      expect(TFP_SOURCE).toMatch(/editorContext\s*\?\s*\{[\s\S]{0,500}editedBy:\s*editorContext\.uid/);
+      expect(TFP_SOURCE).toMatch(/editedByName:\s*editorContext\.name/);
+      expect(TFP_SOURCE).toMatch(/editedByRole:\s*editorContext\.role/);
+      expect(TFP_SOURCE).toMatch(/editedAt:\s*serverTimestamp/);
+    });
   });
 });
