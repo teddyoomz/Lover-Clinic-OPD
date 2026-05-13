@@ -288,7 +288,9 @@ describe('S2: TreatmentFormPage wires hasStockChange to gate reverse+rededuct', 
     // V19 stockChanged contract preserved as 2nd condition. Test asserts both:
     // (a) saveMode !== 'doctor' precedes (Phase 26.0 doctor-save gate)
     // (b) stockChanged condition still present (V19 image-only-edit guard)
-    expect(TFP).toMatch(/if\s*\(\s*saveMode\s*!==\s*['"]doctor['"]\s*&&\s*stockChanged\s*\)\s*\{[\s\S]+?deductStockForTreatment\(newTreatmentId,\s*\{[\s\S]+?consumables/);
+    // Phase 26.2f-pre (V26.2f, 2026-05-13) — gate extended with vitals branch;
+    // 3-clause pattern: saveMode !== 'doctor' && saveMode !== 'vitals' && stockChanged
+    expect(TFP).toMatch(/if\s*\(\s*saveMode\s*!==\s*['"]doctor['"]\s*&&\s*saveMode\s*!==\s*['"]vitals['"]\s*&&\s*stockChanged\s*\)\s*\{[\s\S]+?deductStockForTreatment\(newTreatmentId,\s*\{[\s\S]+?consumables/);
   });
 
   it('S2.6: deductStockForTreatment (medications type-7) gated by stockChanged', () => {
