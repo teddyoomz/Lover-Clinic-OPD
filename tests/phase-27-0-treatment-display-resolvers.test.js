@@ -54,6 +54,10 @@ describe('R2 — resolveAssistantDisplayName', () => {
     const staffMap = new Map([['STAFF-1', { name: 'Asst. Bar' }]]);
     expect(resolveAssistantDisplayName({ id: 'STAFF-1' }, new Map(), staffMap)).toBe('Asst. Bar');
   });
+  it('R2.2b resolves bare string id via staffMap', () => {
+    const staffMap = new Map([['STAFF-1', { name: 'Asst. Bar' }]]);
+    expect(resolveAssistantDisplayName('STAFF-1', new Map(), staffMap)).toBe('Asst. Bar');
+  });
   it('R2.3 falls back to entry.name cache when both maps miss', () => {
     expect(resolveAssistantDisplayName({ id: 'X', name: 'cached' }, new Map(), new Map())).toBe('cached');
   });
