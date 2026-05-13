@@ -311,13 +311,20 @@ describe('Phase 26.0 — Rule I full-flow simulate', () => {
       // semantic is PRESERVED: any string other than 'doctor' → 'staff';
       // any non-string non-object → 'staff' (untouched default).
       //
-      // V21-class fixup (Phase 26.1c): test pattern updated to lock the
-      // new canonical shape — the `let saveMode = 'staff'` default + the
-      // string-branch coercion `(eventOrSaveMode === 'doctor') ? 'doctor' : 'staff'`
-      // inside `if (typeof eventOrSaveMode === 'string')`. Both halves
-      // together preserve the F7.3 defensive contract.
+      // V21-class fixup (Phase 26.2f Task 2): test pattern updated to lock the
+      // new canonical shape after vitals coercion branch was added.
+      // The chained ternary is now:
+      //   (eventOrSaveMode === 'doctor') ? 'doctor'
+      //   : (eventOrSaveMode === 'vitals') ? 'vitals'
+      //   : 'staff'
+      // Defensive contract preserved: anything other than 'doctor'/'vitals' → 'staff'.
       expect(TFP_SOURCE).toMatch(/let\s+saveMode\s*=\s*['"]staff['"]/);
-      expect(TFP_SOURCE).toMatch(/\(\s*eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]\s*:\s*['"]staff['"]/);
+      // Lock: 'doctor' branch still present in string-coercion path
+      expect(TFP_SOURCE).toMatch(/eventOrSaveMode\s*===\s*['"]doctor['"]\s*\)\s*\?\s*['"]doctor['"]/);
+      // Lock: 'vitals' branch now present too (Phase 26.2f Task 2)
+      expect(TFP_SOURCE).toMatch(/eventOrSaveMode\s*===\s*['"]vitals['"]\s*\)\s*\?\s*['"]vitals['"]/);
+      // Lock: final fallback is 'staff'
+      expect(TFP_SOURCE).toMatch(/:\s*['"]staff['"]/);
     });
   });
 

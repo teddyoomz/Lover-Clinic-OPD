@@ -1984,14 +1984,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
     if (typeof eventOrSaveMode === 'string') {
       // Phase 26.0 form: handleSubmit('doctor') OR handleSubmit('staff')
-      saveMode = (eventOrSaveMode === 'doctor') ? 'doctor' : 'staff';
+      // Phase 26.2f: handleSubmit('vitals') added for vitals-only saves
+      saveMode = (eventOrSaveMode === 'doctor') ? 'doctor'
+               : (eventOrSaveMode === 'vitals') ? 'vitals'
+               : 'staff';
     } else if (
       eventOrSaveMode &&
       typeof eventOrSaveMode === 'object' &&
       typeof eventOrSaveMode.preventDefault !== 'function'
     ) {
       // Phase 26.1 internal re-invoke: handleSubmit({saveMode, editorContext})
-      saveMode = (eventOrSaveMode.saveMode === 'doctor') ? 'doctor' : 'staff';
+      // Phase 26.2f: 'vitals' accepted in object form too
+      saveMode = (eventOrSaveMode.saveMode === 'doctor') ? 'doctor'
+               : (eventOrSaveMode.saveMode === 'vitals') ? 'vitals'
+               : 'staff';
       if (eventOrSaveMode.editorContext) {
         editorContext = eventOrSaveMode.editorContext;
       }
@@ -2136,7 +2142,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // edit-mode for status='doctor-recorded'). Without this gate, the validator
         // would fire against selectedCourseItems that the doctor may have touched
         // but won't actually deduct in this save path.
-        if (saveMode !== 'doctor') {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals') {
           // Validate course deductions against LIVE Firestore data.
           // Since rows are no longer grouped, validate each row against the exact
           // Firestore course entry at its `courseIndex`.
@@ -2275,7 +2281,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Doctor-save doesn't touch course balances on save (skips deductCourseItems
         // below). Mirror: skip the reverse so we don't refund a balance that was
         // never deducted in this save path.
-        if (saveMode !== 'doctor' && isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && isEdit && (oldExisting.length > 0 || oldPurchased.length > 0)) {
           const { reverseCourseDeduction } = await import('../lib/scopedDataLayer.js');
           if (oldExisting.length > 0) await reverseCourseDeduction(customerId, oldExisting);
           if (oldPurchased.length > 0) await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
@@ -2337,6 +2343,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             recordedBy: auth.currentUser?.uid || null,
             recordedAt: serverTimestamp(),
           }),
+        } : saveMode === 'vitals' ? {
+          // Phase 26.2f — vitals-save records front-desk / nurse vitals signs.
+          // Mirrors the doctor-save forensic-fields pattern (recordedBy + recordedAt)
+          // but stamps status='vitalsigns-recorded' so downstream gates can distinguish.
+          // All deduction/sale/stock/course writes are skipped (gates above).
+          status: 'vitalsigns-recorded',
+          recordedBy: auth.currentUser?.uid || null,
+          recordedAt: serverTimestamp(),
         } : {
           // Phase 26.0b — admin/staff save clears status (preserves recordedBy/At)
           status: deleteField(),
@@ -2366,7 +2380,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Course balances are touched only when admin finalizes (saveMode='staff'
         // on a treatment that was previously status='doctor-recorded' OR a normal
         // staff save). Doctor-save records OPD/meds/DF only.
-        if (saveMode !== 'doctor' && existingDeductions.length > 0) {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && existingDeductions.length > 0) {
           const newTid = result.treatmentId || treatmentId;
           const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
           const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
@@ -2423,7 +2437,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // deduct. Admin records consumables when finalizing (canAddNewItems edit
           // path). Per Q2 spec decision, meds (call 2 below) stay UNGATED — doctor
           // dispenses meds at OPD time and stock decrements immediately.
-          if (saveMode !== 'doctor' && stockChanged) {
+          if (saveMode !== 'doctor' && saveMode !== 'vitals' && stockChanged) {
             await deductStockForTreatment(newTreatmentId, {
               consumables: backendDetail.consumables || [],
               treatmentItems: backendDetail.treatmentItems || [],
@@ -2454,7 +2468,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // (createBackendSale + deductStockForSale + applyDepositToSale +
         // deductWallet + earnPoints + assignCourseToCustomer + promo-assign).
         // Doctor-save defers all billing/sale creation to admin finalize.
-        if (saveMode !== 'doctor' && hasSale && !isEdit) {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && hasSale && !isEdit) {
           try {
             const { createBackendSale, assignCourseToCustomer, applyDepositToSale, deductWallet, earnPoints, setTreatmentLinkedSaleId } = await import('../lib/scopedDataLayer.js');
             const grouped = { promotions: [], courses: [], products: [], medications: medications.filter(m => m.name) };
@@ -2617,7 +2631,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // is a defensive backstop — if a future code path invokes handleSubmit('doctor')
         // in edit mode (e.g. via API), this prevents accidentally touching the linked
         // sale's deposits/wallet/points/stock.
-        if (saveMode !== 'doctor' && hasSale && isEdit) {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && hasSale && isEdit) {
           try {
             const {
               getSaleByTreatmentId, updateBackendSale,
@@ -2881,7 +2895,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // courses, so the deduct path is moot. Admin's later finalize save re-runs
         // BOTH the assignCourseToCustomer chain AND this purchased-deduction step.
         const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
-        if (saveMode !== 'doctor' && purchasedDeductions.length > 0) {
+        if (saveMode !== 'doctor' && saveMode !== 'vitals' && purchasedDeductions.length > 0) {
           try {
             const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
             // Phase 16.5-quater — same treatment-deduction audit emit
