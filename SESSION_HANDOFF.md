@@ -7,11 +7,65 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 27 saga SHIPPED to master** · 9013+ tests + 1 skipped · build clean · ~32 commits ahead of prod
+- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 28 Treatment History Redesign SHIPPED to master** · 9176 tests + 1 skipped · build clean · ~45 commits ahead of prod
 - **Branch**: `master`
-- **Last commit**: `9819c2e` fix(Phase 27.2-sexies): CDV mapper V12 multi-reader-sweep — TRUE root cause of badge flash-revert
-- **Test count**: **9013 passed** + 1 skipped. 0 failures.
-- **Deploy state**: **PRODUCTION = `e8086de`** (V55 brutal pre-deploy ship was last deploy). Master ~32 commits ahead with Phase 27.x. NOT YET DEPLOYED.
+- **Last commit**: `f557acc` test(Phase 28.11): V21 fixups for tests locking inline CDV structure
+- **Test count**: **9176 passed** + 1 skipped. 0 failures (1 known intermittent flake on Phase 17.1 cross-branch-import-rtl resolves on re-run; pre-existing).
+- **Deploy state**: **PRODUCTION = `e8086de`** (V55 brutal pre-deploy ship). Master ~45 commits ahead with Phase 27 + Phase 28. NOT YET DEPLOYED.
+
+### Session 2026-05-14 LATE EOD continued — Phase 28 Treatment History Redesign SHIPPED
+
+User reaction to current treatment-history list: "โครตจะไม่สวย" + directive: "ใช้สกิลที่มีหรือไม่มีหรือต้องไปหาก็แล้วแต่ redesign UI ... ให้สวยงามกว่านี้ ... แบบ designer ระดับโลก".
+
+Brainstormed Q1-Q4 via visual companion (4 mini-mockups + integrated v2). Locked decisions: **Structural Redesign** (timeline-led) / **Date-grouped sections** (วันนี้ + relative pill) / **Dot stepper + connector** (3 dots with glow + pulse) / **List + header CTAs** (1 fire-red primary + 2 ghost). Shipped 13 commits via subagent-driven-development. Live-verified on real prod customer LC-26000006.
+
+**Architecture**:
+- 7 new components in `src/components/backend/treatment-history/` (Card composer + Header + DateHeader + Row + ExpandedBody + Stepper + Pagination)
+- 6 new pure helpers in `src/lib/treatmentDisplayResolvers.js`
+- 3 extractions per Rule C1: `formatBadgeTime` + `roleLabels` + `TreatmentDetailExpanded`/`DetailField`
+- `formatThaiDateFull` added to `src/utils.js`
+- CDV.jsx: 2349 → 2047 lines (replaces inline 290-line block with `<TreatmentHistoryCard ... />`)
+
+**Tests**: 152 net assertions across 10 new files + 7 V21 fixups across 3 existing files (D2.1, D2.2, D2.3, D5.2, D5.3 in phase-26-0-status-display + V1.14, V2.3 in phase-26-2f).
+
+**Live preview verification (Rule I item b)**: LC-26000006 real prod data shows 5 rows + 2 date groups (วันนี้ 4 รายการ + 1 สัปดาห์ที่แล้ว 1 รายการ) — matching user's original screenshot exactly. Card bg `rgb(15,15,15)` (dark) flips to `rgb(248,250,252)` (light) via `data-theme` toggle while preserving fire-red border-l accent. Mobile 375x812 fits without overflow. Expand interaction → CC/DX callout + print buttons. Zero new console errors (only pre-existing yesterday-timestamp anon-auth permission-denied noise).
+
+**Build**: clean. BackendDashboard chunk 907.60 → 914.70 KB (+7.10 KB justified by 7 new components).
+
+Detail: `.agents/sessions/2026-05-14-phase-28-treatment-history-redesign.md`. NOT YET DEPLOYED — awaiting explicit "deploy" per V18.
+
+#### Resume Prompt — Phase 28 shipped, ~45 commits ahead of prod
+
+```
+Resume LoverClinic — continue from 2026-05-14 LATE-EOD.
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=f557acc, prod=e8086de · ~45 commits ahead · NOT DEPLOYED)
+3. .agents/active.md (9176 tests · Phase 28 + Phase 27 stack ready to ship)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-14-phase-28-treatment-history-redesign.md (Phase 28 detail)
+6. .agents/sessions/2026-05-14-phase-27-saga.md (Phase 27 detail)
+
+Status: master=`f557acc`, 9176 pass + 1 skip + 0 fail, prod=`e8086de` LIVE. Build clean.
+Phase 28 (treatment-history redesign — 7 new components + 6 helpers, CDV -302 lines) +
+Phase 27 saga (branchId + lifecycle badges) all SHIPPED to master. Live-verified on
+real prod (LC-26000006). NOT deployed.
+
+Next: choose ONE
+1. Deploy combined ~45 commits — `vercel --prod` + `firebase deploy --only firestore:rules` per V15 + Rule B Probe-Deploy-Probe.
+2. New phase / feature.
+3. (optional) Phase 27.2-septies — extract shared buildTreatmentSummaryEntry(t) helper.
+
+Outstanding (user-triggered):
+- Deploy auth: ~45 commits ahead. Per V18, explicit "deploy" THIS turn.
+
+Rules: V18 deploy auth per turn; V15 combined deploy; Rule B Probe-Deploy-Probe; Rule J brainstorming HARD-GATE; Rule N targeted-test-only; Rule P class-of-bug expansion.
+
+/session-start
+```
+
+---
 
 ### Session 2026-05-14 LATE EOD — Phase 27 saga SHIPPED (branchId + display + layout + badges)
 

@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-14 EOD — Phase 27 saga shipped; ~32 commits ahead; NOT DEPLOYED"
-status: "master=9819c2e · prod=e8086de · 32 commits ahead · 9013+ tests · build clean"
+updated_at: "2026-05-14 LATE-EOD continued — Phase 28 Treatment History Redesign SHIPPED; ~45 commits ahead; NOT DEPLOYED"
+status: "master=f557acc · prod=e8086de · ~45 commits ahead · 9176 tests + 1 skip · build clean"
 branch: "master"
-last_commit: "9819c2e fix(Phase 27.2-sexies): CDV mapper V12 multi-reader-sweep — TRUE root cause of badge flash-revert"
-tests: 9013
+last_commit: "f557acc test(Phase 28.11): V21 fixups for tests locking inline CDV structure"
+tests: 9176
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "e8086de"
 firestore_rules_version: 29
@@ -13,23 +13,33 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `9819c2e` · prod = `e8086de` (~32 commits ahead — Phase 27 saga + V55 brutal pre-deploy LIVE on master only)
-- Phase 27.x complete: branchId attribution + display-name live-resolve + TFP unified sticky header + lifecycle badges + always-editable save buttons + EditTreatmentBranchModal wired
-- 2 prod Firestore migrations applied: Phase 27.0 (18 treatments backfilled with branchId) + Phase 27.2-quater (4 customer summaries rebuilt with lifecycle fields)
+- master = `f557acc` · prod = `e8086de` (~45 commits ahead — Phase 27 saga + Phase 28 redesign LIVE on master only)
+- Phase 28 SHIPPED: 7 new treatment-history components (Card/Header/DateHeader/Row/ExpandedBody/Stepper/Pagination) + 6 pure helpers + 3 Rule C1 extractions (formatBadgeTime / roleLabels / TreatmentDetailExpanded) + 152 new tests + 7 V21 fixups
+- CDV.jsx: 2349 → 2047 lines (−302 net) by replacing inline 290-line treatment-history block with `<TreatmentHistoryCard ... />`
+- Build clean. BackendDashboard chunk 907.60 → 914.70 KB (+7.10 KB justified)
+- Live-verified on real prod LC-26000006: 5 rows + 2 date groups + steppers + light/dark theme + mobile 375px viewport
 
-## What this session shipped (Phase 27 saga)
-- **27.0** treatmentDisplayResolvers + branchId stamping + AV42 + Rule M migration ✅
-- **27.0 follow-up** wire EditTreatmentBranchModal (✏️ on TreatmentReadOnlyMirror) + optimistic local override ✅
-- **27.1** useLayoutPreference + LayoutSwapButton + TFP CSS-only swap ✅
-- **27.1-quater→sexies** unified sticky header (back + title + history tabs centered + branch chip + swap button) + redesigned EditTreatmentBranchModal + sticky offsets ✅
-- **27.2** stacked lifecycle badges with HH:MM timestamps + always-editable vitals/doctor buttons + per-stage timestamps overwrite on each save ✅
-- **27.2-quater** Rule M migration rebuilt 4 customer summaries ✅
-- **27.2-sexies** V12 multi-reader-sweep round 3 — CDV in-component mapper STRIPPED lifecycle fields from `treatments[]` → flash-revert bug. **TRUE root cause** (Phase 27.2-quinquies dep-array fix was a symptom-level fix; still kept) ✅
-- Checkpoint: `.agents/sessions/2026-05-14-phase-27-saga.md`
+## What this session shipped (Phase 28 in addition to Phase 27)
+- **28.1** treatmentDisplayResolvers — 6 helpers (TDD) ✅
+- **28.1-bis** FS Timestamp sort regression fix (caught by code-quality reviewer) ✅
+- **28.2** TreatmentLifecycleStepper (3-dot stepper + connectors + glow + pulse) ✅
+- **28.3** TreatmentDateHeader (fire-red today / muted past + relative pill) + formatThaiDateFull added to utils ✅
+- **28.4** TreatmentHistoryRow (collapsed + expanded states + edit/delete chips with e.stopPropagation) + ROLE_LABEL_TH extracted ✅
+- **28.5** TreatmentHistoryExpandedBody (CC/DX callout + detail + print buttons) + TreatmentDetailExpanded extracted ✅
+- **28.6** TreatmentHistoryHeader (CTA cluster: 2 ghost + 1 fire-red primary with glow) ✅
+- **28.7** TreatmentHistoryPagination (refined ghost + fire-red active gradient) ✅
+- **28.8** TreatmentHistoryCard composer + wire into CDV (replace inline 290-line block) ✅
+- **28.9 + 28.10** Source-grep regression bank (15) + Rule I full-flow simulate (15 with realistic 5-treatment fixture matching user's screenshot) ✅
+- **28.11** V21 fixups (7 across phase-26-0-status-display + phase-26-2f) ✅
+- Live preview verification (Rule I item b) on LC-26000006 ✅
+- Spec: `docs/superpowers/specs/2026-05-14-treatment-history-redesign-design.md`
+- Plan: `docs/superpowers/plans/2026-05-14-phase-28-treatment-history-redesign.md`
+- Checkpoint: `.agents/sessions/2026-05-14-phase-28-treatment-history-redesign.md`
 
 ## Next action
-- (idle) await user direction OR explicit "deploy" for combined V15 push of ~32 commits
+- (idle) await user direction OR explicit "deploy" for combined V15 push of ~45 commits
 
 ## Outstanding user-triggered actions
-- **Deploy auth**: ~32 commits ahead; combined V15 (`vercel --prod` + `firebase deploy --only firestore:rules`) per V18 explicit "deploy" THIS turn
-- **Verify Phase 27.2-sexies fix**: refresh CDV for LC-26000006 — should see 2 badges (ซักประวัติ + บันทึกแล้ว) with HH:MM on latest treatment row
+- **Deploy auth**: ~45 commits ahead; combined V15 (`vercel --prod` + `firebase deploy --only firestore:rules`) per V18 explicit "deploy" THIS turn
+- **(optional)** Phase 27.2-septies — extract shared `buildTreatmentSummaryEntry(t)` helper
+- **(optional)** Rule-of-3 cleanup: migrate 4+ inline `THAI_MONTHS` sites to use `formatThaiDateFull` from src/utils.js
