@@ -621,3 +621,12 @@ export const updateRecall = (...args) => raw.updateRecall(...args);
 export const recordRecallOutcome = (...args) => raw.recordRecallOutcome(...args);
 export const recordRecallLineSend = (...args) => raw.recordRecallLineSend(...args);
 export const snoozeRecall = (...args) => raw.snoozeRecall(...args);
+
+// ─── Phase 29.22 (2026-05-14) — be_recall_cases UNIVERSAL collection ──────
+// Per BSA Rule L: no branchId; shared across branches. Re-exports are
+// pass-through (no _autoInject) — listRecallCases.__universal__ marker
+// signals useBranchAwareListener to skip branch-resubscribe.
+export const listRecallCases = (...args) => raw.listRecallCases(...args);
+listRecallCases.__universal__ = true;
+export const saveRecallCase = (...args) => raw.saveRecallCase(...args);
+export const setRecallCaseHidden = (...args) => raw.setRecallCaseHidden(...args);
