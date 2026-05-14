@@ -86,6 +86,12 @@ export function buildReminderLogDoc({
   appointmentId, customerId, branchId, customerLineUserId, reminderType,
   status, lineApiResult, retryCount, nextRetryAt, lastError, templateRendered,
 }) {
+  // V14 guard — Firestore setDoc rejects undefined for required fields.
+  // Throw labeled error so callers can distinguish missing-input from
+  // network/auth failures.
+  if (!appointmentId || !customerId || !branchId || !reminderType || !status) {
+    throw new Error('REMINDER_LOG_MISSING_REQUIRED_FIELDS');
+  }
   return {
     appointmentId,
     customerId,
