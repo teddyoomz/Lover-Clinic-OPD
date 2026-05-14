@@ -37,6 +37,10 @@ import {
 // be_line_configs/{branchId}. Falls back to clinic_settings/chat_config.line
 // during transition.
 import { resolveLineConfigForWebhook } from '../admin/_lib/lineConfigAdmin.js';
+// LINE Reminder (2026-05-15) Task 7 — postback handler. Customer taps Flex
+// buttons (✓ ยืนยัน / เลื่อน / ติดต่อ) on a reminder bubble → LINE delivers a
+// `postback` event with `data=action=<a>&appt=<id>&br=<branchId>`.
+import { parsePostbackData } from '../../src/lib/lineReminderTemplate.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -329,6 +333,208 @@ async function findCustomerByLineUserId(lineUserId) {
   }
 }
 
+// ─── LINE Reminder (2026-05-15) Task 7 — Postback handler ──────────────────
+//
+// Reminder Flex bubbles (sent by /api/cron/line-reminder) carry three footer
+// buttons that emit LINE `postback` events with `data` field shaped as:
+//   action=<confirm|reschedule|contact>&appt=<appointmentId>&br=<branchId>
+//
+// Defense-in-depth: we cross-check the `br` field against the destination-
+// resolved branchId (from resolveLineConfigForWebhook). If they disagree, the
+// postback is silently dropped — guards against a malicious customer trying
+// to confirm appointments at a sibling branch by hand-crafting postback data.
+//
+// LR-2 invariant: reply uses config.channelAccessToken (per-branch).
+// LR-5 invariant: postback_log docs include branchId.
+
+/**
+ * Pure mapper from LINE postback action → notifyMeta.lastPostbackAction value.
+ * Exported for unit-testing the contract without spinning up Firestore.
+ * @param {string} action — 'confirm' | 'reschedule' | 'contact' | anything else
+ * @returns {string|null} normalized flag, or null on unknown action
+ */
+export function postbackActionToFlag(action) {
+  switch (action) {
+    case 'confirm':    return 'confirmed';
+    case 'reschedule': return 'reschedule-requested';
+    case 'contact':    return 'contact-requested';
+    default:           return null;
+  }
+}
+
+/**
+ * Handle a LINE postback event. Called from processEvent when event.type
+ * === 'postback'. Already-resolved per-branch config + branchId are passed in
+ * so we don't re-resolve (avoids unnecessary Firestore reads).
+ *
+ * @param {object} event — LINE postback event
+ * @param {object} db — firebase-admin Firestore instance
+ * @param {object} config — resolved per-branch LINE config { channelAccessToken, ... }
+ * @param {string|null} branchId — branchId from resolveLineConfigForWebhook
+ */
+async function handlePostback(event, db, config, branchId) {
+  if (!event?.postback?.data) return;
+  if (!config?.channelAccessToken) return;
+  // Without a destination-resolved branchId we can't safely process — the
+  // cross-check below would always fail. Silent drop.
+  if (!branchId) {
+    console.warn('[postback] no branchId resolved — dropping');
+    return;
+  }
+  const parsed = parsePostbackData(event.postback.data);
+  if (!parsed.action || !parsed.appt) return;
+
+  // Defense-in-depth: cross-check postback `br` field with destination-resolved
+  // branchId. Mismatch = adversarial or stale Flex from a re-pointed channel.
+  if (parsed.br && parsed.br !== branchId) {
+    console.warn(`[postback] branch mismatch data=${parsed.br} destination=${branchId}`);
+    return;
+  }
+
+  const apptRef = db.doc(`artifacts/${APP_ID}/public/data/be_appointments/${parsed.appt}`);
+  const apptSnap = await apptRef.get();
+  if (!apptSnap.exists) {
+    await replyLineMessage(event.replyToken, 'ไม่พบนัดหมาย กรุณาติดต่อคลินิก', config.channelAccessToken);
+    return;
+  }
+  const apptData = apptSnap.data() || {};
+  if (apptData.branchId !== branchId) {
+    console.warn(`[postback] appt.branchId=${apptData.branchId} ≠ event.branchId=${branchId}`);
+    await replyLineMessage(event.replyToken, 'นัดนี้ไม่ตรงกับสาขาที่เชื่อมต่อ กรุณาติดต่อคลินิก', config.channelAccessToken);
+    return;
+  }
+
+  // Atomic batch: postback_log + appointment update.
+  // LR-5 invariant: postback_log carries branchId for per-branch audit reads.
+  const { FieldValue } = await import('firebase-admin/firestore');
+  const batch = db.batch();
+  const logId = `pb-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  batch.set(
+    db.doc(`artifacts/${APP_ID}/public/data/be_line_reminder_postback_log/${logId}`),
+    {
+      appointmentId: parsed.appt,
+      customerId: apptData.customerId || '',
+      branchId,
+      action: parsed.action,
+      receivedAt: FieldValue.serverTimestamp(),
+      rawPostbackData: event.postback.data,
+    }
+  );
+  const apptUpdate = {
+    'notifyMeta.lastPostbackAction': postbackActionToFlag(parsed.action),
+    'notifyMeta.lastPostbackAt': FieldValue.serverTimestamp(),
+  };
+  if (parsed.action === 'confirm') {
+    apptUpdate.status = 'confirmed';
+    apptUpdate.confirmedAt = FieldValue.serverTimestamp();
+    apptUpdate.confirmedVia = 'line-postback';
+  }
+  batch.update(apptRef, apptUpdate);
+  await batch.commit();
+
+  // User-facing reply per action.
+  if (parsed.action === 'confirm') {
+    await replyLineMessage(event.replyToken, '✓ ยืนยันนัดเรียบร้อย — เจอกันค่ะ', config.channelAccessToken);
+  } else if (parsed.action === 'reschedule') {
+    await replyLineMessage(event.replyToken, 'ขอเลื่อนนัดได้รับเรียบร้อย — แอดมินจะติดต่อกลับเร็วๆ นี้ค่ะ', config.channelAccessToken);
+  } else if (parsed.action === 'contact') {
+    let phone = 'โปรดติดต่อทาง LINE นี้';
+    let branchName = '';
+    try {
+      const bSnap = await db.doc(`artifacts/${APP_ID}/public/data/be_branches/${branchId}`).get();
+      if (bSnap.exists) {
+        const bData = bSnap.data() || {};
+        phone = bData.phoneNumber || phone;
+        branchName = bData.branchName || '';
+      }
+    } catch { /* best-effort */ }
+    const txt = branchName
+      ? `ติดต่อคลินิก ${branchName}: ${phone}\nหรือพิมพ์ข้อความที่นี่ — แอดมินจะตอบค่ะ`
+      : `ติดต่อคลินิก: ${phone}\nหรือพิมพ์ข้อความที่นี่ — แอดมินจะตอบค่ะ`;
+    await replyLineMessage(event.replyToken, txt, config.channelAccessToken);
+  }
+}
+
+// ─── LINE Reminder (2026-05-15) Task 8 — Opt-out intents ───────────────────
+//
+// Customer can DM "หยุดแจ้งเตือน" / "stop" to disable reminder pushes, or
+// "เริ่มแจ้งเตือน" / "start" to re-enable. Writes be_customers.notifyOptOut
+// (boolean) which is read by the cron job (Task 4) at push-emit time.
+//
+// LR-3 invariant: customer lookup MUST be branch-scoped — opt-out on branch A
+// does NOT silence reminders from branch B. findCustomerByLineUserIdAtBranch
+// enforces this.
+
+/**
+ * Pure intent classifier. Exported for unit-testing.
+ * @param {string} text — incoming LINE message text
+ * @returns {{ matched: boolean, optOut?: boolean }}
+ */
+export function detectOptOutIntent(text) {
+  if (!text || typeof text !== 'string') return { matched: false };
+  const trimmed = text.trim();
+  if (!trimmed) return { matched: false };
+  const lower = trimmed.toLowerCase();
+  if (trimmed === 'หยุดแจ้งเตือน' || lower === 'stop') return { matched: true, optOut: true };
+  if (trimmed === 'เริ่มแจ้งเตือน' || lower === 'start') return { matched: true, optOut: false };
+  return { matched: false };
+}
+
+/**
+ * Set / clear the opt-out flag on a customer. Writes `notifyOptOut`,
+ * `notifyOptOutAt` (ISO timestamp on opt-out; null on opt-in), and
+ * `notifyOptOutBy` ('customer-dm' when triggered via LINE) — admin can clear
+ * via UI later if needed.
+ */
+async function setCustomerOptOut(db, customerId, value, by) {
+  if (!customerId) return;
+  const ref = db.doc(`artifacts/${APP_ID}/public/data/be_customers/${customerId}`);
+  await ref.update({
+    notifyOptOut: !!value,
+    notifyOptOutAt: value ? new Date().toISOString() : null,
+    notifyOptOutBy: value ? by : null,
+  });
+}
+
+/**
+ * Find the customer who owns this lineUserId AT the given branch. Matches:
+ *   1. lineUserId_byBranch[branchId].lineUserId === lineUserId  (forward-compat)
+ *   2. legacy customer.lineUserId === lineUserId AND customer.branchId === branchId
+ *
+ * Firestore cannot directly query nested-map fields by value, so we use the
+ * legacy lineUserId field as the index + verify the branch match in JS. Brand-
+ * new per-branch linkages WITHOUT a legacy lineUserId aren't queryable here;
+ * that's acceptable for MVP — opt-out is rare and the legacy field is always
+ * stamped during the V32-tris-ter approval flow.
+ */
+async function findCustomerByLineUserIdAtBranch(db, lineUserId, branchId) {
+  if (!lineUserId) return null;
+  try {
+    const snap = await db
+      .collection(`artifacts/${APP_ID}/public/data/be_customers`)
+      .where('lineUserId', '==', lineUserId)
+      .limit(5)
+      .get();
+    if (snap.empty) return null;
+    for (const d of snap.docs) {
+      const data = d.data() || {};
+      // Suspended links shouldn't accept opt-out toggles either.
+      if (data.lineLinkStatus === 'suspended') continue;
+      // Per-branch linkage match (forward-compat).
+      if (data.lineUserId_byBranch?.[branchId]?.lineUserId === lineUserId) {
+        return { id: d.id, ...data };
+      }
+      // Legacy linkage match — only if customer's home branch matches.
+      if (data.branchId === branchId) {
+        return { id: d.id, ...data };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function findUpcomingAppointmentsForCustomer(customerId) {
   if (!customerId) return [];
   try {
@@ -353,6 +559,40 @@ async function maybeEmitBotReply(event, config, branchId) {
   const userId = event.source?.userId;
   const text = event.message?.text || '';
   if (!userId) return false;
+
+  // LINE Reminder (2026-05-15) Task 8 — opt-out intent runs FIRST so it can
+  // short-circuit "ผูก {ID}" / courses / appointments / help. Without this
+  // ordering, "stop" sent by an already-linked customer would fall through
+  // into the help fallback and never toggle their opt-out flag.
+  const optOutIntent = detectOptOutIntent(text);
+  if (optOutIntent.matched) {
+    try {
+      const db = getAdminFirestore();
+      // LR-3: branch-scoped customer lookup. Without branchId we can't
+      // safely scope; bail with a generic ack.
+      if (!branchId) {
+        await replyLineMessage(event.replyToken, 'ยังไม่สามารถระบุสาขาที่ติดต่อได้ค่ะ', config.channelAccessToken);
+        return true;
+      }
+      const customer = await findCustomerByLineUserIdAtBranch(db, userId, branchId);
+      if (customer) {
+        await setCustomerOptOut(db, customer.id, optOutIntent.optOut, 'customer-dm');
+        const replyText = optOutIntent.optOut
+          ? '✓ หยุดแจ้งเตือนผ่าน LINE เรียบร้อยค่ะ\nหากต้องการเปิดอีกครั้ง พิมพ์ "เริ่มแจ้งเตือน"'
+          : '✓ เปิดแจ้งเตือนผ่าน LINE เรียบร้อยค่ะ ระบบจะแจ้งเตือนก่อนนัด 1 วัน';
+        await replyLineMessage(event.replyToken, replyText, config.channelAccessToken);
+      } else {
+        await replyLineMessage(
+          event.replyToken,
+          'ยังไม่ผูก LINE กับสาขานี้ค่ะ กรุณาติดต่อแอดมินเพื่อผูกบัญชี',
+          config.channelAccessToken
+        );
+      }
+    } catch (err) {
+      console.warn('[line-webhook] opt-out intent failed:', err?.message || err);
+    }
+    return true;
+  }
 
   const intent = interpretCustomerMessage(text);
 
@@ -466,7 +706,10 @@ async function maybeEmitBotReply(event, config, branchId) {
 // ─── Process LINE events ────────────────────────────────────────────────────
 
 async function processEvent(event, fallbackConfig) {
-  if (event.type !== 'message') return;
+  // LINE Reminder (2026-05-15) Task 7 — accept postback events alongside
+  // messages. Other event types (follow, unfollow, join, leave, etc.) are
+  // silently ignored as before.
+  if (event.type !== 'message' && event.type !== 'postback') return;
 
   const userId = event.source?.userId;
   if (!userId) return;
@@ -495,6 +738,20 @@ async function processEvent(event, fallbackConfig) {
     console.warn('[line-webhook] config resolution fell back:', err?.message || err);
   }
   if (!config?.channelAccessToken) return;
+
+  // LINE Reminder (2026-05-15) Task 7 — postback events are reminder-button
+  // taps. Route to handlePostback (atomic batch: postback_log + appt update)
+  // and return — postback events don't carry a chat message, so we don't
+  // touch chat_conversations/messages.
+  if (event.type === 'postback') {
+    try {
+      const db = getAdminFirestore();
+      await handlePostback(event, db, config, branchId);
+    } catch (err) {
+      console.warn('[line-webhook] postback handler failed:', err?.message || err);
+    }
+    return;
+  }
 
   const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/line_${userId}`;
   const msgPath = `${convPath}/messages/${event.message.id}`;
