@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Search } from 'lucide-react';
 import { RecallSlotCard } from './RecallSlotCard.jsx';
 import {
@@ -68,6 +68,21 @@ export function RecallCreateModal({
   const [customerSearch, setCustomerSearch] = useState('');
   const [allCustomers, setAllCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const customerSearchRef = useRef(null);
+
+  // Phase 29.21-fix2 Playwright finding A1: autoFocus attribute doesn't
+  // fire when the input is initially DISABLED (during customers loading).
+  // Manually focus when customers finish loading + the picker is still
+  // visible. Uses ref so we focus even after re-render.
+  useEffect(() => {
+    if (customer) return; // picker hidden
+    if (customersLoading) return;
+    // Defer to next tick so React renders the enabled state first
+    const t = setTimeout(() => {
+      try { customerSearchRef.current?.focus(); } catch (e) { /* defensive */ }
+    }, 30);
+    return () => clearTimeout(t);
+  }, [customer, customersLoading]);
 
   // Lazy-load customers ONLY when no customer pre-filled (saves a heavy fetch
   // when modal is launched from CDV / treatment-history context).
@@ -339,13 +354,13 @@ export function RecallCreateModal({
               <div className="relative">
                 <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none" />
                 <input
+                  ref={customerSearchRef}
                   type="text"
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                   placeholder={customersLoading ? 'กำลังโหลดลูกค้า...' : 'ค้นหา (ชื่อ / HN / เบอร์โทร)'}
                   disabled={customersLoading}
                   data-testid="recall-create-customer-search"
-                  autoFocus
                   className="w-full pl-7 pr-2 py-2 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
                 />
               </div>
@@ -419,8 +434,8 @@ export function RecallCreateModal({
             </div>
           )}
           {validationErrors.includes('customer-required') && (
-            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[11px] text-red-300">
-              ⚠ ไม่พบลูกค้า
+            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[11px] text-red-300" data-testid="recall-create-customer-required">
+              ⚠ กรุณาเลือกลูกค้าก่อน
             </div>
           )}
 
