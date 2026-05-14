@@ -35,6 +35,7 @@ export function RecallList({
   onLineSend,
   onSnooze,
   onPairClick,
+  onDelete,
   emptyState = null,
 }) {
   // Bucket grouping — Bangkok-stable, recalls array reference is the key
@@ -97,6 +98,7 @@ export function RecallList({
                   onLineSend={onLineSend}
                   onSnooze={onSnooze}
                   onPairClick={onPairClick}
+                  onDelete={onDelete}
                 />
               ))}
             </div>

@@ -11321,6 +11321,36 @@ export async function snoozeRecall(id, untilDate) {
   });
 }
 
+/**
+ * Phase 29.22 (2026-05-14) — hard-delete a recall doc.
+ * If the recall has a paired recall, also clears the partner's pairedRecallId
+ * pointer (otherwise the partner shows a broken "🔗 จับคู่กับ" badge).
+ *
+ * User report: "ลบ Recall ไม่ได้ user จะลบยังไงวะ ไม่มีปุ่มลบ ปุ่มแก้ไขเลย".
+ *
+ * @param {string} id recall id
+ */
+export async function deleteRecall(id) {
+  if (!id) return;
+  // Read first to find paired partner.
+  const snap = await getDoc(recallDoc(id));
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const pairedId = data?.pairedRecallId || null;
+  const me = _resolveRecallAttribution();
+  // Use a batch so partner-cleanup and self-delete commit atomically.
+  const batch = writeBatch(db);
+  batch.delete(recallDoc(id));
+  if (pairedId) {
+    batch.update(recallDoc(pairedId), {
+      pairedRecallId: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: me,
+    });
+  }
+  await batch.commit();
+}
+
 // Mark customer-scoped recall listener as universal (BSA exception SG10).
 // Branch-scoped listener (`listenToRecalls`) follows the default branch-aware
 // path via `useBranchAwareListener`.

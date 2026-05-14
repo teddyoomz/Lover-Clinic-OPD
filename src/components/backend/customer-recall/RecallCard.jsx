@@ -7,6 +7,7 @@ import { RecallOutcomeModal } from '../recall/RecallOutcomeModal.jsx';
 import { RecallSnoozeMenu } from '../recall/RecallSnoozeMenu.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
 import { useRecallCases } from '../../../hooks/useRecallCases.js';
+import { deleteRecall } from '../../../lib/scopedDataLayer.js';
 import { isOverdue, getEffectiveRecallDate } from '../../../lib/recallResolvers.js';
 import { thaiTodayISO } from '../../../utils.js';
 
@@ -96,6 +97,16 @@ export function RecallCard({ customerId, customer }) {
     const recall = findRecall(id);
     if (recall) setSnoozeModal({ recall });
   }, [findRecall]);
+
+  // Phase 29.22 round-3 — hard-delete handler (confirm lives in RecallRow).
+  const handleDelete = useCallback(async (id) => {
+    try {
+      await deleteRecall(id);
+    } catch (e) {
+      console.error('[RecallCard] deleteRecall failed:', e);
+      window.alert('ลบ Recall ไม่สำเร็จ: ' + (e?.message || 'unknown error'));
+    }
+  }, []);
 
   const handleReschedule = useCallback((id) => {
     const recall = findRecall(id);
@@ -187,6 +198,7 @@ export function RecallCard({ customerId, customer }) {
               onClick={handleRowClick}
               onRecordOutcome={handleRecordOutcome}
               onSnooze={handleSnooze}
+              onDelete={handleDelete}
               // No onLineSend in CDV (admin uses Backend tab for that per spec §4.3)
             />
           ))}

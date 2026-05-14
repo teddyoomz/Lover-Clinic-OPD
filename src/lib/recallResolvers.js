@@ -128,13 +128,34 @@ export function getRecallStatusLabel(r, todayISO) {
  * @param {object} r recall
  * @returns {{bg:string,border:string,text:string}}
  */
+/**
+ * Phase 29.22 round-3 polish (2026-05-14) — theme-aware badge colors.
+ * Previous palette used pastel text (#6ee7b7 etc.) that was invisible on
+ * white in light mode. Now returns BOTH lightText + darkText; caller picks
+ * via useTheme().resolvedTheme. bg/border stay theme-agnostic (rgba alpha
+ * works on both backgrounds).
+ *
+ * User report: "ปุ่มสี badge มึงสีอ่อนไป สีมึงจะกลืนกับสีขาวอยู่แล้ว".
+ *
+ * Returns: { bg, border, lightText, darkText }
+ *   Backward-compat: also returns `text` = darkText for legacy callers
+ *   that don't pass a theme (will look correct in dark, faded in light).
+ */
 export function getRecallStatusColor(r) {
-  if (!r) return { bg: 'transparent', border: 'transparent', text: 'inherit' };
-  if (r.status === 'done') return { bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.35)', text: '#6ee7b7' };
-  if (r.status === 'no-answer') return { bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.35)', text: '#fca5a5' };
-  if (r.status === 'closed-no-answer') return { bg: 'rgba(75,85,99,0.10)', border: 'rgba(75,85,99,0.35)', text: '#9ca3af' };
-  if (r.snoozedUntil) return { bg: 'rgba(99,102,241,0.10)', border: 'rgba(99,102,241,0.35)', text: '#a5b4fc' };
-  return { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.35)', text: '#fcd34d' };
+  if (!r) return { bg: 'transparent', border: 'transparent', text: 'inherit', lightText: 'inherit', darkText: 'inherit' };
+  if (r.status === 'done') {
+    return { bg: 'rgba(16,185,129,0.22)', border: 'rgba(16,185,129,0.60)', lightText: '#047857', darkText: '#6ee7b7', text: '#6ee7b7' };
+  }
+  if (r.status === 'no-answer') {
+    return { bg: 'rgba(239,68,68,0.22)', border: 'rgba(239,68,68,0.60)', lightText: '#b91c1c', darkText: '#fca5a5', text: '#fca5a5' };
+  }
+  if (r.status === 'closed-no-answer') {
+    return { bg: 'rgba(75,85,99,0.22)', border: 'rgba(75,85,99,0.60)', lightText: '#374151', darkText: '#d1d5db', text: '#9ca3af' };
+  }
+  if (r.snoozedUntil) {
+    return { bg: 'rgba(99,102,241,0.22)', border: 'rgba(99,102,241,0.60)', lightText: '#4338ca', darkText: '#a5b4fc', text: '#a5b4fc' };
+  }
+  return { bg: 'rgba(245,158,11,0.22)', border: 'rgba(245,158,11,0.60)', lightText: '#b45309', darkText: '#fcd34d', text: '#fcd34d' };
 }
 
 /**
@@ -148,36 +169,38 @@ export function getRecallStatusColor(r) {
  * @returns {{label:string,emoji:string,color:{bg:string,border:string,text:string}}|null}
  */
 export function getRecallOutcomeMeta(outcome) {
+  // Phase 29.22 round-3 — theme-aware text (lightText + darkText). Caller
+  // picks via useTheme().resolvedTheme. bg/border stay theme-agnostic.
   switch (outcome) {
     case 'will-come':
       return {
         label: 'จะมาตามนัด',
         emoji: '✓',
-        color: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.40)', text: '#6ee7b7' },
+        color: { bg: 'rgba(16,185,129,0.22)', border: 'rgba(16,185,129,0.60)', lightText: '#047857', darkText: '#6ee7b7', text: '#6ee7b7' },
       };
     case 'reschedule':
       return {
         label: 'ขอเลื่อน',
         emoji: '⏰',
-        color: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.40)', text: '#fcd34d' },
+        color: { bg: 'rgba(245,158,11,0.22)', border: 'rgba(245,158,11,0.60)', lightText: '#b45309', darkText: '#fcd34d', text: '#fcd34d' },
       };
     case 'not-interested':
       return {
         label: 'ไม่สนใจ / ไม่ต้องการ',
         emoji: '💭',
-        color: { bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.40)', text: '#a5b4fc' },
+        color: { bg: 'rgba(99,102,241,0.22)', border: 'rgba(99,102,241,0.60)', lightText: '#4338ca', darkText: '#a5b4fc', text: '#a5b4fc' },
       };
     case 'no-answer':
       return {
         label: 'ติดต่อไม่ได้',
         emoji: '📵',
-        color: { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.40)', text: '#fca5a5' },
+        color: { bg: 'rgba(239,68,68,0.22)', border: 'rgba(239,68,68,0.60)', lightText: '#b91c1c', darkText: '#fca5a5', text: '#fca5a5' },
       };
     case 'closed-no-answer':
       return {
         label: 'ปิดการติดตาม',
         emoji: '🗂️',
-        color: { bg: 'rgba(107,114,128,0.14)', border: 'rgba(107,114,128,0.40)', text: '#9ca3af' },
+        color: { bg: 'rgba(107,114,128,0.22)', border: 'rgba(107,114,128,0.55)', lightText: '#374151', darkText: '#d1d5db', text: '#9ca3af' },
       };
     default:
       return null;

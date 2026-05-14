@@ -1,11 +1,12 @@
 import React from 'react';
-import { Phone, MessageCircle, Clock } from 'lucide-react';
+import { Phone, MessageCircle, Clock, Trash2 } from 'lucide-react';
 import {
   getRecallStatusLabel,
   getRecallStatusColor,
   getRecallOutcomeMeta,
   isOverdue,
 } from '../../../lib/recallResolvers.js';
+import { useTheme } from '../../../hooks/useTheme.js';
 import { RecallPairBadge } from './RecallPairBadge.jsx';
 
 /**
@@ -31,6 +32,7 @@ import { RecallPairBadge } from './RecallPairBadge.jsx';
  * @param {function} [props.onLineSend] (recallId) → open LINE template modal
  * @param {function} [props.onSnooze] (recallId) → open snooze date picker
  * @param {function} [props.onPairClick] (pairedRecallId) → scroll/open paired
+ * @param {function} [props.onDelete] (recallId) → hard-delete with confirm
  * @param {boolean} [props.compact] hide source row + reduce padding (CDV variant)
  */
 export function RecallRow({
@@ -42,11 +44,15 @@ export function RecallRow({
   onLineSend,
   onSnooze,
   onPairClick,
+  onDelete,
   compact = false,
 }) {
   if (!recall) return null;
 
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
   const statusColor = getRecallStatusColor(recall);
+  const statusTextColor = isLight ? statusColor.lightText : statusColor.darkText;
   const statusLabel = getRecallStatusLabel(recall, todayISO);
   const over = isOverdue(recall, todayISO);
   const snoozed = !!recall.snoozedUntil && recall.status === 'pending';
@@ -121,8 +127,8 @@ export function RecallRow({
             >L</span>
           )}
           <span
-            className="text-[9px] px-1.5 py-0.5 rounded font-bold border"
-            style={{ background: statusColor.bg, borderColor: statusColor.border, color: statusColor.text }}
+            className="text-[10px] px-2 py-0.5 rounded-md font-bold border"
+            style={{ background: statusColor.bg, borderColor: statusColor.border, color: statusTextColor }}
             data-testid={`recall-status-chip-${recall.id}`}
           >
             {statusLabel}
@@ -139,11 +145,11 @@ export function RecallRow({
               so admins can scan list without opening each entry. */}
           {outcomeMeta && (
             <span
-              className="text-[9px] px-1.5 py-0.5 rounded font-bold border inline-flex items-center gap-0.5"
+              className="text-[10px] px-2 py-0.5 rounded-md font-bold border inline-flex items-center gap-1"
               style={{
                 background: outcomeMeta.color.bg,
                 borderColor: outcomeMeta.color.border,
-                color: outcomeMeta.color.text,
+                color: isLight ? outcomeMeta.color.lightText : outcomeMeta.color.darkText,
               }}
               data-testid={`recall-outcome-meta-${recall.id}`}
               title={`เหตุผล: ${outcomeMeta.label}`}
@@ -153,7 +159,14 @@ export function RecallRow({
             </span>
           )}
         </div>
-        <div className="text-[10px] text-[var(--tx-muted)] mt-1 line-clamp-1">{recall.reason || ''}</div>
+        {/* Phase 29.22 round-3 — reason text prominence bumped per user
+            request: "ไอ้สาเหตุ ... ในแต่ละ list ทุกที่ มึงต้องเด่นกว่านี้มากๆ
+            มันคือสิ่งสำคัญเสือกตัวเล็กบาง". Was text-[10px] text-tx-muted
+            (10px faint) → now text-[13px] font-medium text-tx-primary
+            (13px, full primary color). Keeps line-clamp-2 for overflow control. */}
+        <div className="text-[13px] font-medium text-[var(--tx-primary)] mt-1.5 line-clamp-2" data-testid={`recall-reason-${recall.id}`}>
+          {recall.reason || ''}
+        </div>
         {!compact && recall.sourceProductName && (
           <div className="text-[9px] text-[var(--tx-muted)] opacity-70 mt-0.5">{recall.sourceProductName}</div>
         )}
@@ -175,8 +188,9 @@ export function RecallRow({
         )}
       </div>
 
-      {/* Action chips */}
-      <div className="flex gap-1 self-start opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+      {/* Action chips — always visible (round-3 fix: hover-only pattern was
+          too discoverability-poor; user couldn't find delete/edit buttons). */}
+      <div className="flex gap-1.5 self-start">
         {onRecordOutcome && recall.status !== 'done' && recall.status !== 'closed-no-answer' && (
           <button
             type="button"
@@ -206,11 +220,33 @@ export function RecallRow({
             type="button"
             onClick={(e) => { e.stopPropagation(); onSnooze(recall.id); }}
             data-testid={`recall-snooze-${recall.id}`}
-            className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 flex items-center justify-center"
+            className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 flex items-center justify-center"
             aria-label="เลื่อน Recall"
             title="⏰ เลื่อน"
           >
             <Clock size={11} />
+          </button>
+        )}
+        {/* Phase 29.22 round-3 — delete button. User report: "ลบ Recall ไม่ได้
+            user จะลบยังไงวะ ไม่มีปุ่มลบ ปุ่มแก้ไขเลย".  Hard-delete via
+            deleteRecall (clears paired-partner pointer too). Always shown
+            (admin can delete done/closed recalls too — e.g. wrong customer). */}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const name = recall.customerName || recall.customerHN || recall.id;
+              if (window.confirm(`ลบ Recall ของ "${name}" ?\n(การกระทำนี้ถาวร; หากจับคู่ไว้กับ Recall อื่น คู่จะถูกปลดด้วย)`)) {
+                onDelete(recall.id);
+              }
+            }}
+            data-testid={`recall-delete-${recall.id}`}
+            className="w-6 h-6 rounded bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-300 hover:bg-red-500/25 hover:border-red-500/60 flex items-center justify-center"
+            aria-label="ลบ Recall"
+            title="🗑️ ลบ Recall"
+          >
+            <Trash2 size={11} />
           </button>
         )}
       </div>

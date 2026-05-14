@@ -9,6 +9,7 @@ import { RecallCasesAdminPanel } from './RecallCasesAdminPanel.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
 import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
+import { deleteRecall } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
 
 /**
@@ -125,6 +126,17 @@ export function RecallTab() {
     }
   }, [findRecall, todayISO]);
 
+  // Phase 29.22 round-3 — hard-delete handler. Confirm prompt lives in
+  // RecallRow itself; this only fires after admin confirms.
+  const handleDelete = useCallback(async (id) => {
+    try {
+      await deleteRecall(id);
+    } catch (e) {
+      console.error('[RecallTab] deleteRecall failed:', e);
+      window.alert('ลบ Recall ไม่สำเร็จ: ' + (e?.message || 'unknown error'));
+    }
+  }, []);
+
   const handlePairClick = useCallback((pairedId) => {
     // Future: scroll to paired recall row in list. For now, log + no-op.
     if (typeof window !== 'undefined') {
@@ -204,6 +216,7 @@ export function RecallTab() {
           onLineSend={handleLineSend}
           onSnooze={handleSnooze}
           onPairClick={handlePairClick}
+          onDelete={handleDelete}
         />
       )}
 

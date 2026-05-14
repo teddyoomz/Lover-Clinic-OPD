@@ -621,6 +621,8 @@ export const updateRecall = (...args) => raw.updateRecall(...args);
 export const recordRecallOutcome = (...args) => raw.recordRecallOutcome(...args);
 export const recordRecallLineSend = (...args) => raw.recordRecallLineSend(...args);
 export const snoozeRecall = (...args) => raw.snoozeRecall(...args);
+// Phase 29.22 (2026-05-14) — hard-delete with paired-partner cleanup.
+export const deleteRecall = (...args) => raw.deleteRecall(...args);
 
 // ─── Phase 29.22 (2026-05-14) — be_recall_cases UNIVERSAL collection ──────
 // Per BSA Rule L: no branchId; shared across branches. Re-exports are
