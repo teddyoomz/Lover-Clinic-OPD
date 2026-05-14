@@ -109,6 +109,12 @@ export default defineConfig({
           if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'vendor-firebase';
           if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
           if (id.includes('node_modules/fabric')) return 'vendor-fabric';
+          // Phase 29 (2026-05-14) — bucket recall components into their own
+          // chunk. Workaround for Rolldown panic when AdminDashboard imports
+          // Thai-content components directly (byte-boundary slice error in
+          // hash_placeholder.rs). Splitting into own chunk shifts content
+          // offsets so the panic no longer triggers.
+          if (id.includes('/components/backend/recall/')) return 'recall';
         },
       },
     },

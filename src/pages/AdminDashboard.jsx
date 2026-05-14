@@ -103,6 +103,12 @@ import ClinicLogo from '../components/ClinicLogo.jsx';
 // component picks up the per-user-keyed selectedBranchId immediately.
 import BranchSelector from '../components/backend/BranchSelector.jsx';
 import AppointmentHubView from '../components/admin/AppointmentHubView.jsx';
+// Phase 29 (2026-05-14) — Recall System (Frontend daily-work view).
+// Both imports bucketed into the 'recall' manualChunk (vite.config.js) to
+// isolate Thai-content components from AdminDashboard's chunk (works around
+// a Rolldown char-boundary panic when they were co-located).
+import { RecallFrontendView } from '../components/backend/recall/RecallFrontendView.jsx';
+import { RecallTogglePill } from '../components/backend/recall/RecallTogglePill.jsx';
 // V55/BS-14 (2026-05-08) — useEffectiveClinicSettings merges per-branch
 // settings (V51 openHoursMonFri/SatSun + chatHours*) over global cs. The
 // schedule-link modal's saved doc + slot-build derivations now use these
@@ -6476,7 +6482,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       ) : adminMode === 'appointment' ? (
         <div>
-          {/* V64 — view-toggle pill */}
+          {/* V64 — view-toggle pill. Phase 29 (2026-05-14) extends to 3 states
+              (list / recall / calendar) — recall sits between list and calendar
+              with a real-time count badge for pending+overdue. */}
           <div className="flex gap-2 mb-3">
             <button
               type="button"
@@ -6490,6 +6498,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             >
               📋 รายการ
             </button>
+            <RecallTogglePill
+              active={apptViewMode === 'recall'}
+              onClick={() => setApptViewMode('recall')}
+            />
             <button
               type="button"
               data-testid="appt-view-toggle-calendar"
@@ -6503,7 +6515,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               📅 ปฏิทิน
             </button>
           </div>
-          {apptViewMode === 'list' ? (
+          {apptViewMode === 'recall' ? (
+            <RecallFrontendView />
+          ) : apptViewMode === 'list' ? (
             <AppointmentHubView
               branchName={(branches || []).find(b => b.id === selectedBranchId)?.name || ''}
               doctors={(practitioners || []).filter(p => p.role === 'doctor')}
