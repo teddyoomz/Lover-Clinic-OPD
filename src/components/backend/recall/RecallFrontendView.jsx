@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Plus, PhoneCall } from 'lucide-react';
 import { RecallList } from './RecallList.jsx';
 import { RecallCreateModal } from './RecallCreateModal.jsx';
+import { RecallEditModal } from './RecallEditModal.jsx';
 import { RecallOutcomeModal } from './RecallOutcomeModal.jsx';
 import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
@@ -29,6 +30,7 @@ export function RecallFrontendView() {
   const { recallCases, onSaveAsRecallCase } = useRecallCases();
 
   const [createModal, setCreateModal] = useState(null);
+  const [editModal, setEditModal] = useState(null);
   const [outcomeModal, setOutcomeModal] = useState(null);
   const [lineModal, setLineModal] = useState(null);
   const [snoozeModal, setSnoozeModal] = useState(null);
@@ -66,6 +68,12 @@ export function RecallFrontendView() {
   const handleSnooze = useCallback((id) => {
     const recall = findRecall(id);
     if (recall) setSnoozeModal({ recall });
+  }, [findRecall]);
+
+  // Phase 29.23 Task 6 — edit handler (mirrors handleSnooze pattern).
+  const handleEdit = useCallback((id) => {
+    const recall = findRecall(id);
+    if (recall) setEditModal({ recall });
   }, [findRecall]);
 
   // Phase 29.22 round-3 — hard-delete handler (confirm lives in RecallRow).
@@ -118,6 +126,7 @@ export function RecallFrontendView() {
           onSnooze={handleSnooze}
           onPairClick={() => {}}
           onDelete={handleDelete}
+          onEdit={handleEdit}
         />
       )}
 
@@ -148,6 +157,14 @@ export function RecallFrontendView() {
           recallCases={recallCases}
           onSaveAsRecallCase={onSaveAsRecallCase}
           onClose={() => setCreateModal(null)}
+        />
+      )}
+      {editModal && (
+        <RecallEditModal
+          recall={editModal.recall}
+          recallCases={recallCases}
+          onClose={() => setEditModal(null)}
+          onSaved={() => setEditModal(null)}
         />
       )}
       {outcomeModal && (
