@@ -60,7 +60,26 @@ export function RecallSlotCard({ slotType, value, onChange, todayISO, masterData
 
   const days = value?.recallDate ? computeDaysFromToday(value.recallDate, todayISO) : null;
   const showAutoSuggest = !!(value?.enabled && masterDataSuggestion);
-  const showInlineLearn = !!(value?.enabled && !masterDataSuggestion && value?.recallDate && value?.reason);
+  // Phase 29.23-bis (2026-05-14) — hide inline-learn checkbox when the reason
+  // already matches an existing be_recall_cases entry. User report: "กูเลือก
+  // เหตุผล ที่มีอยู่แล้วใน dropdown มา แล้วมึงยังมีช่อง บันทึกเป็นเคส Recall
+  // โผล่มาให้ติ๊กอีกวะ มันก็บันทึกซ้ำซ้อนอะดิ". When admin picks an existing
+  // case from typeahead, the reason exactly matches one of recallCases.caseName
+  // → no point offering "save as new case" (would create duplicate).
+  // Trim both sides to defend against typeahead-set whitespace asymmetry.
+  const normalizedReason = String(value?.reason || '').trim();
+  const reasonAlreadyInCases = !!(
+    normalizedReason &&
+    Array.isArray(recallCases) &&
+    recallCases.some((c) => String(c?.caseName || '').trim() === normalizedReason)
+  );
+  const showInlineLearn = !!(
+    value?.enabled &&
+    !masterDataSuggestion &&
+    value?.recallDate &&
+    value?.reason &&
+    !reasonAlreadyInCases
+  );
 
   const set = (patch) => onChange?.(patch);
 

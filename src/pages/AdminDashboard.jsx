@@ -3255,6 +3255,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const _maybeOpenWalkInModal = (customerId, customerHN) => {
       if (adminMode !== 'dashboard') return;
       if (!customerId) return;
+      // Phase 29.23-bis (2026-05-14) — gate: entries pushed from deposit-booking
+      // OR no-deposit-booking flows ALREADY have an appointment (be_appointments
+      // doc was created at booking time, then opd_sessions cross-stamped with
+      // linkedAppointmentId / linkedDepositId — see confirmCreateNoDeposit
+      // line ~2828 + confirmCreateDeposit line ~2682). The walk-in modal is
+      // ONLY for fresh walk-ins (created directly in the คิวหน้า Clinic tab).
+      // User report: "หากมาจากหน้า จองมัดจำ หรือ จองไม่มัดจำ ... เมื่อกดบันทึกลง OPD
+      // ในหน้า คิวหน้า Clinic จะไม่ต้องขึ้น modal มาให้สร้างนัดหมายอีก".
+      if (session?.linkedAppointmentId || session?.linkedDepositId) return;
       setWalkInModal({
         sessionId,
         customerId,
@@ -4227,7 +4236,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       <button
         onClick={() => handleOpdClick(session)}
         disabled={isPending || isDone}
-        title={isDone ? 'บันทึกลง ProClinic แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังส่งข้อมูลไป ProClinic...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'ส่งข้อมูลบันทึกลง ProClinic'}
+        title={isDone ? 'บันทึกลง OPD แล้ว — ลบจากหน้าประวัติเพื่อบันทึกใหม่' : isPending ? 'กำลังบันทึกข้อมูล...' : isFailed ? `ล้มเหลว: ${session.brokerError || ''}` : 'บันทึกลง OPD'}
         className={`p-2 rounded-lg border transition-all ${
           isDone    ? 'bg-[var(--opd-btn-bg)] text-[var(--opd-color)] border-[var(--opd-bd-str)] cursor-not-allowed opacity-80' :
           isPending ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse' :
@@ -5591,7 +5600,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
           {[
             { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
-            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิว Walk-IN', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
+            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิวหน้า Clinic', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
             { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
             { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
             { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
@@ -5628,7 +5637,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
           <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}}>
-            <Activity size={16} /> คิว Walk-IN
+            <Activity size={16} /> คิวหน้า Clinic
             {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
           <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
