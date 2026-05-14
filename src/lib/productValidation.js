@@ -52,6 +52,24 @@ export function validateProduct(form) {
     }
   }
 
+  // Phase 29 (2026-05-14) — Recall master-data fields. Day-count fields are
+  // strict-integer + bounded (same contract as course's period/daysBeforeExpire).
+  // Reason fields are free-text — only length-bounded.
+  for (const k of ['followUpAfterDays', 'recallAfterDays']) {
+    if (form[k] != null && form[k] !== '') {
+      const n = Number(form[k]);
+      if (!Number.isFinite(n)) return [k, `${k} ต้องเป็นตัวเลข`];
+      if (n < 0) return [k, `${k} ต้องเป็นจำนวนไม่ติดลบ`];
+      if (!Number.isInteger(n)) return [k, `${k} ต้องเป็นจำนวนเต็ม (จำนวนวัน)`];
+      if (n > 3650) return [k, `${k} ต้องไม่เกิน 3650 วัน (~10 ปี)`];
+    }
+  }
+  for (const k of ['followUpReason', 'recallReason']) {
+    if (form[k] != null && String(form[k]).length > TEXT_MAX_LENGTH) {
+      return [k, `${k} เกิน ${TEXT_MAX_LENGTH} ตัวอักษร`];
+    }
+  }
+
   // V43 (2026-05-08) — `skipStockDeduction` added so direct product
   // purchases can opt out of stock decrement at master level. Mirrors the
   // course-row skipStockDeduction concept but lives on the be_products doc.
@@ -116,6 +134,14 @@ export function emptyProductForm() {
     timesPerDay: '',
     orderBy: '',
     status: 'ใช้งาน',
+    // Phase 29 (2026-05-14) — Recall master-data defaults. All 4 fields are
+    // independently optional. When set, auto-suggest pre-fills the recall
+    // modal when admin creates a recall for this product. `null` = no
+    // auto-suggest (admin types manually).
+    followUpAfterDays: null,  // Slot 1 default — short-term aftercare (e.g. 1-3 days)
+    followUpReason: null,     // Slot 1 default reason text
+    recallAfterDays: null,    // Slot 2 default — cycle-end revisit (e.g. 180 = 6 months)
+    recallReason: null,       // Slot 2 default reason text
   };
 }
 
@@ -158,6 +184,13 @@ export function normalizeProduct(form) {
     timesPerDay: numOrNull(form.timesPerDay),
     orderBy: numOrNull(form.orderBy),
     status: form.status || 'ใช้งาน',
+    // Phase 29 — recall fields. numOrNull handles '' / null / numeric.
+    // Reason fields: trim + collapse empty → null (avoids storing '' for
+    // "no default" — Firestore index efficiency + auto-suggest gate).
+    followUpAfterDays: numOrNull(form.followUpAfterDays),
+    followUpReason: (typeof form.followUpReason === 'string' && form.followUpReason.trim()) ? form.followUpReason.trim() : null,
+    recallAfterDays: numOrNull(form.recallAfterDays),
+    recallReason: (typeof form.recallReason === 'string' && form.recallReason.trim()) ? form.recallReason.trim() : null,
   };
 }
 

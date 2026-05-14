@@ -129,6 +129,18 @@ export function validateCourse(form) {
   const dbeFail = validateDayInteger(form.daysBeforeExpire, 'daysBeforeExpire', 'ระยะเวลาใช้งานหลังซื้อ');
   if (dbeFail) return dbeFail;
 
+  // Phase 29 (2026-05-14) — Recall master-data day-count fields. Same
+  // strict-integer + bounded contract as period/daysBeforeExpire.
+  const followUpFail = validateDayInteger(form.followUpAfterDays, 'followUpAfterDays', 'ระยะเวลาก่อน follow-up (Recall #1)');
+  if (followUpFail) return followUpFail;
+  const recallFail = validateDayInteger(form.recallAfterDays, 'recallAfterDays', 'ระยะเวลาก่อน recall (Recall #2)');
+  if (recallFail) return recallFail;
+  for (const k of ['followUpReason', 'recallReason']) {
+    if (form[k] != null && String(form[k]).length > NAME_MAX_LENGTH) {
+      return [k, `${k} เกิน ${NAME_MAX_LENGTH} ตัวอักษร`];
+    }
+  }
+
   // Buffet courses MUST have a validity window (daysBeforeExpire > 0).
   // Without it, the buffet has no expiry → use forever (financially dangerous).
   // The CourseFormModal already shows "บุฟเฟต์ใช้ได้จนครบกำหนด" hint at line 452;
@@ -234,6 +246,11 @@ export function emptyCourseForm() {
     // Misc
     orderBy: '',
     status: 'ใช้งาน',
+    // Phase 29 (2026-05-14) — Recall master-data defaults. Mirror be_products.
+    followUpAfterDays: null,
+    followUpReason: null,
+    recallAfterDays: null,
+    recallReason: null,
   };
 }
 
@@ -288,6 +305,12 @@ export function normalizeCourse(form) {
       : [],
     orderBy: numOrNull(form.orderBy),
     status: STATUS_OPTIONS.includes(form.status) ? form.status : 'ใช้งาน',
+    // Phase 29 (2026-05-14) — recall master-data normalization. Mirrors
+    // be_products: empty string → null; whitespace trimmed; empty reason → null.
+    followUpAfterDays: numOrNull(form.followUpAfterDays),
+    followUpReason: (typeof form.followUpReason === 'string' && form.followUpReason.trim()) ? form.followUpReason.trim() : null,
+    recallAfterDays: numOrNull(form.recallAfterDays),
+    recallReason: (typeof form.recallReason === 'string' && form.recallReason.trim()) ? form.recallReason.trim() : null,
   };
 }
 

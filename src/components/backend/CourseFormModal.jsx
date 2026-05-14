@@ -655,6 +655,60 @@ export default function CourseFormModal({ course, onClose, onSaved, clinicSettin
             className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
         </div>
       </div>
+
+      {/* Phase 29 (2026-05-14) — Recall settings (optional). Mirrors
+          ProductFormModal — when set, auto-suggest pre-fills recall modal
+          when admin creates a recall for a customer who took this course. */}
+      <div className="rounded-xl border border-[var(--bd)] p-3" data-field="recall-settings">
+        <p className="text-[11px] font-bold text-[var(--tx-muted)] mb-2 uppercase tracking-wider">
+          🔔 Recall settings (optional)
+        </p>
+        <p className="text-[10px] text-[var(--tx-muted)] italic mb-3">
+          Auto-suggest จำนวนวันที่ต้องโทรหาลูกค้าหลังใช้คอร์สนี้
+        </p>
+
+        {/* Slot 1 — aftercare */}
+        <div className="mb-2 p-2 bg-[var(--bg-hover)] rounded border-l-2 border-l-amber-500">
+          <div className="text-xs font-bold text-amber-300 mb-1">🩹 Recall #1 (ติดตามอาการ)</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div data-field="followUpAfterDays">
+              <input type="number" min="0" max="3650"
+                placeholder="กี่วันหลังการรักษา (เช่น 1-3)"
+                value={form.followUpAfterDays ?? ''}
+                onChange={(e) => update({ followUpAfterDays: e.target.value === '' ? null : Number(e.target.value) })}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+            </div>
+            <div data-field="followUpReason">
+              <input type="text" maxLength={200}
+                placeholder="เหตุผล / เรื่องที่จะติดตาม"
+                value={form.followUpReason ?? ''}
+                onChange={(e) => update({ followUpReason: e.target.value || null })}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+            </div>
+          </div>
+        </div>
+
+        {/* Slot 2 — revisit */}
+        <div className="p-2 bg-[var(--bg-hover)] rounded border-l-2 border-l-red-500">
+          <div className="text-xs font-bold text-red-300 mb-1">📅 Recall #2 (นัดกลับมา)</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div data-field="recallAfterDays">
+              <input type="number" min="0" max="3650"
+                placeholder="กี่วัน (เช่น 180 = 6 เดือน)"
+                value={form.recallAfterDays ?? ''}
+                onChange={(e) => update({ recallAfterDays: e.target.value === '' ? null : Number(e.target.value) })}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+            </div>
+            <div data-field="recallReason">
+              <input type="text" maxLength={200}
+                placeholder="เหตุผล / เรื่องที่จะ recall"
+                value={form.recallReason ?? ''}
+                onChange={(e) => update({ recallReason: e.target.value || null })}
+                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]" />
+            </div>
+          </div>
+        </div>
+      </div>
     </MarketingFormShell>
   );
 }
