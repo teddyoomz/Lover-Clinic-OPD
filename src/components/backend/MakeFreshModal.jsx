@@ -1,90 +1,44 @@
-import { useState, useCallback } from 'react';
+// 2026-05-15 — REFACTORED to use shared useMakeFreshStateMachine (Task 3
+// of Central-Stock Make-Fresh spec). State + handlers now in
+// src/lib/makeFreshStateMachine.js; this file is a thin scope=branch wrapper.
+// Backward compat preserved: every test-id + every visible string + every
+// state transition identical to pre-refactor.
+
 import { X, Loader2, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 import { auth } from '../../firebase.js';
 import { BUCKETS, bucketDefaultsForUI } from '../../lib/branchBackupBuckets.js';
+import { useMakeFreshStateMachine } from '../../lib/makeFreshStateMachine.js';
 
 const BUCKET_ORDER = Object.keys(BUCKETS);
+
+async function authedFetch(url, body) {
+  const token = await auth.currentUser?.getIdToken();
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+}
 
 export default function MakeFreshModal({ branch, onClose, onComplete }) {
   const branchName = branch.branchName || branch.name || '?';
   const branchId = branch.branchId || branch.id;
 
-  // Q4-B default: 6 buckets checked + customerActivity unchecked (opt-in only)
-  const [checkedBuckets, setCheckedBuckets] = useState(bucketDefaultsForUI);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState('');
-  // State machine: idle → previewing → preview-ready → confirming → backing-up → wiping → done | error
-  const [phase, setPhase] = useState('idle');
-  const [error, setError] = useState('');
-  const [preview, setPreview] = useState(null);
-  const [autoBackupRef, setAutoBackupRef] = useState(null);
-  const [bodyHash, setBodyHash] = useState(null);
-  const [result, setResult] = useState(null);
+  const sm = useMakeFreshStateMachine({
+    exportEndpoint: '/api/admin/branch-backup-export',
+    makeFreshEndpoint: '/api/admin/branch-make-fresh',
+    bucketDefaults: bucketDefaultsForUI(),
+    fetcher: authedFetch,
+    scopeBody: { branchId },
+    confirmName: branchName,
+  });
 
-  const tickedBucketIds = BUCKET_ORDER.filter(id => checkedBuckets[id]);
-  const matches = confirmText.trim() === branchName.trim();
-
-  const handleBucketToggle = (id) => {
-    setCheckedBuckets(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handlePreview = useCallback(async () => {
-    if (tickedBucketIds.length === 0) return;
-    setPhase('previewing'); setError('');
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch('/api/admin/branch-backup-export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ branchId, bucketIds: tickedBucketIds, dryRun: true }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'preview failed');
-      setPreview(json);
-      setPhase('preview-ready');
-    } catch (e) {
-      setError(e.message || 'preview failed'); setPhase('error');
-    }
-  }, [branchId, tickedBucketIds]);
-
-  const handleRun = useCallback(async () => {
-    if (!matches) return;
-    setPhase('backing-up'); setError('');
-    try {
-      const token = await auth.currentUser?.getIdToken();
-
-      // Phase 1: auto-pre-fresh backup with bucketIds (emits bodyHash)
-      const resBackup = await fetch('/api/admin/branch-backup-export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ branchId, bucketIds: tickedBucketIds, isAutoPreFresh: true }),
-      });
-      const jsonBackup = await resBackup.json();
-      if (!resBackup.ok || !jsonBackup.ok) throw new Error(jsonBackup.error || 'auto-backup failed');
-      setAutoBackupRef(jsonBackup.storagePath);
-      setBodyHash(jsonBackup.bodyHash);
-
-      // Phase 2: make-fresh wipe (server verifies hash before deleting)
-      setPhase('wiping');
-      const resFresh = await fetch('/api/admin/branch-make-fresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          branchId,
-          bucketIds: tickedBucketIds,
-          autoBackupRef: jsonBackup.storagePath,
-          expectedBodyHash: jsonBackup.bodyHash,
-        }),
-      });
-      const jsonFresh = await resFresh.json();
-      if (!resFresh.ok || !jsonFresh.ok) throw new Error(jsonFresh.error || 'make-fresh failed');
-
-      setResult(jsonFresh);
-      setPhase('done');
-    } catch (e) {
-      setError(e.message || 'failed'); setPhase('error');
-    }
-  }, [matches, branchId, tickedBucketIds]);
+  const {
+    phase, checkedBuckets, advancedOpen, confirmText, preview,
+    autoBackupRef, bodyHash, result, error, matches, tickedBucketIds,
+    handleBucketToggle, setAdvancedOpen, setConfirmText, handlePreview, handleRun,
+    setPhase, setPreview,
+  } = sm;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog">
@@ -100,7 +54,6 @@ export default function MakeFreshModal({ branch, onClose, onComplete }) {
           สาขา: <strong>{branchName}</strong> ({branchId})
         </div>
 
-        {/* IDLE — bucket selection */}
         {phase === 'idle' && (
           <>
             <div className="space-y-2" data-testid="bucket-list">
@@ -133,7 +86,7 @@ export default function MakeFreshModal({ branch, onClose, onComplete }) {
             </div>
 
             <button
-              onClick={() => setAdvancedOpen(v => !v)}
+              onClick={() => setAdvancedOpen(!advancedOpen)}
               className="text-xs flex items-center gap-1 opacity-70 hover:opacity-100"
               data-testid="advanced-toggle"
             >
@@ -159,7 +112,6 @@ export default function MakeFreshModal({ branch, onClose, onComplete }) {
           <div className="flex items-center gap-2 text-sm"><Loader2 size={16} className="animate-spin" /> กำลังคำนวณ...</div>
         )}
 
-        {/* PREVIEW READY — show impact panel */}
         {phase === 'preview-ready' && preview && (
           <>
             <div className="space-y-1 text-sm" data-testid="impact-panel">
@@ -202,7 +154,6 @@ export default function MakeFreshModal({ branch, onClose, onComplete }) {
           </>
         )}
 
-        {/* CONFIRMING — typed branch-name gate */}
         {phase === 'confirming' && (
           <>
             <div className="space-y-2 text-sm">
