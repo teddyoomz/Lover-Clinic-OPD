@@ -42,6 +42,11 @@ import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisp
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
+// Task 12 (LINE OA Appointment Reminder, 2026-05-15) — per-branch LINE
+// linkage display + global opt-out toggle for the customer detail page.
+// Spec §5 D. Purely presentational; write path goes through
+// updateCustomer (scopedDataLayer) on the parent toggle handler.
+import { CustomerLineSection } from './CustomerLineSection.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
@@ -422,6 +427,50 @@ export default function CustomerDetailView({
   const customerBranchName = customerBranchId
     ? (resolveBranchName(customerBranchId, allBranchesForLabel) || customerBranchId)
     : '';
+
+  // Task 12 (LINE OA Appointment Reminder, 2026-05-15) — branchId →
+  // branch-doc map for CustomerLineSection's per-branch linkage display.
+  // Built from the same full unscoped branches list (useSelectedBranch)
+  // so a customer's LINE linkage at a branch the current admin can't
+  // access still resolves the human-readable branch name. Spec §5 D.
+  const branchesByIdForLineSection = useMemo(() => {
+    const map = {};
+    (allBranchesForLabel || []).forEach((b) => {
+      if (b && b.branchId) map[b.branchId] = b;
+    });
+    return map;
+  }, [allBranchesForLabel]);
+
+  // Task 12 — opt-out toggle handler. Writes notifyOptOut + notifyOptOutAt
+  // + notifyOptOutBy through the same updateCustomer (scopedDataLayer)
+  // path the rest of CDV uses (Rule E — Firestore only via lib helpers;
+  // no direct setDoc/updateDoc in components). Stamps `admin-uid-{uid}`
+  // so the LINE-DM intent path ("customer-dm") in Task 8 stays
+  // distinguishable from admin-mediated toggles.
+  const onToggleCustomerOptOut = async (nextValue) => {
+    if (!customerId) return;
+    try {
+      const bc = await import('../../lib/scopedDataLayer.js');
+      const { updateCustomer } = bc;
+      const { auth } = await import('../../firebase.js');
+      const uid = auth?.currentUser?.uid || 'unknown';
+      await updateCustomer(customerId, {
+        notifyOptOut: !!nextValue,
+        notifyOptOutAt: nextValue ? new Date().toISOString() : null,
+        notifyOptOutBy: nextValue ? `admin-uid-${uid}` : null,
+      });
+      // Live listener (listenToCustomer at line ~224) keeps liveCustomer
+      // fresh — no manual refresh needed. Defensive parent ping so the
+      // rest of the dashboard (cards using customer prop) stays in sync.
+      if (onCustomerUpdated) {
+        const refreshed = await getCustomer(customerId);
+        if (refreshed) onCustomerUpdated(refreshed);
+      }
+    } catch (err) {
+      console.warn('[CustomerDetailView] notifyOptOut toggle failed:', err);
+      alert('บันทึกการตั้งค่าแจ้งเตือนไม่สำเร็จ');
+    }
+  };
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
   const activeCourses = useMemo(() => allCourses.filter(c => {
@@ -1008,6 +1057,18 @@ export default function CustomerDetailView({
               card pattern, sits next to it"). Uses per-customer universal
               listener (BSA SG10) so recalls follow customer across branches. */}
           <RecallCard customerId={customer?.id} customer={customer} />
+
+          {/* Task 12 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
+              LINE linkage display + global "ปิดรับแจ้งเตือน (ทุกสาขา)"
+              opt-out toggle. Spec §5 D. Section is purely presentational;
+              the toggle write path lives on the parent (onToggleCustomerOptOut
+              → updateCustomer via scopedDataLayer). */}
+          <CustomerLineSection
+            customer={customer}
+            branchesById={branchesByIdForLineSection}
+            onToggleOptOut={onToggleCustomerOptOut}
+          />
+
 
           {/* Treatment History — Phase 28 Task 8 (2026-05-14): inline 290-line
               block extracted to <TreatmentHistoryCard />. All state hooks remain
