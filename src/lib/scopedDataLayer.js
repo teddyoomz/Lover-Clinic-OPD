@@ -632,3 +632,4 @@ export const listRecallCases = (...args) => raw.listRecallCases(...args);
 listRecallCases.__universal__ = true;
 export const saveRecallCase = (...args) => raw.saveRecallCase(...args);
 export const setRecallCaseHidden = (...args) => raw.setRecallCaseHidden(...args);
+export const deleteRecallCase = (...args) => raw.deleteRecallCase(...args);

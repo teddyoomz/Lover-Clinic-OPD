@@ -11438,3 +11438,21 @@ export async function setRecallCaseHidden(id, isHidden, ctx = {}) {
     { merge: true }
   );
 }
+
+/**
+ * Phase 29.23 (2026-05-14) — hard-delete a be_recall_cases doc.
+ * Safe because recalls store `reason` as STRING SNAPSHOT (no FK to caseId);
+ * existing recalls are unaffected by deleting the master case.
+ *
+ * No audit doc emitted (consistent with setRecallCaseHidden which writes
+ * audit fields directly on the doc — but here the doc is gone, so we don't
+ * write anywhere). If audit trail needed in future, callers can pre-record
+ * to be_admin_audit via separate write.
+ *
+ * @param {string} id be_recall_cases doc id
+ * @param {object} [ctx] reserved for future audit (unused now)
+ */
+export async function deleteRecallCase(id, ctx = {}) {
+  if (!id) return;
+  await deleteDoc(recallCaseDoc(id));
+}
