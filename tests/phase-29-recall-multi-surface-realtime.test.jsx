@@ -43,6 +43,12 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: vi.fn(async () => {}),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
+  // Phase 29.22 (2026-05-14) — useRecallCases hook reads these.
+  listRecallCases: vi.fn(async () => []),
+  saveRecallCase: vi.fn(async () => ({ id: 'CASE-mock' })),
+  setRecallCaseHidden: vi.fn(async () => {}),
+  // Phase 29.21-fix2 customer picker.
+  getAllCustomers: vi.fn(async () => []),
 }));
 
 vi.mock('../src/utils.js', async () => {
@@ -54,6 +60,16 @@ vi.mock('../src/firebase.js', () => ({
   auth: { currentUser: { uid: 'TEST', getIdToken: async () => 'mock' } },
   db: {},
   appId: 'loverclinic-opd-4c39b',
+}));
+
+// Phase 29.22 (2026-05-14) — RecallTab now imports useTabAccess for sub-pill gate.
+vi.mock('../src/hooks/useTabAccess.js', () => ({
+  useTabAccess: () => ({
+    isAdmin: true,
+    permissions: {},
+    loaded: true,
+    hasPermission: () => true,
+  }),
 }));
 
 import { RecallTab } from '../src/components/backend/recall/RecallTab.jsx';

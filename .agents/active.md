@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-05-14 EOD — Rule Q (V66) shipped; 7-layer enforcement chain live; Option C next chat"
-status: "master=4124105 (V66 Rule Q infra) · prod=4a552c9 (DEPLOYED but has 5+ Phase 29 bugs already fixed in master c404cb6+6c8b72d, awaits Option C deploy) · 9605 vitest + 1 skipped + 6 Playwright e2e · build clean"
+updated_at: "2026-05-14 — Phase 29.22 (be_recall_cases) implementation COMPLETE; awaiting user 'deploy' verb"
+status: "master=bedc741 (Phase 29.22 Task 16 — Playwright RB1-RB6 spec) · prod=4a552c9 (still has Phase 29 bugs + lacks Phase 29.22) · 9644 vitest + 1 skipped + 12 Playwright e2e · build clean"
 branch: "master"
-last_commit: "4124105 docs(V66/Rule Q): Real-Adversarial Verification — 7-layer enforcement chain SHIPPED"
-tests: 9605
-playwright_e2e: 6
+last_commit: "bedc741 test(Phase 29.22 Task 16): 🚨 Rule Q L1 Playwright real-browser spec RB1-RB6"
+tests: 9644
+playwright_e2e: 12
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "4a552c9"
 firestore_rules_version: 30
@@ -24,77 +24,89 @@ Mock tests = code-shape coverage ONLY, NOT verification. Admin SDK doc-level acc
 - L2 — Real client SDK w/ exact compound queries / listener subscriptions
 - L3 — User walkthrough with written confirmation (LAST RESORT)
 
-Self-check: REAL browser/client? + EXACT UI query? + ACTIVE break-attempt? + <5min/0bugs → retest? + screenshot+log proof?
-
-Any "no" → DO NOT CLAIM. Re-verify at higher level.
-
 Full skill: `~/.claude/skills/real-adversarial-verification/SKILL.md`
-Full rule: `.claude/rules/01-iron-clad.md` Rule Q (top-of-file)
-V-entry: V66 in `.claude/rules/00-session-start.md` + verbose in `v-log-archive.md`
 
 ---
 
-## State
+## State (2026-05-14 mid-session)
 
-- master = `4a552c9` + Rule Q infrastructure (pending commit) · prod = `4a552c9` (DEPLOYED but has 5+ Phase 29 bugs already fixed locally)
-- Phase 29 (Recall System) **DEPLOYED LIVE** but found **5+ user-visible bugs** post-deploy via user real-browser inspection — ALL FIXED LOCALLY, **NOT YET REDEPLOYED**
-- Tests: 9605 vitest + 1 skipped + NEW **6 Playwright real-browser e2e** in `tests/e2e/phase-29-recall-adversarial.spec.js` (A1-A4 backend + F1-F2 frontend)
-- Build clean
-- Rule Q enforcement chain SHIPPED across 7 layers (user-level CLAUDE.md + project CLAUDE.md + 00-session-start.md + 01-iron-clad.md + V66 V-entry + verbose v-log-archive entry + user-memory feedback file)
+- master = `bedc741` (Phase 29.22 Tasks 1-16 SHIPPED + Phase 29.21-fix2 still queued)
+- prod = `4a552c9` (5+ Phase 29 bugs FIXED locally + Phase 29.22 NOT YET REDEPLOYED)
+- Tests: 9605 → **9644** (+39 net) + 1 skipped — ALL GREEN
+- Playwright e2e: 6 → **12** (+6 new in `tests/e2e/phase-29-22-recall-cases-real-browser.spec.js`)
+- Build clean (2.58s)
 
-## Phase 29 — 5+ critical bugs found POST-DEPLOY (real-browser inspection)
+## Phase 29.22 — be_recall_cases (universal recall preset collection)
 
-| Bug | Surface | Status |
+**Goal**: Decouple recall preset data from be_products/be_courses denormalization (Phase 29 baseline / V66 lesson). New universal collection + sub-pill admin UI + typeahead reason picker in modal.
+
+**16 of 17 implementation tasks SHIPPED**:
+
+| # | Task | Status |
 |---|---|---|
-| A. Customer picker missing in 2/4 launch paths | Backend "+ ตั้ง Recall ใหม่" + Frontend pill bottom button | **FIXED** (RecallCreateModal customer search + autoFocus useRef) |
-| B. Auto-suggest never fires across all 4 entry points | RecallFromTreatmentModal | **FIXED** (be_products fetch + masterDataSuggestions populate) |
-| C. Reschedule outcome semantic conflict (status=done + snoozedUntil) | recordRecallOutcome | **FIXED** (reschedule branch keeps pending) |
-| D. No UI to mark closed-no-answer (3-strike resolution missing) | RecallOutcomeModal | **FIXED** (conditional 5th CLOSE_OPTION card) |
-| E. noAnswerCount doesn't reset on non-no-answer outcomes | recordRecallOutcome | **FIXED** (counter reset on done/reschedule) |
-| +. autoFocus on disabled input doesn't trigger | RecallCreateModal | **FIXED** (useRef + useEffect manual focus on disabled→enabled) |
+| 1 | `recallCaseValidation.js` pure helpers (11 unit tests) | ✅ aaa8de6 |
+| 2 | backendClient CRUD (listRecallCases/saveRecallCase/setRecallCaseHidden + __universal__ marker, 7 unit tests) | ✅ 930c89c |
+| 3 | scopedDataLayer universal re-export | ✅ 7769c5f |
+| 4 | branch-collection-coverage `scope:'global'` | ✅ a96d95d |
+| 5 | firestore.rules + indexes (NOT deployed) | ✅ 74ec2e7 |
+| 6 | Strip 4 legacy fields from product+course (followUpAfterDays/followUpReason/recallAfterDays/recallReason) | ✅ d43507c |
+| 7 | RecallCaseSelectField typeahead component (7 RTL) | ✅ 54870cc |
+| 8 | RecallCaseFormModal CRUD form (6 RTL) | ✅ 23e2894 |
+| 9 | RecallCasesAdminPanel CRUD table (6 RTL) | ✅ 3045865 |
+| 10 | RecallTab sub-pill "จัดการเคส" (admin/perm gated, 4 RTL) | ✅ 751c935 |
+| 11 | RecallSlotCard reason → typeahead + RecallCreateModal prop rename | ✅ b215605 |
+| 12 | 4 callers + shared useRecallCases hook | ✅ c1a5986 |
+| 13 | Rule I full-flow simulate F1.1-F1.3 (3 RTL) | ✅ 235442b |
+| 14 | Rule M migration script (NO --apply yet) | ✅ f11a73b |
+| 15 | Source-grep regression locks SG1-SG6 (19 tests) | ✅ b791c31 |
+| 16 | 🚨 Rule Q L1 Playwright RB1-RB6 spec | ✅ bedc741 |
+| 17 | Final pre-deploy verify (full vitest + build clean) | ✅ in this commit |
 
-**ALL FIXES VERIFIED via Playwright real browser** — `tests/e2e/phase-29-recall-adversarial.spec.js` 6/6 PASS.
+**Architecture**:
+- `be_recall_cases` universal collection (no branchId, per BSA Rule L)
+- Schema: `{id: CASE-{ts}-{hex8}, caseName, defaultDays, isHidden, audit stamps, V41 soft-archive}`
+- Sub-pill `🗂 จัดการเคส` in RecallTab → admin/`recall_management` perm gated
+- Typeahead `RecallCaseSelectField` replaces plain `<input>` reason field
+- Auto-fill date on pick: `addDaysISO(todayISO, defaultDays)` (Bangkok midday-UTC parse)
+- Inline-learn `saveAsRecallCase` callback: dedup-aware (silent no-op if name exists)
+- 4 callers (RecallTab + RecallFrontendView + RecallCard + RecallFromTreatmentModal) use shared `useRecallCases` hook (Rule C1)
 
-## Why the original "8-layer test stack" lied
+**Phase 29.22 NEW files (8)**:
+- `src/lib/recallCaseValidation.js`
+- `src/components/backend/recall/{RecallCaseSelectField,RecallCaseFormModal,RecallCasesAdminPanel}.jsx`
+- `src/hooks/useRecallCases.js`
+- `scripts/phase-29-22-strip-recall-fields-from-product-course.mjs`
+- `tests/phase-29-22-*.{test.js,test.jsx}` (8 new test files)
+- `tests/e2e/phase-29-22-recall-cases-real-browser.spec.js`
 
-| # | Layer | Why it lied |
-|---|---|---|
-| 1 | vitest helpers 96 | Mocked Firestore → no index issues |
-| 2 | vitest RTL 240+ | Mocked listeners → no real race |
-| 3 | source-grep 35 | Locks code shape, not outcome (V21-class) |
-| 4 | Rule I flow-simulate 15 | Mocked data |
-| 5 | Multi-surface real-time 15 | Mocked listener responses |
-| 6 | Adversarial property-based 39 | In-memory only |
-| 7 | Admin SDK e2e 5 fixtures | `doc.set/get` BYPASSES composite indexes |
-| 8 | Post-deploy probe (anon POST chat_conversations → HTTP 200) | Not a compound query |
+**Phase 29.22 MODIFIED files**:
+- `src/lib/backendClient.js` (+88 LOC for CRUD)
+- `src/lib/scopedDataLayer.js` (+9 LOC re-export)
+- `src/components/backend/recall/{RecallTab,RecallSlotCard,RecallCreateModal,RecallFrontendView}.jsx`
+- `src/components/backend/customer-recall/{RecallCard,RecallFromTreatmentModal}.jsx`
+- `src/lib/{productValidation,courseValidation,permissionGroupValidation}.js`
+- `src/components/backend/{ProductFormModal,CourseFormModal}.jsx`
+- `firestore.rules` + `firestore.indexes.json`
+- `tests/branch-collection-coverage.test.js`
+- 5 Phase 29 test files extended with new mocks (no regression)
 
-The bug was in CLIENT-SDK compound queries with `where + orderBy`. NONE of the 8 layers exercised that path.
+## Outstanding (user-triggered)
 
-## Next action — OPTION C (next chat)
+1. **DEPLOY** — combined Vercel + Firebase (rules + indexes) — user authorized this turn ("deploy ได้เลย")
+   - Rule B Probe-Deploy-Probe + NEW endpoint #8 (be_recall_cases anon→403 / clinic-staff→200)
+   - Rule Q V66 post-deploy probe: real-client-SDK compound query (NOT anon POST)
+2. **MIGRATION** — `scripts/phase-29-22-strip-recall-fields-from-product-course.mjs` (dry-run review → user confirm → --apply)
+3. **🚨 BRUTAL Rule Q L1** — RB1-RB6 against PROD + Phase 29 Option C continuation (Bug C/D/E re-verify via Playwright)
 
-Per user directive *"แล้ว session end จะไป option C ต่อแชทถัดไป"*:
+## Phase 29 bugs (V66) STILL pending deploy
 
-1. Continue ADVERSARIAL bug hunt via Playwright real browser
-2. Create TEST-RECALL-* fixtures (V33-class prefix discipline) to safely exercise Bug C/D/E end-to-end on real prod data
-3. Add Playwright tests for:
-   - C: reschedule outcome → recall stays pending + new dueDate set
-   - D: closed-no-answer 5th option appears after 3 no-answer rounds
-   - E: noAnswerCount resets correctly on non-no-answer outcomes
-4. Run full Playwright suite + visual regression on 3 surfaces (RecallTab + RecallFrontendView + CDV RecallCard)
-5. If clean → request explicit "deploy" verb → combined Vercel + Firebase deploy (Probe-Deploy-Probe + post-deploy real-client-SDK compound query probe)
+Already FIXED in commits c404cb6 + 6c8b72d — included in this Phase 29.22 deploy bundle:
+- A. Customer picker missing
+- B. Auto-suggest never fires
+- C. Reschedule outcome semantic
+- D. No closed-no-answer UI
+- E. noAnswerCount no reset
+- +. autoFocus on disabled input
 
-## Anti-flicker discipline (architectural backstop — UNCHANGED)
-
-Per spec §14: "If admin reports 'list flickers when X happens', the bug is class-of-bug 'key instability' or 'useEffect dep churn' — investigate listener setup + memo deps before component logic."
-
-SG3 + SG4 + Layer 5 (MS1-MS11) tests must NEVER be relaxed without understanding consequences.
-
-## Rule Q enforcement chain (7 layers — DON'T REMOVE ANY)
-
-1. `~/.claude/CLAUDE.md` — mandatory boot chain
-2. `F:\LoverClinic-app\CLAUDE.md` — project banner
-3. `F:\LoverClinic-app\.claude\rules\00-session-start.md` — Step 0 boot + V66 in §2
-4. `F:\LoverClinic-app\.claude\rules\01-iron-clad.md` — Rule Q top-of-file
-5. `F:\LoverClinic-app\.claude\rules\v-log-archive.md` — verbose V66 entry
-6. `~/.claude/skills/real-adversarial-verification/SKILL.md` — invocable skill
-7. `~/.claude/projects/F--LoverClinic-app/memory/feedback_real_adversarial_verification.md` — user-memory mirror
+Plus Phase 29.22 fixes (NEW):
+- Recall preset coupling to be_products/be_courses (V66 lesson — denormalization wrong)
