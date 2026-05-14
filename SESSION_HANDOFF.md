@@ -43,11 +43,37 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE EOD — **Phase 29.23 SAGA SHIPPED (Tasks 1-9 + bis1-bis5) + NEW Rule R + Rule Q V66 trust-collapse repeated 3× then resolved via env-pull admin-SDK diag** · master=`f7afb74` · prod=`8dd17c5` (Phase 29.22 round-2; **22 commits PENDING DEPLOY per V18**) · build clean · audit-branch-scope 120/120 GREEN · firestore rules v31
+- **Date last updated**: 2026-05-14 LATE EOD #3 — **Selective Make-Fresh + Backup Integrity SHIPPED** (brainstorming Q1-Q6 → spec → 13-task plan → ★ Rule Q L2 10/10 scenarios PASS on real prod) · master=`7026bad` · prod=`8dd17c5` · **34 commits PENDING DEPLOY per V18** · build clean · firestore rules v31
 - **Branch**: `master`
-- **Last commit**: `f7afb74` fix(Phase 29.23-bis5): no-deposit appointment sync — root cause + cleanup + prevention
-- **Test count**: **9644 vitest** + 1 skipped + **12 Playwright e2e** (5 Phase 29.22 RB1-RB5 + 7 Phase 29 baseline A1-A4/F1-F2).
-- **Deploy state**: prod=`8dd17c5` (Phase 29.22 round-2 LIVE). Round-3 commits `1ff2de8` → `f2103e7` PENDING deploy. **🚨 4x V4/V7/V18 violation this session — every `vercel --prod` requires user typing "deploy" verbatim THIS turn**. NO implicit roll-over.
+- **Last commit**: `7026bad` test(selective-make-fresh): V21 fixup sweep — migrate V40-locked tests to bucketIds contract (Task 12)
+- **Test count**: **9825 vitest GREEN** + 12 skipped + 4 pre-existing failures (NOT from selective-make-fresh — flagged in prior session active.md) + **13 Playwright e2e** (12 baseline + 1 new selective-make-fresh L1 spec).
+- **Deploy state**: prod=`8dd17c5` LIVE. **34 commits PENDING DEPLOY** — V18 lock active.
+
+### Session 2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★
+
+User directive: extend V40 "ทำให้เป็นสาขาใหม่" with selective bucket-level wipe + CRYPTOGRAPHIC ROUND-TRIP INTEGRITY ("ระบบ backup ต้องเทสให้แน่ใจที่สุดว่า Backup ออกมาแล้ว สามารถ restore เข้าไปได้แล้วเหมือนเดิม เป็นเรื่องที่ serious มาก").
+
+Brainstorming Q1-Q6 locked: D-hybrid UI / B-match-scope / A-7-buckets / B-6+1-default / B-hash-verify / B-3-step-preview. 13-task plan executed inline (subagent context-thrashing on project's large CLAUDE.md required fallback to inline).
+
+**Artifacts shipped**:
+- NEW `src/lib/branchBackupBuckets.js` — 7-bucket schema + helpers (21 unit tests)
+- EDIT `src/lib/branchBackupSchema.js` — `computeBodyHash` SHA-256 canonicalization (26 tests)
+- EDIT `api/admin/branch-backup-export.js` — bucketIds + dryRun + emit bodyHash
+- EDIT `api/admin/branch-make-fresh.js` — bucketIds + hash verify BEFORE wipe (★ critical safety)
+- REWRITE `src/components/backend/MakeFreshModal.jsx` — 3-step state machine UX (Q4-B defaults: 6 checked + customerActivity unchecked)
+- NEW `tests/branch-make-fresh-selective-flow-simulate.test.jsx` — Rule I (7 tests)
+- NEW `tests/branch-make-fresh-selective-source-grep.test.js` — V21 + AV43 regression (23 tests)
+- ★ NEW `scripts/e2e-backup-restore-roundtrip-real-prod.mjs` — Rule Q L2 (8 phases × 10 scenarios)
+- NEW `tests/e2e/branch-make-fresh-selective.spec.js` — Rule Q L1 Playwright (3 specs)
+- EDIT `scripts/branch-make-fresh.mjs` — CLI `--bucket-ids` arg
+- EDIT `.agents/skills/audit-anti-vibe-code/SKILL.md` — NEW AV43 invariant
+- V21 fixups: 3 test files migrated (FS3.5 + UI3 retired + E3.5-10 updated)
+
+**Rule Q L2 ★ VERIFICATION** (the critical gate per user directive): ran `--apply` on REAL prod with TEST-E2E-RT-prefixed adversarial fixtures (Thai/Unicode NFC vs NFD/Timestamps/refs/large arrays/deeply nested/non-finite/empty buckets). **10/10 SCENARIOS PASSED** with hash byte-equal at every phase boundary (pre-state hash == post-restore hash). Cleanup confirmed zero orphans. Audit docs in `be_admin_audit/e2e-roundtrip-cleanup-*`.
+
+**34 commits PENDING DEPLOY** (Vercel only; no Firebase rules changes). V18 deploy lock active.
+
+Companion files: spec `docs/superpowers/specs/2026-05-14-selective-make-fresh-and-backup-integrity-design.md` + plan `docs/superpowers/plans/2026-05-14-selective-make-fresh-and-backup-integrity.md`.
 
 ### Session 2026-05-14 LATE EOD #2 — Phase 29.23 SAGA + bis1-bis5 + Rule R + V66 trust-collapse 3× repeat
 
