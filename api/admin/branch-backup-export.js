@@ -1,7 +1,15 @@
-// ─── /api/admin/branch-backup-export — V40 ─────────────────────────────────
+// ─── /api/admin/branch-backup-export — V40 + 2026-05-14 selective-make-fresh ─
 // Generate JSON backup of branch-scoped collections; upload to Firebase
 // Storage at backups/{branchId}/{prefix}-{ts}-{rand}.json; return signed URL.
 // Audit doc to be_admin_audit. See spec §4.
+//
+// 2026-05-14 selective-make-fresh — added:
+//   - Request `bucketIds: string[]` (optional) → selective scope via
+//     resolveBucketScope (T1 protected via assertNotT1)
+//   - Request `dryRun: boolean` (optional) → count-only mode; no Storage
+//     upload, no audit. Returns per-bucket counts + size estimate.
+//   - When bucketIds is non-empty: buildBackupFile embeds SHA-256 bodyHash
+//     in meta for integrity verification at branch-make-fresh.
 
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -9,6 +17,7 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { resolveBackupScope, T4_SUBCOLLECTIONS } from '../../src/lib/branchBackupCore.js';
+import { BUCKETS, resolveBucketScope, assertNotT1 } from '../../src/lib/branchBackupBuckets.js';
 import { buildBackupFile, jsonReplacerForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -41,8 +50,7 @@ function getAdmin() {
   // the same serverless container and hits the `getApps().length > 0` branch,
   // it reuses that app — and `bucket()` no-arg fails with "Bucket name not
   // specified or invalid". Explicit `bucket(BUCKET)` works regardless of app
-  // config. Local e2e didn't catch this because the script init'd admin fresh
-  // with storageBucket. Diag captured live error 2026-05-08.
+  // config.
   cachedBucket = getStorage(app).bucket(BUCKET);
   return { db: cachedDb, bucket: cachedBucket };
 }
@@ -62,49 +70,145 @@ export default async function handler(req, res) {
   const caller = await verifyAdminToken(req, res);
   if (!caller) return;
 
-  const { branchId, tiers = [], collections = null, isAutoPreFresh = false } = req.body || {};
+  const {
+    branchId,
+    tiers = [],
+    collections = null,
+    bucketIds = null,
+    dryRun = false,
+    isAutoPreFresh = false,
+  } = req.body || {};
+
   if (!branchId || typeof branchId !== 'string') {
     return res.status(400).json({ ok: false, error: 'MISSING_BRANCH_ID' });
   }
 
-  let scope;
-  try {
-    scope = resolveBackupScope({ tiers, collections });
-  } catch (e) {
-    return res.status(400).json({ ok: false, error: e.message });
+  // ─── Scope resolution: bucket mode (selective-make-fresh) OR legacy tiers/collections (V40) ───
+  let scope;             // flat list of collection names, may include 'be_customers/__per_customer__'
+  let subsToTraverse;    // T4 subcollections list for per-customer iteration
+  let usingBucketMode = false;
+  let sortedBucketIds = [];
+
+  if (Array.isArray(bucketIds) && bucketIds.length > 0) {
+    usingBucketMode = true;
+    let resolved;
+    try {
+      resolved = resolveBucketScope(bucketIds);
+      assertNotT1(resolved.collections);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e.message });
+    }
+    scope = [...resolved.collections];
+    subsToTraverse = [...resolved.subcollections];
+    if (subsToTraverse.length > 0) {
+      scope.push('be_customers/__per_customer__');
+    }
+    sortedBucketIds = [...bucketIds].sort();
+  } else {
+    // Legacy V40 path
+    try {
+      scope = resolveBackupScope({ tiers, collections });
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e.message });
+    }
+    subsToTraverse = T4_SUBCOLLECTIONS;
   }
+
   if (scope.length === 0) {
     return res.status(400).json({ ok: false, error: 'EMPTY_SCOPE' });
   }
 
+  // ─── DRY-RUN path (2026-05-14): count-only, no Storage upload, no audit ───
+  if (dryRun === true) {
+    try {
+      const { db } = getAdmin();
+      const perBucket = {};
+      let totalDocs = 0;
+      let estSizeBytes = 0;
+
+      if (usingBucketMode) {
+        // Pre-fetch ALL customers ONCE (avoid N×M reads when multiple buckets have subcollections)
+        const customersSnap = await dataCol(db, 'be_customers').get();
+
+        for (const bucketId of bucketIds) {
+          const bucketDef = BUCKETS[bucketId];
+          let docs = 0;
+          let subDocs = 0;
+          let sizeBytes = 0;
+
+          for (const col of bucketDef.collections) {
+            const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
+            docs += snap.size;
+            for (const d of snap.docs) sizeBytes += JSON.stringify(d.data()).length;
+          }
+
+          if (bucketDef.customerSubcollections.length > 0) {
+            const T4_BATCH_SIZE = 50;
+            const customerDocs = customersSnap.docs;
+            for (let i = 0; i < customerDocs.length; i += T4_BATCH_SIZE) {
+              const batch = customerDocs.slice(i, i + T4_BATCH_SIZE);
+              const batchResults = await Promise.all(batch.flatMap(cust =>
+                bucketDef.customerSubcollections.map(async sub => {
+                  const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+                  let size = 0;
+                  for (const d of subSnap.docs) size += JSON.stringify(d.data()).length;
+                  return { count: subSnap.size, size };
+                })
+              ));
+              for (const r of batchResults) {
+                subDocs += r.count;
+                sizeBytes += r.size;
+              }
+            }
+          }
+
+          perBucket[bucketId] = { docs, subDocs, sizeBytes };
+          totalDocs += docs + subDocs;
+          estSizeBytes += sizeBytes;
+        }
+      } else {
+        // Legacy mode flat count (no per-bucket breakdown)
+        for (const col of scope) {
+          if (col === 'be_customers/__per_customer__') continue;
+          const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
+          totalDocs += snap.size;
+          for (const d of snap.docs) estSizeBytes += JSON.stringify(d.data()).length;
+        }
+      }
+
+      return res.status(200).json({
+        ok: true,
+        dryRun: true,
+        scopeMode: usingBucketMode ? 'buckets' : 'legacy',
+        bucketIds: sortedBucketIds,
+        perBucket,
+        totalDocs,
+        estSizeBytes,
+      });
+    } catch (e) {
+      console.error('branch-backup-export dryRun error:', e);
+      return res.status(500).json({ ok: false, error: 'DRYRUN_FAILED', detail: e.message });
+    }
+  }
+
+  // ─── Normal build + upload path ───
   try {
-    // V40 review I1 — memory model: this loop loads ALL branch-scoped docs into
-    // an in-memory `out` object, then JSON.stringify serializes the full file
-    // before the 100MB size check below. For very large branches (50k+ T2/T3
-    // docs), peak heap can reach 2-3× the serialized size. UI must avoid
-    // combining T2+T3 in a single export for high-volume branches; prefer
-    // per-tier exports or use the CLI script for one-shot bulk dumps.
+    // V40 review I1 — memory model note: this loop loads ALL branch-scoped docs
+    // into an in-memory `out` object; peak heap can reach 2-3× the serialized
+    // size for very large branches.
     const { db, bucket } = getAdmin();
     const out = {};
 
     for (const colName of scope) {
       if (colName === 'be_customers/__per_customer__') {
-        // T4 — for every customer, query each subcollection filtered by branchId.
-        //
-        // V40-prod-fix-2 (2026-05-08) — parallel-batched traversal. Sequential
-        // per-customer × per-subcollection took ~84s on real prod (375 customers
-        // × 8 subs = 3000 sequential queries × 28ms each), exceeded Vercel
-        // function maxDuration → client hung on no-response. Parallel batching
-        // of 50 customers × 8 subs concurrent reduces to ~5s. Diag captured
-        // live timing via scripts/diag-branch-backup-timing.mjs (2026-05-08).
-        // Firestore handles 3000+ reads/sec — no quota concern.
+        // T4 — iterate selected subcollections (NOT full T4_SUBCOLLECTIONS) per customer
         const T4_BATCH_SIZE = 50;
         const customersSnap = await dataCol(db, 'be_customers').get();
         const customerDocs = customersSnap.docs;
         for (let i = 0; i < customerDocs.length; i += T4_BATCH_SIZE) {
           const batch = customerDocs.slice(i, i + T4_BATCH_SIZE);
           const batchResults = await Promise.all(batch.flatMap(cust =>
-            T4_SUBCOLLECTIONS.map(async sub => {
+            subsToTraverse.map(async sub => {
               const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
               if (subSnap.empty) return null;
               return {
@@ -126,14 +230,13 @@ export default async function handler(req, res) {
     const file = buildBackupFile({
       sourceBranchId: branchId,
       exportedBy: caller.decoded.uid,
-      scope: { tiers, collections },
+      scope: usingBucketMode ? { bucketIds: sortedBucketIds } : { tiers, collections },
       collections: out,
       isAutoPreFresh,
+      bucketIds: usingBucketMode ? sortedBucketIds : undefined,  // → triggers bodyHash emission
     });
 
-    // V40-prod-fix-5 (2026-05-08) — encode NaN/Infinity via sentinel so they
-    // survive round-trip (default JSON.stringify converts them to null —
-    // lossy). Reviver in branch-restore.js decodes back. schemaVersion=2.
+    // V40-prod-fix-5 (2026-05-08) — encode NaN/Infinity via sentinel.
     const json = JSON.stringify(file, jsonReplacerForNonFinite);
     const sizeBytes = Buffer.byteLength(json, 'utf8');
     if (sizeBytes > 100 * 1024 * 1024) {
@@ -144,14 +247,22 @@ export default async function handler(req, res) {
     const prefix = isAutoPreFresh ? 'auto-pre-fresh' : 'manual';
     const filename = `${prefix}-${ts}-${randHex()}.json`;
     const storagePath = `backups/${branchId}/${filename}`;
+    const storageMeta = {
+      branchId,
+      sourceBranchId: branchId,
+      schemaVersion: '2',
+      exportedBy: caller.decoded.uid,
+    };
+    if (usingBucketMode) {
+      storageMeta.bucketIds = JSON.stringify(sortedBucketIds);
+      storageMeta.bodyHash = file.meta.bodyHash;
+    }
     await bucket.file(storagePath).save(json, {
       contentType: 'application/json',
-      metadata: { metadata: { branchId, sourceBranchId: branchId, schemaVersion: '1', exportedBy: caller.decoded.uid } },
+      metadata: { metadata: storageMeta },
     });
 
-    // V40-prod-fix-4 (2026-05-08) — force browser download via responseDisposition.
-    // Without this header, browser opens JSON inline (user reported as bug).
-    // Filename pattern: loverclinic-backup-{branchId}-{ISO}.json (URL-safe).
+    // V40-prod-fix-4 — force browser download via responseDisposition.
     const downloadName = `loverclinic-backup-${branchId}-${new Date(ts).toISOString().replace(/[:.]/g, '-')}.json`;
     const [signedUrl] = await bucket.file(storagePath).getSignedUrl({
       action: 'read',
@@ -161,17 +272,23 @@ export default async function handler(req, res) {
     });
 
     const auditId = `branch-backup-${ts}-${randHex()}`;
-    await dataCol(db, 'be_admin_audit').doc(auditId).set({
+    const auditDoc = {
       action: 'branch-backup',
       branchId,
-      scope: { tiers, collections },
+      scopeMode: usingBucketMode ? 'buckets' : 'legacy',
+      scope: usingBucketMode ? { bucketIds: sortedBucketIds } : { tiers, collections },
       perCollectionCounts: file.meta.perCollectionCounts,
       sizeBytes,
       storagePath,
       isAutoPreFresh,
       exportedBy: caller.decoded.uid,
       exportedAt: new Date().toISOString(),
-    });
+    };
+    if (usingBucketMode) {
+      auditDoc.bucketIds = sortedBucketIds;
+      auditDoc.bodyHash = file.meta.bodyHash;
+    }
+    await dataCol(db, 'be_admin_audit').doc(auditId).set(auditDoc);
 
     return res.status(200).json({
       ok: true,
@@ -179,6 +296,9 @@ export default async function handler(req, res) {
       storagePath,
       auditId,
       sizeBytes,
+      scopeMode: usingBucketMode ? 'buckets' : 'legacy',
+      bucketIds: usingBucketMode ? sortedBucketIds : [],
+      bodyHash: usingBucketMode ? file.meta.bodyHash : null,
       perCollectionCounts: file.meta.perCollectionCounts,
     });
   } catch (e) {
