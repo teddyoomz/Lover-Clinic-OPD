@@ -1,14 +1,28 @@
-// ─── /api/admin/branch-make-fresh — V40 ────────────────────────────────────
-// Wipes all branch-scoped data for a target branch. REQUIRES autoBackupRef
-// in Storage to exist as pre-condition (caller must call /branch-backup-export
-// with isAutoPreFresh=true first). See spec §6.
+// ─── /api/admin/branch-make-fresh — V40 + 2026-05-14 selective-make-fresh ───
+// Wipes selected bucket-scoped data for a target branch. REQUIRES bucketIds[]
+// (selective scope) + autoBackupRef in Storage (AV19 preserved).
+//
+// 2026-05-14 selective-make-fresh:
+//   - bucketIds[] now REQUIRED (V40 atomic-all-wipe contract retired)
+//   - Pre-wipe sequence:
+//       1. Validate bucketIds (non-empty, all known buckets)
+//       2. AV19: bucket.file(autoBackupRef).exists()
+//       3. Download backup + parse + validate
+//       4. Recompute SHA-256 bodyHash + compare with file.meta.bodyHash
+//          → 500 BACKUP_INTEGRITY_FAIL if mismatch (wipe ABORTED)
+//       5. Optional: compare with request.expectedBodyHash (UI cross-check)
+//       6. SCOPE_MISMATCH: file.meta.bucketIds === request.bucketIds (sorted)
+//       7. resolveBucketScope → assertNotT1 (defense-in-depth)
+//       8. Wipe resolved.collections + resolved.subcollections (where branchId == target)
+//       9. Audit doc records bucketIds + bodyHash + deletedCounts
 
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
-import { TIER_MAP, BACKUP_TIER_T1, BACKUP_TIER_T2, BACKUP_TIER_T3, BACKUP_TIER_T4, T4_SUBCOLLECTIONS } from '../../src/lib/branchBackupCore.js';
+import { BUCKETS, resolveBucketScope, assertNotT1 } from '../../src/lib/branchBackupBuckets.js';
+import { computeBodyHash, validateBackupFile, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -33,9 +47,6 @@ function getAdmin() {
     });
   }
   cachedDb = getFirestore(app);
-  // V40-prod-fix (2026-05-08) — pass BUCKET explicitly (mirror branch-backup-export
-  // fix). Reused-app via getApps().length > 0 may lack storageBucket → bucket()
-  // no-arg throws "Bucket name not specified or invalid".
   cachedBucket = getStorage(app).bucket(BUCKET);
   return { db: cachedDb, bucket: cachedBucket };
 }
@@ -54,25 +65,108 @@ export default async function handler(req, res) {
   const caller = await verifyAdminToken(req, res);
   if (!caller) return;
 
-  const { branchId, autoBackupRef } = req.body || {};
-  if (!branchId) return res.status(400).json({ ok: false, error: 'MISSING_BRANCH_ID' });
+  const { branchId, bucketIds, autoBackupRef, expectedBodyHash } = req.body || {};
+
+  // ─── Request validation ───
+  if (!branchId || typeof branchId !== 'string') {
+    return res.status(400).json({ ok: false, error: 'MISSING_BRANCH_ID' });
+  }
+  if (!Array.isArray(bucketIds) || bucketIds.length === 0) {
+    return res.status(400).json({ ok: false, error: 'EMPTY_BUCKET_SET' });
+  }
+  for (const id of bucketIds) {
+    if (!BUCKETS[id]) {
+      return res.status(400).json({ ok: false, error: `UNKNOWN_BUCKET: ${id}` });
+    }
+  }
   if (!autoBackupRef || typeof autoBackupRef !== 'string') {
     return res.status(400).json({ ok: false, error: 'AUTO_BACKUP_REQUIRED' });
   }
 
   try {
     const { db, bucket } = getAdmin();
+
+    // ─── AV19: verify autoBackup file exists in Storage ───
     const [exists] = await bucket.file(autoBackupRef).exists();
     if (!exists) return res.status(400).json({ ok: false, error: 'AUTO_BACKUP_NOT_FOUND', autoBackupRef });
 
-    const wipeList = [
-      ...TIER_MAP[BACKUP_TIER_T1],
-      ...TIER_MAP[BACKUP_TIER_T2],
-      ...TIER_MAP[BACKUP_TIER_T3],
-    ];
-    const deletedCounts = {};
+    // ─── Download + parse + validate backup file (BEFORE any wipe) ───
+    let file;
+    try {
+      const [fileBuffer] = await bucket.file(autoBackupRef).download();
+      file = JSON.parse(fileBuffer.toString('utf8'), jsonReviverForNonFinite);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: 'BACKUP_JSON_PARSE_FAILED', detail: e.message });
+    }
+    try {
+      validateBackupFile(file);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: 'BACKUP_SCHEMA_INVALID', detail: e.message });
+    }
 
-    for (const col of wipeList) {
+    // ─── Hash verification (CRITICAL — wipe ABORTS on mismatch) ───
+    // Only enforced when file has bodyHash (selective-make-fresh files). Legacy
+    // V40 v2 files without bodyHash cannot use selective wipe path (rejected
+    // below by SCOPE_MISMATCH since they won't have bucketIds either).
+    if (!file.meta.bodyHash) {
+      return res.status(400).json({ ok: false, error: 'BACKUP_MISSING_BODY_HASH', detail: 'autoBackup file must be a selective-make-fresh backup with hash' });
+    }
+    if (!Array.isArray(file.meta.bucketIds) || file.meta.bucketIds.length === 0) {
+      return res.status(400).json({ ok: false, error: 'BACKUP_MISSING_BUCKET_IDS' });
+    }
+    const recomputed = computeBodyHash(file.collections || {});
+    if (recomputed !== file.meta.bodyHash) {
+      return res.status(500).json({
+        ok: false,
+        error: 'BACKUP_INTEGRITY_FAIL',
+        expected: file.meta.bodyHash,
+        actual: recomputed,
+      });
+    }
+    // Optional cross-check against UI-passed expectedBodyHash
+    if (expectedBodyHash && expectedBodyHash !== file.meta.bodyHash) {
+      return res.status(400).json({
+        ok: false,
+        error: 'BACKUP_HASH_EXPECTED_MISMATCH',
+        expected: expectedBodyHash,
+        actual: file.meta.bodyHash,
+      });
+    }
+    // Scope-mismatch: file.meta.bucketIds must equal request.bucketIds (sorted)
+    const sortedReq = [...bucketIds].sort();
+    const sortedFile = [...file.meta.bucketIds].sort();
+    if (JSON.stringify(sortedReq) !== JSON.stringify(sortedFile)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'SCOPE_MISMATCH',
+        requestBucketIds: sortedReq,
+        fileBucketIds: sortedFile,
+      });
+    }
+    // sourceBranchId must match
+    if (file.meta.sourceBranchId !== branchId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'BACKUP_BRANCH_MISMATCH',
+        fileBranchId: file.meta.sourceBranchId,
+        requestBranchId: branchId,
+      });
+    }
+
+    // ─── Resolve scope + defense-in-depth T1 check ───
+    let wipeCols, wipeSubs;
+    try {
+      const resolved = resolveBucketScope(bucketIds);
+      assertNotT1(resolved.collections);
+      wipeCols = resolved.collections;
+      wipeSubs = resolved.subcollections;
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e.message });
+    }
+
+    // ─── Wipe phase — top-level collections (where branchId == target) ───
+    const deletedCounts = {};
+    for (const col of wipeCols) {
       const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
       let deleted = 0;
       for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
@@ -85,54 +179,54 @@ export default async function handler(req, res) {
       deletedCounts[col] = deleted;
     }
 
-    // V40 review I3 — scaling note: this loop reads ALL be_customers docs
-    // (universal collection, not branch-scoped) regardless of which branches
-    // they actually transacted at. For 5k+ customer install, the read +
-    // subcollection scan can approach Vercel's 60s function timeout. UI MUST
-    // warn the admin before triggering make-fresh on a large customer base.
-    // Future: maintain be_customer_branch_index/{branchId} → [customerId] for
-    // O(branch-customer-count) wipes instead of O(total-customer-count).
-    //
-    // V40-prod-fix-2 (2026-05-08) — parallel-batched READ of subcollection
-    // snapshots (mirrors branch-backup-export). Read 50 customers × 8 subs
-    // concurrently → ~5s for 375 customers. DELETE batches stay sequential
-    // because each is a writeBatch.commit() that needs to land before the
-    // next BATCH_LIMIT slice (Firestore limit 500 ops/batch).
-    const T4_BATCH_SIZE = 50;
-    const customersSnap = await dataCol(db, 'be_customers').get();
-    const customerDocs = customersSnap.docs;
-    let t4Deleted = 0;
-    for (let bi = 0; bi < customerDocs.length; bi += T4_BATCH_SIZE) {
-      const batch = customerDocs.slice(bi, bi + T4_BATCH_SIZE);
-      const subSnaps = await Promise.all(batch.flatMap(cust =>
-        T4_SUBCOLLECTIONS.map(async sub => {
-          const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
-          return subSnap;
-        })
-      ));
-      for (const subSnap of subSnaps) {
-        for (let i = 0; i < subSnap.docs.length; i += BATCH_LIMIT) {
-          const slice = subSnap.docs.slice(i, i + BATCH_LIMIT);
-          const writeBatch = db.batch();
-          for (const d of slice) writeBatch.delete(d.ref);
-          await writeBatch.commit();
-          t4Deleted += slice.length;
+    // ─── Wipe phase — per-customer subcollections (V40-prod-fix-2 parallel-batched) ───
+    if (wipeSubs.length > 0) {
+      const T4_BATCH_SIZE = 50;
+      const customersSnap = await dataCol(db, 'be_customers').get();
+      const customerDocs = customersSnap.docs;
+      let t4Deleted = 0;
+      for (let bi = 0; bi < customerDocs.length; bi += T4_BATCH_SIZE) {
+        const batchCustomers = customerDocs.slice(bi, bi + T4_BATCH_SIZE);
+        const subSnaps = await Promise.all(batchCustomers.flatMap(cust =>
+          wipeSubs.map(async sub => {
+            const subSnap = await cust.ref.collection(sub).where('branchId', '==', branchId).get();
+            return subSnap;
+          })
+        ));
+        for (const subSnap of subSnaps) {
+          for (let i = 0; i < subSnap.docs.length; i += BATCH_LIMIT) {
+            const slice = subSnap.docs.slice(i, i + BATCH_LIMIT);
+            const writeBatch = db.batch();
+            for (const d of slice) writeBatch.delete(d.ref);
+            await writeBatch.commit();
+            t4Deleted += slice.length;
+          }
         }
       }
+      deletedCounts['be_customers/__per_customer__'] = t4Deleted;
     }
-    deletedCounts['be_customers/__per_customer__'] = t4Deleted;
 
+    // ─── Audit doc ───
     const auditId = `branch-make-fresh-${Date.now()}-${randHex()}`;
     await dataCol(db, 'be_admin_audit').doc(auditId).set({
       action: 'branch-make-fresh',
       branchId,
+      bucketIds: sortedReq,
       autoBackupRef,
+      bodyHash: file.meta.bodyHash,
       deletedCounts,
       executedBy: caller.decoded.uid,
       executedAt: new Date().toISOString(),
     });
 
-    return res.status(200).json({ ok: true, deletedCounts, autoBackupRef, auditId });
+    return res.status(200).json({
+      ok: true,
+      deletedCounts,
+      autoBackupRef,
+      bodyHash: file.meta.bodyHash,
+      bucketIds: sortedReq,
+      auditId,
+    });
   } catch (e) {
     console.error('branch-make-fresh error:', e);
     return res.status(500).json({ ok: false, error: 'MAKE_FRESH_FAILED', detail: e.message });
