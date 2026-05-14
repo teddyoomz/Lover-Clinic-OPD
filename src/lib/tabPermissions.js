@@ -32,6 +32,9 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'appointment-deposit':       { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
   'appointment-treatment-in':  { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
   'appointment-follow-up':     { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
+  // Phase 29 (2026-05-14) — Recall tab — same gate as appointments
+  // (admin who can see appointments can see/manage recalls).
+  recall:                      { requires: ['appointment', 'coming_appointment', 'coming_appointment_self'] },
 
   // Customers
   clone:                 { requires: ['customer_management'] },

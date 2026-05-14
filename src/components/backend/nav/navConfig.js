@@ -58,6 +58,8 @@ import {
   MessageCircle,
   // Phase 25.0a (2026-05-09) walk-in appointment tab icon — drop-in / footprints metaphor
   Footprints,
+  // Phase 29 (2026-05-14) — recall tab icon (phone-call metaphor for follow-up)
+  PhoneCall,
 } from 'lucide-react';
 
 // Pinned items render flat at the top of the sidebar (above sections) —
@@ -99,6 +101,10 @@ export const NAV_SECTIONS = [
       // frontend "คิว Walk-IN" tab → "บันทึกลง OPD" → modal-create. Sub-tab
       // shows ALL walk-in appointments (calendar view filtered to walk-in only).
       { id: 'appointment-walk-in',      label: 'คิว Walk-in',    icon: Footprints,    color: 'amber',   palette: 'appointment walk-in queue คิว วอล์คอิน drop-in walkin' },
+      // Phase 29 (2026-05-14) — Recall System — follow-up call/LINE for customers
+      // whose treatment cycle is due (filler 6mo, botox 4mo, PRP 3mo, etc.) and
+      // short-term aftercare. Branch-scoped via useRecallListener (BS-13).
+      { id: 'recall',                   label: 'Recall',          icon: PhoneCall,     color: 'rose',    palette: 'recall ติดตาม recall โทรกลับ follow-up phone call โทรนัด' },
     ],
   },
   {

@@ -104,6 +104,8 @@ const QuotationTab         = lazy(() => import('../components/backend/QuotationT
 const EmployeeSchedulesTab = lazy(() => import('../components/backend/EmployeeSchedulesTab.jsx'));
 const DoctorSchedulesTab   = lazy(() => import('../components/backend/DoctorSchedulesTab.jsx'));
 const DfGroupsTab          = lazy(() => import('../components/backend/DfGroupsTab.jsx'));
+// Phase 29 (2026-05-14) — Recall System (Backend tab)
+const RecallTab            = lazy(() => import('../components/backend/recall/RecallTab.jsx'));
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { deleteBackendTreatment, rebuildTreatmentSummary, getCustomer } from '../lib/backendClient.js';
 // Phase 24.0-vicies-novies-ter (2026-05-07) — backend dashboard now points
@@ -540,6 +542,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
             theme={theme}
             initialSelectedDate={initialApptDate}
           />
+        ) : activeTab === 'recall' ? (
+          // Phase 29 (2026-05-14) — Recall System Backend tab.
+          // Branch-scoped via useRecallListener (BS-13 safe-by-default).
+          <RecallTab />
         ) : activeTab === 'sales' ? (
           <SaleTab clinicSettings={clinicSettings} theme={theme} initialCustomer={saleInitialCustomer} onCustomerUsed={() => setSaleInitialCustomer(null)}
             onFormClose={() => {
