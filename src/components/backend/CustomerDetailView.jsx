@@ -72,9 +72,11 @@ import { DetailField, TreatmentDetailExpanded } from './treatment-history/Treatm
 // layer migration; all state hooks remain in CDV and pass through as props.
 import { TreatmentHistoryCard } from './treatment-history/TreatmentHistoryCard.jsx';
 // Phase 29 (2026-05-14) — Recall card (universal per-customer listener) +
-// treatment-context RecallCreateModal for "+ Recall" chip on history rows
+// treatment-context RecallCreateModal for "+ Recall" chip on history rows.
+// RecallFromTreatmentModal is a thin wrapper extracted as a real
+// component (NOT an IIFE-in-JSX — Rule 03 / rp1-no-iife-in-jsx lock).
 import { RecallCard } from './customer-recall/RecallCard.jsx';
-import { RecallCreateModal } from './recall/RecallCreateModal.jsx';
+import { RecallFromTreatmentModal } from './customer-recall/RecallFromTreatmentModal.jsx';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
@@ -1360,42 +1362,17 @@ export default function CustomerDetailView({
         />
       )}
 
-      {/* Phase 29 (2026-05-14) — Treatment-context RecallCreateModal.
+      {/* Phase 29 (2026-05-14) — Treatment-context RecallCreateModal wrapper.
           Opens when admin clicks "+ Recall" chip on a backend-created
-          TreatmentHistoryRow. Pre-fills modal with treatmentId + first
-          product's master-data suggestions (if any). Auto-suggest fires
-          inside modal per spec §5.3. */}
-      {recallFromTreatment && (() => {
-        const t = (treatments || []).find(tx => tx.id === recallFromTreatment);
-        const detail = t?.detail || {};
-        const firstItem = (detail.treatmentItems || [])[0] || null;
-        const treatmentContext = {
-          treatmentId: recallFromTreatment,
-          date: detail.treatmentDate || t?.treatmentDate || '',
-          summary: firstItem?.name || firstItem?.productName || t?.treatmentName || '',
-        };
-        const sourceContext = firstItem ? {
-          productId: firstItem.productId || null,
-          productName: firstItem.productName || firstItem.name || null,
-        } : null;
-        const customerArg = {
-          id: customer?.id,
-          displayName: customer?.displayName || customer?.name || '',
-          name: customer?.displayName || customer?.name || '',
-          phone: customer?.phone || customer?.patientData?.phone || '',
-          lineUserId: customer?.lineUserId || null,
-          hn: customer?.hn || customer?.patientData?.hn || null,
-        };
-        return (
-          <RecallCreateModal
-            customer={customerArg}
-            treatmentContext={treatmentContext}
-            sourceContext={sourceContext}
-            masterDataSuggestions={{}}
-            onClose={() => setRecallFromTreatment(null)}
-          />
-        );
-      })()}
+          TreatmentHistoryRow. Wrapper does treatment lookup + props shaping
+          inside its own component (NOT an IIFE-in-JSX — Vite OXC parser
+          would crash; see rp1-no-iife-in-jsx test bank). */}
+      <RecallFromTreatmentModal
+        treatmentId={recallFromTreatment}
+        treatments={treatments}
+        customer={customer}
+        onClose={() => setRecallFromTreatment(null)}
+      />
 
       {/* Phase 14.7.E — "ดูไทม์ไลน์" modal. Re-uses already-loaded
           treatments[] (no extra fetch). Image-led wide layout. */}

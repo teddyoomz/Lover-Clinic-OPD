@@ -306,11 +306,11 @@ describe('Phase 21.0 — F5 source-grep regression guards (V21 lock-in)', () => 
     expect(BD).toMatch(/<AppointmentCalendarView[\s\S]{0,800}?appointmentType=\{/);
   });
 
-  test('F5.3 navConfig has section with exactly 6 appointment items (Phase 25.0a — added walk-in sub-tab)', () => {
+  test('F5.3 navConfig has section with exactly 7 appointment items (Phase 25.0a walk-in + Phase 29 recall)', () => {
     const { NAV_SECTIONS } = require('../src/components/backend/nav/navConfig.js');
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
     // Phase 25.0a (2026-05-09) — bumped 5 → 6 (added 'appointment-walk-in').
-    // Items: appointment-all + no-deposit + deposit + treatment-in + follow-up + walk-in.
-    expect(section.items.length).toBe(6);
+    // Phase 29 (2026-05-14)   — bumped 6 → 7 (added 'recall').
+    expect(section.items.length).toBe(7);
   });
 });

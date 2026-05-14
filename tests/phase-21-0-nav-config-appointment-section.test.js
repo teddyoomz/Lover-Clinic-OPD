@@ -23,11 +23,12 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
     expect(NAV_SECTIONS[0].label).toBe('นัดหมาย');
   });
 
-  test('N1.3 appointments-section has exactly 6 items in canonical order (Phase 25.0a added "appointment-walk-in" at bottom)', () => {
+  test('N1.3 appointments-section has exactly 7 items in canonical order (Phase 25.0a "appointment-walk-in" + Phase 29 "recall" at bottom)', () => {
     const section = NAV_SECTIONS.find(s => s.id === 'appointments-section');
     expect(section).toBeDefined();
     // Phase 25.0a (2026-05-09) — bumped 5 → 6 (added 'appointment-walk-in').
-    expect(section.items.length).toBe(6);
+    // Phase 29 (2026-05-14) — bumped 6 → 7 (added 'recall').
+    expect(section.items.length).toBe(7);
     const ids = section.items.map(i => i.id);
     expect(ids).toEqual([
       'appointment-all',  // Phase 21.0-bis — combined all-types overview at TOP
@@ -35,7 +36,8 @@ describe('Phase 21.0 — N1 navConfig appointment section', () => {
       'appointment-deposit',
       'appointment-treatment-in',
       'appointment-follow-up',
-      'appointment-walk-in',  // Phase 25.0a — Walk-in queue (drop-in) at BOTTOM
+      'appointment-walk-in',  // Phase 25.0a — Walk-in queue (drop-in)
+      'recall',               // Phase 29 — Recall System (call/LINE follow-up) at BOTTOM
     ]);
   });
 

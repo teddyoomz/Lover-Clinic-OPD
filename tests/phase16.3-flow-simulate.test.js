@@ -188,7 +188,7 @@ describe('Phase 16.3 FS.C — cross-file wiring source-grep', () => {
 });
 
 describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
-  test('D.1 — TAB_PERMISSION_MAP count is 56 (50 pre-Phase-21.0 + 5 appointment sub-tab gates + 1 branch-backup)', () => {
+  test('D.1 — TAB_PERMISSION_MAP count is 57 (50 pre-Phase-21.0 + 5 appointment sub-tab gates + 1 branch-backup + 1 recall)', () => {
     // Phase 21.0 (2026-05-06) — added per-sub-tab gates for the 4 typed
     // appointment views ('appointment-no-deposit' / 'appointment-deposit'
     // / 'appointment-treatment-in' / 'appointment-follow-up'). Legacy
@@ -197,8 +197,9 @@ describe('Phase 16.3 FS.D — Phase 16 plan invariants', () => {
     // gate (combined all-types view, replaces legacy 'appointments' as
     // first-preference fallback). Count was 55 after Phase 21.0-bis.
     // V40 (2026-05-07) — added 'branch-backup' tab permission → count = 56.
+    // Phase 29 (2026-05-14) — added 'recall' tab permission → count = 57.
     const count = Object.keys(TAB_PERMISSION_MAP).length;
-    expect(count).toBe(56);
+    expect(count).toBe(57);
   });
 
   test('D.2 — Phase 16.3 doesn’t break existing tab gates (smoke test)', () => {

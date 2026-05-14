@@ -57,6 +57,12 @@ const COLLECTION_MATRIX = {
   'be_vendor_sales':       { scope: 'branch-spread',  source: 'VendorSaleFormModal (in VendorSalesTab); saveVendorSale spreads — wired Phase 14.7.H-D' },
   'be_online_sales':       { scope: 'branch-spread',  source: 'OnlineSalesTab; saveOnlineSale spreads — wired Phase 14.7.H-D' },
   'be_sale_insurance_claims': { scope: 'branch-spread', source: 'SaleInsuranceClaimFormModal; saveSaleInsuranceClaim spreads — wired Phase 14.7.H-D' },
+  // Phase 29 (2026-05-14) — Recall System. Branch-scoped per BSA Rule L
+  // (branchId stamped via _resolveBranchIdForWrite inside createRecall +
+  // createRecallPair). Per-customer queries via listRecallsForCustomer are
+  // a sanctioned exception (universal — SG10) because recalls follow
+  // customer across branches.
+  'be_recalls':            { scope: 'branch',         source: 'RecallCreateModal; createRecall + createRecallPair both call _resolveBranchIdForWrite. Per-customer reads are universal (SG10).' },
 
   // ─── Global (no branchId) ──
   'be_customers':          { scope: 'global',  reason: 'Customer can visit any branch' },
@@ -153,6 +159,7 @@ describe('BC2: branch-scoped collections — branchId presence per scope class',
     'be_stock_adjustments':  'stockAdjustmentDoc',
     'be_stock_transfers':    'stockTransferDoc',
     'be_stock_withdrawals':  'stockWithdrawalDoc',
+    'be_recalls':            'recallDoc',               // Phase 29 (2026-05-14) — createRecall + createRecallPair stamp via _resolveBranchIdForWrite
   };
 
   for (const coll of directBranch) {
