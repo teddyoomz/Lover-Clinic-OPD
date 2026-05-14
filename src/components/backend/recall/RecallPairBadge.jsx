@@ -1,0 +1,43 @@
+import React from 'react';
+import { formatPairBadge } from '../../../lib/recallResolvers.js';
+
+/**
+ * Phase 29 (2026-05-14) — pair link badge rendered below a recall row's meta line.
+ * Format: "🔗 จับคู่กับ: <icon> <reason> · <date> · <status-suffix>"
+ *
+ * Always shows status suffix (5 cases): รอ Recall / เสร็จแล้ว / ติดต่อไม่ได้ครั้งที่ N /
+ * เลื่อนไป <date> / เกินกำหนด N วัน.
+ *
+ * Clickable — `onClick(paired.id)` lets the parent scroll to / open the paired recall.
+ * stopPropagation prevents the parent row's click handler from firing.
+ *
+ * @param {object} props
+ * @param {object} props.paired the paired recall (full recall doc)
+ * @param {string} props.todayISO 'YYYY-MM-DD' (Bangkok)
+ * @param {function} [props.onClick]
+ */
+export function RecallPairBadge({ paired, todayISO, onClick }) {
+  if (!paired) return null;
+  const data = formatPairBadge(paired, todayISO);
+  if (!data) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick?.(paired.id); }}
+      data-testid={`recall-pair-badge-${paired.id}`}
+      className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded
+        bg-indigo-500/[0.08] border border-indigo-400/25 border-l-2 border-l-indigo-500
+        text-[10px] text-indigo-300 hover:bg-indigo-500/[0.14] hover:border-indigo-400/40
+        transition-colors cursor-pointer"
+      aria-label={`จับคู่กับ ${data.icon} ${data.reason} ${data.date} ${data.statusSuffix}`}
+    >
+      <span aria-hidden="true">🔗</span>
+      <span className="opacity-85 font-bold">จับคู่กับ:</span>
+      <span aria-hidden="true">{data.icon}</span>
+      <span className="text-white font-bold">{data.reason}</span>
+      <span className="font-mono text-[9.5px] text-gray-400 font-semibold">· {data.date} · {data.statusSuffix}</span>
+    </button>
+  );
+}
+
+export default RecallPairBadge;
