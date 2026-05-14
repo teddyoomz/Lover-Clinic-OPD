@@ -141,9 +141,37 @@ async function handleApprove({ db, requestId, callerUid }) {
   if (otherDoc) throw new Error('LINE บัญชีนี้ถูกผูกกับลูกค้าอื่นแล้ว');
 
   const now = new Date().toISOString();
+  const lineDisplayName = String(req.lineDisplayName || '');
   // Atomic: update customer + request together via batch
   const batch = db.batch();
-  batch.update(cRef, { lineUserId, lineLinkedAt: now });
+  // Wave 2 deferred fix (2026-05-15) — write per-branch linkage alongside
+  // legacy fields. Per spec §17 customer linkage evolution: cron Step 4
+  // prefers customer.lineUserId_byBranch[branchId] for branch-aware
+  // reminder pushes; legacy customer.lineUserId remains as fallback for
+  // backward-compat. Use dotted-path notation for nested map update —
+  // firebase-admin batch.update supports `'a.b.c'` keys.
+  const customerUpdate = {
+    // Legacy fields (preserve — backward-compat for cron Step 4 fallback):
+    lineUserId,
+    lineLinkedAt: now,
+  };
+  if (lineDisplayName) {
+    customerUpdate.lineDisplayName = lineDisplayName;
+  }
+  // Per-branch field — only stamp when the request carries a branchId
+  // (Phase BS V3 stamping). Legacy untagged requests skip this and rely
+  // on the legacy lineUserId fallback.
+  const reqBranchIdRaw = typeof req.branchId === 'string' ? req.branchId.trim() : '';
+  if (reqBranchIdRaw) {
+    customerUpdate[`lineUserId_byBranch.${reqBranchIdRaw}`] = {
+      lineUserId: lineUserId,
+      lineDisplayName: lineDisplayName,
+      linkedAt: now,
+      _lineStale: false,
+      _lineStaleAt: null,
+    };
+  }
+  batch.update(cRef, customerUpdate);
   batch.update(reqRef, {
     status: 'approved',
     resolvedAt: now,
