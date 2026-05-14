@@ -19,5 +19,9 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/line-reminder-fire",  "schedule": "0 * * * *" },
+    { "path": "/api/cron/line-reminder-retry", "schedule": "*/5 * * * *" }
   ]
 }

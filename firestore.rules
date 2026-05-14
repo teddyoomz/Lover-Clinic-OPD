@@ -396,6 +396,23 @@ service cloud.firestore {
         allow update, delete: if false;  // immutable
       }
 
+      // ── Backend: LINE OA Appointment Reminder (2026-05-15) ──
+      // be_line_reminder_log — fire/retry/expire/postback audit ledger.
+      // Written by /api/cron/line-reminder-fire + retry + /api/webhook/line
+      // postback handler via firebase-admin SDK (bypasses rules). Read by
+      // admin LineRemindersTab via /api/admin/line-reminder-logs endpoint.
+      // Append-only; client SDK locked. Rule B probe #8 verifies anon → 403.
+      match /be_line_reminder_log/{logId} {
+        allow read, write: if false;  // admin-SDK + cron only (LINE OA reminder system, 2026-05-15)
+      }
+      // be_line_reminder_postback_log — atomic guard against duplicate
+      // postback action handling (LINE may redeliver). Doc id = postbackToken.
+      // Written by /api/webhook/line postback handler via firebase-admin SDK.
+      // Client SDK locked. Rule B probe #8 verifies anon → 403.
+      match /be_line_reminder_postback_log/{id} {
+        allow read, write: if false;  // admin-SDK + webhook only (LINE OA reminder system, 2026-05-15)
+      }
+
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
       match /be_vendors/{vendorId} {
         allow read, write: if isClinicStaff();

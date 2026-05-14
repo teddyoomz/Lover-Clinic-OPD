@@ -139,9 +139,19 @@ is now 4 endpoints: 1 + 5 + 6 + 7 below.
      -H "Content-Type: application/json" -d '{"probe":true}'
      # → expect 200
    ```
-8. `firebase deploy --only firestore:rules,storage:rules`
-9. รัน probe 1, 5, 6, 7 ซ้ำ → ถ้า 403 ตัวไหน = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-10. ลบ probe docs ทิ้ง:
+8. **LINE Reminder (2026-05-15, post-V67-ish)** — anon write to be_line_reminder_log + be_line_reminder_postback_log → expect 403:
+   ```
+   curl -X POST "$BASE/$PREFIX/be_line_reminder_log?documentId=test-probe-$(date +%s)" \
+     -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'
+   # → expect 403 (admin-SDK only)
+
+   curl -X POST "$BASE/$PREFIX/be_line_reminder_postback_log?documentId=test-probe-$(date +%s)" \
+     -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'
+   # → expect 403 (admin-SDK only)
+   ```
+9. `firebase deploy --only firestore:rules,storage:rules`
+10. รัน probe 1, 5, 6, 7, 8 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403 (เฉพาะ 8) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+11. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
    - DELETE `$BASE/$PREFIX/be_exam_rooms/test-probe-{TS}` x 2 (clinic-staff)
@@ -149,6 +159,7 @@ is now 4 endpoints: 1 + 5 + 6 + 7 below.
      → Calls `/api/admin/cleanup-test-probes` (admin-only, firebase-admin Firestore SDK)
    - V27 fix: CREATE step now uses isArchived=true so docs hide from queue UI even before cleanup
    - V50-followup-2 (2026-05-08): pc_appointments / proclinic_session* probe artifacts no longer exist (default-deny on those collections)
+   - LINE Reminder (2026-05-15): probe #8 writes are rejected at the rule layer (403 expected) — no probe docs to clean up
 
 **Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)
