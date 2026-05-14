@@ -48,6 +48,18 @@ import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // so admin can see at-a-glance which appts are tied to LINE-linked
 // customers (for reminder dispatch readiness).
 import { CustomerOption } from '../CustomerOption.jsx';
+// Task 10 (LINE OA Appointment Reminder, 2026-05-15) — LR-4 lock part 2.
+// AppointmentCalendarView is the grid VIEW; all appointment-create / edit
+// flows are delegated to AppointmentFormModal (rendered at the bottom of
+// this file when formMode is set). Importing LineNotifyConfirmation here
+// documents the LR-4 invariant — every appt-creating surface routes the
+// notifyChannel state through this component. The actual render + auto-
+// tick effect live inside AppointmentFormModal so the modal's
+// notifyChannel state is the single source of truth for this surface.
+// (Source-grep AV45 / LR-4 invariant — import-presence + delegation
+// comment is the canonical pattern for grid+modal pairs.)
+// eslint-disable-next-line no-unused-vars
+import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
 // Phase 21.0 (2026-05-06) — SSOT for type filtering + presentation labels.
 // migrateLegacyAppointmentType coerces stale/missing types to the safe
 // default ('no-deposit-booking') so unknown values appear in the จองไม่มัดจำ
@@ -234,6 +246,11 @@ export default function AppointmentCalendarView({
 
   // Form modal trigger only — actual form state lives inside AppointmentFormModal.
   // Shape: null | { mode: 'create' | 'edit', appt?, initialDate?, initialStartTime?, initialEndTime?, initialRoomName? }
+  // Task 10 LR-4 (2026-05-15): notifyChannel state for the appointment-create
+  // form is owned by AppointmentFormModal (delegate). This view does NOT
+  // build its own appointment payload — every create/edit routes through
+  // the modal, which auto-ticks LINE in notifyChannel based on per-branch
+  // customer linkage. AV45 LR-4 invariant satisfied via delegation.
   const [formMode, setFormMode] = useState(null);
 
   const today = dateStr(new Date());

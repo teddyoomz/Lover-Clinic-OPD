@@ -69,6 +69,9 @@ import AppointmentFormModal from '../components/backend/AppointmentFormModal.jsx
 // customer-picker so admin can see per-branch LINE linkage before
 // linking an appointment to a customer.
 import { CustomerOption } from '../components/CustomerOption.jsx';
+// Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
+// LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
+import { LineNotifyConfirmation } from '../components/LineNotifyConfirmation.jsx';
 // Phase 22.0b (2026-05-06 EOD) — branch-filter helpers for kiosk modals.
 // listDoctors + listStaff in scopedDataLayer are UNIVERSAL (no auto-inject);
 // fetchDepositOptions must filter the results by selectedBranchId so the
@@ -627,6 +630,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [apptFormMode, setApptFormMode] = useState(null); // null | { mode: 'create'|'edit', appointmentId? }
   const [apptFormData, setApptFormData] = useState({ date: '', startTime: '', endTime: '', doctor: '', advisor: '', room: '', source: '', appointmentTo: '', note: '' });
   const [apptFormSaving, setApptFormSaving] = useState(false);
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — notifyChannel
+  // array drives the be_appointments.notifyChannel write so the cron
+  // pipeline picks this appt up for reminder delivery. Auto-ticked when
+  // apptSelectedCustomer has LINE linked at selectedBranchId + not
+  // opted-out + not stale (LR-4 invariant). User can untick to suppress.
+  const [apptNotifyChannel, setApptNotifyChannel] = useState([]);
 
   // ── Schedule Link modal state ──
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -1123,6 +1132,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setApptCustomerLoading(false);
   };
 
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — auto-tick LINE
+  // when the selected customer has per-branch linkage at selectedBranchId
+  // (LR-4 invariant). Re-runs on customer pick OR branch switch.
+  // apptSelectedCustomer carries lineUserId_byBranch / lineUserId /
+  // notifyOptOut / _lineStale from the be_customers fetch.
+  useEffect(() => {
+    if (!apptSelectedCustomer) { setApptNotifyChannel([]); return; }
+    const branchLink = apptSelectedCustomer.lineUserId_byBranch?.[selectedBranchId];
+    const legacyValid = apptSelectedCustomer.branchId === selectedBranchId && apptSelectedCustomer.lineUserId;
+    const linkedHere = !!(branchLink?.lineUserId || legacyValid);
+    const optedOut = apptSelectedCustomer.notifyOptOut === true;
+    const isStale = branchLink?._lineStale === true ||
+      (apptSelectedCustomer.branchId === selectedBranchId && apptSelectedCustomer._lineStale === true);
+    const canAutoTick = linkedHere && !optedOut && !isStale;
+    if (canAutoTick) setApptNotifyChannel((prev) => (prev.includes('line') ? prev : [...prev, 'line']));
+    else setApptNotifyChannel((prev) => prev.filter((c) => c !== 'line'));
+  }, [apptSelectedCustomer?.id, selectedBranchId]);
+
   const handleApptEdit = (appt) => {
     setApptFormMode({ mode: 'edit', appointmentId: appt.id });
     setApptFormData({
@@ -1165,6 +1192,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         appointmentType: DEFAULT_APPOINTMENT_TYPE, // Phase 19.0 default
         customerId: String(apptSelectedCustomer.id),
         customerName: apptSelectedCustomer.name || '',
+        // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — write
+        // notifyChannel so the cron pipeline can pick this appt up for
+        // LINE-reminder delivery. Auto-ticked when the customer has LINE
+        // linked at selectedBranchId + not opted-out + not stale (LR-4).
+        notifyChannel: apptNotifyChannel,
       };
       let res;
       if (apptFormMode.mode === 'edit') {
@@ -7213,6 +7245,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           onChange={e => setApptFormData(p => ({ ...p, note: e.target.value }))}
                           rows={2} className="w-full text-xs px-2 py-1.5 rounded-lg border bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-normal)] resize-none" />
                       </div>
+                      {/* Task 10 LR-4 (2026-05-15) — LINE-notify confirmation
+                          card. Shows green checkbox + display name when the
+                          selected customer has LINE linked at the active
+                          branch; yellow warning when linked elsewhere; null
+                          otherwise. Drives apptNotifyChannel for the
+                          createBackendAppointment payload. */}
+                      <LineNotifyConfirmation
+                        customer={apptSelectedCustomer}
+                        targetBranchId={selectedBranchId}
+                        checked={apptNotifyChannel.includes('line')}
+                        onChange={(val) => setApptNotifyChannel((prev) =>
+                          val ? Array.from(new Set([...prev, 'line'])) : prev.filter((c) => c !== 'line'),
+                        )}
+                      />
                       <div className="flex gap-2">
                         <button onClick={handleApptFormSubmit} disabled={apptFormSaving}
                           className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-1.5">

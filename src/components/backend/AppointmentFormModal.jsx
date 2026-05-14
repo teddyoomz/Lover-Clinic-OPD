@@ -35,6 +35,9 @@ import { openCustomerInNewTab } from '../../lib/customerNavigation.js';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
+// Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
+// LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
+import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
 import {
   createBackendAppointment, updateBackendAppointment,
   getAllCustomers,
@@ -346,6 +349,12 @@ export default function AppointmentFormModal({
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [doctors, setDoctors] = useState([]);
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — notifyChannel
+  // array drives the be_appointments.notifyChannel write so the cron
+  // pipeline can pick this appt up for reminder delivery. Auto-ticked
+  // when selected customer has LINE linked at selectedBranchId + not
+  // opted-out + not stale (LR-4 invariant). User can untick to suppress.
+  const [notifyChannel, setNotifyChannel] = useState([]);
   // Phase 15.7-octies (2026-04-29) — advisor dropdown uses merged
   // staff + doctors filtered by branch (via listAllSellers). User
   // directive: "แสดงเป็น พนักงาน และ ผู้ช่วย ในสาขานั้นๆ".
@@ -413,6 +422,35 @@ export default function AppointmentFormModal({
     setHolidays,
     () => setHolidays([]),
   );
+
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — resolve the
+  // selected customer doc (from customers[] OR lockedCustomer) so the
+  // LINE-notify auto-tick effect can read lineUserId_byBranch /
+  // notifyOptOut / _lineStale. Returns null when no customer chosen yet
+  // (e.g. pickLater mode or fresh modal).
+  const selectedCustomerDoc = useMemo(() => {
+    if (lockedCustomer) return lockedCustomer;
+    if (!formData.customerId) return null;
+    const id = String(formData.customerId);
+    return customers.find((c) => String(c.proClinicId || c.id) === id) || null;
+  }, [lockedCustomer, formData.customerId, customers]);
+
+  // Task 10 auto-tick — selectedBranchId is the appointment's branch
+  // (resolved via useSelectedBranch above; the modal always writes to
+  // the currently-selected branch). LR-4 invariant: 'line' channel is
+  // pre-checked iff customer has linkedHere + !optOut + !stale.
+  useEffect(() => {
+    if (!selectedCustomerDoc) { setNotifyChannel([]); return; }
+    const branchLink = selectedCustomerDoc.lineUserId_byBranch?.[selectedBranchId];
+    const legacyValid = selectedCustomerDoc.branchId === selectedBranchId && selectedCustomerDoc.lineUserId;
+    const linkedHere = !!(branchLink?.lineUserId || legacyValid);
+    const optedOut = selectedCustomerDoc.notifyOptOut === true;
+    const isStale = branchLink?._lineStale === true ||
+      (selectedCustomerDoc.branchId === selectedBranchId && selectedCustomerDoc._lineStale === true);
+    const canAutoTick = linkedHere && !optedOut && !isStale;
+    if (canAutoTick) setNotifyChannel((prev) => (prev.includes('line') ? prev : [...prev, 'line']));
+    else setNotifyChannel((prev) => prev.filter((c) => c !== 'line'));
+  }, [selectedCustomerDoc?.id, selectedBranchId]);
 
   // Filtered customer list (only used when not locked)
   const filteredCustomers = useMemo(() => {
@@ -601,6 +639,12 @@ export default function AppointmentFormModal({
         customerNote: formData.customerNote || '', notes: formData.notes,
         appointmentColor: formData.appointmentColor || '',
         lineNotify: !!formData.lineNotify,
+        // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — notifyChannel
+        // array of channels the user confirmed at submit. Auto-ticked via
+        // the per-branch LINE linkage effect (LR-4 invariant). createBackend-
+        // Appointment / updateBackendAppointment both stamp this on the doc
+        // so the cron pipeline can pick it up.
+        notifyChannel,
         status: formData.status || 'pending',
         // Phase 14.7.H follow-up A — branch-aware appointment writes.
         branchId: selectedBranchId,
@@ -1000,6 +1044,19 @@ export default function AppointmentFormModal({
                 )}
               </div>
             )}
+            {/* Task 10 LR-4 (2026-05-15) — LINE-notify confirmation card.
+                Renders green checkbox + display name when linked at this
+                branch (auto-ticked + can untick), yellow warning when
+                linked elsewhere, or null otherwise. Drives the
+                notifyChannel array on submit. */}
+            <LineNotifyConfirmation
+              customer={selectedCustomerDoc}
+              targetBranchId={selectedBranchId}
+              checked={notifyChannel.includes('line')}
+              onChange={(val) => setNotifyChannel((prev) =>
+                val ? Array.from(new Set([...prev, 'line'])) : prev.filter((c) => c !== 'line'),
+              )}
+            />
           </div>
           {/* Date + Time */}
           <div className="grid grid-cols-3 gap-3">

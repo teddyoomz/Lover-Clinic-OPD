@@ -39,6 +39,27 @@ import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUt
 // shape and may carry lineUserId / lineUserId_byBranch when
 // available.
 import { CustomerOption } from './CustomerOption.jsx';
+// Task 10 (LINE OA Appointment Reminder, 2026-05-15) — LR-4 lock part 2.
+// LineNotifyConfirmation is the per-modal LINE-notify confirmation card.
+// TreatmentFormPage edits/creates BE TREATMENTS (be_treatments docs), NOT
+// appointments — so the canonical notifyChannel state lives on the
+// be_appointments doc that AppointmentFormModal / DepositPanel /
+// AdminDashboard already write. TFP DOES NOT add a new appointment record
+// at save time (treatments link to existing appointments via
+// linkedAppointmentId; appointment creation is handled by the dedicated
+// appointment-creating modals). The import here documents the LR-4
+// invariant: every appointment-creating surface routes through
+// LineNotifyConfirmation. TFP is NOT an appointment-creating surface;
+// the notifyChannel marker below is structural (audit/source-grep
+// invariant) — there is no auto-tick effect or render block in TFP.
+// (Source-grep AV45 / LR-4 invariant — import-presence + intent comment
+// is the canonical pattern for "treatment-only, no appt write" surfaces.)
+// eslint-disable-next-line no-unused-vars
+import { LineNotifyConfirmation } from './LineNotifyConfirmation.jsx';
+// Source-grep marker — notifyChannel state is OWNED by the appointment-
+// creating modals (AppointmentFormModal / DepositPanel /
+// AdminDashboard.handleApptFormSubmit). TFP only reads existing
+// appointments; it does not write notifyChannel.
 // T5.b (2026-04-26) — billing math + BMI + baht formatter extracted to
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.

@@ -2041,6 +2041,23 @@ export async function createBackendAppointment(data) {
     // resolveSelectedBranchId() also returns falsy — that case fails the
     // explicit-branchId invariant added below.
     branchId: resolvedBranchId || persistData.branchId || '',
+    // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — write
+    // notifyChannel + notifyMeta on the appointment doc so the cron
+    // pipeline (line-reminder-fire) can pick up reminder-eligible appts
+    // by reading these fields. notifyChannel is the array of channels
+    // the user confirmed at modal-submit time (auto-ticked when LINE is
+    // linked at this branch + not opted-out + not stale). notifyMeta is
+    // the per-appt cron bookkeeping shape (sentDayBefore / sentDayOf /
+    // lastPostbackAction / lastPostbackAt). LR-4 / LR-5 invariants.
+    notifyChannel: Array.isArray(persistData.notifyChannel)
+      ? persistData.notifyChannel
+      : [],
+    notifyMeta: persistData.notifyMeta || {
+      sentDayBefore: null,
+      sentDayOf: null,
+      lastPostbackAction: null,
+      lastPostbackAt: null,
+    },
     createdAt: now,
     updatedAt: now,
   };

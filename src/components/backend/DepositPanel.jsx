@@ -46,6 +46,9 @@ import DateField from '../DateField.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
+// Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
+// LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
+import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
@@ -195,6 +198,12 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [apptNote, setApptNote] = useState('');
   const [apptColor, setApptColor] = useState('');
   const [apptLineNotify, setApptLineNotify] = useState(false);
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — notifyChannel
+  // array drives the be_appointments.notifyChannel write so the cron
+  // pipeline can pick this appt up for reminder delivery. Auto-ticked
+  // when selected customer has LINE linked at selectedBranchId + not
+  // opted-out + not stale (LR-4 invariant). User can untick to suppress.
+  const [notifyChannel, setNotifyChannel] = useState([]);
 
   // Options data
   const [customers, setCustomers] = useState([]);
@@ -271,6 +280,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     setApptDoctorId(''); setApptDoctorName(''); setApptAssistantIds([]);
     setApptRoomName(''); setApptChannel(''); setApptPurpose(''); setApptNote('');
     setApptColor(''); setApptLineNotify(false);
+    // Task 10 (2026-05-15) — reset notifyChannel; auto-tick effect will
+    // re-populate when customerId resolves.
+    setNotifyChannel([]);
     setError(''); setSuccess(false); setFormOpen(true);
   }, [loadOptions]);
 
@@ -281,6 +293,33 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       if (onCustomerUsed) onCustomerUsed();
     }
   }, [initialCustomer, openCreate, onCustomerUsed]);
+
+  // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — resolve the
+  // selected customer doc (from customers[]) so the LINE-notify auto-tick
+  // effect can read lineUserId_byBranch / notifyOptOut / _lineStale.
+  // Returns null when no customer chosen yet.
+  const selectedCustomerDoc = useMemo(() => {
+    if (!customerId) return null;
+    const id = String(customerId);
+    return customers.find((c) => String(c.proClinicId || c.id) === id) || null;
+  }, [customerId, customers]);
+
+  // Task 10 auto-tick — selectedBranchId is the appointment's branch
+  // (the deposit + appointment write to the currently-selected branch).
+  // LR-4 invariant: 'line' channel is pre-checked iff customer has
+  // linkedHere + !optOut + !stale.
+  useEffect(() => {
+    if (!selectedCustomerDoc) { setNotifyChannel([]); return; }
+    const branchLink = selectedCustomerDoc.lineUserId_byBranch?.[selectedBranchId];
+    const legacyValid = selectedCustomerDoc.branchId === selectedBranchId && selectedCustomerDoc.lineUserId;
+    const linkedHere = !!(branchLink?.lineUserId || legacyValid);
+    const optedOut = selectedCustomerDoc.notifyOptOut === true;
+    const isStale = branchLink?._lineStale === true ||
+      (selectedCustomerDoc.branchId === selectedBranchId && selectedCustomerDoc._lineStale === true);
+    const canAutoTick = linkedHere && !optedOut && !isStale;
+    if (canAutoTick) setNotifyChannel((prev) => (prev.includes('line') ? prev : [...prev, 'line']));
+    else setNotifyChannel((prev) => prev.filter((c) => c !== 'line'));
+  }, [selectedCustomerDoc?.id, selectedBranchId]);
 
   const openEdit = useCallback((dep) => {
     loadOptions();
@@ -385,6 +424,11 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         note: apptNote,
         color: apptColor,
         lineNotify: !!apptLineNotify,
+        // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — channels
+        // the user confirmed for reminder delivery (LR-4 invariant). The
+        // createDepositBookingPair helper writes this onto the
+        // be_appointments doc so the cron pipeline can pick it up.
+        notifyChannel,
       } : null;
 
       const payload = clean({
@@ -950,6 +994,21 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                     </div>
                   )}
                 </div>
+              )}
+              {/* Task 10 LR-4 (2026-05-15) — LINE-notify confirmation card.
+                  Only renders when this deposit will create an appointment
+                  (hasAppointment=true). Shows green checkbox + display name
+                  when linked at this branch, yellow warning when linked
+                  elsewhere, or null otherwise. */}
+              {hasAppointment && (
+                <LineNotifyConfirmation
+                  customer={selectedCustomerDoc}
+                  targetBranchId={selectedBranchId}
+                  checked={notifyChannel.includes('line')}
+                  onChange={(val) => setNotifyChannel((prev) =>
+                    val ? Array.from(new Set([...prev, 'line'])) : prev.filter((c) => c !== 'line'),
+                  )}
+                />
               )}
             </div>
 
