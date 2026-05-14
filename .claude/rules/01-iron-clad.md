@@ -1,6 +1,61 @@
 <important if="EVERY turn. Read before any commit, deploy, or firestore-rules change.">
 ## 🔥 Iron-Clad Rules — NEVER break
 
+### Q. 🚨🚨🚨 REAL-ADVERSARIAL VERIFICATION MANDATE 🚨🚨🚨 (2026-05-14 — Phase 29 V66 lock)
+
+**TRIGGER**: ก่อน claim ใดๆ ที่บ่งบอกว่า "เสร็จแล้ว / verified / shipped / test passed / ready to deploy / PR ready" สำหรับ user-visible code ใดๆ.
+
+**MANDATE — ต้องผ่าน ≥1 ใน 3 levels ก่อน claim**:
+
+| Level | วิธี | สิ่งที่ต้องการ |
+|---|---|---|
+| **L1 (preferred)** | Playwright / real browser | local-dev UI ชี้ real prod Firestore (หรือ vercel preview / live prod), auth as real role, click ปุ่ม + fill input จริง, assert DOM response จริง |
+| **L2 (acceptable)** | Real client SDK node script | `@firebase/firestore` (ไม่ใช่ `firebase-admin`), auth via `signInWithCustomToken`/`signInWithEmailAndPassword`, issue EXACT compound queries + listeners ที่ UI ใช้ |
+| **L3 (last resort)** | User explicit walkthrough | ใช้เฉพาะเมื่อ L1+L2 infeasible (e.g. external 3rd-party). User เขียน confirm "ลองแล้ว work" หรือ "ลองแล้ว พัง XYZ" |
+
+**ห้ามทำ** (Anti-patterns ที่ Rule Q ห้ามขาด):
+
+1. **vi.mock + RTL** claimed as verification → mocks shadow reality; passing = lying. Mock test = code-shape coverage, NOT behavior verification.
+2. **Admin SDK `doc.get` / `doc.set` / `batch.commit`** + claim "compound query verified" → admin SDK **bypasses Firestore composite indexes**. Test fixtures may pass while real client SDK fails with "index building".
+3. **Post-deploy probe = anon POST chat_conversations** → ไม่ใช่ compound query; ไม่จับ index-not-ready, ไม่จับ rules ผิด, ไม่จับ listener bug.
+4. **"Tests passed + build clean → shipped"** → ไม่พอเด็ดขาดสำหรับ user-visible flow. Required: L1 or L2 evidence.
+5. **"I tested and found no bugs"** ภายใน 5 นาที → ทดสอบไม่หนักพอ. Re-test กับ adversarial mindset.
+6. **Confirmation-bias testing** ("write test that assumes correctness, see it pass") → Adversarial mindset = write test that ASSUMES bug exists, then prove absence with real evidence.
+
+**SELF-CHECK ก่อน claim "verified"**:
+1. Did I drive REAL browser OR real client SDK?
+2. Did I issue the EXACT query the UI issues?
+3. Did I actively TRY to BREAK my own code?
+4. If I found 0 bugs in <5 min, did I test hard enough? (Default answer = NO; retest)
+5. Can I produce output log + screenshot proving the flow works?
+
+ถ้ามีคำตอบ "no" หรือ "I'm not sure" แม้แค่ข้อเดียว → **VERIFICATION INCOMPLETE — DO NOT CLAIM**.
+
+**Rule Q VIOLATION SIGNATURE** (paste-flag เมื่อ detected):
+
+> "I claimed verified/shipped/passed without Level 1 or Level 2 evidence.
+> Anti-pattern triggered. Rolling back claim — re-verify per Rule Q before
+> next claim."
+
+**ORIGIN (V66 — 2026-05-14)**: Phase 29 Recall System shipped with `vitest mocks PASS + admin-SDK e2e PASS (doc-level) + build clean → claimed "verified end-to-end"`. **All 6 layers of tests lied**:
+- vitest mocked Firestore → didn't catch index-not-ready
+- admin-SDK e2e used `doc.set/get` → bypassed composite indexes
+- post-deploy probe was unauth POST → not a compound query
+- No real client-SDK compound query against real prod
+- No Playwright against deployed UI
+
+User caught บั๊ค via prod use: index-building error banner + customer picker missing in 2/4 launch paths + auto-suggest broken in 4/4 entry points + reschedule outcome wrong + close-no-answer UI missing. User: "เทสตอแหลเข้าข้างตัวเอง ... ทำยังไงก็ได้ให้ต่อไปนี้การเทสของมึงจะต้องไม่เหี้ย ไม่โกหก ไม่เข้าข้างตัวเองและใช้ไม่ได้จริง".
+
+**ENFORCEMENT**:
+- ทุก session boot → invoke `Skill(real-adversarial-verification)` (mandatory)
+- Iron-clad rules table includes Rule Q (this file — every turn)
+- Audit `class-of-bug-discipline` checks Rule Q artifacts before "expansion done"
+- V66 V-entry locks lesson permanent
+
+**ZERO TOLERANCE**: ถ้า user catch "เทสผ่าน prod พัง" อีกครั้ง → Rule Q violation = same-class-as Rule A revert; ถอย claim ทันที + re-verify per L1/L2.
+
+---
+
 ### A. Bug-Blast Revert
 ถ้าทำ X แล้ว Y พัง → **ถอด X ออกทันที** ไม่ต้องถาม.
 **Why:** 2026-04-19 deploy `8fc2ed9` ของ session ก่อนทับ Console rules ที่เปิดไว้ → webhook + sync write 403 → chat + ปฏิทินตาย. Revert (`git reset --hard c0d0ffc` + new commit) เป็น safety net.

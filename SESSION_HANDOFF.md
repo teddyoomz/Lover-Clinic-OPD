@@ -5,6 +5,42 @@
 
 ---
 
+## 🚨🚨🚨 RULE Q — REAL-ADVERSARIAL VERIFICATION (V66, 2026-05-14) — READ EVERY TURN 🚨🚨🚨
+
+**TRUST COLLAPSED. PHASE 29 SHIPPED WITH 5+ USER-VISIBLE BUGS WHILE 8 LAYERS OF TESTS CLAIMED PASS.**
+
+Mock tests are NOT verification. Admin-SDK doc-level access is NOT verification.
+They are **CODE-SHAPE COVERAGE ONLY**.
+
+**Before claiming ANY of these — "verified" / "shipped" / "tests passed" / "done" / "complete" / "ready to deploy" / "PR ready" / "approved" / "working" — for ANY user-visible code (UI, API endpoint with auth, Firestore query, etc.) — you MUST satisfy ≥1 level:**
+
+- **L1 (PREFERRED)** — Playwright/real-browser drives the REAL deployed UI with real auth + real DOM + real Firestore side-effects
+- **L2 (ACCEPTABLE)** — Real client SDK (NOT admin) issuing the EXACT compound queries / listener subscriptions the UI issues
+- **L3 (LAST RESORT)** — User walkthrough with written confirmation ("ลองแล้ว work" / "ลองแล้ว พัง XYZ")
+
+**FORBIDDEN** (Rule Q violations):
+- `vi.mock('firebase/firestore')` + claim "verified"
+- RTL with mocked listener data only
+- Admin SDK `doc.get/set/batch.commit` + claim "compound query verified"
+- `firebase firestore:indexes` returns N → claim "indexes ready" (deployed ≠ built; indexes take 2-30 min)
+- Post-deploy probe = anon HTTP POST to one collection (not a compound query)
+- "All vitest tests pass + build clean → shipped" (INSUFFICIENT for user-visible flows)
+- "I tested for 5 min and found no bugs" (<5 min + 0 bugs → retest at higher level)
+- Confirmation-bias test design ("write test that assumes correctness → green")
+
+**Self-check** (run BEFORE any "verified" claim — any "no" or "I'm not sure" → DO NOT CLAIM):
+1. Did I drive REAL browser OR real client SDK?
+2. Did I issue the EXACT query the UI issues?
+3. Did I actively TRY to BREAK my own code?
+4. If <5 min testing + 0 bugs → did I retest at higher level?
+5. Can I produce output log + screenshot proving the flow?
+
+**Full text**: `.claude/rules/01-iron-clad.md` Rule Q (top-of-file) + `~/.claude/skills/real-adversarial-verification/SKILL.md` + V66 in `.claude/rules/00-session-start.md` § 2 + verbose entry in `.claude/rules/v-log-archive.md`.
+
+**Origin**: V66 (2026-05-14) — Phase 29 trust collapse. User curse-verified: *"กูไม่เชื่อเทสที่ไม่น่าเชื่อถือของมึงแล้ว ... ทำยังไงก็ได้ให้ต่อไปนี้การเทสของมึงจะต้องไม่เหี้ย ไม่โกหก ไม่เข้าข้างตัวเองและใช้ไม่ได้จริง"*. EVERY FUTURE "VERIFIED" CLAIM MUST PASS L1 OR L2. NO EXCEPTIONS.
+
+---
+
 ## Current State
 
 - **Date last updated**: 2026-05-14 PHASE-29-DEPLOYED — **Phase 29 (Recall System) SHIPPED LIVE** · master=`4a552c9` · prod=`4a552c9` (DEPLOYED) · 9605 tests + 1 skipped · build clean · firestore rules v30

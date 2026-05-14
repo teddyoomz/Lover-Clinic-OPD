@@ -1,7 +1,30 @@
 # LoverClinic App — Claude Master Index
 
-> อัพเดท: 2026-04-19 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
-> Tests: Vitest 1054+ | Playwright E2E 40+ | RTL 40+ | Phase: 8/12 DONE
+> อัพเดท: 2026-05-14 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
+> Tests: Vitest 9600+ | Playwright E2E 45+ | RTL 40+ | Phase: 29/29 DONE
+
+---
+
+## 🚨🚨🚨 RULE Q — REAL-ADVERSARIAL VERIFICATION (TOP-OF-FILE BANNER — V66, 2026-05-14)
+
+**Mock tests ≠ verification. Admin SDK doc-level ≠ verification.**
+
+ก่อน claim "verified / shipped / passed / done / ready" สำหรับ user-visible code:
+- **MUST** ใช้ Playwright (real browser) **OR** real client SDK (`@firebase/firestore`, not `firebase-admin`) against real Firestore
+- **MUST** exercise EXACT user-flow / compound query / listener UI ใช้จริง
+- **MUST** active break-attempt mindset (ไม่ใช่ "test → pass → done")
+- ถ้าหา 0 bugs ใน <5 min → ทดสอบไม่หนักพอ; retest
+
+**Origin (V66)**: Phase 29 shipped กับ vitest mocks PASS + admin SDK e2e (doc-level) PASS + build clean → claimed verified. **ทุกอันโกหก** — index ยัง build ไม่เสร็จ, customer picker หายไป 2/4 paths, auto-suggest พัง 4/4 entries. User: "เทสตอแหลเข้าข้างตัวเอง ... ทำยังไงก็ได้ให้ต่อไปนี้การเทสของมึงจะต้องไม่เหี้ย ไม่โกหก ไม่เข้าข้างตัวเองและใช้ไม่ได้จริง".
+
+**Full detail**: `.claude/rules/01-iron-clad.md` Rule Q. Loaded every turn.
+
+**Boot sequence (mandatory)**:
+```
+Skill(using-superpowers)
+Skill(llm-wiki)
+Skill(real-adversarial-verification)  ← RULE Q reminder
+```
 
 ---
 
