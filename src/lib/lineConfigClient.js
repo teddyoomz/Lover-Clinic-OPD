@@ -178,6 +178,13 @@ export function mergeLineConfigDefaults(raw) {
       Array.isArray(r.appointmentsKeywords) && r.appointmentsKeywords.length
         ? r.appointmentsKeywords
         : DEFAULT_LINE_CONFIG.appointmentsKeywords,
+    // Task 1 polish (I1, 2026-05-15) — deep-merge lineReminder so partial
+    // Firestore docs (e.g. {enabled:true} only) don't leak `undefined` to
+    // downstream readers (cron pipeline, debug-fire, history panel).
+    lineReminder: {
+      ...DEFAULT_LINE_CONFIG.lineReminder,
+      ...(r?.lineReminder || {}),
+    },
   };
 }
 
@@ -213,6 +220,29 @@ export function normalizeLineConfigForWrite(input) {
     alreadyLinkedRule: ['block', 'replace'].includes(r.alreadyLinkedRule)
       ? r.alreadyLinkedRule
       : 'block',
+    // Task 1 polish (I2, 2026-05-15) — propagate lineReminder block on save
+    // with per-field clamping. Without this, UI Save through saveLineConfig
+    // silently DROPS the entire reminder configuration.
+    lineReminder: (() => {
+      const lr = (r && r.lineReminder) || {};
+      const dflt = DEFAULT_LINE_CONFIG.lineReminder;
+      const clampHour = (v, fallback) => {
+        const n = typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : fallback;
+        return Math.max(0, Math.min(23, n));
+      };
+      return {
+        enabled: !!lr.enabled,
+        dayBeforeHour: clampHour(lr.dayBeforeHour, dflt.dayBeforeHour),
+        dayOfHour: lr.dayOfHour === null
+          ? null
+          : clampHour(lr.dayOfHour, dflt.dayOfHour),
+        quietHourStart: clampHour(lr.quietHourStart, dflt.quietHourStart),
+        quietHourEnd: clampHour(lr.quietHourEnd, dflt.quietHourEnd),
+        templateDayBefore: String(lr.templateDayBefore || dflt.templateDayBefore),
+        templateDayOf: String(lr.templateDayOf || dflt.templateDayOf),
+        cancellationPolicyText: String(lr.cancellationPolicyText || dflt.cancellationPolicyText),
+      };
+    })(),
     updatedAt: r.updatedAt || new Date().toISOString(),
   };
 }
