@@ -7,27 +7,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-describe('SG1 MakeFreshModal — sends bucketIds (not raw collections/tiers)', () => {
-  const code = read('src/components/backend/MakeFreshModal.jsx');
+describe('SG1 MakeFreshModal — sends bucketIds (not raw collections/tiers) [post-2026-05-15 shared-engine refactor]', () => {
+  // V21 fixup 2026-05-15 — Task 3 refactored MakeFreshModal.jsx to consume
+  // shared useMakeFreshStateMachine. The bucketIds + dryRun + expectedBodyHash
+  // logic now lives in `src/lib/makeFreshStateMachine.js` (shared engine).
+  // SG1 checks split: modal carries branch scope config, engine carries
+  // request body assembly.
+  const modalCode = read('src/components/backend/MakeFreshModal.jsx');
+  const engineCode = read('src/lib/makeFreshStateMachine.js');
 
   it('SG1.1 — imports BUCKETS from branchBackupBuckets.js', () => {
-    expect(code).toMatch(/import\s*\{[^}]*BUCKETS[^}]*\}\s*from\s*['"][^'"]*branchBackupBuckets/);
+    expect(modalCode).toMatch(/import\s*\{[^}]*BUCKETS[^}]*\}\s*from\s*['"][^'"]*branchBackupBuckets/);
   });
 
-  it('SG1.2 — sends bucketIds in API request body', () => {
-    expect(code).toMatch(/bucketIds:\s*tickedBucketIds/);
+  it('SG1.2 — engine sends bucketIds:tickedBucketIds in API request body', () => {
+    expect(engineCode).toMatch(/bucketIds:\s*tickedBucketIds/);
   });
 
-  it('SG1.3 — does NOT send raw tiers in request body (V40 contract retired in UI)', () => {
-    expect(code).not.toMatch(/body:\s*JSON\.stringify\([^)]*tiers:\s*\[/);
+  it('SG1.3 — does NOT send raw tiers in request body (V40 contract retired)', () => {
+    expect(modalCode).not.toMatch(/body:\s*JSON\.stringify\([^)]*tiers:\s*\[/);
+    expect(engineCode).not.toMatch(/body:\s*JSON\.stringify\([^)]*tiers:\s*\[/);
   });
 
-  it('SG1.4 — sends expectedBodyHash on make-fresh request (UI cross-check)', () => {
-    expect(code).toMatch(/expectedBodyHash/);
+  it('SG1.4 — engine sends expectedBodyHash on make-fresh request', () => {
+    expect(engineCode).toMatch(/expectedBodyHash/);
   });
 
-  it('SG1.5 — uses dryRun:true for preview request', () => {
-    expect(code).toMatch(/dryRun:\s*true/);
+  it('SG1.5 — engine uses dryRun:true for preview request', () => {
+    expect(engineCode).toMatch(/dryRun:\s*true/);
+  });
+
+  it('SG1.6 — modal consumes shared engine via useMakeFreshStateMachine', () => {
+    expect(modalCode).toMatch(/useMakeFreshStateMachine/);
   });
 });
 

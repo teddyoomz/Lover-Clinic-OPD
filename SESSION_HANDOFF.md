@@ -43,11 +43,42 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE EOD #3 — **Selective Make-Fresh + Backup Integrity DEPLOYED ✓** (Phase 29.23 SAGA + Selective Make-Fresh combined 35-commit deploy) · master=`8b4b047` · prod=`8b4b047` ✓ LIVE on https://lover-clinic-app.vercel.app · build clean · firestore rules v31 (unchanged)
+- **Date last updated**: 2026-05-15 — **Central Stock Make-Fresh + Backup Integrity SHIPPED locally** (extends 2026-05-14 selective-make-fresh; brainstorming Q1-Q3 → spec → 12-task plan → ★ Rule Q L2 5/5 scenarios PASS on real prod) · master=`<post-commit>` · prod=`8b4b047` · **13 commits PENDING DEPLOY per V18** · build clean · firestore rules v31 unchanged
 - **Branch**: `master`
-- **Last commit**: `8b4b047` docs(agents): EOD 2026-05-14 #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★
-- **Test count**: **9825 vitest GREEN** + 12 skipped + 4 pre-existing failures (NOT from selective-make-fresh — flagged in prior session active.md) + **13 Playwright e2e** (12 baseline + 1 new selective-make-fresh L1 spec).
-- **Deploy state**: prod=`8b4b047` ✓ LIVE. Combined 35-commit deploy successful 2026-05-14 LATE EOD #3 (Vercel-only; no Firebase rules touched).
+- **Last commit**: V21 fixup sweep — branch make-fresh tests updated post Task 3 shared-engine refactor
+- **Test count**: **9883+ vitest GREEN** + 12 skipped + 4 pre-existing failures (NOT from this work) + **14 Playwright e2e** (13 baseline + 1 new central-stock L1 spec).
+- **Deploy state**: prod=`8b4b047` LIVE (2026-05-14 EOD #3). **13 commits PENDING** for next combined deploy — V18 lock active.
+
+### Session 2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED ★
+
+User directive: "ฝากเพิ่มระบบลบ tab=central-stock คลังกลางด้วย และ restore กลับได้ 100% ด้วย ต้องการเคลียเหมือนกัน".
+
+Brainstorming Q1-Q3 locked (Q1=C per-warehouse + bulk-all · Q2=A 4 buckets · Q3=B refactor shared 3-step state machine via Rule C1 leverage). 12-task plan executed inline.
+
+**Artifacts shipped**:
+- NEW `src/lib/centralStockBuckets.js` — 4-bucket schema (cs_po + cs_stock_ledger + cs_transfers_withdrawals + cs_adjustments) + helpers (20 unit tests)
+- NEW `src/lib/makeFreshStateMachine.js` — shared 3-step engine (Rule C1 extraction; 9 unit tests)
+- REFACTOR `MakeFreshModal.jsx` — thin scope=branch wrapper consuming shared engine (backward-compat preserved; 7 RTL tests preserved)
+- NEW `CentralMakeFreshModal.jsx` — thin scope=central wrapper (cs- prefixed test IDs)
+- NEW `CentralMakeFreshButton.jsx` + wire `CentralWarehousePanel.jsx` (per-warehouse card button + bulk-all toolbar button)
+- NEW `/api/admin/central-stock-{backup-export,make-fresh}.js` (★ hash verify BEFORE wipe; warehouse master protected by `assertWarehouseMasterProtected`)
+- NEW `tests/central-stock-make-fresh-flow-simulate.test.jsx` (Rule I CF1.1-CF1.7 — 7 tests)
+- NEW `tests/central-stock-make-fresh-source-grep.test.js` (V21 + AV44 — 22 regression tests)
+- ★ NEW `scripts/e2e-central-stock-roundtrip-real-prod.mjs` (Rule Q L2 — 5 scenarios × 8 phases × hash byte-equal)
+- NEW CLI scripts: `scripts/central-stock-make-fresh.mjs` + `scripts/central-stock-restore.mjs`
+- NEW `tests/e2e/central-stock-make-fresh.spec.js` (Rule Q L1 Playwright — 3 specs)
+- EDIT `audit-anti-vibe-code/SKILL.md` — NEW AV44 invariant + section heading AV1-AV44
+- V21 fixup sweep: branch make-fresh tests updated to assert on shared engine post-refactor
+
+**Rule Q L2 ★ VERIFIED on REAL prod**: ran `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` with TEST-CSRT-WH-{ts} warehouse + adversarial fixtures (Thai/Unicode/Timestamps/refs/large/nested/counter doc seq=42). **5/5 scenarios PASSED** with hash byte-equal at every phase boundary. Warehouse master records (`be_central_stock_warehouses`) confirmed INTACT across every scenario — defense-in-depth proven. Cleanup zero orphans (50 docs + 5 Storage files deleted via audit-tracked operations).
+
+**13 commits PENDING DEPLOY** (Vercel only; no Firebase rules changes). V18 deploy lock active.
+
+Companion spec + plan: `docs/superpowers/specs/2026-05-15-central-stock-make-fresh-and-integrity-design.md` + `docs/superpowers/plans/2026-05-15-central-stock-make-fresh.md`.
+
+### Session 2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity DEPLOYED ✓ (35-commit batch)
+
+(prod=8b4b047 LIVE — see prior entry below)
 
 ### Session 2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★
 

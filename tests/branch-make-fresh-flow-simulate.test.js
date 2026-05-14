@@ -27,10 +27,19 @@ describe('FS3 — make-fresh auto-backup discipline', () => {
     expect(backupIdx).toBeLessThan(wipeIdx);
   });
 
-  it('FS3.4 — UI modal locks button until branch name typed verbatim', () => {
+  it('FS3.4 — UI modal locks button until confirm name typed verbatim (post-2026-05-15 shared-engine refactor)', () => {
+    // V21 fixup 2026-05-15 — MakeFreshModal refactored to consume shared
+    // useMakeFreshStateMachine; matches logic now lives in the engine.
+    // Modal disables confirm button via `disabled={!matches}` where matches
+    // comes from the shared engine. Engine computes matches against
+    // `confirmName` (passed = branchName for branch scope).
     const modalCode = fs.readFileSync(path.resolve('src/components/backend/MakeFreshModal.jsx'), 'utf-8');
-    expect(modalCode).toMatch(/confirmText\.trim\(\)\s*===\s*branchName\.trim\(\)/);
+    expect(modalCode).toMatch(/useMakeFreshStateMachine/);
+    expect(modalCode).toMatch(/confirmName:\s*branchName/);
     expect(modalCode).toMatch(/disabled=\{!matches\}/);
+    // Engine impl
+    const engineCode = fs.readFileSync(path.resolve('src/lib/makeFreshStateMachine.js'), 'utf-8');
+    expect(engineCode).toMatch(/confirmText\.trim\(\)\s*===\s*String\(confirmName/);
   });
 
   it('FS3.5 — make-fresh endpoint selectively wipes via resolveBucketScope (post-2026-05-14 selective-make-fresh)', () => {

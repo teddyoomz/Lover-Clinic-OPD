@@ -1,10 +1,10 @@
 ---
-updated_at: "2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity DEPLOYED to prod ✓"
-status: "master=8b4b047 · prod=8b4b047 ✓ DEPLOYED · build clean · 10/10 Rule Q L2 real-prod round-trip GREEN"
+updated_at: "2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED locally (13 commits ahead of prod ★ Rule Q L2 5/5 PASS)"
+status: "master=<post-commit> · prod=8b4b047 · 13 commits PENDING DEPLOY per V18 · build clean · 5/5 Rule Q L2 real-prod round-trip GREEN"
 branch: "master"
-last_commit: "8b4b047 docs(agents): EOD 2026-05-14 #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★"
-tests: "9825 vitest GREEN + 12 skipped + 4 pre-existing failures (NOT introduced by selective-make-fresh — flagged in prior active.md)"
-playwright_e2e: 13
+last_commit: "7cf816f feat(central-stock): CLI scripts + Playwright spec + AV44 invariant (Task 11)"
+tests: "9883+ vitest GREEN + 12 skipped + 4 pre-existing failures (not from this work)"
+playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "8b4b047"
 firestore_rules_version: 31
@@ -15,50 +15,66 @@ storage_rules_version: 2
 
 ## 🚨 RULE Q V66 + V18 DEPLOY LOCK + RULE R STANDING AUTH
 
-- **Rule Q L1**: every "verified" claim → must pass Playwright real-browser OR real client SDK with exact compound queries.
-- **V18 deploy lock**: 34 commits ahead of prod. NO `vercel --prod` without explicit "deploy" verb THIS turn.
+- **Rule Q L1**: every "verified" claim → Playwright real-browser OR real client SDK with exact compound queries
+- **V18 deploy lock**: 13 commits ahead of prod. NO `vercel --prod` without explicit "deploy" verb THIS turn.
 - **Rule R**: standing authorization for `vercel env pull .env.local.prod` + read-only admin-SDK diag any time.
 
 ## State
 
-- master = `8b4b047` · prod = `8b4b047` ✓ DEPLOYED 2026-05-14 LATE EOD #3
+- master = `7cf816f` (+1 V21 fixup commit pending) · prod = `8b4b047` · 13 commits PENDING DEPLOY
 - Build clean
-- **Rule Q L2 ★ VERIFIED**: `scripts/e2e-backup-restore-roundtrip-real-prod.mjs --apply` → 10/10 scenarios PASS on REAL prod (hash byte-equal at every phase boundary, all adversarial fixtures Thai/Unicode/Timestamps/refs/large/nested cleanup zero orphans)
-- 9825 vitest GREEN + 12 skipped + 4 pre-existing failures (NOT from this work)
+- **Rule Q L2 ★ VERIFIED**: `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` → 5/5 scenarios PASS on REAL prod (hash byte-equal at every phase boundary, warehouse master intact across all scenarios, cleanup zero orphans)
+- 9883+ vitest GREEN + 12 skipped + 4 pre-existing failures (NOT from this work)
 
-## What this session shipped (Selective Make-Fresh + Backup Integrity)
+## What this session shipped (Central Stock Make-Fresh)
 
-User directive: extend V40 "ทำให้เป็นสาขาใหม่" button with selective bucket-level wipe + scope-matched backup + CRYPTOGRAPHIC ROUND-TRIP INTEGRITY ("ระบบ backup ต้องเทสให้แน่ใจที่สุดว่า Backup ออกมาแล้ว สามารถ restore เข้าไปได้แล้วเหมือนเดิม เป็นเรื่องที่ serious มาก").
+User directive: "ฝากเพิ่มระบบลบ tab=central-stock คลังกลางด้วย และ restore กลับได้ 100% ด้วย ต้องการเคลียเหมือนกัน".
 
-Brainstorming Q1-Q6 locked (Q1=D hybrid UI + Advanced + T1 server-protected · Q2=B match-scope backup · Q3=A 7 buckets · Q4=B 6+1 default · Q5=B hash verification + test bank · Q6=B 3-step preview UX).
+Brainstorming Q1-Q3 locked (Q1=C per-warehouse + bulk-all · Q2=A 4 buckets · Q3=B refactor shared 3-step state machine).
 
-13-task plan executed inline (subagent context-thrashing on this project's large CLAUDE.md forced inline execution after Task 1 attempts):
+12-task plan executed inline (proven workflow from selective-make-fresh):
 
-1. NEW `src/lib/branchBackupBuckets.js` — 7-bucket schema + helpers (21 tests)
-2. EDIT `src/lib/branchBackupSchema.js` — v2 schema + `computeBodyHash` SHA-256 (26 tests)
-3. EDIT `api/admin/branch-backup-export.js` — bucketIds + dryRun + emit bodyHash
-4. EDIT `api/admin/branch-make-fresh.js` — bucketIds + hash verify BEFORE wipe (★ critical)
-5. REWRITE `src/components/backend/MakeFreshModal.jsx` — 3-step state machine UX
-6. NEW `tests/branch-make-fresh-selective-flow-simulate.test.jsx` — Rule I (7 tests)
-7. NEW `tests/branch-make-fresh-selective-source-grep.test.js` — V21 + AV regression (23 tests)
-8. ★ NEW `scripts/e2e-backup-restore-roundtrip-real-prod.mjs` — Rule Q L2 (8-phase × 10 scenarios)
-9. NEW `tests/e2e/branch-make-fresh-selective.spec.js` — Rule Q L1 Playwright (3 specs)
-10. EDIT `scripts/branch-make-fresh.mjs` — CLI `--bucket-ids` arg
-11. EDIT `audit-anti-vibe-code/SKILL.md` — NEW AV43 invariant
-12. V21 fixup sweep — 3 test files migrated (FS3.5 + UI3 retired + E3.5-10 updated)
-13. (this entry) session-end update
+1. NEW `src/lib/centralStockBuckets.js` — 4-bucket schema + helpers (20 tests)
+2. NEW `src/lib/makeFreshStateMachine.js` — extracted shared 3-step engine (9 tests)
+3. REFACTOR `MakeFreshModal.jsx` to consume shared engine (7 tests preserved)
+4. NEW `CentralMakeFreshModal.jsx` — thin wrapper
+5. NEW `CentralMakeFreshButton.jsx` + wire `CentralWarehousePanel.jsx`
+6. NEW `/api/admin/central-stock-backup-export.js`
+7. NEW `/api/admin/central-stock-make-fresh.js` (★ hash verify BEFORE wipe)
+8. NEW flow-simulate Rule I (CF1.1-CF1.7 — 7 tests)
+9. NEW source-grep V21+AV44 (CSG1-CSG4 — 22 tests)
+10. ★ NEW `scripts/e2e-central-stock-roundtrip-real-prod.mjs` (Rule Q L2)
+    — 5 scenarios × 8 phases × hash byte-equal on REAL PROD verified
+11. NEW CLI scripts (central-stock-make-fresh.mjs + central-stock-restore.mjs)
+    + Playwright spec + AV44 invariant in audit-anti-vibe-code SKILL.md
+12. V21 fixup sweep (FS3.4 + SG1.2/1.4/1.5 — branch tests updated post Task 3
+    refactor; assert on shared engine instead of inline state)
+
+## Rule Q L2 verification (★ CRITICAL per user directive)
+
+Ran `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` on REAL prod:
+- 5 scenarios: cs_po-only / cs_stock_ledger-only / cs_transfers_withdrawals-only / cs_adjustments-only / all-4-buckets
+- Per scenario, 8 phases × hash byte-equal:
+  - Pre-state hash computed
+  - Backup → upload → bodyHash emitted in meta
+  - Wipe → assert empty + warehouse master INTACT
+  - Restore → recompute hash → write-back
+  - Post-restore hash == pre-state hash ✓
+- Adversarial fixtures: Thai + Unicode NFC vs NFD + Timestamps + cross-warehouse refs + counter doc (seq=42 preserved)
+- All cleaned up: 50 docs + 5 Storage files deleted, audit docs emitted
+- Warehouse master records (be_central_stock_warehouses) confirmed INTACT across every scenario
 
 ## Next action
 
-Selective Make-Fresh + Backup Integrity is **LIVE on https://lover-clinic-app.vercel.app** at commit `8b4b047`. Awaiting next task.
+Awaiting next user task or explicit "deploy" verb for 13-commit Vercel deploy.
 
-## Recently completed (this session — all DEPLOYED)
+## Outstanding (user-triggered)
 
-1. ✓ Hard-refresh dev server + verified modal hands-on (Q4-B defaults correct: 6 checked + customerActivity FALSE; 7 buckets render; advanced toggle works)
-2. ✓ Playwright Rule Q L1 spec runs (skips when env vars not set — by design; runnable when admin sets FIREBASE_API_KEY + TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD)
-3. ✓ Deployed via `vercel --prod --yes` — Aliased to lover-clinic-app.vercel.app
+1. Hard-refresh dev server + verify central stock Make-Fresh button hands-on
+2. Run Playwright Rule Q L1 spec when ready (auth env vars required)
+3. Explicit **"deploy"** → 13-commit `vercel --prod --yes` (Vercel only)
 
-## Pre-existing failures (NOT from this work — for reference)
+## Pre-existing failures (NOT from this work)
 
-- `tests/phase-20-0-flow-a-queue-read-source.test.jsx` — listenToAppointmentsByMonth pattern (flagged in prior session)
-- 3 others (need investigation in a future session — not blocking selective-make-fresh)
+- `tests/phase-20-0-flow-a-queue-read-source.test.jsx` — listener pattern (flagged prior session)
+- 3 others (need investigation in a future session — not blocking)
