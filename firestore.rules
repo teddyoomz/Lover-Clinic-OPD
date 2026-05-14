@@ -400,17 +400,31 @@ service cloud.firestore {
       // be_line_reminder_log — fire/retry/expire/postback audit ledger.
       // Written by /api/cron/line-reminder-fire + retry + /api/webhook/line
       // postback handler via firebase-admin SDK (bypasses rules). Read by
-      // admin LineRemindersTab via /api/admin/line-reminder-logs endpoint.
-      // Append-only; client SDK locked. Rule B probe #8 verifies anon → 403.
+      // admin LineRemindersTab via /api/admin/line-reminder-logs endpoint
+      // AND by LineReminderHistoryPanel via client-SDK onSnapshot.
+      // Append-only; WRITE locked at rules layer. Rule B probe #8 verifies
+      // anon → 403 (anon clients are not clinic staff → no read either).
+      //
+      // 2026-05-15 (Wave 2 deferred fix): READ opened to clinic staff for
+      // LineReminderHistoryPanel (§5 C.3). WRITE still locked — admin-SDK +
+      // cron only. Pre-Wave-2: both read+write were `if false`; that prevented
+      // the history panel from rendering any logs in production.
       match /be_line_reminder_log/{logId} {
-        allow read, write: if false;  // admin-SDK + cron only (LINE OA reminder system, 2026-05-15)
+        allow read: if isClinicStaff();
+        allow write: if false;  // admin-SDK + cron only (LINE OA reminder pipeline)
       }
       // be_line_reminder_postback_log — atomic guard against duplicate
       // postback action handling (LINE may redeliver). Doc id = postbackToken.
       // Written by /api/webhook/line postback handler via firebase-admin SDK.
-      // Client SDK locked. Rule B probe #8 verifies anon → 403.
+      // WRITE locked at rules layer. Rule B probe #8 verifies anon → 403.
+      //
+      // 2026-05-15 (Wave 2 deferred fix): READ opened to clinic staff for
+      // LineReminderHistoryPanel (§5 C.3). WRITE still locked — admin-SDK +
+      // webhook only. Pre-Wave-2: both read+write were `if false`; that prevented
+      // the history panel from rendering any logs in production.
       match /be_line_reminder_postback_log/{id} {
-        allow read, write: if false;  // admin-SDK + webhook only (LINE OA reminder system, 2026-05-15)
+        allow read: if isClinicStaff();
+        allow write: if false;  // admin-SDK + webhook only (LINE OA postback log)
       }
 
       // ── Backend: Phase 14.3 (G6) Vendors + Vendor Sales (B2B sale variant) ──
