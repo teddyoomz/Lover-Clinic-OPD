@@ -932,7 +932,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [globalPushMuted, setGlobalPushMuted] = useState(false);
   const [brokerPending, setBrokerPending] = useState({}); // sessionId → true while pending
   // Phase 25.0c (2026-05-09) — Walk-in OPD-save → appointment-create modal.
-  // After admin clicks "บันทึกลง OPD" on the คิว Walk-IN tab and customer
+  // After admin clicks "บันทึกลง OPD" on the คิวหน้า Clinic tab and customer
   // is saved to be_customers, this state holds the data needed to render
   // <AppointmentFormModal> with type+channel+customer+branch locked.
   const [walkInModal, setWalkInModal] = useState(null);
@@ -3240,7 +3240,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     // mismatch resilient — works even if customer types a different phone in
     // the OPD form. Idempotent (re-clicking บันทึกลง OPD won't double-attach).
     // Phase 25.0c (2026-05-09) — after customer is saved to be_customers, if
-    // admin is on the คิว Walk-IN tab (adminMode === 'dashboard'), open the
+    // admin is on the คิวหน้า Clinic tab (adminMode === 'dashboard'), open the
     // Walk-in appointment-create modal with type+channel+customer+branch
     // LOCKED. Per user directive: walk-in customers are recorded in DB FIRST
     // (this OPD-save step), THEN appointment-create modal pops. Other tabs
@@ -8555,7 +8555,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       {showScheduleModal && renderScheduleModal()}
 
       {/* Phase 25.0c (2026-05-09) — Walk-in appointment-create modal. Opens
-          after admin clicks "บันทึกลง OPD" on the คิว Walk-IN tab, customer
+          after admin clicks "บันทึกลง OPD" on the คิวหน้า Clinic tab, customer
           is saved to be_customers, and adminMode === 'dashboard'. Locks
           type='walk-in' / channel='Walk-in' / customer / branch (via context).
           User: "เด้ง modal สร้างนัดหมาย ... ดึงข้อมูลจากสาขานั้นๆมา แล้วล็อค
