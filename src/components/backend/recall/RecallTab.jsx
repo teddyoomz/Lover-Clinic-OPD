@@ -39,7 +39,9 @@ export function RecallTab() {
   // Sub-pill view state: 'list' = existing recall list, 'cases' = admin panel.
   const [view, setView] = useState('list');
   // Phase 29.22 — be_recall_cases shared hook (4-caller Rule of 3).
-  const { recallCases, onSaveAsRecallCase } = useRecallCases();
+  // Rule Q L1 RB5 — also expose `reload` so RecallCasesAdminPanel can
+  // trigger typeahead re-fetch after admin save/hide.
+  const { recallCases, onSaveAsRecallCase, reload: reloadRecallCases } = useRecallCases();
 
   const [searchText, setSearchText] = useState('');
 
@@ -186,7 +188,7 @@ export function RecallTab() {
 
       {view === 'cases' && canManageCases ? (
         <div className="p-4">
-          <RecallCasesAdminPanel />
+          <RecallCasesAdminPanel onCasesChanged={reloadRecallCases} />
         </div>
       ) : loading && !recalls?.length ? (
         <div className="py-10 text-center text-[11px] text-[var(--tx-muted)]" data-testid="recall-tab-loading">

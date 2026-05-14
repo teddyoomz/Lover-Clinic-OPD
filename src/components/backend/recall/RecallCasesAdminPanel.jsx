@@ -6,8 +6,17 @@ import { RecallCaseFormModal } from './RecallCaseFormModal.jsx';
 /**
  * Phase 29.22 (2026-05-14) — sub-pill admin panel for be_recall_cases.
  * CRUD table + add/edit modal + soft-archive toggle + search filter.
+ *
+ * Rule Q L1 RB5 fix: after any mutation (save / hide / unhide), invokes
+ * `onCasesChanged?.()` so the parent's useRecallCases hook (used by the
+ * typeahead) can re-fetch. Without this callback, the typeahead in
+ * RecallCreateModal would show stale data (incl. just-hidden cases) until
+ * full page reload.
+ *
+ * @param {object} props
+ * @param {() => void} [props.onCasesChanged] — invoked after save / hide / unhide
  */
-export function RecallCasesAdminPanel() {
+export function RecallCasesAdminPanel({ onCasesChanged }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
@@ -49,6 +58,8 @@ export function RecallCasesAdminPanel() {
   async function handleSave(payload) {
     await saveRecallCase(payload, { uid: getUid() });
     await reload();
+    // Rule Q L1 RB5 — notify parent so typeahead source re-fetches.
+    onCasesChanged?.();
   }
 
   async function handleToggleHidden(c) {
@@ -60,6 +71,8 @@ export function RecallCasesAdminPanel() {
     try {
       await setRecallCaseHidden(c.id, next, { uid: getUid() });
       await reload();
+      // Rule Q L1 RB5 — notify parent so typeahead source re-fetches.
+      onCasesChanged?.();
     } catch (e) {
       setError(e?.message || 'อัปเดตไม่สำเร็จ');
     }

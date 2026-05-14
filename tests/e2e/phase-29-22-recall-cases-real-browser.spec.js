@@ -197,70 +197,35 @@ test.describe('Phase 29.22 — Recall Cases real-browser (RB1-RB5)', () => {
   });
 });
 
-test.describe('Phase 29.22 — RB6 Real-client-SDK compound query probe (V66 post-deploy)', () => {
-  test('RB6 Compound query (where + orderBy) executes without index-building error', async ({ page }) => {
-    await goToBackend(page);
-    await page.goto('/?backend=1&tab=recall');
-
-    // Inject Firebase modular SDK in the browser context + run the EXACT
-    // compound query the UI issues. Watches for "index building" /
-    // FAILED_PRECONDITION errors (V66 lesson — post-deploy index race).
-    const result = await page.evaluate(async () => {
-      try {
-        const firebaseApp = await import('https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js');
-        const firestoreMod = await import('https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js');
-        const authMod = await import('https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js');
-
-        const cfg = {
-          apiKey: 'AIzaSyDrUal7dR9eweWQKgi4ZhDK7k0hiF9tx20',
-          authDomain: 'loverclinic-opd-4c39b.firebaseapp.com',
-          projectId: 'loverclinic-opd-4c39b',
-        };
-        const app = firebaseApp.initializeApp(cfg, 'rb6-probe');
-        const db = firestoreMod.getFirestore(app);
-        const auth = authMod.getAuth(app);
-
-        // Use existing auth token from main app's localStorage
-        const authKey = `firebase:authUser:${cfg.apiKey}:[DEFAULT]`;
-        const stored = localStorage.getItem(authKey);
-        if (!stored) return { ok: false, error: 'No auth in localStorage' };
-        const user = JSON.parse(stored);
-        // Real client-SDK token sign-in via signInWithCustomToken not available
-        // here; fall back to running the query as the existing session (auth
-        // state propagates via the same Firebase project). If the query needs
-        // auth, the request will succeed via the existing browser context.
-
-        const coll = firestoreMod.collection(
-          db,
-          'artifacts/loverclinic-opd-4c39b/public/data/be_recall_cases'
-        );
-        const q = firestoreMod.query(
-          coll,
-          firestoreMod.where('isHidden', '==', false),
-          firestoreMod.orderBy('caseName', 'asc')
-        );
-        const snap = await firestoreMod.getDocs(q);
-        return { ok: true, count: snap.size, hasIndexError: false };
-      } catch (e) {
-        const msg = e?.message || String(e);
-        return {
-          ok: false,
-          error: msg,
-          hasIndexError: /index.*build|FAILED_PRECONDITION/i.test(msg),
-        };
-      }
+test.describe('Phase 29.22 — RB6 Real-client-SDK compound query probe (UI-driven, V66 post-deploy)', () => {
+  test('RB6 Admin panel mounts + loads cases without "index building" error', async ({ page }) => {
+    // V66 lesson: the UI itself uses real client SDK with where(isHidden,==,false)
+    // + orderBy(caseName). If the composite index is still building or broken,
+    // the admin panel's listRecallCases call would either throw or show no rows.
+    // This UI-driven check is more reliable than in-evaluate dynamic-import,
+    // which has CORS/import-map issues in dev server context.
+    const consoleErrors = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    // Critical assertions per Rule Q V66:
-    // - No "index building" error (composite index pre-declared in
-    //   firestore.indexes.json — Task 5)
-    expect(result.hasIndexError).toBe(false);
-    // - If error other than index, log + soft-fail (might be permission /
-    //   auth state mismatch in evaluate context)
-    if (!result.ok) {
-      console.log('RB6 soft-fail — query did not complete:', result.error);
-    } else {
-      console.log(`RB6 compound query succeeded: ${result.count} cases`);
-    }
+    await goToBackend(page);
+    await page.goto('/?backend=1&tab=recall');
+    await page.waitForTimeout(3000); // lazy chunk load
+
+    await page.getByTestId('recall-subpill-cases').click();
+    await page.getByTestId('recall-cases-admin-panel').waitFor({ state: 'visible', timeout: 5000 });
+
+    // Wait for listRecallCases to settle (loading → loaded state)
+    await page.waitForTimeout(3000);
+
+    // Check console didn't log index-building errors
+    const indexErrors = consoleErrors.filter((e) => /index.*build|FAILED_PRECONDITION/i.test(e));
+    expect(indexErrors).toEqual([]);
+
+    // Admin panel should show either rows OR "ไม่พบเคส" empty state — not stuck
+    // in "กำลังโหลด..." loading state past 3 seconds.
+    const loadingText = await page.locator('text=กำลังโหลด').isVisible().catch(() => false);
+    expect(loadingText).toBe(false);
   });
 });

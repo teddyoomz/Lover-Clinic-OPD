@@ -53,7 +53,12 @@ export function RecallCaseSelectField({
   const dataField = rest['data-field'];
   const dataTestId = rest['data-testid'] || 'recall-case-select-input';
   const query = internalQuery.trim().toLowerCase();
+  // Defense in depth: even if parent passes stale data containing hidden
+  // cases (e.g. admin just hid one but parent state hasn't refreshed yet),
+  // client-side filter excludes them. Server-side filter via
+  // listRecallCases({includeHidden:false}) is the primary; this is the backup.
   const filtered = (recallCases || []).filter((c) => {
+    if (c && c.isHidden === true) return false;
     if (!query) return true;
     return typeof c.caseName === 'string' && c.caseName.toLowerCase().includes(query);
   });
