@@ -58,13 +58,24 @@ export function RecallRow({
       })()
     : '--';
 
+  // Phase 29.22 visual polish — switch from "table-row border-b" to
+  // "card-shape rows with margin" so each entry is visually distinct.
+  // Maintains the dark-fire aesthetic via subtle bg + hover-pop + accent
+  // border-l for overdue/snoozed. User report: "ตารางมันมืดไปหน่อย แยก
+  // แต่ละรายการออกจากกันยาก ช่วยทำให้ตารางดูง่ายสำหรับมนุษย์กว่านี้หน่อย ให้ clear
+  // visible และยังสวยอยู่ด้วยนะ".
+  //
+  // Tailwind note: arbitrary CSS vars don't support /opacity modifier
+  // reliably (bg-[var(--bg-hover)]/40 doesn't parse). Use solid var for base
+  // + white-with-arbitrary-alpha for hover overlay (mirrors existing
+  // RecallRow.hover:bg-white/[0.015] pattern that was already in the file).
   const rowClass = [
-    'group grid grid-cols-[56px_1fr_auto] gap-2.5 transition-colors cursor-pointer',
-    'border-b border-[var(--bd)] last:border-b-0',
-    snoozed ? 'opacity-65' : '',
-    over ? 'border-l-2 border-l-red-500' : '',
-    compact ? 'px-2 py-2' : 'px-3 py-2.5',
-    'hover:bg-white/[0.015]',
+    'group grid grid-cols-[56px_1fr_auto] gap-3 transition-all cursor-pointer',
+    'rounded-lg border bg-[var(--bg-hover)]',
+    'hover:bg-white/[0.04] hover:border-rose-500/35 hover:shadow-sm',
+    snoozed ? 'opacity-60 border-dashed border-[var(--bd)]' : 'border-[var(--bd)]',
+    over ? '!border-l-[3px] !border-l-red-500 bg-red-500/[0.06]' : '',
+    compact ? 'px-3 py-2.5' : 'px-4 py-3',
   ].filter(Boolean).join(' ');
 
   return (

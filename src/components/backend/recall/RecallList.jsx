@@ -66,7 +66,12 @@ export function RecallList({
   }
 
   return (
-    <div data-testid="recall-list" data-mode={mode} className="flex flex-col">
+    <div
+      data-testid="recall-list"
+      data-mode={mode}
+      // Phase 29.22 visual polish — give sections breathing room + per-row card spacing.
+      className="flex flex-col gap-5 px-4 py-3"
+    >
       {orderedBuckets.map((bucketKey) => {
         const items = buckets[bucketKey] || [];
         if (items.length === 0) return null;
@@ -80,7 +85,7 @@ export function RecallList({
               count={items.length}
               doneCount={doneCount}
             />
-            <div>
+            <div className="flex flex-col gap-2 mt-2">
               {items.map((r) => (
                 <RecallRow
                   key={r.id}

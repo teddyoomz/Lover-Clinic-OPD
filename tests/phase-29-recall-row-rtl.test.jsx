@@ -109,7 +109,9 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
     render(<RecallRow recall={recall} todayISO={TODAY} />);
     const row = screen.getByTestId('recall-row-R1');
     expect(row).toHaveAttribute('data-snoozed', 'true');
-    expect(row.className).toMatch(/opacity-65/);
+    // Phase 29.22 visual polish — snoozed dim shifted from opacity-65 → opacity-60
+    // alongside dashed-border treatment for clearer "paused/dim" semantics.
+    expect(row.className).toMatch(/opacity-60/);
   });
 
   it('R-Row.12 requiresManualReview shows badge', () => {
