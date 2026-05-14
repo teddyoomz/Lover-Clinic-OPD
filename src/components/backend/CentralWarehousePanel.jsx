@@ -9,6 +9,7 @@ import {
 import {
   listCentralWarehouses, createCentralWarehouse, updateCentralWarehouse, deleteCentralWarehouse,
 } from '../../lib/scopedDataLayer.js';
+import CentralMakeFreshButton from './CentralMakeFreshButton.jsx';
 
 export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCreate }) {
   const [warehouses, setWarehouses] = useState([]);
@@ -66,6 +67,15 @@ export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCr
             className="px-4 py-2 rounded-lg text-xs font-bold bg-purple-700 text-white hover:bg-purple-600 flex items-center gap-1.5">
             <Plus size={14} /> เพิ่มคลัง
           </button>
+          {/* 2026-05-15 Task 5 — admin-only bulk Make-Fresh toolbar button */}
+          {warehouses.length > 0 && (
+            <CentralMakeFreshButton
+              allWarehouses={true}
+              allWarehouseList={warehouses}
+              className="px-4 py-2 rounded-lg text-xs font-bold bg-rose-800 text-white hover:bg-rose-700 flex items-center gap-1.5 border border-rose-700/40"
+              onComplete={load}
+            />
+          )}
         </div>
       </div>
 
@@ -90,7 +100,7 @@ export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCr
                   </h3>
                   <p className="text-[10px] font-mono text-[var(--tx-muted)]">{w.stockId}</p>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 items-center">
                   <button onClick={() => { setEditing(w); setFormOpen(true); }}
                     className="p-1.5 rounded bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-purple-400 border border-[var(--bd)]" title="แก้ไข">
                     <Edit3 size={11} />
@@ -101,6 +111,8 @@ export default function CentralWarehousePanel({ clinicSettings, theme, onAfterCr
                       <Trash2 size={11} />
                     </button>
                   )}
+                  {/* 2026-05-15 Task 5 — admin-only Make-Fresh trigger per warehouse */}
+                  <CentralMakeFreshButton warehouse={w} />
                 </div>
               </div>
               <div className="space-y-1 text-[11px] text-[var(--tx-muted)]">
