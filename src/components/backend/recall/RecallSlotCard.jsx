@@ -1,6 +1,23 @@
 import React from 'react';
 import DateField from '../../DateField.jsx';
 import { computeDaysFromToday, formatDaysFromTodayLabel } from '../../../lib/recallResolvers.js';
+import { RecallCaseSelectField } from './RecallCaseSelectField.jsx';
+
+/**
+ * Bangkok-TZ-stable "today + N days" helper. Uses midday-UTC parse pattern
+ * (V53 lesson) so day-of-week math doesn't TZ-shift to prior day.
+ * @param {string} isoDate "YYYY-MM-DD"
+ * @param {number} daysToAdd
+ * @returns {string} "YYYY-MM-DD"
+ */
+function addDaysISO(isoDate, daysToAdd) {
+  if (!isoDate || typeof isoDate !== 'string') return '';
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+  const dt = new Date(ms + Math.floor(Number(daysToAdd) || 0) * 86400000);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
 
 /**
  * Phase 29 (2026-05-14) — Single recall slot card inside RecallCreateModal.
@@ -10,9 +27,11 @@ import { computeDaysFromToday, formatDaysFromTodayLabel } from '../../../lib/rec
  *
  * State is fully controlled by parent — this is a presentational atom.
  *
- * Auto-suggest hint shown when `masterDataSuggestion` non-null AND slot enabled.
- * Inline-learn checkbox shown when slot has no master-data suggestion AND user
- * has typed values (admin can opt-in to save the values back to master).
+ * Phase 29.22 (2026-05-14) — reason input swap: plain <input> →
+ * RecallCaseSelectField typeahead pulling from be_recall_cases (parent
+ * passes `recallCases` array). Pick a row → reason + recallDate auto-fill.
+ * Inline-learn checkbox shown when slot reason+date filled but no matching
+ * preset (admin opts in to save the values as a new be_recall_cases entry).
  *
  * @param {object} props
  * @param {'aftercare'|'revisit'} props.slotType
@@ -20,9 +39,12 @@ import { computeDaysFromToday, formatDaysFromTodayLabel } from '../../../lib/rec
  * @param {(patch:object)=>void} props.onChange merges into value
  * @param {string} props.todayISO Bangkok-local today
  * @param {{days:number,reason:string,sourceLabel:string}|null} [props.masterDataSuggestion]
- *   When passed, shows teal hint "Auto-suggest from master: ___"
+ *   DEPRECATED (Phase 29.22) — kept for backward compat; ignored when
+ *   recallCases supplied.
+ * @param {Array<{caseId,caseName,defaultDays}>} [props.recallCases]
+ *   Phase 29.22 — typeahead options from be_recall_cases.
  */
-export function RecallSlotCard({ slotType, value, onChange, todayISO, masterDataSuggestion }) {
+export function RecallSlotCard({ slotType, value, onChange, todayISO, masterDataSuggestion, recallCases = [] }) {
   const isAftercare = slotType === 'aftercare';
   const icon = isAftercare ? '🩹' : '📅';
   const slotLabel = isAftercare ? 'Recall #1 · ติดตามอาการ' : 'Recall #2 · นัดกลับมารับบริการ';
@@ -91,19 +113,28 @@ export function RecallSlotCard({ slotType, value, onChange, todayISO, masterData
               )}
             </div>
 
-            {/* Reason input */}
+            {/* Reason picker (Phase 29.22: typeahead from be_recall_cases) */}
             <div data-field={`${slotKeyPrefix}-reason`}>
               <label className="block text-[10px] font-bold text-[var(--tx-muted)] mb-1 uppercase">
-                เหตุผล / เรื่อง
+                เหตุผล / เคส Recall
               </label>
-              <input
-                type="text"
+              <RecallCaseSelectField
                 value={value?.reason || ''}
-                onChange={(e) => set({ reason: e.target.value })}
+                recallCases={recallCases}
+                onChange={(text) => set({ reason: text })}
+                onPick={({ caseName, defaultDays }) => {
+                  const patch = { reason: caseName };
+                  // Auto-fill recallDate from today + defaultDays. Only set
+                  // when defaultDays is a positive integer.
+                  const d = Math.floor(Number(defaultDays) || 0);
+                  if (d > 0 && todayISO) {
+                    const newDate = addDaysISO(todayISO, d);
+                    if (newDate) patch.recallDate = newDate;
+                  }
+                  set(patch);
+                }}
                 placeholder={isAftercare ? 'ติดตามอาการหลังการรักษา' : 'ครบรอบบริการ'}
-                maxLength={200}
                 data-testid={`recall-slot-${slotType}-reason`}
-                className="w-full px-3 py-1.5 rounded-lg text-xs bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
           </div>
@@ -132,7 +163,7 @@ export function RecallSlotCard({ slotType, value, onChange, todayISO, masterData
                 data-testid={`recall-slot-${slotType}-save-master`}
               />
               <span className="text-[10px] text-[var(--tx-primary)]">
-                💾 บันทึกระยะเวลานี้ลง master-data ด้วย — Recall ครั้งถัดไปจะ Auto-suggest จากค่านี้
+                💾 บันทึกเป็นเคส Recall — Recall ครั้งถัดไปจะ Auto-suggest จากค่านี้
               </span>
             </label>
           )}

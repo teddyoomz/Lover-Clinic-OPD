@@ -38,22 +38,33 @@ import { thaiTodayISO } from '../../../utils.js';
  * @param {object} [props.treatmentContext] { treatmentId, date, summary }
  * @param {object} [props.sourceContext] { productId, productName, courseId, courseName }
  * @param {object} [props.masterDataSuggestions]
- *   { aftercare: {days, reason, sourceLabel}, revisit: {days, reason, sourceLabel} }
- *   When set for a slot, pre-fills + shows auto-suggest hint
+ *   DEPRECATED (Phase 29.22) — kept for backward compat. Phase 29 baseline
+ *   auto-fill was driven by per-product/course followUpAfterDays fields;
+ *   Phase 29.22 moved presets to be_recall_cases (see `recallCases` prop).
+ * @param {Array<{caseId,caseName,defaultDays}>} [props.recallCases]
+ *   Phase 29.22 — list of recall case presets (universal be_recall_cases).
+ *   Passed down to RecallSlotCard → RecallCaseSelectField typeahead.
  * @param {function} props.onClose () => void
  * @param {function} [props.onCreated] (createdIds) => void — fires after successful save
- * @param {function} [props.onSaveToMaster] ({slotType, days, reason}) => Promise<void>
- *   When slot.saveToMaster checked + creation succeeds, invokes for each opt-in slot.
- *   Parent decides target collection (be_products / be_courses).
+ * @param {function} [props.onSaveAsRecallCase] ({slotType, days, reason}) => Promise<void>
+ *   Phase 29.22 — renamed from `onSaveToMaster`. When slot.saveToMaster
+ *   checked + creation succeeds, invokes for each opt-in slot. Parent
+ *   handles dedup + saveRecallCase to be_recall_cases.
+ * @param {function} [props.onSaveToMaster]
+ *   DEPRECATED (Phase 29.22) — kept for backward compat. When defined +
+ *   `onSaveAsRecallCase` not, it receives the same args. Callers should
+ *   migrate to the new name.
  */
 export function RecallCreateModal({
   customer: customerProp,
   treatmentContext = null,
   sourceContext = null,
   masterDataSuggestions = {},
+  recallCases = [],
   onClose,
   onCreated,
-  onSaveToMaster,
+  onSaveAsRecallCase,
+  onSaveToMaster, // DEPRECATED
 }) {
   const todayISO = thaiTodayISO();
 
@@ -241,18 +252,24 @@ export function RecallCreateModal({
         createdIds = [id];
       }
 
-      // Fire inline-learn callbacks (parent decides target collection)
-      if (typeof onSaveToMaster === 'function') {
+      // Phase 29.22 (2026-05-14) — inline-learn fires on the NEW callback
+      // name `onSaveAsRecallCase` (writes to be_recall_cases). Falls back
+      // to legacy `onSaveToMaster` if only the old name is passed (backward
+      // compat — callers should migrate).
+      const saveCb = typeof onSaveAsRecallCase === 'function'
+        ? onSaveAsRecallCase
+        : (typeof onSaveToMaster === 'function' ? onSaveToMaster : null);
+      if (saveCb) {
         try {
           if (slot1.enabled && slot1.saveToMaster) {
-            await onSaveToMaster({
+            await saveCb({
               slotType: 'aftercare',
               days: computeDaysBetween(todayISO, norm1.recallDate),
               reason: norm1.reason,
             });
           }
           if (slot2.enabled && slot2.saveToMaster) {
-            await onSaveToMaster({
+            await saveCb({
               slotType: 'revisit',
               days: computeDaysBetween(todayISO, norm2.recallDate),
               reason: norm2.reason,
@@ -413,6 +430,7 @@ export function RecallCreateModal({
             onChange={(patch) => setSlot1(prev => ({ ...prev, ...patch }))}
             todayISO={todayISO}
             masterDataSuggestion={masterDataSuggestions?.aftercare || null}
+            recallCases={recallCases}
           />
 
           {/* Slot 2 */}
@@ -422,6 +440,7 @@ export function RecallCreateModal({
             onChange={(patch) => setSlot2(prev => ({ ...prev, ...patch }))}
             todayISO={todayISO}
             masterDataSuggestion={masterDataSuggestions?.revisit || null}
+            recallCases={recallCases}
           />
 
           {/* Validation banner */}

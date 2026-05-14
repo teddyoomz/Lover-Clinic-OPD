@@ -51,6 +51,7 @@ export function RecallCaseSelectField({
   }, []);
 
   const dataField = rest['data-field'];
+  const dataTestId = rest['data-testid'] || 'recall-case-select-input';
   const query = internalQuery.trim().toLowerCase();
   const filtered = (recallCases || []).filter((c) => {
     if (!query) return true;
@@ -73,7 +74,7 @@ export function RecallCaseSelectField({
         onFocus={() => setOpen(true)}
         placeholder={placeholder}
         className="w-full px-2 py-1.5 text-xs rounded border border-[var(--border-card)] bg-[var(--bg-input)] text-[var(--tx-primary)]"
-        data-testid="recall-case-select-input"
+        data-testid={dataTestId}
       />
       {open && visible.length > 0 && (
         <div
