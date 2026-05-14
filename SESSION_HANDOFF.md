@@ -7,11 +7,64 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 28 + Phase 27 saga DEPLOYED LIVE** · 9176 tests + 1 skipped · build clean · master = prod = `0389e23`
+- **Date last updated**: 2026-05-14 LATE-EOD continued+2 — **Phase 29 spec + plan WRITTEN** (execution in new chat) · master=`686e84a` · prod=`0389e23` · 9176 tests · build clean
 - **Branch**: `master`
-- **Last commit**: `0389e23` docs(Phase 28): SESSION_HANDOFF + active + V-log + checkpoint
-- **Test count**: **9176 passed** + 1 skipped. 0 failures (1 known intermittent flake on Phase 17.1 cross-branch-import-rtl resolves on re-run; pre-existing).
-- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28 deploy 2026-05-14 LATE-EOD). HTTP 200, TTFB 716ms. Vercel: `https://lover-clinic-app.vercel.app`. Firestore rules: idempotent (no Console drift). Deploy queue EMPTY.
+- **Last commit**: `686e84a` docs(Phase 29): implementation plan with 21 bite-sized tasks
+- **Test count**: **9176 passed** + 1 skipped. 0 failures (Phase 29 not yet implemented — test count unchanged from Phase 28 deploy).
+- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28 deploy earlier this session). 2 docs commits ahead (Phase 29 spec + plan — code-free, no deploy needed). Phase 29 implementation will run in NEW chat.
+
+### Session 2026-05-14 LATE-EOD continued+2 — Phase 29 Recall System (design + plan, no code yet)
+
+After Phase 28 deploy this same session, user requested NEW feature: **ระบบ Recall** (customer follow-up call/LINE tracking when treatment cycle is due — filler 6mo / botox 4mo / aftercare +1d).
+
+Brainstormed via Visual Companion (Q1-Q4 + 2-round addition + pair-label refinement). Wrote 880-line spec + 2010-line plan with 21 bite-sized tasks. Did NOT execute — context full, user chose to switch chats for execution.
+
+**Locked decisions**:
+- Scope = smart-features baseline + LINE templates 1-click send (uses existing LINE OA infra)
+- Auto-suggest = master-data field on be_products + be_courses + inline-learn opt-in (admin saves to master while creating recall)
+- UI = date-grouped sections (Phase 28 DNA, 5 buckets) + 3 surfaces (Backend tab + Frontend sub-tab + CDV card mirroring appointment-card)
+- 2-round pairing per treatment (🩹 aftercare + 📅 revisit, both optional, validation ≥1)
+- Pair-label format always shows status suffix (รอ Recall / เสร็จแล้ว / ติดต่อไม่ได้ครั้งที่ N / เลื่อนไป / เกินกำหนด N วัน)
+- Real-time refresh discipline (user demand): Firestore onSnapshot + stable React keys + optimistic mutation = NO FLICKER
+
+**Architecture**: 16 new files + 12 modified + new `be_recalls` collection (BSA per Rule L) + 4 new optional master-data fields. 6-layer test methodology (helper unit / RTL / source-grep / flow-simulate / **multi-surface real-time integration** / adversarial) + admin-SDK e2e + live preview = 13 new test files, ~362 net assertions.
+
+**Spec self-review caught**: removed background-daemon auto-suggest → modal pre-fill only (admin always confirms). Added "+ Recall" chip on Phase 28 TreatmentHistoryRow as from-treatment entry point. SG11 source-grep prevents drift-back.
+
+Detail: `.agents/sessions/2026-05-14-phase-29-design-and-plan.md`. Phase 29 awaits NEW chat for execution + user spec review (recommend review spec before subagent dispatch).
+
+#### Resume Prompt — Phase 29 design ready, execution in new chat
+
+```
+Resume LoverClinic — execute Phase 29 (Recall System).
+
+Read in order BEFORE any tool call:
+1. CLAUDE.md
+2. SESSION_HANDOFF.md (master=686e84a, prod=0389e23 · 2 docs commits ahead · Phase 29 awaits execution)
+3. .agents/active.md (9176 tests · Phase 28 LIVE · Phase 29 spec+plan ready)
+4. .claude/rules/00-session-start.md (iron-clad A-P + V-summary)
+5. .agents/sessions/2026-05-14-phase-29-design-and-plan.md (this session's checkpoint)
+6. docs/superpowers/specs/2026-05-14-recall-system-design.md (Phase 29 spec, 880 lines)
+7. docs/superpowers/plans/2026-05-14-phase-29-recall-system.md (Phase 29 plan, 2010 lines, 21 tasks)
+
+Status: master=`686e84a`, 9176 pass, prod=`0389e23` LIVE. Build clean. Phase 28 DEPLOYED. Phase 29 docs-ready.
+User pre-authorized full autonomy + deploy ("ทำเลย ทำจนเวร็จ · ผ่านการเทสทุกรูปแบบที่หินโหดแล้ว").
+
+Next: choose ONE
+1. Review Phase 29 spec first (recommended) — read spec → confirm/adjust → start subagent execution
+2. Execute Phase 29 immediately — invoke Skill(subagent-driven-development) → Task 0 onwards
+3. New phase / different work
+
+Heavy testing emphasis (per user): 6-layer methodology, multi-surface real-time integration tests (Layer 5) CRITICAL — first feature with 3 Firestore listener surfaces → anti-flicker discipline must lock permanently.
+
+Rules: V18 deploy auth per turn (carries over but explicit "deploy" required); V15 combined deploy; Rule B Probe-Deploy-Probe; Rule J brainstorming HARD-GATE (already done); Rule N targeted-test-only during iteration; Rule P class-of-bug expansion if bugs surface during execution.
+
+/session-start
+```
+
+---
+
+### Session 2026-05-14 LATE EOD continued — Phase 28 Treatment History Redesign SHIPPED
 
 ### Session 2026-05-14 LATE EOD continued — Phase 28 Treatment History Redesign SHIPPED
 
