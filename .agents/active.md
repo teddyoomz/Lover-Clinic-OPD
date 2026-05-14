@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-14 PHASE-29-IMPLEMENTED — 22 tasks done, awaiting deploy verb"
-status: "master=2ea43eb · prod=0389e23 · ~20 commits ahead · 9605 tests + 1 skipped · build clean"
+updated_at: "2026-05-14 PHASE-29-DEPLOYED — combined deploy successful, e2e verified"
+status: "master=4a552c9 · prod=4a552c9 (DEPLOYED) · 9605 tests + 1 skipped · build clean · firestore rules v30"
 branch: "master"
-last_commit: "2ea43eb test(Phase 29.18): live admin-SDK e2e script on real prod (Rule M canonical)"
+last_commit: "4a552c9 docs(Phase 29.20): SESSION_HANDOFF + active.md + checkpoint — implementation complete"
 tests: 9605
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0389e23"
-firestore_rules_version: 29
+production_commit: "4a552c9"
+firestore_rules_version: 30
 storage_rules_version: 2
 ---
 
@@ -14,12 +14,14 @@ storage_rules_version: 2
 
 ## State
 
-- master = `2ea43eb` · prod = `0389e23` (~20 commits ahead post-Phase-29 implementation)
-- Phase 29 (Recall System) IMPLEMENTED — 22 tasks complete in autonomous overnight execution
+- master = `4a552c9` · prod = `4a552c9` (**DEPLOYED 2026-05-14 — combined Vercel + Firebase rules/indexes**)
+- Phase 29 (Recall System) **SHIPPED LIVE** — 22 tasks complete + Probe-Deploy-Probe passed + e2e --apply verified
 - Tests: 9176 → 9605 + 1 skipped (**+429 net** across 13 new test files)
 - Build clean: BackendDashboard 914.70 → 925.42 KB (+10.72 KB, within +20 KB budget); NEW recall chunk 676.43 KB / 191.49 KB gzip (isolated via manualChunks to sidestep Rolldown char-boundary panic)
-- firestore.rules: be_recalls match block added — Rule B Probe-Deploy-Probe NOT YET RUN (deploy gated)
-- firestore.indexes.json: +4 composite indexes for be_recalls
+- firestore.rules v30: be_recalls match block deployed; Rule B Probe-Deploy-Probe ✅ (pre + post anon POST chat_conversations → HTTP 200 both)
+- firestore.indexes.json: +4 composite indexes for be_recalls deployed
+- Live admin-SDK e2e ✅: 5 fixtures created/read-back/outcome-flipped/snoozed/cleaned-up; audit doc `phase-29-recall-e2e-1778741706763-846c7a19`
+- Prod smoke ✅ HTTP 200 at https://lover-clinic-app.vercel.app
 
 ## Phase 29 implementation summary (this session — 22 tasks)
 
@@ -65,14 +67,15 @@ storage_rules_version: 2
 
 ## Outstanding user-triggered actions
 
-1. **Task 17 — Live preview verification** on dev server with real customer (e.g. LC-26000006). Tests on Backend tab Recall + Frontend Recall view-toggle + CDV recall card all updating simultaneously without flicker.
-2. **Task 18 — Live admin-SDK e2e** — script ready; run `vercel env pull .env.local.prod --environment=production && node scripts/phase-29-recall-e2e-real-prod.mjs --apply` per Rule M.
-3. **Task 21 — V15 combined deploy** — `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes` with full Probe-Deploy-Probe (Rule B). Requires explicit "deploy" verb in this turn per V18.
+(none — Phase 29 fully shipped + verified end-to-end on real prod)
+
+Optional follow-ups:
+- **Task 17 live preview hands-on** — admin opens live prod, exercises 3 surfaces with real customer (LC-26000006) to spot-check anti-flicker discipline visually. Test coverage already locks the contract; this is user-confidence verification.
 
 ## Next action
 
-- User says **"deploy"** → run combined V15 deploy with full Probe-Deploy-Probe (5 endpoints + new be_recalls write probe).
-- OR user reviews Phase 29 hands-on first before deploying.
+- User decides next feature / phase / improvement to ship.
+- OR review Phase 29 live in production hands-on.
 
 ## Anti-flicker discipline (architectural backstop for future Phase 29+ work)
 

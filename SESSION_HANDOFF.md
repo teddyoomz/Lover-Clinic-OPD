@@ -7,11 +7,11 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 PHASE-29-IMPLEMENTED — **Phase 29 (Recall System) shipped in code, awaiting deploy** · master=`2ea43eb` · prod=`0389e23` · 9605 tests + 1 skipped · build clean
+- **Date last updated**: 2026-05-14 PHASE-29-DEPLOYED — **Phase 29 (Recall System) SHIPPED LIVE** · master=`4a552c9` · prod=`4a552c9` (DEPLOYED) · 9605 tests + 1 skipped · build clean · firestore rules v30
 - **Branch**: `master`
-- **Last commit**: `2ea43eb` test(Phase 29.18): live admin-SDK e2e script on real prod (Rule M canonical)
+- **Last commit**: `4a552c9` docs(Phase 29.20): SESSION_HANDOFF + active.md + checkpoint — implementation complete
 - **Test count**: **9605 passed** + 1 skipped. 0 failures. **+429 net** vs pre-Phase-29 baseline (9176). 13 new test files covering Layers 1-6 + e2e script.
-- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28). ~20 commits ahead (Phase 29 implementation). Awaits explicit "deploy" verb per V18.
+- **Deploy state**: **PRODUCTION = `4a552c9`** — Phase 29 SHIPPED LIVE 2026-05-14. Combined V15 deploy ✅ (vercel --prod + firebase deploy --only firestore:rules,firestore:indexes). Rule B Probe-Deploy-Probe ✅ (chat_conversations anon POST HTTP 200 pre + post). Live admin-SDK e2e ✅ (5 fixtures cycle: create → read-back → outcome-flip → snooze → cleanup + audit doc). Prod smoke HTTP 200.
 
 ### Session 2026-05-14 PHASE-29-IMPLEMENTED — Recall System shipped in 22 tasks (autonomous execution)
 
