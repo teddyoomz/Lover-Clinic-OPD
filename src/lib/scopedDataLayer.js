@@ -593,3 +593,31 @@ export const listProductGroupsForTreatment = _autoInjectPositional(() => raw.lis
 
 // ─── Admin reconciler ──────────────────────────────────────────────────────
 export const reconcileAllCustomerSummaries = (...args) => raw.reconcileAllCustomerSummaries(...args);
+
+// ─── Phase 29 (2026-05-14) — Recall System ────────────────────────────────
+// Branch-scoped: listRecalls / listenToRecalls — auto-inject for the list
+// reader (one-shot); listener accepts opts object positional-style so we
+// pass it through (the hook layer handles branch-switch re-subscribe).
+// Universal (sanctioned exception SG10): listRecallsForCustomer +
+// listenToRecallsForCustomer — recalls follow customer across branches.
+
+export const listRecalls = _autoInject(() => raw.listRecalls);
+
+// Pass-through listener — hook layer (useRecallListener) reads
+// useSelectedBranch().branchId and threads it into opts at call time, then
+// re-fires on branch switch via the useEffect dep.
+export const listenToRecalls = (...args) => raw.listenToRecalls(...args);
+
+// Universal pass-through (per-customer, BSA SG10)
+export const listRecallsForCustomer = (...args) => raw.listRecallsForCustomer(...args);
+listRecallsForCustomer.__universal__ = true;
+export const listenToRecallsForCustomer = (...args) => raw.listenToRecallsForCustomer(...args);
+listenToRecallsForCustomer.__universal__ = true;
+
+// Writers — branchId stamping handled inside raw via _resolveBranchIdForWrite
+export const createRecall = (...args) => raw.createRecall(...args);
+export const createRecallPair = (...args) => raw.createRecallPair(...args);
+export const updateRecall = (...args) => raw.updateRecall(...args);
+export const recordRecallOutcome = (...args) => raw.recordRecallOutcome(...args);
+export const recordRecallLineSend = (...args) => raw.recordRecallLineSend(...args);
+export const snoozeRecall = (...args) => raw.snoozeRecall(...args);

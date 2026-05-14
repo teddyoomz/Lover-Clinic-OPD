@@ -11029,3 +11029,270 @@ listenToCustomerFinance.__universal__ = true;
 listenToCourseChanges.__universal__ = true;
 listenToAudiences.__universal__ = true;
 listenToUserPermissions.__universal__ = true;
+
+// ═══ Phase 29 (2026-05-14) — Recall System ════════════════════════════════
+// be_recalls is branch-scoped per BSA Rule L (branchId field). Listers
+// follow BS-13 safe-by-default — when branchId is falsy AND !allBranches,
+// return empty (no cross-branch leak). Customer-scoped listers are universal
+// (sanctioned exception SG10: recalls for a customer cross branches).
+//
+// Doc shape per spec § 6 — 25 fields (id/branch/customer denorm/slotType/
+// source/schedule/pairing/lifecycle/no-answer escalation/LINE/audit).
+
+const recallsCol = () => collection(db, ...basePath(), 'be_recalls');
+const recallDoc = (id) => doc(db, ...basePath(), 'be_recalls', id);
+
+function _newRecallId() {
+  const tsCompact = Date.now().toString(36);
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  return `RECALL-${tsCompact}-${rand}`;
+}
+
+function _resolveRecallAttribution() {
+  const u = auth?.currentUser;
+  return {
+    uid: u?.uid || null,
+    name: u?.displayName || u?.email || 'unknown',
+    role: 'admin',
+  };
+}
+
+/**
+ * Phase 29 — list recalls (branch-scoped, with optional filters).
+ * Safe-by-default per BS-13: when branchId is falsy AND !allBranches → returns [].
+ */
+export async function listRecalls({ branchId = '', allBranches = false, status, dateBefore } = {}) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) return [];
+
+  const clauses = [];
+  if (!allBranches && effectiveBranchId) clauses.push(where('branchId', '==', String(effectiveBranchId)));
+  if (status) clauses.push(where('status', '==', status));
+  if (dateBefore) clauses.push(where('recallDate', '<=', dateBefore));
+  clauses.push(orderBy('recallDate', 'asc'));
+
+  const q = query(recallsCol(), ...clauses);
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+}
+
+/**
+ * Phase 29 — list recalls for a specific customer (universal — not branch-
+ * scoped per BSA sanctioned exception SG10). Recalls follow the customer
+ * across branches because a customer may visit multiple branches.
+ */
+export async function listRecallsForCustomer(customerId) {
+  if (!customerId) return [];
+  const q = query(recallsCol(), where('customerId', '==', String(customerId)), orderBy('recallDate', 'asc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+}
+
+/**
+ * Phase 29 — real-time listener for branch-scoped recall list.
+ * Safe-by-default per BS-13.
+ */
+export function listenToRecalls({ branchId = '', allBranches = false, status, dateBefore } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) {
+    setTimeout(() => onChange?.([]), 0);
+    return () => {};
+  }
+
+  const clauses = [];
+  if (!allBranches && effectiveBranchId) clauses.push(where('branchId', '==', String(effectiveBranchId)));
+  if (status) clauses.push(where('status', '==', status));
+  if (dateBefore) clauses.push(where('recallDate', '<=', dateBefore));
+  clauses.push(orderBy('recallDate', 'asc'));
+
+  const q = query(recallsCol(), ...clauses);
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    onChange?.(items);
+  }, onError);
+}
+
+/**
+ * Phase 29 — real-time listener per customer (universal, sanctioned
+ * exception SG10 — recalls follow customer across branches).
+ */
+export function listenToRecallsForCustomer(customerId, onChange, onError) {
+  if (!customerId) {
+    setTimeout(() => onChange?.([]), 0);
+    return () => {};
+  }
+  const q = query(recallsCol(), where('customerId', '==', String(customerId)), orderBy('recallDate', 'asc'));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    onChange?.(items);
+  }, onError);
+}
+
+/**
+ * Phase 29 — create a single recall doc. Stamps audit fields + 'pending'.
+ */
+export async function createRecall(payload = {}) {
+  const id = _newRecallId();
+  const now = serverTimestamp();
+  const branchId = _resolveBranchIdForWrite({ branchId: payload.branchId });
+  const me = _resolveRecallAttribution();
+  await setDoc(recallDoc(id), {
+    id, branchId,
+    customerId: payload.customerId || '',
+    customerName: payload.customerName || '',
+    customerPhone: payload.customerPhone || '',
+    customerLineUserId: payload.customerLineUserId || null,
+    customerHN: payload.customerHN || null,
+    slotType: payload.slotType || 'revisit',
+    source: payload.source || 'manual',
+    sourceTreatmentId: payload.sourceTreatmentId || null,
+    sourceProductId: payload.sourceProductId || null,
+    sourceProductName: payload.sourceProductName || null,
+    sourceCourseId: payload.sourceCourseId || null,
+    sourceCourseName: payload.sourceCourseName || null,
+    recallDate: payload.recallDate || '',
+    reason: payload.reason || '',
+    snoozedUntil: null,
+    pairedRecallId: payload.pairedRecallId || null,
+    status: 'pending',
+    outcome: null, outcomeNote: null, outcomeAt: null, outcomeBy: null,
+    noAnswerCount: 0, requiresManualReview: false,
+    lineMessageSent: false, lineMessageSentAt: null, lineMessageTemplate: null,
+    lineMessageText: null, lineMessageBy: null,
+    createdAt: now, createdBy: me, updatedAt: now, updatedBy: me,
+  });
+  return { id };
+}
+
+/**
+ * Phase 29 — atomic batch create of 2 paired recalls (slot1=aftercare,
+ * slot2=revisit). Both stamped with the other's id in `pairedRecallId`.
+ */
+export async function createRecallPair({
+  branchId, customerId, customerName, customerPhone, customerLineUserId, customerHN,
+  source, sourceTreatmentId, sourceProductId, sourceProductName, sourceCourseId, sourceCourseName,
+  slot1, slot2,
+} = {}) {
+  const id1 = _newRecallId();
+  // Tiny stagger to guarantee different timestamps in id (idempotency)
+  await new Promise(r => setTimeout(r, 1));
+  const id2 = _newRecallId();
+  const now = serverTimestamp();
+  const resolvedBranchId = _resolveBranchIdForWrite({ branchId });
+  const me = _resolveRecallAttribution();
+  const baseFields = {
+    branchId: resolvedBranchId,
+    customerId: customerId || '',
+    customerName: customerName || '',
+    customerPhone: customerPhone || '',
+    customerLineUserId: customerLineUserId || null,
+    customerHN: customerHN || null,
+    source: source || 'manual',
+    sourceTreatmentId: sourceTreatmentId || null,
+    sourceProductId: sourceProductId || null,
+    sourceProductName: sourceProductName || null,
+    sourceCourseId: sourceCourseId || null,
+    sourceCourseName: sourceCourseName || null,
+    snoozedUntil: null, status: 'pending',
+    outcome: null, outcomeNote: null, outcomeAt: null, outcomeBy: null,
+    noAnswerCount: 0, requiresManualReview: false,
+    lineMessageSent: false, lineMessageSentAt: null, lineMessageTemplate: null,
+    lineMessageText: null, lineMessageBy: null,
+    createdAt: now, createdBy: me, updatedAt: now, updatedBy: me,
+  };
+  const batch = writeBatch(db);
+  batch.set(recallDoc(id1), {
+    id: id1, slotType: 'aftercare',
+    recallDate: slot1?.recallDate || '',
+    reason: slot1?.reason || '',
+    pairedRecallId: id2,
+    ...baseFields,
+  });
+  batch.set(recallDoc(id2), {
+    id: id2, slotType: 'revisit',
+    recallDate: slot2?.recallDate || '',
+    reason: slot2?.reason || '',
+    pairedRecallId: id1,
+    ...baseFields,
+  });
+  await batch.commit();
+  return { id1, id2 };
+}
+
+/**
+ * Phase 29 — generic update with audit stamps.
+ */
+export async function updateRecall(id, patch = {}) {
+  const me = _resolveRecallAttribution();
+  await updateDoc(recallDoc(id), { ...patch, updatedAt: serverTimestamp(), updatedBy: me });
+}
+
+/**
+ * Phase 29 — record outcome + auto-snooze on no-answer + manual-review
+ * flag escalation at 3 consecutive no-answers.
+ *
+ * Pass `currentNoAnswerCount` for accurate increment (caller already has
+ * the value from the listened recall doc — avoids re-read).
+ */
+export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoAnswerCount = 0 } = {}) {
+  const me = _resolveRecallAttribution();
+  const patch = {
+    outcome,
+    outcomeNote: outcomeNote || '',
+    outcomeAt: serverTimestamp(),
+    outcomeBy: me,
+    updatedAt: serverTimestamp(),
+    updatedBy: me,
+  };
+  if (outcome === 'no-answer') {
+    const newCount = (currentNoAnswerCount || 0) + 1;
+    patch.status = 'no-answer';
+    patch.noAnswerCount = newCount;
+    patch.requiresManualReview = newCount >= 3;
+    // Auto-snooze 3 days from now (Bangkok-stable midday-UTC)
+    const snoozeMs = Date.now() + 3 * 86400000;
+    const sd = new Date(snoozeMs);
+    patch.snoozedUntil = `${sd.getUTCFullYear()}-${String(sd.getUTCMonth() + 1).padStart(2, '0')}-${String(sd.getUTCDate()).padStart(2, '0')}`;
+  } else {
+    patch.status = 'done';
+  }
+  await updateDoc(recallDoc(id), patch);
+}
+
+/**
+ * Phase 29 — record LINE template send (called AFTER server endpoint succeeds).
+ */
+export async function recordRecallLineSend(id, { templateId, messageText } = {}) {
+  const me = _resolveRecallAttribution();
+  await updateDoc(recallDoc(id), {
+    lineMessageSent: true,
+    lineMessageSentAt: serverTimestamp(),
+    lineMessageTemplate: templateId || null,
+    lineMessageText: messageText || '',
+    lineMessageBy: me,
+    updatedAt: serverTimestamp(),
+    updatedBy: me,
+  });
+}
+
+/**
+ * Phase 29 — manual snooze (admin picks new date).
+ */
+export async function snoozeRecall(id, untilDate) {
+  const me = _resolveRecallAttribution();
+  await updateDoc(recallDoc(id), {
+    snoozedUntil: untilDate || null,
+    updatedAt: serverTimestamp(),
+    updatedBy: me,
+  });
+}
+
+// Mark customer-scoped recall listener as universal (BSA exception SG10).
+// Branch-scoped listener (`listenToRecalls`) follows the default branch-aware
+// path via `useBranchAwareListener`.
+listenToRecallsForCustomer.__universal__ = true;

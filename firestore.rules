@@ -114,6 +114,14 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── Backend: Phase 29 Recall System (2026-05-14) ──
+      // be_recalls is branch-scoped (branchId field) per BSA Rule L.
+      // Customer-scoped queries are universal (sanctioned exception SG10:
+      // recalls follow customer across branches).
+      match /be_recalls/{recallId} {
+        allow read, write: if isClinicStaff();
+      }
+
       // ── Backend: Sales + Counter ──
       match /be_sales/{saleId} {
         allow read, write: if isClinicStaff();

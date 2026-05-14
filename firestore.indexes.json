@@ -92,6 +92,40 @@
         { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "advisorId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "be_recalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "recallDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "be_recalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "recallDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "be_recalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "recallDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "be_recalls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "snoozedUntil", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
