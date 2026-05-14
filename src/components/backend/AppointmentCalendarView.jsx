@@ -43,6 +43,11 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock). Used in the appt grid cell
+// so admin can see at-a-glance which appts are tied to LINE-linked
+// customers (for reminder dispatch readiness).
+import { CustomerOption } from '../CustomerOption.jsx';
 // Phase 21.0 (2026-05-06) — SSOT for type filtering + presentation labels.
 // migrateLegacyAppointmentType coerces stale/missing types to the safe
 // default ('no-deposit-booking') so unknown values appear in the จองไม่มัดจำ
@@ -931,7 +936,20 @@ export default function AppointmentCalendarView({
                                     title={`เปิดข้อมูล ${appt.customerName || appt.customerNameTemp || ''} ในแท็บใหม่`}
                                     data-testid="appt-grid-customer-link"
                                   >
-                                    {appt.customerName || appt.customerNameTemp || '-'}
+                                    {/* Task 9 LR-4 (2026-05-15) — show 🟢/⚪️ LINE chip alongside
+                                        the denormalized customer name. appt docs carry only
+                                        the denormalized name; lineUserId / lineUserId_byBranch
+                                        (when denormalized) drive the per-branch badge. */}
+                                    <CustomerOption
+                                      customer={{
+                                        name: appt.customerName || appt.customerNameTemp || '-',
+                                        branchId: appt.branchId,
+                                        lineUserId: appt.lineUserId,
+                                        lineDisplayName: appt.lineDisplayName,
+                                        lineUserId_byBranch: appt.lineUserId_byBranch,
+                                      }}
+                                      contextBranchId={selectedBranchId}
+                                    />
                                   </a>
                                 ) : (
                                   <span

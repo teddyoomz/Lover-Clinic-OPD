@@ -44,6 +44,10 @@ import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock). Used in the customer
+// header so admin sees per-branch LINE linkage state at a glance.
+import { CustomerOption } from '../CustomerOption.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
 import CourseHistoryTab from './CourseHistoryTab.jsx';
@@ -410,7 +414,10 @@ export default function CustomerDetailView({
   // (unscoped) branches list from useSelectedBranch so customers tagged with
   // a branch the current user can't access still display their origin name.
   // Empty branchId or unresolvable branchId render '—'.
-  const { branches: allBranchesForLabel } = useSelectedBranch();
+  // Task 9 (LR-4, 2026-05-15) — selectedBranchId drives CustomerOption's
+  // per-branch LINE badge so admin sees "linked to THIS branch" vs
+  // "linked to OTHER branch" at the customer header.
+  const { branchId: selectedBranchId, branches: allBranchesForLabel } = useSelectedBranch();
   const customerBranchId = (typeof customer?.branchId === 'string' && customer.branchId) || '';
   const customerBranchName = customerBranchId
     ? (resolveBranchName(customerBranchId, allBranchesForLabel) || customerBranchId)
@@ -726,7 +733,16 @@ export default function CustomerDetailView({
               )}
 
               {/* Name — NEVER red (Thai culture) */}
-              <h2 className="text-lg font-bold text-[var(--tx-heading)]">{name}</h2>
+              {/* Task 9 LR-4 (2026-05-15) — show 🟢/⚪️ LINE chip next to the customer
+                  name to surface per-branch LINE linkage state. The standalone
+                  ผูก LINE button below (line ~759) still drives the LINK action;
+                  this chip is the at-a-glance read-only indicator. */}
+              <h2 className="text-lg font-bold text-[var(--tx-heading)] flex justify-center">
+                <CustomerOption
+                  customer={{ ...(customer || {}), name }}
+                  contextBranchId={selectedBranchId}
+                />
+              </h2>
 
               {/* Clone status */}
               {customer?.cloneStatus && (

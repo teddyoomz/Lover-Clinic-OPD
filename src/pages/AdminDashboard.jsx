@@ -64,6 +64,11 @@ import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 // because handleOpdClick can open it on click; no lazy boundary needed
 // (modal is small + already built).
 import AppointmentFormModal from '../components/backend/AppointmentFormModal.jsx';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock). Used in the appointment
+// customer-picker so admin can see per-branch LINE linkage before
+// linking an appointment to a customer.
+import { CustomerOption } from '../components/CustomerOption.jsx';
 // Phase 22.0b (2026-05-06 EOD) — branch-filter helpers for kiosk modals.
 // listDoctors + listStaff in scopedDataLayer are UNIVERSAL (no auto-inject);
 // fetchDepositOptions must filter the results by selectedBranchId so the
@@ -7062,7 +7067,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         className="w-full text-left px-3 py-2 rounded-lg border border-[var(--bd)] hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all flex items-center gap-3">
                         <User size={14} className="text-emerald-400 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-sm font-bold text-[var(--tx-heading)] truncate block">{c.name || `ลูกค้า #${c.id}`}</span>
+                          {/* Task 9 LR-4 (2026-05-15) — show 🟢/⚪️ LINE chip alongside the
+                              customer name so admin sees per-branch LINE linkage before
+                              picking this customer for the appointment. */}
+                          <CustomerOption
+                            customer={{ ...c, name: c.name || `ลูกค้า #${c.id}` }}
+                            contextBranchId={selectedBranchId}
+                          />
                           <span className="text-xs text-gray-500">{c.hn ? `HN: ${c.hn}` : ''}{c.phone ? ` | ${c.phone}` : ''} | ID: {c.id}</span>
                         </div>
                         <ChevronRight size={14} className="text-gray-500" />

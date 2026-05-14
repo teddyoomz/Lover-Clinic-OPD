@@ -32,6 +32,13 @@ import { getRateForStaffCourse } from '../lib/dfGroupValidation.js';
 // branches load — callers guard with `branchId || ''` defensive defaults.
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../lib/branchScopeUtils.js';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock). Used in the TFP header
+// so admin sees per-branch LINE linkage state alongside the patient
+// name. patientData prop is the canonical be_customers.patientData
+// shape and may carry lineUserId / lineUserId_byBranch when
+// available.
+import { CustomerOption } from './CustomerOption.jsx';
 // T5.b (2026-04-26) — billing math + BMI + baht formatter extracted to
 // pure helpers. `computeTreatmentBilling` mirrors the previous inline
 // useMemo logic 1:1; tested in tests/t5b-treatment-billing.test.js.
@@ -3088,7 +3095,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 {isEdit ? <Edit3 size={18} /> : <Stethoscope size={18} />}
                 <span className="truncate">{isEdit ? 'แก้ไขการรักษา' : 'สร้างการรักษาใหม่'}</span>
               </h2>
-              {patientName && <p className="text-xs text-gray-500 truncate">{patientName}</p>}
+              {patientName && (
+                <p className="text-xs text-gray-500 truncate">
+                  {/* Task 9 LR-4 (2026-05-15) — surface 🟢/⚪️ LINE chip next to
+                      patient name in the TFP header. patientData carries the
+                      canonical be_customers.patientData; the customer-level
+                      lineUserId fields (if denormalized via patientData by the
+                      caller) feed the per-branch badge. */}
+                  <CustomerOption
+                    customer={{
+                      name: patientName,
+                      branchId: patientData?.branchId,
+                      lineUserId: patientData?.lineUserId,
+                      lineDisplayName: patientData?.lineDisplayName,
+                      lineUserId_byBranch: patientData?.lineUserId_byBranch,
+                    }}
+                    contextBranchId={selectedBranchId}
+                  />
+                </p>
+              )}
             </div>
           </div>
 

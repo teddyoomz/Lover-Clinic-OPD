@@ -43,6 +43,9 @@ import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock).
+import { CustomerOption } from '../CustomerOption.jsx';
 import { thaiTodayISO, bangkokNow } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
@@ -936,7 +939,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                         return (
                           <button key={c.id} onClick={() => { setCustomerId(c.proClinicId || c.id); setCustomerName(nm); setCustomerHN(c.proClinicHN || ''); setCustomerSearch(''); }}
                             className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] flex justify-between">
-                            <span>{nm}</span>
+                            {/* Task 9 LR-4 (2026-05-15) — CustomerOption surfaces 🟢/⚪️ LINE
+                                badge so admin can see per-branch LINE linkage before
+                                picking the customer for this deposit. */}
+                            <CustomerOption customer={{ ...c, name: nm }} contextBranchId={selectedBranchId} />
                             <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN || ''}</span>
                           </button>
                         );

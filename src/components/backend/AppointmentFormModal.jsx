@@ -32,6 +32,9 @@ import {
 // instead of in-page redirect. User: "เปิด Tab ของ Browser ใหม่... ไม่ใช่
 // redirection หน้าเดิมไป มันใช้ยาก".
 import { openCustomerInNewTab } from '../../lib/customerNavigation.js';
+// Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
+// name + per-branch LINE badge (LR-4 lock).
+import { CustomerOption } from '../CustomerOption.jsx';
 import {
   createBackendAppointment, updateBackendAppointment,
   getAllCustomers,
@@ -977,7 +980,10 @@ export default function AppointmentFormModal({
                       return (
                         <button key={c.id} onClick={() => { update({ customerId: c.proClinicId || c.id, customerName: name, customerHN: c.proClinicHN || '' }); setCustomerSearch(''); }}
                           className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
-                          <span className="text-[var(--tx-secondary)]">{name}</span>
+                          {/* Task 9 LR-4 (2026-05-15) — CustomerOption surfaces 🟢/⚪️ LINE
+                              badge so admin can see per-branch LINE linkage before
+                              picking the customer for this appointment. */}
+                          <CustomerOption customer={{ ...c, name }} contextBranchId={selectedBranchId} />
                           <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN || ''}</span>
                         </button>
                       );
