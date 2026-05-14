@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { listRecallCases, saveRecallCase, setRecallCaseHidden } from '../../../lib/scopedDataLayer.js';
+import { listRecallCases, saveRecallCase, setRecallCaseHidden, deleteRecallCase } from '../../../lib/scopedDataLayer.js';
 import { auth } from '../../../firebase.js';
 import { RecallCaseFormModal } from './RecallCaseFormModal.jsx';
 
@@ -75,6 +75,18 @@ export function RecallCasesAdminPanel({ onCasesChanged }) {
       onCasesChanged?.();
     } catch (e) {
       setError(e?.message || 'อัปเดตไม่สำเร็จ');
+    }
+  }
+
+  async function handleDelete(c) {
+    const msg = `ลบเคส "${c.caseName}" ถาวร?\n(Recall ที่ใช้ค่าเดิมไม่ได้รับผลกระทบ; เก็บ snapshot ของชื่อไว้แล้ว)`;
+    if (!window.confirm(msg)) return;
+    try {
+      await deleteRecallCase(c.id, { uid: getUid() });
+      await reload();
+      onCasesChanged?.();
+    } catch (e) {
+      setError(e?.message || 'ลบไม่สำเร็จ');
     }
   }
 
@@ -165,6 +177,14 @@ export function RecallCasesAdminPanel({ onCasesChanged }) {
                   className="text-[11px] font-medium text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 hover:underline"
                 >
                   {c.isHidden ? 'คืน' : 'ซ่อน'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(c)}
+                  className="text-[11px] font-medium text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:underline"
+                  data-testid={`recall-case-delete-${c.id}`}
+                >
+                  ลบ
                 </button>
               </div>
             </div>
