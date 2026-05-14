@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, Edit3, Trash2 } from 'lucide-react';
+import { ChevronDown, Edit3, Trash2, PhoneCall } from 'lucide-react';
 import {
   getTreatmentLifecycle,
   getTreatmentStatusLabel,
@@ -30,6 +30,7 @@ import { TreatmentLifecycleStepper } from './TreatmentLifecycleStepper.jsx';
  * @param {function} props.onToggle           (treatmentId) => void; fires on row body click
  * @param {function} [props.onEditTreatment]  (treatmentId) => void; chip rendered iff present + isBackendCreated
  * @param {function} [props.onDeleteTreatment](treatmentId) => void; chip rendered iff present + isBackendCreated
+ * @param {function} [props.onCreateRecall]   (treatmentId) => void; Phase 29 — "+ Recall" chip rendered iff present + isBackendCreated
  * @param {boolean}  [props.isDark=true]      theme (forwarded to stepper)
  * @param {boolean}  [props.isBackendCreated] whether row was created in our backend (gates edit/delete chips)
  * @param {React.ReactNode} [props.children]  expanded body slot (Task 5 supplies)
@@ -41,6 +42,7 @@ export function TreatmentHistoryRow({
   onToggle,
   onEditTreatment,
   onDeleteTreatment,
+  onCreateRecall,
   isDark = true,
   isBackendCreated = false,
   children,
@@ -71,7 +73,7 @@ export function TreatmentHistoryRow({
     ? 'font-mono text-[13px] font-bold text-red-300 [text-shadow:_0_0_8px_rgba(239,68,68,0.4)] tracking-wider pt-px'
     : 'font-mono text-[13px] font-bold text-[var(--tx-secondary)] tracking-wider pt-px';
 
-  const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment);
+  const showActions = isBackendCreated && (onEditTreatment || onDeleteTreatment || onCreateRecall);
 
   return (
     <div data-testid={`treatment-row-${t.id}`} className={rowClass}>
@@ -185,6 +187,20 @@ export function TreatmentHistoryRow({
                   hover:bg-red-500/[0.18] transition-all"
               >
                 <Trash2 size={11} aria-hidden="true" />
+              </button>
+            )}
+            {onCreateRecall && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onCreateRecall(t.id); }}
+                data-testid={`treatment-recall-${t.id}`}
+                title="+ ตั้ง Recall จากการรักษานี้"
+                aria-label="ตั้ง Recall จากการรักษานี้"
+                className="w-[26px] h-[26px] rounded-md flex items-center justify-center
+                  bg-rose-500/[0.08] border border-rose-500/30 text-rose-300
+                  hover:bg-rose-500/[0.18] transition-all"
+              >
+                <PhoneCall size={11} aria-hidden="true" />
               </button>
             )}
           </div>

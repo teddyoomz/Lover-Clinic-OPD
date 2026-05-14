@@ -71,6 +71,10 @@ import { DetailField, TreatmentDetailExpanded } from './treatment-history/Treatm
 // replaces the inline ~290-line block previously here in CDV. Pure render-
 // layer migration; all state hooks remain in CDV and pass through as props.
 import { TreatmentHistoryCard } from './treatment-history/TreatmentHistoryCard.jsx';
+// Phase 29 (2026-05-14) — Recall card (universal per-customer listener) +
+// treatment-context RecallCreateModal for "+ Recall" chip on history rows
+import { RecallCard } from './customer-recall/RecallCard.jsx';
+import { RecallCreateModal } from './recall/RecallCreateModal.jsx';
 import { cardTextClass } from './MembershipPanel.jsx';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate, THAI_MONTHS_SHORT, THAI_MONTHS_FULL } from '../../lib/dateFormat.js';
@@ -266,6 +270,10 @@ export default function CustomerDetailView({
   const [apptLoading, setApptLoading] = useState(false);
   const [showApptListModal, setShowApptListModal] = useState(false);
   const [apptFormModal, setApptFormModal] = useState(null); // { mode: 'create'|'edit', appt? }
+  // Phase 29 (2026-05-14) — "+ Recall" chip on TreatmentHistoryRow opens
+  // RecallCreateModal pre-filled with treatment context. Holds treatmentId
+  // when modal active; null otherwise. Modal closes by clearing state.
+  const [recallFromTreatment, setRecallFromTreatment] = useState(null); // treatmentId | null
   // Phase 15.7 (2026-04-28) — doctor lookup map for assistant-name resolver
   // fallback (legacy appts written before assistantNames denorm).
   // audit-branch-scope: cross-branch — customer treatments may have been
@@ -977,6 +985,12 @@ export default function CustomerDetailView({
             </div>
           </div>
 
+          {/* Phase 29 (2026-05-14) — Recall card. Sits between appointments
+              card and treatment history (per spec §4.3 — "mirror appointment
+              card pattern, sits next to it"). Uses per-customer universal
+              listener (BSA SG10) so recalls follow customer across branches. */}
+          <RecallCard customerId={customer?.id} customer={customer} />
+
           {/* Treatment History — Phase 28 Task 8 (2026-05-14): inline 290-line
               block extracted to <TreatmentHistoryCard />. All state hooks remain
               here in CDV; composer is pure presentational. See spec
@@ -990,6 +1004,7 @@ export default function CustomerDetailView({
             onCreateTreatment={onCreateTreatment}
             onEditTreatment={onEditTreatment}
             onDeleteTreatment={onDeleteTreatment}
+            onCreateRecall={(treatmentId) => setRecallFromTreatment(treatmentId)}
             treatmentPage={treatmentPage}
             setTreatmentPage={setTreatmentPage}
             treatmentsLoading={treatmentsLoading}
@@ -1344,6 +1359,43 @@ export default function CustomerDetailView({
           }}
         />
       )}
+
+      {/* Phase 29 (2026-05-14) — Treatment-context RecallCreateModal.
+          Opens when admin clicks "+ Recall" chip on a backend-created
+          TreatmentHistoryRow. Pre-fills modal with treatmentId + first
+          product's master-data suggestions (if any). Auto-suggest fires
+          inside modal per spec §5.3. */}
+      {recallFromTreatment && (() => {
+        const t = (treatments || []).find(tx => tx.id === recallFromTreatment);
+        const detail = t?.detail || {};
+        const firstItem = (detail.treatmentItems || [])[0] || null;
+        const treatmentContext = {
+          treatmentId: recallFromTreatment,
+          date: detail.treatmentDate || t?.treatmentDate || '',
+          summary: firstItem?.name || firstItem?.productName || t?.treatmentName || '',
+        };
+        const sourceContext = firstItem ? {
+          productId: firstItem.productId || null,
+          productName: firstItem.productName || firstItem.name || null,
+        } : null;
+        const customerArg = {
+          id: customer?.id,
+          displayName: customer?.displayName || customer?.name || '',
+          name: customer?.displayName || customer?.name || '',
+          phone: customer?.phone || customer?.patientData?.phone || '',
+          lineUserId: customer?.lineUserId || null,
+          hn: customer?.hn || customer?.patientData?.hn || null,
+        };
+        return (
+          <RecallCreateModal
+            customer={customerArg}
+            treatmentContext={treatmentContext}
+            sourceContext={sourceContext}
+            masterDataSuggestions={{}}
+            onClose={() => setRecallFromTreatment(null)}
+          />
+        );
+      })()}
 
       {/* Phase 14.7.E — "ดูไทม์ไลน์" modal. Re-uses already-loaded
           treatments[] (no extra fetch). Image-led wide layout. */}

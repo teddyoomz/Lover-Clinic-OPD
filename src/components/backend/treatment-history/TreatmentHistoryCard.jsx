@@ -37,6 +37,7 @@ export function TreatmentHistoryCard({
   onCreateTreatment,
   onEditTreatment,
   onDeleteTreatment,
+  onCreateRecall,
   treatmentPage,
   setTreatmentPage,
   treatmentsLoading,
@@ -153,6 +154,7 @@ export function TreatmentHistoryCard({
                   onToggle={() => setExpandedTreatment(isExpanded ? null : t.id)}
                   onEditTreatment={isBackendCreated ? onEditTreatment : undefined}
                   onDeleteTreatment={isBackendCreated ? onDeleteTreatment : undefined}
+                  onCreateRecall={isBackendCreated ? onCreateRecall : undefined}
                   isDark={isDark}
                   isBackendCreated={isBackendCreated}
                 >
