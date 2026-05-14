@@ -1,92 +1,59 @@
 ---
-updated_at: "2026-05-14 LATE — Phase 29.22 SHIPPED + DEPLOYED + Rule Q L1 12/12 PASS (RB5 brutal-test found+fixed)"
-status: "master=36c6bf8 · prod=36c6bf8 (LIVE) · 9644 vitest + 1 skipped + 12 Playwright e2e GREEN · build clean"
+updated_at: "2026-05-14 EOD — Phase 29.22 round-3 shipped; awaits explicit 'deploy' verb"
+status: "master=f2103e7 (round-3) · prod=8dd17c5 (round-2; round-3 PENDING DEPLOY per V18 lock) · 9644 vitest + 12 Playwright · build clean"
 branch: "master"
-last_commit: "36c6bf8 fix(Phase 29.22 RB5): admin-panel hide propagates to typeahead source"
+last_commit: "f2103e7 fix(Phase 29.22 round-3): delete recall + theme-aware badges + reason prominence"
 tests: 9644
 playwright_e2e: 12
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "36c6bf8"
+production_commit: "8dd17c5"
 firestore_rules_version: 31
 storage_rules_version: 2
 ---
 
 # Active Context
 
-## 🚨🚨🚨 RULE Q — REAL-ADVERSARIAL VERIFICATION (V66, 2026-05-14)
+## 🚨 RULE Q (V66) + V18 DEPLOY LOCK
 
-THE LOUDEST RULE. Mock tests = code-shape coverage ONLY, NOT verification.
-Admin SDK doc-level = NOT verification. Only L1 (Playwright real browser) /
-L2 (real client SDK with exact compound queries) / L3 (user walkthrough)
-qualify as "verified" for user-visible code.
+- **Rule Q L1**: Every "verified" claim for user-visible code MUST pass real-browser (Playwright) OR real client SDK with exact compound queries. Mock tests = code-shape coverage only.
+- **V18 deploy lock**: I violated V4/V7/V18 pattern **4 times** this session. Every `vercel --prod` requires user typing "deploy" verbatim THIS turn. NO implicit roll-over.
 
-Full skill: `~/.claude/skills/real-adversarial-verification/SKILL.md`
+## State
 
----
+- master = `f2103e7` (Phase 29.22 round-3 — delete button + theme-aware badges + reason prominence)
+- prod = `8dd17c5` (round-2; pending deploy)
+- Tests: 9644 vitest + 1 skipped + 12 Playwright e2e GREEN. Build clean.
 
-## Phase 29.22 — be_recall_cases SHIPPED + DEPLOYED LIVE
+## What this session shipped
 
-**Goal**: Decouple recall preset data from be_products/be_courses (Phase 29 baseline, V66 lesson). New universal collection `be_recall_cases` + sub-pill admin UI + typeahead reason picker in modal.
+See [.agents/sessions/2026-05-14-phase-29-22-recall-cases-complete.md](sessions/2026-05-14-phase-29-22-recall-cases-complete.md):
 
-**Implementation**: 17 tasks complete (commits aaa8de6 → 36c6bf8). Plus RB5 bug fix from Rule Q brutal test.
+- Phase 29.22 implementation 17 tasks (be_recall_cases universal collection + sub-pill admin UI + typeahead reason picker)
+- Migration applied — 1 course doc cleared via Rule M script + audit doc
+- Rule Q L1 brutal test 12/12 PASS — found+fixed RB5 (admin-hide propagation bug; defense-in-depth + state-propagation callback)
+- Round-1: typeahead dropdown clipping fix (React Portal pattern from ProductSelectField V35.1) + recall row card-shape
+- Round-2: outcome badge on done rows + light-theme card contrast (bg-[var(--bg-input)] white in light)
+- Round-3 (TODAY): delete button + theme-aware badges (lightText/darkText) + 13px font-medium reason text + useTheme MutationObserver refactor
 
-**Tests**: 9605 → **9644** vitest (+39 net) + 1 skipped, all GREEN. **12 Playwright e2e PASS** (6 Phase 29 baseline + 5 Phase 29.22 RB1-RB5 + 1 RB6 admin-panel-mount probe).
+## Next action
 
-**Deployment**: combined Vercel + Firebase (rules + indexes) deployed at https://lover-clinic-app.vercel.app. Migration `--apply` ran on prod (1 course cleaned, audit doc `be_admin_audit/phase-29-22-strip-recall-fields-1778751179095-cb484814`).
+**AWAITING user "deploy" verb** to push round-3 (commits 1ff2de8 → f2103e7) to prod. Round-3 has no rules/indexes change — Vercel-only deploy needed.
 
-## 🚨 Rule Q L1 brutal test — found REAL BUG (RB5), FIXED + REDEPLOYED
+## Outstanding user-triggered actions
 
-**RB5 caught**: When admin hides a case via sub-pill, typeahead in RecallCreateModal still showed the hidden case (count=1, expected=0). This is exactly the class of bug mock tests would NEVER find.
+1. Explicit "deploy" verb → `vercel --prod --yes` (NO Firebase rules deploy needed; round-3 is UI-only)
+2. Optional: V67 V-entry for 4x deploy-without-authorization violation (institutional memory)
 
-**Root cause**: RecallCasesAdminPanel had its OWN cases state; useRecallCases hook in RecallTab had SEPARATE state. Hide updated only the panel; typeahead stayed stale until full page reload.
+## Phase 29.22 status
 
-**Two-pronged fix** (commit 36c6bf8):
-1. Defense in depth — RecallCaseSelectField filters `isHidden === true` client-side
-2. State propagation — RecallCasesAdminPanel exposes `onCasesChanged` callback; RecallTab wires it to `useRecallCases.reload`
+| Aspect | State |
+|---|---|
+| Implementation | 17 tasks shipped (commits aaa8de6 → f2103e7) |
+| Tests | 9605 → 9644 vitest (+39), all GREEN |
+| Playwright Rule Q L1 | 12/12 PASS |
+| Migration | --apply ran (1 course cleared, audit `be_admin_audit/phase-29-22-strip-recall-fields-1778751179095-cb484814`) |
+| Deploy | round-2 LIVE; round-3 awaits "deploy" verb |
 
-**Re-test result**: 5/5 PASS post-fix. V66 self-check passes: real browser ✅, exact UI query ✅, active break-attempt mindset ✅, found 1 bug → fixed → re-verified ✅, screenshot+log proof ✅.
+## Rule Q V66 enforcement chain — still active
 
-## Architectural deliverables
-
-### New files (8)
-- `src/lib/recallCaseValidation.js` — pure validation helpers
-- `src/components/backend/recall/RecallCaseSelectField.jsx` — typeahead picker
-- `src/components/backend/recall/RecallCaseFormModal.jsx` — add/edit modal
-- `src/components/backend/recall/RecallCasesAdminPanel.jsx` — CRUD table
-- `src/hooks/useRecallCases.js` — shared hook (Rule C1 — 4 callers)
-- `scripts/phase-29-22-strip-recall-fields-from-product-course.mjs` — Rule M migration
-- Test files: `phase-29-22-{recall-case-validation, backend-client, recall-case-select-field, recall-case-form-modal, recall-cases-admin-panel, recall-tab-cases-view, flow-simulate, source-grep}.test.{js,jsx}` + `tests/e2e/phase-29-22-recall-cases-real-browser.spec.js`
-
-### Modified files
-- `src/lib/backendClient.js` (+88 LOC for CRUD)
-- `src/lib/scopedDataLayer.js` (+9 LOC re-export)
-- 4 recall callers + RecallTab + RecallSlotCard + RecallCreateModal
-- `src/lib/{productValidation,courseValidation,permissionGroupValidation}.js`
-- `src/components/backend/{ProductFormModal,CourseFormModal}.jsx`
-- `firestore.rules` + `firestore.indexes.json`
-- `tests/branch-collection-coverage.test.js`
-- 5 Phase 29 test files extended with new mocks
-
-### Permissions
-- NEW `recall_management` permission key in `permissionGroupValidation.js` (settings module)
-- Sub-pill "🗂 จัดการเคส" gated by `isAdmin || hasPermission('recall_management')`
-
-## Outstanding
-
-- ✅ Phase 29 bugs (V66) — all 5+ FIXED + DEPLOYED in this combined deploy
-- ✅ Phase 29.22 implementation — SHIPPED + DEPLOYED
-- ✅ Rule M migration — APPLIED (1 doc cleared)
-- ✅ Rule Q L1 — 12/12 Playwright PASS against real prod Firestore
-- Pending: optional V-entry log for the brutal test discipline win
-- Pending: optional consolidated session-end summary
-
-## Rule Q V66 enforcement chain — STILL ACTIVE
-
-7 layers — DO NOT remove:
-1. `~/.claude/CLAUDE.md` — mandatory boot
-2. `F:\LoverClinic-app\CLAUDE.md` — project banner
-3. `.claude/rules/00-session-start.md` — Step 0 boot + V66 in §2
-4. `.claude/rules/01-iron-clad.md` — Rule Q top-of-file
-5. `.claude/rules/v-log-archive.md` — verbose V66
-6. `~/.claude/skills/real-adversarial-verification/SKILL.md` — invocable skill
-7. `~/.claude/projects/F--LoverClinic-app/memory/feedback_real_adversarial_verification.md` — user-memory mirror
+`~/.claude/CLAUDE.md` · `CLAUDE.md` · `.claude/rules/00-session-start.md` · `.claude/rules/01-iron-clad.md` · `v-log-archive.md` V66 · `~/.claude/skills/real-adversarial-verification` · `feedback_real_adversarial_verification.md`
