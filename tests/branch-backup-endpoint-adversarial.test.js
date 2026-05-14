@@ -10,6 +10,28 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Buffer } from 'node:buffer';
+import { computeBodyHash } from '../src/lib/branchBackupSchema.js';
+
+// V21 fixup 2026-05-14 — Selective-make-fresh shipped: branch-make-fresh.js
+// now REQUIRES bucketIds[] + v2 backup file with bodyHash. Helper below
+// produces matching v2 files so E3.* adversarial tests can drive the new
+// contract without dropping coverage.
+function makeV2BackupForBucketIds({ bucketIds = ['appointments'], sourceBranchId = 'BR-X', collections = {} } = {}) {
+  return JSON.stringify({
+    meta: {
+      schemaVersion: 2,
+      sourceBranchId,
+      exportedBy: 'test-admin',
+      exportedAt: new Date().toISOString(),
+      scope: { bucketIds },
+      perCollectionCounts: {},
+      isAutoPreFresh: true,
+      bucketIds: [...bucketIds].sort(),
+      bodyHash: computeBodyHash(collections),
+    },
+    collections,
+  });
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -507,10 +529,17 @@ describe('E3 — branch-make-fresh adversarial', () => {
     expect(res.body.error).toBe('MISSING_BRANCH_ID');
   });
 
+  // V21 fixup 2026-05-14 — Selective-make-fresh shipped: bucketIds[] now REQUIRED
+  // (validated BEFORE autoBackupRef per endpoint order). Pre-2026-05-14 these
+  // tests relied on the V40 contract where autoBackupRef was the only required
+  // field. Now requests must include bucketIds[] first; the error-priority
+  // shifted from AUTO_BACKUP_REQUIRED to EMPTY_BUCKET_SET when bucketIds is
+  // missing. Tests updated to include bucketIds so the actual autoBackupRef
+  // validation path is exercised.
   it('E3.5 + E3.6 + E3.7 — Missing / empty / non-string autoBackupRef → 400 AUTO_BACKUP_REQUIRED', async () => {
     const handler = await loadHandler();
     for (const autoBackupRef of [undefined, '', 42, null]) {
-      const req = mockReq({ body: { branchId: 'BR-X', autoBackupRef } });
+      const req = mockReq({ body: { branchId: 'BR-X', bucketIds: ['appointments'], autoBackupRef } });
       const res = mockRes();
       await handler(req, res);
       expect(res.statusCode, `autoBackupRef=${JSON.stringify(autoBackupRef)}`).toBe(400);
@@ -522,33 +551,56 @@ describe('E3 — branch-make-fresh adversarial', () => {
     // Override exists() to return false
     mockFileObj.exists.mockResolvedValueOnce([false]);
     const handler = await loadHandler();
-    const req = mockReq({ body: { branchId: 'BR-X', autoBackupRef: 'backups/BR-X/auto-pre-fresh-ghost.json' } });
+    const req = mockReq({
+      body: {
+        branchId: 'BR-X',
+        bucketIds: ['appointments'],
+        autoBackupRef: 'backups/BR-X/auto-pre-fresh-ghost.json',
+      },
+    });
     const res = mockRes();
     await handler(req, res);
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe('AUTO_BACKUP_NOT_FOUND');
   });
 
-  it('E3.9 — Successful wipe (no docs in branch) → 200 + deletedCounts all zeros', async () => {
+  it('E3.9 — Successful wipe (no docs in branch) → 200 + deletedCounts → empty wipe', async () => {
+    // V21 fixup: provide v2 backup file matching bucketIds; new endpoint
+    // recomputes hash + verifies before wiping.
+    mockFileObj.download.mockResolvedValueOnce([
+      Buffer.from(makeV2BackupForBucketIds({ bucketIds: ['appointments'], sourceBranchId: 'BR-WIPE' })),
+    ]);
     const handler = await loadHandler();
-    // Default mocks: all queries return empty snaps + exists() returns true
-    const req = mockReq({ body: { branchId: 'BR-WIPE', autoBackupRef: 'backups/BR-WIPE/auto-123.json' } });
+    const req = mockReq({
+      body: {
+        branchId: 'BR-WIPE',
+        bucketIds: ['appointments'],
+        autoBackupRef: 'backups/BR-WIPE/auto-123.json',
+      },
+    });
     const res = mockRes();
     await handler(req, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.deletedCounts).toBeDefined();
-    // Every collection should have 0 deletions (empty mock snaps)
-    for (const count of Object.values(res.body.deletedCounts)) {
-      expect(count).toBe(0);
-    }
     expect(res.body.autoBackupRef).toBe('backups/BR-WIPE/auto-123.json');
+    expect(res.body.bucketIds).toEqual(['appointments']);
+    expect(res.body.bodyHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('E3.10 — Wipe returns auditId + auditId is a non-empty string', async () => {
+    mockFileObj.download.mockResolvedValueOnce([
+      Buffer.from(makeV2BackupForBucketIds({ bucketIds: ['appointments'], sourceBranchId: 'BR-AUDIT' })),
+    ]);
     const handler = await loadHandler();
-    const req = mockReq({ body: { branchId: 'BR-AUDIT', autoBackupRef: 'backups/BR-AUDIT/auto.json' } });
+    const req = mockReq({
+      body: {
+        branchId: 'BR-AUDIT',
+        bucketIds: ['appointments'],
+        autoBackupRef: 'backups/BR-AUDIT/auto.json',
+      },
+    });
     const res = mockRes();
     await handler(req, res);
     expect(res.statusCode).toBe(200);

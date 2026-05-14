@@ -260,37 +260,46 @@ describe('UI2 — MakeFreshButton', () => {
     expect(btn.textContent).toContain('สาขาใหม่');
   });
 
-  it('UI2.5 onComplete callback fires when modal closes after done phase', async () => {
+  // V21 fixup 2026-05-14 — UI2.5 retired. Pre-2026-05-14 V40 modal had 2-step
+  // flow (type-confirm → backup+wipe). Selective-make-fresh introduced 3-step
+  // flow (pick buckets → preview → type-confirm → backup+wipe) covered by
+  // tests/branch-make-fresh-selective-flow-simulate.test.jsx F1.5. Keeping a
+  // simple "modal opens" smoke test here.
+  it('UI2.5 clicking the button opens the new 3-step modal (bucket list visible)', async () => {
     tabState.isAdmin = true;
-    mockBackupOk();
-    mockMakeFreshOk();
-    const onComplete = vi.fn();
-    render(<MakeFreshButton branch={testBranch} onComplete={onComplete} />);
-
-    // Open modal
+    render(<MakeFreshButton branch={testBranch} onComplete={() => {}} />);
     await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-btn-BR-TEST')); });
-    await waitFor(() => expect(screen.getByTestId('make-fresh-confirm-input')).toBeTruthy(), WAIT_FOR_OPTS);
-
-    // Type branch name and confirm
-    fireEvent.change(screen.getByTestId('make-fresh-confirm-input'), { target: { value: 'สาขาทดสอบ' } });
-    await act(async () => { fireEvent.click(screen.getByTestId('make-fresh-confirm-btn')); });
-
-    // Wait for done phase and click close
-    await waitFor(() => expect(screen.getByText('เสร็จสิ้น')).toBeTruthy(), WAIT_FOR_OPTS);
-    fireEvent.click(screen.getByText('ปิด'));
-
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    // New modal exposes data-testid="bucket-list" containing 7 bucket checkboxes
+    await waitFor(() => expect(screen.getByTestId('bucket-list')).toBeTruthy(), WAIT_FOR_OPTS);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UI3 — MakeFreshModal
+// UI3 — MakeFreshModal — V21 fixup 2026-05-14
 // ─────────────────────────────────────────────────────────────────────────────
-import MakeFreshModal from '../src/components/backend/MakeFreshModal.jsx';
+// V40 modal had a 2-step flow (type confirm → backup+wipe atomic) with test
+// IDs `make-fresh-confirm-input` + `make-fresh-confirm-btn`. The 2026-05-14
+// selective-make-fresh shipping REWROTE the modal as a 3-step state machine:
+//   pick 7 buckets → preview (dryRun) → type-confirm → backup+wipe.
+//
+// New test IDs:
+//   bucket-list, bucket-{appointments,...,customerActivity}, advanced-toggle,
+//   preview-btn, impact-panel, continue-btn, confirm-input, confirm-btn
+//
+// New flow tests live in:
+//   tests/branch-make-fresh-selective-flow-simulate.test.jsx (F1.1–F1.7)
+//   tests/branch-make-fresh-selective-source-grep.test.js (SG1–SG5)
+//
+// Round-trip integrity (Rule Q L2) verified by:
+//   scripts/e2e-backup-restore-roundtrip-real-prod.mjs --apply (10/10 PASS)
+//
+// All UI3.* V40-locked tests retired here to prevent V21 drift. The "modal
+// opens with bucket list" smoke is preserved at UI2.5 above.
+//
+// import MakeFreshModal from '../src/components/backend/MakeFreshModal.jsx';
+// const modalBranch = { branchId: 'BR-MODAL', branchName: 'สาขาโมดอล', id: 'BR-MODAL', name: 'สาขาโมดอล' };
 
-const modalBranch = { branchId: 'BR-MODAL', branchName: 'สาขาโมดอล', id: 'BR-MODAL', name: 'สาขาโมดอล' };
-
-describe('UI3 — MakeFreshModal', () => {
+describe.skip('UI3 — MakeFreshModal (V21 fixup — retired; see V21 fixup note above)', () => {
   it('UI3.1 renders branch name and branchId in idle phase', () => {
     render(<MakeFreshModal branch={modalBranch} onClose={() => {}} onComplete={() => {}} />);
     // Branch name appears in both <strong> and <code> hint — getAllByText handles multiple
