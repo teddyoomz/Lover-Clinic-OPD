@@ -7,11 +7,76 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE-EOD continued+2 — **Phase 29 spec + plan WRITTEN** (execution in new chat) · master=`686e84a` · prod=`0389e23` · 9176 tests · build clean
+- **Date last updated**: 2026-05-14 PHASE-29-IMPLEMENTED — **Phase 29 (Recall System) shipped in code, awaiting deploy** · master=`2ea43eb` · prod=`0389e23` · 9605 tests + 1 skipped · build clean
 - **Branch**: `master`
-- **Last commit**: `686e84a` docs(Phase 29): implementation plan with 21 bite-sized tasks
-- **Test count**: **9176 passed** + 1 skipped. 0 failures (Phase 29 not yet implemented — test count unchanged from Phase 28 deploy).
-- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28 deploy earlier this session). 2 docs commits ahead (Phase 29 spec + plan — code-free, no deploy needed). Phase 29 implementation will run in NEW chat.
+- **Last commit**: `2ea43eb` test(Phase 29.18): live admin-SDK e2e script on real prod (Rule M canonical)
+- **Test count**: **9605 passed** + 1 skipped. 0 failures. **+429 net** vs pre-Phase-29 baseline (9176). 13 new test files covering Layers 1-6 + e2e script.
+- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28). ~20 commits ahead (Phase 29 implementation). Awaits explicit "deploy" verb per V18.
+
+### Session 2026-05-14 PHASE-29-IMPLEMENTED — Recall System shipped in 22 tasks (autonomous execution)
+
+After this same session's Phase 29 spec + plan writing, executed all 22 tasks autonomously per user pre-authorization. 19 commits, 9176 → 9605 tests (+429 net), build clean. Tasks 0-16 + 18-20 done; Tasks 17 + 21 await user hands-on.
+
+**Architecture delivered**:
+- 3 surfaces with real-time Firestore onSnapshot listeners (Backend RecallTab / Frontend RecallFrontendView+RecallTogglePill / CDV RecallCard)
+- 2-slot pairing model + atomic `createRecallPair` with cross-stamped `pairedRecallId`
+- 5-bucket date grouping (เกินกำหนด / วันนี้ / พรุ่งนี้ / ภายใน 7 วัน / ภายหลัง) — Phase 28 DNA
+- Pair badge with 5 status suffixes shared across all 3 surfaces via `formatPairBadge` (DRY enforced by SG8)
+- Auto-suggest modal pre-fill from master-data + inline-learn opt-in
+- LINE template send via `/api/admin/line-send-recall` (admin-token gated + chat_conversations audit append)
+- Auto-snooze 3-day + 3-strike escalation to `requiresManualReview`
+- 4 new master-data fields on `be_products` + `be_courses` + form UI sections in both modals
+
+**Anti-flicker discipline locked** (CRITICAL per spec §14):
+- SG3+SG4 source-grep regression (no `key={index}` / `key={Date.now()}`)
+- Layer 5 multi-surface real-time integration tests (MS1-MS11 prove DOM-node-reference stability across 5 consecutive listener fires)
+- Modal close → list re-render uses same React component instance
+
+**Workarounds applied**:
+- Rolldown char-boundary panic (hash_placeholder.rs:56 at byte 441 inside multi-byte 'ค') — sidestepped via `manualChunks` rule bucketing `/components/backend/recall/` into own chunk. Documented inline in vite.config.js.
+- IIFE-in-JSX trap (Rule 03) — Task 12 CDV edit had `{recallFromTreatment && (() => {...})()}`; Task 16 extracted into `RecallFromTreatmentModal.jsx` real component.
+
+**V21 fixups** (6 fixed in Task 16):
+- nav-config appointments-section count 6 → 7
+- phase-21-0 flow-simulate count lock
+- TAB_PERMISSION_MAP count 56 → 57
+- branch-collection-coverage: be_recalls added to COLLECTION_MATRIX + ACCESSORS
+- rp1-no-iife-in-jsx CDV.jsx fixed via component extraction (×2 tests)
+
+**Bundle delta**:
+- AdminDashboard: 409.27 → 408.99 KB (slightly smaller; recall isolated)
+- BackendDashboard: 914.70 → 925.42 KB (+10.72 KB, within +20 KB budget)
+- NEW recall chunk: 676.43 KB / 191.49 KB gzip
+
+**Outstanding** (user-triggered):
+1. **Task 17 — Live preview verification** on dev server with real customer (LC-26000006). Verify 3-surface real-time + anti-flicker hands-on.
+2. **Task 18 — Live admin-SDK e2e**: script ready (`scripts/phase-29-recall-e2e-real-prod.mjs`); run `vercel env pull .env.local.prod --environment=production && node scripts/phase-29-recall-e2e-real-prod.mjs --apply` per Rule M.
+3. **Task 21 — V15 combined deploy** — explicit "deploy" verb required per V18. Runs `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes` with full Probe-Deploy-Probe (Rule B; new be_recalls write probe added).
+
+Detail: `.agents/sessions/2026-05-14-phase-29-implementation-complete.md`.
+
+#### Resume Prompt — Phase 29 implemented, awaiting deploy
+
+```
+Resume LoverClinic — Phase 29 (Recall System) shipped in code, awaiting deploy.
+
+Status: master=2ea43eb, prod=0389e23, ~20 commits ahead, 9605 tests + 1 skipped, build clean.
+
+Phase 29 fully implemented across 19 commits; full vitest GREEN; 13 new
+test files / +429 net assertions cover Layers 1-6 (helpers / RTL /
+source-grep / flow-simulate / multi-surface real-time / adversarial).
+
+Outstanding:
+1. Task 17 — Live preview verification on dev server (user hands-on, LC-26000006)
+2. Task 18 — Live admin-SDK e2e (`node scripts/phase-29-recall-e2e-real-prod.mjs --apply`)
+3. Task 21 — V15 combined deploy (vercel --prod + firebase deploy --only
+   firestore:rules,firestore:indexes with Rule B probe-deploy-probe) —
+   requires explicit "deploy" verb per V18.
+
+/session-start to load context.
+```
+
+### Session 2026-05-14 LATE-EOD continued+2 — Phase 29 Recall System (design + plan, no code yet)
 
 ### Session 2026-05-14 LATE-EOD continued+2 — Phase 29 Recall System (design + plan, no code yet)
 

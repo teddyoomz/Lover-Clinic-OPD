@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-14 LATE-EOD continued+2 — Phase 29 spec + plan DONE; ready for execution in NEW chat"
-status: "master=686e84a · prod=0389e23 · 2 commits ahead (docs only) · 9176 tests · build clean"
+updated_at: "2026-05-14 PHASE-29-IMPLEMENTED — 22 tasks done, awaiting deploy verb"
+status: "master=2ea43eb · prod=0389e23 · ~20 commits ahead · 9605 tests + 1 skipped · build clean"
 branch: "master"
-last_commit: "686e84a docs(Phase 29): implementation plan with 21 bite-sized tasks"
-tests: 9176
+last_commit: "2ea43eb test(Phase 29.18): live admin-SDK e2e script on real prod (Rule M canonical)"
+tests: 9605
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "0389e23"
 firestore_rules_version: 29
@@ -13,21 +13,69 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `686e84a` · prod = `0389e23` (2 commits ahead — docs only: Phase 29 spec + plan)
-- Phase 28 (treatment history redesign) DEPLOYED earlier this session
-- Phase 29 (Recall System) brainstormed + spec + plan WRITTEN — execution to start in NEW chat (context full this chat)
 
-## What this session shipped (after Phase 28 deploy)
-- **Phase 29 brainstorming** via Visual Companion (Q1-Q4 + 2-round + pair-label-with-status) — 7 mockup screens at `.superpowers/brainstorm/379-1778731938/content/`
-- **Phase 29 spec** (`02114e2`) — `docs/superpowers/specs/2026-05-14-recall-system-design.md` (~880 lines, 14 sections, heavy test emphasis per user)
-- **Phase 29 plan** (`686e84a`) — `docs/superpowers/plans/2026-05-14-phase-29-recall-system.md` (~2010 lines, 21 bite-sized tasks for subagent-driven execution)
-- Checkpoint: `.agents/sessions/2026-05-14-phase-29-design-and-plan.md`
+- master = `2ea43eb` · prod = `0389e23` (~20 commits ahead post-Phase-29 implementation)
+- Phase 29 (Recall System) IMPLEMENTED — 22 tasks complete in autonomous overnight execution
+- Tests: 9176 → 9605 + 1 skipped (**+429 net** across 13 new test files)
+- Build clean: BackendDashboard 914.70 → 925.42 KB (+10.72 KB, within +20 KB budget); NEW recall chunk 676.43 KB / 191.49 KB gzip (isolated via manualChunks to sidestep Rolldown char-boundary panic)
+- firestore.rules: be_recalls match block added — Rule B Probe-Deploy-Probe NOT YET RUN (deploy gated)
+- firestore.indexes.json: +4 composite indexes for be_recalls
 
-## Next action (NEW CHAT)
-- /session-start in new chat
-- Then `Skill(subagent-driven-development)` → execute Phase 29 Task 0 onwards
+## Phase 29 implementation summary (this session — 22 tasks)
+
+| Task | SHA | Description |
+|---|---|---|
+| 0 | (baseline) | Pre-flight: 9176 tests + 1 skipped + 914.70 KB BackendDashboard |
+| 1 | `6246fe6` | Pure helpers (recallResolvers + Validation + LineTemplateRenderer) — +96 tests TDD |
+| 2 | `a3e0414` | backendClient (10 fns) + scopedDataLayer + useRecallListener + rules + 4 indexes — +16 tests |
+| 3 | `ca26f61` | Master-data extension (be_products + be_courses 4 nullable fields + form UI) — +33 tests |
+| 4 | `18f3e03` | RecallRow + RecallPairBadge (shared atoms for 3 surfaces) — +22 RTL tests |
+| 5 | `f649f52` | RecallSectionHeader + RecallEmptyState + RecallList composer — +21 RTL tests |
+| 6 | `0a32103` | RecallSlotCard + RecallCreateModal (2-slot + auto-suggest + inline-learn) — +29 RTL tests |
+| 7 | `ecddacc` | RecallOutcomeModal (4-category + auto-snooze + manual-review escalation) — +24 RTL tests |
+| 8 | `dd1a506` | RecallLineTemplateModal + /api/admin/line-send-recall endpoint — +19 RTL tests |
+| 9 | `2a72cc5` | RecallSnoozeMenu (compact date picker + quick-pick chips) — +15 RTL tests |
+| 10 | `8024126` | RecallTab + nav + BackendDashboard wire + tab permissions — +18 RTL tests |
+| 11 | `ac3fb82` | Frontend RecallFrontendView + RecallTogglePill + AdminDashboard 3-state — +16 tests (manualChunks workaround for Rolldown Thai-char panic) |
+| 12 | `856bcf2` | RecallCard (CDV) + TreatmentHistoryRow "+ Recall" chip + CDV wire — +16 RTL tests |
+| 13 | `ea154b1` | Source-grep regression bank (Layer 3) — anti-flicker SG3+SG4 + DRY + spec self-review locks — +35 tests |
+| 14 | `5da574f` | Rule I full-flow simulate + multi-surface real-time (Layers 4+5 — CRITICAL anti-flicker) — +30 tests |
+| 15 | `44002ea` | Adversarial + property-based (Layer 6, seed=42 100 iters) — +39 tests |
+| 16 | `4c265f4` | V21 fixups for 6 regressions + IIFE-in-JSX extraction (RecallFromTreatmentModal) — +0 tests, 6 V21 fixes |
+| 17 | DEFERRED | Live preview verification (Rule I item b) — user post-deploy hands-on |
+| 18 | `2ea43eb` | Live admin-SDK e2e script (Rule M canonical, dry-run default, --apply user-gated) |
+| 19 | (verify) | Full vitest 9605 + 1 skipped GREEN; build clean |
+| 20 | (this commit) | SESSION_HANDOFF + active.md + checkpoint |
+| 21 | PENDING | V15 combined deploy — awaits explicit "deploy" verb per V18 |
+
+## Architecture shipped
+
+- **3 surfaces** with real-time Firestore onSnapshot listeners:
+  - Backend RecallTab (`tab=recall`)
+  - Frontend Recall sub-tab (AdminDashboard 3-state view-toggle pill with live count badge)
+  - CDV RecallCard (per-customer universal — BSA sanctioned exception SG10)
+- **2-slot pairing** model (🩹 ติดตามอาการ + 📅 นัดกลับมา) — ≥1 required, atomic batch via `createRecallPair`
+- **5-bucket date grouping** (เกินกำหนด / วันนี้ / พรุ่งนี้ / ภายใน 7 วัน / ภายหลัง) per Phase 28 DNA
+- **Pair badge** with 5 status suffixes (รอ Recall / เสร็จแล้ว / ติดต่อไม่ได้ครั้งที่ N / เลื่อนไป / เกินกำหนด N วัน) shared across all 3 surfaces via `formatPairBadge` (DRY enforced by SG8)
+- **Auto-suggest** modal pre-fill from `be_products`/`be_courses` master-data (no daemon, no draft queue per spec self-review locks)
+- **Inline-learn** opt-in: save reasonable defaults back to master-data on first recall
+- **LINE template send** via `/api/admin/line-send-recall` (admin-token gated; chat_conversations audit append per V32-tris-ter)
+- **Auto-snooze 3-day** on no-answer + **3-strike escalation** (`requiresManualReview = true`)
+- **Anti-flicker discipline** locked via SG3 + SG4 + Layer 5 multi-surface real-time tests (CRITICAL per spec §14)
 
 ## Outstanding user-triggered actions
-- (none — Phase 28 deploy queue was emptied earlier this session)
-- Phase 29 execution authorization carries over to new chat (user pre-authorized "ทำเลย ทำจนเวร็จ ... อนุญาตให้ deploy ได้ ... ผ่านการเทสทุกรูปแบบที่หินโหดแล้วเท่านั้น")
-- Phase 29 spec + plan await user spec review (recommend: review spec first in new chat)
+
+1. **Task 17 — Live preview verification** on dev server with real customer (e.g. LC-26000006). Tests on Backend tab Recall + Frontend Recall view-toggle + CDV recall card all updating simultaneously without flicker.
+2. **Task 18 — Live admin-SDK e2e** — script ready; run `vercel env pull .env.local.prod --environment=production && node scripts/phase-29-recall-e2e-real-prod.mjs --apply` per Rule M.
+3. **Task 21 — V15 combined deploy** — `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes` with full Probe-Deploy-Probe (Rule B). Requires explicit "deploy" verb in this turn per V18.
+
+## Next action
+
+- User says **"deploy"** → run combined V15 deploy with full Probe-Deploy-Probe (5 endpoints + new be_recalls write probe).
+- OR user reviews Phase 29 hands-on first before deploying.
+
+## Anti-flicker discipline (architectural backstop for future Phase 29+ work)
+
+Per spec §14 institutional memory: "If admin reports 'list flickers when X happens', the bug is class-of-bug 'key instability' or 'useEffect dep churn' — investigate listener setup + memo deps before component logic."
+
+SG3 + SG4 + Layer 5 (MS1-MS11) tests must NEVER be relaxed without understanding consequences. Phase 29 is the project's FIRST feature with 3 simultaneous Firestore listener surfaces; the discipline locked here will compound across future multi-surface features.
