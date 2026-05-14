@@ -5,7 +5,9 @@ import { RecallCreateModal } from './RecallCreateModal.jsx';
 import { RecallOutcomeModal } from './RecallOutcomeModal.jsx';
 import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
+import { RecallCasesAdminPanel } from './RecallCasesAdminPanel.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useTabAccess } from '../../../hooks/useTabAccess.js';
 import { thaiTodayISO } from '../../../utils.js';
 
 /**
@@ -29,6 +31,12 @@ import { thaiTodayISO } from '../../../utils.js';
 export function RecallTab() {
   const todayISO = thaiTodayISO();
   const { recalls, loading, error } = useRecallListener({ filters: {} });
+  // Phase 29.22 (2026-05-14) — sub-pill access gating for "จัดการเคส".
+  // Admin claim bypasses; non-admin staff need `recall_management` perm.
+  const { isAdmin, hasPermission } = useTabAccess();
+  const canManageCases = !!(isAdmin || hasPermission?.('recall_management'));
+  // Sub-pill view state: 'list' = existing recall list, 'cases' = admin panel.
+  const [view, setView] = useState('list');
 
   const [searchText, setSearchText] = useState('');
 
@@ -129,6 +137,41 @@ export function RecallTab() {
         onOpenCreate={handleOpenCreate}
       />
 
+      {/* Phase 29.22 (2026-05-14) — sub-pill toggle: List vs Manage Cases.
+          Cases pill only renders when user has admin claim OR
+          `recall_management` permission. */}
+      {canManageCases && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 border-b border-[var(--bd)]"
+          data-testid="recall-tab-subpill-bar"
+        >
+          <button
+            type="button"
+            onClick={() => setView('list')}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium border ${
+              view === 'list'
+                ? 'bg-rose-500 border-rose-500 text-white'
+                : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-rose-400'
+            }`}
+            data-testid="recall-subpill-list"
+          >
+            📋 รายการ Recall
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('cases')}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium border ${
+              view === 'cases'
+                ? 'bg-rose-500 border-rose-500 text-white'
+                : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-rose-400'
+            }`}
+            data-testid="recall-subpill-cases"
+          >
+            🗂 จัดการเคส
+          </button>
+        </div>
+      )}
+
       {error && (
         <div
           className="px-4 py-3 bg-red-500/10 border-b border-red-500/30 text-[11px] text-red-300"
@@ -138,7 +181,11 @@ export function RecallTab() {
         </div>
       )}
 
-      {loading && !recalls?.length ? (
+      {view === 'cases' && canManageCases ? (
+        <div className="p-4">
+          <RecallCasesAdminPanel />
+        </div>
+      ) : loading && !recalls?.length ? (
         <div className="py-10 text-center text-[11px] text-[var(--tx-muted)]" data-testid="recall-tab-loading">
           กำลังโหลด…
         </div>

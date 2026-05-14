@@ -35,6 +35,19 @@ vi.mock('../src/firebase.js', () => ({
   appId: 'loverclinic-opd-4c39b',
 }));
 
+// Phase 29.22 (2026-05-14) — RecallTab now imports useTabAccess for the
+// "จัดการเคส" sub-pill gate. Mock it as admin so existing T1-T5 tests
+// continue to exercise the list view; sub-pill behaviour is covered
+// by tests/phase-29-22-recall-tab-cases-view.test.jsx.
+vi.mock('../src/hooks/useTabAccess.js', () => ({
+  useTabAccess: () => ({
+    isAdmin: true,
+    permissions: {},
+    loaded: true,
+    hasPermission: () => true,
+  }),
+}));
+
 import { RecallTab } from '../src/components/backend/recall/RecallTab.jsx';
 
 const sampleRecalls = [
