@@ -122,7 +122,16 @@ describe('Phase 29 · R3 getRecallStatusColor', () => {
     expect(getRecallStatusColor({ status: 'pending' }).text).toBe('#fcd34d');
   });
   it('R3.6 null safe', () => {
-    expect(getRecallStatusColor(null)).toEqual({ bg: 'transparent', border: 'transparent', text: 'inherit' });
+    // Phase 29.22 round-3 V21-class fixup: resolver now returns 5-key shape
+    // { bg, border, text, lightText, darkText } (theme-aware). Test was
+    // asserting the legacy 3-key shape from pre-round-3.
+    expect(getRecallStatusColor(null)).toEqual({
+      bg: 'transparent',
+      border: 'transparent',
+      text: 'inherit',
+      lightText: 'inherit',
+      darkText: 'inherit',
+    });
   });
 });
 

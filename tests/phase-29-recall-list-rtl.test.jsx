@@ -102,7 +102,10 @@ describe('Phase 29 · L1 RecallList section render', () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
     render(<RecallList recalls={FIXTURE} todayISO={TODAY} onRowClick={onClick} />);
-    await user.click(screen.getByText('A-overdue'));
+    // Phase 29.23 Task 3 V21-class fixup: customer-name is now an <a> with
+    // stopPropagation (opens customer in new tab) → click the row OUTER
+    // instead of customer-name text to trigger outcome modal.
+    await user.click(screen.getByTestId('recall-row-R1'));
     expect(onClick).toHaveBeenCalledWith('R1');
   });
 });

@@ -154,7 +154,11 @@ describe('Phase 29 · F2 row click opens detail (outcome modal)', () => {
   it('F2.1 clicking row body opens outcome modal with that recall', async () => {
     const user = userEvent.setup();
     render(<RecallTab />);
-    await user.click(screen.getByText('B botox-after'));
+    // Phase 29.23 Task 3 V21-class fixup: customer-name is now <a> with
+    // stopPropagation → click row OUTER (data-testid="recall-row-<id>") to
+    // hit the outcome-modal handler instead of the new-tab link.
+    // Fixture "B botox-after" maps to recall id 'R3' (see FIXTURE above).
+    await user.click(screen.getByTestId('recall-row-R3'));
     expect(screen.getByTestId('recall-outcome-modal')).toBeInTheDocument();
   });
 });

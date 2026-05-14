@@ -189,7 +189,11 @@ describe('Phase 29 · CDV4 add flow + empty + loading + error', () => {
   it('CDV4.5 row click opens outcome modal', async () => {
     const user = userEvent.setup();
     render(<RecallCard customerId={customer.id} customer={customer} />);
-    await user.click(screen.getByText('A overdue'));
+    // Phase 29.23 Task 3 V21-class fixup: customer-name is now <a> with
+    // stopPropagation → click row OUTER (data-testid="recall-row-<id>") to
+    // hit the outcome-modal handler instead of the new-tab link.
+    // Fixture "A overdue" maps to recall id 'R1' (see fixture above).
+    await user.click(screen.getByTestId('recall-row-R1'));
     expect(screen.getByTestId('recall-outcome-modal')).toBeInTheDocument();
   });
 });
