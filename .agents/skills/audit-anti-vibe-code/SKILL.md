@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV36)
+## Invariants (AV1–AV43)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -1230,6 +1230,42 @@ live-resolve over frozen denormalized caches.
 
 **Regression test**: `tests/phase-27-0-av42-source-grep.test.js` (AV42.1–AV42.4)
 **Flow-simulate**: `tests/phase-27-0-treatment-branch-flow-simulate.test.js` (FB1–FB5)
+
+### AV43 — Destructive selective-scope ops MUST go through bucket schema + assertNotT1 + hash verify (Selective-Make-Fresh, 2026-05-14)
+
+**Trigger**: Any destructive endpoint that accepts user-selectable scope (currently `/api/admin/branch-make-fresh`) AND any UI that calls it (currently `MakeFreshModal.jsx`).
+
+**Pattern**: V40's atomic-tier-wipe replaced by selective bucket-level wipe. The UI must NOT send raw collection/tier names; it MUST send `bucketIds: string[]` resolved server-side via `resolveBucketScope`. The server MUST `assertNotT1(resolved.collections)` to defense-in-depth-reject T1 (master) even if UI sends malformed input. The server MUST verify `computeBodyHash(backup.collections) === backup.meta.bodyHash` BEFORE any wipe; mismatch aborts with `BACKUP_INTEGRITY_FAIL`.
+
+**Why architectural**: AV19 (V40, 2026-05-07) already required auto-backup-ref. AV43 extends with cryptographic integrity (hash verification) for round-trip safety. Per user directive 2026-05-14: "ระบบ backup ต้องเทสให้แน่ใจที่สุดว่า Backup ออกมาแล้ว สามารถ restore เข้าไปได้แล้วเหมือนเดิม เป็นเรื่องที่ serious มาก".
+
+**Grep targets**:
+- `api/admin/branch-make-fresh.js` MUST contain `assertNotT1(` + `computeBodyHash(` + `BACKUP_INTEGRITY_FAIL`
+- The string index of `BACKUP_INTEGRITY_FAIL` MUST be LESS THAN the string index of the first `batch.delete(` (hash check happens BEFORE any delete)
+- `api/admin/branch-backup-export.js` MUST contain `assertNotT1(` when bucket mode active
+- UI files (`MakeFreshModal.jsx`) MUST send `bucketIds:` (not `tiers:` or `collections:`) in API request bodies
+- UI MUST import `BUCKETS` from `src/lib/branchBackupBuckets.js` (single source of truth)
+- `branchBackupBuckets.BUCKETS.customerActivity.defaultChecked` MUST be `false` (Q4-B opt-in lock — customer-visible state requires explicit admin opt-in)
+
+**Sanctioned exceptions**: NONE. Every selective-destructive endpoint must follow the pattern.
+
+**Companion AV**: AV19 (V40 auto-backup precondition — base layer); AV43 extends with integrity verification.
+
+**Source-grep regression** (`tests/branch-make-fresh-selective-source-grep.test.js`):
+```js
+// SG2.4 — hash compare BEFORE batch.delete (CRITICAL ordering)
+const hashIdx = makeFreshCode.indexOf('BACKUP_INTEGRITY_FAIL');
+const wipeIdx = makeFreshCode.indexOf('batch.delete');
+expect(hashIdx).toBeLessThan(wipeIdx);
+
+// SG3.2 — customerActivity defaultChecked is FALSE (Q4-B opt-in)
+const match = code.match(/customerActivity:\s*Object\.freeze\(\{[\s\S]*?defaultChecked:\s*(true|false)/);
+expect(match[1]).toBe('false');
+```
+
+**Origin**: Brainstorming Q1-Q6 (2026-05-14) + spec `docs/superpowers/specs/2026-05-14-selective-make-fresh-and-backup-integrity-design.md`. Verified via Rule Q L2: `scripts/e2e-backup-restore-roundtrip-real-prod.mjs --apply` on real prod, 10/10 scenarios PASS with hash byte-equal at every phase boundary.
+
+**Lesson**: When V40 introduced "destructive op needs auto-backup" (AV19), the contract assumed the backup file was internally consistent. Real-world Storage uploads can bit-flip, schema can drift, file can be tampered. Hash verification at the read-side (recompute + compare with file.meta.bodyHash) closes the integrity gap. The 10-scenario round-trip e2e proved the contract holds across adversarial inputs (Thai/Unicode/Timestamps/refs/large/nested/non-finite/empty).
 
 ## How to run
 
