@@ -507,7 +507,15 @@ describe('BS-11 — report-tab branch-refresh discipline (V52)', () => {
 // TIME_SLOTS) — so it never trips the grep.
 
 describe('BS-12 — time-axis branch-aware discipline (V53)', () => {
-  const componentFiles = fg.sync('src/components/**/*.{jsx,js}', { cwd: process.cwd() });
+  // Phase 29.23-bis2 (2026-05-14) — scope expanded to include src/pages/.
+  // Pre-expansion blind spot: src/pages/AdminDashboard.jsx imported
+  // `TIME_SLOTS as CANONICAL_TIME_SLOTS` and built timeOptions = ALL slots
+  // (08:15-22:00) for 3 booking modals — BS-12 missed it entirely because
+  // the audit only scanned src/components/**.
+  const componentFiles = [
+    ...fg.sync('src/components/**/*.{jsx,js}', { cwd: process.cwd() }),
+    ...fg.sync('src/pages/**/*.{jsx,js}', { cwd: process.cwd() }),
+  ];
 
   function fileImportsTimeSlots(content) {
     return /import\s*\{[^}]*\bTIME_SLOTS\b[^}]*\}\s*from\s+['"][^'"]*staffScheduleValidation/.test(content);
@@ -581,6 +589,24 @@ describe('BS-12 — time-axis branch-aware discipline (V53)', () => {
       if (!fileImportsHelper(content)) allViolations.push(`${f} BS-12.1`);
     }
     expect(allViolations).toEqual([]);
+  });
+
+  // Phase 29.23-bis2 (2026-05-14) — regression guard for the audit's
+  // pre-expansion blind spot. AdminDashboard.jsx imports TIME_SLOTS as
+  // CANONICAL_TIME_SLOTS and renders it in 3 booking modal time pickers
+  // (edit-deposit + create-deposit + create-no-deposit). User report:
+  // "Modal สร้างนัดหมายของทั้งหน้าจองมัดจำและจองไม่มัดจำ ยังไม่ดึงเวลาเปิด-ปิด
+  // ของสาขานั้นๆ ยังขึ้นตั้งแต่ 8.15 อยู่เลย".
+  it('BS-12.8 AdminDashboard.jsx passes BS-12.1+BS-12.2 (V53 expansion to src/pages/)', () => {
+    const c = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+    expect(fileImportsTimeSlots(c)).toBe(true);
+    expect(fileImportsHelper(c)).toBe(true);
+    expect(c).toMatch(/openHoursMonFri/);
+    expect(c).toMatch(/openHoursSatSun/);
+    // The 3 visible-slots useMemos must exist
+    expect(c).toMatch(/editDepositVisibleSlots/);
+    expect(c).toMatch(/depositFormVisibleSlots/);
+    expect(c).toMatch(/noDepositFormVisibleSlots/);
   });
 });
 

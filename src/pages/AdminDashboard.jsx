@@ -122,7 +122,7 @@ import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
 import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
-import { shouldBlockScheduleSlot, shouldBlockDoctorSlot } from '../lib/scheduleFilterUtils.js';
+import { shouldBlockScheduleSlot, shouldBlockDoctorSlot, getVisibleTimeSlotsForDate } from '../lib/scheduleFilterUtils.js';
 import { shouldRingChatAlert, shouldRingChatInterval } from '../lib/chatUnreadUtils.js';
 import { resolveAppointmentTypeLabel } from '../lib/appointmentDisplay.js';
 import { kioskPatientToCanonical } from '../lib/kioskPatientToCanonical.js';
@@ -925,6 +925,52 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     customerNameTemp: '',
     customerPhoneTemp: '',
   });
+
+  // Phase 29.23-bis2 (2026-05-14) — V53 BS-12 expansion to Frontend booking modals.
+  // Pre-fix: depositOptions.appointment{Start,End}Times was built from
+  // CANONICAL_TIME_SLOTS (08:15-22:00 hardcoded) and consumed verbatim in 3
+  // modal time pickers. Bug surfaced when branch open hours were narrower —
+  // pickers still showed slots starting at 08:15 regardless of branch.
+  //
+  // Root cause: BS-12 audit only scanned src/components/** (NOT src/pages/),
+  // so AdminDashboard.jsx escaped V53's audit + got missed in V53's wiring.
+  // BS-12 audit now extended to src/pages/ (see audit-branch-scope.test.js).
+  //
+  // Fix: derive visible slots per-date per-branch via getVisibleTimeSlotsForDate
+  // (mirror of Backend AppointmentFormModal pattern from V53). Each modal has
+  // its own date state → 3 separate useMemo's, recompute on date or open-hours
+  // change. Legacy values outside visible slots are preserved at the option
+  // layer (so existing appts on now-closed days remain readable in edit mode).
+  const editDepositVisibleSlots = useMemo(() => {
+    const r = getVisibleTimeSlotsForDate({
+      dateISO: editingDepositData?.appointmentDate || '',
+      mergedSettings: cs,
+      allTimeSlots: CANONICAL_TIME_SLOTS,
+      includeAppointments: [],
+    });
+    return r?.slots || CANONICAL_TIME_SLOTS;
+  }, [editingDepositData?.appointmentDate, cs?.openHoursMonFri, cs?.openHoursSatSun]);
+
+  const depositFormVisibleSlots = useMemo(() => {
+    const r = getVisibleTimeSlotsForDate({
+      dateISO: depositFormData?.appointmentDate || '',
+      mergedSettings: cs,
+      allTimeSlots: CANONICAL_TIME_SLOTS,
+      includeAppointments: [],
+    });
+    return r?.slots || CANONICAL_TIME_SLOTS;
+  }, [depositFormData?.appointmentDate, cs?.openHoursMonFri, cs?.openHoursSatSun]);
+
+  const noDepositFormVisibleSlots = useMemo(() => {
+    const r = getVisibleTimeSlotsForDate({
+      dateISO: noDepositFormData?.appointmentDate || '',
+      mergedSettings: cs,
+      allTimeSlots: CANONICAL_TIME_SLOTS,
+      includeAppointments: [],
+    });
+    return r?.slots || CANONICAL_TIME_SLOTS;
+  }, [noDepositFormData?.appointmentDate, cs?.openHoursMonFri, cs?.openHoursSatSun]);
+
   const [editingAppointment, setEditingAppointment] = useState(null); // null = creating, sessionId = editing
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -5350,14 +5396,24 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <label className="text-xs text-gray-500 uppercase block mb-1">เริ่ม</label>
                   <select value={dep.appointmentStartTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
                     <option value="">--</option>
-                    {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {/* Phase 29.23-bis2 — V53 BS-12 per-branch open-hours filter.
+                        Legacy preservation: if existing appt start time is outside
+                        new visible slots (e.g. branch hours edited after appt
+                        created), keep it selectable so admin sees the original. */}
+                    {dep.appointmentStartTime && !editDepositVisibleSlots.includes(dep.appointmentStartTime) && (
+                      <option value={dep.appointmentStartTime}>{dep.appointmentStartTime} (นอกเวลา)</option>
+                    )}
+                    {editDepositVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 uppercase block mb-1">สิ้นสุด</label>
                   <select value={dep.appointmentEndTime || ''} onChange={e => setEditingDepositData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded px-2 py-1.5 text-sm outline-none">
                     <option value="">--</option>
-                    {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {dep.appointmentEndTime && !editDepositVisibleSlots.includes(dep.appointmentEndTime) && (
+                      <option value={dep.appointmentEndTime}>{dep.appointmentEndTime} (นอกเวลา)</option>
+                    )}
+                    {editDepositVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -8066,14 +8122,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             <label className="text-xs text-gray-500 block mb-1">เริ่ม <span className="text-red-500">*</span></label>
                             <select value={depositFormData.appointmentStartTime} onChange={e => setDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-2 py-2 text-xs outline-none">
                               <option value="">--</option>
-                              {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              {/* Phase 29.23-bis2 — V53 BS-12 per-branch open-hours filter. */}
+                              {depositFormData.appointmentStartTime && !depositFormVisibleSlots.includes(depositFormData.appointmentStartTime) && (
+                                <option value={depositFormData.appointmentStartTime}>{depositFormData.appointmentStartTime} (นอกเวลา)</option>
+                              )}
+                              {depositFormVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
                           </div>
                           <div>
                             <label className="text-xs text-gray-500 block mb-1">สิ้นสุด <span className="text-red-500">*</span></label>
                             <select value={depositFormData.appointmentEndTime} onChange={e => setDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className="w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-2 py-2 text-xs outline-none">
                               <option value="">--</option>
-                              {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              {depositFormData.appointmentEndTime && !depositFormVisibleSlots.includes(depositFormData.appointmentEndTime) && (
+                                <option value={depositFormData.appointmentEndTime}>{depositFormData.appointmentEndTime} (นอกเวลา)</option>
+                              )}
+                              {depositFormVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
                           </div>
                         </div>
@@ -8254,14 +8317,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <label className="text-xs text-gray-500 block mb-1">เริ่ม <span className="text-red-500">*</span></label>
                         <select value={noDepositFormData.appointmentStartTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentStartTime: e.target.value}))} className={`w-full rounded-lg px-2 py-2.5 text-xs outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                           <option value="">--</option>
-                          {(depositOptions?.appointmentStartTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          {/* Phase 29.23-bis2 — V53 BS-12 per-branch open-hours filter. */}
+                          {noDepositFormData.appointmentStartTime && !noDepositFormVisibleSlots.includes(noDepositFormData.appointmentStartTime) && (
+                            <option value={noDepositFormData.appointmentStartTime}>{noDepositFormData.appointmentStartTime} (นอกเวลา)</option>
+                          )}
+                          {noDepositFormVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="text-xs text-gray-500 block mb-1">สิ้นสุด <span className="text-red-500">*</span></label>
                         <select value={noDepositFormData.appointmentEndTime} onChange={e => setNoDepositFormData(p => ({...p, appointmentEndTime: e.target.value}))} className={`w-full rounded-lg px-2 py-2.5 text-xs outline-none ${isDark ? 'bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white' : 'bg-pink-50 border border-pink-200 text-gray-900'}`}>
                           <option value="">--</option>
-                          {(depositOptions?.appointmentEndTimes || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          {noDepositFormData.appointmentEndTime && !noDepositFormVisibleSlots.includes(noDepositFormData.appointmentEndTime) && (
+                            <option value={noDepositFormData.appointmentEndTime}>{noDepositFormData.appointmentEndTime} (นอกเวลา)</option>
+                          )}
+                          {noDepositFormVisibleSlots.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
                     </div>
