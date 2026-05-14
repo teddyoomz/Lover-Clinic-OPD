@@ -43,11 +43,26 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 PHASE-29-DEPLOYED — **Phase 29 (Recall System) SHIPPED LIVE** · master=`4a552c9` · prod=`4a552c9` (DEPLOYED) · 9605 tests + 1 skipped · build clean · firestore rules v30
+- **Date last updated**: 2026-05-14 EOD — **Rule Q (V66) installed; 7-layer enforcement chain SHIPPED** · master=`4124105` · prod=`4a552c9` (live but has 5+ Phase 29 bugs already fixed in master, awaits Option C deploy) · 9605 vitest + 1 skipped + 6 Playwright e2e · build clean · firestore rules v30
 - **Branch**: `master`
-- **Last commit**: `4a552c9` docs(Phase 29.20): SESSION_HANDOFF + active.md + checkpoint — implementation complete
-- **Test count**: **9605 passed** + 1 skipped. 0 failures. **+429 net** vs pre-Phase-29 baseline (9176). 13 new test files covering Layers 1-6 + e2e script.
-- **Deploy state**: **PRODUCTION = `4a552c9`** — Phase 29 SHIPPED LIVE 2026-05-14. Combined V15 deploy ✅ (vercel --prod + firebase deploy --only firestore:rules,firestore:indexes). Rule B Probe-Deploy-Probe ✅ (chat_conversations anon POST HTTP 200 pre + post). Live admin-SDK e2e ✅ (5 fixtures cycle: create → read-back → outcome-flip → snooze → cleanup + audit doc). Prod smoke HTTP 200.
+- **Last commit**: `4124105` docs(V66/Rule Q): Real-Adversarial Verification — 7-layer enforcement chain SHIPPED
+- **Test count**: **9605 vitest** + 1 skipped + **NEW 6 Playwright e2e** in `tests/e2e/phase-29-recall-adversarial.spec.js` (real-browser real-Firestore real-auth — A1-A4 + F1-F2 + D1).
+- **Deploy state**: **PRODUCTION = `4a552c9`** (Phase 29 SHIPPED LIVE earlier this session) **but has 5+ critical user-visible bugs** found post-deploy via real-browser inspection. All 5+ bugs FIXED in master (c404cb6 + 6c8b72d), verified via Playwright 6/6 PASS. **Not yet redeployed** — Option C next chat (adversarial bug hunt continuation + TEST-RECALL fixtures + Bug C/D/E end-to-end Playwright + deploy with post-deploy real-client-SDK compound query probe).
+
+### Session 2026-05-14 EOD — Rule Q (V66) Real-Adversarial Verification SHIPPED
+
+7-layer enforcement chain locked permanent after Phase 29 trust collapse (8 test layers lied uniformly while real prod shipped with 5+ user-visible bugs). User curse-verified directive: *"ทำยังไงก็ได้ให้ต่อไปนี้การเทสของมึงจะต้องไม่เหี้ย ไม่โกหก ไม่เข้าข้างตัวเองและใช้ไม่ได้จริง"* + *"ใส่ไปในทุกที่ที่จะเตือนมึงได้ ... ให้ครบให้หลอน ... และบังคับใช้ทันที"*.
+
+**Rule Q 3-level hierarchy** (any "verified"/"shipped"/"done" claim for user-visible code MUST satisfy ≥1):
+- L1 (PREFERRED) — Playwright real browser w/ real auth + real DOM + real Firestore
+- L2 (ACCEPTABLE) — Real client SDK w/ EXACT compound queries / listener subscriptions
+- L3 (LAST RESORT) — User walkthrough with written confirmation
+
+**7-layer enforcement** (commit 4124105): (1) user-level CLAUDE.md boot chain, (2) project CLAUDE.md banner, (3) `.claude/rules/00-session-start.md` Step 0 + V66 row, (4) `.claude/rules/01-iron-clad.md` Rule Q top-of-file, (5) verbose V66 entry in `v-log-archive.md`, (6) NEW skill `~/.claude/skills/real-adversarial-verification/SKILL.md`, (7) user-memory `feedback_real_adversarial_verification.md` + MEMORY.md index. Plus banner in this file + pinned reminder in `.agents/active.md`.
+
+**Phase 29 bug recovery**: 5+ bugs (customer picker / auto-suggest / reschedule semantic / closed-no-answer / counter reset / autoFocus) fixed in master via c404cb6 + 6c8b72d. Real-browser regression bank in `tests/e2e/phase-29-recall-adversarial.spec.js` 6/6 PASS via Playwright. **NOT yet redeployed** — Option C next chat.
+
+Checkpoint: `.agents/sessions/2026-05-14-rule-q-v66-installation.md`. Full V66 lessons: `.claude/rules/v-log-archive.md` V66 verbose entry (the 8-layer lie + recovery + 7 lessons locked permanent).
 
 ### Session 2026-05-14 PHASE-29-IMPLEMENTED — Recall System shipped in 22 tasks (autonomous execution)
 
@@ -91,25 +106,41 @@ After this same session's Phase 29 spec + plan writing, executed all 22 tasks au
 
 Detail: `.agents/sessions/2026-05-14-phase-29-implementation-complete.md`.
 
-#### Resume Prompt — Phase 29 implemented, awaiting deploy
+#### Resume Prompt — 2026-05-14 EOD (Rule Q V66 installed; Option C next)
 
 ```
-Resume LoverClinic — Phase 29 (Recall System) shipped in code, awaiting deploy.
+Resume LoverClinic — continue from 2026-05-14 EOD (Rule Q V66 installation).
 
-Status: master=2ea43eb, prod=0389e23, ~20 commits ahead, 9605 tests + 1 skipped, build clean.
+Read in order BEFORE any tool call:
+1. CLAUDE.md (Rule Q banner — THE LOUDEST RULE)
+2. SESSION_HANDOFF.md (master=4124105, prod=4a552c9 with 5+ bugs already fixed locally)
+3. .agents/active.md (9605 vitest + 6 Playwright e2e)
+4. .claude/rules/00-session-start.md (V66 row + iron-clad Rule Q)
+5. .agents/sessions/2026-05-14-rule-q-v66-installation.md (this session checkpoint)
+6. .claude/rules/v-log-archive.md (verbose V66 — the 8-layer lie + 7 lessons)
 
-Phase 29 fully implemented across 19 commits; full vitest GREEN; 13 new
-test files / +429 net assertions cover Layers 1-6 (helpers / RTL /
-source-grep / flow-simulate / multi-surface real-time / adversarial).
+Status: master=4124105 (Rule Q 7-layer enforcement chain SHIPPED), 9605 vitest +
+1 skipped + 6 Playwright e2e GREEN. Prod=4a552c9 has 5+ Phase 29 bugs already
+FIXED in master via c404cb6 + 6c8b72d (verified Playwright 6/6 PASS) — NOT yet
+redeployed.
 
-Outstanding:
-1. Task 17 — Live preview verification on dev server (user hands-on, LC-26000006)
-2. Task 18 — Live admin-SDK e2e (`node scripts/phase-29-recall-e2e-real-prod.mjs --apply`)
-3. Task 21 — V15 combined deploy (vercel --prod + firebase deploy --only
-   firestore:rules,firestore:indexes with Rule B probe-deploy-probe) —
-   requires explicit "deploy" verb per V18.
+🚨 Rule Q is THE LOUDEST RULE — every "verified"/"shipped"/"done" claim for
+user-visible code MUST satisfy ≥1: L1 (Playwright real browser) OR L2 (real
+client SDK w/ exact compound queries) OR L3 (user walkthrough). Mock tests =
+code-shape coverage ONLY. Admin SDK doc-level access = BYPASSES indexes.
 
-/session-start to load context.
+Next: Option C per user directive ("แล้ว session end จะไป option C ต่อแชทถัดไป"):
+1. Create TEST-RECALL-* fixtures (V33-class prefix discipline)
+2. Playwright e2e for Bug C (reschedule semantic) + D (closed-no-answer 5th card) + E (counter reset)
+3. Run full Playwright suite + visual regression on 3 surfaces
+4. If clean → request explicit "deploy" verb → combined Vercel + Firebase deploy
+   + Rule B probe + post-deploy real-client-SDK compound query probe (NOT anon POST)
+
+Outstanding (user-triggered): explicit "deploy" verb for combined Vercel + Firebase deploy
+Rules: NO deploy without "deploy" THIS turn (V18); V15 combined; Rule B probe;
+Rule M data ops local + admin SDK; Rule Q L1/L2 verification before claiming verified
+
+/session-start
 ```
 
 ### Session 2026-05-14 LATE-EOD continued+2 — Phase 29 Recall System (design + plan, no code yet)

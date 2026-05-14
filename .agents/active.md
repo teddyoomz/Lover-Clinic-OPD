@@ -1,8 +1,8 @@
 ---
-updated_at: "2026-05-14 RULE-Q-INSTALLED — V66 enforcement chain shipped; Option C next chat"
-status: "master=4a552c9 + Rule Q infra · prod=4a552c9 (DEPLOYED — but has 5+ Phase 29 bugs already fixed locally, awaits Option C deploy) · 9605 tests + 6 Playwright e2e · build clean · firestore rules v30"
+updated_at: "2026-05-14 EOD — Rule Q (V66) shipped; 7-layer enforcement chain live; Option C next chat"
+status: "master=4124105 (V66 Rule Q infra) · prod=4a552c9 (DEPLOYED but has 5+ Phase 29 bugs already fixed in master c404cb6+6c8b72d, awaits Option C deploy) · 9605 vitest + 1 skipped + 6 Playwright e2e · build clean"
 branch: "master"
-last_commit: "<pending Rule Q commit>"
+last_commit: "4124105 docs(V66/Rule Q): Real-Adversarial Verification — 7-layer enforcement chain SHIPPED"
 tests: 9605
 playwright_e2e: 6
 production_url: "https://lover-clinic-app.vercel.app"
