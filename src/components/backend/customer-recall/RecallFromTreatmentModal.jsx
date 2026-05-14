@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { RecallCreateModal } from '../recall/RecallCreateModal.jsx';
-import { getProduct } from '../../../lib/scopedDataLayer.js';
+import { useRecallCases } from '../../../hooks/useRecallCases.js';
 
 /**
  * Phase 29 (2026-05-14) — Thin wrapper around RecallCreateModal that
@@ -16,70 +16,23 @@ import { getProduct } from '../../../lib/scopedDataLayer.js';
  * first item, build the props, and render. When treatmentId is null,
  * we render null.
  *
- * Phase 29.21-fix2 (2026-05-14): now ALSO fetches be_products[productId]
- * to populate `masterDataSuggestions` so the modal's slot auto-fill
- * actually works per spec §5.3. Previously hard-coded to `{}` which
- * broke auto-suggest entirely for entry point 4 (treatment-history chip).
+ * Phase 29.22 (2026-05-14): REMOVED the Phase 29.21-fix2 be_products
+ * fetch entirely. Recall presets now live in be_recall_cases (universal
+ * collection) — admin picks from typeahead dropdown via useRecallCases
+ * shared hook. Auto-suggest from per-product followUpAfterDays/Reason
+ * is GONE; that path was the V66 lesson (denormalized recall presets
+ * into product/course master = wrong coupling).
  */
 export function RecallFromTreatmentModal({ treatmentId, treatments, customer, onClose }) {
-  const [masterDataSuggestions, setMasterDataSuggestions] = useState({});
-  const [fetchedProductId, setFetchedProductId] = useState(null);
+  // Phase 29.22 — be_recall_cases shared hook for typeahead picker.
+  const { recallCases, onSaveAsRecallCase } = useRecallCases();
 
-  // Look up treatment first (these don't depend on async fetch)
+  if (!treatmentId) return null;
+
+  // Look up treatment to build treatmentContext + sourceContext
   const t = (treatments || []).find((tx) => tx.id === treatmentId) || null;
   const detail = t?.detail || {};
   const firstItem = (detail.treatmentItems || [])[0] || null;
-  const productId = firstItem?.productId || null;
-
-  // Fetch be_products[productId] to populate auto-suggest fields.
-  // Spec §5.3 entry point 4: "If followUpAfterDays exists → enables Slot 1
-  // + pre-fills date + reason from master". Same for recallAfterDays.
-  useEffect(() => {
-    if (!treatmentId || !productId) {
-      setMasterDataSuggestions({});
-      setFetchedProductId(null);
-      return;
-    }
-    // Avoid refetch if product hasn't changed
-    if (productId === fetchedProductId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const product = await getProduct(productId);
-        if (cancelled) return;
-        const productName = product?.productName || product?.name || firstItem?.productName || firstItem?.name || '';
-        const next = {};
-        // Slot 1 (aftercare)
-        if (product?.followUpAfterDays != null) {
-          next.aftercare = {
-            days: Number(product.followUpAfterDays),
-            reason: product.followUpReason || `ติดตามอาการหลังการรักษา (${productName})`,
-            sourceLabel: `be_products/${productName || productId}`,
-          };
-        }
-        // Slot 2 (revisit)
-        if (product?.recallAfterDays != null) {
-          next.revisit = {
-            days: Number(product.recallAfterDays),
-            reason: product.recallReason || `${productName} ครบรอบบริการ`,
-            sourceLabel: `be_products/${productName || productId}`,
-          };
-        }
-        setMasterDataSuggestions(next);
-        setFetchedProductId(productId);
-      } catch (err) {
-        if (cancelled) return;
-        console.warn('[RecallFromTreatmentModal] getProduct failed (continuing without auto-suggest):', err?.message || err);
-        setMasterDataSuggestions({});
-        setFetchedProductId(productId); // remember even on failure so we don't retry-loop
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [treatmentId, productId, firstItem, fetchedProductId]);
-
-  if (!treatmentId) return null;
 
   const treatmentContext = {
     treatmentId,
@@ -108,7 +61,11 @@ export function RecallFromTreatmentModal({ treatmentId, treatments, customer, on
       customer={customerArg}
       treatmentContext={treatmentContext}
       sourceContext={sourceContext}
-      masterDataSuggestions={masterDataSuggestions}
+      // Phase 29.22 — masterDataSuggestions deprecated; pass {} for backward
+      // compat (RecallCreateModal accepts it but no longer drives behavior).
+      masterDataSuggestions={{}}
+      recallCases={recallCases}
+      onSaveAsRecallCase={onSaveAsRecallCase}
       onClose={onClose}
     />
   );

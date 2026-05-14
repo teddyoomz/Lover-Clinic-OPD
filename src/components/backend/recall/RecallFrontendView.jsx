@@ -6,6 +6,7 @@ import { RecallOutcomeModal } from './RecallOutcomeModal.jsx';
 import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { thaiTodayISO } from '../../../utils.js';
 
 /**
@@ -23,6 +24,8 @@ import { thaiTodayISO } from '../../../utils.js';
 export function RecallFrontendView() {
   const todayISO = thaiTodayISO();
   const { recalls, loading, error } = useRecallListener({ filters: {} });
+  // Phase 29.22 (2026-05-14) — be_recall_cases shared hook for typeahead.
+  const { recallCases, onSaveAsRecallCase } = useRecallCases();
 
   const [createModal, setCreateModal] = useState(null);
   const [outcomeModal, setOutcomeModal] = useState(null);
@@ -130,6 +133,8 @@ export function RecallFrontendView() {
           treatmentContext={createModal.treatmentContext}
           sourceContext={createModal.sourceContext}
           masterDataSuggestions={createModal.masterDataSuggestions || {}}
+          recallCases={recallCases}
+          onSaveAsRecallCase={onSaveAsRecallCase}
           onClose={() => setCreateModal(null)}
         />
       )}

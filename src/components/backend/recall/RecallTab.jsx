@@ -7,6 +7,7 @@ import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
 import { RecallCasesAdminPanel } from './RecallCasesAdminPanel.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
 import { thaiTodayISO } from '../../../utils.js';
 
@@ -37,6 +38,8 @@ export function RecallTab() {
   const canManageCases = !!(isAdmin || hasPermission?.('recall_management'));
   // Sub-pill view state: 'list' = existing recall list, 'cases' = admin panel.
   const [view, setView] = useState('list');
+  // Phase 29.22 — be_recall_cases shared hook (4-caller Rule of 3).
+  const { recallCases, onSaveAsRecallCase } = useRecallCases();
 
   const [searchText, setSearchText] = useState('');
 
@@ -209,6 +212,8 @@ export function RecallTab() {
           treatmentContext={createModal.treatmentContext}
           sourceContext={createModal.sourceContext}
           masterDataSuggestions={createModal.masterDataSuggestions || {}}
+          recallCases={recallCases}
+          onSaveAsRecallCase={onSaveAsRecallCase}
           onClose={() => setCreateModal(null)}
         />
       )}

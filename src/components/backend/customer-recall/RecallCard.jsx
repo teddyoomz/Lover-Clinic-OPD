@@ -6,6 +6,7 @@ import { RecallCreateModal } from '../recall/RecallCreateModal.jsx';
 import { RecallOutcomeModal } from '../recall/RecallOutcomeModal.jsx';
 import { RecallSnoozeMenu } from '../recall/RecallSnoozeMenu.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
+import { useRecallCases } from '../../../hooks/useRecallCases.js';
 import { isOverdue, getEffectiveRecallDate } from '../../../lib/recallResolvers.js';
 import { thaiTodayISO } from '../../../utils.js';
 
@@ -32,6 +33,8 @@ import { thaiTodayISO } from '../../../utils.js';
 export function RecallCard({ customerId, customer }) {
   const todayISO = thaiTodayISO();
   const { recalls, loading, error } = useRecallListener({ customerId });
+  // Phase 29.22 (2026-05-14) — be_recall_cases shared hook for typeahead.
+  const { recallCases, onSaveAsRecallCase } = useRecallCases();
 
   const [expanded, setExpanded] = useState(false);
   const [createModal, setCreateModal] = useState(null);
@@ -205,6 +208,8 @@ export function RecallCard({ customerId, customer }) {
           treatmentContext={createModal.treatmentContext}
           sourceContext={createModal.sourceContext}
           masterDataSuggestions={createModal.masterDataSuggestions || {}}
+          recallCases={recallCases}
+          onSaveAsRecallCase={onSaveAsRecallCase}
           onClose={() => setCreateModal(null)}
         />
       )}

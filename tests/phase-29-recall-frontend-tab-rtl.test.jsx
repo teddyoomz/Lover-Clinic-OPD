@@ -20,6 +20,12 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: vi.fn(async () => {}),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
+  // Phase 29.22 (2026-05-14) — useRecallCases shared hook reads these.
+  listRecallCases: vi.fn(async () => []),
+  saveRecallCase: vi.fn(async () => ({ id: 'CASE-mock' })),
+  setRecallCaseHidden: vi.fn(async () => {}),
+  // Phase 29.21-fix2 customer picker — RecallCreateModal needs this.
+  getAllCustomers: vi.fn(async () => []),
 }));
 
 vi.mock('../src/utils.js', async () => {
