@@ -62,10 +62,13 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
   });
 
   it('R-Row.6 click body fires onClick(recall.id)', async () => {
+    // Phase 29.23 V21-class update: customer-name is now wrapped in <a> with
+    // stopPropagation (opens customer in new tab). Click the reason text
+    // instead — still part of the row body, bubbles to onClick correctly.
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<RecallRow recall={baseRecall} todayISO={TODAY} onClick={onClick} />);
-    await user.click(screen.getByText('นาย Aaa'));
+    await user.click(screen.getByText(/ติดตามอาการหลังฉีดฟิลเลอร์/));
     expect(onClick).toHaveBeenCalledWith('R1');
   });
 

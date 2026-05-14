@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, MessageCircle, Clock, Trash2 } from 'lucide-react';
+import { Phone, MessageCircle, Clock, Trash2, Pencil } from 'lucide-react';
 import {
   getRecallStatusLabel,
   getRecallStatusColor,
@@ -33,6 +33,7 @@ import { RecallPairBadge } from './RecallPairBadge.jsx';
  * @param {function} [props.onSnooze] (recallId) → open snooze date picker
  * @param {function} [props.onPairClick] (pairedRecallId) → scroll/open paired
  * @param {function} [props.onDelete] (recallId) → hard-delete with confirm
+ * @param {function} [props.onEdit] (recallId) → open edit modal
  * @param {boolean} [props.compact] hide source row + reduce padding (CDV variant)
  */
 export function RecallRow({
@@ -45,6 +46,7 @@ export function RecallRow({
   onSnooze,
   onPairClick,
   onDelete,
+  onEdit,
   compact = false,
 }) {
   if (!recall) return null;
@@ -118,7 +120,26 @@ export function RecallRow({
       {/* Content */}
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[12px] font-bold text-[var(--tx-primary)]">{recall.customerName || '—'}</span>
+          {recall.customerId ? (
+            <a
+              href={`/?backend=1&customer=${encodeURIComponent(String(recall.customerId))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[12px] font-bold text-[var(--tx-primary)] hover:underline underline-offset-2 hover:text-sky-300"
+              title={`เปิดข้อมูล ${recall.customerName || ''} ในแท็บใหม่`}
+              data-testid={`recall-customer-link-${recall.id}`}
+            >
+              {recall.customerName || '—'}
+            </a>
+          ) : (
+            <span
+              className="text-[12px] font-bold text-[var(--tx-primary)]"
+              data-testid={`recall-customer-name-plain-${recall.id}`}
+            >
+              {recall.customerName || '—'}
+            </span>
+          )}
           {recall.customerLineUserId && (
             <span
               className="text-[8px] px-1 py-0 bg-green-500/15 text-green-300 border border-green-500/30 rounded font-bold"
@@ -225,6 +246,21 @@ export function RecallRow({
             title="⏰ เลื่อน"
           >
             <Clock size={11} />
+          </button>
+        )}
+        {/* Phase 29.23 — edit button (sky-500). Always shown (admin can fix typos
+            on done/closed recalls too — same discoverability rationale as the
+            delete button per round-3 lesson). */}
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(recall.id); }}
+            data-testid={`recall-edit-${recall.id}`}
+            className="w-6 h-6 rounded bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/60 flex items-center justify-center"
+            aria-label="แก้ไข Recall"
+            title="✏️ แก้ไข Recall"
+          >
+            <Pencil size={11} />
           </button>
         )}
         {/* Phase 29.22 round-3 — delete button. User report: "ลบ Recall ไม่ได้
