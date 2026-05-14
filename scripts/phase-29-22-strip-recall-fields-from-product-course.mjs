@@ -41,7 +41,9 @@ function initFirebase() {
   const privateKey = env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n');
   initializeApp({
     credential: cert({
-      projectId: env.FIREBASE_ADMIN_PROJECT_ID,
+      // Fall back to hardcoded APP_ID when FIREBASE_ADMIN_PROJECT_ID
+      // not in .env.local.prod (mirror canonical scripts pattern).
+      projectId: env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
       clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL,
       privateKey,
     }),
