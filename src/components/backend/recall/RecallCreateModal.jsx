@@ -297,11 +297,11 @@ export function RecallCreateModal({
       data-testid="recall-create-modal"
     >
       <div
-        className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--bg-card)] border-2 border-[var(--bd-strong)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-[var(--bd)] px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-[var(--bd-strong)] px-4 py-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-[var(--tx-primary)]">🔔 ตั้ง Recall ใหม่</h2>
           <button
             type="button"
@@ -384,7 +384,7 @@ export function RecallCreateModal({
               {/* Filtered customer list */}
               {!customersLoading && filteredCustomers.length > 0 && (
                 <div
-                  className="mt-1.5 max-h-48 overflow-y-auto border border-[var(--bd)] rounded-lg bg-[var(--bg-card)]"
+                  className="mt-1.5 max-h-48 overflow-y-auto border-2 border-[var(--bd-strong)] rounded-lg bg-[var(--bg-input)] shadow-md"
                   data-testid="recall-create-customer-list"
                 >
                   {filteredCustomers.map((c) => {
@@ -469,7 +469,7 @@ export function RecallCreateModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-[var(--bg-card)] border-t border-[var(--bd)] px-4 py-3 flex items-center justify-between gap-3">
+        <div className="sticky bottom-0 bg-[var(--bg-card)] border-t border-[var(--bd-strong)] px-4 py-3 flex items-center justify-between gap-3">
           <div
             className="text-[11px] text-[var(--tx-muted)]"
             data-testid="recall-create-summary"

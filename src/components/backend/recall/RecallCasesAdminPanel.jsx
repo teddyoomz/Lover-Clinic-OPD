@@ -123,51 +123,53 @@ export function RecallCasesAdminPanel({ onCasesChanged }) {
           ไม่พบเคส — คลิก "+ เพิ่มเคส" เพื่อเริ่ม
         </div>
       ) : (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-[var(--border-card)] text-[var(--tx-secondary)]">
-              <th className="text-left py-2">ชื่อเคส</th>
-              <th className="text-left py-2 w-24">ระยะเวลา</th>
-              <th className="text-left py-2 w-24">สถานะ</th>
-              <th className="text-right py-2 w-32">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id} className="border-b border-[var(--border-card)]/50">
-                <td className="py-2 text-[var(--tx-primary)]">{c.caseName}</td>
-                <td className="py-2 text-[var(--tx-primary)]">{c.defaultDays} วัน</td>
-                <td className="py-2">
-                  {c.isHidden ? (
-                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px]">
-                      ซ่อน
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px]">
-                      ใช้งาน
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 text-right space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(c)}
-                    className="text-[10px] text-sky-400 hover:underline"
-                  >
-                    แก้
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleHidden(c)}
-                    className="text-[10px] text-amber-400 hover:underline"
-                  >
-                    {c.isHidden ? 'คืน' : 'ซ่อน'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        // Phase 29.22 round-2 polish — card-shape rows instead of bare table-rows.
+        // Same pattern as RecallList: clear visual separation per row, works in
+        // both dark + light themes via --bg-card + --bd-strong + shadow-sm.
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-[1fr_96px_96px_140px] gap-2 px-4 py-2 text-[10px] uppercase tracking-wider font-bold text-[var(--tx-muted)] border-b border-[var(--bd-strong)]">
+            <div>ชื่อเคส</div>
+            <div>ระยะเวลา</div>
+            <div>สถานะ</div>
+            <div className="text-right">Actions</div>
+          </div>
+          {filtered.map((c) => (
+            <div
+              key={c.id}
+              className="grid grid-cols-[1fr_96px_96px_140px] gap-2 px-4 py-3 rounded-lg border border-[var(--bd-strong)] bg-[var(--bg-input)] shadow-md hover:shadow-lg hover:border-rose-500/50 transition-all items-center"
+            >
+              <div className="text-xs text-[var(--tx-primary)] font-medium truncate">{c.caseName}</div>
+              <div className="text-xs text-[var(--tx-primary)]">{c.defaultDays} วัน</div>
+              <div>
+                {c.isHidden ? (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/40 text-[10px] font-bold">
+                    ซ่อน
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
+                    ใช้งาน
+                  </span>
+                )}
+              </div>
+              <div className="text-right space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(c)}
+                  className="text-[11px] font-medium text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 hover:underline"
+                >
+                  แก้
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHidden(c)}
+                  className="text-[11px] font-medium text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 hover:underline"
+                >
+                  {c.isHidden ? 'คืน' : 'ซ่อน'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {editing !== null && (

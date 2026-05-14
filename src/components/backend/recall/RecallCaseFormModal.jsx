@@ -65,7 +65,7 @@ export function RecallCaseFormModal({ initial, existingCases = [], onSave, onClo
       onClick={() => !busy && onClose?.()}
     >
       <div
-        className="w-[460px] max-w-[92vw] rounded-lg border border-[var(--border-card)] bg-[var(--bg-card)] p-5 space-y-4"
+        className="w-[460px] max-w-[92vw] rounded-lg border-2 border-[var(--bd-strong)] bg-[var(--bg-card)] p-5 space-y-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-medium text-[var(--tx-heading)]">

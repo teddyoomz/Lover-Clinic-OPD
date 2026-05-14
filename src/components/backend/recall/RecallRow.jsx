@@ -3,6 +3,7 @@ import { Phone, MessageCircle, Clock } from 'lucide-react';
 import {
   getRecallStatusLabel,
   getRecallStatusColor,
+  getRecallOutcomeMeta,
   isOverdue,
 } from '../../../lib/recallResolvers.js';
 import { RecallPairBadge } from './RecallPairBadge.jsx';
@@ -58,25 +59,33 @@ export function RecallRow({
       })()
     : '--';
 
-  // Phase 29.22 visual polish — switch from "table-row border-b" to
-  // "card-shape rows with margin" so each entry is visually distinct.
-  // Maintains the dark-fire aesthetic via subtle bg + hover-pop + accent
-  // border-l for overdue/snoozed. User report: "ตารางมันมืดไปหน่อย แยก
-  // แต่ละรายการออกจากกันยาก ช่วยทำให้ตารางดูง่ายสำหรับมนุษย์กว่านี้หน่อย ให้ clear
-  // visible และยังสวยอยู่ด้วยนะ".
+  // Phase 29.22 visual polish (round 2) — light theme readability.
+  // Previous round used bg-[var(--bg-hover)] which in light mode is #f1f5f9
+  // — barely distinct from the page bg #f8fafc. Round 2: switch to
+  // bg-[var(--bg-card)] (still subtle in dark, more distinct in light when
+  // page bg is even lighter) + always-on shadow-sm for elevation +
+  // bd-strong for crisper outline. Hover: shadow-md + rose accent.
   //
-  // Tailwind note: arbitrary CSS vars don't support /opacity modifier
-  // reliably (bg-[var(--bg-hover)]/40 doesn't parse). Use solid var for base
-  // + white-with-arbitrary-alpha for hover overlay (mirrors existing
-  // RecallRow.hover:bg-white/[0.015] pattern that was already in the file).
+  // User report (round 2): "ตาราง recall ใน be ก็ยังไม่ชัด โดยเฉพาะตีม
+  // light ยิ่งไม่ชัด ไปหา skill หรือใช้เครื่องมือ design ระดับโลกมาช่วยด่วน".
+  // bg-[var(--bg-input)] (light=#fff, dark=#141414) gives stronger contrast
+  // against page bg [light=#f0f4f8 (slate-100), dark=#050505] than --bg-card
+  // would. Coupled with --bd-strong border + shadow-md for clear elevation.
   const rowClass = [
     'group grid grid-cols-[56px_1fr_auto] gap-3 transition-all cursor-pointer',
-    'rounded-lg border bg-[var(--bg-hover)]',
-    'hover:bg-white/[0.04] hover:border-rose-500/35 hover:shadow-sm',
-    snoozed ? 'opacity-60 border-dashed border-[var(--bd)]' : 'border-[var(--bd)]',
+    'rounded-lg border bg-[var(--bg-input)] shadow-md',
+    'hover:shadow-lg hover:border-rose-500/50 hover:-translate-y-[1px]',
+    snoozed ? 'opacity-65 border-dashed border-[var(--bd-strong)]' : 'border-[var(--bd-strong)]',
     over ? '!border-l-[3px] !border-l-red-500 bg-red-500/[0.06]' : '',
     compact ? 'px-3 py-2.5' : 'px-4 py-3',
   ].filter(Boolean).join(' ');
+
+  // Outcome meta — only relevant when status is done OR closed-no-answer.
+  // User request: "ใน list ที่ขึ้นว่า เสร็จแล้ว ให้แสดงเหตุผลที่ลูกค้าเลือก
+  // ไว้ด้วย" — surface what the customer chose at-a-glance, not just "เสร็จแล้ว".
+  const outcomeMeta = (recall.status === 'done' || recall.status === 'closed-no-answer')
+    ? getRecallOutcomeMeta(recall.outcome)
+    : null;
 
   return (
     <div
@@ -123,6 +132,25 @@ export function RecallRow({
               className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-red-500/15 text-red-300 border border-red-500/30"
               title="ติดต่อไม่ได้ครบ 3 ครั้ง — ต้องตรวจสอบด้วยตนเอง"
             >🚨 ตรวจสอบ</span>
+          )}
+          {/* Phase 29.22 (2026-05-14) — outcome badge on done/closed rows.
+              Shows the customer's chosen outcome (will-come / not-interested /
+              ขอเลื่อน / etc.) alongside the generic "เสร็จแล้ว" status chip
+              so admins can scan list without opening each entry. */}
+          {outcomeMeta && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded font-bold border inline-flex items-center gap-0.5"
+              style={{
+                background: outcomeMeta.color.bg,
+                borderColor: outcomeMeta.color.border,
+                color: outcomeMeta.color.text,
+              }}
+              data-testid={`recall-outcome-meta-${recall.id}`}
+              title={`เหตุผล: ${outcomeMeta.label}`}
+            >
+              <span aria-hidden="true">{outcomeMeta.emoji}</span>
+              <span>{outcomeMeta.label}</span>
+            </span>
           )}
         </div>
         <div className="text-[10px] text-[var(--tx-muted)] mt-1 line-clamp-1">{recall.reason || ''}</div>

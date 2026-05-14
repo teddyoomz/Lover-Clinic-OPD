@@ -138,6 +138,53 @@ export function getRecallStatusColor(r) {
 }
 
 /**
+ * Phase 29.22 (2026-05-14) — outcome metadata for "done"/"closed-no-answer"
+ * rows. Mirror the 5 RecallOutcomeModal options so completed recalls can
+ * surface what the customer chose at-a-glance (per user request: "ตรง list
+ * ที่ขึ้นว่า เสร็จแล้ว ให้แสดงเหตุผลที่ลูกค้าเลือกไว้ด้วย"). Used by every
+ * surface that renders a RecallRow (BE list + FE pill + CDV card).
+ *
+ * @param {string} outcome enum: will-come | reschedule | not-interested | no-answer | closed-no-answer
+ * @returns {{label:string,emoji:string,color:{bg:string,border:string,text:string}}|null}
+ */
+export function getRecallOutcomeMeta(outcome) {
+  switch (outcome) {
+    case 'will-come':
+      return {
+        label: 'จะมาตามนัด',
+        emoji: '✓',
+        color: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.40)', text: '#6ee7b7' },
+      };
+    case 'reschedule':
+      return {
+        label: 'ขอเลื่อน',
+        emoji: '⏰',
+        color: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.40)', text: '#fcd34d' },
+      };
+    case 'not-interested':
+      return {
+        label: 'ไม่สนใจ / ไม่ต้องการ',
+        emoji: '💭',
+        color: { bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.40)', text: '#a5b4fc' },
+      };
+    case 'no-answer':
+      return {
+        label: 'ติดต่อไม่ได้',
+        emoji: '📵',
+        color: { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.40)', text: '#fca5a5' },
+      };
+    case 'closed-no-answer':
+      return {
+        label: 'ปิดการติดตาม',
+        emoji: '🗂️',
+        color: { bg: 'rgba(107,114,128,0.14)', border: 'rgba(107,114,128,0.40)', text: '#9ca3af' },
+      };
+    default:
+      return null;
+  }
+}
+
+/**
  * Phase 29 — pair badge data (icon + reason + date + status suffix).
  * @param {object} paired paired recall
  * @param {string=} todayISO for overdue suffix
