@@ -5,6 +5,7 @@ import { RecallCreateModal } from './RecallCreateModal.jsx';
 import { RecallOutcomeModal } from './RecallOutcomeModal.jsx';
 import { RecallLineTemplateModal } from './RecallLineTemplateModal.jsx';
 import { RecallSnoozeMenu } from './RecallSnoozeMenu.jsx';
+import { RecallEditModal } from './RecallEditModal.jsx';
 import { RecallCasesAdminPanel } from './RecallCasesAdminPanel.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
 import { useRecallCases } from '../../../hooks/useRecallCases.js';
@@ -51,6 +52,7 @@ export function RecallTab() {
   const [outcomeModal, setOutcomeModal] = useState(null);
   const [lineModal, setLineModal] = useState(null);
   const [snoozeModal, setSnoozeModal] = useState(null);
+  const [editModal, setEditModal] = useState(null);
 
   // Filtered recalls (search by name / HN / reason)
   const filteredRecalls = useMemo(() => {
@@ -137,6 +139,11 @@ export function RecallTab() {
     }
   }, []);
 
+  const handleEdit = useCallback((id) => {
+    const recall = findRecall(id);
+    if (recall) setEditModal({ recall });
+  }, [findRecall]);
+
   const handlePairClick = useCallback((pairedId) => {
     // Future: scroll to paired recall row in list. For now, log + no-op.
     if (typeof window !== 'undefined') {
@@ -217,6 +224,7 @@ export function RecallTab() {
           onSnooze={handleSnooze}
           onPairClick={handlePairClick}
           onDelete={handleDelete}
+          onEdit={handleEdit}
         />
       )}
 
@@ -251,6 +259,14 @@ export function RecallTab() {
           recall={snoozeModal.recall}
           initialDate={snoozeModal.initialDate}
           onClose={() => setSnoozeModal(null)}
+        />
+      )}
+      {editModal && (
+        <RecallEditModal
+          recall={editModal.recall}
+          recallCases={recallCases}
+          onClose={() => setEditModal(null)}
+          onSaved={() => setEditModal(null)}
         />
       )}
     </div>
