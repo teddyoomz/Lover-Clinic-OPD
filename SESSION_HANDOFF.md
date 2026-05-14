@@ -7,11 +7,11 @@
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 28 Treatment History Redesign SHIPPED to master** · 9176 tests + 1 skipped · build clean · ~45 commits ahead of prod
+- **Date last updated**: 2026-05-14 LATE-EOD — **Phase 28 + Phase 27 saga DEPLOYED LIVE** · 9176 tests + 1 skipped · build clean · master = prod = `0389e23`
 - **Branch**: `master`
-- **Last commit**: `f557acc` test(Phase 28.11): V21 fixups for tests locking inline CDV structure
+- **Last commit**: `0389e23` docs(Phase 28): SESSION_HANDOFF + active + V-log + checkpoint
 - **Test count**: **9176 passed** + 1 skipped. 0 failures (1 known intermittent flake on Phase 17.1 cross-branch-import-rtl resolves on re-run; pre-existing).
-- **Deploy state**: **PRODUCTION = `e8086de`** (V55 brutal pre-deploy ship). Master ~45 commits ahead with Phase 27 + Phase 28. NOT YET DEPLOYED.
+- **Deploy state**: **PRODUCTION = `0389e23`** (Phase 28 deploy 2026-05-14 LATE-EOD). HTTP 200, TTFB 716ms. Vercel: `https://lover-clinic-app.vercel.app`. Firestore rules: idempotent (no Console drift). Deploy queue EMPTY.
 
 ### Session 2026-05-14 LATE EOD continued — Phase 28 Treatment History Redesign SHIPPED
 

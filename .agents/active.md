@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-14 LATE-EOD continued — Phase 28 Treatment History Redesign SHIPPED; ~45 commits ahead; NOT DEPLOYED"
-status: "master=f557acc · prod=e8086de · ~45 commits ahead · 9176 tests + 1 skip · build clean"
+updated_at: "2026-05-14 LATE-EOD continued — Phase 28 + Phase 27 saga DEPLOYED to prod (0389e23); deploy queue empty"
+status: "master=0389e23 · prod=0389e23 · IN SYNC · 9176 tests + 1 skip · build clean"
 branch: "master"
-last_commit: "f557acc test(Phase 28.11): V21 fixups for tests locking inline CDV structure"
+last_commit: "0389e23 docs(Phase 28): SESSION_HANDOFF + active + V-log + checkpoint"
 tests: 9176
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e8086de"
+production_commit: "0389e23"
 firestore_rules_version: 29
 storage_rules_version: 2
 ---
@@ -13,7 +13,7 @@ storage_rules_version: 2
 # Active Context
 
 ## State
-- master = `f557acc` · prod = `e8086de` (~45 commits ahead — Phase 27 saga + Phase 28 redesign LIVE on master only)
+- master = `0389e23` · prod = `0389e23` (IN SYNC — Phase 27 saga + Phase 28 redesign DEPLOYED LIVE)
 - Phase 28 SHIPPED: 7 new treatment-history components (Card/Header/DateHeader/Row/ExpandedBody/Stepper/Pagination) + 6 pure helpers + 3 Rule C1 extractions (formatBadgeTime / roleLabels / TreatmentDetailExpanded) + 152 new tests + 7 V21 fixups
 - CDV.jsx: 2349 → 2047 lines (−302 net) by replacing inline 290-line treatment-history block with `<TreatmentHistoryCard ... />`
 - Build clean. BackendDashboard chunk 907.60 → 914.70 KB (+7.10 KB justified)
@@ -37,9 +37,10 @@ storage_rules_version: 2
 - Checkpoint: `.agents/sessions/2026-05-14-phase-28-treatment-history-redesign.md`
 
 ## Next action
-- (idle) await user direction OR explicit "deploy" for combined V15 push of ~45 commits
+- (idle) await user direction — deploy queue EMPTY
 
 ## Outstanding user-triggered actions
-- **Deploy auth**: ~45 commits ahead; combined V15 (`vercel --prod` + `firebase deploy --only firestore:rules`) per V18 explicit "deploy" THIS turn
+- (none — deploy queue empty)
 - **(optional)** Phase 27.2-septies — extract shared `buildTreatmentSummaryEntry(t)` helper
 - **(optional)** Rule-of-3 cleanup: migrate 4+ inline `THAI_MONTHS` sites to use `formatThaiDateFull` from src/utils.js
+- **(optional)** Storage rules CLI quirk — `firebase deploy --only storage:rules` errors "Could not find rules for the following storage targets: rules" despite firebase.json having `"storage": {"rules": "storage.rules"}`. Pre-existing config issue (Phase 28 has zero storage changes — not blocking). Deferred for separate maintenance.
