@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Clock, MessageSquare, PhoneOff } from 'lucide-react';
+import { X, Check, Clock, MessageSquare, PhoneOff, Archive } from 'lucide-react';
 import { recordRecallOutcome } from '../../../lib/scopedDataLayer.js';
 
 /**
@@ -73,6 +73,22 @@ const OUTCOMES = [
   },
 ];
 
+// Phase 29.21-fix2 (2026-05-14) — 5th option shown ONLY when recall requires
+// manual review (3+ consecutive no-answers). Lets admin explicitly close
+// the recall instead of leaving it stuck in the "ต้องตรวจสอบ" sub-bucket.
+const CLOSE_OPTION = {
+  id: 'closed-no-answer',
+  label: 'ปิดการติดตาม (ติดต่อไม่ได้ครบ 3+ ครั้ง)',
+  icon: Archive,
+  emoji: '🗂️',
+  color: 'gray',
+  bg: 'bg-gray-500/10',
+  border: 'border-gray-500/40',
+  selectedBg: 'bg-gray-500/20',
+  selectedBorder: 'border-gray-500',
+  text: 'text-gray-300',
+};
+
 export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
   const [outcome, setOutcome] = useState(null);
   const [outcomeNote, setOutcomeNote] = useState('');
@@ -110,6 +126,10 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
   };
 
   const willEscalate = outcome === 'no-answer' && (recall?.noAnswerCount || 0) + 1 >= 3;
+  // Phase 29.21-fix2: show 5th close-no-answer option when admin needs to
+  // resolve a flagged recall (already past 3 no-answer strikes OR currently
+  // flagged for manual review).
+  const showCloseOption = !!recall?.requiresManualReview || (recall?.noAnswerCount || 0) >= 3;
 
   return (
     <div
@@ -168,6 +188,33 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
               );
             })}
           </div>
+
+          {/* Phase 29.21-fix2: 5th option — closed-no-answer — only when admin
+              needs to resolve a 3+ strike "ต้องตรวจสอบด้วยตนเอง" flag. Single
+              full-width card below the 2×2 grid for clarity. NO IIFE-in-JSX
+              (Rule 03 — rp1-no-iife-in-jsx test bank locks). */}
+          {showCloseOption && (
+            <button
+              type="button"
+              onClick={() => setOutcome(CLOSE_OPTION.id)}
+              data-testid={`recall-outcome-card-${CLOSE_OPTION.id}`}
+              data-selected={outcome === CLOSE_OPTION.id ? 'true' : 'false'}
+              className={`w-full mt-2 text-left p-3 rounded-lg border transition-all ${
+                outcome === CLOSE_OPTION.id
+                  ? `${CLOSE_OPTION.selectedBg} ${CLOSE_OPTION.selectedBorder} border-2`
+                  : `${CLOSE_OPTION.bg} ${CLOSE_OPTION.border} hover:${CLOSE_OPTION.selectedBg}`
+              }`}
+            >
+              <div className={`flex items-center gap-2 ${CLOSE_OPTION.text} font-bold text-xs`}>
+                <CLOSE_OPTION.icon size={14} />
+                <span>{CLOSE_OPTION.emoji}</span>
+                <span>{CLOSE_OPTION.label}</span>
+              </div>
+              <div className="text-[10px] text-[var(--tx-muted)] italic mt-1 ml-6">
+                ลูกค้าติดต่อไม่ได้ {(recall?.noAnswerCount || 0)} ครั้งแล้ว — ปิดการติดตามนี้และยกเลิก auto-snooze
+              </div>
+            </button>
+          )}
 
           {/* Auto-snooze hint (only for no-answer) */}
           {outcome === 'no-answer' && (

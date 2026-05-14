@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { X, Search } from 'lucide-react';
 import { RecallSlotCard } from './RecallSlotCard.jsx';
 import {
   validateRecallCreate,
@@ -8,6 +8,7 @@ import {
 import {
   createRecall,
   createRecallPair,
+  getAllCustomers,
 } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
 
@@ -46,7 +47,7 @@ import { thaiTodayISO } from '../../../utils.js';
  *   Parent decides target collection (be_products / be_courses).
  */
 export function RecallCreateModal({
-  customer,
+  customer: customerProp,
   treatmentContext = null,
   sourceContext = null,
   masterDataSuggestions = {},
@@ -55,6 +56,61 @@ export function RecallCreateModal({
   onSaveToMaster,
 }) {
   const todayISO = thaiTodayISO();
+
+  // Phase 29.21-fix2 (2026-05-14) — customer picker for standalone-launch case.
+  // When opened from Backend "+ ตั้ง Recall ใหม่" or Frontend pill,
+  // customerProp = null; admin needs to search + pick a customer first.
+  // When opened from CDV / treatment-history-chip, customerProp is pre-filled
+  // → search UI hidden; header shows customer immediately.
+  const [pickedCustomer, setPickedCustomer] = useState(null);
+  const customer = customerProp || pickedCustomer;
+
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [allCustomers, setAllCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+
+  // Lazy-load customers ONLY when no customer pre-filled (saves a heavy fetch
+  // when modal is launched from CDV / treatment-history context).
+  useEffect(() => {
+    if (customerProp) return; // already have one — skip fetch
+    if (allCustomers.length > 0) return; // already loaded
+    setCustomersLoading(true);
+    getAllCustomers()
+      .then((c) => setAllCustomers(c || []))
+      .catch((err) => {
+        console.error('[RecallCreateModal] getAllCustomers failed:', err);
+        setAllCustomers([]);
+      })
+      .finally(() => setCustomersLoading(false));
+  }, [customerProp, allCustomers.length]);
+
+  const filteredCustomers = useMemo(() => {
+    if (customer) return []; // already picked
+    if (!customerSearch.trim()) return allCustomers.slice(0, 30);
+    const q = customerSearch.trim().toLowerCase();
+    return allCustomers
+      .filter((c) => {
+        const pd = c?.patientData || {};
+        const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim().toLowerCase();
+        const hn = String(c?.proClinicHN || c?.hn || '').toLowerCase();
+        const phone = String(pd.phone || c?.phone || '').toLowerCase();
+        return name.includes(q) || hn.includes(q) || phone.includes(q);
+      })
+      .slice(0, 30);
+  }, [allCustomers, customerSearch, customer]);
+
+  const _shapeCustomer = (c) => {
+    const pd = c?.patientData || {};
+    const fullName = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim();
+    return {
+      id: c.id || c.proClinicId || '',
+      displayName: fullName,
+      name: fullName,
+      phone: pd.phone || c?.phone || '',
+      lineUserId: c?.lineUserId || null,
+      hn: c?.proClinicHN || c?.hn || null,
+    };
+  };
 
   // Initialize each slot — auto-suggest pre-fill when master data exists.
   const initSlot = useCallback((slotType) => {
@@ -227,33 +283,113 @@ export function RecallCreateModal({
         </div>
 
         <div className="p-4 space-y-3">
-          {/* Customer header */}
-          <div className="p-3 rounded-lg bg-teal-500/[0.06] border border-teal-500/25">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-teal-500/20 flex items-center justify-center text-[11px] font-bold text-teal-300 flex-shrink-0">
-                {(customer?.displayName || customer?.name || '?')[0]}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-bold text-[var(--tx-primary)]">{customer?.displayName || customer?.name || '—'}</span>
-                  {customer?.id && (
-                    <span className="font-mono text-[9px] text-[var(--tx-muted)]">{customer.id}</span>
+          {/* Customer header / picker
+              Phase 29.21-fix2: when no customer pre-filled, show search input
+              + filtered list. Once picked (or pre-filled), show header. */}
+          {customer ? (
+            <div className="p-3 rounded-lg bg-teal-500/[0.06] border border-teal-500/25">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-full bg-teal-500/20 flex items-center justify-center text-[11px] font-bold text-teal-300 flex-shrink-0">
+                  {(customer.displayName || customer.name || '?')[0]}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-bold text-[var(--tx-primary)]" data-testid="recall-create-customer-name">
+                      {customer.displayName || customer.name || '—'}
+                    </span>
+                    {customer.id && (
+                      <span className="font-mono text-[9px] text-[var(--tx-muted)]">{customer.id}</span>
+                    )}
+                    {customer.lineUserId && (
+                      <span className="text-[8px] px-1 py-0 bg-green-500/15 text-green-300 border border-green-500/30 rounded font-bold">L</span>
+                    )}
+                    {/* Allow changing pick when admin chose the wrong customer (only when not pre-filled by parent) */}
+                    {!customerProp && (
+                      <button
+                        type="button"
+                        onClick={() => setPickedCustomer(null)}
+                        data-testid="recall-create-customer-clear"
+                        className="ml-auto text-[var(--tx-muted)] hover:text-red-400 text-[10px]"
+                        aria-label="เลือกลูกค้าใหม่"
+                        title="เลือกลูกค้าใหม่"
+                      >
+                        เปลี่ยน
+                      </button>
+                    )}
+                  </div>
+                  {customer.phone && (
+                    <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 {customer.phone}</div>
                   )}
-                  {customer?.lineUserId && (
-                    <span className="text-[8px] px-1 py-0 bg-green-500/15 text-green-300 border border-green-500/30 rounded font-bold">L</span>
+                  {customer.hn && (
+                    <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">HN {customer.hn}</div>
+                  )}
+                  {treatmentContext && (
+                    <div className="text-[10px] text-teal-300 mt-0.5">
+                      จากการรักษา {treatmentContext.date || ''} · {treatmentContext.summary || ''}
+                    </div>
                   )}
                 </div>
-                {customer?.phone && (
-                  <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 {customer.phone}</div>
-                )}
-                {treatmentContext && (
-                  <div className="text-[10px] text-teal-300 mt-0.5">
-                    จากการรักษา {treatmentContext.date || ''} · {treatmentContext.summary || ''}
-                  </div>
-                )}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-[var(--bg-surface)] border border-[var(--bd)]">
+              <label className="block text-[10px] font-bold text-[var(--tx-muted)] mb-1.5 uppercase tracking-wider">
+                เลือกลูกค้า <span className="text-red-300">*</span>
+              </label>
+              <div className="relative">
+                <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--tx-muted)] pointer-events-none" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder={customersLoading ? 'กำลังโหลดลูกค้า...' : 'ค้นหา (ชื่อ / HN / เบอร์โทร)'}
+                  disabled={customersLoading}
+                  data-testid="recall-create-customer-search"
+                  autoFocus
+                  className="w-full pl-7 pr-2 py-2 rounded-lg text-xs bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] placeholder-[var(--tx-muted)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
+                />
+              </div>
+              {/* Filtered customer list */}
+              {!customersLoading && filteredCustomers.length > 0 && (
+                <div
+                  className="mt-1.5 max-h-48 overflow-y-auto border border-[var(--bd)] rounded-lg bg-[var(--bg-card)]"
+                  data-testid="recall-create-customer-list"
+                >
+                  {filteredCustomers.map((c) => {
+                    const pd = c?.patientData || {};
+                    const name = `${pd.prefix || ''} ${pd.firstName || ''} ${pd.lastName || ''}`.trim() || '—';
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setPickedCustomer(_shapeCustomer(c))}
+                        data-testid={`recall-create-customer-pick-${c.id}`}
+                        className="w-full px-3 py-2 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between gap-2 border-b border-[var(--bd)] last:border-b-0"
+                      >
+                        <span className="text-[var(--tx-primary)] truncate flex-1">
+                          {name}
+                          {c.lineUserId && (
+                            <span className="ml-1.5 inline-block text-[8px] px-1 py-0 bg-green-500/15 text-green-300 border border-green-500/30 rounded font-bold align-middle">L</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] font-mono text-[var(--tx-muted)] flex-shrink-0">
+                          {c.proClinicHN || c.hn || ''} {pd.phone ? `· ${pd.phone}` : ''}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {!customersLoading && customerSearch.trim() && filteredCustomers.length === 0 && (
+                <div
+                  className="mt-1.5 px-3 py-2 text-[11px] text-[var(--tx-muted)] italic"
+                  data-testid="recall-create-customer-no-results"
+                >
+                  ไม่พบลูกค้าที่ตรงกับคำค้น "{customerSearch}"
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Slot 1 */}
           <RecallSlotCard

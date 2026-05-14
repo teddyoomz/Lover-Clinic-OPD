@@ -11238,6 +11238,19 @@ export async function updateRecall(id, patch = {}) {
  *
  * Pass `currentNoAnswerCount` for accurate increment (caller already has
  * the value from the listened recall doc — avoids re-read).
+ *
+ * Phase 29.21-fix2 (2026-05-14) — semantic fixes:
+ *   - 'reschedule' outcome: keep status='pending' (NOT 'done'). Caller
+ *     then opens SnoozeMenu so admin picks new date; snoozeRecall sets
+ *     snoozedUntil. Net effect: recall stays pending but shifted to
+ *     new date. Single doc semantic — spec §5.5 "creates new recall"
+ *     interpretation deferred for simpler UX.
+ *   - 'closed-no-answer' outcome: status='closed-no-answer', preserves
+ *     noAnswerCount + requiresManualReview audit trail. Admin uses
+ *     this to retire a recall that's been no-answer 3+ times.
+ *   - For non-no-answer outcomes (will-come / not-interested /
+ *     closed-no-answer), RESET noAnswerCount=0 + requiresManualReview=false
+ *     so a future re-open + new no-answer cycle starts clean.
  */
 export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoAnswerCount = 0 } = {}) {
   const me = _resolveRecallAttribution();
@@ -11258,8 +11271,24 @@ export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoA
     const snoozeMs = Date.now() + 3 * 86400000;
     const sd = new Date(snoozeMs);
     patch.snoozedUntil = `${sd.getUTCFullYear()}-${String(sd.getUTCMonth() + 1).padStart(2, '0')}-${String(sd.getUTCDate()).padStart(2, '0')}`;
+  } else if (outcome === 'reschedule') {
+    // Phase 29.21-fix2: keep status='pending'. Caller opens SnoozeMenu
+    // → snoozeRecall sets snoozedUntil. Outcome 'reschedule' stamped for
+    // audit but recall remains an actionable item until admin marks done.
+    patch.status = 'pending';
+    patch.noAnswerCount = 0;
+    patch.requiresManualReview = false;
+  } else if (outcome === 'closed-no-answer') {
+    // Phase 29.21-fix2: admin explicitly retires a no-answer chain (typically
+    // after 3+ strikes flagged via requiresManualReview).
+    patch.status = 'closed-no-answer';
+    // Preserve noAnswerCount + requiresManualReview for audit (no reset).
   } else {
+    // will-come / not-interested → done. Reset no-answer accounting so
+    // any future re-open starts clean.
     patch.status = 'done';
+    patch.noAnswerCount = 0;
+    patch.requiresManualReview = false;
   }
   await updateDoc(recallDoc(id), patch);
 }
