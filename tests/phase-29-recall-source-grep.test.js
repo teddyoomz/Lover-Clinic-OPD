@@ -303,3 +303,40 @@ describe('Phase 29 · SG13 — be_recalls firestore rules + indexes locked', () 
     expect(recallIndexes).toHaveLength(4);
   });
 });
+
+describe('Phase 29 · SG14 — index-building error UX safety net (Phase 29.21-fix1, 2026-05-14)', () => {
+  // Class-of-bug: "compound query deployed before index ready" is a real-world
+  // failure mode that test-mocks can't catch. User reported scary English
+  // "The query requires an index... currently building" banner in ~5 min after
+  // deploy. SG14 locks the friendly Thai message + classifier + smoke script.
+  it('SG14.1 useRecallListener has _classifyError helper with index-building detection', () => {
+    const c = read('src/hooks/useRecallListener.js');
+    expect(c).toMatch(/_classifyError|classifyError/);
+    expect(c).toMatch(/index/i);
+    expect(c).toMatch(/building/i);
+  });
+
+  it('SG14.2 useRecallListener returns errorClass field for surfaces to detect transient class', () => {
+    const c = read('src/hooks/useRecallListener.js');
+    expect(c).toMatch(/errorClass/);
+    expect(c).toMatch(/'index-building'/);
+  });
+
+  it('SG14.3 Friendly Thai message present when index-building detected', () => {
+    const c = read('src/hooks/useRecallListener.js');
+    expect(c).toMatch(/ระบบกำลังเตรียมพร้อม/);
+    expect(c).toMatch(/2-5 นาที/);
+  });
+
+  it('SG14.4 phase-29-recall-index-smoke.mjs script exists (pre-deploy real-query smoke)', () => {
+    expect(readSafe('scripts/phase-29-recall-index-smoke.mjs')).toContain('be_recalls');
+    expect(readSafe('scripts/phase-29-recall-index-smoke.mjs')).toMatch(/Phase 29\.21-fix1|compound query/);
+  });
+
+  it('SG14.5 smoke script tests all 3 distinct compound query shapes (branchId / customerId / branchId+status)', () => {
+    const c = read('scripts/phase-29-recall-index-smoke.mjs');
+    expect(c).toMatch(/branchId.*recallDate/);
+    expect(c).toMatch(/customerId.*recallDate/);
+    expect(c).toMatch(/where.*status/);
+  });
+});
