@@ -2878,26 +2878,52 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             // (mirrors confirmCreateDeposit kiosk pattern).
             linkedAppointmentId: apptResult.appointmentId,
             appointmentSyncStatus: 'done',
+            appointmentSyncError: null, // clear stale error from previous failed attempts
           });
           showToast('สร้างคิวจองไม่มัดจำ + นัดหมายสำเร็จ!');
         } else {
+          // Phase 29.23-bis4 (2026-05-14) — diagnostic logging. createBackendAppointment
+          // contract returns {appointmentId, success:true} on success; this branch
+          // should be unreachable, but lock evidence in case the contract drifts.
+          console.error('[confirmCreateNoDeposit] createBackendAppointment returned no appointmentId. apptResult=', apptResult, 'payload=', { date: noDepositFormData.appointmentDate, startTime: noDepositFormData.appointmentStartTime, endTime: noDepositFormData.appointmentEndTime, doctorId: noDepositFormData.doctor, branchId: selectedBranchId });
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
             appointmentSyncStatus: 'failed',
-            appointmentSyncError: 'No appointmentId returned',
+            appointmentSyncError: 'createBackendAppointment returned no appointmentId (check DevTools console)',
           });
           showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ');
         }
       } catch (apptErr) {
+        // Phase 29.23-bis4 (2026-05-14) — surface the actual error. Pre-bis4
+        // the catch swallowed everything silently and only stamped a sanitized
+        // message in Firestore — admin saw "sync ล้มเหลว" with no diagnostic
+        // path. User report 2026-05-14: "sync ล้มเหลวทุกครั้งที่กดสร้างนัด
+        // ประเภทจองไม่มัดจำ". Without console output we couldn't identify the
+        // exact failure path (AP1_COLLISION? Firestore permission?
+        // runTransaction abort? etc.). console.error preserves the full
+        // error object including stack trace + custom fields like
+        // err.code / err.collision / err.slotKey.
+        console.error('[confirmCreateNoDeposit] appointment sync failed:', apptErr, 'payload=', {
+          date: noDepositFormData.appointmentDate,
+          startTime: noDepositFormData.appointmentStartTime,
+          endTime: noDepositFormData.appointmentEndTime,
+          doctorId: noDepositFormData.doctor,
+          branchId: selectedBranchId,
+          sessionId,
+        });
+        const friendlyError = apptErr?.code === 'AP1_COLLISION'
+          ? `ช่วงเวลานี้มีนัดอยู่แล้ว: ${apptErr.collision?.startTime || ''}-${apptErr.collision?.endTime || ''}`
+          : (apptErr?.message || String(apptErr));
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
           appointmentSyncStatus: 'failed',
-          appointmentSyncError: apptErr?.code === 'AP1_COLLISION'
-            ? `ช่วงเวลานี้มีนัดอยู่แล้ว: ${apptErr.collision?.startTime || ''}-${apptErr.collision?.endTime || ''}`
-            : (apptErr?.message || String(apptErr)),
+          appointmentSyncError: friendlyError,
+          // Phase 29.23-bis4 — also stamp error code + stack for backend audit
+          appointmentSyncErrorCode: apptErr?.code || null,
+          appointmentSyncErrorStack: typeof apptErr?.stack === 'string' ? apptErr.stack.slice(0, 1000) : null,
         });
         if (apptErr?.code === 'AP1_COLLISION') {
           showToast('สร้างคิวสำเร็จ แต่ช่วงเวลานัดหมายชนกับนัดอื่น');
         } else {
-          showToast('สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ');
+          showToast(`สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ: ${friendlyError}`);
         }
       }
     } catch (e) {
@@ -6483,7 +6509,21 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.appointmentData.appointmentStartTime && <span>{session.appointmentData.appointmentStartTime}{session.appointmentData.appointmentEndTime ? ` - ${session.appointmentData.appointmentEndTime}` : ''}</span>}
                           {renderDoctorLabel(depositOptions?.doctors, session.appointmentData.doctor)}
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
-                          {session.appointmentSyncStatus === 'failed' && <span className="text-red-400">sync ล้มเหลว</span>}
+                          {session.appointmentSyncStatus === 'failed' && (
+                            /* Phase 29.23-bis4 (2026-05-14) — hover tooltip
+                               surfaces the actual appointmentSyncError so
+                               admin can self-diagnose without DevTools.
+                               Pre-bis4 the label was opaque "sync ล้มเหลว"
+                               with the error message hidden in Firestore. */
+                            <span
+                              className="text-red-400 cursor-help underline decoration-dotted decoration-red-500/40"
+                              title={session.appointmentSyncError
+                                ? `ข้อผิดพลาด: ${session.appointmentSyncError}${session.appointmentSyncErrorCode ? `\nโค้ด: ${session.appointmentSyncErrorCode}` : ''}\n\nลองอีกครั้งโดยกด "แก้ไขนัด" แล้วบันทึก หรือเปิด DevTools Console เพื่อดูรายละเอียดเพิ่มเติม`
+                                : 'sync ล้มเหลว (ไม่มีรายละเอียด — เปิด DevTools Console เพื่อดูข้อผิดพลาด)'}
+                            >
+                              sync ล้มเหลว ⚠
+                            </span>
+                          )}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-orange-500">กำลัง sync...</span>}
                           <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; const parsed = parseVisitPurposeText(a.visitPurpose || [], a.visitPurposeOther || ''); setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: parsed.purposes, visitPurposeOther: parsed.other, customerNameTemp: a.customerNameTemp || '', customerPhoneTemp: a.customerPhoneTemp || '' }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>
                         </div>
