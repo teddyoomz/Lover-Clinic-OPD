@@ -24,6 +24,7 @@ import { RecallEmptyState } from './RecallEmptyState.jsx';
  * @param {function} [props.onLineSend] (recallId)
  * @param {function} [props.onSnooze] (recallId)
  * @param {function} [props.onPairClick] (pairedRecallId)
+ * @param {function} [props.onEdit] (recallId) → open edit modal
  * @param {React.ReactNode} [props.emptyState] custom empty state (default RecallEmptyState)
  */
 export function RecallList({
@@ -36,6 +37,7 @@ export function RecallList({
   onSnooze,
   onPairClick,
   onDelete,
+  onEdit,
   emptyState = null,
 }) {
   // Bucket grouping — Bangkok-stable, recalls array reference is the key
@@ -99,6 +101,7 @@ export function RecallList({
                   onSnooze={onSnooze}
                   onPairClick={onPairClick}
                   onDelete={onDelete}
+                  onEdit={onEdit}
                 />
               ))}
             </div>
