@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV43)
+## Invariants (AV1–AV44)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -1266,6 +1266,44 @@ expect(match[1]).toBe('false');
 **Origin**: Brainstorming Q1-Q6 (2026-05-14) + spec `docs/superpowers/specs/2026-05-14-selective-make-fresh-and-backup-integrity-design.md`. Verified via Rule Q L2: `scripts/e2e-backup-restore-roundtrip-real-prod.mjs --apply` on real prod, 10/10 scenarios PASS with hash byte-equal at every phase boundary.
 
 **Lesson**: When V40 introduced "destructive op needs auto-backup" (AV19), the contract assumed the backup file was internally consistent. Real-world Storage uploads can bit-flip, schema can drift, file can be tampered. Hash verification at the read-side (recompute + compare with file.meta.bodyHash) closes the integrity gap. The 10-scenario round-trip e2e proved the contract holds across adversarial inputs (Thai/Unicode/Timestamps/refs/large/nested/non-finite/empty).
+
+### AV44 — Central-stock destructive ops MUST go through bucket schema + assertWarehouseMasterProtected + hash verify (Central-Stock Make-Fresh, 2026-05-15)
+
+**Trigger**: Any destructive endpoint accepting warehouseIds + bucketIds (currently `/api/admin/central-stock-make-fresh`) AND UI calling it (`CentralMakeFreshModal`).
+
+**Pattern**: UI MUST send `warehouseIds[]` (OR `allWarehouses:true`) + `bucketIds[]` — NOT raw collection names. Server MUST `resolveCentralBucketScope` + `assertWarehouseMasterProtected` (defense-in-depth) BEFORE any wipe. Server MUST `computeBodyHash` + verify against `file.meta.bodyHash` BEFORE `batch.delete`. Hash mismatch aborts with `BACKUP_INTEGRITY_FAIL`. `be_central_stock_warehouses` (warehouse master) is PERMANENTLY exempt — never in any bucket.
+
+**Why architectural**: Mirror of AV43 for branch make-fresh. Same architectural backstop applied to warehouse scope. Combined with V40 AV19 (auto-backup precondition) the contract guarantees byte-equal round-trip integrity.
+
+**Grep targets**:
+- `api/admin/central-stock-make-fresh.js` MUST contain `assertWarehouseMasterProtected(` + `computeBodyHash(` + `BACKUP_INTEGRITY_FAIL` + `SCOPE_MISMATCH` + `WAREHOUSE_MISMATCH`
+- The string index of `error: 'BACKUP_INTEGRITY_FAIL'` (return statement) MUST be LESS THAN the string index of the first `batch.delete(` call (hash check happens BEFORE any delete)
+- `api/admin/central-stock-backup-export.js` MUST contain `assertWarehouseMasterProtected(` + emit `file.meta.scopeKind = 'central'` + `file.meta.warehouseIds`
+- UI files (`CentralMakeFreshModal.jsx`) MUST send `warehouseIds:` or `allWarehouses:` (not `collections:`) in API request bodies
+- UI MUST import `CENTRAL_BUCKETS` from `src/lib/centralStockBuckets.js` (single source of truth)
+- `centralStockBuckets.CENTRAL_BUCKETS.<bucket>.defaultChecked` MUST all be `true` (no opt-in-only in central — distinct from branch Bucket 7 customerActivity)
+- No bucket in CENTRAL_BUCKETS may include `be_central_stock_warehouses` (verified via CSG3 source-grep)
+
+**Sanctioned exceptions**: NONE. Every selective-destructive central-stock endpoint must follow the pattern.
+
+**Companion AV**: AV19 (V40 auto-backup precondition — base layer); AV43 (branch make-fresh hash verify); AV44 extends to central scope.
+
+**Source-grep regression** (`tests/central-stock-make-fresh-source-grep.test.js`):
+```js
+// CSG2.4 — hash compare BEFORE batch.delete (CRITICAL ordering)
+const hashErrIdx = makeFreshCode.indexOf("error: 'BACKUP_INTEGRITY_FAIL'");
+const wipeIdx = makeFreshCode.indexOf('batch.delete(');
+expect(hashErrIdx).toBeLessThan(wipeIdx);
+
+// CSG3.2 — all 4 central buckets defaultChecked=true
+const matches = [...code.matchAll(/defaultChecked:\s*(true|false)/g)];
+expect(matches.length).toBe(4);
+for (const m of matches) expect(m[1]).toBe('true');
+```
+
+**Origin**: Brainstorming Q1-Q3 (2026-05-15) + spec `docs/superpowers/specs/2026-05-15-central-stock-make-fresh-and-integrity-design.md`. Verified via Rule Q L2: `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` on real prod, 5/5 scenarios PASS with hash byte-equal + warehouse master intact across all scenarios.
+
+**Lesson**: V40 introduced "destructive op needs auto-backup" (AV19). AV43 added cryptographic integrity for branch scope. AV44 closes the central stock surface with the same architectural backstop. The 5-scenario round-trip e2e proved the contract holds across adversarial inputs (Thai/Unicode/Timestamps/cross-warehouse refs/large/nested/counter doc preservation).
 
 ## How to run
 
