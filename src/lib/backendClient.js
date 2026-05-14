@@ -2013,9 +2013,34 @@ export async function createBackendAppointment(data) {
   const now = new Date().toISOString();
   // Strip the gate flag so it never leaks into the persisted doc.
   const { skipServerCollisionCheck: _stripGate, ...persistData } = data || {};
+  // Phase 29.23-bis5 (2026-05-14) — auto-stamp branchId via the canonical
+  // _resolveBranchIdForWrite helper. PRE-bis5 BUG: confirmCreateNoDeposit /
+  // confirmCreateDeposit passed `branchId: selectedBranchId || ''` from the
+  // form; when selectedBranchId was unresolved at write time (e.g. early
+  // mount, race with BranchContext), the be_appointments doc was written
+  // with `branchId: ''` (or missing entirely after spread quirks). Result:
+  // ORPHAN appointments invisible in branch-scoped UI but still triggering
+  // AP1_COLLISION via the allBranches:true collision scan — admin saw
+  // "sync ล้มเหลว" with no visible conflicting appointment. Diagnosed via
+  // Rule R admin-SDK probe 2026-05-14 (BA-1778770705076 incident).
+  // Fix: force-resolve via _resolveBranchIdForWrite before write. Same
+  // helper used by all branch-scoped writers (BSA writers Task 1-2).
+  const resolvedBranchId = _resolveBranchIdForWrite(persistData);
+  if (resolvedBranchId && persistData.branchId !== resolvedBranchId) {
+    // Log when we had to backfill — helps identify callers that aren't
+    // stamping branchId explicitly. Non-blocking.
+    if (!persistData.branchId) {
+      console.warn(`[createBackendAppointment] auto-stamping branchId=${resolvedBranchId} (caller did not provide). appointmentId=${appointmentId}`);
+    }
+  }
   const apptPayload = {
     appointmentId,
     ...persistData,
+    // OVERWRITE branchId (after spread) so any caller-passed empty string
+    // gets replaced with the resolved value. Falls back to null only if
+    // resolveSelectedBranchId() also returns falsy — that case fails the
+    // explicit-branchId invariant added below.
+    branchId: resolvedBranchId || persistData.branchId || '',
     createdAt: now,
     updatedAt: now,
   };

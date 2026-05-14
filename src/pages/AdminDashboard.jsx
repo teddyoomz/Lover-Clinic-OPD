@@ -2921,7 +2921,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           appointmentSyncErrorStack: typeof apptErr?.stack === 'string' ? apptErr.stack.slice(0, 1000) : null,
         });
         if (apptErr?.code === 'AP1_COLLISION') {
-          showToast('สร้างคิวสำเร็จ แต่ช่วงเวลานัดหมายชนกับนัดอื่น');
+          // Phase 29.23-bis5 (2026-05-14) — surface the collision time in the
+          // toast so admin can fix immediately without inspecting Firestore.
+          // Root-cause-confirmed via Rule R admin-SDK diag 2026-05-14: every
+          // user-reported "sync ล้มเหลว" in the recent batch was a
+          // legitimate double-booking guard firing for an existing
+          // confirmed appointment on the same doctor + overlapping range.
+          const collisionRange = apptErr?.collision
+            ? `${apptErr.collision.startTime || '?'}-${apptErr.collision.endTime || '?'}`
+            : '';
+          showToast(`❌ จองไม่สำเร็จ: หมอมีนัดอยู่แล้วช่วง ${collisionRange} กรุณาเลือกเวลาอื่น`);
         } else {
           showToast(`สร้างคิวสำเร็จ แต่สร้างนัดหมายไม่สำเร็จ: ${friendlyError}`);
         }
@@ -2996,6 +3005,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         || '',
       customerNameTemp: noDepositFormData.customerNameTemp?.trim() || '',
       customerPhoneTemp: noDepositFormData.customerPhoneTemp?.trim() || '',
+      // Phase 29.23-bis5 (2026-05-14) — explicit branchId stamp. PRE-bis5 BUG:
+      // this payload was missing branchId entirely; the create-retry path
+      // at line ~3076 (when session.appointmentProClinicId is empty after
+      // a prior failed create) fed it to createBackendAppointment WITHOUT
+      // branchId → be_appointments doc was written without branchId →
+      // ORPHAN invisible in branch-scoped UI but still triggering
+      // AP1_COLLISION via allBranches:true scan. Root cause confirmed via
+      // Rule R admin-SDK probe 2026-05-14 — BA-1778770705076 was such an
+      // orphan, deleted via cleanup-orphan-empty-branchid-appointments.mjs.
+      // Defense in depth: createBackendAppointment now also auto-stamps via
+      // _resolveBranchIdForWrite, but explicit here keeps the payload
+      // self-describing + makes the edit-cascade syncAppointmentToLinkedDeposit
+      // path (line ~3043+) carry branchId too.
+      branchId: selectedBranchId || session.branchId || '',
     };
 
     try {
@@ -6511,18 +6534,39 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           {session.appointmentProClinicId && <span className="text-green-500 font-mono">ID:{session.appointmentProClinicId}</span>}
                           {session.appointmentSyncStatus === 'failed' && (
                             /* Phase 29.23-bis4 (2026-05-14) — hover tooltip
-                               surfaces the actual appointmentSyncError so
-                               admin can self-diagnose without DevTools.
-                               Pre-bis4 the label was opaque "sync ล้มเหลว"
-                               with the error message hidden in Firestore. */
-                            <span
-                              className="text-red-400 cursor-help underline decoration-dotted decoration-red-500/40"
-                              title={session.appointmentSyncError
-                                ? `ข้อผิดพลาด: ${session.appointmentSyncError}${session.appointmentSyncErrorCode ? `\nโค้ด: ${session.appointmentSyncErrorCode}` : ''}\n\nลองอีกครั้งโดยกด "แก้ไขนัด" แล้วบันทึก หรือเปิด DevTools Console เพื่อดูรายละเอียดเพิ่มเติม`
-                                : 'sync ล้มเหลว (ไม่มีรายละเอียด — เปิด DevTools Console เพื่อดูข้อผิดพลาด)'}
-                            >
-                              sync ล้มเหลว ⚠
-                            </span>
+                               surfaces appointmentSyncError so admin can
+                               self-diagnose without DevTools.
+                               Phase 29.23-bis5 (2026-05-14) — show the
+                               COLLISION TIME directly in the label (not
+                               only on hover) when error code is
+                               AP1_COLLISION. Root-cause diagnosis via Rule R
+                               admin-SDK probe: the actual failure is a
+                               legitimate double-booking guard — admin
+                               doesn't know WHEN it conflicts unless we
+                               surface the conflicting time inline. */
+                            (() => {
+                              const isCollision = session.appointmentSyncErrorCode === 'AP1_COLLISION';
+                              // Try to parse the time range from the error message
+                              // "ช่วงเวลานี้มีนัดอยู่แล้ว: 13:45-16:45"
+                              const collisionTimeMatch = isCollision && typeof session.appointmentSyncError === 'string'
+                                ? session.appointmentSyncError.match(/(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/)
+                                : null;
+                              const label = collisionTimeMatch
+                                ? `⚠ นัดชน ${collisionTimeMatch[1]}-${collisionTimeMatch[2]}`
+                                : 'sync ล้มเหลว ⚠';
+                              const tooltip = session.appointmentSyncError
+                                ? `${session.appointmentSyncError}${session.appointmentSyncErrorCode ? `\nโค้ด: ${session.appointmentSyncErrorCode}` : ''}\n\nลองอีกครั้งโดยกด "แก้ไขนัด" แล้วเลือกเวลาใหม่ที่ไม่ชนกับนัดเดิม`
+                                : 'sync ล้มเหลว (ไม่มีรายละเอียด — เปิด DevTools Console เพื่อดูข้อผิดพลาด)';
+                              return (
+                                <span
+                                  className={`cursor-help underline decoration-dotted ${isCollision ? 'text-amber-400 decoration-amber-500/50' : 'text-red-400 decoration-red-500/40'}`}
+                                  title={tooltip}
+                                  data-error-code={session.appointmentSyncErrorCode || undefined}
+                                >
+                                  {label}
+                                </span>
+                              );
+                            })()
                           )}
                           {session.appointmentSyncStatus === 'pending' && <span className="text-orange-500">กำลัง sync...</span>}
                           <button onClick={() => { if (!depositOptions) fetchDepositOptions(); setEditingAppointment(session.id); const a = session.appointmentData || {}; const parsed = parseVisitPurposeText(a.visitPurpose || [], a.visitPurposeOther || ''); setNoDepositFormData({ sessionName: session.sessionName || '', appointmentDate: a.appointmentDate || todayISO(), appointmentStartTime: a.appointmentStartTime || '', appointmentEndTime: a.appointmentEndTime || '', advisor: a.advisor || '', doctor: a.doctor || '', assistant: a.assistant || '', room: a.room || '', source: a.source || '', visitPurpose: parsed.purposes, visitPurposeOther: parsed.other, customerNameTemp: a.customerNameTemp || '', customerPhoneTemp: a.customerPhoneTemp || '' }); setShowNoDepositForm(true); }} className={`font-bold underline underline-offset-2 ml-1 ${isDark ? 'text-orange-400 hover:text-orange-300' : 'text-pink-500 hover:text-pink-600'}`}>แก้ไขนัด</button>

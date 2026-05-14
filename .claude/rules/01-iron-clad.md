@@ -245,6 +245,41 @@ When the user authorizes ANY data manipulation against production Firestore — 
 
 **Lesson lock**: V15 #22 Phase 19.0 (2026-05-06) — the migration script had two latent bugs (PEM-parse + bare-collection-path) that ONLY surfaced at LIVE execution time. Both were caught + fixed in <10 minutes because the run was local + admin-SDK (not deploy-coupled). Had this been a UI-triggered migration, the fix would have required a redeploy + new probe cycle. Local-first wins on iteration speed AND blast-radius control.
 
+### R. Diagnostic env-pull authorization for testing/debugging (iron-clad 2026-05-14)
+
+User directive (verbatim, 2026-05-14): **"อนุญาตให้ pull env จาก vercel ได้เต็มรูปแบบเพื่อเทส ในโปรเจ็คนี้ ใส่ไว้ในกฎได้เลย"**.
+
+This is **standing authorization** for the LoverClinic project — Claude MAY pull production env via `vercel env pull .env.local.prod --environment=production` AT ANY TIME for read-only diagnosis / testing / investigation purposes. NO per-turn re-confirmation needed.
+
+Rule M (data ops) covers MUTATION authorization (edit/migrate/delete/create). Rule R covers READ-ONLY diagnosis. Together they cover the full "test against real prod" workflow.
+
+**When Rule R applies**:
+- Diagnosing a user-reported bug (e.g. "sync ล้มเหลวทุกครั้ง" — pull env, query opd_sessions where appointmentSyncStatus='failed', read the actual error)
+- Auditing data state (e.g. "are there orphan be_appointment_slots without parent be_appointments?")
+- Verifying a fix landed correctly in prod data (post-deploy verification)
+- Investigating cross-document consistency (e.g. linkedAppointmentId points to existing be_appointments doc?)
+- Reproducing a bug locally with real prod data shape
+
+**Required workflow** (mirrors Rule M minus the mutation steps):
+1. **Pull env** (if not already pulled this session): `vercel env pull .env.local.prod --environment=production`
+2. **Use admin SDK** (firebase-admin) — bypasses rules + reaches all paths
+3. **Use canonical paths**: `artifacts/{APP_ID}/public/data/{collection}` — `APP_ID = 'loverclinic-opd-4c39b'`
+4. **PEM key conversion**: same as Rule M — `key.split('\\n').join('\n')` before `cert(...)`
+5. **Invocation guard**: every `.mjs` script wraps `main()` in `if (process.argv[1] === fileURLToPath(import.meta.url))` so unit-test imports don't auto-trigger Firebase init
+6. **READ-ONLY** by default — script names: `diag-*` / `audit-*` / `investigate-*`. NO writes without explicit Rule M escalation
+7. **Output to console** — no Firestore writes for read-only investigation
+8. **Capture findings** — paste relevant doc data into the chat / commit message so the diagnosis is auditable
+
+**Anti-patterns** (forbidden under Rule R):
+- ❌ Running a `diag-*` script that secretly mutates data — escalates to Rule M, needs explicit user authorization for the mutation
+- ❌ Pulling env then using bare REST (no firebase-admin) — defeats the purpose; admin SDK is the canonical
+- ❌ Logging `FIREBASE_ADMIN_PRIVATE_KEY` to console / committing to git — secret hygiene
+- ❌ Pulling env then leaving `.env.local.prod` in a committed file — `.env.local.prod` is in `.gitignore` (V41 lesson — leaked .env.local once already; never again)
+
+**When the user requests mutation** (edit/migrate/delete based on the diagnostic findings): escalate to Rule M (two-phase dry-run + --apply + audit doc).
+
+**Standing authorization**: this rule supersedes the per-turn "should I pull env?" question. Just pull when needed for diagnosis. The env file lives in `.env.local.prod` (gitignored) and is reusable across the session.
+
 ### Anti-patterns (all 4 rules)
 - Fix bug แต่ไม่เพิ่ม test + skill → regression guaranteed
 - Skill ไม่มี grep patterns / invariant numbers → documentation ไม่ใช่ audit
