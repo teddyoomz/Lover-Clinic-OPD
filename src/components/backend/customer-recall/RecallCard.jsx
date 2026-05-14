@@ -3,6 +3,7 @@ import { Plus, List, PhoneCall } from 'lucide-react';
 import { RecallRow } from '../recall/RecallRow.jsx';
 import { RecallEmptyState } from '../recall/RecallEmptyState.jsx';
 import { RecallCreateModal } from '../recall/RecallCreateModal.jsx';
+import { RecallEditModal } from '../recall/RecallEditModal.jsx';
 import { RecallOutcomeModal } from '../recall/RecallOutcomeModal.jsx';
 import { RecallSnoozeMenu } from '../recall/RecallSnoozeMenu.jsx';
 import { useRecallListener } from '../../../hooks/useRecallListener.js';
@@ -39,6 +40,7 @@ export function RecallCard({ customerId, customer }) {
 
   const [expanded, setExpanded] = useState(false);
   const [createModal, setCreateModal] = useState(null);
+  const [editModal, setEditModal] = useState(null);
   const [outcomeModal, setOutcomeModal] = useState(null);
   const [snoozeModal, setSnoozeModal] = useState(null);
 
@@ -96,6 +98,11 @@ export function RecallCard({ customerId, customer }) {
   const handleSnooze = useCallback((id) => {
     const recall = findRecall(id);
     if (recall) setSnoozeModal({ recall });
+  }, [findRecall]);
+
+  const handleEdit = useCallback((id) => {
+    const recall = findRecall(id);
+    if (recall) setEditModal({ recall });
   }, [findRecall]);
 
   // Phase 29.22 round-3 — hard-delete handler (confirm lives in RecallRow).
@@ -199,6 +206,7 @@ export function RecallCard({ customerId, customer }) {
               onRecordOutcome={handleRecordOutcome}
               onSnooze={handleSnooze}
               onDelete={handleDelete}
+              onEdit={handleEdit}
               // No onLineSend in CDV (admin uses Backend tab for that per spec §4.3)
             />
           ))}
@@ -223,6 +231,14 @@ export function RecallCard({ customerId, customer }) {
           recallCases={recallCases}
           onSaveAsRecallCase={onSaveAsRecallCase}
           onClose={() => setCreateModal(null)}
+        />
+      )}
+      {editModal && (
+        <RecallEditModal
+          recall={editModal.recall}
+          recallCases={recallCases}
+          onClose={() => setEditModal(null)}
+          onSaved={() => setEditModal(null)}
         />
       )}
       {outcomeModal && (
