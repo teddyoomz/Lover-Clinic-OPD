@@ -21,7 +21,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
-import { BUCKETS, resolveBucketScope, assertNotT1 } from '../../src/lib/branchBackupBuckets.js';
+import { BUCKETS, resolveBucketScope, assertNotT1, getFilterSpecForCollection } from '../../src/lib/branchBackupBuckets.js';
 import { computeBodyHash, validateBackupFile, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -164,13 +164,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: e.message });
     }
 
-    // ─── Wipe phase — top-level collections (where branchId == target) ───
+    // ─── Wipe phase — top-level collections ───
+    // V66 fix 2026-05-15: per-collection filter spec via getFilterSpecForCollection.
+    // Most collections filter by `branchId`. be_stock_transfers + be_stock_withdrawals
+    // filter by `sourceLocationId` OR `destinationLocationId` (2 queries + Map dedup).
+    // Pre-V66 the hardcoded `.where('branchId')` matched 0 docs on those 2 collections
+    // → 1,064 transfers + 9 withdrawals survived make-fresh on นครราชสีมา (Rule R
+    // diag 2026-05-15 confirmed).
     const deletedCounts = {};
     for (const col of wipeCols) {
-      const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
+      const spec = getFilterSpecForCollection(col);
+      const docMap = new Map();
+      const snap1 = await dataCol(db, col).where(spec.filterField, '==', branchId).get();
+      for (const d of snap1.docs) docMap.set(d.id, d);
+      if (spec.orFilterField) {
+        const snap2 = await dataCol(db, col).where(spec.orFilterField, '==', branchId).get();
+        for (const d of snap2.docs) {
+          if (!docMap.has(d.id)) docMap.set(d.id, d);
+        }
+      }
+      const docs = [...docMap.values()];
       let deleted = 0;
-      for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
-        const slice = snap.docs.slice(i, i + BATCH_LIMIT);
+      for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+        const slice = docs.slice(i, i + BATCH_LIMIT);
         const batch = db.batch();
         for (const d of slice) batch.delete(d.ref);
         await batch.commit();

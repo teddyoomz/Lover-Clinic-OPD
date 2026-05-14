@@ -17,7 +17,7 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { resolveBackupScope, T4_SUBCOLLECTIONS } from '../../src/lib/branchBackupCore.js';
-import { BUCKETS, resolveBucketScope, assertNotT1 } from '../../src/lib/branchBackupBuckets.js';
+import { BUCKETS, resolveBucketScope, assertNotT1, getFilterSpecForCollection } from '../../src/lib/branchBackupBuckets.js';
 import { buildBackupFile, jsonReplacerForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -59,6 +59,24 @@ function dataCol(db, collection) {
   return db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(collection);
 }
 function randHex(n = 8) { return crypto.randomBytes(Math.ceil(n / 2)).toString('hex').slice(0, n); }
+
+// V66 fix 2026-05-15 — branch-aware query helper. Returns Array<docSnap>
+// (deduped) for collections whose canonical field is NOT `branchId`. Most
+// collections use `branchId`; be_stock_transfers + be_stock_withdrawals use
+// sourceLocationId OR destinationLocationId. See branchBackupBuckets.js.
+async function queryBranchScopedDocs(db, colName, branchId) {
+  const spec = getFilterSpecForCollection(colName);
+  const docMap = new Map();
+  const snap1 = await dataCol(db, colName).where(spec.filterField, '==', branchId).get();
+  for (const d of snap1.docs) docMap.set(d.id, d);
+  if (spec.orFilterField) {
+    const snap2 = await dataCol(db, colName).where(spec.orFilterField, '==', branchId).get();
+    for (const d of snap2.docs) {
+      if (!docMap.has(d.id)) docMap.set(d.id, d);
+    }
+  }
+  return [...docMap.values()];
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -137,9 +155,10 @@ export default async function handler(req, res) {
           let sizeBytes = 0;
 
           for (const col of bucketDef.collections) {
-            const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
-            docs += snap.size;
-            for (const d of snap.docs) sizeBytes += JSON.stringify(d.data()).length;
+            // V66 fix 2026-05-15: spec-aware OR-merge for transfers/withdrawals
+            const colDocs = await queryBranchScopedDocs(db, col, branchId);
+            docs += colDocs.length;
+            for (const d of colDocs) sizeBytes += JSON.stringify(d.data()).length;
           }
 
           if (bucketDef.customerSubcollections.length > 0) {
@@ -170,9 +189,10 @@ export default async function handler(req, res) {
         // Legacy mode flat count (no per-bucket breakdown)
         for (const col of scope) {
           if (col === 'be_customers/__per_customer__') continue;
-          const snap = await dataCol(db, col).where('branchId', '==', branchId).get();
-          totalDocs += snap.size;
-          for (const d of snap.docs) estSizeBytes += JSON.stringify(d.data()).length;
+          // V66 fix 2026-05-15: spec-aware OR-merge for transfers/withdrawals
+          const colDocs = await queryBranchScopedDocs(db, col, branchId);
+          totalDocs += colDocs.length;
+          for (const d of colDocs) estSizeBytes += JSON.stringify(d.data()).length;
         }
       }
 
@@ -222,8 +242,9 @@ export default async function handler(req, res) {
           }
         }
       } else {
-        const snap = await dataCol(db, colName).where('branchId', '==', branchId).get();
-        out[colName] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        // V66 fix 2026-05-15: spec-aware OR-merge for transfers/withdrawals
+        const colDocs = await queryBranchScopedDocs(db, colName, branchId);
+        out[colName] = colDocs.map(d => ({ ...d.data(), id: d.id }));
       }
     }
 

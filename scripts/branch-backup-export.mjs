@@ -10,6 +10,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { resolveBackupScope, T4_SUBCOLLECTIONS } from '../src/lib/branchBackupCore.js';
 import { buildBackupFile } from '../src/lib/branchBackupSchema.js';
+import { getFilterSpecForCollection } from '../src/lib/branchBackupBuckets.js';
 
 const envFile = existsSync('.env.local.prod') ? '.env.local.prod' : '.env.local';
 if (existsSync(envFile)) {
@@ -63,8 +64,20 @@ async function main() {
         }
       }
     } else {
-      const snap = await dataCol(colName).where('branchId', '==', args.branch).get();
-      out[colName] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      // V66 fix 2026-05-15: spec-aware OR-merge for be_stock_transfers +
+      // be_stock_withdrawals (their canonical fields are sourceLocationId +
+      // destinationLocationId, not branchId).
+      const spec = getFilterSpecForCollection(colName);
+      const docMap = new Map();
+      const snap1 = await dataCol(colName).where(spec.filterField, '==', args.branch).get();
+      for (const d of snap1.docs) docMap.set(d.id, d);
+      if (spec.orFilterField) {
+        const snap2 = await dataCol(colName).where(spec.orFilterField, '==', args.branch).get();
+        for (const d of snap2.docs) {
+          if (!docMap.has(d.id)) docMap.set(d.id, d);
+        }
+      }
+      out[colName] = [...docMap.values()].map(d => ({ ...d.data(), id: d.id }));
     }
   }
 

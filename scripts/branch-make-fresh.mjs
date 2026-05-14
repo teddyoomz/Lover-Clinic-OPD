@@ -14,7 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { BUCKETS, resolveBucketScope, assertNotT1 } from '../src/lib/branchBackupBuckets.js';
+import { BUCKETS, resolveBucketScope, assertNotT1, getFilterSpecForCollection } from '../src/lib/branchBackupBuckets.js';
 import { buildBackupFile, computeBodyHash, validateBackupFile } from '../src/lib/branchBackupSchema.js';
 
 const envFile = existsSync('.env.local.prod') ? '.env.local.prod' : '.env.local';
@@ -83,6 +83,21 @@ const bucket = getStorage().bucket();
 function dataCol(name) { return db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(name); }
 function randHex(n = 8) { return randomBytes(Math.ceil(n / 2)).toString('hex').slice(0, n); }
 
+// V66 fix 2026-05-15 — spec-aware branch-scoped doc fetch with OR-merge
+async function queryBranchScopedDocs(colName, branchId) {
+  const spec = getFilterSpecForCollection(colName);
+  const docMap = new Map();
+  const snap1 = await dataCol(colName).where(spec.filterField, '==', branchId).get();
+  for (const d of snap1.docs) docMap.set(d.id, d);
+  if (spec.orFilterField) {
+    const snap2 = await dataCol(colName).where(spec.orFilterField, '==', branchId).get();
+    for (const d of snap2.docs) {
+      if (!docMap.has(d.id)) docMap.set(d.id, d);
+    }
+  }
+  return [...docMap.values()];
+}
+
 async function main() {
   console.log(`Branch: ${args.branch}`);
   console.log(`Buckets: ${bucketIds.join(', ')}`);
@@ -93,10 +108,11 @@ async function main() {
   assertNotT1(resolved.collections);
 
   // Build backup over scope
+  // V66 fix 2026-05-15: spec-aware OR-merge for transfers/withdrawals
   const out = {};
   for (const col of resolved.collections) {
-    const snap = await dataCol(col).where('branchId', '==', args.branch).get();
-    out[col] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    const colDocs = await queryBranchScopedDocs(col, args.branch);
+    out[col] = colDocs.map(d => ({ ...d.data(), id: d.id }));
   }
   if (resolved.subcollections.length > 0) {
     const customersSnap = await dataCol('be_customers').get();
@@ -153,12 +169,13 @@ async function main() {
   console.log('✓ Hash verified post-upload');
 
   // Wipe ONLY resolved scope (not full T1+T2+T3)
+  // V66 fix 2026-05-15: spec-aware OR-merge for transfers/withdrawals
   const deletedCounts = {};
   for (const col of resolved.collections) {
-    const snap = await dataCol(col).where('branchId', '==', args.branch).get();
+    const docs = await queryBranchScopedDocs(col, args.branch);
     let deleted = 0;
-    for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
-      const slice = snap.docs.slice(i, i + BATCH_LIMIT);
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+      const slice = docs.slice(i, i + BATCH_LIMIT);
       const batch = db.batch();
       for (const d of slice) batch.delete(d.ref);
       await batch.commit();

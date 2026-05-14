@@ -7,6 +7,14 @@
 //   Q1=D Hybrid bucket UI + Advanced collection toggle + T1 server-protected
 //   Q3=A 7 buckets
 //   Q4=B Default 6 checked + customerActivity unchecked (opt-in only)
+//
+// 2026-05-15 V66 EXTENSION — per-collection filter-field overrides via
+// BUCKET_FILTER_FIELDS side-table. Most collections store branchId (the
+// default); a small set (be_stock_transfers + be_stock_withdrawals) instead
+// store sourceLocationId + destinationLocationId. Endpoints/CLIs MUST consult
+// getFilterSpecForCollection(name) instead of hard-coding `.where('branchId')`.
+// V66 regression test `tests/branch-backup-buckets-v66-filter-fields.test.js`
+// locks every override against production write-side code (backendClient.js).
 
 import { TIER_MAP, BACKUP_TIER_T1 } from './branchBackupCore.js';
 
@@ -106,4 +114,98 @@ export function bucketDefaultsForUI() {
     out[id] = !!b.defaultChecked;
   }
   return out;
+}
+
+// ─── V66 fix 2026-05-15 — per-collection filter-field overrides ────────────
+//
+// Most branch-scoped collections write `branchId` at write time (verified via
+// Rule R env-pull diag + grep on backendClient.js write-side blocks). This
+// table lists the exceptions — collections whose canonical filter fields
+// differ from `branchId`. Endpoints/CLIs/scripts MUST consult this table
+// instead of hard-coding `.where('branchId')` in wipe/backup loops.
+//
+// Verified canonical field names (production write-side, 2026-05-15):
+//   - be_stock_transfers    → sourceLocationId + destinationLocationId
+//                             (backendClient.js:7683-7684)
+//   - be_stock_withdrawals  → sourceLocationId + destinationLocationId
+//                             (backendClient.js:8059-8060)
+//
+// Pre-V66 BUG: branch-make-fresh.js + branch-backup-export.js + 2 CLI scripts
+// hardcoded `.where('branchId', '==', X)` for ALL stock collections including
+// transfers + withdrawals. Result: 0 matches on those 2 collections → 1,064
+// transfers + 9 withdrawals survived make-fresh on นครราชสีมา branch (Rule R
+// diag 2026-05-15 confirmed). Same class-of-bug as central CENTRAL_BUCKETS
+// V66 fix (commit 25cdb41).
+//
+// To add a new override: verify field name appears in backendClient.js setDoc
+// block, add entry here, extend `tests/branch-backup-buckets-v66-filter-fields.test.js`.
+export const BUCKET_FILTER_FIELDS = Object.freeze({
+  be_stock_transfers: Object.freeze({
+    filterField: 'sourceLocationId',
+    orFilterField: 'destinationLocationId',
+  }),
+  be_stock_withdrawals: Object.freeze({
+    filterField: 'sourceLocationId',
+    orFilterField: 'destinationLocationId',
+  }),
+});
+
+/**
+ * Returns filter spec for a single collection name. Default is `{filterField:
+ * 'branchId'}` (most collections). Override comes from BUCKET_FILTER_FIELDS.
+ *
+ * @param {string} collectionName
+ * @returns {{filterField: string, orFilterField?: string}}
+ */
+export function getFilterSpecForCollection(collectionName) {
+  const override = BUCKET_FILTER_FIELDS[collectionName];
+  if (override) return override;
+  return { filterField: 'branchId' };
+}
+
+/**
+ * Resolve bucketIds into a flat array of `{name, filterField, orFilterField?}`
+ * specs. Wraps resolveBucketScope() + applies getFilterSpecForCollection() to
+ * each collection name. Caller iterates and runs 1 query (or 2 if orFilterField
+ * present, with Map<docId, doc> dedup-merge).
+ *
+ * @param {string[]} bucketIds
+ * @returns {{collections: Array<{name, filterField, orFilterField?}>, subcollections: string[]}}
+ */
+export function resolveBucketScopeWithFilterSpecs(bucketIds) {
+  const { collections, subcollections } = resolveBucketScope(bucketIds);
+  return {
+    collections: collections.map(name => ({
+      name,
+      ...getFilterSpecForCollection(name),
+    })),
+    subcollections,
+  };
+}
+
+/**
+ * Helper for endpoints/CLIs to run the actual Firestore queries. Returns
+ * a Map<docId, docSnap> with all docs matching either filterField=value OR
+ * orFilterField=value (if orFilterField present). Map dedup ensures docs
+ * matching BOTH (e.g. internal transfer src=X, dst=X — unusual but possible)
+ * count once.
+ *
+ * Caller provides `getQueryFn(field, value)` that returns a Promise<QuerySnapshot>.
+ *
+ * @param {{filterField: string, orFilterField?: string}} spec
+ * @param {string} value
+ * @param {(field: string, value: string) => Promise<{docs: Array<{ref:{}, id: string, data: Function}>}>} getQueryFn
+ * @returns {Promise<Map<string, any>>}
+ */
+export async function queryWithFilterSpec(spec, value, getQueryFn) {
+  const docs = new Map();
+  const snap1 = await getQueryFn(spec.filterField, value);
+  for (const d of snap1.docs) docs.set(d.id, d);
+  if (spec.orFilterField) {
+    const snap2 = await getQueryFn(spec.orFilterField, value);
+    for (const d of snap2.docs) {
+      if (!docs.has(d.id)) docs.set(d.id, d);
+    }
+  }
+  return docs;
 }
