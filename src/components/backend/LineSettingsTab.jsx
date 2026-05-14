@@ -36,6 +36,10 @@ import {
   validateLineConfig,
 } from '../../lib/lineConfigClient.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+// Task 11 (2026-05-15) — LINE Reminder sub-sections (per-branch).
+import LineReminderSettingsSection from './LineReminderSettingsSection.jsx';
+import LineReminderDebugSection from './LineReminderDebugSection.jsx';
+import LineReminderHistoryPanel from './LineReminderHistoryPanel.jsx';
 
 export default function LineSettingsTab() {
   const { branchId, branches, isReady } = useSelectedBranch();
@@ -380,6 +384,11 @@ export default function LineSettingsTab() {
             placeholder="🎉 ผูกบัญชี LINE สำเร็จ — พิมพ์ &quot;คอร์ส&quot; เพื่อดูคอร์สที่ใช้ได้" />
         </div>
       </div>
+
+      {/* ── Task 11 (2026-05-15): LINE Reminder sub-sections ───────── */}
+      <LineReminderSettingsSection form={form} onChange={update} />
+      <LineReminderDebugSection branchId={branchId} branchName={branchName} />
+      <LineReminderHistoryPanel branchId={branchId} />
 
       {/* ── Save bar ────────────────────────────────────────────────── */}
       <div className="sticky bottom-0 flex items-center justify-end gap-2 p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)]">
