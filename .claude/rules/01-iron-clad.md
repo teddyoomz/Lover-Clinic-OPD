@@ -93,7 +93,7 @@ clinic_settings/proclinic_session, clinic_settings/proclinic_session_trial.
 ProClinic dev-only sync infrastructure was deleted in V50; matching rules
 were dropped in V50-followup. These endpoints now return 403 (default-deny)
 post-deploy — that's the intended state, NOT a regression. The probe list
-is now 4 endpoints: 1 + 5 + 6 + 7 below.
+is now 5 endpoints: 1 + 5 + 6 + 7 + 8 below.
 
 5. **V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
    ```
