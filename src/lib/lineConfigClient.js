@@ -45,6 +45,17 @@ export const DEFAULT_LINE_CONFIG = Object.freeze({
   // Customer linking
   tokenTtlMinutes: 1440,
   alreadyLinkedRule: 'block',    // 'block' | 'replace'
+  // LINE OA Appointment Reminder (2026-05-15)
+  lineReminder: {
+    enabled: false,
+    dayBeforeHour: 20,
+    dayOfHour: 9,
+    quietHourStart: 22,
+    quietHourEnd: 8,
+    templateDayBefore: 'สวัสดีคุณ {{customerName}} ค่ะ พรุ่งนี้ {{date}} เวลา {{time}} คุณมีนัดที่สาขา {{branchName}} กับ {{doctorName}}\nบริการ: {{treatments}}\n\n{{cancellationPolicyText}}',
+    templateDayOf: 'สวัสดีคุณ {{customerName}} ค่ะ วันนี้คุณมีนัดเวลา {{time}} ที่สาขา {{branchName}} กับ {{doctorName}}\nบริการ: {{treatments}}',
+    cancellationPolicyText: 'กรุณาเลื่อน/ยกเลิกล่วงหน้า 24 ชั่วโมง',
+  },
 });
 
 function lineConfigDocRef(branchId) {
@@ -217,6 +228,29 @@ export function validateLineConfig(cfg) {
   }
   if (c.botBasicId && !/^@/.test(String(c.botBasicId).trim())) {
     errors.push('Bot Basic ID ต้องขึ้นต้นด้วย @ (เช่น @123abcde)');
+  }
+  // lineReminder block validation (Task 1 — 2026-05-15)
+  if (c.lineReminder) {
+    const r = c.lineReminder;
+    if (typeof r.enabled !== 'boolean') errors.push('lineReminder.enabled ต้องเป็น boolean');
+    if (typeof r.dayBeforeHour !== 'number' || r.dayBeforeHour < 0 || r.dayBeforeHour > 23) {
+      errors.push('lineReminder.dayBeforeHour ต้องอยู่ในช่วง 0-23');
+    }
+    if (r.dayOfHour !== null && (typeof r.dayOfHour !== 'number' || r.dayOfHour < 0 || r.dayOfHour > 23)) {
+      errors.push('lineReminder.dayOfHour ต้องอยู่ในช่วง 0-23 หรือ null');
+    }
+    if (typeof r.quietHourStart !== 'number' || r.quietHourStart < 0 || r.quietHourStart > 23) {
+      errors.push('lineReminder.quietHourStart ต้องอยู่ในช่วง 0-23');
+    }
+    if (typeof r.quietHourEnd !== 'number' || r.quietHourEnd < 0 || r.quietHourEnd > 23) {
+      errors.push('lineReminder.quietHourEnd ต้องอยู่ในช่วง 0-23');
+    }
+    if (r.enabled && c.enabled && !c.channelAccessToken) {
+      errors.push('lineReminder.enabled แต่ยังไม่มี channelAccessToken — ต้องตั้งค่า Channel Access Token ก่อน');
+    }
+    for (const k of ['templateDayBefore', 'templateDayOf', 'cancellationPolicyText']) {
+      if (typeof r[k] !== 'string') errors.push(`lineReminder.${k} ต้องเป็น string`);
+    }
   }
   return { valid: errors.length === 0, errors };
 }
