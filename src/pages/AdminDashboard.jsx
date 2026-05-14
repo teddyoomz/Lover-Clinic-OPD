@@ -3301,15 +3301,41 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const _maybeOpenWalkInModal = (customerId, customerHN) => {
       if (adminMode !== 'dashboard') return;
       if (!customerId) return;
-      // Phase 29.23-bis (2026-05-14) — gate: entries pushed from deposit-booking
-      // OR no-deposit-booking flows ALREADY have an appointment (be_appointments
-      // doc was created at booking time, then opd_sessions cross-stamped with
-      // linkedAppointmentId / linkedDepositId — see confirmCreateNoDeposit
-      // line ~2828 + confirmCreateDeposit line ~2682). The walk-in modal is
-      // ONLY for fresh walk-ins (created directly in the คิวหน้า Clinic tab).
-      // User report: "หากมาจากหน้า จองมัดจำ หรือ จองไม่มัดจำ ... เมื่อกดบันทึกลง OPD
-      // ในหน้า คิวหน้า Clinic จะไม่ต้องขึ้น modal มาให้สร้างนัดหมายอีก".
-      if (session?.linkedAppointmentId || session?.linkedDepositId) return;
+      // Phase 29.23-bis (2026-05-14) — initial narrow gate on linkedAppointmentId
+      // / linkedDepositId only.
+      //
+      // Phase 29.23-bis3 (2026-05-14) — gate WIDENED to all booking-origin
+      // indicators because user reported modal still appeared after bis1.
+      // Cause: linkedAppointmentId may be null on the session even when entry
+      // came from no-deposit booking (failure paths at confirmCreateNoDeposit
+      // line ~2884 + line ~2891 stamp appointmentSyncStatus='failed' but NOT
+      // linkedAppointmentId). Likewise deposit-only bookings (no appointment
+      // checkbox) have linkedDepositId set BUT linkedAppointmentId=null.
+      //
+      // Broader indicators (any truthy → block walk-in modal):
+      //   1. linkedAppointmentId — successful no-deposit OR deposit-with-appt
+      //   2. linkedDepositId — any deposit booking
+      //   3. appointmentProClinicId — legacy field name, mirrors linkedAppointmentId
+      //   4. formType === 'deposit' — sessionDoc fingerprint for deposit booking
+      //   5. appointmentData.appointmentDate — no-deposit sessions always carry
+      //      appointmentData with at least a date filled by the booking form
+      //      (line 2790-2792 of confirmCreateNoDeposit — non-empty date is
+      //      required by the form UI).
+      //
+      // User report (verbatim): "หากมาจากหน้า จองมัดจำ หรือ จองไม่มัดจำ ...
+      // เมื่อกดบันทึกลง OPD ในหน้า คิวหน้า Clinic จะไม่ต้องขึ้น modal มาให้
+      // สร้างนัดหมายอีก".
+      const isFromBookingFlow = !!(
+        session?.linkedAppointmentId ||
+        session?.linkedDepositId ||
+        session?.appointmentProClinicId ||
+        session?.formType === 'deposit' ||
+        (session?.appointmentData && (
+          session.appointmentData.appointmentDate ||
+          session.appointmentData.appointmentStartTime
+        ))
+      );
+      if (isFromBookingFlow) return;
       setWalkInModal({
         sessionId,
         customerId,

@@ -55,12 +55,11 @@ describe('Phase 29.23-bis SG-A — OPD-save button tooltips no longer mention Pr
   });
 });
 
-describe('Phase 29.23-bis SG-B — _maybeOpenWalkInModal gates on existing booking links', () => {
+describe('Phase 29.23-bis SG-B — _maybeOpenWalkInModal gates on booking-origin indicators (bis3 widened)', () => {
   // Locate the _maybeOpenWalkInModal helper block.
-  // Anchor: helper declaration through the inner setWalkInModal call close
-  // `});`. This captures everything inside the helper without needing to
-  // navigate past the multi-line Thai marker comment to the outer `};` close
-  // (which is harder to anchor cleanly with non-greedy whitespace).
+  // Anchor: helper declaration through the inner setWalkInModal call close.
+  // Generous size limit accommodates Phase 29.23-bis + bis3 marker comments
+  // (Thai explanatory blocks ~20+ lines).
   const walkInGateBlock = SRC.match(
     /const\s+_maybeOpenWalkInModal\s*=[\s\S]+?setWalkInModal\(\{[\s\S]+?\}\);/
   );
@@ -69,31 +68,155 @@ describe('Phase 29.23-bis SG-B — _maybeOpenWalkInModal gates on existing booki
     expect(walkInGateBlock).toBeTruthy();
   });
 
-  it('SG-B.2 — gates on session.linkedAppointmentId (no-deposit + walk-in→appt path)', () => {
+  it('SG-B.2 — gates on session.linkedAppointmentId (no-deposit + deposit-with-appt path)', () => {
     expect(walkInGateBlock[0]).toMatch(/session\??\.linkedAppointmentId/);
   });
 
-  it('SG-B.3 — gates on session.linkedDepositId (deposit-booking path)', () => {
+  it('SG-B.3 — gates on session.linkedDepositId (any deposit-booking path)', () => {
     expect(walkInGateBlock[0]).toMatch(/session\??\.linkedDepositId/);
   });
 
-  it('SG-B.4 — gate is an early-return (returns before setWalkInModal fires)', () => {
-    // The early-return must appear BEFORE the setWalkInModal call.
-    const linkedGateIdx = walkInGateBlock[0].search(/if\s*\(\s*session\??\.linkedAppointmentId\s*\|\|\s*session\??\.linkedDepositId\s*\)\s*return/);
-    const setModalIdx = walkInGateBlock[0].indexOf('setWalkInModal');
-    expect(linkedGateIdx).toBeGreaterThanOrEqual(0);
-    expect(setModalIdx).toBeGreaterThan(linkedGateIdx);
+  it('SG-B.4 — Phase 29.23-bis3: gates on session.appointmentProClinicId (legacy field name)', () => {
+    expect(walkInGateBlock[0]).toMatch(/session\??\.appointmentProClinicId/);
   });
 
-  it('SG-B.5 — preserves existing adminMode === "dashboard" gate (no regression)', () => {
+  it('SG-B.5 — Phase 29.23-bis3: gates on session.formType === "deposit" (sessionDoc fingerprint)', () => {
+    expect(walkInGateBlock[0]).toMatch(/session\??\.formType\s*===\s*['"]deposit['"]/);
+  });
+
+  it('SG-B.6 — Phase 29.23-bis3: gates on session.appointmentData.appointmentDate (no-deposit always has)', () => {
+    expect(walkInGateBlock[0]).toMatch(/session\??\.appointmentData/);
+    expect(walkInGateBlock[0]).toMatch(/appointment(Date|StartTime)/);
+  });
+
+  it('SG-B.7 — uses isFromBookingFlow named boolean (readable + testable)', () => {
+    expect(walkInGateBlock[0]).toMatch(/(?:const|let)\s+isFromBookingFlow\s*=/);
+    expect(walkInGateBlock[0]).toMatch(/if\s*\(\s*isFromBookingFlow\s*\)\s*return/);
+  });
+
+  it('SG-B.8 — gate fires BEFORE setWalkInModal (early-return order preserved)', () => {
+    const gateIdx = walkInGateBlock[0].search(/if\s*\(\s*isFromBookingFlow\s*\)\s*return/);
+    const setModalIdx = walkInGateBlock[0].indexOf('setWalkInModal');
+    expect(gateIdx).toBeGreaterThanOrEqual(0);
+    expect(setModalIdx).toBeGreaterThan(gateIdx);
+  });
+
+  it('SG-B.9 — preserves existing adminMode === "dashboard" gate (no regression)', () => {
     expect(walkInGateBlock[0]).toMatch(/adminMode\s*!==\s*'dashboard'/);
   });
 
-  it('SG-B.6 — preserves existing customerId truthy gate (no regression)', () => {
+  it('SG-B.10 — preserves existing customerId truthy gate (no regression)', () => {
     expect(walkInGateBlock[0]).toMatch(/if\s*\(\s*!\s*customerId\s*\)\s*return/);
   });
 
-  it('SG-B.7 — Phase 29.23-bis marker comment present (institutional memory)', () => {
-    expect(walkInGateBlock[0]).toMatch(/29\.23-bis/);
+  it('SG-B.11 — Phase 29.23-bis3 marker comment present (institutional memory)', () => {
+    expect(walkInGateBlock[0]).toMatch(/29\.23-bis3/);
+  });
+});
+
+// Phase 29.23-bis3 — pure-logic test for the isFromBookingFlow predicate.
+//
+// The gate logic is inline inside _maybeOpenWalkInModal (a closure inside
+// handleOpdClick) — hard to unit-test directly without React mount. So this
+// test re-implements the predicate locally and exercises it against the 5
+// known booking-origin shapes + the walk-in shape (where modal MUST open).
+//
+// If the inline logic in AdminDashboard.jsx ever drifts from this contract,
+// SG-B.2-B.6 source-grep will catch the drift first. This block is the
+// SEMANTIC ground truth.
+describe('Phase 29.23-bis3 IB — isFromBookingFlow predicate ground truth', () => {
+  function isFromBookingFlow(session) {
+    return !!(
+      session?.linkedAppointmentId ||
+      session?.linkedDepositId ||
+      session?.appointmentProClinicId ||
+      session?.formType === 'deposit' ||
+      (session?.appointmentData && (
+        session.appointmentData.appointmentDate ||
+        session.appointmentData.appointmentStartTime
+      ))
+    );
+  }
+
+  it('IB.1 — no-deposit booking with linkedAppointmentId set → BLOCK modal', () => {
+    expect(isFromBookingFlow({ linkedAppointmentId: 'BA-123' })).toBe(true);
+  });
+
+  it('IB.2 — deposit booking with linkedDepositId set → BLOCK modal', () => {
+    expect(isFromBookingFlow({ linkedDepositId: 'DEP-456' })).toBe(true);
+  });
+
+  it('IB.3 — legacy session with appointmentProClinicId only → BLOCK modal', () => {
+    expect(isFromBookingFlow({ appointmentProClinicId: 'BA-789' })).toBe(true);
+  });
+
+  it('IB.4 — sessionDoc with formType="deposit" → BLOCK modal', () => {
+    expect(isFromBookingFlow({ formType: 'deposit' })).toBe(true);
+  });
+
+  it('IB.5 — no-deposit booking with FAILED appointment creation → BLOCK modal via appointmentData', () => {
+    // CRITICAL: this is the bug user reported. Appointment creation failed
+    // at booking time → linkedAppointmentId NOT stamped → bis1 gate fell open
+    // → modal appeared. bis3 broader gate uses appointmentData fallback.
+    expect(isFromBookingFlow({
+      linkedAppointmentId: null,
+      linkedDepositId: null,
+      appointmentProClinicId: null,
+      formType: 'intake',
+      appointmentData: { appointmentDate: '2026-05-20', appointmentStartTime: '10:00' },
+    })).toBe(true);
+  });
+
+  it('IB.6 — no-deposit booking with only appointmentDate (no startTime) → BLOCK', () => {
+    expect(isFromBookingFlow({
+      appointmentData: { appointmentDate: '2026-05-20', appointmentStartTime: '' },
+    })).toBe(true);
+  });
+
+  it('IB.7 — no-deposit booking with only appointmentStartTime (no date) → BLOCK', () => {
+    expect(isFromBookingFlow({
+      appointmentData: { appointmentDate: '', appointmentStartTime: '10:00' },
+    })).toBe(true);
+  });
+
+  it('IB.8 — fresh walk-in session (no booking indicators at all) → ALLOW modal', () => {
+    expect(isFromBookingFlow({
+      linkedAppointmentId: null,
+      linkedDepositId: null,
+      appointmentProClinicId: null,
+      formType: 'intake',
+      appointmentData: null,
+    })).toBe(false);
+  });
+
+  it('IB.9 — fresh walk-in with empty appointmentData object → ALLOW modal', () => {
+    expect(isFromBookingFlow({
+      appointmentData: {},
+    })).toBe(false);
+  });
+
+  it('IB.10 — fresh walk-in with appointmentData but ALL fields empty → ALLOW modal', () => {
+    expect(isFromBookingFlow({
+      appointmentData: { appointmentDate: '', appointmentStartTime: '' },
+    })).toBe(false);
+  });
+
+  it('IB.11 — null/undefined session → ALLOW modal (defensive — no crash)', () => {
+    expect(isFromBookingFlow(null)).toBe(false);
+    expect(isFromBookingFlow(undefined)).toBe(false);
+    expect(isFromBookingFlow({})).toBe(false);
+  });
+
+  it('IB.12 — deposit-only booking (NO appointment checkbox) — linkedDepositId set, linkedAppointmentId null → BLOCK', () => {
+    // Deposit-only booking: confirmCreateDeposit line 2729-2730 sets
+    // linkedAppointmentId: pairResult?.appointmentId || null. If admin
+    // didn\'t enable hasAppointment, pairResult.appointmentId is null →
+    // linkedAppointmentId: null. linkedDepositId is still truthy. Gate
+    // catches via linkedDepositId.
+    expect(isFromBookingFlow({
+      linkedDepositId: 'DEP-100',
+      linkedAppointmentId: null,
+      formType: 'deposit',
+    })).toBe(true);
   });
 });
