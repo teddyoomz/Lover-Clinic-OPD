@@ -7069,10 +7069,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         <div className="flex-1 min-w-0">
                           {/* Task 9 LR-4 (2026-05-15) — show 🟢/⚪️ LINE chip alongside the
                               customer name so admin sees per-branch LINE linkage before
-                              picking this customer for the appointment. */}
+                              picking this customer for the appointment.
+                              Task 9 polish I1 (2026-05-15) — pass `nameClassName` to
+                              preserve the original bold-heading-color + truncate
+                              styling (pre-migration: `<span className="text-sm font-bold
+                              text-[var(--tx-heading)] truncate block">`). */}
                           <CustomerOption
                             customer={{ ...c, name: c.name || `ลูกค้า #${c.id}` }}
                             contextBranchId={selectedBranchId}
+                            nameClassName="text-sm font-bold text-[var(--tx-heading)] truncate block"
                           />
                           <span className="text-xs text-gray-500">{c.hn ? `HN: ${c.hn}` : ''}{c.phone ? ` | ${c.phone}` : ''} | ID: {c.id}</span>
                         </div>

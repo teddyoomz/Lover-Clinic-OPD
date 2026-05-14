@@ -982,8 +982,16 @@ export default function AppointmentFormModal({
                           className="w-full px-3 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)] transition-colors flex items-center justify-between">
                           {/* Task 9 LR-4 (2026-05-15) — CustomerOption surfaces 🟢/⚪️ LINE
                               badge so admin can see per-branch LINE linkage before
-                              picking the customer for this appointment. */}
-                          <CustomerOption customer={{ ...c, name }} contextBranchId={selectedBranchId} />
+                              picking the customer for this appointment.
+                              Task 9 polish I1 (2026-05-15) — pass `nameClassName` to
+                              preserve the original muted-secondary color
+                              (pre-migration: `<span className="text-[var(--tx-secondary)]">`)
+                              so the name keeps its visual hierarchy against the HN. */}
+                          <CustomerOption
+                            customer={{ ...c, name }}
+                            contextBranchId={selectedBranchId}
+                            nameClassName="text-[var(--tx-secondary)]"
+                          />
                           <span className="text-xs font-mono text-[var(--tx-muted)]">{c.proClinicHN || ''}</span>
                         </button>
                       );

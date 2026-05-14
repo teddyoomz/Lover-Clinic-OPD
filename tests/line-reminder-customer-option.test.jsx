@@ -46,4 +46,30 @@ describe('T9 CustomerOption', () => {
     const { container } = render(<CustomerOption customer={customer} contextBranchId="BR-A" showLineBadge={false} />);
     expect(container.querySelector('[title*="LINE"]')).toBeNull();
   });
+
+  // Task 9 polish (I1+I2) — nameClassName prop preserves caller styling
+  // (AdminDashboard bold-heading-color + truncate; AppointmentFormModal
+  // muted-secondary) and outer flex must use min-w-0 so the inner name
+  // span inherits `truncate` from a parent wrapper (e.g. the AppointmentCalendarView
+  // <a> wrapping CustomerOption). Badge spans must `flex-shrink-0` so they don't
+  // get squished when truncate kicks in.
+  it('T9.8 nameClassName prop applies to name span', () => {
+    render(<CustomerOption customer={{ name: 'X' }} contextBranchId="BR-A" nameClassName="text-bold custom-class" />);
+    const nameSpan = screen.getByText('X');
+    expect(nameSpan.className).toContain('text-bold');
+    expect(nameSpan.className).toContain('custom-class');
+  });
+
+  it('T9.9 outer flex div has min-w-0 for truncate inheritance', () => {
+    const { container } = render(<CustomerOption customer={{ name: 'X' }} contextBranchId="BR-A" />);
+    const outer = container.firstChild;
+    expect(outer.className).toContain('min-w-0');
+  });
+
+  it('T9.10 badge spans have flex-shrink-0', () => {
+    const customer = { name: 'X', branchId: 'BR-A', lineUserId: 'L' };
+    const { container } = render(<CustomerOption customer={customer} contextBranchId="BR-A" />);
+    const badge = container.querySelector('[title*="LINE"]');
+    expect(badge.className).toContain('flex-shrink-0');
+  });
 });

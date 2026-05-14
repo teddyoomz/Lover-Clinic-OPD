@@ -3098,10 +3098,20 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               {patientName && (
                 <p className="text-xs text-gray-500 truncate">
                   {/* Task 9 LR-4 (2026-05-15) — surface 🟢/⚪️ LINE chip next to
-                      patient name in the TFP header. patientData carries the
-                      canonical be_customers.patientData; the customer-level
-                      lineUserId fields (if denormalized via patientData by the
-                      caller) feed the per-branch badge. */}
+                      patient name in the TFP header.
+                      Task 9 polish M5 (2026-05-15) — INTENT NOTE:
+                      The LINE-status fields (lineUserId / lineDisplayName /
+                      lineUserId_byBranch) live on the ROOT be_customers doc,
+                      NOT on `patientData`. The reads below intentionally pull
+                      them with `patientData?.X` so that:
+                        (a) if a future caller denormalizes them onto patientData,
+                            the chip renders correctly;
+                        (b) otherwise the chip stays inert (no badge) — TFP is
+                            a per-treatment editor, not an appointment-creating
+                            picker, so chip absence is acceptable here.
+                      Acquiring the full customer doc just for this header chip
+                      would require an extra fetch + state in TFP; deferred until
+                      LR-5 (push-reminder dispatch) needs the same info. */}
                   <CustomerOption
                     customer={{
                       name: patientName,
