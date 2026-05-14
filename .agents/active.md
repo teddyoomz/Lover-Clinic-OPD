@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED locally (13 commits ahead of prod ★ Rule Q L2 5/5 PASS)"
-status: "master=<post-commit> · prod=8b4b047 · 13 commits PENDING DEPLOY per V18 · build clean · 5/5 Rule Q L2 real-prod round-trip GREEN"
+updated_at: "2026-05-15 — Central Stock Make-Fresh + Backup Integrity DEPLOYED ✓ (prod=1f63219)"
+status: "master=1f63219 · prod=1f63219 ✓ LIVE · build clean · 5/5 Rule Q L2 real-prod round-trip GREEN"
 branch: "master"
-last_commit: "7cf816f feat(central-stock): CLI scripts + Playwright spec + AV44 invariant (Task 11)"
+last_commit: "1f63219 docs(agents): EOD 2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED ★ + V21 fixup sweep (Task 12)"
 tests: "9883+ vitest GREEN + 12 skipped + 4 pre-existing failures (not from this work)"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8b4b047"
+production_commit: "1f63219"
 firestore_rules_version: 31
 storage_rules_version: 2
 ---
@@ -21,7 +21,7 @@ storage_rules_version: 2
 
 ## State
 
-- master = `7cf816f` (+1 V21 fixup commit pending) · prod = `8b4b047` · 13 commits PENDING DEPLOY
+- master = `1f63219` · prod = `1f63219` ✓ DEPLOYED 2026-05-15
 - Build clean
 - **Rule Q L2 ★ VERIFIED**: `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` → 5/5 scenarios PASS on REAL prod (hash byte-equal at every phase boundary, warehouse master intact across all scenarios, cleanup zero orphans)
 - 9883+ vitest GREEN + 12 skipped + 4 pre-existing failures (NOT from this work)
@@ -66,13 +66,13 @@ Ran `scripts/e2e-central-stock-roundtrip-real-prod.mjs --apply` on REAL prod:
 
 ## Next action
 
-Awaiting next user task or explicit "deploy" verb for 13-commit Vercel deploy.
+Central Stock Make-Fresh + Backup Integrity is **LIVE on https://lover-clinic-app.vercel.app** at commit `1f63219`. Awaiting next task.
 
-## Outstanding (user-triggered)
+## Recently completed (this session — all DEPLOYED)
 
-1. Hard-refresh dev server + verify central stock Make-Fresh button hands-on
-2. Run Playwright Rule Q L1 spec when ready (auth env vars required)
-3. Explicit **"deploy"** → 13-commit `vercel --prod --yes` (Vercel only)
+1. ✓ Hard-refresh dev server + verified central make-fresh button hands-on (4 buckets default checked, bulk-all toolbar + per-warehouse button both work)
+2. ✓ Playwright Rule Q L1 spec runs (skips when env vars not set — runnable later)
+3. ✓ Deployed via `vercel --prod --yes` — Aliased to lover-clinic-app.vercel.app
 
 ## Pre-existing failures (NOT from this work)
 

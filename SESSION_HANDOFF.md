@@ -43,11 +43,11 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-15 — **Central Stock Make-Fresh + Backup Integrity SHIPPED locally** (extends 2026-05-14 selective-make-fresh; brainstorming Q1-Q3 → spec → 12-task plan → ★ Rule Q L2 5/5 scenarios PASS on real prod) · master=`<post-commit>` · prod=`8b4b047` · **13 commits PENDING DEPLOY per V18** · build clean · firestore rules v31 unchanged
+- **Date last updated**: 2026-05-15 — **Central Stock Make-Fresh + Backup Integrity DEPLOYED ✓** (14-commit batch) · master=`1f63219` · prod=`1f63219` ✓ LIVE on https://lover-clinic-app.vercel.app · build clean · firestore rules v31 unchanged
 - **Branch**: `master`
-- **Last commit**: V21 fixup sweep — branch make-fresh tests updated post Task 3 shared-engine refactor
+- **Last commit**: `1f63219` docs(agents): EOD 2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED ★ + V21 fixup sweep (Task 12)
 - **Test count**: **9883+ vitest GREEN** + 12 skipped + 4 pre-existing failures (NOT from this work) + **14 Playwright e2e** (13 baseline + 1 new central-stock L1 spec).
-- **Deploy state**: prod=`8b4b047` LIVE (2026-05-14 EOD #3). **13 commits PENDING** for next combined deploy — V18 lock active.
+- **Deploy state**: prod=`1f63219` ✓ LIVE. 14-commit deploy successful 2026-05-15 (Vercel-only; no Firebase rules touched).
 
 ### Session 2026-05-15 — Central Stock Make-Fresh + Backup Integrity SHIPPED ★
 
