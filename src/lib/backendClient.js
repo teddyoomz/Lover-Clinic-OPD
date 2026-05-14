@@ -11325,3 +11325,86 @@ export async function snoozeRecall(id, untilDate) {
 // Branch-scoped listener (`listenToRecalls`) follows the default branch-aware
 // path via `useBranchAwareListener`.
 listenToRecallsForCustomer.__universal__ = true;
+
+// ═══ Phase 29.22 (2026-05-14) — be_recall_cases UNIVERSAL collection ════════
+// Per BSA Rule L: no branchId field; shared across branches (mirror be_staff,
+// be_doctors universal pattern). Soft-archive only via isHidden (V41 pattern).
+// Decouples recall preset data from per-product/per-course denormalization
+// that Phase 29 originally introduced (Bug B / V66 lesson).
+
+const recallCasesCol = () => collection(db, ...basePath(), 'be_recall_cases');
+const recallCaseDoc = (id) => doc(db, ...basePath(), 'be_recall_cases', id);
+
+function _genRecallCaseId() {
+  const ts = Date.now();
+  const arr = new Uint8Array(8);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(arr);
+  } else {
+    for (let i = 0; i < 8; i++) arr[i] = Math.floor(Math.random() * 256);
+  }
+  const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `CASE-${ts}-${hex}`;
+}
+
+/**
+ * Phase 29.22 — list recall cases (universal; not branch-filtered).
+ * @param {{includeHidden?:boolean}} opts
+ * @returns {Promise<Array>}
+ */
+export async function listRecallCases({ includeHidden = false } = {}) {
+  const constraints = [];
+  if (!includeHidden) constraints.push(where('isHidden', '==', false));
+  constraints.push(orderBy('caseName', 'asc'));
+  const q = query(recallCasesCol(), ...constraints);
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+}
+listRecallCases.__universal__ = true;
+
+/**
+ * Phase 29.22 — create or update a recall case.
+ * Generates CASE- prefix id when omitted; stamps audit fields.
+ * @param {{id?,caseName,defaultDays,isHidden?}} form
+ * @param {{uid?,user?}} ctx
+ * @returns {Promise<{id,...}>}
+ */
+export async function saveRecallCase(form, ctx = {}) {
+  const uid = ctx?.uid || ctx?.user?.uid || '';
+  const isEdit = !!form?.id;
+  const id = form?.id || _genRecallCaseId();
+  const payload = {
+    caseName: typeof form?.caseName === 'string' ? form.caseName.trim() : '',
+    defaultDays: Math.floor(Number(form?.defaultDays) || 0),
+    isHidden: !!form?.isHidden,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+  };
+  if (!isEdit) {
+    payload.createdAt = serverTimestamp();
+    payload.createdBy = uid;
+  }
+  await setDoc(recallCaseDoc(id), payload, { merge: true });
+  return { id, ...payload };
+}
+
+/**
+ * Phase 29.22 — toggle isHidden with V41 transition audit stamps.
+ * @param {string} id
+ * @param {boolean} isHidden
+ * @param {{uid?,user?}} ctx
+ */
+export async function setRecallCaseHidden(id, isHidden, ctx = {}) {
+  const uid = ctx?.uid || ctx?.user?.uid || '';
+  await setDoc(
+    recallCaseDoc(id),
+    {
+      isHidden: !!isHidden,
+      hiddenAt: isHidden ? serverTimestamp() : null,
+      hiddenBy: isHidden ? uid : null,
+      updatedAt: serverTimestamp(),
+      updatedBy: uid,
+    },
+    { merge: true }
+  );
+}
