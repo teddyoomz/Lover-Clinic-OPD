@@ -22,6 +22,32 @@ vi.mock('../src/utils.js', async () => {
   return { ...actual, thaiTodayISO: () => '2026-05-14' };
 });
 
+// Phase 29.23-bis — mock RecallCaseSelectField to expose onPick via click-able
+// buttons (real typeahead uses React Portal which is hard to drive in jsdom).
+// Mock preserves the <input value={value}> shape so existing E1.1 getByDisplayValue
+// assertion still works.
+vi.mock('../src/components/backend/recall/RecallCaseSelectField.jsx', () => ({
+  RecallCaseSelectField: ({ value, onChange, onPick, recallCases }) => (
+    <div data-testid="mock-recall-case-select">
+      <input
+        data-testid="mock-recall-case-input"
+        value={value || ''}
+        onChange={(e) => onChange?.(e.target.value)}
+      />
+      {(recallCases || []).map((c) => (
+        <button
+          key={c.caseId}
+          type="button"
+          data-testid={`mock-recall-case-pick-${c.caseId}`}
+          onClick={() => onPick?.(c)}
+        >
+          {c.caseName}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 import { RecallEditModal } from '../src/components/backend/recall/RecallEditModal.jsx';
 
 const RECALL_FIXTURE = {
@@ -190,5 +216,61 @@ describe('Phase 29.23 E1 — RecallEditModal', () => {
     );
     const header = screen.getByTestId('recall-edit-customer-header');
     expect(header.querySelectorAll('input, select, textarea').length).toBe(0);
+  });
+
+  // Phase 29.23-bis (2026-05-14) — case-pick auto-fill recallDate
+  //
+  // User report (verbatim): "ลองเลือกเหตุผลที่มีบันทึกอยู่ผ่าน dropdown แต่บั๊ค
+  // คือ ดันไม่ดึงวันในข้อมูลเหตุผลมาเปลี่ยนวันที่ ทำให้แก้ไขเปลี่ยนเหตุผล
+  // แล้วดึงข้อมูลวันมาเปลี่ยนตรงช่อง วันที่ Recall แบบ auto ด้วย แต่ถ้า user
+  // เลือกกดเพื่อเปลี่ยนวันก็สามารถ override ได้".
+  //
+  // Fix: onPick now sets BOTH reason AND recallDate (today + defaultDays).
+  // Mirror of RecallSlotCard.jsx create-mode behavior.
+
+  it('E1.11 — picking case via dropdown auto-fills recallDate from today + defaultDays', async () => {
+    render(
+      <RecallEditModal
+        recall={RECALL_FIXTURE}
+        recallCases={RECALL_CASES_FIXTURE}
+        onClose={() => {}}
+      />
+    );
+    // Pick CASE-2: caseName='ครบรอบบริการ', defaultDays=180
+    // todayISO mocked to '2026-05-14' → +180 days = '2026-11-10'
+    fireEvent.click(screen.getByTestId('mock-recall-case-pick-CASE-2'));
+
+    fireEvent.click(screen.getByTestId('recall-edit-save'));
+    await waitFor(() => {
+      expect(updateRecallMock).toHaveBeenCalledTimes(1);
+    });
+    const patch = updateRecallMock.mock.calls[0][1];
+    expect(patch.reason).toBe('ครบรอบบริการ');
+    expect(patch.recallDate).toBe('2026-11-10');
+  });
+
+  it('E1.12 — picking case with defaultDays=0 → only reason updates, recallDate preserved', async () => {
+    const RECALL_CASES_WITH_ZERO = [
+      { caseId: 'CASE-ZERO', caseName: 'เคสไม่มีระยะ', defaultDays: 0 },
+    ];
+    render(
+      <RecallEditModal
+        recall={RECALL_FIXTURE}
+        recallCases={RECALL_CASES_WITH_ZERO}
+        onClose={() => {}}
+      />
+    );
+    fireEvent.click(screen.getByTestId('mock-recall-case-pick-CASE-ZERO'));
+
+    fireEvent.click(screen.getByTestId('recall-edit-save'));
+    await waitFor(() => {
+      expect(updateRecallMock).toHaveBeenCalledTimes(1);
+    });
+    const patch = updateRecallMock.mock.calls[0][1];
+    expect(patch.reason).toBe('เคสไม่มีระยะ');
+    // recallDate stays at initial RECALL_FIXTURE.recallDate (2026-05-20),
+    // NOT overwritten — defaultDays=0 means "no auto-fill". Same defensive
+    // gate as RecallSlotCard.
+    expect(patch.recallDate).toBe('2026-05-20');
   });
 });

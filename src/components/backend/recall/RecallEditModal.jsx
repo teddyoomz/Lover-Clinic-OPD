@@ -3,6 +3,27 @@ import { X, Save } from 'lucide-react';
 import DateField from '../../DateField.jsx';
 import { RecallCaseSelectField } from './RecallCaseSelectField.jsx';
 import { updateRecall } from '../../../lib/scopedDataLayer.js';
+import { thaiTodayISO } from '../../../utils.js';
+
+/**
+ * Bangkok-TZ-stable "today + N days" — mirror of RecallSlotCard's local helper.
+ * 2 callers so far (RecallSlotCard inline + RecallEditModal); if a 3rd caller
+ * appears, extract to a shared module (Rule C1 / Rule of 3 trigger).
+ *
+ * Uses midday-UTC parse (V53 lesson) so day math doesn't TZ-shift to prior day.
+ *
+ * @param {string} isoDate "YYYY-MM-DD"
+ * @param {number} daysToAdd
+ * @returns {string} "YYYY-MM-DD"
+ */
+function addDaysISO(isoDate, daysToAdd) {
+  if (!isoDate || typeof isoDate !== 'string') return '';
+  const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+  const dt = new Date(ms + Math.floor(Number(daysToAdd) || 0) * 86400000);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
 
 /**
  * Phase 29.23 (2026-05-14) — Edit Recall modal (lightweight, single-recall).
@@ -18,6 +39,12 @@ import { updateRecall } from '../../../lib/scopedDataLayer.js';
  *   - Stable React keys upstream (RecallList.jsx) preserve DOM nodes; only
  *     edited row's inner text changes.
  *
+ * Phase 29.23-bis (2026-05-14) — onPick auto-fills recallDate from
+ * `today + defaultDays` when a case has a non-zero defaultDays. Mirrors
+ * RecallSlotCard's create-mode behavior. Admin can still manually override
+ * via DateField after picking — flexibility preserved because DateField's
+ * onChange independently calls setRecallDate.
+ *
  * @param {object} props
  * @param {object} props.recall existing recall doc (required)
  * @param {Array<{caseId,caseName,defaultDays}>} [props.recallCases]
@@ -26,6 +53,7 @@ import { updateRecall } from '../../../lib/scopedDataLayer.js';
  * @param {function} [props.onSaved] (id: string) => void — fires after successful save
  */
 export function RecallEditModal({ recall, recallCases = [], onClose, onSaved }) {
+  const todayISO = thaiTodayISO();
   const [recallDate, setRecallDate] = useState(recall?.recallDate || '');
   const [reason, setReason] = useState(recall?.reason || '');
   const [saving, setSaving] = useState(false);
@@ -139,7 +167,20 @@ export function RecallEditModal({ recall, recallCases = [], onClose, onSaved }) 
               value={reason}
               recallCases={recallCases}
               onChange={setReason}
-              onPick={({ caseName }) => setReason(caseName || '')}
+              onPick={({ caseName, defaultDays }) => {
+                // Phase 29.23-bis — auto-fill recallDate from today + defaultDays
+                // when admin picks a preset case. User report: "เลือกเหตุผลที่มี
+                // บันทึก แต่ดันไม่ดึงวันมาเปลี่ยน" — fix mirrors RecallSlotCard
+                // create-mode behavior. Admin can still override the date via
+                // DateField after picking (DateField's setRecallDate runs
+                // independently — flexibility preserved).
+                setReason(caseName || '');
+                const d = Math.floor(Number(defaultDays) || 0);
+                if (d > 0 && todayISO) {
+                  const newDate = addDaysISO(todayISO, d);
+                  if (newDate) setRecallDate(newDate);
+                }
+              }}
               placeholder="พิมพ์เพื่อค้น หรือเลือกจาก dropdown"
               data-testid="recall-edit-reason-field"
             />
