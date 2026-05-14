@@ -28,19 +28,25 @@ describe('CS1 CENTRAL_BUCKETS schema', () => {
     }
   });
 
-  it('CS1.4 cs_po has counter doc be_central_stock_orders_counter', () => {
+  it('CS1.4 cs_po has counter doc + centralWarehouseId filter (V66 fix — prod field name)', () => {
     expect(CENTRAL_BUCKETS.cs_po.counterDocs).toEqual(['be_central_stock_orders_counter']);
     expect(CENTRAL_BUCKETS.cs_po.collections[0].name).toBe('be_central_stock_orders');
-    expect(CENTRAL_BUCKETS.cs_po.collections[0].filterField).toBe('warehouseId');
+    // V66 fix 2026-05-15: prod uses `centralWarehouseId` (verified at
+    // backendClient.js:5855); pre-fix had `warehouseId` (invented).
+    expect(CENTRAL_BUCKETS.cs_po.collections[0].filterField).toBe('centralWarehouseId');
   });
 
-  it('CS1.5 cs_transfers_withdrawals has orFilterField on transfers spec', () => {
+  it('CS1.5 cs_transfers_withdrawals has orFilterField on both transfers + withdrawals (V66 fix — prod field names)', () => {
     const transfers = CENTRAL_BUCKETS.cs_transfers_withdrawals.collections.find(c => c.name === 'be_stock_transfers');
     expect(transfers.filterField).toBe('sourceLocationId');
-    expect(transfers.orFilterField).toBe('destLocationId');
+    // V66 fix: prod uses `destinationLocationId` (verified at backendClient.js:7684);
+    // pre-fix had `destLocationId` (invented).
+    expect(transfers.orFilterField).toBe('destinationLocationId');
     const withdrawals = CENTRAL_BUCKETS.cs_transfers_withdrawals.collections.find(c => c.name === 'be_stock_withdrawals');
     expect(withdrawals.filterField).toBe('sourceLocationId');
-    expect(withdrawals.orFilterField).toBeUndefined();
+    // V66 fix: withdrawals now also handle cross-direction (central as dest);
+    // field verified at backendClient.js:8059-8060.
+    expect(withdrawals.orFilterField).toBe('destinationLocationId');
   });
 
   it('CS1.6 all 4 buckets defaultChecked=true (no opt-in-only in central)', () => {
@@ -57,11 +63,28 @@ describe('CS1 CENTRAL_BUCKETS schema', () => {
     }
   });
 
-  it('CS1.8 cs_stock_ledger includes batches + movements + central movements', () => {
+  it('CS1.8 cs_stock_ledger includes batches + movements (V66 fix — be_central_stock_movements removed, empty in prod)', () => {
     const names = CENTRAL_BUCKETS.cs_stock_ledger.collections.map(c => c.name).sort();
     expect(names).toContain('be_stock_batches');
     expect(names).toContain('be_stock_movements');
-    expect(names).toContain('be_central_stock_movements');
+    // V66 fix 2026-05-15: be_central_stock_movements REMOVED — Rule R diag
+    // confirmed empty in prod (stale collection from branchBackupCore.UNIVERSAL).
+    expect(names).not.toContain('be_central_stock_movements');
+    // V66 fix: filterField for stock collections corrected to `branchId` (prod
+    // actual field per backendClient.js:5439, 5466; pre-fix had `locationId`
+    // which exists only on post-Phase 15.2 docs subset).
+    const batches = CENTRAL_BUCKETS.cs_stock_ledger.collections.find(c => c.name === 'be_stock_batches');
+    expect(batches.filterField).toBe('branchId');
+    const movements = CENTRAL_BUCKETS.cs_stock_ledger.collections.find(c => c.name === 'be_stock_movements');
+    expect(movements.filterField).toBe('branchId');
+  });
+
+  it('CS1.9 cs_adjustments uses branchId filterField (V66 fix — prod field, not locationId)', () => {
+    const adj = CENTRAL_BUCKETS.cs_adjustments.collections[0];
+    expect(adj.name).toBe('be_stock_adjustments');
+    // V66 fix: be_stock_adjustments has `branchId` field only (verified at
+    // backendClient.js:6291); pre-fix had `locationId` which doesn't exist.
+    expect(adj.filterField).toBe('branchId');
   });
 });
 

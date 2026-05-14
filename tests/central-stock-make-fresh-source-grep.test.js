@@ -117,8 +117,13 @@ describe('CSG3 centralStockBuckets — 4 frozen buckets + warehouse master prote
     expect(code).toMatch(/counterDocs:\s*Object\.freeze\(\['be_central_stock_orders_counter'\]/);
   });
 
-  it('CSG3.5 cs_transfers_withdrawals has orFilterField on transfers spec', () => {
-    expect(code).toMatch(/orFilterField:\s*['"]destLocationId['"]/);
+  it('CSG3.5 cs_transfers_withdrawals has orFilterField === destinationLocationId (V66 fix — prod field)', () => {
+    // V66 fix 2026-05-15: pre-fix asserted `destLocationId` (invented field
+    // name that doesn't exist in prod data). Corrected to `destinationLocationId`
+    // per backendClient.js:7684 + 8060.
+    expect(code).toMatch(/orFilterField:\s*['"]destinationLocationId['"]/);
+    // Anti-regression: invented name MUST NOT appear
+    expect(code).not.toMatch(/orFilterField:\s*['"]destLocationId['"]/);
   });
 });
 

@@ -1305,6 +1305,32 @@ for (const m of matches) expect(m[1]).toBe('true');
 
 **Lesson**: V40 introduced "destructive op needs auto-backup" (AV19). AV43 added cryptographic integrity for branch scope. AV44 closes the central stock surface with the same architectural backstop. The 5-scenario round-trip e2e proved the contract holds across adversarial inputs (Thai/Unicode/Timestamps/cross-warehouse refs/large/nested/counter doc preservation).
 
+**AV44 extension (2026-05-15 V66 incident) — filter field verification mandate**:
+
+After initial AV44 shipped, user reported "กดคลังใหม่ไปแล้ว... แม่งข้อมูลอยู่ครบเลย" — clicked Make-Fresh but ALL data still there. Root cause: `CENTRAL_BUCKETS` invented filterField names (`warehouseId`, `locationId`, `destLocationId`) that DID NOT exist in production write-side code. Test e2e seeded with same invented names + filter used same invented names → 5/5 PASS but real prod filter matched 0 docs.
+
+**THE V66 ANTI-PATTERN EXACTLY**: tests using self-consistent fake names pass while production reality differs.
+
+**Extension rule**: Every `filterField` + `orFilterField` in any selective-make-fresh bucket schema (CENTRAL_BUCKETS, future bucket schemas) MUST be grep-verified against the actual write-side code BEFORE shipping. Static regression test `tests/central-stock-buckets-filter-field-prod-verification.test.js` enforces this contract — if a NEW bucket uses a NEW filterField, the test fails unless that field name appears as a `<field>:` setDoc value OR a `where('<field>', ...)` query in the codebase.
+
+**Verified field names (2026-05-15 V66 fix, via `scripts/diag-central-stock-prod-field-names.mjs` + grep of `backendClient.js`)**:
+- `be_central_stock_orders.centralWarehouseId` (was wrongly `warehouseId`)
+- `be_stock_batches.branchId` (was wrongly `locationId`)
+- `be_stock_movements.branchId` (was wrongly `locationId`)
+- `be_stock_transfers.sourceLocationId` + `destinationLocationId` (was wrongly `destLocationId`)
+- `be_stock_withdrawals.sourceLocationId` + `destinationLocationId`
+- `be_stock_adjustments.branchId` (was wrongly `locationId`)
+- REMOVED `be_central_stock_movements` from any bucket (empty in prod — stale from `branchBackupCore.UNIVERSAL`)
+
+**Forbidden invented field names** (regression locked):
+- `destLocationId` (use `destinationLocationId`)
+- `warehouseId` for `be_central_stock_orders` (use `centralWarehouseId`)
+- `locationId` for `be_stock_movements`/`be_stock_adjustments`/`be_stock_batches` filter (use `branchId` for filter — locationId exists in subset of docs but is NOT universal)
+
+**Class-of-bug regression test**: `tests/central-stock-buckets-filter-field-prod-verification.test.js` — V66.1 through V66.7 lock all field name corrections + anti-regression on invented names. Future bucket schema additions MUST extend this test.
+
+**Companion lesson**: Rule Q V66 — mock/synthetic tests can hide reality mismatch when seed + filter use the same (wrong) names. Always grep prod write-side code + run `diag-*` script (Rule R) before claiming any selective-scope feature is "verified".
+
 ## How to run
 
 1. Run each grep pattern; classify hits.

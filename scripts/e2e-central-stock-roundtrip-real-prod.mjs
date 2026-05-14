@@ -76,30 +76,39 @@ const TEST_PREFIX = 'TEST-CSRT';
 const TS = Date.now();
 const TEST_WAREHOUSE_ID = `${TEST_PREFIX}-WH-${TS}`;
 
-// Adversarial fixtures: Thai/Unicode/Timestamps/refs/large/nested/counter
+// Adversarial fixtures — V66 fix 2026-05-15: field names match REAL production
+// write-side code (verified via scripts/diag-central-stock-prod-field-names.mjs
+// + grep of backendClient.js writers). Pre-fix used invented field names
+// (`warehouseId`, `locationId`, `destLocationId`) — test seed + filter both
+// consistent → test passed → but real prod data uses different names → user-
+// reported "data ยังอยู่ครบเลย" because filter matched 0 docs.
 function buildAdversarialFixtures(warehouseId) {
   return {
     be_central_stock_orders: [
-      { id: `${TEST_PREFIX}-PO-${TS}-1`, warehouseId, vendor: 'ผู้ขายตัวอย่าง', items: [{ name: 'รายการ ก', qty: 50 }], total: 12500 },
-      { id: `${TEST_PREFIX}-PO-${TS}-2`, warehouseId, vendor: 'é vendor (NFC: é)', total: 8800 },
+      // V66 fix: centralWarehouseId (NOT warehouseId) per backendClient.js:5855
+      { id: `${TEST_PREFIX}-PO-${TS}-1`, centralWarehouseId: warehouseId, vendorName: 'ผู้ขายตัวอย่าง', items: [{ productName: 'รายการ ก', qty: 50 }], status: 'pending' },
+      { id: `${TEST_PREFIX}-PO-${TS}-2`, centralWarehouseId: warehouseId, vendorName: 'é vendor (NFC: é)', status: 'pending' },
     ],
-    be_central_stock_movements: [
-      { id: `${TEST_PREFIX}-MV-${TS}-1`, warehouseId, type: 'IN', qty: 50, productId: 'TEST-P-001' },
-    ],
+    // be_central_stock_movements REMOVED — empty in prod (Rule R diag).
     be_stock_batches: [
-      { id: `${TEST_PREFIX}-BATCH-${TS}-1`, locationId: warehouseId, productId: 'TEST-P-001', qty: { remaining: 50, total: 50 }, note: 'ทดสอบไทย' },
+      // V66 fix: branchId (NOT locationId) per backendClient.js:5439
+      { id: `${TEST_PREFIX}-BATCH-${TS}-1`, branchId: warehouseId, locationType: 'central', productId: 'TEST-P-001', qty: { remaining: 50, total: 50 }, note: 'ทดสอบไทย' },
     ],
     be_stock_movements: [
-      { id: `${TEST_PREFIX}-SM-${TS}-1`, locationId: warehouseId, productId: 'TEST-P-001', type: 'IN', qty: 50, deeplyNested: { a: { b: { c: { d: 'deep' } } } } },
+      // V66 fix: branchId (NOT locationId) per backendClient.js:5466
+      { id: `${TEST_PREFIX}-SM-${TS}-1`, branchId: warehouseId, productId: 'TEST-P-001', type: 'IN', qty: 50, deeplyNested: { a: { b: { c: { d: 'deep' } } } } },
     ],
     be_stock_transfers: [
-      { id: `${TEST_PREFIX}-TR-${TS}-1`, sourceLocationId: warehouseId, destLocationId: 'TEST-BRANCH-X', qty: 10, status: 'completed' },
+      // V66 fix: destinationLocationId (NOT destLocationId) per backendClient.js:7684
+      { id: `${TEST_PREFIX}-TR-${TS}-1`, sourceLocationId: warehouseId, destinationLocationId: 'TEST-BRANCH-X', qty: 10, status: 'completed' },
     ],
     be_stock_withdrawals: [
-      { id: `${TEST_PREFIX}-WD-${TS}-1`, sourceLocationId: warehouseId, requestingBranchId: 'TEST-BRANCH-X', qty: 5, status: 'pending' },
+      // V66 fix: destinationLocationId added per backendClient.js:8060
+      { id: `${TEST_PREFIX}-WD-${TS}-1`, sourceLocationId: warehouseId, destinationLocationId: 'TEST-BRANCH-X', qty: 5, status: 'pending' },
     ],
     be_stock_adjustments: [
-      { id: `${TEST_PREFIX}-ADJ-${TS}-1`, locationId: warehouseId, type: 'add', qty: 3, reason: 'ทดสอบปรับเพิ่ม' },
+      // V66 fix: branchId (NOT locationId) per backendClient.js:6291
+      { id: `${TEST_PREFIX}-ADJ-${TS}-1`, branchId: warehouseId, type: 'add', qty: 3, reason: 'ทดสอบปรับเพิ่ม' },
     ],
   };
 }
