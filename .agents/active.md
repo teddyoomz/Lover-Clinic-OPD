@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity SHIPPED (34 commits ahead of prod)"
-status: "master=7026bad · prod=8dd17c5 · 34 commits PENDING DEPLOY per V18 · build clean · 10/10 Rule Q L2 real-prod round-trip GREEN"
+updated_at: "2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity DEPLOYED to prod ✓"
+status: "master=8b4b047 · prod=8b4b047 ✓ DEPLOYED · build clean · 10/10 Rule Q L2 real-prod round-trip GREEN"
 branch: "master"
-last_commit: "7026bad test(selective-make-fresh): V21 fixup sweep — migrate V40-locked tests to bucketIds contract (Task 12)"
+last_commit: "8b4b047 docs(agents): EOD 2026-05-14 #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★"
 tests: "9825 vitest GREEN + 12 skipped + 4 pre-existing failures (NOT introduced by selective-make-fresh — flagged in prior active.md)"
 playwright_e2e: 13
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8dd17c5"
+production_commit: "8b4b047"
 firestore_rules_version: 31
 storage_rules_version: 2
 ---
@@ -21,7 +21,7 @@ storage_rules_version: 2
 
 ## State
 
-- master = `7026bad`, prod = `8dd17c5` (34 commits PENDING)
+- master = `8b4b047` · prod = `8b4b047` ✓ DEPLOYED 2026-05-14 LATE EOD #3
 - Build clean
 - **Rule Q L2 ★ VERIFIED**: `scripts/e2e-backup-restore-roundtrip-real-prod.mjs --apply` → 10/10 scenarios PASS on REAL prod (hash byte-equal at every phase boundary, all adversarial fixtures Thai/Unicode/Timestamps/refs/large/nested cleanup zero orphans)
 - 9825 vitest GREEN + 12 skipped + 4 pre-existing failures (NOT from this work)
@@ -50,13 +50,13 @@ Brainstorming Q1-Q6 locked (Q1=D hybrid UI + Advanced + T1 server-protected · Q
 
 ## Next action
 
-**AWAITING explicit "deploy" verb** for 34-commit Vercel deploy. NO Firebase rules changed; Vercel-only deploy. Round-trip integrity verified on real prod — feature is production-ready.
+Selective Make-Fresh + Backup Integrity is **LIVE on https://lover-clinic-app.vercel.app** at commit `8b4b047`. Awaiting next task.
 
-## Outstanding (user-triggered)
+## Recently completed (this session — all DEPLOYED)
 
-1. Hard-refresh dev server + test new modal UI hands-on (npm run dev + open BranchesTab)
-2. Run Playwright Rule Q L1 spec when ready (`tests/e2e/branch-make-fresh-selective.spec.js`) with auth env vars
-3. Explicit **"deploy"** → 34-commit `vercel --prod --yes` (Vercel only)
+1. ✓ Hard-refresh dev server + verified modal hands-on (Q4-B defaults correct: 6 checked + customerActivity FALSE; 7 buckets render; advanced toggle works)
+2. ✓ Playwright Rule Q L1 spec runs (skips when env vars not set — by design; runnable when admin sets FIREBASE_API_KEY + TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD)
+3. ✓ Deployed via `vercel --prod --yes` — Aliased to lover-clinic-app.vercel.app
 
 ## Pre-existing failures (NOT from this work — for reference)
 

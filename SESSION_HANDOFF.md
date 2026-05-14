@@ -43,11 +43,11 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-14 LATE EOD #3 — **Selective Make-Fresh + Backup Integrity SHIPPED** (brainstorming Q1-Q6 → spec → 13-task plan → ★ Rule Q L2 10/10 scenarios PASS on real prod) · master=`7026bad` · prod=`8dd17c5` · **34 commits PENDING DEPLOY per V18** · build clean · firestore rules v31
+- **Date last updated**: 2026-05-14 LATE EOD #3 — **Selective Make-Fresh + Backup Integrity DEPLOYED ✓** (Phase 29.23 SAGA + Selective Make-Fresh combined 35-commit deploy) · master=`8b4b047` · prod=`8b4b047` ✓ LIVE on https://lover-clinic-app.vercel.app · build clean · firestore rules v31 (unchanged)
 - **Branch**: `master`
-- **Last commit**: `7026bad` test(selective-make-fresh): V21 fixup sweep — migrate V40-locked tests to bucketIds contract (Task 12)
+- **Last commit**: `8b4b047` docs(agents): EOD 2026-05-14 #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★
 - **Test count**: **9825 vitest GREEN** + 12 skipped + 4 pre-existing failures (NOT from selective-make-fresh — flagged in prior session active.md) + **13 Playwright e2e** (12 baseline + 1 new selective-make-fresh L1 spec).
-- **Deploy state**: prod=`8dd17c5` LIVE. **34 commits PENDING DEPLOY** — V18 lock active.
+- **Deploy state**: prod=`8b4b047` ✓ LIVE. Combined 35-commit deploy successful 2026-05-14 LATE EOD #3 (Vercel-only; no Firebase rules touched).
 
 ### Session 2026-05-14 LATE EOD #3 — Selective Make-Fresh + Backup Integrity SHIPPED ★
 
