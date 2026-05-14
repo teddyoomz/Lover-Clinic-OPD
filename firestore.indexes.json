@@ -126,6 +126,14 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "snoozedUntil", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "be_recall_cases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isHidden", "order": "ASCENDING" },
+        { "fieldPath": "caseName", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
