@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV48)
+## Invariants (AV1–AV49)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -1462,6 +1462,31 @@ After initial AV44 shipped, user reported "กดคลังใหม่ไป�
 **Origin**: V69 (2026-05-15) — user reported 3 bugs post-V68 deploy: (A) "{{customerName}} ขึ้นนางสาว แพรพร พรแพร" — title prefix duplicates "คุณ" in template; (B) "ยิงเฉพาะลูกค้า ขึ้น 0 sent" — UI showed Sent: 0 even though LINE message arrived per history panel; (C) "ยิงทุกคนพรุ่งนี้/วันนี้ ขึ้น BRANCH_NAME_CONFIRM_MISMATCH" — typed exact branch name but rejected. Phase 1 root cause: A = no title strip in template; B = UI reads response shape `result.sent` but endpoint returns `result.results.sent`; C = UI sends payload key `branchNameConfirm` but endpoint destructures `confirmBranchName`.
 
 **Lesson**: When introducing UI ↔ endpoint integration, write a SINGLE source-of-truth for the contract (e.g. shared TypeScript interface OR a fixture file both sides import). Mock tests on each side WILL match their own self-consistent shape. The integration test (real fetch in UI render OR e2e with running endpoint) is the only test that catches drift. AV48 source-grep locks the post-V69 shapes; future drift fails build at the grep boundary.
+
+### AV49 — Inline LINE badge discipline in admin appt-list (V71, 2026-05-15)
+
+**Trigger**: Any admin appointment-list / appointment-hub UI surface that renders `<AppointmentLineBadge>` (the AV47 shared component) — placement must stay inline next to the status chip, never wrapped in an absolute-positioned overlay div.
+
+**Class**: V21 comment-vs-code drift family + visual-overlap regression. Pre-V71 `AppointmentHubView.jsx` wrapped the badge in `<div className="absolute top-2 right-2 z-10 pointer-events-none">` so the LINE chip floated over the card and visually overlapped the status chip ("ซ้อน" — user-reported). V71 moved the badge inline beside the status chip in `AppointmentHubRowCard.jsx`. AV49 prevents accidental drift back to the absolute-wrapper pattern in any admin appt-list surface.
+
+**Specific contracts locked**:
+  - No `<div className="… absolute …"><AppointmentLineBadge` pattern within 200 chars in `src/components/admin/AppointmentHubView.jsx`, `src/components/admin/AppointmentHubRowCard.jsx`, or `src/pages/AdminDashboard.jsx`.
+  - Inline placement only — badge sits in the same flex row as the status chip, NOT in a corner overlay.
+
+**Sanctioned exceptions**: NONE. Calendar micro-cells in `AdminDashboard.jsx` already render the badge inline; the AV47 sanctioned-skip for those is about chip omission, not absolute-wrapper placement.
+
+**Why architectural**: The LINE-badge surface has 3+ consumers (AV47 Rule of 3 lock). Without AV49, any of those consumers could re-introduce an overlay wrapper at any time, recreating the V71 user-reported overlap. The grep is cheap; the recurrence cost is user-visible visual regression. Lock at source-grep boundary, not at code-review boundary.
+
+**Grep targets**:
+  - `src/components/admin/AppointmentHubView.jsx` MUST NOT match `<div[^>]*className=["'][^"']*\babsolute\b[^"']*["'][^>]*>[\s\S]{0,200}<AppointmentLineBadge`.
+  - `src/components/admin/AppointmentHubRowCard.jsx` — same.
+  - `src/pages/AdminDashboard.jsx` — same.
+
+**Source-grep regression test**: `tests/v71-av49-line-badge-no-absolute.test.js` — AV49.1–AV49.3 audit groups locking each admin appt-list surface.
+
+**Origin**: V71 (2026-05-15) — user reported the LINE chip "ซ้อน" (overlapping) with the status chip in the Frontend appointment list. Root cause: `AppointmentHubView.jsx` had a row-level `<div className="absolute top-2 right-2 …">` wrapping `<AppointmentLineBadge>`, which floated the badge over the card content regardless of card layout. V71 Tasks 5–6 removed the absolute wrapper and moved the badge inline next to the status chip via `AppointmentHubRowCard.jsx`. Task 8 (this AV49) locks the inline placement permanently.
+
+**Lesson**: Floating overlays (`absolute top-2 right-2`) are a tempting "always visible regardless of card content" pattern, but they break visual coexistence with sibling chips that share the same corner. When a status badge co-occupies a region with other chips, inline placement (flex row, gap-1) is the correct default; absolute overlay is the exception that requires explicit justification AND a sanctioned-exception annotation. AV49 closes the admin appt-list surface; future cross-cutting status badges (no-show / VIP / membership tier) should follow the same inline-first contract.
 
 ## How to run
 
