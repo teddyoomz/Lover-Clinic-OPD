@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-15 EOD+4 — V68 LINE badge surfacing + CustomerCard V5 redesign"
-status: "master=ahead-by-3 (V67 + V68-spec + V68-plan + V68-feature) · prod=84c0af1 LIVE · firestore rules v32 (no rules change)"
+updated_at: "2026-05-15 EOD+4 — V67 + V68 DEPLOYED LIVE on prod (vercel-only; no rules change)"
+status: "master=prod=`7f7ade4` LIVE on lover-clinic-app.vercel.app · firestore rules v32 (unchanged)"
 branch: "master"
-last_commit: "(pending V68 feature commit) — single commit batch under V18 lock"
+last_commit: "7f7ade4 feat(V68): LINE badge surfacing + CustomerCard V5 redesign + lineNotify strip"
 tests: "10122 PASS / 0 FAIL / 12 skip (full suite GREEN); 21/21 V68 audit + 18/18 L2 render verify GREEN"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "84c0af1"
+production_commit: "7f7ade4"
 firestore_rules_version: 32
 storage_rules_version: 2
 ---
@@ -15,10 +15,10 @@ storage_rules_version: 2
 
 ## State
 
-- master = ahead-by-3 vs prod=`84c0af1` (V67 + V68-spec + V68-plan + V68-feature pending commit)
-- build clean (2.82s, only pre-existing chunk-size warnings)
+- master = prod = `7f7ade4` LIVE · build clean (2.82s)
+- Vercel deploy completed at https://lover-clinic-app.vercel.app · HTTP 200
 - NO firestore/storage rules change · NO data ops · NO Playwright e2e change
-- V68 LINE badge surfacing across 4 admin appt-list surfaces + CustomerCard V5 redesign + lineNotify legacy strip
+- V67 + V68 shipped together: LINE reminder pipeline schema-drift fix (V67) + LINE badge surfacing across 4 admin surfaces + CustomerCard V5 redesign + lineNotify legacy strip (V68)
 
 ## What this session shipped (V68)
 
@@ -62,7 +62,7 @@ storage_rules_version: 2
 
 ## Next action
 
-**User L1 hands-on after deploy**:
+**User L1 hands-on (Rule Q L1 — verify behavior in real prod)**:
 1. Open `tab=appointment-all` → see 🟢 LINE chips on appts where notifyChannel=line in time-grid
 2. Same in `tab=appointment-hub` (verify visual overlap concern — reposition if needed)
 3. Same in customer detail view → appts tab
@@ -70,12 +70,12 @@ storage_rules_version: 2
 5. Open AppointmentFormModal → confirm bottom checkbox is GONE; only green-card at top
 6. Open `tab=customerlist` → see V5 redesigned cards with 🟢/⚪️ LINE chips + 4-layer shadow depth + initials gradient avatars
 
-**Deploy authorization**: user types "deploy" verb to authorize `vercel --prod` (NO firebase rules change needed — pure UI + lib changes).
+**Deploy DONE**: V67 + V68 LIVE on prod via vercel --prod (no firebase rules change needed).
 
 ## Outstanding user-triggered actions
 
-- Deploy V68 fix to prod (vercel --prod only; combined with V67 commit ahead — both ship together)
-- L1 visual verification of AppointmentHubView badge overlay placement (T4 concern)
+- L1 visual verification of AppointmentHubView badge overlay placement (T4 concern flagged during Subagent-Driven review — adjust if visual is unacceptable)
+- L1 hands-on for V67 LINE reminder pipeline (debug-fire single-mode → real LINE message arrives → click ✓ ยืนยัน → verify status='confirmed')
 
 ## Notes
 
