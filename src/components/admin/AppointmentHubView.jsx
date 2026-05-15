@@ -12,7 +12,9 @@ import {
   getAllMemberships,
   getWalletsForCustomerIds,
   listStaffSchedules,
-  markAppointmentServiceCompleted,           // V71 NEW
+  // V71 (2026-05-15) — markAppointmentServiceCompleted is consumed by AdminDashboard
+  // (parent) and passed back to HubView via the onMarkServiceComplete prop. NOT
+  // imported here to avoid dead-import code smell.
 } from '../../lib/scopedDataLayer.js';
 import {
   applyTabFilter,
