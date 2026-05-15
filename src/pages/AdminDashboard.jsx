@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { app } from '../firebase.js';
+import { app, auth } from '../firebase.js';
 import { signOut } from 'firebase/auth';
 import {
   QrCode, Users, PlusCircle, ClipboardList, CheckCircle2, Clock, Activity,
@@ -57,6 +57,7 @@ import {
   updateDeposit,
   cancelDeposit,
   listStaffSchedules,       // V56 / BS-15 — auto-closure derivation in handleGenScheduleLink
+  markAppointmentServiceCompleted, // V71 (2026-05-15) — service-complete writer for AppointmentHubView
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 // Phase 25.0c (2026-05-09) — Walk-in OPD-save → appointment-create modal flow.
@@ -6794,6 +6795,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               onAddWalkIn={() => {
                 setSessionModalTab?.('standard');
                 setShowSessionModal(true);
+              }}
+              /* V71 (2026-05-15) — mark service complete. Calls the canonical
+               * writer with the current admin's Firebase auth uid for the
+               * serviceCompletedBy forensic stamp. Re-throws on error so
+               * HubView's optimistic-revert path fires. */
+              onMarkServiceComplete={(appt) => {
+                const uid = auth?.currentUser?.uid || '';
+                return markAppointmentServiceCompleted(appt.id, uid).catch((err) => {
+                  console.error('[V71] markAppointmentServiceCompleted failed:', err);
+                  showToast?.('บันทึกสถานะ "รับบริการเรียบร้อย" ไม่สำเร็จ — ลองอีกครั้ง', 4000);
+                  throw err; // re-throw so HubView's optimistic-revert path fires
+                });
               }}
             />
           ) : renderJsxBlock(() => {
