@@ -549,6 +549,9 @@ export const receiveCentralStockOrder = (...args) => raw.receiveCentralStockOrde
 // ─── Appointment operations ────────────────────────────────────────────────
 export const createBackendAppointment = (...args) => raw.createBackendAppointment(...args);
 export const updateBackendAppointment = (...args) => raw.updateBackendAppointment(...args);
+// V71 (2026-05-15) — universal pass-through; appt-id-keyed write, no branch-scope.
+export const markAppointmentServiceCompleted = (...args) =>
+  raw.markAppointmentServiceCompleted(...args);
 
 // ─── Deposit operations ────────────────────────────────────────────────────
 export const createDeposit = (...args) => raw.createDeposit(...args);

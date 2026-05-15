@@ -2272,6 +2272,20 @@ export async function updateBackendAppointment(appointmentId, data) {
   return { success: true };
 }
 
+// V71 (2026-05-15) — Mark appointment as service-completed on today's tab.
+// Writes ONE forensic-stamped field pair + serverTimestamp. No branch-scope
+// (doc id is the key). Caller passes Firebase Auth uid for serviceCompletedBy
+// (empty string allowed for admin-SDK paths).
+export async function markAppointmentServiceCompleted(apptId, uid) {
+  if (!apptId || typeof apptId !== 'string') {
+    throw new Error('V71_MARK_SERVICE_COMPLETED_REQUIRES_APPT_ID');
+  }
+  await updateDoc(appointmentDoc(apptId), {
+    serviceCompletedAt: serverTimestamp(),
+    serviceCompletedBy: typeof uid === 'string' ? uid : '',
+  });
+}
+
 /**
  * Delete an appointment + release its AP1 slot reservation.
  * Slot release is best-effort; appointment deletion is the source of truth.
