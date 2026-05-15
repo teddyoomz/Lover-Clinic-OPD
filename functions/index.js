@@ -116,3 +116,6 @@ exports.sendPushOnSubmit = functionsV1.https.onRequest(async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// V73 (2026-05-16) — Staff chat 7-day cleanup
+exports.cleanupOldStaffChatMessages = require('./cleanupStaffChat.js').cleanupOldStaffChatMessages;
