@@ -42,7 +42,11 @@ export function resolveTokens({ cust, appt, branch, doctor, treatments, branchSe
     || `${cust.firstname || ''} ${cust.lastname || ''}`.trim()
     || cust.patientData?.firstNameTh || '';
   return {
-    clinicName: clinicName || 'LoverClinic',
+    // V70 (2026-05-15): default "Lover Clinic" carries a SPACE — canonical
+    // shape mirrors src/constants.js DEFAULT_CLINIC_SETTINGS. Pre-V70 fallback
+    // 'LoverClinic' (no space) was V21-class drift from canonical default;
+    // user reported header rendering "LoverClinic" jammed together.
+    clinicName: clinicName || 'Lover Clinic',
     customerName: stripCustomerNamePrefix(rawCustomerName),
     customerDisplayName: cust.lineDisplayName || '',
     branchName: branch.branchName || branch.name || '',
@@ -68,6 +72,44 @@ export function renderTemplate(template, tokens) {
     if (v === null || v === undefined) return '';
     return String(v);
   });
+}
+
+// V70 (2026-05-15) — Render a `{{var}}` template as a LINE Flex span array,
+// bolding every resolved variable while leaving static text plain. LINE Flex
+// `text` elements accept `contents: [span]` for inline formatting; each span
+// supports `weight: 'bold'`. User-reported (V70): customerName / date / time /
+// branchName / doctorName / treatments inside templateDayBefore + templateDayOf
+// MUST be bold (the detail rows below the body text are already bold; only the
+// top body text wasn't). Empty resolved values + empty static segments are
+// skipped — LINE rejects empty `{type:'span', text:''}` (same I4 lesson as the
+// parent text node).
+export function renderTemplateAsSpans(template, tokens) {
+  if (typeof template !== 'string' || !template) return [];
+  const spans = [];
+  const regex = /\{\{(\w+)\}\}/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(template)) !== null) {
+    const placeholder = match[0];
+    const key = match[1];
+    const start = match.index;
+    // Static segment before this placeholder.
+    if (start > lastIndex) {
+      const staticText = template.slice(lastIndex, start);
+      if (staticText) spans.push({ type: 'span', text: staticText });
+    }
+    // Variable segment — bold.
+    const v = tokens?.[key];
+    const resolved = v === null || v === undefined ? '' : String(v);
+    if (resolved) spans.push({ type: 'span', text: resolved, weight: 'bold' });
+    lastIndex = start + placeholder.length;
+  }
+  // Trailing static segment.
+  if (lastIndex < template.length) {
+    const tail = template.slice(lastIndex);
+    if (tail) spans.push({ type: 'span', text: tail });
+  }
+  return spans;
 }
 
 export function parsePostbackData(rawData) {
@@ -120,7 +162,12 @@ export function buildReminderFlex(input) {
   const template = safe.reminderType === 'dayOf'
     ? (branchSettings.templateDayOf || '')
     : (branchSettings.templateDayBefore || '');
-  const bodyText = renderTemplate(template, tokens);
+  // V70 (2026-05-15) — bold body variables. Body text node now uses
+  // `contents:[span]` so each {{var}} placeholder renders as a span with
+  // `weight:'bold'`. Detail rows below were already bold; this closes the
+  // V21-class drift where only the bottom table was bold and the top body
+  // text wasn't.
+  const bodySpans = renderTemplateAsSpans(template, tokens);
 
   const headerTitle = safe.reminderType === 'dayOf' ? '📅 นัดหมายวันนี้!' : '📅 แจ้งเตือนนัดหมาย';
   const altText = safe.reminderType === 'dayOf'
@@ -131,9 +178,11 @@ export function buildReminderFlex(input) {
   // (`messages[0].contents.body.contents[0].text: must not be empty`). Conditionally
   // include text nodes — drop the body text + separator when template is empty;
   // drop the trailing separator + policy text when cancellation policy is empty.
+  // V70 mirror: when bodySpans is empty (empty template OR all-variables-empty),
+  // skip the body text node + separator entirely.
   const bodyContents = [
-    ...(bodyText ? [
-      { type: 'text', text: bodyText, wrap: true, size: 'md' },
+    ...(bodySpans.length > 0 ? [
+      { type: 'text', contents: bodySpans, wrap: true, size: 'md' },
       { type: 'separator' },
     ] : []),
     ...buildDetailRows(tokens),

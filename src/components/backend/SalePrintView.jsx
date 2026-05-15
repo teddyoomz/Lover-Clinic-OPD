@@ -201,7 +201,7 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                   clinicNameEn subtitle removed — brand+branch is the only
                   identifier shown on receipts now. */}
               <div className="text-3xl font-black leading-tight" style={{ color: accent }}>
-                {clinic.clinicName || 'LoverClinic'}
+                {clinic.clinicName || 'Lover Clinic'}
               </div>
               {/* 2026-04-28 polish: clinic contact block — address on its own
                   line + phone/taxId on a single inline row separated by a
