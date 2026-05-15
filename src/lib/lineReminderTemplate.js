@@ -52,9 +52,19 @@ export function resolveTokens({ cust, appt, branch, doctor, treatments, branchSe
     branchName: branch.branchName || branch.name || '',
     doctorName: (doctor && (doctor.name || doctor.fullName))
       || appt.doctorName || 'แพทย์ผู้ดูแล',
-    treatments: Array.isArray(treatments) && treatments.length
-      ? treatments.map(t => t && (t.name || '')).filter(Boolean).join(', ') || '-'
-      : '-',
+    // V71.B (2026-05-16): {{treatments}} token semantic is "what this appt is for".
+    // Pre-V71.B resolver only looked at the `treatments` array (be_treatments fetched
+    // for customer+date). For a REMINDER fired BEFORE the visit, no treatment record
+    // exists yet → token resolved to '-' even when admin set "นัดมาเพื่อ" at booking.
+    // User-reported: LINE reminder showed "บริการ: -" while appt.appointmentTo was
+    // "botox". Fallback chain: real treatment names (post-treatment case, rare for
+    // reminders) → appt.appointmentTo (admin's "นัดมาเพื่อ", the canonical reminder
+    // intent) → '-'.
+    treatments: (Array.isArray(treatments) && treatments.length
+      ? treatments.map(t => t && (t.name || '')).filter(Boolean).join(', ')
+      : '')
+      || (typeof appt.appointmentTo === 'string' ? appt.appointmentTo.trim() : '')
+      || '-',
     // V67 (2026-05-15): canonical Firestore field is `date` (NOT `appointmentDate`).
     // Mock-only `appointmentDate` was the V66 mock-shadow drift. Fallback chain
     // mirrors lineBotResponder.js defensive pattern.
