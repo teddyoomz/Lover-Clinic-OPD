@@ -13,6 +13,11 @@ import {
   BTN_PRIMARY, BTN_SECONDARY, BTN_DESTRUCTIVE, BTN_LINE,
   CARD_SURFACE, ACCENT_BAR_BASE, ACCENT_BAR, STATUS_CHIP_CLS,
 } from './_apptHubStyles.js';
+// V71 (2026-05-15) — bottom OPD lifecycle stepper row + inline LINE badge.
+// LINE badge moved from absolute-positioned wrapper in AppointmentHubView
+// into the right-column status cluster to de-overlap with status chip.
+import AppointmentOpdStepperRow from './AppointmentOpdStepperRow.jsx';
+import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 
 const STATUS_LABELS = {
   pending: 'รอยืนยัน',
@@ -53,12 +58,18 @@ export default function AppointmentHubRowCard({
   summary,
   apptDeposit,
   apptDateTreatments = [],
+  isTodayTab = false,                   // V71 NEW
   now = new Date(),
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
+  onMarkServiceComplete,                // V71 NEW
 }) {
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
   const hasTreatmentForDay = !!latestTreatment;
+  // V71 (2026-05-15) — service-completed button visibility: today tab + treatment
+  // exists + not yet marked complete. serviceCompletedAt is a Firestore Timestamp
+  // or null; truthy-check works for both.
+  const showMarkCompleteBtn = isTodayTab && hasTreatmentForDay && !appt.serviceCompletedAt;
   const effectiveStatus = hasTreatmentForDay ? 'done' : rawStatus;
   const status = effectiveStatus;
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
@@ -89,15 +100,20 @@ export default function AppointmentHubRowCard({
 
   return (
     <div
-      className={`${CARD_SURFACE} flex flex-col md:flex-row gap-4`}
+      className={`${CARD_SURFACE} flex flex-col`}
       data-testid="appt-hub-row"
       data-appt-id={appt.id}
       data-status-accent={accentKey}
     >
       {/* V64-fix11 — left-edge status accent bar (3px gradient). Peripheral
-          vision: admin scans the queue + sees urgency colour from edge. */}
+          vision: admin scans the queue + sees urgency colour from edge.
+          V71 (2026-05-15) — accent bar stays at outermost level so the 3px
+          edge spans the FULL card height (3-column body + OPD stepper row). */}
       <span aria-hidden="true" data-testid="row-accent-bar" className={`${ACCENT_BAR_BASE} ${accentClass}`} />
 
+      {/* V71 (2026-05-15) — 3-column body wrapped so the V71 OPD stepper row
+          can sit BELOW the 3 columns as a full-width footer of the card. */}
+      <div className="flex flex-col md:flex-row gap-4">
       {/* LEFT — Customer
           V64-fix14: min-w-0 on mobile so card can shrink below 260px on
           narrow viewports without horizontal overflow. */}
@@ -251,13 +267,37 @@ export default function AppointmentHubRowCard({
           right rail so md:items-end. min-w only on desktop so card collapses
           cleanly on mobile. */}
       <div className="flex flex-col gap-2 items-start md:items-end justify-start md:min-w-[200px]">
-        <span
-          className={`text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${STATUS_CHIP_CLS[status] || ''}`}
-          data-testid="row-status"
-        >
-          {statusLabel}
-        </span>
+        {/* V71 (2026-05-15) — LINE badge inline with status chip (de-overlap
+            from absolute top-right wrapper that lived in AppointmentHubView).
+            AppointmentLineBadge self-nullifies when appt has no LINE channel,
+            so harmless for non-LINE appts. */}
+        <div className="flex items-center gap-2 flex-wrap md:justify-end">
+          <AppointmentLineBadge appt={appt} size="xs" />
+          <span
+            className={`text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${STATUS_CHIP_CLS[status] || ''}`}
+            data-testid="row-status"
+          >
+            {statusLabel}
+          </span>
+        </div>
         <div className="flex gap-1.5 flex-wrap md:justify-end">
+          {/* V71 (2026-05-15) — mark service complete (today tab only, treatment
+              recorded, not already completed). Confirm dialog before optimistic
+              write. Rendered FIRST so it's the most prominent action in the row. */}
+          {showMarkCompleteBtn && (
+            <button
+              type="button"
+              data-testid="row-action-mark-complete"
+              onClick={() => {
+                if (window.confirm('ยืนยันลูกค้าได้รับบริการเรียบร้อย? ลูกค้าจะถูกย้ายไปแท็บ "เสร็จแล้ว"')) {
+                  onMarkServiceComplete?.(appt);
+                }
+              }}
+              className={BTN_PRIMARY}
+            >
+              ✓ ลูกค้ารับบริการเรียบร้อย
+            </button>
+          )}
           {appt.customerLineUserId && (
             <button
               type="button"
@@ -401,6 +441,12 @@ export default function AppointmentHubRowCard({
           )}
         </div>
       </div>
+      {/* end of inner 3-column wrapper (V71) */}
+      </div>
+      {/* V71 (2026-05-15) — full-width OPD lifecycle stepper row sits below the
+          3-column body. AppointmentOpdStepperRow self-nullifies when no
+          treatment exists AND isTodayTab=false (other tabs hide entirely). */}
+      <AppointmentOpdStepperRow latestTreatment={latestTreatment} isTodayTab={isTodayTab} />
     </div>
   );
 }

@@ -41,6 +41,7 @@ export function AppointmentLineBadge({ appt, contextBranchId = '', size = 'sm' }
     <span
       className={`inline-flex items-center gap-1 rounded bg-green-500/10 text-green-700 dark:text-green-400 font-medium flex-shrink-0 ${sizeCls}`}
       title="แจ้งเตือนนัดผ่าน LINE"
+      data-testid="line-badge"
     >
       🟢 LINE
     </span>
