@@ -1,14 +1,19 @@
 // ─── Probe-Deploy-Probe (Rule B iron-clad) ──────────────────────────────────
-// 5-endpoint check before + after firestore:rules deploy. If post-probe
+// 2-endpoint check before + after firestore:rules deploy. If post-probe
 // returns 403 on any endpoint → revert deploy immediately.
 //
-// Endpoints (per .claude/rules/01-iron-clad.md Rule B):
-//   1. POST chat_conversations (unauth REST)
-//   2. PATCH pc_appointments (unauth REST)
-//   3. PATCH clinic_settings/proclinic_session (cookie-relay extension write)
-//   4. PATCH clinic_settings/proclinic_session_trial (cookie-relay trial)
+// Endpoints (per .claude/rules/01-iron-clad.md Rule B, post-V50-followup-2):
+//   1. POST chat_conversations (unauth REST — webhook FB/LINE)
 //   5. anon-auth: signUp → CREATE opd_sessions w/ isArchived:true → PATCH
 //      whitelisted field (V23 patient form submit + V27 hide-from-queue)
+//
+// V50-followup-2 (2026-05-08) — probes 2/3/4 REMOVED:
+//   - probe 2 pc_appointments → ProClinic dev-only sync deleted in V50
+//   - probe 3 clinic_settings/proclinic_session → cookie-relay extension deleted
+//   - probe 4 clinic_settings/proclinic_session_trial → cookie-relay trial deleted
+// These endpoints now return 403 (default-deny) post-deploy — that's the
+// intended state, NOT a regression. Keeping them in the probe list would
+// abort every firebase rules deploy at pre-probe.
 //
 // Mode (CLI arg):
 //   pre      — just probe (assert 200), keep doc IDs for later cleanup
@@ -67,32 +72,6 @@ async function probe1_chatConversations(ts) {
   return { name: 'chat_conversations POST', docId, status: r.status, ok: r.ok, error: r.ok ? null : r.text.slice(0, 200) };
 }
 
-async function probe2_pcAppointments(ts) {
-  const docId = `test-probe-pc-${ts}`;
-  const url = `${FIRESTORE_BASE}/${DATA_PATH}/pc_appointments/${docId}?updateMask.fieldPaths=probe&updateMask.fieldPaths=_probeAt`;
-  const r = await http('PATCH', url, {
-    body: { fields: { probe: { booleanValue: true }, _probeAt: { stringValue: new Date().toISOString() } } },
-  });
-  return { name: 'pc_appointments PATCH', docId, status: r.status, ok: r.ok, error: r.ok ? null : r.text.slice(0, 200) };
-}
-
-async function probe3_proclinicSession() {
-  // PATCH on the REAL session doc — adds + then strips a probe field.
-  const url = `${FIRESTORE_BASE}/${DATA_PATH}/clinic_settings/proclinic_session?updateMask.fieldPaths=probe`;
-  const r = await http('PATCH', url, {
-    body: { fields: { probe: { booleanValue: true } } },
-  });
-  return { name: 'clinic_settings/proclinic_session PATCH', status: r.status, ok: r.ok, error: r.ok ? null : r.text.slice(0, 200) };
-}
-
-async function probe4_proclinicSessionTrial() {
-  const url = `${FIRESTORE_BASE}/${DATA_PATH}/clinic_settings/proclinic_session_trial?updateMask.fieldPaths=probe`;
-  const r = await http('PATCH', url, {
-    body: { fields: { probe: { booleanValue: true } } },
-  });
-  return { name: 'clinic_settings/proclinic_session_trial PATCH', status: r.status, ok: r.ok, error: r.ok ? null : r.text.slice(0, 200) };
-}
-
 async function probe5_anonOpdSessions(ts) {
   // (a) signUp anonymous user
   const signUpUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`;
@@ -140,9 +119,6 @@ async function runProbe(label) {
   console.log(`=== ${label.toUpperCase()} PROBE @ ${new Date().toISOString()} ===`);
   const results = await Promise.all([
     probe1_chatConversations(ts),
-    probe2_pcAppointments(ts),
-    probe3_proclinicSession(),
-    probe4_proclinicSessionTrial(),
     probe5_anonOpdSessions(ts),
   ]);
   let allOk = true;
@@ -169,7 +145,7 @@ async function runCleanup() {
   const db = getFirestore(app);
   const data = db.collection('artifacts').doc(APP_ID).collection('public').doc('data');
 
-  let nuked = { chat_conversations: 0, pc_appointments: 0, opd_sessions: 0, clinic_settings_stripped: 0 };
+  let nuked = { chat_conversations: 0, opd_sessions: 0 };
 
   // chat_conversations test-probe-chat-* + test-probe-* (legacy)
   for (const prefix of ['test-probe-chat-', 'test-probe-']) {
@@ -178,15 +154,6 @@ async function runCleanup() {
       if (!d.id.startsWith(prefix)) continue;
       await d.ref.delete();
       nuked.chat_conversations += 1;
-    }
-  }
-  // pc_appointments test-probe-pc-* + test-probe-*
-  {
-    const snap = await data.collection('pc_appointments').get();
-    for (const d of snap.docs) {
-      if (!d.id.startsWith('test-probe')) continue;
-      await d.ref.delete();
-      nuked.pc_appointments += 1;
     }
   }
   // opd_sessions test-probe-anon-*
@@ -198,24 +165,10 @@ async function runCleanup() {
       nuked.opd_sessions += 1;
     }
   }
-  // Strip 'probe' field from clinic_settings/proclinic_session* (admin SDK)
-  for (const docId of ['proclinic_session', 'proclinic_session_trial']) {
-    try {
-      const ref = data.collection('clinic_settings').doc(docId);
-      const snap = await ref.get();
-      if (snap.exists && snap.data()?.probe !== undefined) {
-        const { FieldValue } = await import('firebase-admin/firestore');
-        await ref.update({ probe: FieldValue.delete() });
-        nuked.clinic_settings_stripped += 1;
-      }
-    } catch (e) { console.warn(`  cleanup ${docId}:`, e.message); }
-  }
 
   console.log(`=== CLEANUP @ ${new Date().toISOString()} ===`);
   console.log(`  chat_conversations: nuked ${nuked.chat_conversations}`);
-  console.log(`  pc_appointments:    nuked ${nuked.pc_appointments}`);
   console.log(`  opd_sessions:       nuked ${nuked.opd_sessions}`);
-  console.log(`  clinic_settings:    stripped probe field on ${nuked.clinic_settings_stripped} doc(s)`);
 }
 
 // ─── Entry ─────────────────────────────────────────────────────────────────
