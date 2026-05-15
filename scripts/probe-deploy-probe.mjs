@@ -164,7 +164,7 @@ async function runCleanup() {
   const db = getFirestore(app);
   const data = db.collection('artifacts').doc(APP_ID).collection('public').doc('data');
 
-  let nuked = { chat_conversations: 0, opd_sessions: 0 };
+  let nuked = { chat_conversations: 0, opd_sessions: 0, be_staff_chat_messages: 0 };
 
   // chat_conversations test-probe-chat-* + test-probe-* (legacy)
   for (const prefix of ['test-probe-chat-', 'test-probe-']) {
@@ -184,10 +184,20 @@ async function runCleanup() {
       nuked.opd_sessions += 1;
     }
   }
+  // be_staff_chat_messages — defensive cleanup if probe9 inversion broke (V27 lesson)
+  {
+    const snap = await data.collection('be_staff_chat_messages').get();
+    for (const d of snap.docs) {
+      if (!d.id.startsWith('test-probe-staffchat-')) continue;
+      await d.ref.delete();
+      nuked.be_staff_chat_messages = (nuked.be_staff_chat_messages || 0) + 1;
+    }
+  }
 
   console.log(`=== CLEANUP @ ${new Date().toISOString()} ===`);
   console.log(`  chat_conversations: nuked ${nuked.chat_conversations}`);
   console.log(`  opd_sessions:       nuked ${nuked.opd_sessions}`);
+  console.log(`  be_staff_chat_messages: nuked ${nuked.be_staff_chat_messages || 0}`);
 }
 
 // ─── Entry ─────────────────────────────────────────────────────────────────

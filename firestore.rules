@@ -124,8 +124,14 @@ service cloud.firestore {
                       && request.resource.data.displayName.size() >= 2
                       && request.resource.data.displayName.size() <= 50
                       && request.resource.data.deviceId is string
-                      && (request.resource.data.get('text', '') is string)
-                      && (request.resource.data.get('text', '') is string && request.resource.data.get('text', '').size() <= 500);
+                      && request.resource.data.deviceId.size() > 0
+                      && request.resource.data.get('text', '') is string
+                      && request.resource.data.get('text', '').size() <= 500
+                      && (
+                        request.resource.data.get('text', '').size() > 0
+                        || (request.resource.data.get('attachmentUrl', '') is string
+                            && request.resource.data.get('attachmentUrl', '').size() > 0)
+                      );
         allow update, delete: if false;  // immutable from client; admin SDK only (cleanup)
       }
 
