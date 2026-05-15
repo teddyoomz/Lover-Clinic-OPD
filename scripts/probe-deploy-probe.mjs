@@ -1,11 +1,13 @@
 // ─── Probe-Deploy-Probe (Rule B iron-clad) ──────────────────────────────────
-// 2-endpoint check before + after firestore:rules deploy. If post-probe
+// 3-endpoint check before + after firestore:rules deploy. If post-probe
 // returns 403 on any endpoint → revert deploy immediately.
 //
 // Endpoints (per .claude/rules/01-iron-clad.md Rule B, post-V50-followup-2):
 //   1. POST chat_conversations (unauth REST — webhook FB/LINE)
 //   5. anon-auth: signUp → CREATE opd_sessions w/ isArchived:true → PATCH
 //      whitelisted field (V23 patient form submit + V27 hide-from-queue)
+//   9. V73 Staff Chat — anon CREATE be_staff_chat_messages → expect 403
+//      (INVERTED probe: we WANT 403 because clinic-staff-only by rule).
 //
 // V50-followup-2 (2026-05-08) — probes 2/3/4 REMOVED:
 //   - probe 2 pc_appointments → ProClinic dev-only sync deleted in V50
@@ -113,6 +115,22 @@ async function probe5_anonOpdSessions(ts) {
   };
 }
 
+async function probe9_staffChatMessagesAnon(ts) {
+  const docId = `test-probe-staffchat-${ts}`;
+  const url = `${FIRESTORE_BASE}/${DATA_PATH}/be_staff_chat_messages?documentId=${docId}`;
+  // Anon write should be REJECTED (403)
+  const r = await http('POST', url, {
+    body: { fields: { branchId: { stringValue: 'BR-PROBE' }, displayName: { stringValue: 'PROBE' }, text: { stringValue: 'p' }, deviceId: { stringValue: 'd' } } },
+  });
+  return {
+    name: 'be_staff_chat_messages anon CREATE (expect 403)',
+    docId,
+    status: r.status,
+    ok: r.status === 403,  // INVERTED — we WANT 403
+    error: r.status === 403 ? null : `expected 403 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
 // ─── Probe orchestrator ─────────────────────────────────────────────────────
 async function runProbe(label) {
   const ts = Date.now();
@@ -120,6 +138,7 @@ async function runProbe(label) {
   const results = await Promise.all([
     probe1_chatConversations(ts),
     probe5_anonOpdSessions(ts),
+    probe9_staffChatMessagesAnon(ts),
   ]);
   let allOk = true;
   for (const r of results) {

@@ -114,6 +114,21 @@ service cloud.firestore {
         allow read, write: if isClinicStaff();
       }
 
+      // ── V73 Staff Chat ──
+      match /be_staff_chat_messages/{msgId} {
+        allow read: if isClinicStaff();
+        allow create: if isClinicStaff()
+                      && request.resource.data.branchId is string
+                      && request.resource.data.branchId.size() > 0
+                      && request.resource.data.displayName is string
+                      && request.resource.data.displayName.size() >= 2
+                      && request.resource.data.displayName.size() <= 50
+                      && request.resource.data.deviceId is string
+                      && (request.resource.data.get('text', '') is string)
+                      && (request.resource.data.get('text', '') is string && request.resource.data.get('text', '').size() <= 500);
+        allow update, delete: if false;  // immutable from client; admin SDK only (cleanup)
+      }
+
       // ── Backend: Phase 29 Recall System (2026-05-14) ──
       // be_recalls is branch-scoped (branchId field) per BSA Rule L.
       // Customer-scoped queries are universal (sanctioned exception SG10:

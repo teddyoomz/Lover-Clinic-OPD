@@ -134,6 +134,14 @@
         { "fieldPath": "isHidden", "order": "ASCENDING" },
         { "fieldPath": "caseName", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "be_staff_chat_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

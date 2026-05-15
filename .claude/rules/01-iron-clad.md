@@ -93,7 +93,7 @@ clinic_settings/proclinic_session, clinic_settings/proclinic_session_trial.
 ProClinic dev-only sync infrastructure was deleted in V50; matching rules
 were dropped in V50-followup. These endpoints now return 403 (default-deny)
 post-deploy — that's the intended state, NOT a regression. The probe list
-is now 5 endpoints: 1 + 5 + 6 + 7 + 8 below.
+is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
 
 5. **V23 (2026-04-26) + V27 refinement (2026-04-26)** — anon Firebase auth + CREATE+PATCH opd_sessions:
    ```
@@ -149,9 +149,16 @@ is now 5 endpoints: 1 + 5 + 6 + 7 + 8 below.
      -H "Content-Type: application/json" -d '{"fields":{"probe":{"booleanValue":true}}}'
    # → expect 403 (admin-SDK only)
    ```
-9. `firebase deploy --only firestore:rules,storage:rules`
-10. รัน probe 1, 5, 6, 7, 8 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403 (เฉพาะ 8) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-11. ลบ probe docs ทิ้ง:
+9. **V73 Staff Chat (2026-05-16)** — anon CREATE be_staff_chat_messages → expect 403:
+   ```
+   curl -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-staffchat-$(date +%s)" \
+     -H "Content-Type: application/json" \
+     -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"PROBE"},"text":{"stringValue":"p"},"deviceId":{"stringValue":"d"}}}'
+   # → expect 403 (clinic-staff only — rule requires isClinicStaff() + field validators)
+   ```
+10. `firebase deploy --only firestore:rules,storage:rules`
+11. รัน probe 1, 5, 6, 7, 8, 9 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403 (เฉพาะ 8, 9) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
+12. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
    - DELETE `$BASE/$PREFIX/be_exam_rooms/test-probe-{TS}` x 2 (clinic-staff)
@@ -160,6 +167,7 @@ is now 5 endpoints: 1 + 5 + 6 + 7 + 8 below.
    - V27 fix: CREATE step now uses isArchived=true so docs hide from queue UI even before cleanup
    - V50-followup-2 (2026-05-08): pc_appointments / proclinic_session* probe artifacts no longer exist (default-deny on those collections)
    - LINE Reminder (2026-05-15): probe #8 writes are rejected at the rule layer (403 expected) — no probe docs to clean up
+   - V73 Staff Chat (2026-05-16): probe #9 writes are rejected at the rule layer (403 expected) — no probe docs to clean up
 
 **Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)
