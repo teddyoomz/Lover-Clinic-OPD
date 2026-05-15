@@ -95,8 +95,9 @@ export function matchesSearchText(appt, searchRaw) {
  * @param {string} [opts.statusOverride] — if set, overrides the default exclude list. '__all__' = no status filter.
  * @param {string} [opts.search]
  * @param {string} [opts.typeFilter] — appointmentType exact match; falsy = no filter
+ * @param {string} [opts.todaySubPill] — V71 (2026-05-15): 'waiting'|'completed' sub-pill for today tab ONLY; ignored on other tabs.
  */
-export function applyTabFilter(appts, { tab, now = new Date(), statusOverride, search = '', typeFilter = '' } = {}) {
+export function applyTabFilter(appts, { tab, now = new Date(), statusOverride, search = '', typeFilter = '', todaySubPill } = {}) {
   const range = dateRangeForTab(tab, now);
   const defaultStatus = defaultStatusFilterForTab(tab);
   return (appts || []).filter(a => {
@@ -109,6 +110,26 @@ export function applyTabFilter(appts, { tab, now = new Date(), statusOverride, s
     }
     if (typeFilter && a.appointmentType !== typeFilter) return false;
     if (!matchesSearchText(a, search)) return false;
+    // V71 (2026-05-15) — today sub-pill split. No-op for non-today tabs OR when todaySubPill is null/undefined.
+    if (tab === 'today' && (todaySubPill === 'waiting' || todaySubPill === 'completed')) {
+      const isCompleted = !!a.serviceCompletedAt;
+      if (todaySubPill === 'completed' && !isCompleted) return false;
+      if (todaySubPill === 'waiting' && isCompleted) return false;
+    }
     return true;
   });
+}
+
+// V71 (2026-05-15) — count helper for the today inline sub-pill bar.
+// Returns {waiting, completed} from the same appts array the view already holds.
+// Uses applyTabFilter's `today` tab logic so today-detection stays single-source-of-truth.
+export function subPillCountsForToday(appts, now = new Date()) {
+  const todayList = applyTabFilter(appts, { tab: 'today', now });
+  let waiting = 0;
+  let completed = 0;
+  for (const a of todayList) {
+    if (a && a.serviceCompletedAt) completed++;
+    else waiting++;
+  }
+  return { waiting, completed };
 }
