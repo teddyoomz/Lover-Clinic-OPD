@@ -18,9 +18,15 @@ const read = p => readFileSync(path.join(ROOT, p), 'utf-8');
 describe('V68/AV47 — LINE badge surfacing discipline', () => {
 
   describe('A. 4 admin appt-list surfaces import + render <AppointmentLineBadge>', () => {
+    // V71 (2026-05-15) — AppointmentLineBadge MIGRATED from AppointmentHubView
+    // (absolute top-right wrapper) to AppointmentHubRowCard (inline in status
+    // cluster). HubView no longer renders the badge directly. The badge is
+    // now rendered through RowCard's inline render — and RowCard is the
+    // sanctioned surface where the chip lives. The V68 audit assertion
+    // migrates accordingly: RowCard replaces HubView in the SURFACES list.
     const SURFACES = [
       'src/components/backend/AppointmentCalendarView.jsx',
-      'src/components/admin/AppointmentHubView.jsx',
+      'src/components/admin/AppointmentHubRowCard.jsx',
       'src/components/backend/CustomerDetailView.jsx',
       'src/pages/AdminDashboard.jsx',
     ];

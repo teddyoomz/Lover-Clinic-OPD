@@ -12,6 +12,7 @@ import {
   getAllMemberships,
   getWalletsForCustomerIds,
   listStaffSchedules,
+  markAppointmentServiceCompleted,           // V71 NEW
 } from '../../lib/scopedDataLayer.js';
 import {
   applyTabFilter,
@@ -30,8 +31,14 @@ import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
 import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
+import AppointmentHubTodaySubPillBar from './AppointmentHubTodaySubPillBar.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
-import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
+import { subPillCountsForToday } from '../../lib/appointmentHubFilters.js';
+// V71 (2026-05-15) — AppointmentLineBadge MIGRATED to AppointmentHubRowCard
+// (inline next to status chip). HubView no longer renders the badge directly;
+// the absolute-positioned top-right wrapper was REMOVED to close the V68→V71
+// transient double-badge state. V68/AV47 audit assertion for HubView moved
+// to RowCard (the new consumer surface).
 
 export default function AppointmentHubView({
   // V64-fix7 (2026-05-09): caller-provided counter that bumps after any
@@ -53,6 +60,7 @@ export default function AppointmentHubView({
   onEditTreatmentForAppt,
   onOpenLineForAppt,
   onAddWalkIn,
+  onMarkServiceComplete,                     // V71 NEW
   branchName = '',
   doctors = [],
   assistants = [],
@@ -62,6 +70,8 @@ export default function AppointmentHubView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('__all__');
   const [typeFilter, setTypeFilter] = useState('');
+  // V71 (2026-05-15) — today sub-pill state. Resets to 'waiting' on tab change.
+  const [todaySubPill, setTodaySubPill] = useState('waiting');
 
   const [appts, setAppts] = useState([]);
   const [summaryMap, setSummaryMap] = useState(new Map());
@@ -85,6 +95,12 @@ export default function AppointmentHubView({
     setStatusFilter('__all__');
     setTypeFilter('');
   }, [selectedBranchId]);
+
+  // V71 (2026-05-15) — reset sub-pill to waiting whenever activeTab changes
+  // (including branch-switch which also resets activeTab to 'today').
+  useEffect(() => {
+    setTodaySubPill('waiting');
+  }, [activeTab]);
 
   // V64-fix2 (Issue 6): wide-range fetch [today-30 .. today+30] in ONE shot;
   // per-tab counts + filtering done client-side from the same dataset so all
@@ -216,9 +232,10 @@ export default function AppointmentHubView({
       statusOverride: statusFilter,
       search,
       typeFilter,
+      todaySubPill,                            // V71 NEW
     });
     return sortApptsByDateTimeAsc(filtered);
-  }, [appts, activeTab, statusFilter, search, typeFilter]);
+  }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
   // Counts ignore search/type/status filters (default-status-per-tab only)
@@ -232,6 +249,9 @@ export default function AppointmentHubView({
       past:     applyTabFilter(appts, { tab: 'past',     now }).length,
     };
   }, [appts]);
+
+  // V71 (2026-05-15) — sub-pill counts derived from same appts array.
+  const todaySubCounts = useMemo(() => subPillCountsForToday(appts, new Date()), [appts]);
 
   // V64-fix (2026-05-09 root-cause): Doctor + assistant shifts for today/tomorrow header (Q2=B+D)
   // Real be_staff_schedules schema (verified via preview_eval against prod):
@@ -345,6 +365,20 @@ export default function AppointmentHubView({
     }
   }, [onCancelAppt]);
 
+  // V71 (2026-05-15) — optimistic local-state update wrapper. Parent
+  // (AdminDashboard) owns the Firestore write via the onMarkServiceComplete
+  // prop. Mirror of V64-fix3 handleConfirmOptimistic pattern.
+  const handleMarkServiceCompleteOptimistic = useCallback(async (appt) => {
+    const prevValue = appt.serviceCompletedAt;
+    const optimisticStamp = new Date();
+    setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, serviceCompletedAt: optimisticStamp } : a));
+    try {
+      await Promise.resolve(onMarkServiceComplete?.(appt));
+    } catch {
+      setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, serviceCompletedAt: prevValue } : a));
+    }
+  }, [onMarkServiceComplete]);
+
   // V64-fix3 (Issue 1): open full modal in-place. Replaces calendar-mode
   // redirect from V64-fix2. AppointmentFormModal handles its own save flow
   // via createBackendAppointment / updateBackendAppointment.
@@ -380,6 +414,15 @@ export default function AppointmentHubView({
         counts={counts}
         onTabChange={setActiveTab}
       />
+      {/* V71 (2026-05-15) — today sub-pill bar. Renders only on today tab. */}
+      {activeTab === 'today' && (
+        <AppointmentHubTodaySubPillBar
+          activeSubPill={todaySubPill}
+          waitingCount={todaySubCounts.waiting}
+          completedCount={todaySubCounts.completed}
+          onSubPillChange={setTodaySubPill}
+        />
+      )}
       <AppointmentHubFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -417,26 +460,26 @@ export default function AppointmentHubView({
           <div className="text-xs text-[var(--tx-muted)] italic mt-1">ลองเปลี่ยน tab หรือ ปรับตัวกรอง</div>
         </div>
       )}
+      {/* V71 (2026-05-15) — absolute-positioned LINE badge wrapper REMOVED.
+          LINE badge now renders INLINE inside AppointmentHubRowCard (next to
+          status chip) — closes the V68→V71 transient double-badge state. */}
       {!loading && filteredAppts.map(a => (
-        <div key={a.id} className="relative">
-          {/* V68 (2026-05-15) — LINE badge if appt has notifyChannel=['line'] */}
-          <div className="absolute top-2 right-2 z-10 pointer-events-none">
-            <AppointmentLineBadge appt={a} size="sm" />
-          </div>
-          <AppointmentHubRowCard
-            appt={a}
-            summary={summaryMap.get(String(a.customerId))}
-            apptDeposit={depositByApptId.get(String(a.id))}
-            apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
-            now={new Date()}
-            onConfirm={handleConfirmOptimistic}
-            onEdit={handleEditOpenModal}
-            onCancel={handleCancelOptimistic}
-            onCreateTreatment={onCreateTreatmentForAppt}
-            onEditTreatment={onEditTreatmentForAppt}
-            onOpenLine={onOpenLineForAppt}
-          />
-        </div>
+        <AppointmentHubRowCard
+          key={a.id}
+          appt={a}
+          summary={summaryMap.get(String(a.customerId))}
+          apptDeposit={depositByApptId.get(String(a.id))}
+          apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
+          isTodayTab={activeTab === 'today'}                             /* V71 NEW */
+          now={new Date()}
+          onConfirm={handleConfirmOptimistic}
+          onEdit={handleEditOpenModal}
+          onCancel={handleCancelOptimistic}
+          onCreateTreatment={onCreateTreatmentForAppt}
+          onEditTreatment={onEditTreatmentForAppt}
+          onOpenLine={onOpenLineForAppt}
+          onMarkServiceComplete={handleMarkServiceCompleteOptimistic}    /* V71 NEW */
+        />
       ))}
       {/* V64-fix3 (Issue 1): full edit modal — same component used by
           backend tab=appointment-all + CustomerDetailView. */}
