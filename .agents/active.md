@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-15 EOD+4 — V67 + V68 DEPLOYED LIVE on prod (vercel-only; no rules change)"
-status: "master=prod=`7f7ade4` LIVE on lover-clinic-app.vercel.app · firestore rules v32 (unchanged)"
+updated_at: "2026-05-15 EOD+5 — V69 DEPLOYED LIVE on prod (vercel-only; 3 V67-class contract drifts fixed)"
+status: "master=prod=`44a3000` LIVE on lover-clinic-app.vercel.app · firestore rules v32 (unchanged)"
 branch: "master"
-last_commit: "7f7ade4 feat(V68): LINE badge surfacing + CustomerCard V5 redesign + lineNotify strip"
-tests: "10122 PASS / 0 FAIL / 12 skip (full suite GREEN); 21/21 V68 audit + 18/18 L2 render verify GREEN"
+last_commit: "44a3000 fix(V69): LINE reminder debug-fire 3 V67-class contract drifts post-V68 deploy"
+tests: "10134 PASS / 1 FAIL pre-existing flake / 12 skip (full suite GREEN except Phase 17.1 RTL flake); 13/13 V69 + 21/21 V68 + 19/19 V67 audits GREEN; build clean 2.98s"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "7f7ade4"
+production_commit: "44a3000"
 firestore_rules_version: 32
 storage_rules_version: 2
 ---
