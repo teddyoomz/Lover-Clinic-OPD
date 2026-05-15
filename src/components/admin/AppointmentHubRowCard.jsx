@@ -62,6 +62,7 @@ export default function AppointmentHubRowCard({
   now = new Date(),
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
   onMarkServiceComplete,                // V71 NEW
+  onUnmarkServiceComplete,              // V71.A NEW — symmetric "back to waiting" handler
 }) {
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
@@ -70,6 +71,11 @@ export default function AppointmentHubRowCard({
   // exists + not yet marked complete. serviceCompletedAt is a Firestore Timestamp
   // or null; truthy-check works for both.
   const showMarkCompleteBtn = isTodayTab && hasTreatmentForDay && !appt.serviceCompletedAt;
+  // V71.A (2026-05-15) — un-mark button visibility (symmetric mirror): today tab +
+  // already marked complete. Mutually exclusive with showMarkCompleteBtn (one
+  // requires !serviceCompletedAt, the other requires !!serviceCompletedAt).
+  // Lets admin recover from accidental mark-complete press.
+  const showUnmarkBtn = isTodayTab && !!appt.serviceCompletedAt;
   const effectiveStatus = hasTreatmentForDay ? 'done' : rawStatus;
   const status = effectiveStatus;
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
@@ -296,6 +302,24 @@ export default function AppointmentHubRowCard({
               className={BTN_PRIMARY}
             >
               ✓ ลูกค้ารับบริการเรียบร้อย
+            </button>
+          )}
+          {/* V71.A (2026-05-15) — un-mark service complete (today tab + already
+              completed). For when admin pressed mark-complete by mistake. Uses
+              SECONDARY (sky) tier since it's a corrective action, not the
+              primary call-to-action. Confirm dialog before optimistic revert. */}
+          {showUnmarkBtn && (
+            <button
+              type="button"
+              data-testid="row-action-unmark-complete"
+              onClick={() => {
+                if (window.confirm('ย้ายลูกค้ากลับไปคิวรอ? (ใช้ในกรณีกดผิด)')) {
+                  onUnmarkServiceComplete?.(appt);
+                }
+              }}
+              className={BTN_SECONDARY}
+            >
+              ↩ กลับไปคิวรอ
             </button>
           )}
           {appt.customerLineUserId && (

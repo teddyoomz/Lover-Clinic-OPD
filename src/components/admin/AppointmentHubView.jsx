@@ -63,6 +63,7 @@ export default function AppointmentHubView({
   onOpenLineForAppt,
   onAddWalkIn,
   onMarkServiceComplete,                     // V71 NEW
+  onUnmarkServiceComplete,                   // V71.A NEW — symmetric un-mark
   branchName = '',
   doctors = [],
   assistants = [],
@@ -381,6 +382,18 @@ export default function AppointmentHubView({
     }
   }, [onMarkServiceComplete]);
 
+  // V71.A (2026-05-15) — symmetric optimistic un-mark wrapper. Mirrors mark
+  // pattern: capture prev → null locally → call parent → revert on error.
+  const handleUnmarkServiceCompleteOptimistic = useCallback(async (appt) => {
+    const prevValue = appt.serviceCompletedAt;
+    setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, serviceCompletedAt: null } : a));
+    try {
+      await Promise.resolve(onUnmarkServiceComplete?.(appt));
+    } catch {
+      setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, serviceCompletedAt: prevValue } : a));
+    }
+  }, [onUnmarkServiceComplete]);
+
   // V64-fix3 (Issue 1): open full modal in-place. Replaces calendar-mode
   // redirect from V64-fix2. AppointmentFormModal handles its own save flow
   // via createBackendAppointment / updateBackendAppointment.
@@ -481,6 +494,7 @@ export default function AppointmentHubView({
           onEditTreatment={onEditTreatmentForAppt}
           onOpenLine={onOpenLineForAppt}
           onMarkServiceComplete={handleMarkServiceCompleteOptimistic}    /* V71 NEW */
+          onUnmarkServiceComplete={handleUnmarkServiceCompleteOptimistic} /* V71.A NEW */
         />
       ))}
       {/* V64-fix3 (Issue 1): full edit modal — same component used by

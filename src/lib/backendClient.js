@@ -2286,6 +2286,22 @@ export async function markAppointmentServiceCompleted(apptId, uid) {
   });
 }
 
+// V71.A (2026-05-15) — symmetric un-mark for the "↩ กลับไปคิวรอ" button.
+// Clears the serviceCompletedAt/By stamps so the row moves back into the
+// "กำลังรอ" sub-pill. Used when admin pressed mark-complete by mistake.
+// Truthy filter treats null as falsy = waiting, so null is the correct
+// clear-value (not deleteField — keeps the field readable for downstream
+// listeners that may inspect the absence vs explicit-null distinction).
+export async function unmarkAppointmentServiceCompleted(apptId) {
+  if (!apptId || typeof apptId !== 'string') {
+    throw new Error('V71_UNMARK_SERVICE_COMPLETED_REQUIRES_APPT_ID');
+  }
+  await updateDoc(appointmentDoc(apptId), {
+    serviceCompletedAt: null,
+    serviceCompletedBy: '',
+  });
+}
+
 /**
  * Delete an appointment + release its AP1 slot reservation.
  * Slot release is best-effort; appointment deletion is the source of truth.

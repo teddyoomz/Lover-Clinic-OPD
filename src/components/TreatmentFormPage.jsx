@@ -344,20 +344,22 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
 
 export default function TreatmentFormPage({ mode = 'create', customerId, customerHN: customerHNProp = '', treatmentId, patientName, patientData, isDark, db, appId, onClose, onSaved, saveTarget = 'backend', initialTreatmentDate = '' }) {
   // V35.2-sexies (2026-04-28) — guard against null/undefined customerId.
-  // User report: "หน้าสร้างการรักษาใหม่ ขึ้นว่า No document to update:
-  // ... be_customers/null". Root cause: caller passed null cid (e.g. when
-  // customer wasn't cloned to ProClinic yet → viewingSession.brokerProClinicId
-  // is null → TreatmentTimeline.onOpenCreateForm(null) → TreatmentFormPage
-  // opens with customerId=null. Render an error placeholder instead of the
-  // form so the save flow can't fire with a null id.
+  // V71.A (2026-05-15) — copy refreshed post-V50 ProClinic strip. ProClinic
+  // "clone" / "proClinicId" language no longer applies (V50 removed all
+  // ProClinic infrastructure). Modern root cause: caller (e.g. AdminDashboard
+  // setTreatmentFormMode JSX prop) forgot to pass `customerId` in the payload.
+  // V71.A audit AV50 + tests/v71a-edit-fix-and-unmark.test.jsx U3.x lock the
+  // contract that every setTreatmentFormMode({mode:'edit'/'create',...}) call
+  // MUST include customerId. Render an error placeholder so save can't fire
+  // with a null id.
   const validCustomerId = String(customerId ?? '').trim();
   if (!validCustomerId || validCustomerId === 'null' || validCustomerId === 'undefined') {
     return (
-      <div className="p-6 text-center text-rose-400">
+      <div className="p-6 text-center text-rose-400" data-testid="tfp-missing-customer-id">
         <p className="font-bold mb-2">ไม่พบ customerId</p>
         <p className="text-xs text-[var(--tx-muted)] mb-4">
-          ไม่สามารถสร้าง/แก้ไขการรักษาได้ — ลูกค้ายังไม่ถูก clone หรือยังไม่มีข้อมูลในระบบ
-          (proClinicId ว่างเปล่า). ติดต่อดูแลระบบหรือ clone ลูกค้าให้สมบูรณ์ก่อน
+          ไม่สามารถสร้าง/แก้ไขการรักษาได้ — ข้อมูลลูกค้าไม่ถูกส่งให้ครบถ้วน
+          (customerId ว่างเปล่า). ปิดและเปิดหน้านี้ใหม่ หรือติดต่อผู้ดูแลระบบ
         </p>
         {onClose && (
           <button onClick={onClose}

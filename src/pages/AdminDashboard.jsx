@@ -58,6 +58,7 @@ import {
   cancelDeposit,
   listStaffSchedules,       // V56 / BS-15 — auto-closure derivation in handleGenScheduleLink
   markAppointmentServiceCompleted, // V71 (2026-05-15) — service-complete writer for AppointmentHubView
+  unmarkAppointmentServiceCompleted, // V71.A (2026-05-15) — symmetric un-mark writer for "↩ กลับไปคิวรอ" button
 } from '../lib/scopedDataLayer.js';
 import { DEFAULT_APPOINTMENT_TYPE } from '../lib/appointmentTypes.js';
 // Phase 25.0c (2026-05-09) — Walk-in OPD-save → appointment-create modal flow.
@@ -6786,7 +6787,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 });
               }}
               onEditTreatmentForAppt={(appt) => {
-                setTreatmentFormMode({ mode: 'edit', treatmentId: appt.linkedTreatmentId });
+                // V71.A (2026-05-15) — BUG FIX: pass customerId + customerHN so
+                // TreatmentFormPage's V35.2-sexies guard doesn't short-circuit
+                // to the "ไม่พบ customerId" placeholder. Pre-fix this dropped
+                // customerId entirely → users couldn't edit treatment from the
+                // "เสร็จแล้ว" sub-pill (or any appt-list row with linked treatment).
+                // AV50 (V71.A) locks the customerId-required contract permanently.
+                setTreatmentFormMode({
+                  mode: 'edit',
+                  treatmentId: appt.linkedTreatmentId,
+                  customerId: appt.customerId,
+                  customerHN: appt.customerHN || appt.hnId || '',
+                });
               }}
               onOpenLineForAppt={(appt) => {
                 if (!appt.customerLineUserId) return;
@@ -6806,6 +6818,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   console.error('[V71] markAppointmentServiceCompleted failed:', err);
                   showToast('บันทึกสถานะ "รับบริการเรียบร้อย" ไม่สำเร็จ — ลองอีกครั้ง', 4000);
                   throw err; // re-throw so HubView's optimistic-revert path fires
+                });
+              }}
+              /* V71.A (2026-05-15) — symmetric un-mark for the "↩ กลับไปคิวรอ"
+               * button. Clears serviceCompletedAt + serviceCompletedBy so the
+               * row moves back to "กำลังรอ" sub-pill. Re-throws on error so
+               * HubView's optimistic-revert path fires. */
+              onUnmarkServiceComplete={(appt) => {
+                return unmarkAppointmentServiceCompleted(appt.id).catch((err) => {
+                  console.error('[V71.A] unmarkAppointmentServiceCompleted failed:', err);
+                  showToast('กลับคิวรอไม่สำเร็จ — ลองอีกครั้ง', 4000);
+                  throw err;
                 });
               }}
             />

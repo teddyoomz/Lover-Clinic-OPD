@@ -552,6 +552,9 @@ export const updateBackendAppointment = (...args) => raw.updateBackendAppointmen
 // V71 (2026-05-15) — universal pass-through; appt-id-keyed write, no branch-scope.
 export const markAppointmentServiceCompleted = (...args) =>
   raw.markAppointmentServiceCompleted(...args);
+// V71.A (2026-05-15) — universal pass-through for un-mark symmetric writer.
+export const unmarkAppointmentServiceCompleted = (...args) =>
+  raw.unmarkAppointmentServiceCompleted(...args);
 
 // ─── Deposit operations ────────────────────────────────────────────────────
 export const createDeposit = (...args) => raw.createDeposit(...args);
