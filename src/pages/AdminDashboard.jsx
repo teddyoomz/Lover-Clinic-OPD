@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { app, auth } from '../firebase.js';
+import { app } from '../firebase.js';
 import { signOut } from 'firebase/auth';
 import {
   QrCode, Users, PlusCircle, ClipboardList, CheckCircle2, Clock, Activity,
@@ -6804,7 +6804,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 const uid = auth?.currentUser?.uid || '';
                 return markAppointmentServiceCompleted(appt.id, uid).catch((err) => {
                   console.error('[V71] markAppointmentServiceCompleted failed:', err);
-                  showToast?.('บันทึกสถานะ "รับบริการเรียบร้อย" ไม่สำเร็จ — ลองอีกครั้ง', 4000);
+                  showToast('บันทึกสถานะ "รับบริการเรียบร้อย" ไม่สำเร็จ — ลองอีกครั้ง', 4000);
                   throw err; // re-throw so HubView's optimistic-revert path fires
                 });
               }}
