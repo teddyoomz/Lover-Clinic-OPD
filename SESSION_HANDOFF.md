@@ -43,11 +43,24 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-15 EOD+6 — LINE Reminder Saga complete (V67+V68+V69+V69.A all DEPLOYED LIVE) · master=`bb48036` · prod=`262cfda` · build clean (2.64s) · firestore rules v32 (unchanged)
+- **Date last updated**: 2026-05-16 EOD — V70 + V71 + V71.A + V71.B all DEPLOYED LIVE · master=`19c6f2f` · prod=`19c6f2f` · build clean (2.59s) · firestore rules v32 (unchanged)
 - **Branch**: `master`
-- **Last commit**: `262cfda` fix(V69.A): force-bypass-idempotency opt-in for debug-fire re-test
-- **Test count**: **10141 PASS / 0 FAIL / 12 skip** (full suite); V67 19/19 + V68 21/21 + L2 18/18 + V69+V69.A 19/19 audits all GREEN
-- **Deploy state**: prod=`262cfda` LIVE. 4 vercel-only deploys this session (no firebase rules change since V32). Vercel crons + CRON_SECRET unchanged.
+- **Last commit**: `19c6f2f` fix(V71.B): LINE reminder {{treatments}} falls back to appt.appointmentTo
+- **Test count**: **10237 PASS / 0 FAIL / 12 skip** (full suite); V70 32/32 + V71 ~67 + V71.A 20/20 + V71.B 9/9 + AV49/AV50 audits all GREEN
+- **Deploy state**: prod=`19c6f2f` LIVE. 5 vercel-only deploys this session (V67-V69 prior + V70+V71.A combined + V71.B). Firebase rules unchanged; probe-deploy-probe script needs V50-followup-2 update (probes 2/3/4 abort on removed `clinic_settings/proclinic_session*` endpoints).
+
+### Session 2026-05-16 EOD — V70 + V71 + V71.A + V71.B all DEPLOYED LIVE ★
+
+V71 = 9-task subagent-driven feature (OPD lifecycle badge on Frontend appt row + LINE de-overlap + sub-pill bar). V71.A + V71.B = post-deploy user-reported bug fixes shipped same session.
+
+- **V70** — LINE reminder body variables bolded via NEW `renderTemplateAsSpans` helper (LINE Flex `contents:[span]` pattern) + "Lover Clinic" header default with SPACE; Rule P cross-file class fix across 3 sites
+- **V71** — `<AppointmentOpdStepperRow>` + `<AppointmentHubTodaySubPillBar>` NEW components + RowCard inline LINE + mark-complete button + HubView sub-pill state + AdminDashboard handler wire + AV49 invariant. 9 tasks subagent-driven 2-stage review; final code review GREEN
+- **V71.A** — BUG FIX: AdminDashboard `onEditTreatmentForAppt` was dropping customerId → TFP "ไม่พบ customerId" placeholder fired. Isolated single-site V12 + V21 partial-shape drift; AV50 source-grep classifier locks all 6 callsites. PLUS new "↩ กลับไปคิวรอ" un-mark button (symmetric to mark-complete). TFP placeholder copy refreshed post-V50 ProClinic-strip.
+- **V71.B** — BUG FIX: LINE reminder `{{treatments}}` resolved to "-" when treatments array empty + appt.appointmentTo set. New fallback chain: real treatment names → appt.appointmentTo.trim() → '-'.
+
+Outstanding: L1 hands-on confirm next LINE cron fire + V71 mark/unmark/edit-treatment flows + probe-deploy-probe script update.
+
+Checkpoint: `.agents/sessions/2026-05-16-v70-v71-v71a-v71b-saga.md`.
 
 ### Session 2026-05-15 EOD+6 — LINE Reminder Saga V67 → V68 → V69 → V69.A all DEPLOYED ★
 
@@ -2256,31 +2269,31 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-15 EOD+2.
+Resume LoverClinic — continue from 2026-05-16 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=`bb48036` · prod=`262cfda` LIVE; 1 docs commit ahead)
-3. .agents/active.md (10141 PASS / 0 FAIL; V67+V68+V69+V69.A audits GREEN)
+2. SESSION_HANDOFF.md (master=`19c6f2f` · prod=`19c6f2f` LIVE)
+3. .agents/active.md (10237 PASS / 0 FAIL; V70+V71+V71.A+V71.B all live)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-15-line-reminder-v67-v68-v69-saga.md
+5. .agents/sessions/2026-05-16-v70-v71-v71a-v71b-saga.md
 
-Status: master=`bb48036`, prod=`262cfda` LIVE on https://lover-clinic-app.vercel.app · LINE reminder pipeline + debug-fire fully functional · 10141/0 vitest · build clean (2.64s).
+Status: master=`19c6f2f`, prod=`19c6f2f` LIVE on https://lover-clinic-app.vercel.app · OPD lifecycle badge + sub-pill + un-mark + LINE bold body + customerId edit-treatment fix + appt.appointmentTo fallback ALL deployed · 10237/0 vitest · build clean (2.59s).
 
-**Next action**: idle UNTIL user reports L1 hands-on results.
+**Next action**: idle UNTIL user reports L1 hands-on findings.
 
-Hands-on test loop (V67+V68+V69+V69.A end-to-end):
-1. Open LINE message body — should read **"สวัสดีคุณ แพรพร พรแพร ค่ะ"** (no นางสาว — V69 strip)
-2. tab=line-settings → Debug Fire single + 000004 → expect **Sent: 1** (V69 UI path fix)
-3. Click again → **Skipped: 1** + 🔁 hint (V69.A 'already-sent'→skipped + force opt-in surface)
-4. Tick **🔁 บังคับยิงซ้ำ** + click → **Sent: 1** (real LINE message #2 arrives — V69.A force flag)
-5. Mode=ยิงทุกคน + พิมพ์ "นครราชสีมา" → no BRANCH_NAME_CONFIRM_MISMATCH (V69 key fix)
-6. tab=customerlist + tab=appointment-* → V68 V5 cards + 🟢 LINE chips visible
+Hands-on test loop (V70+V71+V71.A+V71.B end-to-end):
+1. Next LINE reminder cron fire (~21:30 daily) → 🏥 **Lover Clinic** (space), body vars bolded, **บริการ: botox** (not "-")
+2. /admin → ปฏิทิน tab → "วันนี้" sub-tab → row has OPD stepper (3-dot ซักประวัติ/แพทย์/เสร็จ) + LINE chip inline (no overlap) + "✓ ลูกค้ารับบริการเรียบร้อย" button
+3. Click button → confirm → row moves to "เสร็จแล้ว" sub-pill with count +1
+4. Click "เสร็จแล้ว" sub-pill → row visible + "↩ กลับไปคิวรอ" button + "แก้ไขบันทึกการรักษา" works (no "ไม่พบ customerId")
+5. Click "↩ กลับไปคิวรอ" → confirm → row returns to "กำลังรอ"
+6. Tomorrow tab → sub-pill bar HIDDEN, stepper HIDDEN for all rows
 
 Outstanding (user-triggered):
-- L1 verification of all 6 surfaces above
-- AppointmentHubView badge overlay polish (T4 visual concern flagged in V68 review)
-- Confirm LINE Premium tier ($60/mo) for นครราชสีมา OA
+- L1 verification of all 6 surfaces above (especially LINE cron tomorrow)
+- Probe-deploy-probe script update (V50-followup-2: drop probes 2/3/4 for `clinic_settings/proclinic_session*` + `pc_appointments`)
+- Deferred V71 polish (T2-M1+M2 / T3-M1+M4 / T4-M1 / T5-M1-M5 / T6-M2+M3 / T9-M-final-1..5 — all non-blocking)
 
 🚨 **Rules**:
 - Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.

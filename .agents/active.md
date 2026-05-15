@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-15 EOD+6 — V67 + V68 + V69 + V69.A all DEPLOYED LIVE (LINE reminder saga complete)"
-status: "master=`bb48036` · prod=`262cfda` LIVE on lover-clinic-app.vercel.app · firestore rules v32 (unchanged)"
+updated_at: "2026-05-16 EOD — V70 + V71 + V71.A + V71.B all DEPLOYED LIVE"
+status: "master=`19c6f2f` · prod=`19c6f2f` LIVE on lover-clinic-app.vercel.app · firestore rules v32 (unchanged this session)"
 branch: "master"
-last_commit: "262cfda fix(V69.A): force-bypass-idempotency opt-in for debug-fire re-test"
-tests: "10141 PASS / 0 FAIL / 12 skip; V67+V68+V69+V69.A audits 100% GREEN; build clean 2.64s"
+last_commit: "19c6f2f fix(V71.B): LINE reminder {{treatments}} falls back to appt.appointmentTo"
+tests: "10237 PASS / 0 FAIL / 12 skip (full vitest 10228 baseline + 9 V71.B); build clean 2.59s"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "262cfda"
+production_commit: "19c6f2f"
 firestore_rules_version: 32
 storage_rules_version: 2
 ---
@@ -15,26 +15,25 @@ storage_rules_version: 2
 
 ## State
 
-- master 1 commit ahead of prod (`bb48036` handoff doc; `262cfda` is the live code)
-- LINE reminder pipeline + debug-fire fully functional after 4-V saga (V67 → V68 → V69 → V69.A)
-- NO firestore/storage rules change · NO data ops · NO Playwright e2e change
+- master 0 commits ahead of prod — V70 + V71 + V71.A + V71.B all LIVE
+- 4 vercel deploys this session (V70+V71.A combined · V71.B); firebase rules unchanged
+- Working tree clean except `.claude/settings.local.json` + untracked skill dirs (unrelated)
 
 ## What this session shipped
 
-- **V67** — LINE reminder pipeline schema-drift (4 bugs): appointmentDate→date · branchName→name · customerHN picker · customerName 5-tier fallback chain. AV46 + Rule R schema-match diag.
-- **V68** — LINE badge surfacing: 🟢 LINE chip across 4 admin appt-list surfaces + CustomerCard V5 Editorial rewrite (initials gradient avatars + 4-layer shadow + meta-col + LINE chip in bottom row) + lineNotify legacy strip (5 modal sites + 4 batch.js sites). AV47 + 21 source-grep + 18 jsdom render verifies. **Subagent-Driven Development**: 16 tasks × 2-stage review.
-- **V69** — Post-V68 user-reported 3 V67-class contract drifts: customerName title prefix not stripped · UI reads `result.sent` (root) but endpoint returns `result.results.sent` · UI sends `branchNameConfirm` but endpoint reads `confirmBranchName`. AV48 + 13 V69 tests. Plus IIFE-in-JSX refactor (extracted `<ResultPanel>` per Vite-OXC ban).
-- **V69.A** — Force opt-in for debug-fire re-test: idempotency lock blocked admin re-tests; added `🔁 บังคับยิงซ้ำ` checkbox + plumbed `force?: boolean` through endpoint → pipeline; mapped 'already-sent' → skipped++ (was failed++); 6 AA tests.
-- 4 deploys to prod (V67+V68 combined · V69 · V69.A); each vercel-only (no firebase rules change).
+- **V70** — LINE reminder body variables bolded (renderTemplateAsSpans helper) + "Lover Clinic" header default with SPACE; AV-class drift fix in 3 files
+- **V71** — OPD lifecycle badge (Phase 28 stepper wrap) on Frontend appt row + "ลูกค้ารับบริการเรียบร้อย" button + "เสร็จแล้ว" sub-pill under "วันนี้" tab + LINE/status de-overlap; 9 tasks subagent-driven + final code review GREEN; AV49 audit
+- **V71.A** — BUG FIX: AdminDashboard onEditTreatmentForAppt was dropping customerId → TFP "ไม่พบ customerId" placeholder fired; isolated single-site V12 + V21 partial-shape drift. PLUS new "↩ กลับไปคิวรอ" un-mark button (symmetric to mark-complete). AV50 invariant + TFP placeholder copy refreshed post-V50.
+- **V71.B** — BUG FIX: LINE reminder `{{treatments}}` resolved to "-" when treatments array empty even with appt.appointmentTo set. Resolver now: real treatment names → appt.appointmentTo.trim() → '-'.
 
-Checkpoint: [`.agents/sessions/2026-05-15-line-reminder-v67-v68-v69-saga.md`](sessions/2026-05-15-line-reminder-v67-v68-v69-saga.md)
+Checkpoint: [`.agents/sessions/2026-05-16-v70-v71-v71a-v71b-saga.md`](sessions/2026-05-16-v70-v71-v71a-v71b-saga.md)
 
 ## Next action
 
-Idle UNTIL user reports any L1 issues from real-prod testing. Hands-on test loop documented at end of V69.A deploy summary. Otherwise session-end.
+Idle UNTIL user reports L1 hands-on findings from next LINE reminder cron fire (~21:30 daily) — should now show 🏥 Lover Clinic + bold variables + บริการ: botox.
 
 ## Outstanding user-triggered actions
 
-- L1 hands-on verification of V69.A force checkbox + V68 CustomerCard V5 + V67 LINE reminder end-to-end
-- T4 visual concern (AppointmentHubView badge top-right overlay) — adjust if cramped on narrow desktop
-- Confirm LINE Premium tier ($60/mo) for นครราชสีมา OA usage levels
+- L1 hands-on confirm: next LINE reminder shows "Lover Clinic" (space) + bold vars + "บริการ: botox" instead of "-"
+- L1 hands-on: V71 today-tab mark-complete → sub-pill move → click "↩ กลับไปคิวรอ" → row returns to "กำลังรอ"; edit-treatment in "เสร็จแล้ว" now works (no more "ไม่พบ customerId")
+- Probe-deploy-probe script update: remove V50-stripped probes 2/3/4 (`clinic_settings/proclinic_session*` + `pc_appointments`) — currently aborts firebase rules deploy at pre-probe
