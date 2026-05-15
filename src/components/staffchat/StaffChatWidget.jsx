@@ -2,6 +2,7 @@
 // V73 (2026-05-16) — Root staff chat widget. Mounts globally; self-gates on
 // user + selectedBranchId + !needsPublicAuth.
 // V73 Feature C (2026-05-16) — Wires reply state from useStaffChat to MessageList + Composer.
+// V73 Feature F (2026-05-16) — Passes uploadImage from useStaffChat to Composer for paste/drag uploads.
 import React from 'react';
 import { useStaffChat } from '../../hooks/useStaffChat.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
@@ -40,6 +41,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName }) {
             recentMentionCandidates={chat.recentMentionCandidates}
             replyingTo={chat.replyingTo}
             onClearReply={() => chat.setReplyingTo?.(null)}
+            onUploadImage={chat.uploadImage}
           />
         </StaffChatPanel>
       )}

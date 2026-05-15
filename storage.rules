@@ -24,6 +24,21 @@ service firebase.storage {
       allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
+    // ─── V73 Feature F (2026-05-16) — Staff chat image attachments ────────
+    // Pattern: staff-chat-attachments/{branchId}/{timestamp}-{hex}.jpg
+    // Clinic-staff-only WRITE (client-side resize → JPEG → upload), and
+    // clinic-staff-only READ. 1 MB cap (resized images at maxDim=1024 +
+    // quality 0.85 land well under this — caps abuse paths). UPDATE +
+    // DELETE blocked (append-only by design; admin SDK can sweep via
+    // future cleanup endpoint if needed).
+    match /staff-chat-attachments/{branchId}/{file=**} {
+      allow read: if request.auth != null && (request.auth.token.isClinicStaff == true || request.auth.token.admin == true);
+      allow create: if request.auth != null
+                    && (request.auth.token.isClinicStaff == true || request.auth.token.admin == true)
+                    && request.resource.size < 1 * 1024 * 1024;
+      allow update, delete: if false;
+    }
+
     // Default deny all
     match /{allPaths=**} {
       allow read, write: if false;

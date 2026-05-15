@@ -2,9 +2,11 @@
 // V73 (2026-05-16) — Single message bubble. Own (right-aligned rose) vs other (left, neutral).
 // V73 Feature B (2026-05-16) — Body rendered via StaffChatMessageBody (parses @mentions + LC- / BA- links).
 // V73 Feature C (2026-05-16) — Reply button on hover + quote-card render when replyTo set.
-import React from 'react';
+// V73 Feature F (2026-05-16) — Attachment thumbnail + click-to-open lightbox.
+import React, { useState } from 'react';
 import { Reply } from 'lucide-react';
 import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
+import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
 
 function formatTime(createdAt) {
   if (!createdAt) return '';
@@ -15,6 +17,8 @@ function formatTime(createdAt) {
 }
 
 export function StaffChatMessage({ message, isOwn, onReply }) {
+  // V73 Feature F — local lightbox toggle for attachment view.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   return (
     <div
       data-testid="staff-chat-message"
@@ -43,7 +47,17 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
               : 'bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-primary)] rounded-bl-md'
           }`}
         >
-          <StaffChatMessageBody text={message.text} />
+          {message.attachmentUrl && (
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              data-testid={`staff-chat-message-image-${message.id}`}
+              className="block max-w-[200px] rounded-lg overflow-hidden mb-1 cursor-zoom-in"
+            >
+              <img src={message.attachmentUrl} alt="" className="w-full h-auto" />
+            </button>
+          )}
+          {message.text && <StaffChatMessageBody text={message.text} />}
         </div>
         {onReply && (
           <button
@@ -61,6 +75,9 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
       <div className="text-[9px] text-[var(--tx-muted)] mt-0.5 px-1">
         {formatTime(message.createdAt)}
       </div>
+      {lightboxOpen && (
+        <StaffChatImageLightbox src={message.attachmentUrl} onClose={() => setLightboxOpen(false)} />
+      )}
     </div>
   );
 }

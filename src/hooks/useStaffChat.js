@@ -39,6 +39,10 @@ import {
   getDeviceId,
   getMuted,
 } from '../lib/staffChatIdentity.js';
+// V73 Feature F (T15) — uploadAttachment lets the composer upload a resized
+// image blob to Storage and inject the attachment metadata into the next
+// send() call via extras.
+import { uploadAttachment } from '../lib/staffChatImageResize.js';
 
 export function useStaffChat() {
   const { branchId: selectedBranchId } = useSelectedBranch();
@@ -172,6 +176,14 @@ export function useStaffChat() {
   }, []);
   const minimize = useCallback(() => setMinimized(true), []);
 
+  // V73 Feature F (T15) — upload a resized image blob to staff-chat-attachments/
+  // Storage path under the currently-selected branch. Composer awaits this
+  // before invoking send() so the message doc carries attachmentUrl/Size/MimeType.
+  const uploadImage = useCallback(async (blob) => {
+    if (!selectedBranchId) throw new Error('STAFF_CHAT_NO_BRANCH');
+    return uploadAttachment(blob, selectedBranchId);
+  }, [selectedBranchId]);
+
   return {
     messages, minimized, unreadCount,
     deviceId, error,
@@ -180,5 +192,7 @@ export function useStaffChat() {
     recentMentionCandidates,
     // V73 Feature C — reply state surface.
     replyingTo, setReplyingTo,
+    // V73 Feature F — image upload surface.
+    uploadImage,
   };
 }

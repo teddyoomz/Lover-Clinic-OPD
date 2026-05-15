@@ -2,18 +2,27 @@
 // V73 (2026-05-16) — Textarea + send button. Enter to submit, Shift+Enter newline.
 // V73 Feature B (2026-05-16) — @-mention dropdown + auto-extract mentions on send.
 // V73 Feature C (2026-05-16) — Reply-to-message quote strip + replyTo passed in extras.
+// V73 Feature F (2026-05-16) — Image paste / drag-drop / file-input + resize + upload.
 import React, { useState, useRef } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Paperclip, X as XIcon } from 'lucide-react';
 import { extractMentions } from '../../lib/staffChatClient.js';
 import { StaffChatMentionDropdown } from './StaffChatMentionDropdown.jsx';
+import {
+  isImageFile,
+  resizeImageToBlob,
+  MAX_FILE_SIZE_BEFORE_RESIZE,
+} from '../../lib/staffChatImageResize.js';
 
-export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply }) {
+export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onUploadImage }) {
   const [text, setText] = useState('');
   const [mentionTrigger, setMentionTrigger] = useState(null);
+  const [pendingImageBlob, setPendingImageBlob] = useState(null);
+  const [pendingImageUrl, setPendingImageUrl] = useState(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const trimmed = text.trim();
   const tooLong = trimmed.length > 500;
-  const canSend = trimmed.length > 0 && !tooLong;
+  const canSend = (trimmed.length > 0 || pendingImageBlob) && !tooLong;
 
   const onChange = (e) => {
     const v = e.target.value;
@@ -33,15 +42,75 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
     textareaRef.current?.focus();
   };
 
-  const submit = () => {
+  // V73 Feature F — accept a File from paste/drop/file-input, validate, resize.
+  const acceptFile = async (file) => {
+    if (!isImageFile(file)) {
+      window.alert('รองรับเฉพาะรูปภาพ');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BEFORE_RESIZE) {
+      window.alert('ไฟล์ใหญ่เกิน — กรุณาย่อก่อนส่ง');
+      return;
+    }
+    try {
+      const { blob } = await resizeImageToBlob(file);
+      setPendingImageBlob(blob);
+      setPendingImageUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      window.alert('ย่อรูปไม่สำเร็จ: ' + e.message);
+    }
+  };
+
+  const onPaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile();
+        if (f) acceptFile(f);
+      }
+    }
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) acceptFile(file);
+  };
+
+  const onFileSelect = (e) => {
+    const f = e.target.files?.[0];
+    if (f) acceptFile(f);
+    e.target.value = '';
+  };
+
+  const clearImage = () => {
+    if (pendingImageUrl) URL.revokeObjectURL(pendingImageUrl);
+    setPendingImageBlob(null);
+    setPendingImageUrl(null);
+  };
+
+  const submit = async () => {
     if (!canSend) return;
-    const mentions = extractMentions(trimmed);
     const extras = {};
+    if (pendingImageBlob && onUploadImage) {
+      try {
+        const { url, size } = await onUploadImage(pendingImageBlob);
+        extras.attachmentUrl = url;
+        extras.attachmentSize = size;
+        extras.attachmentMimeType = 'image/jpeg';
+      } catch (e) {
+        window.alert('อัพโหลดรูปไม่สำเร็จ: ' + e.message);
+        return;
+      }
+    }
+    const mentions = extractMentions(trimmed);
     if (mentions.length > 0) extras.mentions = mentions;
     if (replyingTo) extras.replyTo = replyingTo;
     onSend(trimmed, extras);
     setText('');
     setMentionTrigger(null);
+    clearImage();
     onClearReply?.();
   };
 
@@ -57,7 +126,12 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
     : [];
 
   return (
-    <div className="border-t border-[var(--bd)] bg-[var(--bg-surface)]">
+    <div
+      className="border-t border-[var(--bd)] bg-[var(--bg-surface)]"
+      onPaste={onPaste}
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
+    >
       {replyingTo && (
         <div
           data-testid="staff-chat-composer-quote-strip"
@@ -76,7 +150,31 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
           </button>
         </div>
       )}
+      {pendingImageUrl && (
+        <div data-testid="staff-chat-composer-image-preview" className="px-3 py-2 flex items-center gap-2">
+          <img src={pendingImageUrl} className="w-16 h-16 object-cover rounded-md border border-[var(--bd)]" />
+          <button
+            type="button"
+            onClick={clearImage}
+            data-testid="staff-chat-composer-image-clear"
+            className="w-6 h-6 rounded hover:bg-rose-500/20 flex items-center justify-center text-rose-400"
+          >
+            <XIcon size={14} />
+          </button>
+          <span className="text-[10px] text-[var(--tx-muted)]">รูปพร้อมส่ง</span>
+        </div>
+      )}
       <div className="px-2 py-2 flex items-end gap-2">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="staff-chat-composer-attach"
+          className="w-9 h-9 rounded-lg hover:bg-rose-500/10 flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500"
+          aria-label="แนบรูป"
+        >
+          <Paperclip size={16} />
+        </button>
+        <input type="file" accept="image/*" ref={fileInputRef} onChange={onFileSelect} hidden />
         <div className="relative flex-1">
           {mentionTrigger && filteredCandidates.length > 0 && (
             <StaffChatMentionDropdown candidates={filteredCandidates} onPick={onMentionPick} />

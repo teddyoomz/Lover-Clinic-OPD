@@ -156,9 +156,15 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
      -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"PROBE"},"text":{"stringValue":"p"},"deviceId":{"stringValue":"d"}}}'
    # → expect 403 (clinic-staff only — rule requires isClinicStaff() + field validators)
    ```
-10. `firebase deploy --only firestore:rules,storage:rules`
-11. รัน probe 1, 5, 6, 7, 8, 9 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403 (เฉพาะ 8, 9) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules` + redeploy)
-12. ลบ probe docs ทิ้ง:
+10. **V73 Staff Chat Attachments (2026-05-16) — Feature F** — anon WRITE to staff-chat-attachments/ Storage path → expect 401/403:
+   ```
+   curl -X POST "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o?name=staff-chat-attachments%2FPROBE%2Ftest-probe-attach-$(date +%s).json" \
+     -H "Content-Type: application/json" -d '{"probe":true}'
+   # → expect 401/403 (clinic-staff only by storage.rules; 1MB cap + create-only + no update/delete)
+   ```
+11. `firebase deploy --only firestore:rules,storage:rules`
+12. รัน probe 1, 5, 6, 7, 8, 9, 10 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
+13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
    - DELETE `$BASE/$PREFIX/be_exam_rooms/test-probe-{TS}` x 2 (clinic-staff)
@@ -168,6 +174,7 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
    - V50-followup-2 (2026-05-08): pc_appointments / proclinic_session* probe artifacts no longer exist (default-deny on those collections)
    - LINE Reminder (2026-05-15): probe #8 writes are rejected at the rule layer (403 expected) — no probe docs to clean up
    - V73 Staff Chat (2026-05-16): probe #9 writes are rejected at the rule layer (403 expected) — no probe docs to clean up
+   - V73 Staff Chat Attachments (2026-05-16): probe #10 writes are rejected at the Storage rule layer (401/403 expected) — no probe artifacts to clean up
 
 **Why:** Multiple serverless/extension paths + anon-auth client paths เขียน Firestore ผ่าน REST **โดยไม่มี clinic-staff auth token** — ต้องเปิด write rules ไว้ทุกจุดที่ใช้เส้นนี้:
 - `chat_conversations` — Webhook FB Messenger / LINE (`api/webhook/*`)

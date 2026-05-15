@@ -1,5 +1,5 @@
 // ─── Probe-Deploy-Probe (Rule B iron-clad) ──────────────────────────────────
-// 3-endpoint check before + after firestore:rules deploy. If post-probe
+// 4-endpoint check before + after firestore:rules deploy. If post-probe
 // returns 403 on any endpoint → revert deploy immediately.
 //
 // Endpoints (per .claude/rules/01-iron-clad.md Rule B, post-V50-followup-2):
@@ -8,6 +8,8 @@
 //      whitelisted field (V23 patient form submit + V27 hide-from-queue)
 //   9. V73 Staff Chat — anon CREATE be_staff_chat_messages → expect 403
 //      (INVERTED probe: we WANT 403 because clinic-staff-only by rule).
+//   10. V73 Staff Chat attachments — anon WRITE → expect 401/403
+//       (INVERTED probe: clinic-staff-only by Storage rule).
 //
 // V50-followup-2 (2026-05-08) — probes 2/3/4 REMOVED:
 //   - probe 2 pc_appointments → ProClinic dev-only sync deleted in V50
@@ -131,6 +133,23 @@ async function probe9_staffChatMessagesAnon(ts) {
   };
 }
 
+async function probe10_staffChatAttachmentsAnon(ts) {
+  // V73 Feature F (2026-05-16) — verify Storage rule blocks anon writes.
+  // Storage REST returns 401 (no Bearer token) or 403 (with bad token); both
+  // are "rule rejected" — same intent as Firestore 403. INVERTED probe.
+  const filename = `test-probe-attach-${ts}.json`;
+  const url = `https://firebasestorage.googleapis.com/v0/b/${APP_ID}.firebasestorage.app/o?name=staff-chat-attachments%2FPROBE%2F${filename}`;
+  const r = await http('POST', url, {
+    body: { probe: true },
+  });
+  return {
+    name: 'staff-chat-attachments anon WRITE (expect 401/403)',
+    status: r.status,
+    ok: r.status === 401 || r.status === 403,
+    error: (r.status === 401 || r.status === 403) ? null : `expected 403/401 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
 // ─── Probe orchestrator ─────────────────────────────────────────────────────
 async function runProbe(label) {
   const ts = Date.now();
@@ -139,6 +158,7 @@ async function runProbe(label) {
     probe1_chatConversations(ts),
     probe5_anonOpdSessions(ts),
     probe9_staffChatMessagesAnon(ts),
+    probe10_staffChatAttachmentsAnon(ts),
   ]);
   let allOk = true;
   for (const r of results) {
