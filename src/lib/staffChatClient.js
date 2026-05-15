@@ -52,3 +52,36 @@ export async function sendStaffChatMessage(payload) {
   const { addStaffChatMessage } = await import('./scopedDataLayer.js');
   return addStaffChatMessage(doc);
 }
+
+// V73 Feature B (2026-05-16) — Extract @mentions from text.
+// Returns array of unique display-name candidates (max 5) without the '@' prefix.
+export function extractMentions(text) {
+  if (typeof text !== 'string' || !text) return [];
+  const matches = text.match(/@([^\s@]+)/g) || [];
+  const unique = [];
+  for (const m of matches) {
+    const name = m.slice(1);  // strip leading @
+    if (name && !unique.includes(name)) unique.push(name);
+    if (unique.length >= 5) break;
+  }
+  return unique;
+}
+
+// V73 Features B + H (2026-05-16) — Parse message text into renderable segments.
+// Returns array of { type: 'text' | 'mention' | 'customer' | 'appt', content/refId }.
+export function parseMessageBody(text) {
+  if (typeof text !== 'string' || !text) return [{ type: 'text', content: '' }];
+  const out = [];
+  const re = /(@[^\s@]+)|(\bLC-\d{8}\b)|(\bBA-\d+\b)/g;
+  let lastIndex = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastIndex) out.push({ type: 'text', content: text.slice(lastIndex, m.index) });
+    if (m[1]) out.push({ type: 'mention', content: m[1].slice(1) });
+    else if (m[2]) out.push({ type: 'customer', content: m[2], refId: m[2] });
+    else if (m[3]) out.push({ type: 'appt', content: m[3], refId: m[3] });
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < text.length) out.push({ type: 'text', content: text.slice(lastIndex) });
+  return out;
+}

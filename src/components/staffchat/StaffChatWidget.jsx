@@ -23,7 +23,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName }) {
       ) : (
         <StaffChatPanel branchName={branchName} onMinimize={chat.minimize}>
           <StaffChatMessageList messages={chat.messages} ownDeviceId={chat.deviceId} />
-          <StaffChatComposer onSend={chat.send} />
+          <StaffChatComposer onSend={chat.send} recentMentionCandidates={chat.recentMentionCandidates} />
         </StaffChatPanel>
       )}
       {chat.namePickerOpen && (

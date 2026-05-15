@@ -1,7 +1,7 @@
 // V73 Task 2 (2026-05-16) — staffChatClient core unit tests.
 // Covers buildMessageDoc — pure helper with validation + crypto-secure id.
 import { describe, it, expect } from 'vitest';
-import { buildMessageDoc } from '../src/lib/staffChatClient.js';
+import { buildMessageDoc, extractMentions } from '../src/lib/staffChatClient.js';
 
 describe('V73.C1 staffChatClient.buildMessageDoc', () => {
   it('C1.1 builds minimal text message', () => {
@@ -62,5 +62,23 @@ describe('V73.C1 staffChatClient.buildMessageDoc', () => {
       ids.add(doc.id);
     }
     expect(ids.size).toBe(10);
+  });
+});
+
+describe('V73.C2 extractMentions', () => {
+  it('C2.1 returns single mention', () => {
+    expect(extractMentions('hello @ดร.วี please')).toEqual(['ดร.วี']);
+  });
+
+  it('C2.2 dedups + caps at 5', () => {
+    expect(extractMentions('@a @b @a @c @d @e @f')).toEqual(['a','b','c','d','e']);
+  });
+
+  it('C2.3 returns empty for no mentions', () => {
+    expect(extractMentions('plain text')).toEqual([]);
+  });
+
+  it('C2.4 handles email-like @ (treats `@example.com` as one mention)', () => {
+    expect(extractMentions('email me at @example.com')).toEqual(['example.com']);
   });
 });

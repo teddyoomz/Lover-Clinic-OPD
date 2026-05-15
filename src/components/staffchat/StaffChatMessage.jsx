@@ -1,6 +1,8 @@
 // src/components/staffchat/StaffChatMessage.jsx
 // V73 (2026-05-16) — Single message bubble. Own (right-aligned rose) vs other (left, neutral).
+// V73 Feature B (2026-05-16) — Body rendered via StaffChatMessageBody (parses @mentions + LC- / BA- links).
 import React from 'react';
+import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 
 function formatTime(createdAt) {
   if (!createdAt) return '';
@@ -29,7 +31,7 @@ export function StaffChatMessage({ message, isOwn }) {
             : 'bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-primary)] rounded-bl-md'
         }`}
       >
-        {message.text}
+        <StaffChatMessageBody text={message.text} />
       </div>
       <div className="text-[9px] text-[var(--tx-muted)] mt-0.5 px-1">
         {formatTime(message.createdAt)}

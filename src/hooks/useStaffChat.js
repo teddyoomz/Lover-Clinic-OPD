@@ -11,6 +11,13 @@
 //      differs from this device's id. Reset on `expand()`.
 //   5. Clean up the listener subscription on unmount.
 //
+// V73 Feature B (2026-05-16):
+//   - Compute `recentMentionCandidates` (de-duped recent display names, excl. self)
+//     for the composer @ dropdown.
+//   - On incoming message whose `mentions` array includes the local display name:
+//     play mention sound (respects mute) + auto-expand the panel.
+//   - Default incoming non-own message: play default sound + bump unread.
+//
 // Extras parameter on send() is forward-compat for upcoming features:
 //   - mentions (T11 / feature B)
 //   - replyTo (T12 / feature C)
@@ -20,7 +27,7 @@
 // Non-React callers should compose their own pipeline using addStaffChatMessage
 // directly; this hook is the React surface only.
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import {
   listenToStaffChatMessages,
@@ -30,6 +37,7 @@ import { buildMessageDoc } from '../lib/staffChatClient.js';
 import {
   getDisplayName,
   getDeviceId,
+  getMuted,
 } from '../lib/staffChatIdentity.js';
 
 export function useStaffChat() {
@@ -48,6 +56,15 @@ export function useStaffChat() {
   // re-fire (V14-class) can't double-bump the unread counter.
   const lastSeenIdsRef = useRef(new Set());
 
+  // V73 Feature B — Audio refs for default + mention sounds.
+  // Audio file paths land in T17; .catch(() => {}) swallows 404 until then.
+  const defaultSoundRef = useRef(
+    typeof Audio !== 'undefined' ? new Audio('/sounds/staff-chat-notif.mp3') : null
+  );
+  const mentionSoundRef = useRef(
+    typeof Audio !== 'undefined' ? new Audio('/sounds/staff-chat-mention.mp3') : null
+  );
+
   useEffect(() => {
     if (!selectedBranchId) return;
     const unsub = listenToStaffChatMessages(
@@ -58,7 +75,33 @@ export function useStaffChat() {
         const newMsgs = docs.filter(m => !lastSeenIdsRef.current.has(m.id));
         for (const m of newMsgs) {
           lastSeenIdsRef.current.add(m.id);
-          if (m.deviceId !== deviceId) {
+          if (m.deviceId === deviceId) continue;
+          // V73 Feature B — Personal mention dispatch.
+          const myName = getDisplayName();
+          const isMention = myName && Array.isArray(m.mentions) && m.mentions.includes(myName);
+          if (isMention) {
+            // Mention: play mention sound (respects mute), auto-expand panel.
+            if (!getMuted() && mentionSoundRef.current) {
+              try {
+                mentionSoundRef.current.volume = 0.6;
+                const p = mentionSoundRef.current.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              } catch (_) {
+                /* swallow autoplay/load failures */
+              }
+            }
+            setMinimized(false);
+          } else {
+            // Default: play default sound + bump unread.
+            if (!getMuted() && defaultSoundRef.current) {
+              try {
+                defaultSoundRef.current.volume = 0.5;
+                const p = defaultSoundRef.current.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              } catch (_) {
+                /* swallow autoplay/load failures */
+              }
+            }
             setUnreadCount(c => c + 1);
           }
         }
@@ -67,6 +110,18 @@ export function useStaffChat() {
     );
     return () => { unsub?.(); };
   }, [selectedBranchId, deviceId]);
+
+  // V73 Feature B — recentMentionCandidates: de-duped recent display names,
+  // excluding self. Walks messages newest-first, caps at 30.
+  const recentMentionCandidates = useMemo(() => {
+    const myName = getDisplayName();
+    const seen = new Set();
+    for (let i = messages.length - 1; i >= 0 && seen.size < 30; i--) {
+      const n = messages[i]?.displayName;
+      if (n && n !== myName) seen.add(n);
+    }
+    return [...seen];
+  }, [messages]);
 
   const send = useCallback((text, extras = {}) => {
     const displayName = getDisplayName();
@@ -119,5 +174,6 @@ export function useStaffChat() {
     deviceId, error,
     namePickerOpen, setNamePickerOpen,
     send, confirmName, expand, minimize,
+    recentMentionCandidates,
   };
 }
