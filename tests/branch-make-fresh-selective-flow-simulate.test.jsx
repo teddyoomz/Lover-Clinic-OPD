@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import MakeFreshModal from '../src/components/backend/MakeFreshModal.jsx';
 import { BUCKETS, bucketDefaultsForUI } from '../src/lib/branchBackupBuckets.js';
@@ -9,6 +9,10 @@ vi.mock('../src/firebase.js', () => ({
   db: {},
 }));
 
+// V67 (2026-05-15) AV41 fix — capture original fetch + restore in afterAll
+// to prevent worker-pool leak per V55.3 (Phase 17.1 isolation V-entry).
+const ORIGINAL_FETCH = global.fetch;
+
 const SAMPLE_BRANCH = { branchId: 'BR-A', branchName: 'นครราชสีมา' };
 
 describe('F1 MakeFreshModal — Rule I full-flow simulate', () => {
@@ -16,6 +20,10 @@ describe('F1 MakeFreshModal — Rule I full-flow simulate', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+  });
+  afterAll(() => {
+    if (ORIGINAL_FETCH === undefined) delete global.fetch;
+    else global.fetch = ORIGINAL_FETCH;
   });
 
   it('F1.1 — opens with Q4-B default: 6 checked + customerActivity unchecked', () => {

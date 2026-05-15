@@ -76,7 +76,7 @@ describe('T4 runReminderPipeline — idempotency + skip paths', () => {
     const pushFn = vi.fn().mockResolvedValue({ statusCode: 200, body: '{}' });
     const r = await runReminderPipeline({
       db,
-      appt: { id: apptId, branchId: 'BR-A', customerId: 'C1', status: 'pending', appointmentDate: '2026-05-16', startTime: '14:30' },
+      appt: { id: apptId, branchId: 'BR-A', customerId: 'C1', status: 'pending', date: '2026-05-16', startTime: '14:30' },
       cust: { id: 'C1', branchId: 'BR-A', name: 'X', lineUserId_byBranch: { 'BR-A': { lineUserId: 'U-A' } } },
       branch: { branchId: 'BR-A', branchName: 'Nakhon' },
       doctor: null,

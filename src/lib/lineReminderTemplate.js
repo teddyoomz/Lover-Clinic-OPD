@@ -23,11 +23,23 @@ export function resolveTokens({ cust, appt, branch, doctor, treatments, branchSe
     customerName: cust.fullName || cust.name || '',
     customerDisplayName: cust.lineDisplayName || '',
     branchName: branch.branchName || branch.name || '',
-    doctorName: (doctor && doctor.name) || 'แพทย์ผู้ดูแล',
+    // V67 (2026-05-15): customer/doctor fallback chain — real be_customers schema
+    // uses ProClinic-legacy `firstname`/`lastname` (snake-case), and appt
+    // already has denormalized `customerName`/`doctorName`. Mock-only `fullName`/
+    // `name` field-name drift was the V66 root cause for LINE reminder pipeline.
+    customerName: cust.fullName || cust.name || appt.customerName
+      || `${cust.firstname || ''} ${cust.lastname || ''}`.trim()
+      || cust.patientData?.firstNameTh || '',
+    customerDisplayName: cust.lineDisplayName || '',
+    doctorName: (doctor && (doctor.name || doctor.fullName))
+      || appt.doctorName || 'แพทย์ผู้ดูแล',
     treatments: Array.isArray(treatments) && treatments.length
       ? treatments.map(t => t && (t.name || '')).filter(Boolean).join(', ') || '-'
       : '-',
-    date: formatThaiDateBE(appt.appointmentDate),
+    // V67 (2026-05-15): canonical Firestore field is `date` (NOT `appointmentDate`).
+    // Mock-only `appointmentDate` was the V66 mock-shadow drift. Fallback chain
+    // mirrors lineBotResponder.js defensive pattern.
+    date: formatThaiDateBE(appt.date || appt.appointmentDate || ''),
     time: appt.startTime || '00:00',
     cancellationPolicyText: branchSettings.cancellationPolicyText || '',
     appointmentId: appt.id || '',

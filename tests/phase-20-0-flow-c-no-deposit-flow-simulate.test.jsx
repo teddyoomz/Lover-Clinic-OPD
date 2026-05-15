@@ -12,9 +12,8 @@ const ADMIN_DASHBOARD = fs.readFileSync(
   path.join(ROOT, 'src/pages/AdminDashboard.jsx'),
   'utf8',
 );
-const STRIPPED = ADMIN_DASHBOARD
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/^\s*\/\/.*$/gm, '');
+// V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+const STRIPPED = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
 
 describe('Phase 20.0 Flow C — C1 broker.{create,update,delete}Appointment removed (no-deposit)', () => {
   it('C1.1 — no broker.createAppointment call remains anywhere in AdminDashboard', () => {
@@ -69,7 +68,12 @@ describe('Phase 20.0 Flow C — C3 opd_sessions linkage preserved (appointmentPr
 describe('Phase 20.0 Flow C — C4 AP1_COLLISION friendly error in kiosk flow', () => {
   it('C4.1 — confirmCreateNoDeposit catches AP1_COLLISION + shows Thai message', () => {
     expect(STRIPPED).toMatch(/AP1_COLLISION/);
-    expect(STRIPPED).toMatch(/ช่วงเวลานัดหมายชนกับนัดอื่น/);
+    // V67 (2026-05-15) — Phase 29.23-bis5 (2026-05-14) updated the friendly
+    // text to include the collision time range. Previous text
+    // `ช่วงเวลานัดหมายชนกับนัดอื่น` was retired; current canonical is
+    // `ช่วงเวลานี้มีนัดอยู่แล้ว: ${start}-${end}`. C4.2 already locks the
+    // current text; C4.1 now mirrors it.
+    expect(STRIPPED).toMatch(/ช่วงเวลานี้มีนัดอยู่แล้ว/);
   });
 
   it('C4.2 — confirmUpdateAppointment catches AP1_COLLISION on retry-create path', () => {

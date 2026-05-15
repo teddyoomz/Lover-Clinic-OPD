@@ -30,7 +30,7 @@ describe('T4 LR-3 — customer lineUserId is branch-scoped', () => {
     const pushFn = vi.fn();
     const r = await runReminderPipeline({
       db,
-      appt: { id: 'BA-Y', branchId: 'BR-Y', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-Y', branchId: 'BR-Y', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-A', lineUserId: 'legacy-A', lineUserId_byBranch: { 'BR-A': { lineUserId: 'U-A' } } },
       ...baseCtx,
     });
@@ -43,7 +43,7 @@ describe('T4 LR-3 — customer lineUserId is branch-scoped', () => {
     const pushFn = vi.fn().mockResolvedValue({ statusCode: 200, body: '{}' });
     const r = await runReminderPipeline({
       db,
-      appt: { id: 'BA-Y2', branchId: 'BR-Y', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-Y2', branchId: 'BR-Y', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-A', lineUserId: 'legacy-A', lineUserId_byBranch: { 'BR-Y': { lineUserId: 'U-Y' } } },
       ...baseCtx,
       pushFn,
@@ -57,7 +57,7 @@ describe('T4 LR-3 — customer lineUserId is branch-scoped', () => {
     const pushFn = vi.fn().mockResolvedValue({ statusCode: 200, body: '{}' });
     const r = await runReminderPipeline({
       db,
-      appt: { id: 'BA-A', branchId: 'BR-A', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-A', branchId: 'BR-A', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-A', lineUserId: 'legacy-A', lineUserId_byBranch: {} },
       ...baseCtx,
       branch: { branchId: 'BR-A', branchName: 'A' },
@@ -72,7 +72,7 @@ describe('T4 LR-3 — customer lineUserId is branch-scoped', () => {
     const pushFn = vi.fn();
     const r = await runReminderPipeline({
       db,
-      appt: { id: 'BA-Y3', branchId: 'BR-Y', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-Y3', branchId: 'BR-Y', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-A', lineUserId_byBranch: { 'BR-Y': { lineUserId: 'U-Y', _lineStale: true } } },
       ...baseCtx,
       pushFn,

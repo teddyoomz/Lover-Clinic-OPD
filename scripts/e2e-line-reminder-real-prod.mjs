@@ -131,13 +131,19 @@ function buildCustomer({ id, lineUserIdByBranch = {}, notifyOptOut = false }) {
 }
 
 // Build minimal valid be_appointments doc.
+// V67 (2026-05-15): canonical Firestore field is `date` (NOT `appointmentDate`).
+// Pre-V67 e2e fixtures used the wrong field name → admin-SDK writes succeeded but
+// the cron query (where('date', '==', ...)) returned 0 results → all e2e Sent=0.
+// Mock-shadow drift class. Param name kept as `appointmentDate` for caller-API
+// backward-compat; internal field name is now `date`. Backward-compat alias
+// also written so any legacy reader survives.
 function buildAppointment({ id, customerId, branchId, appointmentDate, notifyChannel = ['line'] }) {
   return {
     id,
     appointmentId: id,
     customerId,
     branchId,
-    appointmentDate,
+    date: appointmentDate,
     startTime: '14:00',
     endTime: '15:00',
     status: 'scheduled',

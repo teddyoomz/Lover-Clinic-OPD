@@ -35,9 +35,8 @@ describe('Phase 20.0 Flow A — A1 source-grep no pc_appointments reads', () => 
   });
 
   it('A1.2 — AdminDashboard.jsx has NO broker.syncAppointments() call', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/broker\.syncAppointments\s*\(/);
   });
 });
@@ -84,38 +83,33 @@ describe('Phase 20.0 Flow A — A3 backendClient + scopedDataLayer surface', () 
 
 describe('Phase 20.0 Flow A — A4 dead sync state + UI removed', () => {
   it('A4.1 — apptSyncing state declaration removed', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/useState\s*\(\s*false\s*\)\s*;\s*\n\s*const\s*\[\s*apptSyncing/);
     expect(stripped).not.toMatch(/\bapptSyncing\b/);
   });
 
   it('A4.2 — apptSyncSuccess state declaration removed', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/\bapptSyncSuccess\b/);
   });
 
   it('A4.3 — apptAutoSyncedRef removed', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/\bapptAutoSyncedRef\b/);
   });
 
   it('A4.4 — apptSyncedMonthsRef removed', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/\bapptSyncedMonthsRef\b/);
   });
 
   it('A4.5 — handleSyncAppointments handler removed', () => {
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).not.toMatch(/\bhandleSyncAppointments\b/);
   });
 });
@@ -195,9 +189,8 @@ describe('Phase 20.0 Flow A — A6 branch-scope auto-inject (post-Task-6)', () =
     // Pre-V54 asserted {} — relied on phantom scopedDataLayer auto-inject
     // (V21 comment-vs-code drift). V54 (2026-05-08) made the contract
     // explicit + added safe-by-default backstop in backendClient.js.
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).toMatch(
       /listenToAppointmentsByMonth\s*\(\s*apptMonth\s*,\s*\{\s*branchId:\s*selectedBranchId\s*\}\s*,/s,
     );
@@ -208,9 +201,8 @@ describe('Phase 20.0 Flow A — A6 branch-scope auto-inject (post-Task-6)', () =
     // `branchOpts` based on each schedule's stored branchId. The single
     // assertion covers both call sites: updateActiveSchedules (opts) and
     // post-create resync (branchOpts).
-    const stripped = ADMIN_DASHBOARD
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+    // V67 (2026-05-15) — single-pass regex; see phase-20-0-task-6 STRIPPED comment.
+    const stripped = ADMIN_DASHBOARD.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
     expect(stripped).toMatch(/getAppointmentsByMonth\s*\([^,]+,\s*(opts|branchOpts)\s*\)/);
   });
 });

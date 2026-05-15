@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CentralMakeFreshModal from '../src/components/backend/CentralMakeFreshModal.jsx';
 import { CENTRAL_BUCKETS } from '../src/lib/centralStockBuckets.js';
@@ -9,6 +9,10 @@ vi.mock('../src/firebase.js', () => ({
   db: {},
 }));
 
+// V67 (2026-05-15) AV41 fix — capture original fetch + restore in afterAll
+// to prevent worker-pool leak per V55.3 (Phase 17.1 isolation V-entry).
+const ORIGINAL_FETCH = global.fetch;
+
 const SAMPLE_WAREHOUSE = { stockId: 'WH-A', stockName: 'คลังกลาง 1' };
 
 describe('CF1 CentralMakeFreshModal — Rule I full-flow simulate', () => {
@@ -16,6 +20,10 @@ describe('CF1 CentralMakeFreshModal — Rule I full-flow simulate', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+  });
+  afterAll(() => {
+    if (ORIGINAL_FETCH === undefined) delete global.fetch;
+    else global.fetch = ORIGINAL_FETCH;
   });
 
   it('CF1.1 — opens with all 4 buckets checked (no opt-in-only in central)', () => {

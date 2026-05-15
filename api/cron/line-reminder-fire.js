@@ -278,9 +278,12 @@ export default async function handler(req, res) {
       : { branchId: branchCfg.branchId };
 
     // Get appointments for this branch + target date
+    // V67 (2026-05-15): canonical Firestore field is `date` (NOT `appointmentDate`).
+    // Wave 1 implementer used invented `appointmentDate` per spec; real backendClient.js
+    // writers (lines 2077, 2107) write `date: targetDate`. Returns 0 results otherwise.
     const apptsSnap = await db.collection(`${BASE_PATH}/be_appointments`)
       .where('branchId', '==', branchCfg.branchId)
-      .where('appointmentDate', '==', targetDate)
+      .where('date', '==', targetDate)
       .get();
 
     for (const apptDoc of apptsSnap.docs) {

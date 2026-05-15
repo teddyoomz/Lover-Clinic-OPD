@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { buildReminderFlex, resolveTokens, renderTemplate, getDefaultFlexShape, parsePostbackData } from '../src/lib/lineReminderTemplate.js';
 
+// V67 (2026-05-15): fixtures use REAL be_appointments / be_branches schema:
+//   - appt uses `date` (NOT `appointmentDate` — Wave 1 mock-shadow drift)
+//   - branch uses `name` (NOT `branchName` — same drift class)
+// The helper retains backward-compat fallback chain so old fixtures still work,
+// but tests should LOCK the canonical schema by primary fixture name.
 const baseInput = {
   cust: { fullName: 'นาย โอ๊ค', lineDisplayName: 'OakLINE' },
-  appt: { id: 'BA-1778001-aaa', appointmentDate: '2026-05-16', startTime: '14:30' },
-  branch: { branchName: 'นครราชสีมา', branchId: 'BR-X' },
+  appt: { id: 'BA-1778001-aaa', date: '2026-05-16', startTime: '14:30' },
+  branch: { name: 'นครราชสีมา', branchId: 'BR-X' },
   doctor: { name: 'นพ. สมชาย' },
   treatments: [{ name: 'ฉีดผิว' }, { name: 'เลเซอร์' }],
   branchSettings: { cancellationPolicyText: 'กรุณาเลื่อน/ยกเลิกล่วงหน้า 24 ชม.' },
@@ -210,7 +215,7 @@ describe('T2 buildReminderFlex — Task 2 polish (I1-I5)', () => {
       branch: { branchId: 'BR-X' }, // no branchName
       doctor: null, // falls back to 'แพทย์ผู้ดูแล' (still a string)
       treatments: [],
-      appt: { id: 'BA-z', appointmentDate: '', startTime: '' },
+      appt: { id: 'BA-z', date: '', startTime: '' },
       branchSettings: baseInput.branchSettings,
       reminderType: 'dayBefore',
     });

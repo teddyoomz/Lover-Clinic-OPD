@@ -23,7 +23,7 @@ describe('T4 LR-1 — per-branch channelAccessToken discipline', () => {
     const pushFn = vi.fn().mockResolvedValue({ statusCode: 200, body: '{}' });
     await runReminderPipeline({
       db,
-      appt: { id: 'BA-A', branchId: 'BR-A', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-A', branchId: 'BR-A', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-A', name: 'X', lineUserId_byBranch: { 'BR-A': { lineUserId: 'U-A' } } },
       branch: { branchId: 'BR-A', branchName: 'A' },
       doctor: null, treatments: [],
@@ -40,7 +40,7 @@ describe('T4 LR-1 — per-branch channelAccessToken discipline', () => {
     const pushFn = vi.fn().mockResolvedValue({ statusCode: 200, body: '{}' });
     await runReminderPipeline({
       db,
-      appt: { id: 'BA-B', branchId: 'BR-B', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-B', branchId: 'BR-B', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-B', name: 'X', lineUserId_byBranch: { 'BR-B': { lineUserId: 'U-B' } } },
       branch: { branchId: 'BR-B', branchName: 'B' },
       doctor: null, treatments: [],
@@ -57,7 +57,7 @@ describe('T4 LR-1 — per-branch channelAccessToken discipline', () => {
     const pushFn = vi.fn();
     const r = await runReminderPipeline({
       db,
-      appt: { id: 'BA-X', branchId: 'BR-X', customerId: 'C', status: 'pending', appointmentDate: '2026-05-16', startTime: '10:00' },
+      appt: { id: 'BA-X', branchId: 'BR-X', customerId: 'C', status: 'pending', date: '2026-05-16', startTime: '10:00' },
       cust: { id: 'C', branchId: 'BR-X', name: 'X', lineUserId_byBranch: { 'BR-X': { lineUserId: 'U-X' } } },
       branch: { branchId: 'BR-X', branchName: 'X' },
       doctor: null, treatments: [],

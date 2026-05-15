@@ -96,6 +96,15 @@ const COLLECTION_MATRIX = {
   'be_admin_audit':        { scope: 'global', reason: 'Phase 15.6 / V35 admin cleanup audit log (cleanup-orphan-stock + cleanup-test-products + cleanup-test-sales). Admin SDK only writes; client SDK blocked.' },
   'be_audiences':          { scope: 'global', reason: 'Phase 16.1 (2026-04-30) Smart Audience saved segments — clinic-wide marketing rule trees (rule.kind: group | predicate). Hard-delete in v1.' },
   'be_appointment_slots':  { scope: 'global', reason: 'AP1 (2026-05-04) atomic slot reservation guard — short-lived doc per `${date}_${doctorId}_${startTime}_${endTime}` key. Eliminates createBackendAppointment read-then-write race via runTransaction. Released on appointment delete/cancel.' },
+  // Wave 1 LINE-reminder (2026-05-15) — both `be_line_reminder_log` +
+  // `be_line_reminder_postback_log` are admin-SDK-only (firestore.rules:
+  // `allow read: if isClinicStaff(); allow write: if false;`). Branch attribution
+  // is via the `branchId` payload field on the audit doc (LR-5 invariant — every
+  // reminder log doc carries branchId), but the docs themselves are clinic-wide
+  // audit ledgers (not per-branch isolated by structure). Classified `global`
+  // mirroring be_admin_audit pattern.
+  'be_line_reminder_log':         { scope: 'global', reason: 'Wave 1 LINE-reminder (2026-05-15) — per-appointment reminder send-state ledger. Doc-id = `${appointmentId}_${reminderType}` (idempotency key). Carries branchId field per LR-5 audit invariant.' },
+  'be_line_reminder_postback_log':{ scope: 'global', reason: 'Wave 1 LINE-reminder (2026-05-15) — per-postback audit log (customer ✓ ยืนยัน / เลื่อน / ติดต่อ button taps). Carries branchId field per LR-5.' },
   'be_membership_types':   { scope: 'global',  reason: 'Master data' },
   'be_wallet_types':       { scope: 'global',  reason: 'Master data' },
   'be_bank_accounts':      { scope: 'global',  reason: 'Master data' },

@@ -13,9 +13,15 @@ const ADMIN_DASHBOARD = fs.readFileSync(
   path.join(ROOT, 'src/pages/AdminDashboard.jsx'),
   'utf8',
 );
+// V67 (2026-05-15) STRIPPED helper fix: ordering `/* */` strip BEFORE `//` strip
+// caused literal `/*` text inside `//` line comments (e.g. `// brokerClient.js
+// + api/proclinic/* + cookie-relay still EXIST`) to be misread as block-comment
+// opens — the regex would consume from the `/*` text through the next legit
+// `*/`, swallowing huge chunks of the file. Single-pass regex below is robust:
+// at each scan position, alternation matches whichever comment type is at
+// that position — `//` text inside a line comment never starts a block.
 const STRIPPED = ADMIN_DASHBOARD
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/^\s*\/\/.*$/gm, '');
+  .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
 const APP_JSX = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8');
 
 describe('Phase 20.0 Task 6 — Z1 BranchSelector mounted in AdminDashboard header', () => {

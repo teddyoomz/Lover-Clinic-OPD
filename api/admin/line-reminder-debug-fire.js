@@ -46,10 +46,14 @@ export function validateDebugFireRequest(body, branch) {
     return { valid: false, error: 'SINGLE_MODE_REQUIRES_CUSTOMER_ID' };
   }
   if (body.mode === 'all') {
-    if (!branch || !branch.branchName) {
+    // V67 (2026-05-15): canonical be_branches field is `name` (NOT `branchName`).
+    // Mock-only `branchName` was the V66 mock-shadow drift that caused
+    // BRANCH_NOT_FOUND on every all-mode test against real prod.
+    const branchName = (branch && (branch.name || branch.branchName)) || '';
+    if (!branch || !branchName) {
       return { valid: false, error: 'BRANCH_NOT_FOUND' };
     }
-    if (String(body.confirmBranchName || '').trim() !== String(branch.branchName).trim()) {
+    if (String(body.confirmBranchName || '').trim() !== String(branchName).trim()) {
       return { valid: false, error: 'BRANCH_NAME_CONFIRM_MISMATCH' };
     }
   }
@@ -99,18 +103,36 @@ export default async function handler(req, res) {
   const targetDate = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
   // Pick candidates
+  // V67 (2026-05-15) Bug A: canonical Firestore field is `date` (NOT `appointmentDate`).
+  // V67 (2026-05-15) Bug B: single-mode picker accepts customerId OR customerHN
+  // (real customer doc.id may differ from displayed HN — e.g. doc.id=2853 with
+  // customerHN=000004; user typing HN should still resolve). 2-query OR-merge.
   let candidates = [];
   if (mode === 'single') {
-    const apptsSnap = await db.collection(`${BASE_PATH}/be_appointments`)
-      .where('branchId', '==', branchId)
-      .where('appointmentDate', '==', targetDate)
-      .where('customerId', '==', customerId)
-      .get();
-    candidates = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const [byIdSnap, byHnSnap] = await Promise.all([
+      db.collection(`${BASE_PATH}/be_appointments`)
+        .where('branchId', '==', branchId)
+        .where('date', '==', targetDate)
+        .where('customerId', '==', customerId)
+        .get(),
+      db.collection(`${BASE_PATH}/be_appointments`)
+        .where('branchId', '==', branchId)
+        .where('date', '==', targetDate)
+        .where('customerHN', '==', customerId)
+        .get(),
+    ]);
+    const seen = new Set();
+    for (const snap of [byIdSnap, byHnSnap]) {
+      for (const d of snap.docs) {
+        if (seen.has(d.id)) continue;
+        seen.add(d.id);
+        candidates.push({ id: d.id, ...d.data() });
+      }
+    }
   } else {
     const apptsSnap = await db.collection(`${BASE_PATH}/be_appointments`)
       .where('branchId', '==', branchId)
-      .where('appointmentDate', '==', targetDate)
+      .where('date', '==', targetDate)
       .get();
     candidates = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(a => Array.isArray(a.notifyChannel) && a.notifyChannel.includes('line'));
