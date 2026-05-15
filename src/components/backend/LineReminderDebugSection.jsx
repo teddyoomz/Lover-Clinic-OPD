@@ -33,6 +33,81 @@ async function getIdTokenForAdmin() {
   return u.getIdToken();
 }
 
+// V69 (2026-05-15) — extracted to satisfy iron-clad Vite-OXC ban on
+// JSX-IIFE close pattern (`{(() => { ... })()}` crashes the OXC parser).
+// Reads the endpoint response shape:
+//   { ok, mode, totalAttempted, results: { sent, skipped, failed, details } }  for single|all
+//   { ok, mode, totalEligible, previews }                                       for dry-run
+// Pre-V69 the parent component read result.sent/skipped/failed from ROOT
+// (wrong path — endpoint returns counters under `results.*`). Bug B fix.
+function ResultPanel({ result, mode }) {
+  const counters = result.results || {};
+  const sent = Number(counters.sent || 0);
+  const skipped = Number(counters.skipped || 0);
+  const failed = Number(counters.failed || 0);
+  const details = Array.isArray(counters.details) ? counters.details : [];
+  const totalAttempted = Number(result.totalAttempted ?? result.totalEligible ?? 0);
+  const previews = Array.isArray(result.previews) ? result.previews : [];
+  const isDryRun = result.mode === 'dry-run';
+
+  return (
+    <div
+      className="px-3 py-2 rounded-lg bg-emerald-900/15 border border-emerald-700/40 text-emerald-200 text-xs"
+      data-testid="debug-fire-result"
+    >
+      <div className="flex items-start gap-2 mb-1.5">
+        <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+        <strong>ผลลัพธ์ ({result.mode || mode}):</strong>
+      </div>
+      {isDryRun ? (
+        <div className="ml-5 mb-2">
+          <div className="text-[var(--tx-primary)]">
+            ตรวจสอบนัดที่จะยิง: <strong data-testid="debug-fire-eligible">{totalAttempted}</strong> รายการ · ตัวอย่างที่จะส่ง: <strong>{previews.length}</strong>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2 ml-5 mb-2">
+            <div>
+              <div className="text-[10px] text-[var(--tx-muted)]">Sent</div>
+              <div className="text-emerald-300 font-bold text-lg" data-testid="debug-fire-sent">
+                {sent}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-[var(--tx-muted)]">Skipped</div>
+              <div className="text-amber-300 font-bold text-lg" data-testid="debug-fire-skipped">
+                {skipped}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-[var(--tx-muted)]">Failed</div>
+              <div className="text-red-300 font-bold text-lg" data-testid="debug-fire-failed">
+                {failed}
+              </div>
+            </div>
+          </div>
+          {totalAttempted === 0 && (
+            <div className="ml-5 mb-2 text-[11px] text-amber-300" data-testid="debug-fire-no-candidates">
+              ⚠️ ไม่พบนัดหมายที่ตรงกับโหมดและวันที่ — ลองเปลี่ยนเป็นโหมด {mode === 'single' ? '"เข้าวันนัด (dayOf)"' : 'อื่น'} หรือตรวจสอบว่าลูกค้ามีนัดในวันนี้/พรุ่งนี้
+            </div>
+          )}
+        </>
+      )}
+      {(details.length > 0 || previews.length > 0) && (
+        <details className="mt-1 ml-5">
+          <summary className="cursor-pointer text-[10px] text-[var(--tx-muted)] hover:text-[var(--tx-primary)]">
+            รายละเอียด ({(details.length || previews.length)} รายการ)
+          </summary>
+          <pre className="text-[10px] font-mono mt-1 max-h-60 overflow-auto p-1.5 rounded bg-[var(--bg-hover)] text-[var(--tx-primary)]">
+            {JSON.stringify(isDryRun ? previews : details, null, 2)}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function LineReminderDebugSection({ branchId, branchName }) {
   const [reminderType, setReminderType] = useState('dayBefore'); // dayBefore | dayOf
   const [mode, setMode] = useState('dry-run');                   // dry-run | single | all
@@ -64,7 +139,11 @@ export function LineReminderDebugSection({ branchId, branchName }) {
         mode,
       };
       if (mode === 'single') payload.customerId = customerId;
-      if (mode === 'all') payload.branchNameConfirm = branchConfirm.trim();
+      // V69 (2026-05-15) Bug C fix — endpoint destructures `confirmBranchName`
+      // (api/admin/line-reminder-debug-fire.js:70). Pre-V69 UI sent
+      // `branchNameConfirm` (different key) → server saw undefined →
+      // String('').trim() → BRANCH_NAME_CONFIRM_MISMATCH on every all-mode click.
+      if (mode === 'all') payload.confirmBranchName = branchConfirm.trim();
 
       const res = await fetch(ENDPOINT, {
         method: 'POST',
@@ -218,45 +297,7 @@ export function LineReminderDebugSection({ branchId, branchName }) {
       )}
 
       {result && (
-        <div
-          className="px-3 py-2 rounded-lg bg-emerald-900/15 border border-emerald-700/40 text-emerald-200 text-xs"
-          data-testid="debug-fire-result"
-        >
-          <div className="flex items-start gap-2 mb-1.5">
-            <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-            <strong>ผลลัพธ์ ({mode}):</strong>
-          </div>
-          <div className="grid grid-cols-3 gap-2 ml-5 mb-2">
-            <div>
-              <div className="text-[10px] text-[var(--tx-muted)]">Sent</div>
-              <div className="text-emerald-300 font-bold text-lg" data-testid="debug-fire-sent">
-                {Number(result?.sent || 0)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-[var(--tx-muted)]">Skipped</div>
-              <div className="text-amber-300 font-bold text-lg" data-testid="debug-fire-skipped">
-                {Number(result?.skipped || 0)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-[var(--tx-muted)]">Failed</div>
-              <div className="text-red-300 font-bold text-lg" data-testid="debug-fire-failed">
-                {Number(result?.failed || 0)}
-              </div>
-            </div>
-          </div>
-          {Array.isArray(result?.details) && result.details.length > 0 && (
-            <details className="mt-1 ml-5">
-              <summary className="cursor-pointer text-[10px] text-[var(--tx-muted)] hover:text-[var(--tx-primary)]">
-                รายละเอียด ({result.details.length} รายการ)
-              </summary>
-              <pre className="text-[10px] font-mono mt-1 max-h-60 overflow-auto p-1.5 rounded bg-[var(--bg-hover)] text-[var(--tx-primary)]">
-                {JSON.stringify(result.details, null, 2)}
-              </pre>
-            </details>
-          )}
-        </div>
+        <ResultPanel result={result} mode={mode} />
       )}
 
       <div className="flex items-center justify-end pt-1">

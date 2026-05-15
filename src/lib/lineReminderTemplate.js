@@ -13,24 +13,39 @@ function formatThaiDateBE(isoYyyyMmDd) {
   return `${d}/${m}/${be}`;
 }
 
+// V69 (2026-05-15) — strip Thai title prefix from customer name so the
+// rendered template reads "สวัสดีคุณ แพรพร พรแพร ค่ะ" instead of
+// "สวัสดีคุณ นางสาว แพรพร พรแพร ค่ะ" (user feedback: title prefix
+// duplicates the "คุณ" in the template). Strips นาย / นาง / นางสาว /
+// เด็กชาย / เด็กหญิง / ไม่ระบุ from start of name + leading whitespace.
+function stripCustomerNamePrefix(name) {
+  if (!name || typeof name !== 'string') return '';
+  // Alternation ordered LONGEST-FIRST so e.g. `นางสาว` matches before `นาง`
+  // (regex alternation is greedy left-to-right, NOT longest-match — putting
+  // `นาง` first would leave the trailing `สาว` in the output).
+  return name.replace(/^(นางสาว|เด็กชาย|เด็กหญิง|ไม่ระบุ|นาย|นาง)\s*/, '').trim();
+}
+
 export function resolveTokens({ cust, appt, branch, doctor, treatments, branchSettings, clinicName } = {}) {
   cust = cust || {};
   appt = appt || {};
   branch = branch || {};
   branchSettings = branchSettings || {};
+  // V67 (2026-05-15): customer/doctor fallback chain — real be_customers schema
+  // uses ProClinic-legacy `firstname`/`lastname` (snake-case), and appt
+  // already has denormalized `customerName`/`doctorName`. Mock-only `fullName`/
+  // `name` field-name drift was the V66 root cause for LINE reminder pipeline.
+  // V69 (2026-05-15): wrap with stripCustomerNamePrefix so the resolved name
+  // never includes Thai title (นาย/นาง/นางสาว/...). User's template already
+  // includes "คุณ"; the title prefix would duplicate it.
+  const rawCustomerName = cust.fullName || cust.name || appt.customerName
+    || `${cust.firstname || ''} ${cust.lastname || ''}`.trim()
+    || cust.patientData?.firstNameTh || '';
   return {
     clinicName: clinicName || 'LoverClinic',
-    customerName: cust.fullName || cust.name || '',
+    customerName: stripCustomerNamePrefix(rawCustomerName),
     customerDisplayName: cust.lineDisplayName || '',
     branchName: branch.branchName || branch.name || '',
-    // V67 (2026-05-15): customer/doctor fallback chain — real be_customers schema
-    // uses ProClinic-legacy `firstname`/`lastname` (snake-case), and appt
-    // already has denormalized `customerName`/`doctorName`. Mock-only `fullName`/
-    // `name` field-name drift was the V66 root cause for LINE reminder pipeline.
-    customerName: cust.fullName || cust.name || appt.customerName
-      || `${cust.firstname || ''} ${cust.lastname || ''}`.trim()
-      || cust.patientData?.firstNameTh || '',
-    customerDisplayName: cust.lineDisplayName || '',
     doctorName: (doctor && (doctor.name || doctor.fullName))
       || appt.doctorName || 'แพทย์ผู้ดูแล',
     treatments: Array.isArray(treatments) && treatments.length

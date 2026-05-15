@@ -19,7 +19,11 @@ const baseInput = {
 describe('T2 lineReminderTemplate.resolveTokens', () => {
   it('T2.1 resolves all canonical tokens', () => {
     const tokens = resolveTokens(baseInput);
-    expect(tokens.customerName).toBe('นาย โอ๊ค');
+    // V69 V21 fixup (2026-05-15): resolveTokens now strips Thai title prefix
+    // (นาย/นาง/นางสาว/เด็กชาย/เด็กหญิง/ไม่ระบุ) so the template doesn't
+    // duplicate "คุณ". Pre-V69 baseInput.cust.fullName='นาย โอ๊ค' → token
+    // included title; post-V69 → bare 'โอ๊ค'.
+    expect(tokens.customerName).toBe('โอ๊ค');
     expect(tokens.branchName).toBe('นครราชสีมา');
     expect(tokens.doctorName).toBe('นพ. สมชาย');
     expect(tokens.treatments).toBe('ฉีดผิว, เลเซอร์');

@@ -136,9 +136,13 @@ describe('V68/AV47 — LINE badge surfacing discipline', () => {
       const src = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
       expect(src).toMatch(/^### AV47 — /m);
     });
-    it('F.2 — SKILL.md banner reflects AV1–AV47', () => {
+    it('F.2 — SKILL.md banner reflects AV1–AV47 or higher (V68 + later additions)', () => {
+      // V69 V21 fixup (2026-05-15): banner advanced to AV1–AV48 when V69 added
+      // the UI ↔ endpoint contract invariant. Assertion broadened to tolerate
+      // AV47+ (any future increment is fine — banner just needs to span AT
+      // LEAST through AV47 to confirm V68 is registered).
       const src = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
-      expect(src).toMatch(/Invariants \(AV1[–-]AV47\)/);
+      expect(src).toMatch(/Invariants \(AV1[–-]AV(4[7-9]|[5-9]\d)\)/);
     });
   });
 });
