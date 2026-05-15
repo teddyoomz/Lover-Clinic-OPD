@@ -71,7 +71,10 @@ export default async function handler(req, res) {
   if (!caller) return;
 
   const db = getAdmin();
-  const { branchId, reminderType, mode, customerId, confirmBranchName } = req.body || {};
+  // V69.A (2026-05-15) — `force` opt-in flag bypasses runReminderPipeline
+  // Step 1 idempotency check so admin can re-test an already-sent reminder.
+  // Default false (matches cron+retry behavior); UI checkbox sets true.
+  const { branchId, reminderType, mode, customerId, confirmBranchName, force } = req.body || {};
 
   const branchSnap = branchId
     ? await db.doc(`${BASE_PATH}/be_branches/${branchId}`).get()
@@ -172,10 +175,17 @@ export default async function handler(req, res) {
       db, appt, cust, branch, doctor,
       treatments: appt.treatments || [],
       branchCfg: cfg, reminderType, currentHour,
+      // V69.A — pass force so admin can opt-in to re-test already-sent reminders
+      force: !!force,
     });
     results.details.push({ apptId: appt.id, status: out.status });
     if (out.status === 'sent') results.sent++;
-    else if (out.status && out.status.startsWith('skipped')) results.skipped++;
+    // V69.A — `already-sent` is semantically a skip (we INTENTIONALLY didn't
+    // re-push to protect the customer from duplicate notifications). Pre-V69.A
+    // mapped it to failed++ which made admin think the test failed when it
+    // was actually idempotency working as designed. UI surfaces 'already-sent'
+    // detail string so admin can decide to opt-in via `force=true` checkbox.
+    else if (out.status === 'already-sent' || (out.status && out.status.startsWith('skipped'))) results.skipped++;
     else results.failed++;
   }
 

@@ -72,15 +72,22 @@ export function tomorrowISO(now = new Date()) {
 export async function runReminderPipeline(ctx) {
   const {
     db, appt, cust, branch, doctor, treatments, branchCfg, reminderType, currentHour, pushFn,
+    // V69.A (2026-05-15) — `force=true` bypasses Step 1 idempotency check.
+    // Used by debug-fire endpoint when admin opts in via UI checkbox to
+    // re-test an already-sent reminder. Cron + retry NEVER pass force=true
+    // (production must respect idempotency to avoid customer-spam).
+    force = false,
   } = ctx;
 
   const logKey = getReminderLogKey(appt.id, reminderType);
   const logRef = db.doc(`${BASE_PATH}/be_line_reminder_log/${logKey}`);
 
-  // Step 1: idempotency
-  const existingLog = await logRef.get();
-  if (existingLog.exists && existingLog.data().status === 'sent') {
-    return { status: 'already-sent' };
+  // Step 1: idempotency (skipped when force=true)
+  if (!force) {
+    const existingLog = await logRef.get();
+    if (existingLog.exists && existingLog.data().status === 'sent') {
+      return { status: 'already-sent' };
+    }
   }
 
   // Step 0/branch enable: branch must have config + channelAccessToken

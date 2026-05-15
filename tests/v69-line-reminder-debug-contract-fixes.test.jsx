@@ -198,3 +198,97 @@ describe('V69 Bug C — UI sends `confirmBranchName` (matching server destructur
     expect(sentBody.branchNameConfirm).toBeUndefined();
   });
 });
+
+describe('V69.A — force flag (bypass idempotency for re-test)', () => {
+  let fetchMock;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    global.fetch = fetchMock;
+  });
+
+  it('AA.1 force checkbox is hidden in dry-run mode (no idempotency to bypass)', () => {
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    // Default mode = dry-run; checkbox should NOT be present
+    const checkbox = screen.queryByLabelText(/บังคับยิงซ้ำ/);
+    expect(checkbox).toBeNull();
+  });
+
+  it('AA.2 force checkbox appears in single mode', () => {
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    fireEvent.click(screen.getByLabelText(/ยิงเฉพาะลูกค้า/));
+    const checkbox = screen.getByLabelText(/บังคับยิงซ้ำ/);
+    expect(checkbox).toBeTruthy();
+    expect(checkbox.checked).toBe(false); // default unchecked
+  });
+
+  it('AA.3 single mode + force unchecked → payload omits force', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, mode: 'single', totalAttempted: 0, results: { sent: 0, skipped: 0, failed: 0, details: [] } }),
+    });
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    fireEvent.click(screen.getByLabelText(/ยิงเฉพาะลูกค้า/));
+    fireEvent.change(screen.getByPlaceholderText(/LC-26000001/), { target: { value: '000004' } });
+    fireEvent.click(screen.getByTestId('debug-fire-button'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.force).toBeUndefined();
+  });
+
+  it('AA.4 single mode + force checked → payload sends force=true', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, mode: 'single', totalAttempted: 1, results: { sent: 1, skipped: 0, failed: 0, details: [{ apptId: 'BA-x', status: 'sent' }] } }),
+    });
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    fireEvent.click(screen.getByLabelText(/ยิงเฉพาะลูกค้า/));
+    fireEvent.change(screen.getByPlaceholderText(/LC-26000001/), { target: { value: '000004' } });
+    fireEvent.click(screen.getByLabelText(/บังคับยิงซ้ำ/));
+    fireEvent.click(screen.getByTestId('debug-fire-button'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.force).toBe(true);
+  });
+
+  it('AA.5 result panel shows already-sent hint when details have already-sent + force unchecked', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        mode: 'single',
+        totalAttempted: 1,
+        results: { sent: 0, skipped: 1, failed: 0, details: [{ apptId: 'BA-x', status: 'already-sent' }] },
+      }),
+    });
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    fireEvent.click(screen.getByLabelText(/ยิงเฉพาะลูกค้า/));
+    fireEvent.change(screen.getByPlaceholderText(/LC-26000001/), { target: { value: '000004' } });
+    fireEvent.click(screen.getByTestId('debug-fire-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('debug-fire-already-sent')).toBeTruthy();
+    });
+    expect(screen.getByTestId('debug-fire-already-sent').textContent).toMatch(/เคยยิงไปแล้ว/);
+  });
+
+  it('AA.6 already-sent hint hidden when force IS checked (admin already knows)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        mode: 'single',
+        totalAttempted: 1,
+        results: { sent: 0, skipped: 1, failed: 0, details: [{ apptId: 'BA-x', status: 'already-sent' }] },
+      }),
+    });
+    render(<LineReminderDebugSection branchId="BR-A" branchName="นครราชสีมา" />);
+    fireEvent.click(screen.getByLabelText(/ยิงเฉพาะลูกค้า/));
+    fireEvent.change(screen.getByPlaceholderText(/LC-26000001/), { target: { value: '000004' } });
+    fireEvent.click(screen.getByLabelText(/บังคับยิงซ้ำ/));
+    fireEvent.click(screen.getByTestId('debug-fire-button'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const hint = screen.queryByTestId('debug-fire-already-sent');
+    expect(hint).toBeNull();
+  });
+});

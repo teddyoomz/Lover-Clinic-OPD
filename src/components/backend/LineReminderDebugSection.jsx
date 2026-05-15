@@ -40,7 +40,7 @@ async function getIdTokenForAdmin() {
 //   { ok, mode, totalEligible, previews }                                       for dry-run
 // Pre-V69 the parent component read result.sent/skipped/failed from ROOT
 // (wrong path — endpoint returns counters under `results.*`). Bug B fix.
-function ResultPanel({ result, mode }) {
+function ResultPanel({ result, mode, force = false }) {
   const counters = result.results || {};
   const sent = Number(counters.sent || 0);
   const skipped = Number(counters.skipped || 0);
@@ -49,6 +49,9 @@ function ResultPanel({ result, mode }) {
   const totalAttempted = Number(result.totalAttempted ?? result.totalEligible ?? 0);
   const previews = Array.isArray(result.previews) ? result.previews : [];
   const isDryRun = result.mode === 'dry-run';
+  // V69.A — detect 'already-sent' in details so admin sees a clear hint
+  // pointing to the force checkbox instead of a confusing "0 sent" panel.
+  const alreadySentCount = details.filter((d) => d?.status === 'already-sent').length;
 
   return (
     <div
@@ -92,6 +95,12 @@ function ResultPanel({ result, mode }) {
               ⚠️ ไม่พบนัดหมายที่ตรงกับโหมดและวันที่ — ลองเปลี่ยนเป็นโหมด {mode === 'single' ? '"เข้าวันนัด (dayOf)"' : 'อื่น'} หรือตรวจสอบว่าลูกค้ามีนัดในวันนี้/พรุ่งนี้
             </div>
           )}
+          {/* V69.A — surface 'already-sent' so admin knows to opt-in via force checkbox */}
+          {alreadySentCount > 0 && !force && (
+            <div className="ml-5 mb-2 text-[11px] text-amber-300" data-testid="debug-fire-already-sent">
+              🔁 เคยยิงไปแล้ว ({alreadySentCount} รายการ) — ติ๊ก <strong>"บังคับยิงซ้ำ"</strong> ด้านล่างเพื่อทดสอบใหม่ (ลูกค้าจะได้รับข้อความซ้ำ)
+            </div>
+          )}
         </>
       )}
       {(details.length > 0 || previews.length > 0) && (
@@ -114,6 +123,10 @@ export function LineReminderDebugSection({ branchId, branchName }) {
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [branchConfirm, setBranchConfirm] = useState('');
+  // V69.A (2026-05-15) — opt-in checkbox to bypass runReminderPipeline
+  // idempotency lock. Admin checks this to RE-TEST an already-sent
+  // reminder. Default false to preserve customer-spam protection.
+  const [force, setForce] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);   // { sent, failed, skipped, details? }
   const [error, setError] = useState('');
@@ -144,6 +157,9 @@ export function LineReminderDebugSection({ branchId, branchName }) {
       // `branchNameConfirm` (different key) → server saw undefined →
       // String('').trim() → BRANCH_NAME_CONFIRM_MISMATCH on every all-mode click.
       if (mode === 'all') payload.confirmBranchName = branchConfirm.trim();
+      // V69.A — force flag: only meaningful in single|all (real push) mode;
+      // dry-run never hits idempotency anyway.
+      if (mode !== 'dry-run' && force) payload.force = true;
 
       const res = await fetch(ENDPOINT, {
         method: 'POST',
@@ -297,10 +313,23 @@ export function LineReminderDebugSection({ branchId, branchName }) {
       )}
 
       {result && (
-        <ResultPanel result={result} mode={mode} />
+        <ResultPanel result={result} mode={mode} force={force} />
       )}
 
-      <div className="flex items-center justify-end pt-1">
+      <div className="flex items-center justify-between pt-1 gap-3 flex-wrap">
+        {/* V69.A — force-resend opt-in (only meaningful in single|all real-push modes) */}
+        {mode !== 'dry-run' ? (
+          <label className="flex items-center gap-1.5 text-[11px] text-[var(--tx-secondary)] cursor-pointer" title="ข้าม idempotency lock — ใช้ทดสอบซ้ำหลังจากที่เคยยิงไปแล้ว ลูกค้าจะได้รับข้อความซ้ำ">
+            <input
+              type="checkbox"
+              checked={force}
+              onChange={(e) => setForce(e.target.checked)}
+              data-field="debug-fire-force"
+              className="accent-amber-600"
+            />
+            🔁 บังคับยิงซ้ำ (bypass duplicate-protection)
+          </label>
+        ) : <span />}
         <button
           type="button"
           onClick={handleFire}
