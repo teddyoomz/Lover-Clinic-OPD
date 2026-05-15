@@ -43,11 +43,31 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-15 EOD — Central Stock Make-Fresh DEPLOYED ✓ + V66 fix committed PENDING DEPLOY + 🚨 BRANCH make-fresh has SAME V66 bug (user-reported, NOT fixed) · master=`25cdb41` · prod=`1f63219` · **2 commits PENDING DEPLOY** · build clean
+- **Date last updated**: 2026-05-15 EOD+2 — LINE OA Appointment Reminder System DEPLOYED LIVE on prod · master=`84c0af1` · prod=`84c0af1` (in sync) · build clean · firestore rules v32
 - **Branch**: `master`
-- **Last commit**: `25cdb41` fix(central-stock): V66 — CENTRAL_BUCKETS filter fields corrected against PROD write-side code
-- **Test count**: **9883+ vitest GREEN** + 12 skipped + 4 pre-existing failures + **14 Playwright e2e**.
-- **Deploy state**: prod=`1f63219` LIVE (central make-fresh BROKEN — V66 field name bug). V66 fix committed at `25cdb41` not yet deployed.
+- **Last commit**: `84c0af1` docs(agents): LINE OA appointment reminder system DEPLOYED LIVE on prod
+- **Test count**: **152/152 LINE-reminder tests GREEN + 16/16 AV45 LR-1..LR-5 audit GREEN** + ~10,035 cumulative vitest GREEN + **14 Playwright e2e**.
+- **Deploy state**: prod=`84c0af1` LIVE. Vercel crons scheduled (fire hourly + retry 5min); CRON_SECRET in prod env; firestore.rules v32 (be_line_reminder_log + postback_log read: isClinicStaff, write: false). Rule B Probe-Deploy-Probe PASSED; Rule Q L2 cron endpoint smoke-test PASSED (auth 401/401/200).
+
+### Session 2026-05-15 LATE+2 — LINE OA Appointment Reminder System SHIPPED + DEPLOYED ★
+
+User: "ระบบแจ้งเตือนนัดหมายผ่าน Line OA สำหรับลูกค้าที่ผูก Line OA ไว้" — full feature + per-branch OA pivot + Subagent-Driven Maximum Capacity execution.
+
+Spec + plan via brainstorming HARD-GATE → per-branch architecture pivot (Phase BS V3 be_line_configs/{branchId} extended with .lineReminder block; customer.lineUserId_byBranch[branchId] for multi-branch linkage). 15 tasks across 4 waves of parallel implementer subagents + 2-stage review per task + 7 polish fix subagents + 2 deferred fixes.
+
+**Architecture LIVE**:
+- Vercel cron `/api/cron/line-reminder-fire` (hourly) + `/api/cron/line-reminder-retry` (5min) with CRON_SECRET auth
+- Webhook line.js extended: postback handler (ยืนยัน/เลื่อน/ติดต่อ via 3-button Flex Message) + opt-out intents (หยุดแจ้งเตือน/เริ่มแจ้งเตือน)
+- Per-branch credential lookup via `getLineConfigForBranch` (LR-1); branch-scoped customer LINE userId via `getCustomerLineUserIdAtBranch` helper (LR-3)
+- Idempotency log `be_line_reminder_log/{appointmentId}_{reminderType}` + retry queue with exp backoff (5m/30m/2hr/DEAD)
+- UI: 🟢/⚪️ LINE badge in 6 customer pickers + auto-tick LineNotifyConfirmation in 5 appt modals + LineSettingsTab 3 new sections (settings/debug/history) + CustomerLineSection in CustomerDetailView
+- Class-of-bug locks: AV45 + LR-1..LR-5 source-grep regression (16/16 PASS on first run — every invariant satisfied by Wave 1-3 impl)
+
+**Deploy** (after V18 explicit-permission verb): CRON_SECRET added to Vercel env (newline-strip fix needed) + vercel --prod ✅ + firebase deploy --only firestore:rules with Rule B Probe-Deploy-Probe (probes 1+8a+8b+8c all expected status) + 5 probe artifacts cleaned via admin-SDK + cron endpoint Rule Q L2 smoke-test (401/401/200 + JSON shape verified + Bangkok TZ correct).
+
+Outstanding (user-triggered): admin enables lineReminder per branch in line-settings UI → Rule Q L1 hands-on (Debug Fire → real LINE → click ✓ ยืนยัน → verify status). Plus optional 8-scenario e2e with admin's lineUserId.
+
+Checkpoint: `.agents/sessions/2026-05-15-line-oa-reminder-deployed.md` (full task-by-task breakdown).
 
 ### Session 2026-05-15 EOD — Central Stock Make-Fresh SHIPPED ★ + V66 incident + BRANCH bug discovered
 
@@ -2223,30 +2243,32 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-15 EOD.
+Resume LoverClinic — continue from 2026-05-15 EOD+2.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=25cdb41, prod=1f63219 — V66 fix PENDING DEPLOY)
-3. .agents/active.md (9883+ vitest + 14 Playwright)
+2. SESSION_HANDOFF.md (master=84c0af1 · prod=84c0af1 LIVE · in sync)
+3. .agents/active.md (152/152 LINE tests + 16/16 AV45 audit GREEN)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-15-central-stock-make-fresh-and-v66-saga.md
+5. .agents/sessions/2026-05-15-line-oa-reminder-deployed.md
 
-Status: master=`25cdb41` · prod=`1f63219` · 2 commits PENDING DEPLOY · build clean · 9883+ vitest GREEN.
+Status: master=prod=`84c0af1` LIVE on https://lover-clinic-app.vercel.app · LINE OA reminder system DEPLOYED · build clean · 152/152 LINE tests + 16/16 AV45 LR-1..LR-5 audit GREEN.
 
-🚨 **TOP PRIORITY NEXT SESSION** — user-reported new bug EOD:
-"กด ลบ Stock สาขานครราชสีมา จากปุ่มสาขาใหม่แล้ว แต่ยังเหลือตามภาพ แม่งข้อมูลอยู่ครบเลย จะผ่านก็ต่อเมื่อแม่งไม่เหลือข้อมูลอะไรแล้ว แล้วฝากเคลีย orphan ด้วยนะ เยอะมากๆ"
+**Next action**: idle UNTIL user hands-on tests LINE reminder (Rule Q L1):
+1. tab=line-settings → นครราชสีมา → toggle lineReminder.enabled=ON → Save
+2. Debug Fire → mode=ยิงเฉพาะลูกค้า → admin's customer → "ทดสอบเลย"
+3. Real LINE → click ✓ ยืนยัน → verify appointment.status='confirmed'
+4. DM "หยุดแจ้งเตือน" → verify notifyOptOut=true
+5. Optional: `node scripts/e2e-line-reminder-real-prod.mjs --apply --admin-line-user-id=Uxxx`
 
-Same V66 class-of-bug as central — BRANCH make-fresh on นครราชสีมา leaves 1,064 transfers + orders + withdrawals + Movement Log intact because `be_stock_transfers`/`be_stock_withdrawals` use `sourceLocationId`/`destinationLocationId` not `branchId`. Apply same fix pattern: Rule R diag → grep prod write-side → correct branchBackupBuckets.js → extend V66 regression test → re-verify 10/10 + user hands-on.
-
-Plus orphan cleanup script (Rule R diag + Rule M two-phase).
-
-Then combined deploy (BRANCH V66 fix + orphan cleanup + central V66 fix already committed at 25cdb41).
+Outstanding (user-triggered):
+- Confirm LINE Premium tier ($60/mo) for นครราชสีมา OA
+- Report any L1 issues from hands-on test
 
 🚨 **Rules**:
-- Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries against real prod data). Mock-consistent ≠ reality-verified.
+- Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.
 - V18 deploy lock — user explicit "deploy" verb THIS turn required for vercel --prod.
-- Rule R standing auth — env-pull + admin-SDK read-only diag scripts (diag-*) any time.
+- Rule R standing auth — env-pull + admin-SDK read-only diag scripts any time.
 
 /session-start
 ```
