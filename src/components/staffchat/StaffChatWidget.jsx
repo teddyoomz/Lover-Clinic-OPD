@@ -6,7 +6,6 @@ import { useStaffChat } from '../../hooks/useStaffChat.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { StaffChatBubble } from './StaffChatBubble.jsx';
 import { StaffChatPanel } from './StaffChatPanel.jsx';
-import { StaffChatHeader } from './StaffChatHeader.jsx';
 import { StaffChatMessageList } from './StaffChatMessageList.jsx';
 import { StaffChatComposer } from './StaffChatComposer.jsx';
 import { StaffChatNamePicker } from './StaffChatNamePicker.jsx';

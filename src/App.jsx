@@ -23,6 +23,10 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const PatientDashboard = lazy(() => import('./pages/PatientDashboard.jsx'));
 const ClinicSchedule = lazy(() => import('./pages/ClinicSchedule.jsx'));
 const BackendDashboard = lazy(() => import('./pages/BackendDashboard.jsx'));
+// V73 (2026-05-16) — staff chat widget. Self-gates internally on user +
+// selectedBranchId + !needsPublicAuth, so safe to mount globally inside
+// provider chain.
+const StaffChatWidget = lazy(() => import('./components/staffchat/StaffChatWidget.jsx'));
 
 function LazyFallback() {
   return (
@@ -227,6 +231,12 @@ export default function App() {
       <UserPermissionProvider user={user}>
         <BranchProvider>
           <Suspense fallback={<LazyFallback />}><BackendDashboard clinicSettings={clinicSettings} /></Suspense>
+          {/* V73 (2026-05-16) — staff chat widget mounted inside BranchProvider
+              so useSelectedBranch resolves. Widget self-gates on user +
+              selectedBranchId + !needsPublicAuth. */}
+          <Suspense fallback={null}>
+            <StaffChatWidget user={user} needsPublicAuth={needsPublicAuth} />
+          </Suspense>
         </BranchProvider>
       </UserPermissionProvider>
     );
@@ -262,6 +272,12 @@ export default function App() {
                 theme={theme} setTheme={setTheme}
               />
             )}
+            {/* V73 (2026-05-16) — staff chat widget mounted inside BranchProvider
+                so useSelectedBranch resolves. Widget self-gates on user +
+                selectedBranchId + !needsPublicAuth. */}
+            <Suspense fallback={null}>
+              <StaffChatWidget user={user} needsPublicAuth={needsPublicAuth} />
+            </Suspense>
           </BranchProvider>
         </UserPermissionProvider>
         </Suspense>
