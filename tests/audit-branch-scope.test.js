@@ -671,6 +671,33 @@ describe('BS-13 — raw listener+getter safe-by-default (V54)', () => {
     expect(c).toMatch(/listenToAppointmentsByDate/);
     expect(c).toMatch(/\{\s*branchId:\s*selectedBranchId\s*\}/);
   });
+
+  // V73 Task 2 (2026-05-16) — Staff Chat listener follows BS-13. Marker
+  // comment lives in the section header ABOVE the function (not inside the
+  // body), so we test the function body for resolveSelectedBranchId + verify
+  // the V73/BS-13 marker exists in the preceding section header.
+  it('BS-13.8 listenToStaffChatMessages body contains resolveSelectedBranchId + preceding V73/BS-13 section header', () => {
+    const fnIdx = backendClientSrc.indexOf('export function listenToStaffChatMessages');
+    expect(fnIdx, 'listenToStaffChatMessages definition not found').toBeGreaterThan(-1);
+    // Function body: from definition to next export
+    const after = backendClientSrc.slice(fnIdx);
+    const nextExportIdx = after.indexOf('\nexport ', 1);
+    const body = nextExportIdx > 0 ? after.slice(0, nextExportIdx) : after.slice(0, 3000);
+    expect(body, 'listenToStaffChatMessages body missing resolveSelectedBranchId fallback').toMatch(/resolveSelectedBranchId/);
+    // Section header (preceding ~600 chars) must carry V73 + BS-13 markers
+    const headerStart = Math.max(0, fnIdx - 600);
+    const sectionHeader = backendClientSrc.slice(headerStart, fnIdx);
+    expect(sectionHeader, 'listenToStaffChatMessages section header missing V73 marker').toMatch(/V73/);
+    expect(sectionHeader, 'listenToStaffChatMessages section header missing BS-13 marker').toMatch(/BS-13/);
+  });
+
+  it('BS-13.9 scopedDataLayer.js re-exports listenToStaffChatMessages + addStaffChatMessage as raw.X passthrough', () => {
+    const sdl = readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+    expect(sdl).toMatch(/export\s+const\s+listenToStaffChatMessages\s*=/);
+    expect(sdl).toMatch(/raw\.listenToStaffChatMessages/);
+    expect(sdl).toMatch(/export\s+const\s+addStaffChatMessage\s*=/);
+    expect(sdl).toMatch(/raw\.addStaffChatMessage/);
+  });
 });
 
 // ─── BS-14 — Schedule-link modal data sources branch-scoped (V55, 2026-05-08) ──
