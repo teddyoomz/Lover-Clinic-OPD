@@ -43,11 +43,24 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-15 EOD+2 — LINE OA Appointment Reminder System DEPLOYED LIVE on prod · master=`84c0af1` · prod=`84c0af1` (in sync) · build clean · firestore rules v32
+- **Date last updated**: 2026-05-15 EOD+6 — LINE Reminder Saga complete (V67+V68+V69+V69.A all DEPLOYED LIVE) · master=`bb48036` · prod=`262cfda` · build clean (2.64s) · firestore rules v32 (unchanged)
 - **Branch**: `master`
-- **Last commit**: `84c0af1` docs(agents): LINE OA appointment reminder system DEPLOYED LIVE on prod
-- **Test count**: **152/152 LINE-reminder tests GREEN + 16/16 AV45 LR-1..LR-5 audit GREEN** + ~10,035 cumulative vitest GREEN + **14 Playwright e2e**.
-- **Deploy state**: prod=`84c0af1` LIVE. Vercel crons scheduled (fire hourly + retry 5min); CRON_SECRET in prod env; firestore.rules v32 (be_line_reminder_log + postback_log read: isClinicStaff, write: false). Rule B Probe-Deploy-Probe PASSED; Rule Q L2 cron endpoint smoke-test PASSED (auth 401/401/200).
+- **Last commit**: `262cfda` fix(V69.A): force-bypass-idempotency opt-in for debug-fire re-test
+- **Test count**: **10141 PASS / 0 FAIL / 12 skip** (full suite); V67 19/19 + V68 21/21 + L2 18/18 + V69+V69.A 19/19 audits all GREEN
+- **Deploy state**: prod=`262cfda` LIVE. 4 vercel-only deploys this session (no firebase rules change since V32). Vercel crons + CRON_SECRET unchanged.
+
+### Session 2026-05-15 EOD+6 — LINE Reminder Saga V67 → V68 → V69 → V69.A all DEPLOYED ★
+
+User-reported "ยิงไม่ได้ซักอัน" post-Wave 1 ship triggered systematic-debugging Phase 1 → 4 V-entries shipped + 4 vercel deploys in single session.
+
+- **V67** — pipeline schema-drift (V66 mock-shadow class): `appointmentDate→date` + `branchName→name` + customerHN picker + customerName 5-tier fallback chain. Rule R schema-match diag + AV46.
+- **V68** — LINE badge surfacing across 4 admin surfaces + CustomerCard V5 Editorial rewrite (initials gradient avatars + 4-layer shadow + meta-col + LINE chip in bottom row) + lineNotify legacy strip. AV47 + 21 source-grep + 18 jsdom render. Subagent-Driven Development 16 tasks × 2-stage review.
+- **V69** — 3 V67-class follow-up contract drifts: customerName title prefix not stripped + UI reads `result.sent` (root) but endpoint returns `result.results.sent` + UI sends `branchNameConfirm` but endpoint reads `confirmBranchName`. AV48 + IIFE-in-JSX refactor (extracted ResultPanel per Vite-OXC ban).
+- **V69.A** — force opt-in for debug-fire re-test (idempotency was blocking admin re-tests); 🔁 checkbox + 'already-sent'→skipped++ semantic fix + UI hint.
+
+Outstanding: L1 hands-on verification (3 surfaces × 6 checks), AppointmentHubView badge overlay polish (T4 visual concern), confirm LINE Premium tier.
+
+Checkpoint: `.agents/sessions/2026-05-15-line-reminder-v67-v68-v69-saga.md`.
 
 ### Session 2026-05-15 LATE+2 — LINE OA Appointment Reminder System SHIPPED + DEPLOYED ★
 
@@ -2247,23 +2260,27 @@ Resume LoverClinic — continue from 2026-05-15 EOD+2.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=84c0af1 · prod=84c0af1 LIVE · in sync)
-3. .agents/active.md (152/152 LINE tests + 16/16 AV45 audit GREEN)
+2. SESSION_HANDOFF.md (master=`bb48036` · prod=`262cfda` LIVE; 1 docs commit ahead)
+3. .agents/active.md (10141 PASS / 0 FAIL; V67+V68+V69+V69.A audits GREEN)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-15-line-oa-reminder-deployed.md
+5. .agents/sessions/2026-05-15-line-reminder-v67-v68-v69-saga.md
 
-Status: master=prod=`84c0af1` LIVE on https://lover-clinic-app.vercel.app · LINE OA reminder system DEPLOYED · build clean · 152/152 LINE tests + 16/16 AV45 LR-1..LR-5 audit GREEN.
+Status: master=`bb48036`, prod=`262cfda` LIVE on https://lover-clinic-app.vercel.app · LINE reminder pipeline + debug-fire fully functional · 10141/0 vitest · build clean (2.64s).
 
-**Next action**: idle UNTIL user hands-on tests LINE reminder (Rule Q L1):
-1. tab=line-settings → นครราชสีมา → toggle lineReminder.enabled=ON → Save
-2. Debug Fire → mode=ยิงเฉพาะลูกค้า → admin's customer → "ทดสอบเลย"
-3. Real LINE → click ✓ ยืนยัน → verify appointment.status='confirmed'
-4. DM "หยุดแจ้งเตือน" → verify notifyOptOut=true
-5. Optional: `node scripts/e2e-line-reminder-real-prod.mjs --apply --admin-line-user-id=Uxxx`
+**Next action**: idle UNTIL user reports L1 hands-on results.
+
+Hands-on test loop (V67+V68+V69+V69.A end-to-end):
+1. Open LINE message body — should read **"สวัสดีคุณ แพรพร พรแพร ค่ะ"** (no นางสาว — V69 strip)
+2. tab=line-settings → Debug Fire single + 000004 → expect **Sent: 1** (V69 UI path fix)
+3. Click again → **Skipped: 1** + 🔁 hint (V69.A 'already-sent'→skipped + force opt-in surface)
+4. Tick **🔁 บังคับยิงซ้ำ** + click → **Sent: 1** (real LINE message #2 arrives — V69.A force flag)
+5. Mode=ยิงทุกคน + พิมพ์ "นครราชสีมา" → no BRANCH_NAME_CONFIRM_MISMATCH (V69 key fix)
+6. tab=customerlist + tab=appointment-* → V68 V5 cards + 🟢 LINE chips visible
 
 Outstanding (user-triggered):
+- L1 verification of all 6 surfaces above
+- AppointmentHubView badge overlay polish (T4 visual concern flagged in V68 review)
 - Confirm LINE Premium tier ($60/mo) for นครราชสีมา OA
-- Report any L1 issues from hands-on test
 
 🚨 **Rules**:
 - Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.
