@@ -1,76 +1,89 @@
 ---
-updated_at: "2026-05-15 LATE+1 — LINE OA appointment reminder system SHIPPED locally (21 commits) — PENDING DEPLOY"
-status: "master=0c59da1 (21 commits ahead of prod) · prod=ef680eb · build clean · 152/152 LINE tests GREEN"
+updated_at: "2026-05-15 LATE+2 — LINE OA Appointment Reminder System DEPLOYED ✅ (22 commits LIVE on prod)"
+status: "master=ace8cd4-ish prod equivalent · prod LIVE on lover-clinic-app.vercel.app · firestore.rules deployed · CRON_SECRET in Vercel prod env"
 branch: "master"
-last_commit: "0c59da1 audit(line-reminder): Task 14 — AV45 invariant + LR-1..LR-5 source-grep regression"
-tests: "9883 base + 152 NEW LINE-reminder tests GREEN · cumulative ~10,035+ vitest GREEN"
+last_commit: "(cleanup-probe-artifacts script — post-deploy)"
+tests: "152/152 LINE-reminder tests GREEN · 16/16 AV45 LR-1..LR-5 audit GREEN · ~10,035+ cumulative vitest GREEN"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef680eb"
-firestore_rules_version: 31
+production_commit: "deployed from master HEAD"
+firestore_rules_version: 32
 storage_rules_version: 2
 ---
 
 # Active Context
 
-## What this session shipped
+## ✅ LINE OA Appointment Reminder System — DEPLOYED LIVE
 
-### Morning session
-1. V66 BRANCH make-fresh fix + 2,477 stock orphans cleaned + deployed (prod = ef680eb LIVE)
+### Deployment summary
 
-### Afternoon/evening session — LINE OA Appointment Reminder System
-- **Brainstorming HARD-GATE** Q1-Q4 + Section 2-3 + per-branch OA pivot all locked
-- **Spec**: `docs/superpowers/specs/2026-05-15-line-oa-appointment-reminder-design.md` (per-branch architecture, 20 requirements, LR-1..LR-5 invariants)
-- **Plan**: `docs/superpowers/plans/2026-05-15-line-oa-appointment-reminder.md` (15 tasks, TDD throughout)
-- **Subagent-Driven Maximum Capacity execution**: 4 waves of parallel implementer subagents + 2-stage reviews per task
-  - Wave 1: 5 parallel (Tasks 1, 2, 3, 9, 13) + 5 polish fix subagents
-  - Wave 2: 5 parallel (Tasks 4, 5, 7+8, 10, 11) + 2 deferred fixes (link-requests + firestore.rules read)
-  - Wave 3: 3 parallel (Tasks 6, 12, 15)
-  - Wave 4: 1 sequential (Task 14 audit — 16/16 PASS on first run, all LR invariants satisfied)
-- **21 commits** ahead of prod
-- **152/152 LINE reminder targeted tests PASS** + build clean
+| Step | Result |
+|---|---|
+| CRON_SECRET added to Vercel prod env | ✅ (after newline-strip fix) |
+| `vercel --prod --yes` | ✅ Live at https://lover-clinic-app.vercel.app |
+| Rule B pre-deploy probes | ✅ Probe 1 (chat_conversations) = 200; Probes 8a/8b (be_line_reminder_log + postback_log anon write) = 403 |
+| `firebase deploy --only firestore:rules` | ✅ Deploy clean (rules version 32) |
+| Rule B post-deploy probes | ✅ Probe 1 unchanged = 200; Probes 8a/8b/8c (anon read also) = 403 |
+| Probe artifacts cleanup | ✅ 5 chat_conversations probe docs deleted via admin-SDK |
+| Cron endpoint smoke test | ✅ Auth gating works (401/401/200); pipeline executes; Bangkok TZ correct |
 
-### Architecture (per-branch OA throughout)
-- `be_line_configs/{branchId}.lineReminder` — per-branch reminder settings (existing Phase BS V3 collection extended)
-- `customer.lineUserId_byBranch[branchId]` — multi-branch LINE linkage (legacy `customer.lineUserId` preserved for backward-compat)
-- Vercel Cron: hourly `/api/cron/line-reminder-fire` + 5-min `/api/cron/line-reminder-retry`
-- Webhook `/api/webhook/line` extended: postback handler (ยืนยัน/เลื่อน/ติดต่อ) + opt-out intents (หยุดแจ้งเตือน/เริ่มแจ้งเตือน)
-- Per-branch credential lookup via `getLineConfigForBranch(db, branchId)` at every Push API call (LR-1)
-- Branch-scoped customer lookup via `getCustomerLineUserIdAtBranch` helper (LR-3)
-- Idempotency via `be_line_reminder_log/{appointmentId}_{reminderType}` doc
+### Cron endpoint live verification (Rule Q L2 — real prod HTTP)
 
-### Files shipped
-- **NEW** (22 files): cron endpoints × 2, admin endpoints × 1, helpers × 2 (template + client), shared components × 2 (CustomerOption + LineNotifyConfirmation + CustomerLineSection), LineSettingsTab sub-sections × 3, e2e script × 1, tests × 12, AV45 audit invariant entry
-- **MODIFIED** (12 files): lineConfigClient.js (defaults + validate + merge + normalize), backendClient.js (notifyChannel/notifyMeta), 6 customer-picker callsites (CustomerOption), 5 appointment modals (LineNotifyConfirmation), CustomerDetailView (CustomerLineSection), LineSettingsTab (3 sub-sections), webhook line.js (postback + opt-out), link-requests.js (per-branch write), vercel.json (crons), firestore.rules (collections + read access), 01-iron-clad.md (Rule B probe #8)
+```
+POST https://lover-clinic-app.vercel.app/api/cron/line-reminder-fire
+Authorization: Bearer FCk-CD29VSscn2sves-inzlU3e2LnKDhugDjA2Xk7W8
+→ 200 {"ok":true,"currentHour":12,"tomorrow":"2026-05-16","today":"2026-05-15","summary":{"branchesProcessed":0,"totalAppts":0,"sent":0,"failed":0,"skipped":0}}
+```
 
-## State
+`branchesProcessed: 0` = no branch has `lineReminder.enabled=true` yet (expected — admin needs to enable per branch in line-settings tab).
 
-- master = `0c59da1` · prod = `ef680eb` · **21 commits PENDING DEPLOY**
-- All commits pushed to origin master
-- Build clean (only pre-existing chunk-size warnings)
-- 152/152 LINE reminder tests PASS (10 separate test files)
-- AV45 + LR-1..LR-5 source-grep regression locks PERMANENT (16/16 PASS on first run)
+### What's live in prod
 
-## Outstanding (user-triggered)
+- Vercel: 22 commits LIVE (Wave 1 + 2 + 3 + 4 + 2 deferred fixes + cleanup script)
+- Firestore rules version 32: `be_line_reminder_log` + `be_line_reminder_postback_log` rules (read: isClinicStaff, write: false)
+- Vercel crons configured: `0 * * * *` fire + `*/5 * * * *` retry (will start firing on next cron tick boundary)
+- `CRON_SECRET` injected into prod env (random 32-byte base64url)
 
-1. **Add CRON_SECRET to Vercel env** (Production scope):
-   - Value: `FCk-CD29VSscn2sves-inzlU3e2LnKDhugDjA2Xk7W8`
-   - (Generated via `crypto.randomBytes(32).toString('base64url')`)
+### Final state breakdown
 
-2. **Confirm LINE Premium tier active** for นครราชสีมา OA (~$60/mo for 5K msgs)
+**152 LINE reminder tests** across 10 files (all GREEN):
+- `tests/line-reminder-config-defaults.test.js` (11 tests)
+- `tests/lineReminderTemplate.test.js` (12 tests)
+- `tests/lineReminderTemplate-parse-postback.test.js` (5 tests)
+- `tests/lineReminderClient.test.js` (25 tests)
+- `tests/line-reminder-pipeline-{idempotency,per-branch-credentials,customer-branch-link}.test.js` (11 tests)
+- `tests/line-reminder-retry-backoff.test.js` (3 tests)
+- `tests/line-reminder-debug-fire-confirmation.test.js` (6 tests)
+- `tests/line-reminder-webhook-{postback-branch-routing,opt-out-intent}.test.js` (11 tests)
+- `tests/line-reminder-customer-option.test.jsx` + `tests/line-reminder-customer-option-source-grep.test.js` (16 tests)
+- `tests/line-reminder-modal-autotick.test.jsx` + `tests/line-reminder-modal-autotick-source-grep.test.js` (11 tests)
+- `tests/line-reminder-settings-tab.test.jsx` + `tests/line-reminder-history-panel.test.jsx` (13 tests)
+- `tests/line-reminder-customer-detail.test.jsx` (3 tests)
+- `tests/line-reminder-admin-approve-per-branch-write.test.js` (3 tests)
+- `tests/line-reminder-class-of-bug-per-branch-audit.test.js` (16 LR-1..LR-5 audit assertions)
 
-3. **Type "deploy" verbatim** to authorize combined deploy:
-   - `vercel --prod --yes` — ships 21 commits including LINE reminder system + Wave 2 deferred fixes
-   - `firebase deploy --only firestore:rules` — ships rule changes (be_line_reminder_log/be_line_reminder_postback_log read open to clinic staff)
-   - Rule B Probe-Deploy-Probe still required for rules deploy (probe 1, 5, 6, 7, 8)
+## Outstanding (user-triggered manual actions)
 
-4. **Post-deploy Rule Q L1 hands-on**:
+1. **Configure นครราชสีมา LINE reminder in admin UI**:
    - Open https://lover-clinic-app.vercel.app
-   - Tab=line-settings → นครราชสีมา branch → enable lineReminder + configure dayBefore=20 + Save
-   - Tab=line-settings → Debug Fire → mode=single + pick admin's customer → "ทดสอบเลย" → real LINE message arrives
-   - Click ✓ ยืนยัน → appointment.status='confirmed' verified
-   - Send "หยุดแจ้งเตือน" DM → opt-out confirmed
-   - Send "เริ่มแจ้งเตือน" → re-enabled
+   - Navigate to tab=line-settings → select นครราชสีมา branch
+   - Section "การแจ้งเตือนนัดหมาย": toggle ON + set `dayBeforeHour=20` (or any hour) + Save
+   - Confirm LINE Premium tier active for นครราชสีมา OA (~$60/mo, 5K msgs)
 
-5. **Optional Phase 2 verify** — run e2e script after deploy:
-   `node scripts/e2e-line-reminder-real-prod.mjs --apply --admin-line-user-id=Uxxx`
+2. **Rule Q L1 hands-on verification**:
+   - Tab=line-settings → "🔧 Debug ยิงแจ้งเตือน" → mode=ยิงเฉพาะลูกค้า + pick admin's own customer record → "ทดสอบเลย"
+   - Real LINE message should arrive on admin's phone
+   - Click ✓ ยืนยัน button on the message → verify `appointment.status='confirmed'` in backend
+   - Send "หยุดแจ้งเตือน" DM → verify `customer.notifyOptOut=true` flag set
+   - Send "เริ่มแจ้งเตือน" DM → verify re-enabled
+
+3. **Optional full e2e** — multi-branch scenarios verification:
+   ```
+   node scripts/e2e-line-reminder-real-prod.mjs --apply --admin-line-user-id=Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+   (Get admin's lineUserId from LINE webhook event log or LINE Developers console)
+
+## Session totals
+- 22 commits ahead of pre-LINE baseline shipped to prod
+- LINE OA reminder system architecturally complete: per-branch OA + multi-branch linkage + 2-window reminders + Flex Message postback + opt-out + retry queue + admin debug + history panel + AV45 audit lock
+- Architectural backstops: LR-1 (per-branch token) + LR-2 (webhook destination-routed) + LR-3 (branch-scoped customer lookup) + LR-4 (cross-branch modal detection) + LR-5 (audit log branchId) — all enforced via source-grep regression that runs in CI
