@@ -110,9 +110,14 @@ describe('Phase 24.0 / F3 — audit doc shape', () => {
 });
 
 describe('Phase 24.0 / F4 — UI wiring', () => {
-  it('F4.1 CustomerCard renders ✕ icon button via Trash2 with stopPropagation', () => {
+  it('F4.1 CustomerCard renders ✕ icon button (Trash2 lucide OR 🗑️ emoji) with stopPropagation', () => {
+    // V68 V21 fixup (2026-05-15): CustomerCard rewritten to V5 Editorial.
+    // The lucide-react Trash2 icon was replaced with a 🗑️ emoji span (lighter
+    // dependency footprint + matches the V5 Editorial "emoji-driven" aesthetic).
+    // Assertion broadened to accept either icon flavor — both deliver the
+    // delete affordance with stopPropagation contract.
     const card = fs.readFileSync('src/components/backend/CustomerCard.jsx', 'utf-8');
-    expect(card).toMatch(/Trash2/);
+    expect(card).toMatch(/Trash2|🗑️/);
     expect(card).toMatch(/e\.stopPropagation\(\)/);
   });
 

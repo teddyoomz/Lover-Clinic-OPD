@@ -31,6 +31,7 @@ import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
 import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
+import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 
 export default function AppointmentHubView({
   // V64-fix7 (2026-05-09): caller-provided counter that bumps after any
@@ -417,20 +418,25 @@ export default function AppointmentHubView({
         </div>
       )}
       {!loading && filteredAppts.map(a => (
-        <AppointmentHubRowCard
-          key={a.id}
-          appt={a}
-          summary={summaryMap.get(String(a.customerId))}
-          apptDeposit={depositByApptId.get(String(a.id))}
-          apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
-          now={new Date()}
-          onConfirm={handleConfirmOptimistic}
-          onEdit={handleEditOpenModal}
-          onCancel={handleCancelOptimistic}
-          onCreateTreatment={onCreateTreatmentForAppt}
-          onEditTreatment={onEditTreatmentForAppt}
-          onOpenLine={onOpenLineForAppt}
-        />
+        <div key={a.id} className="relative">
+          {/* V68 (2026-05-15) — LINE badge if appt has notifyChannel=['line'] */}
+          <div className="absolute top-2 right-2 z-10 pointer-events-none">
+            <AppointmentLineBadge appt={a} size="sm" />
+          </div>
+          <AppointmentHubRowCard
+            appt={a}
+            summary={summaryMap.get(String(a.customerId))}
+            apptDeposit={depositByApptId.get(String(a.id))}
+            apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
+            now={new Date()}
+            onConfirm={handleConfirmOptimistic}
+            onEdit={handleEditOpenModal}
+            onCancel={handleCancelOptimistic}
+            onCreateTreatment={onCreateTreatmentForAppt}
+            onEditTreatment={onEditTreatmentForAppt}
+            onOpenLine={onOpenLineForAppt}
+          />
+        </div>
       ))}
       {/* V64-fix3 (Issue 1): full edit modal — same component used by
           backend tab=appointment-all + CustomerDetailView. */}

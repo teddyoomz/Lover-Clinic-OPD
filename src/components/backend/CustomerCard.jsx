@@ -1,201 +1,254 @@
 // ─── CustomerCard — Reusable card for displaying customer info ──────────────
-// Used in both CloneTab (search results) and CustomerListTab (cloned customers).
-// Follows Thai cultural rules: no red on names/HN, uses CSS variables for theme.
+// V68 (2026-05-15) — V5 Editorial redesign. World-class polish for the
+// customer-list view. Initials avatar with hash-derived gradient (no
+// generic User icon). 4-layer shadow stack for depth (lit-from-above
+// inset highlight + tight contact + mid-depth + soft ambient). Meta-col
+// (phone above branch). LINE chip in bottom meta row (Q4=C decision).
+//
+// Public API stable from pre-V68: same props, same callbacks. Caller
+// CustomerListTab.jsx unchanged.
+//
+// Layout:
+//   ┌──────────────────────────────────────────┐  ← rounded-2xl, 4-layer shadow
+//   │ [56px halo gradient avatar]            ✕ │  ← header + delete (hover-only)
+//   │   นางสาว แพรพร พรแพร                       │
+//   │   HN 000004 · 28 ปี · ♀️ หญิง               │  ← tagline
+//   │ ┌──────────────────────────────────────┐ │
+//   │ │ 📞 081-234-5678                      │ │  ← meta-col: phone
+//   │ │ 📍 นครราชสีมา                         │ │  ← branch (stacked)
+//   │ └──────────────────────────────────────┘ │
+//   │ 💊 12 รักษา · 📦 5 คอร์ส       🟢 LINE  │  ← engagement + LINE chip
+//   └──────────────────────────────────────────┘
 
-import { User, Phone, Calendar, Stethoscope, Package, Clock, AlertCircle, CheckCircle2, Loader2, Download, Eye, Trash2 } from 'lucide-react';
-import { hexToRgb } from '../../utils.js';
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { CustomerLineBadge } from '../CustomerOption.jsx';
+
+// Avatar gradient palette — 6 colors (no red per Thai cultural rule).
+// Hash-derived from customer name so the same person always gets the
+// same color (visual identity anchor across sessions).
+const AVATAR_GRADIENTS = [
+  'bg-gradient-to-br from-pink-500 to-pink-700',
+  'bg-gradient-to-br from-teal-500 to-teal-700',
+  'bg-gradient-to-br from-amber-500 to-amber-700',
+  'bg-gradient-to-br from-blue-500 to-blue-700',
+  'bg-gradient-to-br from-purple-500 to-purple-700',
+  'bg-gradient-to-br from-emerald-500 to-emerald-700',
+];
+
+function pickGradient(name) {
+  let hash = 0;
+  const s = String(name || '');
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash) + s.charCodeAt(i);
+    hash |= 0; // force int32
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+// Strip Thai title prefix + take first 2 chars for initials
+function getInitials(name) {
+  const cleaned = String(name || '').replace(/^(นาย|นาง|นางสาว|เด็กชาย|เด็กหญิง)\s*/, '').trim();
+  return cleaned.slice(0, 2) || '?';
+}
+
+// Format relative time
+function relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'เมื่อสักครู่';
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} ชม.ที่แล้ว`;
+  const days = Math.floor(hrs / 24);
+  return `${days} วันที่แล้ว`;
+}
+
+// Compute age from birthdate ISO
+function computeAge(birthdate) {
+  if (!birthdate) return '';
+  const now = new Date();
+  const b = new Date(birthdate);
+  if (Number.isNaN(b.getTime())) return '';
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age > 0 ? `${age} ปี` : '';
+}
+
+// Gender emoji
+function genderEmoji(gender) {
+  const g = String(gender || '').toLowerCase();
+  if (g.includes('หญิง') || g === 'female' || g === 'f') return '♀️ หญิง';
+  if (g.includes('ชาย') || g === 'male' || g === 'm') return '♂️ ชาย';
+  return gender || '';
+}
 
 export default function CustomerCard({
-  customer,           // { proClinicId/id, proClinicHN/hn, name, phone, patientData, ... }
-  accentColor,        // clinic accent color
-  theme,              // 'dark' | 'light' | 'auto'
-  mode = 'search',    // 'search' | 'cloned'
-  cloneStatus,        // 'idle' | 'cloning' | 'done' | 'error' | 'exists'
-  cloneProgress,      // { step, label, percent, detail }
-  onClone,            // callback when "ดูดข้อมูลทั้งหมด" clicked
-  onView,             // callback when card clicked in cloned mode → open detail view
-  onDeleteClick,      // Phase 24.0 — callback when ✕ icon clicked (cloned mode); receives customer
+  customer,
+  // V68: `accentColor` accepted for API stability; the V5 design bakes the
+  // accent into the shadow stack (fire-red dark / sakura light) rather than
+  // applying the dynamic clinic accent color per-card.
+  // eslint-disable-next-line no-unused-vars
+  accentColor,
+  theme,
+  mode = 'cloned',
+  cloneStatus,
+  cloneProgress,
+  onClone,
+  onView,
+  onDeleteClick,
 }) {
-  const ac = accentColor || '#dc2626';
-  const acRgb = hexToRgb(ac);
   const isDark = theme !== 'light';
+  const { branchId: contextBranchId } = useSelectedBranch();
 
-  // Phase 24.0 — dual gate: explicit perm OR admin (auto-bypass).
   const hasDeletePerm = useHasPermission('customer_delete');
   const tabAccess = useTabAccess();
   const canDelete = hasDeletePerm || tabAccess?.isAdmin === true;
 
-  // Normalize fields across search results and cloned data
-  const hn = customer.proClinicHN || customer.hn || '';
+  const hn = customer.proClinicHN || customer.hn_no || customer.hn || '';
   const id = customer.proClinicId || customer.id || '';
-  const name = customer.name || (customer.patientData
-    ? `${customer.patientData.prefix || ''} ${customer.patientData.firstName || ''} ${customer.patientData.lastName || ''}`.trim()
-    : '-');
-  const phone = customer.phone || customer.patientData?.phone || '-';
-  const gender = customer.patientData?.gender || '';
+  const name = customer.name
+    || (customer.patientData
+        ? `${customer.patientData.prefix || ''} ${customer.patientData.firstName || customer.patientData.firstNameTh || ''} ${customer.patientData.lastName || customer.patientData.lastNameTh || ''}`.trim()
+        : `${customer.prefix || ''} ${customer.firstname || ''} ${customer.lastname || ''}`.trim())
+    || '-';
+  const phone = customer.phone || customer.telephone_number || customer.patientData?.phone || '';
+  const gender = customer.patientData?.gender || customer.gender || '';
+  const birthdate = customer.patientData?.birthdate || customer.birthdate || '';
+  const branchName = customer.branchName || customer.branchId || '';
   const treatmentCount = customer.treatmentCount || 0;
-  const courseCount = (customer.courses?.length || 0);
-  const syncedAt = customer.lastSyncedAt;
-  const status = customer.cloneStatus;
+  const courseCount = (customer.courses?.length) || 0;
+  const updatedRel = relativeTime(customer.updatedAt || customer.lastSyncedAt || customer.clonedAt);
 
-  // Format relative time
-  const relativeTime = (isoStr) => {
-    if (!isoStr) return '-';
-    const diff = Date.now() - new Date(isoStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'เมื่อสักครู่';
-    if (mins < 60) return `${mins} นาทีที่แล้ว`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs} ชม.ที่แล้ว`;
-    const days = Math.floor(hrs / 24);
-    return `${days} วันที่แล้ว`;
-  };
+  const initials = getInitials(name);
+  const gradientCls = pickGradient(name);
+  const ageStr = computeAge(birthdate);
+  const genderStr = genderEmoji(gender);
 
   const handleCardClick = () => {
     if (mode === 'cloned' && onView) onView(customer);
   };
 
+  // Tagline: HN · age · gender — only fields that exist
+  const taglineParts = [
+    hn ? `HN ${hn}` : null,
+    ageStr,
+    genderStr,
+  ].filter(Boolean);
+
+  // Format phone with dash separators (XXX-XXX-XXXX)
+  const phoneDisplay = phone
+    ? phone.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
+    : '';
+
   return (
-    <div onClick={handleCardClick}
-      onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && mode === 'cloned' && onView) { e.preventDefault(); handleCardClick(); } }}
+    <div
+      onClick={handleCardClick}
+      onKeyDown={e => {
+        if ((e.key === 'Enter' || e.key === ' ') && mode === 'cloned' && onView) {
+          e.preventDefault();
+          handleCardClick();
+        }
+      }}
       role={mode === 'cloned' && onView ? 'button' : undefined}
       tabIndex={mode === 'cloned' && onView ? 0 : undefined}
-      className={`relative bg-[var(--bg-card)] border border-[var(--bd)] rounded-xl overflow-hidden transition-all hover:border-[var(--bd-strong)] hover:shadow-lg group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''}`}>
-
-      {/* Phase 24.0 — inline ✕ delete icon (cloned mode only, gated) */}
+      data-testid={`customer-card-${id || hn}`}
+      className={`relative bg-gradient-to-b from-[var(--bg-card)] to-[var(--bg-elevated)] border border-[var(--bd)] rounded-2xl p-5 transition-all duration-200 group ${mode === 'cloned' && onView ? 'cursor-pointer' : ''} ${isDark
+        ? 'shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(0,0,0,0.3),0_4px_12px_rgba(0,0,0,0.35),0_12px_32px_rgba(0,0,0,0.4)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_4px_rgba(0,0,0,0.35),0_8px_20px_rgba(0,0,0,0.45),0_20px_48px_rgba(220,38,38,0.10)] hover:-translate-y-0.5 hover:border-[var(--bd-strong)]'
+        : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(31,41,55,0.04),0_4px_12px_rgba(31,41,55,0.06),0_12px_28px_rgba(219,39,119,0.08)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,1),0_2px_4px_rgba(31,41,55,0.06),0_8px_20px_rgba(31,41,55,0.08),0_20px_48px_rgba(219,39,119,0.18)] hover:-translate-y-0.5 hover:border-[var(--bd-strong)]'}`}
+    >
+      {/* Hover-only delete button */}
       {mode === 'cloned' && canDelete && onDeleteClick && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onDeleteClick(customer); }}
           title="ลบลูกค้า"
           aria-label="ลบลูกค้า"
-          data-testid={`delete-customer-${customer.id || customer.proClinicId || ''}`}
-          className="absolute top-2 right-2 p-1 rounded text-[var(--tx-muted)] hover:bg-red-950/40 hover:text-red-400 transition-colors z-10"
+          data-testid={`delete-customer-${id || hn}`}
+          className="absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center text-[var(--tx-muted)] bg-transparent opacity-0 group-hover:opacity-100 hover:bg-red-500/12 hover:text-red-400 transition-all"
         >
-          <Trash2 size={14} />
+          <span aria-hidden="true">🗑️</span>
         </button>
       )}
 
-      {/* Card Header — HN badge + avatar area */}
-      <div className="flex items-start gap-3 p-4 pb-2">
-        {/* Avatar circle */}
-        <div className="w-12 h-12 rounded-full bg-[var(--bg-elevated)] border-2 border-[var(--bd-strong)] flex items-center justify-center flex-shrink-0">
-          <User size={20} className="text-[var(--tx-muted)]" />
+      {/* Header — avatar + name + tagline */}
+      <div className="flex items-center gap-4 mb-3">
+        <div className={`relative flex-shrink-0`}>
+          {/* Halo glow */}
+          <div className="absolute -inset-1 rounded-full opacity-60 blur-md bg-gradient-to-br from-red-500/25 to-pink-400/15 pointer-events-none" />
+          <div
+            className={`relative w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-[var(--bg-card)] shadow-lg ${gradientCls}`}
+            aria-hidden="true"
+          >
+            {initials}
+          </div>
         </div>
-
         <div className="flex-1 min-w-0">
-          {/* HN Badge */}
-          {hn && (
-            <span className="inline-block px-2 py-0.5 rounded text-xs font-mono font-bold tracking-wider bg-[var(--bg-elevated)] border border-[var(--bd)] text-[var(--tx-secondary)] mb-1">
-              {hn}
-            </span>
-          )}
-          {/* Name — NEVER red (Thai culture) */}
-          <h3 className="text-sm font-bold text-[var(--tx-heading)] truncate leading-tight">
+          {/* Name — NEVER red (Thai cultural rule) */}
+          <h3 className="text-base font-extrabold text-[var(--tx-heading)] leading-tight tracking-tight truncate">
             {name}
           </h3>
+          {taglineParts.length > 0 && (
+            <p className="text-xs text-[var(--tx-muted)] mt-1">
+              {taglineParts.join(' · ')}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Card Body — details */}
-      <div className="px-4 pb-3 space-y-1.5">
-        {phone !== '-' && (
-          <div className="flex items-center gap-2 text-xs text-[var(--tx-secondary)]">
-            <Phone size={12} className="flex-shrink-0" /> {phone}
+      {/* Meta box — phone above branch (vertical stack per Q5 decision).
+          T9-review-fix: `bg-black/3` is NOT in Tailwind 3.4 default opacity
+          scale (silently drops); also `dark:` defaults to `media` (OS prefers-
+          color-scheme), not the app `theme` prop. Use arbitrary-value opacity
+          + explicit isDark ternary to bind to the app theme. */}
+      <div className={`flex flex-col gap-2 my-3 px-3.5 py-3 border border-[var(--bd)] rounded-xl ${isDark ? 'bg-white/[0.03]' : 'bg-black/[0.03]'}`}>
+        {phoneDisplay && (
+          <div className="flex items-center gap-2 text-sm text-[var(--tx-secondary)]">
+            <span aria-hidden="true" className="text-sm opacity-85">📞</span>
+            {phoneDisplay}
           </div>
         )}
-        {gender && (
-          <div className="flex items-center gap-2 text-xs text-[var(--tx-secondary)]">
-            <User size={12} className="flex-shrink-0" /> {gender}
-          </div>
-        )}
-
-        {/* Cloned mode: show stats */}
-        {mode === 'cloned' && (
-          <div className="flex items-center gap-4 pt-1">
-            <div className="flex items-center gap-1.5 text-xs text-[var(--tx-muted)]">
-              <Stethoscope size={12} /> {treatmentCount} รักษา
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-[var(--tx-muted)]">
-              <Package size={12} /> {courseCount} คอร์ส
-            </div>
-          </div>
-        )}
-
-        {/* Clone status indicator */}
-        {mode === 'cloned' && status && (
-          <div className="flex items-center gap-2 pt-1">
-            {status === 'complete' && (
-              <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
-                <CheckCircle2 size={11} /> Clone สมบูรณ์
-              </span>
-            )}
-            {status === 'partial_error' && (
-              <span className="flex items-center gap-1 text-xs text-orange-500 font-medium">
-                <AlertCircle size={11} /> Clone บางส่วน
-              </span>
-            )}
-            {status === 'in_progress' && (
-              <span className="flex items-center gap-1 text-xs text-blue-400 font-medium">
-                <Loader2 size={11} className="animate-spin" /> กำลัง Clone...
-              </span>
-            )}
-            {syncedAt && (
-              <span className="flex items-center gap-1 text-xs text-[var(--tx-muted)]">
-                <Clock size={10} /> {relativeTime(syncedAt)}
-              </span>
-            )}
+        {branchName && (
+          <div className="flex items-center gap-2 text-sm text-[var(--tx-secondary)]">
+            <span aria-hidden="true" className="text-sm opacity-85">📍</span>
+            {branchName}
           </div>
         )}
       </div>
 
-      {/* Card Footer — view button (cloned mode) */}
-      {mode === 'cloned' && onView && (
-        <div className="px-4 pb-4">
-          <button onClick={(e) => { e.stopPropagation(); onView(customer); }}
-            className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-teal-900/20 border-teal-700/40 text-teal-400 hover:bg-teal-900/30' : 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100'}`}>
-            <Eye size={14} /> ดูรายละเอียด
-          </button>
+      {/* Footer — engagement counts + LINE chip */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex gap-3 text-xs text-[var(--tx-muted)]">
+          <span>💊 <strong className="text-[var(--tx-heading)] font-bold">{treatmentCount}</strong> รักษา</span>
+          <span>📦 <strong className="text-[var(--tx-heading)] font-bold">{courseCount}</strong> คอร์ส</span>
+          {updatedRel && (
+            <span className="text-[var(--tx-quiet)] hidden lg:inline">· {updatedRel}</span>
+          )}
         </div>
-      )}
+        <CustomerLineBadge customer={customer} contextBranchId={contextBranchId} />
+      </div>
 
-      {/* Card Footer — clone button (search mode) */}
+      {/* Search-mode clone footer (preserved for backward-compat) */}
       {mode === 'search' && onClone && (
-        <div className="px-4 pb-4">
+        <div className="mt-4">
           {cloneStatus === 'cloning' ? (
             <div className="space-y-2">
-              {/* Progress bar */}
-              <div className="w-full h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(cloneProgress?.percent || 0)} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${cloneProgress?.percent || 0}%`,
-                    background: `linear-gradient(90deg, rgba(${acRgb},0.8), rgba(${acRgb},1))`,
-                  }} />
+              <div className="w-full h-1.5 bg-[var(--bg-elevated)] rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-red-500/80 to-red-600 transition-all duration-300" style={{ width: `${cloneProgress?.percent || 0}%` }} />
               </div>
               <p className="text-xs text-[var(--tx-muted)] truncate">{cloneProgress?.label || 'กำลังดำเนินการ...'}</p>
             </div>
-          ) : cloneStatus === 'done' ? (
-            <button disabled className={`w-full py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 ${isDark ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-              <CheckCircle2 size={14} /> Clone สำเร็จ
-            </button>
-          ) : cloneStatus === 'error' ? (
-            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-red-900/20 border-red-700/40 text-red-400 hover:bg-red-900/30' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'}`}>
-              <AlertCircle size={14} /> ลองอีกครั้ง
-            </button>
-          ) : cloneStatus === 'exists' ? (
-            <button onClick={() => onClone(id)} className={`w-full py-2.5 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-2 ${isDark ? 'bg-orange-900/20 border-orange-700/40 text-orange-400 hover:bg-orange-900/30' : 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100'}`}>
-              <Clock size={14} /> อัพเดทข้อมูล
-            </button>
           ) : (
-            <button onClick={() => onClone(id)}
-              className="w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 hover:shadow-lg active:scale-[0.98]"
-              style={{
-                backgroundColor: `rgba(${acRgb},0.15)`,
-                border: `1px solid rgba(${acRgb},0.4)`,
-                color: ac,
-              }}>
-              <Download size={14} /> ดูดข้อมูลทั้งหมด
+            <button
+              onClick={() => onClone(id)}
+              className="w-full py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 hover:shadow-lg active:scale-[0.98] bg-red-500/15 border border-red-500/40 text-red-500 hover:bg-red-500/25"
+            >
+              {cloneStatus === 'done' ? '✓ Clone สำเร็จ' :
+               cloneStatus === 'error' ? '↻ ลองอีกครั้ง' :
+               cloneStatus === 'exists' ? '↻ อัพเดทข้อมูล' :
+               '⬇️ ดูดข้อมูลทั้งหมด'}
             </button>
           )}
         </div>

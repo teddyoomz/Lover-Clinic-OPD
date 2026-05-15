@@ -46,6 +46,29 @@ export function CustomerOption({ customer, contextBranchId, showLineBadge = true
 
   const displayName = customer.fullName || customer.name || '';
 
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className={nameClassName || undefined}>{displayName}</span>
+      {showLineBadge && <CustomerLineBadge customer={customer} contextBranchId={contextBranchId} />}
+    </div>
+  );
+}
+
+// V68 (2026-05-15) — extracted standalone badge for non-name-bearing surfaces
+// (CustomerCard meta-row, future appt-row chips). Same per-branch logic as
+// CustomerOption's inline chip; single source of truth via this export.
+//
+// Props mirror CustomerOption's badge contract:
+//   customer        — be_customers doc shape
+//   contextBranchId — selected branch (drives 🟢 vs ⚪️ decision)
+//
+// Returns:
+//   🟢 LINE chip if linked at THIS branch (per-branch entry OR legacy match)
+//   ⚪️ LINE chip if linked at SOME OTHER branch only
+//   null if not linked anywhere
+export function CustomerLineBadge({ customer, contextBranchId }) {
+  if (!customer || !contextBranchId) return null;
+
   const branchLink = customer.lineUserId_byBranch?.[contextBranchId];
   const legacyValid = customer.branchId === contextBranchId && customer.lineUserId;
   const linkedHere = !!(branchLink?.lineUserId || legacyValid);
@@ -56,25 +79,25 @@ export function CustomerOption({ customer, contextBranchId, showLineBadge = true
 
   const displayLine = branchLink?.lineDisplayName || customer.lineDisplayName || 'linked';
 
-  return (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className={nameClassName || undefined}>{displayName}</span>
-      {showLineBadge && linkedHere && (
-        <span
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-medium flex-shrink-0"
-          title={`LINE: ${displayLine}`}
-        >
-          🟢 LINE
-        </span>
-      )}
-      {showLineBadge && linkedElsewhere && (
-        <span
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-500 text-xs flex-shrink-0"
-          title="ลูกค้าผูก LINE กับสาขาอื่น — ยังไม่ผูกกับสาขานี้"
-        >
-          ⚪️ LINE
-        </span>
-      )}
-    </div>
-  );
+  if (linkedHere) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-500/10 text-green-700 dark:text-green-400 text-xs font-medium flex-shrink-0"
+        title={`LINE: ${displayLine}`}
+      >
+        🟢 LINE
+      </span>
+    );
+  }
+  if (linkedElsewhere) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-500 text-xs flex-shrink-0"
+        title="ลูกค้าผูก LINE กับสาขาอื่น — ยังไม่ผูกกับสาขานี้"
+      >
+        ⚪️ LINE
+      </span>
+    );
+  }
+  return null;
 }

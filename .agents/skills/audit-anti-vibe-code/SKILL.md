@@ -10,7 +10,7 @@ allowed-tools: "Read, Grep, Glob"
 Named after the vibe-code warning 2026-04-19: AI writes fast, but speed today
 = burden tomorrow if the foundation is rotten. Three failure modes to scan:
 
-## Invariants (AV1–AV46)
+## Invariants (AV1–AV47)
 
 ### AV1 — No duplicate component >20 LOC across files
 **Why**: DateField had 5 local clones until the 2026-04-19 migration. Canonical component means 1 fix propagates everywhere.
@@ -1402,6 +1402,37 @@ After initial AV44 shipped, user reported "กดคลังใหม่ไป�
 **Origin**: V67 (2026-05-15) — user report "ยิงไม่ได้ซักอัน นัดผมก็สร้างถูกแล้วนะ" with screenshots showing Sent/Skipped/Failed all 0 in Debug Fire UI (dry-run + single + all modes). Rule R diag against real prod revealed: tomorrow's appointment EXISTS correctly but pipeline queries `where('appointmentDate', '==', target)` against real schema where field is `date`. 152 LINE tests + 16 AV45 GREEN locked the WRONG field name as canonical. EXACT V66 replay one day after Rule Q infrastructure shipped — proving the meta-lesson: even with 7-layer enforcement, mock-only tests STILL slip if no real-prod schema match check is added at PR boundary. AV46 grep + Rule R diag close the gap.
 
 **Lesson**: Mock fixtures should DERIVE from real-prod sample schemas, not be hand-written from spec. Better: add a Rule R "schema-match" diag script (one-shot read + pretty-print of every collection's field set) → reference it in PR template → developer compares mock fixture against current diag output before merge. AV46 grep is the ongoing enforcement; the diag script is the upstream prevention.
+
+### AV47 — Appointment-row LINE badge MUST go through `<AppointmentLineBadge>` shared component (V68 Rule of 3 lock, 2026-05-15)
+
+**Trigger**: Any new code rendering an appointment row in admin surfaces (backend appt grid + hub + customer-detail appts tab + frontend queue calendar).
+
+**Class**: V67-class continuation — Rule of 3 enforcement at the appt-row badge layer. Inline-pasted `🟢 LINE` chips create drift risk: each callsite could diverge in color / label / behavior over time. Single shared component import = greppable + style-change = 1 file edit.
+
+**Sanctioned files** (closed list — adding a 5th surface MUST extend this list):
+  - `src/components/AppointmentLineBadge.jsx` (the component itself)
+  - `src/components/CustomerOption.jsx` (CustomerLineBadge sibling export — same chip rendered for picker callsites)
+  - `src/components/backend/AppointmentCalendarView.jsx` (backend canonical grid)
+  - `src/components/admin/AppointmentHubView.jsx` (admin appt hub)
+  - `src/components/backend/CustomerDetailView.jsx` (per-customer appts tab)
+  - `src/pages/AdminDashboard.jsx` (frontend queue calendar; AV47-sanctioned skip annotation at the 8px schedule-day-preferences slot grid which is too tight for the chip)
+  - `src/components/backend/CustomerCard.jsx` (consumes `<CustomerLineBadge>` from CustomerOption — different component, different surface, same visual chip)
+
+**Why architectural**: After V67 mock-shadow drift saga, the canonical pattern is "ONE shared component per badge concern, defensive `||` fallback chains, source-grep regression locks". V68 closes the appt-row badge layer. Future per-tab status badges (e.g. recall pill, no-show flag) follow the same architecture.
+
+**Grep targets**:
+  - Each of the 4 admin appt-list surfaces MUST contain `import.*AppointmentLineBadge` AND `<AppointmentLineBadge`
+  - NO file outside the sanctioned list contains literal `🟢 LINE` JSX text (comments are fine — strip-comments-then-grep). Inline JSX `<span>🟢 LINE</span>` in non-sanctioned files = drift = audit fail.
+  - `AppointmentLineBadge.jsx` MUST contain `notifyChannel.*\.includes\(['"]line['"]\)` AND `appt.lineNotify === true` defensive fallback (V67 mock-shadow lesson)
+  - `CustomerOption.jsx` MUST export `CustomerLineBadge` as named export
+  - `CustomerCard.jsx` MUST import `CustomerLineBadge` from `CustomerOption.jsx` AND use `useSelectedBranch()` for `contextBranchId`
+  - `AppointmentFormModal.jsx` + `appointmentDepositBatch.js` MUST NOT contain any `lineNotify:` payload key or `formData.lineNotify` reference (V68 strip; V32-tris-ter legacy field gone)
+
+**Source-grep regression test**: `tests/v68-line-badge-surfacing-audit.test.js` — V68 A1-F2 audit groups locking each grep target.
+
+**Origin**: V68 (2026-05-15) — user requested LINE badge across 4 admin appt-list surfaces + duplicate checkbox cleanup + LINE badge on customer cards. Brainstormed via /brainstorming + visual companion (4 customer-card variants × dark+light themes); locked V5 Editorial + meta stacked vertically + 4-layer shadow depth. Single commit batch under V18 lock; no firestore/storage rules changes.
+
+**Lesson**: V67 lesson generalizes — every shared UI status badge MUST be a single component with defensive fallback chain, source-grep locked at each consumer site. AV47 closes the appt-row badge surface; pattern replicates for any future cross-cutting status badge (recall / no-show / VIP / membership tier). Inline copy-paste of chip JSX = future drift = future user-visible inconsistency = future Rule Q L1 failure.
 
 ## How to run
 

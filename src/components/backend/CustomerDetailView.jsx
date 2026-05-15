@@ -53,6 +53,11 @@ import DateField from '../DateField.jsx';
 // name + per-branch LINE badge (LR-4 lock). Used in the customer
 // header so admin sees per-branch LINE linkage state at a glance.
 import { CustomerOption } from '../CustomerOption.jsx';
+// V68 Task 5 (LINE Badge Surfacing, 2026-05-15) — per-appt 🟢 LINE chip
+// rendered inside AppointmentCard. Self-nullifies for non-LINE appts.
+// One import covers both render paths (single-card next-upcoming +
+// "view all" modal list — both consume AppointmentCard).
+import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import TreatmentTimelineModal from './TreatmentTimelineModal.jsx';
 import CourseHistoryTab from './CourseHistoryTab.jsx';
@@ -2091,6 +2096,8 @@ function AppointmentCard({ appt, isDark, onEdit, onCancel, onPrint, dense = fals
           <div className="flex items-center gap-2 text-sm font-bold text-[var(--tx-heading)]">
             <Calendar size={13} className="text-sky-400" />
             <span>{dateStr}{time && ` | ${time}`}</span>
+            {/* V68 Task 5 (2026-05-15) — LINE badge if appt has notifyChannel=['line'] */}
+            <AppointmentLineBadge appt={appt} size="sm" />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--tx-muted)]">
             {doctor && <span className="flex items-center gap-1"><Users size={11} />{doctor}</span>}

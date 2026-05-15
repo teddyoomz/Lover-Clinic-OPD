@@ -48,6 +48,12 @@ import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // so admin can see at-a-glance which appts are tied to LINE-linked
 // customers (for reminder dispatch readiness).
 import { CustomerOption } from '../CustomerOption.jsx';
+// V68 (2026-05-15) — LINE Badge Surfacing. Surfaces a 🟢 LINE chip on
+// every appt cell whose notifyChannel includes 'line' (or legacy
+// lineNotify=true). Component returns null when the appt has no LINE
+// channel, so the wrapper-div gate below only manages visual density
+// (span >= 2 to avoid crowding the smallest cells).
+import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — LR-4 lock part 2.
 // AppointmentCalendarView is the grid VIEW; all appointment-create / edit
 // flows are delegated to AppointmentFormModal (rendered at the bottom of
@@ -177,6 +183,14 @@ function AppointmentSlotMeta({ appt, span, doctorMap }) {
         <p className="text-[11px] text-[var(--tx-muted)] truncate" data-testid="appt-assistants">
           + {assistantNames.join(', ')}
         </p>
+      )}
+      {/* V68 (2026-05-15) — LINE badge if appt has notifyChannel=['line'].
+          AppointmentLineBadge returns null if appt has no LINE channel,
+          so this conditional only manages the wrapper div + visibility gate. */}
+      {span >= 2 && (
+        <div className="mt-1 flex justify-end">
+          <AppointmentLineBadge appt={appt} size="xs" />
+        </div>
       )}
     </>
   );

@@ -80,6 +80,10 @@ function _resolveBranchIdForWrite(data) {
  * @param {string|null} args.branchId
  * @returns {Object} appointment doc payload (no serverTimestamp — caller stamps via batch)
  */
+// V68 (2026-05-15) — `lineNotify` field stripped. notifyChannel: ['line']
+// is the canonical channel-state driver (read by cron pipeline + retry
+// + debug-fire). lineNotify field had zero consumers post-Wave-1 LINE
+// reminder ship; orphan field on existing be_appointments docs is harmless.
 export function buildAppointmentPairPayload({
   depositData,
   depositId,
@@ -130,7 +134,6 @@ export function buildAppointmentPairPayload({
     location: appt.location || '',
     notes: appt.note || appt.notes || '',
     appointmentColor: appt.color || appt.appointmentColor || '',
-    lineNotify: !!appt.lineNotify,
     status: 'pending',
     branchId: branchId || null,
     // Cross-link to deposit doc (queryable both directions).
@@ -427,9 +430,9 @@ export async function attachCustomerToLinkedDeposit(depositId, {
  * @param {Object} apptMeta — same shape as the embedded `appointment` field
  *        DepositPanel writes when creating a deposit (date, startTime,
  *        endTime, doctorId, doctorName, advisorId, advisorName, assistantIds,
- *        assistantNames, roomId, roomName, channel, purpose, note, color,
- *        lineNotify). Only fields present on the input override; missing
- *        fields are left untouched on the deposit doc.
+ *        assistantNames, roomId, roomName, channel, purpose, note, color).
+ *        Only fields present on the input override; missing fields are left
+ *        untouched on the deposit doc.
  * @returns {Promise<{ depositId: string, synced: true }>}
  */
 export async function syncAppointmentToLinkedDeposit(depositId, apptMeta = {}) {
@@ -455,7 +458,7 @@ export async function syncAppointmentToLinkedDeposit(depositId, apptMeta = {}) {
     'assistantIds', 'assistantNames',
     'roomId', 'roomName',
     'channel', 'purpose', 'appointmentTo',
-    'note', 'color', 'lineNotify',
+    'note', 'color',
   ];
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(apptMeta, key)) {
@@ -489,7 +492,7 @@ export async function syncAppointmentToLinkedDeposit(depositId, apptMeta = {}) {
  *        createBackendAppointment (date, startTime, endTime, customerId,
  *        customerName, customerHN, doctorId, doctorName, advisorId,
  *        advisorName, assistantIds, assistantNames, roomId, roomName,
- *        channel, appointmentTo, notes, appointmentColor, lineNotify,
+ *        channel, appointmentTo, notes, appointmentColor,
  *        appointmentType, branchId, etc.).
  * @returns {Promise<{ depositId: string, appointmentId: string }>}
  */
@@ -542,7 +545,6 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
     location: apptPayload.location || '',
     notes: apptPayload.notes || '',
     appointmentColor: apptPayload.appointmentColor || '',
-    lineNotify: !!apptPayload.lineNotify,
     status: 'pending',
     branchId,
     linkedDepositId: depositId,
@@ -575,7 +577,6 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
     'appointment.appointmentTo': apptPayload.appointmentTo || '',
     'appointment.note': apptPayload.notes || '',
     'appointment.color': apptPayload.appointmentColor || '',
-    'appointment.lineNotify': !!apptPayload.lineNotify,
     appointmentSyncedAt: now,
     updatedAt: now,
   };

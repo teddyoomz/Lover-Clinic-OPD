@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-15 EOD+3 — V67 LINE reminder pipeline schema-drift FIX (4 bugs class-of-bug expansion)"
-status: "master=ahead-by-1 · prod=84c0af1 LIVE on lover-clinic-app.vercel.app · firestore rules v32 (no rules change)"
+updated_at: "2026-05-15 EOD+4 — V68 LINE badge surfacing + CustomerCard V5 redesign"
+status: "master=ahead-by-3 (V67 + V68-spec + V68-plan + V68-feature) · prod=84c0af1 LIVE · firestore rules v32 (no rules change)"
 branch: "master"
-last_commit: "(pending V67 commit) — 4 LINE reminder bug fixes + AV46 + V21 fixups + Rule R diag"
-tests: "10083 PASS / 0 FAIL / 12 skip (full suite GREEN); 171/171 LINE-reminder + 19/19 V67 AV46 audit GREEN"
+last_commit: "(pending V68 feature commit) — single commit batch under V18 lock"
+tests: "10122 PASS / 0 FAIL / 12 skip (full suite GREEN); 21/21 V68 audit + 18/18 L2 render verify GREEN"
 playwright_e2e: 14
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "84c0af1"
@@ -15,47 +15,69 @@ storage_rules_version: 2
 
 ## State
 
-- master = ahead-by-1 vs prod=`84c0af1` · build clean · NO rules change · NO data ops
-- V67 LINE reminder schema-drift fix (Rule P class-of-bug expansion of V66 mock-shadow class)
-- 4 bugs fixed: Bug A `appointmentDate→date` (3 files) · Bug C `branchName→name` (validation + template) · Bug B single-mode picker accepts customerHN · Bug D customerName/doctorName fallback chain
-- AV46 invariant + 19 V67 source-grep regression tests + Rule R schema-match diag script
-- 5 pre-existing V21-class failures fixed inline (BC1.1 collection matrix + 3 STRIPPED helper + 2 AV41 fetch-isolation)
-- Rule Q L2 verified end-to-end on real prod data — pipeline reaches push step with correct flex (customer 2853 / appt BA-1778823940645 / branch BR-1777873556815-26df6480)
+- master = ahead-by-3 vs prod=`84c0af1` (V67 + V68-spec + V68-plan + V68-feature pending commit)
+- build clean (2.82s, only pre-existing chunk-size warnings)
+- NO firestore/storage rules change · NO data ops · NO Playwright e2e change
+- V68 LINE badge surfacing across 4 admin appt-list surfaces + CustomerCard V5 redesign + lineNotify legacy strip
 
-## What this session shipped
+## What this session shipped (V68)
 
-- **Phase 1 (root cause)**: Rule R diag against real prod revealed pipeline queried `where('appointmentDate', '==', target)` but real Firestore field is `date` (proven by `backendClient.js:2077,2107` writers). Wave 1 LINE reminder shipped with 152 mock tests + 16 AV45 GREEN locking the WRONG field name. EXACT V66 mock-shadow drift replay 1 day after Rule Q infrastructure shipped.
-- **Phase 2 (class-of-bug expansion)**: Found 4 bugs in same V66 family — A (date field) + C (branchName field) + B (HN vs customerId picker) + D (customerName/doctorName missing real-schema fallback chain).
-- **Phase 4 (fix)**: Defensive `||` fallback chains in 3 runtime files (cron + debug-fire + template); 2-query OR-merge in single-mode picker for customerHN.
-- **Phase 5/6 (Tier 2 artifacts)**: AV46 invariant + V67.A1-A8 source-grep regression bank locks canonical field names + Rule R diag-line-reminder-schema-match.mjs for ongoing pipeline ⊆ real-schema check.
-- **Phase 7 (V21 fixups)**: 5 pre-existing failures fixed inline since they blocked Rule N green claim — BC1.1 missing collection matrix entries (Wave 1 oversight) + STRIPPED regex helper bug in 3 source-grep tests (literal `/*` inside `//` lines mis-stripped) + 2 AV41 global.fetch isolation files.
+**Brainstormed via /brainstorming + visual companion** (4 customer-card variants × dark+light themes); locked V5 Editorial + meta stacked vertically + 4-layer shadow depth. Subagent-Driven Development executed all 16 tasks with 2-stage review.
 
-## Files Touched (V67)
+**NEW components / artifacts**:
+- `src/components/AppointmentLineBadge.jsx` — shared appt-row 🟢 LINE chip (defensive notifyChannel || lineNotify fallback per V67 mock-shadow lesson)
+- `CustomerLineBadge` sibling export from `src/components/CustomerOption.jsx` — single source of truth for per-branch 🟢/⚪️ logic (consumed by both pickers via CustomerOption AND directly by CustomerCard)
+- `src/components/backend/CustomerCard.jsx` — full V5 Editorial rewrite (initials gradient avatar with hash-derived 6-color palette, no red per Thai rule; 4-layer shadow stack with explicit isDark ternary; meta-col phone-above-branch; LINE chip in bottom meta row)
+- AV47 invariant in audit-anti-vibe-code SKILL.md (banner AV1–AV47)
+- `tests/v68-line-badge-surfacing-audit.test.js` — 21 source-grep regression assertions across 6 groups
+- `tests/v68-line-badge-render-l2-verify.test.jsx` — 18 Rule Q L2 jsdom render checks
 
-**MODIFIED runtime (3)**: `src/lib/lineReminderTemplate.js`, `api/cron/line-reminder-fire.js`, `api/admin/line-reminder-debug-fire.js`
+**Wired** (4 admin surfaces import + render `<AppointmentLineBadge>`):
+- AppointmentCalendarView (canonical backend grid)
+- AppointmentHubView (admin appt hub — overlay-via-wrapper pattern with `pointer-events-none` for click pass-through)
+- CustomerDetailView (per-customer appts tab — single AppointmentCard component covers both next-upcoming + view-all-modal)
+- AdminDashboard queue calendar (Frontend page; AV47-sanctioned skip annotation at 8px schedule-day-preferences slot grid)
 
-**MODIFIED tests (5 fixtures + 5 V21 fixups)**: `tests/lineReminderTemplate.test.js`, `tests/line-reminder-pipeline-idempotency.test.js`, `tests/line-reminder-pipeline-customer-branch-link.test.js`, `tests/line-reminder-pipeline-per-branch-credentials.test.js`, `scripts/e2e-line-reminder-real-prod.mjs`, `tests/branch-collection-coverage.test.js` (V21), `tests/phase-20-0-task-6-branch-selector-frontend.test.jsx` (V21), `tests/phase-20-0-flow-a-queue-read-source.test.jsx` (V21), `tests/phase-20-0-flow-c-no-deposit-flow-simulate.test.jsx` (V21), `tests/branch-make-fresh-selective-flow-simulate.test.jsx` (V21), `tests/central-stock-make-fresh-flow-simulate.test.jsx` (V21)
+**Stripped** (legacy lineNotify field — zero consumers):
+- AppointmentFormModal: 5 formData/payload sites + 5-line checkbox JSX block + V68 marker comment
+- appointmentDepositBatch.js: 4 sites (cleanAppointment-equivalent payload + allow-list + batch payload + dotted-path) + JSDoc cleanup + V68 marker comment
 
-**NEW (3)**: `tests/v67-line-reminder-canonical-schema-audit.test.js` (19 source-grep), `scripts/diag-line-reminder-schema-match.mjs` (Rule R ongoing), `scripts/diag-line-reminder-l2-verify-v67.mjs` (Rule Q L2 verification)
+**V21 fixups landed inline** (caused by V68):
+- T9 review caught Tailwind `bg-black/3` invalid + `dark:` mode mismatch — fixed via explicit `isDark ? 'bg-white/[0.03]' : 'bg-black/[0.03]'` ternary + `accentColor` unused-prop comment
+- T15 caught V21 lock-ins: phase-24-0 F4.1 (Trash2 → 🗑️ broadened) + V67 A8.2 (banner AV46 → AV46+ regex)
 
-**MODIFIED audit (1)**: `.agents/skills/audit-anti-vibe-code/SKILL.md` (NEW AV46 invariant + banner AV1–AV46)
+**Tests**: 10078 → 10122 PASS (+44 net = 21 V68 audit + 18 L2 render + 5 from V21 fixups). 0 FAIL. 12 skip. Rule N batch-end satisfied.
+
+**Build**: clean (2.82s).
+
+**T4 visual concern (deferred to L1)**: AppointmentHubView badge overlay at `top-2 right-2` could overlap with status chip / action buttons on narrow desktop. `pointer-events-none` ensures no click interference. Self-nullifies for non-LINE appts (most rows). Real visual judgment requires user L1 inspection; reposition trivially adjustable in follow-up if visual is unacceptable.
+
+## Files Touched (V68 — pending single commit)
+
+**NEW (3)**: `src/components/AppointmentLineBadge.jsx`, `tests/v68-line-badge-surfacing-audit.test.js`, `tests/v68-line-badge-render-l2-verify.test.jsx`
+
+**MODIFIED runtime (8)**: `src/components/CustomerOption.jsx`, `src/components/admin/AppointmentHubView.jsx`, `src/components/backend/AppointmentCalendarView.jsx`, `src/components/backend/AppointmentFormModal.jsx`, `src/components/backend/CustomerCard.jsx`, `src/components/backend/CustomerDetailView.jsx`, `src/lib/appointmentDepositBatch.js`, `src/pages/AdminDashboard.jsx`
+
+**MODIFIED audit/tests (3)**: `.agents/skills/audit-anti-vibe-code/SKILL.md`, `tests/phase-24-0-customer-delete-flow-simulate.test.js` (V21 fixup), `tests/v67-line-reminder-canonical-schema-audit.test.js` (V21 fixup)
 
 ## Next action
 
-User authorizes deploy with "deploy" verb to push V67 fix to prod. After deploy:
-1. tab=line-settings → นครราชสีมา → toggle lineReminder.enabled=ON (already ON per last session screenshot — verify)
-2. Debug Fire → mode=ยิงเฉพาะลูกค้า + customer "000004" or "2853" → "ทดสอบเลย" → Sent should be 1 (not 0)
-3. Real LINE message arrives on user's phone (Rule Q L1)
-4. Click ✓ ยืนยัน → verify `appointment.status='confirmed'` (postback handler unchanged)
-5. DM "หยุดแจ้งเตือน" → verify `notifyOptOut=true` (opt-out handler unchanged)
+**User L1 hands-on after deploy**:
+1. Open `tab=appointment-all` → see 🟢 LINE chips on appts where notifyChannel=line in time-grid
+2. Same in `tab=appointment-hub` (verify visual overlap concern — reposition if needed)
+3. Same in customer detail view → appts tab
+4. Same in `/admin` (Frontend) queue calendar
+5. Open AppointmentFormModal → confirm bottom checkbox is GONE; only green-card at top
+6. Open `tab=customerlist` → see V5 redesigned cards with 🟢/⚪️ LINE chips + 4-layer shadow depth + initials gradient avatars
+
+**Deploy authorization**: user types "deploy" verb to authorize `vercel --prod` (NO firebase rules change needed — pure UI + lib changes).
 
 ## Outstanding user-triggered actions
 
-- Deploy V67 fix to prod (vercel --prod only — NO firebase:rules change)
-- Confirm LINE Premium tier active for นครราชสีมา OA (~$60/mo, 5K msgs/mo)
-- Optional: full 8-scenario e2e `node scripts/e2e-line-reminder-real-prod.mjs --apply --admin-line-user-id=Uxxx`
+- Deploy V68 fix to prod (vercel --prod only; combined with V67 commit ahead — both ship together)
+- L1 visual verification of AppointmentHubView badge overlay placement (T4 concern)
 
 ## Notes
 
-- V67 = canonical replay of V66 mock-shadow drift class. Lesson: Rule Q infrastructure (shipped yesterday) catches at the SELF-CHECK / claim-verified gate, but ONLY if invoked. Wave 1 LINE reminder shipped same day Rule Q shipped — 8-layer test stack lied with same exact failure mode. AV46 grep + Rule R diag are upstream prevention; both should be invoked in PR review for any new pipeline against existing collections.
-- Rule R diag pattern (schema-match) is generalizable — every cron/serverless that reads denormalized fields should have one.
+- V68 = first feature shipped via Subagent-Driven Development workflow this project. 16 tasks × subagent-per-task + 2-stage review = ~30 subagent invocations. Caught 2 critical Tailwind bugs (T9 C1+C2) + 2 V21 lock-ins (T15) inline before commit.
+- AV47 closes the appt-row badge surface; future cross-cutting status badges (recall pill, no-show flag, VIP, membership tier) follow the same Rule of 3 + defensive `||` + source-grep regression pattern (V67 + V68 establish the canonical playbook).

@@ -105,6 +105,10 @@ import {
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+// V68 (2026-05-15) — LINE badge for queue-calendar appt cells. Self-nullifies
+// for non-LINE appts (notifyChannel ≠ ['line']); only renders the 🟢 chip when
+// the appt's reminder channel is LINE OA. See AppointmentLineBadge.jsx.
+import { AppointmentLineBadge } from '../components/AppointmentLineBadge.jsx';
 // Phase 20.0 Task 6 (2026-05-06) — BranchSelector in Frontend header.
 // Mirrors BackendDashboard's BranchSelector mount; auto-hides for single-
 // branch clinics. BranchProvider already at App.jsx (Phase 17.2) so this
@@ -7383,13 +7387,16 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                   <span className="flex items-center gap-1"><Phone size={10} className="text-sky-500" /> {appt.source}</span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
                                 {appt.appointmentType && (
                                   <span className="text-[11px] bg-sky-950/40 text-sky-400 border border-sky-900/40 px-1.5 py-0.5 rounded font-bold">{resolveAppointmentTypeLabel(appt.appointmentType)}</span>
                                 )}
                                 <span className={`text-[11px] font-bold ${statusColor[appt.status] || 'text-gray-400'}`}>
                                   {appt.confirmed ? '✓ ' : ''}{statusMap[appt.status] || `สถานะ ${appt.status}`}
                                 </span>
+                                {/* V68 (2026-05-15) — LINE badge if appt has notifyChannel=['line'].
+                                    Self-nullifies for non-LINE appts so most cells render nothing. */}
+                                <AppointmentLineBadge appt={appt} size="xs" />
                               </div>
                               {appt.note && (
                                 <p className="text-[11px] text-gray-500 mt-1.5 line-clamp-2">{appt.note}</p>
@@ -7637,6 +7644,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                                                 {inDocHour ? '🔥' : ''}
                                               </button>
                                             )}
+                                            {/* V68 (2026-05-15) — schedule-day-preferences slot grid intentionally
+                                                SKIPS the AppointmentLineBadge: 8px micro-cells are too tight for the
+                                                chip; admin's canonical LINE-channel scanning surface is the queue
+                                                calendar selectedAppts list above. AV47 sanctioned skip. */}
                                             <div className={`flex-1 px-2 py-1.5 text-xs flex items-center gap-1.5 min-w-0 rounded-r ${appt ? (isDark ? 'bg-sky-950/30 border border-sky-900/30' : 'bg-sky-50 border border-sky-200') : 'bg-[var(--bg-hover)]/30 border border-transparent'}`}>
                                               {appt ? (
                                                 <>

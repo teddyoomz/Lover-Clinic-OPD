@@ -159,9 +159,13 @@ describe('V67/AV46 — Pipeline canonical schema field names', () => {
       const src = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
       expect(src).toMatch(/^### AV46 — Pipeline Firestore field name MUST match real schema/m);
     });
-    it('A8.2 SKILL.md banner reflects AV1–AV46', () => {
+    it('A8.2 SKILL.md banner reflects AV1–AV46 or higher (V67 + later additions)', () => {
+      // V68 V21 fixup (2026-05-15): banner advanced to AV1–AV47 when V68
+      // added the AppointmentLineBadge invariant. Assertion broadened to
+      // tolerate AV46+ (any future AVxx increment is fine — the banner just
+      // needs to span AT LEAST through AV46 to confirm V67 is registered).
       const src = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
-      expect(src).toMatch(/Invariants \(AV1–AV46\)/);
+      expect(src).toMatch(/Invariants \(AV1[–-]AV(4[6-9]|[5-9]\d)\)/);
     });
   });
 });

@@ -102,6 +102,11 @@ const STATUSES = [
 // Replaced with be_exam_rooms branch-scoped master via listExamRooms.
 // Each appt now stores both roomId (FK) + roomName (snapshot for historical
 // display + deletion-safe rendering).
+//
+// V68 (2026-05-15) — `lineNotify` field stripped. Channel state now lives
+// in formData.notifyChannel: ['line'] driven by LineNotifyConfirmation
+// green-card at top of modal. Pre-V68 formData carried both fields
+// redundantly; only notifyChannel was actually consumed by cron pipeline.
 
 function defaultFormData(overrides = {}) {
   return {
@@ -131,7 +136,6 @@ function defaultFormData(overrides = {}) {
     customerNote: '',
     notes: '',
     appointmentColor: '',
-    lineNotify: false,
     // Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform fields,
     // active only when appointmentType === 'deposit-booking'. Routed through
     // createDepositBookingPair on save → atomic paired (be_deposits +
@@ -298,7 +302,6 @@ export default function AppointmentFormModal({
         customerNote: appt.customerNote || '',
         notes: appt.notes || '',
         appointmentColor: appt.appointmentColor || '',
-        lineNotify: !!appt.lineNotify,
         status: appt.status || 'pending',
       });
     }
@@ -638,7 +641,6 @@ export default function AppointmentFormModal({
         expectedSales: formData.expectedSales || '', preparation: formData.preparation || '',
         customerNote: formData.customerNote || '', notes: formData.notes,
         appointmentColor: formData.appointmentColor || '',
-        lineNotify: !!formData.lineNotify,
         // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — notifyChannel
         // array of channels the user confirmed at submit. Auto-ticked via
         // the per-branch LINE linkage effect (LR-4 invariant). createBackend-
@@ -710,7 +712,6 @@ export default function AppointmentFormModal({
                 appointmentTo: payload.appointmentTo,
                 note: payload.notes,
                 color: payload.appointmentColor,
-                lineNotify: payload.lineNotify,
               });
             }
           }
@@ -792,7 +793,6 @@ export default function AppointmentFormModal({
             purpose: formData.appointmentTo,
             note: formData.notes,
             color: formData.appointmentColor || '',
-            lineNotify: !!formData.lineNotify,
           },
           paymentEvidenceUrl: '',
           paymentEvidencePath: '',
@@ -1413,11 +1413,6 @@ export default function AppointmentFormModal({
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
             </div>
           </div>
-          {/* LINE notify */}
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <input type="checkbox" checked={formData.lineNotify || false} onChange={e => update({ lineNotify: e.target.checked })} className="accent-emerald-500" />
-            แจ้งเตือนนัดหมายทาง LINE
-          </label>
           {error && <div className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={12}/>{error}</div>}
         </div>
         <div className="px-5 py-4 border-t border-[var(--bd)] flex items-center gap-2">
