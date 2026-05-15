@@ -20,22 +20,27 @@ export function RecallPairBadge({ paired, todayISO, onClick }) {
   if (!paired) return null;
   const data = formatPairBadge(paired, todayISO);
   if (!data) return null;
+  // V72 (2026-05-16): mobile-first compact pill — single-line truncation
+  // instead of wrap-to-5-lines. Reason text gets max-w via flex-1 + truncate;
+  // date+status suffix stays right-anchored and shrink-0 so it never wraps.
+  // Desktop unchanged (still inline-flex; on wider cards the truncate is a
+  // no-op because content fits).
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick?.(paired.id); }}
       data-testid={`recall-pair-badge-${paired.id}`}
-      className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded
+      className="mt-1.5 flex w-full md:w-auto md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md md:rounded
         bg-indigo-500/[0.08] border border-indigo-400/25 border-l-2 border-l-indigo-500
         text-[10px] text-indigo-300 hover:bg-indigo-500/[0.14] hover:border-indigo-400/40
-        transition-colors cursor-pointer"
+        transition-colors cursor-pointer min-w-0"
       aria-label={`จับคู่กับ ${data.icon} ${data.reason} ${data.date} ${data.statusSuffix}`}
     >
-      <span aria-hidden="true">🔗</span>
-      <span className="opacity-85 font-bold">จับคู่กับ:</span>
-      <span aria-hidden="true">{data.icon}</span>
-      <span className="text-white font-bold">{data.reason}</span>
-      <span className="font-mono text-[9.5px] text-gray-400 font-semibold">· {data.date} · {data.statusSuffix}</span>
+      <span aria-hidden="true" className="shrink-0">🔗</span>
+      <span className="shrink-0 opacity-85 font-bold">จับคู่กับ:</span>
+      <span aria-hidden="true" className="shrink-0">{data.icon}</span>
+      <span className="text-white font-bold flex-1 min-w-0 truncate text-left">{data.reason}</span>
+      <span className="shrink-0 font-mono text-[9.5px] text-gray-400 font-semibold whitespace-nowrap">· {data.date} · {data.statusSuffix}</span>
     </button>
   );
 }

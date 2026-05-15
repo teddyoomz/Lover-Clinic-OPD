@@ -100,9 +100,11 @@ describe('Phase 29 · F2 RecallFrontendView interactions', () => {
   });
 
   it('F2.2 click row opens outcome modal', async () => {
+    // V72 (2026-05-16): RecallRow renders mobile + desktop header trees
+    // (jsdom keeps both — CSS @media not applied). Click the first match.
     const user = userEvent.setup();
     render(<RecallFrontendView />);
-    await user.click(screen.getByText('A overdue'));
+    await user.click(screen.getAllByText('A overdue')[0]);
     expect(screen.getByTestId('recall-outcome-modal')).toBeInTheDocument();
   });
 

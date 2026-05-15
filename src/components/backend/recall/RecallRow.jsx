@@ -67,25 +67,30 @@ export function RecallRow({
       })()
     : '--';
 
-  // Phase 29.22 visual polish (round 2) — light theme readability.
-  // Previous round used bg-[var(--bg-hover)] which in light mode is #f1f5f9
-  // — barely distinct from the page bg #f8fafc. Round 2: switch to
-  // bg-[var(--bg-card)] (still subtle in dark, more distinct in light when
-  // page bg is even lighter) + always-on shadow-sm for elevation +
-  // bd-strong for crisper outline. Hover: shadow-md + rose accent.
+  // V72 (2026-05-16) — Mobile-first Editorial card redesign.
+  // User report: "โครตน่าเกลียด Recall ใน Version mobile ช่วยทำให้สวยระดับโปร".
+  // Pre-V72 layout: rigid `grid-cols-[56px_1fr_auto]` squeezed content into
+  // ~200px on a 375px viewport → status chips wrap to 2+ lines, PairBadge
+  // wraps to 4-5 lines, action icons STACK vertically (24×24 tap targets,
+  // unusable on mobile), row height 225px.
   //
-  // User report (round 2): "ตาราง recall ใน be ก็ยังไม่ชัด โดยเฉพาะตีม
-  // light ยิ่งไม่ชัด ไปหา skill หรือใช้เครื่องมือ design ระดับโลกมาช่วยด่วน".
-  // bg-[var(--bg-input)] (light=#fff, dark=#141414) gives stronger contrast
-  // against page bg [light=#f0f4f8 (slate-100), dark=#050505] than --bg-card
-  // would. Coupled with --bd-strong border + shadow-md for clear elevation.
+  // V72 fix: responsive flex-col on mobile → grid on md+. Mobile gets an
+  // editorial vertical stack — date+name header, big reason text, slim
+  // truncated PairBadge chip, full-width bottom action bar with 36×36 tap
+  // targets. Desktop keeps the existing 3-column density (proven for backend
+  // RecallTab list scanning). Phase 28 stepper-DNA aesthetic continued.
+  //
+  // Previous round (Phase 29.22 round 2 — light-theme readability):
+  // bg-[var(--bg-input)] (light=#fff, dark=#141414) gives strong contrast
+  // against page bg. Coupled with --bd-strong border + shadow-md for clear
+  // elevation.
   const rowClass = [
-    'group grid grid-cols-[56px_1fr_auto] gap-3 transition-all cursor-pointer',
-    'rounded-lg border bg-[var(--bg-input)] shadow-md',
+    'group flex flex-col md:grid md:grid-cols-[56px_1fr_auto] md:gap-3 transition-all cursor-pointer',
+    'rounded-xl border bg-[var(--bg-input)] shadow-md',
     'hover:shadow-lg hover:border-rose-500/50 hover:-translate-y-[1px]',
     snoozed ? 'opacity-65 border-dashed border-[var(--bd-strong)]' : 'border-[var(--bd-strong)]',
     over ? '!border-l-[3px] !border-l-red-500 bg-red-500/[0.06]' : '',
-    compact ? 'px-3 py-2.5' : 'px-4 py-3',
+    compact ? 'p-3 md:px-3 md:py-2.5' : 'p-3.5 md:px-4 md:py-3',
   ].filter(Boolean).join(' ');
 
   // Outcome meta — only relevant when status is done OR closed-no-answer.
@@ -112,14 +117,65 @@ export function RecallRow({
         }
       }}
     >
-      {/* Time column */}
-      <div className={`font-mono text-[11px] font-bold pt-0.5 ${over ? 'text-red-300' : 'text-[var(--tx-muted)]'}`}>
+      {/* HEADER ROW (mobile-only) — date chip + name + LINE + status pill,
+          all in a single tight row. On md+ this is hidden because the desktop
+          grid uses the standalone Date column at left. */}
+      <div className="flex md:hidden items-start gap-2 mb-2">
+        <span
+          className={`shrink-0 font-mono text-[11px] font-black px-2 py-0.5 rounded-md tracking-tight ${
+            over
+              ? 'bg-red-500/15 text-red-200 border border-red-500/40'
+              : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)]'
+          }`}
+          data-testid={`recall-date-chip-${recall.id}`}
+        >
+          {dateDisplay}
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+          {recall.customerId ? (
+            <a
+              href={`/?backend=1&customer=${encodeURIComponent(String(recall.customerId))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-black text-sky-700 dark:text-sky-300 hover:underline underline-offset-2 leading-tight truncate"
+              title={`เปิดข้อมูล ${recall.customerName || ''} ในแท็บใหม่`}
+              data-testid={`recall-customer-link-mobile-${recall.id}`}
+            >
+              {recall.customerName || '—'}
+            </a>
+          ) : (
+            <span className="text-sm font-black text-sky-700 dark:text-sky-300 leading-tight truncate">
+              {recall.customerName || '—'}
+            </span>
+          )}
+          {recall.customerLineUserId && (
+            <span
+              className="shrink-0 text-[8px] px-1 py-0 bg-green-500/15 text-green-300 border border-green-500/30 rounded font-bold"
+              aria-label="LINE linked"
+              title="ลูกค้าผูก LINE แล้ว"
+            >L</span>
+          )}
+        </div>
+        <span
+          className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap"
+          style={{ background: statusColor.bg, borderColor: statusColor.border, color: statusTextColor }}
+          data-testid={`recall-status-chip-mobile-${recall.id}`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* DESKTOP date column — hidden on mobile (mobile uses inline header chip above). */}
+      <div className={`hidden md:block font-mono text-[11px] font-bold pt-0.5 ${over ? 'text-red-300' : 'text-[var(--tx-muted)]'}`}>
         {dateDisplay}
       </div>
 
-      {/* Content */}
+      {/* CONTENT */}
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* DESKTOP header (md+ only) — keeps the proven dense list aesthetic for
+            backend RecallTab scanning. Mobile already rendered its own header above. */}
+        <div className="hidden md:flex items-center gap-1.5 flex-wrap">
           {recall.customerId ? (
             <a
               href={`/?backend=1&customer=${encodeURIComponent(String(recall.customerId))}`}
@@ -160,10 +216,6 @@ export function RecallRow({
               title="ติดต่อไม่ได้ครบ 3 ครั้ง — ต้องตรวจสอบด้วยตนเอง"
             >🚨 ตรวจสอบ</span>
           )}
-          {/* Phase 29.22 (2026-05-14) — outcome badge on done/closed rows.
-              Shows the customer's chosen outcome (will-come / not-interested /
-              ขอเลื่อน / etc.) alongside the generic "เสร็จแล้ว" status chip
-              so admins can scan list without opening each entry. */}
           {outcomeMeta && (
             <span
               className="text-[10px] px-2 py-0.5 rounded-md font-bold border inline-flex items-center gap-1"
@@ -180,12 +232,40 @@ export function RecallRow({
             </span>
           )}
         </div>
-        {/* Phase 29.22 round-3 — reason text prominence bumped per user
-            request: "ไอ้สาเหตุ ... ในแต่ละ list ทุกที่ มึงต้องเด่นกว่านี้มากๆ
-            มันคือสิ่งสำคัญเสือกตัวเล็กบาง". Was text-[10px] text-tx-muted
-            (10px faint) → now text-[13px] font-medium text-tx-primary
-            (13px, full primary color). Keeps line-clamp-2 for overflow control. */}
-        <div className="text-[13px] font-medium text-[var(--tx-primary)] mt-1.5 line-clamp-2" data-testid={`recall-reason-${recall.id}`}>
+
+        {/* MOBILE secondary chips row — outcome meta + manual review.
+            Renders only when at least one applies (else collapses entirely). */}
+        {(recall.requiresManualReview || outcomeMeta) && (
+          <div className="flex md:hidden items-center gap-1.5 flex-wrap mb-1.5">
+            {recall.requiresManualReview && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-500/15 text-red-300 border border-red-500/30"
+                title="ติดต่อไม่ได้ครบ 3 ครั้ง — ต้องตรวจสอบด้วยตนเอง"
+              >🚨 ตรวจสอบ</span>
+            )}
+            {outcomeMeta && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1"
+                style={{
+                  background: outcomeMeta.color.bg,
+                  borderColor: outcomeMeta.color.border,
+                  color: isLight ? outcomeMeta.color.lightText : outcomeMeta.color.darkText,
+                }}
+                data-testid={`recall-outcome-meta-mobile-${recall.id}`}
+                title={`เหตุผล: ${outcomeMeta.label}`}
+              >
+                <span aria-hidden="true">{outcomeMeta.emoji}</span>
+                <span>{outcomeMeta.label}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* REASON — mobile gets bumped sizing (text-sm font-bold) for editorial weight. */}
+        <div
+          className="text-sm md:text-[13px] font-bold md:font-medium text-[var(--tx-primary)] md:mt-1.5 line-clamp-2 leading-snug"
+          data-testid={`recall-reason-${recall.id}`}
+        >
           {recall.reason || ''}
         </div>
         {!compact && recall.sourceProductName && (
@@ -193,14 +273,14 @@ export function RecallRow({
         )}
         {recall.outcomeNote && recall.status === 'done' && (
           <div
-            className="mt-1.5 px-2 py-1 bg-emerald-500/5 border-l-2 border-emerald-500 text-[9.5px] text-emerald-300 italic rounded"
+            className="mt-1.5 px-2 py-1 bg-emerald-500/5 border-l-2 border-emerald-500 text-[10px] md:text-[9.5px] text-emerald-300 italic rounded"
             data-testid={`recall-outcome-callout-${recall.id}`}
           >
             "{recall.outcomeNote}" — {recall.outcomeBy?.name || ''}
           </div>
         )}
         {recall.lineMessageSent && (
-          <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-500/10 border border-green-500/25 rounded text-[9px] text-green-300">
+          <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-500/10 border border-green-500/25 rounded text-[10px] md:text-[9px] text-green-300">
             💬 ส่ง LINE แล้ว
           </div>
         )}
@@ -209,19 +289,19 @@ export function RecallRow({
         )}
       </div>
 
-      {/* Action chips — always visible (round-3 fix: hover-only pattern was
-          too discoverability-poor; user couldn't find delete/edit buttons). */}
-      <div className="flex gap-1.5 self-start">
+      {/* ACTION BAR — mobile: full-width bottom row with 36×36 tap targets,
+          evenly spaced. Desktop (md+): right-rail compact row, current density. */}
+      <div className="flex gap-2 md:gap-1.5 mt-3 md:mt-0 md:self-start pt-3 md:pt-0 border-t md:border-t-0 border-[var(--bd)]/40 justify-around md:justify-start">
         {onRecordOutcome && recall.status !== 'done' && recall.status !== 'closed-no-answer' && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRecordOutcome(recall.id); }}
             data-testid={`recall-record-${recall.id}`}
-            className="w-6 h-6 rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:bg-[var(--bg-elevated)] flex items-center justify-center"
+            className="w-9 h-9 md:w-6 md:h-6 rounded-lg md:rounded bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-primary)] hover:bg-[var(--bg-elevated)] active:scale-95 transition-transform flex items-center justify-center"
             aria-label="บันทึกผลการโทร"
             title="📞 บันทึกผลการโทร"
           >
-            <Phone size={11} />
+            <Phone className="w-4 h-4 md:w-[11px] md:h-[11px]" />
           </button>
         )}
         {onLineSend && recall.customerLineUserId && (
@@ -229,11 +309,11 @@ export function RecallRow({
             type="button"
             onClick={(e) => { e.stopPropagation(); onLineSend(recall.id); }}
             data-testid={`recall-line-${recall.id}`}
-            className="w-6 h-6 rounded bg-green-500/10 border border-green-500/30 text-green-300 hover:bg-green-500/20 flex items-center justify-center"
+            className="w-9 h-9 md:w-6 md:h-6 rounded-lg md:rounded bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-300 hover:bg-green-500/20 active:scale-95 transition-transform flex items-center justify-center"
             aria-label="ส่งข้อความ LINE"
             title="💬 ส่ง LINE template"
           >
-            <MessageCircle size={11} />
+            <MessageCircle className="w-4 h-4 md:w-[11px] md:h-[11px]" />
           </button>
         )}
         {onSnooze && recall.status !== 'done' && recall.status !== 'closed-no-answer' && (
@@ -241,32 +321,25 @@ export function RecallRow({
             type="button"
             onClick={(e) => { e.stopPropagation(); onSnooze(recall.id); }}
             data-testid={`recall-snooze-${recall.id}`}
-            className="w-6 h-6 rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 flex items-center justify-center"
+            className="w-9 h-9 md:w-6 md:h-6 rounded-lg md:rounded bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 active:scale-95 transition-transform flex items-center justify-center"
             aria-label="เลื่อน Recall"
             title="⏰ เลื่อน"
           >
-            <Clock size={11} />
+            <Clock className="w-4 h-4 md:w-[11px] md:h-[11px]" />
           </button>
         )}
-        {/* Phase 29.23 — edit button (sky-500). Always shown (admin can fix typos
-            on done/closed recalls too — same discoverability rationale as the
-            delete button per round-3 lesson). */}
         {onEdit && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onEdit(recall.id); }}
             data-testid={`recall-edit-${recall.id}`}
-            className="w-6 h-6 rounded bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/60 flex items-center justify-center"
+            className="w-9 h-9 md:w-6 md:h-6 rounded-lg md:rounded bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/60 active:scale-95 transition-transform flex items-center justify-center"
             aria-label="แก้ไข Recall"
             title="✏️ แก้ไข Recall"
           >
-            <Pencil size={11} />
+            <Pencil className="w-4 h-4 md:w-[11px] md:h-[11px]" />
           </button>
         )}
-        {/* Phase 29.22 round-3 — delete button. User report: "ลบ Recall ไม่ได้
-            user จะลบยังไงวะ ไม่มีปุ่มลบ ปุ่มแก้ไขเลย".  Hard-delete via
-            deleteRecall (clears paired-partner pointer too). Always shown
-            (admin can delete done/closed recalls too — e.g. wrong customer). */}
         {onDelete && (
           <button
             type="button"
@@ -278,11 +351,11 @@ export function RecallRow({
               }
             }}
             data-testid={`recall-delete-${recall.id}`}
-            className="w-6 h-6 rounded bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-300 hover:bg-red-500/25 hover:border-red-500/60 flex items-center justify-center"
+            className="w-9 h-9 md:w-6 md:h-6 rounded-lg md:rounded bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-300 hover:bg-red-500/25 hover:border-red-500/60 active:scale-95 transition-transform flex items-center justify-center"
             aria-label="ลบ Recall"
             title="🗑️ ลบ Recall"
           >
-            <Trash2 size={11} />
+            <Trash2 className="w-4 h-4 md:w-[11px] md:h-[11px]" />
           </button>
         )}
       </div>

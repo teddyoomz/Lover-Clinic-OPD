@@ -177,9 +177,10 @@ describe('Phase 29 · T4 row interactions', () => {
   });
 
   it('T4.4 click row body opens outcome modal', async () => {
+    // V72 (2026-05-16): mobile + desktop header trees both render in jsdom.
     const user = userEvent.setup();
     render(<RecallTab />);
-    await user.click(screen.getByText('A overdue'));
+    await user.click(screen.getAllByText('A overdue')[0]);
     expect(screen.getByTestId('recall-outcome-modal')).toBeInTheDocument();
   });
 });

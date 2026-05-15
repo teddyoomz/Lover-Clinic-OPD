@@ -34,8 +34,12 @@ const baseRecall = {
 
 describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
   it('R-Row.1 renders customer name + reason', () => {
+    // V72 (2026-05-16): RecallRow renders TWO header trees (mobile flex-col +
+    // desktop grid) gated by Tailwind responsive classes (md:hidden /
+    // hidden md:flex). jsdom doesn't honor CSS @media so BOTH appear in the
+    // DOM. Customer name shows up in both — use getAllByText.
     render(<RecallRow recall={baseRecall} todayISO={TODAY} />);
-    expect(screen.getByText('นาย Aaa')).toBeInTheDocument();
+    expect(screen.getAllByText('นาย Aaa').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/ติดตามอาการหลังฉีดฟิลเลอร์/)).toBeInTheDocument();
   });
 
@@ -45,8 +49,9 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
   });
 
   it('R-Row.3 renders dd/mm date in time column', () => {
+    // V72: date appears in mobile chip + desktop column → getAllByText.
     render(<RecallRow recall={baseRecall} todayISO={TODAY} />);
-    expect(screen.getByText('15/05')).toBeInTheDocument();
+    expect(screen.getAllByText('15/05').length).toBeGreaterThanOrEqual(1);
   });
 
   it('R-Row.4 LINE button visible when customerLineUserId present', () => {
@@ -120,8 +125,10 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
   });
 
   it('R-Row.12 requiresManualReview shows badge', () => {
+    // V72: manual-review chip appears in both mobile secondary-chips row +
+    // desktop header chip flow.
     render(<RecallRow recall={{ ...baseRecall, requiresManualReview: true, noAnswerCount: 3, status: 'no-answer' }} todayISO={TODAY} />);
-    expect(screen.getByText('🚨 ตรวจสอบ')).toBeInTheDocument();
+    expect(screen.getAllByText('🚨 ตรวจสอบ').length).toBeGreaterThanOrEqual(1);
   });
 
   it('R-Row.13 lineMessageSent badge appears', () => {
