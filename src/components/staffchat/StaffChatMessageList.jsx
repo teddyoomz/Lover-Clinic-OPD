@@ -1,9 +1,10 @@
 // src/components/staffchat/StaffChatMessageList.jsx
 // V73 (2026-05-16) — Scrollable list of messages, auto-scroll to bottom on new msg.
+// V73 Feature C (2026-05-16) — Forwards onReply to each message so hover Reply button fires.
 import React, { useEffect, useRef } from 'react';
 import { StaffChatMessage } from './StaffChatMessage.jsx';
 
-export function StaffChatMessageList({ messages, ownDeviceId }) {
+export function StaffChatMessageList({ messages, ownDeviceId, onReply }) {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function StaffChatMessageList({ messages, ownDeviceId }) {
   return (
     <div data-testid="staff-chat-message-list" className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
       {messages.map(m => (
-        <StaffChatMessage key={m.id} message={m} isOwn={m.deviceId === ownDeviceId} />
+        <StaffChatMessage key={m.id} message={m} isOwn={m.deviceId === ownDeviceId} onReply={onReply} />
       ))}
       <div ref={endRef} />
     </div>

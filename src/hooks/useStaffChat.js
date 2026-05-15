@@ -48,6 +48,9 @@ export function useStaffChat() {
   const [namePickerOpen, setNamePickerOpen] = useState(false);
   const [pendingSendPayload, setPendingSendPayload] = useState(null);
   const [error, setError] = useState(null);
+  // V73 Feature C (T12) — Reply-to-message: stash the message being replied to
+  // so the composer can render a quote strip and the next send() includes replyTo.
+  const [replyingTo, setReplyingTo] = useState(null);
 
   // Mint deviceId once per hook instance (getDeviceId itself is localStorage
   // backed, so the same value persists across mounts/sessions per device).
@@ -175,5 +178,7 @@ export function useStaffChat() {
     namePickerOpen, setNamePickerOpen,
     send, confirmName, expand, minimize,
     recentMentionCandidates,
+    // V73 Feature C — reply state surface.
+    replyingTo, setReplyingTo,
   };
 }
