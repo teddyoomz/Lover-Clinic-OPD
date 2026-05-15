@@ -40,13 +40,25 @@ describe('V71 markAppointmentServiceCompleted', () => {
     });
   });
 
-  it('M1.2 throws when apptId empty (fail loud)', async () => {
+  it('M1.2 throws exact V71_MARK_SERVICE_COMPLETED_REQUIRES_APPT_ID when apptId empty (fail loud)', async () => {
     await expect(markAppointmentServiceCompleted('', 'uid-staff-1'))
-      .rejects.toThrow(/APPT_ID/);
+      .rejects.toThrow('V71_MARK_SERVICE_COMPLETED_REQUIRES_APPT_ID');
   });
 
-  it('M1.3 tolerates missing uid (admin SDK or anon admin sets empty string)', async () => {
+  it('M1.3 tolerates missing uid (empty string passes through)', async () => {
     await markAppointmentServiceCompleted('BA-test-2', '');
+    const [, payload] = updateDoc.mock.calls[0];
+    expect(payload.serviceCompletedBy).toBe('');
+  });
+
+  it('M1.3a undefined uid → empty string fallback (typeof-guard else branch)', async () => {
+    await markAppointmentServiceCompleted('BA-test-3', undefined);
+    const [, payload] = updateDoc.mock.calls[0];
+    expect(payload.serviceCompletedBy).toBe('');
+  });
+
+  it('M1.3b null uid → empty string fallback (typeof-guard else branch)', async () => {
+    await markAppointmentServiceCompleted('BA-test-4', null);
     const [, payload] = updateDoc.mock.calls[0];
     expect(payload.serviceCompletedBy).toBe('');
   });
