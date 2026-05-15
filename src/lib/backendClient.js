@@ -2631,6 +2631,40 @@ export function listenToAppointmentsByMonth(yearMonth, optsOrCallback, onChangeO
   }, onError);
 }
 
+// ───────────────────────────────────────────────────────────────────────
+// V73 Task 2 (2026-05-16) — Staff Chat raw wrappers. Branch-scoped per BSA.
+// safe-by-default pattern (mirror V54 BS-13).
+// ───────────────────────────────────────────────────────────────────────
+function staffChatCol() {
+  return collection(db, `artifacts/${appId}/public/data/be_staff_chat_messages`);
+}
+function staffChatMessageDoc(messageId) {
+  return doc(db, `artifacts/${appId}/public/data/be_staff_chat_messages/${messageId}`);
+}
+
+export function listenToStaffChatMessages({ branchId, allBranches = false, limitCount = 50 } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : resolveSelectedBranchId());
+  if (!effectiveBranchId && !allBranches) {
+    onChange?.([]);
+    return () => {};
+  }
+  const baseQuery = effectiveBranchId
+    ? query(staffChatCol(), where('branchId', '==', String(effectiveBranchId)), orderBy('createdAt', 'desc'), limit(limitCount))
+    : query(staffChatCol(), orderBy('createdAt', 'desc'), limit(limitCount));
+  return onSnapshot(baseQuery, (snap) => {
+    const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    onChange?.(docs.reverse());  // chronological for display
+  }, (err) => onError?.(err));
+}
+
+export async function addStaffChatMessage(messageDoc) {
+  if (!messageDoc.id || !messageDoc.branchId) throw new Error('STAFF_CHAT_MISSING_REQUIRED_FIELDS');
+  await setDoc(staffChatMessageDoc(messageDoc.id), messageDoc);
+  return messageDoc.id;
+}
+
 /**
  * Real-time listener for customer's finance summary — bundles 4 listeners
  * into one unsubscribe. Mirrors the {depositBalance, walletBalance, wallets,

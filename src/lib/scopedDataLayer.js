@@ -313,6 +313,13 @@ export const listenToAppointmentsByMonth = (...args) => raw.listenToAppointments
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
 export const listenToExamRoomsByBranch = (...args) => raw.listenToExamRoomsByBranch(...args);
+// V73 Task 2 (2026-05-16) — Staff Chat passthrough (branch-scoped raw wrapper
+// already applies safe-by-default + resolveSelectedBranchId per BS-13).
+// addStaffChatMessage is a writer; passthrough.
+export const listenToStaffChatMessages = (opts = {}, onChange, onError) =>
+  raw.listenToStaffChatMessages(opts, onChange, onError);
+export const addStaffChatMessage = (messageDoc) => raw.addStaffChatMessage(messageDoc);
+
 // Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
 // (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
 // was extended to accept branchId so AppointmentTab can thread the current
