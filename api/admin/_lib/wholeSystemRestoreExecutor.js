@@ -194,9 +194,26 @@ async function wipeFirebase(db, storage, auth, callerUid) {
  * @returns {Promise<{backupRef, mode, autoBackupRef, stats, passwordResetEmailsSent}>}
  */
 export async function runWholeSystemRestore({
-  db, storage, auth, backupRef, mode, callerUid, sendPasswordResetEmails,
+  db, storage, auth, backupRef, mode, callerUid,
+  sendPasswordResetEmails,
+  ackPasswordResetRequired, // V81-fix2 (2026-05-17 EOD+1): Replace mode MUST pass true
 }) {
   const start = Date.now();
+
+  // V81-fix2: Replace mode requires admin acknowledgment that passwords will be
+  // stripped (per Rule C2 — V81 backup never stores password hashes for security).
+  // After Replace restore, ALL users must reset passwords via "forgot password"
+  // flow. This gate prevents silent staff lockout that occurred 2026-05-17 EOD+1.
+  if (mode === 'replace' && ackPasswordResetRequired !== true) {
+    const err = new Error('Replace mode requires explicit ackPasswordResetRequired: true (staff will need password reset after restore)');
+    err.code = 'REPLACE_ACK_REQUIRED';
+    throw err;
+  }
+
+  // V81-fix2: Replace mode FORCES sendPasswordResetEmails=true (override caller
+  // false). Prevents the silent-lockout case where admin clicks Replace but
+  // forgets to enable reset emails → 353 staff locked out.
+  const effectiveSendResetEmails = mode === 'replace' ? true : !!sendPasswordResetEmails;
 
   // 1. AV62: read + validate manifest (tamper detection via recomputed hash)
   const manifest = await readManifest(storage, backupRef);
@@ -240,9 +257,9 @@ export async function runWholeSystemRestore({
   const authResult = await restoreAuthUsers(auth, storage, manifest, backupRef, callerUid);
   const storResult = await restoreStorage(storage, manifest, backupRef);
 
-  // 4. Optional: send password-reset emails (best-effort)
+  // 4. Send password-reset emails (V81-fix2: FORCED for replace mode)
   let passwordResetEmailsSent = 0;
-  if (sendPasswordResetEmails) {
+  if (effectiveSendResetEmails) {
     try {
       const [buf] = await storage.file(`backups/whole-system/${backupRef}/${manifest.authUsers.path}`).download();
       const users = JSON.parse(buf.toString('utf8'));

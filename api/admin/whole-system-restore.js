@@ -39,6 +39,7 @@ export default async function handler(req, res) {
     mode = 'fresh',
     confirmName,
     sendPasswordResetEmails = false,
+    ackPasswordResetRequired = false, // V81-fix2: Replace mode requires explicit true
   } = req.body || {};
 
   if (!backupRef) {
@@ -56,6 +57,15 @@ export default async function handler(req, res) {
       message: 'พิมพ์ชื่อ backup ให้ตรงเพื่อยืนยัน',
     });
   }
+  // V81-fix2: Replace mode requires admin acknowledgment that staff will need
+  // password reset after restore. Prevents silent lockout (V81-fix2 origin
+  // 2026-05-17 EOD+1: real-prod wipe-restore stripped 353 user passwords).
+  if (mode === 'replace' && ackPasswordResetRequired !== true) {
+    return res.status(400).json({
+      error: 'REPLACE_ACK_REQUIRED',
+      message: 'Replace mode: ต้อง ack ว่าทุก staff ต้อง reset password หลัง restore (V81 backup ไม่เก็บ password hash per Rule C2)',
+    });
+  }
 
   try {
     const result = await runWholeSystemRestore({
@@ -65,10 +75,17 @@ export default async function handler(req, res) {
       backupRef,
       mode,
       callerUid: caller.uid,
-      sendPasswordResetEmails,
+      sendPasswordResetEmails, // executor forces true on replace mode regardless (V81-fix2)
+      ackPasswordResetRequired, // executor double-validates (defense-in-depth)
     });
     return res.status(200).json(result);
   } catch (e) {
+    if (e.code === 'REPLACE_ACK_REQUIRED') {
+      return res.status(400).json({
+        error: e.code,
+        message: 'Replace mode: ต้อง ack ว่าทุก staff ต้อง reset password หลัง restore',
+      });
+    }
     if (e.code === 'WHOLE_SYSTEM_MANIFEST_TAMPERED') {
       return res.status(409).json({
         error: e.code,

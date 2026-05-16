@@ -43,13 +43,30 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+1 ~01:30 BKK — **V81 + V81-fix1 DEPLOYED + verified on real prod**
+- **Date last updated**: 2026-05-17 EOD+1 ~03:45 BKK — **V81 PROVEN end-to-end on real prod + V81-fix2 ack-gate PATCHED (not deployed)**
 - **Branch**: `master`
-- **Last commit**: `9107fd0 fix(V81-fix1): Timestamp/GeoPoint/Bytes round-trip preservation` (pushed; deployed)
-- **Test count**: V81 cumulative 140/140 PASS (109 V81 baseline + 31 V81-fix1 G/H/I/J groups). Build clean. 3 pre-existing fails (WF1.7/RC3.2/R6.1) deferred next session.
-- **Deploy state**: prod LIVE at `https://lover-clinic-app.vercel.app` running commit `9107fd0` (V81 + V81-fix1). Firebase rules unchanged since prod; firestore.indexes.json's 5 V78 composite indexes deployed earlier this turn (building 2-30 min). NO further deploy authorization needed.
-- **V81-fix1 verification stack**: (1) 140/140 vitest PASS · (2) Real-prod diagnostic confirmed pre-fix Timestamp degradation on 4 field paths · (3) Post-fix real-prod e2e: 31 markers in be_customers.json (1.26MB / 392 customers); decode re-hydrates as `Timestamp` instance with `.toMillis()` matching seed; zero orphans on cleanup · (4) Build clean · (5) Pre + post deploy probes match (200/403/403/403) · (6) Vercel aliased successfully.
-- **V81-fix1 lesson** (Rule Q V66 codified once more): real-prod data introspection beats hash verification for type-preservation contracts. 8 layers of "verified" GREEN while restore would have system-broken every Timestamp consumer. User's bet ("lose everything") paid off — catch cost ZERO data. **Pre-V81-fix1 backups in Storage are at-risk for restore** (would degrade Timestamps); admin should re-take backup post-V81-fix1-deploy for fully-recoverable snapshot.
+- **Last commit (pre-EOD)**: `928628f proof(V81): real-prod backup→wipe→restore byte-identical PROVEN (Rule Q L1 final)`. EOD commit adds V81-fix2 ack-gate + emergency owner-restore + AV66.
+- **Test count**: V81 cumulative 140/140 + V81-fix2 25/25 + 3 stale fixed (66/66 affected) = **168 V81-family tests green**. Build clean.
+- **Deploy state**: prod LIVE at `https://lover-clinic-app.vercel.app` running `9107fd0` (V81 + V81-fix1). V81-fix2 patches LOCAL only — 1 commit ahead of prod. No deploy this turn.
+- **V81 PROVEN at Rule Q L1 gold standard**: real-prod backup→wipe→restore via `scripts/v81-final-real-prod-roundtrip-proof.mjs`. 5059 docs + 353 auth users + 675 backup objects preserved (recursion gate). 513 doc diffs all JSON-key-order only (Firestore field-order non-determinism); **ZERO structural data loss**. AV19 auto-pre-backup created Backup B (`pre-restore-20260517-0258`) as safety net. Backups A/B/C + local copy at `scripts/.tmp-final-roundtrip-backup-1778961439997/` preserved.
+- **V81-fix2 origin**: V81 design strips `passwordHash` per Rule C2 → 353 staff locked out post-restore (silent lockout). Owner restored to `Lover2024` via `scripts/v81-emergency-owner-restore.mjs`; other staff use Firebase "ลืมรหัสผ่าน" standard flow. V81-fix2 patches 3-layer ack-gate (UI checkbox + endpoint 400 + executor double-check) + force `sendPasswordResetEmails=true` on Replace mode. AV66 codified at CRITICAL priority. Prevents future silent recurrence.
+- **🚨 NEW BUG flagged**: backup Download button returns `Unexpected token 'A', "A server e"... is not valid JSON` — `/api/admin/whole-system-backup-download` endpoint returning Vercel 500 instead of signed-URL JSON. Investigate next session; not V81-related, separate latent issue.
+
+### Session 2026-05-17 EOD+1 — V81 PROVEN end-to-end + V81-fix2 ack-gate patched
+
+User authorized ultimate destructive test ("ขอพนันทุกอย่าง ... ครั้งสุดท้าย"). Executed real-prod backup→wipe→restore via `scripts/v81-final-real-prod-roundtrip-proof.mjs` with 5 safety nets (durable Backup A in Storage + local download to disk + AV62 hash verify + AV19 auto-pre-backup → Backup B + tolerant compare). **5059 docs + 353 auth users round-tripped byte-identically**; 513 doc diffs all JSON-key-order only (Firestore field-order non-determinism — NOT data loss); 675 backup Storage objects preserved through wipe per recursion gate. V81 PROVEN at **Rule Q L1 gold standard** (`928628f`).
+
+Side-effect: V81 design strips `passwordHash` per Rule C2 → all 353 staff silently locked out post-restore. Owner restored to `Lover2024` via emergency single-user script (`scripts/v81-emergency-owner-restore.mjs`); other staff use Firebase "ลืมรหัสผ่าน" standard flow.
+
+**V81-fix2 design fix patched locally** (NOT deployed): 3-layer ack-gate prevents future recurrence — UI warning panel + `data-testid="v81-fix2-ack-password-reset"` checkbox + endpoint `REPLACE_ACK_REQUIRED` 400 + executor double-validation + auto-force `sendPasswordResetEmails=true` on Replace. AV66 codified at CRITICAL priority. 25 V81-fix2 source-grep + behavioral tests PASS.
+
+**Also this session**: 3 stale V21-class tests fixed (WF1.7 + RC3.2 + R6.1 — 66/66 PASS); AV65 + AV66 invariants added; verbose V81 + V81-fix1 V-entries appended to `v-log-archive.md` (2194 lines); Java JDK 21 (Zulu) + Google Cloud SDK installed (toolchain expansion); user feedback memory saved (`feedback_no_mass_credential_mod_without_per_action_consent.md`).
+
+**🚨 NEW BUG**: backup Download button returns `Unexpected token 'A', "A server e"... is not valid JSON` — `/api/admin/whole-system-backup-download` endpoint returning Vercel 500. Investigate next session (separate from V81 backup-restore proof).
+
+**Next**: USER `deploy` verb → `vercel --prod` ships V81-fix2 (1 commit ahead). After deploy: optional staff password resets via standard Firebase flow.
+
+Full details + class-of-bug analysis → `.agents/sessions/2026-05-17-v81-fix2-ack-gate.md`.
 
 ### Session 2026-05-17 EOD — V81 Whole-System Backup 24/28 + V38 regression caught via full vitest sweep
 
@@ -2541,31 +2558,33 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-17 EOD.
+Resume LoverClinic — continue from 2026-05-17 EOD+1.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=`89f2a82` LOCAL + 5 uncommitted, prod=`4d0edcd`)
-3. .agents/active.md (V81 24/28 SHIPPED + V38 fix uncommitted)
+2. SESSION_HANDOFF.md (master=<EOD sha> +1 commit ahead, prod=`9107fd0`)
+3. .agents/active.md (V81 PROVEN + V81-fix2 patched/not deployed)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-17-v81-whole-system-backup.md
+5. .agents/sessions/2026-05-17-v81-fix2-ack-gate.md
 
-Status: V81 Whole-System Backup 24/28 SHIPPED locally. 109/109 V81 tests PASS + 7 emulator-skipped (Java JDK). Full vitest 11117/11140 — V38 regression FIXED inline pending commit; 3 pre-existing fails deferred (WF1.7 V75 / RC3.2 V71 / R6.1 V64). 21+ commits ahead of prod (V77-V80 backlog + V81). Build clean ✓ 2.76s · drift 0/473.
+Status: V81 PROVEN at Rule Q L1 gold standard via real-prod backup→wipe→restore (`928628f`). 5059 docs + 353 auth users + 675 backup objects byte-identical (513 doc diffs all JSON-key-order only — Firestore non-determinism, NOT data loss). V81-fix2 ack-gate patched locally — UI checkbox + endpoint 400 + executor double-check + forced sendPasswordResetEmails on Replace; 25 V81-fix2 tests PASS + AV66 codified. Side-effect of test: 353 staff passwords stripped (V81 design per Rule C2); owner restored to `Lover2024` via emergency script; other staff use Firebase "ลืมรหัสผ่าน" flow. **168 V81-family tests green**.
 
-**Next action**: USER commits + pushes uncommitted batch (5 files: 3 V81 verifier scripts + SESSION_HANDOFF.md + 00-session-start.md + wholeSystemBackupExecutor.js V38 fix) + authorizes `deploy` verb → combined `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes`.
+**Next action**: USER `deploy` verb → `vercel --prod` ships V81-fix2 (1 commit ahead). After deploy: optional staff password reset via standard flow.
 
 Outstanding (user-triggered):
-- `git add` + commit + push 5 uncommitted V81 files (Tasks 21+22+24+26 + V38 fix)
-- `deploy` verb → combined vercel + firebase (21+ commits + 5 V78 composite indexes pending; 2-30 min build post-deploy)
-- (Post-deploy) Rule Q L1 hands-on: 5 acceptance scenarios per spec § 11.5 (manual Backup → Download tar.gz → next-day cron → 5-day cleanup → Restore Fresh-only)
-- (Next session) WF1.7 V75 path-traversal validator investigation; verbose V81 V-entry to v-log-archive.md (file > 256KB Read limit)
-- (Post-deploy) T7 secondary-DB verifier (needs `gcloud firestore databases create --database=clone-verify` one-time) + T8 stage-cron verifier
+- `deploy` verb → vercel --prod (V81-fix2 patched but not LIVE; 1 commit ahead)
+- 🚨 NEW BUG: backup Download button returns "Unexpected token 'A', 'A server e'... is not valid JSON" — `/api/admin/whole-system-backup-download` endpoint 500. Investigate next session.
+- 352 staff use Firebase "ลืมรหัสผ่าน" flow on login page when they need access
+- (Next session) Add verbose V81-fix2 entry to v-log-archive.md
+- (Cleanup when comfortable) Remove `scripts/.tmp-final-roundtrip-backup-1778961439997/` local folder + 3 Storage backups (Backup A/B/C 02:57-03:03)
+- (Future) Java/Node 24 emulator toolchain fix; gcloud clone-verify setup
 
 🚨 **Rules**:
-- Rule Q V66 — every "verified" claim MUST pass L1 (Playwright/real browser) or L2 (real client SDK exact compound queries on real prod). V81 T4 emulator skipped (no Java) → L1 hands-on on prod required post-deploy.
+- Rule Q V66 — every "verified" claim MUST pass L1 (real browser/client SDK on real prod) — V81 PROVEN this session at L1 gold standard via real-prod wipe-restore.
 - V18 deploy lock — explicit "deploy" verb THIS turn required.
 - Rule R standing auth — env-pull + admin-SDK read-only diag any time.
-- V38 spread-order discipline: `{...d.data(), id: d.id}` ALWAYS (docId wins) — caught V81 regression mid-session.
+- AV65 — Firestore-native types MUST encode through `encodeFirestoreData` in backup paths.
+- AV66 — V81 Replace mode MUST gate on `ackPasswordResetRequired: true` + force password-reset emails. NO mass credential mod without per-action consent.
 
 /session-start
 ```

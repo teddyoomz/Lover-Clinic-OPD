@@ -1768,6 +1768,47 @@ V74 AV53 elevated for customer cascade. V81 extends to whole-system Replace.
 **Sanctioned exceptions**: Fresh-only mode (no wipe → no pre-backup needed).
 **Priority**: CRITICAL — without elevation, admin click loses entire system.
 
+### AV66 — Whole-system Replace mode MUST gate on password-reset acknowledgment + force reset emails (V81-fix2, 2026-05-17 EOD+1)
+
+**Trigger**: `/api/admin/whole-system-restore` with `mode='replace'` MUST require
+`ackPasswordResetRequired: true` in request body. The restore executor + the
+endpoint BOTH validate the flag (defense-in-depth). UI modal MUST display a
+warning panel + force a separate "I understand" checkbox before submit is
+enabled. Executor MUST override `sendPasswordResetEmails` to `true` whenever
+mode is replace, regardless of caller value.
+
+**Why**: V81 backup design strips `passwordHash` + `passwordSalt` per Rule C2
+security (sanitizeAuthUser). After Replace mode wipes + restores Firebase Auth,
+all users have NO password set → unable to login. Origin 2026-05-17 EOD+1:
+real-prod wipe-restore test executed `sendPasswordResetEmails: false` →
+353 users locked out → admin had to manually recover. V81-fix2 closes this
+silent-lockout vector with a 3-layer gate (UI checkbox + endpoint validation
++ executor validation) plus auto-forced reset emails.
+
+**Source-grep patterns**:
+- `runWholeSystemRestore` parameters include `ackPasswordResetRequired`
+- Executor throws `REPLACE_ACK_REQUIRED` if `mode === 'replace' && ackPasswordResetRequired !== true`
+- Executor computes `effectiveSendResetEmails = mode === 'replace' ? true : !!sendPasswordResetEmails`
+- Endpoint `whole-system-restore.js` extracts `ackPasswordResetRequired` from req.body + returns 400 with `REPLACE_ACK_REQUIRED` error if missing for replace
+- UI `WholeSystemRestoreModal.jsx` shows `data-testid="v81-fix2-ack-password-reset"` checkbox + disables submit on `canSubmit = ... && (!replaceAckRequired || ackPasswordReset)`
+
+**Sanctioned exceptions**: NONE. Fresh mode doesn't need the ack (no wipe).
+Replace mode is the only destructive path; ack is unconditional.
+
+**Companion**: AV62 (manifestHash content integrity) + AV65 (Firestore-native
+type fidelity) + AV66 (password-reset acknowledgment). Together AV62 + AV65 +
+AV66 cover content + type + access integrity for the V81 backup-restore contract.
+
+**Priority**: CRITICAL — silent staff lockout = system-wide outage until each
+user runs forgot-password. Far worse than rejected restore attempt.
+
+**Lesson** (V81-fix2 codified): "data preserved" ≠ "system usable". Auth is a
+separate fidelity dimension that needs its own acknowledgment gate. V81 design
+chose security-over-convenience (strip passwords); the consequence is admin
+must explicitly acknowledge the convenience cost before triggering destructive
+restore. UI warning + checkbox + server-side double-validation = 3-layer
+defense against accidental destruction.
+
 ### AV65 — Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify (V81-fix1, 2026-05-17 EOD+1)
 
 **Trigger**: ANY backup/clone/migration code that serializes Firestore data
@@ -1839,7 +1880,7 @@ hash = content-fidelity; AV65 = type-fidelity. All three required.
 
 ## Priority
 
-**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**.
+**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
 **HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.

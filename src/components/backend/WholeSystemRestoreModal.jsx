@@ -12,12 +12,20 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
   const [mode, setMode] = useState('fresh');
   const [confirmName, setConfirmName] = useState('');
   const [sendPasswordReset, setSendPasswordReset] = useState(false);
+  // V81-fix2 (2026-05-17 EOD+1): Replace mode requires explicit acknowledgment
+  // that staff passwords will be stripped + auto-reset emails will be sent.
+  // Prevents the silent-lockout case from 2026-05-17 EOD+1 wipe-restore test.
+  const [ackPasswordReset, setAckPasswordReset] = useState(false);
   const [stage, setStage] = useState('select'); // select | running | done | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
   const selected = useMemo(() => backups.find(b => b.name === selectedName), [backups, selectedName]);
-  const canSubmit = selected && confirmName === selectedName && stage === 'select';
+  const replaceAckRequired = mode === 'replace';
+  const canSubmit = selected
+    && confirmName === selectedName
+    && stage === 'select'
+    && (!replaceAckRequired || ackPasswordReset);
 
   async function handleStart() {
     setStage('running');
@@ -33,7 +41,11 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
           backupRef: selectedName,
           mode,
           confirmName,
-          sendPasswordResetEmails: sendPasswordReset,
+          // V81-fix2: Replace mode FORCES sendPasswordResetEmails=true server-side;
+          // client toggle is now only meaningful in Fresh mode.
+          sendPasswordResetEmails: mode === 'replace' ? true : sendPasswordReset,
+          // V81-fix2: explicit ack flag for Replace mode (server validates + executor double-checks)
+          ackPasswordResetRequired: mode === 'replace' ? ackPasswordReset : false,
         }),
       });
       const json = await res.json();
@@ -97,19 +109,46 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
             </div>
 
             {mode === 'replace' && (
-              <div className="mb-4 p-3 bg-red-950/40 border border-red-800 rounded-xl flex items-start gap-2">
-                <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
-                <span className="text-xs text-red-300">
-                  ⚠ ข้อมูลใหม่ที่เกิดระหว่าง backup time → restore time จะหายทั้งหมด.
-                  Auto-pre-backup จะถูกสร้างไว้ที่ <code>pre-restore-YYYYMMDD-HHmm/</code> (เก็บ 7 วัน — undo ได้).
-                </span>
-              </div>
+              <>
+                <div className="mb-4 p-3 bg-red-950/40 border border-red-800 rounded-xl flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+                  <span className="text-xs text-red-300">
+                    ⚠ ข้อมูลใหม่ที่เกิดระหว่าง backup time → restore time จะหายทั้งหมด.
+                    Auto-pre-backup จะถูกสร้างไว้ที่ <code>pre-restore-YYYYMMDD-HHmm/</code> (เก็บ 7 วัน — undo ได้).
+                  </span>
+                </div>
+
+                {/* V81-fix2 (2026-05-17 EOD+1) — explicit password-reset acknowledgment gate.
+                    Origin: real-prod wipe-restore stripped 353 user passwords; admin had to
+                    manually recover. Now Replace mode is BLOCKED until admin checks this box. */}
+                <div className="mb-4 p-3 bg-amber-950/40 border-2 border-amber-700 rounded-xl">
+                  <div className="flex items-start gap-2 mb-2">
+                    <AlertTriangle size={18} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm font-bold text-amber-200">⚠ Replace = ทุก staff ต้อง reset password</div>
+                  </div>
+                  <p className="text-xs text-amber-200/90 mb-3 pl-6">
+                    V81 backup ไม่เก็บ password hash ใน file (security per Rule C2 — ป้องกัน leak).
+                    หลัง Replace restore: <strong>ทุก user (รวมตัวคุณเอง) จะต้องตั้งรหัสผ่านใหม่</strong>
+                    ผ่านปุ่ม "ลืมรหัสผ่าน" บนหน้า login (Firebase จะส่ง reset link ทางอีเมล).
+                    Email + สิทธิ์ + branchIds + customClaims ทุกอย่างจะยังอยู่ — แค่ password ต้อง reset.
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer text-xs text-amber-100">
+                    <input type="checkbox" checked={ackPasswordReset}
+                      onChange={e => setAckPasswordReset(e.target.checked)}
+                      className="mt-0.5 flex-shrink-0"
+                      data-testid="v81-fix2-ack-password-reset" />
+                    <span><strong>ฉันเข้าใจ:</strong> หลัง Replace restore ทุก staff (รวมฉัน) ต้องตั้ง password ใหม่ผ่าน "ลืมรหัสผ่าน" บนหน้า login. ระบบจะส่ง reset emails อัตโนมัติ.</span>
+                  </label>
+                </div>
+              </>
             )}
 
-            <label className="flex items-center gap-2 mb-4 text-xs text-[var(--tx-muted)] cursor-pointer">
-              <input type="checkbox" checked={sendPasswordReset} onChange={e => setSendPasswordReset(e.target.checked)} />
-              ส่งอีเมล password-reset ไปทุก user ที่ restore (Firebase Auth ไม่ export password)
-            </label>
+            {mode === 'fresh' && (
+              <label className="flex items-center gap-2 mb-4 text-xs text-[var(--tx-muted)] cursor-pointer">
+                <input type="checkbox" checked={sendPasswordReset} onChange={e => setSendPasswordReset(e.target.checked)} />
+                ส่งอีเมล password-reset ไปทุก user ที่ restore (Firebase Auth ไม่ export password)
+              </label>
+            )}
 
             <div className="mb-4">
               <label className="text-xs text-[var(--tx-muted)] block mb-1">
