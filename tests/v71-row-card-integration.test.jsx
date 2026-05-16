@@ -107,7 +107,11 @@ describe('V71 RowCard service-completed button', () => {
     expect(screen.getByTestId('row-action-mark-complete')).toBeInTheDocument();
   });
 
-  it('RC3.2 button HIDDEN when no treatment', () => {
+  it('RC3.2 button VISIBLE even when no treatment (V71.B-ter relax — admin trust)', () => {
+    // V71.B-ter (2026-05-18) fully relaxed the gate: button now shows
+    // on today tab regardless of treatment existence. Pre-V71.B-ter
+    // required hasTreatmentForDay; now trusts admin's deliberate click
+    // per user directive "ไปๆกลับๆไม่จำกัด". Test updated 2026-05-17 EOD+1.
     render(
       <AppointmentHubRowCard
         appt={baseAppt}
@@ -117,7 +121,7 @@ describe('V71 RowCard service-completed button', () => {
         onMarkServiceComplete={() => {}}
       />
     );
-    expect(screen.queryByTestId('row-action-mark-complete')).toBeNull();
+    expect(screen.getByTestId('row-action-mark-complete')).toBeInTheDocument();
   });
 
   it('RC3.3 button HIDDEN on non-today tab', () => {

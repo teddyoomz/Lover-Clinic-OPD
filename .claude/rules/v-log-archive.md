@@ -1994,3 +1994,201 @@ User Rule Q L1 hands-on pending (5 scenarios in `.agents/active.md`):
 
 If any scenario fails → `/systematic-debugging` Phase 1 + Rule P 7-step (cross-file grep MANDATORY this time, not deferred).
 
+
+---
+
+### V81 — 2026-05-17 — Whole-System Backup & Clone SHIPPED (24/28 tasks, then V81-fix1 closure)
+
+User asked (2026-05-15 + EOD batch): replicate the V40 (per-branch) + V74 (per-customer) backup pattern at the WHOLE-SYSTEM level — full Firestore + Storage + Auth snapshot, with auto-daily cron + manual button + restore (Fresh-only + Replace modes) + retention + portable tar.gz download. Replace mode triggers AV19 auto-pre-backup MANDATORY before wipe (mirror V40→V74 lineage). Hybrid restore (Fresh-only refuses if target non-empty; Replace wipes everything then restores). 5-day rolling retention for auto-backups; manual unlimited; pre-restore 7-day grace.
+
+#### Architecture commitments (5 Q brainstormed and locked)
+
+- Q1: TRUE clone (Fresh-only + Replace; not append-merge) — destructive but unambiguous.
+- Q2: Firestore + Storage + Auth (no passwords — V31 sanitizeAuthUser strips secrets).
+- Q3: Hybrid restore (Fresh + Replace + AV19 auto-pre-backup).
+- Q4: 03:00 BKK cron + 5d retention.
+- Q5: V75 manifest+blobs pattern (manifest.json + per-collection JSON files in Storage folder).
+
+#### Files (V81 ship)
+
+20 new + 4 modified. Key files:
+- src/lib/wholeSystemBackupCore.js — pure JS helpers (manifest builder + hash + retention + collection scope + storage scope)
+- api/admin/_lib/wholeSystemBackupExecutor.js — shared backup executor
+- api/admin/_lib/wholeSystemRestoreExecutor.js — shared restore executor with AV19 elevation gate
+- api/cron/whole-system-backup-daily.js — cron at 0 20 UTC = 03:00 BKK
+- api/admin/whole-system-backup-export.js — manual button endpoint
+- api/admin/whole-system-restore.js — restore endpoint (Fresh + Replace modes)
+- api/admin/whole-system-backup-download.js — portable tar.gz download endpoint
+- api/admin/whole-system-backups-list.js — list endpoint for UI
+- api/admin/whole-system-backup-delete.js — delete endpoint with 72h grace
+- src/components/backend/WholeSystemBackupModal.jsx + WholeSystemRestoreModal.jsx — multi-stage UI modals
+- src/components/backend/BackupManagerTab.jsx — whole-system section integration
+- scripts/whole-system-backup-export.mjs + whole-system-restore.mjs — Rule M CLI mirrors
+- scripts/v81-verify-roundtrip-real-prod.mjs — Task 21 secondary-DB clone-verify verifier
+- scripts/v81-stage-cron-verify.mjs — Task 22 cron-staging verifier
+- scripts/e2e-v81-whole-system-backup-restore.mjs — Task 24 live admin-SDK e2e (TEST-V81 prefix)
+- firebase.json — emulator config for Firestore + Storage + Auth (Task 18)
+- tests/v81-whole-system-backup-core.test.js + 4 more test files (50 unit + 7 Rule I flow-simulate + 46 source-grep + 6 property-based × 100 fixtures)
+- tests/v81-emulator-roundtrip.test.js — Task 19 hermetic full-system round-trip (Java-gated)
+- tests/v81-property-based-adversarial.test.js — Task 20 mulberry32 PRNG × 100 fixtures × 6 invariants
+- .agents/skills/audit-anti-vibe-code/SKILL.md — AV62/63/64 + AV19 elevation invariants
+
+#### Key architectural constants
+
+- WHOLE_SYSTEM_SCHEMA_VERSION = 2 (V40 per-branch=1; V75 whole-fleet customer=1; V81=2 — separate evolution lineage)
+- UNIVERSAL_COLLECTIONS × 23
+- BRANCH_SCOPED_COLLECTIONS × 30
+- CUSTOMER_SUBCOLLECTIONS × 8 (V74 T4 — wallets, memberships, points, treatments, sales, appointments, deposits, courseChanges)
+- STORAGE_EXCLUDE_PREFIXES = backups/, probe/, TEST-, E2E- — CRITICAL recursion gate. Without backups/ exclusion, daily backup size doubles every day.
+
+#### AV invariants added
+
+- AV62 — manifestHash integrity (two-tier seal: storageManifestHash separately sealed + included in outer manifestHash → Storage-only tamper detectable independent of collection-side)
+- AV63 — cron CRON_SECRET gate + concurrency lock (manual + cron share same lock, 60-min TTL)
+- AV64 — retention discipline (auto 5d / pre-restore 7d / manual inf / archive tar.gz 24h)
+- AV19 elevation V81 — Replace mode MUST auto-pre-backup + verify exists BEFORE wipe (mirror V40 AV19 + V74 AV53)
+
+#### Testing tiers (Rule Q V66 layered)
+
+1. Tier 1 — 50 unit tests
+2. Tier 2 — 7 Rule I flow-simulate
+3. Tier 3 — 46 source-grep regression
+4. Tier 4 — 6 property-based × 100 fixtures × 6 invariants
+5. Tier 5 — 6 emulator hermetic scenarios (E.1/E.2/E.4/E.5/E.9/E.11 — Java JDK gated; graceful skip via SKIP_V81_EMULATOR=1)
+6. Tier 6 — 3 verifier scripts (secondary-DB clone-verify / stage-cron / live e2e)
+
+109 V81 tests PASS pre-V81-fix1; build clean 2.76s; drift scanner 0/473.
+
+#### V38 regression caught + fixed inline
+
+Full vitest sweep flagged a V38 spread-order regression — 4 sites in wholeSystemBackupExecutor.js used the broken pre-V38 pattern that would silently corrupt restored doc IDs for any Firestore doc with stray id data field (legacy ProClinic imports). Fixed inline to the V38 spread-order discipline: docId WINS. 127/127 PASS post-fix.
+
+#### Deploy (combined per V15)
+
+- vercel --prod → aliased https://lover-clinic-app.vercel.app
+- firebase deploy --only firestore:rules,firestore:indexes → 5 V78 composite indexes deploying (build time 2-30 min post-deploy)
+- Pre + post deploy probes match (200/403/403/403)
+
+#### Lessons (V81 alone — V81-fix1 lessons in separate entry below)
+
+1. Subagent autocompact thrashing on large-context projects — when project_baseline > subagent_budget, inline execution wins.
+2. Plan-vs-reality adapters — when plan-text and existing code diverge, ADAPT TO EXISTING CANONICAL SURFACE.
+3. Two-tier hash sealing — storageManifestHash separately sealed + included in outer manifestHash is the canonical pattern for separating Storage-side tamper from collection-side tamper.
+4. Recursion gate is the highest-impact 4-line constant — STORAGE_EXCLUDE_PREFIXES containing backups/ prevents geometric backup growth.
+5. AV19 elevation pattern generalizes V40 → V74 → V81 — capture state BEFORE destruction + verify capture exists + refuse if either fails.
+6. Firebase emulator graceful skip via describe.skipIf pattern.
+7. Multi-database Firestore enables sandboxed real-prod verification at ~$0.004/month.
+8. Rule Q V66 layered tier strategy — 6 testing tiers cover progressively more of the real-system contract surface.
+9. NOT claiming verified end-to-end without Rule Q L1 — pre-V81-fix1, V81 had 5 tiers GREEN. That was NOT enough for verified. (V81-fix1 then proved this — see V81-fix1 entry below.)
+
+---
+
+### V81-fix1 — 2026-05-17 EOD+1 — Timestamp/GeoPoint/Bytes round-trip preservation (CRITICAL V81 bug)
+
+User authorized full real-prod wipe-restore test of V81 backup system. Per Rule Q V66 "maximally confident before destructive op", I chose multi-layer evidence stacking over prod gamble. 11 layers GREEN. Then ran first-principles real-prod admin-SDK diagnostic that READS REAL FIRESTORE DATA SHAPE — CRITICAL BUG CONFIRMED.
+
+#### Root cause
+
+Firebase admin SDK Timestamp.toJSON() outputs {_seconds, _nanoseconds} (a plain object with the internal underscore-prefixed properties). When JSON.parse(backupFile) runs on the restore side, it gives back a plain JS object — NOT a Timestamp instance. When batch.set(doc, {createdAt: that}) writes that to Firestore, it stores as a Map field, NOT a Timestamp.
+
+The data values are preserved numerically. But the TYPE is lost. The restored doc has createdAt = {_seconds: N, _nanoseconds: M} Map instead of Timestamp(N, M) instance.
+
+#### Real-world impact (would have broken on first prod restore)
+
+Every Timestamp consumer would have broken:
+- doc.createdAt.toMillis() → throws (Map has no .toMillis())
+- Firestore queries with Timestamp range filters → fail or return wrong results
+- Composite indexes keyed on Timestamp fields → broken
+- Cron WHERE nextRetryAt less-or-equal now → returns nothing
+- Every report ordered by performedAt → broken
+
+Affected fields confirmed via real-prod diagnostic:
+- chat_history._v76BranchBackfilledAt × 3,281 docs (V76 backfill)
+- chat_history._v77quinquiesBackfilledAt × 818 docs (V77-quinquies backfill)
+- be_recalls.createdAt + be_recalls.updatedAt (Phase 29)
+- Plus all forensic stamps, audit performedAt, cron nextRetryAt, etc. system-wide
+
+#### Bug invisible to 11 layers of verification
+
+The bug went undetected because each layer tests a different contract:
+- Mock unit tests use plain JS objects (no Timestamp instances) — could not see the bug
+- Property-based tests use plain JS fixtures
+- 7-phase e2e × 2 verified manifestHash + doc counts + cleanup (NOT field shapes)
+- AV62 hash validation matches on both sides because JSON serialization is consistent across encode/decode boundary — hash assumes serialization IS the contract; type fidelity is a SEPARATE contract that hashing cannot detect
+- Rule B probes test rules-state regression — orthogonal to data shape
+- Build clean — type-level (TypeScript would not catch this either; the contract is at runtime)
+
+Only Rule Q V66 real-data introspection (read actual Firestore data via admin SDK, inspect field shapes) caught the gap.
+
+#### Fix architecture
+
+NEW encodeFirestoreData(value) + decodeFirestoreData(value, {Timestamp, GeoPoint}) in src/lib/wholeSystemBackupCore.js (+114 LOC, pure JS — no firebase imports in core; decoder accepts SDK constructors from caller).
+
+Sentinel marker format:
+- Timestamp: {__type: timestamp, seconds: N, nanoseconds: M}
+- GeoPoint: {__type: geopoint, latitude: N, longitude: M}
+- Bytes/Buffer: {__type: bytes, base64: ...}
+
+Encoder detection by strict 2-key duck-typing:
+- _seconds (number) + _nanoseconds (number) AND Object.keys.length === 2 AND keys are exactly those two — Firestore admin SDK Timestamp internal shape
+- _latitude (number) + _longitude (number) AND 2 keys exactly — admin SDK GeoPoint
+- Buffer.isBuffer(value) OR value instanceof Uint8Array — Bytes
+
+Decoder requires complete marker shape. Partial markers OR unknown __type passthrough as plain object (forward-compat).
+
+V38 spread-order invariant preserved through encode.
+
+#### Files
+
+7 files (3 modified + 4 new):
+- src/lib/wholeSystemBackupCore.js (+114 LOC encoder/decoder, no breaking changes)
+- api/admin/_lib/wholeSystemBackupExecutor.js (4 docs.map encode sites)
+- api/admin/_lib/wholeSystemRestoreExecutor.js (decode in restoreCollections + Timestamp/GeoPoint SDK imports + FB_TYPE_OPTS constant)
+- tests/v81-fix1-firestore-type-roundtrip.test.js (NEW 31 tests: G/H/I/J)
+- scripts/diag-v81-timestamp-roundtrip.mjs (NEW — diagnostic that found the bug)
+- scripts/diag-v81-fix1-roundtrip-verify.mjs (NEW — real-prod verify post-fix)
+- scripts/diag-v81-fix1-detector-debug.mjs (NEW — shape detector debug helper)
+
+#### Tests
+
+31 V81-fix1 tests in tests/v81-fix1-firestore-type-roundtrip.test.js:
+- Group G (10 tests): encodeFirestoreData unit
+- Group H (10 tests): decodeFirestoreData unit
+- Group I (7 tests): Round-trip identity including property-based × 50 + V81 prod-shape mirror
+- Group J (4 tests): Source-grep regression locks at 4 backup sites + decode-before-set ordering
+
+Cumulative V81: 140/140 PASS.
+
+#### Real-prod verification
+
+scripts/diag-v81-fix1-roundtrip-verify.mjs — 6-phase verify on real prod. ALL PHASES GREEN both before AND after deploy.
+
+#### Deploy
+
+- Commit 9107fd0 pushed to origin/master
+- vercel --prod re-deployed; aliased to https://lover-clinic-app.vercel.app
+- Firebase rules / indexes unchanged
+
+#### AV65 codified post-V81-fix1
+
+Added to audit-anti-vibe-code SKILL.md as CRITICAL-priority invariant. Source-grep pattern flags any snap.docs.map(d => ({...d.data(), id: d.id outside sanctioned exceptions. Future backup/clone/migration code that serializes Firestore data via JSON MUST pass through encodeFirestoreData / decodeFirestoreData.
+
+#### Lessons (locked permanent)
+
+1. Rule Q V66 real-prod data introspection beats hash verification for type-preservation contracts. Hashing assumes serialization IS the contract; type fidelity is a SEPARATE contract that hashes cannot see. AV62 = content fidelity. AV65 = type fidelity. Both required.
+
+2. Mock tests are code-shape coverage, NOT behavior verification (V66 lesson lived again). 11 layers of verified all GREEN while restore would have system-broken every Timestamp consumer.
+
+3. Library-level invariants prove only the library; executor-level invariants must be verified against real data shape through the executor path. Property-based test simulators (simulateBackup / simulateRestore) operate on plain JS objects; the REAL executor reads Firebase admin SDK class instances; the gap WAS the bug.
+
+4. Sentinel marker encoding (__type: foo, ...payload) is the canonical Firestore-type round-trip pattern. Self-describing in backup file; forward-compat decoders pass through unknown types as plain objects; strict shape check on decode prevents false positives.
+
+5. Class-of-bug: V12 multi-reader-sweep at the SERIALIZATION-FORMAT boundary. Admin SDK writers use Timestamp class; JSON readers see internal _seconds/_nanoseconds; the round-trip identity contract requires symmetric encode+decode. Same class as V12 (shape migration), V21 (test asserts broken behavior), V36-quater (multi-call-site), V49 (canonical-shape-mapper) — different layer each time, same root cause: a contract change that wasn't symmetrically applied to all readers/writers.
+
+6. User lose-everything bet paid off. User authorized destructive prod test, knowing the risk. Smart engineering chose multi-layer evidence first; that evidence-stacking caught the bug pre-prod-impact. Without it, first restore = total Timestamp degradation = system unusable until rollback. Catch cost: zero data. Would-have-cost: catastrophic.
+
+7. Backups taken before V81-fix1 deploy (anything older than commit 9107fd0) are at-risk for restore — they were written with un-decoded Timestamps as _seconds/_nanoseconds plain objects. Admin should re-take backup post-deploy for fully-recoverable snapshot.
+
+8. Daily auto-cron at 03:00 BKK fires from the patched code starting the next firing post-deploy.
+
+9. The 8-tier evidence stack from V81 + V81-fix1 = canonical defense-in-depth for high-stakes user-visible features (backup, payment, auth, identity binding). Future critical features should mirror this pattern: unit + flow-simulate + source-grep + property-based + emulator + e2e + real-prod-diagnostic + L1-user-hands-on.

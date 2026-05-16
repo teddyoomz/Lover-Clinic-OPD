@@ -11,7 +11,10 @@ import {
 
 const makeCustomerEntry = (cid, hn, displayName, fileHash, storageHash, ts) => ({
   cid, hn, displayName,
-  fileEntry: `customers/${cid}.json`,
+  // V77-fix3 (2026-05-16) tightened path-traversal validator: fileEntry MUST
+  // start with 'backups/customers/'. Pre-V77-fix3 fixture (just `customers/`)
+  // was stale and caused WF1.7 to fail post-V77-fix3 ship. Fixed 2026-05-17 EOD+1.
+  fileEntry: `backups/customers/${cid}/2026-05-16-1000-abc/manifest.json`,
   fileHash,
   storageManifestHash: storageHash,
   exportedAt: ts || '2026-05-16T10:00:00.000Z',

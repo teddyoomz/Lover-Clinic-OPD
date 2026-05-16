@@ -179,9 +179,14 @@ describe('V64.R AppointmentHubRowCard', () => {
     const apptTodayPending = { id: 'A3', customerId: 'C1', date: '2026-05-08', status: 'pending' };
     const sameDayTreatment = { id: 'BT-LATEST', customerId: 'C1', detail: { treatmentDate: '2026-05-07' }, createdAt: '2026-05-07T10:00:00Z' };
 
-    it('R6.1 past pending + same-day treatment → status auto-flips to เสร็จแล้ว', () => {
+    it('R6.1 past pending + same-day treatment → status stays รอยืนยัน (V73-BS1 removed auto-flip)', () => {
+      // V73-BS1 (2026-05-18) — effectiveStatus = serviceCompletedAt ? "done" : rawStatus.
+      // Pre-V73-BS1: V64-fix6 auto-flipped to "done" when same-day treatment existed.
+      // Post-V73-BS1: status driven by serviceCompletedAt flag ONLY (admin must
+      // explicitly mark complete). Treatment existence no longer auto-flips badge.
+      // Test updated 2026-05-17 EOD+1 to match V73-BS1 contract.
       render(<AppointmentHubRowCard appt={apptPastPending} summary={baseSummary} apptDateTreatments={[sameDayTreatment]} now={FIXED_NOW} />);
-      expect(screen.getByTestId('row-status').textContent).toBe('เสร็จแล้ว');
+      expect(screen.getByTestId('row-status').textContent).toBe('รอยืนยัน');
     });
 
     it('R6.2 past pending + same-day treatment → "แก้ไขบันทึกการรักษา" button (no missed badge)', () => {

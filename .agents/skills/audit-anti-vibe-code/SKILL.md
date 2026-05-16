@@ -1768,9 +1768,78 @@ V74 AV53 elevated for customer cascade. V81 extends to whole-system Replace.
 **Sanctioned exceptions**: Fresh-only mode (no wipe → no pre-backup needed).
 **Priority**: CRITICAL — without elevation, admin click loses entire system.
 
+### AV65 — Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify (V81-fix1, 2026-05-17 EOD+1)
+
+**Trigger**: ANY backup/clone/migration code that serializes Firestore data
+via `JSON.stringify` MUST first pass the data through `encodeFirestoreData`
+from `src/lib/wholeSystemBackupCore.js`. The restore-side path MUST pass
+the parsed JSON through `decodeFirestoreData(value, { Timestamp, GeoPoint })`
+with Firebase admin SDK constructors BEFORE `batch.set`.
+
+**Why**: Firebase admin SDK Timestamp.toJSON() outputs
+`{_seconds, _nanoseconds}` (plain object, not a Timestamp instance).
+JSON.parse on a backup file gives the same plain object. `batch.set(doc, that)`
+writes it as a Map field, NOT a Timestamp. Same applies to GeoPoint and
+Buffer/Bytes. The data values are preserved numerically but the TYPE is lost,
+which silently breaks every Timestamp consumer post-restore (`doc.createdAt.toMillis()`
+throws, Firestore range queries fail, composite indexes broken, cron
+`WHERE nextRetryAt <= now` returns nothing, every report ordered by
+`performedAt` broken).
+
+**Bug invisible to**:
+- Mock unit tests (no Timestamp instances)
+- Property-based tests on plain JS objects
+- e2e tests that verify hash + counts (not field shapes)
+- AV62 hash validation (hashes match both sides because JSON serialization
+  is consistent — but type fidelity is a SEPARATE contract that hashes can't see)
+
+**Source-grep pattern**:
+```
+grep -rn "snap.docs.map(d => ({.*d.data().*id: d.id" api/ scripts/ src/
+```
+Any match found MUST be wrapped in `encodeFirestoreData(...)` OR carry a
+sanctioned-exception annotation `// audit-anti-vibe-code: AV65 — non-backup
+context, no JSON serialization`.
+
+**Sanctioned exceptions**:
+- `wholeSystemBackupExecutor.js` (4 sites — all already wrapped post-V81-fix1)
+- One-shot diagnostic / dry-run scripts that read but don't write (`scripts/diag-*.mjs`)
+- Tests that compare in-memory shapes without round-trip (`tests/*.test.js`)
+
+**Detection**: backup-side encode + restore-side decode. Look for:
+- Backup write path: `JSON.stringify(snap.docs.map(...))` MUST pass through
+  `encodeFirestoreData` (`snap.docs.map(d => encodeFirestoreData({...d.data(), id: d.id}))`)
+- Restore read path: `JSON.parse(buf)` MUST be followed by
+  `decodeFirestoreData(parsed, FB_TYPE_OPTS)` before any `batch.set`
+
+**Lineage**: V81-fix1 (2026-05-17 EOD+1) added the helpers + wired all 4
+backup sites + 1 restore site. Real-prod diagnostic (`scripts/diag-v81-timestamp-roundtrip.mjs`)
+confirmed pre-fix degradation on 4 field paths (`chat_history._v76BranchBackfilledAt` ×
+3,281, `chat_history._v77quinquiesBackfilledAt` × 818, `be_recalls.createdAt/updatedAt`).
+Post-fix real-prod verify (`scripts/diag-v81-fix1-roundtrip-verify.mjs`):
+backup file contains 31 `__type:timestamp` markers in be_customers.json;
+decode re-hydrates as `Timestamp` instance with `.toMillis()` matching seed.
+
+**Companion AV**: AV62 (manifestHash integrity — content tamper).
+AV65 covers TYPE integrity. Together they guarantee byte-and-type-equal
+round-trip.
+
+**Priority**: CRITICAL — without AV65 enforcement, any new backup/clone
+code path that serializes Firestore data has a hidden type-degradation
+bug that mock + hash tests cannot catch. Same class of failure as V81
+restore would have caused on first use (every Timestamp field broken).
+
+**Source-grep test**: `tests/v81-fix1-firestore-type-roundtrip.test.js`
+Group J source-grep regression locks at all 4 backup sites + restore decode
+ordering. Mirror for future backup additions.
+
+**Lesson** (V66 lived twice): real-data introspection beats hash verification
+for type-preservation contracts. Mock tests = code-shape coverage; AV62
+hash = content-fidelity; AV65 = type-fidelity. All three required.
+
 ## Priority
 
-**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**.
+**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**.
 **HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
