@@ -99,6 +99,11 @@ export default function CustomerCard({
   onClone,
   onView,
   onDeleteClick,
+  // V81-fix4 (Bug "branches มั่ว", 2026-05-17 EOD+2): optional Map<branchId, {id, name}>
+  // injected by parent to resolve customer.branchId → branch name at render time.
+  // Customer doc has no `branchName` field; without this map the chip shows raw
+  // BR-... ID which the user described as "ขึ้นสาขามั่ว".
+  branchesMap,
 }) {
   const isDark = theme !== 'light';
   const { branchId: contextBranchId } = useSelectedBranch();
@@ -117,7 +122,17 @@ export default function CustomerCard({
   const phone = customer.phone || customer.telephone_number || customer.patientData?.phone || '';
   const gender = customer.patientData?.gender || customer.gender || '';
   const birthdate = customer.patientData?.birthdate || customer.birthdate || '';
-  const branchName = customer.branchName || customer.branchId || '';
+  // V81-fix4 (Bug "branches มั่ว"): prefer branchesMap lookup (branch NAME) over
+  // raw branchId fallback. Order: live map lookup → denormalized branchName field
+  // (none currently) → raw branchId (last resort). Empty string if no branch info.
+  const branchName = (() => {
+    const bid = customer.branchId;
+    if (branchesMap && bid) {
+      const found = branchesMap.get(bid);
+      if (found?.name) return found.name;
+    }
+    return customer.branchName || customer.branchId || '';
+  })();
   const treatmentCount = customer.treatmentCount || 0;
   const courseCount = (customer.courses?.length) || 0;
   const updatedRel = relativeTime(customer.updatedAt || customer.lastSyncedAt || customer.clonedAt);

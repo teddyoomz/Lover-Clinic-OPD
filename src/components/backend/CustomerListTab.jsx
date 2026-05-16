@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Users, Search, Loader2, RefreshCw, Download, Eye, Info, AlertCircle, FileText, CheckSquare, Square, UserPlus } from 'lucide-react';
-import { getAllCustomers } from '../../lib/scopedDataLayer.js';
+import { getAllCustomers, listBranches } from '../../lib/scopedDataLayer.js';
 import { hexToRgb } from '../../utils.js';
 import { useHasPermission } from '../../hooks/useTabAccess.js';
 import CustomerCard from './CustomerCard.jsx';
@@ -20,6 +20,11 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
   const canCreate = useHasPermission('customer_management');
 
   const [customers, setCustomers] = useState([]);
+  // V81-fix4 (Bug "branches มั่ว", 2026-05-17 EOD+2): load branches once + build
+  // id→name map so CustomerCard displays the branch NAME instead of raw BR-... ID.
+  // Customer doc has `branchId` but NOT `branchName` (no denormalization), so
+  // lookup at render time is required. Branch list rarely changes; single fetch OK.
+  const [branchesMap, setBranchesMap] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [filterQuery, setFilterQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -52,15 +57,28 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
     [customers, selectedIds],
   );
 
-  // Fetch all cloned customers
+  // Fetch all cloned customers + branches (parallel — branches are universal)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
 
-    getAllCustomers()
-      .then(data => {
-        if (!cancelled) setCustomers(data);
+    Promise.all([
+      getAllCustomers(),
+      // V81-fix4 (Bug "branches มั่ว"): listBranches() with allBranches:true so we get
+      // every branch regardless of selector; needed for ID→name lookup on customer cards.
+      listBranches({ allBranches: true }).catch(() => []),
+    ])
+      .then(([customerData, branchData]) => {
+        if (cancelled) return;
+        setCustomers(customerData);
+        const map = new Map();
+        for (const b of (branchData || [])) {
+          if (b?.id) map.set(b.id, { id: b.id, name: b.name || b.id });
+          // Some branch docs may store the canonical id under `branchId` field too
+          if (b?.branchId && b.branchId !== b.id) map.set(b.branchId, { id: b.id, name: b.name || b.id });
+        }
+        setBranchesMap(map);
       })
       .catch(err => {
         console.error('[CustomerListTab] Failed to load customers:', err);
@@ -269,6 +287,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
                       accentColor={ac}
                       theme={theme}
                       mode="cloned"
+                      branchesMap={branchesMap}
                       onView={selectMode ? null : onViewCustomer}
                       onDeleteClick={selectMode ? null : (cust) => setDeletingCustomer(cust)}
                     />
