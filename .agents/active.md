@@ -1,88 +1,50 @@
 ---
-updated_at: "2026-05-16 EOD+1 SESSION-END — V75 DEPLOYED ✓✓✓ (Firebase rules + Vercel both LIVE; backfill --apply ran clean; awaiting Rule Q L1 hands-on by user)"
-status: "DEPLOYED — V75 Items 1+2+3+4 LIVE on https://lover-clinic-app.vercel.app; firestore.rules v35 LIVE with be_fb_configs match"
+updated_at: "2026-05-16 NIGHT — V76+V77 saga DEPLOYED (V77-quater Vercel LIVE; V77-quinquies data fix)"
+status: "SHIPPED — chat per-branch + whole-fleet backup button + 4-round V51-migration-gap fixes. Awaiting Rule Q L1."
 branch: "master"
-last_commit: "docs(V75): correct commits-ahead count 29 → 26 (git log truth)"
-tests: "~210+ V75 assertions PASS across 17 test files. Full vitest 10760/10775 PASS (99.86%) — 3 pre-existing V71 failures. Build clean ✓ 23.41s. Probe-Deploy-Probe 6/6 PRE + 6/6 POST + cleanup ✓."
+last_commit: "11044de fix(V77-quinquies): backfill responseTimeMs on chat_history docs (818 docs)"
+tests: "All V76/V77 test files PASS (~80 V77 + 28 V76); full vitest deferred. Build clean ✓ 2.61s."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "V75 LIVE — Firebase rules v35 deployed + Vercel build 2m complete at 2026-05-16T11:25Z"
-firestore_rules_version: "v35 LIVE (V75 be_fb_configs match added)"
-v75_commits_ahead_of_prod: 0
+production_commit: "4d0edcd — V77-quater Vercel LIVE @ 2026-05-16T12:41Z; V77-quinquies (11044de) data-only no deploy"
+firestore_rules_version: "v35 LIVE"
+v75_commits_ahead_of_prod: 1
 ---
 
 # Active Context
 
-## State (session 2 — EOD+1 wrap)
+## State
 
-- **~29 V75 commits ahead of prod**; master clean except untracked skill dirs (untouched this session)
-- **Items SHIPPED architecturally**:
-  - **Item 1** ✓ CustomerDetailView 4-button row polish (session 1)
-  - **Item 2** ✓ Whole-fleet customer backup — CLI export (`--all-customers`) + endpoint + CLI restore + AV56 (session 1 + session 2 Tasks 22, 28). UI modals (WholeFleetBackupModal / RestoreModal / BackupManagerTab whole-fleet wire) DEFERRED to V75-bis.
-  - **Item 3** ✓ Chat per-branch — webhook resolvers + Rule M backfill script + BSA reader (BS-17) + ChatPanel migration + `/api/admin/fb-test` (Task 14) + FbSettingsTab (Task 15) + nav wire (Task 16) + firestore.rules + Probe #12 (session 1 + session 2)
-  - **Item 4** ✓ Chat tab mute helper + AdminDashboard wrapper migration + AV58 + Task 32 extensions
-- **V-entry shipped** (Task 38): compact + verbose in `.claude/rules/00-session-start.md` § 2 + `.claude/rules/v-log-archive.md`
+- **V76 + V77 (a/b/c/-bis/-ter/-quater/-quinquies) all SHIPPED**. 2 prod deploys this session (Vercel + Firebase rules).
+- **4 Rule M backfills applied**: V76 (3,281 chat_history → นครราชสีมา), V77-bis (1 chat_conv empty), V77-quater (69 offHours flip), V77-quinquies (818 responseTimeMs recompute).
+- master `11044de` = `4d0edcd` (V77-quater LIVE) + V77-quinquies data-only.
 
-## Session 2 commits (this — EOD+1)
+## What this session shipped
 
-```
-Task 14: feat(V75 Item 3): /api/admin/fb-test endpoint
-Task 15: feat(V75 Item 3): FbSettingsTab.jsx — per-branch FB Page settings
-Task 16: feat(V75 Item 3): wire fb-settings tab into nav + permissions + dashboard
-Task 22: feat(V75 Item 2): /api/admin/whole-fleet-customer-restore endpoint
-Task 28: feat(V75 Item 2): scripts/whole-fleet-customer-restore.mjs CLI
-Task 29: test(V75 Item 2): MAHA-ADVERSARIAL test bank for whole-fleet backup
-Task 30: test(V75 Item 3 CRITICAL): นครราชสีมา continuity verification
-Task 31: test(V75 Item 3): Rule I full-flow simulate — 5-layer chat chain
-Task 32: test(V75 Item 4): extend AV58 cross-surface scope audit
-Task 38: docs(V75): V-entry compact + verbose
-Task 40: docs(V75 state finalize): active.md + SESSION_HANDOFF.md  ← (this commit)
-```
+- **V76** (chat_history BSA) + AV59 invariant + Rule M backfill (3,281 docs → นครราชสีมา)
+- **V77a** (ConnectionSettings sub-view RIPPED -180 LOC)
+- **V77b/c** (📦 "สำรองลูกค้าทุกคน" button + endpoint + WholeFleetBackupModal + vercel.json maxDuration:300)
+- **V77-bis** (webhook hardcoded BR-NAKHON fallback + backfill 1 chat doc)
+- **V77-ter** (AdminDashboard isChatActive V51 cs.chatHours* field migration)
+- **V77-quater** (ChatPanel.isWithinChatHours V51 sibling reader — same class as V77-ter, missed cross-file grep) + backfill 69 offHours-wrongly-tagged docs
+- **V77-quinquies** (818 chat_history docs responseTimeMs recomputed — "ตอบล่าสุด" badge fix)
+- Checkpoint: `.agents/sessions/2026-05-16-v76-v77-saga.md`
 
-## Next action (user-triggered)
+## Class-of-bug lesson (Rule P)
 
-1. **User authorizes "deploy"** → combined `vercel --prod` + `firebase deploy --only firestore:rules` + Probe-Deploy-Probe (8 probes incl. #11 V74 + #12 V75 be_fb_configs)
-2. **After deploy**: admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot; stamps legacy chat_conversations with นครราชสีมา branchId)
-3. **Rule Q L1 hands-on** by user — test Items 1, 3, 4 per spec § 8 acceptance scenarios on real prod (multi-device per spec)
-4. **V75-bis follow-up session** continues with: Tasks 24-26 (UI modals for whole-fleet) + Tasks 33-34 (live admin-SDK e2e) + Tasks 35-37 (Playwright L1 specs) + cosmetic refactor (extract loadAndVerifyBackup)
+V51 per-branch settings migration created 3 readers of pre-V51 field names. V77-ter fixed 1; V77-quater fixed 2 more after user found "นอกเวลา" tag bug. Cross-file grep at V77-ter would have caught all 3. Rule P 7-step Step 3 (cross-file grep) MUST run BEFORE fix-and-ship. My omission cost user 2 extra rounds.
+
+## Next action (user Rule Q L1 on prod — multi-device)
+
+1. **V76 history filter**: ทดลอง 1 / พระราม 3 + ⏰ history → empty; นครราชสีมา → 3,281 chats
+2. **V77a**: chat tab header → ⚙ button gone; empty-state CTA → Backend tabs
+3. **V77b/c**: Backend → จัดการ Backup → 📦 modal → start → manifest.json download
+4. **V77-ter + quater**: chime continuous sound within 11:15-20:45 (Mon-Fri) / 10:15-19:45 (Sat-Sun) AND chat_history NO "ลูกค้าทักนอกเวลา" tag for chats within hours AND "ตอบล่าสุด: <X นาที" badge present for resolved chats
+5. **V77-quinquies**: every old chat_history (818 backfilled) now shows ตอบล่าสุด badge
+
+If any fail → /systematic-debugging Phase 1 (cross-file grep MANDATORY this time).
 
 ## Outstanding user-triggered actions
 
-✓ Combined `vercel --prod` + `firebase deploy --only firestore:rules` — **DEPLOYED 2026-05-16T11:25Z**
-✓ `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` — **RAN, 0 writes** (collection was already clean — idempotent; audit doc `be_admin_audit/v75-chat-conversation-branch-backfill-1778930762379-e74b206f`)
-⏳ **Rule Q L1 multi-device hands-on by USER** (cannot be done by Claude — needs real devices)
-
-### Rule Q L1 acceptance checklist (per spec § 8)
-
-Open https://lover-clinic-app.vercel.app on real device(s) + walk through:
-
-**Item 1 — Button polish** ✓ scenario 1:
-- [ ] Customer detail page (e.g. LC-26000001) → 4 buttons (`แก้ไข`/`ผูก LINE`/`💾 สำรอง`/`ลบลูกค้า`) single row, equal heights, no wrap
-
-**Item 2 — Whole-fleet backup** (UI deferred to V75-bis; CLI works today):
-- [ ] CLI test: `node scripts/customer-backup-export.mjs --all-customers` (dry-run, no --apply) → prints customer count + manifestHash preview
-- [ ] (skip scenarios 2-3 in spec until V75-bis UI ships)
-
-**Item 3 — Chat per-branch** ✓ scenarios 4, 5, 6:
-- [ ] **CONTINUITY (สาขานครราชสีมา)**: switch to นครราชสีมา → chat tab → existing chats visible identical to pre-V75; LineSettingsTab → existing creds visible; **NEW** FbSettingsTab → auto-seed banner + pre-populated form from clinic_settings/chat_config → click save → no broken state
-- [ ] **New branch** (ทดลอง 1): switch → chat tab → empty state; LineSettings → empty form; set up creds → save → simulate LINE message → chat appears under ทดลอง 1 only (NOT นครราชสีมา)
-- [ ] **FB setup**: ทดลอง 1 → FbSettingsTab → save creds → simulate FB Page message → chat under ทดลอง 1 only
-
-**Item 4 — Chat noti mute** ✓ scenarios 7, 8:
-- [ ] Doctor's machine: Frontend chat tab → 🔔 click → flips to 🔕 + banner; send test LINE → no chat sound; appointment due-chime STILL rings; V73 staff-chat STILL rings; 🔕 click → 🔔 + sound resumes
-- [ ] Per-device isolation: front desk unmuted + doctor muted; test LINE → only front desk hears sound (verifies localStorage scope)
-
-If any scenario fails → report back; Claude can debug + ship V75-bis fix in next session.
-
-## V75-bis backlog (deferred this session)
-
-- Task 21: `/api/admin/whole-fleet-customer-backup-export` endpoint (UI route — CLI works today)
-- Task 24: WholeFleetBackupModal.jsx UI
-- Task 25: WholeFleetRestoreModal.jsx UI (two-stage preview→confirm)
-- Task 26: BackupManagerTab whole-fleet wire (entry button + list type-badge)
-- Tasks 33-34: Live admin-SDK e2e against real prod with TEST-V75-WF-CUST-* fixtures (Rule Q L2)
-- Tasks 35-37: Playwright L1 specs (Rule Q PREFERRED)
-- Cosmetic: extract `loadAndVerifyBackup` from `api/admin/customer-restore.js` to shared module so whole-fleet-restore reuses (zero behavior change)
-
-## Per Rule Q (V66, mandatory)
-
-V75 architectural code shipped + mock + source-grep + Rule I full-flow simulate tests PASS (Tier 2 maha-adversarial pattern). **L1 hands-on verification is USER'S responsibility per spec § 8.** Until L1 confirms on real prod, V75 status = "code shipped, L1-pending". This is NOT a "verified" claim — this is "code complete, user-gated for deploy + L1 verification".
+- Rule Q L1 hands-on by user multi-device
+- (next session) Full vitest run (Rule N batch-end)
+- (next session) Verbose V76/V77 entries in v-log-archive.md

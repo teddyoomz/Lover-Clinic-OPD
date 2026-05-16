@@ -43,11 +43,46 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EOD+1 SESSION-END — **V75 ARCHITECTURALLY COMPLETE** · master=~29 V75 commits ahead of prod=`b47a6e6` · All 4 items shipped architecturally (Item 1 polish ✓ · Item 2 whole-fleet CLI+endpoint+CLI restore ✓ — UI modals V75-bis · Item 3 chat per-branch + FbSettingsTab + nav wire ✓ · Item 4 chat tab mute ✓) · AV56+AV57+AV58 + BS-17 + Probe #12 + V21 fixups (3) + V-entry compact+verbose ✓ · awaiting user "deploy" + Rule M backfill + Rule Q L1
+- **Date last updated**: 2026-05-16 NIGHT — **V75 + V76 + V77 (a/b/c/-bis/-ter/-quater/-quinquies) DEPLOYED** · prod LIVE · 4 Rule M backfills applied · awaiting Rule Q L1 hands-on
 - **Branch**: `master`
-- **Last commit**: Task 40 docs(V75 state finalize): active.md + SESSION_HANDOFF.md
-- **Test count**: **~210+ V75 assertions PASS across 17 V75 test files** (~140 session 1 + ~80 session 2). Full vitest queued; build verify queued (per Rule N batch-end discipline).
-- **Deploy state**: prod=`b47a6e6` (V73 + V74 LIVE since 2026-05-16 EOD). V75 batch staged in repo (~29 commits + new be_fb_configs rule) — awaiting explicit "deploy" THIS turn per V18. After deploy → admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot; stamps legacy chats with นครราชสีมา branchId).
+- **Last commit**: `11044de fix(V77-quinquies): backfill responseTimeMs on chat_history docs (818 docs)`
+- **Test count**: ~280+ V75/V76/V77 assertions PASS across ~20 test files; full vitest deferred (Rule N batch-end). Build clean ✓ 2.61s.
+- **Deploy state**: prod=`4d0edcd` (V77-quater Vercel LIVE @ 2026-05-16T12:41Z). V77-quinquies (`11044de`) is data-only (Rule M backfill, no deploy needed). 2 prod deploys this session: V75+V76+V77b/c at 12:33Z + V77-quater at 12:41Z. 4 Rule M backfills: V76 (3,281 chat_history) + V77-bis (1 chat_conv) + V77-quater (69 offHours-flip) + V77-quinquies (818 responseTimeMs).
+
+### Session 2026-05-16 NIGHT — V76+V77 saga DEPLOYED (5 fix rounds — V51 migration gap class-of-bug)
+
+After V77-ter (chat hours V51 field migration) shipped, user found 2 more V51-migration siblings:
+- **V77-quater**: `ChatPanel.isWithinChatHours` (write-time offHours stamp on chat_history) had pre-V51 field reader. 69 chats wrongly tagged "ลูกค้าทักนอกเวลา". Fix: V51 nested-shape + useEffectiveClinicSettings merge in ChatPanel + backfill 69 docs offHours→false.
+- **V77-quinquies**: 818 chat_history docs had `responseTimeMs:null` (handleResolve sets null when offHours=true). Even after V77-quater flipped offHours, responseTimeMs stayed null → "ตอบล่าสุด" badge missing. Fix: recompute from resolvedAt - lastCustomerMessageAt; backfilled 818 docs.
+
+**Lesson**: V77-ter Rule P 7-step Step 3 cross-file grep was DEFERRED → caused 2 extra user-rage rounds. Cross-file grep MUST run BEFORE fix-and-ship for class-of-bug expansion (V51 migration gap = AV29-class).
+
+2 prod deploys this session: V75+V76+V77b/c at 12:33Z + V77-quater at 12:41Z. 4 Rule M backfills applied. Checkpoint: `.agents/sessions/2026-05-16-v76-v77-saga.md`.
+
+### Session 2026-05-16 EOD+1 LATE — V76 + V77 saga DEPLOYED (chat per-branch close + 📦 backup button)
+
+After V75 deploy (earlier this session), user's Rule Q L1 hands-on found 3 real bugs in 3 rounds — every fix landed + deployed same session:
+
+**V76** — chat_history BSA sibling-reader missed by V75:
+- chat_history (3,281 docs) had NO branchId filter → cross-branch leak in ⏰ history view
+- Fix: `listenToChatHistoryByBranch` Layer 1+2 in backendClient.js + scopedDataLayer.js; ChatPanel reader+writer migrated; AV59 invariant
+- Rule M backfill `scripts/v76-backfill-chat-history-branchid.mjs --apply` ran: 3,281 → นครราชสีมา (audit `be_admin_audit/v76-chat-history-branch-backfill-1778932587641-d3a16bf4`)
+
+**V77a** — frontend chat config rip: ConnectionSettings sub-view DELETED (-180 LOC) per user "ตัดหน้านี้ออกไป". Admin per-branch ONLY via Backend tabs.
+
+**V77b/c** — 📦 "สำรองลูกค้าทุกคน" button per user "ไหนปุ่ม backup ลูกค้าทุกคน". New `/api/admin/whole-fleet-customer-backup-export` endpoint + WholeFleetBackupModal + BackupManagerTab wire + vercel.json maxDuration:300.
+
+**V77-bis** — webhook empty-branchId fallback: `LOVER_DEFAULT_BRANCH_ID` env not set in Vercel runtime → resolver returned `''` → new live chat doc with `branchId: ""` leaked across branches. Fix: hardcoded `BR-1777873556815-26df6480` last-resort fallback in line+fb resolvers. Rule M backfill 1 doc.
+
+**V77-ter** — V51 chat-hours field migration gap (per user "มันก็มี setting เวลาของ chat อยู่แล้ว มึงไม่ดูโค๊ดเก่า"): isChatActive was reading pre-V51 `cs.chatOpenTime/CloseTime` → undefined → fell to default 10:00-19:00 → chime gated off after 19:00 despite user config 11:15-20:45. Fix: read V51 `cs.chatHours{AlwaysOn,MonFri,SatSun}` canonical fields; legacy kept as fallback.
+
+Deploy: combined Vercel + Firebase rules + Probe-Deploy-Probe ✓ 6/6 pre + 6/6 post + cleanup.
+
+Class-of-bug pattern lock: V12 multi-reader-sweep at COLLECTION FAMILY level (V76) + per-branch settings migration gap (V77-ter, AV29-class).
+
+Checkpoint: `.agents/sessions/2026-05-16-v76-v77-saga.md`.
+
+**Per Rule Q V66**: NOT claiming verified. User L1 hands-on required (4 scenarios in active.md). Three claim-then-bug rounds this session prove L1 is the only real verification.
 
 ### Session 2026-05-16 EOD+1 SESSION-END — V75 architectural completion (~9 commits this session)
 
