@@ -3,10 +3,13 @@
 // V73 Feature B (2026-05-16) — Body rendered via StaffChatMessageBody (parses @mentions + LC- / BA- links).
 // V73 Feature C (2026-05-16) — Reply button on hover + quote-card render when replyTo set.
 // V73 Feature F (2026-05-16) — Attachment thumbnail + click-to-open lightbox.
+// V73 color-picker (2026-05-18) — sender-chosen color drives name + bubble.
+//   Past messages without senderColor → default rose (own) / sky (other).
 import React, { useState } from 'react';
 import { Reply } from 'lucide-react';
 import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
+import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 
 function formatTime(createdAt) {
   if (!createdAt) return '';
@@ -19,6 +22,13 @@ function formatTime(createdAt) {
 export function StaffChatMessage({ message, isOwn, onReply }) {
   // V73 Feature F — local lightbox toggle for attachment view.
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  // V73 color-picker (2026-05-18) — resolve sender color from message doc.
+  const senderColor = resolveSenderColor(message, isOwn);
+  const bubbleStyle = {
+    backgroundColor: hexToRgba(senderColor, 0.20),
+    borderColor: hexToRgba(senderColor, 0.45),
+  };
+  const nameStyle = { color: senderColor };
   return (
     <div
       data-testid="staff-chat-message"
@@ -35,27 +45,26 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
         </div>
       )}
       {/* V73 L1 fix (2026-05-18) — show displayName on ALL messages incl. own.
-          Pre-fix: own messages had no name → user-curse report "ชื่อของคนส่งไม่
-          แสดงในแชท". Color-coded: rose for own, sky for others. */}
+          V73 color-picker (2026-05-18) — name color uses sender-chosen hex
+          (resolved via resolveSenderColor with fallback to default rose/sky).
+          Inline style required since hex is dynamic (cannot pre-generate
+          Tailwind classes for arbitrary user-picked colors). */}
       {message.displayName && (
         <div
           data-testid={`staff-chat-message-name-${message.id}`}
-          className={`text-[10px] font-bold mb-0.5 px-1 ${
-            isOwn
-              ? 'text-rose-700 dark:text-rose-300'
-              : 'text-sky-700 dark:text-sky-300'
-          }`}
+          className="text-[10px] font-bold mb-0.5 px-1"
+          style={nameStyle}
         >
           {message.displayName}
         </div>
       )}
       <div className="flex items-end gap-1">
         <div
-          className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
-            isOwn
-              ? 'bg-rose-600/20 border border-rose-500/40 text-rose-900 dark:text-rose-100 rounded-br-md'
-              : 'bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-primary)] rounded-bl-md'
+          className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words border text-[var(--tx-primary)] ${
+            isOwn ? 'rounded-br-md' : 'rounded-bl-md'
           }`}
+          style={bubbleStyle}
+          data-testid={`staff-chat-message-bubble-${message.id}`}
         >
           {message.attachmentUrl && (
             <button

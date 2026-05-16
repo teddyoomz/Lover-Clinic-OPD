@@ -5,6 +5,10 @@
 const KEY_NAME = 'staffChatName';
 const KEY_DEVICE = 'staffChatDeviceId';
 const KEY_MUTED = 'staffChatMuted';
+// V73 color-picker (2026-05-18) — per-device sender color.
+const KEY_COLOR = 'staffChatColor';
+const DEFAULT_COLOR = '#E11D48';  // rose-600; matches DEFAULT_OWN_COLOR in staffChatColor.js
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 export function getDisplayName() {
   const v = localStorage.getItem(KEY_NAME);
@@ -37,4 +41,21 @@ export function getMuted() {
 
 export function setMuted(value) {
   localStorage.setItem(KEY_MUTED, value ? '1' : '0');
+}
+
+// V73 color-picker (2026-05-18) — per-device sender color.
+// User picks free hex via native <input type="color"> in NamePicker.
+// Each outgoing message embeds this color so cross-device viewers render
+// the sender's chosen color.
+export function getColor() {
+  const v = localStorage.getItem(KEY_COLOR);
+  if (typeof v === 'string' && HEX_RE.test(v)) return v;
+  return DEFAULT_COLOR;
+}
+
+export function setColor(hex) {
+  if (typeof hex !== 'string' || !HEX_RE.test(hex)) {
+    throw new Error('STAFF_CHAT_COLOR_INVALID');
+  }
+  localStorage.setItem(KEY_COLOR, hex);
 }

@@ -81,8 +81,13 @@ describe('V73.L1 — Bug C: sender name displays on ALL messages (incl. own)', (
     expect(message).toMatch(/data-testid=\{?`?staff-chat-message-name-\$\{message\.id\}`?\}?/);
   });
 
-  it('C.3 own + other styled distinctly (rose vs sky)', () => {
-    expect(message).toMatch(/isOwn[\s\S]*text-rose-700[\s\S]*text-sky-700/);
+  it('C.3 name color uses inline style with sender hex (V73 color-picker 2026-05-18)', () => {
+    // Pre-color-picker: name color was Tailwind utility class (rose for own, sky for other).
+    // Post-color-picker (2026-05-18): name color is sender-chosen hex via inline style={nameStyle}.
+    // The legacy own/other distinction now comes from resolveSenderColor's fallback
+    // (DEFAULT_OWN_COLOR rose / DEFAULT_OTHER_COLOR sky) when senderColor field absent.
+    expect(message).toMatch(/style=\{nameStyle\}/);
+    expect(message).toMatch(/resolveSenderColor\(message,\s*isOwn\)/);
   });
 });
 

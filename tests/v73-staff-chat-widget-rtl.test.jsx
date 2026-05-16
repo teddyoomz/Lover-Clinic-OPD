@@ -228,10 +228,13 @@ describe('V73.W5 StaffChatNamePicker', () => {
     expect(screen.getByTestId('staff-chat-name-picker-save')).toBeEnabled();
   });
 
-  it('W5.4 click save calls confirmName(value)', () => {
+  it('W5.4 click save calls confirmName(name, color) — V73 color-picker 2026-05-18 extended signature', () => {
+    // Pre-color-picker: confirmName(name).
+    // Post-color-picker (2026-05-18): confirmName(name, color) — second arg is sender hex
+    // from native <input type="color"> default value (initialColor || '#E11D48').
     render(<StaffChatWidget user={{ uid: 'U1' }} needsPublicAuth={false} />);
     fireEvent.change(screen.getByTestId('staff-chat-name-picker-input'), { target: { value: 'ดร.วี' } });
     fireEvent.click(screen.getByTestId('staff-chat-name-picker-save'));
-    expect(confirmName).toHaveBeenCalledWith('ดร.วี');
+    expect(confirmName).toHaveBeenCalledWith('ดร.วี', expect.stringMatching(/^#[0-9a-fA-F]{6}$/));
   });
 });

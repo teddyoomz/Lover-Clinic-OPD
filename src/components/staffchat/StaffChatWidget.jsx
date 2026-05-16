@@ -70,6 +70,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
           onConfirm={chat.confirmName}
           onCancel={chat.nameEditMode ? chat.closeNameEdit : (() => chat.setNamePickerOpen(false))}
           initialValue={chat.nameEditMode ? chat.displayName : ''}
+          initialColor={chat.color}
         />
       )}
     </>

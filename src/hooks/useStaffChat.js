@@ -38,6 +38,9 @@ import {
   getDisplayName,
   getDeviceId,
   getMuted,
+  // V73 color-picker (2026-05-18) — per-device sender color helpers
+  getColor,
+  setColor,
 } from '../lib/staffChatIdentity.js';
 // V73 Feature F (T15) — uploadAttachment lets the composer upload a resized
 // image blob to Storage and inject the attachment metadata into the next
@@ -69,6 +72,9 @@ export function useStaffChat() {
   // the header chip + composer NamePicker re-render after edit. localStorage
   // is source of truth; this state is a cache for re-render trigger.
   const [currentDisplayName, setCurrentDisplayName] = useState(() => getDisplayName());
+  // V73 color-picker (2026-05-18) — per-device sender color, cached for
+  // re-render trigger on edit. localStorage is source of truth.
+  const [currentColor, setCurrentColor] = useState(() => getColor());
   // V73 name-edit — controls whether namePickerOpen was triggered by edit
   // (pre-fill current value) vs first-send (empty).
   const [nameEditMode, setNameEditMode] = useState(false);
@@ -176,6 +182,9 @@ export function useStaffChat() {
         displayName,
         deviceId,
         text,
+        // V73 color-picker (2026-05-18) — embed current color in outgoing
+        // message so receivers render with sender's chosen color.
+        senderColor: getColor(),
         ...extras,
       });
     } catch (e) {
@@ -187,10 +196,21 @@ export function useStaffChat() {
     });
   }, [selectedBranchId, deviceId]);
 
-  const confirmName = useCallback(async (name) => {
+  const confirmName = useCallback(async (name, color) => {
     const { setDisplayName } = await import('../lib/staffChatIdentity.js');
     setDisplayName(name);
     setCurrentDisplayName(name);  // V73 name-edit — refresh header chip + mention candidates
+    // V73 color-picker (2026-05-18) — optional color persisted alongside
+    // name. Validated by setColor (throws on bad hex; we swallow to keep the
+    // name-save flow non-blocking — bad hex stays at previous valid value).
+    if (typeof color === 'string') {
+      try {
+        setColor(color);
+        setCurrentColor(color);
+      } catch {
+        // Invalid hex — keep previous color, do not block name save
+      }
+    }
     setNamePickerOpen(false);
     setNameEditMode(false);
     if (pendingSendPayload) {
@@ -204,10 +224,12 @@ export function useStaffChat() {
   // current name). Stays separate from the send-gated first-send open path.
   // Re-sync currentDisplayName from localStorage in case it was modified
   // externally (DevTools / cross-tab) between mount and edit-click — the
-  // useState init only fires once at mount.
+  // useState init only fires once at mount. V73 color-picker — same re-sync
+  // for currentColor.
   const openNameEdit = useCallback(() => {
     const latest = getDisplayName();
     if (latest) setCurrentDisplayName(latest);
+    setCurrentColor(getColor());
     setNameEditMode(true);
     setNamePickerOpen(true);
   }, []);
@@ -241,5 +263,7 @@ export function useStaffChat() {
     nameEditMode,
     openNameEdit,
     closeNameEdit: () => { setNameEditMode(false); setNamePickerOpen(false); },
+    // V73 color-picker (2026-05-18) — current sender hex color (for NamePicker pre-fill).
+    color: currentColor,
   };
 }

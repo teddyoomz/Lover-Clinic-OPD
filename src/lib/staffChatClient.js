@@ -11,6 +11,8 @@ import { serverTimestamp } from 'firebase/firestore';
 export function buildMessageDoc({
   branchId, displayName, text, deviceId,
   mentions, replyTo, attachmentUrl, attachmentSize, attachmentMimeType,
+  // V73 color-picker (2026-05-18) — optional sender hex color
+  senderColor,
 } = {}) {
   if (!branchId || typeof branchId !== 'string') throw new Error('STAFF_CHAT_BRANCH_REQUIRED');
   if (!displayName || typeof displayName !== 'string') throw new Error('STAFF_CHAT_NAME_REQUIRED');
@@ -41,6 +43,13 @@ export function buildMessageDoc({
     doc.attachmentUrl = attachmentUrl;
     doc.attachmentSize = Number(attachmentSize) || 0;
     doc.attachmentMimeType = String(attachmentMimeType || 'image/jpeg');
+  }
+  // V73 color-picker (2026-05-18) — optional senderColor (hex). Receivers
+  // render bubble + name with this color. Omit if invalid (defensive — keep
+  // Firestore-undefined-safe per V14 lesson). Past messages w/o this field
+  // fall back to default rose/sky via resolveSenderColor on the reader side.
+  if (typeof senderColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(senderColor)) {
+    doc.senderColor = senderColor;
   }
   return doc;
 }

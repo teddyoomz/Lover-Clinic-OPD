@@ -46,12 +46,18 @@ describe('V73.NE1 — NamePicker accepts initialValue + edit-mode UX', () => {
     expect(picker).toMatch(/'แก้ชื่อในแชท'[\s\S]*'ตั้งชื่อในแชท'/);
   });
 
-  it('NE1.5 picker save button label flips (เปลี่ยนชื่อ vs บันทึก)', () => {
-    expect(picker).toMatch(/isEdit\s*\?\s*'เปลี่ยนชื่อ'\s*:\s*'บันทึก'/);
+  it('NE1.5 picker save button label is "บันทึก" (V73 color-picker 2026-05-18 unified both modes)', () => {
+    // Pre-color-picker: edit-mode button said "เปลี่ยนชื่อ", first-send said "บันทึก".
+    // Post-color-picker: both modes save name + color (canSave checks either changed).
+    // Unified to "บันทึก" since user might be saving only color change in edit mode.
+    expect(picker).toMatch(/>\s*\{isEdit\s*\?\s*'บันทึก'\s*:\s*'บันทึก'\}\s*</);
   });
 
-  it('NE1.6 picker save button disabled when edit + name unchanged (no-op guard)', () => {
-    expect(picker).toMatch(/isEdit\s*&&\s*trimmed\s*===\s*initialValue\.trim\(\)/);
+  it('NE1.6 picker save disabled gate uses canSave (combines name + color change checks)', () => {
+    // Pre-color-picker: disabled when edit + name unchanged.
+    // Post-color-picker: canSave = valid && (nameChanged || colorChanged).
+    expect(picker).toMatch(/disabled=\{!canSave\}/);
+    expect(picker).toMatch(/const\s+canSave\s*=\s*valid\s*&&\s*\(nameChanged\s*\|\|\s*colorChanged\)/);
   });
 
   it('NE1.7 picker useState init handles missing initialValue gracefully', () => {

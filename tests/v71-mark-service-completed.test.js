@@ -29,7 +29,10 @@ describe('V71 markAppointmentServiceCompleted', () => {
     vi.clearAllMocks();
   });
 
-  it('M1.1 writes serviceCompletedAt:serverTimestamp + serviceCompletedBy:uid to be_appointments doc', async () => {
+  it('M1.1 writes serviceCompletedAt + serviceCompletedBy + wasServiceCompleted to be_appointments doc', async () => {
+    // V71.B-bis (2026-05-18) — added wasServiceCompleted persistent flag to
+    // support unlimited mark ↔ unmark toggle. Flag stamped on EVERY mark
+    // (idempotent; remains true forever once set; unmark does not clear).
     await markAppointmentServiceCompleted('BA-test-1', 'uid-staff-1');
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [docRef, payload] = updateDoc.mock.calls[0];
@@ -37,6 +40,7 @@ describe('V71 markAppointmentServiceCompleted', () => {
     expect(payload).toEqual({
       serviceCompletedAt: '__SERVER_TS__',
       serviceCompletedBy: 'uid-staff-1',
+      wasServiceCompleted: true,
     });
   });
 
