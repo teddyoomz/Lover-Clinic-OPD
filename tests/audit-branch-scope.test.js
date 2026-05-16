@@ -1310,3 +1310,91 @@ describe('AV39 Phase 26.2f — TreatmentReadOnlyMirror read-only contract', () =
     expect(src).toMatch(/mirror-img-zoom/);
   });
 });
+
+// ─── BS-17 — chat_conversations branch-scope discipline (V75 Item 3) ─────────
+describe('BS-17 — chat_conversations branch-scope discipline (V75 Item 3)', () => {
+  it('BS-17.1 — backendClient.js exports listenToChatConversationsByBranch', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf8');
+    expect(src).toMatch(/export function listenToChatConversationsByBranch/);
+  });
+
+  it('BS-17.2 — scopedDataLayer.js exports listenToChatConversationsByBranch (Layer 2)', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+    expect(src).toMatch(/export const listenToChatConversationsByBranch/);
+  });
+
+  it('BS-17.3 — Layer 2 wrapper calls resolveSelectedBranchId for empty opts', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+    const start = src.indexOf('export const listenToChatConversationsByBranch');
+    const block = src.slice(start, start + 600);
+    expect(block).toMatch(/resolveSelectedBranchId/);
+  });
+
+  it('BS-17.4 — backendClient listener safe-by-default pattern (V54/BS-13 mirror)', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/lib/backendClient.js', 'utf8');
+    const start = src.indexOf('export function listenToChatConversationsByBranch');
+    const block = src.slice(start, start + 1000);
+    // Empty branchId + !allBranches → onChange([]) + return () => {}
+    expect(block).toMatch(/onChange\(\[\]\)/);
+    expect(block).toMatch(/return\s+\(\)\s*=>\s*\{\}/);
+  });
+
+  it('BS-17.5 — webhook chat_conversations writes stamp branchId (AV57 cross-link)', async () => {
+    const fs = await import('node:fs');
+    const lineSrc = fs.readFileSync('api/webhook/line.js', 'utf8');
+    const fbSrc = fs.readFileSync('api/webhook/facebook.js', 'utf8');
+    expect(lineSrc).toMatch(/branchId/);
+    expect(fbSrc).toMatch(/branchId/);
+  });
+
+  it('BS-17.6 — SKILL.md BS-17 entry present (sanctioned exceptions: NONE)', async () => {
+    const fs = await import('node:fs');
+    const skill = fs.readFileSync('.agents/skills/audit-branch-scope/SKILL.md', 'utf8');
+    expect(skill).toMatch(/BS-17/);
+  });
+
+  it('BS-17.7 — V75 marker comments present in backendClient + scopedDataLayer additions', async () => {
+    const fs = await import('node:fs');
+    const bc = fs.readFileSync('src/lib/backendClient.js', 'utf8');
+    const sdl = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+    expect(bc).toMatch(/V75 Item 3/);
+    expect(sdl).toMatch(/V75 Item 3/);
+  });
+
+  it('BS-17.8 — chat_conversations not directly accessed from UI components (BS-1 mirror)', async () => {
+    // V75 NOTE: ChatPanel.jsx still accesses chat_conversations directly
+    // pre-Task-19 (listener migration to scopedDataLayer). After Task 19
+    // lands, ChatPanel will import listenToChatConversationsByBranch and
+    // this offender list will be empty. Tracked + closed in Task 19.
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    function walk(dir, list = []) {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) walk(full, list);
+        else if (/\.(js|jsx)$/.test(ent.name)) list.push(full);
+      }
+      return list;
+    }
+    const files = walk('src/components');
+    const offenders = [];
+    for (const f of files) {
+      const src = fs.readFileSync(f, 'utf8');
+      if (/chat_conversations/.test(src) && /from\s+['"]firebase\/firestore['"]/.test(src)) {
+        const stripped = src
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/[^\n]*/g, '');
+        if (/chat_conversations/.test(stripped)) offenders.push(f);
+      }
+    }
+    // Sanctioned (pending Task 19 migration): ChatPanel.jsx. Strict check
+    // reactivates after Task 19 commits the listener swap.
+    const SANCTIONED_PENDING = ['src\\components\\ChatPanel.jsx', 'src/components/ChatPanel.jsx'];
+    const remaining = offenders.filter(f => !SANCTIONED_PENDING.includes(f));
+    expect(remaining).toEqual([]);
+  });
+});

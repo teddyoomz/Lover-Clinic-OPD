@@ -320,6 +320,19 @@ export const listenToStaffChatMessages = (opts = {}, onChange, onError) =>
   raw.listenToStaffChatMessages(opts, onChange, onError);
 export const addStaffChatMessage = (messageDoc) => raw.addStaffChatMessage(messageDoc);
 
+// V75 Item 3 (2026-05-16) — listenToChatConversationsByBranch wrapper (BS-16).
+// Auto-injects resolveSelectedBranchId() when caller passes {} (BSA Layer 2).
+// Explicit branchId OR allBranches:true bypasses auto-inject.
+// AV57 (webhook write) + BS-16 (UI read) co-enforce branch-scoped chat semantics.
+export const listenToChatConversationsByBranch = (opts = {}, onChange, onError) => {
+  const hasExplicitBranchId = typeof opts.branchId === 'string' && opts.branchId.length > 0;
+  const isAllBranches = opts.allBranches === true;
+  const resolved = (hasExplicitBranchId || isAllBranches)
+    ? opts
+    : { ...opts, branchId: resolveSelectedBranchId() };
+  return raw.listenToChatConversationsByBranch(resolved, onChange, onError);
+};
+
 // Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
 // (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
 // was extended to accept branchId so AppointmentTab can thread the current

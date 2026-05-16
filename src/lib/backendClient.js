@@ -2674,6 +2674,38 @@ export async function addStaffChatMessage(messageDoc) {
   return messageDoc.id;
 }
 
+// V75 Item 3 — listenToChatConversationsByBranch (BSA Layer 1 safe-by-default).
+// Branch-scoped chat_conversations listener; empty branchId + !allBranches →
+// onChange([]) + noop unsub (never falls back to whole-collection query unless
+// allBranches:true explicit). Mirrors listenToStaffChatMessages safe template.
+// AV57 enforces webhook write-side branchId stamp; BS-16 enforces UI readers
+// go through scopedDataLayer wrapper (Layer 2 — auto-injects resolveSelectedBranchId).
+export function listenToChatConversationsByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) {
+    constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  }
+  constraints.push(orderBy('lastMessageAt', 'desc'));
+  const q = query(col, ...constraints);
+  return onSnapshot(
+    q,
+    (snap) => {
+      // V38 spread-order safe: doc.id wins over any stray data.id field.
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (typeof onChange === 'function') onChange(list);
+    },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
 /**
  * Real-time listener for customer's finance summary — bundles 4 listeners
  * into one unsubscribe. Mirrors the {depositBalance, walletBalance, wallets,
