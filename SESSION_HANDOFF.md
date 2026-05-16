@@ -43,11 +43,44 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EOD+1 — **V75 PARTIAL SHIP** · master=`23fe62a` · 20 V75 commits ahead of prod=`b47a6e6` · Items 1+3+4 architecturally complete (button polish + chat per-branch BSA reader + chat tab mute) · Item 2 CLI-only (`customer-backup-export.mjs --all-customers`; endpoint+UI deferred V75-bis) · AV56+AV57+AV58 + BS-17 + Probe #12 shipped · awaiting user "deploy" + Rule M backfill + Rule Q L1
+- **Date last updated**: 2026-05-16 EOD+1 SESSION-END — **V75 ARCHITECTURALLY COMPLETE** · master=~29 V75 commits ahead of prod=`b47a6e6` · All 4 items shipped architecturally (Item 1 polish ✓ · Item 2 whole-fleet CLI+endpoint+CLI restore ✓ — UI modals V75-bis · Item 3 chat per-branch + FbSettingsTab + nav wire ✓ · Item 4 chat tab mute ✓) · AV56+AV57+AV58 + BS-17 + Probe #12 + V21 fixups (3) + V-entry compact+verbose ✓ · awaiting user "deploy" + Rule M backfill + Rule Q L1
 - **Branch**: `master`
-- **Last commit**: `23fe62a feat(V75 Item 2): whole-fleet customer backup CLI (--all-customers) + AV56`
-- **Test count**: **20 V75 test files PASS** (~140 V75 assertions across helper + RTL + source-grep + audit). Full suite NOT run this session (Rule N small-fix discipline) — Task 41 batch-end full run deferred to next session.
-- **Deploy state**: prod=`b47a6e6` (V73 + V74 LIVE since 2026-05-16 EOD). V75 batch staged in repo — awaiting explicit "deploy" THIS turn per V18. After deploy → admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot; stamps legacy chats with นครราชสีมา branchId).
+- **Last commit**: Task 40 docs(V75 state finalize): active.md + SESSION_HANDOFF.md
+- **Test count**: **~210+ V75 assertions PASS across 17 V75 test files** (~140 session 1 + ~80 session 2). Full vitest queued; build verify queued (per Rule N batch-end discipline).
+- **Deploy state**: prod=`b47a6e6` (V73 + V74 LIVE since 2026-05-16 EOD). V75 batch staged in repo (~29 commits + new be_fb_configs rule) — awaiting explicit "deploy" THIS turn per V18. After deploy → admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot; stamps legacy chats with นครราชสีมา branchId).
+
+### Session 2026-05-16 EOD+1 SESSION-END — V75 architectural completion (~9 commits this session)
+
+After the V75 partial-ship checkpoint earlier this same day, this session resumed under user directive "ต่อให้จบ ห้ามหยุด เป็นกฎ เวลาเขียนโค๊ดอะ" (locked as `feedback_no_stop_during_coding.md`) and ran continuously through 11 of the deferred tasks without pausing for check-ins.
+
+**Tasks shipped this session**:
+- **Task 14** ✓ — `/api/admin/fb-test` endpoint (FB Graph proxy mirroring V32-tris-ter-fix CORS pattern); 8 tests PASS
+- **Task 15** ✓ — `src/components/backend/FbSettingsTab.jsx` (per-branch FB Page settings: 4 sections + auto-seed banner + password-toggle); 9 tests PASS
+- **Task 16** ✓ — nav + tabPermissions + BackendDashboard wire for `fb-settings` (4 tests) + V21 fixups (3 count-based tests bumped: master section 22→23, TAB_PERMISSION_MAP 59→60)
+- **Task 22** ✓ — `/api/admin/whole-fleet-customer-restore` endpoint (preview + restore action modes; AV56 confirmManifestHash + WHOLE_FLEET_MANIFEST_TAMPERED; per-customer failure isolation; writeBatch chunked at 450 + Storage copy back); 11 tests PASS
+- **Task 28** ✓ — `scripts/whole-fleet-customer-restore.mjs` Rule M CLI mirror (--backup-ref OR --local-manifest; dry-run+--apply; --confirm-hash override)
+- **Task 29** ✓ — V48 prof-grade MAHA-ADVERSARIAL bank: 8 categories × 28 tests (source-grep universal locks AV56/57/58 + mulberry32×100 property-based + Thai NFC≠NFD/NUL/10K/numeric/empty adversarial + idempotency×5 + cross-branch identity via toString.grep + forward/backward compat + concurrent-mutation snapshot + V48 Tier 2 classifier)
+- **Task 30 CRITICAL** ✓ — นครราชสีมา zero-action CONTINUITY test (5 describe × 15 assertions: backfill idempotency + no-clobber + LINE webhook continuity + FB auto-seed + end-to-end pre/post-migration unified). If this fails, V75 SHIP IS BLOCKED.
+- **Task 31** ✓ — Rule I full-flow simulate 5-layer chat chain (6 F-tests: webhook → write → backfill → backendClient Layer 1 → scopedDataLayer Layer 2 → reader; branch-switch round-trip; allBranches view; adversarial fallback; FB layer mirror; mixed pre/post-V75 unified)
+- **Task 32** ✓ — AV58 extended cross-surface noti scope audit (V73 StaffChatHeader separation + non-ChatPanel sound-trigger walk + Phase 29 recall separation); 10 AV58 tests PASS
+- **Task 38** ✓ — V75 V-entry compact in `.claude/rules/00-session-start.md` § 2 + verbose in `.claude/rules/v-log-archive.md` (5 generalizable architectural lessons + 6 plan-vs-reality adaptations)
+- **Task 40** ✓ — `.agents/active.md` + this SESSION_HANDOFF entry finalized
+
+**Plan-vs-reality adaptations caught + documented**:
+1. `verifyAdminToken` import path: plan said `_lib/verifyAdminToken.js`; actual `_lib/adminAuth.js` with `(req, res) → object|null` signature
+2. fbConfigClient API names: plan said `getFbConfigForBranch`; actual `getFbConfig` (Task 13 DROPPED — direct-Firestore)
+3. Whole-fleet backup format: plan suggested fflate-zip; actual is manifest.json + per-customer SEPARATE blobs (NO zip dep)
+4. PRNG-state gotcha in adversarial tests: shared mulberry32 advances state per call → build base ONCE then clone for variation
+5. BS-17 numbering: V64 already used BS-16, so chat_conversations BSA → BS-17
+
+**V75-bis follow-up backlog** (~10 tasks, NOT blocking deploy):
+- Task 21: `/api/admin/whole-fleet-customer-backup-export` endpoint (UI path — CLI works today via `--all-customers`)
+- Tasks 24-26: WholeFleetBackupModal + RestoreModal + BackupManagerTab whole-fleet wire (UI modals)
+- Tasks 33-34: Live admin-SDK e2e on real prod (Rule Q L2)
+- Tasks 35-37: Playwright L1 specs (Rule Q PREFERRED)
+- Cosmetic refactor: extract `loadAndVerifyBackup` from `customer-restore.js` to shared module so whole-fleet-restore reuses (zero behavior change)
+
+**Per Rule Q (V66, mandatory)**: V75 architectural code shipped + mock + source-grep + Rule I full-flow simulate tests PASS (Tier 2 maha-adversarial). **L1 hands-on verification is USER'S responsibility per spec § 8 acceptance scenarios.** Until L1 confirms on real prod multi-device, V75 status = "code shipped, L1-pending". This is NOT a "verified" claim.
 
 ### Session 2026-05-16 EOD+1 — V75 partial ship (20 commits — Items 1+3+4 complete + Item 2 CLI-only) ★★
 
