@@ -19,9 +19,18 @@ import {
 import AppointmentOpdStepperRow from './AppointmentOpdStepperRow.jsx';
 import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 
+// V73-BS1 (2026-05-18) — confirmed label expanded to "ยืนยันแล้ว · รอการรักษา"
+// per user spec: badge state machine
+//   pending             → "รอยืนยัน"
+//   confirmed (NOT done) → "ยืนยันแล้ว · รอการรักษา"  ← V73-BS1 expanded
+//   done (serviceCompletedAt truthy) → "เสร็จแล้ว"
+//   cancelled            → "ยกเลิก"
+// `done` is now driven by `serviceCompletedAt` (not `hasTreatmentForDay`) so
+// the badge correctly reverts to "ยืนยันแล้ว · รอการรักษา" when admin un-marks
+// service-complete and moves the customer back to the waiting queue.
 const STATUS_LABELS = {
   pending: 'รอยืนยัน',
-  confirmed: 'ยืนยันแล้ว',
+  confirmed: 'ยืนยันแล้ว · รอการรักษา',
   done: 'เสร็จแล้ว',
   cancelled: 'ยกเลิก',
 };
@@ -81,7 +90,13 @@ export default function AppointmentHubRowCard({
   // requires !serviceCompletedAt, the other requires !!serviceCompletedAt).
   // Lets admin recover from accidental mark-complete press.
   const showUnmarkBtn = isTodayTab && !!appt.serviceCompletedAt;
-  const effectiveStatus = hasTreatmentForDay ? 'done' : rawStatus;
+  // V73-BS1 (2026-05-18) — badge "done" status follows serviceCompletedAt,
+  // NOT hasTreatmentForDay. Pre-fix: badge stayed green "เสร็จแล้ว" after
+  // admin clicked "↩ กลับไปคิวรอ" because hasTreatmentForDay was still true
+  // (treatment record exists, just not yet service-completed). Post-fix:
+  // un-mark clears serviceCompletedAt → effectiveStatus reverts to 'confirmed'
+  // → badge shows "ยืนยันแล้ว · รอการรักษา" matching the waiting-queue state.
+  const effectiveStatus = appt.serviceCompletedAt ? 'done' : rawStatus;
   const status = effectiveStatus;
   const statusLabel = STATUS_LABELS[effectiveStatus] || effectiveStatus;
   const typeLabel = resolveAppointmentTypeLabel(appt.appointmentType);
