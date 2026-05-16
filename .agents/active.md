@@ -1,12 +1,14 @@
 ---
-updated_at: "2026-05-16 EOD — V74 customer backup/restore FULL SHIP (30/33 tasks)"
-status: "master ahead of prod by 31+ commits (V73 batch 11 + V74 full ship 20+) · awaiting deploy authorization"
+updated_at: "2026-05-16 EOD — V74 customer backup/restore FULL SHIP DEPLOYED ✓"
+status: "DEPLOYED — V73 + V74 batch LIVE on prod · awaiting user Rule Q L1 hands-on"
 branch: "master"
-last_commit: "feat(V74 T30+T32): audit-cascade-logic C16 + V21 fixups (nav color + 5 tab-count + delete-modal V74 backup)"
-tests: "10566+ PASS / 2 FAIL (PRE-EXISTING V64.R6.1 + V71.RC3.2 unrelated to V74; per active.md flagged 'intermittent under full-suite load' from V73 session) / 12 skip"
+last_commit: "feat(V74): probe-deploy-probe #11 — customer-backup-path anon WRITE expect 401/403"
+tests: "10566+ PASS / 2 PRE-EXISTING FAIL (V64.R6.1 + V71.RC3.2 — unrelated to V74) / 12 skip"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "aff149e"
-firestore_rules_version: 33
+production_commit: "DEPLOYED 2026-05-16 EOD (vercel + firestore:rules + storage:rules) — V73 + V74 batch LIVE"
+firestore_rules_version: 34
+storage_rules_deployed: true
+probes_5_5_pass: "pre + post-deploy (chat_conversations 200 / opd_sessions 200 / staff_chat_messages 403 / staff-chat-attachments 401 / backups/customers 401)"
 ---
 
 # Active Context
