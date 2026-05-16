@@ -814,12 +814,15 @@ export default function CustomerDetailView({
                 </div>
               )}
 
-              {/* V33.3 — Action buttons row (Edit + LINE) integrated into profile header */}
-              <div className="mt-3 flex items-center justify-center gap-2">
+              {/* V33.3 — Action buttons row (Edit + LINE) integrated into profile header
+                  V75 Item 1 (2026-05-16) — normalize all 4 buttons to inline-flex
+                  + whitespace-nowrap; wrap row in flex-wrap so mobile <375px collapses
+                  to 2x2 grid instead of splitting a single button across lines. */}
+              <div data-testid="customer-detail-button-row" className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 {onEditCustomer && (
                   <button onClick={onEditCustomer}
                     data-testid="edit-customer-btn"
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
                     style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
                     title="แก้ไขข้อมูลลูกค้าทั้งหมด">
                     <Edit3 size={11} /> แก้ไข
@@ -827,7 +830,7 @@ export default function CustomerDetailView({
                 )}
                 <button onClick={() => setLineQrOpen(true)}
                   data-testid="link-line-btn"
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95"
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
                   style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
                   title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
                   <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
@@ -837,7 +840,7 @@ export default function CustomerDetailView({
                   <button onClick={() => setBackupModalOpen(true)}
                     data-testid="customer-detail-backup-button"
                     title="สำรองข้อมูลลูกค้าทั้งหมด → Storage (ดาวน์โหลดได้ 24 ชม.)"
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300 border-amber-700/50">
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300 border-amber-700/50">
                     💾 สำรอง
                   </button>
                 )}
@@ -847,7 +850,7 @@ export default function CustomerDetailView({
                     onClick={() => onDeleteCustomer(customer)}
                     data-testid="customer-detail-delete-button"
                     title="ลบลูกค้าถาวร พร้อมประวัติทั้งหมด"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"
                   >
                     <Trash2 size={11} /> ลบลูกค้า
                   </button>
