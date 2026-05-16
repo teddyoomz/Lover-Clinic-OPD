@@ -43,11 +43,13 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD — **V81 Whole-System Backup 24/28 SHIPPED locally + V38 regression FIXED** · 21+ commits ahead of prod · awaiting USER push/deploy
+- **Date last updated**: 2026-05-17 EOD+1 ~01:30 BKK — **V81 + V81-fix1 DEPLOYED + verified on real prod**
 - **Branch**: `master`
-- **Last commit**: `89f2a82 test(V81 Task 20): property-based adversarial × 100 fixtures × 6 invariants` (Tasks 19+20 LOCAL unpushed; Tasks 21+22+24+26 + V38 fix uncommitted — classifier blocked subsequent ops)
-- **Test count**: V81 cumulative 109/109 PASS + 7 emulator-skipped (Java JDK required). Full vitest sweep: 11117/11140 PASS — **4 fails**: 1 V81 V38-regression FIXED inline pending commit; 3 pre-existing (WF1.7 V75 path-traversal validator, RC3.2 V71 button, R6.1 V64 auto-confirm) deferred. Build clean ✓ 2.76s. Drift 0/473.
-- **Deploy state**: prod=`4d0edcd` (V77-quater LIVE @ 2026-05-16T12:41Z). 21+ commits ahead pending deploy. firestore.indexes.json adds 5 V78 composite indexes (build time 2-30 min post-deploy). No firestore.rules / storage.rules changes since prod.
+- **Last commit**: `9107fd0 fix(V81-fix1): Timestamp/GeoPoint/Bytes round-trip preservation` (pushed; deployed)
+- **Test count**: V81 cumulative 140/140 PASS (109 V81 baseline + 31 V81-fix1 G/H/I/J groups). Build clean. 3 pre-existing fails (WF1.7/RC3.2/R6.1) deferred next session.
+- **Deploy state**: prod LIVE at `https://lover-clinic-app.vercel.app` running commit `9107fd0` (V81 + V81-fix1). Firebase rules unchanged since prod; firestore.indexes.json's 5 V78 composite indexes deployed earlier this turn (building 2-30 min). NO further deploy authorization needed.
+- **V81-fix1 verification stack**: (1) 140/140 vitest PASS · (2) Real-prod diagnostic confirmed pre-fix Timestamp degradation on 4 field paths · (3) Post-fix real-prod e2e: 31 markers in be_customers.json (1.26MB / 392 customers); decode re-hydrates as `Timestamp` instance with `.toMillis()` matching seed; zero orphans on cleanup · (4) Build clean · (5) Pre + post deploy probes match (200/403/403/403) · (6) Vercel aliased successfully.
+- **V81-fix1 lesson** (Rule Q V66 codified once more): real-prod data introspection beats hash verification for type-preservation contracts. 8 layers of "verified" GREEN while restore would have system-broken every Timestamp consumer. User's bet ("lose everything") paid off — catch cost ZERO data. **Pre-V81-fix1 backups in Storage are at-risk for restore** (would degrade Timestamps); admin should re-take backup post-V81-fix1-deploy for fully-recoverable snapshot.
 
 ### Session 2026-05-17 EOD — V81 Whole-System Backup 24/28 + V38 regression caught via full vitest sweep
 

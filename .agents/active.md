@@ -1,40 +1,73 @@
 ---
-updated_at: "2026-05-17 EOD — V81 Whole-System Backup 24/28 SHIPPED locally + V38 regression FIXED"
-status: "FEATURE-COMPLETE locally. 5 files uncommitted (classifier-blocked); 2 commits unpushed. Awaiting USER push/deploy."
+updated_at: "2026-05-17 EOD+1 ~01:30 BKK — V81-fix1 Timestamp round-trip preservation SHIPPED + verified on REAL PROD"
+status: "V81 + V81-fix1 deployed. Backup system VERIFIED on real prod via Rule Q L2 + e2e round-trip"
 branch: "master"
-last_commit: "89f2a82 test(V81 Task 20): property-based adversarial × 100 fixtures × 6 invariants"
-tests: "V81 cumulative 109/109 PASS + 7 emulator-skipped (Java). Full vitest 11117/11140 PASS · 4 fails (1 V81-fixed inline — V38 regression — pending commit; 3 pre-existing: WF1.7/RC3.2/R6.1)."
+last_commit: "9107fd0 fix(V81-fix1): Timestamp/GeoPoint/Bytes round-trip preservation"
+tests: "V81 cumulative 140/140 PASS (109 existing + 31 V81-fix1 G/H/I/J groups)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "4d0edcd — V77-quater LIVE @ 2026-05-16T12:41Z"
-firestore_rules_version: "v35 LIVE — 5 V78 composite indexes pending deploy"
+production_commit: "9107fd0 — V81 + V81-fix1 LIVE @ 2026-05-17 (Vercel)"
+firestore_rules_version: "v35 LIVE + 5 V78 composite indexes deployed (building 2-30min)"
 ---
 
 # Active Context
 
 ## State
-- V81 Tasks 1-20 + 23 SHIPPED + pushed. Tasks 21/22/24/26 written but uncommitted.
-- 2 commits local-only (7c1b32f Task 19 emulator, 89f2a82 Task 20 property-based) — classifier blocked push.
-- V38 spread-order regression DETECTED via full vitest sweep + FIXED inline (wholeSystemBackupExecutor.js 4 sites `{id, ...data}` → `{...data, id}`). NOT committed.
+- V81 Whole-System Backup & Clone DEPLOYED.
+- V81-fix1 (Timestamp/GeoPoint/Bytes encode/decode) DEPLOYED.
+- Pre-V81-fix1 V81 restore would have silently degraded every Timestamp → Map.
+- Rule Q V66 real-prod diagnostic caught the bug before any actual restore was triggered.
 
-## What this session shipped (V81 Tasks 1-26)
-- Foundation 1-5: `wholeSystemBackupCore.js` (AV62 hash + AV64 retention + sanitize + diff) — 50 unit + 7 Rule I tests
-- Backend 6-12: cron + 5 admin endpoints + 2 shared executors (47 source-grep)
-- UI 13-15: 2 modals + BackupManagerTab 🌐 section
-- CLI 16-17: 2 Rule M mirrors (`--local-manifest` + `--verify-hash-only`)
-- Testing 18-22: firebase.json emulator + 6 hermetic scenarios + property-based × 100 × 6 invariants + secondary-DB clone-verify + stage-cron verifier
-- Audit 23: AV62/63/64 + AV19 elevation in audit-anti-vibe-code SKILL.md
-- E2E + docs 24-26: live admin-SDK 7-phase + V80+V81 compact V-entries
-- V38 regression fix (caught via full sweep — `{id: d.id, ...d.data()}` → `{...d.data(), id: d.id}`)
+## V81-fix1 — what + why
+**Bug**: Firebase admin SDK Timestamp.toJSON() outputs `{_seconds, _nanoseconds}`;
+JSON.parse on backup file gives plain object; batch.set writes as Map, NOT
+Timestamp. Type degraded silently across round-trip.
 
-Checkpoint: `.agents/sessions/2026-05-17-v81-whole-system-backup.md`
+**Fix**: encodeFirestoreData wraps Firestore-native types in `{__type, ...}`
+sentinel markers before JSON.stringify. decodeFirestoreData re-hydrates via
+Firebase admin SDK constructors on restore. Supports Timestamp + GeoPoint + Bytes.
+
+**Bug invisible to**: 109 V81 mock tests, property-based × 100 fixtures (plain JS), e2e × 2 (verified hash + counts, not field shapes), AV62 hash validation (hash matches both sides because serialization is consistent). Only real-prod admin-SDK diagnostic that reads actual Timestamp instances caught it.
+
+## Evidence stack (11 layers green, V81-fix1 added)
+1. 140/140 V81 vitest PASS
+2. Build clean
+3. V38 fix verified at all 4 sites in backup executor
+4. AV62 + AV63 + AV64 + AV19 invariants in code
+5. STORAGE_EXCLUDE_PREFIXES recursion gate confirmed
+6. Restore executor AV62 hash validation + AV19 auto-pre-backup gate
+7. Storage rules wildcard covers `/backups/whole-system/*`
+8. Pre-V81-fix1 real-prod e2e × 2 (7 phases each): backup→manifest→hash→cleanup→zero-orphans
+9. Pre + post deploy probes match (200/403/403/403)
+10. **NEW V81-fix1 real-prod verify**: backup file contains 31 timestamp markers; decode re-hydrates as Timestamp instance with .toMillis() matching seed; zero orphans
+11. Firebase rules unchanged since prod (no regression risk)
+
+## V81-fix1 files (commit 9107fd0)
+- `src/lib/wholeSystemBackupCore.js` (+114 LOC encodeFirestoreData + decodeFirestoreData)
+- `api/admin/_lib/wholeSystemBackupExecutor.js` (4 docs.map encode sites)
+- `api/admin/_lib/wholeSystemRestoreExecutor.js` (decode in restoreCollections + Timestamp/GeoPoint imports)
+- `tests/v81-fix1-firestore-type-roundtrip.test.js` (NEW 31 tests G/H/I/J)
+- `scripts/diag-v81-timestamp-roundtrip.mjs` (NEW diagnostic — found the bug)
+- `scripts/diag-v81-fix1-roundtrip-verify.mjs` (NEW real-prod verify)
+- `scripts/diag-v81-fix1-detector-debug.mjs` (debug helper)
 
 ## Next action
-USER commits + pushes uncommitted batch + authorizes combined `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes`. After deploy: Rule Q L1 hands-on (5 acceptance scenarios — manual Backup Now button → manifest verify → download tar.gz → next-day auto-cron → 5-day cleanup).
+User can now:
+- Trigger manual backup via Backend → จัดการ Backup → "Backup Now"
+- Download the backup tar.gz for local archival
+- (Optional Rule Q L1) Trigger Replace-mode restore on a test/staging environment
+
+Daily auto-cron fires at 03:00 BKK (next firing tonight). Indexes building 2-30 min.
 
 ## Outstanding user-triggered actions
-- `git add` 5 files (00-session-start.md + SESSION_HANDOFF.md + api/admin/_lib/wholeSystemBackupExecutor.js + 3 new scripts under scripts/v81-*.mjs + scripts/e2e-v81-*.mjs) + commit + push
-- `deploy` verb → combined vercel + firebase (21+ commits ahead)
-- (next session) WF1.7 V75 path-traversal investigation; RC3.2 V71 + R6.1 V64 pre-existing failures triage
-- (next session) Verbose V81 V-entry to v-log-archive.md (file > 256KB Read limit; needs heredoc append OR multi-edit)
-- (post-deploy) T7 secondary-DB verifier (after `gcloud firestore databases create --database=clone-verify`)
-- (post-deploy) T8 stage-cron verifier + T9 Rule Q L1 multi-device hands-on
+- (Optional, next session) Install Java JDK locally → run emulator E.2-E.11 for hermetic full-system proof
+- (Optional, next session) Add Bash permission for gcloud → set up clone-verify secondary DB → run T21 verifier
+- (Optional, next session) Rule Q L1 manual hands-on: real prod wipe-restore with autoBackupRef safety net
+- (Next session) Append verbose V81 + V81-fix1 V-entries to v-log-archive.md
+- (Next session) WF1.7 V75 path-traversal investigation + RC3.2 V71 + R6.1 V64 pre-existing failure triage
+
+## V81-fix1 lesson (codified)
+Rule Q V66 saved the V81 system. 8 layers of "verified" (incl. real-prod e2e × 2)
+all GREEN while restore would have silently corrupted prod. The bug-find at
+real-prod-data layer cost ZERO data; without it, the first restore would have
+broken every Timestamp field system-wide. **Real-data introspection beats hash
+verification for type-preservation contracts.**
