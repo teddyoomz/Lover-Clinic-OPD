@@ -2283,6 +2283,13 @@ export async function markAppointmentServiceCompleted(apptId, uid) {
   await updateDoc(appointmentDoc(apptId), {
     serviceCompletedAt: serverTimestamp(),
     serviceCompletedBy: typeof uid === 'string' ? uid : '',
+    // V71.B-bis (2026-05-18) — persistent flag survives unmark cycles. Lets
+    // admin toggle mark-complete ↔ un-mark unlimited times even when the
+    // treatment-link reader (`apptDateTreatments[0]`) becomes stale or empty
+    // (date-mismatch between appt.date and treatment.detail.treatmentDate is
+    // a known fragility). Cleared NEVER once true — once an appt was service-
+    // completed, the toggle button stays available forever.
+    wasServiceCompleted: true,
   });
 }
 

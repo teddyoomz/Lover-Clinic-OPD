@@ -70,7 +70,17 @@ export default function AppointmentHubRowCard({
   // V71 (2026-05-15) — service-completed button visibility: today tab + treatment
   // exists + not yet marked complete. serviceCompletedAt is a Firestore Timestamp
   // or null; truthy-check works for both.
-  const showMarkCompleteBtn = isTodayTab && hasTreatmentForDay && !appt.serviceCompletedAt;
+  // V71.B-bis (2026-05-18) — relax `hasTreatmentForDay` requirement once the
+  // appt was service-completed at least once. Lets admin toggle mark-complete ↔
+  // un-mark UNLIMITED times even when the treatment-link reader returns empty
+  // (date-mismatch between appt.date and treatment.detail.treatmentDate is a
+  // known fragility surfaced by user 2026-05-18). First-time gate (treatment
+  // required) preserved; second+ time uses the persistent `wasServiceCompleted`
+  // flag stamped by markAppointmentServiceCompleted.
+  const showMarkCompleteBtn =
+    isTodayTab &&
+    !appt.serviceCompletedAt &&
+    (hasTreatmentForDay || !!appt.wasServiceCompleted);
   // V71.A (2026-05-15) — un-mark button visibility (symmetric mirror): today tab +
   // already marked complete. Mutually exclusive with showMarkCompleteBtn (one
   // requires !serviceCompletedAt, the other requires !!serviceCompletedAt).
