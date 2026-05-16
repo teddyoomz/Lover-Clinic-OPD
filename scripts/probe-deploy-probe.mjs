@@ -150,6 +150,22 @@ async function probe10_staffChatAttachmentsAnon(ts) {
   };
 }
 
+async function probe11_customerBackupsAnon(ts) {
+  // V74 (2026-05-16) — verify Storage rule blocks anon writes to customer-backup path.
+  // storage.rules `match /backups/{prefix}/{file=**}` admin-only — anon expects 401/403.
+  const filename = `TEST-PROBE-${ts}-backup.json`;
+  const url = `https://firebasestorage.googleapis.com/v0/b/${APP_ID}.firebasestorage.app/o?name=backups%2Fcustomers%2FPROBE-CUST%2F${ts}-probe%2F${filename}`;
+  const r = await http('POST', url, {
+    body: { probe: true },
+  });
+  return {
+    name: 'backups/customers anon WRITE (expect 401/403)',
+    status: r.status,
+    ok: r.status === 401 || r.status === 403,
+    error: (r.status === 401 || r.status === 403) ? null : `expected 403/401 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
 // ─── Probe orchestrator ─────────────────────────────────────────────────────
 async function runProbe(label) {
   const ts = Date.now();
@@ -159,6 +175,7 @@ async function runProbe(label) {
     probe5_anonOpdSessions(ts),
     probe9_staffChatMessagesAnon(ts),
     probe10_staffChatAttachmentsAnon(ts),
+    probe11_customerBackupsAnon(ts),
   ]);
   let allOk = true;
   for (const r of results) {
