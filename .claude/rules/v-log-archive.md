@@ -1513,3 +1513,102 @@ If you somehow get past all 7 layers and still claim verified with mocks-only, t
 
 **EVERY FUTURE "verified" CLAIM MUST PASS L1 or L2 — NO EXCEPTIONS. THIS IS THE LOUDEST V-ENTRY FOR A REASON.**
 
+---
+
+### V75 — 2026-05-16 — Per-branch chat + whole-fleet customer backup (Items 1+2+3+4 SHIPPED)
+
+Across 2 sessions (2026-05-16 EOD + EOD+1): 43-task plan via subagent-driven-development; ~40 V75 commits + 1 spec + 1 plan landed. Session 1 shipped Tasks 1-20 (foundation + webhook stamps + Rule M migration + BSA reader + ChatPanel migration + firestore.rules + Probe #12 + Phase 7 CLI). Session 2 (this — EOD+1) shipped Tasks 14-16 + 22 + 28-32 + 38 + 40-42 (FbSettingsTab + endpoints + tests + V-entry + state finalize).
+
+#### User directives (verbatim, locked in spec)
+- "แต่ละสาขาจะมี LineOA และ FB page แยกจากกันอย่างสิ้นเชิง"
+- "สาขานครราชสีมาที่ใช้ได้อยู่ตอนนี้ต้องใช้ได้แบบต่อเนื่อง ผมไม่ต้องไป setting อะไรใหม่เลยนะ"
+- "เทสมาด้วยแบบ ไปกลับ e2e และมหาโหด เพราะเป็น feature สำคัญ"
+
+#### Items shipped
+
+**Item 1 — CustomerDetailView 4-button row polish** ✓ (visual; Task 1).
+
+**Item 2 — Whole-fleet customer backup/restore** (architecturally complete; UI modals deferred):
+- `src/lib/wholeFleetBackupCore.js` — manifest builder + `computeWholeFleetManifestHash` + `validateWholeFleetManifest`. Hash SEED covers fileHashes + storageManifestHashes + totals + exportedAt; userNote EXCLUDED (Q5b=Y precedent).
+- `scripts/customer-backup-export.mjs` extended with `--all-customers` flag. Per-customer failure isolation via `failedCustomers[]`.
+- `api/admin/whole-fleet-customer-restore.js` ✓ (Task 22) — preview + restore action modes. Verifies recomputed manifestHash matches caller-provided `confirmManifestHash` (409 WHOLE_FLEET_MANIFEST_TAMPERED on mismatch), then per-customer V74 SAFE restore Q3=B. writeBatch chunked at 450 + Storage copy back. Parent audit doc at `be_admin_audit/whole-fleet-restore-{ts}-{rand}` captures full perCustomer outcomes.
+- `scripts/whole-fleet-customer-restore.mjs` ✓ (Task 28) — Rule M CLI mirror. Supports `--backup-ref` OR `--local-manifest`. Dry-run default; `--apply` commits.
+- **DEFERRED to V75-bis**: `/api/admin/whole-fleet-customer-backup-export` endpoint + WholeFleetBackupModal + RestoreModal + BackupManagerTab whole-fleet wire (Tasks 21, 24, 25, 26).
+
+**Item 3 — Chat per-branch** ✓ (all architectural pieces shipped):
+- `api/webhook/_lib/lineChatBranchResolver.js` + `api/webhook/_lib/fbChatBranchResolver.js` — reverse-lookup against `be_line_configs` / `be_fb_configs`; fallback to นครราชสีมา branchId.
+- `api/webhook/{line,facebook}.js` stamp branchId + branchIdSource per AV57.
+- `scripts/v75-backfill-chat-conversations-branchid.mjs` — Rule M canonical migration; pure helpers `decideBackfillAction` + `buildBackfillPatch`; idempotent.
+- BSA migration (BS-17): `backendClient.js` `listenToChatConversationsByBranch` Layer 1 safe-by-default; `scopedDataLayer.js` Layer 2 auto-injects. Mirror of V54 BS-13 listener pattern at chat boundary.
+- `src/components/ChatPanel.jsx` — listenToChatConversationsByBranch wire + empty-state copy + 🔔/🔕 mute toggle + banner.
+- **`/api/admin/fb-test`** ✓ (Task 14) — admin endpoint pings FB Graph API `/me`. Returns `{ok:true, pageId, pageName}` OR `{ok:false, reason}` on FB error / pageId mismatch. CORS-proxy pattern (V32-tris-ter-fix).
+- **`src/components/backend/FbSettingsTab.jsx`** ✓ (Task 15) — per-branch FB Page settings. 4 sections: Channel creds (password-toggle on token+secret) + Test connection + Enable toggle + Webhook URL. Auto-seed banner for นครราชสีมา (silent migration from `clinic_settings/chat_config`).
+- Nav + permissions + dashboard wire ✓ (Task 16). V21 fixups: 22→23 master section, 59→60 TAB_PERMISSION_MAP.
+- `firestore.rules` ✓ — `be_fb_configs` match block. Probe #12 documented.
+
+**Item 4 — Chat tab mute** ✓:
+- `src/lib/chatNotificationMute.js` — localStorage helper + storage-event broadcast.
+- ChatPanel.jsx 🔔/🔕 toggle + `playChatNotificationSound()` SAFE wrapper.
+- AdminDashboard 2 chat-alert sites migrated → `playChatNotificationSound`.
+- AV58 audit: ChatPanel.jsx is ONLY sanctioned consumer of `chatNotificationMute`. Task 32 extends with V73 StaffChatHeader separation + Phase 29 recall separation + generic walk-src/.
+
+#### Test bank (V75 cumulative; ~210+ assertions)
+
+Session 1 (~140): button-polish-rtl + chat-noti-mute-helper + whole-fleet-backup-core + fb-config-client + chat-webhook-branchid-stamp-flow + chat-webhook-branchid-stamp-av57 + backfill-chat-conversations-branchid + chat-noti-mute-scope-av58 (baseline 7) + firestore-rules-fb-configs + whole-fleet-backup-av56.
+
+Session 2 (~80):
+- `tests/v75-fb-test-endpoint.test.js` ✓ 8 (Task 14)
+- `tests/v75-fb-settings-tab-rtl.test.jsx` ✓ 9 (Task 15)
+- `tests/v75-fb-settings-nav-wire.test.js` ✓ 4 (Task 16)
+- `tests/v75-whole-fleet-restore-endpoint.test.js` ✓ 11 (Task 22)
+- `tests/v75-whole-fleet-backup-adversarial.test.js` ✓ 28 (Task 29 — V48 prof-grade)
+- `tests/v75-chat-continuity-flow-simulate.test.js` ✓ 15 (Task 30 CRITICAL — นครราชสีมา zero-action)
+- `tests/v75-chat-conversations-flow-simulate.test.js` ✓ 6 (Task 31 — Rule I 5-layer chain)
+- `tests/v75-chat-noti-mute-scope-av58.test.js` ✓ +3 (Task 32 extensions → 10 total)
+
+#### Audit invariants added (Tier 2 Rule P)
+
+- **AV56** — Whole-fleet backup integrity: manifestHash via shared helper; userNote EXCLUDED (Q5b=Y); restore enforces WHOLE_FLEET_MANIFEST_TAMPERED; per-customer failure isolation. Sanctioned exceptions: NONE.
+- **AV57** — Chat webhook branchId stamping: every chat_conversations write in webhook MUST stamp via the corresponding resolveChat*BranchId* helper. Sanctioned exceptions: NONE.
+- **AV58** — Chat noti mute scope: ChatPanel.jsx is ONLY sanctioned consumer of `chatNotificationMute` helper; other surfaces consume `playChatNotificationSound` SAFE wrapper.
+- **BS-17** — chat_conversations BSA Layer 1 safe-by-default + Layer 2 auto-inject.
+- **Probe #12** — anon write to be_fb_configs → 403 (added to Rule B Probe-Deploy-Probe list).
+
+#### Plan-vs-reality adaptations (V75 lessons)
+
+1. **verifyAdminToken import path**: plan said `./_lib/verifyAdminToken.js`; actual is `./_lib/adminAuth.js` with signature `(req, res) → object | null` (writes 401/403 itself). All V75 endpoints adapted.
+2. **fbConfigClient API names**: plan referenced `getFbConfigForBranch`; actual exports `getFbConfig`. FbSettingsTab adapted.
+3. **Whole-fleet backup format**: plan suggested zip-bundled (`fflate`); actual `--all-customers` CLI emits manifest.json + per-customer SEPARATE Storage blobs. Restore endpoint + CLI adapted — no zip, no fflate.
+4. **Task 13 DROPPED**: original plan had `/api/admin/fb-config-by-branch` endpoint; user dropped — fbConfigClient mirrors lineConfigClient direct-Firestore. FbSettingsTab test mocks the module not fetch.
+5. **PRNG-state gotcha**: shared mulberry32 PRNG advances on every `randomCustomer(i)` call → calling twice for "identical" fixture yields different fileHash → breaks CAT3.1 "displayName-doesn't-affect-hash" invariant. Fix: build base ONCE then clone for variation. Pattern locked in CAT3.1 inline comment.
+6. **BS-17 numbering**: original plan called it BS-16 but V64 already used BS-16 (AppointmentHub). Always grep existing BSA invariant numbers before assigning.
+
+#### V21 fixups absorbed (Rule P 7-step expansion)
+
+- `tests/backend-nav-config.test.js` I4 array bumped (22→23) with fb-settings inserted.
+- `tests/phase11-master-data-scaffold.test.jsx` MASTER_STUB_IDS extended + M2 count 22→23.
+- `tests/phase16.3-flow-simulate.test.js` D.1 TAB_PERMISSION_MAP count 59→60.
+
+#### Architectural lessons (generalizable)
+
+1. **Webhook resolver pattern** generalizes to any platform-routed inbound message (LINE / FB / future Instagram / Twilio): platform-specific identifier → reverse-lookup against per-branch config doc → fallback to "sole-active" branch preserves continuity. AV57 enforces stamp at WRITE boundary.
+2. **Per-branch silent auto-seed from legacy config**: fbConfigClient reads `clinic_settings/chat_config` for นครราชสีมา when `be_fb_configs/{NAKHON}` doesn't exist + flags `_autoSeeded:true`. UI shows banner; admin reviews + saves. ZERO admin action through migration. Pattern reusable for any "single-tenant legacy → multi-tenant per-branch" migration.
+3. **Per-customer failure isolation in batch endpoints** (AV56): one customer's BLOCK / SCHEMA_INVALID / STORAGE_INTEGRITY_FAIL must NOT abort the batch. try/catch INSIDE the loop + accumulate into `perCustomer[]` + `{restored, skippedConflict, failed}`. Generalizable to any batch admin op.
+4. **Hash-seal with selective exclusion** (Q5b=Y): userNote excluded from manifestHash so admin can rename labels without invalidating integrity. Pattern: HASH covers DATA + IDENTITY fields; HASH excludes mutable LABEL fields.
+5. **Multi-source branchIdSource attribution**: chat docs carry `branchIdSource` ∈ {webhook-line / webhook-fb / webhook-line-fallback-nakhonratchasima / webhook-fb-fallback-legacy / *-fallback-empty / backfill-v75-sole-active}. Customers see one branchId; admin can trace WHERE it came from. Future analytics + debugging benefit. Pattern: every multi-path resolution should stamp source attribution + every consumer endpoint should preserve through audit chains.
+
+#### Status + deferred
+
+- Local + commits ONLY across both sessions. NO deploy (per V18 lock + user `feedback_local_only_no_deploy.md`).
+- User authorizes combined `vercel --prod` + `firebase deploy --only firestore:rules` THIS TURN to ship V75.
+- Post-deploy admin must run: `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot).
+- Rule Q L1 hands-on multi-device by user per spec § 8 (8 acceptance scenarios).
+
+**Deferred to V75-bis** (~10 tasks remaining):
+- Tasks 21+24+25+26: WholeFleetBackupModal + RestoreModal + BackupManagerTab whole-fleet wire (UI — CLI works today via `--all-customers`).
+- Tasks 33-34: Live admin-SDK e2e on real prod (Rule Q L2).
+- Tasks 35-37: Playwright L1 specs (Rule Q PREFERRED).
+- Cosmetic refactor TODO: extract `loadAndVerifyBackup` from `customer-restore.js` to a shared module so whole-fleet-restore reuses (zero behavior change).
+
+**Verification claim per Rule Q**: V75 architectural code shipped + mock + source-grep + Rule I full-flow simulate tests PASS (Tier 2 maha-adversarial pattern). L1 hands-on verification is USER'S responsibility per spec § 8. Until L1 confirms, V75 status = "code shipped, L1-pending". This V-entry documents the architectural completion; the deploy-and-verify cycle remains user-gated.
+
