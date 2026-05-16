@@ -2091,10 +2091,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // re-submit doesn't surface yesterday's aria-invalid on inputs the
     // user has since corrected.
     setFieldErrors({});
-    // Phase 26.2f-followup (V26.2f, 2026-05-13) — doctor-required check skipped for
-    // both saveMode='doctor' (doctor-save itself) AND saveMode='vitals' (admin
-    // vitals-save doesn't need doctor selected). Only 'staff' (default) requires it.
-    if (saveMode === 'staff' && !doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
+    // Phase 26.2f-followup (V26.2f, 2026-05-13) → V73-DR1 (2026-05-18) —
+    // REQUIRE doctor for BOTH 'staff' AND 'doctor' saves.
+    //   User curse-report: "ทำให้ปุ่ม บันทึกสำหรับแพทย์ ใน TFP บังคับให้ต้อง
+    //   เลือกหมอด้วยสิวะ เป็นบันทึกของแพทย์เสือกไม่ Required field แพทย์
+    //   ด้านบนสุดได้ยังไง". A doctor's note MUST attribute to a specific
+    //   doctor — without it the record is orphan ("doctor recorded but no
+    //   doctor name"). Pre-V73-DR1 the gate only fired for saveMode='staff'.
+    //   Skip ONLY for 'vitals' (admin vitals-only entry — nurse/staff records
+    //   vitals before doctor sees patient; doctor TBD).
+    if (saveMode !== 'vitals' && !doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
     if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
     // Phase 12.2b Step 7 (2026-04-24): fill-later treatment items (from
     // เหมาตามจริง / เลือกสินค้าตามจริง courses) must have qty entered
