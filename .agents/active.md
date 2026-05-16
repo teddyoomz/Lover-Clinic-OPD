@@ -1,49 +1,80 @@
 ---
-updated_at: "2026-05-17 EOD+2 — V81-fix3 archiver runtime-dep + SESSION_HANDOFF shrink + AV67"
-status: "V81 + V81-fix1 LIVE; V81-fix2 + V81-fix3 patched (NOT deployed). Awaiting USER deploy verb."
+updated_at: "2026-05-17 EOD+2 LATE+1 — V81-fix5 DEPLOYED + branch chip bug FIXED + stress loop v2 running"
+status: "V81-fix3 + V81-fix4 + V81-fix5 LIVE on prod; cleanup ran; stress loop v2 (with User Simulation) running"
 branch: "master"
-last_commit: "1686b32 docs+fix(V81-fix2): EOD+1 — Replace ack-gate + emergency owner-restore + AV66"
-tests: "172 V81-family tests green (168 prior + 4 NEW V81-fix3 / AV67)"
+last_commit: "fix(V81-fix5): CustomerCard resolves branchId → branch NAME via branchesMap"
+tests: "216 V81-family tests green (172 prior + 4 AV67 + 30 AV68/69/70/FD + 10 AV71)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "9107fd0 V81 + V81-fix1 LIVE; 2 fixes ahead of prod (V81-fix2 ack-gate + V81-fix3 archiver runtime-dep)"
+production_commit: "V81-fix5 LIVE — aliased to production"
 firestore_rules_version: "v35 + 5 V78 composite indexes (unchanged this session)"
 ---
 
 # Active Context
 
-## State
-- V81-fix3 (this turn): backup Download 500 root cause fixed — `archiver` moved from `devDependencies` to `dependencies` in `package.json`. Vercel `npm install --production` skips devDeps → endpoint module-load was failing → HTML "A server error..." → client JSON.parse threw on "A". Single-line fix.
-- AV67 invariant codified (audit-anti-vibe-code): every `api/**` import MUST resolve to a runtime dependency. 4 regression tests (tests/v81-fix3-archiver-runtime-dependency.test.js) PASS.
-- SESSION_HANDOFF.md shrunk 317.5 KB → 44.1 KB by archiving 140+ older session blocks to `.agents/sessions/session-handoff-archive.md` (276 KB). 200 KB hard-cap rule + script enforcement (`session-apply.mjs` throws SESSION_HANDOFF_TOO_LARGE post-surgery) installed.
-- Local `scripts/.tmp-final-roundtrip-backup-*` cleaned (7 MB freed). Storage Backups A/B/C still preserved as recovery references.
+## Status
+- **V81-fix3 + V81-fix4 + V81-fix5 LIVE on prod**
+- **309 deprecated per-customer backups purged** (1.6 MB freed; audit doc emitted)
+- **1 test branch fixture cleaned** (TEST-V81-TS-BR-* deleted; orphan customer re-stamped to NAKHON)
+- **216 V81-family regression tests green**
+- **Stress loop v2 running in background** (bash `bq0bt8fju`) with User Simulation — each cycle creates 3 non-NAKHON-branch test customers + backup + restore + verifies branchId preserved AND branchesMap.get(branchId)?.name resolves correctly
 
-## What this session shipped
-- V81-fix3 — `archiver` deps↔devDeps swap in `package.json` (single edit fixes prod Download 500)
-- AV67 — NEW audit invariant + 4 regression tests in `tests/v81-fix3-archiver-runtime-dependency.test.js`
-- SESSION_HANDOFF.md hard 200 KB cap rule:
-  - Banner at top of SESSION_HANDOFF.md
-  - Hard cap + procedure documented in `.agents/skills/session-end/SKILL.md`
-  - Script enforcement in `.agents/scripts/session-apply.mjs` (throws SESSION_HANDOFF_TOO_LARGE if post-surgery > 200 KB; warns at > 180 KB)
-- Archive — NEW `.agents/sessions/session-handoff-archive.md` (276 KB; 140+ blocks from V67 saga down to V32-tris 2026-04-26)
-- Cleanup — deleted local `scripts/.tmp-final-roundtrip-backup-1778961439997/` folder
+## V81-fix5 — branch chip bug ("ขึ้นสาขามั่ว")
+- User report 2026-05-17 EOD+2 LATE: customer cards showed raw `BR-1777873556815-26df6480` ID instead of branch name
+- Rule R diag confirmed: 388/391 customers (99.2%) are stamped NAKHON (preexisting V20 multi-branch migration state). Restore did NOT scramble branchIds — they were always NAKHON.
+- **Real root cause**: `CustomerCard.jsx:120` read `customer.branchName || customer.branchId || ''` — customer doc has NO `branchName` field → fallback to raw branchId
+- **Fix (AV71)**: CustomerListTab loads branches via `listBranches({allBranches:true})` in parallel with `getAllCustomers()`, builds `Map<branchId, {id, name}>`, passes `branchesMap` prop to every CustomerCard. Card resolves name via `map.get(bid)?.name` with fallback chain preserved.
+- **Cleanup**: `scripts/v81-fix5-cleanup-test-branch.mjs --apply` deleted V81-fix1 leftover branch + re-stamped 1 orphan
+- 10 AV71 source-grep tests + build clean
 
-## Next action
-USER `deploy` verb → commit + push + `vercel --prod` ships **V81-fix2 ack-gate + V81-fix3 archiver runtime-dep** (2 fixes, 1 deploy). Post-deploy Rule Q L1 confirmation: click backup Download button → verify JSON `downloadUrl` returned (NOT "A server error...").
+## All bugs/features this session (cumulative)
 
-## Outstanding user-triggered actions
-- `deploy` verb → vercel --prod (V81-fix2 + V81-fix3 both pending live)
-- Post-deploy: click backup Download button to L1-verify V81-fix3 fix (Rule Q gate)
-- 352 staff still need password reset (use "ลืมรหัสผ่าน" on login page) — Firebase sends reset emails
-- Cleanup Storage Backups A/B/C from final-roundtrip-proof when comfortable (still preserved as recovery)
-- (Future) Java/Node 24 SDK compat for emulator E.2-E.11
-- (Future) gcloud clone-verify secondary-DB setup
+| # | Issue | Resolution | Status |
+|---|---|---|---|
+| A1 | Download "Unexpected token 'A'..." | V81-fix3 — archiver deps swap | **✅ LIVE** |
+| A2 | "0 MB" display for all backups | V81-fix4 list endpoint folder-size sum + UI MB/KB | **✅ LIVE + L2 verified** (real prod shows 6.91–7.03 MB) |
+| A3 | Restore error | V81-fix4 Auth-preserve removes slowest path + ack-gate failure | **✅ LIVE** (Cycle 1 = 107s restore) |
+| B | Customer backup bulk-delete fails | Obviated by Feature D cleanup script | **✅ Ran** (309 purged) |
+| C | Refactor customer backup to single file | V77 + V74 buttons removed; V81 whole-system is canonical | **✅ LIVE** |
+| D | Mass delete existing per-customer backups | `scripts/v81-fix4-purge-customer-backups.mjs --apply` | **✅ 309/309** |
+| F | Auth preservation (no login loss) | V81-fix4 `replaceAuthFromBackup: false` default | **✅ LIVE** (Cycle 1 = 353 auth preserved) |
+| **(NEW)** | "branches มั่ว" display bug | V81-fix5 branchesMap injection | **✅ LIVE** |
+| E | Stress test ≥10 cycles | Stress loop v2 with User Simulation running | **🔄 In progress** (background `bq0bt8fju`) |
 
-## Files touched this turn (uncommitted)
-- `package.json` — archiver deps↔devDeps swap
-- `tests/v81-fix3-archiver-runtime-dependency.test.js` — NEW (4 tests)
-- `.agents/skills/audit-anti-vibe-code/SKILL.md` — AV67 invariant added
-- `.agents/skills/session-end/SKILL.md` — 200 KB hard cap rule
-- `.agents/scripts/session-apply.mjs` — SESSION_HANDOFF_TOO_LARGE enforcement
-- `SESSION_HANDOFF.md` — shrunk 317.5 → 44.1 KB + banner + new session block
-- `.agents/sessions/session-handoff-archive.md` — NEW (276 KB, 140+ blocks)
+## Architectural decisions locked
+- V81 Whole-System Backup is THE canonical backup mechanism
+- Replace mode preserves Auth by default; cross-project clone is opt-in
+- AV19 auto-pre-backup MANDATORY before any wipe
+- Backup folder size displayed = real on-disk bytes (sum across collections + storage + auth + manifest)
+- Customer cards display branch NAME via parent-injected branchesMap (no denormalization on customer doc)
+- Per-customer backup files preserved on disk archival-only; UI bindings removed
+
+## Next actions
+1. Wait for stress loop v2 completion notification (10 cycles × ~3 min = ~30 min)
+2. If all 10 clean → V81 production-grade COMPLETE for this session
+3. If any cycle fails → triage + fix + restart from failed cycle (`--start-from=N`)
+4. User does Rule Q L1 hands-on:
+   - Open https://lover-clinic-app.vercel.app → Backend → CustomerListTab → verify cards show branch NAMES (not raw BR-... IDs)
+   - Backend → จัดการ Backup → click Download on any V81 backup row → expect signed-URL download
+   - Backend → จัดการ Backup → Restore → verify "Auth preserved (default)" green panel
+5. Final SESSION_HANDOFF.md update after stress loop completes
+
+## Files touched this turn
+- `src/components/backend/CustomerCard.jsx` — branchesMap prop + name resolution
+- `src/components/backend/CustomerListTab.jsx` — listBranches parallel fetch + branchesMap state + prop pass
+- `tests/v81-fix5-customer-card-branch-name.test.js` — NEW 10 AV71 tests
+- `scripts/v81-fix5-cleanup-test-branch.mjs` — NEW Rule M cleanup
+- `scripts/diag-customer-branchid-distribution.mjs` — NEW Rule R diag
+- `scripts/diag-v81-fix4-bug-a2-verify-real-sizes.mjs` — NEW Rule R diag (verified A2 fix)
+- `scripts/v81-fix5-stress-with-user-simulation.mjs` — NEW stress runner with User Simulation
 - `.agents/active.md` — this file
+
+## Outstanding (user-triggered)
+- Rule Q L1 hands-on on prod (3 verifications above)
+- Storage Backups A/B/C cleanup when comfortable
+- (Future) Delete V74/V77 backend endpoint files entirely
+- (Future) Java/Node 24 SDK compat for V81 emulator
+
+## Lessons locked
+- **Display fallback chains hide schema gaps**: `customer.branchName || customer.branchId` is a fallback that LOOKS safe (renders something) but yields garbage when the primary field never exists. AV71 mandates UI surfaces resolve branchId → name via lookup map, never display raw IDs.
+- **Diagnose before assuming corruption**: "branches มั่ว" sounded like restore corruption but was actually preexisting state + raw-ID display. Rule R diag (count by branchId) confirmed the data was correct; the bug was in rendering.
+- **Stress test loop must exercise WRITE + READ flows**: cycle-1 admin-SDK loop confirmed backup-restore equality but missed the rendering-layer bug. V81-fix5 stress loop adds User Simulation (create test customers in non-NAKHON branches) to exercise the create→backup→restore→display chain end-to-end.
