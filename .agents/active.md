@@ -1,98 +1,43 @@
 ---
-updated_at: "2026-05-16 EOD — V74 customer backup/restore FULL SHIP DEPLOYED ✓"
-status: "DEPLOYED — V73 + V74 batch LIVE on prod · awaiting user Rule Q L1 hands-on"
+updated_at: "2026-05-16 EOD+1 — V75 partial ship (20 commits in master; deploy pending user explicit 'deploy')"
+status: "PARTIAL — Items 1+3+4 architectural-complete + tests; Item 2 CLI-only (UI deferred to V75-bis); 22 tasks remaining"
 branch: "master"
-last_commit: "feat(V74): probe-deploy-probe #11 — customer-backup-path anon WRITE expect 401/403"
-tests: "10566+ PASS / 2 PRE-EXISTING FAIL (V64.R6.1 + V71.RC3.2 — unrelated to V74) / 12 skip"
+last_commit: "23fe62a feat(V75 Item 2): whole-fleet customer backup CLI (--all-customers) + AV56"
+tests: "20 V75 test files PASS (~140 V75 assertions); full suite NOT run this session (Rule N — at batch end / next session)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "DEPLOYED 2026-05-16 EOD (vercel + firestore:rules + storage:rules) — V73 + V74 batch LIVE"
-firestore_rules_version: 34
-storage_rules_deployed: true
-probes_5_5_pass: "pre + post-deploy (chat_conversations 200 / opd_sessions 200 / staff_chat_messages 403 / staff-chat-attachments 401 / backups/customers 401)"
+production_commit: "b47a6e6 — V73 + V74 LIVE (V75 batch awaiting user 'deploy' authorization)"
+firestore_rules_version: "34 LIVE; v35 (V75 be_fb_configs match) staged in repo, not deployed"
+v75_commits_ahead_of_prod: 20
 ---
 
 # Active Context
 
-## State (V74 FULL SHIP — backbone + UI + manager + e2e + AV invariants COMPLETE)
+## State
 
-- master ahead of prod by 31+ commits (V73 batch 11 + V74 full ship 20+)
-- 0 deploys this session (V18 lock — V74 ready for combined deploy)
-- Working tree clean except `.claude/settings.local.json` + untracked skill dirs
+- **20 V75 commits ahead of prod**, master clean except untracked skill dirs (untouched this session)
+- **Items SHIPPED**: 1 (button polish ✓) + 3 (chat per-branch — webhook stamp + backfill script + BSA reader Layer 1+2 + BS-17 + AV57 + firestore rule + Probe #12 ✓) + 4 (chat tab mute + AV58 ✓) + 2 PARTIAL (whole-fleet CLI via `--all-customers` + AV56; endpoint+UI deferred)
+- **Plan deviations**: Task 13 dropped (fbConfigClient direct Firestore); BS-16 → BS-17 (V64 collision); whole-fleet shipped as CLI-only (endpoint+UI = V75-bis)
 
-## V74 Session 2026-05-16 EOD — 30/33 tasks DONE (3 deferred to follow-up)
+## What this session shipped (20 commits)
 
-**Foundation + EXPORT + DELETE + RESTORE + MANAGER + UI + e2e + AV invariants + handoff COMPLETE.**
+- **Phase 0 foundation** (Tasks 1-4): button polish + chatNotificationMute helper + wholeFleetBackupCore (manifest/hasher/validator) + fbConfigClient + fbTestClient
+- **Phase 1 webhook stamps** (Tasks 5-7 / AV57): `api/webhook/{line,facebook}.js` stamp `branchId` + `branchIdSource` via resolveChatBranchIdFrom*Event helpers; fallback to LOVER_DEFAULT_BRANCH_ID
+- **Phase 2 Rule M migration** (Task 8): `scripts/v75-backfill-chat-conversations-branchid.mjs` ready (--apply deferred to user post-deploy)
+- **Phase 3 BSA chat reader** (Tasks 10-12 / BS-17): backendClient Layer 1 safe-by-default + scopedDataLayer Layer 2 auto-inject + BS-17 audit (16→17 invariants)
+- **Phase 6 ChatPanel migration** (Tasks 19+20 + AV58): listenToChatConversationsByBranch wire + empty-state branch-aware copy + 🔔/🔕 mute toggle + banner + AdminDashboard playChatNotificationSound migration
+- **Phase 5 rules+probe** (Tasks 17+18): firestore.rules be_fb_configs match + Probe #12 in probe-deploy-probe.mjs + Rule B documentation
+- **Phase 7 partial** (Tasks 21+23+27): scripts/customer-backup-export.mjs extended with `--all-customers` whole-fleet mode + manifest emit + AV56 invariant
+- Checkpoint: `.agents/sessions/2026-05-16-v75-partial-ship.md`
 
-| Phase | Tasks done | Artifact |
-|---|---|---|
-| Foundation | T1-T3 | customerBackupCore.js + customerBackupSchema.js + customerBackupConflict.js (47 unit tests) |
-| EXPORT | T4-T6 | /api/admin/customer-backup-export + CLI + 14 round-trip tests |
-| DELETE | T7-T8 | delete-customer-cascade extended (16-cascade + 8-subcoll + Storage + chat + AV19 autoBackupRef) + CLI |
-| RESTORE | T10-T11 | /api/admin/customer-restore (Q3=B SAFE) + CLI |
-| MANAGER | T14-T18 | 5 endpoints (list + rename + delete + bulk-delete + download) |
-| UI | T20-T24 | CustomerBackupModal + DeleteCustomerCascadeModal extended + CustomerDataRecoveryTab + BackupManagerTab + nav wiring (2 new tabs) |
-| Rules | T25 | storage.rules `match /backups/{prefix}/{file=**}` covers customer paths admin-only |
-| Tests | T6+T9+T12+T13+T19+T32 | 116 V74 tests + 4 V21 fixups in Phase 24.0/nav/dashboard tests |
-| E2E | T26-T28 (consolidated) | scripts/e2e-v74-customer-backup-real-prod.mjs (3 scenarios: round-trip + tampering + manager) |
-| AV invariants | T29 | AV52 (file integrity) + AV53 (autoBackupRef AV19 elevation) + AV54 (subcoll cascade) + AV55 (72h-grace) in audit-anti-vibe-code SKILL.md |
-| Audit-cascade | T30 | audit-cascade-logic SKILL.md C16 — Customer-wipe cascade completeness invariant |
-| Diag CLI | T31 | scripts/diag-customer-backup-integrity.mjs (Rule R read-only) |
-| Handoff | T33 | V74 V-entry in 00-session-start.md + this active.md + SESSION_HANDOFF.md updated |
+## Next action (user-triggered)
 
-**DEFERRED (3 tasks)** — minimal value-add, NOT blocking deploy:
-- T31 download CLI mirror (admin can download via signed URL from manager-list endpoint instead)
-- ZIP bundle in T18 backup-manager-download (current returns JSON-only signed URL + admin uses CLI for offline ZIP)
-- Additional Storage integrity checks beyond per-object SHA-256 (deemed sufficient by current 6-step verify chain)
+1. **User authorizes "deploy"** → combined `vercel --prod` + `firebase deploy --only firestore:rules` + Probe-Deploy-Probe (8 probes incl. #11 #12)
+2. **After deploy**: admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M; stamps legacy chat_conversations with นครราชสีมา branchId)
+3. **Rule Q L1 hands-on** by user — test Items 1, 3, 4 per spec § 8 acceptance scenarios
+4. **Next session continues** with: full vitest run (Rule N batch-end) + Tasks 14-16 (FbSettingsTab + nav) + Tasks 22+28 (whole-fleet restore CLI) + Tasks 24-26 (UI modals) + Tasks 29-37 (adversarial + continuity + Playwright L1) + Task 38 V-entry + Task 40 state finalize
 
-## What's WORKING NOW
+## Outstanding user-triggered actions
 
-**CLI** (works on local with prod env):
-```bash
-vercel env pull .env.local.prod --environment=production
-node scripts/customer-backup-export.mjs --customer-id LC-X --apply --user-note "EOD"
-node scripts/customer-delete-with-backup.mjs --customer-id LC-X --apply --user-note "GDPR"
-node scripts/customer-restore.mjs --backup-ref backups/customers/LC-X/123-abc/backup.json --apply
-node scripts/diag-customer-backup-integrity.mjs --backup-ref backups/customers/...
-node scripts/e2e-v74-customer-backup-real-prod.mjs --apply
-```
-
-**UI** (works on http://localhost:5173 + after Vercel deploy):
-- CustomerDetailView → "💾 สำรอง" button (top-right) opens CustomerBackupModal → posts to backup-export endpoint
-- CustomerDetailView → "🗑️ ลบลูกค้า" button opens DeleteCustomerCascadeModal with V74 auto-backup-before-delete checkbox (default ON)
-- tab=customer-data-recovery → list + restore preview + restore flow (Q3=B SAFE conflict UI)
-- tab=backup-manager → unified list across all backup types + rename + delete + bulk-delete (AV19 72h-grace warning)
-- Both new tabs are admin-only (via TAB_PERMISSION_MAP)
-
-## V74 architectural commitments locked in code
-
-- **Q1=A Maximal scope**: CD + C11 + CG + CS + CF + CH backed up + wiped + restored; AI preserved
-- **Q2=B JSON + parallel Storage tree**: `gs://.../backups/customers/{cid}/{ts-rand}/{backup.json, storage/...}`
-- **Q3=B SAFE conflict resolution**: BLOCK identity / STRIP line / ALLOW stale FK
-- **Q4=C Hybrid UI**: 💾 button + delete-modal enhancement + recovery tab + manager tab + CLI
-- **Q5=B+Y+72h-grace**: unified manager tab + label-edit + 72h grace + force-override
-- **Q6 test catalog**: 10 categories shipped (T1-T10) + adversarial consolidated test bank + 3 real-prod e2e scenarios
-- **Integrity contract** (6-step verify): bodyHash + storageManifestHash + per-Storage-SHA-256 (userNote EXCLUDED)
-- **AV19 elevation**: delete-customer-cascade refuses delete if integrity fails
-
-## Next action (deploy)
-
-**User says "deploy"** → combined:
-```
-vercel --prod --yes
-firebase deploy --only firestore:rules,storage:rules
-# Then Probe-Deploy-Probe (probes #1+5+6+7+8+9+10+11 NEW)
-```
-
-**After deploy** → Rule Q L1 hands-on by user (6 acceptance scenarios per spec § 9):
-1. Click "💾 สำรอง" on customer page → backup file appears in Storage + downloadable
-2. Click "🗑️ ลบ" with autoBackup ON → AV19 integrity verify fires + cascade wipes + Storage cleanup
-3. Open tab=customer-data-recovery → find backup → 🔄 กู้คืน → preview shows correct counts + 0 conflicts → confirm → customer reappears identical
-4. Open tab=backup-manager → rename a backup label → re-list shows new label (hash preserved)
-5. Select 3 backups → bulk delete → 3 audit docs + Storage trees cleaned
-6. Try delete a backup that was the autoBackupRef <72h ago → BLOCKED with AV19_GRACE_PERIOD error + admin sees audit ref
-
-## Outstanding (user-triggered)
-
-- `vercel --prod --yes` + `firebase deploy --only firestore:rules,storage:rules` for combined V73 + V74 ship (31+ commits)
-- Rule Q L1 multi-device hands-on per acceptance scenarios above
-- (Optional) wire continuous-learning-v2 `hooks/observe.sh` into `~/.claude/settings.json`
+- `vercel --prod` + `firebase deploy --only firestore:rules` (V75 batch — 20 commits + new be_fb_configs rule)
+- `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` post-deploy (Rule M; one-shot)
+- Rule Q L1 multi-device hands-on per spec § 8

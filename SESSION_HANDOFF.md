@@ -43,11 +43,38 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EOD — **V73 + V74 COMBINED BATCH DEPLOYED LIVE** · master=`b47a6e6` · prod LIVE at https://lover-clinic-app.vercel.app · firestore rules v34 · storage rules redeployed · Probe-Deploy-Probe 5/5 PASS pre+post · 116 V74 tests + 55 Phase 24.0 preserved (V21 fixups absorbed) · awaiting Rule Q L1 hands-on by user per spec § 9
+- **Date last updated**: 2026-05-16 EOD+1 — **V75 PARTIAL SHIP** · master=`23fe62a` · 20 V75 commits ahead of prod=`b47a6e6` · Items 1+3+4 architecturally complete (button polish + chat per-branch BSA reader + chat tab mute) · Item 2 CLI-only (`customer-backup-export.mjs --all-customers`; endpoint+UI deferred V75-bis) · AV56+AV57+AV58 + BS-17 + Probe #12 shipped · awaiting user "deploy" + Rule M backfill + Rule Q L1
 - **Branch**: `master`
-- **Last commit**: `feat(V74): storage.rules — confirm V74 customer-backup path admin-only + rename {branchId}→{prefix}`
-- **Test count**: **116 V74 + 55 Phase 24.0 = 171 PASS / 0 FAIL** (focused; full suite of 10579+ not run this session — pending Task 32 next session)
-- **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16 AM). 22 commits ahead awaiting full V74 batch completion (T9 tests + T12-13 tests + T20-24 UI + T14-19 manager + T26-32 e2e + AV invariants + V21 sweep) THEN combined `vercel --prod` + `firebase deploy --only firestore:rules,storage:rules` (with Probe-Deploy-Probe #11 for customer-backup path).
+- **Last commit**: `23fe62a feat(V75 Item 2): whole-fleet customer backup CLI (--all-customers) + AV56`
+- **Test count**: **20 V75 test files PASS** (~140 V75 assertions across helper + RTL + source-grep + audit). Full suite NOT run this session (Rule N small-fix discipline) — Task 41 batch-end full run deferred to next session.
+- **Deploy state**: prod=`b47a6e6` (V73 + V74 LIVE since 2026-05-16 EOD). V75 batch staged in repo — awaiting explicit "deploy" THIS turn per V18. After deploy → admin runs `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` (Rule M one-shot; stamps legacy chats with นครราชสีมา branchId).
+
+### Session 2026-05-16 EOD+1 — V75 partial ship (20 commits — Items 1+3+4 complete + Item 2 CLI-only) ★★
+
+V74 L1 hands-on surfaced 4 items + 1 new ask (chat tab mute). Brainstorming HARD-GATE locked Q1-Q4 picks → 530-line spec → 5760-line 43-task plan → 20 commits shipped this session across 12-phase plan.
+
+**Items SHIPPED**:
+- **Item 1** (button polish): CustomerDetailView 4-button row normalized to inline-flex single-line + data-testid + flex-wrap
+- **Item 3** (chat per-branch): `api/webhook/{line,facebook}.js` stamp branchId via resolveChatBranchIdFrom*Event helpers (AV57) + scripts/v75-backfill-chat-conversations-branchid.mjs Rule M ready + backendClient Layer 1 listenToChatConversationsByBranch (safe-by-default V54/BS-13 mirror) + scopedDataLayer Layer 2 auto-inject + BS-17 audit (16→17) + ChatPanel listener migration via {allBranches:true} + client-side fall-through filter for continuity + firestore.rules be_fb_configs match + Probe #12 + fbConfigClient + fbTestClient (direct Firestore mirror of lineConfigClient; Task 13 endpoint dropped) + branch-aware empty-state copy
+- **Item 4** (chat tab mute): chatNotificationMute per-device localStorage helper + ChatPanel 🔔/🔕 toggle button + banner + AdminDashboard.playAlertSound→playChatNotificationSound migration via SAFE wrapper export (AV58 keeps mute helper scope locked to ChatPanel.jsx)
+- **Item 2 PARTIAL** (whole-fleet backup): scripts/customer-backup-export.mjs extended with `--all-customers` mode + exportWholeFleet + manifest emit at backups/whole-fleet-customers/{ts-rand}/manifest.json + AV56 integrity contract (manifestHash via shared helper; userNote EXCLUDED Q5b=Y; per-customer failure isolation). Endpoint + UI modals (Tasks 21-26) DEFERRED to V75-bis (context budget; CLI sufficient for admin disaster-recovery; Vercel timeout would block 6500-customer multi-min backup anyway)
+
+**Plan deviations** (documented in commits):
+- Task 13 DROPPED: fbConfigClient mirrors lineConfigClient direct-Firestore (no endpoint needed)
+- BS-16 → BS-17: V64 already owned BS-16 (AppointmentHub branch-scope)
+- Tasks 21+27 consolidated into existing customer-backup-export.mjs `--all-customers`
+- Tasks 24-26 (UI modals), 22+28 (restore CLI extension), 14-16 (FbSettingsTab) = V75-bis
+- Tasks 29-37 (adversarial bank + continuity + Rule I + e2e + Playwright L1) = next session
+- Task 9 (--apply dry-run) = user post-deploy per Rule M
+
+**CONTINUITY contract for นครราชสีมา (preserved)**: ChatPanel uses `listenToChatConversationsByBranch({allBranches:true})` + client-side fall-through filter `!c.branchId || c.branchId === selectedBranchId`. Un-stamped legacy chats remain visible across branches until Rule M backfill --apply runs at user post-deploy.
+
+**Outstanding (user-triggered)**:
+1. `vercel --prod` + `firebase deploy --only firestore:rules` for V75 batch (20 commits + new be_fb_configs rule)
+2. `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` post-deploy (Rule M one-shot)
+3. Rule Q L1 multi-device hands-on per spec § 8 acceptance scenarios
+
+Checkpoint: `.agents/sessions/2026-05-16-v75-partial-ship.md`. Plan: `docs/superpowers/plans/2026-05-16-v75-chat-and-backup-batch.md`. Spec: `docs/superpowers/specs/2026-05-16-v75-chat-and-backup-batch-design.md`.
 
 ### Session 2026-05-16 EOD — V74 customer backup/restore FULL SHIP + DEPLOYED ★★★
 
