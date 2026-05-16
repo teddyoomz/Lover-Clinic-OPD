@@ -43,11 +43,30 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 — V73 Staff In-Branch Chat Widget **DEPLOYED LIVE** + V66 BRANCH closure annotation · master=`aff149e` · prod=`aff149e` · **0 commits ahead** · 10344 PASS · build clean · all 3 deploys + post-probes green
+- **Date last updated**: 2026-05-18 EOD — 10 bugfixes + 2 features + 6 skills installed local · master=`d686d3e` · prod=`aff149e` · **10 commits ahead** · 10463 PASS · build clean · 0 deploys this session (V18 lock — awaiting "deploy" verb)
 - **Branch**: `master`
-- **Last commit**: `aff149e` feat(V73 T17): MP3 staff chat notification sounds (1.9KB + 3.3KB ffmpeg-synthesized CC0 mono MP3s)
-- **Test count**: **10344 PASS / 0 FAIL / 12 skip** (full suite; +107 V73 net across 12 test files)
-- **Deploy state**: prod=`aff149e` LIVE on https://lover-clinic-app.vercel.app. **Deployed 2026-05-18** (this session): (a) `firebase deploy --only firestore:rules,firestore:indexes,storage` ✓ (b) `firebase deploy --only functions:cleanupOldStaffChatMessages` ✓ (cleanupOldStaffChatMessages v2 scheduled asia-southeast1) (c) `vercel --prod --yes` ✓ aliased. Pre-probes + post-probes both green (1=200, 5=200, 9=403, 10=403). Probe cleanup nuked 2+2 docs. Outstanding: Rule Q L1 multi-device hands-on per spec §16 (user-driven, 30 acceptance checks) + V70/V71/V71.A/V71.B L1 hands-on confirms.
+- **Last commit**: `d686d3e` fix(V73-BS1): badge state machine — confirmed label expanded + done driven by serviceCompletedAt
+- **Test count**: **10463 PASS / 0 FAIL / 12 skip** (full suite; +119 V73-related this session)
+- **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16). 10 commits ahead awaiting `vercel --prod` (no rules/functions changes in batch — vercel-only). After deploy: V73 Rule Q L1 hands-on per `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md`.
+
+### Session 2026-05-18 EOD — V73 deploy + 7 follow-up bugfixes + color picker + skill installs ★
+
+After V73 deploy at `aff149e`, user-driven adversarial L1 surfaced multiple bugs. Shipped:
+
+- **V73-L1** (4 user-curse bugs caught L1 minutes after V73 deploy): branch name "—" / verbose placeholder / sender name hidden on own messages / silent listener errors. NEW AV51 invariant — V66-class trust collapse pattern + 21 regression tests
+- **V73 name-edit**: per-device clickable chip in header opens reusable NamePicker pre-filled; 27 tests
+- **V73.RC1**: RowCard `appt.advisor` → `advisorName` (V12 multi-reader-sweep); 6 tests + universal classifier
+- **V71.B-bis → V71.B-ter** (2 iterations): mark-complete gate first relaxed to `hasTreatmentForDay || wasServiceCompleted`, then DROPPED both entirely after user re-report; trust admin's deliberate click; 15 tests
+- **V73 color-picker**: free hex via native `<input type="color">` + `senderColor` field in Firestore + inline-style bubble/name + fallback rose/sky for legacy; 48 tests + brainstorming HARD-GATE spec
+- **V73-DR1**: TFP doctor REQUIRED for `'staff'` AND `'doctor'` saves (only `'vitals'` exception); 9 tests
+- **V73-BS1**: status badge state machine — `confirmed` label "ยืนยันแล้ว · รอการรักษา"; `done` driven by `serviceCompletedAt` (not `hasTreatmentForDay`) so un-mark reverts badge; 13 tests
+- **Skills installed**: everything-claude-code MIT repo evaluated (230 skills / 80 commands / 60 agents); adopted `audit-harness` 7-dimension framework (project) + `continuous-learning-v2` instinct system + 5 security skills + 1 command + 1 agent (user-level) per user request; 229 SKIPPED with reasoning
+
+Rule Q L1 verified live preview for EVERY user-visible change (branchName resolve / placeholder strip / sender name / chat color cycle / advisor=กวางตุ้ง / unlimited mark+unmark cycle / badge state machine round-trip).
+
+Outstanding: `vercel --prod` to ship the 10-commit batch (no Probe-Deploy-Probe — vercel-only).
+
+Checkpoint: `.agents/sessions/2026-05-18-v73-bugfixes-features-skills.md`.
 
 ### Session 2026-05-17 EOD — V73 Staff In-Branch Chat Widget (22 tasks, subagent-driven) ★
 
@@ -2283,24 +2302,24 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-17 EOD.
+Resume LoverClinic — continue from 2026-05-18 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=`5923b72`, prod=`19c6f2f`)
-3. .agents/active.md (10344 PASS, V73 22 tasks DONE local, 18 commits ahead)
+2. SESSION_HANDOFF.md (master=`d686d3e`, prod=`aff149e`)
+3. .agents/active.md (10463 PASS, 10 commits ahead, awaiting deploy)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-17-v73-staff-chat-widget.md
+5. .agents/sessions/2026-05-18-v73-bugfixes-features-skills.md
 
-Status: master=`5923b72`, 18 commits ahead of prod (V73 Staff In-Branch Chat Widget) · 10344/0 vitest · build clean 2.61s. Awaiting user deploy authorization (V18 lock).
+Status: master=`d686d3e`, 10 commits ahead of prod (V73-L1 + name-edit + RC1 advisor + V71.B-ter unlimited toggle + color-picker + V73-DR1 doctor required + V73-BS1 badge state machine + audit-harness skill) · 10463 PASS / 0 FAIL / 12 skip · build clean. Awaiting user deploy authorization (V18 lock).
 
-**Next action**: idle UNTIL user (a) sources MP3 sounds, (b) authorizes combined deploy, or (c) runs Rule Q L1 multi-device hands-on per spec §16.
+**Next action**: idle UNTIL user authorizes `vercel --prod --yes` for combined 10-commit batch (vercel-only — no rules/functions/probes needed since no rules changes this session).
 
 Outstanding (user-triggered):
-- Source 2 MP3s → `public/sounds/staff-chat-notif.mp3` + `staff-chat-mention.mp3` (CC0, ~3-6KB each; widget gracefully handles 404)
-- Deploy: `firebase deploy --only firestore:rules,firestore:indexes,storage:rules` (probe-deploy-probe wraps probes 1+5+9+10) + `firebase deploy --only functions:cleanupOldStaffChatMessages` + `vercel --prod`
-- Rule Q L1 multi-device: 2 browsers (1 desktop + 1 mobile), run all 30 acceptance checks from spec §16 (base 10 + B 5 + C 4 + F 5 + H 4 + cross 2)
-- Pre-existing prior session: V70/V71/V71.A/V71.B L1 hands-on confirms still pending
+- `vercel --prod --yes` to ship V73-L1 + name-edit + color-picker + RC1 + V71.B-ter + V73-DR1 + V73-BS1 (NO Probe-Deploy-Probe required — vercel-only)
+- After deploy: Rule Q L1 multi-device hands-on per `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md` (30 V73 checks + V70/V71/V71.A/V71.B carry-over)
+- (Optional) wire `~/.claude/skills/continuous-learning-v2/hooks/observe.sh` into `~/.claude/settings.json` for instinct auto-capture
+- (Optional) replace ffmpeg-synthesized MP3s with curated CC0 sounds
 
 🚨 **Rules**:
 - Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.

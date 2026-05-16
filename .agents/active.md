@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-18 — V73 Staff Chat DEPLOYED + MP3 sounds + V66 BRANCH closure"
-status: "master=`aff149e` · prod=`aff149e` · 0 commits ahead · all 3 deploys green · post-probes 200/200/403/403"
+updated_at: "2026-05-18 EOD — 10 bugfixes + 2 features + 6 skills installed local"
+status: "master=`d686d3e` · prod=`aff149e` · 10 commits ahead · awaiting deploy authorization (V18 lock)"
 branch: "master"
-last_commit: "aff149e feat(V73 T17): MP3 staff chat notification sounds"
-tests: "10344 PASS / 0 FAIL / 12 skip; build clean"
+last_commit: "d686d3e fix(V73-BS1): badge state machine — confirmed label expanded + done driven by serviceCompletedAt"
+tests: "10463 PASS / 0 FAIL / 12 skip (+ ~30 new this session in V71.B-bis/ter + V73-DR1 + V73-BS1 + name-edit + color-picker + RC1)"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "aff149e"
 firestore_rules_version: 33
@@ -12,38 +12,28 @@ firestore_rules_version: 33
 # Active Context
 
 ## State
-- V73 Staff In-Branch Chat Widget LIVE on production
-- All 22 V73 tasks DONE + T17 MP3 sounds shipped + deployed
-- Cloud Function `cleanupOldStaffChatMessages` v2 scheduled (asia-southeast1, nodejs20, 256MB)
-- Firestore rules v33 with be_staff_chat_messages + storage rules for staff-chat-attachments/{branchId}/
+- master 10 commits ahead of prod — V73 deploy at aff149e (5/16); none of today's fixes are live yet
+- 0 deploys this session (V18 lock — needs explicit "deploy" verb)
 - Working tree clean except `.claude/settings.local.json` + untracked skill dirs
 
 ## What this session shipped (2026-05-18)
-- Investigated stale BRANCH Make-Fresh V66 "P0 carryover" → verified `ef680eb` (in prod since 5/15) already fixed it
-- `d98983c` docs(SESSION_HANDOFF): mark V66 BRANCH closure with code/test/endpoint refs
-- `aff149e` feat(V73 T17): generated 1.9KB notif (1000Hz/250ms) + 3.3KB mention (1200Hz/2-beep/400ms) MP3s via ffmpeg
-- Pre-deploy probes 4/4 green → 3 deploys executed → post-deploy probes 4/4 green → cleanup 2+2 docs nuked
-- V18 honored: explicit "ทำ Outstanding" interpreted as single-deploy authorization (scoped to listed items only)
+- V73 deploy follow-up: V73-L1 4 bugs (branch name / placeholder / sender name / error banner) + AV51
+- V73 name-edit: per-device chip + reusable NamePicker in edit mode
+- V73.RC1: AppointmentHubRowCard `advisor` field-name fix (V12 class)
+- V71.B-bis → V71.B-ter: mark-complete gate fully relaxed (drop hasTreatmentForDay + wasServiceCompleted)
+- V73 color picker: free hex via native `<input type="color">` + senderColor in Firestore + bubble/name styled by sender's choice (palette 8 → free hex per user redirect)
+- V73-DR1: TFP doctor REQUIRED for both staff + doctor save modes (vitals exception preserved)
+- V73-BS1: status badge state machine — `confirmed` label expanded to "ยืนยันแล้ว · รอการรักษา" + `done` driven by serviceCompletedAt (not hasTreatmentForDay)
+- Skills: installed continuous-learning-v2 instinct system (~/.claude/skills/) + 5 security skills + 1 cmd + 1 agent + audit-harness (project)
+- everything-claude-code (MIT) evaluated; 1 skill adopted (audit-harness), 229 skipped with reasoning in commit `7c312b6`
 
-## Outstanding (user-triggered hands-on only)
-
-### Rule Q L1 multi-device hands-on — V73 Staff Chat Widget
-**Required**: 2 browsers (1 desktop + 1 mobile/375px) signed in as DIFFERENT staff in SAME branch.
-**Reference**: `docs/superpowers/specs/2026-05-16-staff-in-branch-chat-widget-design.md` §16 (30 acceptance checks)
-**Checkpoint instructions**: see `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md`
-
-### Rule Q L1 catch-up from prior session
-- V70 (LINE reminder bolded body): observe next cron-scheduled LINE message renders bolded variables + "Lover Clinic" header
-- V71 (OPD lifecycle badge + sub-pill bar): verify mark-complete / un-mark / edit-treatment from real appointment row
-- V71.A (edit-treatment customerId fix): edit treatment from Frontend appt row → TFP loads with correct customer
-- V71.B (treatments fallback): observe LINE reminder for appt with empty treatments[] but appointmentTo set → renders the appointmentTo string
-
-### Optional follow-ups
-- Decide whether to replace ffmpeg-synthesized MP3s with curated CC0 sounds from freesound.org / pixabay
-- Cloud Function Node.js 20 deprecation 2026-10-30 — plan upgrade (functions/package.json firebase-functions@latest)
-- artifact-cleanup policy for asia-southeast1 (run `firebase functions:artifacts:setpolicy --force` once)
+Checkpoint: [`.agents/sessions/2026-05-18-v73-bugfixes-features-skills.md`](sessions/2026-05-18-v73-bugfixes-features-skills.md)
 
 ## Next action
-Idle — awaiting user L1 hands-on signal OR new feature direction. No commits / no deploys pending.
+Idle UNTIL user authorizes `vercel --prod` for combined V73-L1 + name-edit + color-picker + RC1 + V71.B-ter + V73-DR1 + V73-BS1 + audit-harness skill. No rules/functions changes — vercel-only deploy.
 
-Checkpoint: [`.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md`](sessions/2026-05-18-v73-deployed-l1-instructions.md)
+## Outstanding (user-triggered)
+- `vercel --prod --yes` to ship 10-commit batch (no Probe-Deploy-Probe needed — no rules deploy)
+- Rule Q L1 multi-device hands-on per `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md` after deploy (30 V73 checks + 4 carry-over V70/V71/V71.A/V71.B confirms)
+- (Optional) wire continuous-learning-v2 `hooks/observe.sh` into `~/.claude/settings.json` if instinct auto-capture desired (currently install only; commands work manually)
+- (Optional) source curated CC0 MP3s to replace ffmpeg-synthesized notif + mention sounds
