@@ -89,7 +89,9 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   for (const colName of scope.universal) {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // V38 spread-order discipline: docId WINS over any stray data.id field
+      // (legacy ProClinic imports occasionally carry numeric `id` in data).
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       const json = JSON.stringify(docs, null, 2);
       const filePath = `${baseStoragePath}/collections/universal/${colName}.json`;
       await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -110,7 +112,7 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   for (const colName of scope.branchScoped) {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       const json = JSON.stringify(docs, null, 2);
       const filePath = `${baseStoragePath}/collections/branch-scoped/${colName}.json`;
       await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -136,7 +138,8 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
         try {
           const subSnap = await db.collection(`${PREFIX}/be_customers/${cid}/${subName}`).get();
           if (subSnap.empty) continue;
-          const docs = subSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          // V38 spread-order: docId WINS over any stray data.id field
+          const docs = subSnap.docs.map(d => ({ ...d.data(), id: d.id }));
           const json = JSON.stringify(docs, null, 2);
           const filePath = `${baseStoragePath}/collections/subcollections/be_customers__${cid}__${subName}.json`;
           await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -165,7 +168,8 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
       try {
         const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${convId}/messages`).get();
         if (msgsSnap.empty) continue;
-        const docs = msgsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // V38 spread-order: docId WINS over any stray data.id field
+        const docs = msgsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
         const json = JSON.stringify(docs, null, 2);
         const filePath = `${baseStoragePath}/collections/subcollections/chat_conversations__${convId}__messages.json`;
         await storage.file(filePath).save(json, { contentType: 'application/json' });

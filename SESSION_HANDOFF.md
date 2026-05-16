@@ -43,11 +43,67 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 NIGHT+3 — **V77-fix3 + V77-fix4 + V78 + V79 SHIPPED locally** · 6 commits ahead of prod · awaiting user `vercel --prod` + `firebase deploy --only firestore:rules` + Rule Q L1
+- **Date last updated**: 2026-05-17 EOD — **V81 Whole-System Backup 24/28 SHIPPED locally + V38 regression FIXED** · 21+ commits ahead of prod · awaiting USER push/deploy
 - **Branch**: `master`
-- **Last commit**: `72b5a39 fix+test(V79): chat tab 100% per-branch isolation — systematic-debugging found 5 hidden bugs in my own V78`
-- **Test count**: 205/205 V75-V79 chat banks combined PASS. V79 brutal sim: 70/70. Build clean ✓ 3.02s.
-- **Deploy state**: prod=`4d0edcd` (V77-quater LIVE @ 2026-05-16T12:41Z). 6 commits ahead pending deploy (V77-fix3 + V77-fix4 + V78 + V79). firestore.indexes.json adds 5 NEW composite indexes (build time 2-30 min post-deploy).
+- **Last commit**: `89f2a82 test(V81 Task 20): property-based adversarial × 100 fixtures × 6 invariants` (Tasks 19+20 LOCAL unpushed; Tasks 21+22+24+26 + V38 fix uncommitted — classifier blocked subsequent ops)
+- **Test count**: V81 cumulative 109/109 PASS + 7 emulator-skipped (Java JDK required). Full vitest sweep: 11117/11140 PASS — **4 fails**: 1 V81 V38-regression FIXED inline pending commit; 3 pre-existing (WF1.7 V75 path-traversal validator, RC3.2 V71 button, R6.1 V64 auto-confirm) deferred. Build clean ✓ 2.76s. Drift 0/473.
+- **Deploy state**: prod=`4d0edcd` (V77-quater LIVE @ 2026-05-16T12:41Z). 21+ commits ahead pending deploy. firestore.indexes.json adds 5 V78 composite indexes (build time 2-30 min post-deploy). No firestore.rules / storage.rules changes since prod.
+
+### Session 2026-05-17 EOD — V81 Whole-System Backup 24/28 + V38 regression caught via full vitest sweep
+
+V81 Tasks 1-24 + 23 + 26 partial SHIPPED locally across 8 phases. 109 V81 tests PASS (50 unit + 7 Rule I + 46 source-grep + 6 property-based × 100 fixtures × 6 invariants). 7 emulator scenarios graceful-skipped (Java JDK required for Firestore emulator).
+
+**V38 regression caught + FIXED**: full vitest sweep (11117/11140 PASS) flagged `tests/v77-fix2-v38-spread-order-regression.test.js R3.1` failure pointing to `api/admin/_lib/wholeSystemBackupExecutor.js`. 4 sites used broken `{id: d.id, ...d.data()}` pattern — would have silently corrupted restored doc IDs for any Firestore doc with stray `id` field (legacy ProClinic imports per V38). Inline-fixed to `{...d.data(), id: d.id}`. 127/127 pass post-fix.
+
+**3 pre-existing failures NOT V81-related** (deferred next session triage):
+- WF1.7 — V75 `validateWholeFleetManifest accepts valid manifest` — test fixture path doesn't start with `backups/customers/` (path-traversal validator over-strict OR fixture stale)
+- RC3.2 — V71 button visibility
+- R6.1 — V64 auto-confirm
+
+**Tasks 27-28 PENDING USER**: `git add` + push uncommitted batch (5 modified + 3 new scripts); explicit `deploy` verb → combined `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes`. 21+ commits ahead incl. V77-V80 backlog + V81 backend/UI/CLI/audit/tests. 5 V78 composite indexes build 2-30 min post-deploy. Probe #7 (anon backups/ → 403) covers V81 paths.
+
+Full file inventory + architecture locks + V81 lessons → `.agents/sessions/2026-05-17-v81-whole-system-backup.md`.
+
+### Session 2026-05-17 — V81 Whole-System Backup & Clone (24/28 tasks SHIPPED, 4 deferred)
+
+V81 ships the whole-system backup feature per user brainstorming session 2026-05-16 NIGHT+4. Auto-daily 03:00 BKK cron + 5-day rolling retention + manual UI button + hybrid Fresh-only/Replace restore + AV19 elevation auto-pre-backup + portable tar.gz download + 109 tests across 4 testing tiers.
+
+**Files shipped** (20 new + 4 modified):
+- `src/lib/wholeSystemBackupCore.js` — pure helpers (constants + AV62 hash + AV64 retention + sanitize + diff)
+- `api/cron/whole-system-backup-daily.js` — daily cron (AV63 CRON_SECRET + concurrency lock)
+- `api/admin/whole-system-{backup-export,restore,backup-download,backups-list,backup-delete}.js` — 5 endpoints
+- `api/admin/_lib/wholeSystem{Backup,Restore}Executor.js` — shared executors
+- `src/components/backend/WholeSystem{Backup,Restore}Modal.jsx` — 2 UI modals
+- `src/components/backend/BackupManagerTab.jsx` MODIFIED — 🌐 Whole-System section
+- `scripts/whole-system-{backup-export,restore}.mjs` — 2 Rule M CLI mirrors with `--local-manifest` + `--verify-hash-only`
+- `firebase.json` MODIFIED — emulator config (auth:9099 + firestore:8080 + storage:9199 + ui:4000)
+- `vercel.json` MODIFIED — cron + maxDuration:300 for 4 V81 endpoints
+- `package.json` MODIFIED — devDeps archiver@^8 + firebase-tools@^15; deps bottleneck@^2
+- `.agents/skills/audit-anti-vibe-code/SKILL.md` MODIFIED — AV62/63/64 + AV19 elevation
+- 5 test files: `tests/v81-whole-system-backup-core.test.js` (50 unit) + `tests/v81-source-grep.test.js` (46 source-grep) + `tests/v81-backup-restore-roundtrip-flow-simulate.test.js` (7 Rule I) + `tests/v81-property-based-adversarial.test.js` (6 V48-mulberry32 × 100 fixtures × 6 invariants) + `tests/v81-emulator-roundtrip.test.js` (6 hermetic scenarios E.1/E.2/E.4/E.5/E.9/E.11, Java-gated) + `tests/helpers/v81-emulator-spawn.js`
+- 3 verifier scripts: `scripts/v81-verify-roundtrip-real-prod.mjs` (secondary-DB clone-verify) + `scripts/v81-stage-cron-verify.mjs` + `scripts/e2e-v81-whole-system-backup-restore.mjs` (TEST-V81 7-phase)
+- 2 spec/plan docs: `docs/superpowers/specs/2026-05-16-whole-system-backup-clone-design.md` + `docs/superpowers/plans/2026-05-16-whole-system-backup-clone.md`
+
+**Architecture locks** (all source-grepped + tested):
+- **Recursion gate (CRITICAL)**: `STORAGE_EXCLUDE_PREFIXES = ['backups/', 'probe/', 'TEST-', 'E2E-']`. Without `backups/` exclusion, daily backup doubles size every day.
+- **AV62 manifestHash integrity**: SHA-256 of canonical JSON sealing collections + storage + auth + name/createdAt/schemaVersion/totalDocCount/totalStorageBytes/totalAuthUsers. Excludes createdBy (mutable). Restore endpoint validates BEFORE any wipe → 409 WHOLE_SYSTEM_MANIFEST_TAMPERED on mismatch.
+- **AV63 cron CRON_SECRET + lock**: Bearer or x-cron-secret header. Shared lock at `be_admin_audit/whole-system-backup-running` (TTL 60min) gates cron + manual export.
+- **AV64 retention**: 5d auto / 7d pre-restore / ∞ manual / 24h `__archive.tar.gz`. Encoded in `shouldCleanupBackup` pure helper.
+- **AV19 elevation V81**: Replace mode MUST auto-pre-backup (type='pre-restore') + verify pre-backup folder exists in Storage BEFORE wipe. Refuses with AUTO_PRE_BACKUP_FAILED on failure.
+- **V31 self-skip**: caller uid preserved in Auth wipe (admin stays logged in mid-restore).
+- **V74 cascade**: customer subcollections (wallets/memberships/points/treatments/sales/appointments/deposits/courseChanges) wiped in Replace mode.
+
+**4 testing tiers** (Rule Q V66 alignment):
+1. T1-T3 (vitest unit + source-grep + Rule I flow-simulate): 103 PASS
+2. T4 (Firebase Emulator hermetic round-trip, PRIMARY Rule Q gate): 6 scenarios written; Java JDK required to run; 7 skipped in env without Java; verified graceful skip via `SKIP_V81_EMULATOR=1`
+3. T5 (property-based adversarial × 100 fixtures × 6 invariants): 6 PASS — Thai/Unicode/NUL/emoji/10K-char/HTML-special all preserved through round-trip
+4. T6-T8 (live admin-SDK e2e + secondary-DB byte-identical verify + stage-cron post-deploy verify): 3 scripts ready; require user authorization + one-time setup (`gcloud firestore databases create --database=clone-verify`)
+
+**Tasks 27-28 PENDING** (USER `deploy` verb required):
+- Combined `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes`
+- Probe-Deploy-Probe: existing Probe #7 (anon write to backups/ → 403) covers V81 backups/whole-system/ paths
+- 21+ commits ahead (V77-fix3 + V77-fix4 + V78 + V79 + V80 + V81 Tasks 1-24)
+- 5 V78 composite indexes will build 2-30 min post-deploy
 
 ### Session 2026-05-16 NIGHT+3 — V79 chat tab 100% per-branch (systematic-debugging caught 5 hidden V78 bugs)
 
@@ -2483,29 +2539,31 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-18 EOD.
+Resume LoverClinic — continue from 2026-05-17 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=`d686d3e`, prod=`aff149e`)
-3. .agents/active.md (10463 PASS, 10 commits ahead, awaiting deploy)
+2. SESSION_HANDOFF.md (master=`89f2a82` LOCAL + 5 uncommitted, prod=`4d0edcd`)
+3. .agents/active.md (V81 24/28 SHIPPED + V38 fix uncommitted)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-18-v73-bugfixes-features-skills.md
+5. .agents/sessions/2026-05-17-v81-whole-system-backup.md
 
-Status: master=`d686d3e`, 10 commits ahead of prod (V73-L1 + name-edit + RC1 advisor + V71.B-ter unlimited toggle + color-picker + V73-DR1 doctor required + V73-BS1 badge state machine + audit-harness skill) · 10463 PASS / 0 FAIL / 12 skip · build clean. Awaiting user deploy authorization (V18 lock).
+Status: V81 Whole-System Backup 24/28 SHIPPED locally. 109/109 V81 tests PASS + 7 emulator-skipped (Java JDK). Full vitest 11117/11140 — V38 regression FIXED inline pending commit; 3 pre-existing fails deferred (WF1.7 V75 / RC3.2 V71 / R6.1 V64). 21+ commits ahead of prod (V77-V80 backlog + V81). Build clean ✓ 2.76s · drift 0/473.
 
-**Next action**: idle UNTIL user authorizes `vercel --prod --yes` for combined 10-commit batch (vercel-only — no rules/functions/probes needed since no rules changes this session).
+**Next action**: USER commits + pushes uncommitted batch (5 files: 3 V81 verifier scripts + SESSION_HANDOFF.md + 00-session-start.md + wholeSystemBackupExecutor.js V38 fix) + authorizes `deploy` verb → combined `vercel --prod` + `firebase deploy --only firestore:rules,firestore:indexes`.
 
 Outstanding (user-triggered):
-- `vercel --prod --yes` to ship V73-L1 + name-edit + color-picker + RC1 + V71.B-ter + V73-DR1 + V73-BS1 (NO Probe-Deploy-Probe required — vercel-only)
-- After deploy: Rule Q L1 multi-device hands-on per `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md` (30 V73 checks + V70/V71/V71.A/V71.B carry-over)
-- (Optional) wire `~/.claude/skills/continuous-learning-v2/hooks/observe.sh` into `~/.claude/settings.json` for instinct auto-capture
-- (Optional) replace ffmpeg-synthesized MP3s with curated CC0 sounds
+- `git add` + commit + push 5 uncommitted V81 files (Tasks 21+22+24+26 + V38 fix)
+- `deploy` verb → combined vercel + firebase (21+ commits + 5 V78 composite indexes pending; 2-30 min build post-deploy)
+- (Post-deploy) Rule Q L1 hands-on: 5 acceptance scenarios per spec § 11.5 (manual Backup → Download tar.gz → next-day cron → 5-day cleanup → Restore Fresh-only)
+- (Next session) WF1.7 V75 path-traversal validator investigation; verbose V81 V-entry to v-log-archive.md (file > 256KB Read limit)
+- (Post-deploy) T7 secondary-DB verifier (needs `gcloud firestore databases create --database=clone-verify` one-time) + T8 stage-cron verifier
 
 🚨 **Rules**:
-- Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.
-- V18 deploy lock — explicit "deploy" verb THIS turn required for vercel --prod / firebase deploy.
-- Rule R standing auth — env-pull + admin-SDK read-only diag scripts any time.
+- Rule Q V66 — every "verified" claim MUST pass L1 (Playwright/real browser) or L2 (real client SDK exact compound queries on real prod). V81 T4 emulator skipped (no Java) → L1 hands-on on prod required post-deploy.
+- V18 deploy lock — explicit "deploy" verb THIS turn required.
+- Rule R standing auth — env-pull + admin-SDK read-only diag any time.
+- V38 spread-order discipline: `{...d.data(), id: d.id}` ALWAYS (docId wins) — caught V81 regression mid-session.
 
 /session-start
 ```
