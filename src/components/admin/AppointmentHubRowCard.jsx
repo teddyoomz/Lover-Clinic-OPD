@@ -244,7 +244,13 @@ export default function AppointmentHubRowCard({
 
         <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
           <dt className="text-[var(--tx-muted)]">ที่ปรึกษา</dt>
-          <dd className="text-[var(--tx-heading)]">{appt.advisor || '-'}</dd>
+          {/* V73 RC1 fix (2026-05-18) — Canonical Firestore field is `advisorName`
+              (written by AppointmentFormModal:626 + AdminDashboard:3119 +
+              appointmentDepositBatch:536). Pre-fix this read `appt.advisor` which
+              is the legacy FORM-STATE field name on AdminDashboard's local
+              noDepositFormData but NOT the stored doc field — always empty here.
+              Mirror sibling lines 249 (doctorName) + 253 (roomName) pattern. */}
+          <dd className="text-[var(--tx-heading)]">{appt.advisorName || appt.advisor || '-'}</dd>
           <dt className="text-[var(--tx-muted)]">แพทย์</dt>
           <dd className="text-[var(--tx-heading)]">{appt.doctorName || '-'}</dd>
           <dt className="text-[var(--tx-muted)]">ผู้ช่วย</dt>
