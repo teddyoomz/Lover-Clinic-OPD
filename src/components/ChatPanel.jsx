@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, getDocs, addDoc, limit as firestoreLimit } from 'firebase/firestore';
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
@@ -28,7 +28,12 @@ import { listenToFbConfig } from '../lib/fbConfigClient.js';
 // chat_config.{line,facebook}.enabled fallback gated to นครราชสีมา only.
 // Other branches MUST have per-branch be_line_configs/be_fb_configs doc to
 // enable pills — strict per-branch isolation per user "ของใครของมัน 100%".
-import { isLegacyNakhonBranch } from '../lib/chatBranchDefaults.js';
+// V80 (2026-05-16 NIGHT+4) — HARDCODED_NAKHON_BR_ID needed for handleResolve
+// hardcoded fallback (mirrors V77-bis webhook resolver pattern). Prevents
+// future missing-branchId chat_history writes when both conv.branchId AND
+// selectedBranchId are empty (admin BranchContext not yet hydrated at resolve
+// time, OR webhook race window pre-V77-bis legacy convs).
+import { isLegacyNakhonBranch, HARDCODED_NAKHON_BR_ID } from '../lib/chatBranchDefaults.js';
 // V75 Item 4 — Chat tab notification mute (per-device localStorage).
 // AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
 // sound triggers stay independent.
@@ -466,8 +471,17 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     });
   }, []);
   useEffect(() => {
+    // V80 (2026-05-16 NIGHT+4) — NAKHON-gated fall-through.
+    // Pre-V80 `!c.branchId` fall-through universally included missing-branchId
+    // convs in EVERY branch view → exactly the leak V79 was supposed to close.
+    // The 7-doc chat_history leak diag confirmed this pattern at the SIBLING
+    // collection. Same V12 multi-reader-sweep fix mandated here for parity.
+    // NAKHON sees legacy unstamped (continuity contract); other branches strict.
     const filtered = selectedBranchId
-      ? rawConversations.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
+      ? rawConversations.filter(c =>
+          (!c.branchId && isLegacyNakhonBranch(selectedBranchId))
+          || String(c.branchId) === String(selectedBranchId)
+        )
       : rawConversations;
     setConversations(filtered);
   }, [rawConversations, selectedBranchId]);
@@ -504,9 +518,14 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const valid = [];
       raw.forEach(item => {
-        // V76 client-side fall-through filter — mirrors line 506-508 pattern.
+        // V80 (2026-05-16 NIGHT+4) — NAKHON-gated fall-through.
+        // Pre-V80 7 chat_history docs with missing branchId leaked across
+        // ALL branch views (user-reported NIGHT+4: "พระราม 3 / ทดลอง 1 มี
+        // ประวัติแชทเก่าของนครราชสีมา"). Rule M backfill audit doc
+        // v80-chat-history-branch-backfill-* stamped those 7; this filter
+        // gates future missing-branchId docs to NAKHON view only.
         const branchMatches = !selectedBranchId
-          || !item.branchId
+          || (!item.branchId && isLegacyNakhonBranch(selectedBranchId))
           || String(item.branchId) === String(selectedBranchId);
         if (!branchMatches) return;
         if (item.resolvedAt && item.resolvedAt < sevenDaysAgo) {
@@ -564,14 +583,22 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
       // V76 (2026-05-16 EOD+1) — AV59: stamp branchId on chat_history doc.
-      // Inherit conv.branchId (from V75-stamped chat_conversations webhook write)
-      // when present; fall back to selectedBranchId (admin's current branch at
-      // resolve time); fall back to '' as last resort. branchIdSource records
-      // which path was used for audit.
-      const resolvedBranchId = String(conv.branchId || selectedBranchId || '');
+      // V80 (2026-05-16 NIGHT+4) — last-resort `''` REPLACED with hardcoded
+      // NAKHON fallback (mirror V77-bis webhook resolver). The 7 chat_history
+      // docs with missing branchId (Rule M backfilled) were created in this
+      // exact code path when both conv.branchId AND selectedBranchId were
+      // empty. Future writes can no longer produce missing-branchId docs.
+      // branchIdSource records which path was used for audit.
+      const resolvedBranchId = String(
+        conv.branchId
+        || selectedBranchId
+        || HARDCODED_NAKHON_BR_ID
+      );
       const branchIdSource = conv.branchId
         ? 'inherited-from-conv'
-        : (selectedBranchId ? 'resolved-by-admin-branch' : 'unstamped');
+        : (selectedBranchId
+            ? 'resolved-by-admin-branch'
+            : 'fallback-hardcoded-nakhon');
       const historyData = {
         convId: convId,
         displayName: conv.displayName || 'ไม่ทราบชื่อ',
@@ -978,12 +1005,17 @@ export function useChatUnread(db, appId, selectedBranchId = '') {
     });
   }, [db, appId]);
 
-  // V78: per-branch derivation. Fall-through filter (!c.branchId) preserves
-  // legacy un-stamped chats so the badge doesn't go silent during the
-  // V75 backfill transition for นครราชสีมา.
+  // V78: per-branch derivation.
+  // V80 (2026-05-16 NIGHT+4): NAKHON-gated fall-through. Pre-V80 the badge
+  // counted unstamped legacy chats for ALL branches → cross-branch chime +
+  // badge inflation on non-NAKHON branches. Strict per-branch from V80
+  // forward; legacy unstamped only counted for NAKHON (continuity contract).
   const branchScopedConvs = useMemo(() => {
     if (!selectedBranchId) return rawConvs;
-    return rawConvs.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId));
+    return rawConvs.filter(c =>
+      (!c.branchId && isLegacyNakhonBranch(selectedBranchId))
+      || String(c.branchId) === String(selectedBranchId)
+    );
   }, [rawConvs, selectedBranchId]);
 
   const { lineUnread, fbUnread, totalUnread } = useMemo(

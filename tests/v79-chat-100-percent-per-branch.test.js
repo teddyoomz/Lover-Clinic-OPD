@@ -470,15 +470,18 @@ describe('V79.D1 — ChatPanel chat-tab data sources all branch-scoped', () => {
   });
 
   it('D1.4: ChatPanel chat_conversations subscribe-once + useEffect derive on selectedBranchId', () => {
-    // Subscribe-once
+    // V21-fixup (V80, 2026-05-16 NIGHT+4): block window 400 → 1500 chars to absorb
+    // V80 NAKHON-gated fall-through comment block inside the derive useEffect.
     expect(src).toMatch(/listenToChatConversationsByBranch\(\s*\{\s*allBranches:\s*true\s*\}/);
-    // Filter derivation deps
-    const block = src.match(/useEffect\(\(\)\s*=>\s*\{[\s\S]{0,400}?setConversations\(filtered\);\s*\},\s*\[rawConversations,\s*selectedBranchId\]/);
+    const block = src.match(/useEffect\(\(\)\s*=>\s*\{[\s\S]{0,1500}?setConversations\(filtered\);\s*\},\s*\[rawConversations,\s*selectedBranchId\]/);
     expect(block).not.toBeNull();
   });
 
   it('D1.5: chat_history listener has selectedBranchId in deps', () => {
-    const block = src.match(/return listenToChatHistoryByBranch[\s\S]{0,800}?\},\s*\[showHistory,\s*selectedBranchId,\s*db,\s*appId\]/);
+    // V21-fixup (V80): block window 800 → 2000 chars. V80 added NAKHON-gated
+    // filter comment block (~600 chars) inside the listener callback before
+    // the closing `}, [showHistory, ...])` deps line.
+    const block = src.match(/return listenToChatHistoryByBranch[\s\S]{0,2000}?\},\s*\[showHistory,\s*selectedBranchId,\s*db,\s*appId\]/);
     expect(block).not.toBeNull();
   });
 

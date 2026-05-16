@@ -94,9 +94,15 @@ describe('V78 BUG-CHAT-3 — useChatUnread per-branch (root user complaint)', ()
     expect(src).toMatch(/export function useChatUnread\(db,\s*appId,\s*selectedBranchId/);
   });
 
-  it('CHAT-3.2 — filters branchScopedConvs by selectedBranchId with fall-through', () => {
+  it('CHAT-3.2 — filters branchScopedConvs by selectedBranchId (V80: NAKHON-gated fall-through)', () => {
+    // V21-fixup (V80, 2026-05-16 NIGHT+4): pre-V80 fall-through was a bare
+    // `!c.branchId ||` which leaked missing-branchId convs across all branches.
+    // V80 NAKHON-gates the fall-through via `&& isLegacyNakhonBranch(...)`.
+    // Old AND new patterns are both valid forms of "filter by branchId with
+    // continuity for legacy unstamped data"; assertion now matches V80 form.
     expect(src).toMatch(/branchScopedConvs/);
-    expect(src).toMatch(/!c\.branchId\s*\|\|\s*String\(c\.branchId\)\s*===\s*String\(selectedBranchId\)/);
+    expect(src).toMatch(/!c\.branchId\s*&&\s*isLegacyNakhonBranch\(selectedBranchId\)/);
+    expect(src).toMatch(/String\(c\.branchId\)\s*===\s*String\(selectedBranchId\)/);
   });
 
   it('CHAT-3.3 — useMemo derives counts from branchScopedConvs', () => {

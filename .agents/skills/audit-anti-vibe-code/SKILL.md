@@ -1669,9 +1669,48 @@ ChatPanel.jsx is the SOLE importer; callers consume the safe wrapper
 **Backfill script (Rule M)**: `scripts/v76-backfill-chat-history-branchid.mjs` stamps `branchId: นครราชสีมา` + `branchIdSource: 'backfill-v76-sole-active'` on legacy unstamped docs.
 **Priority**: CRITICAL — user-visible cross-branch leak.
 
+### AV60 — Every React hook used MUST be imported (V80 P0a, 2026-05-16 NIGHT+4)
+
+**Trigger**: every React hook call site (`useState(`, `useEffect(`, `useMemo(`, `useCallback(`, `useRef(`, `useLayoutEffect(`, `useId(`, `useTransition(`, `useDeferredValue(`, `useSyncExternalStore(`, `useContext(`, `useReducer(`, `useImperativeHandle(`, `useDebugValue(`, `useInsertionEffect(`) in any `.jsx`/`.js`/`.tsx` file under `src/` or `api/` MUST be imported from `'react'` via the line-1 `import { ... } from 'react'` statement (or via `React.X` namespace if `import React from 'react'` form).
+
+**Why**: V78 added `useMemo()` calls inside `useChatUnread` (ChatPanel.jsx) but did NOT add `useMemo` to the line-1 React import. Vite/Rolldown build PASSED (identifiers resolved at runtime, not build time). 70 V79 source-grep tests + 57 V78 source-grep tests all GREEN because they verified code SHAPE not runtime MOUNT. Production user opened admin page → React renders AdminDashboard → AdminDashboard imports + renders ChatPanel → `useChatUnread()` invoked → `useMemo()` reference → `ReferenceError: useMemo is not defined` → React unmounts entire tree → **whole frontend black screen**.
+
+**Class-of-bug**: V11 (mock-shadowed export) family at the React-hook-import boundary. Same family also as V21 (source-grep tests can lock broken code shape). Combination of build-doesn't-static-check-identifiers + tests-don't-mount-runtime is the gap.
+
+**Sanctioned exceptions**: NONE. Every hook call must be paired with its import — no whitelisting.
+
+**Grep target**: `scripts/diag-react-hook-import-drift.mjs` scans both `src/` and `api/` for any drift. Output `0` means clean; non-zero = build-failing class-of-bug.
+
+**Source-grep test**: `tests/v80-chat-fall-through-nakhon-gated.test.js` group D verifies ChatPanel.jsx imports `useMemo` from react + the diag script file exists.
+
+**Priority**: CRITICAL — runtime crash takes down entire React tree.
+
+### AV61 — Chat fall-through filters MUST be NAKHON-gated (V80 P0b, 2026-05-16 NIGHT+4)
+
+**Trigger**: every fall-through filter for missing-branchId chat docs (`chat_conversations` + `chat_history`) in `src/components/ChatPanel.jsx` (3 sites: chat_conversations setConversations effect + chat_history listenToChatHistoryByBranch callback + useChatUnread.branchScopedConvs) MUST gate the `!item.branchId` continuity path via `isLegacyNakhonBranch(selectedBranchId)`. Non-NAKHON branches strictly require stamped branchId; missing-branchId docs are EXCLUDED for those branches.
+
+**Writer contract** (V77-bis mirror): `handleResolve` last-resort branchId stamp MUST use `HARDCODED_NAKHON_BR_ID` (not empty string). Pre-V80 the chain `conv.branchId || selectedBranchId || ''` could write empty branchId when both upstream sources were unset → future reads fell through universally.
+
+**Why**: V76 + V77-bis closed the WRITE side (webhook resolvers + backfill 3,281 docs). V79 closed the lineEnabled/fbEnabled gate. V80 closes the LAST sibling READER family. User-reported NIGHT+4: 7 chat_history docs created in the V76 deploy race window had missing branchId → ChatPanel filter `!item.branchId || item.branchId === selectedBranchId` fall-through INCLUDED them in EVERY branch view → "พระราม 3 และ ทดลอง 1 มีประวัติแชทเก่าของนครราชสีมา". Rule M backfill (`scripts/v80-backfill-chat-history-missing-branchid.mjs`) stamped the 7 stragglers; V80 code fix prevents future cross-branch fall-through.
+
+**Class-of-bug**: V12 multi-reader-sweep at fall-through-filter boundary. Mirrors V79 CHAT-9 strict-isolation pattern at the read layer.
+
+**Sanctioned exceptions**: NONE. All 3 reader sites must NAKHON-gate; writer must hardcoded-fallback.
+
+**Grep target** (source-grep contract):
+- `src/components/ChatPanel.jsx` imports `isLegacyNakhonBranch` + `HARDCODED_NAKHON_BR_ID` from `chatBranchDefaults.js`.
+- 3 reader sites use `!c.branchId && isLegacyNakhonBranch(selectedBranchId)` (or `!item.branchId` form).
+- handleResolve uses `conv.branchId || selectedBranchId || HARDCODED_NAKHON_BR_ID` last-resort.
+- Anti-regression: NO bare `!c.branchId || String(c.branchId)` or `!item.branchId || String(item.branchId)` patterns remain.
+
+**Source-grep test**: `tests/v80-chat-fall-through-nakhon-gated.test.js` groups A + B.
+**Backfill script (Rule M)**: `scripts/v80-backfill-chat-history-missing-branchid.mjs` (7 chat_history docs → NAKHON, idempotent).
+**Diag script (Rule R)**: `scripts/diag-v76-chat-history-branchid-state.mjs` + `scripts/diag-v76-chat-conversations-branchid-state.mjs` enumerate branchId distribution.
+**Priority**: CRITICAL — user-visible cross-branch leak even AFTER V76 + V77-bis.
+
 ## Priority
 
-**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**.
+**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**.
 **HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.

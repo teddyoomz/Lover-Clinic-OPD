@@ -85,14 +85,16 @@ describe('V76 — chat_history BSA + AV59 source-grep regression', () => {
     });
 
     it('C.2 — history listener uses listenToChatHistoryByBranch (NOT raw onSnapshot)', () => {
-      // Find the showHistory listener block
-      const block = src.match(/if\s*\(!showHistory\)\s*return;[\s\S]{0,1500}?\}, \[showHistory[\s\S]{0,200}?\]\);/m);
+      // V21-fixup (V80, 2026-05-16 NIGHT+4): window 1500 → 2500 chars to absorb
+      // V80 NAKHON-gated fall-through comment block (~600 chars added).
+      const block = src.match(/if\s*\(!showHistory\)\s*return;[\s\S]{0,2500}?\}, \[showHistory[\s\S]{0,200}?\]\);/m);
       expect(block).not.toBeNull();
       expect(block[0]).toMatch(/listenToChatHistoryByBranch/);
     });
 
     it('C.3 — history listener deps include selectedBranchId (BS-9 refresh discipline)', () => {
-      const block = src.match(/if\s*\(!showHistory\)\s*return;[\s\S]{0,1500}?\}, \[(showHistory[^\]]*)\]\);/m);
+      // V21-fixup (V80): window 1500 → 2500. Same block as C.2.
+      const block = src.match(/if\s*\(!showHistory\)\s*return;[\s\S]{0,2500}?\}, \[(showHistory[^\]]*)\]\);/m);
       expect(block).not.toBeNull();
       expect(block[1]).toMatch(/selectedBranchId/);
     });
@@ -102,21 +104,29 @@ describe('V76 — chat_history BSA + AV59 source-grep regression', () => {
     });
 
     it('C.5 — handleResolve stamps branchId on chat_history doc (AV59)', () => {
-      const block = src.match(/Save minimal history record[\s\S]{0,1500}?addDoc\(historyRef, historyData\);/m);
+      // V21-fixup (V80): window 1500 → 2500 chars to absorb V80 hardcoded-fallback comments.
+      const block = src.match(/Save minimal history record[\s\S]{0,2500}?addDoc\(historyRef, historyData\);/m);
       expect(block).not.toBeNull();
       expect(block[0]).toMatch(/branchId:\s*resolvedBranchId/);
       expect(block[0]).toMatch(/branchIdSource/);
     });
 
-    it('C.6 — fallback chain conv.branchId → selectedBranchId → empty', () => {
-      const block = src.match(/Save minimal history record[\s\S]{0,1500}?addDoc\(historyRef, historyData\);/m);
-      // resolvedBranchId computed via conv.branchId || selectedBranchId || ''
+    it('C.6 — fallback chain conv.branchId → selectedBranchId → (V80: HARDCODED_NAKHON_BR_ID)', () => {
+      // V21-fixup (V80, 2026-05-16 NIGHT+4): the last-resort `''` was REPLACED
+      // with HARDCODED_NAKHON_BR_ID per V80 hardcoded-fallback. The core
+      // fallback chain `conv.branchId || selectedBranchId` is preserved.
+      const block = src.match(/Save minimal history record[\s\S]{0,2500}?addDoc\(historyRef, historyData\);/m);
       expect(block[0]).toMatch(/conv\.branchId\s*\|\|\s*selectedBranchId/);
+      // V80 last-resort is no longer empty string — must be HARDCODED_NAKHON_BR_ID
+      expect(block[0]).toMatch(/HARDCODED_NAKHON_BR_ID/);
     });
 
-    it('C.7 — branchIdSource attribution distinguishes inherited vs admin-resolved', () => {
-      const block = src.match(/Save minimal history record[\s\S]{0,1500}?addDoc\(historyRef, historyData\);/m);
-      expect(block[0]).toMatch(/inherited-from-conv|resolved-by-admin-branch|unstamped/);
+    it('C.7 — branchIdSource attribution distinguishes inherited vs admin-resolved vs V80-fallback', () => {
+      // V21-fixup (V80): the legacy 'unstamped' marker was renamed to
+      // 'fallback-hardcoded-nakhon' since V80 writes can no longer produce
+      // empty-branchId. Accept any of the three known sources.
+      const block = src.match(/Save minimal history record[\s\S]{0,2500}?addDoc\(historyRef, historyData\);/m);
+      expect(block[0]).toMatch(/inherited-from-conv|resolved-by-admin-branch|fallback-hardcoded-nakhon|unstamped/);
     });
   });
 
