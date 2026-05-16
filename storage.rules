@@ -16,11 +16,20 @@ service firebase.storage {
       );
     }
 
-    // ─── V40 — branch backup storage (admin-only) ─────────────────────────
-    // Pattern: backups/{branchId}/*.json (manual-* + auto-pre-fresh-*)
-    // Admin SDK bypasses these (server-side endpoints write here); rule
-    // gates client-side reads via signed URLs (anonymous read OK with token).
-    match /backups/{branchId}/{file=**} {
+    // ─── V40 + V74 — backup storage (admin-only) ──────────────────────────
+    // Patterns covered by this rule (single-segment prefix + file path):
+    //   - V40: backups/{branchId}/*.json — branch backup files
+    //   - V40: backups/{branchId}/storage/... — branch backup Storage tree (post-2026-05-14)
+    //   - V40: backups/central-stock/.../* — central stock backup files (V15)
+    //   - V74: backups/customers/{customerId}/{ts-rand}/backup.json — per-customer backup
+    //   - V74: backups/customers/{customerId}/{ts-rand}/storage/... — Storage tree
+    // Admin SDK bypasses these rules (server endpoints write here directly);
+    // rule gates client-side anonymous reads via signed URLs (server mints
+    // 24h signed URLs for admin to download/share). Variable name
+    // {prefix} captures any of: branches / central-stock / customers.
+    // Probe-Deploy-Probe #7 (V40 branch) + #11 (V74 customer) verify
+    // anon write returns 401/403.
+    match /backups/{prefix}/{file=**} {
       allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
