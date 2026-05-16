@@ -72,10 +72,58 @@ describe('V81 source-grep — wholeSystemBackupCore exports complete', () => {
   });
 });
 
-// Future appends from Tasks 7-17:
-// - AV63 (Task 7): cron CRON_SECRET + lock
-// - manual endpoint (Task 8): verifyAdminToken + shares lock
-// - restore endpoint Fresh-only (Task 9): validateWholeSystemManifest + assertTargetEmpty
-// - restore Replace mode (Task 10): AV19 elevation auto-pre-backup
-// - download endpoint (Task 11): archiver lib + 24h signed URL
-// - list+delete (Task 12): validate manifest + NAME_PATTERN
+// ─── Task 7 — AV63: cron CRON_SECRET gate + concurrency lock ───────────────
+
+describe('V81 AV63 — cron CRON_SECRET gate + concurrency lock', () => {
+  const cron = READ('api/cron/whole-system-backup-daily.js');
+  const exec = READ('api/admin/_lib/wholeSystemBackupExecutor.js');
+
+  it('cron verifies CRON_SECRET header (Authorization OR x-cron-secret)', () => {
+    expect(cron).toMatch(/CRON_SECRET/);
+    expect(cron).toMatch(/authorization|x-cron-secret/i);
+    expect(cron).toMatch(/status\(401\)/);
+  });
+
+  it('cron acquires + releases lock doc be_admin_audit/whole-system-backup-running', () => {
+    expect(cron).toMatch(/whole-system-backup-running/);
+    expect(cron).toMatch(/runTransaction/);
+    expect(cron).toMatch(/LOCK_BUSY/);
+    expect(cron).toMatch(/lockRef\.delete\(\)/);
+  });
+
+  it('cron sets runCleanup:true (auto-type triggers cleanup per spec §5.1)', () => {
+    expect(cron).toMatch(/runCleanup:\s*true/);
+    expect(cron).toMatch(/type:\s*['"]auto['"]/);
+  });
+
+  it('executor imports buildWholeSystemManifest + computeWholeSystemManifestHash (AV62)', () => {
+    expect(exec).toMatch(/buildWholeSystemManifest/);
+    expect(exec).toMatch(/computeWholeSystemManifestHash/);
+  });
+
+  it('executor uses formatBackupName + auto/manual/pre-restore types', () => {
+    expect(exec).toMatch(/formatBackupName\(type/);
+  });
+
+  it('executor invokes cleanup via shouldCleanupBackup (AV64)', () => {
+    expect(exec).toMatch(/shouldCleanupBackup/);
+  });
+
+  it('executor emits audit doc to be_admin_audit collection with whole-system-backup id', () => {
+    // Path built via template literal `${PREFIX}/be_admin_audit/${auditId}` where
+    // auditId = `whole-system-backup-${name}-${Date.now()}-${randomHex}`.
+    expect(exec).toMatch(/be_admin_audit/);
+    expect(exec).toMatch(/['"`]whole-system-backup-/);
+    expect(exec).toMatch(/auditId/);
+  });
+
+  it('executor sanitizes auth users via sanitizeAuthUser', () => {
+    expect(exec).toMatch(/sanitizeAuthUser/);
+  });
+
+  it('executor enumerates Storage via resolveStorageScope (recursion gate)', () => {
+    expect(exec).toMatch(/resolveStorageScope/);
+  });
+});
+
+// Future appends from Tasks 8-17 ...
