@@ -43,11 +43,25 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EOD — V70 + V71 + V71.A + V71.B all DEPLOYED LIVE · master=`19c6f2f` · prod=`19c6f2f` · build clean (2.59s) · firestore rules v32 (unchanged)
+- **Date last updated**: 2026-05-17 EOD — V73 Staff In-Branch Chat Widget 22 tasks DONE local · master=`5923b72` · prod=`19c6f2f` · 18 commits ahead · 10344 PASS · build clean (2.61s) · firestore rules+index+storage updated LOCALLY (not deployed)
 - **Branch**: `master`
-- **Last commit**: `19c6f2f` fix(V71.B): LINE reminder {{treatments}} falls back to appt.appointmentTo
-- **Test count**: **10237 PASS / 0 FAIL / 12 skip** (full suite); V70 32/32 + V71 ~67 + V71.A 20/20 + V71.B 9/9 + AV49/AV50 audits all GREEN
-- **Deploy state**: prod=`19c6f2f` LIVE. 5 vercel-only deploys this session (V67-V69 prior + V70+V71.A combined + V71.B). Firebase rules unchanged; probe-deploy-probe script needs V50-followup-2 update (probes 2/3/4 abort on removed `clinic_settings/proclinic_session*` endpoints).
+- **Last commit**: `5923b72` docs(V73): active.md update — all 22 tasks DONE locally
+- **Test count**: **10344 PASS / 0 FAIL / 12 skip** (full suite; +107 V73 net across 12 test files)
+- **Deploy state**: prod=`19c6f2f` LIVE. 0 deploys this session — Vercel + firebase rules/indexes/storage + Cloud Function pending user authorization (V18 lock).
+
+### Session 2026-05-17 EOD — V73 Staff In-Branch Chat Widget (22 tasks, subagent-driven) ★
+
+22-task subagent-driven implementation of FB-style floating staff chat widget for in-branch coordination. Brainstorming HARD-GATE produced spec with 4 base UX decisions + 4 enhanced features picked from world-class research (Slack/Discord/Teams/WhatsApp/Telegram/TigerConnect/Klara).
+
+- **Foundation (T1-T4)**: `staffChatIdentity` cookie helpers (crypto-secure deviceId per Rule C2) · `staffChatClient.buildMessageDoc` + raw `listenToStaffChatMessages`/`addStaffChatMessage` (V54 BS-13 safe-by-default mirror) + scopedDataLayer re-exports · firestore.rules + index + probe #9 + V27 cleanup sweep · `useStaffChat` hook
+- **Base UI (T5-T10)**: 8 components (Bubble + Widget + Panel + Header + Message + List + Composer + NamePicker) · App.jsx dual-mount inside both provider chains (gates `user && selectedBranchId && !needsPublicAuth`)
+- **Features**: B @mentions dropdown + chip + dispatch (T11) · C Reply-to-message quote (T12) · F Image paste/upload + Storage rules + probe #10 + lightbox (T14+T15) · H Customer/appt auto-link via MessageBody parser (T16)
+- **Ops + verify**: Cloud Function 7-day cleanup (T18) · Rule I flow-simulate F1-F4 (T19) · Rule Q L2 real-client-SDK verify script (T20) · source-grep regression locks SG1-SG7 (T13) · COLLECTION_MATRIX classification + BSA Rule L lock comment (T22)
+- **T17 sounds deferred** to user (widget `.catch(() => {})` handles missing MP3 gracefully)
+
+Outstanding: source 2 MP3s in `public/sounds/`, deploy rules+indexes+storage+functions+vercel, Rule Q L1 multi-device hands-on (spec §16 — 30 acceptance checks).
+
+Checkpoint: `.agents/sessions/2026-05-17-v73-staff-chat-widget.md`.
 
 ### Session 2026-05-16 EOD — V70 + V71 + V71.A + V71.B all DEPLOYED LIVE ★
 
@@ -2269,35 +2283,28 @@ User picked recommended order (16.5 → 16.3 → 16.2 → 16.1) + intel /admin/o
 ## Resume Prompt
 
 ```
-Resume LoverClinic — continue from 2026-05-16 EOD.
+Resume LoverClinic — continue from 2026-05-17 EOD.
 
 Read in order BEFORE any tool call:
 1. CLAUDE.md
-2. SESSION_HANDOFF.md (master=`19c6f2f` · prod=`19c6f2f` LIVE)
-3. .agents/active.md (10237 PASS / 0 FAIL; V70+V71+V71.A+V71.B all live)
+2. SESSION_HANDOFF.md (master=`5923b72`, prod=`19c6f2f`)
+3. .agents/active.md (10344 PASS, V73 22 tasks DONE local, 18 commits ahead)
 4. .claude/rules/00-session-start.md (Rule Q V66 + iron-clad A-R)
-5. .agents/sessions/2026-05-16-v70-v71-v71a-v71b-saga.md
+5. .agents/sessions/2026-05-17-v73-staff-chat-widget.md
 
-Status: master=`19c6f2f`, prod=`19c6f2f` LIVE on https://lover-clinic-app.vercel.app · OPD lifecycle badge + sub-pill + un-mark + LINE bold body + customerId edit-treatment fix + appt.appointmentTo fallback ALL deployed · 10237/0 vitest · build clean (2.59s).
+Status: master=`5923b72`, 18 commits ahead of prod (V73 Staff In-Branch Chat Widget) · 10344/0 vitest · build clean 2.61s. Awaiting user deploy authorization (V18 lock).
 
-**Next action**: idle UNTIL user reports L1 hands-on findings.
-
-Hands-on test loop (V70+V71+V71.A+V71.B end-to-end):
-1. Next LINE reminder cron fire (~21:30 daily) → 🏥 **Lover Clinic** (space), body vars bolded, **บริการ: botox** (not "-")
-2. /admin → ปฏิทิน tab → "วันนี้" sub-tab → row has OPD stepper (3-dot ซักประวัติ/แพทย์/เสร็จ) + LINE chip inline (no overlap) + "✓ ลูกค้ารับบริการเรียบร้อย" button
-3. Click button → confirm → row moves to "เสร็จแล้ว" sub-pill with count +1
-4. Click "เสร็จแล้ว" sub-pill → row visible + "↩ กลับไปคิวรอ" button + "แก้ไขบันทึกการรักษา" works (no "ไม่พบ customerId")
-5. Click "↩ กลับไปคิวรอ" → confirm → row returns to "กำลังรอ"
-6. Tomorrow tab → sub-pill bar HIDDEN, stepper HIDDEN for all rows
+**Next action**: idle UNTIL user (a) sources MP3 sounds, (b) authorizes combined deploy, or (c) runs Rule Q L1 multi-device hands-on per spec §16.
 
 Outstanding (user-triggered):
-- L1 verification of all 6 surfaces above (especially LINE cron tomorrow)
-- Probe-deploy-probe script update (V50-followup-2: drop probes 2/3/4 for `clinic_settings/proclinic_session*` + `pc_appointments`)
-- Deferred V71 polish (T2-M1+M2 / T3-M1+M4 / T4-M1 / T5-M1-M5 / T6-M2+M3 / T9-M-final-1..5 — all non-blocking)
+- Source 2 MP3s → `public/sounds/staff-chat-notif.mp3` + `staff-chat-mention.mp3` (CC0, ~3-6KB each; widget gracefully handles 404)
+- Deploy: `firebase deploy --only firestore:rules,firestore:indexes,storage:rules` (probe-deploy-probe wraps probes 1+5+9+10) + `firebase deploy --only functions:cleanupOldStaffChatMessages` + `vercel --prod`
+- Rule Q L1 multi-device: 2 browsers (1 desktop + 1 mobile), run all 30 acceptance checks from spec §16 (base 10 + B 5 + C 4 + F 5 + H 4 + cross 2)
+- Pre-existing prior session: V70/V71/V71.A/V71.B L1 hands-on confirms still pending
 
 🚨 **Rules**:
 - Rule Q V66 — every "verified" claim MUST pass L1 (Playwright real-browser) or L2 (real client SDK with exact compound queries on real prod). Mock-consistent ≠ reality-verified.
-- V18 deploy lock — user explicit "deploy" verb THIS turn required for vercel --prod.
+- V18 deploy lock — explicit "deploy" verb THIS turn required for vercel --prod / firebase deploy.
 - Rule R standing auth — env-pull + admin-SDK read-only diag scripts any time.
 
 /session-start
