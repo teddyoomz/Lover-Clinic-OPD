@@ -4,6 +4,11 @@
 // (legacy clinic_settings/chat_config era).
 // AV57 invariant: every chat_conversations write in api/webhook/facebook.js
 // MUST stamp branchId + branchIdSource resolved via this helper.
+//
+// V77-bis (2026-05-16 EOD+1) — HARDCODED last-resort fallback (see
+// lineChatBranchResolver.js for full rationale). Guards against missing
+// LOVER_DEFAULT_BRANCH_ID env in Vercel runtime.
+const HARDCODED_NAKHON_BR_ID = 'BR-1777873556815-26df6480';
 
 /**
  * Resolve branchId + source label for a chat_conversations stamp.
@@ -22,10 +27,11 @@ export async function resolveChatBranchIdFromFbEvent(payload, {
 } = {}) {
   const entries = Array.isArray(payload?.entry) ? payload.entry : [];
   const pageId = entries[0]?.id || '';
-  const fallback = String(fallbackBranchId || '');
-  const fallbackSource = fallback
+  // V77-bis: explicit fallbackBranchId arg wins; else hardcoded นครราชสีมา.
+  const fallback = String(fallbackBranchId || HARDCODED_NAKHON_BR_ID);
+  const fallbackSource = fallbackBranchId
     ? 'webhook-fb-fallback-legacy'
-    : 'webhook-fb-fallback-empty';
+    : 'webhook-fb-fallback-hardcoded-nakhonratchasima';
 
   if (!pageId || typeof getFbConfigByPageId !== 'function') {
     return { branchId: fallback, branchIdSource: fallbackSource };

@@ -4,6 +4,15 @@
 // when no match (preserves existing flow through migration).
 // AV57 invariant: every chat_conversations write in api/webhook/line.js
 // MUST stamp branchId + branchIdSource resolved via this helper.
+//
+// V77-bis (2026-05-16 EOD+1) — HARDCODED last-resort fallback constant for
+// นครราชสีมา (sole-active pre-V75 branch). When LOVER_DEFAULT_BRANCH_ID env
+// is missing in Vercel runtime, webhook would have stamped branchId:''
+// causing client-side `!c.branchId` filter fall-through → cross-branch leak.
+// User-reported bug: 1 live chat doc with branchId:'' / branchIdSource:
+// 'webhook-line-fallback-empty' caused visible leak in ทดลอง 1 + พระราม 3
+// branches. Hardcoded constant guards against forgotten env config.
+const HARDCODED_NAKHON_BR_ID = 'BR-1777873556815-26df6480';
 
 /**
  * Resolve branchId + source label for a chat_conversations stamp.
@@ -21,10 +30,12 @@ export async function resolveChatBranchIdFromLineEvent(payload, {
   onError = () => {},
 } = {}) {
   const destination = payload?.destination || '';
-  const fallback = String(fallbackBranchId || '');
-  const fallbackSource = fallback
+  // V77-bis: explicit fallbackBranchId arg wins; else fall back to hardcoded
+  // นครราชสีมา constant (NEVER empty string — guards against missing env).
+  const fallback = String(fallbackBranchId || HARDCODED_NAKHON_BR_ID);
+  const fallbackSource = fallbackBranchId
     ? 'webhook-line-fallback-nakhonratchasima'
-    : 'webhook-line-fallback-empty';
+    : 'webhook-line-fallback-hardcoded-nakhonratchasima';
 
   if (!destination || typeof getLineConfigByDestination !== 'function') {
     return { branchId: fallback, branchIdSource: fallbackSource };
