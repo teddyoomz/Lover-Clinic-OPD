@@ -14,6 +14,12 @@
     },
     "api/admin/branch-backups.js": {
       "maxDuration": 30
+    },
+    "api/admin/whole-fleet-customer-backup-export.js": {
+      "maxDuration": 300
+    },
+    "api/admin/whole-fleet-customer-restore.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

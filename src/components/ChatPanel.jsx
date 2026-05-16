@@ -105,7 +105,7 @@ export function playAlertSound() {
 // (FbSettingsTab) tabs. Per user directive: "ถ้ามึงจะไปดึงข้อมูลจาก tab fb
 // และ line ของแต่ละสาขา ใน backend แล้ว มึงก็ตัดหน้านี้ที่กุส่งให้ออกไป
 // เพราะไม่จำเป็นแล้ว ไปดึงเอาใน Backend ที่เดียวเลย". Old function deleted
-// (lines 104-262); ⚙ button + setShowSettings(true) call sites swept below.
+// (lines 104-262); ⚙ button + showSettings state swept below.
 // Backwards-compat: clinic_settings/chat_config doc remains in Firestore for
 // auto-seed migration into per-branch be_fb_configs/{nakhonratchasima} on first
 // FbSettingsTab open (V75 fbConfigClient auto-seed contract preserved).

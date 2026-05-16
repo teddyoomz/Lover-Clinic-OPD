@@ -13,6 +13,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Download, Edit3, Trash2, RefreshCw, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import { auth } from '../../firebase.js';
+// V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger modal.
+import WholeFleetBackupModal from './WholeFleetBackupModal.jsx';
 
 async function authedFetch(url, body) {
   const token = await auth.currentUser?.getIdToken();
@@ -42,6 +44,8 @@ export default function BackupManagerTab() {
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  // V77 (2026-05-16 EOD+1) — whole-fleet backup modal
+  const [wholeFleetModalOpen, setWholeFleetModalOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -115,10 +119,28 @@ export default function BackupManagerTab() {
             — Restore: ใช้แท็บเฉพาะประเภท (Customer Data Recovery / Branch Backup / Central Stock)
           </p>
         </div>
-        <button onClick={reload} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 hover:bg-gray-800 flex items-center gap-1.5">
-          <RefreshCw size={12} /> รีโหลด
-        </button>
+        <div className="flex items-center gap-2">
+          {/* V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger button. */}
+          <button
+            onClick={() => setWholeFleetModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs bg-amber-700 hover:bg-amber-600 text-white font-bold flex items-center gap-1.5"
+            data-testid="whole-fleet-backup-trigger"
+            title="สำรองลูกค้าทุกคนพร้อมกัน"
+          >
+            📦 สำรองลูกค้าทุกคน
+          </button>
+          <button onClick={reload} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 hover:bg-gray-800 flex items-center gap-1.5">
+            <RefreshCw size={12} /> รีโหลด
+          </button>
+        </div>
       </div>
+
+      {/* V77 (2026-05-16 EOD+1) — Whole-fleet backup modal */}
+      <WholeFleetBackupModal
+        isOpen={wholeFleetModalOpen}
+        onClose={() => setWholeFleetModalOpen(false)}
+        onComplete={() => { reload(); }}
+      />
 
       {/* Filter chips + search */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
