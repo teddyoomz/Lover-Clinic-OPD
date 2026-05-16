@@ -17,6 +17,7 @@ import { auth } from '../../firebase.js';
 export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
   const [userNote, setUserNote] = useState('');
   const [branchIdFilter, setBranchIdFilter] = useState('');
+  const [maxCustomers, setMaxCustomers] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -31,20 +32,41 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('ไม่ได้ login');
+      const payload = {
+        userNote: userNote.trim(),
+        branchId: branchIdFilter.trim(),
+      };
+      const maxN = parseInt(maxCustomers, 10);
+      if (Number.isFinite(maxN) && maxN > 0) payload.maxCustomers = maxN;
       const r = await fetch('/api/admin/whole-fleet-customer-backup-export', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          userNote: userNote.trim(),
-          branchId: branchIdFilter.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
-      const json = await r.json();
-      if (!r.ok || !json.ok) {
-        throw new Error(json.error || `HTTP ${r.status}`);
+      // V77-fix1 (2026-05-16 NIGHT — Rule Q L1 user-found bug): the
+      // endpoint can return non-JSON bodies (Vercel's "An error occurred"
+      // plain text on timeout/crash/OOM). Parse defensively: read text,
+      // try JSON; on fail, surface the raw body + HTTP status so the
+      // real failure mode is visible to the admin instead of being
+      // masked by a generic "Unexpected token 'A'..." JSON.parse error.
+      const text = await r.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        // Non-JSON response (usually Vercel timeout / crash page)
+        const head = text.slice(0, 240).trim();
+        throw new Error(
+          `HTTP ${r.status} — non-JSON response (likely Vercel timeout/crash). ` +
+            `Body head: "${head}" · ลองลด maxCustomers (เช่น 5-10) หรือใช้ CLI: ` +
+            `scripts/customer-backup-export.mjs --all-customers --apply`
+        );
+      }
+      if (!r.ok || !json || !json.ok) {
+        throw new Error(json?.error || `HTTP ${r.status}`);
       }
       setResult(json);
       if (typeof onComplete === 'function') onComplete(json);
@@ -124,6 +146,30 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
                 placeholder="BR-XXXX (optional)"
                 data-testid="whole-fleet-branch-filter"
               />
+            </label>
+
+            <label className="block">
+              <span className="text-sm text-slate-200">
+                ทดสอบเฉพาะ N ลูกค้าแรก (optional — เว้นว่าง = ทุกคน)
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="10000"
+                value={maxCustomers}
+                onChange={(e) => setMaxCustomers(e.target.value)}
+                disabled={busy}
+                className="mt-1 w-full p-2 bg-slate-800 rounded border border-slate-700 text-sm text-slate-100 font-mono disabled:opacity-50"
+                placeholder="ลองใส่ 5 ถ้า timeout"
+                data-testid="whole-fleet-max-customers"
+              />
+              <span className="text-[10px] text-slate-500">
+                Endpoint หมดเวลาที่ 300s. ถ้าลูกค้าเยอะ + Storage เยอะ → ลองใส่
+                5-20 ก่อน. ถ้ายังหมดเวลา → ใช้ CLI:{' '}
+                <code className="text-amber-300">
+                  scripts/customer-backup-export.mjs --all-customers --apply
+                </code>
+              </span>
             </label>
 
             {error && (
