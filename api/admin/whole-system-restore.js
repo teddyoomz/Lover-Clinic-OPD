@@ -39,7 +39,11 @@ export default async function handler(req, res) {
     mode = 'fresh',
     confirmName,
     sendPasswordResetEmails = false,
-    ackPasswordResetRequired = false, // V81-fix2: Replace mode requires explicit true
+    ackPasswordResetRequired = false, // V81-fix2: only needed when replaceAuthFromBackup=true
+    // V81-fix4 (2026-05-17 EOD+2): Auth preservation by default for same-Vercel restore.
+    // Default false = preserve all login credentials + sessions (no login loss).
+    // Set true ONLY for cross-project clone (advanced; loses passwords per Rule C2).
+    replaceAuthFromBackup = false,
   } = req.body || {};
 
   if (!backupRef) {
@@ -57,13 +61,14 @@ export default async function handler(req, res) {
       message: 'พิมพ์ชื่อ backup ให้ตรงเพื่อยืนยัน',
     });
   }
-  // V81-fix2: Replace mode requires admin acknowledgment that staff will need
-  // password reset after restore. Prevents silent lockout (V81-fix2 origin
-  // 2026-05-17 EOD+1: real-prod wipe-restore stripped 353 user passwords).
-  if (mode === 'replace' && ackPasswordResetRequired !== true) {
+  // V81-fix4: ack-gate ONLY fires when caller explicitly asks to wipe+restore
+  // Auth from backup (cross-project clone case — passwords ARE lost).
+  // Default Replace mode (replaceAuthFromBackup=false) preserves Auth → no
+  // lockout possible → no ack needed.
+  if (mode === 'replace' && replaceAuthFromBackup && ackPasswordResetRequired !== true) {
     return res.status(400).json({
       error: 'REPLACE_ACK_REQUIRED',
-      message: 'Replace mode: ต้อง ack ว่าทุก staff ต้อง reset password หลัง restore (V81 backup ไม่เก็บ password hash per Rule C2)',
+      message: 'Replace + replaceAuthFromBackup=true: ต้อง ack ว่าทุก staff ต้อง reset password (V81 backup ไม่เก็บ password hash per Rule C2)',
     });
   }
 
@@ -75,8 +80,9 @@ export default async function handler(req, res) {
       backupRef,
       mode,
       callerUid: caller.uid,
-      sendPasswordResetEmails, // executor forces true on replace mode regardless (V81-fix2)
-      ackPasswordResetRequired, // executor double-validates (defense-in-depth)
+      sendPasswordResetEmails,
+      ackPasswordResetRequired,
+      replaceAuthFromBackup, // V81-fix4: forwarded to executor
     });
     return res.status(200).json(result);
   } catch (e) {

@@ -13,8 +13,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Download, Edit3, Trash2, RefreshCw, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import { auth } from '../../firebase.js';
-// V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger modal.
-import WholeFleetBackupModal from './WholeFleetBackupModal.jsx';
+// V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger modal. DEPRECATED V81-fix4
+// (2026-05-17 EOD+2) — per-customer backup model removed per user directive
+// "ไม่ต้องเก็บข้อมูล Backup ลูกค้าแบบแยกคน รกเหี้ยๆ". V81 whole-system backup is
+// the canonical "backup all customer data" mechanism going forward.
+// Import deliberately commented out; file kept for archival reference.
+// import WholeFleetBackupModal from './WholeFleetBackupModal.jsx';
 // V81 (2026-05-17) — Whole-system backup (Firestore + Storage + Auth) + restore modals.
 import WholeSystemBackupModal from './WholeSystemBackupModal.jsx';
 import WholeSystemRestoreModal from './WholeSystemRestoreModal.jsx';
@@ -28,8 +32,10 @@ async function authedFetch(url, body) {
   });
 }
 
+// V81-fix4: 'customer' type removed from filter chips (per-customer backup
+// model deprecated). Branch + central-stock chips remain for V40 + V15 backups.
+// Legacy customer rows in storage are purged via scripts/v81-fix4-purge-customer-backups.mjs.
 const TYPE_LABELS = {
-  customer: '👤 ลูกค้า',
   branch: '🏢 สาขา',
   'central-stock': '📦 คลังกลาง',
 };
@@ -41,14 +47,14 @@ export default function BackupManagerTab() {
   const [pageSize] = useState(50);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [typeFilter, setTypeFilter] = useState({ customer: true, branch: true, 'central-stock': true });
+  // V81-fix4: customer type removed from default filter (per-customer backup deprecated)
+  const [typeFilter, setTypeFilter] = useState({ branch: true, 'central-stock': true });
   const [search, setSearch] = useState('');
   const [selectedRefs, setSelectedRefs] = useState(new Set());
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-  // V77 (2026-05-16 EOD+1) — whole-fleet backup modal
-  const [wholeFleetModalOpen, setWholeFleetModalOpen] = useState(false);
+  // V77 (2026-05-16 EOD+1) — whole-fleet backup modal. DEPRECATED V81-fix4 — state removed.
   // V81 (2026-05-17) — whole-system backup + restore state
   const [wsBackups, setWsBackups] = useState([]);
   const [wsLoading, setWsLoading] = useState(false);
@@ -177,27 +183,17 @@ export default function BackupManagerTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger button. */}
-          <button
-            onClick={() => setWholeFleetModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs bg-amber-700 hover:bg-amber-600 text-white font-bold flex items-center gap-1.5"
-            data-testid="whole-fleet-backup-trigger"
-            title="สำรองลูกค้าทุกคนพร้อมกัน"
-          >
-            📦 สำรองลูกค้าทุกคน
-          </button>
+          {/* V81-fix4 (2026-05-17 EOD+2) — V77 "📦 สำรองลูกค้าทุกคน" button REMOVED.
+              Use the V81 "📥 Backup Now" button below (Whole-System Backups section)
+              which includes ALL be_customers + subcollections + Storage + Auth in ONE
+              single file. Per user directive: "ไม่ต้องเก็บข้อมูล Backup ลูกค้าแบบแยกคน". */}
           <button onClick={reload} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 hover:bg-gray-800 flex items-center gap-1.5">
             <RefreshCw size={12} /> รีโหลด
           </button>
         </div>
       </div>
 
-      {/* V77 (2026-05-16 EOD+1) — Whole-fleet backup modal */}
-      <WholeFleetBackupModal
-        isOpen={wholeFleetModalOpen}
-        onClose={() => setWholeFleetModalOpen(false)}
-        onComplete={() => { reload(); }}
-      />
+      {/* V77 WholeFleetBackupModal REMOVED V81-fix4 — see import comment above. */}
 
       {/* V81 (2026-05-17) — Whole-System Backups (full Firestore + Storage + Auth clone) */}
       <section className="mb-6 p-4 bg-gray-900/30 border border-gray-800 rounded-xl" data-testid="whole-system-backups-section">
@@ -244,7 +240,16 @@ export default function BackupManagerTab() {
                     {b.error && <span className="ml-2 text-red-400">⚠ {b.error}</span>}
                     <div className="text-gray-500 mt-0.5">
                       {b.stats?.totalDocCount?.toLocaleString() || 0} docs ·{' '}
-                      {Math.round((b.stats?.totalStorageBytes || 0) / 1024 / 1024)} MB ·{' '}
+                      {/* V81-fix4 Bug A2: show TOTAL on-disk backup size
+                          (collections + storage + auth + manifest); falls back to legacy
+                          totalStorageBytes for backups created pre-V81-fix4 */}
+                      {(() => {
+                        const bytes = b.totalBytes
+                          ?? ((b.stats?.totalCollectionFileBytes || 0) + (b.stats?.totalStorageBytes || 0));
+                        if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+                        if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                        return `${bytes} B`;
+                      })()} ·{' '}
                       {b.stats?.totalAuthUsers || 0} users · {b.type}
                     </div>
                   </div>

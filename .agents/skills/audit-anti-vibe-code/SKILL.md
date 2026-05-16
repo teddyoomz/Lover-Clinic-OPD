@@ -1878,6 +1878,112 @@ ordering. Mirror for future backup additions.
 for type-preservation contracts. Mock tests = code-shape coverage; AV62
 hash = content-fidelity; AV65 = type-fidelity. All three required.
 
+### AV68 — Whole-System Replace mode MUST preserve Auth by default (V81-fix4, 2026-05-17 EOD+2)
+
+**Trigger**: ANY Whole-System restore in Replace mode MUST default to preserving
+all Auth users (no Auth wipe + no Auth import from backup). Cross-project clone
+is an OPT-IN advanced case (`replaceAuthFromBackup: true`) that requires the
+AV66/V81-fix2 ack-gate (passwords will be lost per Rule C2).
+
+**Why**: V81-fix2 ack-gate prevented silent staff lockout post-restore but the
+default behavior still wiped Auth + lost passwords. User directive 2026-05-17
+EOD+2: "ถ้าเป็น vercel เดิมจะไม่ศุนย์เสีย รหัส หรือ email login ไป แม้แต่
+อันเดียว ทุกตำแหน่งต้องสามารถใช้รหัสเดิม login เดิม หรือแม้กระทั่งไม่หลุด login เลย".
+
+Default Replace mode now:
+- Skips Auth wipe (passwords + emails + sessions + refresh tokens preserved)
+- Skips Auth restore (no churn against existing Auth state)
+- Skips password-reset emails (not needed since passwords aren't lost)
+- Skips ack-gate (no lockout risk to acknowledge)
+
+`replaceAuthFromBackup: true` is the legacy V81 behavior — only meaningful for
+cross-project clone (loses passwords because Rule C2 strips passwordHash from
+backup files). Still required ack-gate + reset emails in that case.
+
+**Source-grep pattern**:
+```
+grep -n "replaceAuthFromBackup" api/admin/_lib/wholeSystemRestoreExecutor.js
+grep -n "wipeAuth" api/admin/_lib/wholeSystemRestoreExecutor.js
+```
+
+**Sanctioned exceptions**: NONE. Default MUST be preserve.
+
+**Detection**: regression test `tests/v81-fix4-auth-preserve-and-size.test.js`
+Group AV68 (11 assertions) — locks default behavior + ack-gate scope + UI shape.
+
+**Priority**: CRITICAL — silent staff lockout is the most user-hostile bug
+class possible (admin physically can't recover from outside the system).
+
+**Lineage**: V81 shipped Auth wipe + restore as default → V81-fix2 added ack-gate
+to surface the password-loss → V81-fix4 changed default to preserve.
+
+### AV69 — Whole-System backups list MUST display real folder size on disk (V81-fix4, 2026-05-17 EOD+2)
+
+**Trigger**: The whole-system-backups-list endpoint MUST return `totalBytes`
+(sum of all file sizes in the backup folder) per backup row. UI MUST prefer
+`totalBytes` over the misleading `stats.totalStorageBytes` (which is 0 when
+the clinic has no patient photos but the backup body is actually MB of JSON).
+
+**Why**: User screenshot 2026-05-17 EOD+2 showed all V81 backups as "0 MB"
+even though they contained 5,065 docs each. Root: `BackupManagerTab` displayed
+`stats.totalStorageBytes` only — represents NON-backup Storage files (customer
+photos / signature pads). Clinic had 0 such files → 0 MB display. Real backup
+size = collections JSON + storage payloads + auth/users.json + manifest.json.
+
+**Source-grep pattern**:
+```
+grep -n "totalBytes" api/admin/whole-system-backups-list.js
+grep -n "b.totalBytes" src/components/backend/BackupManagerTab.jsx
+```
+
+**Sanctioned exceptions**: legacy backups created pre-V81-fix4 don't have
+`totalBytes` in their manifest — UI falls back to `(totalCollectionFileBytes +
+totalStorageBytes)` for backward compat.
+
+**Detection**: regression test `tests/v81-fix4-auth-preserve-and-size.test.js`
+Group AV69 (5 assertions).
+
+**Priority**: HIGH — misleading display erodes user trust (looks like the
+backup is empty when it isn't).
+
+### AV70 — Per-customer backup model DEPRECATED (V81-fix4, 2026-05-17 EOD+2)
+
+**Trigger**: NO active code path may import/render the per-customer backup
+UI (V74 `💾 สำรอง` button in CustomerDetailView, V77 `📦 สำรองลูกค้าทุกคน`
+button in BackupManagerTab, `WholeFleetBackupModal`, `CustomerBackupModal`).
+The V81 Whole-System Backup is the canonical replacement.
+
+**Why**: User directive 2026-05-17 EOD+2: "ไม่ต้องเก็บข้อมูล Backup ลูกค้า
+แบบแยกคน รกเหี้ยๆ ต้องการ Backup ลูกค้าทุกคนพร้อมข้อมูลทุกอย่างออกมาเป็น
+ไฟล์เดียว เหมือนกับ backup อื่นๆ". 359 backup files on prod (most per-customer)
+flagged as visual noise. V81 whole-system backup ALREADY includes ALL
+be_customers + subcollections + Storage + (V81-fix4) Auth preserved.
+
+**Source-grep pattern** (must return zero matches):
+```
+grep -rn "data-testid=\"customer-detail-backup-button\"" src/
+grep -rn "data-testid=\"whole-fleet-backup-trigger\"" src/
+grep -rn "^import WholeFleetBackupModal" src/
+```
+
+**Sanctioned exceptions**: archival files preserved but unreferenced —
+`WholeFleetBackupModal.jsx`, `CustomerBackupModal.jsx`, `CustomerDataRecoveryTab.jsx`
+plus backend endpoints `api/admin/customer-backup-export.js` +
+`whole-fleet-customer-backup-export.js` + `whole-fleet-customer-restore.js`
+remain on disk for archival / future re-introduction. They are dead code from
+the UI's perspective.
+
+**Mass cleanup**: `scripts/v81-fix4-purge-customer-backups.mjs --apply` deletes
+all `backups/customers/**` + `backups/whole-fleet-customers/**` Storage files
+in one pass. Rule M two-phase (dry-run + --apply) + audit doc + crypto-secure
+random id.
+
+**Detection**: regression test `tests/v81-fix4-auth-preserve-and-size.test.js`
+Group AV70 (7 assertions) + Group FD (7 assertions for the cleanup script).
+
+**Priority**: MEDIUM — UI cleanup + storage cleanup. Not a runtime bug; a UX +
+data-hygiene improvement.
+
 ### AV67 — Vercel serverless endpoints (api/**) MUST import only runtime dependencies (2026-05-17 EOD+2)
 
 **Trigger**: ANY file under `api/**` that imports a third-party package via

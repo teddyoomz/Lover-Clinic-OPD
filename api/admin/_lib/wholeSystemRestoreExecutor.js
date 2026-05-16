@@ -123,7 +123,21 @@ async function restoreStorage(storage, manifest, backupRef) {
   return { restoredStorage, failedStorage };
 }
 
-async function wipeFirebase(db, storage, auth, callerUid) {
+/**
+ * wipeFirebase — wipe Firestore + Storage + (optionally) Auth.
+ *
+ * V81-fix4 (2026-05-17 EOD+2): Auth wipe is now OPT-IN via `wipeAuth` flag
+ * (default false = preserve all login credentials + sessions on same-project
+ * restore). User directive: "ถ้าเป็น vercel เดิมจะไม่ศุนย์เสีย รหัส หรือ email
+ * login ไป แม้แต่อันเดียว ทุกตำแหน่งต้องสามารถใช้รหัสเดิม login เดิม หรือ
+ * แม้กระทั่งไม่หลุด login เลย หลังจากเรา restore". Skipping Auth wipe AND
+ * Auth restore means: passwords intact, sessions intact, refresh tokens intact.
+ *
+ * AUTH_WIPE_AND_RESTORE_FROM_BACKUP is the legacy V81 behavior — only used
+ * for cross-project clone (advanced; loses passwords because Rule C2 strips
+ * passwordHash from backup files anyway).
+ */
+async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } = {}) {
   // Wipe Firestore collections (V74 cascade pattern)
   const scope = [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
   for (const col of scope) {
@@ -160,18 +174,21 @@ async function wipeFirebase(db, storage, auth, callerUid) {
     await batch.commit();
   }
 
-  // Wipe Auth users (V31 self-skip — caller stays logged in)
-  let nextPageToken;
-  do {
-    const page = await auth.listUsers(1000, nextPageToken);
-    for (const u of page.users) {
-      if (u.uid === callerUid) continue;
-      try {
-        await auth.deleteUser(u.uid);
-      } catch { /* tolerant */ }
-    }
-    nextPageToken = page.pageToken;
-  } while (nextPageToken);
+  // V81-fix4: Auth wipe is OPT-IN. Default = preserve Auth (no login loss).
+  if (wipeAuth) {
+    // Wipe Auth users (V31 self-skip — caller stays logged in)
+    let nextPageToken;
+    do {
+      const page = await auth.listUsers(1000, nextPageToken);
+      for (const u of page.users) {
+        if (u.uid === callerUid) continue;
+        try {
+          await auth.deleteUser(u.uid);
+        } catch { /* tolerant */ }
+      }
+      nextPageToken = page.pageToken;
+    } while (nextPageToken);
+  }
 
   // Wipe Storage objects (CRITICAL: skip backups/ prefix to preserve all backups
   // incl. the pre-restore safety net just created)
@@ -196,24 +213,27 @@ async function wipeFirebase(db, storage, auth, callerUid) {
 export async function runWholeSystemRestore({
   db, storage, auth, backupRef, mode, callerUid,
   sendPasswordResetEmails,
-  ackPasswordResetRequired, // V81-fix2 (2026-05-17 EOD+1): Replace mode MUST pass true
+  ackPasswordResetRequired, // V81-fix2 (2026-05-17 EOD+1): only required if replaceAuthFromBackup=true
+  // V81-fix4 (2026-05-17 EOD+2): Auth preservation by default for same-Vercel restore.
+  // false (default) = preserve all Auth users (no login loss, sessions stay alive)
+  // true (advanced/cross-project) = wipe Auth + restore from backup file
+  //   (Rule C2 strips passwords → all users must reset; AV66/V81-fix2 ack-gate still applies)
+  replaceAuthFromBackup = false,
 }) {
   const start = Date.now();
 
-  // V81-fix2: Replace mode requires admin acknowledgment that passwords will be
-  // stripped (per Rule C2 — V81 backup never stores password hashes for security).
-  // After Replace restore, ALL users must reset passwords via "forgot password"
-  // flow. This gate prevents silent staff lockout that occurred 2026-05-17 EOD+1.
-  if (mode === 'replace' && ackPasswordResetRequired !== true) {
-    const err = new Error('Replace mode requires explicit ackPasswordResetRequired: true (staff will need password reset after restore)');
+  // V81-fix4: ack-gate only applies when caller explicitly opts into Auth wipe+restore.
+  // Default Replace mode preserves Auth → no lockout possible → no ack needed.
+  if (mode === 'replace' && replaceAuthFromBackup && ackPasswordResetRequired !== true) {
+    const err = new Error('Replace + replaceAuthFromBackup=true requires explicit ackPasswordResetRequired: true (passwords will be lost; staff must reset)');
     err.code = 'REPLACE_ACK_REQUIRED';
     throw err;
   }
 
-  // V81-fix2: Replace mode FORCES sendPasswordResetEmails=true (override caller
-  // false). Prevents the silent-lockout case where admin clicks Replace but
-  // forgets to enable reset emails → 353 staff locked out.
-  const effectiveSendResetEmails = mode === 'replace' ? true : !!sendPasswordResetEmails;
+  // V81-fix4: reset emails only meaningful when Auth was wiped. Skip otherwise.
+  const effectiveSendResetEmails = (mode === 'replace' && replaceAuthFromBackup)
+    ? true
+    : !!sendPasswordResetEmails;
 
   // 1. AV62: read + validate manifest (tamper detection via recomputed hash)
   const manifest = await readManifest(storage, backupRef);
@@ -245,7 +265,8 @@ export async function runWholeSystemRestore({
       err.code = 'AUTO_PRE_BACKUP_FAILED';
       throw err;
     }
-    await wipeFirebase(db, storage, auth, callerUid);
+    // V81-fix4: wipeAuth follows replaceAuthFromBackup flag
+    await wipeFirebase(db, storage, auth, callerUid, { wipeAuth: replaceAuthFromBackup });
   } else {
     const err = new Error(`Unknown mode: ${mode}`);
     err.code = 'INVALID_MODE';
@@ -254,10 +275,14 @@ export async function runWholeSystemRestore({
 
   // 3. Restore phases
   const colResult = await restoreCollections(db, storage, manifest, backupRef);
-  const authResult = await restoreAuthUsers(auth, storage, manifest, backupRef, callerUid);
+  // V81-fix4: Auth restore only when caller opted into Auth wipe+restore.
+  // Default = preserve current Auth state (no import, no overwrite, no churn).
+  const authResult = (mode === 'replace' && !replaceAuthFromBackup)
+    ? { restoredAuth: 0, failedAuth: [], skipped: true, skippedReason: 'V81-fix4: Auth preserved (replaceAuthFromBackup=false)' }
+    : await restoreAuthUsers(auth, storage, manifest, backupRef, callerUid);
   const storResult = await restoreStorage(storage, manifest, backupRef);
 
-  // 4. Send password-reset emails (V81-fix2: FORCED for replace mode)
+  // 4. Send password-reset emails ONLY when Auth was wiped + restored (legacy path)
   let passwordResetEmailsSent = 0;
   if (effectiveSendResetEmails) {
     try {
@@ -280,6 +305,8 @@ export async function runWholeSystemRestore({
     backupRef,
     mode,
     autoBackupRef,
+    replaceAuthFromBackup,
+    authPreserved: mode === 'replace' && !replaceAuthFromBackup,
     stats: {
       ...colResult,
       ...authResult,
@@ -294,6 +321,8 @@ export async function runWholeSystemRestore({
     backupRef,
     mode,
     autoBackupRef,
+    replaceAuthFromBackup,
+    authPreserved: mode === 'replace' && !replaceAuthFromBackup,
     stats: {
       ...colResult,
       ...authResult,

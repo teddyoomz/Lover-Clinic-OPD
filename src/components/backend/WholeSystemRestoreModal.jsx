@@ -12,20 +12,24 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
   const [mode, setMode] = useState('fresh');
   const [confirmName, setConfirmName] = useState('');
   const [sendPasswordReset, setSendPasswordReset] = useState(false);
-  // V81-fix2 (2026-05-17 EOD+1): Replace mode requires explicit acknowledgment
-  // that staff passwords will be stripped + auto-reset emails will be sent.
-  // Prevents the silent-lockout case from 2026-05-17 EOD+1 wipe-restore test.
+  // V81-fix2 (2026-05-17 EOD+1): explicit ack only required when caller opts
+  // into Auth wipe+restore from backup (V81-fix4 cross-project case).
   const [ackPasswordReset, setAckPasswordReset] = useState(false);
+  // V81-fix4 (2026-05-17 EOD+2): Auth preservation by default.
+  // false (DEFAULT) = preserve all Auth users on Replace → NO login loss, sessions stay alive.
+  // true (advanced — cross-project clone) = wipe Auth + restore from backup (passwords lost per Rule C2).
+  const [replaceAuthFromBackup, setReplaceAuthFromBackup] = useState(false);
   const [stage, setStage] = useState('select'); // select | running | done | error
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState('');
 
   const selected = useMemo(() => backups.find(b => b.name === selectedName), [backups, selectedName]);
-  const replaceAckRequired = mode === 'replace';
+  // V81-fix4: ack only required when admin explicitly toggles Auth wipe ON.
+  const ackRequired = mode === 'replace' && replaceAuthFromBackup;
   const canSubmit = selected
     && confirmName === selectedName
     && stage === 'select'
-    && (!replaceAckRequired || ackPasswordReset);
+    && (!ackRequired || ackPasswordReset);
 
   async function handleStart() {
     setStage('running');
@@ -41,11 +45,13 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
           backupRef: selectedName,
           mode,
           confirmName,
-          // V81-fix2: Replace mode FORCES sendPasswordResetEmails=true server-side;
-          // client toggle is now only meaningful in Fresh mode.
-          sendPasswordResetEmails: mode === 'replace' ? true : sendPasswordReset,
-          // V81-fix2: explicit ack flag for Replace mode (server validates + executor double-checks)
-          ackPasswordResetRequired: mode === 'replace' ? ackPasswordReset : false,
+          // V81-fix4: reset emails ONLY when admin explicitly opted into Auth wipe.
+          // Default Replace = preserves Auth → no reset needed.
+          sendPasswordResetEmails: (mode === 'replace' && replaceAuthFromBackup) ? true : sendPasswordReset,
+          // V81-fix4: ack only when replaceAuthFromBackup=true (passwords WILL be lost in that case)
+          ackPasswordResetRequired: ackRequired ? ackPasswordReset : false,
+          // V81-fix4: forwarded to executor — controls Auth wipe + restore behavior
+          replaceAuthFromBackup,
         }),
       });
       const json = await res.json();
@@ -102,7 +108,11 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
                   <input type="radio" value="replace" checked={mode === 'replace'} onChange={() => setMode('replace')} className="mt-1" />
                   <div className="text-sm">
                     <span className="font-bold text-red-400">Replace current data (DESTRUCTIVE)</span>
-                    <p className="text-xs text-[var(--tx-muted)]">ลบข้อมูลปัจจุบันทั้งหมด + restore ทับ. <strong>Auto-pre-backup ก่อน wipe</strong> เผื่อ undo.</p>
+                    <p className="text-xs text-[var(--tx-muted)]">
+                      ลบข้อมูลปัจจุบันทั้งหมด + restore ทับ. <strong>Auto-pre-backup ก่อน wipe</strong> เผื่อ undo.
+                      <br />
+                      <span className="text-emerald-400">V81-fix4 (default):</span> Auth (login/email/password/session) จะคงไว้ทั้งหมด — ไม่หลุด login, ไม่ต้อง reset password.
+                    </p>
                   </div>
                 </label>
               </div>
@@ -113,33 +123,58 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
                 <div className="mb-4 p-3 bg-red-950/40 border border-red-800 rounded-xl flex items-start gap-2">
                   <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
                   <span className="text-xs text-red-300">
-                    ⚠ ข้อมูลใหม่ที่เกิดระหว่าง backup time → restore time จะหายทั้งหมด.
+                    ⚠ Firestore + Storage ปัจจุบันจะถูกลบทั้งหมดและแทนที่ด้วย backup.
+                    ข้อมูลใหม่ที่เกิดระหว่าง backup time → restore time จะหาย.
                     Auto-pre-backup จะถูกสร้างไว้ที่ <code>pre-restore-YYYYMMDD-HHmm/</code> (เก็บ 7 วัน — undo ได้).
                   </span>
                 </div>
 
-                {/* V81-fix2 (2026-05-17 EOD+1) — explicit password-reset acknowledgment gate.
-                    Origin: real-prod wipe-restore stripped 353 user passwords; admin had to
-                    manually recover. Now Replace mode is BLOCKED until admin checks this box. */}
-                <div className="mb-4 p-3 bg-amber-950/40 border-2 border-amber-700 rounded-xl">
+                {/* V81-fix4 (2026-05-17 EOD+2) — Auth preservation by default.
+                    User directive: "ถ้าเป็น vercel เดิมจะไม่ศุนย์เสีย รหัส หรือ
+                    email login ไป แม้แต่อันเดียว". Default = preserve Auth (no
+                    login loss). Advanced opt-in for cross-project clone. */}
+                <div className="mb-4 p-3 bg-emerald-950/30 border border-emerald-800 rounded-xl">
                   <div className="flex items-start gap-2 mb-2">
-                    <AlertTriangle size={18} className="text-amber-400 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm font-bold text-amber-200">⚠ Replace = ทุก staff ต้อง reset password</div>
+                    <CheckCircle2 size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm font-bold text-emerald-200">✓ Auth preserved (default — V81-fix4)</div>
                   </div>
-                  <p className="text-xs text-amber-200/90 mb-3 pl-6">
-                    V81 backup ไม่เก็บ password hash ใน file (security per Rule C2 — ป้องกัน leak).
-                    หลัง Replace restore: <strong>ทุก user (รวมตัวคุณเอง) จะต้องตั้งรหัสผ่านใหม่</strong>
-                    ผ่านปุ่ม "ลืมรหัสผ่าน" บนหน้า login (Firebase จะส่ง reset link ทางอีเมล).
-                    Email + สิทธิ์ + branchIds + customClaims ทุกอย่างจะยังอยู่ — แค่ password ต้อง reset.
+                  <p className="text-xs text-emerald-200/80 pl-6">
+                    หลัง Replace restore: ทุก user (รวมคุณเอง) <strong>ยังคง login ได้ด้วยรหัสเดิม</strong>,
+                    sessions ที่เปิดอยู่ <strong>ไม่หลุด</strong>, custom claims + branchIds ยังอยู่. Auth wipe ถูก skip
+                    เพราะ same-Vercel restore ไม่ต้องการ Auth churn. <strong>การ login จะไม่ได้รับผลกระทบเลย.</strong>
                   </p>
-                  <label className="flex items-start gap-2 cursor-pointer text-xs text-amber-100">
-                    <input type="checkbox" checked={ackPasswordReset}
-                      onChange={e => setAckPasswordReset(e.target.checked)}
+                  <label className="flex items-start gap-2 cursor-pointer text-xs text-amber-200/80 mt-3 pl-6">
+                    <input type="checkbox" checked={replaceAuthFromBackup}
+                      onChange={e => setReplaceAuthFromBackup(e.target.checked)}
                       className="mt-0.5 flex-shrink-0"
-                      data-testid="v81-fix2-ack-password-reset" />
-                    <span><strong>ฉันเข้าใจ:</strong> หลัง Replace restore ทุก staff (รวมฉัน) ต้องตั้ง password ใหม่ผ่าน "ลืมรหัสผ่าน" บนหน้า login. ระบบจะส่ง reset emails อัตโนมัติ.</span>
+                      data-testid="v81-fix4-replace-auth-from-backup" />
+                    <span>
+                      <strong>Advanced — cross-project clone:</strong> wipe Auth + restore จาก backup file (passwords จะหายตาม Rule C2)
+                    </span>
                   </label>
                 </div>
+
+                {/* Ack gate only when admin opts INTO Auth wipe (advanced cross-project case) */}
+                {replaceAuthFromBackup && (
+                  <div className="mb-4 p-3 bg-amber-950/40 border-2 border-amber-700 rounded-xl">
+                    <div className="flex items-start gap-2 mb-2">
+                      <AlertTriangle size={18} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm font-bold text-amber-200">⚠ Auth wipe ON = ทุก staff ต้อง reset password</div>
+                    </div>
+                    <p className="text-xs text-amber-200/90 mb-3 pl-6">
+                      เลือก replaceAuthFromBackup=true แล้ว — V81 backup ไม่เก็บ password hash ใน file (Rule C2).
+                      หลัง Replace restore: <strong>ทุก user (รวมตัวคุณเอง) จะต้องตั้งรหัสผ่านใหม่</strong>
+                      ผ่านปุ่ม "ลืมรหัสผ่าน". Email + สิทธิ์ + customClaims ยังอยู่ — แค่ password ต้อง reset.
+                    </p>
+                    <label className="flex items-start gap-2 cursor-pointer text-xs text-amber-100">
+                      <input type="checkbox" checked={ackPasswordReset}
+                        onChange={e => setAckPasswordReset(e.target.checked)}
+                        className="mt-0.5 flex-shrink-0"
+                        data-testid="v81-fix2-ack-password-reset" />
+                      <span><strong>ฉันเข้าใจ:</strong> เลือก wipe Auth จาก backup — ทุก staff (รวมฉัน) ต้องตั้ง password ใหม่. ระบบจะส่ง reset emails อัตโนมัติ.</span>
+                    </label>
+                  </div>
+                )}
               </>
             )}
 

@@ -835,15 +835,11 @@ export default function CustomerDetailView({
                   title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
                   <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
                 </button>
-                {/* V74 — สำรองข้อมูลลูกค้าทั้งหมดไปยัง Storage (admin-only client gate; server re-verifies admin claim) */}
-                {canDeleteCustomer && (
-                  <button onClick={() => setBackupModalOpen(true)}
-                    data-testid="customer-detail-backup-button"
-                    title="สำรองข้อมูลลูกค้าทั้งหมด → Storage (ดาวน์โหลดได้ 24 ชม.)"
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300 border-amber-700/50">
-                    💾 สำรอง
-                  </button>
-                )}
+                {/* V81-fix4 (2026-05-17 EOD+2): V74 per-customer "💾 สำรอง" button REMOVED.
+                    Per-customer backup model deprecated — use V81 Whole-System Backup
+                    (Backend → จัดการ Backup → 📥 Backup Now) which includes ALL customer
+                    data + Auth + Storage in ONE single file. Per user directive:
+                    "ไม่ต้องเก็บข้อมูล Backup ลูกค้าแบบแยกคน". */}
                 {/* Phase 24.0 — prominent ลบลูกค้า button (dual gate) */}
                 {canDeleteCustomer && onDeleteCustomer && (
                   <button
