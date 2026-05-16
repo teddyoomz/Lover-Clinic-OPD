@@ -2,7 +2,7 @@
 // V81 — Shared whole-system restore executor.
 // Fresh-only mode in Task 9; Replace mode + AV19 elevation in Task 10.
 
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, GeoPoint } from 'firebase-admin/firestore';
 import { randomBytes } from 'node:crypto';
 import {
   validateWholeSystemManifest,
@@ -10,7 +10,11 @@ import {
   UNIVERSAL_COLLECTIONS,
   BRANCH_SCOPED_COLLECTIONS,
   CUSTOMER_SUBCOLLECTIONS,
+  decodeFirestoreData, // V81-fix1: re-hydrate Timestamp/GeoPoint/Bytes from markers
 } from '../../../src/lib/wholeSystemBackupCore.js';
+
+// V81-fix1: SDK constructors used by decodeFirestoreData
+const FB_TYPE_OPTS = { Timestamp, GeoPoint };
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
@@ -43,7 +47,10 @@ async function restoreCollections(db, storage, manifest, backupRef) {
   for (const c of manifest.collections) {
     try {
       const [buf] = await storage.file(`backups/whole-system/${backupRef}/${c.path}`).download();
-      const docs = JSON.parse(buf.toString('utf8'));
+      const rawDocs = JSON.parse(buf.toString('utf8'));
+      // V81-fix1: re-hydrate Firestore-native types (Timestamp/GeoPoint/Bytes) from markers
+      // BEFORE batch.set. Without this, Timestamp fields written as plain Maps.
+      const docs = rawDocs.map(d => decodeFirestoreData(d, FB_TYPE_OPTS));
       // Subcollections have name like 'be_customers/{cid}/{sub}' OR
       // 'chat_conversations/{convId}/messages' — Firestore handles nested paths.
       const colPath = `${PREFIX}/${c.name}`;

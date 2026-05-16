@@ -316,6 +316,120 @@ export function shouldCleanupBackup(name, ageMs, nowMs = Date.now()) {
   return { action: 'keep', reason: 'manual — admin responsibility' };
 }
 
+// ─── V81-fix1 (2026-05-17 EOD+1) — Firestore type encoder/decoder ────────
+// Firebase admin SDK Timestamp's JSON.stringify produces {_seconds, _nanoseconds}
+// which Firestore.batch.set treats as a plain Map field, NOT a Timestamp.
+// This caused V81 restore to silently degrade every Timestamp to a Map.
+// Diagnostic confirmed bug on real prod 2026-05-17.
+//
+// Fix: serialize Firestore-native types with a sentinel marker that the
+// restore side can detect + re-hydrate via the SDK constructor.
+//
+// Supported types:
+//   Timestamp  — duck-typed by {_seconds, _nanoseconds} (admin SDK internal)
+//   GeoPoint   — duck-typed by {_latitude, _longitude} (admin SDK internal)
+//   Buffer/Bytes — duck-typed by Buffer.isBuffer / Uint8Array
+//
+// Marker format: `{ __type: '<type>', ...payload }` — single-key namespace
+// __type is reserved + unambiguous in this codebase (grep confirms unused).
+
+/**
+ * isFirestoreTimestamp — duck-type detector for Firebase admin SDK Timestamp.
+ * Strict 2-key shape: `_seconds` (number) + `_nanoseconds` (number).
+ * Avoids false positives on user data that might have these field names.
+ */
+function isFirestoreTimestamp(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  if (typeof v._seconds !== 'number' || typeof v._nanoseconds !== 'number') return false;
+  const keys = Object.keys(v);
+  return keys.length === 2 && keys.includes('_seconds') && keys.includes('_nanoseconds');
+}
+
+/**
+ * isFirestoreGeoPoint — duck-type detector for admin SDK GeoPoint.
+ */
+function isFirestoreGeoPoint(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  if (typeof v._latitude !== 'number' || typeof v._longitude !== 'number') return false;
+  const keys = Object.keys(v);
+  return keys.length === 2 && keys.includes('_latitude') && keys.includes('_longitude');
+}
+
+/**
+ * encodeFirestoreData — recursively walks a JS value + replaces Firestore-native
+ * types with `{__type, ...}` markers so JSON.stringify produces a self-describing
+ * file the restore side can re-hydrate.
+ *
+ * Preserves V38 spread-order invariant: input key insertion order is maintained
+ * in output (the encoder doesn't reorder); callers that spread `{...data, id: d.id}`
+ * still get docId-WINS semantics through the encoder.
+ *
+ * @param {any} value
+ * @returns {any} encoded value (plain JS, JSON-safe)
+ */
+export function encodeFirestoreData(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (isFirestoreTimestamp(value)) {
+    return { __type: 'timestamp', seconds: value._seconds, nanoseconds: value._nanoseconds };
+  }
+  if (isFirestoreGeoPoint(value)) {
+    return { __type: 'geopoint', latitude: value._latitude, longitude: value._longitude };
+  }
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)) {
+    return { __type: 'bytes', base64: value.toString('base64') };
+  }
+  if (value instanceof Uint8Array) {
+    return { __type: 'bytes', base64: Buffer.from(value).toString('base64') };
+  }
+  if (Array.isArray(value)) {
+    return value.map(encodeFirestoreData);
+  }
+  // Plain object: recurse, preserving key insertion order
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = encodeFirestoreData(v);
+  }
+  return out;
+}
+
+/**
+ * decodeFirestoreData — recursively walks parsed JSON + re-hydrates Firestore
+ * types from `{__type, ...}` markers using the provided SDK constructors.
+ *
+ * `opts.Timestamp` / `opts.GeoPoint` should be the Firebase admin SDK classes.
+ * If a constructor is missing, the marker is converted to a plain object that
+ * preserves the data (forward-compat fallback — not ideal but non-destructive).
+ *
+ * @param {any} value
+ * @param {{Timestamp?: Function, GeoPoint?: Function}} opts
+ */
+export function decodeFirestoreData(value, opts = {}) {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map(v => decodeFirestoreData(v, opts));
+  }
+  // Detect sentinel marker
+  if (value.__type === 'timestamp' && typeof value.seconds === 'number' && typeof value.nanoseconds === 'number') {
+    if (opts.Timestamp) return new opts.Timestamp(value.seconds, value.nanoseconds);
+    return { _seconds: value.seconds, _nanoseconds: value.nanoseconds }; // fallback
+  }
+  if (value.__type === 'geopoint' && typeof value.latitude === 'number' && typeof value.longitude === 'number') {
+    if (opts.GeoPoint) return new opts.GeoPoint(value.latitude, value.longitude);
+    return { _latitude: value.latitude, _longitude: value.longitude }; // fallback
+  }
+  if (value.__type === 'bytes' && typeof value.base64 === 'string') {
+    return Buffer.from(value.base64, 'base64');
+  }
+  // Plain object: recurse
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = decodeFirestoreData(v, opts);
+  }
+  return out;
+}
+
 // ─── Task 4 — Auth user sanitization + diff helpers ──────────────────────
 
 /**

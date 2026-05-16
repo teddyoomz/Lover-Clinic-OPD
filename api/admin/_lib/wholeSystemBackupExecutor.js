@@ -17,6 +17,7 @@ import {
   buildWholeSystemManifest,
   computeWholeSystemManifestHash,
   sanitizeAuthUser,
+  encodeFirestoreData, // V81-fix1: Timestamp/GeoPoint/Bytes encoder
 } from '../../../src/lib/wholeSystemBackupCore.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -91,7 +92,10 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
       // V38 spread-order discipline: docId WINS over any stray data.id field
       // (legacy ProClinic imports occasionally carry numeric `id` in data).
-      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      // V81-fix1 (2026-05-17): encode Firestore-native types (Timestamp/GeoPoint/Bytes)
+      // before JSON.stringify so restore can re-hydrate. Diagnostic on real prod
+      // (2026-05-17) confirmed bare JSON.stringify degrades Timestamp→Map.
+      const docs = snap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
       const json = JSON.stringify(docs, null, 2);
       const filePath = `${baseStoragePath}/collections/universal/${colName}.json`;
       await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -112,7 +116,10 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   for (const colName of scope.branchScoped) {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
-      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      // V81-fix1 (2026-05-17): encode Firestore-native types (Timestamp/GeoPoint/Bytes)
+      // before JSON.stringify so restore can re-hydrate. Diagnostic on real prod
+      // (2026-05-17) confirmed bare JSON.stringify degrades Timestamp→Map.
+      const docs = snap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
       const json = JSON.stringify(docs, null, 2);
       const filePath = `${baseStoragePath}/collections/branch-scoped/${colName}.json`;
       await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -139,7 +146,8 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
           const subSnap = await db.collection(`${PREFIX}/be_customers/${cid}/${subName}`).get();
           if (subSnap.empty) continue;
           // V38 spread-order: docId WINS over any stray data.id field
-          const docs = subSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+          // V81-fix1: encode Timestamp/GeoPoint/Bytes before JSON.stringify
+          const docs = subSnap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
           const json = JSON.stringify(docs, null, 2);
           const filePath = `${baseStoragePath}/collections/subcollections/be_customers__${cid}__${subName}.json`;
           await storage.file(filePath).save(json, { contentType: 'application/json' });
@@ -169,7 +177,8 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
         const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${convId}/messages`).get();
         if (msgsSnap.empty) continue;
         // V38 spread-order: docId WINS over any stray data.id field
-        const docs = msgsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        // V81-fix1: encode Timestamp/GeoPoint/Bytes before JSON.stringify
+        const docs = msgsSnap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
         const json = JSON.stringify(docs, null, 2);
         const filePath = `${baseStoragePath}/collections/subcollections/chat_conversations__${convId}__messages.json`;
         await storage.file(filePath).save(json, { contentType: 'application/json' });
