@@ -83,7 +83,10 @@ function customerSubcollection(db, customerId, subName) {
     .collection(subName);
 }
 
-function randHex(n = 8) {
+function randHex(n = 16) {
+  // V77-fix2 (P2-4): bumped default 8 → 16 hex chars (32 → 64 bits entropy).
+  // Prevents path collision when N customers share Date.now() ms within one
+  // call. With 8 chars, 6500 customers had ~1/600 collision chance per call.
   return crypto.randomBytes(Math.ceil(n / 2)).toString('hex').slice(0, n);
 }
 
@@ -220,9 +223,36 @@ export default async function handler(req, res) {
       custQuery = custQuery.where('branchId', '==', branchIdFilter);
     }
     const allCustomersSnap = await custQuery.get();
-    const customerList = allCustomersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // V77-fix2 (2026-05-16 NIGHT — P1-1 V38 spread-order regression).
+    // {...d.data(), id: d.id} ensures docId always wins; legacy customers with
+    // stray `id` data fields (per V38 baseline-migration cohort) no longer
+    // poison customer.id → cascade query uses correct customerId.
+    const customerList = allCustomersSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
     const totalCustomers = customerList.length;
     const scoped = maxCustomers > 0 ? customerList.slice(0, maxCustomers) : customerList;
+
+    // V77-fix2 (P0-8): refuse runaway iterations. Sequential for-loop × N
+    // customers easily exceeds 300s maxDuration for N>30. Endpoint enforces
+    // 50-customer cap unless caller passes force:true (CLI bypass). For
+    // >50-customer clinics, CLI mirror has no timeout.
+    const FORCE = req.body?.force === true;
+    const ENDPOINT_CUSTOMER_CAP = 50;
+    if (!FORCE && scoped.length > ENDPOINT_CUSTOMER_CAP) {
+      return res.status(413).json({
+        ok: false,
+        error: 'WHOLE_FLEET_TOO_LARGE_FOR_ENDPOINT',
+        detail: {
+          scanned: scoped.length,
+          cap: ENDPOINT_CUSTOMER_CAP,
+          hint:
+            `กรุณาใช้ CLI สำหรับ ${scoped.length} ลูกค้า: ` +
+            `node scripts/customer-backup-export.mjs --all-customers --apply ` +
+            `(no timeout). หรือใส่ maxCustomers ≤ ${ENDPOINT_CUSTOMER_CAP} ` +
+            `เพื่อทดสอบบางส่วนผ่าน endpoint.`,
+        },
+        durationMs: Date.now() - start,
+      });
+    }
 
     if (scoped.length === 0) {
       return res.status(200).json({
@@ -237,8 +267,9 @@ export default async function handler(req, res) {
     }
 
     // 2. Pre-fetch ALL chat_conversations ONCE (avoid N+1 per customer)
+    // V77-fix2: spread-order V38 lesson (docId wins over stray data.id)
     const chatSnap = await dataCol(db, 'chat_conversations').get();
-    const allChatConversations = chatSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const allChatConversations = chatSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // 3. Per-customer export with failure isolation
     const exporterLabel = `${caller.email || ''} (${caller.uid || ''})`.trim();

@@ -114,7 +114,7 @@ async function exportSingleCustomer({ db, bucket, customerId, userNote, apply })
   );
   const collections = { be_customers: [customer] };
   CUSTOMER_CASCADE_COLLECTIONS_FULL.forEach((name, idx) => {
-    collections[name] = collectionQueries[idx].docs.map(d => ({ id: d.id, ...d.data() }));
+    collections[name] = collectionQueries[idx].docs.map(d => ({ ...d.data(), id: d.id }));
   });
 
   // Enumerate subcollections
@@ -123,13 +123,13 @@ async function exportSingleCustomer({ db, bucket, customerId, userNote, apply })
   );
   const subcollections = {};
   T4_SUBCOLLECTIONS.forEach((sub, idx) => {
-    subcollections[sub] = subQueries[idx].docs.map(d => ({ id: d.id, ...d.data() }));
+    subcollections[sub] = subQueries[idx].docs.map(d => ({ ...d.data(), id: d.id }));
   });
 
   // Matching chat conversations
   const chatSnap = await dataCol(db, 'chat_conversations').get();
   const chatConversations = chatSnap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), id: d.id }))
     .filter(c => matchCustomerChatPredicate(c, customer));
 
   // Storage objects

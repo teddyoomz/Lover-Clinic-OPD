@@ -173,7 +173,8 @@ async function main() {
   // Conflict scan
   console.log('\n=== STEP 2: Conflict scan ===');
   const liveSnap = await dataCol(db, 'be_customers').get();
-  const liveCustomers = liveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // V77-fix2 (P1-1): spread-order V38 lesson — docId wins over data.id
+  const liveCustomers = liveSnap.docs.map(d => ({ ...d.data(), id: d.id }));
   const conflicts = scanRestoreConflicts({ backupCustomer, liveCustomers });
   console.log(`  customerIdExists: ${conflicts.customerIdExists}`);
   console.log(`  hnCollision:      ${conflicts.hnCollision ? JSON.stringify(conflicts.hnCollision) : 'none'}`);

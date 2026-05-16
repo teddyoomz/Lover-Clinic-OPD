@@ -105,7 +105,7 @@ async function exportBackup({ db, bucket, customerId, userNote }) {
   );
   const collections = { be_customers: [customer] };
   CUSTOMER_CASCADE_COLLECTIONS_FULL.forEach((name, idx) => {
-    collections[name] = collectionQueries[idx].docs.map(d => ({ id: d.id, ...d.data() }));
+    collections[name] = collectionQueries[idx].docs.map(d => ({ ...d.data(), id: d.id }));
   });
 
   const subQueries = await Promise.all(
@@ -113,12 +113,12 @@ async function exportBackup({ db, bucket, customerId, userNote }) {
   );
   const subcollections = {};
   T4_SUBCOLLECTIONS.forEach((sub, idx) => {
-    subcollections[sub] = subQueries[idx].docs.map(d => ({ id: d.id, ...d.data() }));
+    subcollections[sub] = subQueries[idx].docs.map(d => ({ ...d.data(), id: d.id }));
   });
 
   const chatSnap = await dataCol(db, 'chat_conversations').get();
   const chatConversations = chatSnap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
+    .map(d => ({ ...d.data(), id: d.id }))
     .filter(c => matchCustomerChatPredicate(c, customer));
 
   const storagePrefix = `${STORAGE_PREFIX_CUSTOMER}/${customerId}/`;
@@ -204,7 +204,7 @@ async function wipeCustomer({ db, bucket, customerId, customer, storageFiles, ba
 
   // Chat refs
   const chatSnap = await dataCol(db, 'chat_conversations').get();
-  const chatMatching = chatSnap.docs.filter(d => matchCustomerChatPredicate({ id: d.id, ...d.data() }, customer));
+  const chatMatching = chatSnap.docs.filter(d => matchCustomerChatPredicate({ ...d.data(), id: d.id }, customer));
   const chatConversationCount = chatMatching.length;
   chatMatching.forEach(d => refsToDelete.push(d.ref));
 

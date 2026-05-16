@@ -81,6 +81,7 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
     if (busy) return;
     setUserNote('');
     setBranchIdFilter('');
+    setMaxCustomers('');
     setResult(null);
     setError('');
     onClose?.();
@@ -198,13 +199,30 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
 
         {result && (
           <div className="space-y-3" data-testid="whole-fleet-result">
+            {/* V77-fix2 (P0-5): NO_CUSTOMERS_FOUND case returns ok:true but
+                without manifestRef/downloadUrl. Render a distinct empty-result
+                banner so admin doesn't see a broken "ดาวน์โหลด" link. */}
+            {result.warning === 'NO_CUSTOMERS_FOUND' || !result.manifestRef ? (
+              <div className="rounded border border-amber-700/40 bg-amber-950/30 p-3 text-amber-300 text-sm flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">⚠ ไม่พบลูกค้าที่ตรงเงื่อนไข</div>
+                  <div className="text-xs text-amber-200/80 mt-1">
+                    Filter <code className="font-mono">{result.branchIdFilter || '(ทุกสาขา)'}</code> —
+                    ไม่มีไฟล์ backup ถูกสร้าง. ลองล้าง branchId filter หรือเช็คว่ามีลูกค้าในระบบจริง.
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="rounded border border-emerald-700/40 bg-emerald-950/30 p-3 text-emerald-300 text-sm flex items-start gap-2">
               <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold">✅ สำรองสำเร็จ</div>
+                <div className="font-bold">
+                  {result.warning === 'NO_CUSTOMERS_FOUND' ? '✓ จบงาน (0 ลูกค้า)' : '✅ สำรองสำเร็จ'}
+                </div>
                 <div className="text-xs text-emerald-200/80 mt-1">
-                  ลูกค้า {result.successful} คน ({result.failed} fail) · ใช้เวลา{' '}
-                  {(result.durationMs / 1000).toFixed(1)}s
+                  ลูกค้า {result.successful || 0} คน ({result.failed || 0} fail) · ใช้เวลา{' '}
+                  {((result.durationMs || 0) / 1000).toFixed(1)}s
                 </div>
               </div>
             </div>
@@ -246,16 +264,18 @@ export default function WholeFleetBackupModal({ isOpen, onClose, onComplete }) {
               </div>
             )}
 
-            <a
-              href={result.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-center px-4 py-2 rounded bg-sky-700 hover:bg-sky-600 text-white font-bold"
-              data-testid="whole-fleet-download-link"
-            >
-              <Download size={14} className="inline mr-1" />
-              ดาวน์โหลด manifest.json
-            </a>
+            {result.downloadUrl ? (
+              <a
+                href={result.downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center px-4 py-2 rounded bg-sky-700 hover:bg-sky-600 text-white font-bold"
+                data-testid="whole-fleet-download-link"
+              >
+                <Download size={14} className="inline mr-1" />
+                ดาวน์โหลด manifest.json
+              </a>
+            ) : null}
 
             <button
               onClick={handleClose}

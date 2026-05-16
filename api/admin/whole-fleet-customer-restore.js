@@ -166,7 +166,10 @@ async function restoreSingleCustomer({
   if (!backupCustomer) {
     return { ok: false, error: 'BACKUP_CUSTOMER_DOC_MISSING' };
   }
-  const customerId = String(backupCustomer.id || file.meta.customerId);
+  // V77-fix2 (P1-2): trust file.meta.customerId (server-stamped at export
+  // time) over backupCustomer.id (could be poisoned by V38 spread-order
+  // legacy data field). Mirror V38 lesson at restore-side too.
+  const customerId = String(file.meta.customerId || backupCustomer.id);
 
   const restoredCustomer = stripLineConflicts(backupCustomer, conflicts.lineConflicts);
   const strippedLineConflicts = conflicts.lineConflicts;
@@ -347,8 +350,9 @@ export default async function handler(req, res) {
     }
 
     // 4. Live customers snapshot (for conflict scan)
+    // V77-fix2 (P1-1): spread-order V38 lesson — docId wins over data.id
     const liveSnap = await dataCol(db, 'be_customers').get();
-    const liveCustomers = liveSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const liveCustomers = liveSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // 5. Per-customer loop with failure isolation
     const parentBatchAuditId = `whole-fleet-restore-${Date.now()}-${randHex(4)}`;
@@ -360,12 +364,33 @@ export default async function handler(req, res) {
     let wouldSkipBlocked = 0;
     let wouldStripLine = 0;
 
+    // V77-fix2 (P1-7): track restored customers in-memory so successive
+    // restore iterations can detect HN-collision against EARLIER successes
+    // (otherwise duplicate HNs in backup all pass conflict scan because they
+    // all compare against the original liveCustomers snapshot).
+    const restoredLive = [...liveCustomers];
+
     for (const entry of manifest.customers || []) {
       const cid = String(entry.cid || '');
+      // V77-fix2 (SP-2): path-traversal sanitize. fileEntry comes from
+      // manifest.json (admin-controlled but Storage-blob-tamperable). Reject
+      // anything not under the canonical backups/customers/ prefix to prevent
+      // restore from pulling arbitrary JSON files via path traversal.
+      const safeFileEntry = String(entry.fileEntry || '').trim();
+      if (!safeFileEntry.startsWith('backups/customers/')) {
+        failed++;
+        perCustomer.push({
+          cid,
+          outcome: 'failed',
+          error: 'INVALID_FILE_ENTRY_PATH',
+          detail: { fileEntry: safeFileEntry.slice(0, 120) },
+        });
+        continue;
+      }
       try {
         const loadResult = await loadAndVerifyPerCustomer({
           bucket,
-          backupRef: entry.fileEntry,
+          backupRef: safeFileEntry,
         });
         if (!loadResult.ok) {
           failed++;
@@ -386,7 +411,10 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const conflicts = scanRestoreConflicts({ backupCustomer, liveCustomers });
+        // V77-fix2 (P1-7): use restoredLive (grows as customers are restored)
+        // so successive iterations detect HN-collision against earlier
+        // restores in THIS batch, not just the original snapshot.
+        const conflicts = scanRestoreConflicts({ backupCustomer, liveCustomers: restoredLive });
 
         if (conflicts.customerIdExists || conflicts.hnCollision) {
           skippedConflict++;
@@ -433,6 +461,12 @@ export default async function handler(req, res) {
           continue;
         }
         restored++;
+        // V77-fix2 (P1-7): append restored customer to restoredLive so
+        // subsequent iterations see them for collision detection.
+        restoredLive.push({
+          ...backupCustomer,
+          id: String(file.meta.customerId || backupCustomer.id),
+        });
         perCustomer.push({
           cid,
           outcome: 'restored',

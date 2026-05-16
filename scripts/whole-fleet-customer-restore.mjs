@@ -314,7 +314,8 @@ async function main() {
   }
 
   const liveSnap = await dataCol(db, 'be_customers').get();
-  const liveCustomers = liveSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // V77-fix2 (P1-1): spread-order V38 lesson — docId wins over data.id
+  const liveCustomers = liveSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
   console.log(`Live customers in be_customers: ${liveCustomers.length}`);
 
   const start = Date.now();
