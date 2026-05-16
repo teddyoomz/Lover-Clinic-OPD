@@ -2674,6 +2674,40 @@ export async function addStaffChatMessage(messageDoc) {
   return messageDoc.id;
 }
 
+// V76 (2026-05-16 EOD+1) — listenToChatHistoryByBranch (BSA Layer 1 safe-by-default).
+// Sibling of listenToChatConversationsByBranch — V75 missed this READER causing
+// chat_history view to leak across branches (3,281 legacy docs unstamped). Class-
+// of-bug V12 multi-reader-sweep — V75 fixed live conversations only.
+// AV59 enforces chat_history writer-side branchId stamp; BS-17 extended to include
+// chat_history reader path via Layer 2 scopedDataLayer wrapper.
+export function listenToChatHistoryByBranch({ branchId, allBranches = false, limitN = 200 } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/chat_history`);
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) {
+    constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  }
+  constraints.push(orderBy('resolvedAt', 'desc'));
+  if (typeof limitN === 'number' && limitN > 0) {
+    constraints.push(limit(limitN));
+  }
+  const q = query(col, ...constraints);
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (typeof onChange === 'function') onChange(list);
+    },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
 // V75 Item 3 — listenToChatConversationsByBranch (BSA Layer 1 safe-by-default).
 // Branch-scoped chat_conversations listener; empty branchId + !allBranches →
 // onChange([]) + noop unsub (never falls back to whole-collection query unless

@@ -14,7 +14,11 @@ import { useSelectedBranch } from '../lib/BranchContext.jsx';
 // we call with allBranches:true here + apply client-side filter to preserve
 // the legacy-fall-through behavior (un-stamped pre-backfill chats stay visible
 // across branches during the V75 backfill transition).
-import { listenToChatConversationsByBranch } from '../lib/scopedDataLayer.js';
+// V76 (2026-05-16 EOD+1) — chat_history listener also goes through BSA Layer 2
+// (sibling of listenToChatConversationsByBranch). V75 missed this reader →
+// 3,281 legacy chat_history docs leaked across branches. Class-of-bug V12
+// multi-reader-sweep. AV59 enforces handleResolve writer-side branchId stamp.
+import { listenToChatConversationsByBranch, listenToChatHistoryByBranch } from '../lib/scopedDataLayer.js';
 // V75 Item 4 — Chat tab notification mute (per-device localStorage).
 // AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
 // sound triggers stay independent.
@@ -510,26 +514,36 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     });
   }, [selectedBranchId]);
 
-  // Listen to chat history (only when viewing) + auto-delete > 7 days
+  // V76 (2026-05-16 EOD+1) — chat_history listener through BSA Layer 2 wrapper.
+  // V75 missed this SIBLING reader; user reported cross-branch leak (3,281
+  // legacy unstamped docs visible identical across branches).
+  // Uses allBranches:true + client-side fall-through `!c.branchId` filter to
+  // preserve legacy display during V76 backfill transition window (mirrors
+  // V75 chat_conversations continuity contract; once Rule M backfill
+  // --apply runs, the fall-through becomes a no-op naturally).
+  // Auto-delete > 7 days preserved.
   useEffect(() => {
     if (!showHistory) return;
     setHistoryPage(0);
-    const histRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
-    const q = query(histRef, orderBy('resolvedAt', 'desc'), firestoreLimit(200));
-    return onSnapshot(q, snap => {
+    return listenToChatHistoryByBranch({ allBranches: true, limitN: 200 }, (raw) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const valid = [];
-      snap.docs.forEach(d => {
-        const data = { ...d.data(), id: d.id };
-        if (data.resolvedAt && data.resolvedAt < sevenDaysAgo) {
-          deleteDoc(d.ref).catch(() => {});
+      raw.forEach(item => {
+        // V76 client-side fall-through filter — mirrors line 506-508 pattern.
+        const branchMatches = !selectedBranchId
+          || !item.branchId
+          || String(item.branchId) === String(selectedBranchId);
+        if (!branchMatches) return;
+        if (item.resolvedAt && item.resolvedAt < sevenDaysAgo) {
+          // Auto-delete > 7 days
+          deleteDoc(doc(db, `artifacts/${appId}/public/data/chat_history`, item.id)).catch(() => {});
         } else {
-          valid.push(data);
+          valid.push(item);
         }
       });
       setHistory(valid);
     });
-  }, [showHistory, db, appId]);
+  }, [showHistory, selectedBranchId, db, appId]);
 
   // ─── Resolve handler (no confirm, immediate) ─────────────────────────
   const handleResolve = useCallback(async (conv, e) => {
@@ -570,6 +584,15 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
+      // V76 (2026-05-16 EOD+1) — AV59: stamp branchId on chat_history doc.
+      // Inherit conv.branchId (from V75-stamped chat_conversations webhook write)
+      // when present; fall back to selectedBranchId (admin's current branch at
+      // resolve time); fall back to '' as last resort. branchIdSource records
+      // which path was used for audit.
+      const resolvedBranchId = String(conv.branchId || selectedBranchId || '');
+      const branchIdSource = conv.branchId
+        ? 'inherited-from-conv'
+        : (selectedBranchId ? 'resolved-by-admin-branch' : 'unstamped');
       const historyData = {
         convId: convId,
         displayName: conv.displayName || 'ไม่ทราบชื่อ',
@@ -581,6 +604,9 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
         resolvedBy: user?.email || user?.uid || 'unknown',
         responseTimeMs: offHours ? null : responseTimeMs,
         maxCustomerGapMs: offHours ? null : maxCustomerGapMs,
+        // V76 AV59 — branch-scope discipline
+        branchId: resolvedBranchId,
+        branchIdSource,
       };
       if (offHours) historyData.offHours = true;
       await addDoc(historyRef, historyData);

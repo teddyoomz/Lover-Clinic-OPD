@@ -1647,6 +1647,28 @@ ChatPanel.jsx is the SOLE importer; callers consume the safe wrapper
 **Source-grep test**: `tests/v75-chat-webhook-branchid-stamp-av57.test.js`
 **Flow-simulator test**: `tests/v75-chat-webhook-branchid-stamp-flow.test.js`
 
+### AV59 — chat_history MUST stamp + read branchId via BSA (V76, 2026-05-16 EOD+1)
+
+**Trigger**: every `chat_history` write in `src/components/ChatPanel.jsx` (admin-resolve path) MUST spread `branchId` + `branchIdSource` fields. branchId resolved via fallback chain `conv.branchId || selectedBranchId || ''`; source attribution = `'inherited-from-conv'` (V75 chat_conversations webhook stamp present) OR `'resolved-by-admin-branch'` (admin's selectedBranchId at resolve time) OR `'unstamped'` (last resort — should never occur post-V76 backfill).
+
+**Reader contract**: every `chat_history` reader in UI code MUST go through `listenToChatHistoryByBranch` from `src/lib/scopedDataLayer.js` (Layer 2 auto-inject). Raw `onSnapshot(query(collection(db, '.../chat_history')))` outside the sanctioned helpers is forbidden.
+
+**Why**: V75 wired chat_conversations BSA (BS-17 + AV57) but completely missed the SIBLING `chat_history` reader + writer. Result: 3,281 legacy chat_history docs unstamped, ChatPanel history view leaked across branches (user-reported "เปลี่ยนสาขาแล้วเห็นเหมือนกันหมด"). Class-of-bug V12 multi-reader-sweep — V75 fixed live conversations only. AV59 prevents recurrence by enforcing BSA discipline at both write AND read boundaries.
+
+**Sanctioned exceptions**:
+- `src/lib/backendClient.js` — Layer 1 helper home (`listenToChatHistoryByBranch` definition)
+- `src/lib/scopedDataLayer.js` — Layer 2 wrapper home
+- `src/components/ChatPanel.jsx` — sanctioned consumer (V76-migrated)
+
+**Grep targets**:
+- `src/lib/backendClient.js` exports `listenToChatHistoryByBranch` with `where('branchId','==',X)` Firestore filter when branch-scoped + safe-by-default empty-onChange when no branchId.
+- `src/lib/scopedDataLayer.js` exports wrapper that auto-injects `resolveSelectedBranchId()` when caller passes `{}`.
+- `src/components/ChatPanel.jsx` history listener imports from scopedDataLayer (NOT raw onSnapshot) + handleResolve `historyData.branchId` + `historyData.branchIdSource`.
+
+**Source-grep test**: `tests/v76-chat-history-branch-scope.test.js`
+**Backfill script (Rule M)**: `scripts/v76-backfill-chat-history-branchid.mjs` stamps `branchId: นครราชสีมา` + `branchIdSource: 'backfill-v76-sole-active'` on legacy unstamped docs.
+**Priority**: CRITICAL — user-visible cross-branch leak.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**.

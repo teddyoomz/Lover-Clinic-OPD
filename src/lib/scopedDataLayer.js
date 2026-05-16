@@ -333,6 +333,19 @@ export const listenToChatConversationsByBranch = (opts = {}, onChange, onError) 
   return raw.listenToChatConversationsByBranch(resolved, onChange, onError);
 };
 
+// V76 (2026-05-16 EOD+1) — listenToChatHistoryByBranch wrapper (BS-17 extension).
+// V75 missed this SIBLING reader → chat_history view leaked across branches
+// (3,281 legacy docs unstamped). Mirror of chat_conversations BSA Layer 2.
+// AV59 (chat_history writer stamp) + BS-17 extended (UI reader through wrapper).
+export const listenToChatHistoryByBranch = (opts = {}, onChange, onError) => {
+  const hasExplicitBranchId = typeof opts.branchId === 'string' && opts.branchId.length > 0;
+  const isAllBranches = opts.allBranches === true;
+  const resolved = (hasExplicitBranchId || isAllBranches)
+    ? opts
+    : { ...opts, branchId: resolveSelectedBranchId() };
+  return raw.listenToChatHistoryByBranch(resolved, onChange, onError);
+};
+
 // Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
 // (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
 // was extended to accept branchId so AppointmentTab can thread the current
