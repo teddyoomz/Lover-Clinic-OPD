@@ -133,7 +133,7 @@ import { RecallTogglePill } from '../components/backend/recall/RecallTogglePill.
 import { useSelectedBranch, useEffectiveClinicSettings } from '../lib/BranchContext.jsx';
 import ClinicSettingsPanel from '../components/ClinicSettingsPanel.jsx';
 import CustomFormBuilder from '../components/CustomFormBuilder.jsx';
-import ChatPanel, { useChatUnread, playAlertSound } from '../components/ChatPanel.jsx';
+import ChatPanel, { useChatUnread, playAlertSound, playChatNotificationSound } from '../components/ChatPanel.jsx';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
 import TreatmentFormPage from '../components/TreatmentFormPage.jsx';
 import { shouldBlockScheduleSlot, shouldBlockDoctorSlot, getVisibleTimeSlotsForDate } from '../lib/scheduleFilterUtils.js';
@@ -549,7 +549,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       isPlaying: chatIsPlayingRef.current,
     })) {
       chatIsPlayingRef.current = true;
-      playAlertSound();
+      // V75 Item 4 — gated by per-device chat mute (AV58 keeps the helper
+      // import scope locked to ChatPanel.jsx; we use the safe wrapper here).
+      playChatNotificationSound();
       setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
     }
     chatPrevUnreadRef.current = chatUnread;
@@ -563,7 +565,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         isPlaying: chatIsPlayingRef.current,
       })) {
         chatIsPlayingRef.current = true;
-        playAlertSound();
+        // V75 Item 4 — gated by per-device chat mute (AV58 scope-locked).
+        playChatNotificationSound();
         setTimeout(() => { chatIsPlayingRef.current = false; }, 1400);
       }
     }, 30000);

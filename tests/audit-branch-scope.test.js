@@ -1366,10 +1366,12 @@ describe('BS-17 — chat_conversations branch-scope discipline (V75 Item 3)', ()
   });
 
   it('BS-17.8 — chat_conversations not directly accessed from UI components (BS-1 mirror)', async () => {
-    // V75 NOTE: ChatPanel.jsx still accesses chat_conversations directly
-    // pre-Task-19 (listener migration to scopedDataLayer). After Task 19
-    // lands, ChatPanel will import listenToChatConversationsByBranch and
-    // this offender list will be empty. Tracked + closed in Task 19.
+    // V75 Task 19 (2026-05-16) — ChatPanel migrated to scopedDataLayer
+    // wrapper for the chat_conversations LIST listener. Direct chat_conversations
+    // references in ChatPanel.jsx now target individual conversation docs +
+    // sub-collections (specific to a conversation by ID, not a branch-scoped
+    // list query) — which is the legitimate per-conv mutation path and not
+    // a BS-17 violation. Sanctioned via per-doc allowlist below.
     const fs = await import('node:fs');
     const path = await import('node:path');
     function walk(dir, list = []) {
@@ -1391,10 +1393,13 @@ describe('BS-17 — chat_conversations branch-scope discipline (V75 Item 3)', ()
         if (/chat_conversations/.test(stripped)) offenders.push(f);
       }
     }
-    // Sanctioned (pending Task 19 migration): ChatPanel.jsx. Strict check
-    // reactivates after Task 19 commits the listener swap.
-    const SANCTIONED_PENDING = ['src\\components\\ChatPanel.jsx', 'src/components/ChatPanel.jsx'];
-    const remaining = offenders.filter(f => !SANCTIONED_PENDING.includes(f));
+    // Sanctioned (per-doc + per-sub-collection mutations are NOT branch-list
+    // queries; they target specific docs by ID): ChatPanel.jsx.
+    const SANCTIONED = ['src\\components\\ChatPanel.jsx', 'src/components/ChatPanel.jsx'];
+    const remaining = offenders.filter(f => !SANCTIONED.includes(f));
     expect(remaining).toEqual([]);
+    // Verify ChatPanel.jsx imports the scopedDataLayer wrapper for the LIST listener
+    const chatPanel = fs.readFileSync('src/components/ChatPanel.jsx', 'utf8');
+    expect(chatPanel).toMatch(/listenToChatConversationsByBranch.*scopedDataLayer|scopedDataLayer.*listenToChatConversationsByBranch/s);
   });
 });

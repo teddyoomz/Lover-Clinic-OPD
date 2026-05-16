@@ -3,12 +3,22 @@ import { collection, doc, setDoc, onSnapshot, query, orderBy, updateDoc, deleteD
 import {
   MessageCircle, Send, Settings, ArrowLeft, Check, X, Eye, EyeOff,
   Loader2, RefreshCw, ChevronLeft, Wifi, WifiOff, Image as ImageIcon,
-  CheckCircle2, History, Clock, Bookmark
+  CheckCircle2, History, Clock, Bookmark, Bell, BellOff
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
 import { countUnreadPeople } from '../lib/chatUnreadUtils.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
+// V75 Item 3 (2026-05-16) — chat_conversations branch-scoped listener (BS-17).
+// Layer 2 wrapper auto-injects resolveSelectedBranchId() when caller passes {};
+// we call with allBranches:true here + apply client-side filter to preserve
+// the legacy-fall-through behavior (un-stamped pre-backfill chats stay visible
+// across branches during the V75 backfill transition).
+import { listenToChatConversationsByBranch } from '../lib/scopedDataLayer.js';
+// V75 Item 4 — Chat tab notification mute (per-device localStorage).
+// AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
+// sound triggers stay independent.
+import { isChatTabMuted, toggleChatTabMute } from '../lib/chatNotificationMute.js';
 
 // ─── LINE / FB brand colors ────────────────────────────────────────────────
 const LINE_COLOR = '#06C755';
@@ -42,6 +52,15 @@ function PlatformBadge({ platform }) {
 }
 
 // ─── Double beep using Web Audio API ──────────────────────────────────────
+
+// V75 Item 4 (2026-05-16) — Per-device chat-tab notification gate (AV58).
+// Wraps playAlertSound so callers (AdminDashboard chat-alert sites) don't
+// need to import chatNotificationMute directly — keeps the mute helper
+// scope locked to this file per AV58.
+export function playChatNotificationSound() {
+  if (isChatTabMuted()) return;
+  playAlertSound();
+}
 
 export function playAlertSound() {
   try {
@@ -461,6 +480,9 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const [chatConfig, setChatConfig] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'line' | 'facebook'
   const [resolvingId, setResolvingId] = useState(null);
+  // V75 Item 4 — per-device chat-tab notification mute (localStorage; doctor
+  // machine use case — chat sound off, other notis still ring).
+  const [muted, setMuted] = useState(() => isChatTabMuted());
 
   // Listen to chat config
   useEffect(() => {
@@ -470,23 +492,23 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     });
   }, [db, appId]);
 
-  // Listen to conversations — sorted oldest first (admins respond top-to-bottom)
-  // Phase 20.0 follow-up (2026-05-06) — per-branch chat filter. Conversations
-  // are stamped with branchId on incoming webhook (api/webhook/{facebook,line}.js).
-  // Show only convs matching the currently-selected branch. Legacy convs
-  // without branchId fall through (admin sees them on every branch as a
-  // transition gesture; one-shot migration script will stamp them later).
+  // V75 Item 3 (2026-05-16) — chat_conversations listener through Layer 2
+  // wrapper (BS-17). Uses allBranches:true + client-side filter so that
+  // legacy un-stamped chats stay visible during the V75 backfill transition
+  // (continuity for นครราชสีมา per user directive). Once Rule M backfill
+  // script --apply runs (Task 9), all docs will have branchId stamped, and
+  // the fall-through (!c.branchId) check becomes a no-op naturally.
+  // Sort: oldest first — admins respond top-to-bottom (existing UX contract).
   useEffect(() => {
-    const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
-    const q = query(convsRef, orderBy('lastMessageAt', 'asc'));
-    return onSnapshot(q, snap => {
-      const all = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    return listenToChatConversationsByBranch({ allBranches: true }, (raw) => {
+      // raw is sorted desc by lastMessageAt (helper default); reverse to asc
+      const all = [...raw].reverse();
       const filtered = selectedBranchId
         ? all.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
         : all;
       setConversations(filtered);
     });
-  }, [db, appId, selectedBranchId]);
+  }, [selectedBranchId]);
 
   // Listen to chat history (only when viewing) + auto-delete > 7 days
   useEffect(() => {
@@ -661,6 +683,17 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* V75 Item 4 — per-device chat-tab noti mute toggle */}
+          <button
+            type="button"
+            data-testid="chat-mute-toggle"
+            aria-pressed={muted}
+            aria-label={muted ? 'เปิดเสียงแจ้งเตือนแชท (เครื่องนี้)' : 'ปิดเสียงแจ้งเตือนแชท (เครื่องนี้)'}
+            title={muted ? 'เปิดเสียงแจ้งเตือนแชท (เครื่องนี้)' : 'ปิดเสียงแจ้งเตือนแชท (เครื่องนี้)'}
+            onClick={() => setMuted(toggleChatTabMute())}
+            className={`p-2 rounded-lg border border-[var(--bd)] transition-colors ${muted ? 'bg-amber-950/30 text-amber-300' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)]'}`}>
+            {muted ? <BellOff size={16} /> : <Bell size={16} />}
+          </button>
           <button onClick={() => setShowHistory(!showHistory)}
             className={`p-2 rounded-lg border border-[var(--bd)] transition-colors ${showHistory ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)]'}`}
             title="ประวัติแชท">
@@ -672,6 +705,12 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
           </button>
         </div>
       </div>
+      {/* V75 Item 4 — Muted-state banner. Visible only when chat sound muted on this device. */}
+      {muted && (
+        <div data-testid="chat-mute-banner" className="text-xs text-amber-300 bg-amber-950/30 border border-amber-800/40 px-3 py-1.5 rounded-lg mx-2 mt-2">
+          🔕 เครื่องนี้ปิดเสียงแชทอยู่ — แท็บอื่นยังดังปกติ
+        </div>
+      )}
 
       {/* History view */}
       {showHistory && (
@@ -826,9 +865,10 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       )}
 
       {!showHistory && !noPlatformConfigured && filtered.length === 0 && (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-testid="chat-empty-state">
           <MessageCircle size={28} className="text-[var(--tx-muted)] mx-auto mb-3" />
-          <p className="text-sm text-[var(--tx-muted)]">ยังไม่มีแชท</p>
+          {/* V75 Item 3 — empty-state copy is branch-aware (chat list filters by branchId). */}
+          <p className="text-sm text-[var(--tx-muted)]">ยังไม่มีการสนทนาในสาขานี้</p>
           <p className="text-xs text-[var(--tx-muted)] mt-1">ข้อความจากลูกค้าจะแสดงที่นี่</p>
         </div>
       )}
