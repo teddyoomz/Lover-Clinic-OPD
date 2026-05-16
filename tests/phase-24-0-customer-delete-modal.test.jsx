@@ -157,7 +157,7 @@ describe('Phase 24.0 / M3 — ProClinic-cloned warning banner', () => {
 });
 
 describe('Phase 24.0 / M4 — submit flow', () => {
-  it('M4.1 click ลบ → calls deleteCustomerViaApi with single-authorizer payload (Phase 24.0-bis)', async () => {
+  it('M4.1 click ลบ → calls deleteCustomerViaApi with single-authorizer payload (V74: + v74BackupRef param)', async () => {
     const onDeleted = vi.fn();
     deleteCustomerViaApi.mockResolvedValue({
       success: true,
@@ -168,8 +168,10 @@ describe('Phase 24.0 / M4 — submit flow', () => {
     });
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={onDeleted} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    // V74 — uncheck auto-backup checkbox so test focuses on delete-only path
+    const autoBackupCheckbox = screen.getByTestId('v74-auto-backup-checkbox');
+    fireEvent.click(autoBackupCheckbox);
     const select = screen.getByTestId('delete-customer-authorizer-select');
-    // Pick a staff member — server-authoritative role derivation should yield 'staff'.
     fireEvent.change(select, { target: { value: 'BS-1' } });
     fireEvent.click(screen.getByTestId('delete-customer-confirm'));
     await waitFor(() => expect(deleteCustomerViaApi).toHaveBeenCalledTimes(1));
@@ -180,6 +182,7 @@ describe('Phase 24.0 / M4 — submit flow', () => {
         authorizerName: 'พนง A',
         authorizerRole: 'staff',
       },
+      v74BackupRef: null,  // V74 — backup skipped when checkbox unchecked
     });
     await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
   });
@@ -189,8 +192,9 @@ describe('Phase 24.0 / M4 — submit flow', () => {
     deleteCustomerViaApi.mockResolvedValue({ success: true, customerId: 'LC-26000003', cascadeCounts: {}, auditDocId: 'a', totalDeletes: 1 });
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={onDeleted} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    fireEvent.click(screen.getByTestId('v74-auto-backup-checkbox'));  // V74: skip backup
     const select = screen.getByTestId('delete-customer-authorizer-select');
-    fireEvent.change(select, { target: { value: 'BD-1' } });  // doctor list
+    fireEvent.change(select, { target: { value: 'BD-1' } });
     fireEvent.click(screen.getByTestId('delete-customer-confirm'));
     await waitFor(() => expect(deleteCustomerViaApi).toHaveBeenCalledTimes(1));
     expect(deleteCustomerViaApi).toHaveBeenCalledWith({
@@ -200,6 +204,7 @@ describe('Phase 24.0 / M4 — submit flow', () => {
         authorizerName: 'Dr X',
         authorizerRole: 'doctor',
       },
+      v74BackupRef: null,
     });
   });
 
@@ -207,6 +212,7 @@ describe('Phase 24.0 / M4 — submit flow', () => {
     deleteCustomerViaApi.mockRejectedValue(Object.assign(new Error('test fail'), { userMessage: 'authorizerId not in branch roster' }));
     render(<DeleteCustomerCascadeModal customer={customerThai} onClose={() => {}} onDeleted={() => {}} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    fireEvent.click(screen.getByTestId('v74-auto-backup-checkbox'));  // V74: skip backup
     const select = screen.getByTestId('delete-customer-authorizer-select');
     fireEvent.change(select, { target: { value: 'BS-1' } });
     fireEvent.click(screen.getByTestId('delete-customer-confirm'));

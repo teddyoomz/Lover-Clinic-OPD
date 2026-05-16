@@ -200,9 +200,9 @@ describe('section integrity', () => {
     expect(ids).not.toContain('clone');
   });
 
-  it('I4 master section — V50 (2026-05-08) "masterdata" REMOVED, pure CRUD only', () => {
+  it('I4 master section — V50 (2026-05-08) "masterdata" REMOVED + V74 (2026-05-16) added 2 backup admin tabs', () => {
     // V50: ProClinic Sync tab gone. All master data is now CRUD'd via the
-    // 20 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40).
+    // 22 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40 + V74 backup tabs).
     const master = NAV_SECTIONS.find(s => s.id === 'master');
     expect(master).toBeTruthy();
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
@@ -227,6 +227,9 @@ describe('section integrity', () => {
       'link-requests',
       'system-settings',
       'branch-backup',
+      // V74 (2026-05-16) — customer backup/restore admin surfaces
+      'customer-data-recovery',
+      'backup-manager',
     ]);
     // V50 anti-regression
     expect(master.items.map(i => i.id)).not.toContain('masterdata');
