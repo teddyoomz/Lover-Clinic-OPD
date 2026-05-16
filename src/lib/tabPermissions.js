@@ -112,6 +112,12 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // head-of-ops without giving full admin claim. Admin bypass implicit.
   'system-settings':     { requires: ['system_config_management'] },
 
+  // V74 (2026-05-16) — Customer backup/restore admin surfaces.
+  // Both admin-only (destructive ops + PII handling). No separate perm
+  // keys for MVP — admin claim required.
+  'customer-data-recovery': { adminOnly: true },
+  'backup-manager':         { adminOnly: true },
+
   // V40 (2026-05-07) — Branch Backup/Restore tab. Admin-only (destructive
   // ops: export/import/make-fresh). No separate permission key needed —
   // admin bypass is the intended gate for this system-level tool.

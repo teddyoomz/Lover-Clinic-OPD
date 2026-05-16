@@ -73,6 +73,9 @@ const PaymentSummaryTab      = lazy(() => import('../components/backend/reports/
 const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSettingsTab.jsx'));
 // V40 Task 4.4 (2026-05-07) — Branch Backup tab (lazy; admin-only, rarely opened)
 const BranchBackupTab        = lazy(() => import('../components/backend/BranchBackupTab.jsx'));
+// V74 (2026-05-16) — Customer backup/restore admin surfaces (lazy; admin-only)
+const CustomerDataRecoveryTab = lazy(() => import('../components/backend/CustomerDataRecoveryTab.jsx'));
+const BackupManagerTab        = lazy(() => import('../components/backend/BackupManagerTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
 import ProductUnitsTab from '../components/backend/ProductUnitsTab.jsx';
@@ -653,6 +656,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <SystemSettingsTab />
         ) : activeTab === 'branch-backup' ? (
           <BranchBackupTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'customer-data-recovery' ? (
+          <CustomerDataRecoveryTab />
+        ) : activeTab === 'backup-manager' ? (
+          <BackupManagerTab />
         ) : null}
         </Suspense>
       </div>
