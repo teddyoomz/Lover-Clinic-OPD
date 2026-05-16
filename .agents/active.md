@@ -2,7 +2,7 @@
 updated_at: "2026-05-16 NIGHT+1 — Outstanding closed (Rule N full vitest + verbose V76/V77 + 4 V21 fixups)"
 status: "SHIPPED — V76+V77 saga + post-batch V21 fixups + v-log-archive verbose. Awaiting Rule Q L1."
 branch: "master"
-last_commit: "<post-fixup commit — set on commit>"
+last_commit: "66995f6 docs+test(V76+V77 outstanding-batch): verbose v-log + V21 contract fixups"
 tests: "Full vitest 10844 total: 10826 PASS / 12 skip / 6 FAIL → 4 V21-class fixed inline (V77-bis hardcoded-fallback contract + BC1.1 be_fb_configs entry) + 2 pre-existing RTL non-flakes flagged below (NOT V76/V77-caused). Build clean ✓."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "4d0edcd — V77-quater Vercel LIVE @ 2026-05-16T12:41Z; V77-quinquies (11044de) data-only no deploy"
