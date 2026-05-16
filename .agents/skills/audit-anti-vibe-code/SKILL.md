@@ -1708,9 +1708,69 @@ ChatPanel.jsx is the SOLE importer; callers consume the safe wrapper
 **Diag script (Rule R)**: `scripts/diag-v76-chat-history-branchid-state.mjs` + `scripts/diag-v76-chat-conversations-branchid-state.mjs` enumerate branchId distribution.
 **Priority**: CRITICAL — user-visible cross-branch leak even AFTER V76 + V77-bis.
 
+### AV62 — Whole-system backup manifestHash integrity (V81, 2026-05-16 NIGHT+4 → 17 EOD+5)
+
+**Trigger**: every `/api/admin/whole-system-restore.js` endpoint MUST verify
+`computeWholeSystemManifestHash(manifest) === manifest.manifestHash` BEFORE
+any wipe or restore op. Mismatch → 409 `WHOLE_SYSTEM_MANIFEST_TAMPERED` + Thai
+error "ไฟล์ backup เสียหายหรือถูกแก้ไข — ยกเลิกการ restore".
+
+**Hash inputs** (canonical JSON ordered):
+- All `collections[*].fileHash` sorted by collection name
+- `storageManifestHash` (= SHA-256 of `storageObjects[*].fileHash` sorted by path — two-tier seal)
+- `authUsers.fileHash`
+- `name`, `createdAt`, `schemaVersion`, `totalDocCount`, `totalStorageBytes`, `totalAuthUsers`
+
+**EXCLUDED from hash** (mutable for admin convenience):
+- `createdBy`, `manifestHash` (self), `elapsedSec`, `_v81Marker`, `scope` (constant)
+
+**Sanctioned exceptions**: NONE — every restore verifies.
+**Source-grep test**: `tests/v81-source-grep.test.js` (V81 — restore endpoint).
+**Priority**: CRITICAL — tampered backup could write arbitrary attacker data.
+
+### AV63 — Whole-system cron CRON_SECRET gate + concurrency lock (V81)
+
+**Trigger**: `/api/cron/whole-system-backup-daily.js` MUST verify
+`Authorization: Bearer ${CRON_SECRET}` (or x-cron-secret header) AND acquire
++ release `be_admin_audit/whole-system-backup-running` lock via Firestore
+transaction. Lock TTL 60 min; refuse 409 LOCK_BUSY if existing lock < 60 min old.
+Manual export endpoint shares the SAME lock (`api/admin/whole-system-backup-export.js`).
+
+**Sanctioned exceptions**: NONE.
+**Source-grep test**: `tests/v81-source-grep.test.js` AV63 group.
+**Priority**: CRITICAL — concurrent backups corrupt audit + waste resources.
+
+### AV64 — Whole-system retention discipline (V81)
+
+**Trigger**: cleanup logic in `wholeSystemBackupExecutor.runCleanup` MUST follow
+`shouldCleanupBackup(name, ageMs)` from `src/lib/wholeSystemBackupCore.js`:
+- `auto-*`       > 5d → delete
+- `pre-restore-*` > 7d → delete
+- `manual-*`     → keep (∞ — admin's responsibility)
+- `__archive.tar.gz` > 24h → delete (handled separately in download endpoint)
+- Unknown name pattern → log + preserve (forward-compat safety)
+
+**Sanctioned exceptions**: NONE — every cleanup site uses the canonical helper.
+**Source-grep test**: `tests/v81-whole-system-backup-core.test.js` Group D.
+**Priority**: HIGH — incorrect cleanup loses data OR balloons Storage cost.
+
+### AV19 elevation (V81-specific) — whole-system Replace MUST autoBackupRef
+
+**Trigger**: `/api/admin/whole-system-restore` with `mode='replace'` MUST trigger
+auto-pre-backup via internal call to backup-executor with `type='pre-restore'`
+BEFORE wipe. Verify pre-restore folder exists in Storage via
+`bucket.file('backups/whole-system/pre-restore-{ts}/manifest.json').exists()`.
+Refuse 500 `AUTO_PRE_BACKUP_FAILED` if either step fails. Stamp
+`autoBackupRef: 'pre-restore-{ts}'` on restore audit doc.
+
+**Lineage**: V40 introduced AV19 (autoBackupRef mandatory for delete-many).
+V74 AV53 elevated for customer cascade. V81 extends to whole-system Replace.
+**Sanctioned exceptions**: Fresh-only mode (no wipe → no pre-backup needed).
+**Priority**: CRITICAL — without elevation, admin click loses entire system.
+
 ## Priority
 
-**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**.
+**CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**.
 **HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
