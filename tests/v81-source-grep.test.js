@@ -165,4 +165,65 @@ describe('V81 — manual export endpoint', () => {
   });
 });
 
-// Future appends from Tasks 9-17 ...
+// ─── Tasks 9-10 — restore endpoint + AV62 + AV19 elevation ────────────────
+
+describe('V81 — restore endpoint (Fresh + Replace modes)', () => {
+  const src = READ('api/admin/whole-system-restore.js');
+  const exec = READ('api/admin/_lib/wholeSystemRestoreExecutor.js');
+
+  it('endpoint uses verifyAdminToken', () => {
+    expect(src).toMatch(/verifyAdminToken/);
+  });
+
+  it('endpoint validates mode (fresh|replace)', () => {
+    expect(src).toMatch(/INVALID_MODE/);
+    expect(src).toMatch(/['"]fresh['"]/);
+    expect(src).toMatch(/['"]replace['"]/);
+  });
+
+  it('endpoint requires confirmName === backupRef (anti-fat-finger)', () => {
+    expect(src).toMatch(/CONFIRM_NAME_MISMATCH/);
+    expect(src).toMatch(/confirmName/);
+  });
+
+  it('endpoint maps error codes to HTTP status + Thai message', () => {
+    expect(src).toMatch(/WHOLE_SYSTEM_MANIFEST_TAMPERED/);
+    expect(src).toMatch(/TARGET_NOT_EMPTY/);
+    expect(src).toMatch(/AUTO_PRE_BACKUP_FAILED/);
+    expect(src).toMatch(/ไฟล์ backup/);
+  });
+
+  it('executor AV62: validateWholeSystemManifest BEFORE wipe/restore', () => {
+    expect(exec).toMatch(/validateWholeSystemManifest/);
+  });
+
+  it('executor Fresh-only: assertTargetEmpty', () => {
+    expect(exec).toMatch(/assertTargetEmpty/);
+    expect(exec).toMatch(/TARGET_NOT_EMPTY/);
+  });
+
+  it('executor V31: caller uid self-skip in auth import + wipe', () => {
+    expect(exec).toMatch(/u\.uid\s*!==\s*callerUid/);
+    expect(exec).toMatch(/u\.uid\s*===\s*callerUid[\s\S]{0,30}continue/);
+  });
+
+  it('executor AV19 elevation: Replace mode auto-pre-backup', () => {
+    expect(exec).toMatch(/type:\s*['"]pre-restore['"]/);
+    expect(exec).toMatch(/runWholeSystemBackup/);
+  });
+
+  it('executor AV19: verifies pre-backup folder exists BEFORE wipe', () => {
+    expect(exec).toMatch(/AUTO_PRE_BACKUP_FAILED/);
+    expect(exec).toMatch(/manifest\.json[\s\S]{0,150}\.exists\(\)/);
+  });
+
+  it('executor wipe Storage skips backups/ prefix (preserve pre-restore + other backups)', () => {
+    expect(exec).toMatch(/f\.name\.startsWith\(['"]backups\/['"]\)[\s\S]{0,80}continue/);
+  });
+
+  it('executor wipe Firestore skips be_admin_audit (Rule D immutable)', () => {
+    expect(exec).toMatch(/be_admin_audit[\s\S]{0,50}continue/);
+  });
+});
+
+// Future appends from Tasks 11-17 ...
