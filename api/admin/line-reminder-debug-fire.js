@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       for (const d of snap.docs) {
         if (seen.has(d.id)) continue;
         seen.add(d.id);
-        candidates.push({ id: d.id, ...d.data() });
+        candidates.push({ ...d.data(), id: d.id });
       }
     }
   } else {
@@ -137,7 +137,7 @@ export default async function handler(req, res) {
       .where('branchId', '==', branchId)
       .where('date', '==', targetDate)
       .get();
-    candidates = apptsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    candidates = apptsSnap.docs.map(d => ({ ...d.data(), id: d.id }))
       .filter(a => Array.isArray(a.notifyChannel) && a.notifyChannel.includes('line'));
   }
 

@@ -20,6 +20,12 @@
     },
     "api/admin/whole-fleet-customer-restore.js": {
       "maxDuration": 300
+    },
+    "api/cron/line-reminder-fire.js": {
+      "maxDuration": 300
+    },
+    "api/cron/line-reminder-retry.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

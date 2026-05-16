@@ -46,6 +46,7 @@ import {
 import {
   validateWholeFleetManifest,
   computeWholeFleetManifestHash,
+  resolveCustomerEntryPath, // V77-fix4 (N2) — legacy backupRef + post-fix3 fileEntry
 } from '../../src/lib/wholeFleetBackupCore.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
@@ -194,9 +195,17 @@ async function restoreSingleCustomer({
   totalWrites++;
   await flushIfFull();
 
+  // V77-fix3 (P2-7): skip docs with missing/empty id rather than writing
+  // to literal "undefined" docId. Returns count of skipped docs for audit.
+  const skippedMissingId = { collections: 0, subcollections: 0, chats: 0 };
+
   for (const colName of CUSTOMER_CASCADE_COLLECTIONS_FULL) {
     const docs = file.collections?.[colName] || [];
     for (const doc of docs) {
+      if (!doc || !doc.id) {
+        skippedMissingId.collections++;
+        continue;
+      }
       const docId = String(doc.id);
       const { id: _ignoredId, ...payload } = doc;
       batchOp.set(dataCol(db, colName).doc(docId), payload);
@@ -209,6 +218,10 @@ async function restoreSingleCustomer({
   for (const sub of T4_SUBCOLLECTIONS) {
     const docs = file.subcollections?.[sub] || [];
     for (const doc of docs) {
+      if (!doc || !doc.id) {
+        skippedMissingId.subcollections++;
+        continue;
+      }
       const docId = String(doc.id);
       const { id: _ignoredId, ...payload } = doc;
       batchOp.set(customerSubcoll(db, customerId, sub).doc(docId), payload);
@@ -219,6 +232,10 @@ async function restoreSingleCustomer({
   }
 
   for (const chat of file.chatConversations || []) {
+    if (!chat || !chat.id) {
+      skippedMissingId.chats++;
+      continue;
+    }
     const chatId = String(chat.id);
     const { id: _ignoredId, ...payload } = chat;
     batchOp.set(dataCol(db, 'chat_conversations').doc(chatId), payload);
@@ -236,6 +253,7 @@ async function restoreSingleCustomer({
     bodyHash: file.meta.bodyHash,
     storageManifestHash: file.meta.storageManifestHash,
     strippedLineConflicts,
+    skippedMissingId, // V77-fix3 (P2-7) — auditable count of malformed docs
     totalWrites,
     performedBy: { uid: caller.uid || '', email: caller.email || '' },
     performedAt: FieldValue.serverTimestamp(),
@@ -246,8 +264,13 @@ async function restoreSingleCustomer({
   await batchOp.commit();
 
   // Copy Storage objects back to canonical paths
+  // V77-fix3 (P1-8): warn (not block) when destination Storage object
+  // already exists — restore may legitimately overwrite (admin's call) but
+  // admin should see an audit trail of which objects were clobbered. Bare
+  // `file.copy()` previously overwrote silently with no record.
   const storageManifest = file.meta.storageManifest || [];
   const storageErrors = [];
+  const storageOverwrites = [];
   await Promise.all(
     storageManifest.map(async (entry) => {
       const srcPath = `${backupPrefix}/storage/${entry.path}`;
@@ -257,6 +280,11 @@ async function restoreSingleCustomer({
         if (!srcExists) {
           storageErrors.push({ path: entry.path, error: 'STORAGE_SOURCE_MISSING' });
           return;
+        }
+        // V77-fix3 (P1-8): check dest existence before overwrite
+        const [dstExists] = await bucket.file(dstPath).exists();
+        if (dstExists) {
+          storageOverwrites.push({ path: entry.path });
         }
         await bucket.file(srcPath).copy(bucket.file(dstPath));
       } catch (e) {
@@ -270,7 +298,9 @@ async function restoreSingleCustomer({
     customerId,
     totalWrites,
     strippedLineConflicts,
+    skippedMissingId, // V77-fix3 (P2-7)
     storageErrors,
+    storageOverwrites, // V77-fix3 (P1-8)
   };
 }
 
@@ -317,7 +347,9 @@ export default async function handler(req, res) {
     const [manifestBuf] = await bucket.file(backupRef).download();
     let manifest;
     try {
-      manifest = JSON.parse(manifestBuf.toString('utf8'));
+      // V77-fix3 (P2-3): jsonReviverForNonFinite mirrors per-customer
+      // backup files; consistent NaN/Infinity sentinel round-trip.
+      manifest = JSON.parse(manifestBuf.toString('utf8'), jsonReviverForNonFinite);
     } catch (e) {
       return res
         .status(400)
@@ -376,7 +408,12 @@ export default async function handler(req, res) {
       // manifest.json (admin-controlled but Storage-blob-tamperable). Reject
       // anything not under the canonical backups/customers/ prefix to prevent
       // restore from pulling arbitrary JSON files via path traversal.
-      const safeFileEntry = String(entry.fileEntry || '').trim();
+      // V77-fix4 (N2): use resolveCustomerEntryPath helper so legacy V77b/c
+      // manifests (which used `backupRef` instead of `fileEntry`) still
+      // restore. Defense-in-depth: even if validateWholeFleetManifest
+      // accepted the legacy shape, the restore path here previously read
+      // only entry.fileEntry → silently broken.
+      const safeFileEntry = resolveCustomerEntryPath(entry).trim();
       if (!safeFileEntry.startsWith('backups/customers/')) {
         failed++;
         perCustomer.push({

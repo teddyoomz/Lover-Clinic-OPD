@@ -34,6 +34,9 @@ import {
   buildWholeFleetManifest,
   computeWholeFleetManifestHash,
 } from '../../src/lib/wholeFleetBackupCore.js';
+// V77-fix3 (P2-2): use jsonReplacerForNonFinite for manifest too — mirrors
+// per-customer file serialization. Defensive against NaN/Infinity slipping
+// into totals (shouldn't but if it does, sentinel-encoded round-trip works).
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -106,7 +109,7 @@ async function exportSingleCustomer({ db, bucket, customer, customerId, exporter
   );
   const collections = { be_customers: [customer] };
   CUSTOMER_CASCADE_COLLECTIONS_FULL.forEach((name, idx) => {
-    collections[name] = collectionQueries[idx].docs.map((d) => ({ id: d.id, ...d.data() }));
+    collections[name] = collectionQueries[idx].docs.map((d) => ({ ...d.data(), id: d.id }));
   });
 
   // Enumerate 8 customer-attached subcollections (parallel)
@@ -115,7 +118,7 @@ async function exportSingleCustomer({ db, bucket, customer, customerId, exporter
   );
   const subcollections = {};
   T4_SUBCOLLECTIONS.forEach((sub, idx) => {
-    subcollections[sub] = subQueries[idx].docs.map((d) => ({ id: d.id, ...d.data() }));
+    subcollections[sub] = subQueries[idx].docs.map((d) => ({ ...d.data(), id: d.id }));
   });
 
   // Match chat conversations from pre-fetched all-chats array (avoid N+1 fetches)
@@ -207,12 +210,26 @@ export default async function handler(req, res) {
 
   const start = Date.now();
   const userNote = String(req.body?.userNote || '').slice(0, 200);
-  const branchIdFilter = String(req.body?.branchId || '').trim();
-  // Optional limit (admin can preview with small subset before full run)
-  const maxCustomers = Math.min(
-    Number(req.body?.maxCustomers) || 0,
-    10000
-  );
+  // V77-fix3 (P1-9): cap branchIdFilter length to 64 chars (Firestore docId
+  // max is 1500B; real branchIds are ~20 chars). Prevents audit-doc-size
+  // blowup from a tampered/garbage filter.
+  const branchIdFilter = String(req.body?.branchId || '').trim().slice(0, 64);
+  // V77-fix3 (P1-10): strict numeric validation for maxCustomers. Pre-fix
+  // Number("abc") → NaN → || 0 → silently runs entire fleet instead of
+  // refusing. Now rejects non-numeric strings with explicit 400.
+  let maxCustomers = 0;
+  const rawMaxN = req.body?.maxCustomers;
+  if (rawMaxN !== undefined && rawMaxN !== null && rawMaxN !== '') {
+    const n = Number(rawMaxN);
+    if (!Number.isFinite(n) || n < 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'INVALID_MAX_CUSTOMERS',
+        detail: { received: rawMaxN, expected: 'positive integer 1-10000' },
+      });
+    }
+    maxCustomers = Math.min(Math.floor(n), 10000);
+  }
 
   try {
     const { db, bucket } = getAdmin();
@@ -272,7 +289,10 @@ export default async function handler(req, res) {
     const allChatConversations = chatSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // 3. Per-customer export with failure isolation
-    const exporterLabel = `${caller.email || ''} (${caller.uid || ''})`.trim();
+    // V77-fix3 (P1-4): exporterLabel previously could be `()` when both
+    // email + uid empty. Now use filter+join → 'unknown-admin' fallback.
+    const exporterLabel =
+      [caller.email, caller.uid].filter(Boolean).join(' / ') || 'unknown-admin';
     const customerSummaries = [];
     const failedCustomers = [];
 
@@ -303,7 +323,17 @@ export default async function handler(req, res) {
           exportedAt: new Date().toISOString(),
         });
       } catch (err) {
-        failedCustomers.push({ cid: customerId, reason: err?.message || 'EXPORT_FAILED' });
+        // V77-fix3 (P1-3): preserve structured error context (code + name +
+        // first stack line) so admin can differentiate transient (retryable
+        // network/quota) from permanent (schema/permission). Generic bare
+        // message string was insufficient for triage.
+        failedCustomers.push({
+          cid: customerId,
+          reason: err?.message || 'EXPORT_FAILED',
+          code: err?.code || '',
+          type: err?.name || 'Error',
+          stack: err?.stack ? String(err.stack).split('\n').slice(0, 3).join(' | ').slice(0, 400) : '',
+        });
       }
     }
 
@@ -320,9 +350,13 @@ export default async function handler(req, res) {
 
     // 5. Write manifest.json + signed URL
     const ts = Date.now();
-    const rand = randHex(8);
+    const rand = randHex(); // V77-fix2 default 16 chars
     const manifestPath = `backups/whole-fleet-customers/${ts}-${rand}/manifest.json`;
-    const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
+    // V77-fix3 (P2-2): consistent sentinel-encoded NaN/Infinity serialization
+    const manifestBytes = Buffer.from(
+      JSON.stringify(manifest, jsonReplacerForNonFinite, 2),
+      'utf8'
+    );
     await bucket.file(manifestPath).save(manifestBytes, {
       metadata: { contentType: 'application/json' },
       resumable: false,

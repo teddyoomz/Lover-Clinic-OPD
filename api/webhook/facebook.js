@@ -12,11 +12,16 @@ import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { resolveChatBranchIdFromFbEvent } from './_lib/fbChatBranchResolver.js';
 import { getFbConfigByPageId } from './_lib/fbConfig.js';
+import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
-const FALLBACK_BRANCH_ID = process.env.LOVER_DEFAULT_BRANCH_ID || '';
+// V78 (2026-05-16 NIGHT — BUG-XR-24 fix): wire FALLBACK_BRANCH_ID through
+// resolveChatFallbackBranchId() so hardcoded NAKHON constant kicks in when
+// env unset. Same bug class as V77-bis (LINE webhook) — same fix.
+const FALLBACK_BRANCH_ID = resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID);
+const USED_ENV_FALLBACK = !!process.env.LOVER_DEFAULT_BRANCH_ID;
 
 // V75 Item 3 — admin-SDK init for be_fb_configs lookup (rules deny anon read).
 let cachedAdminDb = null;
@@ -44,8 +49,13 @@ function getAdminFirestore() {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function verifySignature(rawBody, signature, appSecret) {
+  // V78 (2026-05-16 NIGHT — BUG-XR-16 fix): constant-time HMAC comparison.
+  // Same class as XR-15 LINE webhook fix.
   const hmac = crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
-  return signature === `sha256=${hmac}`;
+  const expected = `sha256=${hmac}`;
+  if (!signature || typeof signature !== 'string') return false;
+  if (signature.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
 async function getChatConfig() {
@@ -216,9 +226,13 @@ async function processMessage(senderId, message, config, branchInfo = {}) {
   });
 
   // V75 Item 3 — chat_conversations.branchId + branchIdSource for per-branch UI filter (AV57).
+  // V78 BUG-XR-24: USED_ENV_FALLBACK distinguishes env-driven vs hardcoded
+  // fallback so the branchIdSource label is accurate.
   const chatBranchId = branchInfo.branchId || FALLBACK_BRANCH_ID;
   const chatBranchIdSource = branchInfo.branchIdSource
-    || (FALLBACK_BRANCH_ID ? 'webhook-fb-fallback-legacy' : 'webhook-fb-fallback-empty');
+    || (USED_ENV_FALLBACK
+        ? 'webhook-fb-fallback-legacy'
+        : 'webhook-fb-fallback-hardcoded-nakhonratchasima');
 
   // Update conversation
   const convFields = {
@@ -367,7 +381,12 @@ export default async function handler(req, res) {
   // be_fb_configs/{branchId} where pageId == entry[0].id. Falls back to
   // LOVER_DEFAULT_BRANCH_ID (typically นครราชสีมา) when no match —
   // preserves legacy clinic_settings/chat_config era flow.
-  let branchInfo = { branchId: FALLBACK_BRANCH_ID, branchIdSource: FALLBACK_BRANCH_ID ? 'webhook-fb-fallback-legacy' : 'webhook-fb-fallback-empty' };
+  let branchInfo = {
+    branchId: FALLBACK_BRANCH_ID,
+    branchIdSource: USED_ENV_FALLBACK
+      ? 'webhook-fb-fallback-legacy'
+      : 'webhook-fb-fallback-hardcoded-nakhonratchasima',
+  };
   try {
     const db = getAdminFirestore();
     branchInfo = await resolveChatBranchIdFromFbEvent(body, {

@@ -182,7 +182,7 @@ export default async function handler(req, res) {
 
     // 4. Conflict scan (against live customers)
     const liveSnap = await dataCol(db, 'be_customers').get();
-    const liveCustomers = liveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const liveCustomers = liveSnap.docs.map(d => ({ ...d.data(), id: d.id }));
     const conflicts = scanRestoreConflicts({ backupCustomer, liveCustomers });
 
     // Counts for preview/restore response

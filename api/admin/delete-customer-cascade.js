@@ -453,7 +453,7 @@ export default async function handler(req, res) {
 
     // V74 — Query chat_conversations matching this customer (via Phase BS chat-link predicate).
     const chatSnap = await data.collection('chat_conversations').get();
-    const chatMatching = chatSnap.docs.filter(d => matchCustomerChatPredicate({ id: d.id, ...d.data() }, customer));
+    const chatMatching = chatSnap.docs.filter(d => matchCustomerChatPredicate({ ...d.data(), id: d.id }, customer));
     const chatConversationCount = chatMatching.length;
     chatMatching.forEach(d => refsToDelete.push(d.ref));
 

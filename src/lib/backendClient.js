@@ -4371,7 +4371,8 @@ export async function getWalletsForCustomerIds(customerIds = []) {
       getDocs(query(walletsCol(), where('customerId', 'in', chunk)))
     )
   );
-  return snaps.flatMap(s => s.docs.map(d => ({ id: d.id, ...d.data() })));
+  // V77-fix3 (S-4): docId wins spread order (V38 lesson)
+  return snaps.flatMap(s => s.docs.map(d => ({ ...d.data(), id: d.id })));
 }
 
 /** Get balance for a specific wallet (0 if wallet missing). */

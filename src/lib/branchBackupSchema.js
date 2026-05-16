@@ -153,7 +153,10 @@ export function jsonReviverForNonFinite(_key, value) {
 //   - branch-make-fresh.js (read side — recompute + compare before wipe)
 //   - scripts/e2e-backup-restore-roundtrip-real-prod.mjs (verify round-trip)
 
-function canonicalJson(value) {
+// V77-fix3 (2026-05-16 NIGHT — SP-1): exported so wholeFleetBackupCore.js
+// can share the same canonicalization. Same input + same canonicalization →
+// same hash across V40 branch / V74 customer / V75 whole-fleet flows.
+export function canonicalJson(value) {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'number') {
     if (Number.isNaN(value)) return '{"__number__":"NaN"}';

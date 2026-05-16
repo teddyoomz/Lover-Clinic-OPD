@@ -19,6 +19,11 @@ import { useSelectedBranch, useEffectiveClinicSettings } from '../lib/BranchCont
 // 3,281 legacy chat_history docs leaked across branches. Class-of-bug V12
 // multi-reader-sweep. AV59 enforces handleResolve writer-side branchId stamp.
 import { listenToChatConversationsByBranch, listenToChatHistoryByBranch } from '../lib/scopedDataLayer.js';
+// V78 (2026-05-16 NIGHT — BUG-CHAT-4 fix): per-branch LINE+FB config readers
+// for the filter pills + empty-state. Pre-V78 the pills lied because they
+// read legacy single-tenant clinic_settings/chat_config.{line,facebook}.enabled.
+import { listenToLineConfig } from '../lib/lineConfigClient.js';
+import { listenToFbConfig } from '../lib/fbConfigClient.js';
 // V75 Item 4 — Chat tab notification mute (per-device localStorage).
 // AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
 // sound triggers stay independent.
@@ -306,32 +311,13 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 
 // ─── Off-hours helper ──────────────────────────────────────────────────────
 // V77-quater (2026-05-16 EOD+1) — V12 multi-reader-sweep follow-up to V77-ter.
-// V77-ter fixed AdminDashboard.isChatActive only; this SIBLING reader was missed.
-// `settings` is the V51-merged cs (mergeBranchIntoClinic): exposes
-// cs.chatHoursAlwaysOn + cs.chatHoursMonFri.{open,close} + cs.chatHoursSatSun.
-// Legacy pre-V51 fields (chatAlwaysOn/chatOpenTime/chatCloseTime) kept as
-// fallback chain — backward-compat for envs that haven't merged yet.
-function isWithinChatHours(timestamp, settings) {
-  if (!settings) return true;
-  const alwaysOn = (typeof settings.chatHoursAlwaysOn === 'boolean')
-    ? settings.chatHoursAlwaysOn
-    : !!settings.chatAlwaysOn;
-  if (alwaysOn) return true;
-  const d = new Date(timestamp);
-  const bangkokTime = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  const day = bangkokTime.getDay(); // 0=Sun, 6=Sat
-  const hhmm = `${String(bangkokTime.getHours()).padStart(2, '0')}:${String(bangkokTime.getMinutes()).padStart(2, '0')}`;
-  const isWeekend = day === 0 || day === 6;
-  const monFri = settings.chatHoursMonFri || {};
-  const satSun = settings.chatHoursSatSun || {};
-  const open = isWeekend
-    ? (satSun.open || settings.chatOpenTimeWeekend || '10:00')
-    : (monFri.open || settings.chatOpenTime || '10:00');
-  const close = isWeekend
-    ? (satSun.close || settings.chatCloseTimeWeekend || '19:00')
-    : (monFri.close || settings.chatCloseTime || '19:00');
-  return hhmm >= open && hhmm < close;
-}
+// V77-fix3 (S-2 + P2-8, 2026-05-16 NIGHT) — extracted to src/lib/chatHours.js.
+// Was duplicated with AdminDashboard.isChatActive; the duplicate IS what
+// caused V77-quater to be a separate fix after V77-ter (deferred Rule P
+// Step 3 cross-file grep cost 2 user-rage rounds). Now both consume the
+// same canonical helper — future V51-field schema drift only updates THERE.
+// Also fixes P2-8 (Intl.DateTimeFormat replaces locale-string round-trip).
+import { isWithinChatHours } from '../lib/chatHours.js';
 
 export default function ChatPanel({ db, appId, user, clinicSettings }) {
   // Phase 20.0 follow-up (2026-05-06) — per-branch chat filter.
@@ -360,7 +346,31 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   // machine use case — chat sound off, other notis still ring).
   const [muted, setMuted] = useState(() => isChatTabMuted());
 
-  // Listen to chat config
+  // V78 (2026-05-16 NIGHT — BUG-CHAT-4 fix): listen to PER-BRANCH LINE + FB
+  // configs instead of single-tenant clinic_settings/chat_config. Filter pills
+  // + empty-state now reflect the SELECTED branch's enable flags. Pre-V78,
+  // admin in พระราม 3 saw นครราชสีมา's pills + empty-state lied about which
+  // platforms were configured for the current branch.
+  //
+  // Legacy single-tenant chat_config kept as fallback during V75 transition
+  // (auto-seed for นครราชสีมา per V75 contract). After backfill admin re-
+  // configures per-branch, this becomes a no-op fallback.
+  const [lineConfig, setLineConfig] = useState(null);
+  const [fbConfig, setFbConfig] = useState(null);
+  useEffect(() => {
+    if (!selectedBranchId) {
+      setLineConfig(null);
+      setFbConfig(null);
+      return;
+    }
+    const unsubLine = listenToLineConfig(selectedBranchId, setLineConfig, () => setLineConfig(null));
+    const unsubFb = listenToFbConfig(selectedBranchId, setFbConfig, () => setFbConfig(null));
+    return () => { unsubLine?.(); unsubFb?.(); };
+  }, [selectedBranchId]);
+
+  // Legacy fallback — kept for envs where per-branch be_line_configs /
+  // be_fb_configs hasn't been seeded yet. Used ONLY when selectedBranchId
+  // has no per-branch config (returns null). Read once on mount.
   useEffect(() => {
     const configRef = doc(db, `artifacts/${appId}/public/data/clinic_settings`, 'chat_config');
     return onSnapshot(configRef, snap => {
@@ -374,17 +384,39 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   // (continuity for นครราชสีมา per user directive). Once Rule M backfill
   // script --apply runs (Task 9), all docs will have branchId stamped, and
   // the fall-through (!c.branchId) check becomes a no-op naturally.
+  //
+  // V77-fix3 (P2-6, 2026-05-16 NIGHT): subscribe ONCE with empty deps and
+  // store the raw all-branches array; derive the per-branch filtered view via
+  // a `useMemo` below. Pre-fix, deps:[selectedBranchId] tore down + re-
+  // subscribed the SAME all-branches listener on every branch switch =
+  // wasted Firestore reads (billable per resubscribe on some pricing tiers)
+  // AND a brief empty-state flicker during the resubscribe gap.
+  //
   // Sort: oldest first — admins respond top-to-bottom (existing UX contract).
+  const [rawConversations, setRawConversations] = useState([]);
   useEffect(() => {
     return listenToChatConversationsByBranch({ allBranches: true }, (raw) => {
       // raw is sorted desc by lastMessageAt (helper default); reverse to asc
-      const all = [...raw].reverse();
-      const filtered = selectedBranchId
-        ? all.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
-        : all;
-      setConversations(filtered);
+      setRawConversations([...raw].reverse());
     });
-  }, [selectedBranchId]);
+  }, []);
+  useEffect(() => {
+    const filtered = selectedBranchId
+      ? rawConversations.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId))
+      : rawConversations;
+    setConversations(filtered);
+  }, [rawConversations, selectedBranchId]);
+
+  // V78 BUG-CHAT-6: on branch switch, drop currently-selected conv if it
+  // doesn't belong to the new branch (un-stamped legacy conv kept — admin
+  // can still respond during V75 transition window).
+  useEffect(() => {
+    if (!selectedConv) return;
+    if (!selectedBranchId) return;
+    const stillBelongs = !selectedConv.branchId
+      || String(selectedConv.branchId) === String(selectedBranchId);
+    if (!stillBelongs) setSelectedConv(null);
+  }, [selectedBranchId, selectedConv]);
 
   // V76 (2026-05-16 EOD+1) — chat_history listener through BSA Layer 2 wrapper.
   // V75 missed this SIBLING reader; user reported cross-branch leak (3,281
@@ -525,8 +557,12 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
   const filtered = filter === 'all' ? conversations : conversations.filter(c => c.platform === filter);
 
-  const lineEnabled = chatConfig?.line?.enabled;
-  const fbEnabled = chatConfig?.facebook?.enabled;
+  // V78 BUG-CHAT-4: per-branch enable flags. Prefer per-branch config; fall
+  // back to legacy single-tenant chat_config when per-branch absent (V75
+  // transition compat). Same fallback contract as the resolveLineConfig /
+  // resolveFbConfig admin-SDK helpers.
+  const lineEnabled = !!(lineConfig?.enabled ?? chatConfig?.line?.enabled);
+  const fbEnabled = !!(fbConfig?.enabled ?? chatConfig?.facebook?.enabled);
   const noPlatformConfigured = !lineEnabled && !fbEnabled;
 
   function formatContactTime(ts) {
@@ -543,7 +579,15 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
   // ─── Chat detail view ───────────────────────────────────────────────
   // Keep selectedConv in sync with realtime data
-  const liveSelectedConv = selectedConv ? (conversations.find(c => c.id === selectedConv.id) || selectedConv) : null;
+  // V78 (2026-05-16 NIGHT — BUG-CHAT-6 fix): drop the `|| selectedConv`
+  // stale-fallback. When admin switches BranchSelector, `conversations` re-
+  // filters → if currently-selected conv's branchId !== new selectedBranchId,
+  // the conv falls out of the filtered list → find() returns undefined →
+  // pre-V78 fallback kept rendering the stale conv detail with the WRONG
+  // branch header at top. Now: when conv falls out, close the detail view.
+  // Belt-and-suspenders: useEffect below also resets selectedConv on
+  // selectedBranchId change.
+  const liveSelectedConv = selectedConv ? (conversations.find(c => c.id === selectedConv.id) || null) : null;
   if (liveSelectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
@@ -824,21 +868,48 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
 // ─── Export unread counts for tab badge ──────────────────────────────────────
 
-export function useChatUnread(db, appId) {
-  const [lineUnread, setLineUnread] = useState(0);
-  const [fbUnread, setFbUnread] = useState(0);
-  const [totalConversations, setTotalConversations] = useState(0);
+// V78 (2026-05-16 NIGHT — BUG-CHAT-3 fix, root user complaint):
+// Pre-V78 this hook subscribed to ALL chat_conversations (cross-branch).
+// Admin in พระราม 3 saw badge "47" because นครราชสีมา had 47 unreads — pure
+// cross-branch noise. Triggered cross-branch chime + chat-tab blink for
+// messages destined to OTHER branches. The visceral "ไม่เห็นจะแยกกันเลย" came
+// from THIS hook, not the listener V75 already shipped.
+//
+// V78 fix: accept selectedBranchId; mirror ChatPanel listener pattern:
+//   - subscribe-once with allBranches:true raw data
+//   - useMemo + countUnreadPeople with client-side fall-through filter
+//     (preserves un-stamped legacy chats during V75/V76 transition window)
+//   - selectedBranchId in derived useMemo deps → switch branch → counts
+//     instantly recompute without re-subscribing
+//
+// Caller (AdminDashboard): `useChatUnread(db, appId, selectedBranchId)`.
+export function useChatUnread(db, appId, selectedBranchId = '') {
+  const [rawConvs, setRawConvs] = useState([]);
 
   useEffect(() => {
     const convsRef = collection(db, `artifacts/${appId}/public/data/chat_conversations`);
     return onSnapshot(convsRef, snap => {
-      const convs = snap.docs.map(d => d.data());
-      const { lineUnread: lu, fbUnread: fu } = countUnreadPeople(convs);
-      setLineUnread(lu);
-      setFbUnread(fu);
-      setTotalConversations(snap.docs.length);
+      setRawConvs(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
   }, [db, appId]);
 
-  return { lineUnread, fbUnread, totalUnread: lineUnread + fbUnread, totalConversations };
+  // V78: per-branch derivation. Fall-through filter (!c.branchId) preserves
+  // legacy un-stamped chats so the badge doesn't go silent during the
+  // V75 backfill transition for นครราชสีมา.
+  const branchScopedConvs = useMemo(() => {
+    if (!selectedBranchId) return rawConvs;
+    return rawConvs.filter(c => !c.branchId || String(c.branchId) === String(selectedBranchId));
+  }, [rawConvs, selectedBranchId]);
+
+  const { lineUnread, fbUnread, totalUnread } = useMemo(
+    () => countUnreadPeople(branchScopedConvs),
+    [branchScopedConvs]
+  );
+
+  return {
+    lineUnread,
+    fbUnread,
+    totalUnread,
+    totalConversations: branchScopedConvs.length,
+  };
 }

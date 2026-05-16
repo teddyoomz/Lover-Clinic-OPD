@@ -1,17 +1,43 @@
 // ─── Saved Replies API (proxy FB saved_message_responses) ────────────────────
-// Authenticated GET endpoint — returns saved replies from Facebook Page
+// V78 (2026-05-16 NIGHT — BUG-CHAT-2 / XR-13 fix):
+// Authenticated GET endpoint — returns saved replies from Facebook Page.
+//
+// Class-of-bug: V12 multi-reader-sweep at API-layer boundary. Pre-V78 this
+// endpoint read single-tenant `clinic_settings/chat_config.facebook` →
+// admin in พระราม 3 saw นครราชสีมา's FB saved replies.
+//
+// V78 fix:
+//   1. Accept `?branchId=...` query param (UI: ChatPanel passes selectedBranchId).
+//   2. Resolve per-branch `be_fb_configs/{branchId}` via admin SDK; fall back
+//      to legacy `clinic_settings/chat_config.facebook` for V75-transition.
+//   3. Return 503 BRANCH_CONFIG_MISSING when no per-branch + no legacy.
 
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAuth } from '../proclinic/_lib/auth.js';
+import { resolveFbConfigForAdmin } from '../admin/_lib/fbConfigAdmin.js';
 
-const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
-const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
-const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
+const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 
-async function getChatConfig() {
-  const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
-  if (!res.ok) return null;
-  const doc = await res.json();
-  return doc.fields || null;
+let cachedDb = null;
+function getAdminDb() {
+  if (cachedDb) return cachedDb;
+  let app;
+  if (getApps().length > 0) app = getApp();
+  else {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    if (!clientEmail || !rawKey) throw new Error('firebase-admin not configured');
+    app = initializeApp({
+      credential: cert({
+        projectId: APP_ID,
+        clientEmail,
+        privateKey: rawKey.replace(/\\n/g, '\n'),
+      }),
+    });
+  }
+  cachedDb = getFirestore(app);
+  return cachedDb;
 }
 
 export default async function handler(req, res) {
@@ -25,13 +51,26 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const config = await getChatConfig();
-    if (!config) return res.status(200).json({ success: false, error: 'Chat ยังไม่ได้ตั้งค่า' });
+    const db = getAdminDb();
+    // V78: caller passes ?branchId=... — ChatPanel reads conv.branchId.
+    const branchId = String(req.query?.branchId || '').trim();
 
-    const fbFields = config.facebook?.mapValue?.fields;
-    const token = fbFields?.pageAccessToken?.stringValue;
-    const pageId = fbFields?.pageId?.stringValue;
-    if (!token || !pageId) return res.status(200).json({ success: false, error: 'Facebook ยังไม่ได้ตั้งค่า' });
+    const resolved = await resolveFbConfigForAdmin(db, { branchId });
+    if (!resolved || !resolved.config) {
+      return res.status(503).json({
+        success: false,
+        error: 'BRANCH_CONFIG_MISSING',
+        detail: branchId
+          ? `สาขา ${branchId} ยังไม่ได้ตั้งค่า FB Page — ไปที่ Backend → ตั้งค่า FB Page เพื่อตั้งค่า.`
+          : 'ยังไม่ได้ตั้งค่า FB Page — ระบุ branchId.',
+      });
+    }
+
+    const token = resolved.config.pageAccessToken;
+    const pageId = resolved.config.pageId;
+    if (!token || !pageId) {
+      return res.status(503).json({ success: false, error: 'BRANCH_CONFIG_MISSING', detail: 'pageAccessToken/pageId missing on resolved config' });
+    }
 
     const fbRes = await fetch(`https://graph.facebook.com/v25.0/${pageId}/saved_message_responses?access_token=${token}`);
     const data = await fbRes.json();
@@ -45,7 +84,11 @@ export default async function handler(req, res) {
       .filter(r => r.is_enabled !== false)
       .map(r => ({ id: r.id, title: r.title || '', message: r.message || '' }));
 
-    return res.status(200).json({ success: true, replies });
+    return res.status(200).json({
+      success: true,
+      replies,
+      resolved: { branchId: resolved.branchId || null, source: resolved.source },
+    });
   } catch (err) {
     console.error('[saved-replies] Error:', err);
     return res.status(200).json({ success: false, error: err.message });

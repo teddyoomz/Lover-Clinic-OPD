@@ -86,6 +86,7 @@ import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUt
 // "ต้องบันทึกไปในรูปแบบการจองมัดจำใน backend ได้ถูกต้อง และบันทึกมัดจำใน
 //  การเงินได้ถูกต้อง ตามสาขาที่ได้มีการ Gen QR".
 import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
+import { isChatHoursActiveNow } from '../lib/chatHours.js';
 // Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
 import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
 // Phase 24.0-duodecies (2026-05-06) — open backend customer detail/edit in new tab.
@@ -502,7 +503,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [editingNameValue, setEditingNameValue] = useState("");
   const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
   const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
-  const { totalUnread: chatUnread } = useChatUnread(db, appId);
+  // V78 (2026-05-16 NIGHT — BUG-CHAT-3 wire): pass selectedBranchId so the
+  // chat-tab badge + chime gate are scoped to the admin's current branch.
+  // Pre-V78 the badge showed cross-branch unread total → cross-branch chime
+  // → the visceral "ไม่เห็นจะแยกกันเลย" complaint.
+  const { totalUnread: chatUnread } = useChatUnread(db, appId, selectedBranchId);
   const [treatmentFormMode, setTreatmentFormMode] = useState(null); // null | { mode, customerId, treatmentId, patientName }
   const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
   // V64-fix9 (2026-05-09): appointmentDataVersion bumps every time the
@@ -526,30 +531,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // User report: "เสียงต่อเนื่องเมื่อไม่ได้เคลีย Chat หายไป" (locked V51
   // migration gap; AV29-class per-branch-settings sweep miss).
   // Legacy field fallback retained for env where merge hasn't propagated.
-  const isChatActive = useMemo(() => {
-    const alwaysOn = (typeof cs.chatHoursAlwaysOn === 'boolean')
-      ? cs.chatHoursAlwaysOn
-      : !!cs.chatAlwaysOn;
-    if (alwaysOn) return true;
-    const now = new Date();
-    const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-    const day = bkk.getDay(); // 0=Sun, 6=Sat
-    const isWeekend = day === 0 || day === 6;
-    const monFri = cs.chatHoursMonFri || {};
-    const satSun = cs.chatHoursSatSun || {};
-    const openStr = isWeekend
-      ? (satSun.open || cs.chatOpenTimeWeekend || '10:00')
-      : (monFri.open || cs.chatOpenTime || '10:00');
-    const closeStr = isWeekend
-      ? (satSun.close || cs.chatCloseTimeWeekend || '19:00')
-      : (monFri.close || cs.chatCloseTime || '19:00');
-    const [oh, om] = openStr.split(':').map(Number);
-    const [ch, cm] = closeStr.split(':').map(Number);
-    const nowMin = bkk.getHours() * 60 + bkk.getMinutes();
-    const openMin = oh * 60 + om;
-    const closeMin = ch * 60 + cm;
-    return nowMin >= openMin && nowMin < closeMin;
-  }, [
+  // V77-fix3 (S-2, 2026-05-16 NIGHT) — extracted to shared chatHours.js.
+  // Was duplicated with ChatPanel.isWithinChatHours; the duplicate IS what
+  // caused V77-quater to be a separate fix after V77-ter (deferred Rule P
+  // Step 3 cross-file grep cost 2 user-rage rounds). Now both consume the
+  // same canonical helper — future V51-field schema drift only updates
+  // src/lib/chatHours.js.
+  const isChatActive = useMemo(() => isChatHoursActiveNow(cs), [
     cs.chatHoursAlwaysOn, cs.chatHoursMonFri, cs.chatHoursSatSun,
     cs.chatAlwaysOn, cs.chatOpenTime, cs.chatCloseTime,
     cs.chatOpenTimeWeekend, cs.chatCloseTimeWeekend,
@@ -2221,7 +2209,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions');
     const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
       const now = Date.now();
-      const allDocsRaw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allDocsRaw = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       // Phase 20.0 follow-up (2026-05-06) — per-branch session filter.
       // Frontend tabs (queue / deposit / no-deposit / appointment / history)
       // all derive from this listener. Filter by selectedBranchId; legacy

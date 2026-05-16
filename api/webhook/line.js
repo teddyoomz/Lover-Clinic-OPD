@@ -37,6 +37,7 @@ import {
 // be_line_configs/{branchId}. Falls back to clinic_settings/chat_config.line
 // during transition.
 import { resolveLineConfigForWebhook } from '../admin/_lib/lineConfigAdmin.js';
+import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
 // LINE Reminder (2026-05-15) Task 7 — postback handler. Customer taps Flex
 // buttons (✓ ยืนยัน / เลื่อน / ติดต่อ) on a reminder bubble → LINE delivers a
 // `postback` event with `data=action=<a>&appt=<id>&br=<branchId>`.
@@ -77,8 +78,15 @@ function getAdminFirestore() {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function verifySignature(body, signature, channelSecret) {
+  // V78 (2026-05-16 NIGHT — BUG-XR-15 fix): constant-time HMAC comparison
+  // prevents timing-attack signature forgery. Pre-V78 `hmac === signature`
+  // short-circuit on first mismatched byte revealed correct prefix length
+  // via response timing. Real attack feasibility is low (LINE rate-limits +
+  // 1s+ jitter from Vercel) but security best-practice closes it anyway.
   const hmac = crypto.createHmac('SHA256', channelSecret).update(body).digest('base64');
-  return hmac === signature;
+  if (!signature || typeof signature !== 'string') return false;
+  if (hmac.length !== signature.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(signature));
 }
 
 async function getChatConfig() {
@@ -810,12 +818,22 @@ async function processEvent(event, fallbackConfig) {
 
   // V75 Item 3 — resolve branchId + source for chat_conversations stamp (AV57).
   // branchId from be_line_configs match OR fallback to LOVER_DEFAULT_BRANCH_ID
+  // V78 (2026-05-16 NIGHT — BUG-XR-24 fix): wire FALLBACK_BRANCH_ID through
+  // resolveChatFallbackBranchId() so the hardcoded NAKHON constant kicks in
+  // when env is unset. V77-fix3 (S-1) extracted the constant but the
+  // webhook handlers never called the resolver — same V77-bis bug re-latent.
   // (typically นครราชสีมา — preserves existing flow through V75 migration).
-  const FALLBACK_BRANCH_ID = process.env.LOVER_DEFAULT_BRANCH_ID || '';
+  // V78 BUG-XR-24: actually USE resolveChatFallbackBranchId — pre-V78 it was
+  // imported by the resolver helper but the webhook handler bypassed it with
+  // raw `|| ''` → V77-bis empty-branchId bug class re-emerged.
+  const FALLBACK_BRANCH_ID = resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID);
   const chatBranchId = branchId || FALLBACK_BRANCH_ID;
+  const usedEnvFallback = !!process.env.LOVER_DEFAULT_BRANCH_ID;
   const chatBranchIdSource = branchId
     ? 'webhook-line'
-    : (FALLBACK_BRANCH_ID ? 'webhook-line-fallback-nakhonratchasima' : 'webhook-line-fallback-empty');
+    : (usedEnvFallback
+        ? 'webhook-line-fallback-nakhonratchasima'
+        : 'webhook-line-fallback-hardcoded-nakhonratchasima');
 
   // Update conversation
   const convFields = {

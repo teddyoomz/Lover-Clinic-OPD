@@ -6,9 +6,9 @@
 // MUST stamp branchId + branchIdSource resolved via this helper.
 //
 // V77-bis (2026-05-16 EOD+1) — HARDCODED last-resort fallback (see
-// lineChatBranchResolver.js for full rationale). Guards against missing
-// LOVER_DEFAULT_BRANCH_ID env in Vercel runtime.
-const HARDCODED_NAKHON_BR_ID = 'BR-1777873556815-26df6480';
+// lineChatBranchResolver.js for full rationale). V77-fix3 (S-1): constant
+// extracted to shared `chatBranchDefaults.js`.
+import { HARDCODED_NAKHON_BR_ID } from './chatBranchDefaults.js';
 
 /**
  * Resolve branchId + source label for a chat_conversations stamp.

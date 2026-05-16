@@ -5,14 +5,11 @@
 // AV57 invariant: every chat_conversations write in api/webhook/line.js
 // MUST stamp branchId + branchIdSource resolved via this helper.
 //
-// V77-bis (2026-05-16 EOD+1) — HARDCODED last-resort fallback constant for
-// นครราชสีมา (sole-active pre-V75 branch). When LOVER_DEFAULT_BRANCH_ID env
-// is missing in Vercel runtime, webhook would have stamped branchId:''
-// causing client-side `!c.branchId` filter fall-through → cross-branch leak.
-// User-reported bug: 1 live chat doc with branchId:'' / branchIdSource:
-// 'webhook-line-fallback-empty' caused visible leak in ทดลอง 1 + พระราม 3
-// branches. Hardcoded constant guards against forgotten env config.
-const HARDCODED_NAKHON_BR_ID = 'BR-1777873556815-26df6480';
+// V77-bis (2026-05-16 EOD+1) — HARDCODED last-resort fallback for
+// นครราชสีมา. V77-fix3 (S-1, 2026-05-16 NIGHT): constant extracted to
+// shared `chatBranchDefaults.js` (Rule C1 / Rule of 3 — was duplicated in
+// fbChatBranchResolver.js).
+import { HARDCODED_NAKHON_BR_ID } from './chatBranchDefaults.js';
 
 /**
  * Resolve branchId + source label for a chat_conversations stamp.

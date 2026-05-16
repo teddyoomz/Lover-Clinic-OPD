@@ -1,13 +1,13 @@
 ---
-updated_at: "2026-05-16 NIGHT+1 — Outstanding closed (Rule N full vitest + verbose V76/V77 + 4 V21 fixups)"
-status: "SHIPPED — V76+V77 saga + post-batch V21 fixups + v-log-archive verbose. Awaiting Rule Q L1."
+updated_at: "2026-05-16 NIGHT+2 — V78 chat per-branch completeness + 3-round adversarial bug-hunt (40 bugs found)"
+status: "SHIPPED — V77-fix3 (13 deferred) + V77-fix4 (2 hash retro-compat ship-blockers) + V78 chat per-branch completeness (6 CHAT- + 5 XR- fixes). Awaiting Rule Q L1."
 branch: "master"
-last_commit: "66995f6 docs+test(V76+V77 outstanding-batch): verbose v-log + V21 contract fixups"
-tests: "Full vitest 10844 total: 10826 PASS / 12 skip / 6 FAIL → 4 V21-class fixed inline (V77-bis hardcoded-fallback contract + BC1.1 be_fb_configs entry) + 2 pre-existing RTL non-flakes flagged below (NOT V76/V77-caused). Build clean ✓."
+last_commit: "<post-push>"
+tests: "V75/V76/V77/V78 chat + whole-fleet: 254/254 PASS. V78 completeness bank: 57/57 PASS. Build clean ✓ 3.34s. Full vitest deferred to end of batch."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "4d0edcd — V77-quater Vercel LIVE @ 2026-05-16T12:41Z; V77-quinquies (11044de) data-only no deploy"
-firestore_rules_version: "v35 LIVE"
-v75_commits_ahead_of_prod: 2
+production_commit: "4d0edcd — V77-quater Vercel LIVE @ 2026-05-16T12:41Z; V77-fix3 + V77-fix4 + V78 NOT YET deployed"
+firestore_rules_version: "v35 LIVE — V78 ADDS 5 composite indexes pending deploy (XR-3/7/20)"
+v75_commits_ahead_of_prod: "MANY (V77-fix3 + V77-fix4 + V78 + index/cron config)"
 ---
 
 # Active Context
@@ -62,6 +62,65 @@ These failures persisted in isolation (not just under full-suite load). active.m
 - `tests/v64-appointment-hub-rtl.test.jsx` V64.R6.1 — past pending + same-day treatment → status auto-flips to เสร็จแล้ว (AppointmentHubRowCard, NOT chat-related)
 - `tests/v71-row-card-integration.test.jsx` RC3.2 — service-completed button HIDDEN when no treatment (RowCard component, NOT chat-related)
 
+## V78 — Chat per-branch completeness + 3-round adversarial (2026-05-16 NIGHT+2)
+
+User directives:
+> "ทำให้แน่ใจด้วยนะว่า Tab chat ของ frontend มึงดึงข้อมูล 'ทุกอย่าง' แยกสาขากันแล้ว"
+> "อีก 3 รอบ ถึงจะเชื่อว่าไม่บั๊คแล้ว ใช้เครื่องมือทุกเครื่องมือที่มึงมี"
+> "ทำ e2e และ stimulate user flow จริงๆ มาแบบโหดที่สุด"
+
+**3 adversarial agents found ~40 bugs total** across chat tab + V77-fix3 batch + cross-cutting backend.
+
+### V77-fix4 — SHIP-BLOCKERS from Round 2 (my own V77-fix3 regressions)
+- **N1** (hash retro-compat): V77-fix3 added `exporterUid` to manifestHash seed UNCONDITIONALLY → would break restore of every legacy V77b/c-era manifest with WHOLE_FLEET_MANIFEST_TAMPERED. **Fix**: gate inclusion — legacy manifests (no exporterUid) compute pre-V77-fix3 hash; post-V77-fix3 includes both fileEntry + exporterUid for stronger seal.
+- **N2** (validator back-compat): V77-fix3 added REQUIRED `customers[].fileEntry` validator → would reject legacy manifests that used `backupRef`. **Fix**: accept either via new `resolveCustomerEntryPath` helper; restore endpoint imports + uses it.
+
+### V78 chat per-branch completeness (Round 1 — chat tab)
+- **CHAT-1 CRITICAL** (`/api/webhook/send`): hardcoded single-tenant `clinic_settings/chat_config` for LINE/FB tokens → admin in พระราม 3 sent FROM นครราชสีมา's tokens. **Fix**: switched to firebase-admin SDK + `resolveLineConfigForAdmin` / `resolveFbConfigForAdmin`; require `branchId` in req.body; 503 `BRANCH_CONFIG_MISSING` when neither per-branch nor legacy.
+- **CHAT-2 CRITICAL** (`/api/webhook/saved-replies`): same single-tenant leak. **Fix**: `?branchId=` query param + resolveFbConfigForAdmin.
+- **CHAT-3 HIGH** (`useChatUnread`): badge counter showed CROSS-BRANCH total → triggered cross-branch chime → THE root user complaint "ไม่เห็นจะแยกกันเลย". **Fix**: signature `useChatUnread(db, appId, selectedBranchId)`; per-branch filter via useMemo with legacy fall-through; AdminDashboard caller updated.
+- **CHAT-4 HIGH** (`ChatPanel` filter pills + empty state): read single-tenant `chat_config` for LINE/FB enable flags. **Fix**: listenToLineConfig + listenToFbConfig per-branch; lineEnabled/fbEnabled prefer per-branch then legacy fallback.
+- **CHAT-5 MED** (`/api/webhook/send` patch): didn't restamp branchId on conv doc post-reply. **Fix**: convPatch includes `branchId` + `branchIdSource: 'send-<platform>-<resolverSource>'` when resolved.branchId truthy.
+- **CHAT-6 MED** (`ChatPanel` selectedConv): branch-switch mid-detail-view kept stale conv via `|| selectedConv` fallback. **Fix**: drop fallback to null; useEffect resets selectedConv when its branchId doesn't match new selectedBranchId.
+
+### V78 cross-cutting (Round 3)
+- **XR-15+XR-16 SECURITY** (LINE + FB webhook HMAC): `hmac === signature` → timing attack possible. **Fix**: `crypto.timingSafeEqual` after equal-length check.
+- **XR-24 REGRESSION** (V77-fix3 S-1 incomplete): `HARDCODED_NAKHON_BR_ID` constant extracted but webhooks still read `process.env.X || ''` directly → V77-bis empty-branchId class re-latent. **Fix**: webhooks now `resolveChatFallbackBranchId(process.env.LOVER_DEFAULT_BRANCH_ID)`; branchIdSource label distinguishes env-fallback vs hardcoded-fallback.
+- **XR-3 + XR-7 + XR-20** (missing composite Firestore indexes — V67 cron failing silently + V75/V76 BSA reader queries unindexed + bulk-delete grace scan): **Fix**: 5 new indexes in `firestore.indexes.json`:
+  - `be_appointments (branchId, date)` — line-reminder-fire cron
+  - `be_line_reminder_log (status, nextRetryAt)` — retry cron (V67 saga FINALLY indexed)
+  - `chat_conversations (branchId, lastMessageAt DESC)` — V75 BSA reader
+  - `chat_history (branchId, resolvedAt DESC)` — V76 BSA reader
+  - `be_admin_audit (type, performedAt DESC)` — backup-manager bulk-delete
+- **XR-2** (Vercel cron 10s default → silent timeout): **Fix**: `vercel.json` adds `maxDuration: 300` for line-reminder-fire + line-reminder-retry.
+
+### Test bank
+- `tests/v78-chat-per-branch-completeness.test.js` (57 assertions across 12 describe blocks): source-grep regression locks for CHAT-1..6 + XR-15/16/24/3/7/20/2 + N1/N2 hash retro-compat + Rule I behavioral simulate for `useChatUnread` filter logic + V78 marker checks at 7 critical files.
+- `tests/e2e/v78-chat-per-branch-adversarial.spec.js` Playwright stub (skip-by-default; run-on-demand for L1).
+
+**Targeted regression run**: 254/254 PASS across V75/V76/V77/V78 chat + whole-fleet. Build clean ✓ 3.34s.
+
+### Deferred (P2/P3 from 3-round agents)
+- XR-1 FCM push tokens global (architectural — needs per-branch design)
+- XR-4 per-branch admin scoping (architectural — needs spec; admin claim is currently global)
+- XR-5 delete-customer-cascade chat scan loads ALL chats (scalability — pre-filter by customer.branchId)
+- XR-6 Storage cleanup best-effort silent fail (needs retry cron)
+- XR-8 unlink doesn't clear `lineUserId_byBranch[*]` (V75 outbound miss)
+- XR-9 line-send-recall uses Math.random for msgId (replace with crypto.randomBytes)
+- XR-12 send.js msgId millisecond-uniqueness (low blast — concurrent admin replies same conv same ms)
+- XR-14 link-requests collision check legacy-only field (V75-class)
+- XR-17 branch-make-fresh loads ALL be_customers (scalability)
+- XR-18 customer-restore conflict scan loads ALL customers (scalability)
+- XR-19 OWNER_EMAILS bootstrap-self privilege-escalation vector (security review — needs user)
+- XR-21 stack truncation in audit doc (cosmetic)
+- XR-22 storage.rules order-sensitivity (refactor)
+- XR-23 backups storage-rule cross-branch deletion (architectural — needs XR-4 first)
+- L1 chatHours alwaysOn close:'24:00' fragility + L2 ICU-data dependence (chatHours.js robustness)
+- L5/L6 V38 spread-order sweep at scripts/diag-* + backendClient single-doc getDoc (separate cleanups)
+- ~25 one-shot scripts (diag/e2e/phase) with V38 broken spread (NOT runtime; low priority)
+- ChatPanel chat_history `allBranches:true` + client-filter (V76 transition; flip to default branch-scoped post-soak)
+- CHAT-8 chatNotificationMute per-device vs per-branch (design decision — user clarification needed)
+
 ## 🔥 USER-REPORTED P0 BUGS (Rule Q L1 hands-on found these mid-session)
 
 ### P0-A — V77b/c 📦 whole-fleet backup button crashes (THIS session — 2-commit fix: defensive client + 5-bug adversarial batch)
@@ -87,14 +146,21 @@ User reports across 2 rounds:
 
 **Playwright L1 spec written + skipped-by-default**: `tests/e2e/v77-whole-fleet-backup-adversarial.spec.js` — 5 scenarios W1-W5. Run on demand after next deploy.
 
-**DEFERRED (next session)** — 13 lower-priority bugs from adversarial review:
-- P1-3/P1-4/P1-9 (cosmetic + audit-trail polish)
-- SP-1 (`computeWholeFleetManifestHash` should reuse canonicalJson — fix mirror of `computeBodyHash`)
-- S-1 HARDCODED_NAKHON_BR_ID Rule of 3 trigger (2 sites; +1 = extract to shared module)
-- S-2 isWithinChatHours duplicate (ChatPanel + AdminDashboard — V12 risk)
-- S-3 chat_history `allBranches:true` + client-side filter (V76 transition; flip to default branch-scoped post-soak)
-- S-4 AV17 audit-coverage extension (catch V77-class spread regressions)
-- ~25 diag/e2e/phase scripts with same V38 broken spread (sweep separately)
+**Fix batch 3 (V77-fix3 — commit `<post-push-3>`)** — 13 deferred bugs all SHIPPED:
+- **Batch A (audit hash integrity)**: SP-1 canonical JSON (manifestHash now uses canonicalJson from branchBackupSchema.js — single source of truth across V40/V74/V75); P1-6 exporterUid added to hash seed (was undocumented gap); P1-5 validateWholeFleetManifest now checks every customer.fileEntry exists + starts with `backups/customers/` (defense-in-depth + path-traversal guard)
+- **Batch B (endpoint defense)**: P1-3 structured failedCustomers reason (now {reason, code, type, stack-head-400ch}); P1-4 exporterLabel `(())` → 'unknown-admin'; P1-9 branchIdFilter capped to 64ch; P1-10 maxCustomers strict numeric validation (400 INVALID_MAX_CUSTOMERS on non-numeric)
+- **Batch C (restore polish)**: P2-2 jsonReplacerForNonFinite for manifest serialization; P2-3 jsonReviverForNonFinite for parse; P2-7 String(undefined) guard (skip+audit instead of writing literal "undefined" docId); P1-8 Storage copy overwrite tracker (returns storageOverwrites[])
+- **Batch D (frontend Rule of 3)**: P2-6 ChatPanel chat_conversations subscribe-once + useMemo (was tearing down + re-subscribing on every branch switch); P2-8 Intl.DateTimeFormat replaces locale-string round-trip; **S-1** HARDCODED_NAKHON_BR_ID extracted to `api/webhook/_lib/chatBranchDefaults.js`; **S-2** isWithinChatHours + isChatHoursActiveNow extracted to `src/lib/chatHours.js` (the duplicate IS what caused V77-quater to be a separate fix after V77-ter)
+- **Batch E (audit invariant)**: **S-4** NEW `tests/v77-fix2-v38-spread-order-regression.test.js` — project-wide sweep regression catcher. Caught 7 MORE broken-spread sites the adversarial agent missed: api/admin/customer-backup-export.js (V74 endpoint) + customer-restore.js + delete-customer-cascade.js + line-reminder-debug-fire.js (V67) + 2 more in whole-fleet-customer-backup-export.js (exportSingleCustomer collections + subcollections) + backendClient.js:4374 + AdminDashboard.jsx:2208. All FIXED in this batch.
+
+**Build clean ✓ 2.81s. Targeted tests 134/134 PASS + V75 chat 63/63 PASS.**
+
+**Still DEFERRED (next session)** — lower-priority + larger-scope:
+- S-3 chat_history `allBranches:true` + client-side filter rollback (V76 transition; flip to default branch-scoped post-Rule-M-backfill-soak)
+- backendClient.js single-doc `{ id: snap.id, ...snap.data() }` sweep (50+ sites — same V38 class but at getDoc level; lower blast radius because we control be_* writes; separate cleanup)
+- ~25 diag/e2e/phase one-shot scripts with same V38 broken spread (NOT production runtime; low priority)
+- SP-3 preview-action info disclosure (by design — preview leaks structure, not data)
+- P2-10 CORS `*` → explicit allowlist (defense-in-depth; minor)
 
 **Per Rule Q V66 — STILL NOT CLAIMING VERIFIED**. User MUST L1 hands-on:
 1. Click 📦 → set "ทดสอบเฉพาะ N ลูกค้าแรก: 5" → ใส่ branchId="พระราม 3 id" (5 customers) → check if backup succeeds + download works
