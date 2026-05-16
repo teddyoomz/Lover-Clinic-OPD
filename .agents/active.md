@@ -1,13 +1,13 @@
 ---
-updated_at: "2026-05-16 NIGHT — V76+V77 saga DEPLOYED (V77-quater Vercel LIVE; V77-quinquies data fix)"
-status: "SHIPPED — chat per-branch + whole-fleet backup button + 4-round V51-migration-gap fixes. Awaiting Rule Q L1."
+updated_at: "2026-05-16 NIGHT+1 — Outstanding closed (Rule N full vitest + verbose V76/V77 + 4 V21 fixups)"
+status: "SHIPPED — V76+V77 saga + post-batch V21 fixups + v-log-archive verbose. Awaiting Rule Q L1."
 branch: "master"
-last_commit: "11044de fix(V77-quinquies): backfill responseTimeMs on chat_history docs (818 docs)"
-tests: "All V76/V77 test files PASS (~80 V77 + 28 V76); full vitest deferred. Build clean ✓ 2.61s."
+last_commit: "<post-fixup commit — set on commit>"
+tests: "Full vitest 10844 total: 10826 PASS / 12 skip / 6 FAIL → 4 V21-class fixed inline (V77-bis hardcoded-fallback contract + BC1.1 be_fb_configs entry) + 2 pre-existing RTL non-flakes flagged below (NOT V76/V77-caused). Build clean ✓."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "4d0edcd — V77-quater Vercel LIVE @ 2026-05-16T12:41Z; V77-quinquies (11044de) data-only no deploy"
 firestore_rules_version: "v35 LIVE"
-v75_commits_ahead_of_prod: 1
+v75_commits_ahead_of_prod: 2
 ---
 
 # Active Context
@@ -45,6 +45,19 @@ If any fail → /systematic-debugging Phase 1 (cross-file grep MANDATORY this ti
 
 ## Outstanding user-triggered actions
 
-- Rule Q L1 hands-on by user multi-device
-- (next session) Full vitest run (Rule N batch-end)
-- (next session) Verbose V76/V77 entries in v-log-archive.md
+- Rule Q L1 hands-on by user multi-device (5 scenarios above)
+
+## Closed this turn (Outstanding ให้ครบ batch)
+
+- ✅ **Rule N full vitest batch-end**: 10826 PASS / 12 skip / 6 FAIL across 5 files (489 total). 4 V21-class fixed inline:
+  - `tests/v75-chat-webhook-branchid-stamp-flow.test.js` LW1.5 + FW1.6 — locked post-V77-bis hardcoded-นครราชสีมา fallback contract (replaces pre-V77-bis empty-fallback assertion)
+  - `tests/v75-chat-webhook-branchid-stamp-av57.test.js` AV57.9 — replaced `-empty` label assertion with `-hardcoded-nakhonratchasima`; negative regression guard omitted because V77-bis institutional-memory comments in resolver legitimately reference the old label
+  - `tests/branch-collection-coverage.test.js` BC1.1 — added `be_fb_configs` (V75 Item 3) to COLLECTION_MATRIX with structural-doc-id rationale mirroring `be_line_configs`
+- ✅ **Verbose V76 + V77 entries** appended to `.claude/rules/v-log-archive.md` (V76 = chat_history BSA sibling-reader/writer; V77 = 5-round saga V77a + V77b/c + V77-bis + V77-ter + V77-quater + V77-quinquies with class-of-bug lessons + Rule M backfill details + plan-vs-reality adaptations)
+
+## Pre-existing failures surfaced (NOT V76/V77-caused — separate investigation)
+
+These failures persisted in isolation (not just under full-suite load). active.md from V73 session 2026-05-18 had flagged them "intermittent under full-suite load"; isolated re-run today shows consistent fail. Out of scope for this turn (different bug class).
+
+- `tests/v64-appointment-hub-rtl.test.jsx` V64.R6.1 — past pending + same-day treatment → status auto-flips to เสร็จแล้ว (AppointmentHubRowCard, NOT chat-related)
+- `tests/v71-row-card-integration.test.jsx` RC3.2 — service-completed button HIDDEN when no treatment (RowCard component, NOT chat-related)

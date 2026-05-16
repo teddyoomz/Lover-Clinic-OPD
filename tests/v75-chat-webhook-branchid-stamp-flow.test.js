@@ -49,13 +49,19 @@ describe('V75 AV57 — LINE webhook branchId resolver', () => {
     expect(warns).toContain('Firestore unavailable');
   });
 
-  it('LW1.5 — empty fallbackBranchId → webhook-line-fallback-empty (no nakhonratchasima label)', async () => {
+  it('LW1.5 — empty fallbackBranchId → V77-bis hardcoded นครราชสีมา fallback (NOT empty string)', async () => {
+    // V77-bis (2026-05-16): pre-V77-bis behavior returned branchId:'' +
+    // source:'webhook-line-fallback-empty' which caused 1 live chat doc to
+    // leak cross-branch via client-side `!c.branchId` fall-through filter.
+    // Post-V77-bis: hardcoded HARDCODED_NAKHON_BR_ID guards against missing
+    // LOVER_DEFAULT_BRANCH_ID env. Test contract updated; OLD assertion is
+    // the V21-class lock-in this fixup corrects.
     const result = await resolveChatBranchIdFromLineEvent(
       { destination: '', events: [] },
       { getLineConfigByDestination: async () => null, fallbackBranchId: '' }
     );
-    expect(result.branchId).toBe('');
-    expect(result.branchIdSource).toBe('webhook-line-fallback-empty');
+    expect(result.branchId).toBe('BR-1777873556815-26df6480');
+    expect(result.branchIdSource).toBe('webhook-line-fallback-hardcoded-nakhonratchasima');
   });
 
   it('LW1.6 — line.js source contains V75 marker comment near chat_conversations stamp', async () => {
@@ -124,13 +130,18 @@ describe('V75 AV57 — FB webhook branchId resolver', () => {
     expect(warns).toContain('Firestore unavailable');
   });
 
-  it('FW1.6 — empty fallback → webhook-fb-fallback-empty label', async () => {
+  it('FW1.6 — empty fallback → V77-bis hardcoded นครราชสีมา fallback (NOT empty string)', async () => {
+    // V77-bis (2026-05-16): pre-V77-bis behavior returned branchId:'' +
+    // source:'webhook-fb-fallback-empty' which caused cross-branch leak via
+    // client-side `!c.branchId` fall-through. Post-V77-bis: hardcoded
+    // HARDCODED_NAKHON_BR_ID guards against missing env. Test contract
+    // updated; OLD assertion is the V21-class lock-in this fixup corrects.
     const r = await resolveChatBranchIdFromFbEvent(
       { entry: [{ id: '12345' }] },
       { getFbConfigByPageId: async () => null, fallbackBranchId: '' }
     );
-    expect(r.branchId).toBe('');
-    expect(r.branchIdSource).toBe('webhook-fb-fallback-empty');
+    expect(r.branchId).toBe('BR-1777873556815-26df6480');
+    expect(r.branchIdSource).toBe('webhook-fb-fallback-hardcoded-nakhonratchasima');
   });
 
   it('FW1.7 — facebook.js source contains V75 marker comment near chat_conversations stamp', async () => {

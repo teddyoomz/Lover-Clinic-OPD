@@ -58,13 +58,22 @@ describe('V75 AV57 — chat webhook branchId stamp (audit invariant)', () => {
     expect(fs.existsSync('api/webhook/_lib/fbConfig.js')).toBe(true);
   });
 
-  it('AV57.9 — fallback source labels standardized', () => {
+  it('AV57.9 — fallback source labels standardized (V77-bis hardcoded-nakhonratchasima replaces -empty)', () => {
+    // V77-bis (2026-05-16): pre-V77-bis emitted source label '-empty' when
+    // fallbackBranchId was '' which caused cross-branch leak via the empty
+    // branchId stamp. Post-V77-bis: hardcoded NAKHON constant fires INSTEAD
+    // of empty, emitting source label '-hardcoded-nakhonratchasima'. AV57
+    // contract updated; positive assertions lock the post-fix labels.
+    // (Negative '-empty' regression guards omitted — V77-bis institutional-
+    // memory comments in the resolver legitimately reference the old label
+    // as the bug-context phrase; only the actual code-path emission matters,
+    // which is locked by the positive assertions + LW1.5/FW1.6 contract tests.)
     const lineResolver = fs.readFileSync('api/webhook/_lib/lineChatBranchResolver.js', 'utf8');
     const fbResolver = fs.readFileSync('api/webhook/_lib/fbChatBranchResolver.js', 'utf8');
     expect(lineResolver).toMatch(/webhook-line-fallback-nakhonratchasima/);
-    expect(lineResolver).toMatch(/webhook-line-fallback-empty/);
+    expect(lineResolver).toMatch(/webhook-line-fallback-hardcoded-nakhonratchasima/);
     expect(fbResolver).toMatch(/webhook-fb-fallback-legacy/);
-    expect(fbResolver).toMatch(/webhook-fb-fallback-empty/);
+    expect(fbResolver).toMatch(/webhook-fb-fallback-hardcoded-nakhonratchasima/);
   });
 
   it('AV57.10 — AV57 entry present in audit-anti-vibe-code SKILL.md', () => {

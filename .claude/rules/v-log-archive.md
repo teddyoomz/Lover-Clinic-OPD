@@ -1612,3 +1612,385 @@ Session 2 (~80):
 
 **Verification claim per Rule Q**: V75 architectural code shipped + mock + source-grep + Rule I full-flow simulate tests PASS (Tier 2 maha-adversarial pattern). L1 hands-on verification is USER'S responsibility per spec § 8. Until L1 confirms, V75 status = "code shipped, L1-pending". This V-entry documents the architectural completion; the deploy-and-verify cycle remains user-gated.
 
+---
+
+### V76 — 2026-05-16 EOD+1 — chat_history BSA sibling-reader/writer (V12 multi-reader-sweep at COLLECTION FAMILY level)
+
+User report (verbatim, angry, immediately after V75 deploy):
+> "tab chat frontend กุเปลี่ยนครบทุกสาขาแล้วไม่เห็นจะแยกกันเลยไอ้สัส ทำเหี้ยไรตั้ง 40 กว่า task แล้วได้งายโง่ๆแบบนี้"
+
+= "I switched the chat tab across every branch — they don't separate at all you motherfucker. Did 40+ tasks and got dumb-ass results like this."
+
+**Class-of-bug**: V12 multi-reader-sweep at COLLECTION FAMILY level. V75 wired ONE collection (`chat_conversations`) through BSA (BS-17 + AV57) but completely missed the SIBLING `chat_history` reader + writer in the SAME `ChatPanel.jsx` component. The chat-history view (red ⏰ clock icon) reads from `chat_history` collection — entirely different from the live `chat_conversations` listener V75 fixed. Identical cross-branch leak in the history view that V75 was meant to close.
+
+#### Root cause discovery (Rule R diagnostic-first)
+
+`scripts/diag-v75-chat-state.mjs` (NEW, Rule R read-only) ran against real prod Firestore:
+- `chat_conversations` = **0 docs** (collection empty at this moment — admin doesn't have a live customer chat right now)
+- `chat_history` = **3,281 docs**, ALL `withoutBranchId` (no branchId field stamped)
+- User was viewing CHAT HISTORY (red ⏰ icon) — the view V75 forgot existed
+
+`ChatPanel.jsx:513-532` had a raw `listenToChatHistory` listener with NO branchId filter:
+```js
+const unsub = listenToChatHistory({ limit: 200 }, (items) => {
+  setHistoryItems(items);
+});
+```
+
+`ChatPanel.jsx:572-586` (`handleResolve`) wrote new chat_history docs WITHOUT stamping branchId:
+```js
+await setChatHistoryDoc(conv.id, {
+  ...conv,
+  resolvedAt: serverTimestamp(),
+  resolvedBy: auth.currentUser.uid,
+  offHours,
+  responseTimeMs,
+  // NO branchId stamped
+});
+```
+
+Result: switching branch from นครราชสีมา → ทดลอง 1 → พระราม 3 had ZERO effect on the chat-history view. Every branch saw all 3,281 historical chats from นครราชสีมา (the only branch operating pre-V75).
+
+#### Architectural fix (Rule P Phase 4 — same family as V36 / V35 / V47 / V49)
+
+1. **Layer 1 (NEW listener)** — `src/lib/backendClient.js`:
+   ```js
+   export function listenToChatHistoryByBranch(opts = {}, onChange, onError) {
+     const { branchId, allBranches = false, limit = 200 } = opts;
+     const effectiveBranchId = (typeof branchId === 'string' && branchId)
+       ? branchId
+       : (allBranches ? null : resolveSelectedBranchId());
+     if (!effectiveBranchId && !allBranches) {
+       onChange?.([]);
+       return () => {};
+     }
+     // ... query chat_history with where('branchId', '==', effectiveBranchId)
+     //     OR query all if allBranches:true
+   }
+   ```
+   Mirror of `listenToChatConversationsByBranch` (V75) — Layer 1 safe-by-default. NO whole-collection fallback when branchId missing + !allBranches.
+
+2. **Layer 2 wrapper** — `src/lib/scopedDataLayer.js`:
+   ```js
+   export const listenToChatHistoryByBranch = _autoInject(raw.listenToChatHistoryByBranch);
+   ```
+   Auto-injects `resolveSelectedBranchId()` at call time. Pure JS (V36.G.51 lock — no React imports).
+
+3. **Reader migration** — `ChatPanel.jsx:513-532`:
+   ```js
+   const unsub = listenToChatHistoryByBranch(
+     { allBranches: !selectedBranchId, limit: 200 },
+     (items) => {
+       const filtered = items.filter(item =>
+         // client-side fall-through for legacy continuity (pre-V76 docs without branchId)
+         !item.branchId || item.branchId === selectedBranchId
+       );
+       setHistoryItems(filtered);
+     }
+   );
+   return () => unsub?.();
+   // deps array now includes selectedBranchId
+   ```
+   Two-layer defense: server-side branch filter (post-V76 docs) + client-side fall-through (pre-V76 legacy continuity). Branch switch → effect re-fires → re-subscribe.
+
+4. **Writer stamp** — `ChatPanel.jsx:572-586` (`handleResolve`):
+   ```js
+   const branchIdToStamp = conv.branchId || selectedBranchId || '';
+   const branchIdSource = conv.branchId
+     ? 'inherited-from-conv'
+     : selectedBranchId
+       ? 'resolved-by-admin-branch'
+       : 'unstamped';
+   await setChatHistoryDoc(conv.id, {
+     ...conv,
+     branchId: branchIdToStamp,
+     branchIdSource,
+     resolvedAt: serverTimestamp(),
+     // ...
+   });
+   ```
+   Fallback chain: `conv.branchId` (preserved from V75 webhook stamp) → `selectedBranchId` (admin context) → `''` (unstamped — flagged for backfill). Multi-source `branchIdSource` attribution preserves admin auditability (mirrors V75 pattern).
+
+#### NEW AV59 invariant
+
+`audit-anti-vibe-code/SKILL.md` extension:
+
+```
+AV59 — chat_history BSA discipline (V76, 2026-05-16)
+       Every chat_history write MUST stamp branchId via fallback chain
+       (conv.branchId → selectedBranchId → ''); every chat_history read
+       MUST go through scopedDataLayer.listenToChatHistoryByBranch
+       (Layer 2 auto-inject).
+       Sanctioned consumers: backendClient.js (Layer 1) + scopedDataLayer.js
+       (Layer 2) + ChatPanel.jsx (V76-migrated reader+writer).
+       Generic chat_history listener outside these = audit fail.
+       AV57 (V75) covered chat_conversations writes ONLY — AV59 covers
+       chat_history at both READ + WRITE boundaries. Full chat-collection
+       family coverage: chat_conversations (AV57) + chat_history (AV59).
+```
+
+#### Rule M backfill (3,281 docs → นครราชสีมา)
+
+`scripts/v76-backfill-chat-history-branchid.mjs` (mirror of V75 backfill):
+- Dry-run: 3,281 unstamped docs found, 0 already-stamped
+- `--apply` (executed on real prod): 3,281 writes committed
+- Forensic stamps per doc: `_v76BranchBackfilledAt: serverTimestamp()` + `_v76BackfillReason: 'sole-active-pre-v75-นครราชสีมา'`
+- Audit doc: `be_admin_audit/v76-chat-history-branch-backfill-1778932587641-d3a16bf4` with `{scanned: 3281, migrated: 3281, skipped: 0, branchIdAssigned: 'BR-1777873556815-26df6480'}`
+- Idempotent: re-run with `--apply` yields 0 writes (skip-if-already-stamped check)
+
+#### Test bank (28 assertions across 6 groups)
+
+`tests/v76-chat-history-branch-scope.test.js`:
+- **A.1-A.5**: Layer 1 (`listenToChatHistoryByBranch`) — explicit branchId + allBranches:true + `{}`+resolved + `{}`+null safe-by-default + V76 marker
+- **B.1-B.5**: Layer 2 (scopedDataLayer wrapper) — export check + auto-inject + explicit-bypass + delegates to raw + V76 marker
+- **C.1-C.7**: ChatPanel reader migration (selectedBranchId deps + client-side fall-through filter + writer stamp + fallback chain + branchIdSource attribution)
+- **D.1-D.5**: Backfill helpers (`decideBackfillAction` 3-branch + `buildPatch` forensic-trail + throws on missing default branchId)
+- **E.1-E.4**: AV59 cross-link (SKILL.md entry present + Rule M invocation guard + two-phase --apply gate + audit doc emit shape)
+- **F.1-F.2**: Rule P class-of-bug exhaustive check (NO other chat_history listener in src/; handleResolve is ONLY writer)
+
+#### Lessons (locked permanent)
+
+1. **V75 test bank failed to catch this because AV57 was scoped to webhook chat_conversations writes only** — the sibling chat_history writer (admin `handleResolve`) was outside AV57's grep scope. AV59 now covers both `chat_conversations` (AV57) AND `chat_history` (AV59) for full chat-collection-family coverage. Future migrations need family-wide audit, not single-collection audit.
+
+2. **V12 multi-reader-sweep at COLLECTION FAMILY level** — when adding BSA discipline to one collection in a family (chat_conversations), grep ALL related collection writes/reads. `chat_history` + `chat_conversations` + `messages` subcollection are all in the same family. Future migrations need family-wide grep, not single-collection grep. The audit invariant grep target must enumerate the FULL family.
+
+3. **Rule Q V66 hit again** — 210+ V75 tests PASS, prod broken at user's first multi-device hands-on. Mock tests covered AV57 contract exactly as designed; the DESIGN missed chat_history. Tier 2 source-grep regression can only catch what AV invariant grep TARGETS. Adding AV59 was the missing piece. **Source-grep tests cover what they're written to cover, no more.** Test design needs to be class-of-bug exhaustive, not single-instance.
+
+4. **Active break-attempt mindset (Rule Q self-check #3)**: if I had L1'd V75 by switching to history view BEFORE shipping V75, this would have surfaced. User's hands-on did Rule Q for me — at the cost of trust. Lesson: future "chat per-branch" or similar feature MUST L1 across ALL UI sub-views (chat list, history, search, filter) before claiming done. Multiple sub-views in the same component = multiple potential cross-branch leak surfaces.
+
+5. **Rule R diagnostic-first pattern paid off** — `scripts/diag-v75-chat-state.mjs` (READ-ONLY, admin-SDK against real prod) revealed in 5 seconds that `chat_conversations` was empty + `chat_history` had 3,281 unstamped docs. Without that diag, I would have wasted time chasing the wrong collection. Pattern: every user-reported "still broken" bug = run a Rule R diag FIRST to verify what's actually in the data.
+
+#### Files relevant to V76
+
+- `src/lib/backendClient.js` (NEW `listenToChatHistoryByBranch` Layer 1)
+- `src/lib/scopedDataLayer.js` (Layer 2 wrapper)
+- `src/components/ChatPanel.jsx` (reader migration + writer stamp + fallback chain)
+- `scripts/diag-v75-chat-state.mjs` (Rule R diag)
+- `scripts/v76-backfill-chat-history-branchid.mjs` (Rule M canonical mirror)
+- `tests/v76-chat-history-branch-scope.test.js` (28 regression assertions)
+- `.agents/skills/audit-anti-vibe-code/SKILL.md` (AV59 invariant)
+- `.claude/rules/00-session-start.md` § 2 — V76 compact entry
+- `.claude/rules/v-log-archive.md` — this entry
+
+#### Status
+
+V76 SHIPPED in combined deploy with V77a + V77b/c (Vercel `4d0edcd` @ 2026-05-16T12:33Z first round; V77-quater landed at 12:41Z). Rule M backfill ran post-deploy. User Rule Q L1 hands-on pending: switch between branches in chat history view; expect ทดลอง 1 / พระราม 3 = empty history; นครราชสีมา = 3,281 chats.
+
+---
+
+### V77 saga (a/b/c/-bis/-ter/-quater/-quinquies) — 2026-05-16 EOD+1 NIGHT — Webhook fallback hardening + frontend chat-config rip + whole-fleet backup button + V51 chat-hours migration gap (5 user-rage rounds across one session)
+
+User report sequence (verbatim, across 5 rounds of "still broken"):
+
+| Round | Verbatim | Cause |
+|---|---|---|
+| 1 | "ตัดหน้านี้ออกไป" (pointing at ConnectionSettings sub-view in frontend chat tab) | Frontend chat config sub-view existed even though admin uses Backend per-branch settings → V77a |
+| 2 | "ไหนปุ่ม backup ลูกค้าทุกคน" | Item 2 V75-bis whole-fleet backup UI deferred; user wanted the 📦 button → V77b/c |
+| 3 | "ทดสอบบนมือถือ ส่งข้อความใหม่ยังไม่ stamp branchId เลย" | webhook resolver `LOVER_DEFAULT_BRANCH_ID` env not set in Vercel runtime → fallback was `''` empty-string → new chat doc leaked cross-branch → V77-bis |
+| 4 | "chime หายไป ทำไมไม่ดัง ทั้งที่ 19:13 อยู่ในเวลา chat hours ที่ตั้งไว้ 11:15-20:45" | AdminDashboard `isChatActive` reading pre-V51 `cs.chatOpenTime/CloseTime` (undefined) → default 10:00-19:00 → chime gated off after 19:00 → V77-ter |
+| 5 | "ลูกค้าทักเข้ามาในเวลา แต่ทำไมขึ้น 'ลูกค้าทักนอกเวลา' ใน chat_history + ไหน 'ตอบล่าสุด' badge บางคน" | ChatPanel `isWithinChatHours` (sibling reader) ALSO had pre-V51 field reader → 69 chats wrongly tagged offHours + 818 docs `responseTimeMs:null` → V77-quater + V77-quinquies |
+
+**Class-of-bug**: V51 per-branch chat-hours field migration created N readers of OLD field names across `src/`. V77-ter fixed 1 reader (AdminDashboard `isChatActive`). V77-quater fixed 2 more (ChatPanel helper + write-time call-site). Cross-file grep at V77-ter would have caught all 3 in one pass — Rule P 7-step Step 3 (cross-file grep) DEFERRED = same-class re-surfaces × 2. **The exact lesson V77-ter committed text says I learned, then I proceeded to violate immediately.**
+
+#### Each sub-round detailed
+
+##### V77a — ConnectionSettings RIP (-180 LOC)
+
+User: "ตัดหน้านี้ออกไป" pointing at the frontend chat sub-view that let admin configure chat channel creds inline.
+
+Pre-V77a: `ChatPanel.jsx` had a 180-line `<ConnectionSettings>` sub-view rendering channel creds editors + test-connection buttons + webhook URLs. Two paths to configure the same data (Frontend chat tab AND Backend tabs LineSettingsTab/FbSettingsTab). Confusion + drift risk.
+
+V77a: hard rip — entire sub-view DELETED. Frontend chat tab now ONLY operates chats; configuration is Backend-only via:
+- LINE OA → Backend → ตั้งค่า LINE OA (LineSettingsTab) → writes `be_line_configs/{branchId}`
+- FB Page → Backend → ตั้งค่า FB Page (FbSettingsTab) → writes `be_fb_configs/{branchId}`
+
+Empty-state CTA in chat tab now says "ไม่พบการตั้งค่า — ไปตั้งใน Backend tabs" instead of inline editor.
+
+Legacy `clinic_settings/chat_config` doc preserved untouched for V75 auto-seed contract (FbSettingsTab reads it on first open if `be_fb_configs/{NAKHON}` doesn't exist).
+
+V21 fixups absorbed: ChatPanel test references to ConnectionSettings sub-view stripped.
+
+##### V77b/c — 📦 "สำรองลูกค้าทุกคน" button + endpoint + UI
+
+User: "ไหนปุ่ม backup ลูกค้าทุกคน".
+
+V75-bis backlog had the whole-fleet backup endpoint + UI modal deferred (CLI worked via `customer-backup-export.mjs --all-customers`, but no UI button existed). User wanted the button.
+
+V77b/c shipped:
+- **NEW** `/api/admin/whole-fleet-customer-backup-export` (344 LOC) — admin-gated, iterates ALL be_customers (no branchId filter — whole-fleet semantic), per-customer SEPARATE Storage blobs under `backups/whole-fleet-customers/{ts-rand}/{customerId}.json`, single `manifest.json` with `customers[]` + `manifestHash` (computed via shared `computeWholeFleetManifestHash` from `wholeFleetBackupCore.js` — V75 AV56 contract preserved), per-customer failure isolation (try/catch INSIDE loop → `failedCustomers[]`), audit doc emit, signed-URL download.
+- **NEW** `WholeFleetBackupModal.jsx` (225 LOC) — multi-stage modal (idle → preview → backing-up → done|error). Displays manifestRef + hash + downloadUrl + failedCustomers panel + data-testid anchors.
+- **BackupManagerTab** "📦 สำรองลูกค้าทุกคน" button wire + reload-on-complete.
+- **vercel.json** `maxDuration: 300` for whole-fleet endpoints (Enterprise plan supports; for >5000-customer clinics, document CLI fallback — no timeout).
+
+V77b/c test bank: `tests/v77-whole-fleet-backup-endpoint-and-ui.test.js` (27 assertions covering endpoint contract + manifestHash + branchId filter NULL + audit doc + N+1 avoidance + V77 marker + vercel.json maxDuration + modal UI states + failedCustomers panel + V77a ChatPanel removal regression checks).
+
+##### V77-bis — Webhook hardcoded fallback (Rule M backfill 1 chat doc)
+
+User report (mobile multi-device test): new live chat from a customer's mobile had `branchId: ""` (empty string).
+
+Root cause: `api/webhook/_lib/lineChatBranchResolver.js` + `fbChatBranchResolver.js` (V75 resolvers) had this fallback chain:
+```js
+function getDefaultBranchId() {
+  return process.env.LOVER_DEFAULT_BRANCH_ID || '';
+}
+```
+
+`LOVER_DEFAULT_BRANCH_ID` was NOT set in Vercel runtime env (admin forgot to configure post-V75 deploy). Resolver returned `''` → new chat doc had `branchId: ""` → leaked cross-branch.
+
+V77-bis fix: hardcoded `BR-1777873556815-26df6480` (นครราชสีมา branchId) as LAST-RESORT fallback BELOW the env lookup. Defense-in-depth: env-driven config still preferred (for future cloning scenarios); hardcoded constant guards against forgotten config.
+
+```js
+const HARDCODED_NAKHON_BR_ID = 'BR-1777873556815-26df6480';
+
+function getDefaultBranchId() {
+  // Defense-in-depth: env first, hardcoded last-resort
+  return process.env.LOVER_DEFAULT_BRANCH_ID
+      || HARDCODED_NAKHON_BR_ID;
+}
+```
+
+Same pattern as V40/V74 (hardcoded canonical paths + env override). Mirror in both LINE + FB resolvers.
+
+Rule M backfill: `scripts/v77-bis-backfill-empty-branchid-chat-conversations.mjs --apply` ran on real prod; 1 chat_conversations doc with `branchId: ""` flipped to นครราชสีมา + forensic `_v77bisBackfilledAt`.
+
+Diag scripts added (`scripts/diag-v76-live-chat-doc.mjs` + `diag-v76-chat-hours.mjs`) — Rule R helpers for future investigations.
+
+**Sidebar answer to user's "chime missing?" Q2 at this time**: NOT a bug. AdminDashboard `isChatActive` gates the continuous chime on chat operating hours. `clinic_settings/main` had `chatOpenTime/Close` undefined → defaults to 10:00-19:00 Bangkok. Bangkok time = 19:13 → past 19:00 close → chime gated off by design.
+
+**THIS ANSWER WAS WRONG. User found the bug 30 seconds later. → V77-ter.**
+
+##### V77-ter — V51 chat-hours field migration (AdminDashboard `isChatActive`)
+
+User: "มันก็มี setting เวลาของ chat อยู่แล้ว มึงไม่ดูโค๊ดเก่า" — "Chat hours setting already exists, you didn't read the old code."
+
+User had configured V51 per-branch chat hours: 11:15-20:45 in `cs.chatHoursMonFri.open/close`. AdminDashboard `isChatActive` was reading pre-V51 `cs.chatOpenTime / cs.chatCloseTime` (undefined) → fell to default 10:00-19:00 → chime gated off at 19:00 despite user config 11:15-20:45.
+
+V51 introduced canonical per-branch chat hours schema:
+- `cs.chatHoursAlwaysOn: boolean`
+- `cs.chatHoursMonFri: { open: 'HH:MM', close: 'HH:MM' }`
+- `cs.chatHoursSatSun: { open: 'HH:MM', close: 'HH:MM' }`
+
+AdminDashboard `isChatActive` (and elsewhere) was never migrated to read these. Pre-V51 default fields preserved in `constants.js DEFAULT_CLINIC_SETTINGS` as fallbacks (acceptable — V51 architecture supersedes via per-branch settings).
+
+V77-ter fix at `AdminDashboard.jsx`:
+```js
+// V77-ter: V51 canonical field migration (AV29-class)
+const alwaysOn = cs.chatHoursAlwaysOn ?? cs.chatAlwaysOn ?? false;
+const monFriOpen = cs.chatHoursMonFri?.open || cs.chatOpenTime || '10:00';
+const monFriClose = cs.chatHoursMonFri?.close || cs.chatCloseTime || '19:00';
+const satSunOpen = cs.chatHoursSatSun?.open || cs.chatOpenTimeWeekend || cs.chatOpenTime || '10:00';
+const satSunClose = cs.chatHoursSatSun?.close || cs.chatCloseTimeWeekend || cs.chatCloseTime || '19:00';
+```
+
+Legacy fields preserved as fallback chain (backward-compat for envs that haven't merged yet — future refactor: drop legacy after 30-day soak).
+
+useMemo deps extended with all V51 + legacy fields.
+
+14/14 V77-ter tests PASS in `tests/v77-ter-chat-active-v51-field-migration.test.js` (CA1.x source-grep + CA2.x merger contract).
+
+**Mea culpa in commit text**: "my earlier 'by design — past chatCloseTime' answer was wrong because I didn't read the existing V51 code. User saw the bug. I owe the apology + this fix."
+
+**MISTAKE**: After V77-ter shipped, I did NOT run Rule P Step 3 (cross-file grep for OTHER pre-V51 field readers). I assumed AdminDashboard was the only victim. This deferred cross-file grep cost the next 2 rounds.
+
+##### V77-quater — V51 chat-hours sibling reader (ChatPanel `isWithinChatHours`)
+
+User report: "ลูกค้าทักเข้ามาในเวลา แต่ทำไมขึ้น 'ลูกค้าทักนอกเวลา' ใน chat_history" + screenshot showing chats during 11:15-20:45 tagged offHours=true.
+
+V77-ter fixed AdminDashboard. But ChatPanel `handleResolve` ALSO had a sibling helper `isWithinChatHours(cs, lastMessageAt)` that determined the `offHours` field stamped on the resolved chat_history doc. This helper had the IDENTICAL pre-V51 field reader bug → `offHours` was wrongly stamped TRUE for chats within V51 11:15-20:45 hours.
+
+This is the EXACT same class-of-bug. V77-ter Rule P Step 3 cross-file grep would have caught it.
+
+V77-quater fix at `ChatPanel.jsx`:
+- `isWithinChatHours` migrated to V51 nested-shape (same fallback chain as V77-ter)
+- `useEffectiveClinicSettings(clinicSettings)` integration → `cs` is now merged with per-branch settings.chatHours (V51 architecture wired end-to-end)
+- `handleResolve` passes merged `cs` (not raw `clinicSettings`) to `isWithinChatHours`
+
+Rule M backfill: `scripts/v77-quater-backfill-offhours-tag.mjs --apply` ran on real prod:
+- 69 chat_history docs had `offHours: true` wrongly (stamped during pre-V77-quater window)
+- Re-evaluated each against current นครราชสีมา branch chatHours (V51 canonical fields)
+- 69 flipped to `offHours: false` + forensic `_v77quaterOffHoursCorrected: true` + `_v77quaterCorrectedAt: serverTimestamp()`
+- Audit doc emitted
+
+**Class-of-bug LESSON commit text**: "V51 per-branch settings migration created N readers of OLD field names across src/. V77-ter fixed 1 reader; V77-quater fixes 2 more (helper + write-time call-site). Cross-file grep at V77-ter would have caught all 3 in one pass — Rule P Step 3 deferred = same-class re-surfaces."
+
+##### V77-quinquies — `responseTimeMs:null` recompute (Rule M data-only fix)
+
+User: "ระบบ ตอบล่าสุดไปไหนไอ้ควย" — "Where did the latest-reply [badge] go?"
+
+Screenshot: chat "No" at 16:44 shows "ตอบล่าสุด: 3 นาที" badge ✓; chat "🤡keng🤡" at 18:14 has NO "ตอบล่าสุด" badge ✗.
+
+Root cause: chats resolved DURING V77-ter bug window had `offHours: true` stamped wrongly. `handleResolve` has logic:
+```js
+responseTimeMs: offHours ? null : (resolvedAt - lastCustomerMessageAt)
+```
+→ `responseTimeMs: null`. V77-quater backfill flipped `offHours` → `false` but did NOT restore `responseTimeMs` (script scope was offHours-only).
+
+V77-quinquies fix: `scripts/v77-quinquies-backfill-response-time.mjs --apply` ran on real prod:
+- Query `chat_history` for `responseTimeMs == null` AND `resolvedAt != null` AND `lastCustomerMessageAt != null`
+- 818 docs matched
+- Recompute `responseTimeMs = resolvedAt.toMillis() - lastCustomerMessageAt.toMillis()` (same formula as `handleResolve`)
+- 818 writes APPLIED + audit doc
+- `maxCustomerGapMs` NOT recomputed (requires `messages` subcollection which is 7d-cleanup-eligible; cosmetic-only badge stays missing for those — graceful degradation)
+
+Data-only Rule M fix (no code changes — `handleResolve` already correct post-V77-quater; this just heals legacy artifacts).
+
+#### Test bank cumulative (V76 + V77 family)
+
+- `tests/v76-chat-history-branch-scope.test.js` ✓ 28 (V76 BSA)
+- `tests/v77-whole-fleet-backup-endpoint-and-ui.test.js` ✓ 27 (V77b/c)
+- `tests/v77-ter-chat-active-v51-field-migration.test.js` ✓ 14 (V77-ter)
+- `tests/e2e/v76-chat-branch-isolation.spec.js` — Playwright 7 scenarios (V77 Rule Q L1 e2e prep)
+
+#### Audit invariants added (Tier 2 Rule P)
+
+- **AV59** (V76) — chat_history BSA discipline at both read + write boundaries. See V76 entry above for full details.
+- **AV29-class** lesson (V77-ter / V77-quater): per-branch settings migration MUST trigger cross-file grep of ALL pre-V51 field readers in same commit. Not a new invariant number; documented as a discipline reminder under Rule P 7-step Step 3.
+
+#### Plan-vs-reality adaptations (V77 lessons)
+
+1. **V51 per-branch chat-hours migration was incomplete at the time it shipped** — only `clinic_settings/{branchId}` writers were migrated; readers across `src/` were never swept. V77-ter/quater is fixing that gap retroactively. Future schema migrations MUST include reader sweep in same PR.
+
+2. **Hardcoded constants > env-driven config for canonical defaults**: V77-bis chose hardcoded `BR-1777873556815-26df6480` as LAST-RESORT fallback below env lookup. Same pattern as V40 (hardcoded backup path) + V74 (hardcoded canonical paths). Env-driven config is preferred for cloneability but vulnerable to admin-forgot-to-set. Defense-in-depth = both.
+
+3. **"By design" answers are dangerous** — V77-bis bonus answer ("chime missing is by design") was wrong because I didn't read existing V51 code. User caught me in 30 seconds. Rule: NEVER answer "by design" without verifying against existing code state. Always grep first.
+
+4. **V77a hard rip vs deprecate-with-warning**: user explicit "ตัดหน้านี้ออกไป" = hard rip. Legacy `clinic_settings/chat_config` doc preserved untouched for V75 auto-seed contract. Pattern: when removing a UI surface that touches data still consumed elsewhere, rip UI but preserve data. Deprecate-with-warning is appropriate when consumers may exist outside your control; hard rip is fine when you own all consumers.
+
+5. **vercel.json maxDuration: 300** for whole-fleet endpoints — Enterprise plan supports; for >5000-customer clinics, document CLI fallback (no timeout). Future scaling: switch to chunked-resumable backup with progress checkpoints.
+
+#### Architectural lessons (generalizable, locked permanent)
+
+1. **Class-of-bug expansion at THE COMMIT BOUNDARY** — V77-ter commit text literally said "V51 per-branch settings migration created N readers of OLD field names across src/." then I shipped without grepping for the OTHER readers. The lesson was in the commit; the discipline wasn't. **Rule P Step 3 (cross-file grep) MUST happen BEFORE committing the first instance fix, not after the user finds the next one.** Multi-round user-rage = Rule P Step 3 deferred.
+
+2. **The user is the L1 verification I keep failing to do** — V77 saga had 5 rounds because I treated each round as "the bug" instead of "an instance of the class". V77-ter through V77-quinquies are ALL the same class. Had I run cross-file grep at V77-ter end, V77-quater + V77-quinquies would have been zero-additional-user-rounds. The user's frustration IS the cost of skipping Rule P Step 3.
+
+3. **Webhook env-driven defaults need hardcoded backstop** (V77-bis pattern) — env vars are subject to admin oversight (forgot to set after Vercel re-config). Hardcoded canonical defaults below env lookup guard against this without sacrificing cloneability. Same pattern as V40/V74.
+
+4. **Sibling reader/writer in the SAME COMPONENT = highest-risk multi-reader-sweep gap** — V76 (chat_history reader in same ChatPanel as V75 chat_conversations reader) + V77-quater (`isWithinChatHours` in same ChatPanel as `isChatActive` in AdminDashboard) both prove this. When migrating one function in a component, audit the OTHER functions in the SAME component for the same migration class. The component is the natural co-locality boundary.
+
+5. **Data-only Rule M fixes (V77-quinquies pattern) heal legacy artifacts when the code is already correct** — when a code fix lands but historical data was written under the bug, a follow-up Rule M backfill can heal the data. Two-phase ops (dry-run + --apply + audit doc) are the canonical template. Cosmetic-only badges with graceful degradation (V77-quinquies's `maxCustomerGapMs` skip when messages subcollection is gone) avoid blocking the heal on unrecoverable data.
+
+#### Status
+
+V77 saga DEPLOYED via combined Vercel + Firebase rules deploy:
+- First deploy @ 2026-05-16T12:33Z: V75 + V76 + V77a + V77b/c + V77-bis
+- Second deploy @ 2026-05-16T12:41Z: V77-quater (Vercel only — no rule change)
+- V77-quinquies (commit `11044de`): data-only Rule M backfill, NO deploy needed
+
+4 Rule M backfills applied this session:
+1. V76 backfill: 3,281 chat_history → นครราชสีมา
+2. V77-bis backfill: 1 chat_conv empty-branchId → นครราชสีมา
+3. V77-quater backfill: 69 offHours-wrongly-tagged docs flipped
+4. V77-quinquies backfill: 818 responseTimeMs recomputed
+
+User Rule Q L1 hands-on pending (5 scenarios in `.agents/active.md`):
+1. V76 history filter: ทดลอง 1 / พระราม 3 → empty; นครราชสีมา → 3,281 chats
+2. V77a: chat tab header → ⚙ button gone; empty-state CTA → Backend tabs
+3. V77b/c: Backend → จัดการ Backup → 📦 modal → start → manifest.json download
+4. V77-ter + quater: chime continuous within 11:15-20:45 (Mon-Fri) / 10:15-19:45 (Sat-Sun) AND chat_history NO "ลูกค้าทักนอกเวลา" tag for chats within hours AND "ตอบล่าสุด: <X นาที" badge present for resolved chats
+5. V77-quinquies: every old chat_history (818 backfilled) now shows ตอบล่าสุด badge
+
+**Verification claim per Rule Q**: V77 saga code shipped + tests PASS + 4 Rule M backfills applied. L1 hands-on verification is USER'S responsibility per active.md acceptance scenarios. Until L1 confirms multi-device, V77 status = "code shipped + data healed, L1-pending". This V-entry documents the architectural completion + the 5-round class-of-bug expansion saga as institutional memory.
+
+If any scenario fails → `/systematic-debugging` Phase 1 + Rule P 7-step (cross-file grep MANDATORY this time, not deferred).
+
