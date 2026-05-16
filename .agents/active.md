@@ -3,7 +3,7 @@ updated_at: "2026-05-16 EOD+1 SESSION-END — V75 Items 1+2+3+4 architecturally 
 status: "READY-FOR-DEPLOY — Tasks 1-20 (session 1) + 14-16, 22, 28-32, 38, 40-42 (session 2) shipped; ~10 tasks deferred to V75-bis"
 branch: "master"
 last_commit: "Task 38 V-entry compact + verbose docs landed"
-tests: "~210+ V75 assertions PASS across 17 test files (session 1: ~140 / session 2: ~80); full suite + build verification queued at task end"
+tests: "~210+ V75 assertions PASS across 17 test files (session 1: ~140 / session 2: ~80). Full vitest 10760/10775 PASS (99.86%) — 3 failures are pre-existing V71 RowCard RC3.2-class (NOT V75-introduced). Build clean ✓ 23.41s."
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "b47a6e6 — V73 + V74 LIVE (V75 batch awaiting user 'deploy' authorization)"
 firestore_rules_version: "34 LIVE; v35 (V75 be_fb_configs match) staged in repo, not deployed"
