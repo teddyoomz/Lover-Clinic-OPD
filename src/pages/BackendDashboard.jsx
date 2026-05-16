@@ -98,6 +98,8 @@ import SaleInsuranceClaimsTab from '../components/backend/SaleInsuranceClaimsTab
 const DocumentTemplatesTab = lazy(() => import('../components/backend/DocumentTemplatesTab.jsx'));
 // V32-tris-ter (2026-04-26) — LINE OA settings tab
 const LineSettingsTab      = lazy(() => import('../components/backend/LineSettingsTab.jsx'));
+// V75 Item 3 (2026-05-16) — Per-branch FB Page settings tab
+const FbSettingsTab        = lazy(() => import('../components/backend/FbSettingsTab.jsx'));
 // V32-tris-quater (2026-04-26) — LINE link request approval queue
 const LinkRequestsTab      = lazy(() => import('../components/backend/LinkRequestsTab.jsx'));
 const QuotationTab         = lazy(() => import('../components/backend/QuotationTab.jsx'));
@@ -650,6 +652,8 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <DocumentTemplatesTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'line-settings' ? (
           <LineSettingsTab clinicSettings={clinicSettings} theme={theme} />
+        ) : activeTab === 'fb-settings' ? (
+          <FbSettingsTab />
         ) : activeTab === 'link-requests' ? (
           <LinkRequestsTab clinicSettings={clinicSettings} theme={theme} />
         ) : activeTab === 'system-settings' ? (

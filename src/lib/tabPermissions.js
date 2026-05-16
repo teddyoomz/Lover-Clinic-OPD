@@ -105,6 +105,7 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'df-groups':           { requires: ['df_group'], adminOnly: false },
   'document-templates':  { adminOnly: true },
   'line-settings':       { adminOnly: true },  // V32-tris-ter — LINE OA channel + bot config
+  'fb-settings':         { adminOnly: true },  // V75 Item 3 — Per-branch FB Page settings
   'link-requests':       { adminOnly: true },  // V32-tris-quater — LINE link approval queue
 
   // Phase 16.3 (2026-04-29) — System Settings tab. Permission-key gated

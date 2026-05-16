@@ -62,6 +62,7 @@ const MASTER_STUB_IDS = [
   'df-groups',
   'document-templates',
   'line-settings',  // V32-tris-ter (2026-04-26) LINE OA settings
+  'fb-settings',    // V75 Item 3 (2026-05-16) — per-branch FB Page settings
   'link-requests',  // V32-tris-quater (2026-04-26) LINE link-request approval queue
   'system-settings', // Phase 16.3 (2026-04-29) admin-gated system config
   'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
@@ -83,9 +84,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 22 items — 20 prior + 2 V74 backup admin tabs', () => {
+  it('M2 master section has exactly 23 items — 20 prior + 2 V74 backup admin tabs + 1 V75 fb-settings', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(22);
+    expect(master.items.length).toBe(23);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 

@@ -206,6 +206,8 @@ export const NAV_SECTIONS = [
       { id: 'df-groups',            label: 'กลุ่ม DF (ค่ามือ)',     icon: Percent,       color: 'amber', palette: 'df doctor fee group rate commission ค่ามือ กลุ่ม อัตรา เปอร์เซ็นต์' },
       { id: 'document-templates',   label: 'เทมเพลตเอกสาร',        icon: FileTextIcon,  color: 'amber', palette: 'document template certificate medical fit-to-fly medicine label consent referral เทมเพลต เอกสาร ใบรับรอง ฉลากยา ส่งตัว' },
       { id: 'line-settings',        label: 'ตั้งค่า LINE OA',       icon: MessageCircle, color: 'emerald', palette: 'line official account messaging chat bot qr link channel webhook ลายน์ ออฟฟิเชียล แชท บอท ผูก qr' },
+      // V75 Item 3 (2026-05-16) — Per-branch FB Page settings (be_fb_configs).
+      { id: 'fb-settings',          label: 'ตั้งค่า FB Page',        icon: MessageCircle, color: 'sky',     palette: 'facebook fb messenger page chat webhook token secret graph api เฟซบุ๊ก เพจ ผูก' },
       { id: 'link-requests',        label: 'คำขอผูก LINE',          icon: MessageCircle, color: 'emerald', palette: 'line link request approve reject pending bot id national passport ลายน์ คำขอ ผูก อนุมัติ รอ ตรวจสอบ' },
       // Phase 16.3 (2026-04-29) — System Settings tab.
       { id: 'system-settings',      label: 'ตั้งค่าระบบ',           icon: Settings,      color: 'amber', palette: 'system settings tab visibility override default deposit points feature flag negative stock toggle ระบบ ตั้งค่า แท็บ ค่าเริ่มต้น มัดจำ คะแนน สต็อคติดลบ' },

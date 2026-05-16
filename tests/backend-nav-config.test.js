@@ -200,9 +200,10 @@ describe('section integrity', () => {
     expect(ids).not.toContain('clone');
   });
 
-  it('I4 master section — V50 (2026-05-08) "masterdata" REMOVED + V74 (2026-05-16) added 2 backup admin tabs', () => {
+  it('I4 master section — V50 "masterdata" REMOVED + V74 2 backup admin tabs + V75 fb-settings', () => {
     // V50: ProClinic Sync tab gone. All master data is now CRUD'd via the
-    // 22 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40 + V74 backup tabs).
+    // 23 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40 + V74 backup
+    // tabs + V75 fb-settings per-branch FB Page config).
     const master = NAV_SECTIONS.find(s => s.id === 'master');
     expect(master).toBeTruthy();
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
@@ -224,6 +225,8 @@ describe('section integrity', () => {
       'df-groups',
       'document-templates',
       'line-settings',
+      // V75 Item 3 (2026-05-16) — per-branch FB Page settings, adjacent to line-settings
+      'fb-settings',
       'link-requests',
       'system-settings',
       'branch-backup',
