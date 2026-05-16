@@ -171,7 +171,7 @@ async function probe12_beFbConfigsAnon(ts) {
   // rules `match /be_fb_configs/{branchId}` clinic-staff read, admin-only write.
   // Anon POST expects 403 (clinic_staff or admin claim required).
   const docId = `test-probe-fb-${ts}`;
-  const url = `${BASE}/${PREFIX}/be_fb_configs?documentId=${docId}`;
+  const url = `${FIRESTORE_BASE}/${DATA_PATH}/be_fb_configs?documentId=${docId}`;
   const r = await http('POST', url, {
     body: { fields: { probe: { booleanValue: true } } },
   });

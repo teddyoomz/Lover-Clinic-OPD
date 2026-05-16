@@ -1,13 +1,13 @@
 ---
-updated_at: "2026-05-16 EOD+1 SESSION-END — V75 Items 1+2+3+4 architecturally COMPLETE (29 commits ahead of prod; deploy pending)"
-status: "READY-FOR-DEPLOY — Tasks 1-20 (session 1) + 14-16, 22, 28-32, 38, 40-42 (session 2) shipped; ~10 tasks deferred to V75-bis"
+updated_at: "2026-05-16 EOD+1 SESSION-END — V75 DEPLOYED ✓✓✓ (Firebase rules + Vercel both LIVE; backfill --apply ran clean; awaiting Rule Q L1 hands-on by user)"
+status: "DEPLOYED — V75 Items 1+2+3+4 LIVE on https://lover-clinic-app.vercel.app; firestore.rules v35 LIVE with be_fb_configs match"
 branch: "master"
-last_commit: "Task 38 V-entry compact + verbose docs landed"
-tests: "~210+ V75 assertions PASS across 17 test files (session 1: ~140 / session 2: ~80). Full vitest 10760/10775 PASS (99.86%) — 3 failures are pre-existing V71 RowCard RC3.2-class (NOT V75-introduced). Build clean ✓ 23.41s."
+last_commit: "docs(V75): correct commits-ahead count 29 → 26 (git log truth)"
+tests: "~210+ V75 assertions PASS across 17 test files. Full vitest 10760/10775 PASS (99.86%) — 3 pre-existing V71 failures. Build clean ✓ 23.41s. Probe-Deploy-Probe 6/6 PRE + 6/6 POST + cleanup ✓."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "b47a6e6 — V73 + V74 LIVE (V75 batch awaiting user 'deploy' authorization)"
-firestore_rules_version: "34 LIVE; v35 (V75 be_fb_configs match) staged in repo, not deployed"
-v75_commits_ahead_of_prod: 26
+production_commit: "V75 LIVE — Firebase rules v35 deployed + Vercel build 2m complete at 2026-05-16T11:25Z"
+firestore_rules_version: "v35 LIVE (V75 be_fb_configs match added)"
+v75_commits_ahead_of_prod: 0
 ---
 
 # Active Context
@@ -47,9 +47,31 @@ Task 40: docs(V75 state finalize): active.md + SESSION_HANDOFF.md  ← (this com
 
 ## Outstanding user-triggered actions
 
-- Combined `vercel --prod` + `firebase deploy --only firestore:rules` (V75 batch — ~29 commits + new be_fb_configs rule)
-- `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` post-deploy (Rule M; one-shot, idempotent)
-- Rule Q L1 multi-device hands-on per spec § 8 acceptance scenarios
+✓ Combined `vercel --prod` + `firebase deploy --only firestore:rules` — **DEPLOYED 2026-05-16T11:25Z**
+✓ `node scripts/v75-backfill-chat-conversations-branchid.mjs --apply` — **RAN, 0 writes** (collection was already clean — idempotent; audit doc `be_admin_audit/v75-chat-conversation-branch-backfill-1778930762379-e74b206f`)
+⏳ **Rule Q L1 multi-device hands-on by USER** (cannot be done by Claude — needs real devices)
+
+### Rule Q L1 acceptance checklist (per spec § 8)
+
+Open https://lover-clinic-app.vercel.app on real device(s) + walk through:
+
+**Item 1 — Button polish** ✓ scenario 1:
+- [ ] Customer detail page (e.g. LC-26000001) → 4 buttons (`แก้ไข`/`ผูก LINE`/`💾 สำรอง`/`ลบลูกค้า`) single row, equal heights, no wrap
+
+**Item 2 — Whole-fleet backup** (UI deferred to V75-bis; CLI works today):
+- [ ] CLI test: `node scripts/customer-backup-export.mjs --all-customers` (dry-run, no --apply) → prints customer count + manifestHash preview
+- [ ] (skip scenarios 2-3 in spec until V75-bis UI ships)
+
+**Item 3 — Chat per-branch** ✓ scenarios 4, 5, 6:
+- [ ] **CONTINUITY (สาขานครราชสีมา)**: switch to นครราชสีมา → chat tab → existing chats visible identical to pre-V75; LineSettingsTab → existing creds visible; **NEW** FbSettingsTab → auto-seed banner + pre-populated form from clinic_settings/chat_config → click save → no broken state
+- [ ] **New branch** (ทดลอง 1): switch → chat tab → empty state; LineSettings → empty form; set up creds → save → simulate LINE message → chat appears under ทดลอง 1 only (NOT นครราชสีมา)
+- [ ] **FB setup**: ทดลอง 1 → FbSettingsTab → save creds → simulate FB Page message → chat under ทดลอง 1 only
+
+**Item 4 — Chat noti mute** ✓ scenarios 7, 8:
+- [ ] Doctor's machine: Frontend chat tab → 🔔 click → flips to 🔕 + banner; send test LINE → no chat sound; appointment due-chime STILL rings; V73 staff-chat STILL rings; 🔕 click → 🔔 + sound resumes
+- [ ] Per-device isolation: front desk unmuted + doctor muted; test LINE → only front desk hears sound (verifies localStorage scope)
+
+If any scenario fails → report back; Claude can debug + ship V75-bis fix in next session.
 
 ## V75-bis backlog (deferred this session)
 
