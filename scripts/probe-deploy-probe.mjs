@@ -166,6 +166,23 @@ async function probe11_customerBackupsAnon(ts) {
   };
 }
 
+async function probe12_beFbConfigsAnon(ts) {
+  // V75 Item 3 (2026-05-16) — verify firestore rule blocks anon writes to be_fb_configs.
+  // rules `match /be_fb_configs/{branchId}` clinic-staff read, admin-only write.
+  // Anon POST expects 403 (clinic_staff or admin claim required).
+  const docId = `test-probe-fb-${ts}`;
+  const url = `${BASE}/${PREFIX}/be_fb_configs?documentId=${docId}`;
+  const r = await http('POST', url, {
+    body: { fields: { probe: { booleanValue: true } } },
+  });
+  return {
+    name: 'be_fb_configs anon WRITE (expect 403)',
+    status: r.status,
+    ok: r.status === 403,
+    error: r.status === 403 ? null : `expected 403 got ${r.status}: ${r.text.slice(0, 200)}`,
+  };
+}
+
 // ─── Probe orchestrator ─────────────────────────────────────────────────────
 async function runProbe(label) {
   const ts = Date.now();
@@ -176,6 +193,7 @@ async function runProbe(label) {
     probe9_staffChatMessagesAnon(ts),
     probe10_staffChatAttachmentsAnon(ts),
     probe11_customerBackupsAnon(ts),
+    probe12_beFbConfigsAnon(ts),
   ]);
   let allOk = true;
   for (const r of results) {

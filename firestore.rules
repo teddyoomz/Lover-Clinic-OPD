@@ -384,6 +384,21 @@ service cloud.firestore {
         allow delete: if isSignedIn() && request.auth.token.admin == true;
       }
 
+      // ── Backend: V75 Item 3 (2026-05-16) Per-branch FB Page configs ──
+      // Mirror of be_line_configs. Each branch has its own FB Page +
+      // Messenger webhook config. Webhook routes incoming events by
+      // entry[].id (Page ID) → resolves branchId via be_fb_configs.
+      // Read open to clinic staff so FbSettingsTab can render. Write
+      // gated to admin OR system_config_management permission.
+      match /be_fb_configs/{branchId} {
+        allow read: if isClinicStaff();
+        allow create, update: if isSignedIn() && (
+          request.auth.token.admin == true ||
+          request.auth.token['perm_system_config_management'] == true
+        );
+        allow delete: if isSignedIn() && request.auth.token.admin == true;
+      }
+
       // ── Backend: Phase 15.6 (2026-04-28) Admin cleanup audit log ──
       // Written ONLY by /api/admin/cleanup-* endpoints (firebase-admin SDK
       // bypasses rules). Lists deleted batch / product / sale IDs + caller

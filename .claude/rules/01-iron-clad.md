@@ -162,8 +162,21 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
      -H "Content-Type: application/json" -d '{"probe":true}'
    # → expect 401/403 (clinic-staff only by storage.rules; 1MB cap + create-only + no update/delete)
    ```
-11. `firebase deploy --only firestore:rules,storage:rules`
-12. รัน probe 1, 5, 6, 7, 8, 9, 10 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
+11. **V74 Customer Backups (2026-05-16)** — anon WRITE to backups/customers/ Storage path → expect 401/403:
+   ```
+   curl -X POST "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o?name=backups%2Fcustomers%2FPROBE-CUST%2F$(date +%s)-probe%2FTEST-PROBE-backup.json" \
+     -H "Content-Type: application/json" -d '{"probe":true}'
+   # → expect 401/403 (admin-only by storage.rules `match /backups/{prefix}/{file=**}`)
+   ```
+12. **V75 Item 3 Per-branch FB Configs (2026-05-16)** — anon WRITE to be_fb_configs → expect 403:
+   ```
+   curl -X POST "$BASE/$PREFIX/be_fb_configs?documentId=test-probe-fb-$(date +%s)" \
+     -H "Content-Type: application/json" \
+     -d '{"fields":{"probe":{"booleanValue":true}}}'
+   # → expect 403 (clinic-staff read; admin OR perm_system_config_management write)
+   ```
+13. `firebase deploy --only firestore:rules,storage:rules`
+14. รัน probe 1, 5, 6, 7, 8, 9, 12 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11) หรือ ≠ 403 (เฉพาะ 12) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
