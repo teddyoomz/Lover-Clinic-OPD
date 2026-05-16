@@ -126,4 +126,43 @@ describe('V81 AV63 — cron CRON_SECRET gate + concurrency lock', () => {
   });
 });
 
-// Future appends from Tasks 8-17 ...
+// ─── Task 8 — manual export endpoint ───────────────────────────────────
+
+describe('V81 — manual export endpoint', () => {
+  const src = READ('api/admin/whole-system-backup-export.js');
+
+  it('uses verifyAdminToken (NOT cron secret)', () => {
+    expect(src).toMatch(/verifyAdminToken/);
+  });
+
+  it('imports runWholeSystemBackup from shared executor', () => {
+    expect(src).toMatch(/runWholeSystemBackup/);
+    expect(src).toMatch(/wholeSystemBackupExecutor/);
+  });
+
+  it('shares concurrency lock with cron (whole-system-backup-running)', () => {
+    expect(src).toMatch(/whole-system-backup-running/);
+    expect(src).toMatch(/LOCK_BUSY/);
+  });
+
+  it('default type=manual; pre-restore opt-in via req.body.type', () => {
+    // Both literal strings must appear (one as default, other as opt-in branch)
+    expect(src).toMatch(/['"`]pre-restore['"`]/);
+    expect(src).toMatch(/['"`]manual['"`]/);
+    expect(src).toMatch(/req\.body\?\.type/);
+  });
+
+  it('runCleanup:false (manual does NOT cleanup per spec)', () => {
+    expect(src).toMatch(/runCleanup:\s*false/);
+  });
+
+  it('rejects non-POST', () => {
+    expect(src).toMatch(/METHOD_NOT_ALLOWED/);
+  });
+
+  it('lock source attribution uses caller.uid', () => {
+    expect(src).toMatch(/manual-admin-\$\{caller\.uid\}/);
+  });
+});
+
+// Future appends from Tasks 9-17 ...
