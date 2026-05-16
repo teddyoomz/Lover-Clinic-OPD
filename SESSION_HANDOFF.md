@@ -43,11 +43,11 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD — V73 Staff In-Branch Chat Widget 22 tasks DONE local · master=`5923b72` · prod=`19c6f2f` · 18 commits ahead · 10344 PASS · build clean (2.61s) · firestore rules+index+storage updated LOCALLY (not deployed)
+- **Date last updated**: 2026-05-18 — V73 Staff In-Branch Chat Widget **DEPLOYED LIVE** + V66 BRANCH closure annotation · master=`aff149e` · prod=`aff149e` · **0 commits ahead** · 10344 PASS · build clean · all 3 deploys + post-probes green
 - **Branch**: `master`
-- **Last commit**: `5923b72` docs(V73): active.md update — all 22 tasks DONE locally
+- **Last commit**: `aff149e` feat(V73 T17): MP3 staff chat notification sounds (1.9KB + 3.3KB ffmpeg-synthesized CC0 mono MP3s)
 - **Test count**: **10344 PASS / 0 FAIL / 12 skip** (full suite; +107 V73 net across 12 test files)
-- **Deploy state**: prod=`19c6f2f` LIVE. 0 deploys this session — Vercel + firebase rules/indexes/storage + Cloud Function pending user authorization (V18 lock).
+- **Deploy state**: prod=`aff149e` LIVE on https://lover-clinic-app.vercel.app. **Deployed 2026-05-18** (this session): (a) `firebase deploy --only firestore:rules,firestore:indexes,storage` ✓ (b) `firebase deploy --only functions:cleanupOldStaffChatMessages` ✓ (cleanupOldStaffChatMessages v2 scheduled asia-southeast1) (c) `vercel --prod --yes` ✓ aliased. Pre-probes + post-probes both green (1=200, 5=200, 9=403, 10=403). Probe cleanup nuked 2+2 docs. Outstanding: Rule Q L1 multi-device hands-on per spec §16 (user-driven, 30 acceptance checks) + V70/V71/V71.A/V71.B L1 hands-on confirms.
 
 ### Session 2026-05-17 EOD — V73 Staff In-Branch Chat Widget (22 tasks, subagent-driven) ★
 
