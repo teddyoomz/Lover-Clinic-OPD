@@ -8,7 +8,7 @@ import {
 import { getAuth } from 'firebase/auth';
 import { app } from '../firebase.js';
 import { countUnreadPeople } from '../lib/chatUnreadUtils.js';
-import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { useSelectedBranch, useEffectiveClinicSettings } from '../lib/BranchContext.jsx';
 // V75 Item 3 (2026-05-16) — chat_conversations branch-scoped listener (BS-17).
 // Layer 2 wrapper auto-injects resolveSelectedBranchId() when caller passes {};
 // we call with allBranches:true here + apply client-side filter to preserve
@@ -305,21 +305,42 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
 // ─── Main ChatPanel ────────────────────────────────────────────────────────
 
 // ─── Off-hours helper ──────────────────────────────────────────────────────
+// V77-quater (2026-05-16 EOD+1) — V12 multi-reader-sweep follow-up to V77-ter.
+// V77-ter fixed AdminDashboard.isChatActive only; this SIBLING reader was missed.
+// `settings` is the V51-merged cs (mergeBranchIntoClinic): exposes
+// cs.chatHoursAlwaysOn + cs.chatHoursMonFri.{open,close} + cs.chatHoursSatSun.
+// Legacy pre-V51 fields (chatAlwaysOn/chatOpenTime/chatCloseTime) kept as
+// fallback chain — backward-compat for envs that haven't merged yet.
 function isWithinChatHours(timestamp, settings) {
-  if (!settings || settings.chatAlwaysOn) return true;
+  if (!settings) return true;
+  const alwaysOn = (typeof settings.chatHoursAlwaysOn === 'boolean')
+    ? settings.chatHoursAlwaysOn
+    : !!settings.chatAlwaysOn;
+  if (alwaysOn) return true;
   const d = new Date(timestamp);
   const bangkokTime = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
   const day = bangkokTime.getDay(); // 0=Sun, 6=Sat
   const hhmm = `${String(bangkokTime.getHours()).padStart(2, '0')}:${String(bangkokTime.getMinutes()).padStart(2, '0')}`;
   const isWeekend = day === 0 || day === 6;
-  const open = isWeekend ? (settings.chatOpenTimeWeekend || '10:00') : (settings.chatOpenTime || '10:00');
-  const close = isWeekend ? (settings.chatCloseTimeWeekend || '17:00') : (settings.chatCloseTime || '19:00');
+  const monFri = settings.chatHoursMonFri || {};
+  const satSun = settings.chatHoursSatSun || {};
+  const open = isWeekend
+    ? (satSun.open || settings.chatOpenTimeWeekend || '10:00')
+    : (monFri.open || settings.chatOpenTime || '10:00');
+  const close = isWeekend
+    ? (satSun.close || settings.chatCloseTimeWeekend || '19:00')
+    : (monFri.close || settings.chatCloseTime || '19:00');
   return hhmm >= open && hhmm < close;
 }
 
 export default function ChatPanel({ db, appId, user, clinicSettings }) {
   // Phase 20.0 follow-up (2026-05-06) — per-branch chat filter.
   const { branchId: selectedBranchId } = useSelectedBranch();
+  // V77-quater (2026-05-16 EOD+1) — merge per-branch settings.chatHours into
+  // clinicSettings shape so isWithinChatHours sees V51 cs.chatHoursMonFri/
+  // SatSun/AlwaysOn (admin's BranchFormModal config) instead of pre-V51
+  // top-level chatOpenTime/CloseTime fields which are undefined post-V51.
+  const cs = useEffectiveClinicSettings(clinicSettings);
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   // V77 (2026-05-16 EOD+1) — showSettings state REMOVED. Legacy frontend
@@ -431,7 +452,11 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
       }
 
       // Check if first contact was outside business hours
-      const offHours = !isWithinChatHours(firstContactAt || now, clinicSettings);
+      // V77-quater — use V51-merged cs (per-branch chatHours) instead of raw
+      // clinicSettings prop. Pre-fix: pre-V51 fields undefined → defaulted to
+      // 10:00-19:00 → user's 11:15-20:45 config ignored → docs stamped
+      // offHours:true wrongly (visible as "ลูกค้าทักนอกเวลา" tag in history).
+      const offHours = !isWithinChatHours(firstContactAt || now, cs);
 
       // Save minimal history record
       const historyRef = collection(db, `artifacts/${appId}/public/data/chat_history`);
