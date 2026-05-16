@@ -226,4 +226,64 @@ describe('V81 — restore endpoint (Fresh + Replace modes)', () => {
   });
 });
 
-// Future appends from Tasks 11-17 ...
+// ─── Task 11 — download endpoint ───────────────────────────────────────
+
+describe('V81 — download endpoint (server-stream tar.gz + signed URL)', () => {
+  const src = READ('api/admin/whole-system-backup-download.js');
+
+  it('uses archiver lib + tar gzip', () => {
+    expect(src).toMatch(/import\s+archiver/);
+    expect(src).toMatch(/archiver\(['"]tar['"][\s\S]{0,100}gzip:\s*true/);
+  });
+
+  it('reuses existing __archive.tar.gz if < 24h old (avoid re-zipping)', () => {
+    expect(src).toMatch(/__archive\.tar\.gz/);
+    expect(src).toMatch(/ARCHIVE_TTL_MS\s*=\s*24/);
+  });
+
+  it('does NOT include archive in itself (recursion gate)', () => {
+    expect(src).toMatch(/endsWith\(['"]__archive\.tar\.gz['"]\)[\s\S]{0,80}continue/);
+  });
+
+  it('returns 24h signed URL', () => {
+    expect(src).toMatch(/getSignedUrl/);
+    expect(src).toMatch(/expires:\s*Date\.now\(\)\s*\+\s*ARCHIVE_TTL_MS/);
+  });
+
+  it('verifyAdminToken gate', () => {
+    expect(src).toMatch(/verifyAdminToken/);
+  });
+});
+
+// ─── Task 12 — list + delete endpoints ─────────────────────────────────
+
+describe('V81 — list + delete endpoints', () => {
+  const list = READ('api/admin/whole-system-backups-list.js');
+  const del = READ('api/admin/whole-system-backup-delete.js');
+
+  it('list uses verifyAdminToken', () => {
+    expect(list).toMatch(/verifyAdminToken/);
+  });
+
+  it('list validates each manifest via validateWholeSystemManifest (AV62 surface)', () => {
+    expect(list).toMatch(/validateWholeSystemManifest/);
+    expect(list).toMatch(/hashOk:/);
+  });
+
+  it('list parses backup names via parseBackupName + filters invalid', () => {
+    expect(list).toMatch(/parseBackupName/);
+  });
+
+  it('list sorts by createdAt desc', () => {
+    expect(list).toMatch(/createdAt[\s\S]{0,80}localeCompare/);
+  });
+
+  it('delete validates names via NAME_PATTERN (anti-fat-finger)', () => {
+    expect(del).toMatch(/NAME_PATTERN\.test/);
+    expect(del).toMatch(/INVALID_NAME/);
+  });
+
+  it('delete uses bucket.deleteFiles with backups/whole-system/{name}/ prefix', () => {
+    expect(del).toMatch(/deleteFiles[\s\S]{0,80}backups\/whole-system\//);
+  });
+});
