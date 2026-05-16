@@ -808,6 +808,15 @@ async function processEvent(event, fallbackConfig) {
     lineReplyToken: { stringValue: event.replyToken || '' },
   });
 
+  // V75 Item 3 — resolve branchId + source for chat_conversations stamp (AV57).
+  // branchId from be_line_configs match OR fallback to LOVER_DEFAULT_BRANCH_ID
+  // (typically นครราชสีมา — preserves existing flow through V75 migration).
+  const FALLBACK_BRANCH_ID = process.env.LOVER_DEFAULT_BRANCH_ID || '';
+  const chatBranchId = branchId || FALLBACK_BRANCH_ID;
+  const chatBranchIdSource = branchId
+    ? 'webhook-line'
+    : (FALLBACK_BRANCH_ID ? 'webhook-line-fallback-nakhonratchasima' : 'webhook-line-fallback-empty');
+
   // Update conversation
   const convFields = {
     platform: { stringValue: 'line' },
@@ -817,6 +826,9 @@ async function processEvent(event, fallbackConfig) {
     lastMessage: { stringValue: text },
     lastMessageAt: { stringValue: now },
     unreadCount: { integerValue: String(currentUnread + 1) },
+    // V75 Item 3 — branchId + branchIdSource for per-branch chat UI filter (AV57)
+    branchId: { stringValue: chatBranchId },
+    branchIdSource: { stringValue: chatBranchIdSource },
   };
   // Only set createdAt on brand-new conversations
   if (!existingConv?.fields) {

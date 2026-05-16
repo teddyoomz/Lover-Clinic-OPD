@@ -1,12 +1,45 @@
 // ─── Facebook Messenger Webhook Receiver ────────────────────────────────────
 // Receives messages from FB Page Messenger → stores in Firestore
 // No Firebase auth — uses FB signature verification instead
+//
+// V75 Item 3 (2026-05-16) — chat_conversations now stamped with branchId
+// resolved via be_fb_configs/{branchId} lookup by FB Page ID. Falls back to
+// LOVER_DEFAULT_BRANCH_ID (typically นครราชสีมา) for unmatched pages
+// (preserves legacy clinic_settings/chat_config era flow). AV57 enforces.
 
 import crypto from 'crypto';
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { resolveChatBranchIdFromFbEvent } from './_lib/fbChatBranchResolver.js';
+import { getFbConfigByPageId } from './_lib/fbConfig.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
 const CHAT_CONFIG_PATH = `artifacts/${APP_ID}/public/data/clinic_settings/chat_config`;
+const FALLBACK_BRANCH_ID = process.env.LOVER_DEFAULT_BRANCH_ID || '';
+
+// V75 Item 3 — admin-SDK init for be_fb_configs lookup (rules deny anon read).
+let cachedAdminDb = null;
+function getAdminFirestore() {
+  if (cachedAdminDb) return cachedAdminDb;
+  let app;
+  if (getApps().length > 0) {
+    app = getApp();
+  } else {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    if (!clientEmail || !rawKey) throw new Error('firebase-admin not configured');
+    app = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+        clientEmail,
+        privateKey: rawKey.replace(/\\n/g, '\n'),
+      }),
+    });
+  }
+  cachedAdminDb = getFirestore(app);
+  return cachedAdminDb;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -100,7 +133,7 @@ async function firestoreGet(path) {
 
 // ─── Process FB messaging event ─────────────────────────────────────────────
 
-async function processMessage(senderId, message, config) {
+async function processMessage(senderId, message, config, branchInfo = {}) {
   const convPath = `artifacts/${APP_ID}/public/data/chat_conversations/fb_${senderId}`;
   const msgId = message.mid || `fb_${Date.now()}`;
   const msgPath = `${convPath}/messages/${msgId}`;
@@ -182,6 +215,11 @@ async function processMessage(senderId, message, config) {
     isFromCustomer: { booleanValue: true },
   });
 
+  // V75 Item 3 — chat_conversations.branchId + branchIdSource for per-branch UI filter (AV57).
+  const chatBranchId = branchInfo.branchId || FALLBACK_BRANCH_ID;
+  const chatBranchIdSource = branchInfo.branchIdSource
+    || (FALLBACK_BRANCH_ID ? 'webhook-fb-fallback-legacy' : 'webhook-fb-fallback-empty');
+
   // Update conversation
   const convFields = {
     platform: { stringValue: 'facebook' },
@@ -191,6 +229,9 @@ async function processMessage(senderId, message, config) {
     lastMessage: { stringValue: text },
     lastMessageAt: { stringValue: now },
     unreadCount: { integerValue: String(currentUnread + 1) },
+    // V75 Item 3 — branchId + branchIdSource (AV57)
+    branchId: { stringValue: chatBranchId },
+    branchIdSource: { stringValue: chatBranchIdSource },
   };
   // Only set createdAt on brand-new conversations
   if (!existingConv?.fields) {
@@ -242,10 +283,20 @@ async function processEchoMessage(recipientId, message) {
     isFromCustomer: { booleanValue: false },
   });
 
+  // V75 Item 3 — re-stamp branchId + branchIdSource from existing doc to
+  // satisfy AV57 strict (every chat_conversations write stamps branchId).
+  // updateMask preserves untouched fields, but explicit re-stamp is defensive.
+  const existingBranchId = existingConv?.fields?.branchId?.stringValue
+    || FALLBACK_BRANCH_ID;
+  const existingBranchIdSource = existingConv?.fields?.branchIdSource?.stringValue
+    || 'webhook-fb-fallback-legacy';
+
   // Update lastMessage but NOT displayName/pictureUrl — keep customer profile
   await firestorePatch(convPath, {
     lastMessage: { stringValue: text },
     lastMessageAt: { stringValue: now },
+    branchId: { stringValue: existingBranchId },
+    branchIdSource: { stringValue: existingBranchIdSource },
   });
 
   console.log(`[fb-webhook] Echo saved for fb_${recipientId}: "${text.slice(0, 50)}"`);
@@ -312,6 +363,22 @@ export default async function handler(req, res) {
   const body = JSON.parse(rawBody);
   console.log(`[fb-webhook] POST entries=${body.entry?.length || 0}`);
 
+  // V75 Item 3 — resolve branchId for chat_conversations stamp (AV57).
+  // be_fb_configs/{branchId} where pageId == entry[0].id. Falls back to
+  // LOVER_DEFAULT_BRANCH_ID (typically นครราชสีมา) when no match —
+  // preserves legacy clinic_settings/chat_config era flow.
+  let branchInfo = { branchId: FALLBACK_BRANCH_ID, branchIdSource: FALLBACK_BRANCH_ID ? 'webhook-fb-fallback-legacy' : 'webhook-fb-fallback-empty' };
+  try {
+    const db = getAdminFirestore();
+    branchInfo = await resolveChatBranchIdFromFbEvent(body, {
+      getFbConfigByPageId: (pid) => getFbConfigByPageId(db, APP_ID, pid),
+      fallbackBranchId: FALLBACK_BRANCH_ID,
+      onError: (e) => console.warn('[fb-webhook] branchId resolve fell back:', e?.message || e),
+    });
+  } catch (err) {
+    console.warn('[fb-webhook] branchId resolution failed; using fallback:', err?.message || err);
+  }
+
   // Process messaging entries
   const entries = body.entry || [];
   const promises = [];
@@ -327,7 +394,7 @@ export default async function handler(req, res) {
       }
       // Only handle messages (not postbacks, etc.)
       if (event.message && event.sender?.id && event.sender.id !== fbConfig.pageId) {
-        promises.push(processMessage(event.sender.id, event.message, fbConfig));
+        promises.push(processMessage(event.sender.id, event.message, fbConfig, branchInfo));
       }
     }
   }
