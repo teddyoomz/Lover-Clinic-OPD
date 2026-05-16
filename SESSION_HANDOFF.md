@@ -117,7 +117,7 @@ Then user clicked Make-Fresh in real UI: **NO DATA DELETED**. Root cause via sys
 
 Fix at `25cdb41`: 6 field names corrected vs prod write-side code (`centralWarehouseId`/`branchId`/`destinationLocationId`); NEW regression test `tests/central-stock-buckets-filter-field-prod-verification.test.js` (V66.1-V66.7) locks against future invented names; AV44 extension. Re-verified 5/5 on real prod with corrected schema.
 
-**Then NEW user report (EOD)**: clicked BRANCH Make-Fresh on นครราชสีมา → 1,064 transfers + orders + withdrawals + Movement Log STILL THERE. Same V66 bug at branch level — `be_stock_transfers`/`be_stock_withdrawals` use `sourceLocationId`/`destinationLocationId` not `branchId`. NOT FIXED yet — top priority next session.
+**Then NEW user report (EOD)**: clicked BRANCH Make-Fresh on นครราชสีมา → 1,064 transfers + orders + withdrawals + Movement Log STILL THERE. Same V66 bug at branch level — `be_stock_transfers`/`be_stock_withdrawals` use `sourceLocationId`/`destinationLocationId` not `branchId`. **RESOLVED `ef680eb` (2026-05-15)** — V66 BRANCH fix mirrors central pattern: NEW `BUCKET_FILTER_FIELDS` side-table in `src/lib/branchBackupBuckets.js` + `getFilterSpecForCollection` helper + 2-query OR-merge with Map dedup at wipe loop ([branch-make-fresh.js:168-196](api/admin/branch-make-fresh.js#L168-L196)). Regression test `tests/branch-backup-buckets-v66-filter-fields.test.js` (V66.B1-B*) grep-locks every override against backendClient.js write-side. In prod since 2026-05-15 (ancestor of `19c6f2f`).
 
 Checkpoint: `.agents/sessions/2026-05-15-central-stock-make-fresh-and-v66-saga.md`.
 
