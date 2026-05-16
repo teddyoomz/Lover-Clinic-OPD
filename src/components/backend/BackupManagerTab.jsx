@@ -15,6 +15,9 @@ import { Loader2, Download, Edit3, Trash2, RefreshCw, AlertTriangle, X, CheckCir
 import { auth } from '../../firebase.js';
 // V77 (2026-05-16 EOD+1) — Whole-fleet customer backup trigger modal.
 import WholeFleetBackupModal from './WholeFleetBackupModal.jsx';
+// V81 (2026-05-17) — Whole-system backup (Firestore + Storage + Auth) + restore modals.
+import WholeSystemBackupModal from './WholeSystemBackupModal.jsx';
+import WholeSystemRestoreModal from './WholeSystemRestoreModal.jsx';
 
 async function authedFetch(url, body) {
   const token = await auth.currentUser?.getIdToken();
@@ -46,6 +49,60 @@ export default function BackupManagerTab() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   // V77 (2026-05-16 EOD+1) — whole-fleet backup modal
   const [wholeFleetModalOpen, setWholeFleetModalOpen] = useState(false);
+  // V81 (2026-05-17) — whole-system backup + restore state
+  const [wsBackups, setWsBackups] = useState([]);
+  const [wsLoading, setWsLoading] = useState(false);
+  const [wsBackupModalOpen, setWsBackupModalOpen] = useState(false);
+  const [wsRestoreModalOpen, setWsRestoreModalOpen] = useState(false);
+
+  const loadWsBackups = useCallback(async () => {
+    setWsLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/whole-system-backups-list', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      setWsBackups(Array.isArray(json.backups) ? json.backups : []);
+    } catch (e) {
+      setWsBackups([]);
+    } finally {
+      setWsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadWsBackups(); }, [loadWsBackups]);
+
+  async function downloadWs(name) {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/whole-system-backup-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ backupRef: name }),
+      });
+      const json = await res.json();
+      if (json.downloadUrl) window.open(json.downloadUrl, '_blank');
+      else alert(`Download failed: ${json.error || 'unknown'}`);
+    } catch (e) {
+      alert(`Download error: ${e.message}`);
+    }
+  }
+
+  async function deleteWs(names) {
+    if (!window.confirm(`ลบ ${names.length} backup(s)?`)) return;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch('/api/admin/whole-system-backup-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ names }),
+      });
+      loadWsBackups();
+    } catch (e) {
+      alert(`Delete error: ${e.message}`);
+    }
+  }
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -141,6 +198,90 @@ export default function BackupManagerTab() {
         onClose={() => setWholeFleetModalOpen(false)}
         onComplete={() => { reload(); }}
       />
+
+      {/* V81 (2026-05-17) — Whole-System Backups (full Firestore + Storage + Auth clone) */}
+      <section className="mb-6 p-4 bg-gray-900/30 border border-gray-800 rounded-xl" data-testid="whole-system-backups-section">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-bold text-amber-300">🌐 Whole-System Backups (V81)</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Auto-daily 03:00 BKK · 5-day rolling retention · 7-day pre-restore · ∞ manual.
+              Includes ALL Firestore collections + Firebase Storage + Auth users (no passwords).
+            </p>
+          </div>
+          <button
+            onClick={() => setWsBackupModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs bg-red-700 hover:bg-red-600 text-white font-bold flex items-center gap-1.5"
+            data-testid="whole-system-backup-trigger"
+            title="สำรองทั้งระบบ (Firestore + Storage + Auth)"
+          >
+            📥 Backup Now
+          </button>
+        </div>
+
+        {wsLoading ? (
+          <p className="text-xs text-gray-500">กำลังโหลด...</p>
+        ) : wsBackups.length === 0 ? (
+          <p className="text-xs text-gray-500">ยังไม่มี backup — กด "📥 Backup Now" เพื่อสร้างตัวแรก หรือรอ auto-cron 03:00 BKK</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-end mb-2">
+              <button
+                onClick={() => setWsRestoreModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-amber-700 hover:bg-amber-600 text-white font-bold"
+                data-testid="whole-system-restore-trigger"
+                title="Restore จาก backup ที่เลือก"
+              >
+                🔄 Restore
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {wsBackups.map(b => (
+                <div key={b.name} className="flex items-center justify-between p-2.5 bg-gray-900/50 border border-gray-800 rounded-lg text-xs">
+                  <div className="flex-1 min-w-0">
+                    <code className="font-bold text-amber-300">{b.name}</code>
+                    {b.hashOk === false && <span className="ml-2 text-red-400">⚠ HASH BAD</span>}
+                    {b.error && <span className="ml-2 text-red-400">⚠ {b.error}</span>}
+                    <div className="text-gray-500 mt-0.5">
+                      {b.stats?.totalDocCount?.toLocaleString() || 0} docs ·{' '}
+                      {Math.round((b.stats?.totalStorageBytes || 0) / 1024 / 1024)} MB ·{' '}
+                      {b.stats?.totalAuthUsers || 0} users · {b.type}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => downloadWs(b.name)}
+                      className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-[10px]"
+                      title="Download tar.gz"
+                    >
+                      Download
+                    </button>
+                    <button
+                      onClick={() => deleteWs([b.name])}
+                      className="px-2 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-[10px]"
+                      title="ลบ backup"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <WholeSystemBackupModal
+          open={wsBackupModalOpen}
+          onClose={() => setWsBackupModalOpen(false)}
+          onComplete={() => loadWsBackups()}
+        />
+        <WholeSystemRestoreModal
+          open={wsRestoreModalOpen}
+          onClose={() => setWsRestoreModalOpen(false)}
+          backups={wsBackups}
+          onComplete={() => loadWsBackups()}
+        />
+      </section>
 
       {/* Filter chips + search */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
