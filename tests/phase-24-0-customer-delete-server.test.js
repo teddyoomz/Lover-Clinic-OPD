@@ -99,12 +99,20 @@ describe('Phase 24.0 / S4 — endpoint surface (source-grep guards)', () => {
     expect(SERVER_TXT).toMatch(/verifyAdminOrPermissionToken\(req,\s*res,\s*['"]customer_delete['"]\)/);
   });
 
-  it('S4.2 endpoint declares CUSTOMER_CASCADE_COLLECTIONS list (11 entries)', () => {
-    expect(SERVER_TXT).toMatch(/be_treatments[\s\S]{0,800}be_customer_link_tokens/);
-    const block = SERVER_TXT.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    expect(block).toBeTruthy();
-    const entries = block[1].match(/'be_[a-z_]+'/g) || [];
-    expect(entries.length).toBe(11);
+  it('S4.2 endpoint cascade is CUSTOMER_CASCADE_COLLECTIONS_FULL (V74 16-entry canonical)', () => {
+    // V74 (2026-05-16): endpoint imports the canonical 16-entry list from
+    // src/lib/customerBackupCore.js (CUSTOMER_CASCADE_COLLECTIONS_FULL) and
+    // re-aliases as CUSTOMER_CASCADE_COLLECTIONS. The single-source-of-truth
+    // declaration lives in the helper module; here we verify the alias.
+    expect(SERVER_TXT).toMatch(/import\s*\{[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS_FULL[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/src\/lib\/customerBackupCore\.js['"]/);
+    expect(SERVER_TXT).toMatch(/const\s+CUSTOMER_CASCADE_COLLECTIONS\s*=\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*;/);
+    // Anti-regression: must NOT have the Phase 24.0 inline 11-entry Object.freeze.
+    expect(SERVER_TXT).not.toMatch(/const\s+CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[\s*['"]be_treatments['"]/);
+    // Sanctioned exception: COL_TO_RESPONSE_KEY map MUST include all 16 entries.
+    const keyMap = SERVER_TXT.match(/COL_TO_RESPONSE_KEY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
+    expect(keyMap).toBeTruthy();
+    const keyEntries = keyMap[1].match(/be_[a-z_]+\s*:/g) || [];
+    expect(keyEntries.length).toBe(16); // 11 Phase 24.0 + 5 V74 CG
   });
 
   it('S4.3 endpoint writes audit doc with prefix customer-delete-', () => {
@@ -122,15 +130,32 @@ describe('Phase 24.0 / S4 — endpoint surface (source-grep guards)', () => {
 });
 
 describe('Phase 24.0 / S5 — shared CUSTOMER_CASCADE_COLLECTIONS parity (client + server)', () => {
-  it('S5.1 client + server lists are identical (11 entries, same order)', () => {
+  it('S5.1 V74 server cascade aliased to canonical CUSTOMER_CASCADE_COLLECTIONS_FULL; client list = Phase 24.0 (11 entries) subset', () => {
+    // V74 (2026-05-16): server endpoint uses the V74 canonical 16-entry list.
+    // Client-side backendClient.js still uses the Phase 24.0 11-entry list
+    // for its inline cascade (e.g. UI optimistic deletes). The 11 must be a
+    // STRICT SUBSET of the 16 — V74 only ADDS to the cascade, never removes.
     const clientTxt = fs.readFileSync('src/lib/backendClient.js', 'utf-8');
-    const serverTxt = fs.readFileSync('api/admin/delete-customer-cascade.js', 'utf-8');
-    function parseList(src) {
+    const coreTxt = fs.readFileSync('src/lib/customerBackupCore.js', 'utf-8');
+    function parseInlineList(src) {
       const m = src.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-      if (!m) throw new Error('CUSTOMER_CASCADE_COLLECTIONS not found');
+      if (!m) return null;
       return (m[1].match(/'(be_[a-z_]+)'/g) || []).map(s => s.slice(1, -1));
     }
-    expect(parseList(clientTxt)).toEqual(parseList(serverTxt));
+    function parseFullList(src) {
+      const m = src.match(/CUSTOMER_CASCADE_COLLECTIONS_FULL\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
+      if (!m) throw new Error('CUSTOMER_CASCADE_COLLECTIONS_FULL not found in customerBackupCore.js');
+      return (m[1].match(/'(be_[a-z_]+)'/g) || []).map(s => s.slice(1, -1));
+    }
+    const clientList = parseInlineList(clientTxt);
+    const v74Full = parseFullList(coreTxt);
+    expect(v74Full.length).toBe(16); // V74: 11 Phase 24.0 + 5 CG
+    if (clientList) {
+      // Subset invariant: every client cascade entry must be in V74 full list.
+      for (const c of clientList) {
+        expect(v74Full).toContain(c);
+      }
+    }
   });
 });
 

@@ -47,11 +47,17 @@ describe('Phase 24.0 / F2 — cascade scope contract', () => {
     expect(entries.length).toBe(11);
   });
 
-  it('F2.2 server cascade list = 11 entries', () => {
-    const m = SERVER.match(/CUSTOMER_CASCADE_COLLECTIONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/);
-    expect(m).toBeTruthy();
-    const entries = m[1].match(/'be_[a-z_]+'/g) || [];
-    expect(entries.length).toBe(11);
+  it('F2.2 server cascade aliased to V74 CUSTOMER_CASCADE_COLLECTIONS_FULL (16 entries via canonical helper)', () => {
+    // V74 (2026-05-16): server endpoint imports the canonical 16-entry list
+    // from src/lib/customerBackupCore.js (CUSTOMER_CASCADE_COLLECTIONS_FULL)
+    // and re-aliases it as CUSTOMER_CASCADE_COLLECTIONS. The COL_TO_RESPONSE_KEY
+    // map carries the canonical 16-key mapping.
+    expect(SERVER).toMatch(/import\s*\{[\s\S]*?CUSTOMER_CASCADE_COLLECTIONS_FULL[\s\S]*?\}\s*from\s*['"]\.\.\/\.\.\/src\/lib\/customerBackupCore\.js['"]/);
+    expect(SERVER).toMatch(/const\s+CUSTOMER_CASCADE_COLLECTIONS\s*=\s*CUSTOMER_CASCADE_COLLECTIONS_FULL\s*;/);
+    const keyMap = SERVER.match(/COL_TO_RESPONSE_KEY\s*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
+    expect(keyMap).toBeTruthy();
+    const keyEntries = keyMap[1].match(/be_[a-z_]+\s*:/g) || [];
+    expect(keyEntries.length).toBe(16);
   });
 
   it('F2.3 cascade includes V36-quinquies be_course_changes (was missing pre-Phase-24)', () => {

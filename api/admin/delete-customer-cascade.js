@@ -1,45 +1,55 @@
-// ─── /api/admin/delete-customer-cascade — Phase 24.0 (2026-05-06) ────────────
+// ─── /api/admin/delete-customer-cascade — Phase 24.0 + V74 EXTENSION ────────
 //
-// Atomic customer-delete + 11-collection cascade + audit doc, gated on
-// admin claim OR customer_delete perm claim. Mirrors V35 cleanup-test-*
-// admin-SDK pattern.
+// Atomic customer-delete + cascade + audit doc, gated on admin claim OR
+// customer_delete perm claim. Mirrors V35 cleanup-test-* admin-SDK pattern.
 //
-// Spec: docs/superpowers/specs/2026-05-06-customer-delete-button-design.md §6.
+// Spec:
+//   Phase 24.0 (2026-05-06): docs/superpowers/specs/2026-05-06-customer-delete-button-design.md §6
+//   V74 (2026-05-16): docs/superpowers/specs/2026-05-16-customer-backup-restore-design.md §4.2
 //
-// Why server-side (not client-side scopedDataLayer call):
-//   1. Atomic: cascade + audit doc in single batched commit. Half-state on
-//      client crash impossible.
-//   2. Customer-doc snapshot capture happens with admin-SDK strong consistency
-//      (avoids onSnapshot lag).
-//   3. authorizedBy IDs are cross-validated against be_staff/be_doctors @
-//      customer.branchId server-side (admin can't fake names client-side).
+// V74 extension (autoBackupRef MODE; backward-compat preserved):
+//   - If request.autoBackupRef provided + action='delete', AV19 ELEVATED gate fires:
+//     * Verifies Storage backup file exists
+//     * Recomputes bodyHash + storageManifestHash + per-object SHA-256
+//     * BLOCKs delete on any mismatch (BACKUP_INTEGRITY_FAIL)
+//   - Cascade extended from 11 → 16 collections (CG: be_quotations, be_vendor_sales,
+//     be_online_sales, be_sale_insurance_claims, be_recalls)
+//   - Recursive deletion of 8 customer-attached subcollections (CS)
+//   - Storage object deletion under be_customers/{customerId}/ (CF)
+//   - chat_conversations matching customer via matchCustomerChatPredicate (CH)
+//   - Audit doc payload extended with subcollectionCounts, storageObjectCount,
+//     chatConversationCount, autoBackupRef, bodyHash, storageManifestHash
+//
+// Backward-compat: WITHOUT autoBackupRef, V74 still extends cascade to 16 +
+// subcoll + storage + chat but does NOT integrity-verify. UI MUST pass
+// autoBackupRef for strict mode; CLI scripts may bypass.
 //
 // Rule M compliance: writes audit doc to be_admin_audit/customer-delete-{id}-{ts}-{rand}.
 
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { randomBytes } from 'node:crypto';
+import { getStorage } from 'firebase-admin/storage';
+import { randomBytes, createHash } from 'node:crypto';
 import { verifyAdminOrPermissionToken } from './_lib/adminAuth.js';
+import {
+  CUSTOMER_CASCADE_COLLECTIONS_FULL,
+  T4_SUBCOLLECTIONS,
+  matchCustomerChatPredicate,
+} from '../../src/lib/customerBackupCore.js';
+import { validateCustomerBackupFile, computeStorageManifestHash } from '../../src/lib/customerBackupSchema.js';
+import { computeBodyHash, jsonReviverForNonFinite } from '../../src/lib/branchBackupSchema.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
+const BUCKET = `${APP_ID}.firebasestorage.app`;
+const STORAGE_PREFIX_CUSTOMER = 'be_customers';
 
-// MUST stay in lockstep with src/lib/backendClient.js
-// CUSTOMER_CASCADE_COLLECTIONS (Phase 24.0 cascade scope).
-const CUSTOMER_CASCADE_COLLECTIONS = Object.freeze([
-  'be_treatments',
-  'be_sales',
-  'be_deposits',
-  'be_wallets',
-  'be_wallet_transactions',
-  'be_memberships',
-  'be_point_transactions',
-  'be_appointments',
-  'be_course_changes',
-  'be_link_requests',
-  'be_customer_link_tokens',
-]);
+// V74: canonical 16-collection cascade list (extends Phase 24.0's 11).
+// Single source of truth lives in src/lib/customerBackupCore.js
+// (CUSTOMER_CASCADE_COLLECTIONS_FULL).
+const CUSTOMER_CASCADE_COLLECTIONS = CUSTOMER_CASCADE_COLLECTIONS_FULL;
 
 // Map collection name → cascadeCounts JSON key (camelCase for response).
+// Extended in V74 for CG (5 new entries).
 const COL_TO_RESPONSE_KEY = Object.freeze({
   be_treatments: 'treatments',
   be_sales: 'sales',
@@ -52,9 +62,15 @@ const COL_TO_RESPONSE_KEY = Object.freeze({
   be_course_changes: 'courseChanges',
   be_link_requests: 'linkRequests',
   be_customer_link_tokens: 'customerLinkTokens',
+  // V74 CG additions
+  be_quotations: 'quotations',
+  be_vendor_sales: 'vendorSales',
+  be_online_sales: 'onlineSales',
+  be_sale_insurance_claims: 'saleInsuranceClaims',
+  be_recalls: 'recalls',
 });
 
-let cachedDb = null;
+let cachedDb = null, cachedBucket = null;
 function getAdminFirestore() {
   if (cachedDb) return cachedDb;
   let app;
@@ -72,10 +88,19 @@ function getAdminFirestore() {
         clientEmail,
         privateKey: rawKey.replace(/\\n/g, '\n'),
       }),
+      storageBucket: BUCKET,
     });
   }
   cachedDb = getFirestore(app);
   return cachedDb;
+}
+
+// V74 — lazy Storage bucket accessor (needed for autoBackupRef verify + CF wipe)
+function getAdminBucket() {
+  if (cachedBucket) return cachedBucket;
+  getAdminFirestore(); // ensures app initialized
+  cachedBucket = getStorage(getApp()).bucket(BUCKET);
+  return cachedBucket;
 }
 
 function dataPath(db) {
@@ -152,6 +177,95 @@ export function classifyOrigin(customer) {
   return customer?.isManualEntry === true ? 'manual' : 'proclinic-cloned';
 }
 
+/**
+ * V74 — AV19 elevated integrity verification for autoBackupRef.
+ * Verifies:
+ *   1. Storage file exists at backupRef
+ *   2. JSON body parses
+ *   3. Recomputed bodyHash matches meta.bodyHash
+ *   4. Recomputed storageManifestHash matches meta.storageManifestHash
+ *   5. Every Storage object in manifest exists at backup path + per-object SHA-256 matches
+ *
+ * @returns {Promise<{ok: true, meta: object, file: object} | {ok: false, error: string, detail?: any}>}
+ */
+export async function verifyAutoBackupIntegrity({ bucket, backupRef }) {
+  if (!backupRef || typeof backupRef !== 'string') {
+    return { ok: false, error: 'AUTO_BACKUP_REF_MISSING' };
+  }
+  // 1. Existence
+  const [exists] = await bucket.file(backupRef).exists();
+  if (!exists) return { ok: false, error: 'AUTO_BACKUP_NOT_FOUND', detail: { backupRef } };
+
+  // 2. Download + parse
+  let file;
+  try {
+    const [buf] = await bucket.file(backupRef).download();
+    file = JSON.parse(buf.toString('utf8'), jsonReviverForNonFinite);
+  } catch (e) {
+    return { ok: false, error: 'BACKUP_JSON_PARSE_FAILED', detail: { message: e.message } };
+  }
+
+  // 3. Schema validate
+  try {
+    validateCustomerBackupFile(file);
+  } catch (e) {
+    return { ok: false, error: 'BACKUP_SCHEMA_INVALID', detail: { message: e.message } };
+  }
+
+  // 4. bodyHash recompute
+  const hashedBody = { ...(file.collections || {}) };
+  for (const [subName, docs] of Object.entries(file.subcollections || {})) {
+    hashedBody[`__sub__${subName}`] = Array.isArray(docs) ? docs : [];
+  }
+  hashedBody.__chat__ = Array.isArray(file.chatConversations) ? file.chatConversations : [];
+  const recomputedBodyHash = computeBodyHash(hashedBody);
+  if (file.meta.bodyHash && recomputedBodyHash !== file.meta.bodyHash) {
+    return {
+      ok: false,
+      error: 'BACKUP_BODY_HASH_MISMATCH',
+      detail: { expected: file.meta.bodyHash, recomputed: recomputedBodyHash },
+    };
+  }
+
+  // 5. storageManifestHash recompute
+  const manifest = file.meta.storageManifest || [];
+  const recomputedManifestHash = computeStorageManifestHash(manifest);
+  if (file.meta.storageManifestHash && recomputedManifestHash !== file.meta.storageManifestHash) {
+    return {
+      ok: false,
+      error: 'BACKUP_STORAGE_MANIFEST_HASH_MISMATCH',
+      detail: { expected: file.meta.storageManifestHash, recomputed: recomputedManifestHash },
+    };
+  }
+
+  // 6. Per-Storage-object SHA-256 verify (parallel)
+  // backup tree path = `${backupRefPrefix}/storage/${entry.path}`
+  const backupPrefix = backupRef.replace(/\/backup\.json$/, '');
+  const objectErrors = [];
+  await Promise.all(manifest.map(async (entry) => {
+    const objPath = `${backupPrefix}/storage/${entry.path}`;
+    try {
+      const [objExists] = await bucket.file(objPath).exists();
+      if (!objExists) {
+        objectErrors.push({ path: entry.path, error: 'STORAGE_OBJECT_MISSING' });
+        return;
+      }
+      const [objBuf] = await bucket.file(objPath).download();
+      const sha256 = createHash('sha256').update(objBuf).digest('hex');
+      if (sha256 !== entry.sha256) {
+        objectErrors.push({ path: entry.path, error: 'STORAGE_OBJECT_SHA256_MISMATCH', expected: entry.sha256, actual: sha256 });
+      }
+    } catch (e) {
+      objectErrors.push({ path: entry.path, error: e.message });
+    }
+  }));
+  if (objectErrors.length > 0) {
+    return { ok: false, error: 'BACKUP_STORAGE_INTEGRITY_FAIL', detail: { objectErrors } };
+  }
+
+  return { ok: true, meta: file.meta, file };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -184,9 +298,15 @@ export default async function handler(req, res) {
   }
 
   // Phase 24.0 Issue #1 — action discriminator. action='preview' returns the
-  // 11 cascade counts WITHOUT deleting anything (no audit doc, no batch
+  // cascade counts WITHOUT deleting anything (no audit doc, no batch
   // commit). Default ('delete' or absent) preserves existing behavior.
   const action = String(req.body?.action || 'delete').trim();
+
+  // V74 — Optional autoBackupRef (AV19 elevated mode). When provided on
+  // action='delete', server verifies integrity BEFORE wipe. Pass-through
+  // additive — Phase 24.0 callers without autoBackupRef still work but
+  // skip the integrity gate.
+  const autoBackupRef = req.body?.autoBackupRef ? String(req.body.autoBackupRef).trim() : '';
 
   if (action === 'preview') {
     try {
@@ -287,7 +407,24 @@ export default async function handler(req, res) {
       canonicalAuth.authorizerRole = 'staff';
     }
 
-    // Query 11 cascade collections in parallel; collect refs + counts.
+    // V74 — AV19 elevated integrity gate. If autoBackupRef provided, verify
+    // the backup file BEFORE any wipe. BLOCKs on any mismatch.
+    let v74BackupMeta = null;
+    if (autoBackupRef) {
+      const bucket = getAdminBucket();
+      const verifyResult = await verifyAutoBackupIntegrity({ bucket, backupRef: autoBackupRef });
+      if (!verifyResult.ok) {
+        return res.status(400).json({
+          success: false,
+          error: verifyResult.error,
+          detail: verifyResult.detail,
+          autoBackupRef,
+        });
+      }
+      v74BackupMeta = verifyResult.meta;
+    }
+
+    // V74 — Query 16 cascade collections in parallel (Phase 24.0's 11 + CG's 5).
     const queryResults = await Promise.all(
       CUSTOMER_CASCADE_COLLECTIONS.map(name =>
         data.collection(name).where('customerId', '==', customerId).get(),
@@ -300,6 +437,30 @@ export default async function handler(req, res) {
       cascadeCounts[COL_TO_RESPONSE_KEY[name]] = snap.size;
       snap.docs.forEach(d => refsToDelete.push(d.ref));
     });
+
+    // V74 — Query 8 customer-attached subcollections (parallel) + collect refs.
+    const subQueryResults = await Promise.all(
+      T4_SUBCOLLECTIONS.map(subName =>
+        data.collection('be_customers').doc(customerId).collection(subName).get(),
+      ),
+    );
+    const subcollectionCounts = {};
+    T4_SUBCOLLECTIONS.forEach((subName, idx) => {
+      const snap = subQueryResults[idx];
+      subcollectionCounts[subName] = snap.size;
+      snap.docs.forEach(d => refsToDelete.push(d.ref));
+    });
+
+    // V74 — Query chat_conversations matching this customer (via Phase BS chat-link predicate).
+    const chatSnap = await data.collection('chat_conversations').get();
+    const chatMatching = chatSnap.docs.filter(d => matchCustomerChatPredicate({ id: d.id, ...d.data() }, customer));
+    const chatConversationCount = chatMatching.length;
+    chatMatching.forEach(d => refsToDelete.push(d.ref));
+
+    // V74 — List Storage objects under be_customers/{customerId}/ for post-batch deletion.
+    const v74Bucket = getAdminBucket();
+    const [v74StorageFiles] = await v74Bucket.getFiles({ prefix: `${STORAGE_PREFIX_CUSTOMER}/${customerId}/` });
+    const storageObjectCount = v74StorageFiles.length;
 
     // Build audit doc payload.
     const fullName = [
@@ -385,6 +546,13 @@ export default async function handler(req, res) {
       },
       performedAt: new Date().toISOString(),
       cascadeCounts,
+      // V74 — extended counts + integrity refs
+      subcollectionCounts,
+      chatConversationCount,
+      storageObjectCount,
+      autoBackupRef: autoBackupRef || null,
+      autoBackupBodyHash: v74BackupMeta?.bodyHash || null,
+      autoBackupStorageManifestHash: v74BackupMeta?.storageManifestHash || null,
       customerSnapshot: buildSnapshot(customer),
     };
 
@@ -409,10 +577,28 @@ export default async function handler(req, res) {
     inBatch += 1;
     await batchOp.commit();
 
+    // V74 — Storage object deletion (separate from Firestore batch). Best-effort
+    // parallel deletion. If any object fails, log + continue (the Firestore-side
+    // cascade is committed; we don't want to roll back over Storage hiccup).
+    const storageDeleteErrors = [];
+    await Promise.all(v74StorageFiles.map(async (file) => {
+      try {
+        await file.delete();
+      } catch (e) {
+        storageDeleteErrors.push({ path: file.name, error: e.message });
+      }
+    }));
+
     return res.status(200).json({
       success: true,
       customerId,
       cascadeCounts,
+      // V74 — extended response
+      subcollectionCounts,
+      chatConversationCount,
+      storageObjectCount,
+      storageDeleteErrors: storageDeleteErrors.length > 0 ? storageDeleteErrors : null,
+      autoBackupRef: autoBackupRef || null,
       auditDocId: auditId,
       totalDeletes,
     });
