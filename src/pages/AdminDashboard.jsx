@@ -514,21 +514,47 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [autoExpandTreatmentId, setAutoExpandTreatmentId] = useState('');
 
   // ─── Chat schedule: check if within operating hours ─────
+  // V77-ter (2026-05-16 EOD+1) — Fix V12 multi-reader-sweep + V51 per-branch
+  // migration gap. V51 BranchFormModal saves chat hours under
+  // be_branches.settings.chatHours.{alwaysOn,monFri,satSun} and
+  // mergeBranchIntoClinic exposes them as cs.chatHoursAlwaysOn +
+  // cs.chatHoursMonFri.{open,close} + cs.chatHoursSatSun.{open,close}.
+  // AdminDashboard isChatActive was still reading the OLD pre-V51 field
+  // names (cs.chatAlwaysOn / cs.chatOpenTime / cs.chatCloseTime / *Weekend)
+  // which are now undefined → fell back to default '10:00'-'19:00' →
+  // chime gated off after 19:00 even when admin configured 11:15-20:45.
+  // User report: "เสียงต่อเนื่องเมื่อไม่ได้เคลีย Chat หายไป" (locked V51
+  // migration gap; AV29-class per-branch-settings sweep miss).
+  // Legacy field fallback retained for env where merge hasn't propagated.
   const isChatActive = useMemo(() => {
-    if (cs.chatAlwaysOn) return true;
+    const alwaysOn = (typeof cs.chatHoursAlwaysOn === 'boolean')
+      ? cs.chatHoursAlwaysOn
+      : !!cs.chatAlwaysOn;
+    if (alwaysOn) return true;
     const now = new Date();
     const bkk = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
     const day = bkk.getDay(); // 0=Sun, 6=Sat
     const isWeekend = day === 0 || day === 6;
-    const openStr = isWeekend ? (cs.chatOpenTimeWeekend || '10:00') : (cs.chatOpenTime || '10:00');
-    const closeStr = isWeekend ? (cs.chatCloseTimeWeekend || '17:00') : (cs.chatCloseTime || '19:00');
+    const monFri = cs.chatHoursMonFri || {};
+    const satSun = cs.chatHoursSatSun || {};
+    const openStr = isWeekend
+      ? (satSun.open || cs.chatOpenTimeWeekend || '10:00')
+      : (monFri.open || cs.chatOpenTime || '10:00');
+    const closeStr = isWeekend
+      ? (satSun.close || cs.chatCloseTimeWeekend || '19:00')
+      : (monFri.close || cs.chatCloseTime || '19:00');
     const [oh, om] = openStr.split(':').map(Number);
     const [ch, cm] = closeStr.split(':').map(Number);
     const nowMin = bkk.getHours() * 60 + bkk.getMinutes();
     const openMin = oh * 60 + om;
     const closeMin = ch * 60 + cm;
     return nowMin >= openMin && nowMin < closeMin;
-  }, [cs.chatAlwaysOn, cs.chatOpenTime, cs.chatCloseTime, cs.chatOpenTimeWeekend, cs.chatCloseTimeWeekend, currentTime]);
+  }, [
+    cs.chatHoursAlwaysOn, cs.chatHoursMonFri, cs.chatHoursSatSun,
+    cs.chatAlwaysOn, cs.chatOpenTime, cs.chatCloseTime,
+    cs.chatOpenTimeWeekend, cs.chatCloseTimeWeekend,
+    currentTime,
+  ]);
 
   // ─── Chat alert sound: fires on UNREAD count, never on total conv count ─
   const chatIsPlayingRef = useRef(false);
