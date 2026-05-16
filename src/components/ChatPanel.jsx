@@ -99,167 +99,16 @@ export function playAlertSound() {
   }
 }
 
-// ─── Connection Settings Sub-panel ─────────────────────────────────────────
-
-function ConnectionSettings({ db, appId, chatConfig, onBack }) {
-  const [line, setLine] = useState({
-    channelAccessToken: chatConfig?.line?.channelAccessToken || '',
-    channelSecret: chatConfig?.line?.channelSecret || '',
-    enabled: chatConfig?.line?.enabled ?? false,
-  });
-  const [fb, setFb] = useState({
-    pageAccessToken: chatConfig?.facebook?.pageAccessToken || '',
-    appSecret: chatConfig?.facebook?.appSecret || '',
-    verifyToken: chatConfig?.facebook?.verifyToken || '',
-    pageId: chatConfig?.facebook?.pageId || '',
-    enabled: chatConfig?.facebook?.enabled ?? false,
-  });
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [showLineToken, setShowLineToken] = useState(false);
-  const [showLineSecret, setShowLineSecret] = useState(false);
-  const [showFbToken, setShowFbToken] = useState(false);
-  const [showFbSecret, setShowFbSecret] = useState(false);
-
-  const webhookBase = typeof window !== 'undefined' ? window.location.origin : '';
-
-  async function handleSave() {
-    setSaving(true);
-    setMsg('');
-    try {
-      const lineSave = { ...line };
-      if (lineSave.channelAccessToken && lineSave.channelSecret) lineSave.enabled = true;
-      const fbSave = { ...fb };
-      if (fbSave.pageAccessToken && fbSave.appSecret && fbSave.pageId) fbSave.enabled = true;
-
-      await setDoc(doc(db, `artifacts/${appId}/public/data/clinic_settings`, 'chat_config'), {
-        line: lineSave,
-        facebook: fbSave,
-        updatedAt: new Date().toISOString(),
-      });
-      setLine(lineSave);
-      setFb(fbSave);
-      setMsg('✓ บันทึกสำเร็จ');
-    } catch (err) {
-      setMsg(`✗ ${err.message}`);
-    } finally {
-      setSaving(false);
-      setTimeout(() => setMsg(''), 5000);
-    }
-  }
-
-  const inputCls = 'w-full bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-heading)] rounded-lg px-3 py-2.5 outline-none transition-all text-sm focus:border-[var(--accent)] font-mono';
-  const labelCls = 'block text-xs font-bold text-[var(--tx-muted)] mb-1 uppercase tracking-wider';
-  const sectionCls = 'p-4 rounded-xl border border-[var(--bd)] bg-[var(--bg-card)]';
-
-  return (
-    <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors mb-2">
-        <ArrowLeft size={14} /> กลับ
-      </button>
-
-      {/* LINE OA */}
-      <div className={sectionCls}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: LINE_COLOR }}>
-              <MessageCircle size={13} className="text-white" />
-            </div>
-            <h3 className="text-sm font-bold text-[var(--tx-heading)]">LINE Official Account</h3>
-          </div>
-          <button onClick={() => setLine(p => ({ ...p, enabled: !p.enabled }))}
-            className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${line.enabled ? 'text-white' : 'bg-gray-800 text-gray-500'}`}
-            style={line.enabled ? { backgroundColor: LINE_COLOR } : {}}>
-            {line.enabled ? 'เปิด' : 'ปิด'}
-          </button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Channel Access Token</label>
-            <div className="relative">
-              <input type={showLineToken ? 'text' : 'password'} value={line.channelAccessToken} onChange={e => setLine(p => ({ ...p, channelAccessToken: e.target.value }))} className={inputCls} placeholder="ใส่ Channel Access Token" />
-              <button onClick={() => setShowLineToken(!showLineToken)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]">{showLineToken ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Channel Secret</label>
-            <div className="relative">
-              <input type={showLineSecret ? 'text' : 'password'} value={line.channelSecret} onChange={e => setLine(p => ({ ...p, channelSecret: e.target.value }))} className={inputCls} placeholder="ใส่ Channel Secret" />
-              <button onClick={() => setShowLineSecret(!showLineSecret)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]">{showLineSecret ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Webhook URL (ใส่ใน LINE Developer Console)</label>
-            <div className="flex items-center gap-2">
-              <input readOnly value={`${webhookBase}/api/webhook/line`} className={`${inputCls} text-xs opacity-70`} />
-              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/line`)} className="text-xs font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Facebook */}
-      <div className={sectionCls}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: FB_COLOR }}>
-              <MessageCircle size={13} className="text-white" />
-            </div>
-            <h3 className="text-sm font-bold text-[var(--tx-heading)]">Facebook Messenger</h3>
-          </div>
-          <button onClick={() => setFb(p => ({ ...p, enabled: !p.enabled }))}
-            className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all ${fb.enabled ? 'text-white' : 'bg-gray-800 text-gray-500'}`}
-            style={fb.enabled ? { backgroundColor: FB_COLOR } : {}}>
-            {fb.enabled ? 'เปิด' : 'ปิด'}
-          </button>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className={labelCls}>Page Access Token</label>
-            <div className="relative">
-              <input type={showFbToken ? 'text' : 'password'} value={fb.pageAccessToken} onChange={e => setFb(p => ({ ...p, pageAccessToken: e.target.value }))} className={inputCls} placeholder="ใส่ Page Access Token" />
-              <button onClick={() => setShowFbToken(!showFbToken)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]">{showFbToken ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>App Secret</label>
-            <div className="relative">
-              <input type={showFbSecret ? 'text' : 'password'} value={fb.appSecret} onChange={e => setFb(p => ({ ...p, appSecret: e.target.value }))} className={inputCls} placeholder="ใส่ App Secret" />
-              <button onClick={() => setShowFbSecret(!showFbSecret)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tx-muted)]">{showFbSecret ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Page ID</label>
-              <input value={fb.pageId} onChange={e => setFb(p => ({ ...p, pageId: e.target.value }))} className={inputCls} placeholder="Page ID" />
-            </div>
-            <div>
-              <label className={labelCls}>Verify Token</label>
-              <input value={fb.verifyToken} onChange={e => setFb(p => ({ ...p, verifyToken: e.target.value }))} className={inputCls} placeholder="ตั้งเอง (อะไรก็ได้)" />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Webhook URL (ใส่ใน Facebook App Dashboard)</label>
-            <div className="flex items-center gap-2">
-              <input readOnly value={`${webhookBase}/api/webhook/facebook`} className={`${inputCls} text-xs opacity-70`} />
-              <button onClick={() => navigator.clipboard.writeText(`${webhookBase}/api/webhook/facebook`)} className="text-xs font-bold px-2 py-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] whitespace-nowrap">Copy</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Save */}
-      <div className="flex items-center gap-3">
-        <button onClick={handleSave} disabled={saving}
-          className="px-5 py-2.5 rounded-lg text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-[var(--accent)] text-white hover:brightness-110 disabled:opacity-50">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          {saving ? 'กำลังบันทึก...' : 'บันทึก'}
-        </button>
-        {msg && <span className={`text-sm font-bold ${msg.startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>{msg}</span>}
-      </div>
-    </div>
-  );
-}
+// ─── Connection Settings Sub-panel — REMOVED V77 (2026-05-16 EOD+1) ────────
+// Legacy single-tenant chat_config UI. Admin now configures LINE+FB PER-BRANCH
+// via Backend → ตั้งค่า LINE OA (LineSettingsTab) + ตั้งค่า FB Page
+// (FbSettingsTab) tabs. Per user directive: "ถ้ามึงจะไปดึงข้อมูลจาก tab fb
+// และ line ของแต่ละสาขา ใน backend แล้ว มึงก็ตัดหน้านี้ที่กุส่งให้ออกไป
+// เพราะไม่จำเป็นแล้ว ไปดึงเอาใน Backend ที่เดียวเลย". Old function deleted
+// (lines 104-262); ⚙ button + setShowSettings(true) call sites swept below.
+// Backwards-compat: clinic_settings/chat_config doc remains in Firestore for
+// auto-seed migration into per-branch be_fb_configs/{nakhonratchasima} on first
+// FbSettingsTab open (V75 fbConfigClient auto-seed contract preserved).
 
 // ─── Chat Detail View ──────────────────────────────────────────────────────
 
@@ -473,7 +322,9 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const { branchId: selectedBranchId } = useSelectedBranch();
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
-  const [showSettings, setShowSettings] = useState(false);
+  // V77 (2026-05-16 EOD+1) — showSettings state REMOVED. Legacy frontend
+  // ConnectionSettings sub-panel deleted; admin configures LINE+FB per-branch
+  // via Backend → ตั้งค่า LINE OA + ตั้งค่า FB Page tabs.
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyPage, setHistoryPage] = useState(0);
@@ -659,14 +510,11 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
     return d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
   }
 
-  // ─── Settings view ─────────────────────────────────────────────────────
-  if (showSettings) {
-    return (
-      <div className="p-4 max-w-2xl mx-auto">
-        <ConnectionSettings db={db} appId={appId} chatConfig={chatConfig} onBack={() => setShowSettings(false)} />
-      </div>
-    );
-  }
+  // ─── Settings view REMOVED V77 (2026-05-16 EOD+1) ──────────────────────
+  // Admin configures LINE+FB per-branch via Backend → ตั้งค่า LINE OA +
+  // ตั้งค่า FB Page tabs. clinic_settings/chat_config doc retained for
+  // V75 fbConfigClient auto-seed migration but NO longer admin-editable
+  // from frontend.
 
   // ─── Chat detail view ───────────────────────────────────────────────
   // Keep selectedConv in sync with realtime data
@@ -725,10 +573,8 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
             title="ประวัติแชท">
             <History size={16} />
           </button>
-          <button onClick={() => setShowSettings(true)}
-            className="p-2 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] transition-colors" title="ตั้งค่าการเชื่อมต่อ">
-            <Settings size={16} />
-          </button>
+          {/* V77 (2026-05-16 EOD+1) — ⚙ Settings button REMOVED. Admin configures
+              LINE+FB per-branch via Backend → ตั้งค่า LINE OA / ตั้งค่า FB Page. */}
         </div>
       </div>
       {/* V75 Item 4 — Muted-state banner. Visible only when chat sound muted on this device. */}
@@ -881,12 +727,11 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
           <div className="w-16 h-16 rounded-full bg-[var(--bg-hover)] flex items-center justify-center mx-auto mb-4">
             <MessageCircle size={28} className="text-[var(--tx-muted)]" />
           </div>
-          <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-2">ยังไม่ได้เชื่อมต่อแพลตฟอร์ม</h3>
-          <p className="text-xs text-[var(--tx-muted)] mb-4">เชื่อมต่อ LINE OA หรือ Facebook Page เพื่อรับแชทในที่เดียว</p>
-          <button onClick={() => setShowSettings(true)}
-            className="px-4 py-2 rounded-lg text-sm font-bold bg-[var(--accent)] text-white hover:brightness-110 transition-all">
-            <Settings size={14} className="inline mr-1" /> ตั้งค่าการเชื่อมต่อ
-          </button>
+          <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-2">ยังไม่ได้เชื่อมต่อแพลตฟอร์มสำหรับสาขานี้</h3>
+          <p className="text-xs text-[var(--tx-muted)] mb-4">
+            กรุณาไปที่ <span className="font-bold text-[var(--accent)]">หลังบ้าน → ตั้งค่า LINE OA</span> หรือ
+            <span className="font-bold text-[var(--accent)]"> ตั้งค่า FB Page</span> เพื่อตั้งค่าแชทสำหรับสาขานี้
+          </p>
         </div>
       )}
 
