@@ -63,6 +63,7 @@ const COLLECTION_MATRIX = {
   // a sanctioned exception (universal — SG10) because recalls follow
   // customer across branches.
   'be_recalls':            { scope: 'branch',         source: 'RecallCreateModal; createRecall + createRecallPair both call _resolveBranchIdForWrite. Per-customer reads are universal (SG10).' },
+  'be_staff_chat_messages':{ scope: 'branch',         source: 'V73 (2026-05-16) — staff in-branch chat. addStaffChatMessage stamps branchId from useStaffChat hook bound to selectedBranchId. listenToStaffChatMessages safe-by-default (BS-13).' },
 
   // ─── Global (no branchId) ──
   'be_customers':          { scope: 'global',  reason: 'Customer can visit any branch' },
@@ -174,6 +175,7 @@ describe('BC2: branch-scoped collections — branchId presence per scope class',
     'be_stock_transfers':    'stockTransferDoc',
     'be_stock_withdrawals':  'stockWithdrawalDoc',
     'be_recalls':            'recallDoc',               // Phase 29 (2026-05-14) — createRecall + createRecallPair stamp via _resolveBranchIdForWrite
+    'be_staff_chat_messages':'staffChatMessageDoc',     // V73 (2026-05-16) — addStaffChatMessage setDoc(staffChatMessageDoc(id), {...branchId})
   };
 
   for (const coll of directBranch) {

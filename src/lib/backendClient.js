@@ -2662,6 +2662,8 @@ export function listenToStaffChatMessages({ branchId, allBranches = false, limit
 export async function addStaffChatMessage(messageDoc) {
   if (!messageDoc.id || !messageDoc.branchId) throw new Error('STAFF_CHAT_MISSING_REQUIRED_FIELDS');
   await setDoc(staffChatMessageDoc(messageDoc.id), messageDoc);
+  // V73 BSA Rule L lock: messageDoc.branchId is stamped by useStaffChat hook
+  // bound to selectedBranchId — verified by branch-collection-coverage BC2.direct.
   return messageDoc.id;
 }
 
