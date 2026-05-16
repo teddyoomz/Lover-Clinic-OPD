@@ -185,7 +185,7 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
             value={text}
             onChange={onChange}
             onKeyDown={onKeyDown}
-            placeholder="พิมพ์ข้อความ... (Enter = ส่ง · Shift+Enter = ขึ้นบรรทัด)"
+            placeholder="พิมพ์ข้อความ..."
             rows={1}
             className="w-full resize-none px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-sm text-[var(--tx-primary)] focus:outline-none focus:border-rose-500 max-h-24"
           />

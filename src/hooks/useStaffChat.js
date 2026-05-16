@@ -52,6 +52,11 @@ export function useStaffChat() {
   const [namePickerOpen, setNamePickerOpen] = useState(false);
   const [pendingSendPayload, setPendingSendPayload] = useState(null);
   const [error, setError] = useState(null);
+  // V73 L1 fix (2026-05-18, AV51) — Loading state for initial listener subscribe.
+  // Pre-fix: panel rendered empty immediately, no way to distinguish "no messages
+  // yet" from "listener errored" from "listener still subscribing". Bug D root
+  // cause was silent error swallowing — surface loading + error to UI.
+  const [loading, setLoading] = useState(true);
   // V73 Feature C (T12) — Reply-to-message: stash the message being replied to
   // so the composer can render a quote strip and the next send() includes replyTo.
   const [replyingTo, setReplyingTo] = useState(null);
@@ -73,10 +78,16 @@ export function useStaffChat() {
   );
 
   useEffect(() => {
-    if (!selectedBranchId) return;
+    if (!selectedBranchId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);  // V73 L1 fix — clear prior-branch error on resubscribe
     const unsub = listenToStaffChatMessages(
       { branchId: selectedBranchId, limitCount: 50 },
       (docs) => {
+        setLoading(false);
         setMessages(docs);
         // Detect newly-arrived non-own messages.
         const newMsgs = docs.filter(m => !lastSeenIdsRef.current.has(m.id));
@@ -113,7 +124,16 @@ export function useStaffChat() {
           }
         }
       },
-      (err) => setError(String(err?.message || err)),
+      (err) => {
+        // V73 L1 fix (Bug D, AV51) — surface listener errors instead of
+        // silently swallowing. Pre-fix: PERMISSION_DENIED / index-not-built /
+        // branch-mismatch all resulted in empty panel with no diagnostic.
+        // Now logs to console AND sets error state which Panel renders as banner.
+        // eslint-disable-next-line no-console
+        console.warn('[staff-chat] listener error:', err);
+        setError(String(err?.message || err));
+        setLoading(false);
+      },
     );
     return () => { unsub?.(); };
   }, [selectedBranchId, deviceId]);
@@ -186,7 +206,7 @@ export function useStaffChat() {
 
   return {
     messages, minimized, unreadCount,
-    deviceId, error,
+    deviceId, error, loading,
     namePickerOpen, setNamePickerOpen,
     send, confirmName, expand, minimize,
     recentMentionCandidates,

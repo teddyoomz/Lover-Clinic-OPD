@@ -34,8 +34,18 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           <span className="text-[var(--tx-muted)] italic">{message.replyTo.snippet}</span>
         </div>
       )}
-      {!isOwn && (
-        <div className="text-[10px] font-bold text-sky-700 dark:text-sky-300 mb-0.5 px-1">
+      {/* V73 L1 fix (2026-05-18) — show displayName on ALL messages incl. own.
+          Pre-fix: own messages had no name → user-curse report "ชื่อของคนส่งไม่
+          แสดงในแชท". Color-coded: rose for own, sky for others. */}
+      {message.displayName && (
+        <div
+          data-testid={`staff-chat-message-name-${message.id}`}
+          className={`text-[10px] font-bold mb-0.5 px-1 ${
+            isOwn
+              ? 'text-rose-700 dark:text-rose-300'
+              : 'text-sky-700 dark:text-sky-300'
+          }`}
+        >
           {message.displayName}
         </div>
       )}
