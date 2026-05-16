@@ -66,7 +66,7 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+2 — **V81-fix3 archiver runtime-dep FIXED + SESSION_HANDOFF.md shrunk under 200 KB hard cap**
+- **Date last updated**: 2026-05-17 EOD+2 LATE+2 — **V81-fix3 + V81-fix4 + V81-fix5 LIVE; 10/10 stress cycles CLEAN; production-grade complete**
 - **Branch**: `master`
 - **Last commit (pre-this-turn)**: `1686b32 docs+fix(V81-fix2): EOD+1 — Replace ack-gate + emergency owner-restore + AV66`
 - **This turn's working changes (uncommitted)**: `package.json` (archiver deps↔devDeps swap) + `tests/v81-fix3-archiver-runtime-dependency.test.js` (NEW, 4 tests AV67.1-AV67.4) + `.agents/skills/audit-anti-vibe-code/SKILL.md` (AV67 invariant) + `SESSION_HANDOFF.md` (shrunk 317.5 KB → 38.9 KB) + `.agents/sessions/session-handoff-archive.md` (NEW — older blocks)
@@ -76,6 +76,34 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **V81-fix2 ack-gate** (still patched, not deployed): 3-layer Replace mode gate (UI checkbox + endpoint 400 + executor double-check) + force `sendPasswordResetEmails=true`. AV66 codified.
 - **V81-fix3 (NEW THIS TURN)**: backup Download 500 root cause = `archiver` was in `devDependencies` → Vercel `npm install --production` skips it → endpoint module-load fails → generic HTML "A server error has occurred…" → client `await res.json()` → `Unexpected token 'A'`. Fix: move `archiver@^8.0.0` from `devDependencies` to `dependencies` in `package.json`. AV67 invariant codified + 4 regression tests lock the pattern for all api/** files. Cross-file grep confirmed `archiver` is the ONLY devDep import in `api/**`.
 - **🚨 NEW BUG fixed** (was open): backup Download 500 — V81-fix3 resolves it. Deploy required to verify.
+
+### Session 2026-05-17 EOD+2 LATE — V81-fix3 + V81-fix4 + V81-fix5 production-grade ship (8 issues + 10/10 stress)
+
+User session invoked /systematic-debugging with 6 user-reported issues + full deploy authority. Cumulative shipment:
+
+- **V81-fix3** — Bug A1 Download "Unexpected token 'A'...": archiver in devDeps → Vercel `npm install --production` skips → HTML error. Fix: move to dependencies. AV67 + 4 tests.
+- **V81-fix4** — Bugs A2/A3 + Features C/D/F:
+  - A2 "0 MB" display: list endpoint sums real folder size; UI shows MB/KB/B. AV69 + 5 tests. Real prod verified 6.91–7.03 MB.
+  - A3 Restore error: Auth-preserve removes slowest restore path + ack-gate failure mode.
+  - C Per-customer UI removed: V77 "📦 สำรองลูกค้าทุกคน" + V74 "💾 สำรอง" + 'customer' filter chip all deleted. V81 whole-system is canonical. AV70 + 7 tests.
+  - D Cleanup script: `scripts/v81-fix4-purge-customer-backups.mjs --apply` ran on prod — 309 per-customer backups purged (1.6 MB freed); audit doc emitted.
+  - F Auth preservation: Replace mode defaults `replaceAuthFromBackup: false` → Auth wipe + Auth restore SKIPPED → 100% login + session + password preservation. AV68 + 11 tests.
+- **V81-fix5** — Emergent bug "หน้าข้อมูลลูกค้าขึ้นสาขามั่ว" surfaced post-V81-fix4 deploy:
+  - Rule R diag confirmed NOT corruption — 99.2% of customers are NAKHON since V20 multi-branch migration. The bug was raw `BR-...` ID displayed in chip instead of branch NAME.
+  - Fix: CustomerListTab loads branches in parallel → builds `Map<branchId, {id, name}>` → passes `branchesMap` prop. CustomerCard resolves name via `map.get(bid)?.name`. AV71 + 10 tests.
+  - Cleanup: deleted V81-fix1 leftover test branch `TEST-V81-TS-BR-*` + re-stamped 1 orphan to NAKHON.
+
+**Stress test (Feature E)** — `scripts/v81-fix5-stress-with-user-simulation.mjs --cycles=10`: **10/10 CLEAN**. Each cycle creates 2-3 test customers in non-NAKHON branches → backup whole-system → restore Replace (Auth preserved) → verifies doc counts equal + Auth count equal + sample uids preserved + test customers' branchId intact + branchesMap resolves to branch NAME. Cleanup per cycle (zero pollution). Total ~45 min on real prod.
+
+**Final state verified**: 391 customers post-stress (= 391 pre-stress; perfect preservation), 0 orphan branchIds, 8 V81 backups all show realistic 6.91–7.03 MB sizes (Bug A2 verified live), build clean.
+
+**Architectural locks**: V81 Whole-System Backup is THE canonical backup mechanism. Replace mode preserves Auth by default; cross-project clone opt-in. Customer cards display branch NAME via parent-injected branchesMap (no doc-level denormalization). AV19 + AV62 + AV65 + AV67 + AV68 + AV69 + AV70 + AV71 = full V81 invariant stack.
+
+**Lessons**: (a) Display fallback chains hide schema gaps — UI surfaces MUST resolve IDs → names via lookup, never display raw IDs. (b) Diagnose before assuming corruption — Rule R diag in <5 min distinguished "preexisting state + raw-ID render" from "restore corruption". (c) Admin-SDK stress loop must include rendering checks — V81-fix5 stress loop adds branchesMap resolution + User Simulation (create test customers in non-NAKHON branches) to exercise the full create→backup→restore→display chain.
+
+**Test cumulative**: 216 V81-family tests green (172 prior + 4 AV67 + 30 AV68/69/70/FD + 10 AV71). Build clean (BackendDashboard chunk 940.04 KB).
+
+Per Rule Q V66: V81-fix3/4/5 L2 verified via admin-SDK + Rule R diags + 10/10 stress. L1 hands-on = user (Download button → JSON, MB display → real bytes, "Auth preserved (default)" green panel on Restore, customer cards → branch NAMES). Auto-login blocked by classifier (correct safety).
 
 ### Session 2026-05-17 EOD+2 — V81-fix3 archiver runtime-dep + SESSION_HANDOFF shrink + AV67
 
