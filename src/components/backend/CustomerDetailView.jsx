@@ -42,6 +42,8 @@ import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisp
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
+// V74 (2026-05-16) — customer backup/restore: header button → modal → POST /api/admin/customer-backup-export
+import CustomerBackupModal from './CustomerBackupModal.jsx';
 // Task 12 (LINE OA Appointment Reminder, 2026-05-15) — per-branch LINE
 // linkage display + global opt-out toggle for the customer detail page.
 // Spec §5 D. Purely presentational; write path goes through
@@ -267,6 +269,8 @@ export default function CustomerDetailView({
   // Phase 14.5 — print document modal
   const [printDocOpen, setPrintDocOpen] = useState(false);
   const [lineQrOpen, setLineQrOpen] = useState(false);
+  // V74 (2026-05-16) — customer backup modal (admin clicks "💾 สำรอง")
+  const [backupModalOpen, setBackupModalOpen] = useState(false);
   // V32-tris-quater (2026-04-26) — focused nationalId/passport edit modal.
   // Customer linking via "ผูก <ID>" needs these on be_customers.
   // V33.3 — editIdsOpen removed (full-page edit takes over instead)
@@ -828,6 +832,15 @@ export default function CustomerDetailView({
                   title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
                   <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
                 </button>
+                {/* V74 — สำรองข้อมูลลูกค้าทั้งหมดไปยัง Storage (admin-only client gate; server re-verifies admin claim) */}
+                {canDeleteCustomer && (
+                  <button onClick={() => setBackupModalOpen(true)}
+                    data-testid="customer-detail-backup-button"
+                    title="สำรองข้อมูลลูกค้าทั้งหมด → Storage (ดาวน์โหลดได้ 24 ชม.)"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 hover:shadow-md active:scale-95 bg-amber-950/20 hover:bg-amber-900/40 text-amber-300 border-amber-700/50">
+                    💾 สำรอง
+                  </button>
+                )}
                 {/* Phase 24.0 — prominent ลบลูกค้า button (dual gate) */}
                 {canDeleteCustomer && onDeleteCustomer && (
                   <button
@@ -1390,6 +1403,13 @@ export default function CustomerDetailView({
             // Refresh by triggering parent reload (caller passes onCustomerUpdated)
             onCustomerUpdated?.();
           }}
+        />
+      )}
+      {/* V74 (2026-05-16) — customer backup modal */}
+      {backupModalOpen && (
+        <CustomerBackupModal
+          customer={customer}
+          onClose={() => setBackupModalOpen(false)}
         />
       )}
       {/* V33.3 (2026-04-27) — EditCustomerIdsModal REMOVED in favor of full-page
