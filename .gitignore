@@ -59,3 +59,8 @@ graphify-out/
 # Git worktrees (subagent-driven-development isolated workspace; 2026-05-08)
 .worktrees/
 worktrees/
+
+# V81 local backup snapshots (large real-prod data; never commit)
+# Created by scripts/v81-final-real-prod-roundtrip-proof.mjs for recovery safety
+scripts/.tmp-final-roundtrip-backup-*/
+scripts/.tmp-*.mjs
