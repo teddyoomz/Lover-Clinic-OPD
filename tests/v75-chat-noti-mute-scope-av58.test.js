@@ -77,4 +77,54 @@ describe('V75 AV58 — chatNotificationMute scope (only ChatPanel.jsx imports)',
     const src = fs.readFileSync('src/components/ChatPanel.jsx', 'utf8');
     expect(src).toMatch(/V75 Item 4/);
   });
+
+  // ─── Task 32 extensions: cross-surface noti scope audit ────────────────
+  // Per Rule P 7-step expansion: ensure NO other sound-trigger sites in src/
+  // accidentally import the V75 helper (the helper is chat-tab-scoped only).
+
+  it('AV58.8 — V73 StaffChatHeader.jsx uses its own staffChatIdentity (NOT V75 helper)', () => {
+    const headerPath = 'src/components/staffchat/StaffChatHeader.jsx';
+    if (!fs.existsSync(headerPath)) return; // V73 not shipped yet — skip
+    const src = fs.readFileSync(headerPath, 'utf8');
+    expect(src).not.toMatch(/chatNotificationMute/);
+    expect(src).not.toMatch(/isChatTabMuted/);
+    // V73 staff-chat uses its own mute path (getMuted/setMuted from
+    // staffChatIdentity or local state — separate from the chat-tab Mute).
+  });
+
+  it('AV58.9 — non-ChatPanel sound-trigger sites do NOT import chatNotificationMute', () => {
+    const files = walk('src');
+    const violations = [];
+    for (const f of files) {
+      if (/chatNotificationMute/i.test(f)) continue; // helper itself
+      if (/ChatPanel\.jsx$/.test(f)) continue; // sanctioned consumer
+      const src = fs.readFileSync(f, 'utf8');
+      // Find any sound-trigger pattern (Audio / AudioContext / new Notification)
+      const hasSoundTrigger = /new\s+Audio\(|AudioContext\(|new\s+Notification\(/.test(src);
+      const importsV75Helper = /from\s+['"][^'"]*chatNotificationMute[^'"]*['"]/.test(src);
+      if (hasSoundTrigger && importsV75Helper) {
+        violations.push(f);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it('AV58.10 — Phase 29 recall ping + appointment-due alerts do NOT import V75 helper', () => {
+    const candidatePaths = [
+      'src/components/Recall',
+      'src/components/recall',
+      'src/components/backend/recall',
+      'src/components/backend/appointment',
+      'src/lib/recall',
+    ];
+    for (const dir of candidatePaths) {
+      if (!fs.existsSync(dir)) continue;
+      const files = walk(dir);
+      for (const f of files) {
+        const src = fs.readFileSync(f, 'utf8');
+        expect(src).not.toMatch(/chatNotificationMute/);
+        expect(src).not.toMatch(/isChatTabMuted/);
+      }
+    }
+  });
 });
