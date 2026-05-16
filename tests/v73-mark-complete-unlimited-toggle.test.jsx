@@ -62,108 +62,101 @@ describe('V71.B-bis — markAppointmentServiceCompleted stamps wasServiceComplet
 });
 
 describe('V71.B-bis — RowCard gate uses persistent flag for unlimited toggle', () => {
-  it('B2.1 showMarkCompleteBtn gate references wasServiceCompleted', () => {
-    expect(rowCard).toMatch(/wasServiceCompleted/);
+  it('B2.1 V71.B-ter — gate is FULLY relaxed (no hasTreatmentForDay, no wasServiceCompleted)', () => {
+    // V71 → V71.B-bis (added persistent flag) → V71.B-ter (drop both gates).
+    // User directive "ไปๆกลับๆไม่จำกัด" + frustration at button still hidden
+    // for appts without treatment → trust admin's deliberate click entirely.
+    expect(rowCard).toMatch(/const showMarkCompleteBtn = isTodayTab && !appt\.serviceCompletedAt;/);
   });
 
-  it('B2.2 gate is: isTodayTab AND !serviceCompletedAt AND (hasTreatmentForDay OR wasServiceCompleted)', () => {
-    expect(rowCard).toMatch(/isTodayTab\s*&&\s*\n?\s*!appt\.serviceCompletedAt\s*&&\s*\n?\s*\(hasTreatmentForDay\s*\|\|\s*!!appt\.wasServiceCompleted\)/);
+  it('B2.2 gate does NOT reference hasTreatmentForDay or wasServiceCompleted in the visibility check', () => {
+    const fnMatch = rowCard.match(/const showMarkCompleteBtn[\s\S]+?;/);
+    expect(fnMatch).toBeTruthy();
+    expect(fnMatch[0]).not.toMatch(/hasTreatmentForDay/);
+    expect(fnMatch[0]).not.toMatch(/wasServiceCompleted/);
   });
 
   it('B2.3 showUnmarkBtn gate unchanged (still isTodayTab + serviceCompletedAt truthy)', () => {
     expect(rowCard).toMatch(/const showUnmarkBtn = isTodayTab && !!appt\.serviceCompletedAt/);
   });
 
-  it('B2.4 V71 first-time contract preserved: !wasServiceCompleted AND !hasTreatmentForDay → no button', () => {
-    // Logic test: simulate the boolean expression
+  it('B2.4 V71.B-ter — button ALWAYS visible on today tab when not currently completed', () => {
     const isTodayTab = true;
     const serviceCompletedAt = null;
-    const hasTreatmentForDay = false;
-    const wasServiceCompleted = false;  // never marked before
-    const show = isTodayTab && !serviceCompletedAt && (hasTreatmentForDay || !!wasServiceCompleted);
-    expect(show).toBe(false);  // first-time gate still requires treatment
+    // No conditions on treatment or prior-complete — admin's click is the gate
+    const show = isTodayTab && !serviceCompletedAt;
+    expect(show).toBe(true);
   });
 
-  it('B2.5 V71.B-bis unlimited toggle: !hasTreatmentForDay BUT wasServiceCompleted → SHOW button', () => {
+  it('B2.5 V71.B-ter — button hidden when currently completed (shows unmark instead)', () => {
     const isTodayTab = true;
-    const serviceCompletedAt = null;
-    const hasTreatmentForDay = false;
-    const wasServiceCompleted = true;  // was marked before, then unmarked
-    const show = isTodayTab && !serviceCompletedAt && (hasTreatmentForDay || !!wasServiceCompleted);
-    expect(show).toBe(true);  // RE-APPEARS for unlimited toggle
+    const serviceCompletedAt = 'TS-2026-05-18';
+    const show = isTodayTab && !serviceCompletedAt;
+    expect(show).toBe(false);
   });
 
   it('B2.6 mutual exclusion preserved: mark + unmark gates never both true', () => {
     const isTodayTab = true;
     for (const completedAt of [null, 'TS-2026-05-18']) {
-      for (const hasTreatment of [true, false]) {
-        for (const wasCompleted of [true, false]) {
-          const showMark = isTodayTab && !completedAt && (hasTreatment || !!wasCompleted);
-          const showUnmark = isTodayTab && !!completedAt;
-          expect(showMark && showUnmark).toBe(false);  // mutually exclusive
-        }
-      }
+      const showMark = isTodayTab && !completedAt;
+      const showUnmark = isTodayTab && !!completedAt;
+      expect(showMark && showUnmark).toBe(false);
     }
   });
 });
 
-describe('V71.B-bis — round-trip simulator (mark → unmark → re-mark cycles)', () => {
+describe('V71.B-ter — round-trip simulator (mark → unmark → re-mark cycles, no preconditions)', () => {
   function simulateCycle(initialState, action) {
     const next = { ...initialState };
     if (action === 'mark') {
       next.serviceCompletedAt = 'TS-' + Date.now();
       next.serviceCompletedBy = 'uid-123';
-      next.wasServiceCompleted = true;  // persistent
+      next.wasServiceCompleted = true;  // still stamped — kept as historical/audit signal
     } else if (action === 'unmark') {
       next.serviceCompletedAt = null;
       next.serviceCompletedBy = '';
-      // wasServiceCompleted NOT cleared
     }
     return next;
   }
 
-  function showMarkBtn(appt, hasTreatmentForDay) {
-    return true && !appt.serviceCompletedAt && (hasTreatmentForDay || !!appt.wasServiceCompleted);
+  // V71.B-ter gate (no conditions on treatment / prior-complete)
+  function showMarkBtn(appt) {
+    const isTodayTab = true;
+    return isTodayTab && !appt.serviceCompletedAt;
   }
 
-  it('B3.1 fresh appt with treatment → mark visible', () => {
-    const appt = { serviceCompletedAt: null, wasServiceCompleted: undefined };
-    expect(showMarkBtn(appt, true)).toBe(true);
+  it('B3.1 fresh appt (no treatment, no prior complete) → mark visible', () => {
+    const appt = { serviceCompletedAt: null };
+    expect(showMarkBtn(appt)).toBe(true);
   });
 
   it('B3.2 mark cycle 1 → button hidden (now showUnmark)', () => {
-    let appt = { serviceCompletedAt: null, wasServiceCompleted: undefined };
+    let appt = { serviceCompletedAt: null };
     appt = simulateCycle(appt, 'mark');
-    expect(showMarkBtn(appt, true)).toBe(false);  // serviceCompletedAt set
-    expect(appt.wasServiceCompleted).toBe(true);
+    expect(showMarkBtn(appt)).toBe(false);
   });
 
-  it('B3.3 unmark after mark → mark RE-APPEARS (treatment still exists)', () => {
-    let appt = { serviceCompletedAt: null, wasServiceCompleted: undefined };
+  it('B3.3 unmark after mark → mark RE-APPEARS regardless of treatment state', () => {
+    let appt = { serviceCompletedAt: null };
     appt = simulateCycle(appt, 'mark');
     appt = simulateCycle(appt, 'unmark');
-    expect(showMarkBtn(appt, true)).toBe(true);  // back to visible
-    expect(appt.wasServiceCompleted).toBe(true);  // persistent flag intact
+    expect(showMarkBtn(appt)).toBe(true);
   });
 
-  it('B3.4 unmark + treatment GONE → mark STILL VISIBLE (V71.B-bis fix)', () => {
-    let appt = { serviceCompletedAt: null, wasServiceCompleted: undefined };
-    appt = simulateCycle(appt, 'mark');
-    appt = simulateCycle(appt, 'unmark');
-    // simulate the original user bug: treatment somehow becomes unreachable
-    const hasTreatmentForDay = false;
-    expect(showMarkBtn(appt, hasTreatmentForDay)).toBe(true);  // FIX
+  it('B3.4 LEGACY appt stuck pre-fix (no wasServiceCompleted, no treatment) → STILL VISIBLE in V71.B-ter', () => {
+    // This is the exact case user hit: appt was mark+unmark BEFORE the fix
+    // so wasServiceCompleted is undefined; treatment also missing.
+    const appt = { serviceCompletedAt: null /* no wasServiceCompleted, no treatment */ };
+    expect(showMarkBtn(appt)).toBe(true);  // V71.B-ter unblocks legacy stuck appts
   });
 
-  it('B3.5 10-cycle round-trip — button always available after first complete', () => {
-    let appt = { serviceCompletedAt: null, wasServiceCompleted: undefined };
-    // Initial mark requires treatment
-    expect(showMarkBtn(appt, true)).toBe(true);
+  it('B3.5 10-cycle round-trip — button always available, no preconditions', () => {
+    let appt = { serviceCompletedAt: null };
+    expect(showMarkBtn(appt)).toBe(true);
     appt = simulateCycle(appt, 'mark');
-    // Loop unmark/mark 10 times — even without treatment, button is available
     for (let i = 0; i < 10; i++) {
       appt = simulateCycle(appt, 'unmark');
-      expect(showMarkBtn(appt, false)).toBe(true);  // no treatment, but flag persists
+      expect(showMarkBtn(appt)).toBe(true);  // always available on unmark
       appt = simulateCycle(appt, 'mark');
       expect(appt.serviceCompletedAt).toBeTruthy();
     }
