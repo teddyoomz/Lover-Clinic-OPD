@@ -43,11 +43,36 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD — 10 bugfixes + 2 features + 6 skills installed local · master=`d686d3e` · prod=`aff149e` · **10 commits ahead** · 10463 PASS · build clean · 0 deploys this session (V18 lock — awaiting "deploy" verb)
+- **Date last updated**: 2026-05-16 EVENING — V74 customer backup/restore partial ship (11/33 tasks) · master ahead of prod by **22 commits** (V73 batch 11 + V74 partial 11) · 116 V74 + 55 Phase 24.0 tests preserved · build clean · 0 deploys this session (V18 lock — V74 not deploy-ready until UI + tests + e2e complete)
 - **Branch**: `master`
-- **Last commit**: `d686d3e` fix(V73-BS1): badge state machine — confirmed label expanded + done driven by serviceCompletedAt
-- **Test count**: **10463 PASS / 0 FAIL / 12 skip** (full suite; +119 V73-related this session)
-- **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16). 10 commits ahead awaiting `vercel --prod` (no rules/functions changes in batch — vercel-only). After deploy: V73 Rule Q L1 hands-on per `.agents/sessions/2026-05-18-v73-deployed-l1-instructions.md`.
+- **Last commit**: `feat(V74): storage.rules — confirm V74 customer-backup path admin-only + rename {branchId}→{prefix}`
+- **Test count**: **116 V74 + 55 Phase 24.0 = 171 PASS / 0 FAIL** (focused; full suite of 10579+ not run this session — pending Task 32 next session)
+- **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16 AM). 22 commits ahead awaiting full V74 batch completion (T9 tests + T12-13 tests + T20-24 UI + T14-19 manager + T26-32 e2e + AV invariants + V21 sweep) THEN combined `vercel --prod` + `firebase deploy --only firestore:rules,storage:rules` (with Probe-Deploy-Probe #11 for customer-backup path).
+
+### Session 2026-05-16 EVENING — V74 customer backup/restore SHIPPED PARTIAL (11/33 tasks) ★
+
+Per-customer global backup/wipe/restore system: brainstorming HARD-GATE Q1-Q6 locked → 620-line spec → 1945-line 33-task plan → 11 tasks implemented inline. Foundation + EXPORT + DELETE + RESTORE chains all working end-to-end via API + CLI.
+
+- **Foundation (T1-T3)**: `customerBackupCore.js` (16 cascade + 8 subcoll + 6 audit-immutable + matchCustomerChatPredicate) · `customerBackupSchema.js` (buildCustomerBackupFile + validateCustomerBackupFile + computeStorageManifestHash; userNote EXCLUDED from hashes per Q5b=Y) · `customerBackupConflict.js` (scanRestoreConflicts + stripLineConflicts — Q3=B SAFE). 47 unit tests.
+- **EXPORT (T4-T6)**: `/api/admin/customer-backup-export` (10-step) + CLI mirror + 14 round-trip tests (vanilla + 20-image gallery hash + 6 adversarial: Thai + NaN + Infinity + NUL + 10K-char + NFC≠NFD).
+- **DELETE (T7-T8)**: extended `delete-customer-cascade.js` cascade 11→16 (CG closes Phase 24.0 stale-cascade bug — be_quotations + be_vendor_sales + be_online_sales + be_sale_insurance_claims + be_recalls) + 8 T4 subcoll recursive deletion + Storage cleanup + chat cleanup + autoBackupRef AV19 elevated gate (6-step integrity verify BEFORE wipe). BACKWARD COMPAT preserved. 2 V21 source-grep test fixups absorbed. + `customer-delete-with-backup.mjs` disaster-recovery CLI.
+- **RESTORE (T10-T11)**: NEW `/api/admin/customer-restore` (preview + restore actions; Q3=B SAFE: BLOCK customerId-exists + HN-collision / STRIP lineUserId conflicts / ALLOW stale FKs; 6-step integrity verify; batch-write at original IDs; Storage objects copied back) + `customer-restore.mjs` CLI (--backup-ref or --local-file).
+- **Rules (T25)**: storage.rules existing wildcard already covers `backups/customers/*` admin-only. Renamed `{branchId}` → `{prefix}` for clarity. Probe-Deploy-Probe #11 documented.
+
+**Customer can be backed up + deleted + restored END-TO-END via CLI today** (no UI yet):
+```bash
+node scripts/customer-backup-export.mjs --customer-id LC-X --apply
+node scripts/customer-delete-with-backup.mjs --customer-id LC-X --apply
+node scripts/customer-restore.mjs --backup-ref backups/customers/LC-X/... --apply
+```
+
+**DEFERRED (22 tasks)** — next-session sequence: Phase A tests (T9, T12, T13) → Phase B UI (T20-24) → Phase C manager endpoints (T14-19) → Phase D pre-deploy (T26-33).
+
+NO DEPLOY until full V74 batch + Rule Q L1 hands-on by user (V18 + V66 lock).
+
+Checkpoint: `.agents/sessions/2026-05-16-v74-customer-backup-partial.md` (full file inventory + commit list + resume prompt).
+
+Spec + plan: `docs/superpowers/specs/2026-05-16-customer-backup-restore-design.md` + `docs/superpowers/plans/2026-05-16-customer-backup-restore.md`.
 
 ### Session 2026-05-18 EOD — V73 deploy + 7 follow-up bugfixes + color picker + skill installs ★
 
