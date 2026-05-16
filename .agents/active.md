@@ -7,7 +7,7 @@ tests: "~210+ V75 assertions PASS across 17 test files (session 1: ~140 / sessio
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "b47a6e6 — V73 + V74 LIVE (V75 batch awaiting user 'deploy' authorization)"
 firestore_rules_version: "34 LIVE; v35 (V75 be_fb_configs match) staged in repo, not deployed"
-v75_commits_ahead_of_prod: 29
+v75_commits_ahead_of_prod: 26
 ---
 
 # Active Context
