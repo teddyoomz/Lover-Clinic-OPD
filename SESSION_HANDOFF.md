@@ -43,11 +43,37 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 NIGHT — **V75 + V76 + V77 (a/b/c/-bis/-ter/-quater/-quinquies) DEPLOYED** · prod LIVE · 4 Rule M backfills applied · awaiting Rule Q L1 hands-on
+- **Date last updated**: 2026-05-16 NIGHT+3 — **V77-fix3 + V77-fix4 + V78 + V79 SHIPPED locally** · 6 commits ahead of prod · awaiting user `vercel --prod` + `firebase deploy --only firestore:rules` + Rule Q L1
 - **Branch**: `master`
-- **Last commit**: `11044de fix(V77-quinquies): backfill responseTimeMs on chat_history docs (818 docs)`
-- **Test count**: ~280+ V75/V76/V77 assertions PASS across ~20 test files; full vitest deferred (Rule N batch-end). Build clean ✓ 2.61s.
-- **Deploy state**: prod=`4d0edcd` (V77-quater Vercel LIVE @ 2026-05-16T12:41Z). V77-quinquies (`11044de`) is data-only (Rule M backfill, no deploy needed). 2 prod deploys this session: V75+V76+V77b/c at 12:33Z + V77-quater at 12:41Z. 4 Rule M backfills: V76 (3,281 chat_history) + V77-bis (1 chat_conv) + V77-quater (69 offHours-flip) + V77-quinquies (818 responseTimeMs).
+- **Last commit**: `72b5a39 fix+test(V79): chat tab 100% per-branch isolation — systematic-debugging found 5 hidden bugs in my own V78`
+- **Test count**: 205/205 V75-V79 chat banks combined PASS. V79 brutal sim: 70/70. Build clean ✓ 3.02s.
+- **Deploy state**: prod=`4d0edcd` (V77-quater LIVE @ 2026-05-16T12:41Z). 6 commits ahead pending deploy (V77-fix3 + V77-fix4 + V78 + V79). firestore.indexes.json adds 5 NEW composite indexes (build time 2-30 min post-deploy).
+
+### Session 2026-05-16 NIGHT+3 — V79 chat tab 100% per-branch (systematic-debugging caught 5 hidden V78 bugs)
+
+User invoked /systematic-debugging after V78 deploy. Phase 1 exhaustive audit + Phase 2 class-of-bug expansion via Explore agent found **V78 was HALF-SHIPPED at 5 surfaces** — server-side endpoints accepted `branchId` but CLIENT didn't pass it → SAME cross-branch outbound leak V78 was supposed to fix was STILL LIVE in prod.
+
+5 bugs fixed in V79:
+- **CHAT-7 CRITICAL**: `sendMessage()` signature gained `branchId` (ChatDetailView passes `conv.branchId || selectedBranchId`). The EXACT bug V78 server-side aimed to fix.
+- **CHAT-8 CRITICAL**: `chatApiFetch` gained query-string support + saved-replies passes `?branchId=` + cache keyed per-branch (no cross-contamination).
+- **CHAT-9 HIGH**: lineEnabled/fbEnabled legacy `chat_config` fallback gated to NAKHON only via `isLegacyNakhonBranch()`. Other branches strictly require per-branch be_line_configs/be_fb_configs doc.
+- **CHAT-10 MED**: lineConfig/fbConfig state cleared BEFORE re-subscribe (no stale-flash).
+- **CHAT-11 MED**: chat_history `setHistory([])` before re-subscribe (no stale-flash).
+
+NEW `src/lib/chatBranchDefaults.js` client-side mirror of `api/webhook/_lib/chatBranchDefaults.js` (exports `HARDCODED_NAKHON_BR_ID` + `isLegacyNakhonBranch`). Constants must stay in sync.
+
+Wiring completeness VERIFIED: branch chat-hours (BranchFormModal → mergeBranchIntoClinic → cs.chatHours* → chatHours.js → ChatPanel + AdminDashboard); LINE 18 DEFAULT_LINE_CONFIG fields all consumed by chat tab / send.js / webhook / bot / cron; FB 5 fields all consumed.
+
+Test bank `tests/v79-chat-100-percent-per-branch.test.js` 70 assertions: source-grep + Rule I behavioral simulate + wiring completeness + adversarial mid-flow. 3 V21 fixups in V78 test bank (locked V78 universal fallback shape; updated to V79 NAKHON-gated form).
+
+Per Rule Q V66 STILL NOT CLAIMING VERIFIED. Awaiting user L1 hands-on on prod post-deploy:
+1. Admin reply branch identity (`resolved.source = be_line_configs/be_fb_configs`)
+2. Tab badge per-branch instant switch
+3. No-config branch hides FB pill + empty state to Backend
+4. History view stale-flash absent
+5. Saved replies per-branch templates
+
+Checkpoint: `.agents/sessions/2026-05-16-v79-chat-100-percent-per-branch.md`.
 
 ### Session 2026-05-16 NIGHT — V76+V77 saga DEPLOYED (5 fix rounds — V51 migration gap class-of-bug)
 
