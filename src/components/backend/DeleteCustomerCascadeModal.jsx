@@ -10,10 +10,14 @@
 // audit trail (with role label). Spec §5.1 + §13 superseded inline.
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader2, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Loader2, Trash2, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { listStaff, listDoctors } from '../../lib/scopedDataLayer.js';
 import { filterStaffByBranch, filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import { deleteCustomerViaApi, previewCustomerDeleteViaApi } from '../../lib/customerDeleteClient.js';
+// V74 (2026-05-16) — auto-backup before delete (AV19 elevated pattern).
+// Calls /api/admin/customer-backup-export via admin token; result.backupRef
+// stored in audit doc for forensic recovery trail.
+import { auth } from '../../firebase.js';
 
 const labelCls = 'text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1';
 const selectCls = 'w-full bg-[var(--bg-card)] border border-[var(--bd-strong)] text-white rounded-lg px-3 py-2 text-sm outline-none disabled:opacity-50';
@@ -33,6 +37,10 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
   const [cascadeCounts, setCascadeCounts] = useState(null);
   const [previewError, setPreviewError] = useState('');
   const cancelRef = useRef(null);
+  // V74 (2026-05-16) — auto-backup-before-delete state
+  const [autoBackup, setAutoBackup] = useState(true);
+  const [backupPhase, setBackupPhase] = useState('idle'); // idle | running | done | error
+  const [backupResult, setBackupResult] = useState(null);
 
   // Cancel-button autofocus on first render — matches DocumentPrintModal +
   // PermissionGroupsTab cleanup confirm pattern.
@@ -100,6 +108,39 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
     setError('');
     setSubmitting(true);
     try {
+      // V74 — auto-backup BEFORE delete (AV19 elevated pattern). On success,
+      // backupRef passed to deleteCustomerViaApi (forensic trail in audit doc).
+      let v74BackupRef = null;
+      if (autoBackup) {
+        setBackupPhase('running');
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const res = await fetch('/api/admin/customer-backup-export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              customerId: customer.id,
+              userNote: `auto-pre-delete ${new Date().toISOString()}`,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            setBackupPhase('error');
+            setError(`สำรองข้อมูลล้มเหลว — ${data.error || 'NETWORK_ERROR'} (ลบหยุดเพื่อความปลอดภัย; ลองอีกครั้ง หรือถอด ☐ "สำรองก่อนลบ" หากยอมรับความเสี่ยง)`);
+            setSubmitting(false);
+            return;
+          }
+          v74BackupRef = data.backupRef;
+          setBackupResult(data);
+          setBackupPhase('done');
+        } catch (e) {
+          setBackupPhase('error');
+          setError(`สำรองข้อมูลล้มเหลว — ${e?.message || 'NETWORK_ERROR'}`);
+          setSubmitting(false);
+          return;
+        }
+      }
+
       // Phase 24.0-bis — resolve role from which list contains the chosen ID.
       // Staff list checked first; then doctor list. role: 'staff' | 'doctor'.
       const staffRec = staffOptions.find(s => s.value === authorizerId);
@@ -113,6 +154,7 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
           authorizerName,
           authorizerRole: role,
         },
+        v74BackupRef, // forensic field — written to audit doc by customerDeleteClient
       });
       // Phase 24.0 (post-review hardening) — wrap onDeleted so a parent
       // throw doesn't strand the modal in submitting=true (which would
@@ -229,6 +271,36 @@ export default function DeleteCustomerCascadeModal({ customer, onClose, onDelete
               </optgroup>
             )}
           </select>
+        </div>
+
+        {/* V74 (2026-05-16) — auto-backup-before-delete (AV19 elevated pattern) */}
+        <div className="mb-4 p-3 bg-amber-950/20 border border-amber-700/40 rounded-lg" data-testid="v74-auto-backup-block">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoBackup}
+              onChange={(e) => setAutoBackup(e.target.checked)}
+              disabled={submitting || backupPhase === 'running'}
+              className="mt-1"
+              data-testid="v74-auto-backup-checkbox"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-bold text-amber-200">💾 สำรองข้อมูลก่อนลบ (แนะนำ)</div>
+              <div className="text-xs text-amber-300/70 mt-0.5">
+                สำรองข้อมูลลูกค้าทั้งหมด (คอร์ส + บริการ + ประวัติ + รูป + chat) → Storage ก่อนลบ จะคืน customer ได้ 100% หากต้องการ
+              </div>
+              {backupPhase === 'running' && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-amber-300">
+                  <Loader2 size={12} className="animate-spin" /> กำลังสำรอง...
+                </div>
+              )}
+              {backupPhase === 'done' && backupResult && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-green-300">
+                  <CheckCircle2 size={12} /> สำรองสำเร็จ — <code className="text-[10px] opacity-70">{backupResult.backupRef?.slice(-50)}</code>
+                </div>
+              )}
+            </div>
+          </label>
         </div>
 
         {error && (

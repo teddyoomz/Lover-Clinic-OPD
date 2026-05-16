@@ -298,7 +298,7 @@ export async function previewCustomerDeleteViaApi({ customerId }) {
  *   (legacy 6-field shape also accepted via normalizeAuthorizedBy fallback)
  * @returns {Promise<{success, customerId, cascadeCounts, auditDocId, totalDeletes}>}
  */
-export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
+export async function deleteCustomerViaApi({ customerId, authorizedBy, v74BackupRef = null }) {
   const user = await requireAuth();
   const cid = String(customerId || '').trim();
   if (!cid) throw makeError('customerId required', { status: 400, field: 'customerId' });
@@ -412,6 +412,9 @@ export async function deleteCustomerViaApi({ customerId, authorizedBy }) {
     cascadeCounts,
     cascadeSkipped,                     // [] if all 11 cascaded; non-empty on local-dev
     performedVia: 'client-firestore',   // distinguishes from server-admin-SDK path
+    // V74 (2026-05-16) — forensic trail. Backup ref (if admin chose auto-backup).
+    // null if admin opted out. Server endpoint also writes this field.
+    v74BackupRef: v74BackupRef || null,
     customerSnapshot: buildSnapshot(customer, cid),
   };
 
