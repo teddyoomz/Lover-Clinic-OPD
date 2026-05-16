@@ -64,27 +64,55 @@ These failures persisted in isolation (not just under full-suite load). active.m
 
 ## 🔥 USER-REPORTED P0 BUGS (Rule Q L1 hands-on found these mid-session)
 
-### P0-A — V77b/c 📦 whole-fleet backup button crashes (THIS turn — defensive client fix shipped; ROOT CAUSE diagnosis pending)
+### P0-A — V77b/c 📦 whole-fleet backup button crashes (THIS session — 2-commit fix: defensive client + 5-bug adversarial batch)
 
-User: "backup ลูกค้าไม่ได้ ไอ้สัส" + screenshot showing modal error "Unexpected token 'A', "An error o"... is not valid JSON".
+User reports across 2 rounds:
+1. "backup ลูกค้าไม่ได้ ไอ้สัส" + screenshot "Unexpected token 'A', "An error o"... is not valid JSON"
+2. "มึงเทสแล้วจริงเหรอ กูไม่เชื่อ ยังไงก็บั๊ค มึงหาบั๊คต่อได้เลย"
 
-Symptom signature: Vercel returned plain-text "An error occurred" page (function timeout/crash/OOM), client `r.json()` threw SyntaxError that masked the real failure.
+**Confirmed Rule Q V66 violation** — V77 shipped on mock tests only; user L1 found the crash instantly. I owe an apology and the adversarial bug-hunt; both shipped this session.
 
-**Confirmed Rule Q V66 violation** — I claimed V77 was shipped after mock tests passed. **I did NOT** do L1 (real browser) or L2 (real client SDK) verification against the deployed endpoint. The user did L1 for me and found this bug instantly.
+**Fix batch 1 (commit `<post-push-1>`)** — Tier 2 mitigations:
+- Defensive JSON parse — modal now reads response as text, try JSON.parse, on fail surface HTTP status + body head 240 chars instead of generic SyntaxError mask
+- `maxCustomers` input added to modal (admin can preview 5-20 first)
+- CLI fallback hint inline in modal
 
-**Endpoint suspicion (most likely)**: `/api/admin/whole-fleet-customer-backup-export` per-customer cost is HEAVY — 16 collection reads + 8 subcollection reads + EVERY Storage file is downloaded for SHA-256 + EVERY Storage file is copied to backup path. For LoverClinic's customer base × per-customer Storage objects, the function likely TIMES OUT or RUNS OUT OF MEMORY. vercel.json sets maxDuration:300 — but even that may not be enough; need to verify on plan.
+**Fix batch 2 (commit `<post-push-2>`)** — Adversarial code-review found 18+ bugs; 5 most critical P0/P1 fixed:
+- **P1-1 (CRITICAL V38 lesson regression at 6 sites)**: `{ id: d.id, ...d.data() }` re-introduced in V77 endpoint + restore + 4 CLI scripts. Stray data.id (baseline-migrated cohort) silently poisons customer.id → cascade query targets wrong customer. Flipped to `{ ...d.data(), id: d.id }` everywhere.
+- **P0-8 (root cause of user crash)**: sequential for-loop × N customers exceeds Vercel 300s. Endpoint now caps at 50 customers without `force:true` flag (HTTP 413 + Thai CLI hint).
+- **P0-5**: modal NO_CUSTOMERS_FOUND no longer renders broken `<a href={undefined}>` download link; amber empty-state banner instead.
+- **SP-2**: restore endpoint rejects `fileEntry` not under `backups/customers/` prefix (path-traversal guard).
+- **P2-4**: `randHex` default 8 → 16 hex chars (32 → 64 bits) to prevent ts+rand collision in fast iteration.
+- **P1-2 + P1-7**: restore precedence flipped (server-stamped meta.customerId > data.id); `restoredLive` mutable copy detects same-batch HN-collision.
 
-**Fix shipped this turn (Tier 2 mitigation, NOT root-cause fix)**:
-1. `src/components/backend/WholeFleetBackupModal.jsx` defensive parse — read response as text first, try JSON.parse, on fail surface raw HTTP status + body head so admin sees the REAL failure mode (not generic SyntaxError mask)
-2. `maxCustomers` input added to modal (admin can preview 5-20 customers first to verify endpoint works before attempting full fleet)
-3. CLI fallback documented in the modal hint: `scripts/customer-backup-export.mjs --all-customers --apply` (no timeout)
+**Playwright L1 spec written + skipped-by-default**: `tests/e2e/v77-whole-fleet-backup-adversarial.spec.js` — 5 scenarios W1-W5. Run on demand after next deploy.
 
-**What this does NOT fix** (still pending user hands-on diagnosis):
-- The endpoint itself is still vulnerable to timeout/OOM for thousands of customers
-- Root cause needs L1 evidence: user clicks with maxCustomers:5 → sees specific HTTP status/body
-- Real architectural fix likely needs chunked/async endpoint OR keeping the CLI as the canonical path
+**DEFERRED (next session)** — 13 lower-priority bugs from adversarial review:
+- P1-3/P1-4/P1-9 (cosmetic + audit-trail polish)
+- SP-1 (`computeWholeFleetManifestHash` should reuse canonicalJson — fix mirror of `computeBodyHash`)
+- S-1 HARDCODED_NAKHON_BR_ID Rule of 3 trigger (2 sites; +1 = extract to shared module)
+- S-2 isWithinChatHours duplicate (ChatPanel + AdminDashboard — V12 risk)
+- S-3 chat_history `allBranches:true` + client-side filter (V76 transition; flip to default branch-scoped post-soak)
+- S-4 AV17 audit-coverage extension (catch V77-class spread regressions)
+- ~25 diag/e2e/phase scripts with same V38 broken spread (sweep separately)
 
-**Next action**: user clicks 📦 with `ทดสอบเฉพาะ N ลูกค้าแรก: 5` → reports actual error code/text. Then root-cause fix.
+**Per Rule Q V66 — STILL NOT CLAIMING VERIFIED**. User MUST L1 hands-on:
+1. Click 📦 → set "ทดสอบเฉพาะ N ลูกค้าแรก: 5" → ใส่ branchId="พระราม 3 id" (5 customers) → check if backup succeeds + download works
+2. If still crashes → adversarial pass needed
+3. If succeeds at 5 → escalate to 50, then CLI for full fleet
+
+### P0-B — V67 cron `/api/cron/line-reminder-retry` missing composite Firestore index
+
+Surfaced via `vercel logs` stream during this debugging session (unrelated to user's whole-fleet click):
+
+```
+Error: 9 FAILED_PRECONDITION: The query requires an index.
+collection: be_line_reminder_log, fields: status + nextRetryAt + __name__
+```
+
+Cron `*/5 * * * *` (every 5 min) is failing silently — no retries for failed LINE reminders are being processed. Index URL captured in the error message (one-click create in Firebase console). Need to add to `firestore.indexes.json` + deploy.
+
+**Not V76/V77-caused** (V67 saga from 2026-05-15). Flagged here for next-session.
 
 ### P0-B — V67 cron `/api/cron/line-reminder-retry` missing composite Firestore index
 
