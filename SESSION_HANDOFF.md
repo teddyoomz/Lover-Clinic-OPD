@@ -43,11 +43,23 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EOD — **V74 customer backup/restore FULL SHIP (30/33 tasks done; 3 minor deferred — NOT blocking deploy)** · master ahead of prod by **31+ commits** (V73 batch 11 + V74 full ship 20+) · 116 V74 + 55 Phase 24.0 tests preserved with V21 fixups · build clean · 0 deploys this session (V18 lock — **V74 READY FOR DEPLOY when user authorizes**)
+- **Date last updated**: 2026-05-16 EOD — **V73 + V74 COMBINED BATCH DEPLOYED LIVE** · master=`b47a6e6` · prod LIVE at https://lover-clinic-app.vercel.app · firestore rules v34 · storage rules redeployed · Probe-Deploy-Probe 5/5 PASS pre+post · 116 V74 tests + 55 Phase 24.0 preserved (V21 fixups absorbed) · awaiting Rule Q L1 hands-on by user per spec § 9
 - **Branch**: `master`
 - **Last commit**: `feat(V74): storage.rules — confirm V74 customer-backup path admin-only + rename {branchId}→{prefix}`
 - **Test count**: **116 V74 + 55 Phase 24.0 = 171 PASS / 0 FAIL** (focused; full suite of 10579+ not run this session — pending Task 32 next session)
 - **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16 AM). 22 commits ahead awaiting full V74 batch completion (T9 tests + T12-13 tests + T20-24 UI + T14-19 manager + T26-32 e2e + AV invariants + V21 sweep) THEN combined `vercel --prod` + `firebase deploy --only firestore:rules,storage:rules` (with Probe-Deploy-Probe #11 for customer-backup path).
+
+### Session 2026-05-16 EOD — V74 customer backup/restore FULL SHIP + DEPLOYED ★★★
+
+User said "deploy" → combined V73 + V74 ship LIVE on prod. Pre-deploy probe 5/5 OK → `vercel --prod --yes` (Production: lover-clinic-app.vercel.app aliased) → `firebase deploy --only firestore:rules` (released to cloud.firestore) → `firebase deploy --only storage` (released to firebase.storage) → post-deploy probe 5/5 OK → cleanup 4 artifacts.
+
+CLI quirk: `--only firestore:rules,storage:rules` combined surfaced "Could not find rules for storage targets: rules" (Firebase CLI v14.x parsing). Split into 2 sequential `--only` deploys; both succeeded with no behavior change. Probe-Deploy-Probe extended to 5 probes (added #11 customer-backups path anon WRITE expects 401/403).
+
+Production state: V73 batch 11 + V74 batch 24 (foundation + EXPORT + DELETE + RESTORE + MANAGER + UI + e2e + AV invariants + V21 fixups + docs) = 35 combined commits LIVE.
+
+Awaiting user Rule Q L1 multi-device hands-on per spec § 9 acceptance scenarios. If bugs surface, V67-class iteration (V74-bis); else V74 closed.
+
+Checkpoint: `.agents/sessions/2026-05-16-v74-full-ship-deployed.md`.
 
 ### Session 2026-05-16 EOD — V74 customer backup/restore FULL SHIP (30/33 tasks) ★★★
 
