@@ -64,6 +64,14 @@ export function useStaffChat() {
   // Mint deviceId once per hook instance (getDeviceId itself is localStorage
   // backed, so the same value persists across mounts/sessions per device).
   const deviceId = useRef(getDeviceId()).current;
+
+  // V73 name-edit (2026-05-18) — track current displayName in React state so
+  // the header chip + composer NamePicker re-render after edit. localStorage
+  // is source of truth; this state is a cache for re-render trigger.
+  const [currentDisplayName, setCurrentDisplayName] = useState(() => getDisplayName());
+  // V73 name-edit — controls whether namePickerOpen was triggered by edit
+  // (pre-fill current value) vs first-send (empty).
+  const [nameEditMode, setNameEditMode] = useState(false);
   // Track which message IDs we've already counted so a Firestore snapshot
   // re-fire (V14-class) can't double-bump the unread counter.
   const lastSeenIdsRef = useRef(new Set());
@@ -182,13 +190,27 @@ export function useStaffChat() {
   const confirmName = useCallback(async (name) => {
     const { setDisplayName } = await import('../lib/staffChatIdentity.js');
     setDisplayName(name);
+    setCurrentDisplayName(name);  // V73 name-edit — refresh header chip + mention candidates
     setNamePickerOpen(false);
+    setNameEditMode(false);
     if (pendingSendPayload) {
       const payload = pendingSendPayload;
       setPendingSendPayload(null);
       await send(payload.text, payload);
     }
   }, [pendingSendPayload, send]);
+
+  // V73 name-edit (2026-05-18) — open NamePicker in edit mode (pre-fill with
+  // current name). Stays separate from the send-gated first-send open path.
+  // Re-sync currentDisplayName from localStorage in case it was modified
+  // externally (DevTools / cross-tab) between mount and edit-click — the
+  // useState init only fires once at mount.
+  const openNameEdit = useCallback(() => {
+    const latest = getDisplayName();
+    if (latest) setCurrentDisplayName(latest);
+    setNameEditMode(true);
+    setNamePickerOpen(true);
+  }, []);
 
   const expand = useCallback(() => {
     setMinimized(false);
@@ -214,5 +236,10 @@ export function useStaffChat() {
     replyingTo, setReplyingTo,
     // V73 Feature F — image upload surface.
     uploadImage,
+    // V73 name-edit (2026-05-18) — surface for header chip + NamePicker pre-fill.
+    displayName: currentDisplayName,
+    nameEditMode,
+    openNameEdit,
+    closeNameEdit: () => { setNameEditMode(false); setNamePickerOpen(false); },
   };
 }

@@ -50,6 +50,8 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
         <StaffChatPanel
           branchName={resolvedBranchName}
           onMinimize={chat.minimize}
+          onEditName={chat.openNameEdit}
+          displayName={chat.displayName}
           error={chat.error}
           loading={chat.loading}
         >
@@ -66,7 +68,8 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
       {chat.namePickerOpen && (
         <StaffChatNamePicker
           onConfirm={chat.confirmName}
-          onCancel={() => chat.setNamePickerOpen(false)}
+          onCancel={chat.nameEditMode ? chat.closeNameEdit : (() => chat.setNamePickerOpen(false))}
+          initialValue={chat.nameEditMode ? chat.displayName : ''}
         />
       )}
     </>

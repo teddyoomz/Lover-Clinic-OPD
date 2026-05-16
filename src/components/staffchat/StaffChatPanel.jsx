@@ -8,7 +8,7 @@ import React from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { StaffChatHeader } from './StaffChatHeader.jsx';
 
-export function StaffChatPanel({ branchName, onMinimize, error, loading, children }) {
+export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, children }) {
   return (
     <div
       data-testid="staff-chat-panel"
@@ -18,7 +18,12 @@ export function StaffChatPanel({ branchName, onMinimize, error, loading, childre
         bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl
         flex flex-col overflow-hidden z-[9000]"
     >
-      <StaffChatHeader branchName={branchName} onMinimize={onMinimize} />
+      <StaffChatHeader
+        branchName={branchName}
+        onMinimize={onMinimize}
+        onEditName={onEditName}
+        displayName={displayName}
+      />
       {error && (
         <div
           data-testid="staff-chat-error-banner"
