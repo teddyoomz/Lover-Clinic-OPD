@@ -1878,6 +1878,50 @@ ordering. Mirror for future backup additions.
 for type-preservation contracts. Mock tests = code-shape coverage; AV62
 hash = content-fidelity; AV65 = type-fidelity. All three required.
 
+### AV67 — Vercel serverless endpoints (api/**) MUST import only runtime dependencies (2026-05-17 EOD+2)
+
+**Trigger**: ANY file under `api/**` that imports a third-party package via
+`import X from 'pkg'` MUST have that package listed in `package.json`
+`dependencies` (NOT `devDependencies`). Vercel runs `npm install --production`
+on serverless build, which SKIPS `devDependencies` — any import resolving
+to a devDep crashes at module-load with a generic Vercel error page
+("A server error has occurred…" — HTML, NOT JSON).
+
+**Why**: Vercel's serverless runtime mirrors production Node — devDeps are
+build/test-only. The runtime cannot find the package → module-load throws
+→ Vercel wraps in a generic 500 HTML page → client `await res.json()` parses
+"A server e…" → `SyntaxError: Unexpected token 'A', "A server e"... is not
+valid JSON`. The actual import error is invisible to the client.
+
+**Origin**: V81 backup Download button shipped 2026-05-17 with `archiver`
+in `devDependencies`. User clicked Download → 500 with the cryptic JSON
+parse error. Endpoint code was correct; package placement was wrong.
+Vercel build succeeded (devDeps install at build time for type-checking);
+runtime failed (production install skips devDeps).
+
+**Source-grep pattern**:
+```
+grep -rn "^import.*from\s*['\"]\(archiver\|jsdom\|fast-check\|@playwright\|@testing-library\|@stryker\|@vitest\|knip\|eslint\|vite\|vitest\|autoprefixer\|postcss\|tailwindcss\|@vitejs\|firebase-tools\)['\"]" api/
+```
+Any match found MUST move the package to `dependencies`.
+
+**Sanctioned exceptions**: NONE. Every devDep import in `api/**` is a bug.
+
+**Detection**: regression test `tests/v81-fix3-archiver-runtime-dependency.test.js`
+parses `package.json` + walks `api/**/*.{js,mjs}` import statements; for each
+import resolving to a known devDep family, asserts the package is in
+`dependencies`. Fails build on drift.
+
+**Priority**: HIGH — every new serverless endpoint addition is a potential
+trigger. Catches silently-broken endpoints at build time (cheaper than
+post-deploy 500 + user-rage round).
+
+**Lineage**: V81-fix3 (2026-05-17 EOD+2) moved `archiver@^8.0.0` from
+`devDependencies` to `dependencies`. Single import site
+(`api/admin/whole-system-backup-download.js:9`). No other devDeps imports
+in `api/**` confirmed via cross-file grep. AV67 codifies the invariant
+permanently.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.

@@ -215,6 +215,30 @@ function patchHandoff() {
     `$1${rp}`,
   );
 
+  // 4) Hard 200 KB cap enforcement (2026-05-17 EOD+2, V81-fix3 turn).
+  // If post-surgery size would exceed 200 KB, abort with SESSION_HANDOFF_TOO_LARGE.
+  // LLM follows the manual archive procedure in session-end SKILL.md "Hard caps" §
+  // (move oldest blocks → .agents/sessions/session-handoff-archive.md), then re-runs apply.
+  const HANDOFF_HARD_CAP_BYTES = 200 * 1024;
+  const HANDOFF_WARN_BYTES = 180 * 1024;
+  const postSize = Buffer.byteLength(text, 'utf8');
+  if (postSize > HANDOFF_HARD_CAP_BYTES) {
+    const kb = (postSize / 1024).toFixed(1);
+    throw new Error(
+      `SESSION_HANDOFF_TOO_LARGE — SESSION_HANDOFF.md would be ${kb} KB after surgery ` +
+      `(hard cap = 200 KB). Archive oldest 5–10 session blocks to ` +
+      `.agents/sessions/session-handoff-archive.md per session-end SKILL.md "Hard caps" §, ` +
+      `then re-run session-apply.mjs.`,
+    );
+  }
+  if (postSize > HANDOFF_WARN_BYTES) {
+    const kb = (postSize / 1024).toFixed(1);
+    console.warn(
+      `[session-apply] WARN: SESSION_HANDOFF.md = ${kb} KB (warn threshold 180 KB / hard cap 200 KB). ` +
+      `Archive oldest session blocks on next turn to avoid blocking surgery.`,
+    );
+  }
+
   writeFileSync(path, text);
 }
 
