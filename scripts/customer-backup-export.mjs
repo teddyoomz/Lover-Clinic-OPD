@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 // scripts/customer-backup-export.mjs — Rule M canonical CLI mirror of
-// /api/admin/customer-backup-export. Single-customer or branch-batch.
-// Dry-run default; --apply commits writes.
+// /api/admin/customer-backup-export. Single-customer, branch-batch, or
+// whole-fleet (V75 Item 2). Dry-run default; --apply commits writes.
 //
 // Usage:
 //   node scripts/customer-backup-export.mjs --customer-id LC-26000001 [--apply] [--user-note "x"]
 //   node scripts/customer-backup-export.mjs --all-in-branch BR-... [--apply]
+//   node scripts/customer-backup-export.mjs --all-customers [--apply] [--user-note "EOD"]
+//
+// V75 Item 2 (2026-05-16) — --all-customers whole-fleet mode iterates every
+// be_customers doc + invokes exportSingleCustomer for each, then emits a
+// whole-fleet MANIFEST at backups/whole-fleet-customers/{ts-rand}/manifest.json
+// linking all per-customer backup refs. Per AV56: manifestHash covers every
+// customer fileHash + storageManifestHash (userNote EXCLUDED per Q5b=Y).
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -20,6 +27,11 @@ import {
 } from '../src/lib/customerBackupCore.js';
 import { buildCustomerBackupFile } from '../src/lib/customerBackupSchema.js';
 import { jsonReplacerForNonFinite } from '../src/lib/branchBackupSchema.js';
+// V75 Item 2 — whole-fleet manifest helpers (AV56).
+import {
+  buildWholeFleetManifest,
+  computeWholeFleetManifestHash,
+} from '../src/lib/wholeFleetBackupCore.js';
 
 // Inline .env.local.prod loader (mirrors Phase 18.0+19.0 CLI scripts)
 function loadEnvFile(path = '.env.local.prod') {
@@ -49,6 +61,7 @@ function parseArgs() {
     if (a === '--apply') out.apply = true;
     else if (a === '--customer-id') out.customerId = args[++i];
     else if (a === '--all-in-branch') out.branchId = args[++i];
+    else if (a === '--all-customers') out.allCustomers = true; // V75 Item 2 whole-fleet
     else if (a === '--user-note') out.userNote = args[++i] || '';
   }
   return out;
@@ -154,6 +167,9 @@ async function exportSingleCustomer({ db, bucket, customerId, userNote, apply })
     customerId, customerHN, customerName,
     backupRef: backupJsonPath,
     sizeBytes: backupJsonBytes.length,
+    // V75 Item 2 — surface hashes so whole-fleet manifest can include them (AV56)
+    bodyHash: backupFile.meta.bodyHash,
+    storageManifestHash: backupFile.meta.storageManifestHash,
     perCollectionCounts: backupFile.meta.perCollectionCounts,
     subcollectionCounts: backupFile.meta.subcollectionCounts,
     chatConversationCount: backupFile.meta.chatConversationCount,
@@ -190,10 +206,100 @@ async function exportSingleCustomer({ db, bucket, customerId, userNote, apply })
   return summary;
 }
 
+async function exportWholeFleet({ db, bucket, userNote, apply }) {
+  // V75 Item 2 — iterate ALL be_customers + invoke exportSingleCustomer per
+  // customer + emit a whole-fleet manifest linking all per-customer backups.
+  // AV56: manifestHash seal covers every fileHash + storageManifestHash.
+  console.log('V75 whole-fleet customer backup — iterating ALL customers...');
+  const snap = await dataCol(db, 'be_customers').get();
+  console.log(`Found ${snap.size} total customers across all branches`);
+
+  const customers = [];
+  const failedCustomers = [];
+  const start = Date.now();
+
+  for (const doc of snap.docs) {
+    try {
+      const summary = await exportSingleCustomer({
+        db, bucket, customerId: doc.id, userNote, apply,
+      });
+      if (summary) {
+        customers.push({
+          cid: summary.customerId,
+          hn: summary.customerHN,
+          displayName: summary.customerName,
+          fileEntry: summary.backupRef,
+          fileHash: summary.bodyHash || '',
+          storageManifestHash: summary.storageManifestHash || '',
+          totals: {
+            appointmentCount: summary.perCollectionCounts?.be_appointments || 0,
+            saleCount: summary.perCollectionCounts?.be_sales || 0,
+            treatmentCount: summary.perCollectionCounts?.be_treatments || 0,
+          },
+          exportedAt: new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      console.warn(`[FAIL] ${doc.id}: ${e.message}`);
+      failedCustomers.push({ cid: doc.id, reason: e.message });
+    }
+  }
+
+  const manifest = buildWholeFleetManifest({
+    customers,
+    failedCustomers,
+    userNote,
+    exportedAt: new Date().toISOString(),
+    exporterUid: 'cli-script',
+  });
+  const manifestHash = computeWholeFleetManifestHash(manifest);
+  manifest.manifestHash = manifestHash;
+
+  const ts = Date.now();
+  const rand = randHex(8);
+  const manifestPath = `backups/whole-fleet-customers/${ts}-${rand}/manifest.json`;
+
+  if (apply) {
+    const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
+    await bucket.file(manifestPath).save(manifestBytes, {
+      metadata: { contentType: 'application/json' },
+      resumable: false,
+    });
+    // Audit doc
+    const auditId = `whole-fleet-backup-export-${ts}-${rand}`;
+    await dataCol(db, 'be_admin_audit').doc(auditId).set({
+      type: 'whole-fleet-backup-export',
+      manifestPath,
+      manifestHash,
+      customerCount: customers.length,
+      failedCount: failedCustomers.length,
+      durationMs: Date.now() - start,
+      exportedBy: { uid: 'cli', email: 'cli-script' },
+      exportedAt: new Date().toISOString(),
+      userNote,
+    });
+    console.log(`\n[OK] whole-fleet manifest → ${manifestPath}`);
+    console.log(`     ${customers.length} customers backed up, ${failedCustomers.length} failed`);
+    console.log(`     manifestHash: ${manifestHash}`);
+    console.log(`     audit: ${auditId}`);
+  } else {
+    console.log(`\n[DRY-RUN] whole-fleet:`);
+    console.log(`  Would back up ${customers.length} customers`);
+    console.log(`  Failed: ${failedCustomers.length}`);
+    console.log(`  manifestHash (preview): ${manifestHash}`);
+    console.log(`  manifestPath (preview): ${manifestPath}`);
+  }
+
+  return { manifestPath, manifestHash, customerCount: customers.length, failedCount: failedCustomers.length };
+}
+
 async function main() {
   const args = parseArgs();
-  if (!args.customerId && !args.branchId) {
-    console.error('Usage: --customer-id <id> OR --all-in-branch <branchId> [--apply] [--user-note <text>]');
+  if (!args.customerId && !args.branchId && !args.allCustomers) {
+    console.error('Usage:');
+    console.error('  --customer-id <id> [--apply] [--user-note <text>]');
+    console.error('  --all-in-branch <branchId> [--apply] [--user-note <text>]');
+    console.error('  --all-customers [--apply] [--user-note <text>]  # V75 whole-fleet');
     process.exit(1);
   }
   const app = initApp();
@@ -202,6 +308,9 @@ async function main() {
 
   if (args.customerId) {
     await exportSingleCustomer({ db, bucket, customerId: args.customerId, userNote: args.userNote, apply: args.apply });
+  } else if (args.allCustomers) {
+    // V75 Item 2 — whole-fleet
+    await exportWholeFleet({ db, bucket, userNote: args.userNote, apply: args.apply });
   } else {
     const snap = await dataCol(db, 'be_customers').where('branchId', '==', args.branchId).get();
     console.log(`Found ${snap.size} customers in branch ${args.branchId}`);
