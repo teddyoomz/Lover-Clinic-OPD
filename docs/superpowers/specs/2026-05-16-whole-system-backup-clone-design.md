@@ -644,7 +644,178 @@ Firebase `auth.listUsers()` returns `UserRecord` objects with `toJSON()` method 
 - Inspect tar.gz: extract → see manifest.json + collections/ + storage/ + auth/
 - Re-verify manifestHash locally via `node scripts/whole-system-restore.mjs --backup-ref=... --verify-hash-only`
 - **Acceptance criterion**: manifestHash matches + all expected collections present + storage blob count > 0 + auth users count matches prod auth count
-- (Restore to fresh test Firebase project = separate hands-on; not required for V81 ship — can be deferred to Phase 2 polish)
+
+### 11.6 Firebase Emulator Suite — hermetic round-trip (PRIMARY e2e test)
+
+**Why critical**: user can't test (`ผมก็ลองไม่ได้`); admin SDK against real prod could damage real data; need a HERMETIC environment to round-trip backup→restore→verify-byte-identical safely + repeatably. Firebase Emulator Suite is the canonical tool for this exact use case.
+
+**Setup** (one-time, npm dev dep — added to `package.json` `devDependencies`):
+```
+npm install --save-dev firebase-tools
+```
+
+`firebase.json` (NEW or extended) declares emulator ports:
+```json
+{
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "storage": { "port": 9199 },
+    "ui": { "enabled": true, "port": 4000 }
+  }
+}
+```
+
+**Two-instance strategy** for restore-target verification:
+- **Source emulator** (port 8080/9099/9199) — seeded with backup-source fixtures
+- **Target emulator** (port 8081/9098/9198) — receives restore output
+- Compare source → backup → target query results
+
+**OR alternative single-instance with Firestore multi-database** (cheaper + simpler):
+- One emulator running BOTH `(default)` database (source) AND `clone-test` database (target)
+- Source seeded; backup script reads `(default)`; restore script writes to `clone-test`
+- Verify by query each side
+
+**Test runner** `tests/v81-emulator-roundtrip.test.js`:
+```js
+// Pseudo-structure
+beforeAll(async () => { await spawn('firebase emulators:start --import=./test-fixtures'); });
+test('round-trip preserves all data byte-identical', async () => {
+  const sourceState = await readAllFromEmulator('(default)');
+  const backup = await runBackupScript({ emulatorMode: true });
+  expect(backup.manifestHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  await runRestoreScript({ backupRef: backup.name, targetDb: 'clone-test', mode: 'fresh' });
+  const targetState = await readAllFromEmulator('clone-test');
+  expect(diffStates(sourceState, targetState)).toEqual({ added: [], removed: [], modified: [] });
+});
+afterAll(async () => { await stopEmulator(); });
+```
+
+**Test scenarios** (each in own `it()` block):
+- **E.1**: Empty source → backup → restore → target empty. (Trivial baseline)
+- **E.2**: Minimal source (1 customer, 1 branch, 1 staff, 1 auth user) → round-trip → byte-identical
+- **E.3**: Moderate source (50 customers, 3 branches, 200 treatments, 100 sales, 50 chat_history docs) → round-trip → byte-identical
+- **E.4**: Storage blob fidelity — upload 10 image blobs (varied sizes 1KB to 5MB) → round-trip → SHA-256 of each restored blob matches source
+- **E.5**: Auth user fidelity — 20 users (mix of email/password + Google OAuth + LINE provider) → round-trip → all metadata preserved (uid, email, displayName, customClaims, providerData) except passwordHash (expected exclusion)
+- **E.6**: Subcollection cascade — 5 customers × 8 subcollections (wallets, memberships, points, treatments, sales, appointments, deposits, courseChanges) → round-trip → byte-identical
+- **E.7**: Branch-scoped distribution — be_treatments docs spanning 3 branches → round-trip preserves branchId field for each → byte-identical
+- **E.8**: Chat conversation messages subcoll — 2 conversations × 50 messages each → round-trip → all messages restored
+- **E.9**: Replace mode auto-pre-backup → source modified → backup → wipe → restore → verify pre-restore-* folder exists with PRE-mod state + post-restore matches backup state
+- **E.10**: Fresh-only mode rejection — target has 1 customer → restore Fresh-only refuses with 409 → target unchanged
+- **E.11**: manifestHash tamper detection — backup → manually corrupt 1 byte in 1 collection JSON file → restore refuses with WHOLE_SYSTEM_MANIFEST_TAMPERED
+
+**Acceptance criterion**: ALL 11 emulator scenarios PASS without exception. Round-trip equality MUST be exact (no implicit conversion / type coercion / field-reorder allowed). Storage blobs MUST hash-match. Auth users MUST preserve customClaims + providerData.
+
+### 11.7 Property-based adversarial (V48 mulberry32 PRNG pattern × 100 fixtures)
+
+**Why**: hand-crafted fixtures cover known-shapes only. Property-based tests with deterministic-seed PRNG explore fixture space far more thoroughly. V48 codified this for stock invariants; V81 applies same pattern to backup data round-trip.
+
+`tests/v81-property-based-adversarial.test.js`:
+```js
+// Each iteration uses seed = i; output reproducible across runs.
+for (let i = 0; i < 100; i++) {
+  const fixture = randomCustomer(prngFromSeed(i));  // Thai names + Unicode + NUL bytes + 10K-char fields + edge floats
+  const backed = await runBackup(fixture);
+  const restored = await runRestore(backed);
+  expect(diffFixtures(fixture, restored)).toEqual({}); // identity invariant
+}
+```
+
+**Adversarial input categories** (random subset selected per fixture):
+- Thai full-width chars (`๐๑๒` digits + `เ า ํ` vowels)
+- Unicode NFC vs NFD normalization edge (`é` = `é` vs `é`)
+- NUL byte ` ` in middle of string
+- 10K-char displayName / treatment notes
+- Numeric extremes: `Number.MAX_SAFE_INTEGER`, `Number.MIN_SAFE_INTEGER`, `0.1 + 0.2` floating-point quirks
+- Empty/null/undefined/[empty array]/[empty object] for optional fields
+- Deeply-nested objects (5+ levels)
+- Mixed-type fields (e.g., `phone` as string OR number — Firestore tolerates both)
+- Emoji in displayName / chat lastMessage
+- HTML-special chars (`<script>`, `&amp;`, etc.) — Firestore stores raw, but verify no escape introduced
+
+**Property invariants** (each MUST hold across all 100 iterations):
+- **P1**: `backup(state).restore() === state` (identity / deterministic round-trip)
+- **P2**: `manifestHash(backup(state))` is deterministic — same state always produces same hash
+- **P3**: Tampering ANY byte of ANY file → manifestHash changes → restore refuses
+- **P4**: Backup of state₁ + state₂ + state₃ (in sequence, each restored fresh) all return their own state
+- **P5**: Cleanup retention with 5d/7d/∞ boundaries respected exactly (no off-by-one)
+- **P6**: Concurrent backup attempts: first acquires lock, second refuses → 2nd retry after 1st completes → succeeds
+
+**Acceptance criterion**: 100/100 iterations + 6/6 invariants PASS.
+
+### 11.8 Staging Vercel cron verification (post-deploy)
+
+**Why**: Vercel cron only fires in deployed environments (NOT local). The cron schedule + CRON_SECRET handshake + Vercel function timeout (300s) + Firebase Admin SDK initialization in Vercel cold-start = these only verify in REAL deployment.
+
+**Flow**:
+1. Deploy V81 to Vercel preview branch (not prod yet) via `vercel --preview --branch=v81-staging`
+2. Manually trigger cron via curl: `curl -X POST https://<preview-url>/api/cron/whole-system-backup-daily -H "Authorization: Bearer $CRON_SECRET"`
+3. Wait for response (300s max) — expect 200 with backup name + manifestHash
+4. Verify Firebase Storage has `backups/whole-system/{name}/manifest.json`
+5. Verify audit doc `be_admin_audit/whole-system-backup-{name}-*` emitted
+6. Wait for actual scheduled cron at 03:00 BKK (next day) — verify auto-fire works
+7. Wait 5 days → verify cleanup retention auto-deletes day-1 backup
+
+**Acceptance criterion**:
+- Manual cron fire returns 200 within 300s on first try
+- Backup folder appears in Storage with all expected sub-paths
+- Audit doc emitted with correct stats
+- Actual scheduled cron fires at 03:00 BKK next day
+- Day-6 cron deletes the day-1 backup automatically
+
+### 11.9 Secondary Firestore database restore-target verification (BYTE-IDENTICAL VERIFICATION on real prod)
+
+**Why**: Firebase Emulator (11.6) is hermetic but synthetic. Real prod has real data shape quirks that emulator might not reproduce. We need to verify backup→restore round-trip on REAL prod data WITHOUT damaging it. Firestore multi-database feature (GA 2023) lets us create a SECONDARY database within same Firebase project. Source = `(default)` (read-only); target = `clone-verify` (we own write).
+
+**Setup**:
+1. One-time: Create secondary Firestore database `clone-verify` in same Firebase project via Console UI or gcloud CLI:
+   ```
+   gcloud firestore databases create --database=clone-verify --location=asia-southeast1
+   ```
+2. Update admin SDK init to support multi-db:
+   ```js
+   import { getFirestore } from 'firebase-admin/firestore';
+   const sourceDb = getFirestore('(default)');
+   const targetDb = getFirestore('clone-verify');
+   ```
+3. Scoped subset of restore script for verification: `scripts/v81-verify-roundtrip-real-prod.mjs` reads from `(default)` + writes to `clone-verify` (NEVER writes to `(default)`)
+
+**Flow** (run after every successful backup, OR on-demand):
+1. Pick latest auto-backup
+2. Wipe `clone-verify` database (admin SDK paginated delete; this IS the target, so wipe is OK)
+3. Restore backup → `clone-verify` (Fresh-only mode)
+4. Diff `(default)` vs `clone-verify` for each universal collection:
+   - getCountFromServer + sample 50 random docs per collection → assert byte-identical
+5. Storage objects: not testable here (Storage is single-bucket per project); skip OR use Storage Emulator (covered in 11.6)
+6. Auth users: not testable here (Auth is project-scoped); skip OR use Auth Emulator
+7. Report diff: PASS if zero modified docs
+
+**Acceptance criterion**:
+- `clone-verify` database population matches `(default)` after restore
+- Sample 50 docs × 10 collections = 500-doc subset → zero diff
+- Total doc count matches via getCountFromServer (every collection in scope)
+
+**Cost**: ~$0.02/GB/month per secondary database (Firestore pricing). For typical clinic data ~200 MB → ~$0.004/month → negligible.
+
+### 11.10 Testing tier hierarchy (combined verification matrix)
+
+| Tier | Tool | Speed | Coverage | When |
+|---|---|---|---|---|
+| **T1: Unit** | Vitest pure-helper | <1 sec | Logic isolation | Every commit (Rule N) |
+| **T2: Source-grep** | Vitest regex | <1 sec | Code-shape regression | Every commit |
+| **T3: Rule I flow-simulate** | Vitest + mocked SDK | <5 sec | Cross-component chains | Every sub-phase end |
+| **T4: Emulator round-trip** | firebase-tools + Vitest | ~30 sec | E2E hermetic | Pre-merge (CI) + every backup-code change |
+| **T5: Property-based** | Vitest + mulberry32 | ~30 sec | Adversarial fuzzing | Pre-merge (CI) |
+| **T6: Real-prod TEST fixtures** | admin-SDK CLI script | ~5 min | Live write paths | Pre-deploy |
+| **T7: Secondary DB verification** | admin-SDK + multi-db | ~5 min | Real data shape round-trip | Post-deploy (Rule Q L1) |
+| **T8: Staging Vercel cron** | curl + Storage verify | ~5 min + 24h | Cron + cold-start + timeout | Post-deploy preview |
+| **T9: Admin UI hands-on** | Playwright OR manual | ~5 min | UX verification | Post-deploy prod |
+
+**For V81 ship gate** (Rule Q V66 — minimum verification):
+- T1+T2+T3+T4+T5 ALL green (vitest CI)
+- T6+T7 green (admin-SDK against prod with TEST/E2E prefixes + secondary DB)
+- T8 PARTIAL OK (manual cron trigger verified; auto-fire scheduled for next day)
+- T9 user's responsibility (admin UI walkthrough after V81 ships)
 
 ---
 
@@ -752,22 +923,29 @@ Estimated ~20-25 tasks for implementation plan:
 15. `scripts/whole-system-backup-export.mjs` — Rule M canonical
 16. `scripts/whole-system-restore.mjs` — Rule M canonical (with --local-manifest for cross-Vercel)
 
-**Tests / Audit (3 tasks)**:
-17. `scripts/e2e-v81-whole-system-backup-restore.mjs` — Phase 1-7 live admin-SDK e2e on prod with TEST- fixtures
-18. Audit invariants AV62/AV63/AV64 + AV19 elevation entries in `.agents/skills/audit-anti-vibe-code/SKILL.md`
-19. V21 fixups in existing V40/V74/V75 tests if AV56-related contracts changed (likely no, but verify)
+**Tests / Audit (8 tasks — heavy testing per Rule Q V66 + user proxy directive)**:
+17. `scripts/e2e-v81-whole-system-backup-restore.mjs` — Phase 1-7 live admin-SDK e2e on prod with TEST- fixtures (T6)
+18. **NEW** `firebase.json` + `package.json` devDep `firebase-tools` — Firebase Emulator Suite setup
+19. **NEW** `tests/v81-emulator-roundtrip.test.js` — E.1-E.11 hermetic round-trip with emulator-spawn lifecycle (T4) — PRIMARY e2e gate
+20. **NEW** `tests/v81-property-based-adversarial.test.js` — V48 mulberry32 PRNG × 100 fixtures × 6 property invariants (T5)
+21. **NEW** `scripts/v81-verify-roundtrip-real-prod.mjs` — Secondary Firestore database `clone-verify` byte-identical verification on REAL prod data (T7)
+22. **NEW** `scripts/v81-stage-cron-verify.mjs` — Staging Vercel cron trigger + Storage verification (T8)
+23. Audit invariants AV62/AV63/AV64 + AV19 elevation entries in `.agents/skills/audit-anti-vibe-code/SKILL.md`
+24. V21 fixups in existing V40/V74/V75 tests if AV56-related contracts changed (likely no, but verify)
 
 **Documentation (2 tasks)**:
-20. Compact V81 V-entry in `.claude/rules/00-session-start.md` § 2
-21. Update active.md + SESSION_HANDOFF.md with V81 ship status
+25. Compact V81 V-entry in `.claude/rules/00-session-start.md` § 2
+26. Update active.md + SESSION_HANDOFF.md with V81 ship status
 
 **Verification (2 tasks)**:
-22. Rule N targeted test run + full vitest at batch-end
-23. Build clean + drift scanner (V80 P0a) — 0 instances
+27. Rule N targeted test run + full vitest at batch-end
+28. Build clean + drift scanner (V80 P0a) — 0 instances
 
 **(Optional / Phase 2 follow-up — NOT in this spec)**:
-- 24. Rule Q L1 hands-on multi-device verification (admin UI walkthrough)
-- 25. Verbose V81 V-entry in `.claude/rules/v-log-archive.md`
+- 29. Rule Q L1 hands-on multi-device verification (admin UI walkthrough)
+- 30. Verbose V81 V-entry in `.claude/rules/v-log-archive.md`
+
+**Estimated tasks**: ~28 (was 20-25 pre-testing-enrichment). Realistic 4-5 days implementation with parallel sub-agent dispatch.
 
 ---
 
