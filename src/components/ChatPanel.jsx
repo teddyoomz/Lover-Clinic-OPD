@@ -24,6 +24,11 @@ import { listenToChatConversationsByBranch, listenToChatHistoryByBranch } from '
 // read legacy single-tenant clinic_settings/chat_config.{line,facebook}.enabled.
 import { listenToLineConfig } from '../lib/lineConfigClient.js';
 import { listenToFbConfig } from '../lib/fbConfigClient.js';
+// V79 (2026-05-16 NIGHT — chat tab 100% per-branch isolation): legacy
+// chat_config.{line,facebook}.enabled fallback gated to นครราชสีมา only.
+// Other branches MUST have per-branch be_line_configs/be_fb_configs doc to
+// enable pills — strict per-branch isolation per user "ของใครของมัน 100%".
+import { isLegacyNakhonBranch } from '../lib/chatBranchDefaults.js';
 // V75 Item 4 — Chat tab notification mute (per-device localStorage).
 // AV58: ONLY ChatPanel.jsx imports this helper; staff-chat / appt / recall
 // sound triggers stay independent.
@@ -35,7 +40,7 @@ const FB_COLOR = '#0084FF';
 
 // ─── Chat API helpers ──────────────────────────────────────────────────────
 
-async function chatApiFetch(endpoint, body, method = 'POST') {
+async function chatApiFetch(endpoint, body, method = 'POST', query = null) {
   const auth = getAuth(app);
   const token = await auth.currentUser?.getIdToken();
   if (!token) return { success: false, error: 'Not logged in' };
@@ -44,12 +49,34 @@ async function chatApiFetch(endpoint, body, method = 'POST') {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   };
   if (method === 'POST' && body) opts.body = JSON.stringify(body);
-  const res = await fetch(`/api/webhook/${endpoint}`, opts);
+  // V79 (2026-05-16 NIGHT — chat tab per-branch 100%): support query string
+  // so GET endpoints (saved-replies) can pass ?branchId=... to resolve the
+  // per-branch FB Page. Without this the V78 saved-replies endpoint always
+  // hit the legacy chat_config fallback → wrong branch's templates shown.
+  let url = `/api/webhook/${endpoint}`;
+  if (query && typeof query === 'object') {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined && v !== null && v !== '') qs.append(k, String(v));
+    }
+    const qsStr = qs.toString();
+    if (qsStr) url += `?${qsStr}`;
+  }
+  const res = await fetch(url, opts);
   return res.json();
 }
 
-function sendMessage(platform, odriverId, text, conversationId) {
-  return chatApiFetch('send', { platform, odriverId, text, conversationId });
+// V79 BUG-CHAT-7 — sendMessage signature gained `branchId` (required for
+// per-branch LINE/FB token resolution at the send.js endpoint). My V78
+// fix was half-shipped: server-side resolveLineConfigForAdmin / resolveFbConfigForAdmin
+// were wired, but the CLIENT didn't pass branchId → endpoint always fell
+// through to the single-tenant legacy chat_config → SAME cross-branch
+// outbound leak V78 was supposed to fix. Closed now. Caller (ChatDetailView)
+// passes `conversation.branchId || selectedBranchId` so post-V75 stamped
+// convs route through their stored branch; legacy un-stamped convs route
+// through admin's current branch context.
+function sendMessage(platform, odriverId, text, conversationId, branchId) {
+  return chatApiFetch('send', { platform, odriverId, text, conversationId, branchId });
 }
 
 // ─── Platform badge ────────────────────────────────────────────────────────
@@ -117,7 +144,11 @@ export function playAlertSound() {
 
 // ─── Chat Detail View ──────────────────────────────────────────────────────
 
-function ChatDetailView({ db, appId, conversation, onBack }) {
+// V79 (2026-05-16 NIGHT — chat tab 100% per-branch): ChatDetailView accepts
+// `selectedBranchId` prop. Used as fallback when conv.branchId is empty (legacy
+// un-stamped chat — admin's current branch context applies). All outbound
+// API calls (send, saved-replies) include the resolved branchId.
+function ChatDetailView({ db, appId, conversation, onBack, selectedBranchId = '' }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [sending, setSending] = useState(false);
@@ -126,7 +157,11 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
   const [loadingReplies, setLoadingReplies] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  const savedRepliesCache = useRef({ data: null, fetchedAt: 0 });
+  // V79: savedRepliesCache keyed by resolved branchId — switching conv to a
+  // different branch's chat (or admin switching branchSelector context) MUST
+  // re-fetch per-branch FB Page's saved replies. Pre-V79 cache was global
+  // → admin saw one branch's templates inside another branch's conv.
+  const savedRepliesCache = useRef({}); // { [branchId]: { data, fetchedAt } }
 
   // Listen to messages
   useEffect(() => {
@@ -174,11 +209,23 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showSavedReplies]);
 
+  // V79 (2026-05-16 NIGHT): resolve outbound branchId via conv.branchId (V75
+  // stamped) → fallback to selectedBranchId (admin context for legacy conv).
+  // This is the SAME fallback chain ChatPanel handleResolve uses for chat_history
+  // writes — keeps outbound routing consistent with persistence-layer routing.
+  const outboundBranchId = conversation?.branchId || selectedBranchId || '';
+
   async function handleSend() {
     const text = newMsg.trim();
     if (!text || sending) return;
     setSending(true);
-    const result = await sendMessage(conversation.platform, conversation.odriverId, text, conversation.id);
+    const result = await sendMessage(
+      conversation.platform,
+      conversation.odriverId,
+      text,
+      conversation.id,
+      outboundBranchId, // V79 CHAT-7 fix — pass branchId to /api/webhook/send
+    );
     if (result.success) {
       setNewMsg('');
       inputRef.current?.focus();
@@ -189,16 +236,31 @@ function ChatDetailView({ db, appId, conversation, onBack }) {
   }
 
   async function fetchSavedReplies() {
+    // V79 (BUG-CHAT-2 client wiring): saved-replies cache is per-branch.
+    // Same conv stays open across branch-context changes is impossible (V78
+    // CHAT-6 evicts cross-branch conv) so the per-conv outboundBranchId
+    // resolves uniquely. Empty branchId → request without query param →
+    // endpoint returns 503 BRANCH_CONFIG_MISSING (V78 server) which we
+    // surface gracefully.
+    const cacheKey = outboundBranchId || '_unstamped_';
     const now = Date.now();
-    if (savedRepliesCache.current.data && now - savedRepliesCache.current.fetchedAt < 300000) {
-      setSavedReplies(savedRepliesCache.current.data);
+    const cached = savedRepliesCache.current[cacheKey];
+    if (cached && cached.data && now - cached.fetchedAt < 300000) {
+      setSavedReplies(cached.data);
       return;
     }
     setLoadingReplies(true);
-    const result = await chatApiFetch('saved-replies', null, 'GET');
+    const result = await chatApiFetch(
+      'saved-replies',
+      null,
+      'GET',
+      outboundBranchId ? { branchId: outboundBranchId } : null,
+    );
     if (result.success) {
       setSavedReplies(result.replies || []);
-      savedRepliesCache.current = { data: result.replies || [], fetchedAt: Date.now() };
+      savedRepliesCache.current[cacheKey] = { data: result.replies || [], fetchedAt: Date.now() };
+    } else {
+      setSavedReplies([]);
     }
     setLoadingReplies(false);
   }
@@ -358,11 +420,14 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   const [lineConfig, setLineConfig] = useState(null);
   const [fbConfig, setFbConfig] = useState(null);
   useEffect(() => {
-    if (!selectedBranchId) {
-      setLineConfig(null);
-      setFbConfig(null);
-      return;
-    }
+    // V79: clear PREVIOUS branch's config IMMEDIATELY on switch so the
+    // filter-pill derivation `lineConfig?.enabled ?? legacy` doesn't show
+    // the old branch's flags during the async resubscribe window. Empty
+    // state during the brief gap = "no platforms configured" (matches
+    // strict per-branch contract) which is correct.
+    setLineConfig(null);
+    setFbConfig(null);
+    if (!selectedBranchId) return;
     const unsubLine = listenToLineConfig(selectedBranchId, setLineConfig, () => setLineConfig(null));
     const unsubFb = listenToFbConfig(selectedBranchId, setFbConfig, () => setFbConfig(null));
     return () => { unsubLine?.(); unsubFb?.(); };
@@ -429,6 +494,12 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   useEffect(() => {
     if (!showHistory) return;
     setHistoryPage(0);
+    // V79 (2026-05-16 NIGHT — RISK #3 fix): clear stale history list IMMEDIATELY
+    // before resubscribe. Pre-V79 a branch switch with history view open kept
+    // the old branch's chat_history entries visible for the brief async window
+    // between unsubscribe + first new snapshot arrival → "ของใครของมัน 100%"
+    // user demand violated by stale-flash.
+    setHistory([]);
     return listenToChatHistoryByBranch({ allBranches: true, limitN: 200 }, (raw) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const valid = [];
@@ -557,12 +628,21 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
   const filtered = filter === 'all' ? conversations : conversations.filter(c => c.platform === filter);
 
-  // V78 BUG-CHAT-4: per-branch enable flags. Prefer per-branch config; fall
-  // back to legacy single-tenant chat_config when per-branch absent (V75
-  // transition compat). Same fallback contract as the resolveLineConfig /
-  // resolveFbConfig admin-SDK helpers.
-  const lineEnabled = !!(lineConfig?.enabled ?? chatConfig?.line?.enabled);
-  const fbEnabled = !!(fbConfig?.enabled ?? chatConfig?.facebook?.enabled);
+  // V78 BUG-CHAT-4 + V79 strict-isolation gate: per-branch enable flags.
+  // Legacy single-tenant chat_config fallback ONLY applies when the
+  // selected branch is the legacy นครราชสีมา branch (HARDCODED_NAKHON_BR_ID).
+  // Pre-V79 the `??` fallback applied universally → admin in พระราม 3 saw
+  // นครราชสีมา's enable flags via legacy chat_config. NOW: other branches
+  // strictly require be_line_configs/be_fb_configs doc to enable pills.
+  const allowLegacyFallback = isLegacyNakhonBranch(selectedBranchId);
+  const lineEnabled = !!(
+    lineConfig?.enabled
+    ?? (allowLegacyFallback ? chatConfig?.line?.enabled : undefined)
+  );
+  const fbEnabled = !!(
+    fbConfig?.enabled
+    ?? (allowLegacyFallback ? chatConfig?.facebook?.enabled : undefined)
+  );
   const noPlatformConfigured = !lineEnabled && !fbEnabled;
 
   function formatContactTime(ts) {
@@ -591,7 +671,12 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
   if (liveSelectedConv) {
     return (
       <div className="h-[calc(100vh-180px)] min-h-[400px]">
-        <ChatDetailView db={db} appId={appId} conversation={liveSelectedConv} onBack={() => setSelectedConv(null)} />
+        {/* V79 CHAT-7+8: pass selectedBranchId so ChatDetailView can resolve
+            per-branch endpoints (send.js + saved-replies.js) for legacy
+            un-stamped conversations (fall-through filter case). Post-V75
+            conv with stamped branchId uses its own; un-stamped uses admin's
+            current branch context. */}
+        <ChatDetailView db={db} appId={appId} conversation={liveSelectedConv} selectedBranchId={selectedBranchId} onBack={() => setSelectedConv(null)} />
       </div>
     );
   }

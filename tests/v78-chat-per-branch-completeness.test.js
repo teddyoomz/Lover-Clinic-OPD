@@ -128,17 +128,22 @@ describe('V78 BUG-CHAT-4 — ChatPanel per-branch LINE+FB configs', () => {
   });
 
   it('CHAT-4.2 — subscribes per-branch + resubscribes on selectedBranchId change', () => {
-    // useEffect that depends on [selectedBranchId] and calls listenToLineConfig
-    const block = src.match(/useEffect\(\(\)\s*=>\s*\{[\s\S]{0,400}?listenToLineConfig\([\s\S]{0,400}?\},\s*\[selectedBranchId\]\)/);
+    // V79 expanded the effect body (added setLineConfig(null) + setFbConfig(null)
+    // BEFORE the branch-id gate to fix stale-flash). Allow 800-char window now.
+    const block = src.match(/useEffect\(\(\)\s*=>\s*\{[\s\S]{0,800}?listenToLineConfig\([\s\S]{0,400}?\},\s*\[selectedBranchId\]\)/);
     expect(block).not.toBeNull();
   });
 
-  it('CHAT-4.3 — lineEnabled prefers lineConfig.enabled with legacy chatConfig.line fallback', () => {
-    expect(src).toMatch(/lineConfig\?\.enabled\s*\?\?\s*chatConfig\?\.line\?\.enabled/);
+  it('CHAT-4.3 — lineEnabled prefers lineConfig.enabled (V79: gated legacy fallback)', () => {
+    // V79 strict-isolation: legacy fallback gated to NAKHON via
+    // `allowLegacyFallback ? chatConfig?.line?.enabled : undefined`.
+    // Pre-V79: `lineConfig?.enabled ?? chatConfig?.line?.enabled` (UNIVERSAL fallback — leak).
+    // Both shapes prefer lineConfig.enabled; the difference is fallback gating.
+    expect(src).toMatch(/lineConfig\?\.enabled[\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.line\?\.enabled/);
   });
 
-  it('CHAT-4.4 — fbEnabled prefers fbConfig.enabled with legacy chatConfig.facebook fallback', () => {
-    expect(src).toMatch(/fbConfig\?\.enabled\s*\?\?\s*chatConfig\?\.facebook\?\.enabled/);
+  it('CHAT-4.4 — fbEnabled prefers fbConfig.enabled (V79: gated legacy fallback)', () => {
+    expect(src).toMatch(/fbConfig\?\.enabled[\s\S]{0,200}allowLegacyFallback\s*\?\s*chatConfig\?\.facebook\?\.enabled/);
   });
 });
 
