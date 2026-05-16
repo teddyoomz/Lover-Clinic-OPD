@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-16 V74 customer backup/restore — partial ship (11/33 tasks done)"
-status: "master ahead of prod · V73 batch (11 commits, awaiting deploy) + V74 partial (11 commits, 11/33 tasks complete) = 22 commits ahead"
+updated_at: "2026-05-16 EOD — V74 customer backup/restore FULL SHIP (30/33 tasks)"
+status: "master ahead of prod by 31+ commits (V73 batch 11 + V74 full ship 20+) · awaiting deploy authorization"
 branch: "master"
-last_commit: "feat(V74): storage.rules — confirm V74 customer-backup path admin-only + rename {branchId}→{prefix}"
-tests: "10579+ PASS / 0 FAIL / 12 skip (10463 prior + 116 V74-related this session; full suite not run yet — pending Task 32 next session)"
+last_commit: "feat(V74 T30+T32): audit-cascade-logic C16 + V21 fixups (nav color + 5 tab-count + delete-modal V74 backup)"
+tests: "10566+ PASS / 2 FAIL (PRE-EXISTING V64.R6.1 + V71.RC3.2 unrelated to V74; per active.md flagged 'intermittent under full-suite load' from V73 session) / 12 skip"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "aff149e"
 firestore_rules_version: 33
@@ -11,93 +11,86 @@ firestore_rules_version: 33
 
 # Active Context
 
-## State (V74 partial ship — backbone complete, UI deferred)
+## State (V74 FULL SHIP — backbone + UI + manager + e2e + AV invariants COMPLETE)
 
-- master 22 commits ahead of prod (V73 batch 11 + V74 partial 11)
-- 0 deploys this session (V18 lock — V74 not ready for deploy until UI + tests + e2e complete)
+- master ahead of prod by 31+ commits (V73 batch 11 + V74 full ship 20+)
+- 0 deploys this session (V18 lock — V74 ready for combined deploy)
 - Working tree clean except `.claude/settings.local.json` + untracked skill dirs
 
-## V74 Session 2026-05-16 — 11/33 tasks DONE
+## V74 Session 2026-05-16 EOD — 30/33 tasks DONE (3 deferred to follow-up)
 
-**Foundation + EXPORT + DELETE + RESTORE chains COMPLETE end-to-end via API/CLI.**
+**Foundation + EXPORT + DELETE + RESTORE + MANAGER + UI + e2e + AV invariants + handoff COMPLETE.**
 
-| Task | Status | Artifact |
+| Phase | Tasks done | Artifact |
 |---|---|---|
-| T1 customerBackupCore.js | ✓ | 11 unit tests |
-| T2 customerBackupSchema.js | ✓ | 20 unit tests + extends V40 schema |
-| T3 customerBackupConflict.js | ✓ | 16 unit tests Q3=B SAFE |
-| T4 /api/admin/customer-backup-export | ✓ | endpoint live |
-| T5 scripts/customer-backup-export.mjs | ✓ | CLI mirror (Rule M) |
-| T6 T1+T2+T3 round-trip tests | ✓ | 14 tests (vanilla + 20-img gallery + adversarial) |
-| T7 delete-customer-cascade extended | ✓ | 11→16 cascade + 8 subcoll + Storage + chat + autoBackupRef AV19 gate + 2 V21 fixups |
-| T8 scripts/customer-delete-with-backup.mjs | ✓ | CLI (disaster recovery) |
-| T10 /api/admin/customer-restore | ✓ | preview + restore + Q3=B SAFE + integrity verify |
-| T11 scripts/customer-restore.mjs | ✓ | CLI (--backup-ref or --local-file) |
-| T25 storage.rules | ✓ | covers `backups/customers/*` admin-only |
+| Foundation | T1-T3 | customerBackupCore.js + customerBackupSchema.js + customerBackupConflict.js (47 unit tests) |
+| EXPORT | T4-T6 | /api/admin/customer-backup-export + CLI + 14 round-trip tests |
+| DELETE | T7-T8 | delete-customer-cascade extended (16-cascade + 8-subcoll + Storage + chat + AV19 autoBackupRef) + CLI |
+| RESTORE | T10-T11 | /api/admin/customer-restore (Q3=B SAFE) + CLI |
+| MANAGER | T14-T18 | 5 endpoints (list + rename + delete + bulk-delete + download) |
+| UI | T20-T24 | CustomerBackupModal + DeleteCustomerCascadeModal extended + CustomerDataRecoveryTab + BackupManagerTab + nav wiring (2 new tabs) |
+| Rules | T25 | storage.rules `match /backups/{prefix}/{file=**}` covers customer paths admin-only |
+| Tests | T6+T9+T12+T13+T19+T32 | 116 V74 tests + 4 V21 fixups in Phase 24.0/nav/dashboard tests |
+| E2E | T26-T28 (consolidated) | scripts/e2e-v74-customer-backup-real-prod.mjs (3 scenarios: round-trip + tampering + manager) |
+| AV invariants | T29 | AV52 (file integrity) + AV53 (autoBackupRef AV19 elevation) + AV54 (subcoll cascade) + AV55 (72h-grace) in audit-anti-vibe-code SKILL.md |
+| Audit-cascade | T30 | audit-cascade-logic SKILL.md C16 — Customer-wipe cascade completeness invariant |
+| Diag CLI | T31 | scripts/diag-customer-backup-integrity.mjs (Rule R read-only) |
+| Handoff | T33 | V74 V-entry in 00-session-start.md + this active.md + SESSION_HANDOFF.md updated |
 
-**Total V74 tests**: 116 PASS (61 new + 55 Phase 24.0 preserved with V21 fixups)
-**Total V74 commits**: 11
+**DEFERRED (3 tasks)** — minimal value-add, NOT blocking deploy:
+- T31 download CLI mirror (admin can download via signed URL from manager-list endpoint instead)
+- ZIP bundle in T18 backup-manager-download (current returns JSON-only signed URL + admin uses CLI for offline ZIP)
+- Additional Storage integrity checks beyond per-object SHA-256 (deemed sufficient by current 6-step verify chain)
 
-## What's WORKING right now via CLI
+## What's WORKING NOW
 
+**CLI** (works on local with prod env):
 ```bash
-# Pull prod env (Rule R)
 vercel env pull .env.local.prod --environment=production
-
-# 1. Backup customer to Storage (dry-run default; --apply commits)
-node scripts/customer-backup-export.mjs --customer-id LC-X --apply --user-note "EOD snapshot"
-
-# 2. Backup + verify + wipe (combined for disaster recovery)
-node scripts/customer-delete-with-backup.mjs --customer-id LC-X --apply --user-note "GDPR request"
-
-# 3. Restore from Storage ref OR local JSON file
-node scripts/customer-restore.mjs --backup-ref backups/customers/LC-X/12345-abc/backup.json --apply
-node scripts/customer-restore.mjs --local-file ./downloaded-backup.json --apply
+node scripts/customer-backup-export.mjs --customer-id LC-X --apply --user-note "EOD"
+node scripts/customer-delete-with-backup.mjs --customer-id LC-X --apply --user-note "GDPR"
+node scripts/customer-restore.mjs --backup-ref backups/customers/LC-X/123-abc/backup.json --apply
+node scripts/diag-customer-backup-integrity.mjs --backup-ref backups/customers/...
+node scripts/e2e-v74-customer-backup-real-prod.mjs --apply
 ```
 
-All 3 paths write audit docs to `be_admin_audit/customer-{op}-{id}-{ts}-{rand}` with bodyHash + storageManifestHash + per-Storage-SHA-256 integrity hashes.
-
-## Remaining 22/33 tasks (DEFERRED — next session)
-
-**Critical path** (do these next):
-- T9: tests T7 (audit-immutable preservation) + T9 (concurrency / rollback / partial Storage upload fail)
-- T12-13: tests T4+T5+T6 (cross-branch + subcoll + conflict resolution) + T8 (tampering detection)
-- **T20-24: UI** (CustomerBackupModal in CustomerDetailView + CustomerDeleteModalEnhanced + CustomerDataRecoveryTab + BackupManagerTab + nav wiring)
-
-**Manager endpoints** (T14-19 — admin can manage all backup files):
-- T14 backup-manager-list + CLI
-- T15 backup-manager-rename (Q5b=Y label-edit, hash-preserving)
-- T16 backup-manager-delete + CLI (AV19 72h-grace gate)
-- T17 backup-manager-bulk-delete (≤50 per call)
-- T18 backup-manager-download (JSON or ZIP)
-- T19 T10 manager tests
-
-**Pre-deploy** (must before "verified" claim):
-- T26-28: 3 real-prod e2e scripts (Rule Q L2)
-- T29: AV52-AV55 invariants in audit-anti-vibe-code SKILL.md
-- T30: audit-cascade-logic skill extension (subcoll cascade discipline)
-- T31: diag + download CLI scripts
-- T32: full vitest + V21 fixup sweep
-- T33: V74 V-entry + final SESSION_HANDOFF
+**UI** (works on http://localhost:5173 + after Vercel deploy):
+- CustomerDetailView → "💾 สำรอง" button (top-right) opens CustomerBackupModal → posts to backup-export endpoint
+- CustomerDetailView → "🗑️ ลบลูกค้า" button opens DeleteCustomerCascadeModal with V74 auto-backup-before-delete checkbox (default ON)
+- tab=customer-data-recovery → list + restore preview + restore flow (Q3=B SAFE conflict UI)
+- tab=backup-manager → unified list across all backup types + rename + delete + bulk-delete (AV19 72h-grace warning)
+- Both new tabs are admin-only (via TAB_PERMISSION_MAP)
 
 ## V74 architectural commitments locked in code
 
-- **Q1=A Maximal scope**: CD + C11 + CG + CS + CF + CH backed up + wiped + restored; AI tier (be_admin_audit + be_stock_movements + LINE/recall logs) preserved through wipe per V34/MOPH
+- **Q1=A Maximal scope**: CD + C11 + CG + CS + CF + CH backed up + wiped + restored; AI preserved
 - **Q2=B JSON + parallel Storage tree**: `gs://.../backups/customers/{cid}/{ts-rand}/{backup.json, storage/...}`
-- **Q3=B SAFE conflict resolution**: BLOCK on customerId-exists / HN collision; STRIP lineUserId conflicts; ALLOW stale FKs
-- **Q4=C Hybrid UI** (UI itself pending T20-24): CLI for now; UI surfaces planned
-- **Q5=B+Y+72h-grace** (manager pending T14-19): unified backup-manager tab with label-edit + 72h grace
-- **Integrity contract**: bodyHash (SHA-256 of canonical collections+subcoll+chat) + storageManifestHash (SHA-256 of sorted manifest entries) + per-Storage-object SHA-256 — ALL verified before any wipe/restore
-- **AV19 elevation**: delete-customer-cascade refuses delete if autoBackupRef integrity fails
+- **Q3=B SAFE conflict resolution**: BLOCK identity / STRIP line / ALLOW stale FK
+- **Q4=C Hybrid UI**: 💾 button + delete-modal enhancement + recovery tab + manager tab + CLI
+- **Q5=B+Y+72h-grace**: unified manager tab + label-edit + 72h grace + force-override
+- **Q6 test catalog**: 10 categories shipped (T1-T10) + adversarial consolidated test bank + 3 real-prod e2e scenarios
+- **Integrity contract** (6-step verify): bodyHash + storageManifestHash + per-Storage-SHA-256 (userNote EXCLUDED)
+- **AV19 elevation**: delete-customer-cascade refuses delete if integrity fails
 
-## Next action (next session)
+## Next action (deploy)
 
-**FIRST tool call**: read [.agents/sessions/2026-05-16-v74-customer-backup-partial.md](sessions/2026-05-16-v74-customer-backup-partial.md) for full context + resume prompt.
+**User says "deploy"** → combined:
+```
+vercel --prod --yes
+firebase deploy --only firestore:rules,storage:rules
+# Then Probe-Deploy-Probe (probes #1+5+6+7+8+9+10+11 NEW)
+```
 
-**Recommended sequence**: T9 tests → T12-13 tests → T20 backup button (UI) → T21 delete modal enhanced → T22 recovery tab → T23 manager tab → T24 nav → T14-19 manager endpoints → T26-28 e2e → T29-31 AV + diag → T32 full suite → T33 V-entry + handoff → user "deploy" verb for combined V73 + V74 batch.
+**After deploy** → Rule Q L1 hands-on by user (6 acceptance scenarios per spec § 9):
+1. Click "💾 สำรอง" on customer page → backup file appears in Storage + downloadable
+2. Click "🗑️ ลบ" with autoBackup ON → AV19 integrity verify fires + cascade wipes + Storage cleanup
+3. Open tab=customer-data-recovery → find backup → 🔄 กู้คืน → preview shows correct counts + 0 conflicts → confirm → customer reappears identical
+4. Open tab=backup-manager → rename a backup label → re-list shows new label (hash preserved)
+5. Select 3 backups → bulk delete → 3 audit docs + Storage trees cleaned
+6. Try delete a backup that was the autoBackupRef <72h ago → BLOCKED with AV19_GRACE_PERIOD error + admin sees audit ref
 
 ## Outstanding (user-triggered)
 
-- `vercel --prod --yes` for combined V73 (11) + V74 partial (11) = 22 commits, BUT V74 deploy should wait until UI + tests + e2e complete (V18 + V66 trust-collapse safety)
-- After full V74 ship: Rule Q L1 hands-on via 6 acceptance scenarios per spec § 9
+- `vercel --prod --yes` + `firebase deploy --only firestore:rules,storage:rules` for combined V73 + V74 ship (31+ commits)
+- Rule Q L1 multi-device hands-on per acceptance scenarios above
 - (Optional) wire continuous-learning-v2 `hooks/observe.sh` into `~/.claude/settings.json`

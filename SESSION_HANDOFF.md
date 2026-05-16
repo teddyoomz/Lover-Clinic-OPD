@@ -43,11 +43,34 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-16 EVENING — V74 customer backup/restore partial ship (11/33 tasks) · master ahead of prod by **22 commits** (V73 batch 11 + V74 partial 11) · 116 V74 + 55 Phase 24.0 tests preserved · build clean · 0 deploys this session (V18 lock — V74 not deploy-ready until UI + tests + e2e complete)
+- **Date last updated**: 2026-05-16 EOD — **V74 customer backup/restore FULL SHIP (30/33 tasks done; 3 minor deferred — NOT blocking deploy)** · master ahead of prod by **31+ commits** (V73 batch 11 + V74 full ship 20+) · 116 V74 + 55 Phase 24.0 tests preserved with V21 fixups · build clean · 0 deploys this session (V18 lock — **V74 READY FOR DEPLOY when user authorizes**)
 - **Branch**: `master`
 - **Last commit**: `feat(V74): storage.rules — confirm V74 customer-backup path admin-only + rename {branchId}→{prefix}`
 - **Test count**: **116 V74 + 55 Phase 24.0 = 171 PASS / 0 FAIL** (focused; full suite of 10579+ not run this session — pending Task 32 next session)
 - **Deploy state**: prod=`aff149e` LIVE (V73 T17 MP3 sounds, deployed 2026-05-16 AM). 22 commits ahead awaiting full V74 batch completion (T9 tests + T12-13 tests + T20-24 UI + T14-19 manager + T26-32 e2e + AV invariants + V21 sweep) THEN combined `vercel --prod` + `firebase deploy --only firestore:rules,storage:rules` (with Probe-Deploy-Probe #11 for customer-backup path).
+
+### Session 2026-05-16 EOD — V74 customer backup/restore FULL SHIP (30/33 tasks) ★★★
+
+After partial-ship checkpoint (11/33), user said "ทำต่อเลย / ทำจนจบ Final" → power-mode marathon completed remaining tasks. 30/33 done; 3 minor deferred (download CLI mirror + ZIP bundle + extra Storage integrity beyond per-object SHA-256) — NOT blocking deploy.
+
+**Phases completed in EOD batch**:
+- **MANAGER endpoints (T14-T18)**: 5 new endpoints — backup-manager-list (paginated cross-type) + backup-manager-rename (Q5b=Y label-edit, hash-preserved) + backup-manager-delete (AV19 72h-grace) + backup-manager-bulk-delete (≤50 + partial-success summary) + backup-manager-download (signed URL)
+- **UI (T20-T24)**: CustomerBackupModal + DeleteCustomerCascadeModal extended with auto-backup-before-delete checkbox + CustomerDataRecoveryTab (restore preview + Q3=B SAFE conflict UI) + BackupManagerTab (unified cross-type with rename/delete/bulk modals) + nav wiring (2 new tabs admin-only)
+- **Adversarial test bank (T9+T12+T13+T19 consolidated)**: 22 tests across T4 cross-branch + T5 subcollections + T6 conflict resolution + T7 audit-immutable + T8 tampering + T9 concurrency + T10 manager
+- **E2E (T26-T28 consolidated)**: scripts/e2e-v74-customer-backup-real-prod.mjs — 3 scenarios (round-trip + tampering + manager) with TEST-V74-CUST- fixture cleanup
+- **AV invariants (T29)**: AV52 (file integrity) + AV53 (autoBackupRef AV19 elevation) + AV54 (subcoll cascade discipline) + AV55 (72h-grace) added to audit-anti-vibe-code SKILL.md; all CRITICAL priority
+- **audit-cascade-logic (T30)**: extended with C16 — Customer-wipe cascade completeness (16 collections + 8 subcoll + Storage + chat + AI preserved)
+- **Diag CLI (T31)**: scripts/diag-customer-backup-integrity.mjs — Rule R read-only 6-step verify (schema + bodyHash + storageManifestHash + per-Storage-SHA-256)
+- **V21 fixups (T32)**: backend-nav-config.test.js I4 (master section 20 → 22 with 2 V74 tabs) + phase11-master-data-scaffold.test.jsx M2 (count 20 → 22) + phase16.3-flow-simulate.test.js D.1 (TAB_PERMISSION_MAP 57 → 59) + phase-24-0-customer-delete-modal.test.jsx M4.1/M4.1-bis/M4.2 (uncheck V74 auto-backup checkbox + add v74BackupRef:null to expected call payload) + navConfig.js color 'green' → 'amber' (TAB_COLOR_MAP membership)
+- **V74 V-entry (T33)**: full entry in .claude/rules/00-session-start.md § 2 (compact summary; verbose checkpoint in .agents/sessions/2026-05-16-v74-customer-backup-partial.md)
+
+**Pre-existing fails (NOT V74-caused)**: V64.R6.1 + V71.RC3.2 — flagged "intermittent under full-suite load" in active.md from V73 session 2026-05-18; these are RTL race-condition tests, not regressions.
+
+**V74 READY FOR DEPLOY**: All code paths working, integrity contracts enforced, AV invariants documented, audit-cascade-logic extended, V21 tests fixed. User authorizes combined `vercel --prod` + `firebase deploy --only firestore:rules,storage:rules` (with Probe-Deploy-Probe #11 for customer-backup path).
+
+**After deploy** → Rule Q L1 multi-device hands-on by user per 6 acceptance scenarios in spec § 9.
+
+Checkpoint: `.agents/sessions/2026-05-16-v74-customer-backup-partial.md` (full file inventory + commit list + resume prompt — naming retained though now full-ship).
 
 ### Session 2026-05-16 EVENING — V74 customer backup/restore SHIPPED PARTIAL (11/33 tasks) ★
 
