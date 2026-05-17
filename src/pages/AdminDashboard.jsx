@@ -2220,8 +2220,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         : allDocsRaw;
 
       // Auto-cleanup expired sessions: delete if no data, archive if has data
+      // V82-followup (2026-05-17 EOD+3 LATE) — opt-out via `_v82FollowupOpdResetAt`:
+      // when admin manually resets an old opd_session back to pending (fresh-start
+      // sync flow), the auto-archive must NOT immediately revert it. The forensic
+      // stamp from the reset script signals "admin wants this OLD doc back in
+      // queue regardless of age".
       allDocs.forEach(s => {
         if (s.isArchived || s.isPermanent || !s.createdAt) return;
+        if (s._v82FollowupOpdResetAt) return; // V82-followup opt-out
         if ((now - s.createdAt.toMillis()) > SESSION_TIMEOUT_MS) {
           if (!s.patientData) {
             deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id)).catch(console.error);
@@ -2269,6 +2275,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           if (session.isPermanent && session.formType !== 'deposit' && !session.serviceCompleted) return false; // จองไม่มัดจำ → อยู่ tab จองไม่มัดจำ
           if (session.isPermanent) return true;
           if (session.formType === 'deposit' && session.serviceCompleted) return true; // deposit มารับบริการแล้ว → แสดงในคิว
+          // V82-followup (2026-05-17 EOD+3 LATE) — manual reset overrides the 2hr
+          // freshness rule. Used when admin wipes be_customers but wants the
+          // original kiosk intake records back in queue for re-sync into fresh
+          // be_customers (new HN starting LC-26000001).
+          if (session._v82FollowupOpdResetAt) return true;
           if (!session.createdAt) return true;
           const createdAtMs = session.createdAt.toMillis();
           return (now - createdAtMs) <= SESSION_TIMEOUT_MS;
