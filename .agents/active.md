@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-05-17 EOD+3 — V82 staff chat cursor + force-open + role badges LIVE; 11294/11294 PASS / 0 FAIL; both deploy rounds verified"
-status: "V82 LIVE on prod (both rounds); 0 V82 regressions; all 17 pre-V82 baseline stale fails closed; perfect green"
+updated_at: "2026-05-17 EOD+3 LATE — V82 LIVE + full customer wipe complete; prod = fresh-start state (next HN = LC-26000001)"
+status: "V82 LIVE on prod (2 rounds verified) + 3,832 customer-side docs wiped + HN counter reset; ready for frontend sync re-population"
 branch: "master"
 last_commit: "44737de3 fix(V82-followup): strip 2 IIFE-in-JSX from BackupManagerTab (Rule C3) — RP1 lock"
 tests: "11294/11294 PASS / 0 FAIL / 18 skip (V21 markers + 6 emulator-skip Java-gated); build clean 3.12s"
@@ -48,8 +48,26 @@ Checkpoint: V82 LIVE round 2 = master 44737de3; production hash = same.
 - MODIFIED: 4 V81-followup test files (skip with V21 markers for V81-fix4/V81-fix6b removed surfaces)
 
 ## Next action
-Idle. User Rule Q L1 hands-on encouraged: switch Frontend↔Backend rapidly post-deploy; verify badge count stays 0; verify minimize button disabled when unread > 0; verify role badges appear in NamePicker + bubble.
+Idle. Prod = fresh-start state for customers. User will sync customers from frontend going forward; first new customer will get HN = LC-26000001.
+
+## Wipe event 2026-05-17 EOD+3 LATE
+- User directive: ลบข้อมูลลูกค้าและคอร์สคงเหลือ + ทุกอย่างที่เกี่ยวกับลูกค้าทุกคน + reset HN to LC-26000001
+- Sequence: V81 whole-system backup taken FIRST (AV19 mandate) → dry-run reviewed → explicit "go --apply" → executed
+- Backup safety net: `backups/whole-system/pre-restore-20260517-1331/` (5,274 docs + 362 Auth users + manifestHash sha256:6422c063...)
+- Recovery path: `node scripts/whole-system-restore.mjs --backup-ref backups/whole-system/pre-restore-20260517-1331/manifest.json --apply` (Replace mode + AV19 gate)
+- Wiped (3,832 docs total):
+  - be_customers (391) + 8 customer subcollections (0 — never populated)
+  - be_treatments (15), be_sales (8), be_appointments (3), be_recalls (8)
+  - chat_conversations (1), chat_history (3,324), opd_sessions (82)
+  - be_deposits, be_quotations, be_online_sales, be_sale_insurance_claims (all already 0)
+  - Storage uploads/be_customers/.../etc. (all already 0 — no live customer image data)
+- HN counter `be_customer_counter/counter` DELETED → next addCustomer mints LC-26000001 fresh
+- Preserved: be_products (606), be_courses (349), be_doctors (2), be_staff (4), be_branches (4), be_stock_* (4 each), be_admin_audit (382), be_promotions (4), all master_data, all be_*_configs
+- Auth users (362) preserved — no staff logins affected
+- Audit doc: `be_admin_audit/v82-followup-full-customer-wipe-1779000038538-d34ca45a`
 
 ## Outstanding (user-triggered, not auto)
-- Rule Q L1 user verification on prod (multi-device tab-switch chaos + badge selection + force-open block check)
+- Sync first customer from Frontend (PatientForm submit → opd_sessions → admin attaches → be_customers with LC-26000001)
+- Rule Q L1 user verification on prod for V82 staff chat (tab-switch chaos + badge selection + force-open block check)
+- (Future) Widen V81 STORAGE_INCLUDE_PREFIXES to cover `uploads/*` so future wipes have full Storage backup coverage (architectural gap noted; no impact this wipe since 0 customer Storage files existed)
 - (Future) Clean local scripts/.tmp-* diag files when comfortable

@@ -66,7 +66,35 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+3 — **V82 staff chat cursor + force-open + role badges LIVE both rounds; 11294/11294 PASS / 0 FAIL; AV76 + Rule C3 cleanup; PERFECT GREEN**
+- **Date last updated**: 2026-05-17 EOD+3 LATE — **V82 LIVE both rounds + full customer wipe complete (3,832 docs, HN reset → LC-26000001)**
+
+### Session 2026-05-17 EOD+3 LATE — Full customer wipe + HN counter reset
+
+User directive (verbatim): "pull env ยิงลบข้อมูลลูกค้าและคอร์สคงเหลือ และทุกอย่างที่เกี่ยวกับลูกค้าทุกคน แล้วรีให้ HN กลับมาเริ่ม LC 01 ใหม่ด้วย เราจะเริ่ม sync ลูกค้าจาก frontend เข้ามาแทนลูกค้าเดิมทั้งหมดแล้วเริ่มใหม่แล้ว"
+
+**Pre-flight (3 AskUserQuestion Qs)**: scope = FULL CUSTOMER WIPE; HN reset = LC-26000001 (Buddhist-Era prefix preserved, counter reset to fresh); sequencing = backup FIRST → dry-run → await go-ahead.
+
+**Sequence**:
+1. `vercel env pull .env.local.prod --environment=production` (fresh creds)
+2. `node scripts/whole-system-backup-export.mjs --type=pre-restore` (V81 backup — 5,274 docs + 362 Auth users; manifestHash `sha256:6422c063...`; 97 sec; `backups/whole-system/pre-restore-20260517-1331/`)
+3. Wrote `scripts/v82-followup-full-customer-wipe.mjs` (Rule M canonical: two-phase + admin SDK + canonical path + AV19 gate + audit doc + crypto-secure id + invocation guard)
+4. Dry-run reviewed: 3,832 main-collection docs to delete, 0 customer subcollection docs (V74 T4 never populated), 0 Storage files (no customer images on prod), HN counter `{year:"26", seq:29}` will delete
+5. User explicit `go --apply` → executed
+6. `scripts/v82-followup-verify-wipe.mjs` — ALL CHECKS PASSED (12 wipe collections = 0, HN counter absent, audit doc present, all preserved collections intact)
+
+**Final state**:
+- Wiped: be_customers (391), be_treatments (15), be_sales (8), be_appointments (3), be_recalls (8), chat_conversations (1), chat_history (3,324), opd_sessions (82) — total **3,832 docs**
+- HN counter `be_customer_counter/counter` DELETED → next addCustomer mints **LC-26000001**
+- Preserved: be_products (606), be_courses (349), be_doctors (2), be_staff (4), be_branches (4), be_stock_* (4 each), be_admin_audit (382), be_promotions (4), all master_data, all be_*_configs, all Auth users (362)
+- Audit doc: `be_admin_audit/v82-followup-full-customer-wipe-1779000038538-d34ca45a`
+
+**Recovery path** (if needed): `node scripts/whole-system-restore.mjs --backup-ref backups/whole-system/pre-restore-20260517-1331/manifest.json --apply` (Replace mode + AV19 gate).
+
+**Architectural gap noted (future fix)**: V81 backup `STORAGE_INCLUDE_PREFIXES = ['customers/', 'staff-chat-attachments/']` doesn't cover `uploads/*` — future wipes with live customer images would lose them. No impact this wipe (0 customer Storage files). Track as V82-followup-2 + AV-extension candidate.
+
+**Next**: user syncs customers from Frontend (PatientForm submit → opd_sessions intake → admin attach → be_customers with fresh LC-26000001 HN).
+
+Files: `scripts/v82-followup-full-customer-wipe.mjs` + `scripts/v82-followup-verify-wipe.mjs` (Rule M canonical templates for future destructive ops). NO source code changes (data-ops only).
 
 ### Session 2026-05-17 EOD+3 — V82 staff chat cursor + force-open + role badges + 17 baseline cleanup
 
