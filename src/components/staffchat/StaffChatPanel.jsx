@@ -8,7 +8,7 @@ import React from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { StaffChatHeader } from './StaffChatHeader.jsx';
 
-export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, children }) {
+export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
   return (
     <div
       data-testid="staff-chat-panel"
@@ -23,6 +23,7 @@ export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName
         onMinimize={onMinimize}
         onEditName={onEditName}
         displayName={displayName}
+        canMinimize={canMinimize}
       />
       {error && (
         <div

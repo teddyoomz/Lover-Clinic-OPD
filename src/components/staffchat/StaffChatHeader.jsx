@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Bell, BellOff, Minus, Pencil } from 'lucide-react';
 import { getMuted, setMuted, getDisplayName } from '../../lib/staffChatIdentity.js';
 
-export function StaffChatHeader({ branchName, onMinimize, onEditName, displayName }) {
+export function StaffChatHeader({ branchName, onMinimize, onEditName, displayName, canMinimize = true }) {
   const [muted, setMutedState] = useState(getMuted());
 
   // Re-read displayName on every render so the chip refreshes after edit.
@@ -53,12 +53,24 @@ export function StaffChatHeader({ branchName, onMinimize, onEditName, displayNam
         >
           {muted ? <BellOff size={16} /> : <Bell size={16} />}
         </button>
+        {/* V82 (2026-05-17) — force-open gate. canMinimize === false (unread > 0)
+            disables the button + swaps the tooltip. onClick is no-op'd by both
+            the disabled attr AND the conditional onClick to defend in depth
+            against any future click-handler dispatch from keyboard / a11y libs. */}
         <button
           type="button"
-          onClick={onMinimize}
-          data-testid="staff-chat-header-minimize"
-          className="w-8 h-8 rounded hover:bg-rose-700 flex items-center justify-center transition-colors"
+          onClick={canMinimize ? onMinimize : undefined}
+          disabled={!canMinimize}
+          data-testid="staff-chat-minimize-btn"
+          data-can-minimize={canMinimize ? 'true' : 'false'}
+          aria-disabled={!canMinimize}
           aria-label="ย่อแชท"
+          title={canMinimize ? 'ย่อหน้าต่าง' : 'เลื่อนลงล่างก่อน ⬇'}
+          className="w-8 h-8 rounded hover:bg-rose-700 flex items-center justify-center transition-colors disabled:hover:bg-transparent"
+          style={{
+            opacity: canMinimize ? 1 : 0.4,
+            cursor: canMinimize ? 'pointer' : 'not-allowed',
+          }}
         >
           <Minus size={16} />
         </button>

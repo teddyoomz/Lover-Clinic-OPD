@@ -54,8 +54,14 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
           displayName={chat.displayName}
           error={chat.error}
           loading={chat.loading}
+          canMinimize={chat.canMinimize}
         >
-          <StaffChatMessageList messages={chat.messages} ownDeviceId={chat.deviceId} onReply={handleReply} />
+          <StaffChatMessageList
+            messages={chat.messages}
+            ownDeviceId={chat.deviceId}
+            onReply={handleReply}
+            onScrolledToBottom={chat.markScrolledToBottom}
+          />
           <StaffChatComposer
             onSend={chat.send}
             recentMentionCandidates={chat.recentMentionCandidates}
