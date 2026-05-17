@@ -7,7 +7,12 @@
 // V73 color-picker (2026-05-18) — accepts `initialColor` (hex), native HTML5
 //   color picker UI, returns color via onConfirm(name, color). Free hex
 //   (no palette clamp) per user directive.
+// V82 (2026-05-17) — role section below color row. 5 tiles (4 roles + ไม่ระบุ).
+//   onConfirm signature extended to (name, color, role). Initial role hydrated
+//   from getRole() in edit mode; null in first-send mode.
 import React, { useState } from 'react';
+import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
+import { ROLE_KEYS, ROLE_LABELS_TH, getRole } from '../../lib/staffChatIdentity.js';
 
 const DEFAULT_COLOR = '#E11D48';  // rose-600
 
@@ -18,12 +23,17 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
       ? initialColor
       : DEFAULT_COLOR
   );
+  const isEdit = !!(initialValue && initialValue.trim());
+  // V82 (2026-05-17) — role state. In edit mode hydrate from localStorage so
+  // user sees their previous pick; in first-send mode default to null.
+  const [selectedRole, setSelectedRole] = useState(() => (isEdit ? getRole() : null));
+  const initialRole = isEdit ? getRole() : null;
   const trimmed = name.trim();
   const valid = trimmed.length >= 2 && trimmed.length <= 50;
-  const isEdit = !!(initialValue && initialValue.trim());
   const nameChanged = isEdit ? trimmed !== initialValue.trim() : true;
   const colorChanged = isEdit ? color.toLowerCase() !== (initialColor || DEFAULT_COLOR).toLowerCase() : true;
-  const canSave = valid && (nameChanged || colorChanged);
+  const roleChanged = isEdit ? selectedRole !== initialRole : true;
+  const canSave = valid && (nameChanged || colorChanged || roleChanged);
 
   return (
     <div
@@ -78,6 +88,71 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
             {trimmed || 'ตัวอย่าง'}
           </span>
         </div>
+        {/* V82 (2026-05-17) — role section. 4 role tiles + 'ไม่ระบุ' tile.
+            Optional per spec Q4-c; persists to localStorage via setRole on save.
+            Selected tile gets red border + bg tint; unselected transparent.
+            'ไม่ระบุ' tile uses dashed border treatment (no badge). */}
+        <div className="mt-3">
+          <label className="text-xs text-[var(--tx-muted)] block mb-1.5">ตำแหน่ง (ไม่บังคับ)</label>
+          <div className="grid grid-cols-5 gap-1.5">
+            {ROLE_KEYS.map((key) => {
+              const isSelected = selectedRole === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedRole(key)}
+                  aria-pressed={isSelected}
+                  data-testid={`staffchat-namepicker-role-${key}`}
+                  className="flex flex-col items-center justify-center p-2 rounded-lg transition-colors"
+                  style={{
+                    gap: '8px',
+                    border: isSelected ? '2px solid #E11D48' : '2px solid transparent',
+                    backgroundColor: isSelected ? 'rgba(225, 29, 72, 0.10)' : 'transparent',
+                  }}
+                >
+                  <StaffChatRoleBadge role={key} size="lg" />
+                  <span className="text-[11px] text-[var(--tx-primary)] leading-tight text-center">
+                    {ROLE_LABELS_TH[key]}
+                  </span>
+                </button>
+              );
+            })}
+            {(() => {
+              const isSelected = selectedRole === null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole(null)}
+                  aria-pressed={isSelected}
+                  data-testid="staffchat-namepicker-role-none"
+                  className="flex flex-col items-center justify-center p-2 rounded-lg transition-colors"
+                  style={{
+                    gap: '8px',
+                    border: isSelected ? '2px solid #E11D48' : '2px dashed var(--bd)',
+                    backgroundColor: isSelected ? 'rgba(225, 29, 72, 0.10)' : 'transparent',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '9999px',
+                      border: '2px dashed var(--bd)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-[11px] text-[var(--tx-muted)] leading-tight text-center">
+                    ไม่ระบุ
+                  </span>
+                </button>
+              );
+            })()}
+          </div>
+        </div>
         <div className="flex justify-end gap-2 mt-4">
           <button
             type="button"
@@ -89,7 +164,7 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
           </button>
           <button
             type="button"
-            onClick={() => canSave && onConfirm(trimmed, color)}
+            onClick={() => canSave && onConfirm(trimmed, color, selectedRole)}
             disabled={!canSave}
             data-testid="staff-chat-name-picker-save"
             className="px-3 py-1.5 rounded-lg text-sm font-bold bg-rose-600 hover:bg-rose-500 disabled:bg-[var(--bg-hover)] disabled:text-[var(--tx-muted)] text-white disabled:cursor-not-allowed"
