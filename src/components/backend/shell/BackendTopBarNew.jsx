@@ -52,13 +52,8 @@ export default function BackendTopBarNew({
 
   return (
     <header
-      className="sticky top-0 z-40 backdrop-blur-[14px]"
-      style={{
-        background:
-          'linear-gradient(180deg, rgba(13,13,15,0.75) 0%, rgba(13,13,15,0.6) 100%)',
-        borderBottom: `1px solid rgba(${acRgb},0.25)`,
-        paddingTop: 'env(safe-area-inset-top, 0)',
-      }}
+      className="sticky top-0 z-40 backdrop-blur-[14px] backend-topbar-new"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
       data-testid="backend-topbar-new"
     >
       {!isDesktop && (

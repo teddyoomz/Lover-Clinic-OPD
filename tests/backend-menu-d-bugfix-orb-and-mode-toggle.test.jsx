@@ -26,13 +26,12 @@ describe('Bug A fix — BackendArcBloom uses scatter-grid layout per mockup', ()
     expect(orbs.length).toBe(NAV_SECTIONS.length);
   });
 
-  it('B1.2 desktop orbs use CSS Grid placement (gridRow + gridColumn, not top%/left%)', () => {
-    // Default jsdom innerWidth = 1024 → desktop mode → grid placement
+  it('B1.2 desktop orbs use scatter top%/left% positioning (mockup-organic)', () => {
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const orbs = screen.getAllByRole('menuitem');
     for (const orb of orbs) {
-      expect(orb.style.gridRow, 'desktop orb must use grid-row').toMatch(/^[12]$/);
-      expect(orb.style.gridColumn, 'desktop orb must use grid-column').toMatch(/^[1-4]$/);
+      expect(orb.style.top, 'desktop orb must use top%').toMatch(/%$/);
+      expect(orb.style.left, 'desktop orb must use left%').toMatch(/%$/);
     }
   });
 
@@ -47,18 +46,28 @@ describe('Bug A fix — BackendArcBloom uses scatter-grid layout per mockup', ()
     }
   });
 
-  it('B1.4 grid placement: customers row 1 col 2 (top-row second position)', () => {
+  it('B1.4 scatter positions: customers top:8% left:28% (mockup line 864)', () => {
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const customersOrb = screen.getByTestId('bloom-orb-customers');
-    expect(customersOrb.style.gridRow).toBe('1');
-    expect(customersOrb.style.gridColumn).toBe('2');
+    expect(customersOrb.style.top).toBe('8%');
+    expect(customersOrb.style.left).toBe('28%');
   });
 
-  it('B1.4-bis grid placement: stock row 2 col 4 (bottom-row last position)', () => {
+  it('B1.4-bis scatter positions: stock top:52% left:78% (mockup line 867)', () => {
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const stockOrb = screen.getByTestId('bloom-orb-stock');
-    expect(stockOrb.style.gridRow).toBe('2');
-    expect(stockOrb.style.gridColumn).toBe('4');
+    expect(stockOrb.style.top).toBe('52%');
+    expect(stockOrb.style.left).toBe('78%');
+  });
+
+  it('B1.4-ter emoji glyphs present (mockup-matched colored icons)', () => {
+    render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
+    const customersOrb = screen.getByTestId('bloom-orb-customers');
+    expect(customersOrb.querySelector('.bloom-orb-emoji')?.textContent).toBe('👥');
+    const reportsOrb = screen.getByTestId('bloom-orb-reports');
+    expect(reportsOrb.querySelector('.bloom-orb-emoji')?.textContent).toBe('📊');
+    const stockOrb = screen.getByTestId('bloom-orb-stock');
+    expect(stockOrb.querySelector('.bloom-orb-emoji')?.textContent).toBe('📦');
   });
 
   it('B1.5 mockup-locked colors: sales (red→orange), customers (teal→green)', () => {
@@ -74,9 +83,10 @@ describe('Bug A fix — BackendArcBloom uses scatter-grid layout per mockup', ()
   it('B1.6 source guard — fix markers + no radial-arc patterns remain', () => {
     const src = readFileSync('src/components/backend/shell/BackendArcBloom.jsx', 'utf-8');
     expect(src).toMatch(/Rewrite 2026-05-18/);
-    expect(src).toMatch(/DESKTOP_GRID_AREA/);
+    expect(src).toMatch(/DESKTOP_POSITION/);
     expect(src).toMatch(/MOBILE_POSITION/);
     expect(src).toMatch(/SECTION_COLOR/);
+    expect(src).toMatch(/SECTION_EMOJI/);
     // Old radial math must be gone
     expect(src).not.toMatch(/orbPosition\(/);
     expect(src).not.toMatch(/Math\.cos\(angle/);

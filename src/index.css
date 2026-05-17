@@ -2078,6 +2078,25 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   display: none;
 }
 
+/* ─── Top bar (new shell) — ember/sakura ambient blend per mockup ─────────── */
+/* Dark theme: red-orange ember radials + dark base. Sakura: pink mist radials. */
+.backend-topbar-new {
+  border-bottom: 1px solid rgba(239,68,68,0.18);
+  background:
+    radial-gradient(ellipse at 20% 100%, rgba(239,68,68,0.06), transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(249,115,22,0.04), transparent 60%),
+    linear-gradient(180deg, rgba(12,4,6,0.92), rgba(20,8,12,0.88));
+  box-shadow: 0 1px 0 rgba(239,68,68,0.06), 0 4px 18px rgba(0,0,0,0.25);
+}
+[data-theme="light"] .backend-topbar-new {
+  border-bottom: 1px solid rgba(236,72,153,0.22);
+  background:
+    radial-gradient(ellipse at 20% 100%, rgba(236,72,153,0.07), transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(244,114,182,0.06), transparent 60%),
+    linear-gradient(180deg, rgba(255,245,248,0.85), rgba(255,228,236,0.7));
+  box-shadow: 0 1px 0 rgba(236,72,153,0.08), 0 4px 18px rgba(190,24,93,0.08);
+}
+
 /* ─── Bloom backdrop (dark theme) ─────────────────────────────────────────── */
 /* z-index: 30 so the top bar (z-40) and duo pill (z-50) stay visible above.
    Bugfix 2026-05-18 — was z-8500 which covered the entire viewport including
@@ -2104,20 +2123,15 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   position: absolute;
 }
 .bloom-stage.desktop {
-  /* Center the grid in viewport (excluding the ~48px top bar zone) */
+  /* Centered stage — scatter inside this bounded box so tiles cluster nicely
+     across all viewports. Top: 72px clears the top bar zone. */
   top: 72px;
   bottom: 72px;
   left: 0;
   right: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  /* Constrain to a sensible width so tiles stay close on ultrawide */
-  max-width: min(1100px, 90vw);
-  max-height: min(640px, 75vh);
+  max-width: min(1100px, 86vw);
+  max-height: min(640px, 78vh);
   margin: auto;
-  place-items: center;
-  gap: clamp(12px, 2vw, 36px);
 }
 .bloom-stage.mobile {
   inset: 0;
@@ -2222,12 +2236,14 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   transform: scale(0);
   z-index: 5;
 }
-/* Desktop tile — grid child (NOT absolute). Fluid sizing via clamp() so it
-   scales evenly tablet → 4K. */
+/* Desktop tile — absolute scatter inside centered stage. Center on top%/left%
+   anchor via negative margin equal to half width. */
 .bloom-orb.desktop {
-  position: static;
-  width: clamp(110px, 12vw, 156px);
-  height: clamp(110px, 12vw, 156px);
+  position: absolute;
+  width: clamp(110px, 13vw, 160px);
+  height: clamp(110px, 13vw, 160px);
+  margin-left: clamp(-80px, -6.5vw, -55px);
+  margin-top: clamp(-80px, -6.5vw, -55px);
 }
 /* Mobile fan-arc tile — absolute, uses bottom/right/left pixel offsets from
    MOBILE_POSITION map. Sized for compact phone viewport. */
@@ -2298,6 +2314,21 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 }
 .bloom-orb-icon { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
 [data-theme="light"] .bloom-orb-icon { filter: drop-shadow(0 2px 3px rgba(190,24,93,0.3)); }
+/* Colored emoji glyph (mockup-matched · vibrant per-section icons) */
+.bloom-orb-emoji {
+  font-size: 38px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45)) drop-shadow(0 0 4px rgba(251,191,36,0.3));
+  pointer-events: none;
+  user-select: none;
+}
+.bloom-orb.mobile .bloom-orb-emoji {
+  font-size: 22px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
+[data-theme="light"] .bloom-orb-emoji {
+  filter: drop-shadow(0 2px 3px rgba(190,24,93,0.35)) drop-shadow(0 0 3px rgba(244,114,182,0.3));
+}
 .bloom-orb-label {
   font-size: 14px;
   font-weight: 700;

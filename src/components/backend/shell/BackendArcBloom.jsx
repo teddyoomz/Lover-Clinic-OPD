@@ -15,20 +15,32 @@ import { NAV_SECTIONS } from '../nav/navConfig.js';
 
 const MD_BREAKPOINT = 768;
 
-// Desktop/Tablet (≥768px): CSS Grid 4×2 layout · centered + fluid scale.
-// Grid-area assignment per section.id (instead of absolute positions) so the
-// layout auto-centers in viewport and scales evenly from tablet → 4K.
-// Order: top row (apptmnts, customers, sales, marketing) +
-//        bottom row (master, reports, finance, stock).
-const DESKTOP_GRID_AREA = {
-  'appointments-section': { gridRow: 1, gridColumn: 1 },
-  'customers':            { gridRow: 1, gridColumn: 2 },
-  'sales':                { gridRow: 1, gridColumn: 3 },
-  'marketing':            { gridRow: 1, gridColumn: 4 },
-  'master':               { gridRow: 2, gridColumn: 1 },
-  'reports':              { gridRow: 2, gridColumn: 2 },
-  'finance':              { gridRow: 2, gridColumn: 3 },
-  'stock':                { gridRow: 2, gridColumn: 4 },
+// Desktop/Tablet (≥768px): organic scatter — mockup-literal positions
+// (lines 863-870). NOT a rigid grid. Tiles form 2 gentle arcs (top arc
+// dips up-down-down-up, bottom arc dips down-up-up-down) within a
+// centered stage. Slight asymmetry = "ไร้ระเบียบนิดหน่อยแต่สมดุล".
+const DESKTOP_POSITION = {
+  'appointments-section': { top: '20%', left: '8%'  },
+  'customers':            { top: '8%',  left: '28%' },
+  'sales':                { top: '4%',  left: '50%' },
+  'marketing':            { top: '12%', left: '72%' },
+  'stock':                { top: '52%', left: '78%' },
+  'finance':              { top: '66%', left: '56%' },
+  'reports':              { top: '66%', left: '32%' },
+  'master':               { top: '52%', left: '12%' },
+};
+
+// Colored emoji per section (mockup uses these — visually pops vs monochrome
+// lucide icons). Maps section.id → emoji glyph.
+const SECTION_EMOJI = {
+  'appointments-section': '📅',
+  'customers':            '👥',
+  'sales':                '🛒',
+  'marketing':            '📣',
+  'stock':                '📦',
+  'finance':              '💰',
+  'reports':              '📊',
+  'master':               '🗄️',
 };
 
 // Mobile fan-arc position (pixel offsets from edges) — from mockup lines 641-648
@@ -193,18 +205,16 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
         />
       ))}
 
-      {/* Bloom stage — Desktop/Tablet: CSS Grid 4×2 auto-centered + fluid-scale.
-          Mobile: full-screen with fan-arc absolute orbs around the duo pill. */}
+      {/* Bloom stage — both viewports use absolute positioning.
+          Desktop: scatter top%/left% inside a centered max-1100x640 stage.
+          Mobile: full-screen with fan-arc bottom/right/left px offsets. */}
       <div className={`bloom-stage ${isMobile ? 'mobile' : 'desktop'}`} data-testid="bloom-stage">
         {sections.map((section, i) => {
-          const Icon = section.icon;
           const color = SECTION_COLOR[section.id] || { c1: '#dc2626', c2: '#f97316' };
           const count = sectionCount(section);
-          const iconSize = isMobile ? 18 : 32;
-          // Mobile: absolute pixel offsets · Desktop/Tablet: CSS grid placement
-          const positionStyle = isMobile
-            ? (MOBILE_POSITION[section.id] || { top: '50%', left: '50%' })
-            : (DESKTOP_GRID_AREA[section.id] || {});
+          const emoji = SECTION_EMOJI[section.id] || '✨';
+          const POSITION_MAP = isMobile ? MOBILE_POSITION : DESKTOP_POSITION;
+          const pos = POSITION_MAP[section.id] || { top: '50%', left: '50%' };
           return (
             <button
               key={section.id}
@@ -217,13 +227,13 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
               aria-label={`ไปยังหมวด ${section.label}`}
               className={`bloom-orb ${isMobile ? 'mobile' : 'desktop'}`}
               style={{
-                ...positionStyle,
+                ...pos,
                 '--c1': color.c1,
                 '--c2': color.c2,
               }}
               onClick={() => handleOrbClick(section)}
             >
-              {Icon && <Icon size={iconSize} color="white" className="bloom-orb-icon" aria-hidden="true" />}
+              <span className="bloom-orb-emoji" aria-hidden="true">{emoji}</span>
               <span className="bloom-orb-label">{section.label}</span>
               {count && <span className="bloom-orb-count">{count}</span>}
             </button>
