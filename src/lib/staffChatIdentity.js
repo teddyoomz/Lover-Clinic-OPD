@@ -59,3 +59,49 @@ export function setColor(hex) {
   }
   localStorage.setItem(KEY_COLOR, hex);
 }
+
+// V82 (2026-05-17) — Role badge system.
+// Per-device role stored in localStorage; surfaces a Thai badge next to the
+// sender's display name in chat. Decoupled from be_staff/be_doctors roles —
+// chat identity is device-scoped (V73 design), not Firebase-Auth-scoped.
+const KEY_ROLE = 'staffChat:role';
+
+export const ROLE_KEYS = Object.freeze(['doctor', 'assistant', 'staff', 'manager']);
+
+export const ROLE_LABELS_TH = Object.freeze({
+  doctor: 'แพทย์',
+  assistant: 'ผู้ช่วยแพทย์',
+  staff: 'พนักงาน',
+  manager: 'ผู้จัดการ',
+});
+
+export function getRole() {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
+  try {
+    const v = localStorage.getItem(KEY_ROLE);
+    if (typeof v === 'string' && ROLE_KEYS.includes(v)) return v;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setRole(role) {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+  if (role === null || role === '' || role === undefined) {
+    try {
+      localStorage.removeItem(KEY_ROLE);
+    } catch {
+      // silent on quota / access errors
+    }
+    return;
+  }
+  if (typeof role !== 'string' || !ROLE_KEYS.includes(role)) {
+    throw new Error('STAFF_CHAT_ROLE_INVALID');
+  }
+  try {
+    localStorage.setItem(KEY_ROLE, role);
+  } catch {
+    // silent on quota errors
+  }
+}
