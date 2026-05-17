@@ -65,7 +65,13 @@ export default function BackendShellNew({
 
       {/* ArcBloom overlay — mounted lazily via bloomOpen gate */}
       {bloomOpen && (
-        <BackendArcBloom open={bloomOpen} onClose={closeBloom} onNavigate={handleNavigate} />
+        <BackendArcBloom
+          open={bloomOpen}
+          onClose={closeBloom}
+          onNavigate={handleNavigate}
+          clinicSettings={clinicSettings}
+          theme={theme}
+        />
       )}
 
       {/* CmdPalette preserved verbatim (Cmd+K + 🛒 button trigger it) */}

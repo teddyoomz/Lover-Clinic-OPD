@@ -2586,3 +2586,127 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   .subtab-cell { transform: none !important; transition: none !important; }
   .subtab-cell:hover { transform: scale(1.03) !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Backend Menu D — ClinicLogo at center of bloom (EOD+6 polish)
+   Theme-aware via ClinicLogo's auto-pick; slow ~4.5s glow breath.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bloom-logo-wrap {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: bloom-logo-breath 4.5s ease-in-out infinite;
+}
+
+/* Desktop: centered in the stage, scales with viewport like orbs */
+.bloom-logo-wrap.desktop {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(180px, 22vw, 320px);
+  height: clamp(180px, 22vw, 320px);
+}
+
+/* Mobile: top-center, sits in the empty upper area above the orb ring */
+.bloom-logo-wrap.mobile {
+  top: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(120px, 36vw, 170px);
+  height: clamp(120px, 36vw, 170px);
+}
+
+.bloom-logo-wrap .bloom-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Initial glow filter — animation overrides this with breathing brightness */
+  filter: drop-shadow(0 0 18px rgba(220, 38, 38, 0.45))
+          drop-shadow(0 0 32px rgba(220, 38, 38, 0.25));
+}
+
+/* Light theme uses sakura-pink glow to match the sakura petal palette */
+[data-theme="light"] .bloom-logo-wrap .bloom-logo {
+  filter: drop-shadow(0 0 18px rgba(236, 72, 153, 0.45))
+          drop-shadow(0 0 32px rgba(236, 72, 153, 0.25));
+}
+
+/* Slow breathing glow — pulses intensity over 4.5s, never speeds up */
+@keyframes bloom-logo-breath {
+  0%, 100% {
+    filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.35))
+            drop-shadow(0 0 24px rgba(220, 38, 38, 0.20))
+            brightness(0.95);
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+  50% {
+    filter: drop-shadow(0 0 28px rgba(220, 38, 38, 0.70))
+            drop-shadow(0 0 52px rgba(220, 38, 38, 0.45))
+            brightness(1.08);
+    transform: translate(-50%, -50%) scale(1.015);
+  }
+}
+
+/* Mobile breath keyframes — separate because transform-origin differs */
+.bloom-logo-wrap.mobile {
+  animation-name: bloom-logo-breath-mobile;
+}
+@keyframes bloom-logo-breath-mobile {
+  0%, 100% {
+    filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.35))
+            drop-shadow(0 0 24px rgba(220, 38, 38, 0.20))
+            brightness(0.95);
+    transform: translateX(-50%) scale(0.985);
+  }
+  50% {
+    filter: drop-shadow(0 0 28px rgba(220, 38, 38, 0.70))
+            drop-shadow(0 0 52px rgba(220, 38, 38, 0.45))
+            brightness(1.08);
+    transform: translateX(-50%) scale(1.015);
+  }
+}
+
+/* Light-theme glow palette — sakura pink */
+[data-theme="light"] .bloom-logo-wrap.desktop {
+  animation-name: bloom-logo-breath-light;
+}
+[data-theme="light"] .bloom-logo-wrap.mobile {
+  animation-name: bloom-logo-breath-light-mobile;
+}
+@keyframes bloom-logo-breath-light {
+  0%, 100% {
+    filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.35))
+            drop-shadow(0 0 24px rgba(236, 72, 153, 0.20))
+            brightness(0.95);
+    transform: translate(-50%, -50%) scale(0.985);
+  }
+  50% {
+    filter: drop-shadow(0 0 28px rgba(236, 72, 153, 0.70))
+            drop-shadow(0 0 52px rgba(236, 72, 153, 0.45))
+            brightness(1.08);
+    transform: translate(-50%, -50%) scale(1.015);
+  }
+}
+@keyframes bloom-logo-breath-light-mobile {
+  0%, 100% {
+    filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.35))
+            drop-shadow(0 0 24px rgba(236, 72, 153, 0.20))
+            brightness(0.95);
+    transform: translateX(-50%) scale(0.985);
+  }
+  50% {
+    filter: drop-shadow(0 0 28px rgba(236, 72, 153, 0.70))
+            drop-shadow(0 0 52px rgba(236, 72, 153, 0.45))
+            brightness(1.08);
+    transform: translateX(-50%) scale(1.015);
+  }
+}
+
+/* Reduced motion — disable the breath animation but keep a static gentle glow */
+@media (prefers-reduced-motion: reduce) {
+  .bloom-logo-wrap { animation: none !important; }
+}

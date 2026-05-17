@@ -13,6 +13,7 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NAV_SECTIONS } from '../nav/navConfig.js';
 import BackendSubTabBloom from './BackendSubTabBloom.jsx';
+import ClinicLogo from '../../ClinicLogo.jsx';
 
 const MD_BREAKPOINT = 768;
 
@@ -25,14 +26,16 @@ const MD_BREAKPOINT = 768;
 // scaled to desktop. Linear-mapped: top [4-66%] → [15-80%], left [8-78%] →
 // [12-88%]. Shape preserved (top arc dips up-down-down-up, bottom arc inverse).
 const DESKTOP_POSITION = {
-  'appointments-section': { top: '32%', left: '12%' },
-  'customers':            { top: '19%', left: '34%' },
-  'sales':                { top: '15%', left: '58%' },
-  'marketing':            { top: '23%', left: '82%' },
-  'stock':                { top: '65%', left: '88%' },
-  'finance':              { top: '80%', left: '64%' },
-  'reports':              { top: '80%', left: '38%' },
-  'master':               { top: '65%', left: '16%' },
+  // EOD+6 polish — widened from prior scatter (top/left shifted ~5% outward)
+  // to open up center space for the ClinicLogo (rendered at 50%/50%).
+  'appointments-section': { top: '28%', left: '8%'  },
+  'customers':            { top: '14%', left: '32%' },
+  'sales':                { top: '10%', left: '60%' },
+  'marketing':            { top: '18%', left: '86%' },
+  'stock':                { top: '70%', left: '92%' },
+  'finance':              { top: '86%', left: '64%' },
+  'reports':              { top: '86%', left: '36%' },
+  'master':               { top: '70%', left: '12%' },
 };
 
 // Colored emoji per section (mockup uses these — visually pops vs monochrome
@@ -144,7 +147,7 @@ function getIsMobile() {
   return window.innerWidth < MD_BREAKPOINT;
 }
 
-export default function BackendArcBloom({ open, onClose, onNavigate }) {
+export default function BackendArcBloom({ open, onClose, onNavigate, clinicSettings = null, theme = 'dark' }) {
   const orbRefs = useRef([]);
   const previouslyFocused = useRef(null);
   const sections = useMemo(() => NAV_SECTIONS, []);
@@ -244,6 +247,18 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
         onClick={onClose}
         aria-hidden="true"
       />
+
+      {/* Center logo — Lover Clinic mark, theme-aware (dark/light), slow glow.
+          Desktop: centered at 50%/50% inside bloom-stage. Mobile: top-center
+          where the upper viewport is empty (per user EOD+6 placement). */}
+      <div className={`bloom-logo-wrap ${isMobile ? 'mobile' : 'desktop'}`} aria-hidden="true">
+        <ClinicLogo
+          clinicSettings={clinicSettings}
+          theme={theme}
+          showText={false}
+          className="bloom-logo"
+        />
+      </div>
 
       {/* Dark: stars + nebulae + embers · Light: petals */}
       <div className="bloom-stars" aria-hidden="true">

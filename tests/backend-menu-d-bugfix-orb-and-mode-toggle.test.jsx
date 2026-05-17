@@ -46,18 +46,21 @@ describe('Bug A fix — BackendArcBloom uses scatter-grid layout per mockup', ()
     }
   });
 
-  it('B1.4 scatter positions (re-centered): customers top:19% left:34%', () => {
+  it('B1.4 (EOD+6 widened) scatter positions: customers top:14% left:32%', () => {
+    // EOD+6 polish — DESKTOP_POSITION shifted ~5% outward to open center
+    // space for the ClinicLogo. Original was top:19%/left:34%.
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const customersOrb = screen.getByTestId('bloom-orb-customers');
-    expect(customersOrb.style.top).toBe('19%');
-    expect(customersOrb.style.left).toBe('34%');
+    expect(customersOrb.style.top).toBe('14%');
+    expect(customersOrb.style.left).toBe('32%');
   });
 
-  it('B1.4-bis scatter positions: stock top:65% left:88% (bottom-right corner)', () => {
+  it('B1.4-bis (EOD+6 widened) scatter positions: stock top:70% left:92% (bottom-right corner)', () => {
+    // EOD+6 widened. Original was top:65%/left:88%.
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const stockOrb = screen.getByTestId('bloom-orb-stock');
-    expect(stockOrb.style.top).toBe('65%');
-    expect(stockOrb.style.left).toBe('88%');
+    expect(stockOrb.style.top).toBe('70%');
+    expect(stockOrb.style.left).toBe('92%');
   });
 
   it('B1.4-quater cluster centroid ~ (50%, 50%) — balanced not top-left tilt', () => {
