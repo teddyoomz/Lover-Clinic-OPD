@@ -42,6 +42,11 @@ function dataCol(db, name) {
   return db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(name);
 }
 
+// AV75 (2026-05-17 post-V81-fix7b) — explicit `.orderBy('performedAt','desc')`
+// matches the deployed composite index `be_admin_audit (type ASC, performedAt
+// DESCENDING)`. Without it, Firestore implicit ASC order on the `>=` range
+// mismatches the index direction → FAILED_PRECONDITION at runtime. Mirror
+// of backup-manager-delete.js fix.
 async function checkGracePeriod(db, backupRef) {
   const since = new Date(Date.now() - GRACE_HOURS * 60 * 60 * 1000).toISOString();
   const types = ['customer-delete-cascade', 'branch-make-fresh', 'central-stock-make-fresh'];
@@ -49,6 +54,7 @@ async function checkGracePeriod(db, backupRef) {
     const snap = await dataCol(db, 'be_admin_audit')
       .where('type', '==', t)
       .where('performedAt', '>=', since)
+      .orderBy('performedAt', 'desc')
       .get();
     for (const doc of snap.docs) {
       const data = doc.data();

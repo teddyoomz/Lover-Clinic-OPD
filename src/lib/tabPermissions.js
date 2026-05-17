@@ -113,10 +113,10 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // head-of-ops without giving full admin claim. Admin bypass implicit.
   'system-settings':     { requires: ['system_config_management'] },
 
-  // V74 (2026-05-16) — Customer backup/restore admin surfaces.
-  // Both admin-only (destructive ops + PII handling). No separate perm
-  // keys for MVP — admin claim required.
-  'customer-data-recovery': { adminOnly: true },
+  // V74 (2026-05-16) — Customer backup/restore admin surface.
+  // 2026-05-17 post-V81-fix7b — 'customer-data-recovery' tab REMOVED per user
+  // directive (orphan after V81-fix4 deprecated per-customer UI).
+  // backup-manager admin-only (destructive ops + PII).
   'backup-manager':         { adminOnly: true },
 
   // V40 (2026-05-07) — Branch Backup/Restore tab. Admin-only (destructive

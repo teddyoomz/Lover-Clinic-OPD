@@ -66,12 +66,13 @@ const MASTER_STUB_IDS = [
   'link-requests',  // V32-tris-quater (2026-04-26) LINE link-request approval queue
   'system-settings', // Phase 16.3 (2026-04-29) admin-gated system config
   'branch-backup',   // V40 (2026-05-07) admin-only branch backup/restore
-  'customer-data-recovery', // V74 (2026-05-16) admin-only customer restore
   'backup-manager',         // V74 (2026-05-16) admin-only unified backup manager
 ];
 
 // V50 (2026-05-08) — 'masterdata' (Sync ProClinic) REMOVED from master section.
 // V74 (2026-05-16) — 2 NEW customer backup admin tabs ADDED.
+// 2026-05-17 post-V81-fix7b — 'customer-data-recovery' REMOVED (orphan after V81-fix4
+// deprecated per-customer UI). Master section count: 23 → 22.
 // All master data CRUD'd via dedicated be_* tabs; no legacy ProClinic sync UI.
 const MASTER_SECTION_ITEM_IDS = [...MASTER_STUB_IDS];
 
@@ -84,9 +85,9 @@ describe('Phase 11.1 — navConfig master section', () => {
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
   });
 
-  it('M2 master section has exactly 23 items — 20 prior + 2 V74 backup admin tabs + 1 V75 fb-settings', () => {
+  it('M2 master section has exactly 22 items — 20 prior + 1 V74 backup-manager + 1 V75 fb-settings (post-V81-fix7b drop)', () => {
     const master = NAV_SECTIONS.find(s => s.id === 'master');
-    expect(master.items.length).toBe(23);
+    expect(master.items.length).toBe(22);
     expect(master.items.map(i => i.id)).toEqual(MASTER_SECTION_ITEM_IDS);
   });
 

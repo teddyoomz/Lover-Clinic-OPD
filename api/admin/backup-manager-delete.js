@@ -44,6 +44,12 @@ function dataCol(db, name) {
 /**
  * AV19 72h-grace — query be_admin_audit for any doc in last GRACE_HOURS
  * where autoBackupRef === target. Returns the audit doc id if found.
+ *
+ * AV75 (2026-05-17 post-V81-fix7b) — explicit `.orderBy('performedAt','desc')`
+ * matches the deployed composite index `be_admin_audit (type ASC, performedAt
+ * DESCENDING)` (firestore.indexes.json). Without the explicit DESC orderBy,
+ * Firestore implicitly orders by `performedAt ASC` for the `>=` range filter
+ * → composite-index direction mismatch → FAILED_PRECONDITION at runtime.
  */
 async function checkGracePeriod(db, backupRef) {
   const since = new Date(Date.now() - GRACE_HOURS * 60 * 60 * 1000).toISOString();
@@ -53,6 +59,7 @@ async function checkGracePeriod(db, backupRef) {
     const snap = await dataCol(db, 'be_admin_audit')
       .where('type', '==', t)
       .where('performedAt', '>=', since)
+      .orderBy('performedAt', 'desc')
       .get();
     for (const doc of snap.docs) {
       const data = doc.data();

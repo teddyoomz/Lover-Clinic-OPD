@@ -200,10 +200,12 @@ describe('section integrity', () => {
     expect(ids).not.toContain('clone');
   });
 
-  it('I4 master section — V50 "masterdata" REMOVED + V74 2 backup admin tabs + V75 fb-settings', () => {
+  it('I4 master section — V50 "masterdata" REMOVED + V74 backup-manager + V75 fb-settings (V81-fix7b drops customer-data-recovery)', () => {
     // V50: ProClinic Sync tab gone. All master data is now CRUD'd via the
-    // 23 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40 + V74 backup
-    // tabs + V75 fb-settings per-branch FB Page config).
+    // 22 dedicated be_* tabs (P11/P12/P13/P14/V32/Phase16.3/V40 + V74 backup-manager
+    // + V75 fb-settings per-branch FB Page config).
+    // 2026-05-17 post-V81-fix7b — 'customer-data-recovery' tab REMOVED per user
+    // directive (orphan after V81-fix4 deprecated per-customer UI). Count 23 → 22.
     const master = NAV_SECTIONS.find(s => s.id === 'master');
     expect(master).toBeTruthy();
     expect(master.label).toBe('ข้อมูลพื้นฐาน');
@@ -230,12 +232,13 @@ describe('section integrity', () => {
       'link-requests',
       'system-settings',
       'branch-backup',
-      // V74 (2026-05-16) — customer backup/restore admin surfaces
-      'customer-data-recovery',
+      // V74 (2026-05-16) — customer backup/restore admin surface (backup-manager only post-V81-fix7b)
       'backup-manager',
     ]);
     // V50 anti-regression
     expect(master.items.map(i => i.id)).not.toContain('masterdata');
+    // post-V81-fix7b anti-regression — orphan tab must NOT come back
+    expect(master.items.map(i => i.id)).not.toContain('customer-data-recovery');
   });
 
   it('I4b deprecated "system" section no longer exists (absorbed into master in Phase 11.1)', () => {

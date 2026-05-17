@@ -213,8 +213,9 @@ export const NAV_SECTIONS = [
       { id: 'system-settings',      label: 'ตั้งค่าระบบ',           icon: Settings,      color: 'amber', palette: 'system settings tab visibility override default deposit points feature flag negative stock toggle ระบบ ตั้งค่า แท็บ ค่าเริ่มต้น มัดจำ คะแนน สต็อคติดลบ' },
       // V40 (2026-05-07) — Branch Backup/Restore tab. Admin-only.
       { id: 'branch-backup',        label: 'Backup สาขา',           icon: Database,      color: 'amber', palette: 'backup restore branch export import สาขา สำรอง นำเข้า กู้คืน branch-backup snapshot' },
-      // V74 (2026-05-16) — Customer backup/restore admin surfaces.
-      { id: 'customer-data-recovery', label: 'กู้คืนข้อมูลลูกค้า',     icon: Database,      color: 'amber', palette: 'customer data recovery restore backup customer ลูกค้า กู้คืน สำรอง patient v74' },
+      // V74 (2026-05-16) — Customer backup/restore admin surface.
+      // 2026-05-17 post-V81-fix7b — 'customer-data-recovery' tab REMOVED per user
+      // directive (orphan after V81-fix4 deprecated per-customer UI).
       { id: 'backup-manager',         label: 'จัดการ Backup ทั้งหมด', icon: Database,      color: 'amber', palette: 'backup manager unified all branch customer central stock rename delete bulk file จัดการ ไฟล์ สำรอง ทั้งหมด lable v74' },
     ],
   },

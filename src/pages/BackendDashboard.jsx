@@ -74,7 +74,9 @@ const SystemSettingsTab      = lazy(() => import('../components/backend/SystemSe
 // V40 Task 4.4 (2026-05-07) — Branch Backup tab (lazy; admin-only, rarely opened)
 const BranchBackupTab        = lazy(() => import('../components/backend/BranchBackupTab.jsx'));
 // V74 (2026-05-16) — Customer backup/restore admin surfaces (lazy; admin-only)
-const CustomerDataRecoveryTab = lazy(() => import('../components/backend/CustomerDataRecoveryTab.jsx'));
+// 2026-05-17 post-V81-fix7b — CustomerDataRecoveryTab removed per user directive
+// "ลบไป รก tab=customer-data-recovery". Per-customer UI was deprecated by V81-fix4;
+// this tab was the LAST orphaned consumer of the dead 'customer' filter chip.
 const BackupManagerTab        = lazy(() => import('../components/backend/BackupManagerTab.jsx'));
 import ComingSoon from '../components/backend/ComingSoon.jsx';
 import ProductGroupsTab from '../components/backend/ProductGroupsTab.jsx';
@@ -660,8 +662,6 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           <SystemSettingsTab />
         ) : activeTab === 'branch-backup' ? (
           <BranchBackupTab clinicSettings={clinicSettings} theme={theme} />
-        ) : activeTab === 'customer-data-recovery' ? (
-          <CustomerDataRecoveryTab />
         ) : activeTab === 'backup-manager' ? (
           <BackupManagerTab />
         ) : null}

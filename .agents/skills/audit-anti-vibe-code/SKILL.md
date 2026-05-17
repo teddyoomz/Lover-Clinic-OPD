@@ -2028,6 +2028,61 @@ post-deploy 500 + user-rage round).
 in `api/**` confirmed via cross-file grep. AV67 codifies the invariant
 permanently.
 
+### AV75 — Firestore composite-index direction MUST match query orderBy direction (post-V81-fix7b, 2026-05-17 EOD+2)
+
+**Trigger**: ANY Firestore query of the shape
+`where(eqField, '==', x).where(rangeField, opIneq, y).get()` (where `opIneq`
+is one of `>=`, `>`, `<=`, `<`, `!=`) MUST include an explicit
+`.orderBy(rangeField, <direction>)` whose direction matches the deployed
+composite index direction for `rangeField`. Without the explicit orderBy,
+Firestore implicitly orders by `rangeField` ASC; if the deployed index has
+DESC direction for `rangeField`, the query throws `FAILED_PRECONDITION:
+The query requires an index` at runtime.
+
+**Why**: Composite indexes encode per-field direction. A query with an
+implicit ASC orderBy CANNOT use a DESC composite index even when both
+fields match — Firestore requires direction alignment. The error is invisible
+to unit tests (mocks don't enforce index policy) and to admin-SDK doc-level
+access (admin SDK bypasses composite indexes entirely — Rule Q V66 lesson).
+Only real-client-SDK runs against real prod surface the bug.
+
+**Origin**: V81-fix7b post-deploy (2026-05-17 EOD+2 LATE+4) — user clicked
+the 🗑 delete button on a per-branch backup row in BackupManagerTab. The
+endpoint's `checkGracePeriod` ran `where('type','==',t).where('performedAt','>=',since)`
+against `be_admin_audit`. Deployed index `(type ASC, performedAt DESC)` was
+correct for the manager-LIST query (which orders newest-first), but the
+grace-check had no orderBy → implicit ASC → mismatch → user-visible error
+banner: "⚠ 9 FAILED_PRECONDITION: The query requires an index". Two
+identical sites: `api/admin/backup-manager-delete.js:checkGracePeriod` +
+`api/admin/backup-manager-bulk-delete.js:checkGracePeriod`. Fixed by adding
+`.orderBy('performedAt', 'desc')` to both.
+
+**Source-grep pattern** (catches future drift):
+```
+# Find any .where('X', '==', ...) followed by .where('Y', '>=|>|<=|<', ...)
+# without a subsequent .orderBy() — class-of-bug regression catcher.
+grep -nE "\.where\(['\"][^'\"]+['\"], ?['\"](>=|>|<=|<)['\"]" api/admin/*.js
+# Cross-reference each match against firestore.indexes.json to verify the
+# query has an explicit .orderBy() matching the deployed index direction.
+```
+
+**Sanctioned exceptions**: queries with NO matching deployed composite index
+(use single-field index only) — Firestore handles those without composite.
+But adding `.orderBy()` defensively is always safe.
+
+**Detection**: regression test `tests/v81-fix7b-grace-check-composite-index.test.js`
+parses both `checkGracePeriod` functions + asserts both contain
+`.orderBy('performedAt', 'desc')`. Future removal fails build.
+
+**Priority**: HIGH — the bug surfaces ONLY at runtime against real Firestore;
+mock tests + admin-SDK e2e + build all GREEN while the user clicks → 500.
+Every new composite-index-backed query in api/** needs this audit pass.
+
+**Lineage**: post-V81-fix7b (2026-05-17 EOD+2 LATE+4). Two sites fixed in
+single commit per Rule P 7-step class-of-bug expansion. Plus removal of
+orphan `customer-data-recovery` tab in same commit (independent fix, same
+user-report turn).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
