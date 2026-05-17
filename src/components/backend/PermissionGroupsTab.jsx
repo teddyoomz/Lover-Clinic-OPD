@@ -3,17 +3,22 @@
 // count (e.g. "42 / 130 สิทธิ์"). 9th reuse of MarketingTabShell.
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Trash2, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertCircle, PackageOpen } from 'lucide-react';
-import { listPermissionGroups, deletePermissionGroup, reconcileAllCustomerSummaries } from '../../lib/scopedDataLayer.js';
-import { listCoursesNeedingMigration, commitCoursesSkipStockMigration } from '../../lib/migrateCoursesSkipStockClient.js';
+import { Edit2, Trash2, ShieldCheck } from 'lucide-react';
+import { listPermissionGroups, deletePermissionGroup } from '../../lib/scopedDataLayer.js';
 import PermissionGroupFormModal from './PermissionGroupFormModal.jsx';
 import MarketingTabShell from './MarketingTabShell.jsx';
-import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
+import { useHasPermission } from '../../hooks/useTabAccess.js';
 import {
   STATUS_OPTIONS,
   ALL_PERMISSION_KEYS,
   countPermissions,
 } from '../../lib/permissionGroupValidation.js';
+// V82-fix6 (2026-05-17 EOD+3 LATE+3) — M9 reconciler + Backfill "ไม่ตัดสต็อค"
+// admin cards REMOVED per user directive "ลบปุ่มในภาพที่ 1 ออก ไม่ได้ใช้แล้ว".
+// The underlying helpers (reconcileAllCustomerSummaries +
+// listCoursesNeedingMigration + commitCoursesSkipStockMigration +
+// migrateCoursesSkipStockClient module) remain available for ad-hoc admin-
+// SDK use via scripts/* but are no longer exposed in the UI.
 
 // V29 (2026-04-26) — Removed manual buttons (Bootstrap self / Sync ทุก staff /
 // ลบ test-probe ค้าง) per user directive: "ไม่ต้องการระบบ manual เหล่านี้".
@@ -38,62 +43,6 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
   // Phase 13.5.3 — gate delete on permission_group_management. Admin
   // bypasses (useHasPermission returns true for admins).
   const canDelete = useHasPermission('permission_group_management');
-  // M9 (2026-04-26) — admin-only reconciler button. Walks every customer +
-  // recomputes the customer-doc summary (totalSpent / lastSaleAt / etc.)
-  // from the ledger collections. Use after a Firestore restore, manual
-  // edits, or whenever the customer-list summary drifts from the actual
-  // sales/treatments/deposits/wallets data.
-  const { isAdmin } = useTabAccess();
-  const [reconciling, setReconciling] = useState(false);
-  const [reconcileResult, setReconcileResult] = useState(null);
-  const [reconcileProgress, setReconcileProgress] = useState({ done: 0, total: 0, name: '' });
-
-  const handleReconcile = useCallback(async () => {
-    if (!window.confirm('สรุปยอดลูกค้าใหม่ทั้งหมด?\n\nเดินทุกลูกค้า → คำนวณยอดซื้อ / วันที่ซื้อล่าสุด / ฯลฯ จาก ledger จริง.\nใช้เวลาตามจำนวนลูกค้า — อาจกินเวลาหลายนาที.')) return;
-    setReconciling(true);
-    setReconcileResult(null);
-    setReconcileProgress({ done: 0, total: 0, name: '' });
-    try {
-      const result = await reconcileAllCustomerSummaries({
-        onProgress: ({ done, total, name }) => setReconcileProgress({ done, total, name }),
-      });
-      setReconcileResult(result);
-    } catch (e) {
-      setReconcileResult({ error: e.message || String(e) });
-    } finally {
-      setReconciling(false);
-    }
-  }, []);
-
-  // 2026-04-28 — admin-only "ไม่ตัดสต็อค" course migration. Walks every
-  // be_courses doc + backfills `skipStockDeduction: false` (default
-  // unchecked = ตัดสต็อคปกติ) on top-level + every courseProducts[i] entry
-  // that doesn't already carry the field. Idempotent — re-runs after
-  // commit return 0 changes.
-  const [migrating, setMigrating] = useState(false);
-  const [migrationResult, setMigrationResult] = useState(null);
-  const handleMigrateCoursesSkipStock = useCallback(async () => {
-    if (!window.confirm('Migrate be_courses ทุก doc เพื่อเพิ่ม flag "ไม่ตัดสต็อค" (default = ไม่ติ๊ก = ตัดสต็อคปกติ)?\n\nระบบจะดู docs ที่ขาด field ก่อน แล้ว update เฉพาะที่จำเป็น (idempotent — รันซ้ำได้)')) return;
-    setMigrating(true);
-    setMigrationResult(null);
-    try {
-      const dryRun = await listCoursesNeedingMigration();
-      if (!dryRun.needsMigrationCount) {
-        setMigrationResult({ noop: true, totalCourses: dryRun.totalCourses });
-        return;
-      }
-      if (!window.confirm(`พบ ${dryRun.needsMigrationCount} / ${dryRun.totalCourses} คอร์สที่ต้อง migrate\n  • ขาด top-level: ${dryRun.topMissingCount}\n  • ขาดใน sub-items: ${dryRun.subMissingCount}\n\nยืนยัน commit ?`)) {
-        setMigrationResult({ cancelled: true });
-        return;
-      }
-      const commit = await commitCoursesSkipStockMigration();
-      setMigrationResult(commit);
-    } catch (e) {
-      setMigrationResult({ error: e.message || String(e) });
-    } finally {
-      setMigrating(false);
-    }
-  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -156,121 +105,12 @@ export default function PermissionGroupsTab({ clinicSettings, theme }) {
     </select>
   );
 
-  // M9 (2026-04-26) — admin reconciler card. Rendered OUTSIDE
-  // MarketingTabShell because the shell hides children when there are no
-  // permission groups (filteredCount === 0), but the M9 card is a distinct
-  // admin operation that should always be available to admins regardless
-  // of permission-group state.
-  const m9Card = isAdmin && (
-    <div className="mb-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]" data-testid="m9-reconciler-card">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
-            <RefreshCw size={14} className="text-sky-400" />
-            สรุปยอดลูกค้าใหม่ทั้งหมด (M9 reconciler)
-          </div>
-          <div className="text-xs text-[var(--tx-muted)] mt-0.5">
-            คำนวณยอดซื้อ / วันที่ซื้อล่าสุด / ฯลฯ จาก ledger จริง — ใช้เมื่อข้อมูลรวมหน้า Customer List ไม่ตรงกับยอดจริง
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleReconcile}
-          disabled={reconciling}
-          data-testid="m9-reconcile-btn"
-          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-700 text-white inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {reconciling ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          {reconciling ? `กำลังสรุป... (${reconcileProgress.done}/${reconcileProgress.total})` : 'สรุปยอดใหม่'}
-        </button>
-      </div>
-      {reconciling && reconcileProgress.name && (
-        <div className="mt-2 text-xs text-[var(--tx-muted)] truncate" data-testid="m9-reconcile-progress">
-          กำลังประมวลผล: <b className="text-[var(--tx-heading)]">{reconcileProgress.name}</b>
-        </div>
-      )}
-      {reconcileResult && !reconcileResult.error && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs flex items-start gap-2" data-testid="m9-reconcile-success">
-          <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-          <div>
-            <div>เสร็จสิ้น — สรุปสำเร็จ <b>{reconcileResult.succeeded}</b> / {reconcileResult.total} ลูกค้า</div>
-            {reconcileResult.failed.length > 0 && (
-              <div className="mt-1 text-amber-200">
-                ล้มเหลว {reconcileResult.failed.length} ราย — {reconcileResult.failed.slice(0, 3).map(f => f.customerId).join(', ')}{reconcileResult.failed.length > 3 ? '...' : ''}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {reconcileResult && reconcileResult.error && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-700/40 text-red-300 text-xs flex items-start gap-2" data-testid="m9-reconcile-error">
-          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-          <div>เกิดข้อผิดพลาด: {reconcileResult.error}</div>
-        </div>
-      )}
-    </div>
-  );
-
-  // 2026-04-28 — admin-only course skipStockDeduction migration card.
-  // Same pattern as M9 — admin-gated, sky-700 button, optimistic Thai
-  // confirm dialogs, success/error banners.
-  const skipStockCard = isAdmin && (
-    <div className="mb-3 p-3 rounded-lg bg-[var(--bg-card)] border border-[var(--bd)]" data-testid="course-skip-stock-migrate-card">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-[var(--tx-heading)] flex items-center gap-2">
-            <PackageOpen size={14} className="text-rose-400" />
-            Backfill flag "ไม่ตัดสต็อค" ในคอร์สทั้งหมด
-          </div>
-          <div className="text-xs text-[var(--tx-muted)] mt-0.5">
-            เพิ่ม field ลง be_courses ทุก doc — default ไม่ติ๊ก (= ตัดสต็อคปกติ). Idempotent — รันซ้ำได้, จะไม่ repeat update doc ที่มี field อยู่แล้ว.
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleMigrateCoursesSkipStock}
-          disabled={migrating}
-          data-testid="course-skip-stock-migrate-btn"
-          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-700 text-white inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {migrating ? <Loader2 size={14} className="animate-spin" /> : <PackageOpen size={14} />}
-          {migrating ? 'กำลังตรวจสอบ + migrate...' : 'Migrate'}
-        </button>
-      </div>
-      {migrationResult && migrationResult.noop && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs flex items-start gap-2" data-testid="course-skip-stock-noop">
-          <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-          <div>ทุกคอร์สมี field ครบแล้ว ({migrationResult.totalCourses} คอร์ส) — ไม่ต้อง migrate</div>
-        </div>
-      )}
-      {migrationResult && migrationResult.cancelled && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/40 text-amber-200 text-xs flex items-start gap-2" data-testid="course-skip-stock-cancelled">
-          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-          <div>ยกเลิก — ไม่ได้ commit migration</div>
-        </div>
-      )}
-      {migrationResult && migrationResult.updatedCount != null && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-900/20 border border-emerald-700/40 text-emerald-200 text-xs flex items-start gap-2" data-testid="course-skip-stock-success">
-          <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-          <div>
-            <div>Migrate สำเร็จ — update <b>{migrationResult.updatedCount}</b> / {migrationResult.totalCourses} คอร์ส</div>
-            <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">audit: {migrationResult.auditId}</div>
-          </div>
-        </div>
-      )}
-      {migrationResult && migrationResult.error && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-700/40 text-red-300 text-xs flex items-start gap-2" data-testid="course-skip-stock-error">
-          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-          <div>เกิดข้อผิดพลาด: {migrationResult.error}</div>
-        </div>
-      )}
-    </div>
-  );
+  // V82-fix6 (2026-05-17 EOD+3 LATE+3) — m9Card + skipStockCard REMOVED per
+  // user "ลบปุ่มในภาพที่ 1 ออก ไม่ได้ใช้แล้ว". Underlying helpers preserved
+  // for scripts/* admin-SDK ad-hoc use.
 
   return (
     <>
-      {m9Card}
-      {skipStockCard}
       <MarketingTabShell
         icon={ShieldCheck}
         title="สิทธิ์การใช้งาน"

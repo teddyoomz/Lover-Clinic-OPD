@@ -105,21 +105,40 @@ function writeSelected(uid, branchId) {
 /**
  * First-login default branch resolver.
  * - branches null/empty → null
- * - accessibleBranchIds null/empty → fall back to ALL branches (bootstrap
- *   admin / legacy staff records pre-Phase-BS where branchIds[] is empty
- *   meaning "all branches")
- * - accessibleBranchIds non-empty → filter to that subset
+ * - TEST- / E2E- prefixed branches EXCLUDED from default selection
+ *   (V82-fix6 2026-05-17 EOD+3 LATE+3): testing artifacts must not become
+ *   first-login defaults. Origin: V81-fix1 Branch (TEST-V81-TS-BR-...)
+ *   was created during V81 backup testing 2026-05-16 + remained in
+ *   be_branches → newest createdAt → became default for every fresh
+ *   login → 0 data → "empty skeleton until BranchSelector switch".
+ *   Mirrors V33.10/.11/.12/.13/.14 test-prefix discipline. User CAN still
+ *   manually pick a test branch via the dropdown; only the auto-default
+ *   skips them.
+ * - accessibleBranchIds null/empty → fall back to ALL non-TEST branches
+ *   (bootstrap admin / legacy staff records pre-Phase-BS where branchIds[]
+ *   is empty meaning "all branches")
+ * - accessibleBranchIds non-empty → filter to that subset (after TEST-exclude)
  * - sort accessible by createdAt DESC (newest first); secondary stable
  *   sort on id for determinism when timestamps tie
- * - return first.branchId || first.id; null if no accessible branches
+ * - return first.branchId || first.id; null if no accessible non-TEST branches
  */
+function isTestBranchId(id) {
+  const s = String(id || '');
+  return s.startsWith('TEST-') || s.startsWith('E2E-');
+}
+
 function pickFirstLoginDefault({ branches, accessibleBranchIds }) {
   if (!Array.isArray(branches) || branches.length === 0) return null;
+  // V82-fix6: drop TEST-/E2E- prefixed branches BEFORE access-filter so they
+  // never become the first-login default (root cause of "empty skeleton"
+  // bug after V81 testing left a TEST-V81-TS-BR-... branch in be_branches).
+  const nonTest = branches.filter((b) => !isTestBranchId(b.branchId || b.id));
+  if (nonTest.length === 0) return null; // pure test environment — no production default
   const hasAccessFilter = Array.isArray(accessibleBranchIds) && accessibleBranchIds.length > 0;
   const allowed = hasAccessFilter ? new Set(accessibleBranchIds.map((x) => String(x))) : null;
   const accessible = hasAccessFilter
-    ? branches.filter((b) => allowed.has(String(b.branchId || b.id)))
-    : branches;
+    ? nonTest.filter((b) => allowed.has(String(b.branchId || b.id)))
+    : nonTest;
   if (accessible.length === 0) return null;
   const sorted = [...accessible].sort((a, b) => {
     const ca = a.createdAt || '';
@@ -129,6 +148,8 @@ function pickFirstLoginDefault({ branches, accessibleBranchIds }) {
   });
   return sorted[0].branchId || sorted[0].id || null;
 }
+
+export { isTestBranchId as __isTestBranchIdForTest, pickFirstLoginDefault as __pickFirstLoginDefaultForTest };
 
 /**
  * Provider — wrap App (Phase 17.2 — hoisted from BackendDashboard so the

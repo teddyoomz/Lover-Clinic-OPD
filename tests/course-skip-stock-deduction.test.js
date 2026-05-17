@@ -569,15 +569,23 @@ describe('CSS.J — Migration endpoint helper + UI button', () => {
       expect(migrateClientSrc).toMatch(/Authorization: `Bearer/);
     });
 
-    it('PermissionGroupsTab imports the client + adds admin card', () => {
-      expect(permissionGroupsTabSrc).toMatch(/listCoursesNeedingMigration|commitCoursesSkipStockMigration/);
-      expect(permissionGroupsTabSrc).toMatch(/data-testid="course-skip-stock-migrate-card"/);
-      expect(permissionGroupsTabSrc).toMatch(/data-testid="course-skip-stock-migrate-btn"/);
+    it('V82-fix6 (2026-05-17 EOD+3 LATE+3): PermissionGroupsTab NO LONGER imports the migration helpers (UI card REMOVED per user "ลบปุ่มในภาพที่ 1 ออก ไม่ได้ใช้แล้ว")', () => {
+      // Strip comments — the V82-fix6 explanatory comment intentionally
+      // mentions the removed helper names. Only IMPORT statements matter.
+      const codeOnly = permissionGroupsTabSrc
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*$/gm, '');
+      expect(codeOnly).not.toMatch(/import\s*\{[^}]*\blistCoursesNeedingMigration\b/);
+      expect(codeOnly).not.toMatch(/import\s*\{[^}]*\bcommitCoursesSkipStockMigration\b/);
+      expect(permissionGroupsTabSrc).not.toContain('data-testid="course-skip-stock-migrate-card"');
+      expect(permissionGroupsTabSrc).not.toContain('data-testid="course-skip-stock-migrate-btn"');
     });
 
-    it('migrate card is admin-only (uses isAdmin gate from useTabAccess)', () => {
-      // Both M9 + skipStockCard use isAdmin in their JSX guard.
-      expect(permissionGroupsTabSrc).toMatch(/skipStockCard\s*=\s*isAdmin\s*&&/);
+    it('V82-fix6: skipStockCard JSX block REMOVED from PermissionGroupsTab', () => {
+      // Pre-V82-fix6: `const skipStockCard = isAdmin && (<div data-testid="course-skip-stock-migrate-card">...</div>)`
+      // Post-V82-fix6: declaration entirely removed.
+      expect(permissionGroupsTabSrc).not.toMatch(/skipStockCard\s*=\s*isAdmin\s*&&/);
+      expect(permissionGroupsTabSrc).not.toContain('{skipStockCard}');
     });
   });
 });
