@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NAV_SECTIONS } from '../nav/navConfig.js';
+import BackendSubTabBloom from './BackendSubTabBloom.jsx';
 
 const MD_BREAKPOINT = 768;
 
@@ -116,6 +117,9 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
   const previouslyFocused = useRef(null);
   const sections = useMemo(() => NAV_SECTIONS, []);
   const [isMobile, setIsMobile] = useState(getIsMobile);
+  // Sub-tab picker state — opens when section has ≥2 items
+  const [pickerSection, setPickerSection] = useState(null);
+  const [pickerOriginRect, setPickerOriginRect] = useState(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(getIsMobile());
@@ -156,14 +160,36 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
   }, [open, onClose, sections.length]);
 
   const handleOrbClick = useCallback(
-    (section) => {
-      const firstItem = section.items[0];
-      if (!firstItem) return;
-      onNavigate?.(firstItem.id);
-      onClose?.();
+    (section, ev) => {
+      const items = section.items;
+      if (!items || items.length === 0) return;
+      // Single-item section → direct navigate (skip picker) per spec
+      if (items.length === 1) {
+        onNavigate?.(items[0].id);
+        onClose?.();
+        return;
+      }
+      // Multi-item section → open picker
+      const rect = ev?.currentTarget?.getBoundingClientRect?.() || null;
+      setPickerOriginRect(rect);
+      setPickerSection(section);
     },
     [onNavigate, onClose]
   );
+
+  const handlePickerNavigate = useCallback(
+    (itemId) => {
+      onNavigate?.(itemId);
+      setPickerSection(null);
+      onClose?.();  // also close the main ArcBloom — both blooms collapse
+    },
+    [onNavigate, onClose]
+  );
+
+  const handlePickerClose = useCallback(() => {
+    setPickerSection(null);
+    // Main ArcBloom stays open behind
+  }, []);
 
   if (!open) return null;
 
@@ -235,7 +261,7 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
                 '--c1': color.c1,
                 '--c2': color.c2,
               }}
-              onClick={() => handleOrbClick(section)}
+              onClick={(ev) => handleOrbClick(section, ev)}
             >
               <span className="bloom-orb-emoji" aria-hidden="true">{emoji}</span>
               <span className="bloom-orb-label">{section.label}</span>
@@ -243,6 +269,15 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
             </button>
           );
         })}
+        {pickerSection && (
+          <BackendSubTabBloom
+            section={pickerSection}
+            parentColor={SECTION_COLOR[pickerSection.id]}
+            originRect={pickerOriginRect}
+            onNavigate={handlePickerNavigate}
+            onClose={handlePickerClose}
+          />
+        )}
       </div>
     </div>
   );
