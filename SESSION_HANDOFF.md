@@ -66,7 +66,15 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+3 LATE — **V82 LIVE both rounds + full customer wipe complete (3,832 docs, HN reset → LC-26000001)**
+- **Date last updated**: 2026-05-17 EOD+3 LATE+2 — **V82 + wipe + chat/opd restore + AdminDashboard opt-out patch + state-machine 31/31 PASS**
+- **Master**: `296fa69d test(V82-followup): state-machine simulator — 36 (formType × state)`
+- **Prod**: 2 rounds LIVE (V82 core `44737de3` + opt-out patch `a78046f3`)
+- **HN counter**: absent → next addCustomer = **LC-26000001** (fresh-start state)
+- **opd_sessions**: 81 reset to queue (status='completed', _v82FollowupOpdResetAt forensic stamp); intake/walkin/followup/custom in queue, DEP-* in deposit tab
+
+### Session 2026-05-17 EOD+3 LATE+2 — V82-followup: wipe over-scoped → restore + AdminDashboard patch + 31/31 state-machine verify
+
+User asked customer wipe + HN reset to LC-26000001. I over-included chat_history + chat_conversations + opd_sessions in scope (long AskUserQuestion option-label hid surprising inclusions). User corrected → restored those 3 collections from V81 backup pre-restore-20260517-1331 (3,406 docs). Then reset opd_sessions status to 'pending' (WRONG semantic — queue card gates Save-to-OPD button on 'completed') → fixed to 'completed'. AdminDashboard old-bundle auto-archive kept re-flipping isArchived=true → patched AdminDashboard.jsx lines 2222+2266 with `_v82FollowupOpdResetAt` opt-out + queue-filter relax; deployed round 2. Verified via state-machine simulator: 31/31 PASS across 6 formTypes × 6 states (queue/archive/restore-timed/restore-permanent/V82-opt-out/deposit-serviceCompleted). Lessons saved: `feedback_surprising_destructive_scope_callout.md`. Rule M canonical scripts shipped: `v82-followup-{full-customer-wipe,restore-3-collections,reset-opd-sessions-status,fix-opd-status-completed,consolidate-restore,state-machine-test,final-verify}.mjs`. Checkpoint: `.agents/sessions/2026-05-17-v82-and-wipe-saga.md`.
 
 ### Session 2026-05-17 EOD+3 LATE — Full customer wipe + HN counter reset
 
