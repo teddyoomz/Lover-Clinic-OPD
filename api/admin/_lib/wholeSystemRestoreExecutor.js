@@ -52,29 +52,81 @@ async function assertTargetEmpty(db, scope = 'full') {
 }
 
 async function restoreCollections(db, storage, manifest, backupRef, scope = 'full') {
+  // V81-fix7 (2026-05-17 EOD+2 LATE+3): per-doc resilience — if ONE doc in a
+  // batch fails, log + skip THAT doc; other docs still restored. Previous
+  // per-collection try/catch silently dropped entire collections (S2 stress
+  // test root cause — 102 docs restored out of 3722+ expected).
+  //
+  // Strategy:
+  //   1. Try downloading the collection file (per-collection try/catch)
+  //   2. Parse JSON + decode types (per-collection)
+  //   3. Try a fast-path batch.commit (most common case — whole batch succeeds)
+  //   4. If batch fails → fall back to per-doc individual writes with try/catch
+  //   5. Track restoredDocs + failedDocsCount per collection + per-doc errors
+
   let restoredDocs = 0;
   const failedDocs = [];
   for (const c of manifest.collections) {
+    let downloadFailed = false;
+    let buf;
     try {
-      const [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${c.path}`).download();
+      [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${c.path}`).download();
+    } catch (e) {
+      failedDocs.push({ collection: c.name, phase: 'download', error: e.message });
+      downloadFailed = true;
+    }
+    if (downloadFailed) continue;
+
+    let docs;
+    try {
       const rawDocs = JSON.parse(buf.toString('utf8'));
-      // V81-fix1: re-hydrate Firestore-native types (Timestamp/GeoPoint/Bytes) from markers
-      // BEFORE batch.set. Without this, Timestamp fields written as plain Maps.
-      const docs = rawDocs.map(d => decodeFirestoreData(d, FB_TYPE_OPTS));
-      // Subcollections have name like 'be_customers/{cid}/{sub}' OR
-      // 'chat_conversations/{convId}/messages' — Firestore handles nested paths.
-      const colPath = `${PREFIX}/${c.name}`;
-      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      docs = rawDocs.map(d => decodeFirestoreData(d, FB_TYPE_OPTS));
+    } catch (e) {
+      failedDocs.push({ collection: c.name, phase: 'parse', error: e.message });
+      continue;
+    }
+
+    const colPath = `${PREFIX}/${c.name}`;
+    let perCollectionRestored = 0;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const slice = docs.slice(i, i + BATCH_SIZE);
+      // Fast path: try whole batch
+      try {
         const batch = db.batch();
-        for (const doc of docs.slice(i, i + BATCH_SIZE)) {
+        for (const doc of slice) {
           const { id, ...data } = doc;
           batch.set(db.doc(`${colPath}/${id}`), data);
         }
         await batch.commit();
+        perCollectionRestored += slice.length;
+        continue;
+      } catch (batchErr) {
+        // Slow path: per-doc fallback — find the bad doc(s), preserve the good ones
+        for (const doc of slice) {
+          const { id, ...data } = doc;
+          try {
+            await db.doc(`${colPath}/${id}`).set(data);
+            perCollectionRestored += 1;
+          } catch (docErr) {
+            failedDocs.push({
+              collection: c.name,
+              docId: id,
+              phase: 'per-doc-set',
+              error: docErr.message,
+              hint: 'isolated by V81-fix7 per-doc fallback (was silent-swallow pre-fix)',
+            });
+          }
+        }
       }
-      restoredDocs += docs.length;
-    } catch (e) {
-      failedDocs.push({ collection: c.name, error: e.message });
+    }
+    restoredDocs += perCollectionRestored;
+    if (perCollectionRestored !== docs.length) {
+      failedDocs.push({
+        collection: c.name,
+        phase: 'partial-restore',
+        attempted: docs.length,
+        succeeded: perCollectionRestored,
+      });
     }
   }
   return { restoredDocs, failedDocs };

@@ -34,13 +34,17 @@ export default async function handler(req, res) {
   const bundlePath = `backups/customer-only/${backupRef}/__bundle.json`;
   const bundleFile = storage.file(bundlePath);
 
+  // V81-fix7: force file download (not browser tab open)
+  const filename = `lover-clinic-customer-only-backup-${backupRef}.json`;
+  const responseDisposition = `attachment; filename="${filename}"`;
+
   try {
     const [exists] = await bundleFile.exists();
     if (exists) {
       const [meta] = await bundleFile.getMetadata();
       const ageMs = Date.now() - new Date(meta.timeCreated).getTime();
       if (ageMs < ARCHIVE_TTL_MS) {
-        const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
+        const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS, responseDisposition });
         return res.status(200).json({
           downloadUrl: url,
           archiveSize: parseInt(meta.size || '0', 10),
@@ -74,13 +78,14 @@ export default async function handler(req, res) {
     const bundleJson = JSON.stringify(bundle);
     await bundleFile.save(bundleJson, { contentType: 'application/json' });
     const [meta] = await bundleFile.getMetadata();
-    const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
+    const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS, responseDisposition });
 
     return res.status(200).json({
       downloadUrl: url,
       archiveSize: parseInt(meta.size || '0', 10),
       reused: false,
       format: 'json-bundle-v1',
+      filename,
       fileCount: Object.keys(bundle.files).length,
       expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
     });

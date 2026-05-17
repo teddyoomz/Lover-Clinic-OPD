@@ -40,9 +40,10 @@ function getAdminBucket() {
 // whole-system SUB-FILE (which hits AV19 grace check and fails with cryptic
 // FAILED_PRECONDITION error per Bug 3a 2026-05-17 EOD+2 LATE+1).
 const EXCLUDE_PREFIXES = [
-  'backups/whole-system/',         // V81 — separate UI section
-  'backups/whole-fleet-customers/', // V77 deprecated — purged by V81-fix4 script
-  'backups/customers/',             // V74 deprecated — purged by V81-fix4 script
+  'backups/whole-system/',           // V81 — separate UI section
+  'backups/customer-only/',          // V81-fix6 — separate UI section (V81-fix7 added: prevents user clicking Delete on sub-files which hits AV19 grace + missing composite index)
+  'backups/whole-fleet-customers/',  // V77 deprecated — purged by V81-fix4 script
+  'backups/customers/',              // V74 deprecated — purged by V81-fix4 script
 ];
 
 function isExcluded(filePath) {

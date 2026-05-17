@@ -48,6 +48,10 @@ export default async function handler(req, res) {
   const bundlePath = `backups/whole-system/${backupRef}/__bundle.json`;
   const bundleFile = storage.file(bundlePath);
 
+  // V81-fix7: force browser download (responseDisposition)
+  const filename = `lover-clinic-backup-${backupRef}.json`;
+  const responseDisposition = `attachment; filename="${filename}"`;
+
   // 1. Reuse cached bundle if < 24h old (avoid re-bundling)
   try {
     const [exists] = await bundleFile.exists();
@@ -58,12 +62,14 @@ export default async function handler(req, res) {
         const [url] = await bundleFile.getSignedUrl({
           action: 'read',
           expires: Date.now() + ARCHIVE_TTL_MS,
+          responseDisposition,
         });
         return res.status(200).json({
           downloadUrl: url,
           archiveSize: parseInt(meta.size || '0', 10),
           reused: true,
           format: 'json-bundle-v1',
+          filename,
           expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
         });
       }
@@ -98,6 +104,7 @@ export default async function handler(req, res) {
     const [url] = await bundleFile.getSignedUrl({
       action: 'read',
       expires: Date.now() + ARCHIVE_TTL_MS,
+      responseDisposition,
     });
 
     return res.status(200).json({
@@ -105,6 +112,7 @@ export default async function handler(req, res) {
       archiveSize: parseInt(meta.size || '0', 10),
       reused: false,
       format: 'json-bundle-v1',
+      filename,
       fileCount: Object.keys(bundle.files).length,
       expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
     });
