@@ -48,35 +48,39 @@ const SECTION_EMOJI = {
   'master':               '🗄️',
 };
 
-// Mobile Arc Fan — single clean quarter-circle sweep, anchored at the
-// bottom-right corner where the DuoPill (chat + menu) lives. Optimized
-// for one-thumb RIGHT-hand reach. 8 orbs at radius 230px, sweeping β = 0°
-// → 90° around the anchor (anchor right: 30, bottom: 30). β=0° puts the
-// first orb directly ABOVE the duo pill (closest reach, just above where
-// the thumb already rests); β=90° puts the last orb directly LEFT of the
-// pill at thumb-height (still reachable). Even angular spacing
-// (90/7 ≈ 12.86°) yields the balanced symmetric balloon-arc that matches
-// the user-approved "Arc Fan สวยๆ ... สมดุลสวยงาม" brief
-// (2026-05-18 EOD+5 polish).
+// Mobile Arc Fan — TWO-TIER concentric arcs (4 inner + 4 outer at same
+// β angles), anchored at the bottom-right corner where the DuoPill lives.
+// Single-arc with 8 orbs caused overlap (~28% per user report 2026-05-18
+// EOD+5 round 2: "ติดกันมากไป กดลำบาก คลี่มันออกมา ... ทำเป็นหลายๆชั้นก็ได้").
+// Two-tier resolves overlap WITHOUT growing radius beyond the 375px viewport.
+//
+// Geometry: 72px orbs. Inner r=130, Outer r=230.
+//   • Within-arc spacing at Δβ=30°: 2·r·sin(15°)
+//     - Inner:  67.3px center-to-center → ~5px overlap (visually touching)
+//     - Outer: 119.0px center-to-center → 47px gap (no overlap)
+//   • Same-β radial pairs: r_outer − r_inner = 100px → 28px gap (no overlap)
+//
+// Assignment (NAV_SECTIONS order preserved):
+//   Inner ring (closer to thumb) = first 4 (operational tabs)
+//   Outer ring (further reach)   = last 4 (admin/reports tabs)
 //
 // Positions computed as: right = 30 + r·sin(β),  bottom = 30 + r·cos(β)
 //
-//   β=0°   appts     (right:  30, bottom: 260)  ← directly above duo pill
-//   β=13°  customers (right:  81, bottom: 254)
-//   β=26°  sales     (right: 130, bottom: 237)
-//   β=39°  marketing (right: 173, bottom: 210)
-//   β=51°  stock     (right: 210, bottom: 173)
-//   β=64°  finance   (right: 237, bottom: 130)
-//   β=77°  reports   (right: 254, bottom:  81)
-//   β=90°  master    (right: 260, bottom:  30)  ← directly left of duo pill
+//   INNER (r=130)                            OUTER (r=230)
+//   β=0°   appts     ( 30, 160)              β=0°   stock     ( 30, 260)
+//   β=30°  customers ( 95, 143)              β=30°  finance   (145, 229)
+//   β=60°  sales     (143,  95)              β=60°  reports   (229, 145)
+//   β=90°  marketing (160,  30)              β=90°  master    (260,  30)
 const MOBILE_POSITION = {
-  'appointments-section': { right: '30px',  bottom: '260px' },
-  'customers':            { right: '81px',  bottom: '254px' },
-  'sales':                { right: '130px', bottom: '237px' },
-  'marketing':            { right: '173px', bottom: '210px' },
-  'stock':                { right: '210px', bottom: '173px' },
-  'finance':              { right: '237px', bottom: '130px' },
-  'reports':              { right: '254px', bottom: '81px'  },
+  // Inner ring (close to thumb)
+  'appointments-section': { right: '30px',  bottom: '160px' },
+  'customers':            { right: '95px',  bottom: '143px' },
+  'sales':                { right: '143px', bottom: '95px'  },
+  'marketing':            { right: '160px', bottom: '30px'  },
+  // Outer ring (further reach)
+  'stock':                { right: '30px',  bottom: '260px' },
+  'finance':              { right: '145px', bottom: '229px' },
+  'reports':              { right: '229px', bottom: '145px' },
   'master':               { right: '260px', bottom: '30px'  },
 };
 
