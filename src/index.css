@@ -2603,21 +2603,23 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 }
 
 /* Desktop: centered in the stage, scales with viewport like orbs */
+/* EOD+6 round 2 — bumped from 22vw/320 → 25vw/360 (~+13% at 1280px). */
 .bloom-logo-wrap.desktop {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: clamp(180px, 22vw, 320px);
-  height: clamp(180px, 22vw, 320px);
+  width: clamp(200px, 25vw, 360px);
+  height: clamp(200px, 25vw, 360px);
 }
 
 /* Mobile: top-center, sits in the empty upper area above the orb ring */
+/* EOD+6 round 2 — bumped from 36vw/170 → 40vw/190 (~+11% at 375px). */
 .bloom-logo-wrap.mobile {
   top: 14%;
   left: 50%;
   transform: translateX(-50%);
-  width: clamp(120px, 36vw, 170px);
-  height: clamp(120px, 36vw, 170px);
+  width: clamp(135px, 40vw, 190px);
+  height: clamp(135px, 40vw, 190px);
 }
 
 .bloom-logo-wrap .bloom-logo {

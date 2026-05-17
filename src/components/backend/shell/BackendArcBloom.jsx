@@ -28,13 +28,17 @@ const MD_BREAKPOINT = 768;
 const DESKTOP_POSITION = {
   // EOD+6 polish — widened from prior scatter (top/left shifted ~5% outward)
   // to open up center space for the ClinicLogo (rendered at 50%/50%).
+  // EOD+6 round 2 (logo enlarged) — pushed finance + reports from 86% to 91%
+  // so the bumped 25vw logo has ≥10px breathing room above the bottom row
+  // at 1280×800. Top row (sales 10%, customers 14%) already clears the
+  // logo top with margin per preview_eval verification.
   'appointments-section': { top: '28%', left: '8%'  },
   'customers':            { top: '14%', left: '32%' },
   'sales':                { top: '10%', left: '60%' },
   'marketing':            { top: '18%', left: '86%' },
   'stock':                { top: '70%', left: '92%' },
-  'finance':              { top: '86%', left: '64%' },
-  'reports':              { top: '86%', left: '36%' },
+  'finance':              { top: '91%', left: '64%' },
+  'reports':              { top: '91%', left: '36%' },
   'master':               { top: '70%', left: '12%' },
 };
 
