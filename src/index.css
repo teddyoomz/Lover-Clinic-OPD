@@ -2123,15 +2123,14 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   position: absolute;
 }
 .bloom-stage.desktop {
-  /* Centered stage — scatter inside this bounded box so tiles cluster nicely
-     across all viewports. Top: 72px clears the top bar zone. */
-  top: 72px;
-  bottom: 72px;
-  left: 0;
-  right: 0;
-  max-width: min(1100px, 86vw);
-  max-height: min(640px, 78vh);
-  margin: auto;
+  /* Horizontally centered via transform (margin:auto unreliable on
+     absolute elements with right anchor). Vertical centering via
+     flex on bloom-backdrop parent. */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1100px, 86vw);
+  height: min(640px, calc(100vh - 160px));
 }
 .bloom-stage.mobile {
   inset: 0;

@@ -46,18 +46,31 @@ describe('Bug A fix — BackendArcBloom uses scatter-grid layout per mockup', ()
     }
   });
 
-  it('B1.4 scatter positions: customers top:8% left:28% (mockup line 864)', () => {
+  it('B1.4 scatter positions (re-centered): customers top:19% left:34%', () => {
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const customersOrb = screen.getByTestId('bloom-orb-customers');
-    expect(customersOrb.style.top).toBe('8%');
-    expect(customersOrb.style.left).toBe('28%');
+    expect(customersOrb.style.top).toBe('19%');
+    expect(customersOrb.style.left).toBe('34%');
   });
 
-  it('B1.4-bis scatter positions: stock top:52% left:78% (mockup line 867)', () => {
+  it('B1.4-bis scatter positions: stock top:65% left:88% (bottom-right corner)', () => {
     render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
     const stockOrb = screen.getByTestId('bloom-orb-stock');
-    expect(stockOrb.style.top).toBe('52%');
-    expect(stockOrb.style.left).toBe('78%');
+    expect(stockOrb.style.top).toBe('65%');
+    expect(stockOrb.style.left).toBe('88%');
+  });
+
+  it('B1.4-quater cluster centroid ~ (50%, 50%) — balanced not top-left tilt', () => {
+    render(<BackendArcBloom open={true} onClose={() => {}} onNavigate={() => {}} />);
+    const orbs = Array.from(document.querySelectorAll('[role="menuitem"]'));
+    const sumTop = orbs.reduce((s, o) => s + parseFloat(o.style.top), 0);
+    const sumLeft = orbs.reduce((s, o) => s + parseFloat(o.style.left), 0);
+    const meanTop = sumTop / orbs.length;
+    const meanLeft = sumLeft / orbs.length;
+    expect(meanTop, `cluster vertical centroid (${meanTop.toFixed(1)}%) should be ~50%`).toBeGreaterThanOrEqual(45);
+    expect(meanTop).toBeLessThanOrEqual(55);
+    expect(meanLeft, `cluster horizontal centroid (${meanLeft.toFixed(1)}%) should be ~50%`).toBeGreaterThanOrEqual(45);
+    expect(meanLeft).toBeLessThanOrEqual(55);
   });
 
   it('B1.4-ter emoji glyphs present (mockup-matched colored icons)', () => {

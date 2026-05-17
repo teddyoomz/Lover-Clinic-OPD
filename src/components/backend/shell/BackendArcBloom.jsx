@@ -19,15 +19,19 @@ const MD_BREAKPOINT = 768;
 // (lines 863-870). NOT a rigid grid. Tiles form 2 gentle arcs (top arc
 // dips up-down-down-up, bottom arc dips down-up-up-down) within a
 // centered stage. Slight asymmetry = "ไร้ระเบียบนิดหน่อยแต่สมดุล".
+// Stretched + re-centered so cluster centroid = stage center (50%, 50%).
+// Original mockup means (top=35%, left=42%) caused visual top-left tilt when
+// scaled to desktop. Linear-mapped: top [4-66%] → [15-80%], left [8-78%] →
+// [12-88%]. Shape preserved (top arc dips up-down-down-up, bottom arc inverse).
 const DESKTOP_POSITION = {
-  'appointments-section': { top: '20%', left: '8%'  },
-  'customers':            { top: '8%',  left: '28%' },
-  'sales':                { top: '4%',  left: '50%' },
-  'marketing':            { top: '12%', left: '72%' },
-  'stock':                { top: '52%', left: '78%' },
-  'finance':              { top: '66%', left: '56%' },
-  'reports':              { top: '66%', left: '32%' },
-  'master':               { top: '52%', left: '12%' },
+  'appointments-section': { top: '32%', left: '12%' },
+  'customers':            { top: '19%', left: '34%' },
+  'sales':                { top: '15%', left: '58%' },
+  'marketing':            { top: '23%', left: '82%' },
+  'stock':                { top: '65%', left: '88%' },
+  'finance':              { top: '80%', left: '64%' },
+  'reports':              { top: '80%', left: '38%' },
+  'master':               { top: '65%', left: '16%' },
 };
 
 // Colored emoji per section (mockup uses these — visually pops vs monochrome
