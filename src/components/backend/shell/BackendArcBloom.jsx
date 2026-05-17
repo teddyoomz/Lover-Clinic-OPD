@@ -50,38 +50,47 @@ const SECTION_EMOJI = {
 
 // Mobile Arc Fan — TWO-TIER concentric arcs (4 inner + 4 outer at same
 // β angles), anchored at the bottom-right corner where the DuoPill lives.
-// Single-arc with 8 orbs caused overlap (~28% per user report 2026-05-18
-// EOD+5 round 2: "ติดกันมากไป กดลำบาก คลี่มันออกมา ... ทำเป็นหลายๆชั้นก็ได้").
-// Two-tier resolves overlap WITHOUT growing radius beyond the 375px viewport.
+// EOD+5 round 3 polish: ZERO overlap required (user "ไม่ซ้อนคือไม่ซ้อนกัน
+// เลยสักวง ... วงนอกในก็ไม่ซ้อน ไม่ทับกัน"). Round 2 had 5–9 px residual
+// touch on inner adjacents because r=130 was too small for 72 px orbs.
 //
-// Geometry: 72px orbs. Inner r=130, Outer r=230.
+// Geometry recompute: 72px orbs need ≥ 80 px center-to-center spacing
+// (72 px size + 8 px breathing room) for visual zero-touch.
+// Inner r=160, Outer r=250 — both rings have full gaps.
+//
 //   • Within-arc spacing at Δβ=30°: 2·r·sin(15°)
-//     - Inner:  67.3px center-to-center → ~5px overlap (visually touching)
-//     - Outer: 119.0px center-to-center → 47px gap (no overlap)
-//   • Same-β radial pairs: r_outer − r_inner = 100px → 28px gap (no overlap)
+//     - Inner r=160: 82.8 px center distance → ~11 px gap ✓
+//     - Outer r=250: 129.4 px center distance → ~57 px gap ✓
+//   • Same-β radial pairs: r_outer − r_inner = 90 px → ~18 px gap ✓
+//   • Cross-ring near-adjacent (β_inner=0° vs β_outer=30°):
+//     sqrt(125² + 57²) = 137 px → ~65 px gap ✓
+//   All pairwise distances ≥ 82 px > 72 px orb size → strict no-touch.
+//
+// Viewport fit (vw=375): outer β=90° at right=280 → orb left edge =
+// 375 − 280 − 72 = 23 px from left edge. On-screen with margin.
 //
 // Assignment (NAV_SECTIONS order preserved):
-//   Inner ring (closer to thumb) = first 4 (operational tabs)
-//   Outer ring (further reach)   = last 4 (admin/reports tabs)
+//   Inner ring (closer to thumb) = first 4 (operational)
+//   Outer ring (further reach)   = last 4 (admin/reports)
 //
-// Positions computed as: right = 30 + r·sin(β),  bottom = 30 + r·cos(β)
+// Positions: right = 30 + r·sin(β),  bottom = 30 + r·cos(β)
 //
-//   INNER (r=130)                            OUTER (r=230)
-//   β=0°   appts     ( 30, 160)              β=0°   stock     ( 30, 260)
-//   β=30°  customers ( 95, 143)              β=30°  finance   (145, 229)
-//   β=60°  sales     (143,  95)              β=60°  reports   (229, 145)
-//   β=90°  marketing (160,  30)              β=90°  master    (260,  30)
+//   INNER (r=160)                            OUTER (r=250)
+//   β=0°   appts     ( 30, 190)              β=0°   stock     ( 30, 280)
+//   β=30°  customers (110, 169)              β=30°  finance   (155, 247)
+//   β=60°  sales     (169, 110)              β=60°  reports   (247, 155)
+//   β=90°  marketing (190,  30)              β=90°  master    (280,  30)
 const MOBILE_POSITION = {
   // Inner ring (close to thumb)
-  'appointments-section': { right: '30px',  bottom: '160px' },
-  'customers':            { right: '95px',  bottom: '143px' },
-  'sales':                { right: '143px', bottom: '95px'  },
-  'marketing':            { right: '160px', bottom: '30px'  },
+  'appointments-section': { right: '30px',  bottom: '190px' },
+  'customers':            { right: '110px', bottom: '169px' },
+  'sales':                { right: '169px', bottom: '110px' },
+  'marketing':            { right: '190px', bottom: '30px'  },
   // Outer ring (further reach)
-  'stock':                { right: '30px',  bottom: '260px' },
-  'finance':              { right: '145px', bottom: '229px' },
-  'reports':              { right: '229px', bottom: '145px' },
-  'master':               { right: '260px', bottom: '30px'  },
+  'stock':                { right: '30px',  bottom: '280px' },
+  'finance':              { right: '155px', bottom: '247px' },
+  'reports':              { right: '247px', bottom: '155px' },
+  'master':               { right: '280px', bottom: '30px'  },
 };
 
 // Per-section gradient colors (--c1 → --c2 at 135deg) — from mockup.
