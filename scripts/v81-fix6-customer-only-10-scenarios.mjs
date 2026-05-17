@@ -110,7 +110,11 @@ async function restore(db, storage, auth, backupRef) {
     replaceAuthFromBackup: false,
     scope: 'customer-only',
   });
-  console.log(`  [restore] ✓ Replace done ${((Date.now()-t)/1000).toFixed(1)}s | auth ${r.stats.skipped ? 'PRESERVED' : 'TOUCHED'} | restored: ${r.stats.restoredDocs}`);
+  const failedCount = r.stats?.failedDocs?.length || 0;
+  console.log(`  [restore] ✓ Replace done ${((Date.now()-t)/1000).toFixed(1)}s | auth ${r.stats.skipped ? 'PRESERVED' : 'TOUCHED'} | restored: ${r.stats.restoredDocs} | failedDocs: ${failedCount}`);
+  if (failedCount > 0) {
+    console.log(`  [restore] First 5 failures:`, JSON.stringify(r.stats.failedDocs.slice(0, 5), null, 2));
+  }
   return r;
 }
 

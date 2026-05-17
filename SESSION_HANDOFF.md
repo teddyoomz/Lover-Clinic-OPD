@@ -66,7 +66,7 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+2 LATE+2 — **V81-fix3 + V81-fix4 + V81-fix5 LIVE; 10/10 stress cycles CLEAN; production-grade complete**
+- **Date last updated**: 2026-05-17 EOD+2 LATE+3 — **V81-fix7 LIVE; 10/10 customer-only stress scenarios CLEAN; full V81 production-grade (whole-system + customer-only)**
 - **Branch**: `master`
 - **Last commit (pre-this-turn)**: `1686b32 docs+fix(V81-fix2): EOD+1 — Replace ack-gate + emergency owner-restore + AV66`
 - **This turn's working changes (uncommitted)**: `package.json` (archiver deps↔devDeps swap) + `tests/v81-fix3-archiver-runtime-dependency.test.js` (NEW, 4 tests AV67.1-AV67.4) + `.agents/skills/audit-anti-vibe-code/SKILL.md` (AV67 invariant) + `SESSION_HANDOFF.md` (shrunk 317.5 KB → 38.9 KB) + `.agents/sessions/session-handoff-archive.md` (NEW — older blocks)
@@ -76,6 +76,29 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **V81-fix2 ack-gate** (still patched, not deployed): 3-layer Replace mode gate (UI checkbox + endpoint 400 + executor double-check) + force `sendPasswordResetEmails=true`. AV66 codified.
 - **V81-fix3 (NEW THIS TURN)**: backup Download 500 root cause = `archiver` was in `devDependencies` → Vercel `npm install --production` skips it → endpoint module-load fails → generic HTML "A server error has occurred…" → client `await res.json()` → `Unexpected token 'A'`. Fix: move `archiver@^8.0.0` from `devDependencies` to `dependencies` in `package.json`. AV67 invariant codified + 4 regression tests lock the pattern for all api/** files. Cross-file grep confirmed `archiver` is the ONLY devDep import in `api/**`.
 - **🚨 NEW BUG fixed** (was open): backup Download 500 — V81-fix3 resolves it. Deploy required to verify.
+
+### Session 2026-05-17 EOD+2 LATE+3 — V81-fix6/6b/6c/7/7b: 3 user bugs + customer-only feature + 10/10 stress
+
+User reported 3 new bugs at EOD+2 LATE+2 (Download opens browser tab not file / Delete fails with composite-index error / Restore mode error from stale ref) + asked for dedicated Customer-Only single-file backup with restore + asked for 10 DIFFERENT scenarios stress test (not repeats).
+
+**Shipped (5 commits)**:
+- **V81-fix6** — customer-only scope (5 new endpoints + UI section in BackupManagerTab) + lockfile (archiver moved to deps) + be_admin_audit composite index deployed + EXCLUDE_PREFIXES for whole-system + customer-only + optimistic delete (no flicker)
+- **V81-fix6b** — bypass archiver entirely with pure JSON bundle download (Vercel runtime kept crashing FUNCTION_INVOCATION_FAILED on archiver tar-stream)
+- **V81-fix6c** — `validateWholeSystemManifest` accepts `backupType: 'customer-only'` (was hardcoded 'whole-system')
+- **V81-fix7** — per-doc restore resilience (root cause of S2 silent-corruption: per-collection try/catch silently dropped 290/391 customers; now per-doc fallback isolates bad docs) + Content-Disposition: attachment on signed URL (Download saves file) + backup-manager-list EXCLUDE customer-only + baseline invariant in stress test
+- **V81-fix7b** — UI auto-refresh list on restore error (stale ref disappears) + show failedDocs count in success alert
+
+**Stress test** — 10 DIFFERENT scenarios (NOT 10 repeats): Baseline / Single NAKHON / Cross-branch / Delete-then-restore / Subcollection / Chat conv / Storage file / Bulk 10 / Chained A→B / Mixed delete+add+wipe. **10/10 CLEAN** on real prod. failedDocs=0 in every restore. Customer count stable at 391; Auth at 353.
+
+**Emergency restore** — V81-fix7 full-system restore proven: 5126 docs restored, 0 failed, Auth preserved (after S6 transient bug corrupted prod during stress test development).
+
+**Architectural locks**:
+- archiver removed entirely (pure JSON bundle is more reliable for Vercel)
+- Per-customer backup model fully deprecated (V74 + V77b/c UI gone)
+- Customer-only NEVER touches Auth regardless of replaceAuthFromBackup flag
+- AV67/68/69/70/71/72/73/74 invariants codified
+
+Checkpoint: `.agents/sessions/2026-05-17-v81-fix7-customer-only-stress-10-of-10.md`.
 
 ### Session 2026-05-17 EOD+2 LATE — V81-fix3 + V81-fix4 + V81-fix5 production-grade ship (8 issues + 10/10 stress)
 
