@@ -28,20 +28,51 @@ describe('Backend Menu D — ArcBloom RTL', () => {
     expect(orbs.length).toBe(NAV_SECTIONS.length);
   });
 
-  it('T3.4 orb click invokes onNavigate with first item id from that section', () => {
+  it('T3.4 (V21-T6 fixup) multi-item orb click opens sub-tab picker instead of direct navigating', () => {
+    // Pre-T6: orb click → onNavigate(firstItem.id) for ALL sections.
+    // Post-T6: orb click on multi-item (items.length ≥ 2) → opens picker; onNavigate NOT called yet.
+    //          Single-item sections (customers, finance) still direct-navigate.
+    const multiItemIdx = NAV_SECTIONS.findIndex(s => Array.isArray(s.items) && s.items.length >= 2);
+    expect(multiItemIdx).toBeGreaterThanOrEqual(0);
     const onNavigate = vi.fn();
     render(<BackendArcBloom open={true} onClose={vi.fn()} onNavigate={onNavigate} />);
     const orbs = screen.getAllByRole('menuitem');
-    fireEvent.click(orbs[0]);
-    const firstSectionFirstItemId = NAV_SECTIONS[0].items[0].id;
-    expect(onNavigate).toHaveBeenCalledWith(firstSectionFirstItemId);
+    fireEvent.click(orbs[multiItemIdx]);
+    // Picker is mounted, onNavigate is NOT called yet
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('subtab-overlay')).not.toBeNull();
   });
 
-  it('T3.5 orb click also closes the bloom', () => {
+  it('T3.4-bis (V21-T6 fixup) single-item orb click direct-navigates and closes ArcBloom', () => {
+    // Single-item sections (customers, finance) bypass picker per spec.
+    const singleItemIdx = NAV_SECTIONS.findIndex(s => Array.isArray(s.items) && s.items.length === 1);
+    expect(singleItemIdx).toBeGreaterThanOrEqual(0);
+    const onNavigate = vi.fn();
     const onClose = vi.fn();
-    render(<BackendArcBloom open={true} onClose={onClose} onNavigate={vi.fn()} />);
-    fireEvent.click(screen.getAllByRole('menuitem')[0]);
+    render(<BackendArcBloom open={true} onClose={onClose} onNavigate={onNavigate} />);
+    const orbs = screen.getAllByRole('menuitem');
+    fireEvent.click(orbs[singleItemIdx]);
+    expect(onNavigate).toHaveBeenCalledWith(NAV_SECTIONS[singleItemIdx].items[0].id);
     expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByTestId('subtab-overlay')).toBeNull();
+  });
+
+  it('T3.5 (V21-T6 fixup) single-item orb click closes ArcBloom; multi-item orb click keeps ArcBloom open under picker', () => {
+    const singleItemIdx = NAV_SECTIONS.findIndex(s => Array.isArray(s.items) && s.items.length === 1);
+    const multiItemIdx = NAV_SECTIONS.findIndex(s => Array.isArray(s.items) && s.items.length >= 2);
+
+    // Single-item: closes ArcBloom
+    const onCloseSingle = vi.fn();
+    const { unmount } = render(<BackendArcBloom open={true} onClose={onCloseSingle} onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('menuitem')[singleItemIdx]);
+    expect(onCloseSingle).toHaveBeenCalled();
+    unmount();
+
+    // Multi-item: ArcBloom stays open (only picker opens above)
+    const onCloseMulti = vi.fn();
+    render(<BackendArcBloom open={true} onClose={onCloseMulti} onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('menuitem')[multiItemIdx]);
+    expect(onCloseMulti).not.toHaveBeenCalled();
   });
 
   it('T3.6 Escape key closes bloom', () => {

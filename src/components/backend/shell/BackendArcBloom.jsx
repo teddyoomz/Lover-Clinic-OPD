@@ -128,8 +128,11 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
   }, []);
 
   // Focus trap + Esc + arrow keys
+  // When picker (SubTabBloom) is open, defer ALL keyboard handling to the picker
+  // so Esc closes only the picker (per spec) and arrows scope to mini-orbs.
   useEffect(() => {
     if (!open) return;
+    if (pickerSection) return;  // Picker owns keyboard while mounted
     previouslyFocused.current = document.activeElement;
     requestAnimationFrame(() => orbRefs.current[0]?.focus());
 
@@ -157,7 +160,7 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
       window.removeEventListener('keydown', onKey);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose, sections.length]);
+  }, [open, onClose, sections.length, pickerSection]);
 
   const handleOrbClick = useCallback(
     (section, ev) => {

@@ -33,29 +33,67 @@ describe('Backend Menu D — Rule I full-flow simulate', () => {
     expect(screen.getByTestId('active-tab').textContent).toBe('customers');
   });
 
-  it('FS2 tap menu → bloom opens → tap orb 0 → activeTab updates to first-section first-item', () => {
+  it('FS2 (V21-T6 fixup) tap menu → bloom opens → tap multi-item orb → picker opens → tap mini-orb 0 → activeTab updates', () => {
+    // Pre-T6: orb click directly navigated.
+    // Post-T6: multi-item sections (≥2 sub-tabs) open the picker first; mini-orb click finalizes navigation.
     render(<HarnessApp />);
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     const orbs = screen.getAllByRole('menuitem');
     expect(orbs.length).toBe(NAV_SECTIONS.length);
-    fireEvent.click(orbs[0]);
-    expect(screen.getByTestId('active-tab').textContent).toBe(NAV_SECTIONS[0].items[0].id);
+    const multiIdx = NAV_SECTIONS.findIndex(s => s.items.length >= 2);
+    expect(multiIdx).toBeGreaterThanOrEqual(0);
+    fireEvent.click(orbs[multiIdx]);
+    // Picker is now open + ArcBloom still rendered behind
+    expect(screen.queryByTestId('subtab-overlay')).not.toBeNull();
+    expect(screen.getByTestId('active-tab').textContent).toBe('customers');
+    // Click the first mini-orb in the picker
+    const firstMiniOrb = screen.getByTestId(`subtab-cell-${NAV_SECTIONS[multiIdx].items[0].id}`);
+    fireEvent.click(firstMiniOrb);
+    expect(screen.getByTestId('active-tab').textContent).toBe(NAV_SECTIONS[multiIdx].items[0].id);
   });
 
-  it('FS3 orb click also closes the bloom (no lingering overlay)', () => {
+  it('FS2-bis (V21-T6 fixup) single-item orb click direct-navigates without opening picker', () => {
     render(<HarnessApp />);
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
-    fireEvent.click(screen.getAllByRole('menuitem')[0]);
+    const singleIdx = NAV_SECTIONS.findIndex(s => s.items.length === 1);
+    expect(singleIdx).toBeGreaterThanOrEqual(0);
+    fireEvent.click(screen.getAllByRole('menuitem')[singleIdx]);
+    expect(screen.queryByTestId('subtab-overlay')).toBeNull();
+    expect(screen.getByTestId('active-tab').textContent).toBe(NAV_SECTIONS[singleIdx].items[0].id);
+  });
+
+  it('FS3 (V21-T6 fixup) single-item orb click closes the bloom (no lingering overlay)', () => {
+    render(<HarnessApp />);
+    fireEvent.click(screen.getByTestId('duo-pill-menu'));
+    const singleIdx = NAV_SECTIONS.findIndex(s => s.items.length === 1);
+    fireEvent.click(screen.getAllByRole('menuitem')[singleIdx]);
     expect(screen.queryByTestId('bloom-overlay')).toBeNull();
   });
 
-  it('FS4 every section reachable via orb click', () => {
+  it('FS3-bis (V21-T6 fixup) multi-item orb click keeps ArcBloom open with picker mounted on top', () => {
+    const { container } = render(<HarnessApp />);
+    fireEvent.click(screen.getByTestId('duo-pill-menu'));
+    const multiIdx = NAV_SECTIONS.findIndex(s => s.items.length >= 2);
+    fireEvent.click(screen.getAllByRole('menuitem')[multiIdx]);
+    expect(container.querySelector('[data-testid="bloom-overlay"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="subtab-overlay"]')).not.toBeNull();
+  });
+
+  it('FS4 (V21-T6 fixup) every section reachable — multi-item goes via picker, single-item direct', () => {
     NAV_SECTIONS.forEach((section, i) => {
       const { unmount } = render(<HarnessApp />);
       fireEvent.click(screen.getByTestId('duo-pill-menu'));
       const orbs = screen.getAllByRole('menuitem');
       fireEvent.click(orbs[i]);
-      expect(screen.getByTestId('active-tab').textContent).toBe(section.items[0].id);
+      if (section.items.length === 1) {
+        // Direct navigate
+        expect(screen.getByTestId('active-tab').textContent).toBe(section.items[0].id);
+      } else {
+        // Picker is now open; click first mini-orb to finalize navigation
+        const firstMiniOrb = screen.getByTestId(`subtab-cell-${section.items[0].id}`);
+        fireEvent.click(firstMiniOrb);
+        expect(screen.getByTestId('active-tab').textContent).toBe(section.items[0].id);
+      }
       unmount();
     });
   });

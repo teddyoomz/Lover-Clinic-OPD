@@ -20,6 +20,20 @@ const SELECTORS = [
   '[data-testid="topbar-shortcut-desktop"]',
   '[data-testid="mode-toggle-new"]',
   '[data-testid="mode-toggle-classic"]',
+  // Bloom orbs (only resolve after duo-pill-menu opens the bloom; otherwise skipped)
+  '[data-testid="bloom-orb-customers"]',
+  '[data-testid="bloom-orb-sales"]',
+  '[data-testid="bloom-orb-reports"]',
+  '[data-testid="bloom-orb-master"]',
+  '[data-testid="bloom-orb-marketing"]',
+  '[data-testid="bloom-orb-stock"]',
+  // Sub-tab picker mini-orbs (only resolve when picker is open after a multi-item orb click)
+  '[data-testid="subtab-cell-reports-pnl"]',
+  '[data-testid="subtab-cell-reports-sale"]',
+  '[data-testid="subtab-cell-staff"]',
+  '[data-testid="subtab-cell-doctors"]',
+  '[data-testid="subtab-cell-promotions"]',
+  '[data-testid="subtab-overlay"]',  // backdrop click to close picker
 ];
 
 function lcg(seed) {

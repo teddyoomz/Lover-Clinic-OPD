@@ -97,14 +97,19 @@ describe('Backend Menu D — Shell RTL', () => {
     expect(screen.queryByTestId('bloom-overlay')).toBeNull();
   });
 
-  it('T6.9 click orb calls onNavigate verbatim with section first-item id', () => {
+  it('T6.9 (V21-T6 fixup) click single-item orb calls onNavigate verbatim with item id', async () => {
+    // Pre-T6: every orb click → onNavigate.
+    // Post-T6: only items.length === 1 sections direct-navigate; multi-item opens picker first.
+    const { NAV_SECTIONS } = await import('../src/components/backend/nav/navConfig.js');
+    const singleIdx = NAV_SECTIONS.findIndex((s) => s.items.length === 1);
+    expect(singleIdx).toBeGreaterThanOrEqual(0);
     const onNavigate = vi.fn();
     setup({ onNavigate });
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     const orbs = screen.getAllByRole('menuitem');
-    fireEvent.click(orbs[0]);
+    fireEvent.click(orbs[singleIdx]);
     expect(onNavigate).toHaveBeenCalledTimes(1);
-    expect(typeof onNavigate.mock.calls[0][0]).toBe('string');
+    expect(onNavigate.mock.calls[0][0]).toBe(NAV_SECTIONS[singleIdx].items[0].id);
   });
 
   it('T6.10 theme prop passed through to ThemeToggle verbatim', () => {

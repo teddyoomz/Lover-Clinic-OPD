@@ -97,4 +97,74 @@ test.describe('Backend Menu D — Real-browser L1', () => {
     await expect(page.locator('[data-testid="backend-menu-mode-toggle"]')).not.toBeVisible();
     await expect(page.locator('[data-testid="duo-pill-menu"]')).toBeVisible();
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Sub-tab Picker E2E (Rule Q V66 L1 — mouse-follow REQUIRES real browser)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  test('E9 multi-item orb (reports) opens sub-tab picker with all mini-orbs', async ({ page }) => {
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-reports"]').click();
+    await expect(page.locator('[data-testid="subtab-overlay"]')).toBeVisible();
+    // Sample a few known reports sub-tabs
+    await expect(page.locator('[data-testid="subtab-cell-reports-sale"]')).toBeVisible();
+    await expect(page.locator('[data-testid="subtab-cell-reports-pnl"]')).toBeVisible();
+    await expect(page.locator('[data-testid="subtab-cell-clinic-report"]')).toBeVisible();
+  });
+
+  test('E10 click mini-orb (reports-pnl) → activeTab updates + both blooms collapse', async ({ page }) => {
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-reports"]').click();
+    await page.locator('[data-testid="subtab-cell-reports-pnl"]').click();
+    await expect(page.locator('[data-testid="subtab-overlay"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="bloom-overlay"]')).not.toBeVisible();
+  });
+
+  test('E11 mouse-follow tilt — moving cursor across modal changes --tilt-mx CSS var (Rule Q L1 real browser)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-reports"]').click();
+    const modal = page.locator('[data-testid="subtab-modal"]');
+    await expect(modal).toBeVisible();
+    // Sample tilt after moving to left side
+    await page.mouse.move(200, 400);
+    await page.waitForTimeout(400); // allow lerp to settle
+    const leftTilt = await modal.evaluate((el) => el.style.getPropertyValue('--tilt-mx'));
+    // Move to right side
+    await page.mouse.move(1080, 400);
+    await page.waitForTimeout(400);
+    const rightTilt = await modal.evaluate((el) => el.style.getPropertyValue('--tilt-mx'));
+    // The two tilt values should differ (cursor on opposite sides bias the modal differently)
+    expect(leftTilt).not.toBe(rightTilt);
+  });
+
+  test('E12 mobile 414×896 — multi-item orb opens V2 bubble with parent gradient', async ({ page }) => {
+    await page.setViewportSize({ width: 414, height: 896 });
+    await page.reload();
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-reports"]').click();
+    const modal = page.locator('[data-testid="subtab-modal"]');
+    await expect(modal).toBeVisible();
+    const className = await modal.getAttribute('class');
+    expect(className).toContain('mobile');
+    // Origin should be set from orb rect
+    const originX = await modal.evaluate((el) => el.style.getPropertyValue('--origin-x'));
+    expect(originX).not.toBe('');
+  });
+
+  test('E13 single-item orb (customers) does NOT open picker — direct navigate', async ({ page }) => {
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-customers"]').click();
+    await expect(page.locator('[data-testid="subtab-overlay"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="bloom-overlay"]')).not.toBeVisible();
+  });
+
+  test('E14 Esc closes picker only — ArcBloom stays open', async ({ page }) => {
+    await page.locator('[data-testid="duo-pill-menu"]').click();
+    await page.locator('[data-testid="bloom-orb-reports"]').click();
+    await expect(page.locator('[data-testid="subtab-overlay"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-testid="subtab-overlay"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="bloom-overlay"]')).toBeVisible();
+  });
 });
