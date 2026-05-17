@@ -66,7 +66,33 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+2 LATE+3 — **V81-fix7 LIVE; 10/10 customer-only stress scenarios CLEAN; full V81 production-grade (whole-system + customer-only)**
+- **Date last updated**: 2026-05-17 EOD+3 — **V82 staff chat cursor + force-open + role badges LIVE both rounds; 11294/11294 PASS / 0 FAIL; AV76 + Rule C3 cleanup; PERFECT GREEN**
+
+### Session 2026-05-17 EOD+3 — V82 staff chat cursor + force-open + role badges + 17 baseline cleanup
+
+User reported 3 staff-chat concerns post-V81-fix7b deploy: (a) Bug #2 — tab switch resurrects read chats + noti spam (root cause: `lastSeenIdsRef = useRef(new Set())` in V73 useStaffChat — in-memory only, resets every remount; listener fires 50 messages on resubscribe → all look "new"); (b) Feature ask "force chat open until all read" (scroll-to-bottom gate); (c) Feature ask "4 role badges in NamePicker + bubble" (แพทย์/ผู้ช่วยแพทย์/พนักงาน/ผู้จัดการ).
+
+**Architecture**: brainstormed Q1-Q4 with Visual Companion → Q1=B scroll-to-bottom=read / Q2=A localStorage per-(device,branch) / Q3=B colored circle gradient / Q4=all 3 defaults. Spec: `docs/superpowers/specs/2026-05-17-staff-chat-cursor-forceopen-badge-design.md`. Plan: `docs/superpowers/plans/2026-05-17-staff-chat-cursor-forceopen-badge.md` (13 tasks).
+
+**Execution via subagent-driven-development**: 6 chunks (Tasks 1-3 foundation + Task 4 useStaffChat refactor + Task 5 buildMessageDoc + Tasks 6-8 UI + Task 9 tests + Tasks 10-12 AV/stress/L2). 4 NEW src files (`staffChatReadCursor.js` cursor module + `StaffChatRoleBadge.jsx` lucide-icons component + 2 scripts) + 7 modified src files (useStaffChat replaces lastSeenIdsRef → cursor + canMinimize + markScrolledToBottom; staffChatIdentity adds getRole/setRole/ROLE_KEYS/ROLE_LABELS_TH; staffChatClient buildMessageDoc accepts senderRole; NamePicker adds role section + (name,color,role) signature; StaffChatMessage RoleBadge inline; MessageList bottomSentinelRef IntersectionObserver; StaffChatHeader minimize disabled={!canMinimize} + tooltip "เลื่อนลงล่างก่อน ⬇").
+
+**Bug found post-T9 via V73 flow-simulate red**: subagent's initial cursor module narrowed createdAt check to `typeof === 'number'` — silently returned false for ALL real prod messages (Firestore SDK returns Timestamp instances, NOT numbers); cursor never detected unread in prod. Fix: dual-shape support in 3 sites (cursor.isMessageUnread + useStaffChat seedMs + markScrolledToBottom). A.7-bis regression test locks the contract.
+
+**V21 fixups**: 10 across V73 sibling tests adapted to (name,color,role) signature + force-open auto-expand + cursor-relative dedup. Pre-V82 baseline had 17 stale fails (V77 BMT removed by V81-fix4 + V81-fix2 ack-gate + V81-source-grep archiver + V81-fix3 AV67.1 archiver + V75 button-polish + RP1 IIFE in BackupManagerTab) — ALL closed in V82-followup batch (3 test commits + 1 source commit extracting BackupManagerTab IIFEs to `formatBytesDisplay` helper per Rule C3).
+
+**AV76 invariant codified**: in-memory dedup of Firestore listener results (`useRef(new Set())`) crashes on remount → forbidden for cross-remount dedup; persist via localStorage (per-device) or Firestore doc (cross-device). Source-grep pattern: `useRef\s*(\s*new Set\s*(` near `listenTo*` callers.
+
+**Rule Q V66 verification**: L2 admin-SDK `scripts/v82-cursor-l2-verify.mjs` (5 listener re-fires return identical doc IDs on real prod — cursor stability proven, both deploy rounds); 10-scenario stress `scripts/v82-staff-chat-stress.mjs` (10/10 PASS, 23 TEST-V82 fixtures created + cleaned). L1 user hands-on pending: tab-switch chaos + force-open block + badge selection.
+
+**Deployed both rounds**: round 1 (V82 implementation, Vercel `2b156ltbl` + Firebase rules idempotent + 6/6 probes + L2 PASS); round 2 (V21 cleanup batch + Rule C3 fix, Vercel `4lct44tkm` + 6/6 probes + L2 PASS). Final test state: **11294/11294 PASS / 0 FAIL** (was 11284/11319 pre-V82-fixups; now 0 after V82 + cleanup). Build clean 3.12s.
+
+**Lessons**: (a) Subagent over-narrowing — implementer simplified spec's dual-shape check; missing realprod Timestamp support. Caught by V73 flow-simulate fixture {toMillis} use. Lesson: spec must explicitly enumerate input shapes; cross-test against existing fixture shapes. (b) Rule K validated — 6 chunks built structure → review revealed real bug → test bank + regression locks in batch. (c) Bug-loop discipline per user "วนลูปจน Perfect" — Round 1: 0 V82 regressions (133/133); Round 2: closed 17 pre-V82 baseline (11294/11294). "Perfect" = 0/0. (d) In-memory dedup ref is V12 multi-reader-sweep family at LISTENER boundary; AV76 codifies permanently.
+
+V82 V-entry: `.claude/rules/00-session-start.md` § 2 PAST VIOLATIONS row + `v-log-archive.md` candidate (Tier 3 architectural for AV76).
+
+Checkpoint: master = `44737de3 fix(V82-followup): strip 2 IIFE-in-JSX from BackupManagerTab (Rule C3) — RP1 lock`.
+
+### Session 2026-05-17 EOD+2 LATE+3 — V81-fix7 LIVE; 10/10 customer-only stress scenarios CLEAN; full V81 production-grade (whole-system + customer-only)
 - **Branch**: `master`
 - **Last commit (pre-this-turn)**: `1686b32 docs+fix(V81-fix2): EOD+1 — Replace ack-gate + emergency owner-restore + AV66`
 - **This turn's working changes (uncommitted)**: `package.json` (archiver deps↔devDeps swap) + `tests/v81-fix3-archiver-runtime-dependency.test.js` (NEW, 4 tests AV67.1-AV67.4) + `.agents/skills/audit-anti-vibe-code/SKILL.md` (AV67 invariant) + `SESSION_HANDOFF.md` (shrunk 317.5 KB → 38.9 KB) + `.agents/sessions/session-handoff-archive.md` (NEW — older blocks)
