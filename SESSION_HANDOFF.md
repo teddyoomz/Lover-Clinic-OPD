@@ -66,12 +66,23 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+4 — **Backend Menu D design LOCKED; spec + mockup committed; writing-plans pending**
-- **Master**: `257a699f feat(phone): tap-to-dial customer phones across Frontend + Backend (V82-Phone)` (1 commit ahead of prod)
-- **Prod**: `ef4bd5c3` LIVE (V82-Phone awaits user deploy auth · vercel-only no rules change)
-- **Tests**: 11409/11409 PASS baseline (no code changes this session — pure design phase)
+- **Date last updated**: 2026-05-18 EOD+5 — **Backend Menu D SHIPPED to master (T1-T9 + 5 bugfix rounds); sub-tab picker spec + plan committed; implementation pending fresh chat**
+- **Master**: post-fix5 polish (Backend Menu D Round 5 — cluster recentered to centroid 50/50 + V5 stage transform) · ~16+ commits ahead of prod
+- **Prod**: `ef4bd5c3` LIVE (Backend Menu D NOT deployed · joins V82-Phone in deploy queue · user must type "deploy")
+- **Tests**: 11482 PASS (baseline 11409 + 52 D-suite + 12 source-grep + 9 bugfix regression) · build clean 2.7-3.1s · 2442 modules
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+5 — Backend Menu D SHIPPED + Sub-tab Picker (V5+V2) spec+plan committed
+
+Shipped Backend Menu D Variant D across **9 tasks (T1-T9) + 5 bugfix rounds**. Layout pivoted 3×: radial-arc (math wrong · 5/8 orbs below viewport) → CSS Grid 4×2 (too rigid per user) → organic scatter (mockup-literal) → recentered scatter (cluster centroid 50/50 vs original 35/42 top-left tilt). Mockup-exact polish: top bar ember radial-gradient blend (replaced linear-gradient) · colored emoji icons (📅👥🛒📣📦💰📊🗄️ replaced lucide monochrome) · 50+ random stars + nebula + embers Dark · falling petals Sakura. Mode toggle ⚡↔📋 ≥768px with per-device localStorage `lover.backendMenuMode` + classic-return path in breadcrumbSlot (one-way trap fixed). Cosmetic-shell preserved across entire saga — `onNavigate(tabId)` verbatim · no handler/state/prop changes.
+
+**Sub-tab picker brainstorming HARD-GATE satisfied** via Visual Companion 5-variant comparison → user picked hybrid **V5 desktop (3D Tilt Stack + interactive mouse-follow ±6deg lerp · "หันหน้าหาเมาส์")** + **V2 mobile (expanding bubble from clicked orb · parent gradient color · scale-zoom 350ms)**. 12 locked decisions including single-item sections (customers, finance) skip picker (direct nav). Sub-tab emoji map ~50 entries extracted to own file (Rule C1).
+
+**Spec**: `docs/superpowers/specs/2026-05-18-backend-subtab-picker-design.md` (177 lines · Rule J/I/Q/C1/cosmetic-shell compliance checklist).
+**Plan**: `docs/superpowers/plans/2026-05-18-backend-subtab-picker.md` (897 lines · **7 tasks · Rule K work-first per user explicit**: T1-T6 source-only · T7 single test batch all 6 tiers including Rule Q V66 Playwright L1 mandatory for mouse-follow).
+**Checkpoint**: `.agents/sessions/2026-05-18-backend-menu-d-and-subtab-picker.md`.
+**Next chat**: subagent-driven-development → 7 tasks → final pyramid → ask user deploy.
 
 ### Session 2026-05-18 EOD+4 — Backend Menu Redesign Variant D design (spec + mockup; no code)
 
