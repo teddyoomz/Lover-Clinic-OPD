@@ -73,6 +73,62 @@ export default function BackendSubTabBloom({
     };
   }, [section.items.length, onClose]);
 
+  // Desktop: cursor-direction tilt bias · lerp-smoothed · ±6deg max
+  useEffect(() => {
+    if (isMobile) return;
+    if (typeof window === 'undefined') return;
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return;
+
+    let rafId = null;
+    let currentBiasX = 0; // visible value lerped toward target
+    let currentBiasY = 0;
+    let targetBiasX = 0;
+    let targetBiasY = 0;
+    const MAX_BIAS = 6; // degrees
+    const LERP = 0.12;
+
+    const onMove = (e) => {
+      const modal = modalRef.current;
+      if (!modal) return;
+      const rect = modal.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      // Distance from modal center (in viewport coords)
+      const dx = (e.clientX - cx) / (rect.width / 2);  // [-1, 1] within modal width
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      // Clamp + scale to ±MAX_BIAS · invert dy for natural feel (cursor above → tilt up)
+      targetBiasX = Math.max(-1, Math.min(1, dx)) * MAX_BIAS;
+      targetBiasY = -Math.max(-1, Math.min(1, dy)) * MAX_BIAS;
+    };
+
+    const onLeave = () => {
+      targetBiasX = 0;
+      targetBiasY = 0;
+    };
+
+    const tick = () => {
+      currentBiasX += (targetBiasX - currentBiasX) * LERP;
+      currentBiasY += (targetBiasY - currentBiasY) * LERP;
+      const modal = modalRef.current;
+      if (modal) {
+        modal.style.setProperty('--tilt-mx', `${currentBiasX.toFixed(2)}deg`);
+        modal.style.setProperty('--tilt-my', `${currentBiasY.toFixed(2)}deg`);
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseout', onLeave);
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseout', onLeave);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [isMobile]);
+
   const handleCellClick = useCallback(
     (item) => {
       onNavigate?.(item.id);
