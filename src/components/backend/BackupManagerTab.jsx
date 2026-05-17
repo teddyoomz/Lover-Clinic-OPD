@@ -196,6 +196,7 @@ export default function BackupManagerTab() {
   }
 
   // V81-fix6: customer-only restore (Replace mode with confirm)
+  // V81-fix7: on error, also refresh list (handles stale backup refs gracefully)
   async function restoreCoConfirmed(name) {
     setCoBusy(true);
     try {
@@ -207,11 +208,16 @@ export default function BackupManagerTab() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`);
-      alert(`Restore สำเร็จ ✓ Docs: ${json.stats?.restoredDocs || 0} | Auto-pre-backup: ${json.autoBackupRef || '-'}`);
+      const failedDocs = json.stats?.failedDocs || [];
+      const failMsg = failedDocs.length > 0 ? `\n⚠ ${failedDocs.length} docs failed (per-doc resilience isolated them — see audit doc)` : '';
+      alert(`Restore สำเร็จ ✓ Docs: ${json.stats?.restoredDocs || 0} | Auto-pre-backup: ${json.autoBackupRef || '-'}${failMsg}`);
       await loadCoBackups();
       setCoRestoreConfirm(null);
     } catch (e) {
       alert(`Restore error: ${e.message}`);
+      // V81-fix7: refresh list so stale backup refs disappear after errors like NO_SUCH_OBJECT
+      await loadCoBackups();
+      setCoRestoreConfirm(null);
     } finally {
       setCoBusy(false);
     }
