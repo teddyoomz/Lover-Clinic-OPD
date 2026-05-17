@@ -11,6 +11,7 @@ import {
   getAllCustomers,
 } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
+import PhoneLink from '../../PhoneLink.jsx';
 
 /**
  * Phase 29 (2026-05-14) — Create Recall modal with 2-slot design.
@@ -350,7 +351,7 @@ export function RecallCreateModal({
                     )}
                   </div>
                   {customer.phone && (
-                    <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 {customer.phone}</div>
+                    <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 <PhoneLink value={customer.phone}>{customer.phone}</PhoneLink></div>
                   )}
                   {customer.hn && (
                     <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">HN {customer.hn}</div>
@@ -405,7 +406,7 @@ export function RecallCreateModal({
                           )}
                         </span>
                         <span className="text-[10px] font-mono text-[var(--tx-muted)] flex-shrink-0">
-                          {c.proClinicHN || c.hn || ''} {pd.phone ? `· ${pd.phone}` : ''}
+                          {c.proClinicHN || c.hn || ''} {pd.phone ? <>· <PhoneLink value={pd.phone}>{pd.phone}</PhoneLink></> : null}
                         </span>
                       </button>
                     );

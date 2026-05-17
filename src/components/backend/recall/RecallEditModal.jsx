@@ -4,6 +4,7 @@ import DateField from '../../DateField.jsx';
 import { RecallCaseSelectField } from './RecallCaseSelectField.jsx';
 import { updateRecall } from '../../../lib/scopedDataLayer.js';
 import { thaiTodayISO } from '../../../utils.js';
+import PhoneLink from '../../PhoneLink.jsx';
 
 /**
  * Bangkok-TZ-stable "today + N days" — mirror of RecallSlotCard's local helper.
@@ -136,7 +137,7 @@ export function RecallEditModal({ recall, recallCases = [], onClose, onSaved }) 
               )}
             </div>
             {recall.customerPhone && (
-              <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 {recall.customerPhone}</div>
+              <div className="text-[10px] text-[var(--tx-muted)] mt-0.5">📞 <PhoneLink value={recall.customerPhone}>{recall.customerPhone}</PhoneLink></div>
             )}
             {(recall.sourceProductName || recall.sourceCourseName) && (
               <div className="text-[10px] text-teal-300 mt-0.5">

@@ -46,6 +46,7 @@ import DateField from '../DateField.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
+import PhoneLink from '../PhoneLink.jsx';
 // Task 10 (LINE OA Appointment Reminder, 2026-05-15) — per-branch
 // LINE-notify confirmation card with auto-tick (LR-4 lock part 2).
 import { LineNotifyConfirmation } from '../LineNotifyConfirmation.jsx';
@@ -627,7 +628,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                           <div className="mt-1 text-[10px] flex flex-wrap items-center gap-1.5" data-testid="deposit-customer-temp-badge">
                             <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300 font-bold uppercase">ลูกค้าจอง</span>
                             {dep.customerNameTemp && <span className="text-amber-200">{dep.customerNameTemp}</span>}
-                            {dep.customerPhoneTemp && <span className="text-amber-300/80 font-mono">· {dep.customerPhoneTemp}</span>}
+                            {dep.customerPhoneTemp && <span className="text-amber-300/80 font-mono">· <PhoneLink value={dep.customerPhoneTemp}>{dep.customerPhoneTemp}</PhoneLink></span>}
                             {/* Phase 24.0-vicies-novies (2026-05-07) —
                                 "ส่งลิ้งค์ลูกค้า" button. When clicked, mints
                                 an opd_sessions doc + stamps linkedOpdSessionId

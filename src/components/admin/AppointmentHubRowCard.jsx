@@ -18,6 +18,7 @@ import {
 // into the right-column status cluster to de-overlap with status chip.
 import AppointmentOpdStepperRow from './AppointmentOpdStepperRow.jsx';
 import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
+import PhoneLink from '../PhoneLink.jsx';
 
 // V73-BS1 (2026-05-18) — confirmed label expanded to "ยืนยันแล้ว · รอการรักษา"
 // per user spec: badge state machine
@@ -180,7 +181,7 @@ export default function AppointmentHubRowCard({
 
         <div className="text-xs text-[var(--tx-muted)] flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
           {summary?.gender && <span>เพศ {summary.gender}</span>}
-          {summary?.phone && <span>📞 {summary.phone}</span>}
+          {summary?.phone && <span>📞 <PhoneLink value={summary.phone}>{summary.phone}</PhoneLink></span>}
         </div>
 
         {/* V64-fix10: finance chips bumped to text-xs + font-bold + border + emoji */}

@@ -1,36 +1,33 @@
 ---
-updated_at: "2026-05-18 EOD+3 — Menu V2 + V82-fix7-bis + V2-bis ALL LIVE"
-status: "3 prod deploys today; 11369/0 PASS; user L1 hands-on pending"
+updated_at: "2026-05-18 EOD+3 LATE — V82-Phone tap-to-dial shipped (local)"
+status: "11409/0 PASS full vitest (+40 new V82-Phone); build clean; awaiting deploy auth"
 branch: "master"
-last_commit: "ef4bd5c3 fix(menu-V2-bis): hide chat bubble while mobile drawer/sheet open + light theme dock surface"
-tests: "11369/11369 PASS full vitest (+47 net from 11322 V82-fix6 baseline: 43 menu source-grep + 1 V21-fixup + 3 V82-fix7-bis D.6/D.7/D.8)"
+last_commit: "ef4bd5c3 (Menu V2-bis); V82-Phone pending commit"
+tests: "11409/11409 PASS full vitest (+40 net from 11369 Menu V2 baseline)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (3 vercel rounds today: 24b116a3 → 357acf45 → ef4bd5c3)"
-firestore_rules_version: "unchanged; rules deploy idempotent re-released this session"
+production_commit: "ef4bd5c3 LIVE (Menu V2 + V82-fix7-bis + V2-bis)"
+firestore_rules_version: "unchanged"
 ---
 
 # Active Context
 
 ## State
-- master = `ef4bd5c3` (Menu V2-bis chat-bubble-hide + light theme dock); origin/master matches
-- 11369/0 PASS full vitest · build clean · 3 vercel deploys today (all post-probe verified)
-- Menu Variant A v2 LIVE: compact pill bar (desktop ≥768px) + floating bottom dock (mobile <768px) + จอง BottomSheet + ⋯ Drawer
-- V82 force-open intact: chat stays open until scroll-to-bottom advances cursor → minimize unlocks (real bug was scroll-bleed, not the lock)
-- Mobile chat overlay scroll FIXED: html[data-staff-chat-open] body lock + overscroll-contain + touch-action:pan-y
+- master = `ef4bd5c3` + uncommitted V82-Phone (10 files modified + 3 new) ready to commit
+- 11409/0 PASS full vitest · build clean (2.82s) · NO deploy this turn (V18 lock — awaiting explicit "deploy")
+- V82-Phone: every customer phone display across Frontend + Backend is now `<a href="tel:...">` tappable
 
-## What this session shipped
-- Visual companion: 4 menu variants → user picked Variant A → refined v2 (real logo + unread badges 100% + chat bubble lift)
-- Menu V2 (commit 24b116a3): header replaced + mobile bottom dock + new CSS classes + StaffChatBubble mobile-[88px] lift
-- V82-fix7 then V82-fix7-bis (commits abc36e25, 357acf45): mobile scroll-bleed in chat panel — fixed via body lock + overscroll-contain + touchAction
-- Menu V2-bis (commit ef4bd5c3): hide chat bubble when drawer/sheet open + light theme dock surface + tab text overrides
-- Tests: +43 menu source-grep regression + 1 V21-fixup phase-25-0 + 3 V82 D.6/D.7/D.8 new — net +47 from baseline
-- Plan + visual companion mockup committed: `docs/superpowers/plans/2026-05-18-menu-redesign-variant-a-v2.md` + `docs/brainstorm/menu-redesign-variants.html`
-- Checkpoint: `.agents/sessions/2026-05-18-menu-v2-shipped.md`
+## What this session shipped (post-Menu-V2)
+- NEW `src/lib/phoneLink.js` — `formatPhoneForTel(value)` helper (Thai mobile/landline/intl + leading + preserved + ≥9 digits required; null for "-"/empty/short)
+- NEW `src/components/PhoneLink.jsx` — wraps phone string in `<a href="tel:...">` when valid, falls back to `<span>` for "-"/empty (preserves display text exactly); aria-label "โทรหา {value}"; `e.stopPropagation()` so picker rows don't accidentally pick
+- 17 customer-phone display sites migrated across 10 files: AdminDashboard.jsx (×5), PatientDashboard.jsx (×1), CustomerCard.jsx (×1), CustomerDetailView.jsx (×2 incl. emergency phone), RecallCreateModal.jsx (×2), RecallEditModal.jsx (×1), CustomerReportTab.jsx (×2 mobile+table), AppointmentCalendarView.jsx (×1 temp phone), DepositPanel.jsx (×1 temp phone), AppointmentHubRowCard.jsx (×1)
+- SKIP: Print PDFs (PrintTemplates / SalePrintView / QuotationPrintView — non-interactive), vendor/branch/clinic phones (out of scope — user said customer phones)
+- NEW `tests/phone-link-tappable-customer-phone.test.jsx` — 40 assertions (17 helper unit + 11 RTL + 12 source-grep regression locks at every site + 2 anti-regression for legacy bare-text patterns)
+- Phase B + Phase C state cleanup (earlier this turn): dropped from active.md + checkpoint per user "ตัดทิ้ง ไม่ทำแล้ว"
 
 ## Next action
-IDLE. AWAIT user L1 hands-on re-verify on prod mobile (Bug 1 chat-bubble-hide + Bug 2 light theme dock). If pass → consider Phase B (15 modals redesign) when user opts in.
+IDLE. AWAIT user authorization to deploy V82-Phone. Then user L1 mobile hands-on (tap a customer phone → dialer opens).
 
 ## Outstanding (user-triggered, not auto)
-- User L1 mobile re-test: ⋯ drawer items uncovered + light theme dock white
-- (Future) Phase B writing-plans for 15 modals
-- (Future) Phase C settings + chat + full light theme polish + a11y pass
+- User authorization for `vercel --prod` (V18 lock — no rules change so vercel-only acceptable)
+- User L1 mobile hands-on for V82-Phone tap-to-dial (post-deploy)
+- User L1 mobile re-test (pre-existing): ⋯ drawer items uncovered + light theme dock white

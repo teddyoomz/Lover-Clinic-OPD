@@ -48,6 +48,7 @@ import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // so admin can see at-a-glance which appts are tied to LINE-linked
 // customers (for reminder dispatch readiness).
 import { CustomerOption } from '../CustomerOption.jsx';
+import PhoneLink from '../PhoneLink.jsx';
 // V68 (2026-05-15) — LINE Badge Surfacing. Surfaces a 🟢 LINE chip on
 // every appt cell whose notifyChannel includes 'line' (or legacy
 // lineNotify=true). Component returns null when the appt has no LINE
@@ -990,7 +991,7 @@ export default function AppointmentCalendarView({
                                   >
                                     {appt.customerName || appt.customerNameTemp || '-'}
                                     {!appt.customerName && appt.customerPhoneTemp && (
-                                      <span className="ml-1.5 text-[10px] font-normal font-mono text-[var(--tx-muted)]">· {appt.customerPhoneTemp}</span>
+                                      <span className="ml-1.5 text-[10px] font-normal font-mono text-[var(--tx-muted)]">· <PhoneLink value={appt.customerPhoneTemp}>{appt.customerPhoneTemp}</PhoneLink></span>
                                     )}
                                   </span>
                                 )}

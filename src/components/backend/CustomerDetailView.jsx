@@ -51,6 +51,7 @@ import CustomerBackupModal from './CustomerBackupModal.jsx';
 import { CustomerLineSection } from './CustomerLineSection.jsx';
 // V33.3 — EditCustomerIdsModal replaced by full-page edit (BackendDashboard takeover)
 import DateField from '../DateField.jsx';
+import PhoneLink from '../PhoneLink.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the customer
 // header so admin sees per-branch LINE linkage state at a glance.
@@ -875,7 +876,7 @@ export default function CustomerDetailView({
               )}
               <InfoRow label="เพศ" value={formatGenderTh(pd.gender)} />
               <InfoRow label="วันเกิด" value={formatDob(pd)} />
-              <InfoRow label="เบอร์โทร" value={pd.phone || '-'} icon={<Phone size={11} />} />
+              <InfoRow label="เบอร์โทร" value={pd.phone ? <PhoneLink value={pd.phone}>{pd.phone}</PhoneLink> : '-'} icon={<Phone size={11} />} />
               <InfoRow label="กรุ๊ปเลือด" value={pd.bloodType || '-'} />
               <InfoRow label="ที่อยู่" value={formatAddress(pd)} icon={<MapPin size={11} />} />
               {pd.allergiesDetail && (
@@ -885,7 +886,17 @@ export default function CustomerDetailView({
                 <InfoRow label="โรคประจำตัว" value={formatUnderlying(pd)} className="text-orange-400" />
               )}
               {pd.emergencyName && (
-                <InfoRow label="ผู้ติดต่อฉุกเฉิน" value={`${pd.emergencyName} (${pd.emergencyRelation || '-'}) ${pd.emergencyPhone || ''}`} />
+                <InfoRow
+                  label="ผู้ติดต่อฉุกเฉิน"
+                  value={
+                    <span>
+                      {pd.emergencyName} ({pd.emergencyRelation || '-'})
+                      {pd.emergencyPhone ? (
+                        <> <PhoneLink value={pd.emergencyPhone}>{pd.emergencyPhone}</PhoneLink></>
+                      ) : null}
+                    </span>
+                  }
+                />
               )}
               {pd.howFoundUs?.length > 0 && (
                 <InfoRow label="ที่มา" value={Array.isArray(pd.howFoundUs) ? pd.howFoundUs.join(', ') : pd.howFoundUs} />

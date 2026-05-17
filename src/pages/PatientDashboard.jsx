@@ -10,6 +10,7 @@ import { hexToRgb } from '../utils.js';
 import { getCustomer, getCustomerAppointments } from '../lib/scopedDataLayer.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
+import PhoneLink from '../components/PhoneLink.jsx';
 import { Package, PackageX, CalendarClock, Phone, PhoneCall, AlertCircle, Loader2,
          CheckCircle2, XCircle, RefreshCw, MapPin, Clock, Stethoscope, MessageCircle } from 'lucide-react';
 import TreatmentTimeline from '../components/TreatmentTimeline.jsx';
@@ -685,7 +686,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
                 )}
                 {d.phone && (
                   <span className={`text-xs flex items-center gap-1.5 ${isDark ? 'text-red-300/50' : 'text-pink-400/70'}`}>
-                    <Phone size={11} className={isDark ? 'text-red-400/40' : 'text-pink-300'} />{d.phone}
+                    <Phone size={11} className={isDark ? 'text-red-400/40' : 'text-pink-300'} />
+                    <PhoneLink value={d.phone}>{d.phone}</PhoneLink>
                   </span>
                 )}
               </div>

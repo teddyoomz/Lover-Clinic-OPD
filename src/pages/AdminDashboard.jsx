@@ -108,6 +108,7 @@ import {
 } from '../utils.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
+import PhoneLink from '../components/PhoneLink.jsx';
 // V68 (2026-05-15) — LINE badge for queue-calendar appt cells. Self-nullifies
 // for non-LINE appts (notifyChannel ≠ ['line']); only renders the 🟢 chip when
 // the appt's reminder channel is LINE OA. See AppointmentLineBadge.jsx.
@@ -4699,7 +4700,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {!isFollowUp && !isCustom && (
                       <>
                         <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">สัญชาติ:</span><span className="col-span-2 font-bold text-white">{d.nationality === 'ต่างชาติ' ? (d.nationalityCountry || 'ต่างชาติ') : 'ไทย'}</span></div>
-                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">โทรศัพท์:</span><span className="col-span-2 font-bold text-white font-mono break-all">{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span></div>
+                        <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">โทรศัพท์:</span><PhoneLink value={formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)} className="col-span-2 font-bold text-white font-mono break-all">{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</PhoneLink></div>
                         <div className="grid grid-cols-3 gap-2"><span className="text-gray-500">ที่อยู่:</span><span className="col-span-2 font-bold text-gray-300 text-xs leading-relaxed break-words">{[d.address, d.subDistrict && `ต.${d.subDistrict}`, d.district && `อ.${d.district}`, d.province, d.postalCode].filter(Boolean).join(' ') || '-'}</span></div>
                       </>
                     )}
@@ -4712,7 +4713,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-orange-500/50">ชื่อ-สกุล:</span><span className="font-bold text-orange-200">{d.emergencyName || '-'}</span></div>
                       <div className="flex justify-between"><span className="text-orange-500/50">ความสัมพันธ์:</span><span className="font-bold text-orange-200">{d.emergencyRelation || '-'}</span></div>
-                      <div className="flex justify-between"><span className="text-orange-500/50">โทรศัพท์:</span><span className="font-bold font-mono text-orange-200 break-all">{formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</span></div>
+                      <div className="flex justify-between"><span className="text-orange-500/50">โทรศัพท์:</span><PhoneLink value={formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)} className="font-bold font-mono text-orange-200 break-all">{formatPhoneNumberDisplay(d.emergencyPhone, d.isInternationalEmergencyPhone, d.emergencyPhoneCountryCode)}</PhoneLink></div>
                     </div>
                   </div>
                 )}
@@ -6118,7 +6119,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                         <span>อายุ: {d.age || '-'} ปี</span>
-                        {d.phone && <span>โทร: {formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</span>}
+                        {d.phone && <span>โทร: <PhoneLink value={formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}>{formatPhoneNumberDisplay(d.phone, d.isInternationalPhone, d.phoneCountryCode)}</PhoneLink></span>}
                         {d.idCard && <span className="flex items-center gap-1"><CreditCard size={10}/> {d.idCard.length === 13 ? d.idCard.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/, '$1-$2-$3-$4-$5') : d.idCard}</span>}
                       </div>
                       {reasons.length > 0 && (
@@ -7169,7 +7170,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                             contextBranchId={selectedBranchId}
                             nameClassName="text-sm font-bold text-[var(--tx-heading)] truncate block"
                           />
-                          <span className="text-xs text-gray-500">{c.hn ? `HN: ${c.hn}` : ''}{c.phone ? ` | ${c.phone}` : ''} | ID: {c.id}</span>
+                          <span className="text-xs text-gray-500">{c.hn ? `HN: ${c.hn}` : ''}{c.phone ? <> | <PhoneLink value={c.phone}>{c.phone}</PhoneLink></> : null} | ID: {c.id}</span>
                         </div>
                         <ChevronRight size={14} className="text-gray-500" />
                       </button>
@@ -8002,7 +8003,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs text-gray-500 font-mono font-semibold">
                             <span>อายุ: {data.age || '-'} ปี</span>
-                            {!isFollowUp && !isCustom && <span>โทร: {formatPhoneNumberDisplay(data.phone, data.isInternationalPhone, data.phoneCountryCode)}</span>}
+                            {!isFollowUp && !isCustom && <span>โทร: <PhoneLink value={formatPhoneNumberDisplay(data.phone, data.isInternationalPhone, data.phoneCountryCode)}>{formatPhoneNumberDisplay(data.phone, data.isInternationalPhone, data.phoneCountryCode)}</PhoneLink></span>}
                             {(isFollowUp || isCustom) && <span className="text-orange-400">ประเมิน: {data.assessmentDate || '-'}</span>}
                           </div>
                           {/* Reasons */}

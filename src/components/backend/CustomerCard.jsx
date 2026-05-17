@@ -23,6 +23,7 @@
 import { useHasPermission, useTabAccess } from '../../hooks/useTabAccess.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { CustomerLineBadge } from '../CustomerOption.jsx';
+import PhoneLink from '../PhoneLink.jsx';
 
 // Avatar gradient palette — 6 colors (no red per Thai cultural rule).
 // Hash-derived from customer name so the same person always gets the
@@ -222,7 +223,7 @@ export default function CustomerCard({
         {phoneDisplay && (
           <div className="flex items-center gap-2 text-sm text-[var(--tx-secondary)]">
             <span aria-hidden="true" className="text-sm opacity-85">📞</span>
-            {phoneDisplay}
+            <PhoneLink value={phone}>{phoneDisplay}</PhoneLink>
           </div>
         )}
         {branchName && (

@@ -54,8 +54,8 @@ ef4bd5c3 fix(menu-V2-bis): hide chat bubble while mobile drawer/sheet open + lig
    - Bug 1: tap ⋯ → bubble hides → "ออกจากระบบ" visible
    - Bug 2: theme=light → bottom dock white + amber-700 active tab
    - V82 force-open: open chat → scroll inside chat list works → reach bottom → "—" unlocks → close works
-2. If pass → consider Phase B (15 modals redesign) when user opts in
-3. If new bugs found → quick iterate
+2. If new bugs found → quick iterate
+3. Phase B + Phase C **DROPPED 2026-05-18 EOD+3** per user "ตัดทิ้ง ไม่ทำแล้ว"
 
 ## Resume Prompt
 

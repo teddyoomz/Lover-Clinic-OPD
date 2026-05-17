@@ -17,6 +17,7 @@ import { useSelectedBranch } from '../../../lib/BranchContext.jsx';
 import { downloadCSV } from '../../../lib/csvExport.js';
 import { fmtMoney } from '../../../lib/financeUtils.js';
 import { sortBy } from '../../../lib/reportsUtils.js';
+import PhoneLink from '../../PhoneLink.jsx';
 
 // Sortable columns — each maps to a key on the aggregator row.
 // Composite columns (ลูกค้า, การสั่งซื้อ) use a sub-key for the underlying value.
@@ -337,7 +338,7 @@ function CustomerMobileList({ rows, onOpenCustomer }) {
                   {r.phone && (
                     <>
                       <span className="opacity-50">·</span>
-                      <span className="not-italic">{r.phone}</span>
+                      <PhoneLink value={r.phone} className="not-italic">{r.phone}</PhoneLink>
                     </>
                   )}
                 </div>
@@ -495,7 +496,7 @@ function CustomerReportTable({ rows, totals, onOpenCustomer, sortKey, sortDir, o
                       {r.customerName}
                     </button>
                     {r.phone && (
-                      <span className="text-[10px] text-[var(--tx-muted)]">โทร: {r.phone}</span>
+                      <span className="text-[10px] text-[var(--tx-muted)]">โทร: <PhoneLink value={r.phone}>{r.phone}</PhoneLink></span>
                     )}
                   </div>
                 </td>
