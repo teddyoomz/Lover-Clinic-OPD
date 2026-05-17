@@ -7,7 +7,7 @@
 // useSelectedBranch.branches (Bug A from L1: App.jsx never passed branchName
 // prop → header rendered "—"). Also surfaces hook error to UI banner (Bug D
 // silent-listener-error → V66-class trust collapse).
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useStaffChat } from '../../hooks/useStaffChat.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { StaffChatBubble } from './StaffChatBubble.jsx';
@@ -19,6 +19,25 @@ import { StaffChatNamePicker } from './StaffChatNamePicker.jsx';
 export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchName }) {
   const { branchId: selectedBranchId, branches } = useSelectedBranch();
   const chat = useStaffChat();
+
+  // Backend Menu D — alternative trigger surface. Additive: existing
+  // StaffChatBubble onClick still works. DuoPill dispatches these events.
+  useEffect(() => {
+    const onOpen = () => chat.expand?.();
+    const onUnreadReq = () => {
+      window.dispatchEvent(
+        new CustomEvent('lover:staff-chat-unread', { detail: { count: chat.unreadCount || 0 } })
+      );
+    };
+    window.addEventListener('lover:staff-chat-open', onOpen);
+    window.addEventListener('lover:staff-chat-unread-request', onUnreadReq);
+    // Broadcast on count change
+    onUnreadReq();
+    return () => {
+      window.removeEventListener('lover:staff-chat-open', onOpen);
+      window.removeEventListener('lover:staff-chat-unread-request', onUnreadReq);
+    };
+  }, [chat.expand, chat.unreadCount]);
 
   if (!user || !selectedBranchId || needsPublicAuth) return null;
 
