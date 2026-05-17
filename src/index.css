@@ -2613,13 +2613,13 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 }
 
 /* Mobile: top-center, sits in the empty upper area above the orb ring */
-/* EOD+6 round 4 — bumped again 44vw/210 → 48vw/230 (~+10% at 375px). */
+/* EOD+6 round 5 — bumped again 48vw/230 → 50.5vw/240 (~+5% at 375px). */
 .bloom-logo-wrap.mobile {
   top: 14%;
   left: 50%;
   transform: translateX(-50%);
-  width: clamp(165px, 48vw, 230px);
-  height: clamp(165px, 48vw, 230px);
+  width: clamp(175px, 50.5vw, 240px);
+  height: clamp(175px, 50.5vw, 240px);
 }
 
 .bloom-logo-wrap .bloom-logo {
