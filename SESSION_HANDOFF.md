@@ -66,11 +66,23 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-17 EOD+3 LATE+2 — **V82 + wipe + chat/opd restore + AdminDashboard opt-out patch + state-machine 31/31 PASS**
-- **Master**: `296fa69d test(V82-followup): state-machine simulator — 36 (formType × state)`
-- **Prod**: 2 rounds LIVE (V82 core `44737de3` + opt-out patch `a78046f3`)
-- **HN counter**: absent → next addCustomer = **LC-26000001** (fresh-start state)
-- **opd_sessions**: 81 reset to queue (status='completed', _v82FollowupOpdResetAt forensic stamp); intake/walkin/followup/custom in queue, DEP-* in deposit tab
+- **Date last updated**: 2026-05-18 EOD+3 — **Menu V2 + V82-fix7-bis + V2-bis ALL LIVE; 11369/0 PASS**
+- **Master**: `ef4bd5c3 fix(menu-V2-bis): hide chat bubble while mobile drawer/sheet open + light theme dock surface`
+- **Prod**: 3 rounds LIVE today (24b116a3 Menu V2 → 357acf45 V82-fix7-bis → ef4bd5c3 V2-bis); aliased lover-clinic-app.vercel.app
+- **HN counter**: absent → next addCustomer = **LC-26000001** (preserved across all 3 deploys; pure UI session)
+- **opd_sessions**: state unchanged from EOD+2 — backend data layer NOT touched
+
+### Session 2026-05-18 EOD+3 — Menu Variant A v2 + 2 mobile follow-up fixes (3 deploys)
+
+User: "redesign เมนูใน Frontend ให้ดูดีระดับชนะการประกวด" → 4-variant visual companion mockup → user picked **Variant A** refined (real ClinicLogo + 4 unread badges 100% preserved + chat bubble lift). Menu V2 (commit `24b116a3`): replaced 2-row xl: header (logo + actions row + 4×2 mobile grid OR xl:flex desktop) with compact pill bar (≥768px) + floating bottom dock (<768px) + จอง BottomSheet + ⋯ Drawer. All 8 setAdminMode handlers + 4 unread badges (chat blue / queue red / no-dep orange / dep emerald with chat-tab-blink) + Notif popover (verbatim both viewports) + BranchSelector real dropdown + ThemeToggle + ClinicLogo + onlineAdmins indicator + signOut preserved 100%. StaffChatBubble lifted `bottom-3` → `bottom-[88px]` on mobile (clears 72px dock + 14px gap). Then deployed → user found 3 mobile bugs:
+
+(a) "กดปิดแชทไม่ได้" — V82 force-open lock + scroll-bleed combined: chat panel covered bottom dock + IntersectionObserver "scroll-to-bottom" never fired because touch events bled to page behind. Initial fix V82-fix7 (`abc36e25`) treated user click = ack-all-read; user redirected ("ใช้ระบบเดิมได้ถ้าแก้ scroll ได้") → V82-fix7-bis (`357acf45`) REVERTED V82-fix7 + added scroll-bleed fix: useEffect sets `html[data-staff-chat-open]` → CSS @media (max-width:767px) body+html overflow:hidden + touch-action:none; StaffChatPanel + StaffChatMessageList get overscroll-contain + touchAction:pan-y + WebkitOverflowScrolling:touch. V82 force-open contract intact (canMinimize gate restored).
+
+(b) Drawer ⋯ เพิ่ม opened → floating chat bubble (z=9000) covered "ออกจากระบบ" item. Fix in V2-bis: useEffect toggles `html[data-mobile-menu-overlay-open]` when sheet/drawer open → CSS @media hides bubble (display:none). Auto-restores on close.
+
+(c) Theme switched to light → bottom dock stayed hardcoded dark `bg-[rgba(13,13,15,0.94)]`. Fix in V2-bis: replaced with `.menu-dock-surface` CSS class + `[data-theme="light"]` override (rgba(255,255,255,0.94) + dark border + soft shadow) + light theme overrides for `.menu-tab` (slate-600/900) + `.menu-dock-tab-active` (amber-700 for AA contrast on light bg).
+
+Test discipline: 43 NEW menu source-grep regression tests + 1 V21-fixup `phase-25-0-walk-in-tab-rename.test.js` (JSX shape migrated from `{mode:'dashboard'}` array to inline buttons) + 3 NEW V82 D.6/D.7/D.8 source-grep locks for V82-fix7-bis scroll-bleed contract. Net +47 from V82-fix6 baseline = 11369/0 PASS. Build clean every round. 3 vercel deploys all post-probe verified (chat_conv 200 · be_staff_chat anon 403 · Vercel root 200); firestore rules idempotent re-release every deploy. **NO DATA OPS this session — pure UI restructure**. Checkpoint: `.agents/sessions/2026-05-18-menu-v2-shipped.md`.
 
 ### Session 2026-05-17 EOD+3 LATE+2 — V82-followup: wipe over-scoped → restore + AdminDashboard patch + 31/31 state-machine verify
 

@@ -1,62 +1,36 @@
 ---
-updated_at: "2026-05-18 EOD+2 — Menu Variant A v2 SHIPPED (Phase A redesign)"
-status: "Menu redesign committed + pushed. 11366/0 PASS. Dev preview verified. Deploy pending user authorization."
+updated_at: "2026-05-18 EOD+3 — Menu V2 + V82-fix7-bis + V2-bis ALL LIVE"
+status: "3 prod deploys today; 11369/0 PASS; user L1 hands-on pending"
 branch: "master"
-last_commit: "24b116a3 feat(menu): Variant A v2 — compact pill bar + mobile bottom dock (Phase A)"
-tests: "11366/11366 PASS full vitest (44 new — 43 menu-source-grep + 1 V21-fixup mobile dock label)"
+last_commit: "ef4bd5c3 fix(menu-V2-bis): hide chat bubble while mobile drawer/sheet open + light theme dock surface"
+tests: "11369/11369 PASS full vitest (+47 net from 11322 V82-fix6 baseline: 43 menu source-grep + 1 V21-fixup + 3 V82-fix7-bis D.6/D.7/D.8)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "still 2 rounds LIVE from prior session (44737de3 V82 core + a78046f3 opt-out) — V82-fix2 + V82-fix6 + Menu-V2 source patches LOCAL-ONLY pending deploy"
-firestore_rules_version: "unchanged; no rules change this session"
+production_commit: "ef4bd5c3 LIVE (3 vercel rounds today: 24b116a3 → 357acf45 → ef4bd5c3)"
+firestore_rules_version: "unchanged; rules deploy idempotent re-released this session"
 ---
 
 # Active Context
 
 ## State
-- master = `24b116a3` (Menu Variant A v2) — origin/master matches
-- 11366/0 PASS full vitest (+44 net from V82-fix6 baseline 11322)
-- Build clean (2.97s)
-- Dev preview verified at desktop 1440 + mobile 375:
-  - Desktop pill bar with 8 tabs + right rail rendered ✓
-  - Mobile top bar (44px) + floating bottom dock (5 slots) rendered ✓
-  - จอง BottomSheet picker opens with 2 options ✓
-  - ⋯ More Drawer opens with 6 items (history/settings/backend/theme/online/signout) ✓
-  - Tab switching dashboard→appointment→clinicSettings works ✓
-  - StaffChatBubble lifted to bottom-[88px] on mobile — 19px gap above bottom dock ✓
+- master = `ef4bd5c3` (Menu V2-bis chat-bubble-hide + light theme dock); origin/master matches
+- 11369/0 PASS full vitest · build clean · 3 vercel deploys today (all post-probe verified)
+- Menu Variant A v2 LIVE: compact pill bar (desktop ≥768px) + floating bottom dock (mobile <768px) + จอง BottomSheet + ⋯ Drawer
+- V82 force-open intact: chat stays open until scroll-to-bottom advances cursor → minimize unlocks (real bug was scroll-bleed, not the lock)
+- Mobile chat overlay scroll FIXED: html[data-staff-chat-open] body lock + overscroll-contain + touch-action:pan-y
 
 ## What this session shipped
-- Visual companion mockup with 4 variants → user picked Variant A
-- Variant A refined per user feedback (real ClinicLogo + unread badges preserved + chat bubble lift)
-- Phase A-v2 plan + 43-test source-grep regression bank
-- V21 fixup of `phase-25-0-walk-in-tab-rename.test.js` for new JSX shape
-- Single commit `24b116a3` with:
-  - `src/pages/AdminDashboard.jsx` header replaced + state hooks + mobile dock/sheets/drawer JSX
-  - `src/index.css` new menu utility classes
-  - `src/components/staffchat/StaffChatBubble.jsx` mobile bottom-[88px]
-  - 2 test files (1 new regression + 1 V21 fixup)
-  - Plan doc + visual companion mockup committed
-
-## Preserved 100% (wiring contract)
-- All 8 setAdminMode handlers (chat/dashboard/noDeposit/deposit/appointment/history/clinicSettings + backend window.open)
-- All 4 unread badges with exact same expressions + same colors + chat-tab-blink animation
-- Sub-mode active states (noDepositHistory under noDeposit, depositHistory under deposit, formBuilder under clinicSettings)
-- Notif popover JSX preserved verbatim in both viewports (sound toggle + volume slider + push enable/disable + iPhone hint)
-- BranchSelector real dropdown + ThemeToggle + ClinicLogo + onlineAdmins indicator + signOut(auth) all wired identical
-- No new Firestore reads/writes — pure UI restructure
+- Visual companion: 4 menu variants → user picked Variant A → refined v2 (real logo + unread badges 100% + chat bubble lift)
+- Menu V2 (commit 24b116a3): header replaced + mobile bottom dock + new CSS classes + StaffChatBubble mobile-[88px] lift
+- V82-fix7 then V82-fix7-bis (commits abc36e25, 357acf45): mobile scroll-bleed in chat panel — fixed via body lock + overscroll-contain + touchAction
+- Menu V2-bis (commit ef4bd5c3): hide chat bubble when drawer/sheet open + light theme dock surface + tab text overrides
+- Tests: +43 menu source-grep regression + 1 V21-fixup phase-25-0 + 3 V82 D.6/D.7/D.8 new — net +47 from baseline
+- Plan + visual companion mockup committed: `docs/superpowers/plans/2026-05-18-menu-redesign-variant-a-v2.md` + `docs/brainstorm/menu-redesign-variants.html`
+- Checkpoint: `.agents/sessions/2026-05-18-menu-v2-shipped.md`
 
 ## Next action
-AWAIT user authorization to deploy. Per V18:
-- `deploy` = combined `vercel --prod` + `firebase deploy --only firestore:rules` (no rules change so vercel-only this round)
-- OR `deploy vercel only` = vercel only
-
-If user requests changes → iterate; mockup at `docs/brainstorm/menu-redesign-variants.html` for reference.
+IDLE. AWAIT user L1 hands-on re-verify on prod mobile (Bug 1 chat-bubble-hide + Bug 2 light theme dock). If pass → consider Phase B (15 modals redesign) when user opts in.
 
 ## Outstanding (user-triggered, not auto)
-- Deploy authorization THIS turn (per V18 lock — never roll over)
-- Future: Phase B (15 modals redesign) when user opts in
-- Future: Phase C (settings + chat + light theme) when user opts in
-- Future: Phase D (backend redesign) when user opts in
-
-## Rule Q V66 status
-- L1 (real-browser preview_eval at 3 viewports) — desktop 1440 + mobile 375 verified via DOM introspection
-- Playwright L1 NOT run this session (preview_eval covered the verification surface; user can request Playwright if needed for screenshot evidence)
-- L2 not applicable — pure UI restructure, no data layer changes
+- User L1 mobile re-test: ⋯ drawer items uncovered + light theme dock white
+- (Future) Phase B writing-plans for 15 modals
+- (Future) Phase C settings + chat + full light theme polish + a11y pass
