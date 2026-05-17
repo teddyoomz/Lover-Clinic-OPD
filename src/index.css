@@ -2064,3 +2064,236 @@ button:not(:disabled):active {
   to   { transform: translateY(0); }
 }
 .animate-in.slide-in-from-bottom { animation: slide-in-from-bottom 240ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+
+/* === Backend Menu D === */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Backend Menu D — Bloom Space (Dark) + Sakura Petals (Light)
+   Cosmetic chrome ONLY · no behavior · CSS-only animations (no JS loops)
+   Activates when html[data-backend-menu-mode="new"]
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Hide standalone StaffChatBubble when Backend new-mode active —
+   the DuoPill renders the chat segment instead. */
+html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
+  display: none;
+}
+
+/* ─── Bloom backdrop (dark theme) ─────────────────────────────────────────── */
+.bloom-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  background: radial-gradient(ellipse at bottom right, #050308 0%, #020106 60%, #02010a 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+}
+.bloom-backdrop[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+[data-theme="light"] .bloom-backdrop {
+  background: radial-gradient(ellipse at bottom right, #fff0f5 0%, #ffe4ec 60%, #ffd1dc 100%);
+}
+
+/* ─── Stars (dark only) ───────────────────────────────────────────────────── */
+.bloom-stars { position: absolute; inset: 0; pointer-events: none; }
+.bloom-stars .star {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(255,255,255,0.7);
+  animation: twinkle 3s ease-in-out infinite;
+}
+.bloom-stars .star.red    { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.8); }
+.bloom-stars .star.orange { background: #fb923c; box-shadow: 0 0 6px rgba(251,146,60,0.8); }
+.bloom-stars .star.big    { width: 3px; height: 3px; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50%      { opacity: 1;   transform: scale(1.2); }
+}
+[data-theme="light"] .bloom-stars { display: none; }
+
+/* ─── Nebula patches (dark only) ──────────────────────────────────────────── */
+.bloom-nebula {
+  position: absolute;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(220,38,38,0.25), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+[data-theme="light"] .bloom-nebula {
+  background: radial-gradient(circle, rgba(244,114,182,0.25), transparent 70%);
+}
+
+/* ─── Embers (dark only) — floating */
+.bloom-ember {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: radial-gradient(circle, #fbbf24, #ea580c);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(251,191,36,0.8);
+  animation: ember-drift 8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ember-drift {
+  0%   { transform: translate(0,0)   scale(1);   opacity: 0.8; }
+  50%  { transform: translate(20px,-40px) scale(1.3); opacity: 1; }
+  100% { transform: translate(-10px,-80px) scale(0.7); opacity: 0; }
+}
+[data-theme="light"] .bloom-ember { display: none; }
+
+/* ─── Sakura petals (light only) ──────────────────────────────────────────── */
+.bloom-petal {
+  position: absolute;
+  width: 12px; height: 12px;
+  background: radial-gradient(ellipse at 30% 30%, #fbcfe8 0%, #f9a8d4 60%, #ec4899 100%);
+  border-radius: 50% 0 50% 0;
+  opacity: 0.7;
+  animation: petal-fall 7s linear infinite;
+  pointer-events: none;
+}
+.bloom-petal.small { width: 8px;  height: 8px;  }
+.bloom-petal.big   { width: 16px; height: 16px; }
+@keyframes petal-fall {
+  0%   { transform: translate(0,-20px) rotate(0deg);     opacity: 0;   }
+  10%  { opacity: 0.8; }
+  100% { transform: translate(40px, calc(100vh + 20px)) rotate(360deg); opacity: 0; }
+}
+[data-theme="dark"] .bloom-petal { display: none; }
+
+/* ─── Orbs (8 nav-section buttons radiating from Duo Pill) ────────────────── */
+.bloom-orb {
+  position: absolute;
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), rgba(0,0,0,0.55) 70%);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow:
+    0 12px 32px rgba(0,0,0,0.5),
+    0 0 24px rgba(220,38,38,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+  opacity: 0;
+  transform: scale(0);
+}
+.bloom-orb[data-bloomed="true"] {
+  opacity: 1;
+  transform: scale(1);
+  animation: orb-float-A 5s ease-in-out infinite;
+}
+.bloom-orb:nth-of-type(3n+1)[data-bloomed="true"] { animation-name: orb-float-A; }
+.bloom-orb:nth-of-type(3n+2)[data-bloomed="true"] { animation-name: orb-float-B; animation-delay: -1s; }
+.bloom-orb:nth-of-type(3n+3)[data-bloomed="true"] { animation-name: orb-float-C; animation-delay: -2s; }
+.bloom-orb:hover { transform: scale(1.08) translateY(-4px); }
+.bloom-orb:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 4px;
+}
+
+@keyframes orb-float-A { 0%,100% { translate: 0   0;   } 50% { translate: 0    -6px; } }
+@keyframes orb-float-B { 0%,100% { translate: 0   0;   } 50% { translate: -3px -4px; } }
+@keyframes orb-float-C { 0%,100% { translate: 0   0;   } 50% { translate: 3px  -5px; } }
+
+/* fire-pulse halo (dark) */
+.bloom-orb::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251,146,60,0.4), transparent 70%);
+  filter: blur(8px);
+  animation: fire-pulse 3s ease-in-out infinite;
+  z-index: -1;
+}
+@keyframes fire-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.96); }
+  50%      { opacity: 0.9; transform: scale(1.08); }
+}
+[data-theme="light"] .bloom-orb::before {
+  background: radial-gradient(circle, rgba(244,114,182,0.4), transparent 70%);
+}
+[data-theme="light"] .bloom-orb {
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.95), rgba(255,228,236,0.7) 70%);
+  border: 1px solid rgba(244,114,182,0.3);
+  box-shadow:
+    0 12px 32px rgba(244,114,182,0.25),
+    0 0 24px rgba(244,114,182,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.bloom-orb-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+[data-theme="light"] .bloom-orb-label { color: #831843; text-shadow: 0 1px 3px rgba(255,255,255,0.6); }
+
+/* ─── Duo Pill (bottom-right) ─────────────────────────────────────────────── */
+.duo-pill {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 9100;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(13,13,15,0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+[data-theme="light"] .duo-pill {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(244,114,182,0.25);
+  box-shadow: 0 8px 24px rgba(244,114,182,0.2);
+}
+.duo-pill-btn {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.duo-pill-btn:hover { transform: scale(1.08); }
+.duo-pill-btn:focus-visible { outline: 2px solid #fbbf24; outline-offset: 2px; }
+
+/* ─── Mobile shrinks pill ─── */
+@media (max-width: 767px) {
+  .duo-pill { bottom: 12px; right: 12px; padding: 4px; }
+  .duo-pill-btn { width: 44px; height: 44px; }
+}
+
+/* ─── Themed slim scrollbar (Classic mode sidebar) ────────────────────────── */
+.backend-classic-sidebar::-webkit-scrollbar { width: 5px; }
+.backend-classic-sidebar::-webkit-scrollbar-track { background: transparent; }
+.backend-classic-sidebar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #dc2626, #f97316);
+  border-radius: 999px;
+}
+[data-theme="light"] .backend-classic-sidebar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #ec4899, #fb923c);
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .bloom-stars .star,
+  .bloom-ember,
+  .bloom-petal,
+  .bloom-orb,
+  .bloom-orb::before,
+  .duo-pill-btn { animation: none !important; transition: none !important; }
+}
