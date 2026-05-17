@@ -40,6 +40,15 @@ const TYPE_LABELS = {
   'central-stock': '📦 คลังกลาง',
 };
 
+// V82-followup (2026-05-17) — extracted from inline IIFE-in-JSX to satisfy Rule C3 (Vite OXC
+// parser bomb risk per .claude/rules/03-stack.md). Used by both whole-system + customer-only
+// backup row size displays. Pure JS, byte-format human-readable.
+function formatBytesDisplay(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
 export default function BackupManagerTab() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -355,14 +364,12 @@ export default function BackupManagerTab() {
                       {b.stats?.totalDocCount?.toLocaleString() || 0} docs ·{' '}
                       {/* V81-fix4 Bug A2: show TOTAL on-disk backup size
                           (collections + storage + auth + manifest); falls back to legacy
-                          totalStorageBytes for backups created pre-V81-fix4 */}
-                      {(() => {
-                        const bytes = b.totalBytes
-                          ?? ((b.stats?.totalCollectionFileBytes || 0) + (b.stats?.totalStorageBytes || 0));
-                        if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-                        if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-                        return `${bytes} B`;
-                      })()} ·{' '}
+                          totalStorageBytes for backups created pre-V81-fix4.
+                          V82-followup: extracted IIFE → formatBytesDisplay helper (Rule C3). */}
+                      {formatBytesDisplay(
+                        b.totalBytes
+                          ?? ((b.stats?.totalCollectionFileBytes || 0) + (b.stats?.totalStorageBytes || 0))
+                      )} ·{' '}
                       {b.stats?.totalAuthUsers || 0} users · {b.type}
                     </div>
                   </div>
@@ -439,12 +446,8 @@ export default function BackupManagerTab() {
                   {b.error && <span className="ml-2 text-red-400">⚠ {b.error}</span>}
                   <div className="text-gray-500 mt-0.5">
                     {b.stats?.totalDocCount?.toLocaleString() || 0} docs ·{' '}
-                    {(() => {
-                      const bytes = b.totalBytes ?? 0;
-                      if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-                      if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-                      return `${bytes} B`;
-                    })()} · {b.type}
+                    {/* V82-followup: extracted IIFE → formatBytesDisplay helper (Rule C3). */}
+                    {formatBytesDisplay(b.totalBytes ?? 0)} · {b.type}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
