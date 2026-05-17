@@ -2409,3 +2409,180 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   .bloom-orb::before,
   .duo-pill-btn { animation: none !important; transition: none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Backend Menu D — Sub-tab Picker (V5 desktop / V2 mobile)
+   Mockup ref: 5-variant Visual Companion · user-approved 2026-05-18 EOD+5
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.subtab-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: subtab-fade-in 0.22s ease-out;
+}
+@keyframes subtab-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.subtab-overlay.desktop { perspective: 1200px; }
+
+.subtab-modal {
+  background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(8,12,24,0.96));
+  border: 1px solid color-mix(in srgb, var(--c1, #0ea5e9) 35%, transparent);
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow:
+    0 30px 90px rgba(0,0,0,0.7),
+    0 0 40px color-mix(in srgb, var(--c1, #0ea5e9) 25%, transparent);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* V5 Desktop — 3D tilt + mouse-follow vars set inline via JS (Task 4) */
+.subtab-modal.desktop {
+  width: min(540px, 90vw);
+  max-height: 76vh;
+  overflow-y: auto;
+  --tilt-x: 8deg;
+  --tilt-y: -4deg;
+  --tilt-mx: 0deg; /* mouse-bias x */
+  --tilt-my: 0deg; /* mouse-bias y */
+  transform: rotateX(calc(var(--tilt-x) + var(--tilt-my))) rotateY(calc(var(--tilt-y) + var(--tilt-mx)));
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: subtab-pop-3d 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes subtab-pop-3d {
+  from { transform: scale(0.7) rotateX(8deg) rotateY(-4deg); opacity: 0; }
+  to   { transform: scale(1)   rotateX(8deg) rotateY(-4deg); opacity: 1; }
+}
+
+/* V2 Mobile — bubble with parent gradient color */
+.subtab-modal.mobile {
+  background: linear-gradient(135deg, var(--c1, #0ea5e9), var(--c2, #6366f1));
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: min(360px, 92vw);
+  max-height: 78vh;
+  overflow-y: auto;
+  animation: subtab-pop-bubble 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: var(--origin-x, 80%) var(--origin-y, 80%);
+}
+@keyframes subtab-pop-bubble {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* Header */
+.subtab-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.subtab-header-emoji {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+}
+.subtab-modal.mobile .subtab-header-emoji { font-size: 28px; }
+.subtab-header-text { display: flex; flex-direction: column; gap: 2px; }
+.subtab-header-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.subtab-modal.mobile .subtab-header-name { font-size: 14px; }
+.subtab-header-count {
+  font-size: 10px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 600;
+}
+
+/* Mini-orb grid · 4 columns */
+.subtab-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.subtab-modal.mobile .subtab-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+/* Mini-orb cell */
+.subtab-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 78px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--c1, #0ea5e9), var(--c2, #6366f1));
+  border: 1px solid rgba(251,191,36,0.25);
+  box-shadow:
+    0 6px 14px rgba(0,0,0,0.5),
+    0 0 10px rgba(251,191,36,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.4);
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s;
+  transform: translateZ(var(--depth, 0px));
+  color: white;
+}
+.subtab-cell:hover {
+  transform: translateZ(calc(var(--depth, 0px) + 12px)) scale(1.04);
+  box-shadow:
+    0 14px 28px rgba(0,0,0,0.6),
+    0 0 20px rgba(251,191,36,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.subtab-cell:focus-visible {
+  outline: 3px solid #fbbf24;
+  outline-offset: 3px;
+}
+/* Mobile cells = white-tinted on parent gradient bg */
+.subtab-modal.mobile .subtab-cell {
+  background: rgba(255,255,255,0.18);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  height: 70px;
+}
+.subtab-cell-emoji {
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+  pointer-events: none;
+}
+.subtab-modal.mobile .subtab-cell-emoji { font-size: 22px; }
+.subtab-cell-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  text-align: center;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  pointer-events: none;
+}
+
+/* Reduced motion — flatten 3D + disable mouse-follow tilt + simplify animations */
+@media (prefers-reduced-motion: reduce) {
+  .subtab-overlay { animation: none; }
+  .subtab-modal.desktop {
+    transform: none !important;
+    animation: none !important;
+  }
+  .subtab-modal.mobile { animation: none !important; }
+  .subtab-cell { transform: none !important; transition: none !important; }
+  .subtab-cell:hover { transform: scale(1.03) !important; }
+}
