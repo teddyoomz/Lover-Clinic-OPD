@@ -222,4 +222,42 @@ describe('Backend Menu D — Sub-tab Picker RTL', () => {
     const src = fs.readFileSync('src/components/backend/shell/BackendSubTabBloom.jsx', 'utf-8');
     expect(src).toMatch(/V5 3D Tilt Stack|V2 Expanding Bubble/);
   });
+
+  // ---- EOD+5 polish: mouse-follow seeded from last-known cursor ----
+
+  it('P1.19 (EOD+5 polish) mouse-follow tilt seeds IMMEDIATELY on mount from last-known cursor position', async () => {
+    setViewport(1024);
+    // Simulate mouse movement BEFORE picker mounts — module-level tracker
+    // should capture this as _lastCursorX/_lastCursorY.
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 100, clientY: 200 }));
+    // Force the module to re-evaluate its tracker by sending a second event
+    // (some jsdom versions queue the first one until next tick).
+    await new Promise((r) => setTimeout(r, 10));
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 100, clientY: 200 }));
+    render(<BackendSubTabBloom section={makeSection()} onClose={noop} onNavigate={noop} />);
+    // Wait for the seed rAF (one frame) + the first tick rAF (one more frame)
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const modal = screen.getByTestId('subtab-modal');
+    const tiltMx = modal.style.getPropertyValue('--tilt-mx');
+    const tiltMy = modal.style.getPropertyValue('--tilt-my');
+    // At minimum tick has run — tilt-mx + tilt-my should be SET (non-empty strings)
+    expect(tiltMx).not.toBe('');
+    expect(tiltMy).not.toBe('');
+    // They should match the "Ndeg" format
+    expect(tiltMx).toMatch(/-?\d+(\.\d+)?deg/);
+    expect(tiltMy).toMatch(/-?\d+(\.\d+)?deg/);
+  });
+
+  it('P1.20 (EOD+5 polish) source-grep — seed-from-cursor markers present', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/components/backend/shell/BackendSubTabBloom.jsx', 'utf-8');
+    // Module-level cursor tracker
+    expect(src).toMatch(/let _lastCursorX/);
+    expect(src).toMatch(/let _lastCursorY/);
+    expect(src).toMatch(/window\.addEventListener\(\s*['"]mousemove['"]/);
+    // Seed rAF reads tracker + snaps both target AND current
+    expect(src).toMatch(/biasFromCursor\(_lastCursorX, _lastCursorY\)/);
+    expect(src).toMatch(/currentBiasX = bias\.x/);
+    expect(src).toMatch(/currentBiasY = bias\.y/);
+  });
 });

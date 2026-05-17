@@ -19,7 +19,11 @@ export default function BackendShellNew({
   topBarSlot = null,
   children,
 }) {
-  const [bloomOpen, setBloomOpen] = useState(false);
+  // Backend Menu D EOD+5 polish (2026-05-18) — bloom open by default per user:
+  // "เมื่อกดเข้า backend จากไหนก็ตาม ... จะเป็นสถานะเมนูเปิดรออยู่". User can
+  // dismiss via backdrop/Esc/orb-click — falls through to the underlying tab
+  // (default = appointment-all from BackendDashboard).
+  const [bloomOpen, setBloomOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Set html data-attr so global CSS can hide standalone StaffChatBubble

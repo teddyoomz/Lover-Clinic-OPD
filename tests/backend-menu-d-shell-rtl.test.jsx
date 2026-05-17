@@ -73,9 +73,17 @@ describe('Backend Menu D — Shell RTL', () => {
     expect(screen.getByTestId('duo-pill-menu')).toBeTruthy();
   });
 
-  it('T6.6 click DuoPill menu opens bloom overlay', () => {
+  it('T6.6 (EOD+5 polish) bloom is OPEN by default on mount; backdrop click closes; DuoPill menu re-opens it', () => {
+    // EOD+5 polish: BackendShellNew now defaults bloomOpen=true so user sees
+    // the menu waiting on first entry to ?backend=1. This test verifies the
+    // open-by-default + close + re-open cycle.
     setup();
+    // Open by default
+    expect(screen.getByTestId('bloom-overlay')).toBeTruthy();
+    // Close via backdrop
+    fireEvent.click(screen.getByTestId('bloom-backdrop'));
     expect(screen.queryByTestId('bloom-overlay')).toBeNull();
+    // DuoPill menu re-opens
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     expect(screen.getByTestId('bloom-overlay')).toBeTruthy();
   });

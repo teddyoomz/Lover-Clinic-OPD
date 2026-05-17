@@ -13,6 +13,23 @@ import { getSubTabEmoji } from './subTabEmoji.js';
 
 const MD_BREAKPOINT = 768;
 
+// EOD+5 polish (2026-05-18) — module-level cursor tracker so the picker can
+// seed mouse-follow tilt IMMEDIATELY on open from the last-known cursor
+// position instead of waiting for the first mousemove. User report verbatim:
+// "ตามทันทีที่เปิด sub tab". Single passive listener; minimal perf cost.
+let _lastCursorX = 0;
+let _lastCursorY = 0;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'mousemove',
+    (e) => {
+      _lastCursorX = e.clientX;
+      _lastCursorY = e.clientY;
+    },
+    { passive: true }
+  );
+}
+
 function getIsMobile() {
   if (typeof window === 'undefined') return false;
   return window.innerWidth < MD_BREAKPOINT;
@@ -89,18 +106,28 @@ export default function BackendSubTabBloom({
     const MAX_BIAS = 6; // degrees
     const LERP = 0.12;
 
-    const onMove = (e) => {
+    // Pure bias-from-cursor compute (also used to seed initial state on mount)
+    const biasFromCursor = (clientX, clientY) => {
       const modal = modalRef.current;
-      if (!modal) return;
+      if (!modal) return null;
       const rect = modal.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      // Distance from modal center (in viewport coords)
-      const dx = (e.clientX - cx) / (rect.width / 2);  // [-1, 1] within modal width
-      const dy = (e.clientY - cy) / (rect.height / 2);
-      // Clamp + scale to ±MAX_BIAS · invert dy for natural feel (cursor above → tilt up)
-      targetBiasX = Math.max(-1, Math.min(1, dx)) * MAX_BIAS;
-      targetBiasY = -Math.max(-1, Math.min(1, dy)) * MAX_BIAS;
+      const dx = (clientX - cx) / (rect.width / 2);
+      const dy = (clientY - cy) / (rect.height / 2);
+      return {
+        x: Math.max(-1, Math.min(1, dx)) * MAX_BIAS,
+        y: -Math.max(-1, Math.min(1, dy)) * MAX_BIAS,
+      };
+    };
+
+    const onMove = (e) => {
+      const bias = biasFromCursor(e.clientX, e.clientY);
+      if (bias) {
+        targetBiasX = bias.x;
+        targetBiasY = bias.y;
+      }
     };
 
     const onLeave = () => {
@@ -121,6 +148,23 @@ export default function BackendSubTabBloom({
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseout', onLeave);
+
+    // EOD+5 polish — seed bias from last-known cursor position so the modal
+    // tilts toward the cursor IMMEDIATELY on open instead of starting flat
+    // and only reacting after the first mouse jitter. Use rAF to wait one
+    // frame so the modal has been positioned + getBoundingClientRect returns
+    // meaningful dimensions; then snap both target AND current to skip the
+    // lerp's first-frame "from zero" intro.
+    requestAnimationFrame(() => {
+      const bias = biasFromCursor(_lastCursorX, _lastCursorY);
+      if (bias) {
+        targetBiasX = bias.x;
+        targetBiasY = bias.y;
+        currentBiasX = bias.x;
+        currentBiasY = bias.y;
+      }
+    });
+
     rafId = requestAnimationFrame(tick);
 
     return () => {

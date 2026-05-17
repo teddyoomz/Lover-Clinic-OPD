@@ -134,7 +134,11 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // BackendNav (sidebar + drawer). Mobile <768px forced to 'new'.
   const [menuMode] = useBackendMenuMode();
   // V50 (2026-05-08) — default tab changed from 'clone' (DELETED) to 'customers'.
-  const [activeTab, setActiveTab] = useState('customers');
+  // Backend Menu D EOD+5 polish (2026-05-18) — default flipped to 'appointment-all'
+  // so the menu-open default state (BackendShellNew bloomOpen=true) shows the
+  // user the appointments overview behind the bloom. Deep-links (?customer=, ?tab=)
+  // still override per the useEffect below.
+  const [activeTab, setActiveTab] = useState('appointment-all');
   const [viewingCustomer, setViewingCustomer] = useState(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);   // V33.2 — full-page Add Customer takeover
   const [editingCustomer, setEditingCustomer] = useState(null);      // V33.3 — full-page Edit Customer takeover (the customer doc to edit)
