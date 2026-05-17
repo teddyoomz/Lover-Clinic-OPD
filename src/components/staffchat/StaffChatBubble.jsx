@@ -10,7 +10,7 @@ export function StaffChatBubble({ unreadCount, onClick }) {
       type="button"
       onClick={onClick}
       data-testid="staff-chat-bubble"
-      className="fixed bottom-3 right-3 md:bottom-4 md:right-4 w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-xl hover:shadow-2xl transition-all hover:scale-105 flex items-center justify-center z-[9000]"
+      className="fixed bottom-[88px] right-3 md:bottom-4 md:right-4 w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-xl hover:shadow-2xl transition-all hover:scale-105 flex items-center justify-center z-[9000]"
       aria-label="เปิดแชทในสาขา"
     >
       <MessageCircle size={24} />

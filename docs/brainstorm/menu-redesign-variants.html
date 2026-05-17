@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LoverClinic — Menu Redesign Variants</title>
+<style>
+  :root {
+    --rx1-300: #fb923c;
+    --rx1-500: #f97316;
+    --rx1-600: #ef4444;
+    --rx1-700: #dc2626;
+    --rx1-gradient: linear-gradient(90deg, #dc2626 0%, #ef4444 35%, #f97316 70%, #fb923c 100%);
+    --rx1-gradient-soft: linear-gradient(135deg, rgba(220,38,38,0.14) 0%, rgba(251,146,60,0.06) 100%);
+    --rx1-text-gradient: linear-gradient(135deg, #ef4444, #fb923c);
+
+    --bg-app: #050505;
+    --bg-elevated: #0d0d0f;
+    --bg-card: #111114;
+    --bg-hover: #18181b;
+    --bg-input: #1c1c20;
+
+    --bd: rgba(255,255,255,0.06);
+    --bd-strong: rgba(255,255,255,0.1);
+    --bd-accent: rgba(251,146,60,0.3);
+
+    --tx-heading: #fafafa;
+    --tx-primary: #e5e5e5;
+    --tx-secondary: #a8a8a8;
+    --tx-muted: #71717a;
+    --tx-accent: #fed7aa;
+
+    --state-success: #22c55e;
+    --state-danger: #ef4444;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-app); color: var(--tx-primary); font-family: 'Sukhumvit Set', 'Noto Sans Thai', system-ui, -apple-system, sans-serif; font-size: 14px; }
+
+  .page-wrap { max-width: 1640px; margin: 0 auto; padding: 32px 24px 80px; }
+  .page-title { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; background: var(--rx1-text-gradient); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0 0 8px; }
+  .page-subtitle { color: var(--tx-secondary); margin: 0 0 8px; }
+  .page-meta { color: var(--tx-muted); font-size: 12px; margin: 0 0 40px; }
+
+  .variant {
+    background: var(--bg-elevated);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .variant-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
+  .variant-name-row { display: flex; align-items: center; gap: 14px; }
+  .variant-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--rx1-300); background: var(--rx1-gradient-soft); border: 1px solid var(--bd-accent); padding: 4px 10px; border-radius: 999px; }
+  .variant-title { font-size: 22px; font-weight: 700; color: var(--tx-heading); margin: 0; letter-spacing: -0.01em; }
+  .variant-desc { color: var(--tx-secondary); margin: 6px 0 0; font-size: 13px; max-width: 760px; line-height: 1.55; }
+
+  .variant-feats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .feat { font-size: 11px; padding: 4px 10px; border: 1px solid var(--bd-strong); border-radius: 6px; color: var(--tx-secondary); background: var(--bg-card); }
+
+  .preview-row { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+  @media (max-width: 1100px) { .preview-row { grid-template-columns: 1fr; } }
+
+  .preview-pane { background: var(--bg-app); border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+  .preview-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tx-muted); padding: 10px 16px; border-bottom: 1px solid var(--bd); background: rgba(255,255,255,0.02); }
+  .preview-frame { padding: 16px; }
+
+  /* Mobile frame */
+  .mobile-frame { width: 348px; margin: 0 auto; background: var(--bg-app); border-radius: 28px; border: 8px solid #1a1a1d; padding: 0; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.4); position: relative; }
+  .mobile-frame .notch { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 90px; height: 18px; background: #0a0a0a; border-radius: 0 0 14px 14px; z-index: 50; }
+  .mobile-content { width: 332px; height: 600px; overflow: hidden; position: relative; padding-top: 0; background: var(--bg-app); }
+
+  /* Generic chrome */
+  .gradient-line { height: 3px; background: var(--rx1-gradient); }
+  .gradient-text { background: var(--rx1-text-gradient); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; letter-spacing: -0.01em; }
+  .pill { background: var(--bg-hover); border: 1px solid var(--bd-strong); padding: 5px 10px; border-radius: 999px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .pill-rx1 { background: var(--rx1-gradient-soft); border-color: var(--bd-accent); color: var(--tx-accent); }
+  .icn-btn { width: 36px; height: 36px; border-radius: 8px; background: var(--bg-hover); border: 1px solid var(--bd-strong); display: inline-flex; align-items: center; justify-content: center; color: var(--tx-secondary); position: relative; flex-shrink: 0; }
+  .icn-btn-rx1 { background: var(--rx1-gradient); border: none; color: white; }
+  .icn-btn .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background: var(--state-danger); border-radius: 50%; }
+
+  .btn-primary { background: var(--rx1-gradient); color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .btn-ghost { background: transparent; color: var(--tx-secondary); border: 1px solid var(--bd-strong); padding: 8px 14px; border-radius: 8px; font-size: 13px; }
+
+  .tab { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--tx-secondary); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .tab-active { color: var(--tx-heading); background: var(--bg-hover); }
+
+  /* ─────────────────────────────────────────────────
+     VARIANT 1 — Compact Pill Bar
+     ───────────────────────────────────────────────── */
+  .v1-bar { display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--bd); }
+  .v1-brand { font-size: 18px; font-weight: 800; letter-spacing: 0.01em; }
+  .v1-brand .small { color: var(--tx-muted); font-size: 10px; letter-spacing: 0.15em; font-weight: 600; }
+  .v1-tabs { display: flex; align-items: center; gap: 4px; flex: 1; margin-left: 16px; }
+  .v1-tab { padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--tx-secondary); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .v1-tab:hover { color: var(--tx-primary); background: var(--bg-hover); }
+  .v1-tab-active { color: var(--tx-heading); background: var(--rx1-gradient-soft); border: 1px solid var(--bd-accent); }
+  .v1-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* mobile bottom nav for V1 */
+  .v1-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+  .v1-bot { position: absolute; bottom: 0; left: 0; right: 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: rgba(13,13,15,0.95); backdrop-filter: blur(12px); display: flex; justify-content: space-around; border-top: 1px solid var(--bd-strong); }
+  .v1-bot-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; border-radius: 10px; font-size: 10px; color: var(--tx-muted); font-weight: 600; min-width: 52px; }
+  .v1-bot-tab.active { background: var(--rx1-gradient-soft); color: var(--tx-accent); }
+
+  /* ─────────────────────────────────────────────────
+     VARIANT 2 — Slim 2-Row Editorial
+     ───────────────────────────────────────────────── */
+  .v2-top { display: flex; align-items: center; justify-content: space-between; padding: 8px 18px; background: var(--bg-elevated); }
+  .v2-tabs-row { display: flex; align-items: center; gap: 0; padding: 0 18px; background: var(--bg-elevated); border-bottom: 1px solid var(--bd); border-top: 1px solid var(--bd); overflow-x: auto; }
+  .v2-tab { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--tx-secondary); cursor: pointer; position: relative; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .v2-tab:hover { color: var(--tx-primary); }
+  .v2-tab.active { color: var(--tx-heading); }
+  .v2-tab.active::after { content: ''; position: absolute; bottom: 0; left: 8px; right: 8px; height: 2px; background: var(--rx1-gradient); border-radius: 2px 2px 0 0; }
+
+  /* ─────────────────────────────────────────────────
+     VARIANT 3 — Sidebar (Vertical)
+     ───────────────────────────────────────────────── */
+  .v3-layout { display: flex; min-height: 240px; }
+  .v3-sidebar { width: 64px; background: var(--bg-elevated); border-right: 1px solid var(--bd); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 4px; transition: width 0.2s; flex-shrink: 0; }
+  .v3-sidebar:hover { width: 220px; align-items: stretch; padding-left: 12px; padding-right: 12px; }
+  .v3-brand-mark { width: 44px; height: 44px; border-radius: 12px; background: var(--rx1-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 17px; margin-bottom: 14px; flex-shrink: 0; }
+  .v3-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; color: var(--tx-secondary); cursor: pointer; font-size: 13px; font-weight: 600; }
+  .v3-nav-item:hover { background: var(--bg-hover); color: var(--tx-primary); }
+  .v3-nav-item.active { background: var(--rx1-gradient-soft); color: var(--tx-accent); border: 1px solid var(--bd-accent); }
+  .v3-nav-item .icn { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+  .v3-nav-item .lbl { opacity: 0; white-space: nowrap; transition: opacity 0.2s; }
+  .v3-sidebar:hover .v3-nav-item .lbl { opacity: 1; }
+  .v3-spacer { flex: 1; }
+  .v3-main { flex: 1; background: var(--bg-app); display: flex; flex-direction: column; }
+  .v3-topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--bd); }
+  .v3-title-block { display: flex; align-items: center; gap: 10px; }
+  .v3-title { font-size: 16px; font-weight: 700; color: var(--tx-heading); }
+  .v3-crumb { color: var(--tx-muted); font-size: 12px; }
+
+  /* ─────────────────────────────────────────────────
+     VARIANT 4 — Cmd-K Command Bar
+     ───────────────────────────────────────────────── */
+  .v4-bar { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--bd); }
+  .v4-crumb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .v4-crumb .brand { font-weight: 800; }
+  .v4-crumb .sep { color: var(--tx-muted); }
+  .v4-crumb .active-tab { color: var(--tx-heading); font-weight: 700; }
+  .v4-search { flex: 1; max-width: 520px; background: var(--bg-input); border: 1px solid var(--bd-strong); border-radius: 10px; padding: 9px 14px; display: flex; align-items: center; gap: 10px; color: var(--tx-muted); font-size: 13px; }
+  .v4-search .kbd { margin-left: auto; background: var(--bg-hover); border: 1px solid var(--bd-strong); padding: 2px 6px; border-radius: 5px; font-family: ui-monospace, monospace; font-size: 11px; color: var(--tx-secondary); }
+
+  /* ─────────────────────────────────────────────────
+     VARIANT-AGNOSTIC mobile components reused
+     ───────────────────────────────────────────────── */
+  .mob-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; gap: 8px; }
+  .mob-top .brand-mini { font-size: 14px; font-weight: 800; }
+  .mob-content-stub { padding: 16px; color: var(--tx-muted); font-size: 12px; text-align: center; line-height: 1.6; }
+  .mob-bottom-dock {
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    background: rgba(13,13,15,0.92); backdrop-filter: blur(20px);
+    border: 1px solid var(--bd-strong); border-radius: 18px;
+    display: flex; justify-content: space-around; padding: 8px 6px;
+  }
+  .mob-bottom-dock .tab { padding: 6px 8px; flex-direction: column; gap: 2px; font-size: 10px; color: var(--tx-muted); }
+  .mob-bottom-dock .tab.active { background: var(--rx1-gradient-soft); color: var(--tx-accent); border-radius: 12px; }
+
+  /* Generic icon glyph placeholders (real impl uses lucide-react) */
+  .ic { width: 16px; height: 16px; display: inline-block; vertical-align: middle; }
+  .legend { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 10px; padding: 14px 16px; margin-top: 16px; font-size: 12px; color: var(--tx-secondary); line-height: 1.7; }
+  .legend strong { color: var(--tx-heading); }
+  .legend ul { margin: 8px 0 0 18px; padding: 0; }
+
+  .vote-block { background: var(--bg-card); border: 1px solid var(--bd-accent); border-radius: 12px; padding: 20px 24px; margin-top: 32px; }
+  .vote-block h2 { margin: 0 0 8px; font-size: 18px; color: var(--tx-heading); }
+  .vote-block p { color: var(--tx-secondary); margin: 0 0 8px; font-size: 13px; line-height: 1.6; }
+  .vote-block code { background: var(--bg-hover); padding: 2px 7px; border-radius: 5px; color: var(--tx-accent); font-family: ui-monospace, monospace; font-size: 12px; }
+
+  .meta-stats { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+  .stat { background: var(--bg-card); border: 1px solid var(--bd); padding: 8px 14px; border-radius: 8px; font-size: 12px; color: var(--tx-secondary); }
+  .stat strong { color: var(--tx-heading); }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <h1 class="page-title">เมนู Frontend — 4 ตัวเลือก</h1>
+  <p class="page-subtitle">ออกแบบเฉพาะแถบเมนูบน เลือกแบบที่ชอบแล้วผมจะ implement.</p>
+  <p class="page-meta">ทั้งหมด: dark theme · RX1 red-orange accent · 8 tabs : แชท · คิวหน้า Clinic · จองไม่มัดจำ · จองมัดจำ · นัดหมาย · ประวัติ · ตั้งค่า · หลังบ้าน + utilities (สร้างคิวใหม่ · 🔔 · branch · theme · online · ออก)</p>
+
+  <!-- =============== VARIANT 1 =============== -->
+  <div class="variant">
+    <div class="variant-header">
+      <div>
+        <div class="variant-name-row">
+          <span class="variant-tag">Variant A</span>
+          <h2 class="variant-title">Compact Pill Bar — Linear/Vercel style</h2>
+        </div>
+        <p class="variant-desc">แถวเดียวบน desktop · มี 5 tabs หลักโชว์ + overflow ⋯ สำหรับ ตั้งค่า/หลังบ้าน · จองรวมเป็น dropdown · utilities ย่อเป็น user-menu (👤▾) ภายในมี theme + online + ออก. มือถือ = bottom nav 5 ช่อง + top bar กระชับ.</p>
+      </div>
+      <div class="variant-feats">
+        <span class="feat">1 row desktop</span>
+        <span class="feat">bottom-nav mobile</span>
+        <span class="feat">overflow ⋯</span>
+        <span class="feat">user-menu collapse</span>
+      </div>
+    </div>
+
+    <div class="preview-row">
+      <div class="preview-pane">
+        <div class="preview-label">Desktop · 1440px</div>
+        <div class="preview-frame">
+          <div style="background: var(--bg-app); border-radius: 8px; overflow: hidden; border: 1px solid var(--bd);">
+            <div class="gradient-line"></div>
+            <div class="v1-bar">
+              <div class="v1-brand">
+                <span class="gradient-text">LOVER CLINIC</span>
+                <div class="small">PATIENT CARE</div>
+              </div>
+              <div class="v1-tabs">
+                <div class="v1-tab">💬 แชท</div>
+                <div class="v1-tab v1-tab-active">🏥 คิวหน้า Clinic</div>
+                <div class="v1-tab">🗓 จอง <span style="font-size:10px">▾</span></div>
+                <div class="v1-tab">📅 นัดหมาย</div>
+                <div class="v1-tab">📋 ประวัติ</div>
+                <div class="v1-tab" title="ตั้งค่า + หลังบ้าน">⋯</div>
+              </div>
+              <div class="v1-actions">
+                <button class="btn-primary">⊕ สร้างคิวใหม่</button>
+                <div class="icn-btn">🔔<span class="dot"></span></div>
+                <div class="pill pill-rx1">🏢 นครราชสีมา <span style="font-size:10px;opacity:.7">▾</span></div>
+                <div class="icn-btn">👤</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-label">Mobile · 375px</div>
+        <div class="preview-frame">
+          <div class="mobile-frame">
+            <div class="notch"></div>
+            <div class="mobile-content">
+              <div class="gradient-line"></div>
+              <div class="v1-top">
+                <span class="gradient-text" style="font-size: 16px">LOVER CLINIC</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <div class="pill pill-rx1" style="font-size:11px;padding:3px 8px">🏢 นคร</div>
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:13px">🔔<span class="dot"></span></div>
+                </div>
+              </div>
+              <div class="mob-content-stub">— content area —<br/>คิวลูกค้าวันนี้</div>
+              <div class="v1-bot">
+                <div class="v1-bot-tab active"><span style="font-size:18px">🏥</span><span>คิว</span></div>
+                <div class="v1-bot-tab"><span style="font-size:18px">💬</span><span>แชท</span></div>
+                <div class="v1-bot-tab"><span style="font-size:18px">📅</span><span>นัด</span></div>
+                <div class="v1-bot-tab"><span style="font-size:18px">🗓</span><span>จอง</span></div>
+                <div class="v1-bot-tab"><span style="font-size:18px">⋯</span><span>เพิ่ม</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>โครงสร้าง:</strong> brand (gradient text) → 5 tabs + ⋯ → quick action + utilities กระชับ.
+      <ul>
+        <li>"⋯" overflow: ตั้งค่า · หลังบ้าน (กดเปิด popover)</li>
+        <li>"👤" avatar: 🌗 Dark/Light toggle · ● 3 ออนไลน์ · ออกจากระบบ</li>
+        <li>มือถือ: 4 tabs หลัก + "เพิ่ม" drawer (ประวัติ + ตั้งค่า + หลังบ้าน + ออก)</li>
+        <li>ความสูง: desktop 56px · mobile top 44px + bottom dock 64px</li>
+      </ul>
+    </div>
+
+    <div class="meta-stats">
+      <div class="stat"><strong>เหมาะ:</strong> ผู้ใช้ทั่วไป + ทีมที่อยากเปลี่ยน tab ไวๆ</div>
+      <div class="stat"><strong>เสี่ยง:</strong> 2 tabs ซ่อนใน ⋯ — ต้องเรียนรู้</div>
+      <div class="stat"><strong>เคล็ดลับ:</strong> active pill เด่นชัด — รู้ตำแหน่งทันที</div>
+    </div>
+  </div>
+
+  <!-- =============== VARIANT 2 =============== -->
+  <div class="variant">
+    <div class="variant-header">
+      <div>
+        <div class="variant-name-row">
+          <span class="variant-tag">Variant B</span>
+          <h2 class="variant-title">Slim 2-Row Editorial — Stripe/NYTimes style</h2>
+        </div>
+        <p class="variant-desc">2 แถวบาง: แถวบน = brand + actions/utilities · แถวล่าง = 8 tabs ครบทุกอัน (active = underline gradient). มือถือ = brand row + tab strip เลื่อนแนวนอน (auto-center active). ไม่มี overflow — เห็น tab ครบ.</p>
+      </div>
+      <div class="variant-feats">
+        <span class="feat">2 slim rows</span>
+        <span class="feat">8 tabs ครบ</span>
+        <span class="feat">underline active</span>
+        <span class="feat">scrollable mobile</span>
+      </div>
+    </div>
+
+    <div class="preview-row">
+      <div class="preview-pane">
+        <div class="preview-label">Desktop · 1440px</div>
+        <div class="preview-frame">
+          <div style="background: var(--bg-app); border-radius: 8px; overflow: hidden; border: 1px solid var(--bd);">
+            <div class="gradient-line"></div>
+            <div class="v2-top">
+              <div>
+                <span class="gradient-text" style="font-size:18px">LOVER CLINIC</span>
+                <span style="color:var(--tx-muted);font-size:11px;letter-spacing:0.1em;margin-left:8px">· PATIENT CARE</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn-primary">⊕ สร้างคิวใหม่</button>
+                <div class="icn-btn">🔔<span class="dot"></span></div>
+                <div class="pill pill-rx1">🏢 นครราชสีมา <span style="font-size:10px;opacity:.7">▾</span></div>
+                <div class="icn-btn">👤</div>
+              </div>
+            </div>
+            <div class="v2-tabs-row">
+              <div class="v2-tab">💬 แชท</div>
+              <div class="v2-tab active">🏥 คิวหน้า Clinic</div>
+              <div class="v2-tab">🗓 จองไม่มัดจำ</div>
+              <div class="v2-tab">🗓 จองมัดจำ</div>
+              <div class="v2-tab">📅 นัดหมาย</div>
+              <div class="v2-tab">📋 ประวัติ</div>
+              <div class="v2-tab">⚙ ตั้งค่า</div>
+              <div class="v2-tab">⬛ หลังบ้าน</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-label">Mobile · 375px</div>
+        <div class="preview-frame">
+          <div class="mobile-frame">
+            <div class="notch"></div>
+            <div class="mobile-content">
+              <div class="gradient-line"></div>
+              <div class="mob-top">
+                <div>
+                  <span class="gradient-text" style="font-size:14px">LOVER CLINIC</span>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <div class="icn-btn" style="width:32px;height:32px;background:var(--rx1-gradient);color:white;border:none;font-size:13px">⊕</div>
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:13px">🔔<span class="dot"></span></div>
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:13px">👤</div>
+                </div>
+              </div>
+              <div style="background:var(--bg-elevated);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);overflow-x:auto;display:flex;gap:0;padding:0 10px">
+                <div class="v2-tab" style="padding:10px 12px;font-size:12px">💬 แชท</div>
+                <div class="v2-tab active" style="padding:10px 12px;font-size:12px">🏥 คิว</div>
+                <div class="v2-tab" style="padding:10px 12px;font-size:12px">🗓 ไม่มัดจำ</div>
+                <div class="v2-tab" style="padding:10px 12px;font-size:12px">🗓 มัดจำ</div>
+                <div class="v2-tab" style="padding:10px 12px;font-size:12px">📅 นัด</div>
+                <div class="v2-tab" style="padding:10px 12px;font-size:12px">📋 ประวัติ</div>
+              </div>
+              <div style="padding:8px 14px;background:var(--bg-elevated);border-bottom:1px solid var(--bd);font-size:11px;color:var(--tx-muted)">
+                🏢 นครราชสีมา <span style="float:right;color:var(--state-success)">● 3 ออนไลน์</span>
+              </div>
+              <div class="mob-content-stub">— content area —<br/>คิวลูกค้าวันนี้</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>โครงสร้าง:</strong> 2 แถวแน่น แต่บาง (รวม 84px desktop), แถวล่างคือ tab strip ที่ active = underline gradient.
+      <ul>
+        <li>มือถือ: tab strip scrollable ตรงกลาง · active auto-center · branch chip บางๆใต้ tabs</li>
+        <li>ไม่มี ⋯ ซ่อน — เห็น tab ครบ 8 อันใน desktop / 6 ครั้งล่าสุดใน mobile (scroll ดูได้หมด)</li>
+        <li>theme + online + ออก ย้ายเข้า user menu 👤</li>
+        <li>ความสูง: desktop 84px · mobile top 100px (top bar 44 + tab strip 40 + branch row 24)</li>
+      </ul>
+    </div>
+
+    <div class="meta-stats">
+      <div class="stat"><strong>เหมาะ:</strong> ทีมที่ใช้ทุก tab บ่อย — ไม่อยาก hidden อะไร</div>
+      <div class="stat"><strong>เสี่ยง:</strong> มือถือต้อง scroll tabs (ไม่เห็นทุกอันพร้อมกัน)</div>
+      <div class="stat"><strong>เคล็ดลับ:</strong> active underline = editorial vibe พรีเมียม</div>
+    </div>
+  </div>
+
+  <!-- =============== VARIANT 3 =============== -->
+  <div class="variant">
+    <div class="variant-header">
+      <div>
+        <div class="variant-name-row">
+          <span class="variant-tag">Variant C</span>
+          <h2 class="variant-title">Sidebar Vertical — Notion/Linear/Slack workspace</h2>
+        </div>
+        <p class="variant-desc">Sidebar แนวตั้ง 64px (icon-only) ที่ขยายเป็น 220px เมื่อ hover · top bar เหลือแค่ page title + actions · มือถือ = hamburger เปิด drawer ซ้อนทับ. เพิ่ม vertical screen space กลับมาให้ content เยอะที่สุด.</p>
+      </div>
+      <div class="variant-feats">
+        <span class="feat">vertical nav</span>
+        <span class="feat">expand on hover</span>
+        <span class="feat">max content height</span>
+        <span class="feat">workspace vibe</span>
+      </div>
+    </div>
+
+    <div class="preview-row">
+      <div class="preview-pane">
+        <div class="preview-label">Desktop · 1440px (hover sidebar to expand)</div>
+        <div class="preview-frame">
+          <div style="background: var(--bg-app); border-radius: 8px; overflow: hidden; border: 1px solid var(--bd);">
+            <div class="v3-layout">
+              <div class="v3-sidebar">
+                <div class="v3-brand-mark">L</div>
+                <div class="v3-nav-item"><span class="icn">💬</span><span class="lbl">แชท</span></div>
+                <div class="v3-nav-item active"><span class="icn">🏥</span><span class="lbl">คิวหน้า Clinic</span></div>
+                <div class="v3-nav-item"><span class="icn">🗓</span><span class="lbl">จองไม่มัดจำ</span></div>
+                <div class="v3-nav-item"><span class="icn">🗓</span><span class="lbl">จองมัดจำ</span></div>
+                <div class="v3-nav-item"><span class="icn">📅</span><span class="lbl">นัดหมาย</span></div>
+                <div class="v3-nav-item"><span class="icn">📋</span><span class="lbl">ประวัติ</span></div>
+                <div class="v3-spacer"></div>
+                <div class="v3-nav-item"><span class="icn">⚙</span><span class="lbl">ตั้งค่า</span></div>
+                <div class="v3-nav-item"><span class="icn">⬛</span><span class="lbl">หลังบ้าน</span></div>
+              </div>
+              <div class="v3-main">
+                <div class="v3-topbar">
+                  <div class="v3-title-block">
+                    <span class="v3-crumb">หน้าหลัก /</span>
+                    <span class="v3-title">คิวหน้า Clinic</span>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn-primary">⊕ สร้างคิวใหม่</button>
+                    <div class="icn-btn">🔔<span class="dot"></span></div>
+                    <div class="pill pill-rx1">🏢 นครราชสีมา <span style="font-size:10px;opacity:.7">▾</span></div>
+                    <div class="icn-btn">👤</div>
+                  </div>
+                </div>
+                <div style="padding:30px;color:var(--tx-muted);font-size:12px">— content area เต็มพื้นที่ —</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-label">Mobile · 375px</div>
+        <div class="preview-frame">
+          <div class="mobile-frame">
+            <div class="notch"></div>
+            <div class="mobile-content">
+              <div class="gradient-line"></div>
+              <div class="mob-top">
+                <div style="display:flex;gap:10px;align-items:center">
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:14px">☰</div>
+                  <div>
+                    <span class="gradient-text" style="font-size:14px">LOVER CLINIC</span>
+                    <div style="font-size:10px;color:var(--tx-muted)">คิวหน้า Clinic</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <div class="icn-btn" style="width:32px;height:32px;background:var(--rx1-gradient);color:white;border:none;font-size:13px">⊕</div>
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:13px">🔔<span class="dot"></span></div>
+                </div>
+              </div>
+              <div style="padding:8px 14px;background:var(--bg-elevated);border-bottom:1px solid var(--bd);font-size:11px;color:var(--tx-muted);display:flex;justify-content:space-between">
+                <span>🏢 นครราชสีมา</span>
+                <span style="color:var(--state-success)">● 3 ออนไลน์</span>
+              </div>
+              <div class="mob-content-stub">— content area —<br/>คิวลูกค้าวันนี้<br/><br/>กด ☰ เปิด drawer สำหรับ nav</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>โครงสร้าง:</strong> sidebar เป็น primary nav · top bar เหลือเฉพาะ page title + actions.
+      <ul>
+        <li>Sidebar 64px default (icon-only พร้อม tooltip) → hover ขยายเป็น 220px แสดง label</li>
+        <li>Settings + Backend อยู่ล่างสุด (group แยกชัดเจน)</li>
+        <li>มือถือ: ☰ เปิด drawer คลุมจอ พร้อม nav แนวตั้ง</li>
+        <li>ความสูง: top bar เหลือแค่ 52px · sidebar 100% height</li>
+        <li>เหมาะกับเดสก์ท็อปจอใหญ่ที่มีพื้นที่ด้านข้างให้เสีย</li>
+      </ul>
+    </div>
+
+    <div class="meta-stats">
+      <div class="stat"><strong>เหมาะ:</strong> Power user · จอใหญ่ · ใช้คอมพิวเตอร์เป็นหลัก</div>
+      <div class="stat"><strong>เสี่ยง:</strong> ใช้พื้นที่ด้านข้าง 64–220px ตลอด</div>
+      <div class="stat"><strong>เคล็ดลับ:</strong> content area สูงที่สุดในทุก variant</div>
+    </div>
+  </div>
+
+  <!-- =============== VARIANT 4 =============== -->
+  <div class="variant">
+    <div class="variant-header">
+      <div>
+        <div class="variant-name-row">
+          <span class="variant-tag">Variant D</span>
+          <h2 class="variant-title">Cmd-K Command Bar — Raycast/Linear modern</h2>
+        </div>
+        <p class="variant-desc">Top bar แสดงเฉพาะ "Brand ▸ Active tab" + ⌘K search bar + actions ขวา · ไม่มี tabs แสดงในแถบ — ทุกอย่างเปิดผ่าน command palette (กด ⌘K / Ctrl+K หรือคลิก search bar). มือถือ = floating 🔍 ปุ่มล่างขวา.</p>
+      </div>
+      <div class="variant-feats">
+        <span class="feat">minimal 1 row</span>
+        <span class="feat">⌘K palette</span>
+        <span class="feat">no tab clutter</span>
+        <span class="feat">power-user</span>
+      </div>
+    </div>
+
+    <div class="preview-row">
+      <div class="preview-pane">
+        <div class="preview-label">Desktop · 1440px</div>
+        <div class="preview-frame">
+          <div style="background: var(--bg-app); border-radius: 8px; overflow: hidden; border: 1px solid var(--bd);">
+            <div class="gradient-line"></div>
+            <div class="v4-bar">
+              <div class="v4-crumb">
+                <span class="brand gradient-text" style="font-size:16px">LOVER</span>
+                <span class="sep">▸</span>
+                <span class="active-tab">🏥 คิวหน้า Clinic</span>
+                <span class="sep" style="font-size:10px">▾</span>
+              </div>
+              <div class="v4-search">
+                <span style="font-size:13px">🔍</span>
+                <span>ค้นหาหรือเปลี่ยนแท็บ...</span>
+                <span class="kbd">Ctrl K</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn-primary">⊕ คิวใหม่</button>
+                <div class="icn-btn">🔔<span class="dot"></span></div>
+                <div class="pill pill-rx1">🏢 นครราชสีมา <span style="font-size:10px;opacity:.7">▾</span></div>
+                <div class="icn-btn">👤</div>
+              </div>
+            </div>
+            <!-- mock palette popover -->
+            <div style="margin:16px;background:var(--bg-elevated);border:1px solid var(--bd-accent);border-radius:12px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);max-width:480px">
+              <div style="font-size:11px;color:var(--tx-muted);letter-spacing:0.1em;margin-bottom:8px">▸ COMMAND PALETTE (กด Ctrl+K)</div>
+              <div style="padding:6px;background:var(--bg-input);border:1px solid var(--bd-strong);border-radius:8px;font-size:12px;color:var(--tx-secondary);margin-bottom:8px">🔍 ลูกค้า / จองมัดจำ / เปิด...</div>
+              <div style="display:flex;flex-direction:column;gap:2px;font-size:12px">
+                <div style="padding:8px 10px;background:var(--rx1-gradient-soft);border-radius:6px;color:var(--tx-accent)">🗓 จองมัดจำ<span style="float:right;color:var(--tx-muted)">↵</span></div>
+                <div style="padding:8px 10px;color:var(--tx-secondary)">📋 ประวัติคิว</div>
+                <div style="padding:8px 10px;color:var(--tx-secondary)">⚙ ตั้งค่า · เปลี่ยนสาขา</div>
+                <div style="padding:8px 10px;color:var(--tx-secondary)">⬛ หลังบ้าน</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-label">Mobile · 375px</div>
+        <div class="preview-frame">
+          <div class="mobile-frame">
+            <div class="notch"></div>
+            <div class="mobile-content">
+              <div class="gradient-line"></div>
+              <div class="mob-top">
+                <div>
+                  <span class="gradient-text" style="font-size:14px">LOVER</span>
+                  <span style="color:var(--tx-muted);margin:0 4px">▸</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--tx-heading)">คิว</span>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <div class="pill pill-rx1" style="font-size:11px;padding:3px 8px">🏢 นคร</div>
+                  <div class="icn-btn" style="width:32px;height:32px;font-size:13px">👤</div>
+                </div>
+              </div>
+              <div class="mob-content-stub">— content area —<br/>คิวลูกค้าวันนี้</div>
+              <!-- floating cmd-k button -->
+              <div style="position:absolute;bottom:20px;right:20px;z-index:5">
+                <div style="background:var(--rx1-gradient);width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:white;box-shadow:0 10px 30px rgba(220,38,38,0.5)">🔍</div>
+              </div>
+              <div style="position:absolute;bottom:88px;right:20px;background:var(--bg-elevated);border:1px solid var(--bd-strong);padding:6px 10px;border-radius:8px;font-size:11px;color:var(--tx-secondary)">กดเพื่อค้นหา / เปลี่ยนแท็บ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>โครงสร้าง:</strong> top bar แสดง brand + active tab + ⌘K + actions · ไม่มี tabs แสดงตลอดเวลา.
+      <ul>
+        <li>กด <code>Ctrl+K</code> หรือคลิก search bar → command palette เด้งขึ้น พิมพ์ค้น/เปลี่ยน tab</li>
+        <li>มือถือ: floating 🔍 ปุ่มล่างขวา → fullscreen palette</li>
+        <li>Breadcrumb (Brand ▸ Active) ปกป้องว่าอยู่ tab ไหน — กด dropdown ▾ ก็เปลี่ยน tab ผ่าน palette</li>
+        <li>ความสูง: desktop 56px (น้อยที่สุด) · mobile top 48px</li>
+        <li>⚠ มี learning curve — ต้องสอนเจ้าหน้าที่ครั้งแรก</li>
+      </ul>
+    </div>
+
+    <div class="meta-stats">
+      <div class="stat"><strong>เหมาะ:</strong> ทีมที่พิมพ์เป็นหลัก · ชอบ keyboard shortcut</div>
+      <div class="stat"><strong>เสี่ยง:</strong> เจ้าหน้าที่ที่ไม่คุ้น keyboard จะติด — ต้องมีปุ่ม fallback</div>
+      <div class="stat"><strong>เคล็ดลับ:</strong> สวยที่สุด — แบบ Linear/Raycast 2025</div>
+    </div>
+  </div>
+
+  <div class="vote-block">
+    <h2>เลือกแบบไหน?</h2>
+    <p>ตอบ <code>A</code> / <code>B</code> / <code>C</code> / <code>D</code> หรือ <code>ผสม X+Y</code> (เช่น "A สำหรับ mobile, C สำหรับ desktop") หรือถ้าอยากเห็นเพิ่ม/แก้ไข detail บอกได้.</p>
+    <p style="margin-top:10px"><strong>คำแนะนำ (subjective):</strong> Variant <strong>A (Compact Pill)</strong> ปลอดภัยที่สุดสำหรับเจ้าหน้าที่หลายแบบ · Variant <strong>B (Slim Editorial)</strong> สวยที่สุดและไม่ซ่อน tab เลย · Variant <strong>C (Sidebar)</strong> ใช้พื้นที่จอเก่ง · Variant <strong>D (Cmd-K)</strong> ล้ำที่สุดแต่ต้องสอน.</p>
+  </div>
+</div>
+</body>
+</html>

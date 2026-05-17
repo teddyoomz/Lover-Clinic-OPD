@@ -15,43 +15,47 @@ import { readFileSync } from 'fs';
 const SRC = readFileSync('src/pages/AdminDashboard.jsx', 'utf-8');
 
 describe('Phase 25.0b → 29.23-bis — Frontend tab rename to คิวหน้า Clinic', () => {
-  it('P25.0b-T1 mobile tab label is "คิวหน้า Clinic"', () => {
-    // Mobile tab definition list at line ~5594 (post-29.23-bis).
-    // Non-greedy [\s\S]*? required because the line contains <Activity size={14} />
-    // with literal `}` braces that would terminate a [^}]* class.
-    expect(SRC).toMatch(/mode:\s*'dashboard'[\s\S]*?label:\s*'คิวหน้า Clinic'/);
+  // Menu Variant A v2 (2026-05-18, Phase A) — JSX shape changed from
+  // <tab-array.map()> to direct <button onClick={() => setAdminMode('X')}>
+  // inline buttons. The {mode:'dashboard'} object pattern no longer exists.
+  // Updated regex matches the NEW contract while preserving the V21 intent
+  // (verify "คิวหน้า Clinic" label present + no legacy labels remaining).
+
+  it('P25.0b-T1 desktop pill-tab label is "คิวหน้า Clinic"', () => {
+    // Variant A v2 desktop tab: <button onClick={() => setAdminMode('dashboard')} ...>
+    //   <Activity size={14}/> <span>คิวหน้า Clinic</span> ...
+    expect(SRC).toMatch(/setAdminMode\('dashboard'\)[\s\S]{0,300}?<span>คิวหน้า Clinic<\/span>/);
   });
 
-  it('P25.0b-T2 desktop button label is "คิวหน้า Clinic"', () => {
-    // Desktop button at line ~5631 (post-29.23-bis).
-    expect(SRC).toMatch(/<Activity size=\{16\}\s*\/>\s*คิวหน้า Clinic/);
+  it('P25.0b-T2 dashboard tab uses Activity icon', () => {
+    // Verify the Activity icon paired with the คิวหน้า Clinic label.
+    // Size argument no longer asserted (varies by viewport variant — desktop=14, dock=18).
+    expect(SRC).toMatch(/<Activity size=\{\d+\}\s*\/>\s*<span>คิวหน้า Clinic<\/span>/);
   });
 
-  it('P25.0b-T3 legacy bare "คิว" label NOT present in mobile tab definition', () => {
-    // Defensive: ensure the older "คิว" + "หน้าคิว" labels (pre-25.0b) are
-    // not present anymore on the dashboard mode. Other "คิว..." labels
-    // (deposit/no-deposit history) remain — we only check the dashboard
-    // tab definition block.
+  it('P25.0b-T3 legacy bare "คิว" label NOT present in dashboard tab', () => {
+    // Defensive: ensure the pre-25.0b "label: 'คิว'" object pattern is gone.
     expect(SRC).not.toMatch(/mode:\s*'dashboard'[\s\S]*?label:\s*'คิว',\s*badge:/);
   });
 
   it('P25.0b-T4 legacy "หน้าคิว" desktop label NOT present', () => {
-    expect(SRC).not.toMatch(/<Activity size=\{16\}\s*\/>\s*หน้าคิว/);
+    expect(SRC).not.toMatch(/<Activity[^>]*>\s*หน้าคิว/);
   });
 
   it('P25.0b-T5 internal mode key still "dashboard" (no breaking change)', () => {
-    // The setAdminMode('dashboard') call must still exist (proves the
-    // internal mode key wasn't renamed alongside the display label).
+    // setAdminMode('dashboard') is still the dispatch key on the dashboard tab.
     expect(SRC).toMatch(/setAdminMode\('dashboard'\)/);
   });
 
   it('P29.23-bis-T6 prior "คิว Walk-IN" label NOT present (V21 fixup lock)', () => {
-    // Anti-regression for the 25.0b → 29.23-bis rename. The "Walk-IN"
-    // ENGLISH appointment channel name still exists elsewhere (line 2401,
-    // 2413 customer source dropdowns + 8573 toast); those are separate
-    // concepts (channel) and stay as "Walk-in" English. This guard
-    // narrowly checks the tab-label sites only.
-    expect(SRC).not.toMatch(/<Activity size=\{16\}\s*\/>\s*คิว Walk-IN/);
+    // Anti-regression — Walk-IN as a TAB label must not exist.
+    expect(SRC).not.toMatch(/<Activity[^>]*>\s*คิว Walk-IN/);
+    expect(SRC).not.toMatch(/<span>คิว Walk-IN<\/span>/);
     expect(SRC).not.toMatch(/mode:\s*'dashboard'[\s\S]*?label:\s*'คิว Walk-IN'/);
+  });
+
+  it('P-A-v2-T7 Variant A v2 mobile bottom dock has "คิว" short label for dashboard tab', () => {
+    // Mobile dock uses shortened label "คิว" inside data-tab="dashboard" button.
+    expect(SRC).toMatch(/data-tab="dashboard"[\s\S]{0,200}?<span>คิว<\/span>/);
   });
 });

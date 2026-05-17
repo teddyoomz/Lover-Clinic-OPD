@@ -8,7 +8,7 @@ import {
   AlertCircle, Eye, X, FileText, Edit3, TimerOff, Trash2, Phone, HeartPulse,
   Pill, CheckSquare, LogOut, Lock, Flame, Printer, Link, ClipboardCheck,
   Globe, Bell, BellOff, Volume2, Settings, LayoutTemplate, Palette, Archive, History,
-  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database
+  Smartphone, RotateCcw, Timer, Infinity, Search, Package, PackageX, CalendarClock, Calendar, CalendarDays, Banknote, Loader2, ChevronDown, ChevronRight, ChevronLeft, Unlink, ToggleLeft, ToggleRight, ExternalLink, XCircle, UserCheck, RefreshCw, Stethoscope, MapPin, User, CreditCard, UserPlus, MessageCircle, Database, MoreHorizontal
 } from 'lucide-react';
 import { DEFAULT_CLINIC_SETTINGS, SESSION_TIMEOUT_MS } from '../constants.js';
 // Phase 20.0 Tasks 1-6 + 5a-5c (2026-05-06) — Frontend ProClinic rewire
@@ -900,6 +900,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [isNotifEnabled, setIsNotifEnabled] = useState(true);
   const [notifVolume, setNotifVolume] = useState(0.5);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
+  // ─── Menu Variant A v2 (Phase A, 2026-05-18) — mobile drawer state ───
+  const [showMobileJongPicker, setShowMobileJongPicker] = useState(false);   // จอง BottomSheet
+  const [showMobileMoreDrawer, setShowMobileMoreDrawer] = useState(false);   // ⋯ เพิ่ม drawer
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimerRef = useRef(null);
   const showToast = (msg, durationMs = 5000) => {
@@ -5732,27 +5735,67 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       )}
 
-      <header className="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-6 sm:mb-8 bg-[var(--bg-surface)] p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[var(--shadow-panel)] border border-[var(--bd)] gap-3 relative overflow-visible z-20">
-        <div className="absolute top-[-50px] left-[-50px] w-40 h-40 rounded-full blur-[50px] pointer-events-none" style={{backgroundColor: `rgba(${acRgb},0.15)`}}></div>
+      {/* ───── Top Menu — Variant A v2 (Phase A, 2026-05-18) ─────
+           Desktop (≥768px): single-row pill bar with logo + 7 tabs + ⋯ overflow + right rail.
+           Mobile (<768px): top bar (logo + create + bell + branch + signout) + floating bottom dock.
+           Preserves 100% of legacy wiring: every setAdminMode mode kept verbatim, all 4 unread
+           badges (chat/queue/no-dep/dep) with same colors + same blink for chat, Notif popover
+           preserved verbatim, BranchSelector / ThemeToggle / ClinicLogo / online indicator /
+           signOut all wired through identical props. */}
+      <header className="menu-shell mb-6 sm:mb-8 relative z-20" data-testid="admin-top-menu">
+        <div className="menu-grad-line h-[3px] w-full rounded-t-2xl"></div>
 
-        {/* ── Row 1: Logo + compact action icons (mobile) ── */}
-        <div className="relative flex items-center justify-between w-full xl:w-auto gap-1.5 sm:gap-3 z-20">
-          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
-            <ClinicLogo className="h-7 sm:h-10 max-w-[80px] sm:max-w-[160px] xl:max-w-[200px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
-            <div className="h-6 sm:h-8 w-px bg-[var(--bd)] shrink-0 hidden sm:block"></div>
-            <p className="text-[11px] sm:text-xs text-[var(--tx-muted)] truncate hidden sm:block">{cs.clinicSubtitle || 'ระบบ OPD รับผู้ป่วย'}</p>
-          </div>
-          {/* Mobile-only: icon-only actions */}
-          <div className="flex items-center gap-1 sm:gap-1.5 xl:hidden shrink-0">
-            <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
-              className="p-2 sm:p-2.5 rounded-lg text-white flex items-center justify-center disabled:opacity-70 transition-all"
-              style={{backgroundColor: ac, boxShadow: `0 0 10px rgba(${acRgb},0.3)`}} title="สร้างคิวใหม่">
-              <PlusCircle size={15} />
+        {/* ─── Original mobile Row 1 — REMOVED, replaced by .menu-mobile + .menu-bottom-dock ─── */}
+        {/* ─── Desktop top bar (≥768px) — single-row pill bar ─── */}
+        <div className="menu-desktop hidden md:flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-surface)] border border-[var(--bd)] border-t-0 rounded-b-2xl shadow-[var(--shadow-panel)] overflow-visible">
+          <ClinicLogo className="h-9 max-w-[140px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
+          <div className="h-7 w-px bg-[var(--bd)] shrink-0 mx-1"></div>
+
+          {/* Pill tabs — all 8 modes, badges preserved verbatim */}
+          <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+            <button onClick={() => setAdminMode('chat')} className={`menu-tab ${adminMode === 'chat' ? 'menu-tab-active' : ''} ${isChatActive && chatUnread > 0 && adminMode !== 'chat' ? 'chat-tab-blink' : ''}`}>
+              <MessageCircle size={14}/> <span>แชท</span>
+              {isChatActive && chatUnread > 0 && <span className="menu-badge" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
             </button>
+            <button onClick={() => setAdminMode('dashboard')} className={`menu-tab ${adminMode === 'dashboard' ? 'menu-tab-active' : ''}`}>
+              <Activity size={14}/> <span>คิวหน้า Clinic</span>
+              {unreadCount > 0 && <span className="menu-badge" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </button>
+            <button onClick={() => setAdminMode('noDeposit')} className={`menu-tab ${(adminMode === 'noDeposit' || adminMode === 'noDepositHistory') ? 'menu-tab-active' : ''}`} title="ลูกค้าจองไม่มัดจำ">
+              <UserPlus size={14}/> <span>จองไม่มัดจำ</span>
+              {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="menu-badge" style={{background:'#f97316'}}>{noDepositSessions.filter(s => s.isUnread).length}</span>}
+            </button>
+            <button onClick={() => setAdminMode('deposit')} className={`menu-tab ${(adminMode === 'deposit' || adminMode === 'depositHistory') ? 'menu-tab-active' : ''}`} title="ลูกค้าจองมัดจำ">
+              <Banknote size={14}/> <span>จองมัดจำ</span>
+              {depositSessions.filter(s => s.isUnread).length > 0 && <span className="menu-badge" style={{background:'#10b981'}}>{depositSessions.filter(s => s.isUnread).length}</span>}
+            </button>
+            <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย ProClinic">
+              <CalendarDays size={14}/> <span>นัดหมาย</span>
+            </button>
+            <button onClick={() => setAdminMode('history')} className={`menu-tab ${adminMode === 'history' ? 'menu-tab-active' : ''}`} title="ประวัติผู้ป่วย">
+              <History size={14}/> <span>ประวัติ</span>
+            </button>
+            <button onClick={() => setAdminMode('clinicSettings')} className={`menu-tab ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? 'menu-tab-active' : ''}`} title="ตั้งค่าระบบ">
+              <Palette size={14}/> <span>ตั้งค่า</span>
+            </button>
+            <button onClick={() => window.open('?backend=1', '_blank')} className="menu-tab menu-tab-backend" title="ระบบหลังบ้าน (เปิด tab ใหม่)">
+              <Database size={14}/> <span>หลังบ้าน</span>
+            </button>
+          </div>
+
+          {/* Right rail — create + notif + branch + theme + online + signout */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
+              className="text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-70 transition-all whitespace-nowrap"
+              style={{backgroundColor: ac, boxShadow: `0 0 10px rgba(${acRgb},0.3)`}}>
+              <PlusCircle size={14}/> สร้างคิวใหม่
+            </button>
+
             <div className="relative">
               <button onClick={() => setShowNotifSettings(!showNotifSettings)}
-                className={`border p-2 sm:p-2.5 rounded-lg transition-all ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}>
-                {isNotifEnabled ? <Bell size={15} /> : <BellOff size={15} />}
+                className={`border p-2 rounded-lg transition-all ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}
+                title="ตั้งค่าการแจ้งเตือน">
+                {isNotifEnabled ? <Bell size={14}/> : <BellOff size={14}/>}
               </button>
               {showNotifSettings && (
                 <div className="absolute right-0 top-12 w-64 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-4 z-[200]">
@@ -5788,22 +5831,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </div>
               )}
             </div>
-            {/* Phase 20.0 Task 6 (2026-05-06) — BranchSelector in header.
-                 Auto-hides on single-branch clinics; per-user-keyed selection
-                 persists across sessions (Phase 17.2). Mirrors BackendDashboard
-                 placement (next to ThemeToggle). */}
+
             <BranchSelector />
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-            {/* Online admins indicator */}
+
             <div className="relative group">
-              <div className="flex items-center gap-1 px-2 py-1.5 sm:py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
+              <div className="flex items-center gap-1 px-2 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                 </span>
-                <span className="text-xs sm:text-xs font-bold text-green-500">{onlineAdmins.length}</span>
+                <span className="text-xs font-bold text-green-500">{onlineAdmins.length}</span>
               </div>
-              {/* Tooltip on hover — show who's online */}
               <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
                 <p className="text-[11px] text-gray-500 font-bold font-semibold mb-2">แอดมินออนไลน์</p>
                 {onlineAdmins.map(a => (
@@ -5815,148 +5854,62 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 ))}
               </div>
             </div>
-            <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 sm:p-2.5 rounded-lg transition-all" title="ออกจากระบบ">
-              <LogOut size={15} />
+
+            <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 rounded-lg transition-all" title="ออกจากระบบ">
+              <LogOut size={14}/>
             </button>
           </div>
         </div>
 
-        {/* ── Row 2: Nav tabs — mobile full-width ── */}
-        <div className="grid grid-cols-4 gap-0.5 w-full xl:hidden z-0">
-          {[
-            { mode: 'chat', icon: <MessageCircle size={14} />, label: 'แชท', badge: isChatActive ? chatUnread : 0, badgeColor: 'bg-blue-500', activeClass: 'bg-blue-700 text-white', blinkWhenBadge: isChatActive },
-            { mode: 'dashboard', icon: <Activity size={14} />, label: 'คิวหน้า Clinic', badge: unreadCount, badgeColor: 'bg-red-500', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
-            { mode: 'noDeposit', icon: <UserPlus size={14} />, label: 'ไม่มัดจำ', badge: noDepositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-orange-500', activeClass: 'bg-orange-700 text-white' },
-            { mode: 'deposit', icon: <Banknote size={14} />, label: 'มัดจำ', badge: depositSessions.filter(s => s.isUnread).length, badgeColor: 'bg-emerald-500', activeClass: 'bg-emerald-700 text-white' },
-            { mode: 'appointment', icon: <CalendarDays size={14} />, label: 'นัด', activeClass: 'bg-sky-700 text-white' },
-            { mode: 'history', icon: <History size={14} />, label: 'ประวัติ', activeClass: 'bg-orange-700 text-white' },
-            { mode: 'clinicSettings', icon: <Palette size={14} />, label: 'ตั้งค่า', activeStyle: {backgroundColor: ac, color: '#fff', /* no glow */}, activeClass: '' },
-            { mode: '_backend', icon: <Database size={14} />, label: 'หลังบ้าน', activeClass: 'bg-violet-700 text-white', isExternal: true },
-          ].map(tab => {
-            if (tab.isExternal) {
-              return (
-                <button key={tab.mode} onClick={() => window.open('?backend=1', '_blank')}
-                  className="py-2 rounded-xl font-bold text-[11px] sm:text-xs flex flex-col items-center justify-center gap-0.5 transition-all relative bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50">
-                  {tab.icon}
-                  <span className="truncate w-full text-center px-0.5">{tab.label}</span>
-                </button>
-              );
-            }
-            const isActive = tab.mode === 'dashboard' ? adminMode === 'dashboard' : tab.mode === 'noDeposit' ? (adminMode === 'noDeposit' || adminMode === 'noDepositHistory') : tab.mode === 'deposit' ? (adminMode === 'deposit' || adminMode === 'depositHistory') : tab.mode === 'clinicSettings' ? (adminMode === 'clinicSettings' || adminMode === 'formBuilder') : adminMode === tab.mode;
-            return (
-              <button key={tab.mode} onClick={() => setAdminMode(tab.mode)}
-                className={`py-2 rounded-xl font-bold text-[11px] sm:text-xs flex flex-col items-center justify-center gap-0.5 transition-all relative ${isActive ? tab.activeClass : tab.blinkWhenBadge && tab.badge > 0 && !isActive ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)]'}`}
-                style={isActive && tab.activeStyle ? tab.activeStyle : {}}>
-                {tab.icon}
-                <span className="truncate w-full text-center px-0.5">{tab.label}</span>
-                {tab.badge > 0 && <span className={`absolute -top-1 -right-0.5 ${tab.badgeColor} text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none`}>{tab.badge > 99 ? '99+' : tab.badge}</span>}
+        {/* ─── Mobile top bar (<768px) ─── */}
+        <div className="menu-mobile md:hidden flex items-center justify-between gap-2 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--bd)] border-t-0 rounded-b-2xl">
+          <ClinicLogo className="h-7 max-w-[100px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
+              className="p-2 rounded-lg text-white disabled:opacity-70" style={{backgroundColor: ac, boxShadow: `0 0 8px rgba(${acRgb},0.3)`}} title="สร้างคิวใหม่">
+              <PlusCircle size={15}/>
+            </button>
+            <div className="relative">
+              <button onClick={() => setShowNotifSettings(!showNotifSettings)}
+                className={`border p-2 rounded-lg ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`} title="ตั้งค่าการแจ้งเตือน">
+                {isNotifEnabled ? <Bell size={15}/> : <BellOff size={15}/>}
               </button>
-            );
-          })}
-        </div>
-
-        {/* ── Desktop: full button row ── */}
-        <div className="hidden xl:flex items-center gap-2 z-10 flex-wrap">
-          <button onClick={() => setAdminMode('chat')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'chat' ? 'bg-blue-700 text-white' : isChatActive && chatUnread > 0 ? 'chat-tab-blink' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-blue-400 hover:border-blue-900/50'}`}>
-            <MessageCircle size={16} /> แชท
-            {chatUnread > 0 && <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{chatUnread > 99 ? '99+' : chatUnread}</span>}
-          </button>
-          <button onClick={() => setAdminMode('dashboard')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'dashboard' ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={adminMode === 'dashboard' ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}}>
-            <Activity size={16} /> คิวหน้า Clinic
-            {unreadCount > 0 && <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-          </button>
-          <button onClick={() => setAdminMode('noDeposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'noDeposit' || adminMode === 'noDepositHistory' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ลูกค้าจองไม่มัดจำ">
-            <UserPlus size={16} /> จองไม่มัดจำ
-            {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{noDepositSessions.filter(s => s.isUnread).length}</span>}
-          </button>
-          <button onClick={() => setAdminMode('deposit')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 relative ${adminMode === 'deposit' || adminMode === 'depositHistory' ? 'bg-emerald-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-900/50'}`} title="ลูกค้าจองมัดจำ">
-            <Banknote size={16} /> จองมัดจำ
-            {depositSessions.filter(s => s.isUnread).length > 0 && <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[8px] font-black rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">{depositSessions.filter(s => s.isUnread).length}</span>}
-          </button>
-          <button onClick={() => setAdminMode('appointment')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'appointment' ? 'bg-sky-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-sky-400 hover:border-sky-900/50'}`} title="นัดหมาย ProClinic">
-            <CalendarDays size={16} /> นัดหมาย
-          </button>
-          <button onClick={() => setAdminMode('history')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${adminMode === 'history' ? 'bg-orange-700 text-white' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-orange-400 hover:border-orange-900/50'}`} title="ประวัติผู้ป่วย">
-            <History size={16} /> ประวัติ
-          </button>
-          <button onClick={() => setAdminMode('clinicSettings')} className={`px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? '' : 'bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-white'}`} style={(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? {backgroundColor: ac, color: '#fff', /* no glow */} : {}} title="ตั้งค่าระบบ">
-            <Palette size={16} /> ตั้งค่า
-          </button>
-          <button onClick={() => window.open('?backend=1', '_blank')} className="px-4 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 bg-[var(--bg-hover)] border border-[var(--bd)] text-violet-400 hover:text-violet-300 hover:border-violet-800/50 hover:opacity-90" title="ระบบหลังบ้าน (เปิด tab ใหม่)">
-            <Database size={16} /> หลังบ้าน
-          </button>
-          <div className="h-8 w-px bg-[var(--bd)] mx-2"></div>
-          <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating} className="bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-white px-3 py-3 rounded-lg font-bold font-bold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-70">
-            <PlusCircle size={16} /> สร้างคิวใหม่
-          </button>
-          <div className="relative flex-none">
-            <button onClick={() => setShowNotifSettings(!showNotifSettings)} className={`border p-3 rounded-lg font-semibold transition-all shadow-sm ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500 hover:bg-blue-900/50' : 'bg-[var(--bg-card)] border-[var(--bd)] text-gray-500 hover:bg-[var(--bg-hover)]'}`} title="ตั้งค่าการแจ้งเตือน">
-              {isNotifEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-            </button>
-            {showNotifSettings && (
-              <div className="absolute right-0 top-14 w-64 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-4 z-[200] animate-in slide-in-from-top-2">
-                <div className="flex items-center justify-between mb-4 border-b border-[var(--bd)] pb-2">
-                  <h3 className="text-white font-bold text-xs font-semibold flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
-                  <button onClick={() => setShowNotifSettings(false)} className="text-gray-500 hover:text-white"><X size={14}/></button>
-                </div>
-                <div className="space-y-4">
-                  <label className="flex items-center justify-between cursor-pointer group">
-                    <span className="text-gray-300 text-sm font-medium group-hover:text-white transition-colors">เสียงและ Pop-up</span>
-                    <input type="checkbox" checked={isNotifEnabled} onChange={(e) => setIsNotifEnabled(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500"/>
-                  </label>
-                  <div className={`space-y-2 transition-opacity ${isNotifEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                    <div className="flex items-center justify-between text-xs text-gray-500 font-bold font-semibold">
-                      <span>ระดับเสียง</span>
-                      <span className="text-blue-500">{Math.round(notifVolume * 100)}%</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Volume2 size={16} className="text-gray-400 shrink-0"/>
-                      <input type="range" min="0" max="1" step="0.1" value={notifVolume} onChange={(e) => setNotifVolume(parseFloat(e.target.value))} className="w-full accent-blue-600"/>
-                    </div>
-                    <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold font-semibold transition-colors">ทดสอบเสียง</button>
+              {showNotifSettings && (
+                <div className="absolute right-0 top-12 w-64 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-4 z-[200]">
+                  <div className="flex items-center justify-between mb-4 border-b border-[var(--bd)] pb-2">
+                    <h3 className="text-white font-bold text-xs font-semibold flex items-center gap-2"><Settings size={14}/> ตั้งค่าแจ้งเตือน</h3>
+                    <button onClick={() => setShowNotifSettings(false)} className="text-gray-500 hover:text-white"><X size={14}/></button>
                   </div>
-                  <div className="pt-3 border-t border-[var(--bd)]">
-                    <p className="text-xs text-gray-500 font-bold font-semibold mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
-                    {pushEnabled ? (
-                      <button onClick={disablePushNotifications} className="w-full bg-green-950/30 border border-green-900/40 text-green-400 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5"><CheckCircle2 size={11}/> เปิดอยู่แล้ว — กดเพื่อปิด</button>
-                    ) : (
-                      <button onClick={enablePushNotifications} disabled={pushLoading} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"><Smartphone size={11}/> {pushLoading ? 'กำลังตั้งค่า...' : 'เปิดการแจ้งเตือน'}</button>
-                    )}
-                    <p className="text-[11px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
+                  <div className="space-y-4">
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-gray-300 text-sm font-medium group-hover:text-white transition-colors">เสียงและ Pop-up</span>
+                      <input type="checkbox" checked={isNotifEnabled} onChange={(e) => setIsNotifEnabled(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-black border-[#444] focus:ring-blue-500"/>
+                    </label>
+                    <div className={`space-y-2 transition-opacity ${isNotifEnabled ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+                      <div className="flex items-center justify-between text-xs text-gray-500 font-bold font-semibold">
+                        <span>ระดับเสียง</span><span className="text-blue-500">{Math.round(notifVolume * 100)}%</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Volume2 size={16} className="text-gray-400 shrink-0"/>
+                        <input type="range" min="0" max="1" step="0.1" value={notifVolume} onChange={(e) => setNotifVolume(parseFloat(e.target.value))} className="w-full accent-blue-600"/>
+                      </div>
+                      <button onClick={() => playNotificationSound(notifVolume)} className="w-full mt-2 bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold font-semibold transition-colors">ทดสอบเสียง</button>
+                    </div>
+                    <div className="pt-3 border-t border-[var(--bd)]">
+                      <p className="text-xs text-gray-500 font-bold font-semibold mb-2 flex items-center gap-1.5"><Smartphone size={12}/> แจ้งเตือนมือถือ</p>
+                      {pushEnabled ? (
+                        <button onClick={disablePushNotifications} className="w-full bg-green-950/30 border border-green-900/40 text-green-400 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5"><CheckCircle2 size={11}/> เปิดอยู่แล้ว — กดเพื่อปิด</button>
+                      ) : (
+                        <button onClick={enablePushNotifications} disabled={pushLoading} className="w-full bg-[var(--bg-hover)] hover:bg-[var(--bg-elevated)] border border-[var(--bd)] text-gray-300 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition-colors"><Smartphone size={11}/> {pushLoading ? 'กำลังตั้งค่า...' : 'เปิดการแจ้งเตือน'}</button>
+                      )}
+                      <p className="text-[11px] text-gray-600 mt-1.5">iPhone: ต้อง "เพิ่มลงหน้าจอ" ใน Safari ก่อน</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-          {/* Phase 20.0 Task 6 (2026-05-06) — BranchSelector in DESKTOP header.
-               Mirrors the mobile placement (line ~4030) but rendered inside
-               the `hidden xl:flex` desktop block so it's visible at xl: ≥1280px
-               viewports. Without this, desktop users see no branch picker. */}
-          <BranchSelector />
-          {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} />}
-          {/* Online admins indicator — desktop */}
-          <div className="relative group">
-            <div className="flex items-center gap-1.5 px-3 py-3 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span className="text-xs font-bold text-green-500">{onlineAdmins.length}</span>
+              )}
             </div>
-            <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl shadow-2xl p-3 z-[200] opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
-              <p className="text-[11px] text-gray-500 font-bold font-semibold mb-2">แอดมินออนไลน์</p>
-              {onlineAdmins.map(a => (
-                <div key={a.id} className="flex items-center gap-2 py-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
-                  <span className="text-[11px] text-gray-300 truncate">{a.email || 'Unknown'}</span>
-                  {a.id === tabIdRef.current && <span className="text-[8px] text-green-600 font-bold">(คุณ)</span>}
-                </div>
-              ))}
-            </div>
+            <BranchSelector />
           </div>
-          <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-3 rounded-lg font-semibold transition-all shadow-sm flex-none" title="ออกจากระบบ">
-            <LogOut size={16} />
-          </button>
         </div>
       </header>
 
@@ -8924,6 +8877,112 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           }}
           onClose={() => setWalkInModal(null)}
         />
+      )}
+
+      {/* ───── Mobile floating bottom dock — Variant A v2 (Phase A, 2026-05-18) ─────
+           4 main tabs + ⋯ overflow. Visible only at <768px via Tailwind md:hidden.
+           จอง opens BottomSheet sub-picker (มัดจำ / ไม่มัดจำ). ⋯ opens overflow
+           drawer with ประวัติ/ตั้งค่า/หลังบ้าน/theme/online/signout. Every action
+           wired to the SAME state hooks the desktop tabs use — zero behavioral
+           drift from V82-fix6. */}
+      <nav className="md:hidden fixed left-2 right-2 z-[90] flex justify-around items-stretch p-1.5 rounded-2xl bg-[rgba(13,13,15,0.94)] backdrop-blur-xl border border-[var(--bd-strong)] shadow-2xl menu-bottom-dock" style={{bottom: 'calc(env(safe-area-inset-bottom) + 8px)'}} data-testid="menu-bottom-dock">
+        <button onClick={() => setAdminMode('chat')} className={`menu-dock-tab ${adminMode === 'chat' ? 'menu-dock-tab-active' : ''} ${isChatActive && chatUnread > 0 && adminMode !== 'chat' ? 'chat-tab-blink' : ''}`} data-tab="chat">
+          <MessageCircle size={18}/>
+          <span>แชท</span>
+          {isChatActive && chatUnread > 0 && <span className="menu-badge-dock" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
+        </button>
+        <button onClick={() => setAdminMode('dashboard')} className={`menu-dock-tab ${adminMode === 'dashboard' ? 'menu-dock-tab-active' : ''}`} data-tab="dashboard">
+          <Activity size={18}/>
+          <span>คิว</span>
+          {unreadCount > 0 && <span className="menu-badge-dock" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+        <button onClick={() => setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'appointment' ? 'menu-dock-tab-active' : ''}`} data-tab="appointment">
+          <CalendarDays size={18}/>
+          <span>นัด</span>
+        </button>
+        <button onClick={() => setShowMobileJongPicker(true)} className={`menu-dock-tab ${['noDeposit','noDepositHistory','deposit','depositHistory'].includes(adminMode) ? 'menu-dock-tab-active' : ''}`} data-tab="jong">
+          <Banknote size={18}/>
+          <span>จอง</span>
+          {(noDepositSessions.filter(s => s.isUnread).length + depositSessions.filter(s => s.isUnread).length) > 0 && (
+            <span className="menu-badge-dock" style={{background:'#10b981'}}>
+              {noDepositSessions.filter(s => s.isUnread).length + depositSessions.filter(s => s.isUnread).length}
+            </span>
+          )}
+        </button>
+        <button onClick={() => setShowMobileMoreDrawer(true)} className="menu-dock-tab" data-tab="more">
+          <MoreHorizontal size={18}/>
+          <span>เพิ่ม</span>
+        </button>
+      </nav>
+
+      {/* ───── Mobile จอง BottomSheet (มัดจำ / ไม่มัดจำ picker) ───── */}
+      {showMobileJongPicker && (
+        <div className="md:hidden fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end" onClick={() => setShowMobileJongPicker(false)} data-testid="menu-jong-sheet">
+          <div className="w-full bg-[var(--bg-surface)] rounded-t-3xl p-4 border-t border-[var(--bd-strong)] animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-[var(--bd)] rounded-full mx-auto mb-4"></div>
+            <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">เลือกประเภทการจอง</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { setAdminMode('noDeposit'); setShowMobileJongPicker(false); }} className="p-4 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex flex-col items-center gap-2 hover:border-orange-900/50 active:scale-95 transition-all">
+                <UserPlus size={22} className="text-orange-500"/>
+                <span className="text-sm font-bold text-[var(--tx-heading)]">จองไม่มัดจำ</span>
+                {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="text-[10px] font-bold text-orange-500">{noDepositSessions.filter(s => s.isUnread).length} ใหม่</span>}
+              </button>
+              <button onClick={() => { setAdminMode('deposit'); setShowMobileJongPicker(false); }} className="p-4 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex flex-col items-center gap-2 hover:border-emerald-900/50 active:scale-95 transition-all">
+                <Banknote size={22} className="text-emerald-500"/>
+                <span className="text-sm font-bold text-[var(--tx-heading)]">จองมัดจำ</span>
+                {depositSessions.filter(s => s.isUnread).length > 0 && <span className="text-[10px] font-bold text-emerald-500">{depositSessions.filter(s => s.isUnread).length} ใหม่</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ───── Mobile ⋯ เพิ่ม Drawer (ประวัติ/ตั้งค่า/หลังบ้าน/theme/online/signout) ───── */}
+      {showMobileMoreDrawer && (
+        <div className="md:hidden fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end" onClick={() => setShowMobileMoreDrawer(false)} data-testid="menu-more-drawer">
+          <div className="w-full bg-[var(--bg-surface)] rounded-t-3xl p-4 border-t border-[var(--bd-strong)] animate-in slide-in-from-bottom max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-[var(--bd)] rounded-full mx-auto mb-4"></div>
+            <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">เพิ่มเติม</h3>
+            <div className="space-y-1.5">
+              <button onClick={() => { setAdminMode('history'); setShowMobileMoreDrawer(false); }} className="w-full p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center gap-3 hover:border-orange-900/50 active:scale-[0.98] transition-all">
+                <History size={18} className="text-orange-500 shrink-0"/>
+                <span className="text-sm font-bold text-[var(--tx-heading)] flex-1 text-left">ประวัติ</span>
+                {adminMode === 'history' && <span className="text-[10px] text-orange-500 font-bold">เปิดอยู่</span>}
+              </button>
+              <button onClick={() => { setAdminMode('clinicSettings'); setShowMobileMoreDrawer(false); }} className="w-full p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center gap-3 active:scale-[0.98] transition-all">
+                <Palette size={18} className="shrink-0" style={{color: ac}}/>
+                <span className="text-sm font-bold text-[var(--tx-heading)] flex-1 text-left">ตั้งค่า</span>
+                {(adminMode === 'clinicSettings' || adminMode === 'formBuilder') && <span className="text-[10px] font-bold" style={{color: ac}}>เปิดอยู่</span>}
+              </button>
+              <button onClick={() => { window.open('?backend=1', '_blank'); setShowMobileMoreDrawer(false); }} className="w-full p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center gap-3 hover:border-violet-900/50 active:scale-[0.98] transition-all">
+                <Database size={18} className="text-violet-400 shrink-0"/>
+                <span className="text-sm font-bold text-[var(--tx-heading)] flex-1 text-left">หลังบ้าน</span>
+                <span className="text-[10px] text-violet-500 font-bold">เปิด tab ใหม่</span>
+              </button>
+              <div className="h-px bg-[var(--bd)] my-2"></div>
+              {theme && setTheme && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
+                  <span className="text-sm font-bold text-[var(--tx-heading)]">ธีม</span>
+                  <ThemeToggle theme={theme} setTheme={setTheme} compact />
+                </div>
+              )}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)]">
+                <span className="text-sm font-bold text-[var(--tx-heading)]">แอดมินออนไลน์</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span className="text-xs font-bold text-green-500">{onlineAdmins.length}</span>
+                </div>
+              </div>
+              <button onClick={() => signOut(auth)} className="w-full p-3 rounded-xl bg-red-950/30 border border-red-900/50 flex items-center gap-3 mt-2 hover:bg-red-900/40 active:scale-[0.98] transition-all">
+                <LogOut size={18} className="text-red-500 shrink-0"/>
+                <span className="text-sm font-bold text-red-500 flex-1 text-left">ออกจากระบบ</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
