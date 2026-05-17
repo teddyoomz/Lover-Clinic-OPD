@@ -65,16 +65,44 @@ describe('V73.H1 useStaffChat hook', () => {
     expect(unsub).toHaveBeenCalledTimes(1);
   });
 
-  it('H1.6 unread increments for incoming non-own message when minimized', () => {
+  it('H1.6 incoming non-own message auto-expands panel (V82 force-open)', () => {
+    // V82 fix-up — pre-V82 asserted `unreadCount === 1` after incoming msg
+    // while `minimized === true`. V82 (2026-05-17) replaced the per-msg
+    // counter with persistent cursor + force-open semantics:
+    //   - `unreadCount` is now DERIVED via `isMessageUnread(message, cursor, deviceId)`,
+    //     which requires `message.createdAt > cursor.lastReadCreatedAtMs` AND
+    //     `message.deviceId !== self`.
+    //   - On the FIRST snapshot, `initCursorIfMissing` seeds the cursor at the
+    //     latest msg's createdAt, so it reads as "not unread" (no badge spam
+    //     on first-ever load). Force-open does NOT fire on the seed batch.
+    //   - On a LATER snapshot containing a strictly-newer message, the
+    //     dispatch loop computes `trulyNew = docs.filter(isMessageUnread(...))`
+    //     and calls `setMinimized(false)` per truly-new message → user-visible
+    //     V82 behavior is "auto-expand on incoming chat".
+    // Assertion adapted: two snapshots (seed older baseline → newer real msg)
+    // → minimized flips true→false. The pre-V82 unreadCount increment is now
+    // implicit in the force-open behavior + cursor logic; both reach the
+    // same place in user-visible state.
     let onChangeCallback;
     listenToStaffChatMessages.mockImplementation((opts, onChange) => {
       onChangeCallback = onChange;
       return () => {};
     });
     const { result } = renderHook(() => useStaffChat());
-    expect(result.current.unreadCount).toBe(0);
-    act(() => onChangeCallback([{ id: 'CHAT-1', text: 'hi', deviceId: 'other-device' }]));
-    expect(result.current.unreadCount).toBe(1);
+    expect(result.current.minimized).toBe(true);
+    const baselineMs = 1_700_000_000_000;
+    // First snapshot: seed cursor with an older baseline message (own device,
+    // so it doesn't trigger force-open).
+    act(() => onChangeCallback([
+      { id: 'CHAT-0', text: 'seed', deviceId: result.current.deviceId, createdAt: baselineMs },
+    ]));
+    expect(result.current.minimized).toBe(true);
+    // Second snapshot: NEWER non-own message → isMessageUnread true → force-open.
+    act(() => onChangeCallback([
+      { id: 'CHAT-0', text: 'seed', deviceId: result.current.deviceId, createdAt: baselineMs },
+      { id: 'CHAT-1', text: 'hi',   deviceId: 'other-device',          createdAt: baselineMs + 1000 },
+    ]));
+    expect(result.current.minimized).toBe(false);
   });
 
   it('H1.7 unread does NOT increment for own message', () => {

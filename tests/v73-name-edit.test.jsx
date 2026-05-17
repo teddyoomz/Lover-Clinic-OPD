@@ -53,11 +53,14 @@ describe('V73.NE1 — NamePicker accepts initialValue + edit-mode UX', () => {
     expect(picker).toMatch(/>\s*\{isEdit\s*\?\s*'บันทึก'\s*:\s*'บันทึก'\}\s*</);
   });
 
-  it('NE1.6 picker save disabled gate uses canSave (combines name + color change checks)', () => {
+  it('NE1.6 picker save disabled gate uses canSave (combines name + color + role change checks)', () => {
     // Pre-color-picker: disabled when edit + name unchanged.
     // Post-color-picker: canSave = valid && (nameChanged || colorChanged).
+    // V82 fix-up — V82 (2026-05-17) added optional role section + `roleChanged`
+    // to the OR-chain so admin can save by changing only the role too.
+    // Assertion adapted to include the 3rd branch.
     expect(picker).toMatch(/disabled=\{!canSave\}/);
-    expect(picker).toMatch(/const\s+canSave\s*=\s*valid\s*&&\s*\(nameChanged\s*\|\|\s*colorChanged\)/);
+    expect(picker).toMatch(/const\s+canSave\s*=\s*valid\s*&&\s*\(nameChanged\s*\|\|\s*colorChanged\s*\|\|\s*roleChanged\)/);
   });
 
   it('NE1.7 picker useState init handles missing initialValue gracefully', () => {

@@ -176,11 +176,17 @@ describe('V73.CP4 — NamePicker color UI source-grep', () => {
   });
 
   it('CP4.6 NamePicker onConfirm passes (name, color)', () => {
-    expect(picker).toMatch(/onConfirm\(trimmed,\s*color\)/);
+    // V82 fix-up — pre-V82 asserted `onConfirm(trimmed, color)`; V82 extended
+    // the signature to `onConfirm(trimmed, color, selectedRole)` adding optional
+    // role param. Assertion adapted to match the new 3-arg shape.
+    expect(picker).toMatch(/onConfirm\(trimmed,\s*color,\s*selectedRole\)/);
   });
 
   it('CP4.7 NamePicker save enabled when name OR color changes (not both required)', () => {
-    expect(picker).toMatch(/canSave\s*=\s*valid\s*&&\s*\(nameChanged\s*\|\|\s*colorChanged\)/);
+    // V82 fix-up — pre-V82 asserted `canSave = valid && (nameChanged || colorChanged)`;
+    // V82 added `roleChanged` to the OR-chain so admin can save by changing only
+    // role too. Assertion adapted to include the new 3rd branch.
+    expect(picker).toMatch(/canSave\s*=\s*valid\s*&&\s*\(nameChanged\s*\|\|\s*colorChanged\s*\|\|\s*roleChanged\)/);
   });
 });
 
@@ -224,7 +230,11 @@ describe('V73.CP6 — useStaffChat hook threads color end-to-end', () => {
   });
 
   it('CP6.4 confirmName accepts optional color param', () => {
-    expect(hook).toMatch(/confirmName\s*=\s*useCallback\(async\s*\(name,\s*color\)/);
+    // V82 fix-up — pre-V82 asserted `confirmName = useCallback(async (name, color))`;
+    // V82 extended the signature to `(name, color, role)` so the hook can persist
+    // the picker's selected role via setRole. Assertion adapted to include the
+    // new 3rd arg.
+    expect(hook).toMatch(/confirmName\s*=\s*useCallback\(async\s*\(name,\s*color,\s*role\)/);
   });
 
   it('CP6.5 confirmName persists color via setColor + setCurrentColor', () => {

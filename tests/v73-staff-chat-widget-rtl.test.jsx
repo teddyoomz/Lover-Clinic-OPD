@@ -86,10 +86,19 @@ describe('V73.W2 StaffChatPanel + Header', () => {
   });
 
   it('W2.3 click minimize button → minimize()', () => {
+    // V82 fix-up — pre-V82 used testid `staff-chat-header-minimize` AND no
+    // unread gate. V82 (2026-05-17):
+    //   (a) StaffChatHeader minimize button testid renamed to
+    //       `staff-chat-minimize-btn` (force-open contract — own data-testid),
+    //   (b) the button is DISABLED when unread > 0 via `canMinimize` prop
+    //       threaded from useStaffChat. mockChatState here omits canMinimize,
+    //       which defaults to `true` in StaffChatHeader → button enabled →
+    //       click fires minimize().
+    // Assertion adapted to the new testid.
     const minimize = vi.fn();
-    useStaffChat.mockReturnValue(mockChatState({ minimized: false, minimize }));
+    useStaffChat.mockReturnValue(mockChatState({ minimized: false, minimize, canMinimize: true }));
     render(<StaffChatWidget user={{ uid: 'U1' }} needsPublicAuth={false} />);
-    fireEvent.click(screen.getByTestId('staff-chat-header-minimize'));
+    fireEvent.click(screen.getByTestId('staff-chat-minimize-btn'));
     expect(minimize).toHaveBeenCalled();
   });
 
@@ -228,13 +237,17 @@ describe('V73.W5 StaffChatNamePicker', () => {
     expect(screen.getByTestId('staff-chat-name-picker-save')).toBeEnabled();
   });
 
-  it('W5.4 click save calls confirmName(name, color) — V73 color-picker 2026-05-18 extended signature', () => {
+  it('W5.4 click save calls confirmName(name, color, role) — V82 2026-05-17 extended signature', () => {
     // Pre-color-picker: confirmName(name).
     // Post-color-picker (2026-05-18): confirmName(name, color) — second arg is sender hex
     // from native <input type="color"> default value (initialColor || '#E11D48').
+    // V82 fix-up — V82 (2026-05-17) extended signature again to
+    // `confirmName(name, color, selectedRole)`. In first-send mode (no
+    // initialValue) selectedRole defaults to null. Assertion adapted to
+    // include the new 3rd arg (null for first-send).
     render(<StaffChatWidget user={{ uid: 'U1' }} needsPublicAuth={false} />);
     fireEvent.change(screen.getByTestId('staff-chat-name-picker-input'), { target: { value: 'ดร.วี' } });
     fireEvent.click(screen.getByTestId('staff-chat-name-picker-save'));
-    expect(confirmName).toHaveBeenCalledWith('ดร.วี', expect.stringMatching(/^#[0-9a-fA-F]{6}$/));
+    expect(confirmName).toHaveBeenCalledWith('ดร.วี', expect.stringMatching(/^#[0-9a-fA-F]{6}$/), null);
   });
 });

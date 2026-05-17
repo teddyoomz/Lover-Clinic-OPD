@@ -8,6 +8,10 @@ const FILES = {
   identity: readFileSync('src/lib/staffChatIdentity.js', 'utf-8'),
   client: readFileSync('src/lib/staffChatClient.js', 'utf-8'),
   hook: readFileSync('src/hooks/useStaffChat.js', 'utf-8'),
+  // V82 fix-up — V82 (2026-05-17) extracted the own-device unread-skip logic
+  // from useStaffChat.js into staffChatReadCursor.js as `isMessageUnread(message, cursor, selfDeviceId)`.
+  // SG5.1 now grep the new canonical home (file added below).
+  readCursor: readFileSync('src/lib/staffChatReadCursor.js', 'utf-8'),
   message: readFileSync('src/components/staffchat/StaffChatMessage.jsx', 'utf-8'),
   messageBody: readFileSync('src/components/staffchat/StaffChatMessageBody.jsx', 'utf-8'),
   composer: readFileSync('src/components/staffchat/StaffChatComposer.jsx', 'utf-8'),
@@ -81,9 +85,16 @@ describe('V73.SG4 MessageBody parser discipline (no raw {message.text})', () => 
 });
 
 describe('V73.SG5 Mention notification dispatch — own-device filter', () => {
-  it('SG5.1 useStaffChat skips notification when msg.deviceId === own deviceId', () => {
-    // The dispatch loop must filter own messages BEFORE sound/expand
-    expect(FILES.hook).toMatch(/m\.deviceId\s*===\s*deviceId/);
+  it('SG5.1 own-device skip logic exists (V82: extracted to isMessageUnread)', () => {
+    // V82 fix-up — pre-V82 asserted `m.deviceId === deviceId` in useStaffChat.js
+    // dispatch loop. V82 (2026-05-17) extracted the own-device skip logic into
+    // `isMessageUnread(message, cursor, selfDeviceId)` in src/lib/staffChatReadCursor.js,
+    // and the dispatch loop now consumes it via `isMessageUnread(m, liveCursor, deviceId)`.
+    // The cursor module owns the `message.deviceId === selfDeviceId` predicate.
+    // Assertion adapted to the new canonical location.
+    expect(FILES.readCursor).toMatch(/message\.deviceId\s*===\s*selfDeviceId/);
+    // Defense-in-depth: hook still consumes isMessageUnread with deviceId arg
+    expect(FILES.hook).toMatch(/isMessageUnread\s*\(\s*m\s*,\s*liveCursor\s*,\s*deviceId\s*\)/);
   });
 
   it('SG5.2 Mention path checks mentions.includes(displayName)', () => {
