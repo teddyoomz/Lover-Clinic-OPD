@@ -66,12 +66,22 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+5 — **Backend Menu D SHIPPED to master (T1-T9 + 5 bugfix rounds); sub-tab picker spec + plan committed; implementation pending fresh chat**
-- **Master**: post-fix5 polish (Backend Menu D Round 5 — cluster recentered to centroid 50/50 + V5 stage transform) · ~16+ commits ahead of prod
-- **Prod**: `ef4bd5c3` LIVE (Backend Menu D NOT deployed · joins V82-Phone in deploy queue · user must type "deploy")
-- **Tests**: 11482 PASS (baseline 11409 + 52 D-suite + 12 source-grep + 9 bugfix regression) · build clean 2.7-3.1s · 2442 modules
+- **Date last updated**: 2026-05-18 EOD+6 — **Sub-tab picker T1-T7 SHIPPED + Arc Fan polish (5 rounds)**
+- **Master**: `666008f6` (round 5 — appts-centric concentric rings) · ~13 commits ahead of prod
+- **Prod**: `ef4bd5c3` LIVE (sub-tab picker + polish NOT deployed · joins V82-Phone queue · user must type "deploy")
+- **Tests**: 11543 PASS / 25 skipped · Backend Menu D pyramid 136/136 · build clean 2.63–2.92s
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+6 — Sub-tab Picker (T1-T7) SHIPPED + Arc Fan polish (5 rounds)
+
+Executed the 7-task sub-tab picker plan via subagent-driven-development (sonnet per task, Rule K work-first: T1-T6 source only, T7 = all 6 test tiers in one batch). Shipped 4 new source files (`subTabEmoji.js` 51-emoji map · `BackendSubTabBloom.jsx` 200+ LOC with V5 desktop 3D Tilt + Mouse-Follow lerp ±6deg · V2 mobile Expanding Bubble · CSS layer +177 LOC · ArcBloom integration with handleOrbClick branching on items.length 1 vs ≥2). 60+ new tests (RTL 18, source-grep 26, flow-simulate 8, stress 8) + Playwright E9-E14 + user-sim selector extension + 5 V21 fixups across 3 pre-T6 test files. ArcBloom Esc-gate spec-compliance fix (defer Esc to picker when picker mounted).
+
+Then EOD+5 polish round 1: mobile Arc Fan single quarter-circle, `?backend=1` default = bloom-open + activeTab='appointment-all', mouse-follow tilt seeded immediately from last-known cursor (module-level passive `mousemove` tracker + rAF seed) + 2 regression locks (P1.19 + P1.20).
+
+Rounds 2-5 iterated mobile layout per user feedback ("ติดกัน" → "ไม่ซ้อนสักวง" → "เอานัดหมายมาไว้ในสุด" → "นัดหมายเป็นจุดศูนย์กลาง"): single-arc → two-tier-same-angle → wider-r-no-overlap → three-tier (1+3+4 from corner anchor) → final appts-centric concentric rings (T1 appts at right=30/bottom=95 above duo pill · T2 inner ring r=110 with 3 orbs at α=90°/142.5°/195° · T3 outer ring r=200 with 4 orbs at α=90°/125°/160°/195° · radial spokes customers↑stock + marketing↓master). preview_eval verified zero overlap across all 28 pairs · min edge gap 10 px · all orbs on-screen.
+
+**Checkpoint**: `.agents/sessions/2026-05-18-subtab-picker-and-arcfan-polish.md`. **Next**: user types "deploy" to ship combined batch (V82-Phone + sub-tab picker + 5 polish rounds, vercel-only — no rules change).
 
 ### Session 2026-05-18 EOD+5 — Backend Menu D SHIPPED + Sub-tab Picker (V5+V2) spec+plan committed
 
