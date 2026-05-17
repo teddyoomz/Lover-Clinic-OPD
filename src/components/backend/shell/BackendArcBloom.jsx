@@ -48,49 +48,50 @@ const SECTION_EMOJI = {
   'master':               '🗄️',
 };
 
-// Mobile Arc Fan — TWO-TIER concentric arcs (4 inner + 4 outer at same
-// β angles), anchored at the bottom-right corner where the DuoPill lives.
-// EOD+5 round 3 polish: ZERO overlap required (user "ไม่ซ้อนคือไม่ซ้อนกัน
-// เลยสักวง ... วงนอกในก็ไม่ซ้อน ไม่ทับกัน"). Round 2 had 5–9 px residual
-// touch on inner adjacents because r=130 was too small for 72 px orbs.
+// Mobile Arc Fan — APPTS-CENTRIC concentric ring layout (EOD+5 round 5).
+// User explicit (round 4 angry rewrite): "นัดหมายเหมือนจุดศูนย์กลาง แล้ว
+// แถวอื่นเรียงตัวสวย ห่างพอดี เป็นชั้น 2 ชั้นต่อไปจากนัดหมาย ... เอานัดหมาย
+// มาเหนือปุ่มเปิดแชทเปิดเมนูนิดเดียวเลย".
 //
-// Geometry recompute: 72px orbs need ≥ 80 px center-to-center spacing
-// (72 px size + 8 px breathing room) for visual zero-touch.
-// Inner r=160, Outer r=250 — both rings have full gaps.
+// Layout (8 orbs):
+//   Tier 1 (center): appointments-section just above the DuoPill
+//   Tier 2 (inner ring r=110 around appts): 3 orbs — α=90° / 142.5° / 195°
+//   Tier 3 (outer ring r=200 around appts): 4 orbs — α=90° / 125° / 160° / 195°
 //
-//   • Within-arc spacing at Δβ=30°: 2·r·sin(15°)
-//     - Inner r=160: 82.8 px center distance → ~11 px gap ✓
-//     - Outer r=250: 129.4 px center distance → ~57 px gap ✓
-//   • Same-β radial pairs: r_outer − r_inner = 90 px → ~18 px gap ✓
-//   • Cross-ring near-adjacent (β_inner=0° vs β_outer=30°):
-//     sqrt(125² + 57²) = 137 px → ~65 px gap ✓
-//   All pairwise distances ≥ 82 px > 72 px orb size → strict no-touch.
+// Geometry (72 px orbs · appts center at viewport ≈(309, 681) on 375×812):
+//   • T1 ↔ T2 (r=110): every T2 orb is 110 px from appts → 38 px edge gap ✓
+//   • T1 ↔ T3 (r=200): every T3 orb is 200 px from appts → 128 px edge gap ✓
+//   • T2 within-ring (Δα=52.5°, r=110): 2·110·sin(26.25°) = 97 px → 25 px ✓
+//   • T3 within-ring (Δα=35°,  r=200): 2·200·sin(17.5°)  = 120 px → 48 px ✓
+//   • T2 vs T3 same-α radial pairs:  200 − 110 = 90 px → 18 px edge gap ✓
+//   • T2 vs T3 near-adjacent crosses: ≥ 100 px → 28 px edge gap ✓
+//   STRICT no-overlap across all 28 pairs · min edge gap = 18 px ✓
 //
-// Viewport fit (vw=375): outer β=90° at right=280 → orb left edge =
-// 375 − 280 − 72 = 23 px from left edge. On-screen with margin.
+// Viewport fit (vw=375): all orbs centered between x≈116 and x=309
+//   (edges 80–345 px). Outer α=195° (master) at bottom=43 sits LEFT of
+//   the duo pill — no horizontal conflict (orb x≈116, pill x≈275-365).
 //
-// Assignment (NAV_SECTIONS order preserved):
-//   Inner ring (closer to thumb) = first 4 (operational)
-//   Outer ring (further reach)   = last 4 (admin/reports)
+// Appts to duo pill: appts bottom edge at viewport y = 812 − 95 − 72 = 645
+//   from top (= 167 px from viewport bottom). Duo pill at bottom ≈22 px
+//   above pill top → ~22 px breathing room. "นิดเดียวเลย" ✓
 //
-// Positions: right = 30 + r·sin(β),  bottom = 30 + r·cos(β)
-//
-//   INNER (r=160)                            OUTER (r=250)
-//   β=0°   appts     ( 30, 190)              β=0°   stock     ( 30, 280)
-//   β=30°  customers (110, 169)              β=30°  finance   (155, 247)
-//   β=60°  sales     (169, 110)              β=60°  reports   (247, 155)
-//   β=90°  marketing (190,  30)              β=90°  master    (280,  30)
+// NAV_SECTIONS assignment (preserves order, groups by tier):
+//   T1: appointments-section
+//   T2: customers (α=90° up), sales (α=142.5° upper-left), marketing (α=195°)
+//   T3: stock (α=90° up), finance (α=125°), reports (α=160°), master (α=195°)
+//   Same-α radial spokes: customers↑stock (α=90°), marketing↓master (α=195°)
 const MOBILE_POSITION = {
-  // Inner ring (close to thumb)
-  'appointments-section': { right: '30px',  bottom: '190px' },
-  'customers':            { right: '110px', bottom: '169px' },
-  'sales':                { right: '169px', bottom: '110px' },
-  'marketing':            { right: '190px', bottom: '30px'  },
-  // Outer ring (further reach)
-  'stock':                { right: '30px',  bottom: '280px' },
-  'finance':              { right: '155px', bottom: '247px' },
-  'reports':              { right: '247px', bottom: '155px' },
-  'master':               { right: '280px', bottom: '30px'  },
+  // T1 — appointments at center (just above duo pill)
+  'appointments-section': { right: '30px',  bottom: '95px'  },
+  // T2 — inner ring r=110 around appts (3 orbs)
+  'customers':            { right: '30px',  bottom: '205px' }, // α=90°    (up)
+  'sales':                { right: '117px', bottom: '162px' }, // α=142.5° (upper-left)
+  'marketing':            { right: '136px', bottom: '67px'  }, // α=195°   (lower-left)
+  // T3 — outer ring r=200 around appts (4 orbs)
+  'stock':                { right: '30px',  bottom: '295px' }, // α=90°    (up)
+  'finance':              { right: '145px', bottom: '259px' }, // α=125°
+  'reports':              { right: '218px', bottom: '163px' }, // α=160°
+  'master':               { right: '223px', bottom: '43px'  }, // α=195°
 };
 
 // Per-section gradient colors (--c1 → --c2 at 135deg) — from mockup.
