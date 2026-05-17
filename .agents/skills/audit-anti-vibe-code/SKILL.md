@@ -2127,10 +2127,73 @@ Cross-file grep (Rule P Step 3) confirmed no other listener consumers in src/
 currently use `useRef(new Set())` for cross-remount dedup. AV76 codifies the
 pattern permanently.
 
+### AV77 — Transient workflow opt-out flags MUST be respected by ALL sibling tab-routing filters (V82-fix2, 2026-05-17 EOD+3 LATE+3)
+
+**Trigger**: A transient state flag (e.g. `_v82FollowupOpdResetAt`) is added to
+ONE filter site to override default tab-routing — but its semantic is NOT
+propagated to sibling filters that share the same routing decision matrix.
+When other state combinations (manual restore, deposit-tab assignment, etc.)
+also trigger early-rejects placed BEFORE the opt-out, the flag is silently
+overridden and the session lands in an unexpected tab.
+
+**Why**: A tab-routing decision is a MULTI-FILTER concern — queue, archive,
+deposit, and permanent tabs each have their own filter. Adding an opt-out at
+one filter without sweeping the siblings creates a combinatorial state where
+the opt-out semantic is REACHABLE for some state combos but UNREACHABLE for
+others. User reports "X disappeared from BOTH tabs" because the session is
+routed to a THIRD tab the user wasn't expecting.
+
+**Origin**: V82-fix2 (2026-05-17 EOD+3 LATE+3) — `_v82FollowupOpdResetAt`
+opt-out was added at `AdminDashboard.jsx:2282` AFTER the `isPermanent`-non-
+deposit early-reject at line 2275. When user clicked "กลับเข้าคิว → ลิงก์ดูข้อมูล"
+on a reset session (sets `isPermanent: true`), line 2275 won and the opt-out
+was unreachable → 2 customers (LOV-1F5QNL, LOV-5PG74T) silently routed to
+จองไม่มัดจำ tab. The state-machine test `v82-followup-state-machine-test.mjs`
+missed this because it tested State D (restore-permanent) and State E (reset
+stamp) IN ISOLATION — never the D+E combination.
+
+**Source-grep pattern** (catches future drift): every transient workflow opt-
+out flag added to one filter MUST also appear at sibling filters in the same
+file:
+
+```
+# Identify opt-out flags introduced for workflow overrides
+grep -E "if \(session\._v[0-9]+\w*\) return (true|false);" src/pages/*.jsx src/components/**/*.jsx | sort -u
+
+# Confirm each appears in MULTIPLE filter sites (queue + noDeposit + archive)
+# for any tab-routing component (AdminDashboard.jsx, BackendDashboard.jsx)
+```
+
+For each opt-out flag, verify:
+1. It appears at TOP of the primary tab filter (right after `isArchived` check)
+2. It appears as an EXCLUDE clause in any sibling tab filter that would
+   otherwise match the same session state (to avoid double-appearance)
+3. There's a paired test combining the flag with each early-reject state
+   (intake+permanent, deposit+serviced, etc.)
+
+**Sanctioned exceptions**: Deposit-tab assignment may have priority for
+formType-specific routing (e.g. `formType === 'deposit'` short-circuits even
+with opt-out). Document the exception with an inline comment near the
+filter site.
+
+**Detection**: regression test `tests/v82-fix2-permanent-restore-reset-stamp.test.js`
+Groups C + D lock the post-fix shape: opt-out branch at top, noDepositSessions
+exclusion, sibling filter ordering check, state-combination matrix.
+
+**Priority**: HIGH — silently routes user-visible data to the wrong tab
+without throwing any error. User reads it as "data lost" → trust collapse
+(Rule Q V66 risk). Combinatorial state-machine testing gap MUST be filled at
+every new opt-out introduction.
+
+**Lineage**: V82-fix2 (2026-05-17 EOD+3 LATE+3). Companion test bank locks
+both the queue filter ordering AND the noDepositSessions exclusion. Pair-
+edit discipline: any future opt-out at queue filter MUST be paired with the
+same opt-out at noDepositSessions filter to prevent double-appearance.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss).
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

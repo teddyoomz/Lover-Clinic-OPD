@@ -2259,8 +2259,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       );
 
       // จองไม่มัดจำ = isPermanent + NOT deposit + NOT serviceCompleted
+      // V82-fix2 (2026-05-17 EOD+3 LATE+3): EXCLUDE _v82FollowupOpdResetAt-
+      // stamped sessions. Those belong in the main queue (re-sync workflow)
+      // regardless of isPermanent. If user accidentally clicked
+      // "กลับเข้าคิว → ลิงก์ดูข้อมูล" on a reset session, isPermanent=true
+      // was set but the reset stamp still indicates queue-intent. The queue
+      // filter below (line ~2282) now picks them up. Pair-edit with that
+      // filter to avoid double-appearance.
       const ndData = allDocs
-          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted)
+          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted && !s._v82FollowupOpdResetAt)
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0));
       setNoDepositSessions(ndData);
       setArchivedNoDepositSessions(
@@ -2271,6 +2278,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       const data = allDocs.filter(session => {
           if (session.isArchived) return false;
+          // V82-fix2 (2026-05-17 EOD+3 LATE+3): _v82FollowupOpdResetAt opt-out
+          // MUST fire BEFORE any other early-reject so that reset sessions are
+          // ALWAYS in queue once unarchived — regardless of isPermanent (set
+          // by restoreToQueue 'permanent' choice) or deposit/serviced state.
+          // Bug found 2026-05-17 EOD+3 LATE+3 — 2 customers (LOV-1F5QNL,
+          // LOV-5PG74T) silently routed to จองไม่มัดจำ tab after user clicked
+          // "กลับเข้าคิว → ลิงก์ดูข้อมูล" on reset opd_sessions. The previous
+          // ordering placed this opt-out AFTER line 2275's isPermanent reject,
+          // making it unreachable for that path. Sibling จองไม่มัดจำ filter
+          // also excludes reset sessions to avoid double-appearance — pair
+          // edit at line ~2263 above. Deposit-unserviced case left to existing
+          // ordering (per state-machine test E intent — deposit tab assignment
+          // has priority for that formType only).
+          if (session._v82FollowupOpdResetAt && session.formType !== 'deposit') return true;
           if (session.formType === 'deposit' && !session.serviceCompleted) return false; // deposit ที่ยังไม่มารับบริการ → อยู่ tab จองมัดจำ
           if (session.isPermanent && session.formType !== 'deposit' && !session.serviceCompleted) return false; // จองไม่มัดจำ → อยู่ tab จองไม่มัดจำ
           if (session.isPermanent) return true;
@@ -2279,6 +2300,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // freshness rule. Used when admin wipes be_customers but wants the
           // original kiosk intake records back in queue for re-sync into fresh
           // be_customers (new HN starting LC-26000001).
+          // (V82-fix2 elevated the non-deposit branch above; this fallthrough
+          // remains for legacy / edge cases where formType is missing.)
           if (session._v82FollowupOpdResetAt) return true;
           if (!session.createdAt) return true;
           const createdAtMs = session.createdAt.toMillis();
