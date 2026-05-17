@@ -13,6 +13,8 @@ export function buildMessageDoc({
   mentions, replyTo, attachmentUrl, attachmentSize, attachmentMimeType,
   // V73 color-picker (2026-05-18) — optional sender hex color
   senderColor,
+  // V82 (2026-05-17) — optional sender role label
+  senderRole,
 } = {}) {
   if (!branchId || typeof branchId !== 'string') throw new Error('STAFF_CHAT_BRANCH_REQUIRED');
   if (!displayName || typeof displayName !== 'string') throw new Error('STAFF_CHAT_NAME_REQUIRED');
@@ -50,6 +52,13 @@ export function buildMessageDoc({
   // fall back to default rose/sky via resolveSenderColor on the reader side.
   if (typeof senderColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(senderColor)) {
     doc.senderColor = senderColor;
+  }
+  // V82 (2026-05-17) — optional senderRole label (e.g. "หมอ", "ผู้ช่วย").
+  // Receivers may render alongside displayName. Omit if falsy/non-string to
+  // keep Firestore-undefined-safe per V14 lesson. Past messages w/o this
+  // field render without role suffix on the reader side.
+  if (senderRole) {
+    doc.senderRole = String(senderRole);
   }
   return doc;
 }
