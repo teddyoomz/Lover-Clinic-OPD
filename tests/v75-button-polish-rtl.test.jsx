@@ -51,11 +51,16 @@ describe('V75 Item 1 — CustomerDetailView 4-button row equal-height polish', (
     expect(block).toMatch(/gap-2/);
   });
 
-  it('BTN1.3 — all 4 button labels render in the row (แก้ไข / ผูก LINE / สำรอง / ลบลูกค้า)', () => {
+  // V21 fix-up (V82-followup, 2026-05-17): V81-fix4 removed the per-customer 'สำรอง'
+  // (customer-detail-backup-button) — superseded by V81 WholeSystem + V81-fix6
+  // customer-only single-file backups managed in BackupManagerTab. Button row dropped
+  // from 4 → 3 buttons (แก้ไข / ผูก LINE / ลบลูกค้า). BTN1.3 label list trimmed; BTN1.4
+  // expected count 4 → 3; BTN1.6 backup-button data-testid assertion removed.
+  it('BTN1.3 — all 3 remaining button labels render in the row (แก้ไข / ผูก LINE / ลบลูกค้า)', () => {
     expect(block).toContain('แก้ไข');
     expect(block).toContain('ผูก LINE');
-    expect(block).toContain('สำรอง');
     expect(block).toContain('ลบลูกค้า');
+    // V81-fix4: per-customer 'สำรอง' button REMOVED — covered by WholeSystem/customer-only backups
   });
 
   it('BTN1.4 — every <button> inside the row uses inline-flex + items-center + whitespace-nowrap', () => {
@@ -66,7 +71,8 @@ describe('V75 Item 1 — CustomerDetailView 4-button row equal-height polish', (
     while ((m = buttonTagPattern.exec(block)) !== null) {
       classNames.push(m[1]);
     }
-    expect(classNames.length).toBe(4);
+    // V81-fix4 (V21 fix-up V82-followup): 4 → 3 buttons (สำรอง removed)
+    expect(classNames.length).toBe(3);
     classNames.forEach((cn, i) => {
       expect(cn, `button ${i + 1} className: ${cn}`).toMatch(/inline-flex/);
       expect(cn, `button ${i + 1} className: ${cn}`).toMatch(/items-center/);
@@ -82,10 +88,11 @@ describe('V75 Item 1 — CustomerDetailView 4-button row equal-height polish', (
     expect(bareFlexMatches.length).toBe(0);
   });
 
-  it('BTN1.6 — preserves existing button onClick handlers + data-testid attrs (no functional change)', () => {
+  it('BTN1.6 — preserves remaining button onClick handlers + data-testid attrs (no functional change)', () => {
     expect(block).toMatch(/data-testid="edit-customer-btn"/);
     expect(block).toMatch(/data-testid="link-line-btn"/);
-    expect(block).toMatch(/data-testid="customer-detail-backup-button"/);
+    // V81-fix4 (V21 fix-up V82-followup): customer-detail-backup-button REMOVED;
+    // per-customer backup superseded by WholeSystem + customer-only backups in BackupManagerTab
     expect(block).toMatch(/data-testid="customer-detail-delete-button"/);
   });
 });
