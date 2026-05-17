@@ -21,6 +21,8 @@ import { useTheme } from '../hooks/useTheme.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ProfileDropdown from '../components/backend/ProfileDropdown.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
+import BackendShellNew from '../components/backend/shell/BackendShellNew.jsx';
+import { useBackendMenuMode } from '../components/backend/shell/backendMenuMode.js';
 import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
 // Phase 17.2 (2026-05-05) — BranchProvider hoisted to App.jsx; this file
 // no longer wraps. BranchSelector still rendered here (top-bar slot).
@@ -126,6 +128,10 @@ import { useTabAccess } from '../hooks/useTabAccess.js';
 
 export default function BackendDashboard({ clinicSettings: parentSettings }) {
   const { theme, setTheme } = useTheme();
+  // Backend Menu D (2026-05-18) — per-device localStorage mode toggle.
+  // 'new' renders BackendShellNew (bloom + duo pill); 'classic' renders
+  // BackendNav (sidebar + drawer). Mobile <768px forced to 'new'.
+  const [menuMode] = useBackendMenuMode();
   // V50 (2026-05-08) — default tab changed from 'clone' (DELETED) to 'customers'.
   const [activeTab, setActiveTab] = useState('customers');
   const [viewingCustomer, setViewingCustomer] = useState(null);
@@ -346,15 +352,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     </div>
   );
 
-  return (
-    <BackendNav
-      activeTabId={activeTab}
-      onNavigate={handleNavigate}
-      clinicSettings={clinicSettings}
-      theme={theme}
-      setTheme={setTheme}
-      topBarSlot={breadcrumbSlot}
-    >
+  // Backend Menu D — extract main content once so both shells render
+  // IDENTICAL children. Cosmetic-shell rule: no logic diverges per mode.
+  const mainContent = (
+    <>
       <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6`}>
         {/* Audit P2 (2026-04-26 perf code-split): Suspense boundary catches
             in-flight tab loads. Eager-imported tabs render immediately;
@@ -717,6 +718,33 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
           }}
         />
       )}
+    </>
+  );
+
+  // Backend Menu D — conditional shell. Both branches receive byte-identical
+  // props; mainContent is the same children block. Mode toggle swaps shells
+  // via React state — no route change, no re-mount of child tabs.
+  return menuMode === 'new' ? (
+    <BackendShellNew
+      activeTabId={activeTab}
+      onNavigate={handleNavigate}
+      clinicSettings={clinicSettings}
+      theme={theme}
+      setTheme={setTheme}
+      topBarSlot={breadcrumbSlot}
+    >
+      {mainContent}
+    </BackendShellNew>
+  ) : (
+    <BackendNav
+      activeTabId={activeTab}
+      onNavigate={handleNavigate}
+      clinicSettings={clinicSettings}
+      theme={theme}
+      setTheme={setTheme}
+      topBarSlot={breadcrumbSlot}
+    >
+      {mainContent}
     </BackendNav>
   );
 }
