@@ -22,6 +22,7 @@ import ThemeToggle from '../components/ThemeToggle.jsx';
 import ProfileDropdown from '../components/backend/ProfileDropdown.jsx';
 import BackendNav from '../components/backend/nav/BackendNav.jsx';
 import BackendShellNew from '../components/backend/shell/BackendShellNew.jsx';
+import BackendMenuModeToggle from '../components/backend/shell/BackendMenuModeToggle.jsx';
 import { useBackendMenuMode } from '../components/backend/shell/backendMenuMode.js';
 import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
 // Phase 17.2 (2026-05-05) — BranchProvider hoisted to App.jsx; this file
@@ -332,24 +333,33 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       </button>
       {/* Phase 14.7.H follow-up A — branch selector (auto-hides when <2 branches) */}
       <BranchSelector className="hidden lg:flex" />
+      {/* Bugfix 2026-05-18 — mode toggle visible in classic mode (no one-way trap).
+          In 'new' mode it's rendered by BackendTopBarNew; here it appears only when classic. */}
+      {menuMode === 'classic' && <div className="hidden lg:block"><BackendMenuModeToggle /></div>}
       <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
       <div className="hidden lg:block"><ProfileDropdown /></div>
     </div>
   ) : (
-    <div className="hidden lg:flex items-center justify-end gap-3">
-      {/* V64-fix9 — back-to-frontend before BranchSelector (adjacency lock). */}
-      <button
-        onClick={() => { window.location.href = '/'; }}
-        title="กลับ Frontend (สาขาเดิม)"
-        data-testid="back-to-frontend-desktop"
-        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
-      >
-        <Home size={12} /> Frontend
-      </button>
-      <BranchSelector />
-      <ThemeToggle theme={theme} setTheme={setTheme} />
-      <ProfileDropdown />
-    </div>
+    // Bugfix 2026-05-18 — only render chrome in classic mode. New mode's
+    // BackendTopBarNew already renders Frontend/Branch/Theme/Profile (duplicate
+    // otherwise). breadcrumbSlot in new mode = null for non-viewing-customer.
+    menuMode === 'classic' ? (
+      <div className="hidden lg:flex items-center justify-end gap-3">
+        {/* V64-fix9 — back-to-frontend before BranchSelector (adjacency lock). */}
+        <button
+          onClick={() => { window.location.href = '/'; }}
+          title="กลับ Frontend (สาขาเดิม)"
+          data-testid="back-to-frontend-desktop"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
+        >
+          <Home size={12} /> Frontend
+        </button>
+        <BranchSelector />
+        <BackendMenuModeToggle />
+        <ThemeToggle theme={theme} setTheme={setTheme} />
+        <ProfileDropdown />
+      </div>
+    ) : null
   );
 
   // Backend Menu D — extract main content once so both shells render

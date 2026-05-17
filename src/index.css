@@ -2079,10 +2079,14 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 }
 
 /* ─── Bloom backdrop (dark theme) ─────────────────────────────────────────── */
+/* z-index: 30 so the top bar (z-40) and duo pill (z-50) stay visible above.
+   Bugfix 2026-05-18 — was z-8500 which covered the entire viewport including
+   the top bar, hiding all utility buttons. Per mockup, top bar must remain
+   visible + fully clickable while bloom is open. */
 .bloom-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 8500;
+  z-index: 30;
   background: radial-gradient(ellipse at bottom right, #050308 0%, #020106 60%, #02010a 100%);
   opacity: 0;
   pointer-events: none;
@@ -2091,6 +2095,32 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 .bloom-backdrop[data-open="true"] {
   opacity: 1;
   pointer-events: auto;
+}
+/* Bloom stage — Desktop/Tablet uses CSS Grid (4×2, centered, fluid scale on
+   every viewport from 768px → 4K). Mobile is full-screen w/ absolute fan-arc.
+   Bugfix 2026-05-18 (round 3) — switched from %-position scatter to CSS Grid
+   to guarantee balanced centering across all screen sizes. */
+.bloom-stage {
+  position: absolute;
+}
+.bloom-stage.desktop {
+  /* Center the grid in viewport (excluding the ~48px top bar zone) */
+  top: 72px;
+  bottom: 72px;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  /* Constrain to a sensible width so tiles stay close on ultrawide */
+  max-width: min(1100px, 90vw);
+  max-height: min(640px, 75vh);
+  margin: auto;
+  place-items: center;
+  gap: clamp(12px, 2vw, 36px);
+}
+.bloom-stage.mobile {
+  inset: 0;
 }
 
 [data-theme="light"] .bloom-backdrop {
@@ -2164,11 +2194,13 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 }
 [data-theme="dark"] .bloom-petal { display: none; }
 
-/* ─── Orbs (8 nav-section buttons radiating from Duo Pill) ────────────────── */
+/* ─── Orbs (8 scattered tiles · mockup-matched 2026-05-18) ─────────────────── */
+/* Rewrite 2026-05-18 — was circle radial-gradient; now rounded-square with
+   per-section linear-gradient (set via inline --c1/--c2 CSS vars). Mockup ref:
+   docs/superpowers/specs/2026-05-18-backend-menu-redesign-mockup.html line 432+. */
 .bloom-orb {
   position: absolute;
-  width: 72px; height: 72px;
-  border-radius: 50%;
+  border-radius: 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2176,43 +2208,77 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   gap: 4px;
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.18), rgba(0,0,0,0.55) 70%);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(135deg, var(--c1, #dc2626), var(--c2, #f97316));
+  border: 1px solid rgba(251,191,36,0.28);
   box-shadow:
-    0 12px 32px rgba(0,0,0,0.5),
-    0 0 24px rgba(220,38,38,0.4),
-    inset 0 1px 0 rgba(255,255,255,0.15);
+    0 22px 44px rgba(0,0,0,0.62),
+    0 12px 22px rgba(0,0,0,0.4),
+    0 0 18px rgba(251,191,36,0.38),
+    0 0 38px rgba(251,146,60,0.27),
+    0 0 64px rgba(249,115,22,0.17),
+    0 0 0 1px rgba(251,191,36,0.26),
+    inset 0 2px 0 rgba(255,255,255,0.52);
   opacity: 0;
   transform: scale(0);
+  z-index: 5;
+}
+/* Desktop tile — grid child (NOT absolute). Fluid sizing via clamp() so it
+   scales evenly tablet → 4K. */
+.bloom-orb.desktop {
+  position: static;
+  width: clamp(110px, 12vw, 156px);
+  height: clamp(110px, 12vw, 156px);
+}
+/* Mobile fan-arc tile — absolute, uses bottom/right/left pixel offsets from
+   MOBILE_POSITION map. Sized for compact phone viewport. */
+.bloom-orb.mobile {
+  position: absolute;
+  width: 72px; height: 72px;
+  border-radius: 18px;
 }
 .bloom-orb[data-bloomed="true"] {
   opacity: 1;
   transform: scale(1);
-  animation: orb-float-A 5s ease-in-out infinite;
+  animation: orb-float-A 4.2s ease-in-out infinite;
 }
-.bloom-orb:nth-of-type(3n+1)[data-bloomed="true"] { animation-name: orb-float-A; }
-.bloom-orb:nth-of-type(3n+2)[data-bloomed="true"] { animation-name: orb-float-B; animation-delay: -1s; }
-.bloom-orb:nth-of-type(3n+3)[data-bloomed="true"] { animation-name: orb-float-C; animation-delay: -2s; }
-.bloom-orb:hover { transform: scale(1.08) translateY(-4px); }
+.bloom-orb:nth-of-type(2n)[data-bloomed="true"] { animation: orb-float-B 4.7s ease-in-out infinite; animation-delay: -0.5s; }
+.bloom-orb:nth-of-type(3n)[data-bloomed="true"] { animation: orb-float-C 3.8s ease-in-out infinite; animation-delay: -1.3s; }
+.bloom-orb:nth-of-type(4n+1)[data-bloomed="true"] { animation-delay: -2.1s; }
+.bloom-orb:nth-of-type(5n+2)[data-bloomed="true"] { animation-delay: -2.9s; }
+.bloom-orb:hover { transform: scale(1.06) translateY(-3px); }
 .bloom-orb:focus-visible {
-  outline: 2px solid #fbbf24;
+  outline: 3px solid #fbbf24;
   outline-offset: 4px;
 }
 
-@keyframes orb-float-A { 0%,100% { translate: 0   0;   } 50% { translate: 0    -6px; } }
-@keyframes orb-float-B { 0%,100% { translate: 0   0;   } 50% { translate: -3px -4px; } }
-@keyframes orb-float-C { 0%,100% { translate: 0   0;   } 50% { translate: 3px  -5px; } }
+@keyframes orb-float-A {
+  0%, 100% { translate: 0 0;    scale: 1;    }
+  50%      { translate: 0 -6px; scale: 1.05; }
+}
+@keyframes orb-float-B {
+  0%, 100% { translate: 0 0;    scale: 1;    }
+  50%      { translate: 0 -8px; scale: 1.04; }
+}
+@keyframes orb-float-C {
+  0%, 100% { translate: 0 0;    scale: 1;    }
+  50%      { translate: 0 -5px; scale: 1.04; }
+}
 
-/* fire-pulse halo (dark) */
+/* fire-pulse halo (dark) — gold-orange flame behind tile */
 .bloom-orb::before {
   content: '';
   position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(251,146,60,0.4), transparent 70%);
-  filter: blur(8px);
-  animation: fire-pulse 3s ease-in-out infinite;
+  inset: -16px;
+  border-radius: 28px;
+  background: radial-gradient(circle,
+    rgba(251,191,36,0.3) 0%,
+    rgba(251,146,60,0.2) 35%,
+    rgba(249,115,22,0.1) 65%,
+    transparent 95%);
+  filter: blur(12px);
   z-index: -1;
+  animation: fire-pulse 3.3s ease-in-out infinite;
+  pointer-events: none;
 }
 @keyframes fire-pulse {
   0%, 100% { opacity: 0.6; transform: scale(0.96); }
@@ -2222,28 +2288,44 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   background: radial-gradient(circle, rgba(244,114,182,0.4), transparent 70%);
 }
 [data-theme="light"] .bloom-orb {
-  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.95), rgba(255,228,236,0.7) 70%);
-  border: 1px solid rgba(244,114,182,0.3);
+  border: 1px solid rgba(255,255,255,0.65);
   box-shadow:
-    0 12px 32px rgba(244,114,182,0.25),
-    0 0 24px rgba(244,114,182,0.3),
-    inset 0 1px 0 rgba(255,255,255,0.9);
+    0 24px 50px rgba(190,24,93,0.4),
+    0 14px 26px rgba(236,72,153,0.25),
+    0 0 36px rgba(244,114,182,0.55),
+    0 0 0 1px rgba(255,255,255,0.7),
+    inset 0 2px 0 rgba(255,255,255,0.7);
 }
+.bloom-orb-icon { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+[data-theme="light"] .bloom-orb-icon { filter: drop-shadow(0 2px 3px rgba(190,24,93,0.3)); }
 .bloom-orb-label {
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
   color: white;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  pointer-events: none;
+  margin-top: 4px;
+}
+.bloom-orb.mobile .bloom-orb-label { font-size: 9px; margin-top: 2px; }
+.bloom-orb-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.88);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
   pointer-events: none;
 }
-[data-theme="light"] .bloom-orb-label { color: #831843; text-shadow: 0 1px 3px rgba(255,255,255,0.6); }
+.bloom-orb.mobile .bloom-orb-count { font-size: 7px; }
+[data-theme="light"] .bloom-orb-label { text-shadow: 0 1px 2px rgba(190,24,93,0.3); }
+[data-theme="light"] .bloom-orb-count { text-shadow: 0 1px 2px rgba(190,24,93,0.25); }
 
 /* ─── Duo Pill (bottom-right) ─────────────────────────────────────────────── */
+/* z-index: 50 keeps it above bloom backdrop (z-30) and above top bar (z-40).
+   Bugfix 2026-05-18 — was z-9100, conflicted with new z-stack model. */
 .duo-pill {
   position: fixed;
   bottom: 16px;
   right: 16px;
-  z-index: 9100;
+  z-index: 50;
   display: inline-flex;
   align-items: center;
   gap: 4px;

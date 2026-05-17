@@ -1,12 +1,63 @@
-// Backend Menu D — ArcBloom overlay. 8 orbs radial fan around Duo Pill.
+// Backend Menu D — Bloom overlay. 8 scattered rounded-square orbs across the
+// bloom backdrop (mockup-matched layout, NOT radial arc).
 // Reads NAV_SECTIONS verbatim · orb click → onNavigate(firstChildTabId) · onClose
 // role=dialog aria-modal · focus trap · Esc + arrow keys · prefers-reduced-motion
+//
+// Rewrite 2026-05-18 — replaces previous radial-arc-fan implementation that
+// did NOT match the approved mockup. Mockup at
+// docs/superpowers/specs/2026-05-18-backend-menu-redesign-mockup.html shows
+// 8 tiles scattered in scatter-grid layout (top%/left% per-section) with
+// per-section linear-gradient colors and icon+name+count. This rewrite
+// matches the mockup verbatim.
 
-import { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NAV_SECTIONS } from '../nav/navConfig.js';
 
-// Random star/nebula/ember/petal positions — generated once per module-load
-// so they stay stable across re-renders (no jitter).
+const MD_BREAKPOINT = 768;
+
+// Desktop/Tablet (≥768px): CSS Grid 4×2 layout · centered + fluid scale.
+// Grid-area assignment per section.id (instead of absolute positions) so the
+// layout auto-centers in viewport and scales evenly from tablet → 4K.
+// Order: top row (apptmnts, customers, sales, marketing) +
+//        bottom row (master, reports, finance, stock).
+const DESKTOP_GRID_AREA = {
+  'appointments-section': { gridRow: 1, gridColumn: 1 },
+  'customers':            { gridRow: 1, gridColumn: 2 },
+  'sales':                { gridRow: 1, gridColumn: 3 },
+  'marketing':            { gridRow: 1, gridColumn: 4 },
+  'master':               { gridRow: 2, gridColumn: 1 },
+  'reports':              { gridRow: 2, gridColumn: 2 },
+  'finance':              { gridRow: 2, gridColumn: 3 },
+  'stock':                { gridRow: 2, gridColumn: 4 },
+};
+
+// Mobile fan-arc position (pixel offsets from edges) — from mockup lines 641-648
+// (compact phone view). Orbs cluster around the bottom edges + one floats at
+// top-center, forming a balloon cluster around the duo pill at bottom-right.
+const MOBILE_POSITION = {
+  'appointments-section': { bottom: '80px',  right: '12px'  },
+  'customers':            { bottom: '124px', right: '30px'  },
+  'sales':                { bottom: '158px', right: '70px'  },
+  'marketing':            { bottom: '172px', right: '122px' },
+  'stock':                { bottom: '164px', left:  '64px'  },
+  'finance':              { bottom: '128px', left:  '26px'  },
+  'reports':              { bottom: '84px',  left:  '10px'  },
+  'master':               { top: '60px', left: '50%', transform: 'translateX(-50%)' },
+};
+
+// Per-section gradient colors (--c1 → --c2 at 135deg) — from mockup.
+const SECTION_COLOR = {
+  'appointments-section': { c1: '#3b82f6', c2: '#06b6d4' }, // blue → cyan
+  'customers':            { c1: '#14b8a6', c2: '#22c55e' }, // teal → green
+  'sales':                { c1: '#ef4444', c2: '#f97316' }, // red → orange
+  'marketing':            { c1: '#a855f7', c2: '#ec4899' }, // purple → pink
+  'stock':                { c1: '#f59e0b', c2: '#facc15' }, // amber → yellow
+  'finance':              { c1: '#10b981', c2: '#06b6d4' }, // emerald → cyan
+  'reports':              { c1: '#0ea5e9', c2: '#6366f1' }, // sky → indigo
+  'master':               { c1: '#facc15', c2: '#f97316' }, // yellow → orange
+};
+
+// Decorative-layer positions — generated once per module-load for stability.
 const STARS = Array.from({ length: 55 }, (_, i) => ({
   top: `${Math.random() * 100}%`,
   left: `${Math.random() * 100}%`,
@@ -30,30 +81,36 @@ const PETALS = Array.from({ length: 20 }, (_, i) => ({
   size: i % 7 === 0 ? 'big' : i % 5 === 0 ? 'small' : '',
 }));
 
-// Arc fan layout — 8 positions on a radial arc anchored to bottom-right.
-function orbPosition(i, total) {
-  const startAngle = 175; // degrees, fan opens up-and-left from bottom-right
-  const sweep = 95;
-  const angle = ((startAngle + (sweep * i) / Math.max(1, total - 1)) * Math.PI) / 180;
-  const radius = 180; // px from anchor
-  // Anchor at viewport bottom-right corner ~64px in
-  return {
-    right: `${64 + Math.cos(angle - Math.PI) * radius}px`,
-    bottom: `${64 + Math.sin(Math.PI - angle) * radius}px`,
-  };
+function sectionCount(section) {
+  // Sub-tab count — real number from NAV_SECTIONS.items, shown as "N sub".
+  // Mockup also uses contextual labels (132 / ฿24K / 3 promo); those need
+  // real data wiring (future). For now, the consistent "N sub" gives admin
+  // an at-a-glance sense of section size.
+  const n = Array.isArray(section.items) ? section.items.length : 0;
+  return n > 0 ? `${n} sub` : '';
+}
+
+function getIsMobile() {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < MD_BREAKPOINT;
 }
 
 export default function BackendArcBloom({ open, onClose, onNavigate }) {
   const orbRefs = useRef([]);
   const previouslyFocused = useRef(null);
-
   const sections = useMemo(() => NAV_SECTIONS, []);
+  const [isMobile, setIsMobile] = useState(getIsMobile);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(getIsMobile());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Focus trap + Esc + arrow keys
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement;
-    // Focus first orb when bloom opens
     requestAnimationFrame(() => orbRefs.current[0]?.focus());
 
     const onKey = (e) => {
@@ -136,29 +193,43 @@ export default function BackendArcBloom({ open, onClose, onNavigate }) {
         />
       ))}
 
-      {/* 8 orbs · radial fan layout */}
-      {sections.map((section, i) => {
-        const Icon = section.icon;
-        const pos = orbPosition(i, sections.length);
-        return (
-          <button
-            key={section.id}
-            ref={(el) => (orbRefs.current[i] = el)}
-            type="button"
-            role="menuitem"
-            tabIndex={0}
-            data-bloomed="true"
-            data-testid={`bloom-orb-${section.id}`}
-            aria-label={`ไปยังหมวด ${section.label}`}
-            className="bloom-orb"
-            style={pos}
-            onClick={() => handleOrbClick(section)}
-          >
-            {Icon && <Icon size={26} color="white" />}
-            <span className="bloom-orb-label">{section.label}</span>
-          </button>
-        );
-      })}
+      {/* Bloom stage — Desktop/Tablet: CSS Grid 4×2 auto-centered + fluid-scale.
+          Mobile: full-screen with fan-arc absolute orbs around the duo pill. */}
+      <div className={`bloom-stage ${isMobile ? 'mobile' : 'desktop'}`} data-testid="bloom-stage">
+        {sections.map((section, i) => {
+          const Icon = section.icon;
+          const color = SECTION_COLOR[section.id] || { c1: '#dc2626', c2: '#f97316' };
+          const count = sectionCount(section);
+          const iconSize = isMobile ? 18 : 32;
+          // Mobile: absolute pixel offsets · Desktop/Tablet: CSS grid placement
+          const positionStyle = isMobile
+            ? (MOBILE_POSITION[section.id] || { top: '50%', left: '50%' })
+            : (DESKTOP_GRID_AREA[section.id] || {});
+          return (
+            <button
+              key={section.id}
+              ref={(el) => (orbRefs.current[i] = el)}
+              type="button"
+              role="menuitem"
+              tabIndex={0}
+              data-bloomed="true"
+              data-testid={`bloom-orb-${section.id}`}
+              aria-label={`ไปยังหมวด ${section.label}`}
+              className={`bloom-orb ${isMobile ? 'mobile' : 'desktop'}`}
+              style={{
+                ...positionStyle,
+                '--c1': color.c1,
+                '--c2': color.c2,
+              }}
+              onClick={() => handleOrbClick(section)}
+            >
+              {Icon && <Icon size={iconSize} color="white" className="bloom-orb-icon" aria-hidden="true" />}
+              <span className="bloom-orb-label">{section.label}</span>
+              {count && <span className="bloom-orb-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
