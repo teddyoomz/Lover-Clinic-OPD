@@ -118,39 +118,36 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
                 </button>
               );
             })}
-            {(() => {
-              const isSelected = selectedRole === null;
-              return (
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole(null)}
-                  aria-pressed={isSelected}
-                  data-testid="staffchat-namepicker-role-none"
-                  className="flex flex-col items-center justify-center p-2 rounded-lg transition-colors"
-                  style={{
-                    gap: '8px',
-                    border: isSelected ? '2px solid #E11D48' : '2px dashed var(--bd)',
-                    backgroundColor: isSelected ? 'rgba(225, 29, 72, 0.10)' : 'transparent',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '9999px',
-                      border: '2px dashed var(--bd)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-[11px] text-[var(--tx-muted)] leading-tight text-center">
-                    ไม่ระบุ
-                  </span>
-                </button>
-              );
-            })()}
+            {/* V82 — "ไม่ระบุ" (no-badge) tile. Rule C3 lock: inline ternaries
+                instead of IIFE-in-JSX (Vite OXC parser crash risk). */}
+            <button
+              type="button"
+              onClick={() => setSelectedRole(null)}
+              aria-pressed={selectedRole === null}
+              data-testid="staffchat-namepicker-role-none"
+              className="flex flex-col items-center justify-center p-2 rounded-lg transition-colors"
+              style={{
+                gap: '8px',
+                border: selectedRole === null ? '2px solid #E11D48' : '2px dashed var(--bd)',
+                backgroundColor: selectedRole === null ? 'rgba(225, 29, 72, 0.10)' : 'transparent',
+              }}
+            >
+              <span
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '9999px',
+                  border: '2px dashed var(--bd)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-hidden="true"
+              />
+              <span className="text-[11px] text-[var(--tx-muted)] leading-tight text-center">
+                ไม่ระบุ
+              </span>
+            </button>
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">
