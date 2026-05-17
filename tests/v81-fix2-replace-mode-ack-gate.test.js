@@ -20,15 +20,24 @@ describe('V81-fix2 — Replace mode ack gate (Group K)', () => {
     expect(src).toMatch(/V81-fix2/);
   });
 
-  it('K.2 — restore executor throws REPLACE_ACK_REQUIRED when replace mode + missing ack', () => {
+  // V21 fix-up (V82-followup, 2026-05-17): V81-fix4 narrowed the ack gate
+  // condition by AND-ing it with `replaceAuthFromBackup` (which defaults to false
+  // post-V81-fix4 — Auth is now PRESERVED by default on Replace). The original
+  // V81-fix2 2-condition gate `mode === 'replace' && ackPasswordResetRequired !== true`
+  // became 3-condition `mode === 'replace' && replaceAuthFromBackup && ack !== true`.
+  // Same architectural contract (Replace + Auth-wipe demands password-reset ack);
+  // regex loosened to match the V81-fix4 implementation shape.
+  it('K.2 — restore executor throws REPLACE_ACK_REQUIRED when replace mode + Auth-wipe + missing ack', () => {
     const src = fs.readFileSync('api/admin/_lib/wholeSystemRestoreExecutor.js', 'utf8');
     expect(src).toMatch(/REPLACE_ACK_REQUIRED/);
-    expect(src).toMatch(/mode === 'replace' && ackPasswordResetRequired !== true/);
+    // V81-fix4: gate now ANDs with replaceAuthFromBackup (V21 fix-up)
+    expect(src).toMatch(/mode === 'replace' && replaceAuthFromBackup && ackPasswordResetRequired !== true/);
   });
 
-  it('K.3 — restore executor forces effectiveSendResetEmails on replace mode', () => {
+  it('K.3 — restore executor forces effectiveSendResetEmails on replace+Auth-wipe', () => {
     const src = fs.readFileSync('api/admin/_lib/wholeSystemRestoreExecutor.js', 'utf8');
-    expect(src).toMatch(/effectiveSendResetEmails\s*=\s*mode === 'replace' \? true/);
+    // V81-fix4: forcing reset-emails now also AND-gated by replaceAuthFromBackup (V21 fix-up)
+    expect(src).toMatch(/effectiveSendResetEmails\s*=\s*\(mode === 'replace' && replaceAuthFromBackup\)/);
     expect(src).toMatch(/if \(effectiveSendResetEmails\)/);
   });
 
@@ -38,10 +47,10 @@ describe('V81-fix2 — Replace mode ack gate (Group K)', () => {
     expect(src).toMatch(/REPLACE_ACK_REQUIRED/);
   });
 
-  it('K.5 — endpoint returns 400 REPLACE_ACK_REQUIRED for replace+missing ack', () => {
+  it('K.5 — endpoint returns 400 REPLACE_ACK_REQUIRED for replace+Auth-wipe+missing ack', () => {
     const src = fs.readFileSync('api/admin/whole-system-restore.js', 'utf8');
-    // Endpoint pre-flight check
-    const preflightIdx = src.indexOf('mode === \'replace\' && ackPasswordResetRequired !== true');
+    // V81-fix4 (V21 fix-up V82-followup): pre-flight now AND-gates with replaceAuthFromBackup
+    const preflightIdx = src.indexOf('mode === \'replace\' && replaceAuthFromBackup && ackPasswordResetRequired !== true');
     expect(preflightIdx).toBeGreaterThan(-1);
     // The 400 response status is right after the check
     const after = src.slice(preflightIdx, preflightIdx + 300);
@@ -55,20 +64,24 @@ describe('V81-fix2 — Replace mode ack gate (Group K)', () => {
     expect(src).toMatch(/ackPasswordReset/);
   });
 
-  it('K.7 — UI modal disables submit when replace mode + ack unchecked', () => {
+  it('K.7 — UI modal disables submit when replace mode + Auth-wipe + ack unchecked', () => {
     const src = fs.readFileSync('src/components/backend/WholeSystemRestoreModal.jsx', 'utf8');
-    // canSubmit incorporates ackPasswordReset for replace mode
-    expect(src).toMatch(/canSubmit\s*=[\s\S]{0,400}!replaceAckRequired\s*\|\|\s*ackPasswordReset/);
+    // V81-fix4 (V21 fix-up V82-followup): replaceAckRequired renamed `ackRequired` +
+    // gated on replaceAuthFromBackup. canSubmit shape: `(!ackRequired || ackPasswordReset)`
+    expect(src).toMatch(/canSubmit\s*=[\s\S]{0,400}!ackRequired\s*\|\|\s*ackPasswordReset/);
   });
 
-  it('K.8 — UI modal sends ackPasswordResetRequired in request body for replace mode', () => {
+  it('K.8 — UI modal sends ackPasswordResetRequired in request body for replace+Auth-wipe', () => {
     const src = fs.readFileSync('src/components/backend/WholeSystemRestoreModal.jsx', 'utf8');
-    expect(src).toMatch(/ackPasswordResetRequired:\s*mode === 'replace' \? ackPasswordReset : false/);
+    // V81-fix4 (V21 fix-up V82-followup): now `ackRequired ? ackPasswordReset : false` —
+    // ackRequired itself = `mode === 'replace' && replaceAuthFromBackup`
+    expect(src).toMatch(/ackPasswordResetRequired:\s*ackRequired\s*\?\s*ackPasswordReset\s*:\s*false/);
   });
 
-  it('K.9 — UI modal forces sendPasswordResetEmails=true server-side for replace mode', () => {
+  it('K.9 — UI modal forces sendPasswordResetEmails=true server-side for replace+Auth-wipe', () => {
     const src = fs.readFileSync('src/components/backend/WholeSystemRestoreModal.jsx', 'utf8');
-    expect(src).toMatch(/sendPasswordResetEmails:\s*mode === 'replace' \? true : sendPasswordReset/);
+    // V81-fix4 (V21 fix-up V82-followup): now `(mode === 'replace' && replaceAuthFromBackup) ? true : sendPasswordReset`
+    expect(src).toMatch(/sendPasswordResetEmails:\s*\(mode === 'replace' && replaceAuthFromBackup\)\s*\?\s*true\s*:\s*sendPasswordReset/);
   });
 
   it('K.10 — Replace mode warning panel + Thai password-reset copy present', () => {
