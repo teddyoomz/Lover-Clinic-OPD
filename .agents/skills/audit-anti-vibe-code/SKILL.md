@@ -2083,6 +2083,50 @@ single commit per Rule P 7-step class-of-bug expansion. Plus removal of
 orphan `customer-data-recovery` tab in same commit (independent fix, same
 user-report turn).
 
+### AV76 — In-memory dedup for Firestore listener results crashes on remount (V82, 2026-05-17)
+
+**Trigger**: Any component that subscribes to a Firestore listener AND uses
+`useRef(new Set())` to track "seen IDs" for unread/sound dedup. The Set is
+in-memory — it resets every component remount (parent re-render, route change,
+tab toggle). On resubscribe, the listener fires with the full result set, all
+docs look "new", duplicate sound + unread events fire.
+
+**Why**: Cross-remount dedup needs PERSISTENT state, not in-memory ref. Per
+Rule of 3 / per-device patterns:
+- **Per-device** (most common): localStorage cursor with `{branchId}` keying
+- **Cross-device** (rare): Firestore doc per-(uid, scope)
+
+**Origin**: V73 useStaffChat shipped with `lastSeenIdsRef = useRef(new Set())`.
+After V81-fix7b deploy, user reported chat badge count growing + noti spam on
+every Frontend↔Backend tab switch — same device, same name, same color, but
+unread state reset every remount. V82 introduced `staffChatReadCursor.js`
+(localStorage per-(deviceId, branchId)) to close the gap permanently.
+
+**Source-grep pattern** (catches future drift):
+```
+grep -rn "useRef\s*(\s*new Set\s*(" src/ | grep -v node_modules
+```
+For each match, verify whether cross-remount dedup is required. If YES →
+migrate to persistent cursor (localStorage or Firestore). If NO (per-mount
+dedup is intentional, e.g. modal open-close) → annotate with comment
+`// AV76 safe — per-mount dedup intentional` so the audit skips.
+
+**Sanctioned exceptions**: short-lived modal components where the user is
+expected to see all listener events fresh on each open; one-shot toast
+notifications.
+
+**Detection**: regression test `tests/v82-staff-chat-cursor-and-badge.test.js`
+Group H assertions (H.1-H.8) lock the post-fix shape: cursor module imported,
+markScrolledToBottom wired, no `lastSeenIdsRef = useRef(new Set())` remains.
+
+**Priority**: HIGH — listener-consuming components are common; missed dedup
+manifests as user-visible noti/badge spam (Rule Q V66 trust collapse risk).
+
+**Lineage**: V82 (2026-05-17 post-V81-fix7b) — single migration of useStaffChat.
+Cross-file grep (Rule P Step 3) confirmed no other listener consumers in src/
+currently use `useRef(new Set())` for cross-remount dedup. AV76 codifies the
+pattern permanently.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
