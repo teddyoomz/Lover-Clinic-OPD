@@ -144,10 +144,19 @@ export function useStaffChat() {
         // initCursorIfMissing seeds with the latest message's createdAt so
         // the entire backlog reads as "read" on first-ever load (no
         // 50-message badge spam). Idempotent on subsequent snapshots.
+        // V82 bug-fix (post-T9 vitest red, 2026-05-17) — handle both raw number
+        // and Firestore Timestamp `{toMillis()}` shape. Mirrors the cursor
+        // module's isMessageUnread fix; real prod messages arrive as Timestamp.
         const latest = docs.length > 0 ? docs[docs.length - 1] : null;
-        const seedMs = (latest && typeof latest.createdAt === 'number')
-          ? latest.createdAt
-          : Date.now();
+        let seedMs = Date.now();
+        if (latest) {
+          const rawCa = latest.createdAt;
+          if (typeof rawCa === 'number' && Number.isFinite(rawCa)) {
+            seedMs = rawCa;
+          } else if (rawCa && typeof rawCa.toMillis === 'function') {
+            try { seedMs = rawCa.toMillis(); } catch { /* swallow → keep Date.now() */ }
+          }
+        }
         initCursorIfMissing(selectedBranchId, seedMs);
         const liveCursor = getCursor(selectedBranchId);
         setCursorState(liveCursor);
@@ -323,7 +332,14 @@ export function useStaffChat() {
     if (!messages || messages.length === 0) return;
     const latest = messages[messages.length - 1];
     if (!latest) return;
-    const latestMs = (typeof latest.createdAt === 'number') ? latest.createdAt : Date.now();
+    // V82 bug-fix (post-T9 vitest red, 2026-05-17) — dual-shape support; real
+    // prod messages arrive as Firestore Timestamp {toMillis()}, not raw number.
+    let latestMs = Date.now();
+    if (typeof latest.createdAt === 'number' && Number.isFinite(latest.createdAt)) {
+      latestMs = latest.createdAt;
+    } else if (latest.createdAt && typeof latest.createdAt.toMillis === 'function') {
+      try { latestMs = latest.createdAt.toMillis(); } catch { /* keep Date.now() */ }
+    }
     setCursor(selectedBranchId, {
       lastReadId: String(latest.id || ''),
       lastReadCreatedAtMs: latestMs,

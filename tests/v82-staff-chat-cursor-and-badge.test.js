@@ -90,6 +90,17 @@ describe('AV76.A — staffChatReadCursor module unit', () => {
     const cursor = { lastReadCreatedAtMs: 500, lastReadId: '' };
     expect(isMessageUnread({ createdAt: 600, deviceId: 'me' }, cursor, 'me')).toBe(false);
   });
+  it('A.7-bis isMessageUnread accepts Firestore Timestamp {toMillis()} shape (real-prod contract)', () => {
+    // V82 bug-fix lock (post-T9 vitest red): real prod messages from Firestore
+    // SDK arrive as Timestamp instances, not raw numbers. Pre-fix the function
+    // over-narrowed to typeof === number → silently returned false for ALL
+    // real prod data → cursor never detected unread → force-open/sound/auto-
+    // expand never fired in real prod. Lock dual-shape support permanently.
+    const cursor = { lastReadCreatedAtMs: 1000, lastReadId: '' };
+    expect(isMessageUnread({ createdAt: { toMillis: () => 2000 }, deviceId: 'other' }, cursor, 'me')).toBe(true);
+    expect(isMessageUnread({ createdAt: { toMillis: () => 500 }, deviceId: 'other' }, cursor, 'me')).toBe(false);
+    expect(isMessageUnread({ createdAt: { toMillis: () => { throw new Error('bad'); } }, deviceId: 'other' }, cursor, 'me')).toBe(false);
+  });
   it('A.8 initCursorIfMissing seeds with latest createdAt when absent; idempotent', () => {
     const c1 = initCursorIfMissing('BR-X', 999);
     expect(c1.lastReadCreatedAtMs).toBe(999);

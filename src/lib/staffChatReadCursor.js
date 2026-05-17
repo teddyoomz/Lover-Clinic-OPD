@@ -228,7 +228,22 @@ export function isMessageUnread(message, cursor, selfDeviceId) {
   if (!message || typeof message !== 'object') return false;
   const cursorMs = cursor.lastReadCreatedAtMs;
   if (typeof cursorMs !== 'number' || !Number.isFinite(cursorMs)) return false;
-  const msgMs = message.createdAt;
+  // V82 bug-fix (post-T9 vitest red, 2026-05-17) — accept either raw number OR
+  // Firestore Timestamp object shape `{toMillis()}`. Real production messages
+  // from Firestore SDK arrive as Timestamp instances, NOT numbers. Pre-fix
+  // this function returned false for every real prod message → cursor never
+  // detected unread → force-open + sound + auto-expand never fired. The spec
+  // (section "Read Cursor Module") explicitly required dual-shape support;
+  // initial impl lost it via over-narrowing.
+  const raw = message.createdAt;
+  let msgMs;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    msgMs = raw;
+  } else if (raw && typeof raw.toMillis === 'function') {
+    try { msgMs = raw.toMillis(); } catch { msgMs = NaN; }
+  } else {
+    msgMs = NaN;
+  }
   if (typeof msgMs !== 'number' || !Number.isFinite(msgMs)) return false;
   if (typeof selfDeviceId === 'string'
     && selfDeviceId.length > 0

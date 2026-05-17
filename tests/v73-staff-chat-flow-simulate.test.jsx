@@ -24,10 +24,21 @@ describe('V73.F1 Rule I — full base flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // V82 fix-up — pre-seed cursor at 0 so incoming msg with Date.now() createdAt
+    // is unambiguously > cursor → counts as unread. V82 default first-mount cursor
+    // = latest snapshot createdAt → silences single-msg test scenarios (intentional
+    // for real backlog; tests need explicit "has-used-before" state).
+    localStorage.setItem('staffChat:cursor:BR-T', JSON.stringify({
+      lastReadId: '', lastReadCreatedAtMs: 0, updatedAt: 0,
+    }));
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   });
 
-  it('F1.1 mount → listener subscribes → incoming msg → unread badge increments when minimized', async () => {
+  it('F1.1 mount → listener subscribes → incoming msg → widget auto-expands (V82 force-open)', async () => {
+    // V82 fix-up — pre-V82 contract was "unread badge increments while minimized".
+    // V82 force-open spec says any truly-new msg auto-expands the panel; the bubble
+    // is replaced by panel so a "bubble unread badge" no longer makes sense for new
+    // arrivals. Assert the V82 contract: panel renders (auto-expand fired).
     let onChange;
     listenToStaffChatMessages.mockImplementation((opts, onC) => { onChange = onC; return () => {}; });
     render(<StaffChatWidget user={{ uid: 'U1' }} needsPublicAuth={false} />);
@@ -35,7 +46,7 @@ describe('V73.F1 Rule I — full base flow', () => {
     expect(listenToStaffChatMessages).toHaveBeenCalled();
 
     act(() => onChange([{ id: 'CHAT-1', branchId: 'BR-T', displayName: 'ดร.วี', text: 'hi', deviceId: 'other', createdAt: { toMillis: () => Date.now() } }]));
-    await waitFor(() => expect(screen.getByTestId('staff-chat-bubble-unread')).toHaveTextContent('1'));
+    await waitFor(() => expect(screen.getByTestId('staff-chat-panel')).toBeInTheDocument());
   });
 });
 
@@ -43,6 +54,10 @@ describe('V73.F2 Rule I — mention triggers auto-expand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // V82 fix-up — pre-seed cursor (same reason as F1.1)
+    localStorage.setItem('staffChat:cursor:BR-T', JSON.stringify({
+      lastReadId: '', lastReadCreatedAtMs: 0, updatedAt: 0,
+    }));
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   });
 
