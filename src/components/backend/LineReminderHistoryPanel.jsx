@@ -215,10 +215,10 @@ export function LineReminderHistoryPanel({ branchId }) {
       )}
 
       {detail && (
+        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           data-testid="history-detail-modal"
-          onClick={() => setDetail(null)}
         >
           <div
             className="rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] p-4 max-w-2xl w-full max-h-[80vh] overflow-auto"

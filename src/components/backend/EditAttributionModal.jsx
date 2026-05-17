@@ -223,9 +223,9 @@ export function EditTreatmentBranchModal({ treatment, onClose, onSaved }) {
     // <div> with raw select + buttons; now matches project canonical modal
     // pattern (fixed overlay, centered card, header/body/footer, accent
     // styling consistent with other backend modals).
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       data-testid="edit-treatment-branch-modal-overlay"
     >
       <div

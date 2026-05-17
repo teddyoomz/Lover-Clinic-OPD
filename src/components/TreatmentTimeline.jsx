@@ -329,7 +329,8 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
 
     {/* ── Cancel Treatment Modal ── */}
     {cancelModalOpen && (
-      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" onClick={() => setCancelModalOpen(false)}>
+      // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50">
         <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-[#111] border border-[#222]' : 'bg-white'}`}
           onClick={e => e.stopPropagation()}>
           <div className={`px-5 py-4 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>

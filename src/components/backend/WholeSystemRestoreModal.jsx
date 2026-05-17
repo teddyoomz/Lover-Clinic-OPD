@@ -67,8 +67,8 @@ export default function WholeSystemRestoreModal({ open, onClose, backups = [], o
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-      onClick={() => stage !== 'running' && onClose?.()}>
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
       <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">

@@ -849,7 +849,8 @@ export default function ChatPanel({ db, appId, user, clinicSettings }) {
 
       {/* History detail — read-only message view */}
       {historyDetail && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setHistoryDetail(null)}>
+        // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--bd)] shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center gap-3 p-3 border-b border-[var(--bd)]">

@@ -145,6 +145,7 @@ export default function LinkLineInstructionsModal({ customer, onClose, onActionS
     };
     const l = labels[confirmAction];
     return (
+      /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
       <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" data-testid="line-link-confirm-dialog">
         <div className="bg-[var(--bg-base)] rounded-xl shadow-2xl w-full max-w-sm p-4">
           <h4 className="text-base font-bold text-[var(--tx-heading)] mb-2">{l.title}</h4>

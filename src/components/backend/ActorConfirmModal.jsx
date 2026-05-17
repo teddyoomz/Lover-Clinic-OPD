@@ -94,13 +94,13 @@ export default function ActorConfirmModal({
     onCancel?.();
   };
 
+  // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
     <div
       className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60"
       role="dialog"
       aria-modal="true"
       data-testid={testId}
-      onClick={handleCancel}
       onKeyDown={(e) => { if (e.key === 'Escape') handleCancel(); }}
     >
       <div

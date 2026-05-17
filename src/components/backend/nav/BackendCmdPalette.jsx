@@ -46,9 +46,9 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
   if (!open) return null;
 
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div
       className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
-      onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}
     >
       <Command
         label="เมนูค้นหา"

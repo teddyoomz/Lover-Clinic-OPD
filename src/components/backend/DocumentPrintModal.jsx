@@ -543,8 +543,9 @@ export default function DocumentPrintModal({
   if (!open) return null;
 
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={onClose} data-testid="document-print-modal">
+      data-testid="document-print-modal">
       <div className="w-full max-w-4xl mx-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}>
         {/* Header */}

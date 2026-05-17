@@ -619,8 +619,9 @@ function DetailModal({ m, isDark, onClose }) {
   const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-[var(--tx-muted)] mb-1 block';
   const grad = cardGradient(m.colorName || m.cardTypeName);
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true"
-      onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -699,8 +700,9 @@ function CancelModal({ m, isDark, inputCls, labelCls, onClose, onDone }) {
   };
 
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
-      onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -769,8 +771,9 @@ function RenewModal({ m, isDark, inputCls, labelCls, onClose, onDone }) {
   };
 
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
-      onClick={onClose} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
         onClick={e => e.stopPropagation()}>
         <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>

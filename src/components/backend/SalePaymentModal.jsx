@@ -60,8 +60,8 @@ export default function SalePaymentModal({ sale, onClose, onSaved }) {
   const saleLabel = s.saleId || s.id || '—';
 
   const content = (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-auto"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       data-testid="sale-payment-overlay">
       <div className="w-full max-w-md mt-12 rounded-xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl"
         data-testid="sale-payment-modal">

@@ -105,9 +105,9 @@ export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
   };
 
   return (
+    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       data-testid="recall-line-template-modal"
     >
       <div

@@ -96,8 +96,9 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
   // of truth) instead of per-prop. Teal accent kept as branded constant.
   const cardCls = 'rounded-lg border overflow-hidden transition-all hover:scale-[1.02] border-[var(--bd-strong)] bg-[var(--bg-card)] hover:border-teal-500/50';
 
+  // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
-    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60">
       <div className="w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col bg-[var(--bg-elevated)] border border-[var(--bd)]"
         onClick={e => e.stopPropagation()}>
         {/* Header */}

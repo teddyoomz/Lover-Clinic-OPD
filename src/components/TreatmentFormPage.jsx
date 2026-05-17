@@ -3702,7 +3702,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
           {/* Lab Modal */}
           {labModalOpen && (
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-lab" onClick={() => setLabModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setLabModalOpen(false); }}>
+            // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-lab" onKeyDown={e => { if (e.key === 'Escape') setLabModalOpen(false); }}>
               <div className={`w-full max-w-md rounded-2xl p-5 mx-4 ${isDark ? 'bg-[#111] border border-[#333]' : 'bg-white'}`} onClick={e => e.stopPropagation()}>
                 <h4 id="modal-title-lab" className="text-sm font-bold text-cyan-500 mb-4">{editingLabIndex >= 0 ? 'แก้ไข Lab' : 'เพิ่ม Lab'}</h4>
                 {labModalLoading ? <div className="text-center py-6"><Loader2 size={20} className="animate-spin mx-auto text-gray-500" /></div> : (
@@ -3941,7 +3942,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* เพิ่มยากลับบ้าน modal — matching ProClinic */}
             {medModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med" onClick={() => setMedModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
+              // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med" onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
                 <div className={`w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -4056,7 +4058,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Medication group modal — full overlay matching ProClinic */}
             {medGroupModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-group" onClick={() => setMedGroupModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setMedGroupModalOpen(false); }}>
+              // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-group" onKeyDown={e => { if (e.key === 'Escape') setMedGroupModalOpen(false); }}>
                 <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
@@ -4533,7 +4536,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Buy modal — ซื้อโปรโมชัน / คอร์ส / สินค้าหน้าร้าน */}
             {buyModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-treat-buy" onClick={() => setBuyModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
+              // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-treat-buy" onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
                 <div className={`w-full max-w-5xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
@@ -4710,7 +4714,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* เพิ่มสินค้าสิ้นเปลือง modal — matching ProClinic */}
             {consModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons" onClick={() => setConsModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setConsModalOpen(false); }}>
+              // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons" onKeyDown={e => { if (e.key === 'Escape') setConsModalOpen(false); }}>
                 <div className={`w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   <div className={`px-5 py-3 border-b ${isDark ? 'border-[#222]' : 'border-gray-200'}`}>
@@ -4764,7 +4769,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
             {/* Consumable group modal — full overlay matching ProClinic */}
             {consGroupModalOpen && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-group" onClick={() => setConsGroupModalOpen(false)} onKeyDown={e => { if (e.key === 'Escape') setConsGroupModalOpen(false); }}>
+              // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+              <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-cons-group" onKeyDown={e => { if (e.key === 'Escape') setConsGroupModalOpen(false); }}>
                 <div className={`w-full max-w-2xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col ${isDark ? 'bg-[#0e0e0e] border border-[#222]' : 'bg-white'}`}
                   onClick={e => e.stopPropagation()}>
                   {/* Header */}
@@ -5346,12 +5352,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
         {/* Phase 26.2 Task 5 — Mobile fallback: history modal overlay (<lg) */}
         {selectedHistoryTreatmentId && (
+          // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
           <div
             className="lg:hidden fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-2 sm:p-4"
-            onClick={() => {
-              setSelectedHistoryTreatmentId(null);
-              setHistoryFullDoc(null);
-            }}
           >
             <div
               className={`max-w-2xl w-full rounded-t-xl sm:rounded-xl max-h-[90vh] overflow-y-auto p-4 ${isDark ? 'bg-[var(--bg-card)]' : 'bg-white'}`}
