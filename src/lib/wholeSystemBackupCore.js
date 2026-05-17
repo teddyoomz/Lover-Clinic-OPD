@@ -114,14 +114,78 @@ export function resolveStorageScope(filePath) {
   return false;
 }
 
+// V81-fix6 (2026-05-17 EOD+2 LATE+1): customer-only scope for the new dedicated
+// customer single-file backup. Per user directive "ปุ่ม Backup ลูกค้าที่กดทีเดียว
+// Backup ทุกคน แล้ว restore กลับได้". Reuses V81 infrastructure with collection
+// scope filter — backup writes to backups/customer-only/ instead of backups/
+// whole-system/.
+//
+// Customer-only scope includes:
+//   universal:     be_customers + (customer-attached: link tokens / link requests / chat_*)
+//   branchScoped:  collections that reference customerId (transactions + deposits)
+//   subcollections: ALL customer subcollections (wallets/memberships/points/.../courseChanges)
+//   storage:        customers/* paths ONLY
+//   Auth:           NEVER touched (Auth is system-wide; customer-restore must not lock out staff)
+export const CUSTOMER_ONLY_UNIVERSAL = Object.freeze([
+  'be_customers',
+  'be_customer_link_tokens',
+  'be_link_requests',
+  'chat_conversations',
+  'chat_history',
+]);
+export const CUSTOMER_ONLY_BRANCH_SCOPED = Object.freeze([
+  'be_treatments',
+  'be_sales',
+  'be_appointments',
+  'be_quotations',
+  'be_vendor_sales',
+  'be_online_sales',
+  'be_sale_insurance_claims',
+]);
+export const CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES = Object.freeze([
+  'customers/',
+]);
+
 /**
  * resolveCollectionScope — returns scope object for backup enumeration.
+ * @param {{scope?: 'full'|'customer-only'}} opts
  */
-export function resolveCollectionScope() {
+export function resolveCollectionScope(opts = {}) {
+  const scope = opts.scope || 'full';
+  if (scope === 'customer-only') {
+    return {
+      scope: 'customer-only',
+      universal: CUSTOMER_ONLY_UNIVERSAL.slice(),
+      branchScoped: CUSTOMER_ONLY_BRANCH_SCOPED.slice(),
+      storageIncludePrefixes: CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES.slice(),
+      includeAuth: false, // Auth NEVER touched on customer-only path
+    };
+  }
   return {
+    scope: 'full',
     universal: UNIVERSAL_COLLECTIONS.slice(),
     branchScoped: BRANCH_SCOPED_COLLECTIONS.slice(),
+    storageIncludePrefixes: STORAGE_INCLUDE_PREFIXES.slice(),
+    includeAuth: true,
   };
+}
+
+/**
+ * resolveStorageScopeForBackup — scope-aware version of resolveStorageScope.
+ * V81-fix6: customer-only backup uses CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES.
+ */
+export function resolveStorageScopeForBackup(filePath, opts = {}) {
+  if (typeof filePath !== 'string' || !filePath) return false;
+  for (const ex of STORAGE_EXCLUDE_PREFIXES) {
+    if (filePath.startsWith(ex)) return false;
+  }
+  const prefixes = (opts.scope === 'customer-only')
+    ? CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES
+    : STORAGE_INCLUDE_PREFIXES;
+  for (const inc of prefixes) {
+    if (filePath.startsWith(inc)) return true;
+  }
+  return false;
 }
 
 // ─── Task 2 — manifest builder + AV62 hash sealing + validator ────────────

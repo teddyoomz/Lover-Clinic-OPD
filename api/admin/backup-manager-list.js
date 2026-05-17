@@ -33,8 +33,23 @@ function getAdminBucket() {
   return cachedBucket;
 }
 
+// V81-fix4: whole-system backups have their own dedicated list/download/delete
+// endpoints + UI section. V81-fix4 also deprecated per-customer backups
+// (UI removed; cleanup script purged storage). EXCLUDE_PREFIXES filters them
+// out of the unified backup-manager table so user can't click Delete on a
+// whole-system SUB-FILE (which hits AV19 grace check and fails with cryptic
+// FAILED_PRECONDITION error per Bug 3a 2026-05-17 EOD+2 LATE+1).
+const EXCLUDE_PREFIXES = [
+  'backups/whole-system/',         // V81 — separate UI section
+  'backups/whole-fleet-customers/', // V77 deprecated — purged by V81-fix4 script
+  'backups/customers/',             // V74 deprecated — purged by V81-fix4 script
+];
+
+function isExcluded(filePath) {
+  return EXCLUDE_PREFIXES.some(p => filePath.startsWith(p));
+}
+
 function classifyType(filePath) {
-  if (filePath.startsWith('backups/customers/')) return 'customer';
   if (filePath.startsWith('backups/central-stock/')) return 'central-stock';
   if (filePath.startsWith('backups/')) return 'branch';
   return 'unknown';
@@ -77,6 +92,9 @@ export default async function handler(req, res) {
 
     // Build metadata records (in parallel; download only meta block of each)
     const items = await Promise.all(jsonFiles.map(async (file) => {
+      // V81-fix4 Bug 3a: skip whole-system + deprecated per-customer files
+      // (whole-system has its own UI section; per-customer was deprecated + purged)
+      if (isExcluded(file.name)) return null;
       const type = classifyType(file.name);
       if (!types.includes(type)) return null;
       const scopeId = parseScopeId(type, file.name);

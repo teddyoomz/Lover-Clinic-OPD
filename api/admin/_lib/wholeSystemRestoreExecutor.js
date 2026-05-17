@@ -10,6 +10,9 @@ import {
   UNIVERSAL_COLLECTIONS,
   BRANCH_SCOPED_COLLECTIONS,
   CUSTOMER_SUBCOLLECTIONS,
+  CUSTOMER_ONLY_UNIVERSAL,        // V81-fix6
+  CUSTOMER_ONLY_BRANCH_SCOPED,    // V81-fix6
+  CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES, // V81-fix6
   decodeFirestoreData, // V81-fix1: re-hydrate Timestamp/GeoPoint/Bytes from markers
 } from '../../../src/lib/wholeSystemBackupCore.js';
 
@@ -20,16 +23,23 @@ const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const BATCH_SIZE = 450; // Firestore writeBatch limit is 500; 450 = safe headroom
 
-async function readManifest(storage, backupRef) {
-  const [buf] = await storage.file(`backups/whole-system/${backupRef}/manifest.json`).download();
+// V81-fix6: scope-aware backup path
+function backupPathPrefix(scope) {
+  return scope === 'customer-only' ? 'backups/customer-only' : 'backups/whole-system';
+}
+
+async function readManifest(storage, backupRef, scope = 'full') {
+  const [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/manifest.json`).download();
   return JSON.parse(buf.toString('utf8'));
 }
 
-async function assertTargetEmpty(db) {
-  // Scan ALL non-audit collections; refuse if any has docs.
-  // Excludes be_admin_audit (restore writes audit doc; that's expected).
-  const scope = [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
-  for (const col of scope) {
+async function assertTargetEmpty(db, scope = 'full') {
+  // Scan scoped non-audit collections; refuse if any has docs.
+  // V81-fix6: customer-only restore checks ONLY customer-scoped collections.
+  const cols = scope === 'customer-only'
+    ? [...CUSTOMER_ONLY_UNIVERSAL, ...CUSTOMER_ONLY_BRANCH_SCOPED]
+    : [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
+  for (const col of cols) {
     if (col === 'be_admin_audit') continue;
     const snap = await db.collection(`${PREFIX}/${col}`).limit(1).get();
     if (!snap.empty) {
@@ -41,12 +51,12 @@ async function assertTargetEmpty(db) {
   }
 }
 
-async function restoreCollections(db, storage, manifest, backupRef) {
+async function restoreCollections(db, storage, manifest, backupRef, scope = 'full') {
   let restoredDocs = 0;
   const failedDocs = [];
   for (const c of manifest.collections) {
     try {
-      const [buf] = await storage.file(`backups/whole-system/${backupRef}/${c.path}`).download();
+      const [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${c.path}`).download();
       const rawDocs = JSON.parse(buf.toString('utf8'));
       // V81-fix1: re-hydrate Firestore-native types (Timestamp/GeoPoint/Bytes) from markers
       // BEFORE batch.set. Without this, Timestamp fields written as plain Maps.
@@ -70,11 +80,11 @@ async function restoreCollections(db, storage, manifest, backupRef) {
   return { restoredDocs, failedDocs };
 }
 
-async function restoreAuthUsers(auth, storage, manifest, backupRef, callerUid) {
+async function restoreAuthUsers(auth, storage, manifest, backupRef, callerUid, scope = 'full') {
   let restoredAuth = 0;
   const failedAuth = [];
   try {
-    const [buf] = await storage.file(`backups/whole-system/${backupRef}/${manifest.authUsers.path}`).download();
+    const [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${manifest.authUsers.path}`).download();
     const users = JSON.parse(buf.toString('utf8'));
     // V31 self-skip: don't import caller's own uid (avoids "uid already exists" conflict
     // since the caller is currently logged in with that uid)
@@ -108,12 +118,12 @@ async function restoreAuthUsers(auth, storage, manifest, backupRef, callerUid) {
   return { restoredAuth, failedAuth };
 }
 
-async function restoreStorage(storage, manifest, backupRef) {
+async function restoreStorage(storage, manifest, backupRef, scope = 'full') {
   let restoredStorage = 0;
   const failedStorage = [];
   for (const s of (manifest.storageObjects || [])) {
     try {
-      const srcPath = `backups/whole-system/${backupRef}/${s.path}`;
+      const srcPath = `${backupPathPrefix(scope)}/${backupRef}/${s.path}`;
       await storage.file(srcPath).copy(storage.file(s.originalGsPath));
       restoredStorage += 1;
     } catch (e) {
@@ -137,10 +147,15 @@ async function restoreStorage(storage, manifest, backupRef) {
  * for cross-project clone (advanced; loses passwords because Rule C2 strips
  * passwordHash from backup files anyway).
  */
-async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } = {}) {
+async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false, scope = 'full' } = {}) {
+  // V81-fix6: scope-aware wipe. Customer-only restore wipes ONLY scoped collections;
+  // other collections (staff, products, courses, branches, etc.) untouched.
+  const cols = scope === 'customer-only'
+    ? [...CUSTOMER_ONLY_UNIVERSAL, ...CUSTOMER_ONLY_BRANCH_SCOPED]
+    : [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
+
   // Wipe Firestore collections (V74 cascade pattern)
-  const scope = [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
-  for (const col of scope) {
+  for (const col of cols) {
     if (col === 'be_admin_audit') continue; // audit immutable per Rule D
     let snap;
     do {
@@ -152,7 +167,8 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } =
     } while (snap.size === BATCH_SIZE);
   }
 
-  // Wipe customer subcollections (V74 T4 cascade)
+  // Wipe customer subcollections (V74 T4 cascade) — applies to BOTH scopes
+  // since customer-only also includes per-customer subcolls
   const custSnap = await db.collection(`${PREFIX}/be_customers`).get();
   for (const c of custSnap.docs) {
     for (const sub of CUSTOMER_SUBCOLLECTIONS) {
@@ -164,7 +180,7 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } =
     }
   }
 
-  // Wipe chat_conversations messages subcoll
+  // Wipe chat_conversations messages subcoll (applies to both scopes)
   const convSnap = await db.collection(`${PREFIX}/chat_conversations`).get();
   for (const c of convSnap.docs) {
     const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${c.id}/messages`).get();
@@ -175,8 +191,8 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } =
   }
 
   // V81-fix4: Auth wipe is OPT-IN. Default = preserve Auth (no login loss).
-  if (wipeAuth) {
-    // Wipe Auth users (V31 self-skip — caller stays logged in)
+  // V81-fix6: customer-only scope NEVER wipes Auth regardless of wipeAuth.
+  if (wipeAuth && scope !== 'customer-only') {
     let nextPageToken;
     do {
       const page = await auth.listUsers(1000, nextPageToken);
@@ -190,11 +206,15 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false } =
     } while (nextPageToken);
   }
 
-  // Wipe Storage objects (CRITICAL: skip backups/ prefix to preserve all backups
-  // incl. the pre-restore safety net just created)
+  // Wipe Storage objects (V81-fix6: scope-aware filter)
+  // Whole-system: wipe everything except backups/
+  // Customer-only: wipe ONLY customers/ paths
   const [allFiles] = await storage.getFiles();
   for (const f of allFiles) {
     if (f.name.startsWith('backups/')) continue;
+    if (scope === 'customer-only') {
+      if (!CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES.some(p => f.name.startsWith(p))) continue;
+    }
     try {
       await f.delete();
     } catch { /* tolerant */ }
@@ -219,6 +239,10 @@ export async function runWholeSystemRestore({
   // true (advanced/cross-project) = wipe Auth + restore from backup file
   //   (Rule C2 strips passwords → all users must reset; AV66/V81-fix2 ack-gate still applies)
   replaceAuthFromBackup = false,
+  // V81-fix6 (2026-05-17 EOD+2 LATE+1): scope filter — 'full' (whole-system,
+  // default backward-compat) OR 'customer-only' (be_customers + transactions +
+  // subcollections + customers/* storage; Auth always preserved).
+  scope = 'full',
 }) {
   const start = Date.now();
 
@@ -236,7 +260,7 @@ export async function runWholeSystemRestore({
     : !!sendPasswordResetEmails;
 
   // 1. AV62: read + validate manifest (tamper detection via recomputed hash)
-  const manifest = await readManifest(storage, backupRef);
+  const manifest = await readManifest(storage, backupRef, scope);
   const v = validateWholeSystemManifest(manifest);
   if (!v.valid) {
     const err = new Error(`Manifest invalid: ${v.reason}`);
@@ -247,26 +271,26 @@ export async function runWholeSystemRestore({
   // 2. Mode-specific pre-flight
   let autoBackupRef = null;
   if (mode === 'fresh') {
-    await assertTargetEmpty(db);
+    await assertTargetEmpty(db, scope);
   } else if (mode === 'replace') {
-    // AV19 elevation: auto-pre-backup MANDATORY before wipe.
+    // AV19 elevation: auto-pre-backup MANDATORY before wipe (same scope as restore).
     const { runWholeSystemBackup } = await import('./wholeSystemBackupExecutor.js');
     const pre = await runWholeSystemBackup({
       db, storage, auth,
       type: 'pre-restore',
       createdBy: `pre-restore-for-${backupRef}`,
       runCleanup: false,
+      scope, // V81-fix6: pre-backup matches restore scope
     });
     autoBackupRef = pre.name;
-    // Verify pre-backup folder exists BEFORE wipe (defense against silent fail)
-    const [exists] = await storage.file(`backups/whole-system/${autoBackupRef}/manifest.json`).exists();
+    const [exists] = await storage.file(`${backupPathPrefix(scope)}/${autoBackupRef}/manifest.json`).exists();
     if (!exists) {
       const err = new Error('Auto-pre-backup not verifiable');
       err.code = 'AUTO_PRE_BACKUP_FAILED';
       throw err;
     }
-    // V81-fix4: wipeAuth follows replaceAuthFromBackup flag
-    await wipeFirebase(db, storage, auth, callerUid, { wipeAuth: replaceAuthFromBackup });
+    // V81-fix4/fix6: wipeAuth follows replaceAuthFromBackup flag + scope
+    await wipeFirebase(db, storage, auth, callerUid, { wipeAuth: replaceAuthFromBackup, scope });
   } else {
     const err = new Error(`Unknown mode: ${mode}`);
     err.code = 'INVALID_MODE';
@@ -274,13 +298,13 @@ export async function runWholeSystemRestore({
   }
 
   // 3. Restore phases
-  const colResult = await restoreCollections(db, storage, manifest, backupRef);
-  // V81-fix4: Auth restore only when caller opted into Auth wipe+restore.
-  // Default = preserve current Auth state (no import, no overwrite, no churn).
-  const authResult = (mode === 'replace' && !replaceAuthFromBackup)
-    ? { restoredAuth: 0, failedAuth: [], skipped: true, skippedReason: 'V81-fix4: Auth preserved (replaceAuthFromBackup=false)' }
-    : await restoreAuthUsers(auth, storage, manifest, backupRef, callerUid);
-  const storResult = await restoreStorage(storage, manifest, backupRef);
+  const colResult = await restoreCollections(db, storage, manifest, backupRef, scope);
+  // V81-fix4/fix6: Auth restore only on full-scope replace mode with explicit opt-in.
+  // Customer-only NEVER touches Auth. Whole-system default = preserve.
+  const authResult = (scope === 'customer-only' || (mode === 'replace' && !replaceAuthFromBackup))
+    ? { restoredAuth: 0, failedAuth: [], skipped: true, skippedReason: scope === 'customer-only' ? 'V81-fix6: customer-only never touches Auth' : 'V81-fix4: Auth preserved (replaceAuthFromBackup=false)' }
+    : await restoreAuthUsers(auth, storage, manifest, backupRef, callerUid, scope);
+  const storResult = await restoreStorage(storage, manifest, backupRef, scope);
 
   // 4. Send password-reset emails ONLY when Auth was wiped + restored (legacy path)
   let passwordResetEmailsSent = 0;

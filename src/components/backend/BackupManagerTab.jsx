@@ -60,6 +60,11 @@ export default function BackupManagerTab() {
   const [wsLoading, setWsLoading] = useState(false);
   const [wsBackupModalOpen, setWsBackupModalOpen] = useState(false);
   const [wsRestoreModalOpen, setWsRestoreModalOpen] = useState(false);
+  // V81-fix6 (2026-05-17 EOD+2 LATE+1) — customer-only single-file backup state
+  const [coBackups, setCoBackups] = useState([]);
+  const [coLoading, setCoLoading] = useState(false);
+  const [coBusy, setCoBusy] = useState(false);
+  const [coRestoreConfirm, setCoRestoreConfirm] = useState(null); // {name} or null
 
   const loadWsBackups = useCallback(async () => {
     setWsLoading(true);
@@ -77,7 +82,24 @@ export default function BackupManagerTab() {
     }
   }, []);
 
-  useEffect(() => { loadWsBackups(); }, [loadWsBackups]);
+  // V81-fix6: customer-only list loader
+  const loadCoBackups = useCallback(async () => {
+    setCoLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/customer-only-backups-list', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      setCoBackups(Array.isArray(json.backups) ? json.backups : []);
+    } catch (e) {
+      setCoBackups([]);
+    } finally {
+      setCoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadWsBackups(); loadCoBackups(); }, [loadWsBackups, loadCoBackups]);
 
   async function downloadWs(name) {
     try {
@@ -95,18 +117,103 @@ export default function BackupManagerTab() {
     }
   }
 
+  // V81-fix6 UX: optimistic delete — remove from state immediately, rollback on error.
+  // No full reload = no flicker; UI feels instant.
   async function deleteWs(names) {
     if (!window.confirm(`ลบ ${names.length} backup(s)?`)) return;
+    const before = wsBackups;
+    setWsBackups(prev => prev.filter(b => !names.includes(b.name)));
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch('/api/admin/whole-system-backup-delete', {
+      const res = await fetch('/api/admin/whole-system-backup-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ names }),
       });
-      loadWsBackups();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
+      setWsBackups(before); // rollback
       alert(`Delete error: ${e.message}`);
+    }
+  }
+
+  // V81-fix6: customer-only download (mirror of whole-system)
+  async function downloadCo(name) {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/customer-only-backup-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ backupRef: name }),
+      });
+      const json = await res.json();
+      if (json.downloadUrl) window.open(json.downloadUrl, '_blank');
+      else alert(`Download failed: ${json.error || 'unknown'}`);
+    } catch (e) {
+      alert(`Download error: ${e.message}`);
+    }
+  }
+
+  // V81-fix6: customer-only optimistic delete
+  async function deleteCo(names) {
+    if (!window.confirm(`ลบ customer backup ${names.length} ไฟล์?`)) return;
+    const before = coBackups;
+    setCoBackups(prev => prev.filter(b => !names.includes(b.name)));
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/customer-only-backup-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ names }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      setCoBackups(before);
+      alert(`Delete error: ${e.message}`);
+    }
+  }
+
+  // V81-fix6: customer-only one-click backup (no modal — single button)
+  async function backupCoNow() {
+    if (coBusy) return;
+    if (!window.confirm('สำรองข้อมูลลูกค้าทั้งหมด (ALL customers + transactions + storage) → ไฟล์เดียว ?')) return;
+    setCoBusy(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/customer-only-backup-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`);
+      await loadCoBackups();
+    } catch (e) {
+      alert(`Backup error: ${e.message}`);
+    } finally {
+      setCoBusy(false);
+    }
+  }
+
+  // V81-fix6: customer-only restore (Replace mode with confirm)
+  async function restoreCoConfirmed(name) {
+    setCoBusy(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/customer-only-restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ backupRef: name, mode: 'replace', confirmName: name }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`);
+      alert(`Restore สำเร็จ ✓ Docs: ${json.stats?.restoredDocs || 0} | Auto-pre-backup: ${json.autoBackupRef || '-'}`);
+      await loadCoBackups();
+      setCoRestoreConfirm(null);
+    } catch (e) {
+      alert(`Restore error: ${e.message}`);
+    } finally {
+      setCoBusy(false);
     }
   }
 
@@ -286,6 +393,96 @@ export default function BackupManagerTab() {
           backups={wsBackups}
           onComplete={() => loadWsBackups()}
         />
+      </section>
+
+      {/* V81-fix6 (2026-05-17 EOD+2 LATE+1) — Customer-Only Single-File Backups.
+          Scoped V81: be_customers + customer subcollections + transactions referencing customer +
+          Storage at customers/* — Auth NEVER touched. Replace mode wipes ONLY customer-scoped
+          collections (staff/products/branches/courses untouched). */}
+      <section className="mb-6 p-4 bg-gray-900/30 border border-emerald-800/40 rounded-xl" data-testid="customer-only-backups-section">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-bold text-emerald-300">👥 Customer-Only Single-File Backups (V81-fix6)</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              สำรองข้อมูลลูกค้าทั้งหมด (be_customers + subcollections + transactions + customer storage) เป็นไฟล์เดียว.
+              Restore Replace = ลบ + ใส่กลับ ENTIRELY for customer data; <strong>Auth + branches + products + courses ไม่ถูกแตะ</strong>.
+            </p>
+          </div>
+          <button
+            onClick={backupCoNow}
+            disabled={coBusy}
+            className="px-3 py-1.5 rounded-lg text-xs bg-emerald-700 hover:bg-emerald-600 text-white font-bold flex items-center gap-1.5 disabled:opacity-40"
+            data-testid="customer-only-backup-trigger"
+            title="สำรองข้อมูลลูกค้าทั้งหมดเป็นไฟล์เดียว"
+          >
+            {coBusy ? <Loader2 size={12} className="animate-spin" /> : '📥'} Backup Now (Customer-Only)
+          </button>
+        </div>
+
+        {coLoading ? (
+          <p className="text-xs text-gray-500">กำลังโหลด...</p>
+        ) : coBackups.length === 0 ? (
+          <p className="text-xs text-gray-500">ยังไม่มี customer-only backup — กด "📥 Backup Now" เพื่อสร้างตัวแรก</p>
+        ) : (
+          <div className="space-y-1.5">
+            {coBackups.map(b => (
+              <div key={b.name} className="flex items-center justify-between p-2.5 bg-gray-900/50 border border-emerald-800/40 rounded-lg text-xs">
+                <div className="flex-1 min-w-0">
+                  <code className="font-bold text-emerald-300">{b.name}</code>
+                  {b.hashOk === false && <span className="ml-2 text-red-400">⚠ HASH BAD</span>}
+                  {b.error && <span className="ml-2 text-red-400">⚠ {b.error}</span>}
+                  <div className="text-gray-500 mt-0.5">
+                    {b.stats?.totalDocCount?.toLocaleString() || 0} docs ·{' '}
+                    {(() => {
+                      const bytes = b.totalBytes ?? 0;
+                      if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+                      if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                      return `${bytes} B`;
+                    })()} · {b.type}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCoRestoreConfirm({ name: b.name })}
+                    disabled={coBusy}
+                    className="px-2 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded text-[10px] disabled:opacity-40"
+                    title="Restore (Replace mode) — ลบ + ใส่กลับ"
+                    data-testid={`customer-only-restore-${b.name}`}
+                  >
+                    🔄 Restore
+                  </button>
+                  <button onClick={() => downloadCo(b.name)} className="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-[10px]" title="Download tar.gz">
+                    Download
+                  </button>
+                  <button onClick={() => deleteCo([b.name])} className="px-2 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-[10px]" title="ลบ backup">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Customer-Only Restore confirm */}
+        {coRestoreConfirm && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="customer-only-restore-confirm">
+            <div className="w-[95vw] max-w-md rounded-xl bg-[var(--bg-card)] border-2 border-amber-700/60 p-6 space-y-3">
+              <h3 className="text-lg font-bold text-amber-300">🔄 Restore Customer Data (Replace mode)?</h3>
+              <div className="text-xs text-gray-400"><code>{coRestoreConfirm.name}</code></div>
+              <div className="text-sm text-gray-200 space-y-2">
+                <p>✓ Auto-pre-backup จะถูกสร้าง (เก็บ 7 วัน — undo ได้)</p>
+                <p>✓ <strong className="text-emerald-300">Auth / branches / staff / products / courses ไม่ถูกแตะ</strong></p>
+                <p>⚠ ข้อมูลลูกค้าปัจจุบัน (391 customers + transactions + storage) จะถูกลบทั้งหมด + แทนที่ด้วย backup</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setCoRestoreConfirm(null)} disabled={coBusy} className="px-4 py-2 rounded text-sm border border-gray-700">ยกเลิก</button>
+                <button onClick={() => restoreCoConfirmed(coRestoreConfirm.name)} disabled={coBusy} className="px-4 py-2 rounded text-sm bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-50" data-testid="customer-only-restore-confirm-btn">
+                  {coBusy ? <Loader2 size={12} className="inline animate-spin" /> : 'Restore ลบ + ใส่กลับ'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Filter chips + search */}

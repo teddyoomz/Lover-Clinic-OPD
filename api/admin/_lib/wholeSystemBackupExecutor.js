@@ -11,7 +11,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import {
   formatBackupName,
   resolveCollectionScope,
-  resolveStorageScope,
+  resolveStorageScopeForBackup, // V81-fix6: scope-aware (full vs customer-only)
   CUSTOMER_SUBCOLLECTIONS,
   shouldCleanupBackup,
   buildWholeSystemManifest,
@@ -22,6 +22,11 @@ import {
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
+
+// V81-fix6: backup storage path prefix per scope
+function backupPathPrefix(scope) {
+  return scope === 'customer-only' ? 'backups/customer-only' : 'backups/whole-system';
+}
 
 async function sha256Stream(readable) {
   return new Promise((resolve, reject) => {
@@ -49,10 +54,11 @@ function sha256Buffer(buf) {
  * @param {boolean} args.runCleanup — true ONLY for cron (auto type); false for manual
  * @returns {Promise<{name, manifestHash, stats, failedCollections, failedStorageObjects}>}
  */
-export async function runWholeSystemBackup({ db, storage, auth, type, createdBy, runCleanup }) {
+export async function runWholeSystemBackup({ db, storage, auth, type, createdBy, runCleanup, scope = 'full' }) {
   const start = Date.now();
   const name = formatBackupName(type, new Date());
-  const baseStoragePath = `backups/whole-system/${name}`;
+  const pathPrefix = backupPathPrefix(scope);
+  const baseStoragePath = `${pathPrefix}/${name}`;
   const failedCollections = [];
   const failedStorageObjects = [];
   const collections = [];
@@ -60,7 +66,7 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
 
   // 1. Cleanup retention (AV64) — only for auto (cron) per spec §5.1
   if (runCleanup) {
-    const [files] = await storage.getFiles({ prefix: 'backups/whole-system/' });
+    const [files] = await storage.getFiles({ prefix: `${pathPrefix}/` });
     const folderTs = new Map();
     for (const f of files) {
       const m = f.name.match(/^backups\/whole-system\/([^/]+)\//);
@@ -76,7 +82,7 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
       const decision = shouldCleanupBackup(folder, ageMs, Date.now());
       if (decision.action === 'delete') {
         try {
-          await storage.deleteFiles({ prefix: `backups/whole-system/${folder}/` });
+          await storage.deleteFiles({ prefix: `${pathPrefix}/${folder}/` });
         } catch (e) {
           // Tolerant — log + continue (don't abort cron on cleanup failure)
           console.warn(`Cleanup failed for ${folder}: ${e.message}`);
@@ -85,9 +91,9 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
     }
   }
 
-  // 2. Export universal collections
-  const scope = resolveCollectionScope();
-  for (const colName of scope.universal) {
+  // 2. Export universal collections (V81-fix6: scope-aware)
+  const colScope = resolveCollectionScope({ scope });
+  for (const colName of colScope.universal) {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
       // V38 spread-order discipline: docId WINS over any stray data.id field
@@ -113,7 +119,7 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   }
 
   // 3. Export branch-scoped collections
-  for (const colName of scope.branchScoped) {
+  for (const colName of colScope.branchScoped) {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
       // V81-fix1 (2026-05-17): encode Firestore-native types (Timestamp/GeoPoint/Bytes)
@@ -198,34 +204,36 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
     failedCollections.push({ name: '__chat_messages_subcoll__', error: e.message });
   }
 
-  // 6. Export Auth users (sanitized via wholeSystemBackupCore.sanitizeAuthUser)
+  // 6. Export Auth users (V81-fix6: skip for customer-only scope — Auth is system-wide)
   let authUsersFileHash = '';
   let authUserCount = 0;
-  try {
-    const allUsers = [];
-    let nextPageToken;
-    do {
-      const page = await auth.listUsers(1000, nextPageToken);
-      for (const u of page.users) {
-        const json = u.toJSON ? u.toJSON() : u;
-        allUsers.push(sanitizeAuthUser(json));
-      }
-      nextPageToken = page.pageToken;
-    } while (nextPageToken);
-    authUserCount = allUsers.length;
-    const json = JSON.stringify(allUsers, null, 2);
-    authUsersFileHash = sha256Buffer(json);
-    await storage.file(`${baseStoragePath}/auth/users.json`).save(json, { contentType: 'application/json' });
-  } catch (e) {
-    failedCollections.push({ name: '__auth_users__', error: e.message });
+  if (colScope.includeAuth) {
+    try {
+      const allUsers = [];
+      let nextPageToken;
+      do {
+        const page = await auth.listUsers(1000, nextPageToken);
+        for (const u of page.users) {
+          const json = u.toJSON ? u.toJSON() : u;
+          allUsers.push(sanitizeAuthUser(json));
+        }
+        nextPageToken = page.pageToken;
+      } while (nextPageToken);
+      authUserCount = allUsers.length;
+      const json = JSON.stringify(allUsers, null, 2);
+      authUsersFileHash = sha256Buffer(json);
+      await storage.file(`${baseStoragePath}/auth/users.json`).save(json, { contentType: 'application/json' });
+    } catch (e) {
+      failedCollections.push({ name: '__auth_users__', error: e.message });
+    }
   }
 
-  // 7. Copy Storage objects (resolveStorageScope = recursion gate + scope filter)
+  // 7. Copy Storage objects (V81-fix6: scope-aware filter)
   let totalStorageBytes = 0;
   try {
     const [allStorageFiles] = await storage.getFiles();
     for (const f of allStorageFiles) {
-      if (!resolveStorageScope(f.name)) continue;
+      if (!resolveStorageScopeForBackup(f.name, { scope })) continue;
       try {
         const destPath = `${baseStoragePath}/storage/${f.name}`;
         await f.copy(storage.file(destPath));
@@ -268,6 +276,9 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
       elapsedSec: Math.round((Date.now() - start) / 1000),
     },
   });
+  // V81-fix6: stamp scope on manifest so restore knows what to wipe
+  manifest.scope = colScope.scope;
+  manifest.backupType = scope === 'customer-only' ? 'customer-only' : 'whole-system';
   manifest.manifestHash = computeWholeSystemManifestHash(manifest);
 
   // 9. Write manifest.json
@@ -275,11 +286,12 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
   await storage.file(`${baseStoragePath}/manifest.json`).save(manifestJson, { contentType: 'application/json' });
 
   // 10. Audit doc
-  const auditId = `whole-system-backup-${name}-${Date.now()}-${randomBytes(4).toString('hex')}`;
+  const auditId = `${scope === 'customer-only' ? 'customer-only' : 'whole-system'}-backup-${name}-${Date.now()}-${randomBytes(4).toString('hex')}`;
   await db.doc(`${PREFIX}/be_admin_audit/${auditId}`).set({
-    op: 'whole-system-backup',
+    op: scope === 'customer-only' ? 'customer-only-backup' : 'whole-system-backup',
     name,
     type,
+    scope: colScope.scope,
     source: createdBy,
     stats: manifest.stats,
     manifestHash: manifest.manifestHash,
@@ -290,6 +302,7 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
 
   return {
     name,
+    scope: colScope.scope,
     manifestHash: manifest.manifestHash,
     stats: manifest.stats,
     failedCollections,

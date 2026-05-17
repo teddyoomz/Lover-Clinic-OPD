@@ -38,6 +38,15 @@
     },
     "api/cron/whole-system-backup-daily.js": {
       "maxDuration": 300
+    },
+    "api/admin/customer-only-backup-export.js": {
+      "maxDuration": 300
+    },
+    "api/admin/customer-only-restore.js": {
+      "maxDuration": 300
+    },
+    "api/admin/customer-only-backup-download.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

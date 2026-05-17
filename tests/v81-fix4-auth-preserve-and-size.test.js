@@ -41,8 +41,9 @@ describe('V81-fix4 AV68 — Whole-System Replace mode preserves Auth by default'
     expect(exec).toMatch(/wipeAuth\s*:\s*replaceAuthFromBackup/);
   });
 
-  it('AV68.3 — Auth wipe is gated by `if (wipeAuth)` (NOT unconditional)', () => {
-    expect(exec).toMatch(/if\s*\(\s*wipeAuth\s*\)/);
+  it('AV68.3 — Auth wipe is gated by wipeAuth flag (NOT unconditional)', () => {
+    // V81-fix6 updated to `if (wipeAuth && scope !== 'customer-only')` — wipeAuth still gating
+    expect(exec).toMatch(/if\s*\(\s*wipeAuth\s*(?:&&|\))/);
   });
 
   it('AV68.4 — Auth restore is skipped when replaceAuthFromBackup=false', () => {
