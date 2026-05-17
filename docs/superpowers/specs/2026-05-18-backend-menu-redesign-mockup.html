@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Variant D — Sakura Light + Red-Black Space Dark · Themed Bloom</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,'Noto Sans Thai',system-ui,sans-serif;
+    background:
+      radial-gradient(circle at 15% -5%, rgba(239,68,68,0.15) 0%, transparent 45%),
+      radial-gradient(circle at 85% 100%, rgba(236,72,153,0.1) 0%, transparent 40%),
+      #0a0a0c;
+    color: #e8eaed; padding: 30px 20px 80px; min-height: 100vh; line-height: 1.55;
+  }
+  .title {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px;
+    background: linear-gradient(135deg,#fb923c,#ef4444,#ec4899);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { color: #9ca3af; font-size: 13px; margin-bottom: 20px; max-width: 1000px; }
+  .pill {
+    display: inline-block; font-size: 9.5px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px;
+    margin-right: 5px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .pill.locked { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .pill.fire { background: linear-gradient(135deg,rgba(239,68,68,0.2),rgba(249,115,22,0.15)); color: #fb923c; }
+  .pill.sakura { background: linear-gradient(135deg,rgba(236,72,153,0.18),rgba(244,114,182,0.12)); color: #f9a8d4; }
+  .section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+    margin: 26px 0 12px;
+    border-left: 3px solid #ef4444; padding-left: 10px; color: #fb923c;
+  }
+  .section-label.sakura { border-color: #ec4899; color: #f9a8d4; }
+  .row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 22px; max-width: 1200px; margin: 0 auto 22px;
+  }
+  @media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
+  .col {
+    background: linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.005));
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 18px; padding: 16px;
+  }
+  .col-title {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 13px; font-weight: 700; color: #f3f4f6;
+  }
+  .frames { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .state-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; padding: 4px 0; }
+  .state-label.fire { color: #fb923c; }
+  .state-label.sakura { color: #f9a8d4; }
+
+  /* ═════════════════════ DARK theme phone ═════════════════════ */
+  .pdark {
+    background: linear-gradient(180deg,#0c0a0c,#16121a);
+    border: 1px solid #2a2024; border-radius: 26px;
+    aspect-ratio: 9 / 19; padding: 9px 7px; overflow: hidden;
+    position: relative; display: flex; flex-direction: column;
+    box-shadow: inset 0 0 0 2px #1a1216,0 6px 22px rgba(0,0,0,0.5);
+  }
+  .pdark .pstatus { height: 13px; display: flex; justify-content: space-between; padding: 0 6px; font-size: 8px; color: #9ca3af; font-weight: 600; margin-bottom: 3px; }
+  .pdark .tb {
+    display: flex; flex-direction: column; gap: 4px; padding: 4px 3px 6px;
+    border-bottom: 1px solid rgba(239,68,68,0.18); flex-shrink: 0;
+    background:
+      radial-gradient(ellipse at 20% 100%, rgba(239,68,68,0.06), transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(249,115,22,0.04), transparent 60%),
+      linear-gradient(180deg, rgba(12,4,6,0.7), rgba(20,8,12,0.5));
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 7px 7px 0 0;
+    box-shadow: 0 1px 0 rgba(239,68,68,0.05);
+  }
+  .pdark .tb-row { display: flex; align-items: center; gap: 3px; }
+  .pdark .tb-logo { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(135deg,#dc2626,#f97316); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(239,68,68,0.35); }
+  .pdark .tb-bread { flex: 1; min-width: 0; padding: 0 3px; }
+  .pdark .tb-bread-section { font-size: 6.5px; color: #fb923c; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+  .pdark .tb-bread-title { font-size: 9px; font-weight: 700; color: #f3f4f6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pdark .tb-btn { height: 24px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: #e5e7eb; font-size: 8.5px; font-weight: 600; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .pdark .tb-btn.icon { padding: 0; width: 24px; justify-content: center; font-size: 10px; }
+  .pdark .tb-btn .ic { font-size: 10px; }
+  .pdark .tb-btn .arrow { font-size: 6.5px; color: #9ca3af; margin-left: 2px; }
+  .pdark .tb-theme { height: 24px; display: flex; padding: 2px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
+  .pdark .tb-theme-seg { padding: 0 6px; border-radius: 6px; display: flex; align-items: center; gap: 2px; font-size: 8.5px; font-weight: 700; color: #9ca3af; }
+  .pdark .tb-theme-seg.active { background: linear-gradient(135deg,#ef4444,#f97316); color: white; box-shadow: 0 2px 8px rgba(239,68,68,0.4); }
+  .pdark .tb-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg,#14b8a6,#06b6d4); color: white; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 2px 8px rgba(20,184,166,0.35); position: relative; }
+  .pdark .tb-avatar .live { position: absolute; bottom: -1px; right: -1px; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; border: 1.5px solid #0c0a0c; }
+  .pdark .pcontent { flex: 1; position: relative; padding: 4px 2px 2px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .pdark .cz-card { background: rgba(255,255,255,0.03); border: 1px solid #26222e; border-radius: 8px; padding: 7px 8px; color: #9ca3af; font-size: 8px; }
+  .pdark .cz-card.head { background: linear-gradient(135deg,rgba(239,68,68,0.13),rgba(249,115,22,0.08)); border-color: rgba(239,68,68,0.28); color: #fca5a5; font-weight: 700; font-size: 9.5px; }
+  .pdark .duo-pill { position: absolute; bottom: 10px; right: 8px; display: flex; gap: 2px; background: rgba(13,10,12,0.9); backdrop-filter: blur(16px); border-radius: 26px; padding: 3px; box-shadow: 0 10px 26px rgba(239,68,68,0.25), 0 0 0 1px rgba(239,68,68,0.18); border: 1px solid rgba(255,255,255,0.08); z-index: 6; }
+  .pdark .duo-seg { width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; position: relative; }
+  .pdark .duo-seg.chat { background: linear-gradient(135deg,#ec4899,#a855f7); }
+  .pdark .duo-seg.menu { background: linear-gradient(135deg,#ef4444,#f97316); box-shadow: 0 2px 12px rgba(239,68,68,0.45); }
+  .pdark .duo-seg .badge { position: absolute; top: -1px; right: -1px; background: #fbbf24; color: #18181b; font-size: 7px; font-weight: 800; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #0c0a0c; }
+
+  /* ═════ Dark bloom — DEEP BLACK SPACE w/ red nebulae ═════ */
+  .bloom-space {
+    position: absolute; inset: 0; z-index: 4;
+    background:
+      /* Small concentrated red nebula patches — fade fast to keep mostly black */
+      radial-gradient(ellipse 22% 18% at 22% 28%, rgba(239,68,68,0.35) 0%, transparent 60%),
+      radial-gradient(ellipse 18% 14% at 78% 70%, rgba(220,38,38,0.3) 0%, transparent 65%),
+      radial-gradient(ellipse 14% 10% at 55% 12%, rgba(248,113,113,0.18) 0%, transparent 70%),
+      /* Deep black space base */
+      linear-gradient(135deg, #020106 0%, #050308 50%, #02010a 100%);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+  .bloom-space::before, .bloom-space::after {
+    content: ''; position: absolute; border-radius: 50%; pointer-events: none;
+  }
+  .bloom-space::before {
+    /* Small concentrated red glow upper-left */
+    width: 35%; height: 30%; top: 8%; left: 8%;
+    background: radial-gradient(circle, rgba(239,68,68,0.3) 0%, rgba(239,68,68,0.1) 40%, transparent 70%);
+    filter: blur(18px);
+  }
+  .bloom-space::after {
+    /* Small concentrated crimson glow bottom-right */
+    width: 30%; height: 28%; bottom: 12%; right: 8%;
+    background: radial-gradient(circle, rgba(220,38,38,0.26) 0%, rgba(220,38,38,0.08) 45%, transparent 75%);
+    filter: blur(22px);
+  }
+  .star {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    box-shadow: 0 0 4px currentColor;
+    animation: star-drift 8s ease-in-out infinite;
+  }
+  .star.white { background: white; color: rgba(255,255,255,0.9); }
+  .star.red { background: #fca5a5; color: rgba(239,68,68,0.8); }
+  .star.orange { background: #fdba74; color: rgba(249,115,22,0.7); }
+  .star.tiny { width: 1.5px; height: 1.5px; box-shadow: 0 0 3px currentColor; }
+  .star.sm { width: 2px; height: 2px; }
+  .star.md { width: 3px; height: 3px; box-shadow: 0 0 6px currentColor; }
+  .star.lg { width: 4px; height: 4px; box-shadow: 0 0 10px currentColor, 0 0 18px currentColor; }
+  .star.ember {
+    width: 5px; height: 5px;
+    background: radial-gradient(circle, #fbbf24 0%, #f97316 50%, transparent 100%);
+    box-shadow: 0 0 14px rgba(249,115,22,0.8), 0 0 30px rgba(239,68,68,0.5);
+    animation: float-up 4s ease-in-out infinite alternate;
+  }
+  /* Asymmetric drift per nth-of-type so stars desync naturally — feels cosmic */
+  .star:nth-of-type(3n)   { animation-duration: 7s;  animation-delay: -1.2s; }
+  .star:nth-of-type(3n+1) { animation-duration: 9.4s; animation-delay: -3.5s; }
+  .star:nth-of-type(3n+2) { animation-duration: 11s;  animation-delay: -0.8s; }
+  .star:nth-of-type(5n)   { animation-duration: 6.5s; animation-delay: -2.6s; }
+  .star:nth-of-type(7n)   { animation-duration: 12s;  animation-delay: -4.1s; }
+  @keyframes star-drift {
+    0%   { transform: translate(0px, 0px);    opacity: 0.55; }
+    25%  { transform: translate(1.8px, -2px); opacity: 0.95; }
+    50%  { transform: translate(-1px, 2.5px); opacity: 0.75; }
+    75%  { transform: translate(2px, 1px);    opacity: 1;    }
+    100% { transform: translate(0px, 0px);    opacity: 0.55; }
+  }
+  @keyframes float-up { from { transform: translateY(0); opacity: 0.7; } to { transform: translateY(-15px); opacity: 1; } }
+  @keyframes twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+  .star.twinkle { animation: twinkle 2.5s ease-in-out infinite; }
+  .star.ember { animation: float-up 4s ease-in-out infinite alternate; }
+
+  /* ═════ Orb lift animation — bobs gently to feel 3D ═════ */
+  @keyframes orb-float-A {
+    0%, 100% { transform: translateY(0)   scale(1);    }
+    50%      { transform: translateY(-4px) scale(1.03); }
+  }
+  @keyframes orb-float-B {
+    0%, 100% { transform: translateY(0)   scale(1);    }
+    50%      { transform: translateY(-3px) scale(1.02); }
+  }
+  @keyframes orb-float-C {
+    0%, 100% { transform: translateY(0)   scale(1);    }
+    50%      { transform: translateY(-5px) scale(1.04); }
+  }
+  .arc-orb {
+    position: absolute; width: 48px; height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg,var(--c1),var(--c2));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    /* Gold-orange flame shadow — gentle */
+    box-shadow:
+      0 14px 28px rgba(0,0,0,0.58),
+      0 7px 14px rgba(0,0,0,0.42),
+      0 0 11px rgba(251,191,36,0.38),
+      0 0 24px rgba(251,146,60,0.27),
+      0 0 42px rgba(249,115,22,0.17),
+      0 0 64px rgba(234,88,12,0.09),
+      0 0 0 1px rgba(251,191,36,0.24),
+      inset 0 1px 0 rgba(255,255,255,0.45);
+    border: 1px solid rgba(251,191,36,0.27);
+    z-index: 5;
+    animation: orb-float-A 4s ease-in-out infinite;
+    will-change: transform;
+  }
+  /* Gold-orange flame blob behind orb — mid pulse */
+  .arc-orb::after {
+    content: '';
+    position: absolute; inset: -12px;
+    border-radius: 24px;
+    background: radial-gradient(circle,
+      rgba(251,191,36,0.38) 0%,
+      rgba(251,146,60,0.26) 35%,
+      rgba(249,115,22,0.13) 65%,
+      transparent 95%);
+    filter: blur(10px);
+    z-index: -1;
+    animation: fire-pulse 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes fire-pulse {
+    0%, 100% { opacity: 0.6;  transform: scale(0.96); }
+    50%      { opacity: 0.9;  transform: scale(1.08); }
+  }
+  .arc-orb:nth-of-type(2n)   { animation: orb-float-B 4.4s ease-in-out infinite; animation-delay: -0.6s; }
+  .arc-orb:nth-of-type(3n)   { animation: orb-float-C 3.6s ease-in-out infinite; animation-delay: -1.2s; }
+  .arc-orb:nth-of-type(4n+1) { animation-delay: -2.0s; }
+  .arc-orb:nth-of-type(5n+2) { animation-delay: -2.8s; }
+  .arc-orb:nth-of-type(2n)::after { animation-duration: 3.1s; animation-delay: -0.8s; }
+  .arc-orb:nth-of-type(3n)::after { animation-duration: 2.0s; animation-delay: -1.4s; }
+  .arc-orb .orb-icon { font-size: 14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)) drop-shadow(0 0 2px rgba(251,191,36,0.3)); }
+  .arc-orb .orb-name { font-size: 6.5px; color: white; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 0 3px rgba(251,191,36,0.3); }
+
+  /* ═════════════════════ SAKURA LIGHT phone ═════════════════════ */
+  .psakura {
+    background: linear-gradient(180deg,#fff5f8 0%, #ffeef4 60%, #ffe2ee 100%);
+    border: 1px solid #fbcfe8; border-radius: 26px;
+    aspect-ratio: 9 / 19; padding: 9px 7px; overflow: hidden;
+    position: relative; display: flex; flex-direction: column;
+    box-shadow: inset 0 0 0 2px rgba(244,114,182,0.18), 0 6px 22px rgba(236,72,153,0.18);
+  }
+  .psakura .pstatus { height: 13px; display: flex; justify-content: space-between; padding: 0 6px; font-size: 8px; color: #6b7280; font-weight: 600; margin-bottom: 3px; }
+  .psakura .tb {
+    display: flex; flex-direction: column; gap: 4px; padding: 4px 3px 6px;
+    border-bottom: 1px solid rgba(236,72,153,0.22);
+    background:
+      radial-gradient(ellipse at 20% 100%, rgba(236,72,153,0.07), transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(244,114,182,0.06), transparent 60%),
+      linear-gradient(180deg, rgba(255,245,248,0.8), rgba(255,228,236,0.6));
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 7px 7px 0 0;
+    flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(236,72,153,0.08);
+  }
+  .psakura .tb-row { display: flex; align-items: center; gap: 3px; }
+  .psakura .tb-logo { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(135deg,#dc2626,#f97316); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: white; flex-shrink: 0; box-shadow: 0 2px 8px rgba(239,68,68,0.4); }
+  .psakura .tb-bread { flex: 1; min-width: 0; padding: 0 3px; }
+  .psakura .tb-bread-section { font-size: 6.5px; color: #be185d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+  .psakura .tb-bread-title { font-size: 9px; font-weight: 700; color: #18181b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .psakura .tb-btn { height: 24px; padding: 0 6px; border-radius: 6px; background: white; border: 1px solid #fce7f3; color: #18181b; font-size: 8.5px; font-weight: 600; display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .psakura .tb-btn.icon { padding: 0; width: 24px; justify-content: center; font-size: 10px; }
+  .psakura .tb-btn .ic { font-size: 10px; }
+  .psakura .tb-btn .arrow { font-size: 6.5px; color: #9ca3af; margin-left: 2px; }
+  .psakura .tb-theme { height: 24px; display: flex; padding: 2px; border-radius: 8px; background: #fdf2f8; border: 1px solid #fce7f3; flex-shrink: 0; }
+  .psakura .tb-theme-seg { padding: 0 6px; border-radius: 6px; display: flex; align-items: center; gap: 2px; font-size: 8.5px; font-weight: 700; color: #831843; }
+  .psakura .tb-theme-seg.active { background: white; color: #be185d; box-shadow: 0 2px 6px rgba(190,24,93,0.18); }
+  .psakura .tb-avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg,#14b8a6,#06b6d4); color: white; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 2px 8px rgba(20,184,166,0.45); position: relative; }
+  .psakura .tb-avatar .live { position: absolute; bottom: -1px; right: -1px; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; border: 1.5px solid #ffeef4; }
+  .psakura .pcontent { flex: 1; position: relative; padding: 4px 2px 2px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .psakura .cz-card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 8px; padding: 7px 8px; color: #52525b; font-size: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .psakura .cz-card.head { background: linear-gradient(135deg,rgba(236,72,153,0.1),rgba(244,114,182,0.06)); border-color: rgba(236,72,153,0.25); color: #be185d; font-weight: 700; font-size: 9.5px; }
+
+  .psakura .duo-pill { position: absolute; bottom: 10px; right: 8px; display: flex; gap: 2px; background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); border-radius: 26px; padding: 3px; box-shadow: 0 10px 26px rgba(236,72,153,0.2), 0 0 0 1px rgba(236,72,153,0.18); border: 1px solid rgba(0,0,0,0.05); z-index: 6; }
+  .psakura .duo-seg { width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; position: relative; }
+  .psakura .duo-seg.chat { background: linear-gradient(135deg,#ec4899,#a855f7); }
+  .psakura .duo-seg.menu { background: linear-gradient(135deg,#ef4444,#f97316); box-shadow: 0 2px 12px rgba(239,68,68,0.5); }
+  .psakura .duo-seg .badge { position: absolute; top: -1px; right: -1px; background: #fbbf24; color: #18181b; font-size: 7px; font-weight: 800; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; }
+
+  /* ═════ Sakura bloom — PETALS FALLING ═════ */
+  .bloom-sakura {
+    position: absolute; inset: 0; z-index: 4;
+    background:
+      radial-gradient(ellipse at 25% 20%, rgba(244,114,182,0.32) 0%, transparent 50%),
+      radial-gradient(ellipse at 75% 80%, rgba(251,207,232,0.4) 0%, transparent 55%),
+      radial-gradient(circle at 50% 50%, rgba(255,228,236,0.5) 0%, transparent 70%),
+      linear-gradient(180deg, #fff0f5, #ffe4ec 50%, #ffd1dc);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+  .bloom-sakura::before, .bloom-sakura::after {
+    content: ''; position: absolute; border-radius: 50%; pointer-events: none;
+  }
+  .bloom-sakura::before {
+    width: 70%; height: 70%; top: -20%; left: -15%;
+    background: radial-gradient(circle, rgba(244,114,182,0.22), transparent 70%);
+    filter: blur(22px);
+  }
+  .bloom-sakura::after {
+    width: 60%; height: 60%; bottom: -15%; right: -10%;
+    background: radial-gradient(circle, rgba(251,207,232,0.3), transparent 70%);
+    filter: blur(28px);
+  }
+  /* Petal shapes — using a leaf border-radius technique */
+  .petal {
+    position: absolute; pointer-events: none;
+    border-radius: 50% 0 50% 0;
+    box-shadow: 0 1px 3px rgba(190,24,93,0.18);
+    opacity: 0.85;
+  }
+  .petal.deep { background: linear-gradient(135deg, #f9a8d4, #ec4899); }
+  .petal.mid  { background: linear-gradient(135deg, #fbcfe8, #f9a8d4); }
+  .petal.soft { background: linear-gradient(135deg, #ffffff, #fce7f3); }
+  .petal.xs { width: 6px; height: 6px; }
+  .petal.sm { width: 9px; height: 9px; }
+  .petal.md { width: 12px; height: 12px; }
+  .petal.lg { width: 16px; height: 16px; box-shadow: 0 2px 6px rgba(190,24,93,0.22); }
+  @keyframes petal-fall {
+    0% { transform: translateY(-10px) rotate(0deg); }
+    50% { transform: translateY(50px) rotate(180deg) translateX(8px); }
+    100% { transform: translateY(120px) rotate(360deg) translateX(-4px); opacity: 0; }
+  }
+  .petal.fall1 { animation: petal-fall 6s linear infinite; }
+  .petal.fall2 { animation: petal-fall 7.5s linear infinite; }
+  .petal.fall3 { animation: petal-fall 5s linear infinite; }
+  .petal.fall4 { animation: petal-fall 9s linear infinite; }
+
+  .arc-orb-l {
+    position: absolute; width: 48px; height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg,var(--c1),var(--c2));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    /* Sakura-tinted multi-layer lift: pink dropshadow + ambient + colored halo + top highlight */
+    box-shadow:
+      0 16px 32px rgba(190,24,93,0.35),
+      0 8px 16px rgba(236,72,153,0.22),
+      0 0 26px var(--glow, rgba(244,114,182,0.5)),
+      0 0 0 1px rgba(255,255,255,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.65);
+    z-index: 5;
+    animation: orb-float-A 4s ease-in-out infinite;
+    will-change: transform;
+  }
+  .arc-orb-l:nth-of-type(2n)   { animation: orb-float-B 4.4s ease-in-out infinite; animation-delay: -0.7s; }
+  .arc-orb-l:nth-of-type(3n)   { animation: orb-float-C 3.6s ease-in-out infinite; animation-delay: -1.4s; }
+  .arc-orb-l:nth-of-type(4n+1) { animation-delay: -2.2s; }
+  .arc-orb-l:nth-of-type(5n+2) { animation-delay: -3.0s; }
+  .arc-orb-l .orb-icon { font-size: 14px; filter: drop-shadow(0 1px 2px rgba(190,24,93,0.25)); }
+  .arc-orb-l .orb-name { font-size: 6.5px; color: white; font-weight: 700; text-shadow: 0 1px 2px rgba(190,24,93,0.35); }
+
+  /* ═════ Desktop frames ═════ */
+  .ddark, .dsakura {
+    border-radius: 14px; aspect-ratio: 16 / 10; padding: 0;
+    overflow: hidden; position: relative; display: flex; flex-direction: column;
+  }
+  .ddark {
+    background: linear-gradient(180deg,#0c0a0c,#16121a);
+    border: 1px solid #2a2024;
+    box-shadow: inset 0 0 0 2px #1a1216,0 6px 22px rgba(0,0,0,0.5);
+  }
+  .dsakura {
+    background: linear-gradient(180deg,#fff5f8,#ffe4ec);
+    border: 1px solid #fbcfe8;
+    box-shadow: inset 0 0 0 2px rgba(244,114,182,0.2),0 6px 22px rgba(236,72,153,0.15);
+  }
+  .dtb { display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex-shrink: 0; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  /* Dark top bar = blend with red-black space bloom · same hue family · subtle ember glow */
+  .ddark .dtb {
+    border-bottom: 1px solid rgba(239,68,68,0.18);
+    background:
+      radial-gradient(ellipse at 20% 100%, rgba(239,68,68,0.06), transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(249,115,22,0.04), transparent 60%),
+      linear-gradient(180deg, rgba(12,4,6,0.92), rgba(20,8,12,0.88));
+    box-shadow: 0 1px 0 rgba(239,68,68,0.06), 0 4px 18px rgba(0,0,0,0.25);
+  }
+  /* Sakura top bar = blend with pink petal bloom · soft frosted pink · subtle blossom tint */
+  .dsakura .dtb {
+    border-bottom: 1px solid rgba(236,72,153,0.22);
+    background:
+      radial-gradient(ellipse at 20% 100%, rgba(236,72,153,0.07), transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(244,114,182,0.06), transparent 60%),
+      linear-gradient(180deg, rgba(255,245,248,0.85), rgba(255,228,236,0.7));
+    box-shadow: 0 1px 0 rgba(236,72,153,0.08), 0 4px 18px rgba(190,24,93,0.08);
+  }
+  .dtb-bread { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+  .dtb-sect-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .ddark .dtb-sect-icon { background: linear-gradient(135deg,rgba(239,68,68,0.18),rgba(249,115,22,0.12)); border: 1px solid rgba(239,68,68,0.3); color: #fb923c; }
+  .dsakura .dtb-sect-icon { background: linear-gradient(135deg,rgba(236,72,153,0.15),rgba(251,207,232,0.4)); border: 1px solid rgba(236,72,153,0.3); color: #be185d; }
+  .dtb-sect { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ddark .dtb-sect { color: #fb923c; }
+  .dsakura .dtb-sect { color: #be185d; }
+  .dtb-tit { font-size: 11px; font-weight: 700; }
+  .ddark .dtb-tit { color: #f3f4f6; }
+  .dsakura .dtb-tit { color: #18181b; }
+  .dtb-btn { height: 26px; padding: 0 9px; border-radius: 7px; display: flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 600; }
+  .ddark .dtb-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e5e7eb; }
+  .dsakura .dtb-btn { background: white; border: 1px solid #fce7f3; color: #18181b; }
+  .dtb-btn.icon-only { padding: 0; width: 26px; justify-content: center; }
+  .dtb-theme { height: 26px; display: flex; padding: 2px; border-radius: 8px; }
+  .ddark .dtb-theme { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+  .dsakura .dtb-theme { background: #fdf2f8; border: 1px solid #fce7f3; }
+  .dtb-theme-seg { height: 22px; padding: 0 8px; border-radius: 5px; display: flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 700; }
+  .ddark .dtb-theme-seg { color: #9ca3af; }
+  .dsakura .dtb-theme-seg { color: #831843; }
+  .ddark .dtb-theme-seg.active { background: linear-gradient(135deg,#ef4444,#f97316); color: white; box-shadow: 0 2px 8px rgba(239,68,68,0.4); }
+  .dsakura .dtb-theme-seg.active { background: white; color: #be185d; box-shadow: 0 2px 6px rgba(190,24,93,0.2); }
+  .dtb-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,#14b8a6,#06b6d4); color: white; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0; box-shadow: 0 2px 8px rgba(20,184,166,0.45); }
+
+  /* ═════ Menu-mode toggle — Desktop/Tablet only, switches New ↔ Classic ═════ */
+  .menu-toggle { height: 26px; display: flex; padding: 2px; border-radius: 8px; }
+  .ddark .menu-toggle { background: rgba(255,255,255,0.05); border: 1px solid rgba(251,191,36,0.22); }
+  .dsakura .menu-toggle { background: #fdf2f8; border: 1px solid rgba(236,72,153,0.25); }
+  .menu-toggle-seg { height: 22px; padding: 0 7px; border-radius: 5px; display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.02em; }
+  .ddark .menu-toggle-seg { color: #9ca3af; }
+  .dsakura .menu-toggle-seg { color: #831843; }
+  .ddark .menu-toggle-seg.active {
+    background: linear-gradient(135deg,#fbbf24,#f97316); color: white;
+    box-shadow: 0 2px 8px rgba(251,146,60,0.45), inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+  .dsakura .menu-toggle-seg.active {
+    background: linear-gradient(135deg,#ec4899,#f97316); color: white;
+    box-shadow: 0 2px 8px rgba(236,72,153,0.4), inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .ddark .dtb-avatar { border: 1px solid rgba(255,255,255,0.2); }
+  .dsakura .dtb-avatar { border: 1px solid rgba(0,0,0,0.05); }
+
+  .dcontent { flex: 1; position: relative; padding: 10px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+  .ddark .dz-card { background: rgba(255,255,255,0.03); border: 1px solid #26222e; border-radius: 8px; padding: 8px 10px; color: #9ca3af; font-size: 9px; }
+  .ddark .dz-card.head { background: linear-gradient(135deg,rgba(239,68,68,0.13),rgba(249,115,22,0.08)); border-color: rgba(239,68,68,0.28); color: #fca5a5; font-weight: 700; font-size: 10px; }
+  .dsakura .dz-card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 8px; padding: 8px 10px; color: #52525b; font-size: 9px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .dsakura .dz-card.head { background: linear-gradient(135deg,rgba(236,72,153,0.1),rgba(244,114,182,0.06)); border-color: rgba(236,72,153,0.25); color: #be185d; font-weight: 700; font-size: 10px; }
+
+  .ddark .duo-pill, .dsakura .duo-pill { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 2px; backdrop-filter: blur(16px); border-radius: 26px; padding: 3px; z-index: 6; }
+  .ddark .duo-pill { background: rgba(13,10,12,0.9); box-shadow: 0 10px 26px rgba(239,68,68,0.25); border: 1px solid rgba(255,255,255,0.08); }
+  .dsakura .duo-pill { background: rgba(255,255,255,0.95); box-shadow: 0 10px 26px rgba(236,72,153,0.2); border: 1px solid rgba(0,0,0,0.05); }
+  .ddark .duo-seg, .dsakura .duo-seg { width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; position: relative; }
+  .ddark .duo-seg.chat, .dsakura .duo-seg.chat { background: linear-gradient(135deg,#ec4899,#a855f7); }
+  .ddark .duo-seg.menu, .dsakura .duo-seg.menu { background: linear-gradient(135deg,#ef4444,#f97316); box-shadow: 0 2px 12px rgba(239,68,68,0.45); }
+  .ddark .duo-seg .badge, .dsakura .duo-seg .badge { position: absolute; top: -1px; right: -1px; background: #fbbf24; color: #18181b; font-size: 7px; font-weight: 800; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .ddark .duo-seg .badge { border: 2px solid #0c0a0c; }
+  .dsakura .duo-seg .badge { border: 2px solid white; }
+
+  .arc-orb-d {
+    position: absolute; width: 76px; height: 76px; border-radius: 18px;
+    background: linear-gradient(135deg,var(--c1),var(--c2));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    z-index: 5;
+    animation: orb-float-A 4.2s ease-in-out infinite;
+    will-change: transform;
+  }
+  .arc-orb-d:nth-of-type(2n)   { animation: orb-float-B 4.7s ease-in-out infinite; animation-delay: -0.5s; }
+  .arc-orb-d:nth-of-type(3n)   { animation: orb-float-C 3.8s ease-in-out infinite; animation-delay: -1.3s; }
+  .arc-orb-d:nth-of-type(4n+1) { animation-delay: -2.1s; }
+  .arc-orb-d:nth-of-type(5n+2) { animation-delay: -2.9s; }
+  /* Desktop dark — gentle gold-orange flame shadow */
+  .ddark .arc-orb-d {
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.62),
+      0 12px 22px rgba(0,0,0,0.4),
+      0 0 18px rgba(251,191,36,0.38),
+      0 0 38px rgba(251,146,60,0.27),
+      0 0 64px rgba(249,115,22,0.17),
+      0 0 92px rgba(234,88,12,0.1),
+      0 0 0 1px rgba(251,191,36,0.26),
+      inset 0 2px 0 rgba(255,255,255,0.52);
+    border: 1px solid rgba(251,191,36,0.28);
+  }
+  /* Desktop flame blob — gentle gold pulse */
+  .ddark .arc-orb-d::after {
+    content: '';
+    position: absolute; inset: -16px;
+    border-radius: 28px;
+    background: radial-gradient(circle,
+      rgba(251,191,36,0.3) 0%,
+      rgba(251,146,60,0.2) 35%,
+      rgba(249,115,22,0.1) 65%,
+      transparent 95%);
+    filter: blur(12px);
+    z-index: -1;
+    animation: fire-pulse 3.3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .ddark .arc-orb-d:nth-of-type(2n)::after { animation-duration: 4s;   animation-delay: -1s;   }
+  .ddark .arc-orb-d:nth-of-type(3n)::after { animation-duration: 2.8s; animation-delay: -1.6s; }
+  .ddark .arc-orb-d .orb-icon { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45)) drop-shadow(0 0 3px rgba(251,191,36,0.32)); }
+  .ddark .arc-orb-d .orb-name { text-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 0 4px rgba(251,191,36,0.32); }
+  .ddark .arc-orb-d .orb-count { text-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 0 3px rgba(251,191,36,0.3); }
+  /* Desktop sakura — pink-tinted lift + sakura halo */
+  .dsakura .arc-orb-d {
+    box-shadow:
+      0 24px 50px rgba(190,24,93,0.4),
+      0 14px 26px rgba(236,72,153,0.25),
+      0 0 36px var(--glow, rgba(244,114,182,0.55)),
+      0 0 0 1px rgba(255,255,255,0.7),
+      inset 0 2px 0 rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.65);
+  }
+  .arc-orb-d .orb-icon { font-size: 22px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35)); }
+  .arc-orb-d .orb-name { font-size: 9px; color: white; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  .arc-orb-d .orb-count { font-size: 7px; color: rgba(255,255,255,0.85); text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+  .dsakura .arc-orb-d .orb-icon { filter: drop-shadow(0 2px 3px rgba(190,24,93,0.3)); }
+  .dsakura .arc-orb-d .orb-name { text-shadow: 0 1px 2px rgba(190,24,93,0.3); }
+  .dsakura .arc-orb-d .orb-count { text-shadow: 0 1px 2px rgba(190,24,93,0.25); }
+
+  /* Lock */
+  .lock-card {
+    background: linear-gradient(135deg,rgba(239,68,68,0.06),rgba(236,72,153,0.04));
+    border: 1px solid rgba(239,68,68,0.22);
+    border-radius: 14px; padding: 16px 18px; margin: 22px auto 0; max-width: 1200px;
+  }
+  .lock-row { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; font-size: 12px; }
+  .lock-key { font-weight: 700; min-width: 140px; color: #fb923c; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px; }
+  .lock-val { color: #ecfdf5; flex: 1; line-height: 1.5; }
+  .lock-val b { color: #fbbf24; }
+  .lock-val code { background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 4px; font-size: 10.5px; color: #fca5a5; font-family: monospace; }
+</style>
+</head>
+<body>
+  <h1 class="title">Variant D — Themed Bloom · Red-Space + Sakura</h1>
+  <p class="sub">
+    <span class="pill fire">🔥 Dark = Red-Black Space</span>
+    <span class="pill sakura">🌸 Light = Sakura Petals</span>
+    <span class="pill locked">✓ Cosmetic shell · ห้ามแตะ wiring</span>
+    <br/><br/>
+    เมื่อ tap ≡ → bloom background เปลี่ยนเป็นธีมพิเศษ. Dark = อวกาศแดง-ดำ + ดาว/ember floating · Light (Sakura) = พื้นชมพูอ่อน + ดอกซากุระร่วง · ทั้ง mobile + desktop
+  </p>
+
+  <!-- ═══════════════ Mobile: Dark Space vs Sakura Light ═══════════════ -->
+  <div class="section-label">▼ Mobile · Idle → Bloom (เปรียบ Dark vs Sakura)</div>
+
+  <div class="row">
+
+    <!-- Dark column -->
+    <div class="col">
+      <div class="col-title">🔥 <b>Dark</b> · Red-Black Space</div>
+      <div class="frames">
+        <!-- Dark Idle -->
+        <div>
+          <div class="state-label fire">Idle</div>
+          <div class="pdark">
+            <div class="pstatus"><span>9:41</span><span>100%</span></div>
+            <div class="tb">
+              <div class="tb-row">
+                <div class="tb-logo">L</div>
+                <div class="tb-bread"><div class="tb-bread-section">📊 รายงาน</div><div class="tb-bread-title">กำไรขาดทุน</div></div>
+                <div class="tb-btn icon">🏠</div>
+                <div class="tb-btn icon">🛒</div>
+                <div class="tb-avatar">L<div class="live"></div></div>
+              </div>
+              <div class="tb-row">
+                <div class="tb-btn" style="flex:1;"><span class="ic">📍</span><span style="flex:1; text-align:left;">นครราชสีมา</span><span class="arrow">▾</span></div>
+                <div class="tb-theme">
+                  <div class="tb-theme-seg active"><span>🌙</span><span>Dark</span></div>
+                  <div class="tb-theme-seg"><span>Light</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="pcontent">
+              <div class="cz-card head">💼 P&L · พ.ค.</div>
+              <div class="cz-card">รายได้ ฿485K</div>
+              <div class="cz-card">รายจ่าย ฿102K</div>
+              <div class="cz-card">Gross 79%</div>
+              <div class="cz-card">⚠ Stock 3</div>
+              <div class="duo-pill">
+                <div class="duo-seg chat">💬<span class="badge">3</span></div>
+                <div class="duo-seg menu">≡</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dark Bloom (Space) -->
+        <div>
+          <div class="state-label fire">Bloom · Space</div>
+          <div class="pdark">
+            <div class="pstatus"><span>9:41</span><span>100%</span></div>
+            <div class="tb">
+              <div class="tb-row">
+                <div class="tb-logo">L</div>
+                <div class="tb-bread"><div class="tb-bread-section">เลือกหมวด</div><div class="tb-bread-title">8 หมวด</div></div>
+                <div class="tb-btn icon">🏠</div>
+                <div class="tb-btn icon">🛒</div>
+                <div class="tb-avatar">L<div class="live"></div></div>
+              </div>
+              <div class="tb-row">
+                <div class="tb-btn" style="flex:1;"><span class="ic">📍</span><span style="flex:1; text-align:left;">นครราชสีมา</span><span class="arrow">▾</span></div>
+                <div class="tb-theme">
+                  <div class="tb-theme-seg active"><span>🌙</span><span>Dark</span></div>
+                  <div class="tb-theme-seg"><span>Light</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="pcontent">
+              <div class="bloom-space">
+                <!-- Stars layer — densely scattered, random distribution -->
+                <div class="star white tiny"          style="top:3%;left:11%"></div>
+                <div class="star white sm twinkle"    style="top:6%;left:34%"></div>
+                <div class="star white tiny"          style="top:4%;left:57%"></div>
+                <div class="star red md"              style="top:5%;left:79%"></div>
+                <div class="star white tiny"          style="top:9%;left:92%"></div>
+                <div class="star white sm"            style="top:11%;left:6%"></div>
+                <div class="star white tiny twinkle"  style="top:13%;left:23%"></div>
+                <div class="star white sm"            style="top:15%;left:46%"></div>
+                <div class="star orange tiny"         style="top:12%;left:63%"></div>
+                <div class="star white md twinkle"    style="top:17%;left:85%"></div>
+                <div class="star white tiny"          style="top:20%;left:14%"></div>
+                <div class="star red sm"              style="top:22%;left:38%"></div>
+                <div class="star white sm twinkle"    style="top:24%;left:52%"></div>
+                <div class="star white tiny"          style="top:21%;left:71%"></div>
+                <div class="star white tiny"          style="top:25%;left:96%"></div>
+                <div class="star white md"            style="top:28%;left:4%"></div>
+                <div class="star white tiny"          style="top:30%;left:27%"></div>
+                <div class="star white sm twinkle"    style="top:32%;left:48%"></div>
+                <div class="star orange tiny twinkle" style="top:33%;left:67%"></div>
+                <div class="star red tiny"            style="top:35%;left:81%"></div>
+                <div class="star white tiny"          style="top:38%;left:18%"></div>
+                <div class="star white lg twinkle"    style="top:40%;left:35%"></div>
+                <div class="star white tiny"          style="top:42%;left:58%"></div>
+                <div class="star white sm"            style="top:44%;left:76%"></div>
+                <div class="star white tiny"          style="top:43%;left:93%"></div>
+                <div class="star white sm"            style="top:48%;left:9%"></div>
+                <div class="star red tiny twinkle"    style="top:50%;left:30%"></div>
+                <div class="star white tiny"          style="top:52%;left:43%"></div>
+                <div class="star white md twinkle"    style="top:54%;left:64%"></div>
+                <div class="star white tiny"          style="top:55%;left:82%"></div>
+                <div class="star white sm"            style="top:58%;left:16%"></div>
+                <div class="star white tiny twinkle"  style="top:60%;left:39%"></div>
+                <div class="star red sm"              style="top:62%;left:55%"></div>
+                <div class="star white tiny"          style="top:63%;left:73%"></div>
+                <div class="star white sm"            style="top:65%;left:90%"></div>
+                <div class="star white tiny"          style="top:68%;left:5%"></div>
+                <div class="star white md"            style="top:71%;left:22%"></div>
+                <div class="star white tiny twinkle"  style="top:73%;left:46%"></div>
+                <div class="star orange sm twinkle"   style="top:74%;left:68%"></div>
+                <div class="star white tiny"          style="top:76%;left:84%"></div>
+                <div class="star white sm"            style="top:79%;left:12%"></div>
+                <div class="star white tiny"          style="top:81%;left:32%"></div>
+                <div class="star red tiny twinkle"    style="top:83%;left:51%"></div>
+                <div class="star white tiny"          style="top:85%;left:70%"></div>
+                <div class="star white sm twinkle"    style="top:86%;left:88%"></div>
+                <div class="star white tiny"          style="top:89%;left:6%"></div>
+                <div class="star white sm"            style="top:91%;left:25%"></div>
+                <div class="star white tiny twinkle"  style="top:93%;left:42%"></div>
+                <div class="star white tiny"          style="top:95%;left:60%"></div>
+                <div class="star red tiny"            style="top:96%;left:78%"></div>
+                <!-- Floating embers — slowly drift up -->
+                <div class="star ember" style="top:30%;left:62%; animation-delay: 0s;"></div>
+                <div class="star ember" style="top:65%;left:24%; animation-delay: 1.8s;"></div>
+                <div class="star ember" style="top:48%;left:85%; animation-delay: 3.4s;"></div>
+                <div class="star ember" style="top:78%;left:54%; animation-delay: 2.5s;"></div>
+                <!-- Orbs -->
+                <div class="arc-orb" style="bottom: 80px; right: 12px; --c1:#3b82f6;--c2:#06b6d4;"><div class="orb-icon">📅</div><div class="orb-name">นัด</div></div>
+                <div class="arc-orb" style="bottom: 124px; right: 30px; --c1:#14b8a6;--c2:#22c55e;"><div class="orb-icon">👥</div><div class="orb-name">ลูกค้า</div></div>
+                <div class="arc-orb" style="bottom: 158px; right: 70px; --c1:#ef4444;--c2:#f97316;"><div class="orb-icon">🛒</div><div class="orb-name">ขาย</div></div>
+                <div class="arc-orb" style="bottom: 172px; right: 122px; --c1:#a855f7;--c2:#ec4899;"><div class="orb-icon">📣</div><div class="orb-name">ตลาด</div></div>
+                <div class="arc-orb" style="bottom: 164px; left: 64px; --c1:#f59e0b;--c2:#facc15;"><div class="orb-icon">📦</div><div class="orb-name">คลัง</div></div>
+                <div class="arc-orb" style="bottom: 128px; left: 26px; --c1:#10b981;--c2:#06b6d4;"><div class="orb-icon">💰</div><div class="orb-name">เงิน</div></div>
+                <div class="arc-orb" style="bottom: 84px; left: 10px; --c1:#0ea5e9;--c2:#6366f1;"><div class="orb-icon">📊</div><div class="orb-name">รายงาน</div></div>
+                <div class="arc-orb" style="top: 60px; left: 50%; transform: translateX(-50%); --c1:#facc15;--c2:#f97316;"><div class="orb-icon">🗄️</div><div class="orb-name">พื้นฐาน</div></div>
+              </div>
+              <div class="duo-pill" style="z-index: 7;">
+                <div class="duo-seg chat" style="opacity:0.5;">💬</div>
+                <div class="duo-seg menu" style="background:linear-gradient(135deg,#71717a,#52525b);">✕</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sakura column -->
+    <div class="col">
+      <div class="col-title">🌸 <b>Light · Sakura</b> · Petal Rain</div>
+      <div class="frames">
+        <!-- Sakura Idle -->
+        <div>
+          <div class="state-label sakura">Idle</div>
+          <div class="psakura">
+            <div class="pstatus"><span>9:41</span><span>100%</span></div>
+            <div class="tb">
+              <div class="tb-row">
+                <div class="tb-logo">L</div>
+                <div class="tb-bread"><div class="tb-bread-section">📊 รายงาน</div><div class="tb-bread-title">กำไรขาดทุน</div></div>
+                <div class="tb-btn icon">🏠</div>
+                <div class="tb-btn icon">🛒</div>
+                <div class="tb-avatar">L<div class="live"></div></div>
+              </div>
+              <div class="tb-row">
+                <div class="tb-btn" style="flex:1;"><span class="ic">📍</span><span style="flex:1; text-align:left;">นครราชสีมา</span><span class="arrow">▾</span></div>
+                <div class="tb-theme">
+                  <div class="tb-theme-seg"><span>🌙</span><span>Dark</span></div>
+                  <div class="tb-theme-seg active"><span>🌸</span><span>Light</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="pcontent">
+              <div class="cz-card head">💼 P&L · พ.ค.</div>
+              <div class="cz-card">รายได้ ฿485K</div>
+              <div class="cz-card">รายจ่าย ฿102K</div>
+              <div class="cz-card">Gross 79%</div>
+              <div class="cz-card">⚠ Stock 3</div>
+              <div class="duo-pill">
+                <div class="duo-seg chat">💬<span class="badge">3</span></div>
+                <div class="duo-seg menu">≡</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sakura Bloom (Petals) -->
+        <div>
+          <div class="state-label sakura">Bloom · Sakura</div>
+          <div class="psakura">
+            <div class="pstatus"><span>9:41</span><span>100%</span></div>
+            <div class="tb">
+              <div class="tb-row">
+                <div class="tb-logo">L</div>
+                <div class="tb-bread"><div class="tb-bread-section">เลือกหมวด</div><div class="tb-bread-title">8 หมวด</div></div>
+                <div class="tb-btn icon">🏠</div>
+                <div class="tb-btn icon">🛒</div>
+                <div class="tb-avatar">L<div class="live"></div></div>
+              </div>
+              <div class="tb-row">
+                <div class="tb-btn" style="flex:1;"><span class="ic">📍</span><span style="flex:1; text-align:left;">นครราชสีมา</span><span class="arrow">▾</span></div>
+                <div class="tb-theme">
+                  <div class="tb-theme-seg"><span>🌙</span><span>Dark</span></div>
+                  <div class="tb-theme-seg active"><span>🌸</span><span>Light</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="pcontent">
+              <div class="bloom-sakura">
+                <!-- Petal rain -->
+                <div class="petal deep md fall1" style="top:5%; left:14%; transform: rotate(15deg);"></div>
+                <div class="petal soft sm fall2" style="top:8%; left:40%;"></div>
+                <div class="petal mid lg fall3" style="top:3%; left:65%; transform: rotate(45deg);"></div>
+                <div class="petal deep xs fall1" style="top:18%; left:22%;"></div>
+                <div class="petal mid md fall2" style="top:14%; left:78%; transform: rotate(80deg);"></div>
+                <div class="petal soft sm fall3" style="top:25%; left:8%;"></div>
+                <div class="petal deep sm fall4" style="top:28%; left:52%;"></div>
+                <div class="petal mid xs fall1" style="top:32%; left:88%;"></div>
+                <div class="petal soft md fall2" style="top:38%; left:30%; transform: rotate(120deg);"></div>
+                <div class="petal deep lg fall3" style="top:42%; left:70%;"></div>
+                <div class="petal mid sm fall4" style="top:48%; left:12%;"></div>
+                <div class="petal soft xs fall1" style="top:55%; left:46%;"></div>
+                <div class="petal deep md fall2" style="top:62%; left:82%; transform: rotate(200deg);"></div>
+                <div class="petal mid sm fall3" style="top:70%; left:20%;"></div>
+                <div class="petal soft md fall4" style="top:78%; left:58%;"></div>
+                <div class="petal deep xs fall1" style="top:85%; left:36%;"></div>
+                <div class="petal mid lg fall2" style="top:92%; left:74%; transform: rotate(280deg);"></div>
+                <!-- Orbs -->
+                <div class="arc-orb-l" style="bottom: 80px; right: 12px; --c1:#3b82f6;--c2:#06b6d4;"><div class="orb-icon">📅</div><div class="orb-name">นัด</div></div>
+                <div class="arc-orb-l" style="bottom: 124px; right: 30px; --c1:#14b8a6;--c2:#22c55e;"><div class="orb-icon">👥</div><div class="orb-name">ลูกค้า</div></div>
+                <div class="arc-orb-l" style="bottom: 158px; right: 70px; --c1:#ef4444;--c2:#f97316;"><div class="orb-icon">🛒</div><div class="orb-name">ขาย</div></div>
+                <div class="arc-orb-l" style="bottom: 172px; right: 122px; --c1:#a855f7;--c2:#ec4899;"><div class="orb-icon">📣</div><div class="orb-name">ตลาด</div></div>
+                <div class="arc-orb-l" style="bottom: 164px; left: 64px; --c1:#f59e0b;--c2:#facc15;"><div class="orb-icon">📦</div><div class="orb-name">คลัง</div></div>
+                <div class="arc-orb-l" style="bottom: 128px; left: 26px; --c1:#10b981;--c2:#06b6d4;"><div class="orb-icon">💰</div><div class="orb-name">เงิน</div></div>
+                <div class="arc-orb-l" style="bottom: 84px; left: 10px; --c1:#0ea5e9;--c2:#6366f1;"><div class="orb-icon">📊</div><div class="orb-name">รายงาน</div></div>
+                <div class="arc-orb-l" style="top: 60px; left: 50%; transform: translateX(-50%); --c1:#facc15;--c2:#f97316;"><div class="orb-icon">🗄️</div><div class="orb-name">พื้นฐาน</div></div>
+              </div>
+              <div class="duo-pill" style="z-index: 7;">
+                <div class="duo-seg chat" style="opacity:0.5;">💬</div>
+                <div class="duo-seg menu" style="background:linear-gradient(135deg,#a1a1aa,#71717a);">✕</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ Desktop ═══════════════ -->
+  <div class="section-label">▼ Desktop · Bloom · Dark Space vs Sakura</div>
+
+  <div class="row">
+
+    <!-- Desktop Dark Bloom -->
+    <div class="col">
+      <div class="col-title">🔥 <b>Desktop Dark</b> · Red-Black Space</div>
+      <div class="ddark">
+        <div class="dtb">
+          <div class="dtb-bread">
+            <div class="dtb-sect-icon">📊</div>
+            <div><div class="dtb-sect">เลือกหมวด</div><div class="dtb-tit">8 หมวด</div></div>
+          </div>
+          <div class="dtb-btn"><span>🏠</span><span>Frontend</span></div>
+          <div class="dtb-btn icon-only"><span>🛒</span></div>
+          <div class="menu-toggle" title="สลับเมนู (จำต่อเครื่อง)">
+            <div class="menu-toggle-seg active"><span>⚡</span><span>ใหม่</span></div>
+            <div class="menu-toggle-seg"><span>📋</span><span>เดิม</span></div>
+          </div>
+          <div class="dtb-btn"><span>📍</span><span>นครราชสีมา</span><span style="font-size:7px; color:#9ca3af;">▾</span></div>
+          <div class="dtb-theme">
+            <div class="dtb-theme-seg active"><span>🌙</span><span>Dark</span></div>
+            <div class="dtb-theme-seg"><span>🌸</span><span>Light</span></div>
+          </div>
+          <div class="dtb-avatar">L</div>
+        </div>
+        <div class="dcontent" style="position: relative;">
+          <div class="bloom-space" style="position: absolute; inset: 0;">
+            <!-- Stars galaxy desktop scale — densely scattered, random distribution -->
+            <div class="star white tiny"          style="top:4%;left:7%"></div>
+            <div class="star white sm twinkle"    style="top:6%;left:19%"></div>
+            <div class="star white tiny"          style="top:3%;left:32%"></div>
+            <div class="star red md"              style="top:7%;left:44%"></div>
+            <div class="star white tiny"          style="top:5%;left:55%"></div>
+            <div class="star white sm"            style="top:9%;left:65%"></div>
+            <div class="star white tiny twinkle"  style="top:4%;left:74%"></div>
+            <div class="star white lg twinkle"    style="top:8%;left:84%"></div>
+            <div class="star white tiny"          style="top:6%;left:94%"></div>
+            <div class="star white sm"            style="top:13%;left:4%"></div>
+            <div class="star white tiny"          style="top:14%;left:14%"></div>
+            <div class="star red sm twinkle"      style="top:16%;left:27%"></div>
+            <div class="star white tiny"          style="top:15%;left:38%"></div>
+            <div class="star white sm"            style="top:18%;left:50%"></div>
+            <div class="star orange tiny"         style="top:17%;left:60%"></div>
+            <div class="star white tiny"          style="top:19%;left:70%"></div>
+            <div class="star white sm twinkle"    style="top:14%;left:81%"></div>
+            <div class="star white tiny"          style="top:21%;left:90%"></div>
+            <div class="star white md"            style="top:24%;left:10%"></div>
+            <div class="star white tiny twinkle"  style="top:26%;left:22%"></div>
+            <div class="star red tiny"            style="top:28%;left:35%"></div>
+            <div class="star white sm"            style="top:25%;left:46%"></div>
+            <div class="star white tiny"          style="top:27%;left:56%"></div>
+            <div class="star white sm twinkle"    style="top:30%;left:68%"></div>
+            <div class="star orange sm"           style="top:28%;left:78%"></div>
+            <div class="star white tiny"          style="top:32%;left:88%"></div>
+            <div class="star white tiny"          style="top:35%;left:5%"></div>
+            <div class="star white md twinkle"    style="top:34%;left:16%"></div>
+            <div class="star red tiny"            style="top:38%;left:30%"></div>
+            <div class="star white sm"            style="top:36%;left:42%"></div>
+            <div class="star white tiny"          style="top:40%;left:52%"></div>
+            <div class="star white tiny"          style="top:42%;left:64%"></div>
+            <div class="star white sm twinkle"    style="top:38%;left:74%"></div>
+            <div class="star white tiny"          style="top:44%;left:85%"></div>
+            <div class="star red sm"              style="top:46%;left:96%"></div>
+            <div class="star white lg twinkle"    style="top:50%;left:12%"></div>
+            <div class="star white tiny"          style="top:48%;left:24%"></div>
+            <div class="star orange md twinkle"   style="top:52%;left:40%"></div>
+            <div class="star white tiny"          style="top:54%;left:54%"></div>
+            <div class="star white sm"            style="top:56%;left:68%"></div>
+            <div class="star white tiny twinkle"  style="top:58%;left:80%"></div>
+            <div class="star red tiny"            style="top:60%;left:92%"></div>
+            <div class="star white sm"            style="top:62%;left:6%"></div>
+            <div class="star white tiny"          style="top:64%;left:18%"></div>
+            <div class="star white md"            style="top:66%;left:32%"></div>
+            <div class="star white tiny twinkle"  style="top:68%;left:48%"></div>
+            <div class="star red sm"              style="top:70%;left:60%"></div>
+            <div class="star white tiny"          style="top:72%;left:74%"></div>
+            <div class="star orange tiny"         style="top:74%;left:86%"></div>
+            <div class="star white sm twinkle"    style="top:76%;left:14%"></div>
+            <div class="star white tiny"          style="top:78%;left:28%"></div>
+            <div class="star white md"            style="top:80%;left:42%"></div>
+            <div class="star white tiny"          style="top:82%;left:56%"></div>
+            <div class="star red tiny twinkle"    style="top:84%;left:70%"></div>
+            <div class="star white sm"            style="top:86%;left:82%"></div>
+            <div class="star white tiny"          style="top:88%;left:94%"></div>
+            <div class="star white tiny"          style="top:90%;left:8%"></div>
+            <div class="star white sm twinkle"    style="top:92%;left:22%"></div>
+            <div class="star red tiny"            style="top:91%;left:38%"></div>
+            <div class="star white tiny"          style="top:94%;left:52%"></div>
+            <div class="star white sm"            style="top:95%;left:66%"></div>
+            <div class="star white tiny twinkle"  style="top:93%;left:78%"></div>
+            <div class="star white tiny"          style="top:96%;left:88%"></div>
+            <!-- Floating embers — drift up across the canvas -->
+            <div class="star ember" style="top:18%;left:46%; animation-delay: 0s;"></div>
+            <div class="star ember" style="top:42%;left:18%; animation-delay: 1.3s;"></div>
+            <div class="star ember" style="top:55%;left:78%; animation-delay: 2.7s;"></div>
+            <div class="star ember" style="top:70%;left:36%; animation-delay: 1.9s;"></div>
+            <div class="star ember" style="top:30%;left:82%; animation-delay: 3.6s;"></div>
+            <div class="star ember" style="top:80%;left:62%; animation-delay: 4.4s;"></div>
+            <!-- Orbs in centered arc -->
+            <div class="arc-orb-d" style="top:20%;left:8%;--c1:#3b82f6;--c2:#06b6d4;"><div class="orb-icon">📅</div><div class="orb-name">นัด</div><div class="orb-count">7 sub</div></div>
+            <div class="arc-orb-d" style="top:8%;left:28%;--c1:#14b8a6;--c2:#22c55e;"><div class="orb-icon">👥</div><div class="orb-name">ลูกค้า</div><div class="orb-count">132</div></div>
+            <div class="arc-orb-d" style="top:4%;left:50%;--c1:#ef4444;--c2:#f97316;"><div class="orb-icon">🛒</div><div class="orb-name">ขาย</div><div class="orb-count">฿24K</div></div>
+            <div class="arc-orb-d" style="top:12%;left:72%;--c1:#a855f7;--c2:#ec4899;"><div class="orb-icon">📣</div><div class="orb-name">ตลาด</div><div class="orb-count">3 promo</div></div>
+            <div class="arc-orb-d" style="top:52%;left:78%;--c1:#f59e0b;--c2:#facc15;"><div class="orb-icon">📦</div><div class="orb-name">คลัง</div><div class="orb-count">⚠ 3</div></div>
+            <div class="arc-orb-d" style="top:66%;left:56%;--c1:#10b981;--c2:#06b6d4;"><div class="orb-icon">💰</div><div class="orb-name">เงิน</div><div class="orb-count">มัดจำ</div></div>
+            <div class="arc-orb-d" style="top:66%;left:32%;--c1:#0ea5e9;--c2:#6366f1;"><div class="orb-icon">📊</div><div class="orb-name">รายงาน</div><div class="orb-count">16</div></div>
+            <div class="arc-orb-d" style="top:52%;left:12%;--c1:#facc15;--c2:#f97316;"><div class="orb-icon">🗄️</div><div class="orb-name">พื้นฐาน</div><div class="orb-count">22</div></div>
+          </div>
+          <div class="duo-pill" style="z-index: 7;">
+            <div class="duo-seg chat" style="opacity:0.5;">💬</div>
+            <div class="duo-seg menu" style="background:linear-gradient(135deg,#71717a,#52525b);">✕</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop Sakura Bloom -->
+    <div class="col">
+      <div class="col-title">🌸 <b>Desktop Sakura</b> · Petal Rain</div>
+      <div class="dsakura">
+        <div class="dtb">
+          <div class="dtb-bread">
+            <div class="dtb-sect-icon">📊</div>
+            <div><div class="dtb-sect">เลือกหมวด</div><div class="dtb-tit">8 หมวด</div></div>
+          </div>
+          <div class="dtb-btn"><span>🏠</span><span>Frontend</span></div>
+          <div class="dtb-btn icon-only"><span>🛒</span></div>
+          <div class="menu-toggle" title="สลับเมนู (จำต่อเครื่อง)">
+            <div class="menu-toggle-seg active"><span>⚡</span><span>ใหม่</span></div>
+            <div class="menu-toggle-seg"><span>📋</span><span>เดิม</span></div>
+          </div>
+          <div class="dtb-btn"><span>📍</span><span>นครราชสีมา</span><span style="font-size:7px; color:#71717a;">▾</span></div>
+          <div class="dtb-theme">
+            <div class="dtb-theme-seg"><span>🌙</span><span>Dark</span></div>
+            <div class="dtb-theme-seg active"><span>🌸</span><span>Light</span></div>
+          </div>
+          <div class="dtb-avatar">L</div>
+        </div>
+        <div class="dcontent" style="position: relative;">
+          <div class="bloom-sakura" style="position: absolute; inset: 0;">
+            <!-- Petal rain desktop scale -->
+            <div class="petal deep md fall1" style="top:5%; left:8%; transform: rotate(15deg);"></div>
+            <div class="petal soft sm fall2" style="top:8%; left:22%;"></div>
+            <div class="petal mid lg fall3" style="top:3%; left:38%; transform: rotate(45deg);"></div>
+            <div class="petal deep xs fall1" style="top:12%; left:52%;"></div>
+            <div class="petal mid md fall2" style="top:6%; left:68%; transform: rotate(80deg);"></div>
+            <div class="petal soft sm fall3" style="top:10%; left:84%;"></div>
+            <div class="petal deep sm fall4" style="top:20%; left:14%;"></div>
+            <div class="petal mid xs fall1" style="top:24%; left:30%;"></div>
+            <div class="petal soft md fall2" style="top:30%; left:44%; transform: rotate(120deg);"></div>
+            <div class="petal deep lg fall3" style="top:26%; left:62%;"></div>
+            <div class="petal mid sm fall4" style="top:32%; left:78%;"></div>
+            <div class="petal soft xs fall1" style="top:40%; left:10%;"></div>
+            <div class="petal deep md fall2" style="top:44%; left:24%; transform: rotate(200deg);"></div>
+            <div class="petal mid sm fall3" style="top:48%; left:48%;"></div>
+            <div class="petal soft md fall4" style="top:54%; left:64%;"></div>
+            <div class="petal deep xs fall1" style="top:58%; left:88%;"></div>
+            <div class="petal mid lg fall2" style="top:64%; left:18%; transform: rotate(280deg);"></div>
+            <div class="petal soft sm fall3" style="top:70%; left:36%;"></div>
+            <div class="petal deep md fall4" style="top:76%; left:52%;"></div>
+            <div class="petal mid sm fall1" style="top:82%; left:70%;"></div>
+            <div class="petal soft xs fall2" style="top:88%; left:14%;"></div>
+            <div class="petal deep md fall3" style="top:92%; left:42%; transform: rotate(340deg);"></div>
+            <!-- Orbs in centered arc -->
+            <div class="arc-orb-d" style="top:20%;left:8%;--c1:#3b82f6;--c2:#06b6d4;"><div class="orb-icon">📅</div><div class="orb-name">นัด</div><div class="orb-count">7 sub</div></div>
+            <div class="arc-orb-d" style="top:8%;left:28%;--c1:#14b8a6;--c2:#22c55e;"><div class="orb-icon">👥</div><div class="orb-name">ลูกค้า</div><div class="orb-count">132</div></div>
+            <div class="arc-orb-d" style="top:4%;left:50%;--c1:#ef4444;--c2:#f97316;"><div class="orb-icon">🛒</div><div class="orb-name">ขาย</div><div class="orb-count">฿24K</div></div>
+            <div class="arc-orb-d" style="top:12%;left:72%;--c1:#a855f7;--c2:#ec4899;"><div class="orb-icon">📣</div><div class="orb-name">ตลาด</div><div class="orb-count">3 promo</div></div>
+            <div class="arc-orb-d" style="top:52%;left:78%;--c1:#f59e0b;--c2:#facc15;"><div class="orb-icon">📦</div><div class="orb-name">คลัง</div><div class="orb-count">⚠ 3</div></div>
+            <div class="arc-orb-d" style="top:66%;left:56%;--c1:#10b981;--c2:#06b6d4;"><div class="orb-icon">💰</div><div class="orb-name">เงิน</div><div class="orb-count">มัดจำ</div></div>
+            <div class="arc-orb-d" style="top:66%;left:32%;--c1:#0ea5e9;--c2:#6366f1;"><div class="orb-icon">📊</div><div class="orb-name">รายงาน</div><div class="orb-count">16</div></div>
+            <div class="arc-orb-d" style="top:52%;left:12%;--c1:#facc15;--c2:#f97316;"><div class="orb-icon">🗄️</div><div class="orb-name">พื้นฐาน</div><div class="orb-count">22</div></div>
+          </div>
+          <div class="duo-pill" style="z-index: 7;">
+            <div class="duo-seg chat" style="opacity:0.5;">💬</div>
+            <div class="duo-seg menu" style="background:linear-gradient(135deg,#a1a1aa,#71717a);">✕</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ Desktop Classic Mode (Toggle off) ═══════════════ -->
+  <div class="section-label">▼ Desktop · Classic Mode · Toggle <span style="color:#fbbf24;">📋 เดิม</span> active (สลับกลับได้ทันที ไม่ refresh · จำต่อเครื่อง)</div>
+
+  <style>
+    .classic-shell { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+    .classic-sidebar {
+      width: 130px; flex-shrink: 0; padding: 8px 6px;
+      overflow-y: auto; overflow-x: hidden;
+      display: flex; flex-direction: column; gap: 2px;
+      scrollbar-width: thin;
+      scrollbar-gutter: stable;
+    }
+    .ddark .classic-sidebar { background: rgba(255,255,255,0.02); border-right: 1px solid rgba(239,68,68,0.12); scrollbar-color: rgba(239,68,68,0.35) transparent; }
+    .dsakura .classic-sidebar { background: rgba(255,255,255,0.55); border-right: 1px solid rgba(236,72,153,0.18); scrollbar-color: rgba(236,72,153,0.4) transparent; }
+    /* Themed webkit scrollbar — slim, gradient, blends with theme */
+    .classic-sidebar::-webkit-scrollbar { width: 5px; }
+    .classic-sidebar::-webkit-scrollbar-track { background: transparent; }
+    .classic-sidebar::-webkit-scrollbar-thumb { border-radius: 8px; transition: background 0.2s; }
+    .ddark .classic-sidebar::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(251,146,60,0.45), rgba(239,68,68,0.32));
+      box-shadow: 0 0 6px rgba(239,68,68,0.2);
+    }
+    .ddark .classic-sidebar::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(251,191,36,0.7), rgba(249,115,22,0.55));
+    }
+    .dsakura .classic-sidebar::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(236,72,153,0.45), rgba(244,114,182,0.35));
+      box-shadow: 0 0 6px rgba(236,72,153,0.15);
+    }
+    .dsakura .classic-sidebar::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(236,72,153,0.7), rgba(244,114,182,0.55));
+    }
+    .classic-sec-head {
+      display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 7px;
+      font-size: 9.5px; font-weight: 700; cursor: pointer;
+    }
+    .ddark .classic-sec-head { color: #d1d5db; }
+    .dsakura .classic-sec-head { color: #1f2937; }
+    .ddark .classic-sec-head.open { color: #fb923c; background: rgba(251,146,60,0.08); }
+    .dsakura .classic-sec-head.open { color: #be185d; background: rgba(236,72,153,0.08); }
+    .classic-sec-head .arrow { margin-left: auto; font-size: 7px; opacity: 0.6; }
+    .classic-sub { display: flex; flex-direction: column; gap: 1px; padding: 1px 0 4px 10px; }
+    .classic-sub-item {
+      padding: 5px 9px; border-radius: 6px; font-size: 9px; cursor: pointer;
+    }
+    .ddark .classic-sub-item { color: #9ca3af; }
+    .dsakura .classic-sub-item { color: #4b5563; }
+    .ddark .classic-sub-item.active { background: linear-gradient(135deg,rgba(251,146,60,0.18),rgba(239,68,68,0.1)); color: #fb923c; font-weight: 700; border-left: 2px solid #fb923c; padding-left: 7px; }
+    .dsakura .classic-sub-item.active { background: linear-gradient(135deg,rgba(236,72,153,0.15),rgba(244,114,182,0.08)); color: #be185d; font-weight: 700; border-left: 2px solid #ec4899; padding-left: 7px; }
+    .classic-main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+    /* Chat bubble alone, no Duo Pill in classic mode */
+    .classic-chat-bubble {
+      position: absolute; bottom: 12px; right: 12px;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg,#ec4899,#a855f7);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 17px; z-index: 6;
+      box-shadow: 0 8px 22px rgba(236,72,153,0.4), 0 0 0 4px rgba(236,72,153,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .classic-chat-bubble .badge {
+      position: absolute; top: -1px; right: -1px;
+      background: #fbbf24; color: #18181b; font-size: 7px; font-weight: 800;
+      width: 14px; height: 14px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; border: 2px solid currentColor;
+    }
+    .ddark .classic-chat-bubble .badge { border-color: #0c0a0c; }
+    .dsakura .classic-chat-bubble .badge { border-color: white; }
+  </style>
+
+  <div class="row">
+
+    <!-- Desktop Dark · Classic mode -->
+    <div class="col">
+      <div class="col-title">📋 <b>Desktop Dark</b> · Classic (sidebar เดิม)</div>
+      <div class="ddark">
+        <div class="dtb">
+          <div class="dtb-bread">
+            <div class="dtb-sect-icon">📊</div>
+            <div><div class="dtb-sect">รายงาน</div><div class="dtb-tit">P&L</div></div>
+          </div>
+          <div class="dtb-btn"><span>🏠</span><span>Frontend</span></div>
+          <div class="dtb-btn icon-only"><span>🛒</span></div>
+          <div class="menu-toggle" title="สลับเมนู">
+            <div class="menu-toggle-seg"><span>⚡</span><span>ใหม่</span></div>
+            <div class="menu-toggle-seg active"><span>📋</span><span>เดิม</span></div>
+          </div>
+          <div class="dtb-btn"><span>📍</span><span>นครราชสีมา</span><span style="font-size:7px; color:#9ca3af;">▾</span></div>
+          <div class="dtb-theme">
+            <div class="dtb-theme-seg active"><span>🌙</span><span>Dark</span></div>
+            <div class="dtb-theme-seg"><span>🌸</span><span>Light</span></div>
+          </div>
+          <div class="dtb-avatar">L</div>
+        </div>
+        <div class="classic-shell">
+          <div class="classic-sidebar">
+            <div class="classic-sec-head"><span>📅</span><span>นัดหมาย</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>👥</span><span>ลูกค้า</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>🛒</span><span>การขาย</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>📦</span><span>คลังสินค้า</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>💰</span><span>การเงิน</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>📣</span><span>การตลาด</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head open"><span>📊</span><span>รายงาน</span><span class="arrow">▾</span></div>
+            <div class="classic-sub">
+              <div class="classic-sub-item">หน้ารายงาน</div>
+              <div class="classic-sub-item">รายการขาย</div>
+              <div class="classic-sub-item">ลูกค้าสาขา</div>
+              <div class="classic-sub-item active">กำไรขาดทุน (P&L)</div>
+              <div class="classic-sub-item">ค่ามือแพทย์ (DF)</div>
+              <div class="classic-sub-item">+8 รายการ...</div>
+            </div>
+            <div class="classic-sec-head"><span>🗄️</span><span>ข้อมูลพื้นฐาน</span><span class="arrow">▸</span></div>
+          </div>
+          <div class="classic-main">
+            <div class="dcontent" style="padding: 12px;">
+              <div class="dz-card head">💼 P&L · เดือน พ.ค. 2569</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                <div class="dz-card">รายได้ ฿485K</div>
+                <div class="dz-card">รายจ่าย ฿102K</div>
+                <div class="dz-card">Net 62%</div>
+              </div>
+              <div class="dz-card">⚠ Stock เตือน: Filler X · Botox A · PRP kit</div>
+            </div>
+            <!-- Chat bubble only (no Duo Pill in classic) -->
+            <div class="classic-chat-bubble">💬<div class="badge">3</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop Sakura · Classic mode -->
+    <div class="col">
+      <div class="col-title">📋 <b>Desktop Sakura</b> · Classic (sidebar เดิม)</div>
+      <div class="dsakura">
+        <div class="dtb">
+          <div class="dtb-bread">
+            <div class="dtb-sect-icon">📊</div>
+            <div><div class="dtb-sect">รายงาน</div><div class="dtb-tit">P&L</div></div>
+          </div>
+          <div class="dtb-btn"><span>🏠</span><span>Frontend</span></div>
+          <div class="dtb-btn icon-only"><span>🛒</span></div>
+          <div class="menu-toggle" title="สลับเมนู">
+            <div class="menu-toggle-seg"><span>⚡</span><span>ใหม่</span></div>
+            <div class="menu-toggle-seg active"><span>📋</span><span>เดิม</span></div>
+          </div>
+          <div class="dtb-btn"><span>📍</span><span>นครราชสีมา</span><span style="font-size:7px; color:#71717a;">▾</span></div>
+          <div class="dtb-theme">
+            <div class="dtb-theme-seg"><span>🌙</span><span>Dark</span></div>
+            <div class="dtb-theme-seg active"><span>🌸</span><span>Light</span></div>
+          </div>
+          <div class="dtb-avatar">L</div>
+        </div>
+        <div class="classic-shell">
+          <div class="classic-sidebar">
+            <div class="classic-sec-head"><span>📅</span><span>นัดหมาย</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>👥</span><span>ลูกค้า</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>🛒</span><span>การขาย</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>📦</span><span>คลังสินค้า</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>💰</span><span>การเงิน</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head"><span>📣</span><span>การตลาด</span><span class="arrow">▸</span></div>
+            <div class="classic-sec-head open"><span>📊</span><span>รายงาน</span><span class="arrow">▾</span></div>
+            <div class="classic-sub">
+              <div class="classic-sub-item">หน้ารายงาน</div>
+              <div class="classic-sub-item">รายการขาย</div>
+              <div class="classic-sub-item">ลูกค้าสาขา</div>
+              <div class="classic-sub-item active">กำไรขาดทุน (P&L)</div>
+              <div class="classic-sub-item">ค่ามือแพทย์ (DF)</div>
+              <div class="classic-sub-item">+8 รายการ...</div>
+            </div>
+            <div class="classic-sec-head"><span>🗄️</span><span>ข้อมูลพื้นฐาน</span><span class="arrow">▸</span></div>
+          </div>
+          <div class="classic-main">
+            <div class="dcontent" style="padding: 12px;">
+              <div class="dz-card head">💼 P&L · เดือน พ.ค. 2569</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+                <div class="dz-card">รายได้ ฿485K</div>
+                <div class="dz-card">รายจ่าย ฿102K</div>
+                <div class="dz-card">Net 62%</div>
+              </div>
+              <div class="dz-card">⚠ Stock เตือน: Filler X · Botox A · PRP kit</div>
+            </div>
+            <div class="classic-chat-bubble">💬<div class="badge">3</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="lock-card">
+    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #6ee7b7; border-left: 3px solid #10b981; padding-left: 10px; margin-bottom: 10px;">▼ Themed Bloom Spec</div>
+
+    <div class="lock-row">
+      <div class="lock-key">🔥 Dark bloom</div>
+      <div class="lock-val">
+        <b>Red-Black Space</b> · นทพื้นหลัง <code>linear-gradient(#1a0608, #2c0a0e 50%, #0a0203)</code> + radial red nebula glow + 15+ stars (white·red·orange · sizes tiny/sm/md/lg + glow shadow) + 3 floating <b>embers</b> (animated <code>float-up</code> 4s) + 5 twinkle stars (animated <code>opacity 0.3→1</code> 2.5s). Backdrop blur 8px.
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">🌸 Sakura bloom</div>
+      <div class="lock-val">
+        <b>Sakura Petal Rain</b> · พื้นหลัง <code>linear-gradient(#fff0f5, #ffe4ec 50%, #ffd1dc)</code> + radial pink mist + 17-22 <b>petals</b> ขนาดต่างกัน (xs/sm/md/lg) · 3 colors (deep #f9a8d4→#ec4899 · mid #fbcfe8→#f9a8d4 · soft #ffffff→#fce7f3) · animated <code>petal-fall</code> 5-9s loop · rotated 0-340° + translateX drift. Backdrop blur 8px.
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">🎨 Theme switch</div>
+      <div class="lock-val">
+        Bloom background reads <code>[data-theme]</code> attribute (Dark=red-space · Sakura=petals) · same component · CSS animation auto-pauses เมื่อ user prefers-reduced-motion · <code>prefers-reduced-motion: reduce</code> → static (no fall/twinkle/float).
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">📐 Performance</div>
+      <div class="lock-val">
+        Stars/petals = <b>CSS only</b> (no canvas, no JS loop) · ~20 absolute-positioned divs · CSS animations GPU-accelerated · should add <code>will-change: transform</code> on animated petals/embers · cleanup on bloom-close (unmount animation).
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">♿ A11y</div>
+      <div class="lock-val">
+        Bloom overlay <code>role="dialog"</code> + <code>aria-modal="true"</code> · animation honors <code>prefers-reduced-motion</code> · 8 orbs <code>role="menuitem"</code> + tabindex · screen-reader: "เปิดเมนู เลือก 1 ใน 8 หมวด"
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">🚫 Cosmetic only</div>
+      <div class="lock-val">
+        ห้ามแตะ flow/logic/wiring · sub-components (<code>BranchSelector</code> · <code>ThemeToggle</code> · <code>ProfileDropdown</code> · <code>StaffChatBubble</code>) wired verbatim · handlers verbatim · state verbatim · test pyramid 6 ชั้น loop จน 100% Perfect
+      </div>
+    </div>
+
+    <div class="lock-row">
+      <div class="lock-key">⚡↔📋 Menu Toggle</div>
+      <div class="lock-val">
+        <b>Desktop + Tablet เท่านั้น</b> (≥768px · mobile <768px จะ force New mode ตลอด) · pill toggle <code>[⚡ ใหม่ | 📋 เดิม]</code> ใน top bar · ตำแหน่งระหว่าง 🛒 shortcut กับ Branch dropdown<br/><br/>
+        <b>Switch ทันที seamlessly</b> — React state <code>const [menuMode, setMenuMode] = useState(...)</code> · กดแล้วเปลี่ยน render component พร้อมกัน ไม่มี page refresh · transition 200ms fade ระหว่าง Old↔New shell · sub-components (BranchSelector · ThemeToggle · ProfileDropdown · BackendCmdPalette · BackendMobileDrawer · breadcrumbSlot · NEW NavConfig data) <b>reused verbatim ทั้ง 2 modes</b> — ไม่มีการ duplicate code<br/><br/>
+        <b>Per-device persistence</b> · <code>localStorage.setItem('lover.backendMenuMode', mode)</code> · key namespace <code>lover.</code> ป้องกัน collision · default = <code>'new'</code> เมื่อไม่มีค่า · จำต่อ browser ต่อเครื่อง (localStorage scope) · ไม่ sync ข้าม device (intentional — แต่ละเครื่องเลือก preferred mode ของตัวเอง)<br/><br/>
+        <b>Mode = 'classic'</b> render = `&lt;BackendNav&gt;` เดิม (sidebar + drawer accordion + breadcrumb) · เก็บ <code>code เดิมไว้ครบ 100%</code> ไม่ลบทิ้ง<br/>
+        <b>Mode = 'new'</b> render = `&lt;BackendShellNew&gt;` (Top bar + Duo Pill + Arc Fan bloom) · NEW component wraps NavConfig + section dispatch verbatim
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

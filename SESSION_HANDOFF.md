@@ -66,11 +66,22 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+3 — **Menu V2 + V82-fix7-bis + V2-bis ALL LIVE; 11369/0 PASS**
-- **Master**: `ef4bd5c3 fix(menu-V2-bis): hide chat bubble while mobile drawer/sheet open + light theme dock surface`
-- **Prod**: 3 rounds LIVE today (24b116a3 Menu V2 → 357acf45 V82-fix7-bis → ef4bd5c3 V2-bis); aliased lover-clinic-app.vercel.app
-- **HN counter**: absent → next addCustomer = **LC-26000001** (preserved across all 3 deploys; pure UI session)
-- **opd_sessions**: state unchanged from EOD+2 — backend data layer NOT touched
+- **Date last updated**: 2026-05-18 EOD+4 — **Backend Menu D design LOCKED; spec + mockup committed; writing-plans pending**
+- **Master**: `257a699f feat(phone): tap-to-dial customer phones across Frontend + Backend (V82-Phone)` (1 commit ahead of prod)
+- **Prod**: `ef4bd5c3` LIVE (V82-Phone awaits user deploy auth · vercel-only no rules change)
+- **Tests**: 11409/11409 PASS baseline (no code changes this session — pure design phase)
+- **HN counter**: absent → next addCustomer = **LC-26000001**
+- **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+4 — Backend Menu Redesign Variant D design (spec + mockup; no code)
+
+User asked for backend menu redesign (mobile-first, scalable to 50+ tabs across 8 sections, beautiful modern). Brainstormed 5 menu variants via Visual Companion mockup → user picked **D Floating Hub + Bloom**. Iterated 8+ rounds to final design: **D2 Arc Fan bloom + Duo Pill [💬 chat \| ≡ menu] bottom-right (co-locates with V73 StaffChatBubble) + 5 utility buttons preserved top-bar (🏠 Frontend · 🛒 Shortcut · 📍 Branch · Dark\|Light Theme · 👤 ProfileDropdown clickable) + Mode Toggle ⚡↔📋 (Desktop+Tablet ≥768px only · per-device localStorage `lover.backendMenuMode` · seamless React state swap no refresh · classic BackendNav kept 100%)**.
+
+Dark theme bloom = red-black space + 50+ random-distributed stars (white majority / red minority / orange) + 3 small red nebula patches + 3-4 floating embers · CSS-only drift animations · subtle gentle gold-orange flame halo on orbs. Sakura (Light) theme = white-pink + 17-22 falling petals (3 sizes × 3 shades) · pink-tinted orb shadow. Header BG tuned to blend with bloom (frosted glass + radial theme tints + same hue family). Classic-mode sidebar gets themed slim 5px gradient scrollbar.
+
+**Cosmetic-shell invariant locked** (`feedback_cosmetic_shell_redesign_constraint.md` saved): handlers/state/props verbatim · sub-components reused (BranchSelector / ThemeToggle / ProfileDropdown / StaffChatBubble / BackendCmdPalette) · no flow/logic/wiring changes. **6-tier test pyramid required** (RTL + source-grep + Rule I flow-simulate + Playwright e2e + stress + user simulation · loop until 100% Perfect). Frontend Menu V2 OUT OF SCOPE (untouched).
+
+**Spec**: `docs/superpowers/specs/2026-05-18-backend-menu-redesign-variant-d-design.md` (190 lines, 13 locked decisions). **Mockup**: `docs/superpowers/specs/2026-05-18-backend-menu-redesign-mockup.html` (1194 lines, all 4 theme×state combos). **Checkpoint**: `.agents/sessions/2026-05-18-backend-menu-d-design.md`. Two new memories saved (`feedback_cosmetic_shell_redesign_constraint.md` + `feedback_keep_task_count_tight.md`). **Next chat**: writing-plans → 8-12 tasks → execute.
 
 ### Session 2026-05-18 EOD+3 — Menu Variant A v2 + 2 mobile follow-up fixes (3 deploys)
 
