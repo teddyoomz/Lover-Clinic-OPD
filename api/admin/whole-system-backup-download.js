@@ -1,12 +1,18 @@
 // api/admin/whole-system-backup-download.js
-// V81 — Server-side stream tar.gz of backup folder; return 24h signed URL.
-// Reuses existing __archive.tar.gz if < 24h old (avoids re-zipping).
-// Per spec §5.4 + AV64 archive retention.
+// V81-fix6b (2026-05-17 EOD+2 LATE+1): switched from `archiver` (broken at Vercel
+// runtime; FUNCTION_INVOCATION_FAILED 500 despite lockfile fix — archiver tar-stream
+// pipe to @google-cloud/storage createWriteStream fails opaquely on serverless)
+// to a PURE JSON bundle approach (zero native deps).
+//
+// Bundle shape:
+//   { manifest, files: { [relativePath]: <content-or-base64> } }
+//
+// JSON files → embedded as strings; binary Storage payloads → base64 encoded.
+// Single file (backup.bundle.json) cached at __bundle.json for 24h.
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { verifyAdminToken } from './_lib/adminAuth.js';
-import archiver from 'archiver';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const ARCHIVE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -39,17 +45,17 @@ export default async function handler(req, res) {
   }
 
   const storage = getStorage().bucket();
-  const archivePath = `backups/whole-system/${backupRef}/__archive.tar.gz`;
-  const archiveFile = storage.file(archivePath);
+  const bundlePath = `backups/whole-system/${backupRef}/__bundle.json`;
+  const bundleFile = storage.file(bundlePath);
 
-  // 1. Check if existing archive < 24h old → reuse (avoid re-zipping)
+  // 1. Reuse cached bundle if < 24h old (avoid re-bundling)
   try {
-    const [exists] = await archiveFile.exists();
+    const [exists] = await bundleFile.exists();
     if (exists) {
-      const [meta] = await archiveFile.getMetadata();
+      const [meta] = await bundleFile.getMetadata();
       const ageMs = Date.now() - new Date(meta.timeCreated).getTime();
       if (ageMs < ARCHIVE_TTL_MS) {
-        const [url] = await archiveFile.getSignedUrl({
+        const [url] = await bundleFile.getSignedUrl({
           action: 'read',
           expires: Date.now() + ARCHIVE_TTL_MS,
         });
@@ -57,44 +63,39 @@ export default async function handler(req, res) {
           downloadUrl: url,
           archiveSize: parseInt(meta.size || '0', 10),
           reused: true,
+          format: 'json-bundle-v1',
           expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
         });
       }
     }
-  } catch { /* file probe failed; proceed to create new archive */ }
+  } catch { /* fall through to create */ }
 
-  // 2. Stream tar.gz creation
+  // 2. Build JSON bundle (pure JS, no native deps)
   try {
-    await new Promise((resolve, reject) => {
-      const archive = archiver('tar', { gzip: true, gzipOptions: { level: 6 } });
-      const writeStream = archiveFile.createWriteStream({ contentType: 'application/gzip' });
+    const [files] = await storage.getFiles({ prefix: `backups/whole-system/${backupRef}/` });
+    const bundle = { format: 'json-bundle-v1', backupRef, files: {} };
+    for (const f of files) {
+      const relPath = f.name.replace(`backups/whole-system/${backupRef}/`, '');
+      if (relPath === '__bundle.json') continue; // skip self
+      const [buf] = await f.download();
+      const isJson = relPath.endsWith('.json');
+      // JSON files → store as parsed JSON for direct re-use; binary → base64
+      if (isJson) {
+        try {
+          bundle.files[relPath] = { kind: 'json', data: JSON.parse(buf.toString('utf8')) };
+        } catch {
+          // Malformed JSON → keep as string fallback
+          bundle.files[relPath] = { kind: 'text', data: buf.toString('utf8') };
+        }
+      } else {
+        bundle.files[relPath] = { kind: 'base64', data: buf.toString('base64') };
+      }
+    }
 
-      archive.on('error', reject);
-      archive.on('warning', (err) => {
-        // Non-fatal warnings (e.g. file not found in mid-stream) — log + continue
-        if (err.code !== 'ENOENT') reject(err);
-      });
-      writeStream.on('error', reject);
-      writeStream.on('finish', resolve);
-
-      archive.pipe(writeStream);
-
-      // Enumerate folder + stream each file (excluding self)
-      storage.getFiles({ prefix: `backups/whole-system/${backupRef}/` })
-        .then(([files]) => {
-          for (const f of files) {
-            if (f.name.endsWith('__archive.tar.gz')) continue; // don't include self
-            const relPath = f.name.replace(`backups/whole-system/${backupRef}/`, '');
-            archive.append(f.createReadStream(), { name: relPath });
-          }
-          archive.finalize();
-        })
-        .catch(reject);
-    });
-
-    // 3. Read final meta + sign URL
-    const [meta] = await archiveFile.getMetadata();
-    const [url] = await archiveFile.getSignedUrl({
+    const bundleJson = JSON.stringify(bundle);
+    await bundleFile.save(bundleJson, { contentType: 'application/json' });
+    const [meta] = await bundleFile.getMetadata();
+    const [url] = await bundleFile.getSignedUrl({
       action: 'read',
       expires: Date.now() + ARCHIVE_TTL_MS,
     });
@@ -103,9 +104,11 @@ export default async function handler(req, res) {
       downloadUrl: url,
       archiveSize: parseInt(meta.size || '0', 10),
       reused: false,
+      format: 'json-bundle-v1',
+      fileCount: Object.keys(bundle.files).length,
       expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
     });
   } catch (e) {
-    return res.status(500).json({ error: 'ARCHIVE_FAILED', message: e.message });
+    return res.status(500).json({ error: 'BUNDLE_FAILED', message: e.message, stack: e.stack?.slice(0, 500) });
   }
 }

@@ -1,10 +1,9 @@
 // api/admin/customer-only-backup-download.js
-// V81-fix6 — Stream tar.gz of customer-only backup folder; return 24h signed URL.
+// V81-fix6b — pure JSON bundle download (mirror of whole-system-backup-download).
 
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { verifyAdminToken } from './_lib/adminAuth.js';
-import archiver from 'archiver';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const ARCHIVE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -32,20 +31,21 @@ export default async function handler(req, res) {
   if (!backupRef) return res.status(400).json({ error: 'BACKUP_REF_REQUIRED' });
 
   const storage = getStorage().bucket();
-  const archivePath = `backups/customer-only/${backupRef}/__archive.tar.gz`;
-  const archiveFile = storage.file(archivePath);
+  const bundlePath = `backups/customer-only/${backupRef}/__bundle.json`;
+  const bundleFile = storage.file(bundlePath);
 
   try {
-    const [exists] = await archiveFile.exists();
+    const [exists] = await bundleFile.exists();
     if (exists) {
-      const [meta] = await archiveFile.getMetadata();
+      const [meta] = await bundleFile.getMetadata();
       const ageMs = Date.now() - new Date(meta.timeCreated).getTime();
       if (ageMs < ARCHIVE_TTL_MS) {
-        const [url] = await archiveFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
+        const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
         return res.status(200).json({
           downloadUrl: url,
           archiveSize: parseInt(meta.size || '0', 10),
           reused: true,
+          format: 'json-bundle-v1',
           expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
         });
       }
@@ -53,35 +53,38 @@ export default async function handler(req, res) {
   } catch { /* fall through */ }
 
   try {
-    await new Promise((resolve, reject) => {
-      const archive = archiver('tar', { gzip: true, gzipOptions: { level: 6 } });
-      const writeStream = archiveFile.createWriteStream({ contentType: 'application/gzip' });
-      archive.on('error', reject);
-      archive.on('warning', (err) => { if (err.code !== 'ENOENT') reject(err); });
-      writeStream.on('error', reject);
-      writeStream.on('finish', resolve);
-      archive.pipe(writeStream);
-      storage.getFiles({ prefix: `backups/customer-only/${backupRef}/` })
-        .then(([files]) => {
-          for (const f of files) {
-            if (f.name.endsWith('__archive.tar.gz')) continue;
-            const relPath = f.name.replace(`backups/customer-only/${backupRef}/`, '');
-            archive.append(f.createReadStream(), { name: relPath });
-          }
-          archive.finalize();
-        })
-        .catch(reject);
-    });
+    const [files] = await storage.getFiles({ prefix: `backups/customer-only/${backupRef}/` });
+    const bundle = { format: 'json-bundle-v1', backupRef, scope: 'customer-only', files: {} };
+    for (const f of files) {
+      const relPath = f.name.replace(`backups/customer-only/${backupRef}/`, '');
+      if (relPath === '__bundle.json') continue;
+      const [buf] = await f.download();
+      const isJson = relPath.endsWith('.json');
+      if (isJson) {
+        try {
+          bundle.files[relPath] = { kind: 'json', data: JSON.parse(buf.toString('utf8')) };
+        } catch {
+          bundle.files[relPath] = { kind: 'text', data: buf.toString('utf8') };
+        }
+      } else {
+        bundle.files[relPath] = { kind: 'base64', data: buf.toString('base64') };
+      }
+    }
 
-    const [meta] = await archiveFile.getMetadata();
-    const [url] = await archiveFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
+    const bundleJson = JSON.stringify(bundle);
+    await bundleFile.save(bundleJson, { contentType: 'application/json' });
+    const [meta] = await bundleFile.getMetadata();
+    const [url] = await bundleFile.getSignedUrl({ action: 'read', expires: Date.now() + ARCHIVE_TTL_MS });
+
     return res.status(200).json({
       downloadUrl: url,
       archiveSize: parseInt(meta.size || '0', 10),
       reused: false,
+      format: 'json-bundle-v1',
+      fileCount: Object.keys(bundle.files).length,
       expiresAt: new Date(Date.now() + ARCHIVE_TTL_MS).toISOString(),
     });
   } catch (e) {
-    return res.status(500).json({ error: 'ARCHIVE_FAILED', message: e.message });
+    return res.status(500).json({ error: 'BUNDLE_FAILED', message: e.message, stack: e.stack?.slice(0, 500) });
   }
 }
