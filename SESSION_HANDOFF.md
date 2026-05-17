@@ -66,12 +66,24 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+6 — **Sub-tab picker T1-T7 SHIPPED + Arc Fan polish (5 rounds)**
-- **Master**: `666008f6` (round 5 — appts-centric concentric rings) · ~13 commits ahead of prod
-- **Prod**: `ef4bd5c3` LIVE (sub-tab picker + polish NOT deployed · joins V82-Phone queue · user must type "deploy")
-- **Tests**: 11543 PASS / 25 skipped · Backend Menu D pyramid 136/136 · build clean 2.63–2.92s
+- **Date last updated**: 2026-05-18 EOD+7 — **ClinicLogo at bloom center + slow glow + iterative size tune**
+- **Master**: `033a1101` (round 7 mobile logo -2% tune) · ~20 commits ahead of prod
+- **Prod**: `ef4bd5c3` LIVE (logo polish NOT deployed · joins existing queue · user must type "deploy")
+- **Tests**: Backend Menu D pyramid 136/136 PASS · build clean 3.55s
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+7 — ClinicLogo at bloom center + slow glow + iterative size tune
+
+Added `<ClinicLogo>` to BackendArcBloom rendered at the center of the bloom-stage (desktop 50%/50% with `transform: translate(-50%,-50%)`; mobile top:14% center). Theme-aware via the existing `ClinicLogo` component (auto-picks `logoUrl` vs `logoUrlLight` based on theme prop). Wired clinicSettings + theme through BackendShellNew. Desktop scatter widened ~5% outward to open center room; later finance + reports pushed from top:86% → 91% to clear the bumped logo bottom.
+
+NEW CSS `.bloom-logo-wrap` with clamp-based sizing (desktop 200–360px / mobile 180–247px final after round 7) + slow 4.5s breath animation: 4 keyframes (`bloom-logo-breath`, `*-mobile`, `*-light`, `*-light-mobile`) with drop-shadow blur 14↔28 / 24↔52 px + scale 0.985↔1.015. Dark = ember red `(220,38,38)`, light = sakura pink `(236,72,153)`. `prefers-reduced-motion` stops animation. 2 V21 fixups for new desktop scatter coords in `backend-menu-d-bugfix-orb-and-mode-toggle.test.jsx`.
+
+Then 5 iterative mobile logo bumps per user feedback: 150 → 165 → 180 → 189 → 199 → 195 px at vw=375 (rounds 3-7, each a 1-line clamp() tune).
+
+Discovery: Chrome MCP installed but extension not reachable this turn — fell back to `preview_eval` only (faster than 30s `preview_screenshot` timeout). Suggested user reconnect for next session.
+
+**Checkpoint**: `.agents/sessions/2026-05-18-bloom-logo-and-glow.md`. **Next**: user types "deploy" for the combined queue (V82-Phone + sub-tab picker + Arc Fan rounds + logo polish, vercel-only).
 
 ### Session 2026-05-18 EOD+6 — Sub-tab Picker (T1-T7) SHIPPED + Arc Fan polish (5 rounds)
 
