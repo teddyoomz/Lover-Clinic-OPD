@@ -134,16 +134,22 @@ describe('V77 — BackupManagerTab 📦 button wire', () => {
     expect(src).toMatch(/import\s+WholeFleetBackupModal\s+from/);
   });
 
-  it('BMT1.2 — has 📦 trigger button with data-testid', () => {
+  // V21 fix-up (V82-followup, 2026-05-17): post-V81-fix4 the V77 WholeFleetBackupModal
+  // wire was removed from BackupManagerTab (import commented + JSX deleted). The
+  // 📦 per-customer-fleet trigger button no longer exists in the tab — superseded by
+  // the V81 WholeSystem backup section + V81-fix6 customer-only single-file backups.
+  // Endpoint + Modal files still exist (other tests above still pass); only the
+  // BackupManagerTab wire is gone. Skipped with marker.
+  it.skip('BMT1.2 — has 📦 trigger button with data-testid [REMOVED V81-fix4 — see V21 fix-up note]', () => {
     expect(src).toMatch(/data-testid="whole-fleet-backup-trigger"/);
     expect(src).toMatch(/📦 สำรองลูกค้าทุกคน/);
   });
 
-  it('BMT1.3 — modal state via setWholeFleetModalOpen', () => {
+  it.skip('BMT1.3 — modal state via setWholeFleetModalOpen [REMOVED V81-fix4 — see V21 fix-up note]', () => {
     expect(src).toMatch(/setWholeFleetModalOpen/);
   });
 
-  it('BMT1.4 — onComplete refreshes list (reload)', () => {
+  it.skip('BMT1.4 — onComplete refreshes list (reload) [REMOVED V81-fix4 — see V21 fix-up note]', () => {
     const block = src.match(/<WholeFleetBackupModal[\s\S]{0,300}?\/>/);
     expect(block).not.toBeNull();
     expect(block[0]).toMatch(/onComplete.*reload/);
