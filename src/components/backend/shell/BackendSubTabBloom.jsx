@@ -30,6 +30,7 @@ export default function BackendSubTabBloom({
   onClose,
   onNavigate,
   parentColor,        // { c1, c2 } from SECTION_COLOR of parent orb
+  originRect = null,  // DOMRect of clicked orb for mobile bubble transform-origin
 }) {
   const modalRef = useRef(null);
   const cellRefs = useRef([]);
@@ -141,6 +142,15 @@ export default function BackendSubTabBloom({
   const c1 = parentColor?.c1 || '#0ea5e9';
   const c2 = parentColor?.c2 || '#6366f1';
 
+  // Compute transform-origin in % of viewport for mobile bubble (scale-zoom from orb)
+  const originStyle = {};
+  if (isMobile && originRect && typeof window !== 'undefined') {
+    const ox = ((originRect.left + originRect.width / 2) / window.innerWidth) * 100;
+    const oy = ((originRect.top + originRect.height / 2) / window.innerHeight) * 100;
+    originStyle['--origin-x'] = `${ox.toFixed(1)}%`;
+    originStyle['--origin-y'] = `${oy.toFixed(1)}%`;
+  }
+
   return (
     <div
       role="dialog"
@@ -159,6 +169,7 @@ export default function BackendSubTabBloom({
         style={{
           '--c1': c1,
           '--c2': c2,
+          ...originStyle,
         }}
       >
         {/* Header */}
