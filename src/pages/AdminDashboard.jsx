@@ -903,6 +903,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // ─── Menu Variant A v2 (Phase A, 2026-05-18) — mobile drawer state ───
   const [showMobileJongPicker, setShowMobileJongPicker] = useState(false);   // จอง BottomSheet
   const [showMobileMoreDrawer, setShowMobileMoreDrawer] = useState(false);   // ⋯ เพิ่ม drawer
+  // V2-bis (2026-05-18) — flag html[data-mobile-menu-overlay-open] when either
+  // sheet/drawer is open so CSS can hide the floating staff-chat bubble that
+  // otherwise covers drawer items (user-reported: bubble obscured ออกจากระบบ).
+  useEffect(() => {
+    const open = showMobileJongPicker || showMobileMoreDrawer;
+    if (open) {
+      document.documentElement.setAttribute('data-mobile-menu-overlay-open', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-mobile-menu-overlay-open');
+    }
+    return () => {
+      document.documentElement.removeAttribute('data-mobile-menu-overlay-open');
+    };
+  }, [showMobileJongPicker, showMobileMoreDrawer]);
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimerRef = useRef(null);
   const showToast = (msg, durationMs = 5000) => {
@@ -8885,7 +8899,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
            drawer with ประวัติ/ตั้งค่า/หลังบ้าน/theme/online/signout. Every action
            wired to the SAME state hooks the desktop tabs use — zero behavioral
            drift from V82-fix6. */}
-      <nav className="md:hidden fixed left-2 right-2 z-[90] flex justify-around items-stretch p-1.5 rounded-2xl bg-[rgba(13,13,15,0.94)] backdrop-blur-xl border border-[var(--bd-strong)] shadow-2xl menu-bottom-dock" style={{bottom: 'calc(env(safe-area-inset-bottom) + 8px)'}} data-testid="menu-bottom-dock">
+      <nav className="md:hidden fixed left-2 right-2 z-[90] flex justify-around items-stretch p-1.5 rounded-2xl backdrop-blur-xl border border-[var(--bd-strong)] shadow-2xl menu-bottom-dock menu-dock-surface" style={{bottom: 'calc(env(safe-area-inset-bottom) + 8px)'}} data-testid="menu-bottom-dock">
         <button onClick={() => setAdminMode('chat')} className={`menu-dock-tab ${adminMode === 'chat' ? 'menu-dock-tab-active' : ''} ${isChatActive && chatUnread > 0 && adminMode !== 'chat' ? 'chat-tab-blink' : ''}`} data-tab="chat">
           <MessageCircle size={18}/>
           <span>แชท</span>
