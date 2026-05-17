@@ -195,13 +195,32 @@ describe('AV76.D — force-open semantics', () => {
     expect(expandBlock).toBeTruthy();
     expect(expandBlock[1]).not.toMatch(/setUnreadCount\s*\(\s*0\s*\)/);
   });
-  it('D.4 Header minimize button has disabled={!canMinimize} prop', () => {
+  it('D.4 V82-fix7 — Header minimize button is ALWAYS clickable (no disabled gate)', () => {
+    // V82-fix7 (2026-05-18): force-open trapped mobile users where chat panel
+    // covered the bottom dock + IntersectionObserver "scroll-to-bottom" never
+    // fired. Fix: minimize button ALWAYS works; useStaffChat.minimize auto-
+    // advances the cursor (treats user click = "acknowledge all read").
     const src = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatHeader.jsx'));
-    expect(src).toMatch(/disabled=\{!canMinimize\}|disabled=\{\s*!canMinimize\s*\}/);
+    expect(src).not.toMatch(/disabled=\{!canMinimize\}|disabled=\{\s*!canMinimize\s*\}/);
+    // Anti-regression: legacy `disabled={!canMinimize}` pattern absent
   });
-  it('D.5 Header minimize button has Thai tooltip when blocked', () => {
+  it('D.5 V82-fix7 — Header tooltip indicates ack-on-minimize when unread > 0', () => {
+    // V82-fix7: tooltip changes to inform user that clicking will mark all read.
     const src = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatHeader.jsx'));
-    expect(src).toMatch(/เลื่อนลงล่าง/);
+    expect(src).toMatch(/ทำเครื่องหมายว่าอ่านครบ/);
+    // Old "เลื่อนลงล่างก่อน ⬇" tooltip is removed per V82-fix7
+    expect(src).not.toMatch(/เลื่อนลงล่างก่อน/);
+  });
+  it('D.6 V82-fix7 — useStaffChat.minimize advances cursor before setMinimized(true)', () => {
+    // V82-fix7 contract: clicking minimize = ack all read. Cursor advances
+    // to latest msg createdAt, then setMinimized(true). Locks the new behavior.
+    const src = readFile(join(REPO_ROOT, 'src/hooks/useStaffChat.js'));
+    const minimizeBlock = src.match(/const minimize = useCallback\(\(\) => \{[\s\S]*?\},\s*\[[^\]]*\]\)/);
+    expect(minimizeBlock).toBeTruthy();
+    // Cursor advance call inside minimize body
+    expect(minimizeBlock[0]).toMatch(/setCursor\(selectedBranchId/);
+    // Deps array now includes selectedBranchId + messages (was empty pre-fix7)
+    expect(minimizeBlock[0]).toMatch(/\[selectedBranchId,\s*messages\]/);
   });
 });
 

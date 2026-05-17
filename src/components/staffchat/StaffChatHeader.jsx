@@ -53,24 +53,23 @@ export function StaffChatHeader({ branchName, onMinimize, onEditName, displayNam
         >
           {muted ? <BellOff size={16} /> : <Bell size={16} />}
         </button>
-        {/* V82 (2026-05-17) — force-open gate. canMinimize === false (unread > 0)
-            disables the button + swaps the tooltip. onClick is no-op'd by both
-            the disabled attr AND the conditional onClick to defend in depth
-            against any future click-handler dispatch from keyboard / a11y libs. */}
+        {/* V82-fix7 (2026-05-18) — minimize ALWAYS works. Force-open
+            (V82 contract) is preserved via auto-reopen on new messages, but
+            user explicitly clicking "—" is treated as "acknowledge all read"
+            (useStaffChat.minimize advances the cursor to the latest msg
+            before setMinimized(true)). canMinimize is now a VISUAL hint
+            only — tooltip + opacity reflect unread state but button works.
+            Origin: User mobile bug "กดปิดแชทไม่ได้" — force-open trapped
+            users on mobile where bottom dock was covered. V82 force-open
+            stays useful (next new msg reopens chat) without trapping. */}
         <button
           type="button"
-          onClick={canMinimize ? onMinimize : undefined}
-          disabled={!canMinimize}
+          onClick={onMinimize}
           data-testid="staff-chat-minimize-btn"
           data-can-minimize={canMinimize ? 'true' : 'false'}
-          aria-disabled={!canMinimize}
-          aria-label="ย่อแชท"
-          title={canMinimize ? 'ย่อหน้าต่าง' : 'เลื่อนลงล่างก่อน ⬇'}
-          className="w-8 h-8 rounded hover:bg-rose-700 flex items-center justify-center transition-colors disabled:hover:bg-transparent"
-          style={{
-            opacity: canMinimize ? 1 : 0.4,
-            cursor: canMinimize ? 'pointer' : 'not-allowed',
-          }}
+          aria-label={canMinimize ? 'ย่อแชท' : 'ย่อแชท (และทำเครื่องหมายว่าอ่านครบ)'}
+          title={canMinimize ? 'ย่อหน้าต่าง' : 'ย่อ + ทำเครื่องหมายว่าอ่านครบ'}
+          className="w-8 h-8 rounded hover:bg-rose-700 flex items-center justify-center transition-colors"
         >
           <Minus size={16} />
         </button>
