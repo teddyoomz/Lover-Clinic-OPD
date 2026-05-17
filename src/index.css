@@ -2002,6 +2002,20 @@ button:not(:disabled):active {
   body { padding-bottom: 88px; }
 }
 
+/* V82-fix7-bis (2026-05-18) — Mobile body scroll lock when staff chat panel
+   is open. Without this, swiping inside the full-viewport chat panel bled
+   through to scroll the page behind. Desktop panel is corner-anchored
+   (360×480) — no lock needed. */
+@media (max-width: 767px) {
+  html[data-staff-chat-open] {
+    overflow: hidden !important;
+    touch-action: none;
+  }
+  html[data-staff-chat-open] body {
+    overflow: hidden !important;
+  }
+}
+
 /* Bottom-sheet slide-in animation */
 @keyframes slide-in-from-bottom {
   from { transform: translateY(100%); }

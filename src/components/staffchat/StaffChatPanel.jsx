@@ -4,11 +4,25 @@
 // V73 L1 fix (2026-05-18) — Surface error + loading state from useStaffChat
 // per AV51 (Bug D: silent listener errors hid index-not-built / permission-
 // denied / branch-mismatch causes). User sees rose-tinted banner + retry hint.
-import React from 'react';
+// V82-fix7-bis (2026-05-18) — Mobile body-scroll lock + touchAction:pan-y +
+// overscroll-contain to prevent scroll-bleed: user touch inside chat list
+// was scrolling the page BEHIND the panel instead of the list. Body-class
+// trick (data-staff-chat-open) + CSS @media targets mobile only.
+import React, { useEffect } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { StaffChatHeader } from './StaffChatHeader.jsx';
 
 export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName, error, loading, canMinimize, children }) {
+  // V82-fix7-bis — body scroll lock on mount, restore on unmount. CSS rule
+  // in src/index.css `@media (max-width: 767px) { html[data-staff-chat-open] { overflow: hidden; touch-action: none; } }`
+  // ensures the lock applies ONLY on mobile (desktop panel is 360×480 corner-anchored, doesn't need lock).
+  useEffect(() => {
+    document.documentElement.setAttribute('data-staff-chat-open', 'true');
+    return () => {
+      document.documentElement.removeAttribute('data-staff-chat-open');
+    };
+  }, []);
+
   return (
     <div
       data-testid="staff-chat-panel"
@@ -16,7 +30,8 @@ export function StaffChatPanel({ branchName, onMinimize, onEditName, displayName
         bottom-2 right-2 left-2 top-[20vh] md:top-auto md:left-auto md:bottom-4 md:right-4
         md:w-[360px] md:h-[480px]
         bg-[var(--bg-card)] border border-[var(--bd-strong)] rounded-xl shadow-2xl
-        flex flex-col overflow-hidden z-[9000]"
+        flex flex-col overflow-hidden overscroll-contain z-[9000]"
+      style={{ touchAction: 'pan-y' }}
     >
       <StaffChatHeader
         branchName={branchName}

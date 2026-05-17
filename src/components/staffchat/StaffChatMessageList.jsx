@@ -57,7 +57,11 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply, onScrolle
   }
 
   return (
-    <div data-testid="staff-chat-message-list" className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+    <div
+      data-testid="staff-chat-message-list"
+      className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-2"
+      style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+    >
       {messages.map(m => (
         <StaffChatMessage key={m.id} message={m} isOwn={m.deviceId === ownDeviceId} onReply={onReply} />
       ))}

@@ -195,32 +195,37 @@ describe('AV76.D — force-open semantics', () => {
     expect(expandBlock).toBeTruthy();
     expect(expandBlock[1]).not.toMatch(/setUnreadCount\s*\(\s*0\s*\)/);
   });
-  it('D.4 V82-fix7 — Header minimize button is ALWAYS clickable (no disabled gate)', () => {
-    // V82-fix7 (2026-05-18): force-open trapped mobile users where chat panel
-    // covered the bottom dock + IntersectionObserver "scroll-to-bottom" never
-    // fired. Fix: minimize button ALWAYS works; useStaffChat.minimize auto-
-    // advances the cursor (treats user click = "acknowledge all read").
+  it('D.4 Header minimize button has disabled={!canMinimize} prop', () => {
     const src = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatHeader.jsx'));
-    expect(src).not.toMatch(/disabled=\{!canMinimize\}|disabled=\{\s*!canMinimize\s*\}/);
-    // Anti-regression: legacy `disabled={!canMinimize}` pattern absent
+    expect(src).toMatch(/disabled=\{!canMinimize\}|disabled=\{\s*!canMinimize\s*\}/);
   });
-  it('D.5 V82-fix7 — Header tooltip indicates ack-on-minimize when unread > 0', () => {
-    // V82-fix7: tooltip changes to inform user that clicking will mark all read.
+  it('D.5 Header minimize button has Thai tooltip when blocked', () => {
     const src = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatHeader.jsx'));
-    expect(src).toMatch(/ทำเครื่องหมายว่าอ่านครบ/);
-    // Old "เลื่อนลงล่างก่อน ⬇" tooltip is removed per V82-fix7
-    expect(src).not.toMatch(/เลื่อนลงล่างก่อน/);
+    expect(src).toMatch(/เลื่อนลงล่าง/);
   });
-  it('D.6 V82-fix7 — useStaffChat.minimize advances cursor before setMinimized(true)', () => {
-    // V82-fix7 contract: clicking minimize = ack all read. Cursor advances
-    // to latest msg createdAt, then setMinimized(true). Locks the new behavior.
-    const src = readFile(join(REPO_ROOT, 'src/hooks/useStaffChat.js'));
-    const minimizeBlock = src.match(/const minimize = useCallback\(\(\) => \{[\s\S]*?\},\s*\[[^\]]*\]\)/);
-    expect(minimizeBlock).toBeTruthy();
-    // Cursor advance call inside minimize body
-    expect(minimizeBlock[0]).toMatch(/setCursor\(selectedBranchId/);
-    // Deps array now includes selectedBranchId + messages (was empty pre-fix7)
-    expect(minimizeBlock[0]).toMatch(/\[selectedBranchId,\s*messages\]/);
+  // V82-fix7-bis (2026-05-18) — scroll-bleed fixed in StaffChatPanel +
+  // StaffChatMessageList; V82 force-open contract preserved as designed.
+  it('D.6 V82-fix7-bis — StaffChatPanel applies mobile scroll lock + touch-action', () => {
+    const panel = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatPanel.jsx'));
+    // Body scroll lock via html[data-staff-chat-open] attribute set in useEffect
+    expect(panel).toMatch(/data-staff-chat-open/);
+    // touch-action: pan-y inline style on panel root
+    expect(panel).toMatch(/touchAction:\s*['"]pan-y['"]/);
+    // overscroll-contain to prevent scroll bubble at edges
+    expect(panel).toMatch(/overscroll-contain/);
+  });
+  it('D.7 V82-fix7-bis — MessageList has overscroll-contain + touch-action:pan-y', () => {
+    const list = readFile(join(REPO_ROOT, 'src/components/staffchat/StaffChatMessageList.jsx'));
+    expect(list).toMatch(/overscroll-contain/);
+    expect(list).toMatch(/touchAction:\s*['"]pan-y['"]/);
+    expect(list).toMatch(/WebkitOverflowScrolling:\s*['"]touch['"]/);
+  });
+  it('D.8 V82-fix7-bis — index.css gates body scroll lock to mobile only', () => {
+    const css = readFile(join(REPO_ROOT, 'src/index.css'));
+    expect(css).toMatch(/html\[data-staff-chat-open\][\s\S]{0,200}?overflow:\s*hidden/);
+    // The lock is wrapped in @media (max-width: 767px) — desktop chat
+    // panel is corner-anchored 360×480 and does NOT need body lock.
+    expect(css).toMatch(/@media \(max-width:\s*767px\)[\s\S]{0,400}?html\[data-staff-chat-open\]/);
   });
 });
 

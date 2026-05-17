@@ -320,38 +320,7 @@ export function useStaffChat() {
   const expand = useCallback(() => {
     setMinimized(false);
   }, []);
-  // V82-fix7 (2026-05-18) — clicking minimize = "acknowledge all read" so the
-  // force-open contract doesn't TRAP users on mobile where the chat panel
-  // covers the entire viewport (including bottom nav) and the
-  // scroll-to-bottom IntersectionObserver may never fire for long lists.
-  // The user's explicit minimize click IS the read receipt. unreadCount
-  // drops to 0 + cursor persists + next new message will re-trigger
-  // force-open as designed (V82 cursor still works across remounts).
-  //
-  // Note: we inline the cursor advance here (instead of calling
-  // markScrolledToBottom) so this callback doesn't need markScrolledToBottom
-  // in its deps array (which would cause cyclic dependency since both
-  // depend on `messages` + `selectedBranchId`).
-  const minimize = useCallback(() => {
-    if (selectedBranchId && messages && messages.length > 0) {
-      const latest = messages[messages.length - 1];
-      if (latest) {
-        let latestMs = Date.now();
-        if (typeof latest.createdAt === 'number' && Number.isFinite(latest.createdAt)) {
-          latestMs = latest.createdAt;
-        } else if (latest.createdAt && typeof latest.createdAt.toMillis === 'function') {
-          try { latestMs = latest.createdAt.toMillis(); } catch { /* keep Date.now() */ }
-        }
-        setCursor(selectedBranchId, {
-          lastReadId: String(latest.id || ''),
-          lastReadCreatedAtMs: latestMs,
-          updatedAt: Date.now(),
-        });
-        setCursorState(getCursor(selectedBranchId));
-      }
-    }
-    setMinimized(true);
-  }, [selectedBranchId, messages]);
+  const minimize = useCallback(() => setMinimized(true), []);
 
   // V82 (2026-05-17) — Advance the persistent cursor to the latest message
   // when the user scrolls to the bottom of the chat list. ChatPanel calls
