@@ -323,14 +323,17 @@ export async function runWholeSystemRestore({
   }
 
   // 5. Audit doc
-  const auditId = `whole-system-restore-${Date.now()}-${randomBytes(4).toString('hex')}`;
+  // V81-fix6: scope-aware audit op + id naming
+  const auditOp = scope === 'customer-only' ? 'customer-only-restore' : 'whole-system-restore';
+  const auditId = `${auditOp}-${Date.now()}-${randomBytes(4).toString('hex')}`;
   await db.doc(`${PREFIX}/be_admin_audit/${auditId}`).set({
-    op: 'whole-system-restore',
+    op: auditOp,
+    scope,
     backupRef,
     mode,
     autoBackupRef,
     replaceAuthFromBackup,
-    authPreserved: mode === 'replace' && !replaceAuthFromBackup,
+    authPreserved: scope === 'customer-only' || (mode === 'replace' && !replaceAuthFromBackup),
     stats: {
       ...colResult,
       ...authResult,

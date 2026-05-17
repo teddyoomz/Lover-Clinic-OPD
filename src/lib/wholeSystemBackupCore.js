@@ -298,7 +298,8 @@ export function validateWholeSystemManifest(manifest) {
   if (manifest.schemaVersion !== WHOLE_SYSTEM_SCHEMA_VERSION) {
     return { valid: false, reason: `schemaVersion mismatch: got ${manifest.schemaVersion}, expected ${WHOLE_SYSTEM_SCHEMA_VERSION}` };
   }
-  if (manifest.backupType !== 'whole-system') {
+  // V81-fix6: accept both 'whole-system' (legacy) and 'customer-only' (scoped)
+  if (manifest.backupType !== 'whole-system' && manifest.backupType !== 'customer-only') {
     return { valid: false, reason: `backupType mismatch: got ${manifest.backupType}` };
   }
   if (!manifest.name || !NAME_PATTERN.test(manifest.name)) {
