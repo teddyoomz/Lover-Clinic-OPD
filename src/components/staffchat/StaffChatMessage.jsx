@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { Reply } from 'lucide-react';
 import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
+import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 
 function formatTime(createdAt) {
@@ -48,14 +49,23 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           V73 color-picker (2026-05-18) — name color uses sender-chosen hex
           (resolved via resolveSenderColor with fallback to default rose/sky).
           Inline style required since hex is dynamic (cannot pre-generate
-          Tailwind classes for arbitrary user-picked colors). */}
+          Tailwind classes for arbitrary user-picked colors).
+          V82 (2026-05-17) — RoleBadge rendered inline-flex BEFORE the name
+          when message.senderRole present; returns null gracefully for legacy
+          messages (no senderRole field) so no layout reflow. */}
       {message.displayName && (
         <div
           data-testid={`staff-chat-message-name-${message.id}`}
           className="text-[10px] font-bold mb-0.5 px-1"
-          style={nameStyle}
         >
-          {message.displayName}
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <StaffChatRoleBadge role={message.senderRole} size="sm" />
+            <span data-testid="staff-chat-sender-name" style={nameStyle}>
+              {message.displayName}
+            </span>
+          </span>
         </div>
       )}
       <div className="flex items-end gap-1">

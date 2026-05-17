@@ -1,15 +1,52 @@
 // src/components/staffchat/StaffChatMessageList.jsx
 // V73 (2026-05-16) — Scrollable list of messages, auto-scroll to bottom on new msg.
 // V73 Feature C (2026-05-16) — Forwards onReply to each message so hover Reply button fires.
+// V82 (2026-05-17) — Bottom sentinel + IntersectionObserver fires onScrolledToBottom
+//   when the user reaches the latest message. ChatPanel wires this to
+//   useStaffChat.markScrolledToBottom → advances the persistent read cursor →
+//   unreadCount → 0 → canMinimize → true (force-open lock release).
 import React, { useEffect, useRef } from 'react';
 import { StaffChatMessage } from './StaffChatMessage.jsx';
 
-export function StaffChatMessageList({ messages, ownDeviceId, onReply }) {
+export function StaffChatMessageList({ messages, ownDeviceId, onReply, onScrolledToBottom }) {
   const endRef = useRef(null);
+  const bottomSentinelRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages.length]);
+
+  // V82 (2026-05-17) — IntersectionObserver on the bottom sentinel. Fires
+  // onScrolledToBottom() when the sentinel becomes visible in the scroll
+  // viewport (>= 50% intersection). Cleaner than scroll-position math; handles
+  // dynamic message heights (image attachments) + no scroll-jitter listener
+  // overhead. Observer is recreated on prop change so callback identity is
+  // honored; disconnect on unmount or prop swap.
+  useEffect(() => {
+    if (typeof onScrolledToBottom !== 'function') return undefined;
+    if (typeof IntersectionObserver === 'undefined') return undefined;
+    const node = bottomSentinelRef.current;
+    if (!node) return undefined;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            try {
+              onScrolledToBottom();
+            } catch {
+              // swallow — cursor write failures must not crash the list
+            }
+            return;
+          }
+        }
+      },
+      { threshold: 0.5 }
+    );
+    obs.observe(node);
+    return () => {
+      obs.disconnect();
+    };
+  }, [onScrolledToBottom, messages.length]);
 
   if (messages.length === 0) {
     return (
@@ -25,6 +62,9 @@ export function StaffChatMessageList({ messages, ownDeviceId, onReply }) {
         <StaffChatMessage key={m.id} message={m} isOwn={m.deviceId === ownDeviceId} onReply={onReply} />
       ))}
       <div ref={endRef} />
+      {/* V82 (2026-05-17) — bottom sentinel watched by IntersectionObserver
+          to fire onScrolledToBottom when the user reaches the latest message. */}
+      <div ref={bottomSentinelRef} data-testid="staff-chat-bottom-sentinel" style={{ height: '1px' }} />
     </div>
   );
 }
