@@ -426,6 +426,35 @@ html.theme-transitioning *::after {
 [data-theme="auto"] [class*="bg-teal-"].text-white,
 [data-theme="auto"] [class*="bg-yellow-"].text-white { color: #ffffff !important; }
 
+/* V83-followup-11 (EOD8 LATE 2026-05-18) — Restore white text on:
+   (a) slate/gray/zinc/neutral/stone bg classes (missing from grayscale palette)
+   (b) ANY bg-gradient-to-* class (covers from-slate / from-gray / multi-stop)
+   User report: BackendMenuModeToggle "เดิม" pill uses bg-gradient-to-r
+   from-slate-600 to-slate-700 + text-white → light-theme override flipped
+   text to dark slate → invisible on dark gradient. */
+[data-theme="light"] [class*="bg-slate-"].text-white,
+[data-theme="light"] [class*="bg-gray-"].text-white,
+[data-theme="light"] [class*="bg-zinc-"].text-white,
+[data-theme="light"] [class*="bg-neutral-"].text-white,
+[data-theme="light"] [class*="bg-stone-"].text-white,
+[data-theme="light"] [class*="from-slate-"].text-white,
+[data-theme="light"] [class*="from-gray-"].text-white,
+[data-theme="light"] [class*="from-zinc-"].text-white,
+[data-theme="light"] [class*="from-neutral-"].text-white,
+[data-theme="light"] [class*="from-stone-"].text-white,
+[data-theme="light"] [class*="bg-gradient-to"].text-white,
+[data-theme="auto"] [class*="bg-slate-"].text-white,
+[data-theme="auto"] [class*="bg-gray-"].text-white,
+[data-theme="auto"] [class*="bg-zinc-"].text-white,
+[data-theme="auto"] [class*="bg-neutral-"].text-white,
+[data-theme="auto"] [class*="bg-stone-"].text-white,
+[data-theme="auto"] [class*="from-slate-"].text-white,
+[data-theme="auto"] [class*="from-gray-"].text-white,
+[data-theme="auto"] [class*="from-zinc-"].text-white,
+[data-theme="auto"] [class*="from-neutral-"].text-white,
+[data-theme="auto"] [class*="from-stone-"].text-white,
+[data-theme="auto"] [class*="bg-gradient-to"].text-white { color: #ffffff !important; }
+
 /* ── Restore white text on inline-style accent backgrounds (+ button, Save, logo tabs) ── */
 [data-theme="light"] [style*="background-color"].text-white,
 [data-theme="auto"] [style*="background-color"].text-white { color: #ffffff !important; }
