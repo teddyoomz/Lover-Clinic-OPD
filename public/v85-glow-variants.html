@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>V85 Glow Effect for Dark-Theme Boxes/Cards/Modals — 10 Variants</title>
+<style>
+  /* ─── Stage (dark theme — mimic project root vars) ─────────────────── */
+  :root {
+    --bg-app: #050505;
+    --bg-surface: #0d0d0f;
+    --bg-card: #14141a;
+    --bd: rgba(255,255,255,0.06);
+    --tx-heading: #fafafa;
+    --tx-primary: #e5e5e5;
+    --tx-muted: #71717a;
+    --tx-accent: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Sukhumvit Set", "IBM Plex Sans Thai", sans-serif;
+    background:
+      radial-gradient(ellipse at 25% 15%, #0c0420 0%, transparent 55%),
+      radial-gradient(ellipse at 75% 85%, #04111e 0%, transparent 55%),
+      var(--bg-app);
+    color: var(--tx-primary);
+    min-height: 100vh;
+    padding: 28px 24px 96px;
+    overflow-x: hidden;
+  }
+  /* Faint stars (dark only — mimics bloom-stars but quieter) */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,0.55), transparent),
+      radial-gradient(2px 2px at 60% 10%, rgba(255,255,255,0.65), transparent),
+      radial-gradient(1px 1px at 80% 40%, rgba(248,113,113,0.45), transparent),
+      radial-gradient(1.5px 1.5px at 10% 70%, rgba(251,146,60,0.5), transparent),
+      radial-gradient(1px 1px at 45% 85%, rgba(255,255,255,0.45), transparent),
+      radial-gradient(2px 2px at 88% 65%, rgba(255,255,255,0.55), transparent),
+      radial-gradient(1px 1px at 33% 50%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1.5px 1.5px at 92% 22%, rgba(251,191,36,0.45), transparent);
+    background-size: 100% 100%;
+    z-index: 0;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0 0 4px;
+    color: var(--tx-heading);
+    letter-spacing: 0.5px;
+    position: relative;
+    z-index: 2;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--tx-muted);
+    font-size: 13px;
+    margin: 0 0 22px;
+    position: relative;
+    z-index: 2;
+  }
+  .legend {
+    max-width: 880px;
+    margin: 0 auto 28px;
+    background: rgba(20,22,28,0.55);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #cbd5e1;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(8px);
+  }
+  .legend strong { color: var(--tx-accent); }
+  .section-h {
+    max-width: 1240px;
+    margin: 36px auto 12px;
+    padding: 0 12px;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--tx-accent);
+    letter-spacing: 0.5px;
+    position: relative;
+    z-index: 2;
+    text-transform: uppercase;
+  }
+  .section-h .meta { font-weight: 500; font-size: 12px; color: var(--tx-muted); margin-left: 8px; text-transform: none; }
+
+  /* ─── Grid of variant cards ────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 60px 28px;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 28px 12px 56px;
+    position: relative;
+    z-index: 2;
+  }
+  .variant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .variant-frame {
+    position: relative;
+    width: 260px;
+    /* extra padding so wide-aurora variants don't get cut by grid cell edge */
+    padding: 24px;
+  }
+  .caption {
+    text-align: center;
+    font-size: 12px;
+    color: #cbd5e1;
+    max-width: 260px;
+    line-height: 1.55;
+  }
+  .caption .name {
+    color: var(--tx-accent);
+    font-weight: 800;
+    font-size: 13.5px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .caption .desc { display: block; color: var(--tx-muted); }
+
+  /* ─── Base "standard dark card" (mimics CustomerCard / SaleCard etc.) ─ */
+  .panel {
+    position: relative;
+    width: 240px;
+    background: var(--bg-card);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 16px 18px;
+    z-index: 5;
+    transition: transform 0.25s ease;
+  }
+  .panel:hover { transform: translateY(-2px); }
+  .panel .title { font-size: 12px; color: var(--tx-muted); margin-bottom: 6px; }
+  .panel .stat  { font-size: 28px; font-weight: 800; color: var(--tx-heading); line-height: 1.1; margin-bottom: 4px; }
+  .panel .delta { font-size: 11px; color: #4ade80; font-weight: 700; }
+  .panel .delta.neg { color: #f87171; }
+  .panel .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .panel .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    background: rgba(251,191,36,0.12);
+    color: var(--tx-accent);
+    border: 1px solid rgba(251,191,36,0.25);
+  }
+
+  /* ─── Modal mockup ─────────────────────────────────────────────────── */
+  .modal-frame {
+    position: relative;
+    width: 280px;
+    padding: 32px;
+  }
+  .modal {
+    position: relative;
+    width: 240px;
+    background: var(--bg-surface);
+    border: 1px solid var(--bd);
+    border-radius: 18px;
+    padding: 20px 22px;
+    z-index: 5;
+  }
+  .modal .head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+  }
+  .modal .head .title { font-size: 14px; font-weight: 800; color: var(--tx-heading); }
+  .modal .head .x { font-size: 16px; color: var(--tx-muted); cursor: pointer; }
+  .modal .body { font-size: 12px; color: var(--tx-primary); line-height: 1.55; }
+  .modal .body p { margin: 0 0 12px; }
+  .modal .actions {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;
+  }
+  .modal .actions .btn {
+    padding: 6px 12px; border-radius: 8px;
+    font-size: 11px; font-weight: 700; cursor: pointer;
+  }
+  .modal .actions .btn.primary { background: linear-gradient(135deg, #dc2626, #f97316); color: white; border: none; }
+  .modal .actions .btn.ghost { background: transparent; color: var(--tx-muted); border: 1px solid var(--bd); }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V1 — Bloom-Classic (current Backend Menu D baseline)                */
+  /*  Multi-layer soft halo + breathing pulse                            */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v1 .panel,
+  .v1 .modal {
+    box-shadow:
+      0 20px 38px rgba(0,0,0,0.55),
+      0 0 18px rgba(251,191,36,0.28),
+      0 0 38px rgba(251,146,60,0.18),
+      0 0 64px rgba(249,115,22,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v1 .panel::before,
+  .v1 .modal::before {
+    content: '';
+    position: absolute;
+    inset: -14px;
+    border-radius: 26px;
+    background: radial-gradient(circle,
+      rgba(251,191,36,0.22) 0%,
+      rgba(251,146,60,0.14) 35%,
+      rgba(249,115,22,0.06) 65%,
+      transparent 95%);
+    filter: blur(14px);
+    z-index: -1;
+    animation: pulse-soft 3.3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.55; transform: scale(0.96); }
+    50%      { opacity: 0.85; transform: scale(1.05); }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V2 — Tight-Rim-Neon (single accent color, sharp)                    */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v2 .panel,
+  .v2 .modal {
+    border: 1px solid rgba(6,182,212,0.55);
+    box-shadow:
+      0 0 6px rgba(6,182,212,0.6),
+      0 0 18px rgba(6,182,212,0.35),
+      0 12px 24px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V3 — Wide-Aurora (no animation, atmospheric)                        */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v3 .panel,
+  .v3 .modal {
+    box-shadow:
+      0 16px 32px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v3 .panel::before,
+  .v3 .modal::before {
+    content: '';
+    position: absolute;
+    inset: -36px;
+    border-radius: 56px;
+    background: radial-gradient(circle,
+      rgba(168,85,247,0.28) 0%,
+      rgba(236,72,153,0.14) 40%,
+      rgba(236,72,153,0.04) 70%,
+      transparent 100%);
+    filter: blur(22px);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V4 — Heartbeat Pulse (subtle alert)                                 */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v4 .panel,
+  .v4 .modal {
+    border: 1px solid rgba(239,68,68,0.28);
+    animation: heartbeat 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes heartbeat {
+    0%, 100% {
+      box-shadow:
+        0 14px 28px rgba(0,0,0,0.55),
+        0 0 8px rgba(239,68,68,0.22),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    50% {
+      box-shadow:
+        0 14px 28px rgba(0,0,0,0.55),
+        0 0 18px rgba(239,68,68,0.5),
+        0 0 38px rgba(239,68,68,0.18),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V5 — Jet-Thrust (DOWNWARD asymmetric glow)                          */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v5 .panel,
+  .v5 .modal {
+    box-shadow:
+      0 0 20px rgba(20,184,166,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v5 .panel::after,
+  .v5 .modal::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 80%;
+    width: 240px;
+    height: 200px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse 50% 60% at 50% 0%,
+      rgba(20,184,166,0.42) 0%,
+      rgba(34,197,94,0.22) 40%,
+      transparent 80%);
+    filter: blur(20px);
+    z-index: -1;
+    pointer-events: none;
+    animation: thrust-flicker 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes thrust-flicker {
+    from { opacity: 0.7; transform: translateX(-50%) scaleY(0.95); }
+    to   { opacity: 1;   transform: translateX(-50%) scaleY(1.08); }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V6 — Conic-Rainbow (multi-color halo, colors cycle in place)        */
+  /*  Fix 2026-05-18: pre-fix used `transform: rotate(360deg)` which       */
+  /*  swung the rectangular ::before/::after bounding box OUTSIDE the     */
+  /*  card frame (corners protruded as the element spun). Replaced with   */
+  /*  @property-registered --hue angle so conic-gradient starts at a       */
+  /*  different angle every frame — element STAYS PUT, only colors cycle.  */
+  /* ──────────────────────────────────────────────────────────────────── */
+  @property --v6-hue {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+  .v6 .panel,
+  .v6 .modal {
+    box-shadow: 0 14px 30px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v6 .panel::before,
+  .v6 .modal::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 18px;
+    background: conic-gradient(
+      from var(--v6-hue),
+      #ef4444, #f97316, #facc15, #22c55e, #06b6d4, #6366f1, #ec4899, #ef4444);
+    z-index: -1;
+    animation: hue-cycle 8s linear infinite;
+    filter: blur(2px) brightness(1.05);
+    opacity: 0.7;
+  }
+  .v6 .panel::after,
+  .v6 .modal::after {
+    content: '';
+    position: absolute;
+    inset: -14px;
+    border-radius: 30px;
+    background: conic-gradient(
+      from var(--v6-hue),
+      rgba(239,68,68,0.32), rgba(249,115,22,0.32), rgba(250,204,21,0.32),
+      rgba(34,197,94,0.32), rgba(6,182,212,0.32), rgba(99,102,241,0.32),
+      rgba(236,72,153,0.32), rgba(239,68,68,0.32));
+    filter: blur(14px);
+    z-index: -2;
+    animation: hue-cycle 12s linear infinite reverse;
+  }
+  @keyframes hue-cycle {
+    to { --v6-hue: 360deg; }
+  }
+  /* Fallback for browsers without @property support: keep colors static
+     (no rotation) instead of falling back to the buggy transform spin. */
+  @supports not (background: paint(something)) {
+    .v6 .panel::before, .v6 .modal::before,
+    .v6 .panel::after, .v6 .modal::after { animation: none; }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V7 — Holographic Sweep (gloss strip + ambient)                      */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v7 .panel,
+  .v7 .modal {
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow:
+      0 14px 30px rgba(0,0,0,0.55),
+      0 0 14px rgba(16,185,129,0.22),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v7 .panel::before,
+  .v7 .modal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg,
+      transparent 0%,
+      transparent 35%,
+      rgba(255,255,255,0.16) 50%,
+      transparent 65%,
+      transparent 100%);
+    pointer-events: none;
+    animation: sweep 5s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0%   { transform: translateX(-100%); }
+    65%  { transform: translateX(100%); }
+    100% { transform: translateX(100%); }
+  }
+  .v7 .panel::after,
+  .v7 .modal::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: 26px;
+    background: radial-gradient(circle,
+      rgba(16,185,129,0.22),
+      rgba(6,182,212,0.1) 50%,
+      transparent 80%);
+    filter: blur(14px);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V8 — Inner Glow Only (glassmorphism)                                */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v8 .panel,
+  .v8 .modal {
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(20,22,28,0.7);
+    backdrop-filter: blur(10px);
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.4),
+      inset 0 0 20px rgba(14,165,233,0.14);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V9 — Double-Halo (inner tight + outer wide, 2 colors)               */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v9 .panel,
+  .v9 .modal {
+    box-shadow:
+      0 18px 36px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .v9 .panel::before,
+  .v9 .modal::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 22px;
+    background: radial-gradient(circle,
+      rgba(244,63,94,0.4) 0%,
+      rgba(244,63,94,0.14) 50%,
+      transparent 80%);
+    filter: blur(10px);
+    z-index: -1;
+    pointer-events: none;
+    animation: pulse-soft 3.5s ease-in-out infinite;
+  }
+  .v9 .panel::after,
+  .v9 .modal::after {
+    content: '';
+    position: absolute;
+    inset: -32px;
+    border-radius: 52px;
+    background: radial-gradient(circle,
+      rgba(245,158,11,0.26) 0%,
+      rgba(245,158,11,0.1) 45%,
+      transparent 80%);
+    filter: blur(22px);
+    z-index: -2;
+    pointer-events: none;
+    animation: pulse-soft 4.5s ease-in-out infinite reverse;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  V10 — Drop-Shadow + Ambient (conservative)                          */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .v10 .panel,
+  .v10 .modal {
+    box-shadow:
+      0 28px 56px rgba(0,0,0,0.7),
+      0 12px 24px rgba(0,0,0,0.4),
+      0 0 0 1px rgba(139,92,246,0.16),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .v10 .panel::before,
+  .v10 .modal::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 22px;
+    background: radial-gradient(circle,
+      rgba(139,92,246,0.16) 0%,
+      transparent 70%);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* ─── Footer ────────────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    color: var(--tx-muted);
+    font-size: 11px;
+    margin-top: 40px;
+    position: relative;
+    z-index: 2;
+  }
+  .footer code {
+    background: rgba(15,15,20,0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--tx-accent);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════ */
+  /*  SECTION C — Universal Box Shadow                                     */
+  /*  apply กับ "ทุก box ทุกกรอบ" ใน dark theme: panel, header card,         */
+  /*  sub-panel, search-bar, day-tab, time-table, mini-calendar ฯลฯ        */
+  /*  เป้าหมาย: ให้ทุก box ลอยจากพื้นหลังดำ ไม่จมไปกับ background           */
+  /* ════════════════════════════════════════════════════════════════════ */
+  .page-mockup {
+    position: relative;
+    width: 280px;
+    padding: 16px;
+    background: var(--bg-app);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .page-mockup .pm-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg-card); border: 1px solid var(--bd);
+    border-radius: 10px; padding: 8px 12px; margin-bottom: 10px;
+    font-size: 11px; color: var(--tx-heading); font-weight: 700;
+  }
+  .page-mockup .pm-header .h-pill {
+    background: linear-gradient(135deg, #dc2626, #f97316);
+    color: white; font-size: 9.5px; font-weight: 800;
+    padding: 3px 8px; border-radius: 6px;
+  }
+  .page-mockup .pm-search {
+    background: var(--bg-card); border: 1px solid var(--bd);
+    border-radius: 10px; padding: 6px 10px;
+    font-size: 10px; color: var(--tx-muted); margin-bottom: 10px;
+  }
+  .page-mockup .pm-body {
+    background: var(--bg-card); border: 1px solid var(--bd);
+    border-radius: 10px; padding: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .page-mockup .mini-panel {
+    background: var(--bg-surface); border: 1px solid var(--bd);
+    border-radius: 8px; padding: 8px 10px;
+    font-size: 10.5px; color: var(--tx-primary);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .page-mockup .mini-panel .mp-num {
+    color: var(--tx-accent); font-weight: 800;
+  }
+  /* Convenience selector — applies to every box in the mockup */
+  .boxset { /* will be replaced per variant */ }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U1 — Subtle Drop Lift (most conservative · no color)                */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u1 .pm-header, .u1 .pm-search, .u1 .pm-body, .u1 .mini-panel {
+    box-shadow:
+      0 24px 48px rgba(0,0,0,0.55),
+      0 8px 16px rgba(0,0,0,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U2 — Cool Ambient (cyan/blue tint glow)                             */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u2 .pm-header, .u2 .pm-search, .u2 .pm-body, .u2 .mini-panel {
+    box-shadow:
+      0 24px 48px rgba(0,0,0,0.55),
+      0 0 28px rgba(6,182,212,0.1),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U3 — Warm Ember (orange/amber tint — matches app theme)             */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u3 .pm-header, .u3 .pm-search, .u3 .pm-body, .u3 .mini-panel {
+    box-shadow:
+      0 24px 48px rgba(0,0,0,0.55),
+      0 0 28px rgba(251,146,60,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U4 — Dual-Tone Aurora (warm bottom + cool top)                      */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u4 .pm-header, .u4 .pm-search, .u4 .pm-body, .u4 .mini-panel {
+    box-shadow:
+      0 24px 48px rgba(0,0,0,0.55),
+      0 -8px 28px rgba(6,182,212,0.08),
+      0 14px 28px rgba(251,146,60,0.1),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U5 — Border Highlight + Drop (sharp top edge + soft drop)           */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u5 .pm-header, .u5 .pm-search, .u5 .pm-body, .u5 .mini-panel {
+    border-color: rgba(251,191,36,0.18) !important;
+    box-shadow:
+      0 24px 48px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(251,191,36,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U6 — Slow Pulse (very subtle 8s breathing on every box)             */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u6 .pm-header, .u6 .pm-search, .u6 .pm-body, .u6 .mini-panel {
+    animation: u6-breathe 8s ease-in-out infinite;
+  }
+  @keyframes u6-breathe {
+    0%, 100% {
+      box-shadow:
+        0 22px 44px rgba(0,0,0,0.55),
+        0 0 24px rgba(251,146,60,0.08),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    50% {
+      box-shadow:
+        0 26px 52px rgba(0,0,0,0.6),
+        0 0 38px rgba(251,146,60,0.14),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U7 — Layered Stack Depth (3 drop shadows — "chip on table" feel)    */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u7 .pm-header, .u7 .pm-search, .u7 .pm-body, .u7 .mini-panel {
+    box-shadow:
+      0 4px 8px rgba(0,0,0,0.4),
+      0 12px 24px rgba(0,0,0,0.5),
+      0 28px 56px rgba(0,0,0,0.65),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U8 — Inner Glow Only (subtle inset + drop · clean minimalist)       */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u8 .pm-header, .u8 .pm-search, .u8 .pm-body, .u8 .mini-panel {
+    border-color: rgba(255,255,255,0.1) !important;
+    box-shadow:
+      0 20px 40px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 0 24px rgba(255,255,255,0.03);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U9 — Per-Domain Tint (each box inherits a domain color)             */
+  /*  Mockup uses 4 tints: header=amber, search=red, body=cyan, mini=violet */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u9 .pm-header {
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.55),
+      0 0 24px rgba(251,146,60,0.16),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .u9 .pm-search {
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.55),
+      0 0 24px rgba(239,68,68,0.14),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .u9 .pm-body {
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.55),
+      0 0 28px rgba(6,182,212,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .u9 .mini-panel {
+    box-shadow:
+      0 12px 24px rgba(0,0,0,0.5),
+      0 0 18px rgba(139,92,246,0.14),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────── */
+  /*  U10 — Glassmorphism All-Boxes (backdrop-blur on every container)    */
+  /* ──────────────────────────────────────────────────────────────────── */
+  .u10 .pm-header, .u10 .pm-search, .u10 .pm-body, .u10 .mini-panel {
+    background: rgba(20,22,28,0.5) !important;
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    box-shadow:
+      0 22px 44px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .u6 .pm-header, .u6 .pm-search, .u6 .pm-body, .u6 .mini-panel { animation: none !important; }
+    .v1 .panel::before, .v1 .modal::before,
+    .v4 .panel, .v4 .modal,
+    .v5 .panel::after, .v5 .modal::after,
+    .v6 .panel::before, .v6 .modal::before,
+    .v6 .panel::after, .v6 .modal::after,
+    .v7 .panel::before, .v7 .modal::before,
+    .v9 .panel::before, .v9 .modal::before,
+    .v9 .panel::after, .v9 .modal::after {
+      animation: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>V85 Glow Effect — Dark-Theme Box / Card / Modal + Universal Box</h1>
+  <div class="subtitle">การ์ด + modal + ทุก box/กรอบ มี shadow ลอยจากพื้นหลังดำ · NOT แตะ Backend Menu (ของเดิมคงไว้)</div>
+
+  <div class="legend">
+    <strong>วิธีดู</strong>: 3 sections — <strong>(A) Card panel</strong> 10 แบบ (เหมือนการ์ดสถิติ/customer/sale) · <strong>(B) Modal</strong> 10 แบบ (popup) · <strong>(C) Universal Box</strong> 10 แบบ (apply กับ "ทุก box ทุกกรอบ" — header / search bar / body / nested panels)<br>
+    <strong>โทน</strong>: dark-surface (rgba(20,22,28)) · พื้นหลังดำสนิทเหมือน app จริง · glow มาจาก box-shadow + ::before/::after pseudo<br>
+    <strong>เลือก</strong>: พิมพ์ <strong>V1–V10</strong> (card/modal) + <strong>U1–U10</strong> (universal box) หรือ combo เช่น <strong>"V9 บน card + V10 บน modal + U3 ทุก box"</strong><br>
+    <strong>Performance budget</strong>: ไม่จำกัด (user authorized "เครื่องแรงพอ ใส่ effect เต็มที่")
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Section A — Standard Card Panels (สถิติ / dashboard / list rows)  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="section-h">A — Card Panel <span class="meta">(เช่น CustomerCard / SaleCard / StatCard ในแอป)</span></div>
+
+  <div class="grid">
+    <!-- V1 -->
+    <div class="variant v1">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">ลูกค้าทั้งหมด</div>
+          <div class="stat">248</div>
+          <div class="delta">+12 รายในเดือนนี้</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V1 · Bloom-Classic</span>
+        <span class="desc">radial halo + pulse 3.3s · gold-orange · บาลานซ์สุด</span>
+      </div>
+    </div>
+
+    <!-- V2 -->
+    <div class="variant v2">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">นัดวันนี้</div>
+          <div class="stat">14</div>
+          <div class="delta">มาแล้ว 9 · เหลือ 5</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V2 · Tight-Rim Neon</span>
+        <span class="desc">1px tight rim + 6px close glow · ชัด · แยกขอบเด่น</span>
+      </div>
+    </div>
+
+    <!-- V3 -->
+    <div class="variant v3">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">รายได้สัปดาห์</div>
+          <div class="stat">฿ 86,400</div>
+          <div class="delta">+18% vs สัปดาห์ก่อน</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V3 · Wide-Aurora</span>
+        <span class="desc">halo กว้าง -36px · ไม่ดิ้น · บรรยากาศ · นุ่ม</span>
+      </div>
+    </div>
+
+    <!-- V4 -->
+    <div class="variant v4">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">Recall ที่ต้องโทร</div>
+          <div class="stat">3</div>
+          <div class="delta neg">2 รายเกินวันแล้ว</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V4 · Heartbeat Pulse</span>
+        <span class="desc">pulse 1.8s · alert-ish · เหมาะกับ panel แจ้งเตือน</span>
+      </div>
+    </div>
+
+    <!-- V5 -->
+    <div class="variant v5">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">ยอดเดือนนี้</div>
+          <div class="stat">฿ 312,800</div>
+          <div class="delta">+24% · เลขสูงสุดในไตรมาส</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V5 · Jet-Thrust</span>
+        <span class="desc">glow ล่าง asymmetric · เหมือนไอพ่นจรวด · มีพลังสุด</span>
+      </div>
+    </div>
+
+    <!-- V6 -->
+    <div class="variant v6">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">หมวดยอดนิยม</div>
+          <div class="stat">5 อันดับ</div>
+          <div class="row" style="margin-top:8px;">
+            <span class="pill">🥇 ฉีดผิว</span>
+            <span class="pill">🥈 ดูแลผม</span>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V6 · Conic-Rainbow</span>
+        <span class="desc">ring 7 สีหมุน · multi-color จริง · gimmick สูงสุด</span>
+      </div>
+    </div>
+
+    <!-- V7 -->
+    <div class="variant v7">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">VIP คนใหม่</div>
+          <div class="stat">7 ราย</div>
+          <div class="delta">ระดับ Gold · 4 ราย</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V7 · Holographic Sweep</span>
+        <span class="desc">แถบกวาด 5s · พรีเมียม · Apple shimmer</span>
+      </div>
+    </div>
+
+    <!-- V8 -->
+    <div class="variant v8">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">งานในคิว</div>
+          <div class="stat">23</div>
+          <div class="delta">รอจัดสรร 8</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V8 · Inner Glow Only</span>
+        <span class="desc">inset + backdrop-blur · glass · เรียบสุด</span>
+      </div>
+    </div>
+
+    <!-- V9 -->
+    <div class="variant v9">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">สมาชิกหมดอายุ</div>
+          <div class="stat">11</div>
+          <div class="delta neg">ภายใน 14 วัน</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V9 · Double-Halo</span>
+        <span class="desc">2 ชั้น halo (ใน rose + นอก amber) · ลอยที่สุด · เห็นความลึก</span>
+      </div>
+    </div>
+
+    <!-- V10 -->
+    <div class="variant v10">
+      <div class="variant-frame">
+        <div class="panel">
+          <div class="title">รายงานล่าสุด</div>
+          <div class="stat">P&amp;L</div>
+          <div class="delta">อัพเดต 5 นาทีก่อน</div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">V10 · Drop+Ambient</span>
+        <span class="desc">drop-shadow ใต้ + ambient violet · ทางการ · ปลอดภัยกับ modal</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Section B — Modal Mockups                                          -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="section-h">B — Modal <span class="meta">(เช่น Confirm / FormModal / DetailView popup)</span></div>
+
+  <div class="grid">
+    <!-- Modal V1 -->
+    <div class="variant v1">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">ยืนยันการบันทึก</div><div class="x">✕</div></div>
+          <div class="body"><p>กดยืนยันเพื่อบันทึกการรักษานี้</p></div>
+          <div class="actions"><div class="btn ghost">ยกเลิก</div><div class="btn primary">ยืนยัน</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V1 · Bloom-Classic</span><span class="desc">aura เดียวกันกับ card</span></div>
+    </div>
+
+    <!-- Modal V2 -->
+    <div class="variant v2">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">เพิ่มนัด</div><div class="x">✕</div></div>
+          <div class="body"><p>กรอกข้อมูลให้ครบก่อนกดสร้าง</p></div>
+          <div class="actions"><div class="btn ghost">ปิด</div><div class="btn primary">สร้าง</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V2 · Tight-Rim Neon</span><span class="desc">cyan rim ชัด · ดูเฉียบ</span></div>
+    </div>
+
+    <!-- Modal V3 -->
+    <div class="variant v3">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">รายละเอียดผู้ป่วย</div><div class="x">✕</div></div>
+          <div class="body"><p>นาย Lover Clinic<br>HN 26000001 · เคยมา 12 ครั้ง</p></div>
+          <div class="actions"><div class="btn ghost">ปิด</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V3 · Wide-Aurora</span><span class="desc">นุ่ม · เหมาะ modal ใหญ่</span></div>
+    </div>
+
+    <!-- Modal V4 -->
+    <div class="variant v4">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">⚠ ลบรายการ?</div><div class="x">✕</div></div>
+          <div class="body"><p>ลบแล้วกู้กลับมาไม่ได้</p></div>
+          <div class="actions"><div class="btn ghost">ยกเลิก</div><div class="btn primary">ลบ</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V4 · Heartbeat Pulse</span><span class="desc">เหมาะ confirm-delete · กระตุก</span></div>
+    </div>
+
+    <!-- Modal V5 -->
+    <div class="variant v5">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">ส่ง SMS</div><div class="x">✕</div></div>
+          <div class="body"><p>ส่งให้ลูกค้า 12 รายในรายชื่อ?</p></div>
+          <div class="actions"><div class="btn ghost">ยกเลิก</div><div class="btn primary">ส่ง</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V5 · Jet-Thrust</span><span class="desc">เด่นสุด · "พลังงาน" สูง</span></div>
+    </div>
+
+    <!-- Modal V6 -->
+    <div class="variant v6">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">🎉 รางวัล</div><div class="x">✕</div></div>
+          <div class="body"><p>คุณได้รับ 500 แต้ม Lover Clinic</p></div>
+          <div class="actions"><div class="btn primary">รับเลย</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V6 · Conic-Rainbow</span><span class="desc">งานเฉลิมฉลอง · gimmick สูง</span></div>
+    </div>
+
+    <!-- Modal V7 -->
+    <div class="variant v7">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">VIP เลื่อนระดับ</div><div class="x">✕</div></div>
+          <div class="body"><p>ระดับใหม่: Gold ✦</p></div>
+          <div class="actions"><div class="btn primary">ตกลง</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V7 · Holographic Sweep</span><span class="desc">พรีเมียม · เห็นแถบกวาด</span></div>
+    </div>
+
+    <!-- Modal V8 -->
+    <div class="variant v8">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">ตั้งค่าระบบ</div><div class="x">✕</div></div>
+          <div class="body"><p>กดปุ่มเพื่อเปลี่ยนค่า preferences</p></div>
+          <div class="actions"><div class="btn ghost">ปิด</div><div class="btn primary">บันทึก</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V8 · Inner Glow</span><span class="desc">glassmorphism · เรียบ · เห็นพื้นหลัง</span></div>
+    </div>
+
+    <!-- Modal V9 -->
+    <div class="variant v9">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">ออเดอร์เข้าใหม่</div><div class="x">✕</div></div>
+          <div class="body"><p>คลังกลาง ลำดับที่ #2046</p></div>
+          <div class="actions"><div class="btn primary">เปิดดู</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V9 · Double-Halo</span><span class="desc">2 ชั้น · ดูลอยที่สุด</span></div>
+    </div>
+
+    <!-- Modal V10 -->
+    <div class="variant v10">
+      <div class="modal-frame">
+        <div class="modal">
+          <div class="head"><div class="title">ส่งออกรายงาน</div><div class="x">✕</div></div>
+          <div class="body"><p>เลือกรูปแบบไฟล์ที่ต้องการ</p></div>
+          <div class="actions"><div class="btn ghost">ปิด</div><div class="btn primary">ส่งออก</div></div>
+        </div>
+      </div>
+      <div class="caption"><span class="name">V10 · Drop+Ambient</span><span class="desc">ทางการ · ปลอดภัย default ของ modal</span></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Section C — Universal Box Shadow                                    -->
+  <!--  apply กับ "ทุก box ทุกกรอบ" ใน dark theme ไม่ใช่แค่ card หลัก         -->
+  <!--  จำลอง: page mockup = outer page + header + search + body + 3 mini-panels -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="section-h">C — Universal Box Shadow <span class="meta">(apply กับ "ทุก กรอบ ทุก box" — header / search bar / body / nested panels ที่อยู่ในหน้า · พื้นหลังดำสนิทเหมือน app จริง)</span></div>
+
+  <div class="grid">
+    <!-- U1 — Subtle Drop Lift -->
+    <div class="variant u1">
+      <div class="page-mockup">
+        <div class="pm-header"><span>🩺 รายการคิวผู้ป่วย</span><span class="h-pill">+ คิวใหม่</span></div>
+        <div class="pm-search">🔍 ค้นหา (ชื่อ, HN, เบอร์)</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>วันนี้</span><span class="mp-num">14</span></div>
+          <div class="mini-panel"><span>มาแล้ว</span><span class="mp-num">9</span></div>
+          <div class="mini-panel"><span>เหลือ</span><span class="mp-num">5</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U1 · Subtle Drop Lift</span>
+        <span class="desc">no color · drop-shadow only · เป็นทางการ · ใช้ทุกที่ปลอดภัย</span>
+      </div>
+    </div>
+
+    <!-- U2 — Cool Ambient -->
+    <div class="variant u2">
+      <div class="page-mockup">
+        <div class="pm-header"><span>📅 ตารางวันนี้</span><span class="h-pill">+ เพิ่ม</span></div>
+        <div class="pm-search">🔍 กรองตามแพทย์/ห้อง</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>11:30 ห้องดริป</span><span class="mp-num">ว่าง</span></div>
+          <div class="mini-panel"><span>12:00 ห้องแพทย์</span><span class="mp-num">นัด</span></div>
+          <div class="mini-panel"><span>13:15 ห้องช็อค</span><span class="mp-num">ว่าง</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U2 · Cool Ambient</span>
+        <span class="desc">cyan/blue tint 10% · เย็น · นุ่ม · ฟีล hi-tech</span>
+      </div>
+    </div>
+
+    <!-- U3 — Warm Ember -->
+    <div class="variant u3">
+      <div class="page-mockup">
+        <div class="pm-header"><span>🛒 รายการขาย</span><span class="h-pill">+ ขาย</span></div>
+        <div class="pm-search">🔍 ค้นหาใบขาย</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>วันนี้</span><span class="mp-num">฿ 24,800</span></div>
+          <div class="mini-panel"><span>สัปดาห์นี้</span><span class="mp-num">฿ 152K</span></div>
+          <div class="mini-panel"><span>เดือนนี้</span><span class="mp-num">฿ 612K</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U3 · Warm Ember</span>
+        <span class="desc">amber 12% glow · matches ธีมไฟ/ember ของแอป · ครอบคลุมสุด</span>
+      </div>
+    </div>
+
+    <!-- U4 — Dual-Tone Aurora -->
+    <div class="variant u4">
+      <div class="page-mockup">
+        <div class="pm-header"><span>📊 รายงาน</span><span class="h-pill">+ สร้าง</span></div>
+        <div class="pm-search">🔍 เลือกประเภทรายงาน</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>P&amp;L</span><span class="mp-num">↗ +18%</span></div>
+          <div class="mini-panel"><span>DF Payout</span><span class="mp-num">฿ 42K</span></div>
+          <div class="mini-panel"><span>ค่ามือหมอ</span><span class="mp-num">฿ 86K</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U4 · Dual-Tone Aurora</span>
+        <span class="desc">cyan top + amber bottom · aurora subtle · 2 tone gradient</span>
+      </div>
+    </div>
+
+    <!-- U5 — Border Highlight + Drop -->
+    <div class="variant u5">
+      <div class="page-mockup">
+        <div class="pm-header"><span>👥 ลูกค้าใหม่</span><span class="h-pill">+ เพิ่ม</span></div>
+        <div class="pm-search">🔍 ค้นหาลูกค้า (ชื่อ, HN)</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>นาย อดิศร</span><span class="mp-num">HN 26000001</span></div>
+          <div class="mini-panel"><span>นาง วิเชียร</span><span class="mp-num">HN 26000002</span></div>
+          <div class="mini-panel"><span>นาย มนัส</span><span class="mp-num">HN 26000003</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U5 · Border + Drop</span>
+        <span class="desc">amber 8% rim + top highlight + drop · เห็นขอบชัดทุก box</span>
+      </div>
+    </div>
+
+    <!-- U6 — Slow Pulse -->
+    <div class="variant u6">
+      <div class="page-mockup">
+        <div class="pm-header"><span>💊 คลังยา</span><span class="h-pill">+ รับเข้า</span></div>
+        <div class="pm-search">🔍 ค้นหาสินค้า</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>คงเหลือทั้งหมด</span><span class="mp-num">312</span></div>
+          <div class="mini-panel"><span>ใกล้หมด</span><span class="mp-num">8</span></div>
+          <div class="mini-panel"><span>หมดอายุ &lt;30 วัน</span><span class="mp-num">3</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U6 · Slow Pulse</span>
+        <span class="desc">8s breathing บนทุก box · กระเพื่อมพร้อมกัน · ฟีลมีชีวิต</span>
+      </div>
+    </div>
+
+    <!-- U7 — Layered Stack Depth -->
+    <div class="variant u7">
+      <div class="page-mockup">
+        <div class="pm-header"><span>📣 การตลาด</span><span class="h-pill">+ แคมเปญ</span></div>
+        <div class="pm-search">🔍 ค้นหาโปรโมชั่น</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>โปรฤดูร้อน</span><span class="mp-num">active</span></div>
+          <div class="mini-panel"><span>VIP Gold</span><span class="mp-num">active</span></div>
+          <div class="mini-panel"><span>คูปอง 200</span><span class="mp-num">expired</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U7 · Layered Stack</span>
+        <span class="desc">3 drop shadows ซ้อนกัน · ฟีล "ลูกกลิ้งวางบนโต๊ะ" · ลึกที่สุด</span>
+      </div>
+    </div>
+
+    <!-- U8 — Inner Glow Only -->
+    <div class="variant u8">
+      <div class="page-mockup">
+        <div class="pm-header"><span>⚙️ ตั้งค่าระบบ</span><span class="h-pill">บันทึก</span></div>
+        <div class="pm-search">🔍 ค้นหาเมนูตั้งค่า</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>สีธีม</span><span class="mp-num">dark</span></div>
+          <div class="mini-panel"><span>ภาษา</span><span class="mp-num">ไทย</span></div>
+          <div class="mini-panel"><span>โซนเวลา</span><span class="mp-num">GMT+7</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U8 · Inner Glow Only</span>
+        <span class="desc">inset highlight ที่ขอบบน · ดูเป็น material/glass · เรียบสุด</span>
+      </div>
+    </div>
+
+    <!-- U9 — Per-Domain Tint -->
+    <div class="variant u9">
+      <div class="page-mockup">
+        <div class="pm-header"><span>🏠 หน้าหลัก</span><span class="h-pill">⚡ Live</span></div>
+        <div class="pm-search">🔍 ค้นหาเมนูทั้งหมด</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>📅 นัดหมาย</span><span class="mp-num">14</span></div>
+          <div class="mini-panel"><span>👥 ลูกค้า</span><span class="mp-num">248</span></div>
+          <div class="mini-panel"><span>💰 ยอดวันนี้</span><span class="mp-num">฿ 25K</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U9 · Per-Domain Tint</span>
+        <span class="desc">ทุก box สีตามหมวด: header=amber, search=red, body=cyan, mini=violet · ระบุ domain</span>
+      </div>
+    </div>
+
+    <!-- U10 — Glassmorphism All-Boxes -->
+    <div class="variant u10">
+      <div class="page-mockup">
+        <div class="pm-header"><span>🪟 มุมมองแก้ว</span><span class="h-pill">+ ทดลอง</span></div>
+        <div class="pm-search">🔍 พื้นหลังเบลอ + กระจกใส</div>
+        <div class="pm-body">
+          <div class="mini-panel"><span>มอง stars ทะลุ</span><span class="mp-num">✓</span></div>
+          <div class="mini-panel"><span>blur 10px</span><span class="mp-num">✓</span></div>
+          <div class="mini-panel"><span>saturate 140%</span><span class="mp-num">✓</span></div>
+        </div>
+      </div>
+      <div class="caption">
+        <span class="name">U10 · Glassmorphism</span>
+        <span class="desc">backdrop-blur 10px ทุก box · เห็นพื้นหลังนิดๆ · ระบบ macOS / iOS feel</span>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="footer">
+    <strong>เปิดที่</strong>: <code>http://localhost:5173/v85-glow-variants.html</code> · brainstorming HARD-GATE ตามกฎ J · ไม่แตะ Backend Menu D · ไม่แตะ src/ (V84 chat-tab fix in-flight ปลอดภัย)
+  </div>
+</body>
+</html>
