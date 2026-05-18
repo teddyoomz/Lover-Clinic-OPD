@@ -1,12 +1,13 @@
 ---
-updated_at: "2026-05-18 EOD+10 — V86 v1 + followup-2 shipped (universal red + dimmer + admin-tunable Settings UI)"
-status: "30+ commits ahead of prod · awaiting deploy verb · V86 ready (Phase A 64/64 vitest + Phase B 8 Playwright skip-graceful · build clean · partial Phase C L1 verified)"
+updated_at: "2026-05-18 EOD+11 — V87 + V88 SHIPPED + DEPLOYED (combined queue ~32 commits LIVE)"
+status: "MASTER = PROD. Deploy successful · vercel alias 200 · firestore/storage rules idempotent · 4/4 probes pre+post identical · pending user L1 walkthrough"
 branch: "master"
-last_commit: "cc3aea81 test(V86-followup-2 T4): CG2/CG3/CG8 rewrite + CG9 NEW + VS1-VS6 + B1-B4 rewrite + B8 NEW + AV83 update"
-tests: "Phase A vitest 64/64 PASS (CG1-CG9 + VS1-VS6) · Phase B Playwright 8 scenarios skip-graceful · build clean · partial Phase C real-prod L1 (appointments verified pre-pivot)"
+last_commit: "bfc340d9 style(V88): AdminDashboard top-bar harmony + redder menu-tab-active (cosmetic-shell)"
+tests: "V88 15/15 + V87 20/20 + V86 64/64 = 99/99 V8x family GREEN · build clean (AdminDashboard 414.38 KB)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (V84 + V85 + AV82 + V86 v1 + V86-followup-2 stack NOT deployed)"
-firestore_rules_version: "unchanged"
+production_commit: "bfc340d9 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88 stack DEPLOYED 2026-05-18 EOD+11)"
+firestore_rules_version: "unchanged (idempotent re-deploy)"
+storage_rules_version: "unchanged (idempotent re-deploy via --only storage syntax fix)"
 ---
 
 # Active Context
