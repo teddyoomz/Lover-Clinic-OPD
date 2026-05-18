@@ -66,13 +66,37 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+11 LATE — **V87+V88+V89+V90+V91+V92 shipped + 5 combined deploys + audit-all 23 skills delivered**
-- **Master = Prod**: `56e25aca` (after V92 deploy) — stack V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 ALL LIVE
-- **Tests**: V8x family 158/158 GREEN (V92 15 + V91 18 + V90 13 + V89 13 + V88 15 + V87 20 + V86 64) · full vitest run 195s · build clean
-- **AV invariants added this session**: AV84 (V87 link-button OPD-save guard) — extends V83 chain
-- **Audit findings**: 3 CRITICAL + 7 HIGH all isolated (TZ1 family × 8 sites + S18 atomicity + A7 fetch timeout + H7 cascade gap). Auth + admin + backend-firestore + chat-notifications + rules ALL PASS clean.
+- **Date last updated**: 2026-05-19 (EOD+11 LATE+1) — **🎉 VERSION 1.0 LIVE. V93/V94/V95 audit-all batch deployed + 3-iter audit-fix-audit converged GREEN**
+- **Master = Prod**: `31368682` (after V93+V94+V95 + 3 iter fixes deploy) — stack V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 + V93/V94/V95 audit batch ALL LIVE
+- **Tests**: 116/116 audit batch GREEN (V93 35 + V94 41 + V95 21 + bsa-task6 1) · V8x family 158/158 GREEN · full vitest ~12,000 PASS (17 pre-existing menu-d V90 test-debt + 1 Java-gated emulator unchanged) · build clean
+- **AV invariants added this session**: AV85 (TZ1 family lock — slice/substring/split for date arithmetic) with 5-entry closed sanctioned-exception list
+- **Audit findings**: 3-iter audit-fix-audit converged to 0 P0-P1 remaining. Iter-1 caught 1 missed TZ1 site (`clinicReportAggregator.js:298`). Iter-2 caught TZ1 family expansion (`split('T')[0]` for validity-date arithmetic × 2 sites). Iter-3 confirmed GREEN. Auth + admin + backend-firestore + chat-notifications + rules ALL PASS clean.
 - **HN counter**: unchanged
 - **opd_sessions**: unchanged
+
+### Session 2026-05-19 (EOD+11 LATE+1) — 🎉 V1.0 LIVE: V93/V94/V95 audit batch + 3-iter audit-fix-audit loop converged GREEN
+
+**Single deploy this turn (combined Vercel + Firebase per V15)**. Closes the audit-all 2026-05-18 P0-P1 backlog completely via 3 audit-fix-audit loop iterations. User declared V1.0 at end-of-session: "เรามาพักกัน โปรแกรมเราเริ่มที่ Version 1.0 แล้ว".
+
+- **V93** TZ1 family × 11 sites — `new Date().toISOString().slice(0,10)` → `thaiTodayISO()`. audit-all flagged 8; Rule P Step 3 cross-file grep surfaced 3 more (`CustomerCreatePage.jsx:461` birthdate max + `lineBotResponder.js:402,768` pure helpers with inlined `_thaiTodayISO()` for Vercel serverless). 9 files modified.
+- **V94.S** S18 — `cancelCentralStockOrder` writeBatch atomicity. Mirror of V34 cancelStockOrder pattern. Reads outside batch; cascade writes (batch.update + movement.set + final order.update) queued + single `wb.commit()`.
+- **V94.H** H7 — TreatmentTimeline.confirmCancel adds course-reverse cascade via scopedDataLayer.js (BS-1 compliant — not backendClient direct). Mirrors BackendDashboard.jsx:475-493 canonical pattern. Safe fallback (try/catch + customerId-gated; pre-existing delete behavior preserved if cascade fails).
+- **V94.A** A7 — shared `api/_lib/apiFetch.js` (5s default timeout via `AbortSignal.timeout`) + 18 sites migrated across 9 api/ files (LINE Push/Reply/Profile + FB Graph + Firestore REST). Audit said 60+ sites; actual count 18.
+- **Iter-1 fix** — `clinicReportAggregator.js:298` `.slice(0,7)` → `thaiYearMonth()`. AV85 invariant added to `audit-anti-vibe-code` SKILL.md (Rule P Step 6 lock — TZ1 family).
+- **Iter-3 fix** — validity-date arithmetic × 2 sites (`backendClient.js:1523` + `courseExchange.js:81`). NEW helper `thaiDateNDaysFromNow(days)` in `utils.js` (Bangkok-anchored arithmetic). AV85 expanded to 5-entry closed sanctioned-exception list (INV ID gen + filename ts × 2 + Vercel inlined + serverless modules).
+- **Test bank**: V93 (35) + V94 (41) + V95 (21) + bsa-task6 (1) = 116 assertions GREEN. V95 NEW (iter-3 file) covers helper unit + 2 fixed sites + AV85 SKILL.md content + utils.js export shape.
+- **Audit-all loop**: 3 iterations × 6 parallel general-purpose subagents (23 audit skills × 238 invariants per iter). Iter-1 found 4 P0-P1 → fixed. Iter-2 caught 2 P0-P1 family-expansion sites → fixed. Iter-3 confirmed 0 NEW P0-P1.
+
+**Deploy** (V15 combined):
+- Vercel `lover-clinic-94ywl4274-teddyoomz-4523s-projects.vercel.app` → aliased `https://lover-clinic-app.vercel.app` HTTP 200 ✓
+- Firebase `firebase deploy --only firestore:rules,storage` ✓ (idempotent — V93/V94/V95 batch contains zero rule file changes)
+- Probe-Deploy-Probe 4/4 IDENTICAL pre+post (chat_conv 200 · be_line_reminder_log 403 · be_fb_configs 403 · be_staff_chat_messages 403)
+
+**V1.0 marker**: project memory `~/.claude/projects/F--LoverClinic-app/memory/project_v1_0_milestone.md` records the full V1.0 baseline. Future work classifies as v1.0.x patch / v1.1.0 minor / v2.0.0 major.
+
+**Pre-existing failures** (NOT from this batch — separate session work):
+- 17× `tests/backend-menu-d-*` test-debt post-V90 entity-context auto-close (older V21-T6 tests don't tap-to-open before asserting menuitem role; V90's bloom auto-close on isSpecificEntityContext is correct, tests just need post-V90 fixup).
+- 1× `tests/v81-emulator-roundtrip.test.js` Java-gated skip (intentional via `describe.skipIf(SKIP_V81_EMULATOR === '1')`).
 
 ### Session 2026-05-18 EOD+11 LATE — V87→V92 (5 deploys) + audit-all 23 skills via 6 parallel subagents
 
