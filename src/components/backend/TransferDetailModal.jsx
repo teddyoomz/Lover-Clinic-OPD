@@ -64,7 +64,7 @@ export default function TransferDetailModal({ transferId, onClose }) {
   const info = STATUS_INFO[status] || STATUS_INFO[0];
 
   return (
-    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--bd)] px-5 py-3 flex items-center gap-3">

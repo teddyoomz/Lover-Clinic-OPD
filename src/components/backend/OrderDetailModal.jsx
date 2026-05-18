@@ -142,7 +142,7 @@ export default function OrderDetailModal({ orderId, onClose, onSaved }) {
   const total = order ? (order.items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0) : 0;
 
   return (
-    {/* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */}
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}

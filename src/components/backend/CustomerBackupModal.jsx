@@ -48,7 +48,7 @@ export default function CustomerBackupModal({ customer, onClose }) {
   }
 
   return (
-    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" data-testid="customer-backup-modal">
       <div className="w-[95vw] max-w-xl rounded-xl bg-[var(--bg-card)] border border-amber-700/40 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">

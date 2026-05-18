@@ -71,7 +71,7 @@ export default function SaleDetailModal({ sale, onClose, onOpenCustomer }) {
   const outstanding = Math.max(0, netTotal - channelSum);
 
   return (
-    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       role="dialog"

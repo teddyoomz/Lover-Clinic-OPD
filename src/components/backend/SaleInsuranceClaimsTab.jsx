@@ -237,7 +237,7 @@ export default function SaleInsuranceClaimsTab({ clinicSettings }) {
 
       {/* Pay modal — transition to 'paid' with paidAmount */}
       {payOpen && (
-        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <form onClick={(e) => e.stopPropagation()} onSubmit={handlePaySubmit}
             className="w-full max-w-md mx-4 rounded-2xl p-5 bg-[var(--bg-surface)] border border-[var(--bd)] space-y-3"
