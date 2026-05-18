@@ -14,6 +14,7 @@ if (import.meta.env.DEV) {
 import { DEFAULT_CLINIC_SETTINGS } from './constants.js';
 import { applyThemeColor, hexToRgb } from './utils.js';
 import { useTheme } from './hooks/useTheme.js';
+import { useV86GlowApply } from './hooks/useV86GlowApply.js';
 import { OfficialOPDPrint, DashboardOPDPrint } from './components/PrintTemplates.jsx';
 import AdminLogin from './pages/AdminLogin.jsx';
 import PatientForm from './pages/PatientForm.jsx';
@@ -38,6 +39,10 @@ function LazyFallback() {
 
 export default function App() {
   const { theme, setTheme } = useTheme();
+  // V86-followup-2 — apply neon glow CSS vars from system_config.v86Glow.
+  // Safe to mount globally: hook self-handles absent/anon-blocked config
+  // via fallback to V86_GLOW_DEFAULTS (red + 45% intensity).
+  useV86GlowApply();
   const [user, setUser] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [printMode, setPrintMode] = useState(null);

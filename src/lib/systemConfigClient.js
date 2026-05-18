@@ -28,6 +28,38 @@ const SYSTEM_CONFIG_DOC_ID = 'system_config';
 
 const VALID_DATE_RANGES = Object.freeze(['7d', '30d', '90d', '180d', '1y', 'mtd', 'qtd', 'ytd']);
 
+// V86-followup-2 (2026-05-18 EOD+10) — Universal red glow + intensity
+// multiplier. Admin tunes via SystemSettingsTab "เอฟเฟกต์แสงเรือง" section.
+export const V86_GLOW_DEFAULTS = Object.freeze({
+  enabled: true,
+  c1: '#dc2626',           // red-600 border + outer ring
+  c2: '#ef4444',           // red-500 halo
+  intensityPercent: 45,    // 0-150 (% — 0=off, 100=full V86 v1 baseline, 150=brighter)
+});
+
+const V86_HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * V86-followup-2 — validate + normalize a v86Glow patch. Returns a fully-
+ * populated v86Glow object with defaults filled for any missing/invalid fields.
+ * Used by both validateSystemConfigPatch (error reporting) and as a standalone
+ * helper for callers that want auto-fixed values.
+ */
+export function validateV86Glow(patch) {
+  const out = { ...V86_GLOW_DEFAULTS };
+  if (typeof patch?.enabled === 'boolean') out.enabled = patch.enabled;
+  if (typeof patch?.c1 === 'string' && V86_HEX_RE.test(patch.c1)) {
+    out.c1 = patch.c1.toLowerCase();
+  }
+  if (typeof patch?.c2 === 'string' && V86_HEX_RE.test(patch.c2)) {
+    out.c2 = patch.c2.toLowerCase();
+  }
+  if (Number.isFinite(patch?.intensityPercent)) {
+    out.intensityPercent = Math.max(0, Math.min(150, Math.round(patch.intensityPercent)));
+  }
+  return out;
+}
+
 export const SYSTEM_CONFIG_DEFAULTS = Object.freeze({
   tabOverrides: {},
   defaults: Object.freeze({
@@ -40,6 +72,7 @@ export const SYSTEM_CONFIG_DEFAULTS = Object.freeze({
     // Q4-C semantic: false → block NEW negatives, repay existing.
     allowNegativeStock: true,
   }),
+  v86Glow: V86_GLOW_DEFAULTS,
 });
 
 function basePath() {
@@ -82,6 +115,8 @@ export function mergeSystemConfigDefaults(raw) {
         ? r.featureFlags.allowNegativeStock
         : SYSTEM_CONFIG_DEFAULTS.featureFlags.allowNegativeStock,
     },
+    // V86-followup-2 — validateV86Glow auto-fills missing/invalid fields
+    v86Glow: validateV86Glow(r.v86Glow),
     _updatedBy: r._updatedBy || '',
     _updatedAt: r._updatedAt || null,
     _version: typeof r._version === 'number' ? r._version : 0,
@@ -174,6 +209,29 @@ export function validateSystemConfigPatch(patch) {
       return 'featureFlags.allowNegativeStock must be boolean';
     }
   }
+  // V86-followup-2 — v86Glow validation
+  if (patch.v86Glow !== undefined) {
+    if (typeof patch.v86Glow !== 'object' || Array.isArray(patch.v86Glow)) {
+      return 'v86Glow must be an object';
+    }
+    if (patch.v86Glow.enabled !== undefined && typeof patch.v86Glow.enabled !== 'boolean') {
+      return 'v86Glow.enabled must be boolean';
+    }
+    if (patch.v86Glow.c1 !== undefined &&
+        (typeof patch.v86Glow.c1 !== 'string' || !V86_HEX_RE.test(patch.v86Glow.c1))) {
+      return 'v86Glow.c1 must be 7-char hex string (e.g. #dc2626)';
+    }
+    if (patch.v86Glow.c2 !== undefined &&
+        (typeof patch.v86Glow.c2 !== 'string' || !V86_HEX_RE.test(patch.v86Glow.c2))) {
+      return 'v86Glow.c2 must be 7-char hex string (e.g. #ef4444)';
+    }
+    if (patch.v86Glow.intensityPercent !== undefined) {
+      const n = Number(patch.v86Glow.intensityPercent);
+      if (!Number.isFinite(n) || n < 0 || n > 150) {
+        return 'v86Glow.intensityPercent must be 0-150';
+      }
+    }
+  }
   return null;
 }
 
@@ -207,6 +265,13 @@ export function computeChangedFields(before, after) {
   for (const k of ['allowNegativeStock']) {
     if ((b.featureFlags || {})[k] !== (a.featureFlags || {})[k]) {
       out.push(`featureFlags.${k}`);
+    }
+  }
+
+  // V86-followup-2 — v86Glow per-field diff
+  for (const k of ['enabled', 'c1', 'c2', 'intensityPercent']) {
+    if ((b.v86Glow || {})[k] !== (a.v86Glow || {})[k]) {
+      out.push(`v86Glow.${k}`);
     }
   }
 
@@ -255,6 +320,10 @@ export async function saveSystemConfig({ patch, executedBy, reason } = {}) {
       ...beforeMerged.featureFlags,
       ...(patch.featureFlags || {}),
     },
+    // V86-followup-2 — normalize v86Glow via validator on merge
+    v86Glow: patch.v86Glow !== undefined
+      ? validateV86Glow({ ...beforeMerged.v86Glow, ...patch.v86Glow })
+      : beforeMerged.v86Glow,
   };
   const afterMerged = mergeSystemConfigDefaults(nextRaw);
 
