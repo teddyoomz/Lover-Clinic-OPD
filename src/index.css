@@ -3673,3 +3673,81 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
     0 2px 4px -1px rgba(244, 114, 182, 0.08),
     0 1px 2px 0 rgba(15, 23, 42, 0.05) !important;
 }
+
+/* =====================================================================
+   V86 — Neon Cyberpunk Glow (2026-05-18 EOD+10)
+   Replaces V85's invisible-on-dark black shadows with per-section
+   colored neon. Per-section binding via [data-section="<id>"] CSS vars.
+   Steady-state: 4s breath pulse. Interactive: hover boost (in T3).
+   Reduced-motion: static fallback (in T3). Light theme: deeper-saturation
+   alphas (in T3).
+   AV83 lock: utilities consume var(--neon-c1/c2), never hardcoded RGB.
+   AV81 lock: menu + print files MUST never reference .v86-glow-*.
+   ===================================================================== */
+
+/* --- Per-section color vars (mirrors ArcBloom SECTION_COLOR pairs) --- */
+[data-section="appointments-section"],
+[data-section="appointments"] {
+  --neon-c1: 59, 130, 246;   /* blue */
+  --neon-c2: 6, 182, 212;    /* cyan */
+}
+[data-section="customers"] {
+  --neon-c1: 20, 184, 166;   /* teal */
+  --neon-c2: 34, 197, 94;    /* green */
+}
+[data-section="sales"] {
+  --neon-c1: 239, 68, 68;    /* red */
+  --neon-c2: 249, 115, 22;   /* orange */
+}
+[data-section="marketing"] {
+  --neon-c1: 168, 85, 247;   /* purple */
+  --neon-c2: 236, 72, 153;   /* magenta */
+}
+[data-section="stock"] {
+  --neon-c1: 245, 158, 11;   /* amber */
+  --neon-c2: 250, 204, 21;   /* yellow */
+}
+[data-section="finance"] {
+  --neon-c1: 16, 185, 129;   /* emerald */
+  --neon-c2: 6, 182, 212;    /* cyan */
+}
+[data-section="reports"] {
+  --neon-c1: 14, 165, 233;   /* sky */
+  --neon-c2: 99, 102, 241;   /* indigo */
+}
+[data-section="master"] {
+  --neon-c1: 250, 204, 21;   /* yellow */
+  --neon-c2: 249, 115, 22;   /* orange */
+}
+
+/* Fallback (no data-section ancestor): neutral blue/cyan */
+:root {
+  --neon-c1: 59, 130, 246;
+  --neon-c2: 6, 182, 212;
+}
+
+/* --- V86 base utility class --- */
+.v86-glow-card {
+  border: 1px solid rgba(var(--neon-c1), 0.40);
+  box-shadow:
+    0 0 0 1px rgba(var(--neon-c1), 0.08),
+    0 0 14px rgba(var(--neon-c2), 0.45),
+    0 0 32px rgba(var(--neon-c2), 0.20);
+  animation: v86-breath 4s ease-in-out infinite;
+  transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+@keyframes v86-breath {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(var(--neon-c1), 0.08),
+      0 0 14px rgba(var(--neon-c2), 0.45),
+      0 0 32px rgba(var(--neon-c2), 0.20);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(var(--neon-c1), 0.16),
+      0 0 22px rgba(var(--neon-c2), 0.65),
+      0 0 52px rgba(var(--neon-c2), 0.38);
+  }
+}
