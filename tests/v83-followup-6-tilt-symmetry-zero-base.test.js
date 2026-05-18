@@ -64,25 +64,38 @@ describe('V83-followup-6 — Sub-tab tilt CSS base-zero symmetry', () => {
   });
 });
 
-describe('V83-followup-7 — Sidebar sub-item card-shading', () => {
-  it('SH1 — DARK theme inactive items have rgba background + border + shadow', () => {
-    // Match the dark-theme rule (no [data-theme="light"] prefix)
-    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.025\)/s);
+describe('V83-followup-7 → followup-16 supersession — Sidebar sub-item shading', () => {
+  // V21-class fixup (2026-05-18 EOD+9, V85 cycle): V83-followup-7 added per-item
+  // card chrome (rgba background + multi-side border + box-shadow + hover lift).
+  // V83-followup-16 later (same session) STRIPPED it per user "ทำให้เมนูย่อย
+  // เหลือแต่กรอบล่าง" → sub-items now have ONLY a bottom-border divider.
+  // followup-16's CSS strip did NOT update SH1/SH3/SH4 here (V21 lock-in).
+  // Flipped each test to assert the followup-16 contract; followup-7 marker
+  // assertion preserved as institutional memory.
+
+  it('SH1 — DARK theme inactive items use transparent bg + bottom border only (post-followup-16)', () => {
+    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*background:\s*transparent[^}]*border-bottom:\s*1px\s+solid\s+rgba\(244,\s*114,\s*182/s);
   });
 
-  it('SH2 — DARK theme inactive items have transform + box-shadow', () => {
-    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*box-shadow/s);
+  it('SH2 — DARK theme inactive items have NO outer box-shadow (post-followup-16)', () => {
+    // Stripped per followup-16: was box-shadow:0 2px 4px rgba(..); now box-shadow:none
+    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*box-shadow:\s*none/s);
   });
 
-  it('SH3 — DARK theme hover lifts (translateY(-1px))', () => {
-    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\):hover\s*\{[^}]*transform:\s*translateY\(-1px\)/s);
+  it('SH3 — DARK theme hover changes border-bottom-color (no translateY lift post-followup-16)', () => {
+    // Pre-followup-16: hover translateY(-1px) lift. Post: bg/border tint only, transform:none.
+    expect(CSS).toMatch(/nav\[aria-label="เมนูระบบหลังบ้าน"\]\s+ul\[role="list"\][^{]*not\(\[aria-current="page"\]\):hover\s*\{[^}]*border-bottom-color:\s*rgba\(244,\s*114,\s*182/s);
   });
 
-  it('SH4 — LIGHT theme inactive items have white bg + paper drop-shadow', () => {
-    expect(CSS).toMatch(/\[data-theme="light"\][^{]*nav\[aria-label="เมนูระบบหลังบ้าน"\][^{]*ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*background:\s*#ffffff/s);
+  it('SH4 — LIGHT theme inactive items use transparent bg + rose bottom border (post-followup-16)', () => {
+    expect(CSS).toMatch(/\[data-theme="light"\][^{]*nav\[aria-label="เมนูระบบหลังบ้าน"\][^{]*ul\[role="list"\][^{]*not\(\[aria-current="page"\]\)\s*\{[^}]*background:\s*transparent[^}]*border-bottom:\s*1px\s+solid\s+rgba\(244,\s*114,\s*182/s);
   });
 
-  it('SH5 — V83-followup-7 marker present', () => {
+  it('SH5 — V83-followup-7 marker present (institutional memory — superseded by followup-16)', () => {
     expect(CSS).toMatch(/V83-followup-7/);
+  });
+
+  it('SH6 — V83-followup-16 marker present (current contract — bottom border only)', () => {
+    expect(CSS).toMatch(/V83-followup-16/);
   });
 });
