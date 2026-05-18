@@ -14,6 +14,11 @@ import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NAV_SECTIONS } from '../nav/navConfig.js';
 import BackendSubTabBloom from './BackendSubTabBloom.jsx';
 import ClinicLogo from '../../ClinicLogo.jsx';
+// EOD8 (2026-05-18 V83-followup) — wire permission filter so new menu
+// only shows tabs/sub-tabs the logged-in user can access. Mirrors the old
+// sidebar (BackendSidebar.jsx uses the same hook). User report:
+// "เมนูใหม่เราแสดง tab และ sub tab ครบ ทั้งๆที่ login นั้นไม่มีสิทธิ์เข้าถึง".
+import { useTabAccess } from '../../../hooks/useTabAccess.js';
 
 const MD_BREAKPOINT = 768;
 
@@ -154,7 +159,22 @@ function getIsMobile() {
 export default function BackendArcBloom({ open, onClose, onNavigate, clinicSettings = null, theme = 'dark' }) {
   const orbRefs = useRef([]);
   const previouslyFocused = useRef(null);
-  const sections = useMemo(() => NAV_SECTIONS, []);
+  // EOD8 (2026-05-18 V83-followup) — permission filter via useTabAccess.
+  // canAccess(tabId) returns true if (isAdmin OR perm map allows it).
+  // Until permissions are loaded, hide everything to avoid flashing the full
+  // menu then collapsing — better empty-bloom-briefly than wrong-tab-flash.
+  const { canAccess, loaded: permsLoaded } = useTabAccess();
+  const sections = useMemo(() => {
+    if (!permsLoaded) return [];
+    return NAV_SECTIONS
+      .map((section) => {
+        const accessibleItems = (section.items || []).filter((item) => canAccess(item.id));
+        if (accessibleItems.length === 0) return null;
+        // Preserve original section shape; only items[] is filtered
+        return { ...section, items: accessibleItems };
+      })
+      .filter(Boolean);
+  }, [canAccess, permsLoaded]);
   const [isMobile, setIsMobile] = useState(getIsMobile);
   // Sub-tab picker state — opens when section has ≥2 items
   const [pickerSection, setPickerSection] = useState(null);

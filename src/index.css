@@ -2418,7 +2418,11 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 .subtab-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* EOD8 (2026-05-18 V83-followup) — bumped from 60 → 100 to clearly
+     beat bloom-logo-wrap (z:1 inside bloom-backdrop z:30 stacking context).
+     User reported sub-tab text being overlapped by big LOVER CLINIC logo
+     drop-shadow glow. z:100 lifts subtab cleanly above all bloom internals. */
+  z-index: 100;
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
   display: flex;
@@ -2594,7 +2598,12 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 
 .bloom-logo-wrap {
   position: absolute;
-  z-index: 1;
+  /* EOD8 (2026-05-18 V83-followup) — lowered from 1 → 0 so the sub-tab
+     picker overlay (z:100) sits unambiguously above the logo. The logo's
+     drop-shadow glow can extend ~50px outside its box, so even though
+     sub-tab z:100 wins in stacking, lowering logo z prevents any edge-case
+     paint-order issue at the perspective-transform boundary. */
+  z-index: 0;
   pointer-events: none;
   display: flex;
   align-items: center;
