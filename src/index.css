@@ -2372,6 +2372,24 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   border: 1px solid rgba(244,114,182,0.25);
   box-shadow: 0 8px 24px rgba(244,114,182,0.2);
 }
+/* V83-followup-8 (EOD8 LATE 2026-05-18) — Light theme DuoPill icon visibility fix.
+   BackendDuoPill.jsx hardcodes <MessageCircle color="white"/> + <MenuIcon color="white"/>
+   so icons render WHITE. In light theme the pill bg is also white (rgba(255,255,255,0.7))
+   → white-on-white = invisible (user image confirmed: "ปุ่มเปิดเมนูใน backend ของ light
+   theme บั๊ค ขายไปหมด ไม่แสดงรายละเอียดข้างใน"). Fix: force light-theme button-svg color
+   to rose-accent. Backdrop blur stays light; icons + unread badge keep contrast. */
+[data-theme="light"] .duo-pill-btn svg {
+  color: #be185d !important; /* rose-700 — readable on white pill */
+  /* The inline color="white" on <MessageCircle/MenuIcon> sets stroke via prop;
+     CSS `color` cascades to currentColor for lucide icons EXCEPT when an explicit
+     color prop is set on the SVG element. Use stroke override for lucide. */
+  stroke: #be185d !important;
+}
+/* Hover punch — slightly darker rose so user gets feedback */
+[data-theme="light"] .duo-pill-btn:hover svg {
+  color: #9f1239 !important; /* rose-800 */
+  stroke: #9f1239 !important;
+}
 .duo-pill-btn {
   width: 48px; height: 48px;
   border-radius: 50%;
@@ -2769,10 +2787,16 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
    reads as a discrete card. Both themes. Active item (white-on-color)
    untouched. */
 
-/* DARK theme — subtle dark-elevated card with hint of light border */
+/* V83-followup-9 (EOD8 LATE 2026-05-18) — Sub-tab item border uses ACCENT-tinted
+   color (rose) to signal hierarchy ("child of section"). User: "ทำให้กรอบเมนู
+   ย่อยมันคนละสี ... สีที่แสดงว่าเป็น tab ย่อย ทั้ง light และ dark themes".
+   Top-level section headers keep their own chrome (border-l accent rail);
+   sub-items get pink-rose-tinted card borders so the hierarchy reads visually. */
+
+/* DARK theme — subtle dark-elevated card with rose-tinted border */
 nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(244, 114, 182, 0.18); /* rose-400 low-alpha = "sub-tab" tint */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -2780,28 +2804,29 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(244, 114, 182, 0.08);
+  border-color: rgba(244, 114, 182, 0.40); /* brighter rose on hover */
   box-shadow:
+    0 2px 8px rgba(244, 114, 182, 0.15),
     0 2px 6px rgba(0, 0, 0, 0.30),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transform: translateY(-1px);
 }
 
-/* LIGHT theme — paper-card look with soft drop-shadow */
+/* LIGHT theme — paper-card look with rose-tinted border (sub-tab hierarchy) */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
   background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(244, 114, 182, 0.30); /* visible-but-soft pink */
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(244, 114, 182, 0.08),
     0 1px 3px rgba(15, 23, 42, 0.04);
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
-  background: #f8fafc; /* slate-50 */
-  border-color: rgba(15, 23, 42, 0.16);
+  background: #fdf2f8; /* pink-50 — same warmth as border tint */
+  border-color: rgba(244, 114, 182, 0.55);
   box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.10),
-    0 1px 3px rgba(15, 23, 42, 0.06);
+    0 2px 8px rgba(244, 114, 182, 0.18),
+    0 2px 6px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
 /* Clinic name + subtitle at top of sidebar */
