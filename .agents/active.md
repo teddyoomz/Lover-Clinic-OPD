@@ -1,14 +1,14 @@
 ---
-updated_at: "2026-05-18 EOD+11 LATE — V89 SHIPPED + DEPLOYED (CustomerListTab mobile responsive) + audit-all in progress"
-status: "MASTER = PROD = e4e62afc + V88 + V89. 2nd deploy this session successful. Audit-all running (6 parallel subagents)"
+updated_at: "2026-05-18 EOD+11 LATE — V90 SHIPPED + DEPLOYED (bloom auto-close on entity context) + audit-all report DELIVERED"
+status: "MASTER = PROD. V90 LIVE. 3rd deploy this session. Audit-all 23 skills / 238 invariants done. 3 CRITICAL + 7 HIGH (TZ1 family + S18 + A7 + H7) pending follow-up."
 branch: "master"
-last_commit: "(V89) style: CustomerListTab mobile responsive header (cosmetic-shell)"
-tests: "V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 112/112 V8x family GREEN · build clean"
+last_commit: "(V90) fix: bloom auto-closes on specific-entity context (mobile customer-detail block)"
+tests: "V90 13/13 + V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 125/125 V8x family GREEN · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "V89 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
-firestore_rules_version: "unchanged (idempotent — combined --only firestore:rules,storage syntax verified)"
-storage_rules_version: "unchanged (idempotent re-deploy combined with firestore)"
-audit_all_status: "Running 6 parallel subagents covering 23 audit skills (238 invariants total). Will aggregate findings into P0-P3 report post-completion."
+production_commit: "V90 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
+firestore_rules_version: "unchanged (idempotent — combined --only firestore:rules,storage)"
+storage_rules_version: "unchanged (idempotent combined)"
+audit_findings: "P0×3 TZ1 display-path · P1×7 (5×TZ1 write-path + S18 cancelCentralStockOrder atomicity + A7 fetch timeout 60+ sites + H7 TreatmentTimeline delete cascade) · P2×~11 · P3×~4. Auth+admin+backend-firestore+chat-notifications+rules ALL PASS clean. See chat for full P0-P3 report."
 ---
 
 # Active Context
