@@ -1,6 +1,6 @@
 ---
-updated_at: "2026-05-18 EOD+8 — V83 modal explicit-close-only + perm polish SHIPPED"
-status: "V83 done · awaiting deploy verb"
+updated_at: "2026-05-18 EOD+8 LATE — V83-followup-3 perm/tab mapping completeness (AV79)"
+status: "V83 + 3 followups done · awaiting deploy verb"
 branch: "master"
 last_commit: "test(V83): V21 fixups — 6 backdrop-click tests flipped to 'DOES NOT close'"
 tests: "Full vitest GREEN post-V21 fixups · build clean 2.76s · Rule Q L2 PASS"
@@ -12,7 +12,12 @@ firestore_rules_version: "unchanged"
 # Active Context
 
 ## State
-- **V83 SHIPPED locally**: 56 modal files stripped of backdrop-click dismiss (AV78); `link_request_management` perm added; `(29.22)` + `(16.3)` phase tags removed from labels; `tab=link-requests` gate flipped `adminOnly` → `requires`.
+- **V83 + V83-followup + V83-followup-2 + V83-followup-3 SHIPPED locally**:
+  - V83: 56 modals stripped of backdrop-click (AV78) + link_request_management perm + phase tag cleanup
+  - V83-followup: BackendArcBloom perm filter wire + sub-tab z-index above logo
+  - V83-followup-2: sub-tab tilt sensing viewport-clamped (symmetric up/down)
+  - V83-followup-3: **11 master-data tabs adminOnly→requires (AV79)** — perm grants for product/group/unit/instrument/branch/room/staff/doctor/holiday/permission/courses now ACTUALLY work
+- **AV invariants added**: AV78 (modal backdrop) + AV79 (perm/tab mapping completeness)
 - **All test banks GREEN**: M1-M5 + F1-F7 + P1-P5 (~50 V83 assertions) + 6 V21 fixups + full vitest.
 - **Rule Q L2 PASS** on real prod: TEST-LINKREQ-V83 fixtures seeded across 2 branches, per-branch isolation verified, cleanup zero-orphan, audit doc emitted (`v83-l2-link-request-perm-verify-1779082269383-12e12359`).
 - ~28+ commits ahead of prod · all pushed to `origin/master` · prod still at `ef4bd5c3`.
