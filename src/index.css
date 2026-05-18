@@ -1950,6 +1950,45 @@ select.pf-input {
     animation: none !important;
   }
 }
+/* ─── V85 auto-glow — universal sub-box lift (2026-05-18 EOD+9) ─────────
+   User feedback (2 screenshots): light theme bordered boxes "ดูมีเงา ดูโดดเด้ง"
+   but dark theme sub-boxes (nested panels, list rows, calendar cells, etc.)
+   were missing the same lift. This rule auto-applies a subtle drop + ember
+   tint to EVERY card-like wrapper (bg-card / bg-surface + rounded-*)
+   INSIDE the content zones (data-testid backend-content / frontend-content).
+   - Scoped via [data-testid="..."] ancestor → menu and print views NOT
+     affected (they live outside these wrappers).
+   - :not([class*="fx-glow-"]) prevents double-glow on cards that already
+     received an explicit fx-glow-* utility class (V or U variant).
+   - :not([data-glow-skip]) is an escape hatch for any individual card
+     we want to keep flat (e.g., nested cards inside a glowing parent).
+   - :where(...) keeps specificity low so manual fx-glow-* overrides win
+     when both apply (the :not() catches that case anyway). */
+
+[data-testid="backend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]),
+[data-testid="frontend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]) {
+  box-shadow:
+    0 14px 28px rgba(0,0,0,0.4),
+    0 0 16px rgba(var(--v85-ember-rgb), 0.06),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+[data-theme="light"] [data-testid="backend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]),
+[data-theme="light"] [data-testid="frontend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]) {
+  box-shadow:
+    0 8px 16px rgba(0,0,0,0.06),
+    0 0 12px rgba(var(--v85-ember-rgb), 0.04),
+    inset 0 1px 0 rgba(0,0,0,0.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="backend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]),
+  [data-testid="frontend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]) {
+    transition: none !important;
+  }
+}
+
 /* End V85 — Universal Glow Effect Utilities */
 
 
