@@ -2826,21 +2826,21 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
   position: relative;
   overflow: hidden;
-  /* V83-followup-14 (EOD8 LATE 2026-05-18) — Variant R: PARALLELOGRAM italic
-     slant. User picked R from visual-companion picker. Sport/dynamic feel
-     with motion-implied lean. Children counter-skewed to keep text upright. */
-  transform: skewX(-6deg);
-  /* V83-followup-13 ring + elevation preserved (will skew with button) */
+  /* V83-followup-15 (EOD8 LATE 2026-05-18) — Variant V: FILE-TAB STYLE.
+     User switched from R parallelogram → V file-tab. Left accent bar +
+     right-rounded corners + sharp left. Section header reads as "I am a
+     selected file tab pulling out of the sidebar" — browser-tab feel. */
+  border-left: 4px solid rgba(244, 114, 182, 0.55);
+  border-radius: 0 8px 8px 0; /* sharp-left, round-right = file tab */
   box-shadow:
-    0 0 0 1px rgba(244, 114, 182, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     inset 0 -1px 0 rgba(0, 0, 0, 0.20),
     0 2px 4px rgba(0, 0, 0, 0.18),
     0 4px 12px -4px rgba(244, 114, 182, 0.12);
-  border-radius: 6px; /* tighter corners for cleaner parallelogram */
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.18s ease,
+    border-color 0.18s ease,
     filter 0.18s ease;
 }
 /* ::before — subtle top-down sheen overlay (premium glass effect).
@@ -2855,24 +2855,23 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
   border-radius: inherit;
 }
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]:hover {
-  /* V83-followup-14 — preserve skewX in hover transform */
-  transform: skewX(-6deg) translateY(-1px) scale(1.005);
+  border-left-color: rgba(244, 114, 182, 0.85);
+  transform: translateX(2px);
   box-shadow:
-    0 0 0 1px rgba(244, 114, 182, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     inset 0 -1px 0 rgba(0, 0, 0, 0.25),
     0 4px 10px rgba(0, 0, 0, 0.30),
     0 8px 24px -4px rgba(244, 114, 182, 0.30);
   filter: brightness(1.08) saturate(1.10);
 }
-/* Active section (expanded with active child) — strongest accent presence */
+/* Active section (expanded with active child) — bold accent presence */
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded="true"] {
+  border-left-color: rgba(244, 114, 182, 1);
   box-shadow:
-    0 0 0 1.5px rgba(244, 114, 182, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.22),
     0 3px 6px rgba(0, 0, 0, 0.22),
-    0 6px 20px -4px rgba(244, 114, 182, 0.28);
+    0 6px 20px -4px rgba(244, 114, 182, 0.45);
 }
 /* LIGHT theme — softer paper-card depth instead of dark inner shadow */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
@@ -2906,12 +2905,11 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
     0 4px 10px rgba(244, 114, 182, 0.20),
     0 6px 18px -4px rgba(15, 23, 42, 0.10);
 }
-/* Ensure inner content (icon, label, chevron) sits ABOVE the ::before sheen
-   AND counter-skews to stay upright (V83-followup-14 R parallelogram fix) */
+/* Ensure inner content (icon, label, chevron) sits ABOVE the ::before sheen.
+   V83-followup-15 dropped the counter-skew (no parallelogram anymore). */
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] > * {
   position: relative;
   z-index: 1;
-  transform: skewX(6deg); /* counter-skew matches parent's -6deg */
 }
 
 /* V83-followup-9 (EOD8 LATE 2026-05-18) — Sub-tab item border uses ACCENT-tinted
@@ -2920,41 +2918,42 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
    Top-level section headers keep their own chrome (border-l accent rail);
    sub-items get pink-rose-tinted card borders so the hierarchy reads visually. */
 
-/* DARK theme — subtle dark-elevated card with rose-tinted border */
+/* V83-followup-16 (EOD8 LATE 2026-05-18) — Sub-items BOTTOM BORDER ONLY.
+   User: "ทำให้เมนูย่อย เหลือแต่กรอบล่าง". Stripped full-card chrome
+   (background + 4-side border + box-shadow + margin gap + hover lift) →
+   ONLY a thin rose-tinted divider line under each sub-item. Active item
+   (white-on-color) UNTOUCHED. */
+
+/* DARK theme — bottom divider only */
 nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(244, 114, 182, 0.18); /* rose-400 low-alpha = "sub-tab" tint */
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.20),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  margin-bottom: 4px;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(244, 114, 182, 0.18);
+  border-radius: 0;
+  box-shadow: none;
+  margin-bottom: 0;
+  transition: background 0.15s ease, border-bottom-color 0.15s ease;
 }
 nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
-  background: rgba(244, 114, 182, 0.08);
-  border-color: rgba(244, 114, 182, 0.40); /* brighter rose on hover */
-  box-shadow:
-    0 2px 8px rgba(244, 114, 182, 0.15),
-    0 2px 6px rgba(0, 0, 0, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  transform: translateY(-1px);
+  background: rgba(244, 114, 182, 0.06);
+  border-bottom-color: rgba(244, 114, 182, 0.50);
+  box-shadow: none;
+  transform: none;
 }
 
-/* LIGHT theme — paper-card look with rose-tinted border (sub-tab hierarchy) */
+/* LIGHT theme — bottom divider only */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
-  background: #ffffff;
-  border: 1px solid rgba(244, 114, 182, 0.30); /* visible-but-soft pink */
-  box-shadow:
-    0 1px 2px rgba(244, 114, 182, 0.08),
-    0 1px 3px rgba(15, 23, 42, 0.04);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(244, 114, 182, 0.25);
+  border-radius: 0;
+  box-shadow: none;
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
-  background: #fdf2f8; /* pink-50 — same warmth as border tint */
-  border-color: rgba(244, 114, 182, 0.55);
-  box-shadow:
-    0 2px 8px rgba(244, 114, 182, 0.18),
-    0 2px 6px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  background: rgba(244, 114, 182, 0.08);
+  border-bottom-color: rgba(244, 114, 182, 0.65);
+  box-shadow: none;
+  transform: none;
 }
 /* Clinic name + subtitle at top of sidebar */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] h1,
