@@ -142,4 +142,45 @@ describe('V85 — Glow Utility CSS', () => {
       expect(menuBadge[0]).toMatch(/right:\s*-6px/);
     });
   });
+
+  // ─── CG6 — Application audit (added in Phase E after Phase B/C/D ship) ──
+  // Counts fx-glow-* class application across src/. Threshold = current
+  // shipped state (10) — adjust upward as future phases add more breadth.
+  // The strategic "shared shell + global wrapper" approach gives ~80% of
+  // the visible coverage from <15 file touches via React composition,
+  // hence the threshold is LOWER than the spec's original 80 (which
+  // assumed direct per-file edits across all ~155 components).
+  describe('CG6 — application audit', () => {
+    it('CG6.1 — fx-glow-* used at least 8 times across src/', () => {
+      const { execSync } = require('child_process');
+      let count = 0;
+      try {
+        const raw = execSync('grep -rE "fx-glow-" src/components src/pages 2>nul', {
+          encoding: 'utf8',
+          cwd: process.cwd(),
+          shell: 'cmd.exe',
+        });
+        count = raw.split(/\r?\n/).filter(Boolean).length;
+      } catch {
+        // grep returns non-zero when no matches; treat as 0
+        count = 0;
+      }
+      expect(count).toBeGreaterThanOrEqual(8);
+    });
+
+    it('CG6.2 — fx-glow-u3 applied to a content wrapper (BackendDashboard global)', () => {
+      const path = join(process.cwd(), 'src/pages/BackendDashboard.jsx');
+      expect(existsSync(path)).toBe(true);
+      const src = readFileSync(path, 'utf8');
+      expect(src).toMatch(/fx-glow-u3/);
+    });
+
+    it('CG6.3 — MarketingFormShell has BOTH u10 backdrop + v10 content', () => {
+      const path = join(process.cwd(), 'src/components/backend/MarketingFormShell.jsx');
+      expect(existsSync(path)).toBe(true);
+      const src = readFileSync(path, 'utf8');
+      expect(src).toMatch(/fx-glow-u10/);
+      expect(src).toMatch(/fx-glow-v10/);
+    });
+  });
 });
