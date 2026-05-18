@@ -82,7 +82,7 @@ export default function MarketingFormShell({
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fx-glow-u10"
     >
       <div
-        className={`w-full ${widthClass} max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)]`}
+        className={`w-full ${widthClass} max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)] fx-glow-v10`}
         style={{ boxShadow: `0 0 40px rgba(${acRgb},0.2)` }}
       >
         {/* Header */}

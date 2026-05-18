@@ -773,7 +773,7 @@ export default function CustomerDetailView({
         {/* ════════════════════ LEFT: Profile ════════════════════ */}
         <div className="space-y-3 min-w-0">
           {/* Profile Card */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
+          <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden fx-glow-v9" data-testid="customer-detail-main">
             {/* Avatar + Name header */}
             <div className="p-5 text-center border-b border-[var(--bd)]">
               {/* Avatar */}

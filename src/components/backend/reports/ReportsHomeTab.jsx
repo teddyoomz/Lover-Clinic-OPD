@@ -213,7 +213,7 @@ function AnalyticsCard({ card, onClick }) {
       disabled={!isActive}
       className={`text-left p-3 rounded-lg border transition-all ${
         isActive
-          ? 'bg-[var(--bg-card)] border-amber-700/40 hover:border-amber-500/60 hover:bg-amber-900/10 cursor-pointer'
+          ? 'bg-[var(--bg-card)] border-amber-700/40 hover:border-amber-500/60 hover:bg-amber-900/10 cursor-pointer fx-glow-v5'
           : 'bg-[var(--bg-card)] border-[var(--bd)] opacity-50 cursor-not-allowed'
       }`}
     >
