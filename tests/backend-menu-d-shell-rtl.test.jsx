@@ -15,6 +15,27 @@ vi.mock('../src/components/ThemeToggle.jsx', () => ({
 vi.mock('../src/components/backend/ProfileDropdown.jsx', () => ({
   default: () => <div data-testid="mock-profile-dropdown">Profile</div>,
 }));
+// V85-followup AV82 (T6.13) — mock BackendCmdPalette so the test can simulate
+// a palette pick WITHOUT mounting cmdk (which needs ResizeObserver, absent in
+// jsdom). Mock exposes a test button that calls onNavigate(tabId) the SAME
+// way the real palette does, exercising the shell's handleNavigate contract.
+vi.mock('../src/components/backend/nav/BackendCmdPalette.jsx', () => ({
+  default: ({ open, onOpenChange, onNavigate }) => (
+    open ? (
+      <div data-testid="mock-cmd-palette" aria-label="เมนูค้นหา">
+        <button
+          data-testid="mock-palette-pick"
+          onClick={() => {
+            onNavigate?.('customers');
+            onOpenChange?.(false);  // real palette also closes itself
+          }}
+        >
+          Pick item
+        </button>
+      </div>
+    ) : null
+  ),
+}));
 
 describe('Backend Menu D — Shell RTL', () => {
   beforeEach(() => {
@@ -134,5 +155,52 @@ describe('Backend Menu D — Shell RTL', () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync('src/components/backend/shell/BackendShellNew.jsx', 'utf-8');
     expect(src).toMatch(/Backend Menu D|BackendShellNew/);
+  });
+
+  it('T6.13 (V85-followup AV82) Cmd-palette pick closes BOTH palette AND bloom', () => {
+    // Bug pre-fix: palette pick → tab switches + palette closes BUT bloom
+    // stays open (bloomOpen defaults true, handleNavigate never set it false).
+    // User screenshot showed dimmed bloom backdrop visible behind palette
+    // after picking a menu item. Fix: handleNavigate also closes both overlays.
+    // Uses mocked BackendCmdPalette (see top-of-file) — exercises the shell's
+    // handleNavigate contract WITHOUT cmdk's ResizeObserver requirement.
+    const onNavigate = vi.fn();
+    setup({ onNavigate });
+
+    // Bloom is open by default (T6.6 contract)
+    expect(screen.getByTestId('bloom-overlay')).toBeTruthy();
+
+    // Open palette via topbar shortcut trigger (V85-followup search-box)
+    fireEvent.click(screen.getByTestId('topbar-shortcut-desktop'));
+    expect(screen.getByTestId('mock-cmd-palette')).toBeTruthy();
+
+    // Simulate palette pick — the mock's button mirrors the real handleSelect:
+    // calls onNavigate(tabId) + onOpenChange(false) for the palette itself.
+    fireEvent.click(screen.getByTestId('mock-palette-pick'));
+
+    // Contract: onNavigate called once + BOTH overlays gone
+    // Pre-fix this assertion failed on bloom-overlay (bloomOpen never cleared)
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate.mock.calls[0][0]).toBe('customers');
+    expect(screen.queryByTestId('mock-cmd-palette')).toBeNull();
+    expect(screen.queryByTestId('bloom-overlay')).toBeNull();
+  });
+
+  it('T6.14 (V85-followup AV82) source-grep — handleNavigate closes both overlays', async () => {
+    // Drift catcher — if a future commit strips setBloomOpen(false) or
+    // setPaletteOpen(false) from handleNavigate, the bug returns. Lock both.
+    const fs = await import('node:fs');
+    const src = fs.readFileSync('src/components/backend/shell/BackendShellNew.jsx', 'utf-8');
+    // Anchor on the handleNavigate body. Capture lines between the
+    // `const handleNavigate = useCallback(` and its closing `[onNavigate])`
+    // (whitespace allowed before the closing paren due to multi-line dep array).
+    const m = src.match(/const handleNavigate = useCallback\([\s\S]*?\[onNavigate\]\s*\)/);
+    expect(m).toBeTruthy();
+    const body = m[0];
+    expect(body).toMatch(/onNavigate\?\.\(tabId\)/);
+    expect(body).toMatch(/setBloomOpen\(false\)/);
+    expect(body).toMatch(/setPaletteOpen\(false\)/);
+    // V85-followup marker present
+    expect(src).toMatch(/AV82|V85-followup.*shell-level handleNavigate|EOD9\+1/);
   });
 });

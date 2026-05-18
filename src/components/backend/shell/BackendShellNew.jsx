@@ -39,9 +39,19 @@ export default function BackendShellNew({
   const openPalette = useCallback(() => setPaletteOpen(true), []);
 
   // Navigate via existing onNavigate prop — same shape as BackendNav.
+  // V85-followup (EOD9+1, 2026-05-18) — shell-level handleNavigate is the
+  // single coordination point for "go to tab + collapse all menu overlays".
+  // Bug pre-fix: Cmd palette pick → `handleSelect` calls onNavigate(itemId) +
+  // onOpenChange(false) for palette ONLY → tab switches + palette closes but
+  // bloomOpen (default true) stayed → bloom backdrop + orbs rendered behind.
+  // Fix: every navigation through this handler ALSO closes both overlays.
+  // ArcBloom's own onClose?.() calls become redundant but harmless (React
+  // batches same-value setters). New AV82 invariant locks the contract.
   const handleNavigate = useCallback(
     (tabId) => {
       onNavigate?.(tabId);
+      setBloomOpen(false);
+      setPaletteOpen(false);
     },
     [onNavigate]
   );
