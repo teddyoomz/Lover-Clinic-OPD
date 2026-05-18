@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { Command } from 'cmdk';
-import { Search, CornerDownLeft } from 'lucide-react';
+import { Search, CornerDownLeft, X } from 'lucide-react';
 import { NAV_SECTIONS, PINNED_ITEMS, TAB_COLOR_MAP } from './navConfig.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
 
@@ -53,6 +53,19 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
     // the established convention for command palettes (cmd+k tools). The
     // currentTarget===target check ensures only backdrop clicks close — clicks
     // INSIDE the Command tree bubble up but get filtered out.
+    // V92 (2026-05-18 EOD+11 LATE) — mobile cmd-palette redesign per user
+    // report "เมนูใหม่กดเปิดมาแล้วเต็มจอเลย แถมไม่มีปุ่มปิดอีก ช่วย Design
+    // drop down มันให้สวยและใช้งานง่ายกว่านี้ สำหรับ mobile":
+    //   - Sheet-style mobile layout: `mt-12` (48px top backdrop) +
+    //     `max-h-[calc(100vh-3rem)]` instead of `h-full` so the user can
+    //     tap the 48px area above to dismiss (AV78 exemption already in
+    //     place per V85-followup EOD9 — palette is a nav tool, no data).
+    //   - `rounded-b-2xl` on mobile so the sheet's bottom edge feels
+    //     polished (top sticks to the 48px gap so top corners are flush).
+    //   - Visible X close button in header (mobile + desktop) — gives an
+    //     explicit dismiss affordance independent of backdrop-tap discovery.
+    //   - Desktop layout UNCHANGED (sm:max-w-xl + sm:max-h-[70vh] +
+    //     sm:rounded-2xl all preserved).
     <div
       className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
       onClick={(e) => { if (e.currentTarget === e.target) onOpenChange(false); }}
@@ -60,11 +73,11 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
       <Command
         label="เมนูค้นหา"
         loop
-        className="w-full sm:max-w-xl h-full sm:h-auto sm:max-h-[70vh] flex flex-col bg-[var(--bg-surface)] sm:rounded-2xl sm:border sm:border-[var(--bd)] shadow-2xl overflow-hidden animate-scaleIn"
+        className="w-full sm:max-w-xl mt-12 sm:mt-0 max-h-[calc(100vh-3rem)] sm:max-h-[70vh] flex flex-col bg-[var(--bg-surface)] rounded-b-2xl sm:rounded-2xl border-x border-b sm:border-t border-[var(--bd)] shadow-2xl overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === 'Escape') onOpenChange(false); }}
       >
-        {/* Search input */}
+        {/* Search input + close button */}
         <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-[var(--bd)]">
           <Search size={16} className="text-[var(--tx-muted)] flex-shrink-0" />
           <Command.Input
@@ -75,6 +88,16 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
           <kbd className="hidden sm:inline-flex text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-hover)] border border-[var(--bd)] font-mono text-[var(--tx-muted)]">
             ESC
           </kbd>
+          {/* V92 — explicit X close button (mobile + desktop) */}
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="ปิดเมนูค้นหา"
+            data-testid="cmd-palette-close"
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 text-[var(--tx-muted)] hover:text-[var(--tx-primary)] flex-shrink-0 transition-all"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Results list */}
