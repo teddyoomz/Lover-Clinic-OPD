@@ -2454,8 +2454,15 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   width: min(540px, 90vw);
   max-height: 76vh;
   overflow-y: auto;
-  --tilt-x: 8deg;
-  --tilt-y: -4deg;
+  /* V83-followup-6 (EOD8 LATE 2026-05-18) — zero base tilt for SYMMETRIC
+     mouse-follow. Pre-fix had --tilt-x:8deg + --tilt-y:-4deg pre-baked
+     forward+left tilt; mouse bias was ADDED on top → mouse top-left ≈
+     14deg X / -10deg Y (big tilt), mouse bottom-right ≈ 2deg X / 2deg Y
+     (almost flat). User: "ในรูปที่ 1 มุมซ้ายบน เอียงหา; ในรูปที่ 2 มุมขวาล่าง
+     ระยะห่างเท่ากันแต่ไม่เอียงหาเลย ทำไมแต่ละมุมแม่ง interactive ไม่เท่ากันวะ".
+     Fix: drop base tilt — mouse bias drives the FULL ±6deg range symmetrically. */
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
   --tilt-mx: 0deg; /* mouse-bias x */
   --tilt-my: 0deg; /* mouse-bias y */
   transform: rotateX(calc(var(--tilt-x) + var(--tilt-my))) rotateY(calc(var(--tilt-y) + var(--tilt-mx)));
@@ -2463,8 +2470,9 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
   animation: subtab-pop-3d 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes subtab-pop-3d {
-  from { transform: scale(0.7) rotateX(8deg) rotateY(-4deg); opacity: 0; }
-  to   { transform: scale(1)   rotateX(8deg) rotateY(-4deg); opacity: 1; }
+  /* V83-followup-6 — entry animation tilt also zeroed for consistency */
+  from { transform: scale(0.7) rotateX(0deg) rotateY(0deg); opacity: 0; }
+  to   { transform: scale(1)   rotateX(0deg) rotateY(0deg); opacity: 1; }
 }
 
 /* V2 Mobile — bubble with parent gradient color */
@@ -2749,6 +2757,52 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
   color: #020617; /* slate-950 — extra punch on hover */
   font-weight: 700;
+}
+
+/* ─── V83-followup-7 (EOD8 LATE 2026-05-18) — Sub-item card-shading ─
+   User: "ทำให้เมนูย่อยแต่ละอันมี shade มีเงา ให้รูปว่ามันแยกออกจากกัน
+   เป็นก้อนๆได้ อันนี้มันเหมือนติดกัน เป็นแนวยาวเลยสำหรับเมนูย่อย ฝากแก้
+   ใน dark theme ด้วย ให้ไปในทำนองเดียวกัน".
+   Pre-fix: sub-items inside expanded sections rendered as plain buttons,
+   blended together visually like a continuous strip. Fix: add subtle
+   per-item bg + border + drop-shadow + breathing margin so each item
+   reads as a discrete card. Both themes. Active item (white-on-color)
+   untouched. */
+
+/* DARK theme — subtle dark-elevated card with hint of light border */
+nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  margin-bottom: 4px;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+/* LIGHT theme — paper-card look with soft drop-shadow */
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+}
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
+  background: #f8fafc; /* slate-50 */
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.10),
+    0 1px 3px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
 }
 /* Clinic name + subtitle at top of sidebar */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] h1,
