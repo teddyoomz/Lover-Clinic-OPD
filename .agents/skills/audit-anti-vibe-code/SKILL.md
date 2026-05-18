@@ -2190,6 +2190,71 @@ both the queue filter ordering AND the noDepositSessions exclusion. Pair-
 edit discipline: any future opt-out at queue filter MUST be paired with the
 same opt-out at noDepositSessions filter to prevent double-appearance.
 
+### AV79 — Perm/Tab mapping completeness (V83-followup-3, 2026-05-18 EOD+8)
+
+**Trigger**: A perm key in `permissionGroupValidation.js` is granted (checkbox
+ticked in PermissionGroupFormModal) but the corresponding tab does not become
+accessible. Root cause: tab's `TAB_PERMISSION_MAP` gate uses `adminOnly:true`
+which short-circuits `canAccessTab` BEFORE the `requires` array is checked.
+Perm grant is DEAD code.
+
+**Why**: `canAccessTab` order:
+```js
+if (isAdmin) return true;
+if (gate.adminOnly) return false;  // ← short-circuits HERE
+const reqs = gate.requires || [];
+return reqs.some(k => perms[k] === true);
+```
+A tab declared `{ requires: ['exam_room_management'], adminOnly: true }` will
+**always deny** non-admin even with the perm — the `requires` is dead code.
+
+**Source-grep pattern** (catches future drift):
+
+```bash
+# Every tab in TAB_PERMISSION_MAP that has adminOnly:true MUST be in the
+# sanctioned list (no specific perm OR destructive op). Otherwise the perm
+# grant is dead.
+grep -nE "['\"][a-z-]+['\"]:\s*\{[^}]*adminOnly:\s*true" src/lib/tabPermissions.js
+```
+
+After this grep, cross-check each match against the canonical `PERM_TO_TAB`
+mapping in `tests/v83-followup-3-perm-tab-mapping-completeness.test.js`. If
+a perm key in `permissionGroupValidation.js` settings module maps to that
+tab, the gate is broken — flip to `{ requires: ['<perm_key>'] }`.
+
+**Sanctioned adminOnly tabs** (closed list — adding requires V-entry):
+1. `masterdata` — stale entry, tab removed in V50
+2. `finance-master` — umbrella, no specific perm declared
+3. `document-templates` — no perm declared for templates admin
+4. `line-settings` — LINE OA channel + bot config (admin)
+5. `fb-settings` — Per-branch FB Page settings (admin)
+6. `backup-manager` — destructive op (admin claim is the intended gate)
+7. `branch-backup` — destructive op (admin claim is the intended gate)
+
+**Detection**: regression test `tests/v83-followup-3-perm-tab-mapping-completeness.test.js`
+(C1-C6: every-perm-grants-tab + 11-affected-tabs-locks + 4-persona-matrix +
+sanctioned-list-explicit + source-grep + settings-perm-completeness).
+
+**Class-of-bug**: V12 multi-reader-sweep at permission-mapping boundary.
+`permissionGroupValidation.js` (perm catalog) and `tabPermissions.js` (gate
+map) are two readers of "what permission allows access" — they drifted. V83
+fixed link_request_management; V83-followup-3 batch-fixes the 11 remaining
+master-data tabs.
+
+**Priority**: HIGH — silent permission grant. Admin grants a perm via UI
+(checkbox ticked, saved to Firestore), expects user can access the tab, but
+gate denies. User loses trust ("ทำไมตั้งสิทธิ์ให้แล้ว user เข้าไม่ได้").
+
+**Lineage**: V83-followup-3 (2026-05-18 EOD+8). User report (verbatim, locked
+permanent): "คนที่มีสิทธิ์ในการตั้งค่า จัดการสินค้า จัดการกลุ่มสินค้า เครื่องหัตถการ
+จัดการหน่วยสินค้า หรืออื่นๆ แต่ sub tab ทั้งแบบเดิมและใหม่ กลับปรากฎไม่ครบ ...
+ฝากเช็คว่าสิทธิ์กับสิ่งที่ app เราอนุญาติมันตรงกันทั้งหมดจริงๆ".
+
+Pair-edit discipline: any new perm key added to `permissionGroupValidation.js`
+settings module MUST be paired with a `requires` gate entry in
+`tabPermissions.js` OR added to the C6 NO_TAB_PERMS intentional-tab-less list
+in the regression test.
+
 ### AV78 — Modal backdrop click MUST NOT close (V83, 2026-05-18 EOD+8)
 
 **Trigger**: A user fills in a long modal form and accidentally clicks the
@@ -2257,7 +2322,7 @@ contract OR be added to sanctioned lightbox list.
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

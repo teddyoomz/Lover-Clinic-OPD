@@ -83,29 +83,44 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   // declared in permissionGroupValidation.js under "analytics" module.
   'smart-audience':      { requires: ['smart_audience'] },
 
-  // Master data — most are admin-configured settings
-  masterdata:            { adminOnly: true },
-  'product-groups':      { adminOnly: true },
-  'product-units':       { adminOnly: true },
-  'medical-instruments': { adminOnly: true },
-  holidays:              { adminOnly: true },
-  branches:              { adminOnly: true },
-  // Phase 18.0 (2026-05-05) — branch-scoped exam-room master. Admin-default
-  // OR explicit exam_room_management perm. Owner can grant to a branch
-  // manager without making them full admin.
-  'exam-rooms':          { requires: ['exam_room_management'], adminOnly: true },
-  'permission-groups':   { adminOnly: true },
-  staff:                 { adminOnly: true },
+  // Master data — V83-followup-3 (EOD8 2026-05-18) — class-of-bug fix.
+  // Pre-fix bug: tabs with `adminOnly:true` short-circuited canAccessTab
+  // BEFORE checking `requires`, so 11 perm keys in permissionGroupValidation.js
+  // (product_group, default_product_unit, medical_instrument, holiday_setting,
+  // branch_management, exam_room_management, permission_group_management,
+  // user_management, doctor_management, product_management,
+  // course_management/clinic_course_management) were DEAD — checking the box
+  // in PermissionGroupFormModal granted nothing because the tab gate ignored
+  // the perm. User reported: "คนที่มีสิทธิ์ในการตั้งค่า จัดการสินค้า ... sub tab
+  // ทั้งแบบเดิมและใหม่ กลับปรากฎไม่ครบ". Fix: flip all 11 adminOnly → requires
+  // (admin bypass still works via canAccessTab isAdmin early-return).
+  //
+  // Sanctioned remaining adminOnly: finance-master (umbrella, no specific
+  // perm), document-templates / line-settings / fb-settings (no perm declared
+  // in catalog), backup-manager / branch-backup (destructive ops — admin
+  // claim is the intended gate).
+  masterdata:            { adminOnly: true },   // stale — tab REMOVED in V50; entry kept for back-compat
+  'product-groups':      { requires: ['product_group'] },
+  'product-units':       { requires: ['default_product_unit'] },
+  'medical-instruments': { requires: ['medical_instrument'] },
+  holidays:              { requires: ['holiday_setting'] },
+  branches:              { requires: ['branch_management'] },
+  // Phase 18.0 + V83-followup-3 — branch-scoped exam-room master.
+  // adminOnly DROPPED (was dead code blocking the requires path).
+  'exam-rooms':          { requires: ['exam_room_management'] },
+  'permission-groups':   { requires: ['permission_group_management'] },
+  staff:                 { requires: ['user_management'] },
   'staff-schedules':     { requires: ['user_schedule_management', 'user_schedule_view'], adminOnly: false },
   'doctor-schedules':    { requires: ['doctor_schedule_management', 'doctor_schedule_view'], adminOnly: false },
-  doctors:               { adminOnly: true },
-  products:              { adminOnly: true },
-  courses:               { adminOnly: true },
-  'finance-master':      { adminOnly: true },
+  doctors:               { requires: ['doctor_management'] },
+  products:              { requires: ['product_management'] },
+  // Courses tab: either branch-scoped OR clinic-wide perm grants access
+  courses:               { requires: ['course_management', 'clinic_course_management'] },
+  'finance-master':      { adminOnly: true },   // umbrella — no specific perm declared
   'df-groups':           { requires: ['df_group'], adminOnly: false },
-  'document-templates':  { adminOnly: true },
-  'line-settings':       { adminOnly: true },  // V32-tris-ter — LINE OA channel + bot config
-  'fb-settings':         { adminOnly: true },  // V75 Item 3 — Per-branch FB Page settings
+  'document-templates':  { adminOnly: true },   // no perm declared for templates admin
+  'line-settings':       { adminOnly: true },   // V32-tris-ter — LINE OA channel + bot config (admin)
+  'fb-settings':         { adminOnly: true },   // V75 Item 3 — Per-branch FB Page settings (admin)
   // V83 (EOD8 2026-05-18) — admin bypass implicit via canAccessTab isAdmin
   // early-return; per-branch user with link_request_management gets access
   // (LinkRequestsTab already branch-scoped via useSelectedBranch).

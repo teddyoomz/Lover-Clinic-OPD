@@ -85,12 +85,15 @@ describe('Phase 16.3 TPO.B — canAccessTab with overrides', () => {
   });
 
   test('B.4 — adminOnly:false on a static-adminOnly tab → unlocks via permissions', () => {
-    // Pick a static-adminOnly tab (e.g. branches)
-    expect(TAB_PERMISSION_MAP.branches.adminOnly).toBe(true);
-    const overrides = { branches: { adminOnly: false, requires: ['branch_management'] } };
-    expect(canAccessTab('branches', { branch_management: true }, false, overrides)).toBe(true);
+    // V83-followup-3 (EOD8 2026-05-18) — `branches` was flipped from adminOnly
+    // to requires when the 11 master-data tabs got per-perm gates. This test
+    // now uses `line-settings` (sanctioned remaining adminOnly — no perm
+    // declared) which still has adminOnly:true.
+    expect(TAB_PERMISSION_MAP['line-settings'].adminOnly).toBe(true);
+    const overrides = { 'line-settings': { adminOnly: false, requires: ['system_config_management'] } };
+    expect(canAccessTab('line-settings', { system_config_management: true }, false, overrides)).toBe(true);
     // Without permission: still blocked
-    expect(canAccessTab('branches', {}, false, overrides)).toBe(false);
+    expect(canAccessTab('line-settings', {}, false, overrides)).toBe(false);
   });
 
   test('B.5 — added requires[]: any-of merge works', () => {
