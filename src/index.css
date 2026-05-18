@@ -2577,10 +2577,17 @@ button:not(:disabled):active {
   color: var(--tx-primary, #e5e5e5);
   background: var(--bg-hover, #18181b);
 }
+/* V88 (2026-05-18 EOD+11) — universal red active state (no orange).
+   Pre-V88 used rgba(251,146,60,...) orange-400 stops which read as
+   "watered-down" / orange-ish on the red-themed clinic UI. V88 replaces
+   the orange stops with red-500 (239,68,68) and strengthens alpha so
+   the selected pill reads clearly red, matching the V86 universal-red
+   theme tokens (--neon-c1 = 220,38,38 red-600 + --neon-c2 = 239,68,68
+   red-500). */
 .menu-tab-active {
   color: var(--tx-heading, #fafafa) !important;
-  background: linear-gradient(135deg, rgba(220,38,38,0.14) 0%, rgba(251,146,60,0.06) 100%) !important;
-  border-color: rgba(251,146,60,0.3) !important;
+  background: linear-gradient(135deg, rgba(220,38,38,0.28) 0%, rgba(239,68,68,0.14) 100%) !important;
+  border-color: rgba(239,68,68,0.55) !important;
 }
 .menu-tab-backend {
   color: rgb(167, 139, 250); /* violet-400 */
@@ -2659,9 +2666,10 @@ button:not(:disabled):active {
   cursor: pointer;
 }
 .menu-dock-tab:hover { color: var(--tx-primary, #e5e5e5); }
+/* V88 — mobile dock active mirror (matches .menu-tab-active redder). */
 .menu-dock-tab-active {
-  background: linear-gradient(135deg, rgba(220,38,38,0.14) 0%, rgba(251,146,60,0.06) 100%);
-  color: var(--tx-accent, #fed7aa) !important;
+  background: linear-gradient(135deg, rgba(220,38,38,0.28) 0%, rgba(239,68,68,0.14) 100%);
+  color: var(--tx-heading, #fafafa) !important;
 }
 .menu-dock-tab[data-tab="more"]:hover {
   background: rgba(255,255,255,0.04);

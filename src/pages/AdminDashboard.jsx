@@ -5815,9 +5815,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <PlusCircle size={14}/> สร้างคิวใหม่
             </button>
 
+            {/* V88 (2026-05-18 EOD+11) — desktop right-rail cosmetic harmony.
+                Transparent base + hover:bg-[var(--bg-hover)] matches the
+                .menu-tab pill philosophy used by the left tab cluster, so
+                the right-rail buttons read as part of the same bar instead
+                of detached cards. Handler + state logic UNCHANGED. */}
             <div className="relative">
               <button onClick={() => setShowNotifSettings(!showNotifSettings)}
-                className={`border p-2 rounded-lg transition-all ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`}
+                className={`p-2 rounded-lg border border-transparent transition-all hover:bg-[var(--bg-hover)] ${isNotifEnabled ? 'text-blue-400' : 'text-[var(--tx-muted)]'}`}
                 title="ตั้งค่าการแจ้งเตือน">
                 {isNotifEnabled ? <Bell size={14}/> : <BellOff size={14}/>}
               </button>
@@ -5859,8 +5864,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <BranchSelector />
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
 
+            {/* V88 — online indicator: transparent base (no card frame). */}
             <div className="relative group">
-              <div className="flex items-center gap-1 px-2 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
+              <div className="flex items-center gap-1 px-2 py-2 rounded-lg cursor-default" title={`ออนไลน์ ${onlineAdmins.length} คน`}>
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
@@ -5879,7 +5885,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
             </div>
 
-            <button onClick={() => signOut(auth)} className="bg-[var(--bg-input)] border border-[var(--bd)] hover:border-red-900/50 text-[var(--tx-muted)] hover:text-red-500 p-2 rounded-lg transition-all" title="ออกจากระบบ">
+            {/* V88 — signout: transparent base + red on hover (no card frame). */}
+            <button onClick={() => signOut(auth)} className="border border-transparent text-[var(--tx-muted)] hover:bg-[var(--bg-hover)] hover:text-red-500 p-2 rounded-lg transition-all" title="ออกจากระบบ">
               <LogOut size={14}/>
             </button>
           </div>
