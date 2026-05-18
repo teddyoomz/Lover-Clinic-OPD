@@ -370,7 +370,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // IDENTICAL children. Cosmetic-shell rule: no logic diverges per mode.
   const mainContent = (
     <>
-      <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+      <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6 fx-glow-u3`} data-testid="backend-content">
         {/* Audit P2 (2026-04-26 perf code-split): Suspense boundary catches
             in-flight tab loads. Eager-imported tabs render immediately;
             lazy-imported tabs (reports + heavy modals) trigger this fallback

@@ -108,7 +108,7 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
     <div className="space-y-4">
 
       {/* ── Header bar ── */}
-      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg fx-glow-u9 fx-glow-u9-customers" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: `rgba(${acRgb},0.5)` }} />

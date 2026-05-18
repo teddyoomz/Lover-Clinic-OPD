@@ -1049,7 +1049,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg fx-glow-u9 fx-glow-u9-sales" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-400/50" />
