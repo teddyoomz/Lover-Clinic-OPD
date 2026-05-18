@@ -85,7 +85,7 @@ export default function BranchBackupTab({ theme = 'dark' }) {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 fx-glow-v3">
       <header className="flex items-center gap-3">
         <Database size={24} className="text-blue-400" />
         <h2 className="text-xl font-bold">Backup สาขา</h2>

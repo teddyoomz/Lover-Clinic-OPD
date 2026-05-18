@@ -294,7 +294,7 @@ export default function BackupManagerTab() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="p-4 max-w-7xl mx-auto" data-testid="backup-manager-tab">
+    <div className="p-4 max-w-7xl mx-auto fx-glow-v3" data-testid="backup-manager-tab">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-bold text-white">📦 จัดการไฟล์สำรองข้อมูลทั้งหมด</h2>
