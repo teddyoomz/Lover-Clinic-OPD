@@ -2721,3 +2721,42 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 @media (prefers-reduced-motion: reduce) {
   .bloom-logo-wrap { animation: none !important; }
 }
+
+/* ─── V83-followup-5 (EOD8 LATE 2026-05-18) — Old sidebar light-theme contrast ─
+   User: "เมนูแบบเดิมของ backend แบบ light theme อ่านยากมากตามภาพ มองไม่ค่อยเห็น
+   ช่วยทำให้มันชัดเจนขึ้นด้วย". Light theme tx-secondary = #334155 (slate-700)
+   was thin against pink-tinted bg + Thai font weights at 12px feel weak.
+   Boost: heavier weight + slate-900 text + subtle text-shadow for crispness.
+   Targets the OLD sidebar (nav[aria-label="เมนูระบบหลังบ้าน"]) only — does
+   NOT affect new Backend Menu D shell. Active items keep white-on-color
+   contrast (untouched). */
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] {
+  /* Section headers: already font-black tx-heading — boost text-shadow for
+     subtle paper-depth effect that lifts heavy Thai glyphs off the white bg. */
+}
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
+  /* Section header rows */
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 1px rgba(15, 23, 42, 0.15);
+}
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]) {
+  /* Inactive items: bump weight + darker text + subtle shadow.
+     `:not([aria-current="page"])` preserves the active state (white-on-color)
+     which already has strong contrast. */
+  color: #0f172a;
+  font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list"] li button:not([aria-current="page"]):hover {
+  color: #020617; /* slate-950 — extra punch on hover */
+  font-weight: 700;
+}
+/* Clinic name + subtitle at top of sidebar */
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] h1,
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] > div:first-child p {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+/* Search bar input label */
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-label*="ค้นหา"] {
+  color: #334155;
+  font-weight: 600;
+}

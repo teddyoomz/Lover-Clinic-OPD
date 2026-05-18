@@ -203,8 +203,25 @@ export function BranchProvider({ children }) {
         // pickFirstLoginDefault (newest-created accessible) instead of
         // isDefault=true / 'main'.
         const stored = readSelected(currentUid);
+        // V83-followup-4 (EOD8 LATE 2026-05-18) — validate access, not just
+        // existence. Pre-fix bug: user with access to only นครราชสีมา but
+        // localStorage retained ทดลอง 1 ID (from a session when they had
+        // access). selectionStillValid=true (branch exists in be_branches) →
+        // selectedBranchId stayed = ทดลอง 1 → BranchSelector showed
+        // นครราชสีมา (uses access-filtered useUserScopedBranches) while
+        // StaffChatWidget showed ทดลอง 1 (uses full-branch useSelectedBranch).
+        // Two UI sources of truth diverged. User: "เข้าได้แต่นครราชสีมา
+        // แต่แชทกลับเป็นสาขาทดลอง 1 กด refresh แล้วก็ไม่หาย".
+        // Fix: also verify stored branch is in staffAccessible (or empty
+        // accessible = "all branches" bootstrap admin / legacy pre-Phase-BS).
+        const accessOpen = !Array.isArray(staffAccessible) || staffAccessible.length === 0;
+        const storedIsAccessible = accessOpen || (
+          !!stored && staffAccessible.includes(String(stored))
+        );
         const selectionStillValid = !!stored &&
-          list.length > 0 && list.some((b) => String(b.branchId || b.id) === String(stored));
+          list.length > 0 &&
+          list.some((b) => String(b.branchId || b.id) === String(stored)) &&
+          storedIsAccessible;
 
         if (!isReady && list.length > 0) {
           if (selectionStillValid) {
