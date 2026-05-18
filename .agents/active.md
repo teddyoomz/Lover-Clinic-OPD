@@ -1,40 +1,54 @@
 ---
-updated_at: "2026-05-18 EOD+7 — ClinicLogo at bloom center + glow + iterative size tune"
-status: "Logo polish done · awaiting deploy verb"
+updated_at: "2026-05-18 EOD+8 — V83 modal explicit-close-only + perm polish SHIPPED"
+status: "V83 done · awaiting deploy verb"
 branch: "master"
-last_commit: "033a1101 fix(backend-menu-d EOD+6 round 7): mobile logo -2% tune (195px at 375)"
-tests: "Backend Menu D pyramid 136/136 PASS · build clean 3.55s"
+last_commit: "test(V83): V21 fixups — 6 backdrop-click tests flipped to 'DOES NOT close'"
+tests: "Full vitest GREEN post-V21 fixups · build clean 2.76s · Rule Q L2 PASS"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (logo polish NOT deployed)"
+production_commit: "ef4bd5c3 LIVE (V83 NOT deployed)"
 firestore_rules_version: "unchanged"
 ---
 
 # Active Context
 
 ## State
-- Backend Menu D bloom now renders ClinicLogo at its center (desktop) / top (mobile) with theme-aware variant + slow 4.5s breathing glow.
-- Mobile logo iterated 4 size-tune rounds this turn (165 → 180 → 189 → 199 → 195 px at vw=375).
-- ~20 commits ahead of prod · all pushed to `origin/master` · prod still at `ef4bd5c3`.
+- **V83 SHIPPED locally**: 56 modal files stripped of backdrop-click dismiss (AV78); `link_request_management` perm added; `(29.22)` + `(16.3)` phase tags removed from labels; `tab=link-requests` gate flipped `adminOnly` → `requires`.
+- **All test banks GREEN**: M1-M5 + F1-F7 + P1-P5 (~50 V83 assertions) + 6 V21 fixups + full vitest.
+- **Rule Q L2 PASS** on real prod: TEST-LINKREQ-V83 fixtures seeded across 2 branches, per-branch isolation verified, cleanup zero-orphan, audit doc emitted (`v83-l2-link-request-perm-verify-1779082269383-12e12359`).
+- ~28+ commits ahead of prod · all pushed to `origin/master` · prod still at `ef4bd5c3`.
 
 ## What this session shipped
-- **EOD+6 round 1** — Add `<ClinicLogo>` to BackendArcBloom (theme-aware via existing logoUrl/logoUrlLight). Wired clinicSettings + theme props through BackendShellNew. Widened desktop scatter ~5% outward. Added `.bloom-logo-wrap` CSS with clamp-based sizing + slow breath animation (4 keyframes: dark/light × desktop/mobile). reduced-motion stops animation.
-- **EOD+6 round 2** — Bumped logo sizes (desktop 22vw/320 → 25vw/360 · +12%; mobile 36vw/170 → 40vw/190 · +11%). Pushed finance + reports orbs from top:86% → 91% to clear the bigger logo bottom. 2 V21 fixups in `backend-menu-d-bugfix-orb-and-mode-toggle.test.jsx` for new scatter coords.
-- **Rounds 3-7 mobile logo iterative tune** — quick 1-line clamp() bumps per user: 40vw → 44vw → 48vw → 50.5vw → 53vw → 52vw (final 195px at vw=375).
-- **Discovery**: Chrome MCP installed but extension not reachable this turn — fell back to preview_eval only (faster than preview_screenshot which timed out at 30s). Suggested user check extension sign-in for next session.
-- Checkpoint: `.agents/sessions/2026-05-18-bloom-logo-and-glow.md`
+- **V83 Modal explicit-close-only universal fix** — Pain: "คลิ๊กพลาดปิด modal บ่อยจนอยากจะทุบคอมทิ้ง". Mechanical strip of `onClick={onClose}` / Pattern B currentTarget guard / state-setter dismissers from 56 modal backdrop divs (~80 instances). ESC + X + Cancel still close. 2 sanctioned exceptions: `StaffChatImageLightbox` + `TreatmentReadOnlyMirror` inner Lightbox (fullscreen image viewers). Each stripped backdrop carries `// AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)` marker.
+- **AV78 invariant** added to `audit-anti-vibe-code` SKILL.md as HIGH priority + closed sanctioned exception list of 2 files (adding a 4th lightbox requires V-entry + test extension).
+- **Source-grep regression bank** `tests/v83-modal-explicit-close-only.test.js` (M1-M5: sanctioned list closure + ZERO offenders + ESC/X presence + marker coverage + total count ≥40).
+- **Rule I flow-simulate** `tests/v83-modal-explicit-close-flow-simulate.test.jsx` (F1-F7: backdrop click ignored × 22 vectors + X/Cancel/ESC close × 5 vectors + sanctioned lightbox exception verified + user-flow real-data scenario).
+- **Permission polish**: added `link_request_management` key in settings module + flipped `tab=link-requests` `adminOnly:true` → `requires:['link_request_management']` (admin bypass implicit via canAccessTab) + stripped `(16.3)` from `system_config_management` label + `(29.22)` from `recall_management` label.
+- **Permission unit + source-grep** `tests/v83-link-request-permission.test.js` (P1-P5: catalog presence + label exact match + tabPermissions wiring + canAccessTab 4-persona semantics + anti-regression label sweep + source-grep wiring locks).
+- **6 V21 fixups** — backdrop-click test assertions flipped from "closes" → "DOES NOT close (V83/AV78)" in 5 recall modal tests + 1 link-requests tabPermissions test (adminOnly → requires).
+- **2 bug fixes during run** — (a) MarketingFormShell:80 trailing backdrop onClick caught by M2.1; (b) OrderDetailModal:145 Batch 3 subagent's broken `{// AV78 ... }` JSX comment (parser ate `}`) → flat `// AV78 ...`. Build broke for ~5 min before second fix; now clean 2.76s.
+- **Rule Q L2** real-prod admin-SDK verification PASS: 3 TEST-LINKREQ-V83 fixtures (2 BR_A + 1 BR_B) seeded → branch isolation verified → cleanup zero-orphan → audit emitted.
+- **Checkpoint**: `.agents/sessions/` (next checkpoint via /session-end).
 
-## Decisions
-- Logo center 50%/50% on desktop, top:14% center on mobile (orbs at bottom-right have no overlap risk on mobile).
-- Drop-shadow ember-red (220,38,38) for dark / sakura-pink (236,72,153) for light — matches existing theme palette.
-- Breath animation: 4.5s ease-in-out infinite · scale 0.985↔1.015 · drop-shadow blur 14↔28 / 24↔52 px.
-- 42×3 px corner brush between customers orb + desktop logo accepted as visually invisible (within drop-shadow blur radius).
-- Skip preview_screenshot going forward — only preview_eval (DOM/style queries) — 30s timeout savings.
+## Decisions (V83)
+- **Mechanical strip > new wrapper component** (Q1=A) — 56 files × 1-3 line edit each is cheaper + lower risk than building shared `<Modal>` + migrating; AV78 source-grep regression locks the contract.
+- **Closed sanctioned exception list of 2** — only fullscreen image lightboxes (StaffChatImageLightbox + TreatmentReadOnlyMirror inner) where click-anywhere-closes IS expected UX (Stripe/Linear convention).
+- **Keep per-modal ESC handler as-is** (Q3=A) — don't centralize; minimal touch.
+- **Universal permission key + per-branch via data-layer** (Q5=A) — `link_request_management` is universal; per-branch visibility happens at `listLinkRequests({branchId})` (already wired in LinkRequestsTab).
+- **`// AV78 (EOD8): ...` line comment markers** (NOT `/* */` block) — uniform style across 42 files; avoids JSX parser edge cases.
 
 ## Next action
-**Deploy when user types "deploy"** — queue: V82-Phone `257a699f` + sub-tab picker T1-T7 + 5 Arc Fan polish rounds + ClinicLogo polish (rounds 1-7). All vercel-only, no firestore rules change.
+**Deploy when user types "deploy"** — combined queue is now LARGE:
+- V83 (modal explicit-close-only + perm polish) — THIS SESSION
+- EOD+7 ClinicLogo polish (rounds 1-7)
+- EOD+5 Arc Fan polish rounds
+- V82-Phone `257a699f`
+- Sub-tab picker T1-T7
+All vercel-only · NO firestore rules change since V82-Phone.
 
 ## Outstanding user-triggered actions
-- Deploy (vercel-only)
-- V82 Menu V2 mobile L1 re-test (carryover)
-- Chrome MCP extension reconnect (sign in + active tab) — would speed up future preview cycles
-- Playwright L1 mouse-follow tilt run (E11 backend-menu-d.spec.js) when admin creds env set
+- **Deploy (vercel-only)** — explicit "deploy" verb required per V18
+- **Rule Q L1 hands-on post-deploy**: open any modal → try clicking backdrop / outside → expect modal STAYS OPEN with form data preserved → click X / ESC / Cancel → modal closes. Repeat for 3+ representative modals (AppointmentForm, RecallCreate, WholeSystemBackup).
+- **Per-branch link-request test post-deploy**: create staff user with `link_request_management` perm in branch A → log in non-admin → switch to branch A → confirm `tab=link-requests` visible + can approve/reject A's pending requests → switch to branch B → tab still visible but only B's records show
+- **Chrome MCP extension reconnect** (carryover)
+- **V82 Menu V2 mobile L1 re-test** (carryover)
+- **Playwright L1 mouse-follow tilt** (E11 backend-menu-d.spec.js) when admin creds env set
