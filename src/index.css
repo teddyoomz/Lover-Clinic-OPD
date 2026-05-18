@@ -2826,11 +2826,20 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
   position: relative;
   overflow: hidden;
+  /* V83-followup-13 (EOD8 LATE 2026-05-18) — modern outline + inset ring +
+     elevation. User: "เปลี่ยนกรอบเมนูใหญ่ ให้สวยและ modern กว่านี้ และ
+     เมนูใหญ่ที่ยังไม่ได้ select ก็อยากให้มันเด่นด้วย".
+     5-layer box-shadow: outer accent ring + top inner highlight + bottom
+     inner shadow + base lift + soft drop. Inactive sections get visible
+     rose-tinted ring; active gets brighter ring + bigger glow. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),  /* top-inner highlight */
+    /* Outer accent ring — visible even on inactive sections */
+    0 0 0 1px rgba(244, 114, 182, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),  /* top-inner highlight */
     inset 0 -1px 0 rgba(0, 0, 0, 0.20),       /* bottom-inner shadow */
-    0 1px 2px rgba(0, 0, 0, 0.15),            /* base lift */
-    0 2px 4px rgba(0, 0, 0, 0.08);            /* soft drop */
+    0 2px 4px rgba(0, 0, 0, 0.18),            /* base lift */
+    0 4px 12px -4px rgba(244, 114, 182, 0.12); /* rose-tinted ambient glow */
+  border-radius: 10px;
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.18s ease,
@@ -2850,30 +2859,55 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]:hover {
   transform: translateY(-1px) scale(1.005);
   box-shadow:
+    /* Brighter accent ring on hover */
+    0 0 0 1px rgba(244, 114, 182, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 4px 8px rgba(0, 0, 0, 0.25),
-    0 8px 16px -4px rgba(0, 0, 0, 0.15);
+    0 4px 10px rgba(0, 0, 0, 0.30),
+    0 8px 24px -4px rgba(244, 114, 182, 0.30); /* stronger rose glow */
   filter: brightness(1.08) saturate(1.10);
+}
+/* Active section (expanded with active child) — strongest accent presence */
+nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded="true"] {
+  box-shadow:
+    /* Bold accent ring */
+    0 0 0 1.5px rgba(244, 114, 182, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 3px 6px rgba(0, 0, 0, 0.22),
+    0 6px 20px -4px rgba(244, 114, 182, 0.28);
 }
 /* LIGHT theme — softer paper-card depth instead of dark inner shadow */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
   box-shadow:
+    /* Outer rose ring — visible on white bg */
+    0 0 0 1px rgba(244, 114, 182, 0.30),
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
     inset 0 -1px 0 rgba(15, 23, 42, 0.05),
-    0 1px 2px rgba(244, 114, 182, 0.10),
-    0 2px 6px rgba(15, 23, 42, 0.06);
+    0 2px 4px rgba(244, 114, 182, 0.12),
+    0 4px 12px -2px rgba(15, 23, 42, 0.08);
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]::before {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, transparent 40%, transparent 60%, rgba(244, 114, 182, 0.05) 100%);
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]:hover {
   box-shadow:
+    /* Brighter ring on hover */
+    0 0 0 1px rgba(244, 114, 182, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
     inset 0 -1px 0 rgba(15, 23, 42, 0.08),
-    0 6px 14px -4px rgba(244, 114, 182, 0.30),
-    0 8px 20px -6px rgba(15, 23, 42, 0.10);
+    0 6px 14px -4px rgba(244, 114, 182, 0.35),
+    0 8px 20px -6px rgba(15, 23, 42, 0.12);
   filter: brightness(1.03);
+}
+[data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded="true"] {
+  box-shadow:
+    /* Active: solid bold rose ring */
+    0 0 0 1.5px rgba(244, 114, 182, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    0 4px 10px rgba(244, 114, 182, 0.20),
+    0 6px 18px -4px rgba(15, 23, 42, 0.10);
 }
 /* Ensure inner content (icon, label, chevron) sits ABOVE the ::before sheen */
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] > * {
