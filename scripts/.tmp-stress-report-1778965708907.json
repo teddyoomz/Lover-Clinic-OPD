@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "cycleNum": 1,
+      "backupRef": "manual-20260517-0405",
+      "autoBackupRef": "pre-restore-20260517-0406",
+      "success": true,
+      "issues": [],
+      "docCountsMatch": true,
+      "authPreserved": true,
+      "elapsedSec": 183
+    }
+  ],
+  "generatedBackups": [
+    "manual-20260517-0405",
+    "pre-restore-20260517-0406"
+  ]
+}

@@ -230,7 +230,7 @@ export default function ScheduleEntryFormModal({
   };
 
   return (
-    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl bg-[var(--bg-surface)] border border-[var(--bd)] shadow-2xl overflow-hidden"
         data-testid="schedule-entry-modal">

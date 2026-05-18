@@ -1245,7 +1245,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
       {/* ═══ DETAIL VIEW MODAL ═══ */}
       {viewingSale && (
-        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-view-sale" onKeyDown={e => { if (e.key === 'Escape') setViewingSale(null); }}>
           <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b flex items-center justify-between sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
@@ -1341,7 +1341,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
       {/* ═══ CANCEL MODAL ═══ */}
       {cancelModal && (
-        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-cancel-sale" onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
           <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[88vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b sticky top-0 z-10 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-surface)]' : 'border-gray-200 bg-white'}`}>
@@ -1548,7 +1548,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
       {/* ═══ PAYMENT UPDATE MODAL ═══ */}
       {payModal && (
-        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="modal-title-pay-sale" onKeyDown={e => { if (e.key === 'Escape') setPayModal(null); }}>
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
             <div className={`px-5 py-4 border-b ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -1884,7 +1884,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
         {/* Buy modal */}
         {buyModalOpen && (
-          /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+          /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-buy" onKeyDown={e => { if (e.key === 'Escape') setBuyModalOpen(false); }}>
             <div className={`w-full max-w-lg mx-4 rounded-2xl shadow-2xl max-h-[70vh] flex flex-col ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
               <div className={`px-4 py-3 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>
@@ -1948,7 +1948,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
         {/* Med modal — เพิ่ม/แก้ไขยากลับบ้าน */}
         {medModalOpen && (
-          /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+          /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
           <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="modal-title-med-sale" onKeyDown={e => { if (e.key === 'Escape') setMedModalOpen(false); }}>
             <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`} onClick={e => e.stopPropagation()}>
               <div className={`px-5 py-4 border-b flex items-center justify-between ${isDark ? 'border-[var(--bd)]' : 'border-gray-200'}`}>

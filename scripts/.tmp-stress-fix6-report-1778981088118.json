@@ -1,0 +1,8 @@
+{
+  "results": [
+    {
+      "cycleNum": 1,
+      "exception": "Manifest invalid: backupType mismatch: got customer-only"
+    }
+  ]
+}

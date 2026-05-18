@@ -103,7 +103,7 @@ function Lightbox({ src, label, onClose }) {
   }, [onClose]);
 
   if (!src) return null;
-  // audit-anti-vibe-code: AV67 lightbox-explicit-exception — image zoom lightbox.
+  // audit-anti-vibe-code: AV78 lightbox-explicit-exception — image zoom lightbox.
   // Click-anywhere-closes IS expected UX for fullscreen image viewers (Stripe/Linear/etc).
   return (
     <div

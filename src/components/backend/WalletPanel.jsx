@@ -302,7 +302,7 @@ function TopupModal({ modal, walletTypes, isDark, inputCls, labelCls, onClose, o
   };
 
   return (
-    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
@@ -411,7 +411,7 @@ function AdjustModal({ modal, isDark, inputCls, labelCls, onClose, onDone }) {
   };
 
   return (
-    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
@@ -480,7 +480,7 @@ function HistoryModal({ modal, isDark, onClose }) {
   }, [customerId, wallet?.walletTypeId]);
 
   return (
-    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}

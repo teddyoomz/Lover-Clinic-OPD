@@ -239,12 +239,18 @@ export const PERMISSION_MODULES = Object.freeze([
       // this to head-of-ops or designated power users so they can adjust
       // tab visibility / defaults / feature flags without needing the
       // full admin claim. See firestore.rules clinic_settings/system_config.
-      { key: 'system_config_management',      label: 'ตั้งค่าระบบ (16.3)' },
+      { key: 'system_config_management',      label: 'ตั้งค่าระบบ' },
       // Phase 29.22 (2026-05-14) — Recall Cases admin sub-pill access.
       // Grants ability to manage be_recall_cases (add/edit/hide recall
       // preset durations). Admin claim bypasses this; non-admin staff with
       // this key see the "จัดการเคส" sub-pill inside RecallTab.
-      { key: 'recall_management',             label: 'จัดการเคส Recall (29.22)' },
+      { key: 'recall_management',             label: 'จัดการเคส Recall' },
+      // V83 (2026-05-18 EOD+8) — Per-branch LINE link request management.
+      // Owner can grant to branch manager so they can approve/reject LINE
+      // link requests for their branch without needing the full admin claim.
+      // Tab itself remains branch-scoped via useSelectedBranch; this perm
+      // grants visibility. See tabPermissions.js 'link-requests' entry.
+      { key: 'link_request_management',       label: 'จัดการคำขอผูก LINE' },
     ],
   },
 ]);

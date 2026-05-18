@@ -1,0 +1,110 @@
+{
+  "results": [
+    {
+      "id": "S1",
+      "name": "Baseline preservation",
+      "ok": true,
+      "pre": {
+        "be_customers": 391,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 391,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "issue": null,
+      "elapsed": "176.0"
+    },
+    {
+      "id": "S2",
+      "name": "Single NAKHON customer",
+      "ok": true,
+      "pre": {
+        "be_customers": 392,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 392,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "cid": "TEST-V81-FIX6-S2-5b95af",
+      "issue": null,
+      "elapsed": "165.5"
+    },
+    {
+      "id": "S3",
+      "name": "Cross-branch creation",
+      "ok": true,
+      "pre": {
+        "be_customers": 394,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 394,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 9,
+        "auth": 353
+      },
+      "issue": null,
+      "elapsed": "166.9"
+    },
+    {
+      "id": "S4",
+      "name": "Delete-then-restore",
+      "ok": true,
+      "middleCount": 392,
+      "issue": null,
+      "elapsed": "164.9"
+    },
+    {
+      "id": "S5",
+      "name": "Subcollection fidelity",
+      "ok": true,
+      "issue": null,
+      "elapsed": "161.2"
+    },
+    {
+      "id": "S6",
+      "name": "Chat conversation",
+      "ok": false,
+      "baselineViolation": true,
+      "postCustomers": 0,
+      "BASELINE_CUSTOMERS": 391,
+      "elapsed": "146.9"
+    }
+  ]
+}

@@ -106,7 +106,10 @@ export const TAB_PERMISSION_MAP = Object.freeze({
   'document-templates':  { adminOnly: true },
   'line-settings':       { adminOnly: true },  // V32-tris-ter — LINE OA channel + bot config
   'fb-settings':         { adminOnly: true },  // V75 Item 3 — Per-branch FB Page settings
-  'link-requests':       { adminOnly: true },  // V32-tris-quater — LINE link approval queue
+  // V83 (EOD8 2026-05-18) — admin bypass implicit via canAccessTab isAdmin
+  // early-return; per-branch user with link_request_management gets access
+  // (LinkRequestsTab already branch-scoped via useSelectedBranch).
+  'link-requests':       { requires: ['link_request_management'] },
 
   // Phase 16.3 (2026-04-29) — System Settings tab. Permission-key gated
   // (Q2-C: NEW key `system_config_management`) so owner can grant to

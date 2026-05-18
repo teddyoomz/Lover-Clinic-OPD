@@ -1,0 +1,13 @@
+
+> genform-app@0.0.0 test
+> vitest run --run
+
+
+ RUN  v4.1.5 F:/LoverClinic-app
+
+
+ Test Files  320 passed (320)
+      Tests  8350 passed | 1 skipped (8351)
+   Start at  17:52:47
+   Duration  115.62s (transform 20.71s, setup 108.24s, import 105.12s, tests 73.08s, environment 1178.56s)
+

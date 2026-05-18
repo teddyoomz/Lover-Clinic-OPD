@@ -854,7 +854,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       )}
 
       {cancelModal && (
-        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-cancel-title"
           onKeyDown={e => { if (e.key === 'Escape') setCancelModal(null); }}>
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
@@ -891,7 +891,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       )}
 
       {refundModal && (
-        /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+        /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-refund-title"
           onKeyDown={e => { if (e.key === 'Escape') setRefundModal(null); }}>
           <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}
@@ -1354,7 +1354,7 @@ function DetailModal({ dep, isDark, onClose }) {
     ? Number(dep.remainingAmount) || 0
     : calcDepositRemaining(dep.amount, dep.usedAmount);
   return (
-    /* AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="deposit-detail-title"
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className={`w-full max-w-2xl mx-4 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto ${isDark ? 'bg-[var(--bg-surface)] border border-[var(--bd)]' : 'bg-white border border-gray-200'}`}

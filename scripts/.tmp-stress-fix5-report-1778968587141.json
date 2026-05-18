@@ -1,0 +1,64 @@
+{
+  "results": [
+    {
+      "cycleNum": 1,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0426"
+    },
+    {
+      "cycleNum": 2,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0429"
+    },
+    {
+      "cycleNum": 3,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0432"
+    },
+    {
+      "cycleNum": 4,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0435"
+    },
+    {
+      "cycleNum": 5,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0438"
+    },
+    {
+      "cycleNum": 6,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0441"
+    },
+    {
+      "cycleNum": 7,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0444"
+    },
+    {
+      "cycleNum": 8,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0447"
+    },
+    {
+      "cycleNum": 9,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0450"
+    },
+    {
+      "cycleNum": 10,
+      "success": true,
+      "issues": [],
+      "backupRef": "manual-20260517-0453"
+    }
+  ]
+}

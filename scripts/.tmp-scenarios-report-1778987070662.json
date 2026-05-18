@@ -1,0 +1,136 @@
+{
+  "results": [
+    {
+      "id": "S1",
+      "name": "Baseline preservation",
+      "ok": true,
+      "pre": {
+        "be_customers": 391,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 391,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "issue": null,
+      "elapsed": "178.3"
+    },
+    {
+      "id": "S2",
+      "name": "Single NAKHON customer",
+      "ok": true,
+      "pre": {
+        "be_customers": 392,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 392,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "cid": "TEST-V81-FIX6-S2-e9761a",
+      "issue": null,
+      "elapsed": "175.7"
+    },
+    {
+      "id": "S3",
+      "name": "Cross-branch creation",
+      "ok": true,
+      "pre": {
+        "be_customers": 394,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "post": {
+        "be_customers": 394,
+        "be_staff": 4,
+        "be_products": 606,
+        "be_treatments": 15,
+        "be_sales": 8,
+        "be_appointments": 3,
+        "chat_conversations": 11,
+        "auth": 353
+      },
+      "issue": null,
+      "elapsed": "168.6"
+    },
+    {
+      "id": "S4",
+      "name": "Delete-then-restore",
+      "ok": true,
+      "middleCount": 392,
+      "issue": null,
+      "elapsed": "164.8"
+    },
+    {
+      "id": "S5",
+      "name": "Subcollection fidelity",
+      "ok": true,
+      "issue": null,
+      "elapsed": "173.1"
+    },
+    {
+      "id": "S6",
+      "name": "Chat conversation",
+      "ok": true,
+      "issue": null,
+      "elapsed": "166.5"
+    },
+    {
+      "id": "S7",
+      "name": "Customer with Storage file",
+      "ok": true,
+      "issue": null,
+      "elapsed": "168.0"
+    },
+    {
+      "id": "S8",
+      "name": "Bulk 10 customers",
+      "ok": true,
+      "issue": null,
+      "elapsed": "174.2"
+    },
+    {
+      "id": "S9",
+      "name": "Chained restore (A → B)",
+      "ok": true,
+      "issue": null,
+      "elapsed": "361.8"
+    },
+    {
+      "id": "S10",
+      "name": "Mixed delete+add then wipe+restore",
+      "ok": true,
+      "issue": null,
+      "elapsed": "178.9"
+    }
+  ]
+}

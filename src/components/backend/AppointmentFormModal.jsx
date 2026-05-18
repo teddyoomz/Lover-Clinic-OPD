@@ -853,7 +853,7 @@ export default function AppointmentFormModal({
     });
   };
 
-  // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+  // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-form-modal-title" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()} data-testid="appointment-form-modal">

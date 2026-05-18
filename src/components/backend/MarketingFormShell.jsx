@@ -76,9 +76,9 @@ export default function MarketingFormShell({
   const spacingClass = BODY_SPACING_CLASS[bodySpacing] || BODY_SPACING_CLASS[4];
 
   return (
+    /* AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC) */
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose?.(); }}
     >
       <div
         className={`w-full ${widthClass} max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)]`}

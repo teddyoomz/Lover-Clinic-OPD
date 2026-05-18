@@ -1521,7 +1521,7 @@ function AddQtyModal({ course, courseIndex, courseName, customerId, customerName
   const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
-    // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-add-qty" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between">
@@ -1627,7 +1627,7 @@ function ExchangeModal({ course, courseIndex, customerId, customerName, isDark, 
   const selectedStaff = staff.find(s => String(s.id) === staffId);
 
   return (
-    // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-exchange" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
@@ -1852,7 +1852,7 @@ function ShareModal({ course, courseIndex, fromCustomerId, fromCustomerName, isD
   const toName = selectedCust ? `${selectedCust.patientData?.prefix || ''} ${selectedCust.patientData?.firstName || ''} ${selectedCust.patientData?.lastName || ''}`.trim() : '';
 
   return (
-    // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="modal-title-share" onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)] z-10">
@@ -2181,7 +2181,7 @@ function AppointmentListModal({ appointments, customer, isDark, onClose, onEdit,
     return [...upcoming, ...past];
   }, [appointments, today]);
   return (
-    // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="appt-list-title">
       <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()} data-testid="customer-appt-list-modal">
         <div className="px-5 py-4 border-b border-[var(--bd)] flex items-center justify-between sticky top-0 bg-[var(--bg-surface)]">

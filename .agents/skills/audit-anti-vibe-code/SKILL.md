@@ -2190,10 +2190,74 @@ both the queue filter ordering AND the noDepositSessions exclusion. Pair-
 edit discipline: any future opt-out at queue filter MUST be paired with the
 same opt-out at noDepositSessions filter to prevent double-appearance.
 
+### AV78 — Modal backdrop click MUST NOT close (V83, 2026-05-18 EOD+8)
+
+**Trigger**: A user fills in a long modal form and accidentally clicks the
+darkened backdrop outside the modal content box → modal dismisses → all
+form input lost. User has to restart from scratch. Repeated occurrences
+cause user trust + workflow damage ("ใกล้จะหมดแล้ว ดันไปเผลอคลิ๊ก ... หัวร้อน
+มากๆ ... อยากจะทุบคอมทิ้ง").
+
+**Why**: Modal backdrop dismiss is a default React/Tailwind pattern (single
+line `onClick={onClose}` on the outer `<div className="fixed inset-0 ...">`)
+copied across ~57 ad-hoc modal files. Backdrop-click dismissal is a UX
+anti-pattern for FORMS (vs. simple confirm dialogs). Even brief slip-clicks
+destroy work. Modern UX (Stripe, Linear, etc.) only dismisses on explicit
+affordances: X button, Cancel button, ESC key.
+
+**Source-grep pattern** (catches future drift):
+
+```bash
+# Every modal backdrop in src/components/**/*.jsx MUST NOT carry these:
+grep -rEn "onClick=\{onClose\}|onClick=\{\(e\) => \{ if \(e\.target === e\.currentTarget\)" src/components/ | grep -v StaffChatImageLightbox
+
+# Pattern A: `onClick={onClose}` directly on backdrop
+# Pattern A-alt: `onClick={() => setSomeState(null|false)}` on backdrop
+# Pattern A-alt2: `onClick={() => stage !== 'running' && onClose?.()}` (WholeSystem)
+# Pattern B: `onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}`
+# All FORBIDDEN on backdrop divs (not on X/Cancel buttons inside the modal)
+```
+
+After this audit pattern, the source-grep regression test
+`tests/v83-modal-explicit-close-only.test.js` (M1-M4 groups) enforces:
+- M1: closed sanctioned exception list (lightboxes only)
+- M2: ZERO offending backdrop onClick patterns in src/components/
+- M3: ESC OR X-button close affordance still present (positive check)
+- M4: AV78 marker comment present where strip happened
+
+**Sanctioned exceptions** (closed list — adding a 4th requires extending
+both the test file AND filing a V-entry justifying the UX deviation):
+1. `src/components/staffchat/StaffChatImageLightbox.jsx` — fullscreen
+   chat image viewer; click-anywhere-closes IS expected UX
+2. `src/components/backend/TreatmentReadOnlyMirror.jsx` (inner
+   ImageLightbox helper) — same pattern for treatment image zoom
+
+Both annotated with `// audit-anti-vibe-code: AV78 lightbox-explicit-exception`.
+
+**Detection**: regression test `tests/v83-modal-explicit-close-only.test.js`
+(M1-M4) + Rule I flow-simulate `tests/v83-modal-explicit-close-flow-simulate.test.jsx`
+(F1-F6) lock the post-V83 contract permanently.
+
+**Class-of-bug**: V12 multi-reader-sweep at UI-affordance boundary. 57
+ad-hoc modals all shared the same anti-pattern. Mechanical strip via
+batch Edit + source-grep regression at file-level boundary is the only
+sustainable fix. AV78 grep prevents new modals from re-introducing the
+pattern at PR time.
+
+**Priority**: HIGH — silent user-data destruction. Form work lost without
+any error or warning. Trust damage compounds with repetition.
+
+**Lineage**: V83 (2026-05-18 EOD+8). User pain locked permanent in this
+entry; marker comment `AV78 (EOD8): backdrop click does NOT close — explicit
+close only (X / Cancel / ESC)` placed above 80+ backdrop divs across 40+
+modal files (some files have multiple backdrops). Pair-edit discipline:
+any new modal added to src/components MUST follow explicit-close-only
+contract OR be added to sanctioned lightbox list.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

@@ -35,7 +35,7 @@ export function StaffChatNamePicker({ onConfirm, onCancel, initialValue, initial
   const roleChanged = isEdit ? selectedRole !== initialRole : true;
   const canSave = valid && (nameChanged || colorChanged || roleChanged);
 
-  // AV67 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+  // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
   return (
     <div
       data-testid="staff-chat-name-picker"

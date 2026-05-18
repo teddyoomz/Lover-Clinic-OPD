@@ -11,7 +11,7 @@ export function StaffChatImageLightbox({ src, onClose }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // audit-anti-vibe-code: AV67 lightbox-explicit-exception — fullscreen image viewer.
+  // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen image viewer.
   // Click-anywhere-closes IS expected UX for fullscreen attachment viewers (Stripe/Linear convention).
   return (
     <div
