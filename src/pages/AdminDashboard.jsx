@@ -5766,8 +5766,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <ClinicLogo className="h-9 max-w-[140px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
           <div className="h-7 w-px bg-[var(--bd)] shrink-0 mx-1"></div>
 
-          {/* Pill tabs — all 8 modes, badges preserved verbatim */}
-          <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+          {/* Pill tabs — all 8 modes, badges preserved verbatim.
+              V84 (2026-05-18 EOD+9): gap-0.5 → gap-1.5 (6px) so the chat tab's
+              .menu-badge (right:-6px protrusion) no longer overlaps the next tab.
+              menu-tab-scroll class adds padding-margin trick so badges with
+              top:-6px aren't clipped by the implicit overflow-y:auto that the
+              browser auto-applies whenever overflow-x is non-visible. See
+              src/index.css `.menu-tab-scroll` for the full why. */}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto no-scrollbar menu-tab-scroll">
             <button onClick={() => setAdminMode('chat')} className={`menu-tab ${adminMode === 'chat' ? 'menu-tab-active' : ''} ${isChatActive && chatUnread > 0 && adminMode !== 'chat' ? 'chat-tab-blink' : ''}`}>
               <MessageCircle size={14}/> <span>แชท</span>
               {isChatActive && chatUnread > 0 && <span className="menu-badge" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}

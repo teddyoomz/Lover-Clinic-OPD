@@ -83,6 +83,13 @@ Also grep for `token: '[A-Za-z0-9]{20,}'` and `password:\s*['"][^'"]+['"]`.
 - `console.log.*cleanup OK\|cleanup complete` — verify the message follows an explicit count assertion.
 **Fix**: every cleanup op returns `{ removed: N, failed: M, ids: [...] }`. Caller assertion: `removed > 0` OR `failed === 0 && total === 0`.
 
+### AV80 — Absolute-positioned overlay inside overflow-x-auto container (V84)
+**Why**: V84 — `.menu-badge` was `position:absolute; top:-6px; right:-6px;` inside a tab container with `overflow-x-auto`. CSS spec auto-promotes `overflow-y: visible` → `overflow-y: auto` whenever overflow-x is non-visible. Badges that protrude above/below the container are CLIPPED by the implicit overflow-y. Plus right-protrusion overlapped neighbor when container gap < badge offset.
+**Grep**:
+- `overflow-x-auto` and `overflow-x: auto` in JSX className / CSS — for each, check if the container holds absolutely-positioned children with negative top/right offsets via grep on `.<descendant>:: { position: absolute; (top|right): -\d+px }`.
+- Pair-check: any `.menu-badge`-style class with negative top/right inset MUST be inside a container that either has overflow-x visible OR uses padding-margin trick (padding-{top,right,bottom} + matching negative margins). Single anchor: `.menu-tab-scroll` (V84 canonical pattern).
+**Fix**: padding-margin trick. Container gets `padding-top: Npx; padding-{right,bottom}: ...; margin-top: -Npx; margin-{right,bottom}: ...;` so the absolute overlay has room within the clipping content box while outer layout net-zero changes. Pair with `gap-{N}` ≥ badge-right-protrusion to prevent neighbor overlap. Source-grep regression in `tests/v84-menu-badge-overflow-y-clip.test.js` locks the contract.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

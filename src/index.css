@@ -1388,10 +1388,15 @@ select.pf-input {
   50%       { box-shadow: 0 0 24px rgba(var(--accent-rgb, 220,38,38), 0.55); }
 }
 
-/* Chat tab blink alert */
+/* Chat tab blink alert
+   V84 (2026-05-18 EOD+9): halo radius reduced 16px→10px so the pulsing
+   alert stays inside the menu-shell vertical padding (~10px each side)
+   instead of bleeding into the brand gradient line above and into
+   the rounded-b-2xl border below. Alert intensity preserved via the
+   solid-fill bg flip (blue↔red) which is what carries the urgency. */
 @keyframes chat-blink {
   0%, 100% { opacity: 1; background-color: rgb(29, 78, 216); box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
-  50%       { opacity: 1; background-color: rgb(239, 68, 68); box-shadow: 0 0 16px rgba(239, 68, 68, 0.6); }
+  50%       { opacity: 1; background-color: rgb(239, 68, 68); box-shadow: 0 0 10px rgba(239, 68, 68, 0.55); }
 }
 .chat-tab-blink {
   animation: chat-blink 1s ease-in-out infinite;
@@ -1977,6 +1982,35 @@ button:not(:disabled):active {
   border: 2px solid var(--bg-surface, #0d0d0f);
   box-shadow: 0 2px 6px rgba(0,0,0,0.5);
   line-height: 1;
+}
+
+/* V84 (2026-05-18 EOD+9): inner horizontal scroll container for desktop
+   top-menu tabs. The bug being fixed:
+     <div class="... overflow-x-auto"> wraps menu-tab buttons whose
+     .menu-badge children are absolute-positioned with top:-6px right:-6px.
+     CSS spec auto-promotes `overflow-y: visible` → `overflow-y: auto`
+     whenever overflow-x is non-visible (Chrome/Firefox/Safari all behave
+     this way). Result: every badge that protrudes above/below the button
+     is CLIPPED by the implicit overflow-y. The badge "1" looked squashed
+     against the top brand gradient line and also overlapped the next tab
+     because gap-0.5 (2px) < badge protrusion (-6px right).
+   The fix:
+     1. padding-margin trick — give the badge breathing room INSIDE the
+        scroll container's content box (where clipping happens), while
+        keeping the OUTER spacing identical via the negative margin. Net
+        height/width change to surrounding layout = 0.
+     2. Pair with gap-1.5 (6px) on the JSX so the badge's right protrusion
+        no longer encroaches on the neighbor tab's clickable area.
+   This is paired with the chat-blink halo reduction above (16px→10px)
+   so the pulse stays inside the bar instead of bleeding into the
+   brand gradient line. */
+.menu-tab-scroll {
+  padding-top: 10px;
+  padding-bottom: 4px;
+  padding-right: 8px;
+  margin-top: -10px;
+  margin-bottom: -4px;
+  margin-right: -8px;
 }
 
 /* Mobile bottom dock tab */
