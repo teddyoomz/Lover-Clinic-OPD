@@ -2839,3 +2839,40 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
   color: #334155;
   font-weight: 600;
 }
+
+/* ─── V83-followup-10 (EOD8 LATE 2026-05-18) — Light theme universal shadow polish ─
+   User: "ฝากเพิ่ม แสงและเงาให้กับหน้าต่างๆ ทุกหน้าทุก tab ทั้ง Frontend และ
+   Backend ให้มันดูเท่ขึ้น แต่ละอย่าง แต่ละ card แต่ละ list มีแสงและเงาสวยขึ้น
+   ดูทันสมัยขึ้น ... แค่เติมแสงและเงามันไม่ต้องแก้ไขอะไรมาก ไม่น่าทำให้อะไรพังได้".
+   Strategy: enhance Tailwind shadow utilities in LIGHT theme ONLY (where shadows
+   on white-bg cards washed out vs dark theme). Pink-tinted depth + subtle slate
+   undertone = modern paper-card look matching project sakura accent. Dark theme
+   untouched. Zero JSX changes — pure CSS utility-class enhancement. */
+[data-theme="light"] .shadow-2xl {
+  box-shadow:
+    0 25px 50px -12px rgba(244, 114, 182, 0.18),
+    0 12px 24px -8px rgba(15, 23, 42, 0.10),
+    0 4px 8px -2px rgba(15, 23, 42, 0.06) !important;
+}
+[data-theme="light"] .shadow-xl {
+  box-shadow:
+    0 18px 36px -10px rgba(244, 114, 182, 0.14),
+    0 8px 16px -4px rgba(15, 23, 42, 0.08),
+    0 2px 6px -1px rgba(15, 23, 42, 0.05) !important;
+}
+[data-theme="light"] .shadow-lg {
+  box-shadow:
+    0 10px 20px -5px rgba(244, 114, 182, 0.12),
+    0 6px 12px -3px rgba(15, 23, 42, 0.08),
+    0 2px 4px -1px rgba(15, 23, 42, 0.04) !important;
+}
+[data-theme="light"] .shadow-md {
+  box-shadow:
+    0 6px 12px -2px rgba(244, 114, 182, 0.10),
+    0 2px 4px -1px rgba(15, 23, 42, 0.06) !important;
+}
+[data-theme="light"] .shadow {
+  box-shadow:
+    0 2px 4px -1px rgba(244, 114, 182, 0.08),
+    0 1px 2px 0 rgba(15, 23, 42, 0.05) !important;
+}
