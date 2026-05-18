@@ -1989,6 +1989,27 @@ select.pf-input {
   }
 }
 
+/* V85-auto-modal — modal content cards at any DOM location.
+   Some modals are rendered at body root via fixed positioning (not inside
+   a data-testid wrapper). This rule catches their content cards by
+   matching any rounded bg-card/surface inside a fixed.inset-0 wrapper,
+   EXCLUDING menu overlays (bloom + mobile drawer + admin top menu). */
+[class*="fixed"][class*="inset-0"]:not([data-testid="bloom-overlay"]):not([data-testid="admin-top-menu"]):not(.bloom-stage):not(.bloom-backdrop) :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]) {
+  box-shadow:
+    0 28px 56px rgba(0,0,0,0.65),
+    0 12px 24px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(var(--v85-violet-rgb), 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+[data-theme="light"] [class*="fixed"][class*="inset-0"]:not([data-testid="bloom-overlay"]):not([data-testid="admin-top-menu"]):not(.bloom-stage):not(.bloom-backdrop) :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]) {
+  box-shadow:
+    0 20px 40px rgba(0,0,0,0.12),
+    0 8px 16px rgba(0,0,0,0.06),
+    0 0 0 1px rgba(var(--v85-violet-rgb), 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
 /* End V85 — Universal Glow Effect Utilities */
 
 
