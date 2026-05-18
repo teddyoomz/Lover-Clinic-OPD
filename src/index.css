@@ -3675,64 +3675,33 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 }
 
 /* =====================================================================
-   V86 — Neon Cyberpunk Glow (2026-05-18 EOD+10)
-   Replaces V85's invisible-on-dark black shadows with per-section
-   colored neon. Per-section binding via [data-section="<id>"] CSS vars.
-   Steady-state: 4s breath pulse. Interactive: hover boost (in T3).
-   Reduced-motion: static fallback (in T3). Light theme: deeper-saturation
-   alphas (in T3).
-   AV83 lock: utilities consume var(--neon-c1/c2), never hardcoded RGB.
+   V86 — Neon Cyberpunk Glow (2026-05-18 EOD+10 + followup-2 pivot)
+   FOLLOWUP-2 pivot: universal red dual-tone (c1=#dc2626 + c2=#ef4444)
+   with --neon-intensity multiplier (default 0.45). Admin tunes via
+   SystemSettingsTab "เอฟเฟกต์แสงเรือง" section, persisted to
+   clinic_settings/system_config.v86Glow, applied via useV86GlowApply hook.
+   Per-section [data-section] blocks DROPPED (universal color now).
+   AV83 lock: utilities consume var(--neon-c1/c2) + var(--neon-intensity)
+   via calc() — never hardcoded RGB or bare alphas outside the factor.
    AV81 lock: menu + print files MUST never reference .v86-glow-*.
+   admin-frontend-zone scope EXCLUDES menu via triple :not() chain
+   (admin-top-menu + descendants + [class*="menu-"]).
    ===================================================================== */
 
-/* --- Per-section color vars (mirrors ArcBloom SECTION_COLOR pairs) --- */
-[data-section="appointments-section"],
-[data-section="appointments"] {
-  --neon-c1: 59, 130, 246;   /* blue */
-  --neon-c2: 6, 182, 212;    /* cyan */
-}
-[data-section="customers"] {
-  --neon-c1: 20, 184, 166;   /* teal */
-  --neon-c2: 34, 197, 94;    /* green */
-}
-[data-section="sales"] {
-  --neon-c1: 239, 68, 68;    /* red */
-  --neon-c2: 249, 115, 22;   /* orange */
-}
-[data-section="marketing"] {
-  --neon-c1: 168, 85, 247;   /* purple */
-  --neon-c2: 236, 72, 153;   /* magenta */
-}
-[data-section="stock"] {
-  --neon-c1: 245, 158, 11;   /* amber */
-  --neon-c2: 250, 204, 21;   /* yellow */
-}
-[data-section="finance"] {
-  --neon-c1: 16, 185, 129;   /* emerald */
-  --neon-c2: 6, 182, 212;    /* cyan */
-}
-[data-section="reports"] {
-  --neon-c1: 14, 165, 233;   /* sky */
-  --neon-c2: 99, 102, 241;   /* indigo */
-}
-[data-section="master"] {
-  --neon-c1: 250, 204, 21;   /* yellow */
-  --neon-c2: 249, 115, 22;   /* orange */
-}
-
-/* Fallback (no data-section ancestor): neutral blue/cyan */
+/* --- Universal V86 vars (followup-2 defaults: red + 45% intensity) --- */
 :root {
-  --neon-c1: 59, 130, 246;
-  --neon-c2: 6, 182, 212;
+  --neon-c1: 220, 38, 38;       /* red-600 border + outer ring */
+  --neon-c2: 239, 68, 68;       /* red-500 halo */
+  --neon-intensity: 0.45;       /* alpha multiplier — 0.45 = 45% of V86 v1 baseline */
 }
 
 /* --- V86 base utility class --- */
 .v86-glow-card {
-  border: 1px solid rgba(var(--neon-c1), 0.40);
+  border: 1px solid rgba(var(--neon-c1), calc(0.40 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.08),
-    0 0 14px rgba(var(--neon-c2), 0.45),
-    0 0 32px rgba(var(--neon-c2), 0.20);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.08 * var(--neon-intensity))),
+    0 0 14px rgba(var(--neon-c2), calc(0.45 * var(--neon-intensity))),
+    0 0 32px rgba(var(--neon-c2), calc(0.20 * var(--neon-intensity)));
   animation: v86-breath 4s ease-in-out infinite;
   transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
@@ -3740,15 +3709,15 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 @keyframes v86-breath {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(var(--neon-c1), 0.08),
-      0 0 14px rgba(var(--neon-c2), 0.45),
-      0 0 32px rgba(var(--neon-c2), 0.20);
+      0 0 0 1px rgba(var(--neon-c1), calc(0.08 * var(--neon-intensity))),
+      0 0 14px rgba(var(--neon-c2), calc(0.45 * var(--neon-intensity))),
+      0 0 32px rgba(var(--neon-c2), calc(0.20 * var(--neon-intensity)));
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(var(--neon-c1), 0.16),
-      0 0 22px rgba(var(--neon-c2), 0.65),
-      0 0 52px rgba(var(--neon-c2), 0.38);
+      0 0 0 1px rgba(var(--neon-c1), calc(0.16 * var(--neon-intensity))),
+      0 0 22px rgba(var(--neon-c2), calc(0.65 * var(--neon-intensity))),
+      0 0 52px rgba(var(--neon-c2), calc(0.38 * var(--neon-intensity)));
   }
 }
 
@@ -3756,11 +3725,11 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 .v86-glow-card:hover {
   animation-play-state: paused;
   transform: translateY(-3px);
-  border-color: rgba(var(--neon-c1), 0.65);
+  border-color: rgba(var(--neon-c1), calc(0.65 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.20),
-    0 0 28px rgba(var(--neon-c2), 0.85),
-    0 0 64px rgba(var(--neon-c2), 0.50);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.20 * var(--neon-intensity))),
+    0 0 28px rgba(var(--neon-c2), calc(0.85 * var(--neon-intensity))),
+    0 0 64px rgba(var(--neon-c2), calc(0.50 * var(--neon-intensity)));
 }
 
 /* --- Reduced-motion fallback (no pulse, no lift transform) --- */
@@ -3777,31 +3746,31 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 
 /* --- Light theme: deeper-saturation alphas for white-bg contrast --- */
 [data-theme="light"] .v86-glow-card {
-  border-color: rgba(var(--neon-c1), 0.55);
+  border-color: rgba(var(--neon-c1), calc(0.55 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.10),
-    0 0 12px rgba(var(--neon-c2), 0.30),
-    0 0 28px rgba(var(--neon-c2), 0.15);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.10 * var(--neon-intensity))),
+    0 0 12px rgba(var(--neon-c2), calc(0.30 * var(--neon-intensity))),
+    0 0 28px rgba(var(--neon-c2), calc(0.15 * var(--neon-intensity)));
 }
 [data-theme="light"] .v86-glow-card:hover {
-  border-color: rgba(var(--neon-c1), 0.85);
+  border-color: rgba(var(--neon-c1), calc(0.85 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.25),
-    0 0 22px rgba(var(--neon-c2), 0.55),
-    0 0 50px rgba(var(--neon-c2), 0.30);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.25 * var(--neon-intensity))),
+    0 0 22px rgba(var(--neon-c2), calc(0.55 * var(--neon-intensity))),
+    0 0 50px rgba(var(--neon-c2), calc(0.30 * var(--neon-intensity)));
 }
 @keyframes v86-breath-light {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(var(--neon-c1), 0.10),
-      0 0 12px rgba(var(--neon-c2), 0.30),
-      0 0 28px rgba(var(--neon-c2), 0.15);
+      0 0 0 1px rgba(var(--neon-c1), calc(0.10 * var(--neon-intensity))),
+      0 0 12px rgba(var(--neon-c2), calc(0.30 * var(--neon-intensity))),
+      0 0 28px rgba(var(--neon-c2), calc(0.15 * var(--neon-intensity)));
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(var(--neon-c1), 0.20),
-      0 0 20px rgba(var(--neon-c2), 0.50),
-      0 0 44px rgba(var(--neon-c2), 0.28);
+      0 0 0 1px rgba(var(--neon-c1), calc(0.20 * var(--neon-intensity))),
+      0 0 20px rgba(var(--neon-c2), calc(0.50 * var(--neon-intensity))),
+      0 0 44px rgba(var(--neon-c2), calc(0.28 * var(--neon-intensity)));
   }
 }
 [data-theme="light"] .v86-glow-card {
@@ -3809,47 +3778,50 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 }
 
 /* --- V86 auto-glow override (replaces V85 black-shadow auto-glow) ---
-   Strategy: every card-shaped element inside [data-testid="backend-content"]
-   or .admin-frontend-zone auto-receives V86 neon glow via the per-section
-   CSS vars set on the [data-section] ancestor. Menu overlays + subtab picker
-   excluded by :not() chain (AV81 lock). Print views never reach these scopes.
+   Every card-shaped element inside [data-testid="backend-content"] or
+   .admin-frontend-zone auto-receives V86 universal red glow. Menu overlays
+   + subtab picker excluded by :not() chain (AV81 lock). Print views never
+   reach these scopes.
+   admin-frontend-zone scope ALSO excludes menu via triple :not() chain
+   (admin-top-menu + descendants + [class*="menu-"]) — defense-in-depth
+   against menu glow leak (per user reminder "ห้ามแตะเมนู").
 */
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
-.admin-frontend-zone [class*="rounded-2xl"],
-.admin-frontend-zone [class*="rounded-xl"] {
-  border: 1px solid rgba(var(--neon-c1), 0.40);
+.admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+.admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
+  border: 1px solid rgba(var(--neon-c1), calc(0.40 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.08),
-    0 0 14px rgba(var(--neon-c2), 0.45),
-    0 0 32px rgba(var(--neon-c2), 0.20);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.08 * var(--neon-intensity))),
+    0 0 14px rgba(var(--neon-c2), calc(0.45 * var(--neon-intensity))),
+    0 0 32px rgba(var(--neon-c2), calc(0.20 * var(--neon-intensity)));
   animation: v86-breath 4s ease-in-out infinite;
   transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
-.admin-frontend-zone [class*="rounded-2xl"]:hover,
-.admin-frontend-zone [class*="rounded-xl"]:hover {
+.admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover,
+.admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover {
   animation-play-state: paused;
   transform: translateY(-3px);
-  border-color: rgba(var(--neon-c1), 0.65);
+  border-color: rgba(var(--neon-c1), calc(0.65 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.20),
-    0 0 28px rgba(var(--neon-c2), 0.85),
-    0 0 64px rgba(var(--neon-c2), 0.50);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.20 * var(--neon-intensity))),
+    0 0 28px rgba(var(--neon-c2), calc(0.85 * var(--neon-intensity))),
+    0 0 64px rgba(var(--neon-c2), calc(0.50 * var(--neon-intensity)));
 }
 
 /* Light theme auto-glow override */
 [data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
 [data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
-[data-theme="light"] .admin-frontend-zone [class*="rounded-2xl"],
-[data-theme="light"] .admin-frontend-zone [class*="rounded-xl"] {
-  border-color: rgba(var(--neon-c1), 0.55);
+[data-theme="light"] .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+[data-theme="light"] .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
+  border-color: rgba(var(--neon-c1), calc(0.55 * var(--neon-intensity)));
   box-shadow:
-    0 0 0 1px rgba(var(--neon-c1), 0.10),
-    0 0 12px rgba(var(--neon-c2), 0.30),
-    0 0 28px rgba(var(--neon-c2), 0.15);
+    0 0 0 1px rgba(var(--neon-c1), calc(0.10 * var(--neon-intensity))),
+    0 0 12px rgba(var(--neon-c2), calc(0.30 * var(--neon-intensity))),
+    0 0 28px rgba(var(--neon-c2), calc(0.15 * var(--neon-intensity)));
   animation: v86-breath-light 4s ease-in-out infinite;
 }
 
@@ -3857,15 +3829,15 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 @media (prefers-reduced-motion: reduce) {
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
-  .admin-frontend-zone [class*="rounded-2xl"],
-  .admin-frontend-zone [class*="rounded-xl"] {
+  .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+  .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
     animation: none !important;
     transition: none !important;
   }
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
-  .admin-frontend-zone [class*="rounded-2xl"]:hover,
-  .admin-frontend-zone [class*="rounded-xl"]:hover {
+  .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover,
+  .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover {
     transform: none !important;
   }
 }
