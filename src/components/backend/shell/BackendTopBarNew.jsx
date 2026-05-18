@@ -13,7 +13,7 @@
 // mount once. Listens to `resize` so live-resize across breakpoints reflows.
 
 import { useEffect, useState } from 'react';
-import { Home, Briefcase } from 'lucide-react';
+import { Home, Briefcase, Search } from 'lucide-react';
 import { itemById, sectionOf, NAV_SECTIONS } from '../nav/navConfig.js';
 import ThemeToggle from '../../ThemeToggle.jsx';
 import BranchSelector from '../BranchSelector.jsx';
@@ -103,7 +103,14 @@ export default function BackendTopBarNew({
       )}
 
       {isDesktop && (
-        /* Desktop ≥768px : 1-row 48px */
+        /* Desktop ≥768px : 1-row 48px.
+           V85-followup (EOD9, 2026-05-18) — Briefcase icon-button replaced
+           by a wide search-box trigger placed in the center. User: "นำปุ่ม
+           เปิดเมนูมาทำเป็นช่องค้นหาไว้ตรงกลางเลย สะดวกกว่า กดไปแล้วมีเมนู
+           เด้ง". Click still opens cmd palette (onOpenPalette wiring
+           preserved verbatim); only the visual treatment changes from a
+           28×28 icon button → a wide input-shaped trigger.  Breadcrumb
+           pushed to the right of the search box (lg+ visible). */
         <div className="flex h-12 px-4 items-center gap-2">
           <button
             type="button"
@@ -114,18 +121,30 @@ export default function BackendTopBarNew({
           >
             <Home size={18} />
           </button>
+          <BackendMenuModeToggle />
+          <BranchSelector />
+          {/* Wide search-box trigger — replaces former briefcase icon button.
+              Click → onOpenPalette opens BackendCmdPalette with real search
+              input + keyboard nav. Visually mimics an input so users can
+              "type here" intent at a glance. Cmd+K shortcut still wired
+              inside BackendCmdPalette. */}
           <button
             type="button"
             onClick={onOpenPalette}
             aria-label="ค้นหาเมนู (Cmd+K)"
             data-testid="topbar-shortcut-desktop"
-            className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
+            className="flex-1 min-w-0 max-w-[320px] h-8 mx-1 flex items-center gap-1.5 px-2.5 rounded-md bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] hover:border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-xs font-medium transition-all"
           >
-            <Briefcase size={18} />
+            <Search size={13} className="flex-shrink-0" strokeWidth={2.25} />
+            <span className="flex-1 text-left truncate">ค้นหาเมนู…</span>
+            <kbd
+              className="text-[9px] font-mono leading-none px-1 py-[3px] rounded bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-muted)] flex-shrink-0"
+              aria-hidden="true"
+            >⌘K</kbd>
           </button>
-          <BackendMenuModeToggle />
-          <BranchSelector />
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          {/* Breadcrumb — compact, right of search, hidden on smaller screens
+              so the search box gets priority width. */}
+          <div className="hidden 2xl:flex items-center gap-1.5 min-w-0 max-w-xs">
             {section && (
               <>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)] truncate">
@@ -137,8 +156,8 @@ export default function BackendTopBarNew({
             <h1 className="text-sm font-black truncate" style={{ color: ac }}>
               {item?.label || 'ระบบหลังบ้าน'}
             </h1>
-            <div className="ml-3">{topBarSlot}</div>
           </div>
+          {topBarSlot && <div className="flex-shrink-0">{topBarSlot}</div>}
           <ThemeToggle theme={theme} setTheme={setTheme} />
           <ProfileDropdown />
         </div>

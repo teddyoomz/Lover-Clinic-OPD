@@ -46,14 +46,22 @@ export default function BackendCmdPalette({ open, onOpenChange, onNavigate }) {
   if (!open) return null;
 
   return (
-    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // V85-followup (EOD9, 2026-05-18) — AV78 EXEMPTION for command palette
+    // per user "ทำให้กดที่ตรงที่ว่างเบลอๆตรงอื่นแล้วปิดตัวเองลงไปได้ด้วย".
+    // Cmd palette is a NAV tool (no unsaved data), unlike form modals where
+    // AV78 protects against accidental data loss. Click-outside-to-close is
+    // the established convention for command palettes (cmd+k tools). The
+    // currentTarget===target check ensures only backdrop clicks close — clicks
+    // INSIDE the Command tree bubble up but get filtered out.
     <div
       className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
+      onClick={(e) => { if (e.currentTarget === e.target) onOpenChange(false); }}
     >
       <Command
         label="เมนูค้นหา"
         loop
         className="w-full sm:max-w-xl h-full sm:h-auto sm:max-h-[70vh] flex flex-col bg-[var(--bg-surface)] sm:rounded-2xl sm:border sm:border-[var(--bd)] shadow-2xl overflow-hidden animate-scaleIn"
+        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === 'Escape') onOpenChange(false); }}
       >
         {/* Search input */}
