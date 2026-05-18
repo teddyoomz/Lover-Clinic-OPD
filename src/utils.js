@@ -77,6 +77,30 @@ export function thaiYearMonth() {
 }
 
 /**
+ * Return YYYY-MM-DD that is N days from now in Bangkok TZ.
+ * Used for course/coupon/membership validity-end calculations.
+ *
+ * TZ1 expansion (V93+iter2, 2026-05-18): replaces the unsafe pattern
+ * `new Date(Date.now() + N*86400000).toISOString().split('T')[0]` which
+ * emits UTC date (drifts to previous-day at Bangkok 00:00-07:00). The
+ * canonical Bangkok-anchored arithmetic: add 7h offset to the target
+ * epoch, then read getUTC* on the shifted Date. Matches `thaiTodayISO()`
+ * semantics — both functions agree on "today in Bangkok" when days=0.
+ *
+ * @param {number} days — integer; negative = N days ago.
+ * @returns {string} 'YYYY-MM-DD' Bangkok-anchored.
+ */
+export function thaiDateNDaysFromNow(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return '';
+  const target = new Date(Date.now() + n * 86400000 + 7 * 3600000);
+  const y = target.getUTCFullYear();
+  const m = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(target.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Generate a short crypto-grade random ID (uppercase hex).
  * Use for session IDs, short tokens, queue codes — anything that's a Firestore doc ID
  * or part of a customer-facing URL. For full-length URL tokens (patient-link, schedule),

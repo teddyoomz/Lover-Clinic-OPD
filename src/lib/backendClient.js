@@ -7,10 +7,12 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
-// TZ1 (2026-05-18 audit-fix) — Thai timezone helper for "today" defaults.
+// TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
-// in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson).
-import { thaiTodayISO } from '../utils.js';
+// in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
+// applies to `.split('T')[0]` for future-date arithmetic (TZ1 family
+// expansion at iter-2 — course/membership validity end calc).
+import { thaiTodayISO, thaiDateNDaysFromNow } from '../utils.js';
 
 /**
  * Phase BS V2 (2026-05-06) — branchId stamp helper for master-data writes.
@@ -1520,7 +1522,7 @@ export async function assignCourseToCustomer(customerId, masterCourse) {
     ? Number(masterCourse.daysBeforeExpire)
     : (masterCourse.validityDays != null ? Number(masterCourse.validityDays) : null);
   const expiry = validityDays > 0
-    ? new Date(Date.now() + validityDays * 86400000).toISOString().split('T')[0]
+    ? thaiDateNDaysFromNow(validityDays)
     : '';
   // Track where this course came from (parent course/promotion name)
   const parentName = masterCourse.parentName || '';

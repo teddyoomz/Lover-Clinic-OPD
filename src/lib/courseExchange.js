@@ -17,6 +17,11 @@
 //     actor: <admin uid>,
 //     createdAt: <ISO> }
 
+// TZ1 expansion (V93+iter2, 2026-05-18) — exchange-flow validity uses
+// the canonical Bangkok-anchored helper instead of UTC split('T')[0]
+// which drifts to previous-day at Bangkok 00:00-07:00.
+import { thaiDateNDaysFromNow } from '../utils.js';
+
 /**
  * Phase 16.7-quinquies-ter (2026-04-29) — derive the canonical course
  * type label from a course doc, handling legacy/clone variants where
@@ -78,7 +83,7 @@ export function applyCourseExchange(customer, fromCourseId, newMasterCourse, opt
     ? Number(newMasterCourse.daysBeforeExpire)
     : (newMasterCourse.validityDays != null ? Number(newMasterCourse.validityDays) : null);
   const expiry = validityDays > 0
-    ? new Date(Date.now() + validityDays * 86400000).toISOString().split('T')[0]
+    ? thaiDateNDaysFromNow(validityDays)
     : '';
 
   const newCourse = {

@@ -94,8 +94,10 @@ describe('V93.C: backendClient createCentralStockOrder importedDate uses thaiTod
   const SRC = READ('src/lib/backendClient.js');
   const CODE = stripComments(SRC);
 
-  it('C.1: imports thaiTodayISO from utils.js', () => {
-    expect(SRC).toMatch(/import\s*\{\s*thaiTodayISO\s*\}\s*from\s*['"]\.\.\/utils\.js['"]/);
+  it('C.1: imports thaiTodayISO from utils.js (may be in multi-name import after iter-3)', () => {
+    // iter-3 added thaiDateNDaysFromNow alongside thaiTodayISO in the same
+    // import line. Regex must permit multi-name destructure.
+    expect(SRC).toMatch(/import\s*\{[^}]*\bthaiTodayISO\b[^}]*\}\s*from\s*['"]\.\.\/utils\.js['"]/);
   });
 
   it('C.2: importedDate fallback uses thaiTodayISO', () => {
