@@ -77,8 +77,9 @@ export default function MarketingFormShell({
 
   return (
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
+    // V85 (EOD9): fx-glow-u10 glassmorphism overrides bg/backdrop-filter — more depth + saturate
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fx-glow-u10"
     >
       <div
         className={`w-full ${widthClass} max-h-[92vh] rounded-2xl shadow-2xl flex flex-col bg-[var(--bg-surface)] border border-[var(--bd)]`}
