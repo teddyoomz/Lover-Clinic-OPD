@@ -107,10 +107,18 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
   return (
     <div className="space-y-4">
 
-      {/* ── Header bar ── */}
-      <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg fx-glow-u9 fx-glow-u9-customers" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
+      {/* ── Header bar ──
+          V89 (2026-05-18 EOD+11) — mobile responsive cosmetic fix.
+          User report: "หน้าลูกค้าใน mobile ปุ่มมันตกขอบ ... เน้นช่องค้นหา
+          เพราะใช้บ่อย ส่วนปุ่ม พิมพ์ bulk ไร้สาระมาก ปีนึงจะใช้สักที
+          เอาไปแอบตรงไหนก็ได้ดีกว่า".
+          Mobile (<md): search = full-width row 1, [รีเฟรช]+[เพิ่มลูกค้า]
+          split 50/50 row 2, พิมพ์ Bulk hidden (`hidden md:inline-flex`).
+          Desktop (≥md): unchanged — single-row 4-button bar.
+          ZERO handler / state / onClick touch (cosmetic-shell). */}
+      <div className="bg-[var(--bg-surface)] rounded-2xl p-3 md:p-5 shadow-lg fx-glow-u9 fx-glow-u9-customers" style={{ border: `1.5px solid rgba(${acRgb},0.15)` }}>
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+          <div className="relative flex-1 w-full md:w-auto">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: `rgba(${acRgb},0.5)` }} />
             <input
               type="text"
@@ -121,34 +129,37 @@ export default function CustomerListTab({ clinicSettings, theme, onViewCustomer,
               style={{ boxShadow: `inset 0 2px 4px rgba(0,0,0,0.1)` }}
             />
           </div>
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            disabled={loading}
-            className="px-5 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
-            style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.6))`, boxShadow: `0 4px 20px rgba(${acRgb},0.25)` }}
-          >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> รีเฟรช
-          </button>
-          {/* Phase 14.10 — bulk-print toggle + action bar */}
-          <button
-            onClick={() => { setSelectMode(s => !s); if (selectMode) clearSelection(); }}
-            disabled={loading || customers.length === 0}
-            data-testid="bulk-print-toggle"
-            className={`px-4 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-40 flex items-center gap-2 uppercase tracking-wider ${selectMode ? 'bg-violet-700 text-white' : 'bg-[var(--bg-input)] text-[var(--tx-primary)] border border-[var(--bd)] hover:border-violet-500/50'}`}
-          >
-            <FileText size={15} /> {selectMode ? 'ยกเลิก' : 'พิมพ์ Bulk'}
-          </button>
-          {/* V33-customer-create — manual add customer (V33.2: full-page takeover) */}
-          {canCreate && onCreateCustomer && (
+          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
             <button
-              onClick={() => onCreateCustomer()}
+              onClick={() => setRefreshKey(k => k + 1)}
               disabled={loading}
-              data-testid="add-customer-button"
-              className="px-5 py-3 rounded-xl font-black text-sm text-white transition-all disabled:opacity-40 flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-900/30"
+              className="flex-1 md:flex-none px-3 md:px-5 py-2.5 md:py-3 rounded-xl font-black text-xs md:text-sm text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+              style={{ background: `linear-gradient(135deg, rgba(${acRgb},0.9), rgba(${acRgb},0.6))`, boxShadow: `0 4px 20px rgba(${acRgb},0.25)` }}
             >
-              <UserPlus size={15} /> เพิ่มลูกค้า
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> รีเฟรช
             </button>
-          )}
+            {/* Phase 14.10 — bulk-print toggle + action bar.
+                V89: hidden on mobile per user "ปีนึงจะใช้สักที"; admin uses desktop for bulk-print. */}
+            <button
+              onClick={() => { setSelectMode(s => !s); if (selectMode) clearSelection(); }}
+              disabled={loading || customers.length === 0}
+              data-testid="bulk-print-toggle"
+              className={`hidden md:inline-flex px-4 py-3 rounded-xl font-black text-sm transition-all disabled:opacity-40 items-center gap-2 uppercase tracking-wider ${selectMode ? 'bg-violet-700 text-white' : 'bg-[var(--bg-input)] text-[var(--tx-primary)] border border-[var(--bd)] hover:border-violet-500/50'}`}
+            >
+              <FileText size={15} /> {selectMode ? 'ยกเลิก' : 'พิมพ์ Bulk'}
+            </button>
+            {/* V33-customer-create — manual add customer (V33.2: full-page takeover) */}
+            {canCreate && onCreateCustomer && (
+              <button
+                onClick={() => onCreateCustomer()}
+                disabled={loading}
+                data-testid="add-customer-button"
+                className="flex-1 md:flex-none px-3 md:px-5 py-2.5 md:py-3 rounded-xl font-black text-xs md:text-sm text-white transition-all disabled:opacity-40 flex items-center justify-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-900/30"
+              >
+                <UserPlus size={15} /> เพิ่มลูกค้า
+              </button>
+            )}
+          </div>
         </div>
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
