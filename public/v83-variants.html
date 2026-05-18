@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>V83-followup — Section Header SHAPE Variants Picker</title>
+<style>
+  body {
+    margin: 0; padding: 24px;
+    background: #060608;
+    color: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Thai', sans-serif;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: #fff;
+  }
+  .subtitle {
+    text-align: center;
+    color: #94a3b8;
+    margin: 0 0 24px;
+    font-size: 13px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: #0a0a0c;
+    border: 1px solid #1f1f24;
+    border-radius: 14px;
+    padding: 18px;
+  }
+  h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    color: #fbbf24;
+    border-bottom: 1px dashed #333;
+    padding-bottom: 6px;
+  }
+  .label {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 10px 0 4px;
+  }
+  .sidebar {
+    background: #0d0d12;
+    padding: 14px 16px;
+    border-radius: 10px;
+    width: 260px;
+  }
+  .sh {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+    cursor: pointer;
+    margin-bottom: 10px;
+    background: linear-gradient(180deg, #1a1a22 0%, #0f0f15 100%);
+    border: none;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    min-height: 48px;
+  }
+  .sh .ico {
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: rgba(244,114,182,0.12);
+    border: 1px solid rgba(244,114,182,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: #f9a8d4;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .sh.active .ico {
+    background: linear-gradient(135deg, rgba(244,114,182,0.45), rgba(244,114,182,0.20));
+    border: 1px solid rgba(244,114,182,0.65);
+    box-shadow: 0 0 14px -2px rgba(244,114,182,0.60);
+    color: #fff;
+  }
+  .sh .lbl { flex: 1; }
+  .sh .chev { color: rgba(244,114,182,0.55); font-size: 12px; flex-shrink: 0; }
+  .sh.active .chev { color: rgba(244,114,182,1); }
+  .variant-name {
+    color: #fbbf24;
+    font-size: 12px;
+    font-weight: 700;
+    margin: 8px 0 2px;
+  }
+  .pros, .cons {
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 2px 0;
+    line-height: 1.4;
+  }
+  .pros::before { content: "✓ "; color: #34d399; }
+  .cons::before { content: "△ "; color: #fbbf24; }
+
+  /* I — HEXAGON */
+  .v-i .sh {
+    clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);
+    background: linear-gradient(180deg, #161620 0%, #0a0a12 100%);
+    padding: 12px 26px;
+  }
+  .v-i .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.30) 0%, rgba(244,114,182,0.10) 100%);
+    filter: drop-shadow(0 0 12px rgba(244,114,182,0.45));
+  }
+
+  /* J — SCI-FI OCTAGON */
+  .v-j .sh {
+    clip-path: polygon(
+      14px 0, calc(100% - 14px) 0, 100% 14px,
+      100% calc(100% - 14px), calc(100% - 14px) 100%,
+      14px 100%, 0 calc(100% - 14px), 0 14px
+    );
+    background: linear-gradient(180deg, #18181f 0%, #0c0c14 100%);
+  }
+  .v-j .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.32) 0%, rgba(244,114,182,0.08) 100%);
+    filter: drop-shadow(0 0 14px rgba(244,114,182,0.55));
+  }
+
+  /* K — SLASH CHEVRON → */
+  .v-k .sh {
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+    background: linear-gradient(90deg, #18181f 0%, #0c0c16 100%);
+    padding-right: 32px;
+  }
+  .v-k .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.45) 0%, rgba(244,114,182,0.10) 100%);
+    filter: drop-shadow(2px 0 8px rgba(244,114,182,0.45));
+  }
+
+  /* L — LEFT-ARROW TAB ◀ */
+  .v-l .sh {
+    clip-path: polygon(18px 0, 100% 0, 100% 100%, 18px 100%, 0 50%);
+    background: linear-gradient(90deg, #1a0a14 0%, #0e0e16 100%);
+    padding-left: 32px;
+  }
+  .v-l .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.50) 0%, rgba(244,114,182,0.08) 70%);
+    filter: drop-shadow(-2px 0 10px rgba(244,114,182,0.55));
+  }
+
+  /* M — NOTCHED LEFT (cutout + accent bar) */
+  .v-m .sh {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 65%, 6px 60%, 6px 40%, 0 35%);
+    background: linear-gradient(180deg, #18181f 0%, #0c0c14 100%);
+    border-left: 4px solid rgba(244,114,182,0.50);
+    padding-left: 18px;
+  }
+  .v-m .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.25) 0%, rgba(244,114,182,0.06) 100%);
+    border-left: 4px solid rgba(244,114,182,1);
+    filter: drop-shadow(0 0 10px rgba(244,114,182,0.40));
+  }
+
+  /* N — RIBBON BANNER */
+  .v-n .sh {
+    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 50%, 100% 100%, 0 100%);
+    background: linear-gradient(90deg, #1a0d18 0%, #0e0e16 100%);
+    padding-right: 24px;
+  }
+  .v-n .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.45), rgba(244,114,182,0.08));
+    filter: drop-shadow(4px 0 10px rgba(244,114,182,0.45));
+  }
+
+  /* O — FOLDED CORNER */
+  .v-o .sh {
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+    background: linear-gradient(180deg, #18181f 0%, #0c0c14 100%);
+    border-radius: 6px;
+    position: relative;
+  }
+  .v-o .sh::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 16px; height: 16px;
+    background: linear-gradient(225deg, rgba(244,114,182,0.50) 50%, transparent 50%);
+  }
+  .v-o .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.28) 0%, rgba(244,114,182,0.06) 100%);
+    box-shadow: 0 0 14px rgba(244,114,182,0.40);
+  }
+
+  /* P — BRACKET CORNERS [ ] */
+  .v-p .sh {
+    background: linear-gradient(180deg, #16161e 0%, #0c0c14 100%);
+    border-radius: 4px;
+    position: relative;
+  }
+  .v-p .sh::before, .v-p .sh::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border-color: rgba(244,114,182,0.65);
+    border-style: solid;
+  }
+  .v-p .sh::before { top: 4px; left: 4px; border-width: 2px 0 0 2px; }
+  .v-p .sh::after { bottom: 4px; right: 4px; border-width: 0 2px 2px 0; }
+  .v-p .sh.active { background: linear-gradient(180deg, rgba(244,114,182,0.18) 0%, rgba(244,114,182,0.04) 100%); }
+  .v-p .sh.active::before, .v-p .sh.active::after {
+    border-color: rgba(244,114,182,1);
+    box-shadow: 0 0 8px rgba(244,114,182,0.65);
+    width: 16px; height: 16px;
+  }
+  .v-p .sh.active::before { border-width: 3px 0 0 3px; }
+  .v-p .sh.active::after { border-width: 0 3px 3px 0; }
+
+  /* Q — TRAPEZOID (wider at top) */
+  .v-q .sh {
+    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%);
+    background: linear-gradient(180deg, #1c1018 0%, #0a0a14 100%);
+    padding-bottom: 14px; padding-top: 10px;
+  }
+  .v-q .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.40) 0%, rgba(244,114,182,0.05) 100%);
+    filter: drop-shadow(0 4px 12px rgba(244,114,182,0.40));
+  }
+
+  /* R — PARALLELOGRAM (italic) */
+  .v-r .sh {
+    transform: skewX(-6deg);
+    background: linear-gradient(90deg, #18181f 0%, #0c0c14 100%);
+    border-left: 3px solid rgba(244,114,182,0.50);
+    border-radius: 4px;
+  }
+  .v-r .sh > * { transform: skewX(6deg); }
+  .v-r .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.32), rgba(244,114,182,0.04));
+    border-left: 3px solid rgba(244,114,182,1);
+    box-shadow: 4px 4px 12px rgba(244,114,182,0.30);
+  }
+
+  /* S — ASYMMETRIC PILL */
+  .v-s .sh {
+    border-top-left-radius: 24px;
+    border-bottom-left-radius: 24px;
+    border-right: 4px solid rgba(244,114,182,0.45);
+    background: linear-gradient(90deg, #1a0e14 0%, #0c0c16 100%);
+    padding-left: 18px;
+  }
+  .v-s .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.50) 0%, rgba(244,114,182,0.06) 100%);
+    border-right: 4px solid rgba(244,114,182,1);
+    box-shadow: 0 0 16px -2px rgba(244,114,182,0.55);
+  }
+
+  /* T — DOUBLE TOP-NOTCH */
+  .v-t .sh {
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%, 0 10px);
+    background: linear-gradient(180deg, #16161e 0%, #0a0a14 100%);
+  }
+  .v-t .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.35) 0%, rgba(244,114,182,0.05) 100%);
+    filter: drop-shadow(0 0 12px rgba(244,114,182,0.50));
+  }
+
+  /* U — DASHED STAMP */
+  .v-u .sh {
+    border: 2px dashed rgba(244,114,182,0.40);
+    background: linear-gradient(180deg, #16161e 0%, #0c0c14 100%);
+    border-radius: 4px;
+    box-shadow: 3px 3px 0 rgba(244,114,182,0.20);
+  }
+  .v-u .sh.active {
+    border: 2px dashed rgba(244,114,182,1);
+    background: linear-gradient(180deg, rgba(244,114,182,0.18), rgba(244,114,182,0.03));
+    box-shadow: 3px 3px 0 rgba(244,114,182,0.55), 0 0 20px rgba(244,114,182,0.35);
+  }
+
+  /* V — FILE-TAB STYLE */
+  .v-v .sh {
+    border-left: 4px solid rgba(244,114,182,0.55);
+    border-radius: 0 8px 8px 0;
+    background: linear-gradient(180deg, #18181f 0%, #0c0c14 100%);
+    padding-left: 18px;
+  }
+  .v-v .sh.active {
+    border-left: 4px solid rgba(244,114,182,1);
+    background: linear-gradient(90deg, rgba(244,114,182,0.30), rgba(244,114,182,0.04));
+    box-shadow: 0 0 16px rgba(244,114,182,0.45);
+  }
+</style>
+</head>
+<body>
+<h1>V83-followup-14 — Section Header SHAPE Picker (Round 2)</h1>
+<p class="subtitle">14 frame SHAPES — บอกตัวอักษร I-V ที่ชอบ · แต่ละการ์ดมี Inactive + Active state · accent = rose</p>
+
+<div class="grid">
+
+  <div class="panel v-i">
+    <h2>I — Hexagon</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Hexagon clip-path</p>
+    <p class="pros">Unique, gaming/tech vibe</p>
+    <p class="cons">Cut sides → reduced tap area on edges</p>
+  </div>
+
+  <div class="panel v-j">
+    <h2>J — Sci-fi Octagon</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">All 4 corners cut diagonally</p>
+    <p class="pros">Cyberpunk-tech vibe matches dark+fire palette</p>
+    <p class="cons">Corners are transparent — no inset border possible</p>
+  </div>
+
+  <div class="panel v-k">
+    <h2>K — Slash Chevron Right →</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Pointed right edge (breadcrumb)</p>
+    <p class="pros">Directional "go this way" feel · premium navigator</p>
+    <p class="cons">Right padding awkward · chev icon redundant</p>
+  </div>
+
+  <div class="panel v-l">
+    <h2>L — Left-Arrow Tab ◀</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Pointed-left side (folder tab)</p>
+    <p class="pros">"Selected tab pulling out of sidebar" feel</p>
+    <p class="cons">Icon left-shifted, may look unusual at small width</p>
+  </div>
+
+  <div class="panel v-m">
+    <h2>M — Notched Left Accent</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Left cutout + accent bar</p>
+    <p class="pros">Industrial-tech feel · accent bar visible</p>
+    <p class="cons">Notch subtle — may not read at glance</p>
+  </div>
+
+  <div class="panel v-n">
+    <h2>N — Ribbon Banner</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Scalloped right edge (banner)</p>
+    <p class="pros">Decorative ribbon/award feel</p>
+    <p class="cons">Heavy decoration — may clash with utility UI</p>
+  </div>
+
+  <div class="panel v-o">
+    <h2>O — Folded Corner</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Paper-fold top-right corner</p>
+    <p class="pros">Document/paper feel · unique detail</p>
+    <p class="cons">Static fold — doesn't feel "button"</p>
+  </div>
+
+  <div class="panel v-p">
+    <h2>P — Bracket [ ] Corners</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Bracket corners (no full border)</p>
+    <p class="pros">Sci-fi HUD/targeting reticle · breathes</p>
+    <p class="cons">Brackets pull eye away from text</p>
+  </div>
+
+  <div class="panel v-q">
+    <h2>Q — Trapezoid (wider top)</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Wider top, narrower bottom</p>
+    <p class="pros">Pyramid/podium feel · ranks by hierarchy</p>
+    <p class="cons">Asymmetric edges — alignment tricky</p>
+  </div>
+
+  <div class="panel v-r">
+    <h2>R — Parallelogram (italic slant)</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Italic-slanted parallelogram</p>
+    <p class="pros">Sport/dynamic feel · motion implied</p>
+    <p class="cons">Skew may hurt Thai glyph slightly</p>
+  </div>
+
+  <div class="panel v-s">
+    <h2>S — Asymmetric Pill</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Round-left, sharp-right + accent stripe</p>
+    <p class="pros">Friendly + utilitarian · accent pops</p>
+    <p class="cons">Mix of curves can feel inconsistent</p>
+  </div>
+
+  <div class="panel v-t">
+    <h2>T — Double Top-Corner Cut</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Both top corners cut diagonally</p>
+    <p class="pros">Building/podium feel · balanced sci-fi</p>
+    <p class="cons">Less dramatic than full octagon</p>
+  </div>
+
+  <div class="panel v-u">
+    <h2>U — Dashed Stamp</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Dashed border + offset shadow</p>
+    <p class="pros">Handcrafted/paper feel · distinctive</p>
+    <p class="cons">Dashed reads as "draft/unfinished"</p>
+  </div>
+
+  <div class="panel v-v">
+    <h2>V — File-Tab Style</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Left accent bar + right-round corners</p>
+    <p class="pros">Browser-tab feel · "I'm a section"</p>
+    <p class="cons">Soft variant — less dramatic shape change</p>
+  </div>
+
+</div>
+</body>
+</html>

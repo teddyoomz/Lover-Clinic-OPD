@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>V83-followup — Section Header Variants Picker</title>
+<style>
+  body {
+    margin: 0; padding: 24px;
+    background: #060608;
+    color: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Thai', sans-serif;
+    min-height: 100vh;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: #0a0a0c;
+    border: 1px solid #1f1f24;
+    border-radius: 14px;
+    padding: 20px;
+  }
+  h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: #fbbf24;
+    border-bottom: 1px dashed #333;
+    padding-bottom: 8px;
+  }
+  .label {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 14px 0 6px;
+  }
+  .sidebar {
+    background: #0d0d12;
+    padding: 12px;
+    border-radius: 12px;
+    width: 280px;
+  }
+  /* ─── Base section header (will be styled per variant) ─── */
+  .sh {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+    cursor: pointer;
+    margin-bottom: 8px;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    transition: all 0.2s ease;
+  }
+  .sh .ico {
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: rgba(244,114,182,0.10);
+    border: 1px solid rgba(244,114,182,0.20);
+    display: flex; align-items: center; justify-content: center;
+    color: #f9a8d4;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .sh.active .ico {
+    background: linear-gradient(135deg, rgba(244,114,182,0.32), rgba(244,114,182,0.12));
+    border: 1px solid rgba(244,114,182,0.50);
+    box-shadow: 0 0 12px -2px rgba(244,114,182,0.50);
+    color: #fff;
+  }
+  .sh .lbl { flex: 1; }
+  .sh .chev { color: rgba(244,114,182,0.5); font-size: 12px; }
+  .sh.active .chev { color: rgba(244,114,182,0.95); }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant A — CURRENT (V83-followup-13): rose ring + glass
+     ═══════════════════════════════════════════════════════════════ */
+  .v-a .sh {
+    border-radius: 10px;
+    box-shadow:
+      0 0 0 1px rgba(244, 114, 182, 0.20),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -1px 0 rgba(0,0,0,0.20),
+      0 2px 4px rgba(0,0,0,0.18),
+      0 4px 12px -4px rgba(244,114,182,0.12);
+  }
+  .v-a .sh.active {
+    box-shadow:
+      0 0 0 1.5px rgba(244,114,182,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 6px 20px -4px rgba(244,114,182,0.28);
+    background: linear-gradient(90deg, rgba(244,114,182,0.18), rgba(244,114,182,0.04));
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant B — EMBOSSED METAL: heavy 3D press-out feel
+     ═══════════════════════════════════════════════════════════════ */
+  .v-b .sh {
+    border-radius: 8px;
+    background: linear-gradient(180deg, #1c1c22 0%, #0f0f14 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.40),
+      0 1px 0 rgba(0,0,0,0.30),
+      0 4px 8px rgba(0,0,0,0.35),
+      0 0 0 1px rgba(244,114,182,0.15);
+  }
+  .v-b .sh.active {
+    background: linear-gradient(180deg, rgba(244,114,182,0.28) 0%, rgba(244,114,182,0.08) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.20),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 4px 12px rgba(244,114,182,0.30),
+      0 0 0 1.5px rgba(244,114,182,0.60);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant C — GLASSMORPHISM: frosted glass
+     ═══════════════════════════════════════════════════════════════ */
+  .v-c .sh {
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      0 4px 16px rgba(0,0,0,0.20);
+  }
+  .v-c .sh.active {
+    background: rgba(244,114,182,0.14);
+    border-color: rgba(244,114,182,0.50);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.20),
+      0 0 24px -4px rgba(244,114,182,0.40);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant D — NEUMORPHIC SOFT: gentle popped-out feel
+     ═══════════════════════════════════════════════════════════════ */
+  .v-d .sh {
+    border-radius: 14px;
+    background: #0d0d12;
+    box-shadow:
+      -3px -3px 8px rgba(255,255,255,0.025),
+      3px 3px 8px rgba(0,0,0,0.55),
+      inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .v-d .sh.active {
+    background: linear-gradient(145deg, #1a1014, #0d0d12);
+    box-shadow:
+      -2px -2px 6px rgba(244,114,182,0.10),
+      4px 4px 12px rgba(0,0,0,0.60),
+      inset 0 1px 0 rgba(244,114,182,0.20),
+      0 0 0 1px rgba(244,114,182,0.40);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant E — CYBERPUNK NEON: thin glowing ring
+     ═══════════════════════════════════════════════════════════════ */
+  .v-e .sh {
+    border-radius: 6px;
+    background: #08080c;
+    border: 1px solid rgba(244,114,182,0.30);
+    box-shadow:
+      0 0 8px rgba(244,114,182,0.15),
+      inset 0 0 12px rgba(244,114,182,0.04);
+  }
+  .v-e .sh.active {
+    background: #0c0508;
+    border-color: rgba(244,114,182,0.95);
+    box-shadow:
+      0 0 16px rgba(244,114,182,0.55),
+      0 0 32px rgba(244,114,182,0.30),
+      inset 0 0 12px rgba(244,114,182,0.18);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant F — PREMIUM PILL: rounded pill + accent stripe
+     ═══════════════════════════════════════════════════════════════ */
+  .v-f .sh {
+    border-radius: 100px;
+    padding: 10px 18px;
+    background: linear-gradient(90deg, rgba(244,114,182,0.04) 0%, rgba(15,15,20,0.40) 30%);
+    border-left: 4px solid rgba(244,114,182,0.50);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 2px 6px rgba(0,0,0,0.25);
+  }
+  .v-f .sh.active {
+    background: linear-gradient(90deg, rgba(244,114,182,0.35) 0%, rgba(244,114,182,0.08) 80%);
+    border-left: 4px solid rgba(244,114,182,1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      0 4px 12px rgba(244,114,182,0.35),
+      0 0 24px -4px rgba(244,114,182,0.30);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant G — DUAL-LAYER CARD: stacked depth with accent edge
+     ═══════════════════════════════════════════════════════════════ */
+  .v-g .sh {
+    border-radius: 10px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.20) 100%),
+      #0e0e14;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 0 0 3px rgba(244,114,182,0.08),
+      0 4px 10px rgba(0,0,0,0.30);
+  }
+  .v-g .sh.active {
+    background:
+      linear-gradient(180deg, rgba(244,114,182,0.22) 0%, rgba(244,114,182,0.05) 100%),
+      #100810;
+    box-shadow:
+      0 0 0 1px rgba(244,114,182,0.40),
+      0 0 0 4px rgba(244,114,182,0.18),
+      0 6px 16px rgba(244,114,182,0.25);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Variant H — MINIMAL FLAT MODERN: clean borders, no shadow
+     ═══════════════════════════════════════════════════════════════ */
+  .v-h .sh {
+    border-radius: 8px;
+    background: #0a0a10;
+    border: 1px solid rgba(244,114,182,0.25);
+  }
+  .v-h .sh:hover {
+    background: #11111a;
+    border-color: rgba(244,114,182,0.45);
+  }
+  .v-h .sh.active {
+    background: linear-gradient(180deg, #15080d 0%, #0a0a10 100%);
+    border: 1.5px solid rgba(244,114,182,0.70);
+  }
+
+  .grid h1 {
+    grid-column: 1 / -1;
+    text-align: center;
+    margin: 0 0 8px;
+    font-size: 22px;
+    color: #fff;
+  }
+  .grid > p {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #94a3b8;
+    margin: 0 0 16px;
+    font-size: 13px;
+  }
+  .variant-name {
+    color: #fbbf24;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .pros, .cons {
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+  .pros::before { content: "✓ "; color: #34d399; }
+  .cons::before { content: "△ "; color: #fbbf24; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <h1>V83-followup-14 — Section Header Variants Picker</h1>
+  <p>เลือกแบบที่ชอบที่สุด — บอกตัวอักษร (A-H) แล้วจะ apply ลง src/index.css จริง · แต่ละการ์ดมี Inactive + Active state เปรียบเทียบ</p>
+
+  <!-- A -->
+  <div class="panel v-a">
+    <h2>A — Current (followup-13)</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Rose ring + glass</p>
+    <p class="pros">Subtle, current — minimal change</p>
+    <p class="cons">User ยังบอกว่ายังไม่เด่นพอ</p>
+  </div>
+
+  <!-- B -->
+  <div class="panel v-b">
+    <h2>B — Embossed Metal</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Heavy 3D press-out</p>
+    <p class="pros">เด่น, มีความ "เป็นปุ่ม" จริง, premium hardware feel</p>
+    <p class="cons">หนักหน่อย, อาจดู skeuomorphic เก่า</p>
+  </div>
+
+  <!-- C -->
+  <div class="panel v-c">
+    <h2>C — Glassmorphism</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Frosted glass (backdrop-blur)</p>
+    <p class="pros">โมเดิร์น, iOS-Apple-feel, transparent depth</p>
+    <p class="cons">ต้อง backdrop-filter, อาจหนักใน list ยาว</p>
+  </div>
+
+  <!-- D -->
+  <div class="panel v-d">
+    <h2>D — Neumorphic Soft</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Gentle popped-out (dual shadow)</p>
+    <p class="pros">ดูนุ่ม minimalist, ไม่กระชาก</p>
+    <p class="cons">subtle เกินไป, อาจไม่ตอบโจทย์ "เด่น"</p>
+  </div>
+
+  <!-- E -->
+  <div class="panel v-e">
+    <h2>E — Cyberpunk Neon</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Neon ring + strong glow</p>
+    <p class="pros">เด่นที่สุด, dark+powerful+fire feel ตรงกับ palette</p>
+    <p class="cons">อาจ glare ใน light theme, ต้อง tune ทั้ง 2 theme</p>
+  </div>
+
+  <!-- F -->
+  <div class="panel v-f">
+    <h2>F — Premium Pill</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Rounded pill + accent stripe</p>
+    <p class="pros">ทันสมัย, ขอบมน feel friendly, accent stripe ชัด</p>
+    <p class="cons">pill เปลือง horizontal space เล็กน้อย</p>
+  </div>
+
+  <!-- G -->
+  <div class="panel v-g">
+    <h2>G — Dual-Layer Card</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Stacked depth (double-ring)</p>
+    <p class="pros">มี outer halo + inner stroke เด่น, sophisticated</p>
+    <p class="cons">2 ring กินพื้นที่ pseudo-shadow</p>
+  </div>
+
+  <!-- H -->
+  <div class="panel v-h">
+    <h2>H — Minimal Flat Modern</h2>
+    <div class="sidebar">
+      <div class="label">Inactive</div>
+      <button class="sh"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+      <div class="label">Active</div>
+      <button class="sh active"><span class="ico">📅</span><span class="lbl">นัดหมาย</span><span class="chev">▾</span></button>
+    </div>
+    <p class="variant-name">Clean borders, no shadow</p>
+    <p class="pros">โมเดิร์น สุดขั้ว ลด distraction</p>
+    <p class="cons">ไม่มี depth, อาจดู "flat-too-much"</p>
+  </div>
+
+</div>
+</body>
+</html>
