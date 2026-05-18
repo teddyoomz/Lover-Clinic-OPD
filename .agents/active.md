@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-18 EOD+9 — V84 + V85 universal glow shipped (foundation + auto-glow rules + sub-tab fix + topbar search box)"
-status: "21 commits ahead of prod · awaiting deploy verb · 1 OPEN UX bug deferred (chat-tab badge crowding — pre-V85)"
+updated_at: "2026-05-18 EOD+9+1 — V85-followup AV82 Cmd-palette closes bloom overlay (Rule P class-of-bug expansion)"
+status: "22 commits ahead of prod · awaiting deploy verb · 1 OPEN UX bug deferred (chat-tab badge crowding — pre-V85)"
 branch: "master"
-last_commit: "0a01100e feat(V85-followup): topbar 3-zone layout + search box scale + palette backdrop-close"
-tests: "86/86 V85 source-grep + CG6 application audit · build clean 3.29s · full vitest baseline 11826/3F/25S (pre-V85 V21 fixed)"
+last_commit: "c93287bc fix(V85-followup AV82): Cmd-palette pick now collapses bloom overlay"
+tests: "14/14 backend-menu-d-shell-rtl (T6.13+T6.14 new) · 33/34 sibling suite (FS3-bis pre-existing portal V21) · build clean · preview L1 verified 2 scenarios"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (V84 + V85 stack NOT deployed)"
+production_commit: "ef4bd5c3 LIVE (V84 + V85 + AV82 stack NOT deployed)"
 firestore_rules_version: "unchanged"
 ---
 
@@ -18,6 +18,7 @@ firestore_rules_version: "unchanged"
 - TopBar (BackendShellNew) Briefcase icon → wide search-box trigger (32×320px) with 3-zone justify-between layout.
 
 ## What this session shipped
+- **V85-followup AV82 Cmd-palette closes bloom** (commit c93287bc) — `handleNavigate` adds `setBloomOpen(false)` + `setPaletteOpen(false)` after `onNavigate?.(tabId)`. Root cause: shell-owned overlay state leak on navigation through the central handleNavigate handler (single-broken path; ArcBloom paths already explicit). Tier 2 artifacts: AV82 invariant + T6.13/T6.14 regression. Real-prod preview L1: Cmd-K → palette opens over bloom → pick item → both collapse + tab switches (2 scenarios). User report verbatim: "menu ui space ข้างหลังมันไม่ปิด".
 - **V84 chat-tab badge fix** (commit 2dcb4c79) — overflow-y clip + neighbor overlap + halo containment (AV80)
 - **V85 brainstorming** spec + Visual Companion 30 mockups + AV81 invariant (approved by user)
 - **V85 plan** v1 → consolidated v2 (5 phase-tasks + cosmetic-shell banner)
