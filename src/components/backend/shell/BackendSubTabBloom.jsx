@@ -9,6 +9,7 @@
 // changes outside this picker step.
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getSubTabEmoji } from './subTabEmoji.js';
 
 const MD_BREAKPOINT = 768;
@@ -220,7 +221,24 @@ export default function BackendSubTabBloom({
     originStyle['--origin-y'] = `${oy.toFixed(1)}%`;
   }
 
-  return (
+  /* V85-followup (EOD9, 2026-05-18) — picker rendered via createPortal to
+     document.body. Reason: parent BackendArcBloom mounts this inside
+     `.bloom-stage` which has `transform: translate(-50%,-50%)`. CSS
+     `transform` creates a containing block for fixed-position descendants,
+     so `.subtab-overlay`'s `position: fixed; inset: 0` was constrained to
+     bloom-stage's 1100×640 box instead of the viewport. That made the
+     full-screen blur appear as a localized rectangle film. Portal to body
+     escapes the transform ancestor → fixed positioning now relative to
+     the actual viewport → blur is truly full-screen.
+
+     User feedback (3 rounds, frustrated): "background sub tab สร้างกล่อง
+     สีเหลี่ยมดำๆ" / "ยังมีอยู่ไอ้สัส" / "ถ้าจะเบลอก็ขยายไปทั้งจอเลย ... แม่งคือ
+     กรอบของ modal sub tab แน่ๆ เพราะถ้ากดไปบนเบลอๆ sub tab จะปิด แต่ถ้ากด
+     ลงไปบน background ที่ไม่เบลอ เมนูจะปิดไปทั้งอันแล้ว".
+
+     Zero behavioral change — same onClose semantics, same focus trap,
+     same keyboard nav. Only the DOM mounting point changes. */
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -275,6 +293,7 @@ export default function BackendSubTabBloom({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
