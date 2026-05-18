@@ -8,6 +8,7 @@ import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Download } from 'lucide-react';
 import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
+import { thaiTodayISO } from '../../utils.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -67,7 +68,7 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
   // pre-fill from saved record values per user directive.
   const sigDateIso = q.createdAt
     ? String(q.createdAt).slice(0, 10)
-    : (q.quotationDate || q.date || new Date().toISOString().slice(0, 10));
+    : (q.quotationDate || q.date || thaiTodayISO());
   const signatureDateBE = formatDateThaiBE(sigDateIso);
   const customerDisplay = q.customerName || (q.customerHN ? `HN ${q.customerHN}` : '');
   const sellerDisplay = q.sellerName || q.createdByName || q.createdBy || '';

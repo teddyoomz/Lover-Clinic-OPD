@@ -15,6 +15,8 @@
 // Rule E exception: api/admin/* is production infrastructure.
 
 import { verifyAdminToken } from './_lib/adminAuth.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const GRAPH_API_VERSION = 'v25.0';
 
@@ -37,7 +39,7 @@ export default async function handler(req, res) {
 
   let fbResp;
   try {
-    fbResp = await fetch(url);
+    fbResp = await apiFetch(url);
   } catch (e) {
     return res
       .status(200)

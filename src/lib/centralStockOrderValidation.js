@@ -9,6 +9,8 @@
 // rejects them). Empty optional fields default to '' / null / 0.
 
 import { CENTRAL_ORDER_STATUS } from './stockUtils.js';
+// TZ1 (2026-05-18 audit-fix) — Thai timezone helper for "today" defaults.
+import { thaiTodayISO } from '../utils.js';
 
 export const NOTE_MAX_LENGTH = 500;
 export const VENDOR_NAME_MAX_LENGTH = 200;
@@ -116,7 +118,7 @@ export function validateCentralStockOrder(form) {
  *   - one blank line so the user sees the form structure immediately.
  */
 export function emptyCentralStockOrderForm() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = thaiTodayISO();
   return {
     centralWarehouseId: '',
     vendorId: '',
@@ -183,7 +185,7 @@ export function normalizeCentralStockOrder(form, opts = {}) {
     centralWarehouseId: String(f.centralWarehouseId || '').trim(),
     vendorId: String(f.vendorId || '').trim(),
     vendorName: String(f.vendorName || '').trim(),
-    importedDate: f.importedDate ? String(f.importedDate) : new Date().toISOString().slice(0, 10),
+    importedDate: f.importedDate ? String(f.importedDate) : thaiTodayISO(),
     note: String(f.note || '').trim(),
     discount: Number.isFinite(discountN) && discountN >= 0 ? discountN : 0,
     discountType: DISCOUNT_TYPES.includes(f.discountType) ? f.discountType : DEFAULT_DISCOUNT_TYPE,

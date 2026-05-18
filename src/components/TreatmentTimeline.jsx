@@ -115,6 +115,42 @@ export default function TreatmentTimeline({ customerId, isDark, onOpenCreateForm
       if (cancelDetail?.trim()) {
         console.info('[TreatmentTimeline] cancel detail (not yet persisted):', cancelDetail);
       }
+      // H7 (2026-05-18 audit-fix) — port course-reverse cascade from
+      // BackendDashboard.jsx:475-493. Pre-fix TreatmentTimeline.confirmCancel
+      // called deleteBackendTreatment WITHOUT reversing the treatment's
+      // course deductions → customer's purchased course counts stayed
+      // decremented even though the treatment that consumed them was deleted.
+      // Mirror BackendDashboard pattern: read treatment detail, split
+      // courseItems by rowId prefix, reverse both halves (preferNewest:true
+      // for purchased/promo). Wrapped in try/catch — failure here MUST NOT
+      // block the underlying deleteBackendTreatment (cosmetic-shell rule).
+      if (customerId) {
+        try {
+          // BSA Task 6 / BS-1 — route through scopedDataLayer.js per audit
+          // invariant (bsa-task6-ui-imports T6.1). Both helpers are plain
+          // pass-throughs in scopedDataLayer for these collections, so
+          // functionally identical to the BackendDashboard pattern.
+          const {
+            getTreatment, reverseCourseDeduction,
+          } = await import('../lib/scopedDataLayer.js');
+          const t = await getTreatment(cancelTarget);
+          const courseItems = t?.detail?.courseItems || [];
+          const oldExisting = courseItems.filter(
+            ci => !ci.rowId?.startsWith('purchased-') && !ci.rowId?.startsWith('promo-')
+          );
+          const oldPurchased = courseItems.filter(
+            ci => ci.rowId?.startsWith('purchased-') || ci.rowId?.startsWith('promo-')
+          );
+          if (oldExisting.length > 0) {
+            await reverseCourseDeduction(customerId, oldExisting);
+          }
+          if (oldPurchased.length > 0) {
+            await reverseCourseDeduction(customerId, oldPurchased, { preferNewest: true });
+          }
+        } catch (e) {
+          console.warn('[TreatmentTimeline] reverse course deduction failed:', e);
+        }
+      }
       await deleteBackendTreatment(cancelTarget);
       // Rebuild customer.treatmentSummary so AdminDashboard / CustomerDetailView
       // queue + count reflect the deletion.

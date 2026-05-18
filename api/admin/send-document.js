@@ -29,6 +29,8 @@ import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -78,7 +80,7 @@ async function sendLine({ token, recipient, message, pdfUrl }) {
   if (pdfUrl) {
     messages.push({ type: 'text', text: `ดาวน์โหลด: ${pdfUrl}` });
   }
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await apiFetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

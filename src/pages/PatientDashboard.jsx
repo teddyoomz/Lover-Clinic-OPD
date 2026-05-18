@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
-import { hexToRgb } from '../utils.js';
+import { hexToRgb, thaiTodayISO } from '../utils.js';
 // V50 (2026-05-08) — ProClinic strip. Migrated from `import * as broker` to
 // scopedDataLayer. be_customers docId equals proClinicId for ProClinic-cloned
 // customers; this public-link path only fires when sessionData.brokerProClinicId
@@ -428,7 +428,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
       if (customer) {
         const allCourses = Array.isArray(customer.courses) ? customer.courses : [];
-        const today = new Date().toISOString().slice(0, 10);
+        const today = thaiTodayISO();
         // Active = not yet expired (or no explicit expiry). Expired = past expiry.
         // Adapter parity with broker.getCourses output shape.
         courses = allCourses.filter(c => !c.expiryDate || String(c.expiryDate) >= today);

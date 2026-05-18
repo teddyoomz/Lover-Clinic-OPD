@@ -349,7 +349,7 @@ export function mapDepositPayloadToBe(dep, customerId, customerHN, patient) {
     customerHN: String(customerHN || ''),
     amount: Number(dep?.paymentAmount) || 0,
     paymentChannel: dep?.paymentChannel || '',
-    paymentDate: dep?.depositDate || new Date().toISOString().slice(0, 10),
+    paymentDate: dep?.depositDate || thaiTodayISO(),
     paymentTime: dep?.depositTime || '',
     refNo: dep?.refNo || '',
     sellers: dep?.salesperson

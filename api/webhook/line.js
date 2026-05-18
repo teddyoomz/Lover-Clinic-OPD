@@ -38,6 +38,8 @@ import {
 // during transition.
 import { resolveLineConfigForWebhook } from '../admin/_lib/lineConfigAdmin.js';
 import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 // LINE Reminder (2026-05-15) Task 7 — postback handler. Customer taps Flex
 // buttons (✓ ยืนยัน / เลื่อน / ติดต่อ) on a reminder bubble → LINE delivers a
 // `postback` event with `data=action=<a>&appt=<id>&br=<branchId>`.
@@ -95,7 +97,7 @@ async function getChatConfig() {
   // resolveLineConfigForWebhook(event). Once all branches have configs in
   // be_line_configs/* this top-of-handler check becomes redundant + can be
   // simplified to "webhook is enabled?" without touching any tokens.
-  const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
+  const res = await apiFetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
   if (!res.ok) return null;
   const doc = await res.json();
   if (!doc.fields?.line?.mapValue?.fields) return null;
@@ -133,7 +135,7 @@ async function isAnyLineEnabled(db) {
 
 async function getLineProfile(userId, accessToken) {
   try {
-    const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+    const res = await apiFetch(`https://api.line.me/v2/bot/profile/${userId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return { displayName: userId, pictureUrl: '' };
@@ -150,7 +152,7 @@ async function firestorePatch(path, fields) {
   // the named fields only. Match the pattern used by facebook.js / send.js.
   const mask = Object.keys(fields || {}).map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
   const url = mask ? `${FIRESTORE_BASE}/${path}?${mask}` : `${FIRESTORE_BASE}/${path}`;
-  await fetch(url, {
+  await apiFetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
@@ -158,7 +160,7 @@ async function firestorePatch(path, fields) {
 }
 
 async function firestoreGet(path) {
-  const res = await fetch(`${FIRESTORE_BASE}/${path}`);
+  const res = await apiFetch(`${FIRESTORE_BASE}/${path}`);
   if (!res.ok) return null;
   return await res.json();
 }
@@ -171,7 +173,7 @@ async function firestoreGet(path) {
 
 async function pushLineMessage(userId, text, accessToken) {
   if (!userId || !text || !accessToken) return false;
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await apiFetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -198,7 +200,7 @@ async function replyLineMessage(replyToken, payload, accessToken) {
     ? payload.slice(0, 5)
     : [{ type: 'text', text: String(payload) }];
   if (messages.length === 0) return false;
-  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
+  const res = await apiFetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

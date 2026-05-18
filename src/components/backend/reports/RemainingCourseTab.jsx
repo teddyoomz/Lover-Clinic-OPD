@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReportShell from './ReportShell.jsx';
 import RemainingCourseRow from './RemainingCourseRow.jsx';
+import { thaiTodayISO } from '../../../utils.js';
 import {
   flattenCustomerCourses,
   filterCourses,
@@ -147,7 +148,7 @@ export default function RemainingCourseTab({ clinicSettings }) {
   ]), []);
 
   const handleExport = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = thaiTodayISO();
     downloadCSV(`remaining-course-${today}`, sortedRows, csvColumns);
   }, [sortedRows, csvColumns]);
 

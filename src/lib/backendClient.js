@@ -7,6 +7,10 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
+// TZ1 (2026-05-18 audit-fix) — Thai timezone helper for "today" defaults.
+// Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
+// in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson).
+import { thaiTodayISO } from '../utils.js';
 
 /**
  * Phase BS V2 (2026-05-06) — branchId stamp helper for master-data writes.
@@ -6012,7 +6016,7 @@ export async function createCentralStockOrder(data, opts = {}) {
     centralWarehouseId: wh,
     vendorId: String(data.vendorId || ''),
     vendorName: String(data.vendorName || ''),
-    importedDate: data.importedDate || new Date().toISOString().slice(0, 10),
+    importedDate: data.importedDate || thaiTodayISO(),
     note: String(data.note || ''),
     discount: Number(data.discount) || 0,
     discountType: data.discountType === 'percent' ? 'percent' : 'amount',
@@ -6252,13 +6256,21 @@ export async function cancelCentralStockOrder(orderId, opts = {}) {
   const movementIds = [];
   const cancelledBatchIds = [];
 
+  // S18 (2026-05-18 audit-fix) — writeBatch atomicity for the cancel cascade.
+  // Pre-fix shipped sequential updateDoc → setDoc → updateDoc, so any failure
+  // mid-loop produced a partial cancellation (some batches flipped, some not,
+  // order status still 'partial'). Mirror of V34 cancelStockOrder atomicity
+  // pattern. Reads (getStockBatch, _resolveProductNameLive) stay outside the
+  // writeBatch; queued writes commit as ONE transaction.
+  const wb = writeBatch(db);
+
   for (const batchId of receivedBatchIds) {
     const batch = await getStockBatch(batchId);
     if (!batch) continue;
     const total = Number(batch.qty?.total) || 0;
 
     // Flip batch → cancelled.
-    await updateDoc(stockBatchDoc(batchId), {
+    wb.update(stockBatchDoc(batchId), {
       status: BATCH_STATUS.CANCELLED,
       qty: { remaining: 0, total },
       updatedAt: now,
@@ -6270,7 +6282,7 @@ export async function cancelCentralStockOrder(orderId, opts = {}) {
     // V48 (2026-05-08) — Rule O extension at central-stock-order cancel path.
     // Mirror of cancelStockOrder fix.
     const liveCentralCancelName = await _resolveProductNameLive(batch.productId);
-    await setDoc(stockMovementDoc(movementId), {
+    wb.set(stockMovementDoc(movementId), {
       movementId,
       type: MOVEMENT_TYPES.CANCEL_IMPORT,
       batchId,
@@ -6293,13 +6305,15 @@ export async function cancelCentralStockOrder(orderId, opts = {}) {
     cancelledBatchIds.push(batchId);
   }
 
-  await updateDoc(centralStockOrderDoc(orderId), {
+  wb.update(centralStockOrderDoc(orderId), {
     status: 'cancelled_post_receive',
     cancelReason: reason,
     cancelledAt: now,
     cancelledBy: user,
     updatedAt: now,
   });
+
+  await wb.commit();
 
   return {
     orderId,

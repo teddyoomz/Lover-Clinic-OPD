@@ -34,6 +34,7 @@ import { scrollToFieldError } from '../../lib/scrollToFieldError.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import DateField from '../DateField.jsx';
 import ThaiAddressSelect from './customer-form/ThaiAddressSelect.jsx';
+import { thaiTodayISO } from '../../utils.js';
 
 const COUNTRIES = [
   '', 'ไทย', 'ลาว', 'กัมพูชา', 'พม่า', 'มาเลเซีย', 'สิงคโปร์', 'เวียดนาม', 'อินโดนีเซีย', 'ฟิลิปปินส์',
@@ -458,7 +459,7 @@ export default function CustomerCreatePage({
                   onChange={(v) => setField('birthdate', v)}
                   locale="ce"
                   fieldClassName={inputCls()}
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={thaiTodayISO()}
                 />
               </div>
               <div>

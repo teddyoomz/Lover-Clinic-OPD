@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
+import { thaiTodayISO } from '../../utils.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -149,7 +150,7 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
   // Date stamp at signature lines — falls back through created → saleDate → today
   const signatureDateIso = s.createdAt
     ? String(s.createdAt).slice(0, 10)
-    : (s.saleDate || new Date().toISOString().slice(0, 10));
+    : (s.saleDate || thaiTodayISO());
   const signatureDateBE = formatDateThaiBE(signatureDateIso);
   // Customer + seller display: pull from the record (single source of truth).
   // Phase 14.10-tris (2026-04-26) — sellers were saved with `{ id, name, percent, total }`

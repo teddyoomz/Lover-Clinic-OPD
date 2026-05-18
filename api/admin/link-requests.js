@@ -34,6 +34,8 @@ import {
   formatLinkRequestApprovedReply,
   formatLinkRequestRejectedReply,
 } from '../../src/lib/lineBotResponder.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -69,7 +71,7 @@ async function getLineTokenForBranch(db, branchId) {
 
 async function pushLineMessage(token, lineUserId, text) {
   if (!token || !lineUserId || !text) return false;
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await apiFetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ to: lineUserId, messages: [{ type: 'text', text }] }),

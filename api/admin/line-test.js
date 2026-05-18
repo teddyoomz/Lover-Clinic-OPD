@@ -21,6 +21,8 @@ import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAdminToken } from './_lib/adminAuth.js';
 import { resolveLineConfigForAdmin } from './_lib/lineConfigAdmin.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || 'loverclinic-opd-4c39b';
 
@@ -79,7 +81,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const lineRes = await fetch('https://api.line.me/v2/bot/info', {
+    const lineRes = await apiFetch('https://api.line.me/v2/bot/info', {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (lineRes.status === 401 || lineRes.status === 403) {

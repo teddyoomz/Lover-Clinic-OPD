@@ -16,6 +16,8 @@ import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { verifyAuth } from '../proclinic/_lib/auth.js';
 import { resolveFbConfigForAdmin } from '../admin/_lib/fbConfigAdmin.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 
@@ -72,7 +74,7 @@ export default async function handler(req, res) {
       return res.status(503).json({ success: false, error: 'BRANCH_CONFIG_MISSING', detail: 'pageAccessToken/pageId missing on resolved config' });
     }
 
-    const fbRes = await fetch(`https://graph.facebook.com/v25.0/${pageId}/saved_message_responses?access_token=${token}`);
+    const fbRes = await apiFetch(`https://graph.facebook.com/v25.0/${pageId}/saved_message_responses?access_token=${token}`);
     const data = await fbRes.json();
 
     if (data.error) {

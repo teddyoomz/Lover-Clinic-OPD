@@ -28,9 +28,26 @@
 // Intent detection is keyword-based:
 //   - "1234567890123" / "ผูก 1234567890123" → intent: 'id-link-request'
 //   - "คอร์ส" / "courses" / "เหลือ" → intent: 'courses'
+// TZ1 (2026-05-18 audit-fix) — pure helpers; callers may override `todayISO`.
+// Default fallback is Thai timezone (Asia/Bangkok GMT+7) not browser/UTC.
+// See ../utils.js bangkokNow / thaiTodayISO for rationale (inlined below so
+// this module stays dependency-free for Vercel serverless consumers).
 //   - "นัด" / "appointment" / "วันนัด" → intent: 'appointments'
 //   - whitelisted help keywords → intent: 'help'
 //   - default                      → intent: 'unknown' (no reply)
+
+// TZ1 (2026-05-18) — Bangkok-TZ "today" helper. Inlined (not imported from
+// utils.js) because this module is also consumed by Vercel serverless
+// (api/webhook/line.js + api/admin/link-requests.js); keeping it dependency-
+// free keeps the bundle path simple.
+function _thaiTodayISO() {
+  // Add 7h to UTC epoch so getUTC* methods return Thai wall-clock values.
+  const d = new Date(Date.now() + 7 * 3600000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 // ─── V33.7 (2026-04-27) — i18n MESSAGES dictionary ──────────────────────
 // All customer-facing strings are keyed by language. Default = 'th'.
@@ -399,7 +416,7 @@ export function formatAppointmentsReply(appointments, todayISO = '', language = 
   if (!Array.isArray(appointments) || appointments.length === 0) {
     return M.APPT_NO_DATA;
   }
-  const today = todayISO || new Date().toISOString().slice(0, 10);
+  const today = todayISO || _thaiTodayISO();
   const upcoming = appointments
     .filter((a) => {
       const s = String(a?.status || '').toLowerCase();
@@ -765,7 +782,7 @@ export function buildAppointmentsFlex(appointments, opts = {}) {
   const accentColor = opts.accentColor || DEFAULT_ACCENT;
   const clinicName = opts.clinicName || DEFAULT_CLINIC_NAME;
   const maxItems = Number.isFinite(opts.maxItems) ? opts.maxItems : APPOINTMENTS_FLEX_MAX_ITEMS;
-  const todayISO = opts.todayISO || new Date().toISOString().slice(0, 10);
+  const todayISO = opts.todayISO || _thaiTodayISO();
   const lang = normLang(opts.language);
   const M = MESSAGES[lang];
 

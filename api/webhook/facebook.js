@@ -13,6 +13,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { resolveChatBranchIdFromFbEvent } from './_lib/fbChatBranchResolver.js';
 import { getFbConfigByPageId } from './_lib/fbConfig.js';
 import { resolveChatFallbackBranchId } from './_lib/chatBranchDefaults.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+// Bare fetch() hangs forever if upstream stalls; default 5s timeout
+// prevents webhook from blocking Vercel return queue.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${APP_ID}/databases/(default)/documents`;
@@ -60,7 +64,7 @@ function verifySignature(rawBody, signature, appSecret) {
 
 async function getChatConfig() {
   try {
-    const res = await fetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
+    const res = await apiFetch(`${FIRESTORE_BASE}/${CHAT_CONFIG_PATH}`);
     if (!res.ok) { console.log('[fb-webhook] getChatConfig: Firestore fetch failed', res.status); return null; }
     const doc = await res.json();
     // Try mapValue format (saved via Firebase SDK from client)
@@ -89,7 +93,7 @@ async function getFBProfile(psid, accessToken) {
 
   try {
     const url = `https://graph.facebook.com/v25.0/${psid}?fields=name,first_name,last_name,profile_pic&access_token=${accessToken}`;
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const raw = await res.text();
     console.log(`[fb-webhook] getFBProfile response: status=${res.status} body=${raw.slice(0, 500)}`);
 
@@ -128,7 +132,7 @@ async function getFBProfile(psid, accessToken) {
 
 async function firestorePatch(path, fields) {
   const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
-  await fetch(`${FIRESTORE_BASE}/${path}?${mask}`, {
+  await apiFetch(`${FIRESTORE_BASE}/${path}?${mask}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
@@ -136,7 +140,7 @@ async function firestorePatch(path, fields) {
 }
 
 async function firestoreGet(path) {
-  const res = await fetch(`${FIRESTORE_BASE}/${path}`);
+  const res = await apiFetch(`${FIRESTORE_BASE}/${path}`);
   if (!res.ok) return null;
   return await res.json();
 }

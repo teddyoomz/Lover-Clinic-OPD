@@ -22,6 +22,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { verifyAuth } from '../proclinic/_lib/auth.js';
 import { resolveLineConfigForAdmin } from '../admin/_lib/lineConfigAdmin.js';
 import { resolveFbConfigForAdmin } from '../admin/_lib/fbConfigAdmin.js';
+// A7 (2026-05-18 audit-fix) — fetch timeout via shared helper.
+import { apiFetch } from '../_lib/apiFetch.js';
 
 const APP_ID = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_APP_ID || 'loverclinic-opd-4c39b';
 
@@ -60,7 +62,7 @@ async function sendLineMessage(userId, text, config) {
   const token = config.channelAccessToken;
   if (!token) throw new Error('LINE Channel Access Token ไม่ได้ตั้งค่า');
 
-  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+  const res = await apiFetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -85,7 +87,7 @@ async function sendFBMessage(psid, text, config) {
   const token = config.pageAccessToken;
   if (!token) throw new Error('Facebook Page Access Token ไม่ได้ตั้งค่า');
 
-  const res = await fetch(`https://graph.facebook.com/v25.0/me/messages?access_token=${token}`, {
+  const res = await apiFetch(`https://graph.facebook.com/v25.0/me/messages?access_token=${token}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
