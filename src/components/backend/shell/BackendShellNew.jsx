@@ -13,6 +13,7 @@ import BackendCmdPalette from '../nav/BackendCmdPalette.jsx';
 export default function BackendShellNew({
   activeTabId,
   onNavigate,
+  isSpecificEntityContext = false,
   clinicSettings,
   theme,
   setTheme,
@@ -23,8 +24,28 @@ export default function BackendShellNew({
   // "เมื่อกดเข้า backend จากไหนก็ตาม ... จะเป็นสถานะเมนูเปิดรออยู่". User can
   // dismiss via backdrop/Esc/orb-click — falls through to the underlying tab
   // (default = appointment-all from BackendDashboard).
-  const [bloomOpen, setBloomOpen] = useState(true);
+  //
+  // V90 (EOD+11 LATE, 2026-05-18) — exception: if BackendDashboard signals
+  // the user is landing on a specific entity surface (customer detail /
+  // treatment form / customer edit), start bloom CLOSED so the entity
+  // content is visible. The bloom auto-closes via the useEffect below
+  // when the flag transitions to true during the session (e.g. user on
+  // customer list → clicks a customer → entity context kicks in).
+  // User reported mobile bug 2026-05-18 EOD+11 LATE: "เปิดค้างทับหน้านั้น
+  // ไว้ ปิดไม่ได้". V82 menu-untouchable lock honored — only state defaults
+  // change; menu visuals + handlers identical.
+  const [bloomOpen, setBloomOpen] = useState(!isSpecificEntityContext);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // V90 (EOD+11 LATE) — auto-close bloom on transition INTO specific entity
+  // context. Covers the case where admin opens backend at root (bloom open)
+  // → clicks a customer in CustomerListTab → entity context becomes truthy
+  // → bloom auto-collapses so customer-detail content is visible.
+  useEffect(() => {
+    if (isSpecificEntityContext) {
+      setBloomOpen(false);
+    }
+  }, [isSpecificEntityContext]);
 
   // Set html data-attr so global CSS can hide standalone StaffChatBubble
   useEffect(() => {

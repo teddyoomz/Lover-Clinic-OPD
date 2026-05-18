@@ -738,6 +738,17 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     </>
   );
 
+  // V90 (2026-05-18 EOD+11 LATE) — entity-context signal so Menu V2 bloom
+  // auto-closes when admin lands on a specific entity surface (customer
+  // detail / treatment form / customer edit). Without this, mobile users
+  // clicking a customer row in CustomerListTab landed with the bloom overlay
+  // covering the customer-detail page → unable to interact. Reported by user
+  // 2026-05-18 EOD+11 LATE ("เปิดค้างทับหน้านั้นไว้ ปิดไม่ได้"). The signal
+  // is read by BackendShellNew's `isSpecificEntityContext` prop which (a)
+  // defaults bloom CLOSED on initial mount when truthy, and (b) runs a
+  // useEffect that closes bloom whenever the flag transitions to true.
+  const isSpecificEntityContext = !!viewingCustomer || !!treatmentFormMode || !!editingCustomer;
+
   // Backend Menu D — conditional shell. Both branches receive byte-identical
   // props; mainContent is the same children block. Mode toggle swaps shells
   // via React state — no route change, no re-mount of child tabs.
@@ -745,6 +756,7 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
     <BackendShellNew
       activeTabId={activeTab}
       onNavigate={handleNavigate}
+      isSpecificEntityContext={isSpecificEntityContext}
       clinicSettings={clinicSettings}
       theme={theme}
       setTheme={setTheme}
