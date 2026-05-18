@@ -128,6 +128,23 @@ Also grep for `token: '[A-Za-z0-9]{20,}'` and `password:\s*['"][^'"]+['"]`.
 - Total link-button trigger sites currently: 2 (history-view + walk-in queue). Adding a 3rd elsewhere REQUIRES the same OPD-save guard wrap.
 **Fix**: any trigger-OPEN site without the guard gets wrapped immediately with `{session.opdRecordedAt && session.brokerStatus === 'done' && (` ... `)}` mirroring AdminDashboard.jsx:6080 verbatim. Source-grep regression: `tests/v87-link-button-opd-save-guard.test.js` G1-G3 locks both sites + the closed-list invariant.
 
+### AV85 — TZ1 family: NO raw `new Date().toISOString().slice(0,N)` / `.substring(0,N)` for display defaults (V93+iter2, 2026-05-18 EOD+11 LATE)
+**Why**: V93 batch migrated 11 sites from `new Date().toISOString().slice(0,10)` → `thaiTodayISO()`. Class-of-bug = TZ off-by-one: UTC slice during Bangkok 00:00-07:00 returns the PREVIOUS day. Money records, deposit dates, report exports, document signature dates all drift. Audit-iter-2 caught a 12th site (`src/lib/clinicReportAggregator.js:298` using `.slice(0,7)` for month default) that V93's grep missed because the regex was `slice(0, 10)`-specific. AV85 locks the FAMILY of TZ-unsafe slice patterns. **Rule P Step 6 — the regression-test bank in V93 covers 9 files; AV85 grep covers EVERY future code path globally**.
+**Grep** (any of these in `src/` outside `tests/` / `.claude/` / `.agents/` / `docs/` / sanctioned `tests/extended/audit-2026-04-26-tz1-fixes.test.js`):
+- `new Date\(\)\.toISOString\(\)\.slice\(\s*0\s*,\s*10\s*\)` — day default (use `thaiTodayISO()` from `src/utils.js`)
+- `new Date\(\)\.toISOString\(\)\.slice\(\s*0\s*,\s*7\s*\)` — month default (use `thaiYearMonth()`)
+- `new Date\(\)\.toISOString\(\)\.substring\(\s*0\s*,\s*(7|10)\s*\)` — alt syntax (same fix)
+- `new Date\(\)\.toISOString\(\)\.split\(['"]T['"]\)\[0\]` — alt syntax (same fix)
+- Sanctioned exceptions: timestamp ID compaction in `backendClient.js:10366` (not display, ID generator OK); filename timestamps in `documentPrintEngine.js` (not display, file label OK); inlined `_thaiTodayISO()` in `lineBotResponder.js` (Vercel serverless dependency-free helper, byte-equivalent to canonical).
+- Vercel serverless under `api/`: use the same inlined Bangkok-TZ helper pattern (no `from '../utils.js'` import — keep bundle dependency-free).
+**Fix**: replace with canonical helper from `src/utils.js`:
+- Day: `thaiTodayISO()` returns `'YYYY-MM-DD'`
+- Month: `thaiYearMonth()` returns `'YYYY-MM'`
+- Now-minutes-of-day: `thaiNowMinutes()`
+- For pure-helper modules consumed by api/ AND src/ (e.g. `lineBotResponder.js`): inline a `_thaiTodayISO()` byte-equivalent to keep the module dependency-free.
+**Closed sanctioned list**: TZ1 ID generators (`backendClient.js:10366`) + filename timestamps (`documentPrintEngine.js:231`) + inlined api/ helpers (Vercel context). Adding a 4th sanctioned exception requires a V-entry.
+Source-grep regression: `tests/v93-tz1-batch-2026-05-18.test.js` (9 files × 4 assertions = 35) + this AV85 grep enforces globally.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

@@ -45,6 +45,11 @@ import {
 // to fix TOP-10 DOCTORS empty-table bug. Sales lack a denormalized doctorId
 // when they're treatment-linked; we join via treatment.detail.linkedSaleId.
 import { loadTreatmentsByDateRange } from './reportsLoaders.js';
+// TZ1 (2026-05-18 audit-fix iter 2) — Bangkok "YYYY-MM" helper for the
+// no-range-default month picker. Raw new Date().toISOString().slice(0,7)
+// drifts to UTC = previous-month-Dec at Bangkok 00:00-07:00 on Jan 1.
+// V93 batch missed this site; iter-2 audit caught it.
+import { thaiYearMonth } from '../utils.js';
 
 import { aggregateRevenueByProcedure } from './revenueAnalysisAggregator.js';
 import { aggregateCustomerReport }      from './customerReportAggregator.js';
@@ -294,8 +299,9 @@ export async function clinicReportAggregator(filter = {}) {
  */
 function buildMonthRange(from, to) {
   if (!from && !to) {
-    // No range — default to current month
-    return [new Date().toISOString().slice(0, 7)];
+    // No range — default to current month (Bangkok TZ; UTC slice drifts to
+    // previous-month-December at Bangkok 00:00-07:00 on Jan 1 per TZ1).
+    return [thaiYearMonth()];
   }
   const start = (from || to).slice(0, 7);
   const end   = (to || from).slice(0, 7);

@@ -301,3 +301,67 @@ describe('V93.K: V12-class anti-regression — all 9 V93 files stay TZ-clean', (
     expect(V93_FILES).toHaveLength(9);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// V93.L — iter-2 (audit-all 2026-05-18 EOD+11 LATE iter 2) caught one
+// more site V93 batch missed: clinicReportAggregator monthly-default
+// using `.slice(0, 7)` — same TZ family, different slice width.
+// ═══════════════════════════════════════════════════════════════════════
+
+const RAW_BAD_MONTH_RE = /new Date\(\)\.toISOString\(\)\.slice\(\s*0\s*,\s*7\s*\)/;
+
+describe('V93.L: clinicReportAggregator monthly default uses thaiYearMonth', () => {
+  const SRC = READ('src/lib/clinicReportAggregator.js');
+  const CODE = stripComments(SRC);
+
+  it('L.1: imports thaiYearMonth from utils.js', () => {
+    expect(SRC).toMatch(/import\s*\{\s*thaiYearMonth\s*\}\s*from\s*['"]\.\.\/utils\.js['"]/);
+  });
+
+  it('L.2: buildMonthRange no-range default returns [thaiYearMonth()]', () => {
+    expect(SRC).toMatch(/return\s*\[\s*thaiYearMonth\(\)\s*\]/);
+  });
+
+  it('L.3: NO raw new Date().toISOString().slice(0,7) in code', () => {
+    expect(CODE).not.toMatch(RAW_BAD_MONTH_RE);
+  });
+
+  it('L.4: NO raw new Date().toISOString().slice(0,10) either', () => {
+    expect(CODE).not.toMatch(RAW_BAD_RE);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// V93.M — AV85 invariant lock in audit-anti-vibe-code SKILL.md
+// (Rule P Step 6 lock — without AVxx invariant, future drift relies on
+// regression test only; AV85 enforces globally via grep.)
+// ═══════════════════════════════════════════════════════════════════════
+
+describe('V93.M: AV85 invariant present in audit-anti-vibe-code SKILL.md', () => {
+  const SKILL = READ('.claude/skills/audit-anti-vibe-code/SKILL.md');
+
+  it('M.1: AV85 entry exists with TZ1 family in title', () => {
+    expect(SKILL).toMatch(/### AV85 — TZ1 family/);
+  });
+
+  it('M.2: grep pattern for .slice(0,10) covered', () => {
+    expect(SKILL).toMatch(/slice\\\(\\s\*0\\s\*,\\s\*10\\s\*\\\)/);
+  });
+
+  it('M.3: grep pattern for .slice(0,7) covered (iter-2 catch)', () => {
+    expect(SKILL).toMatch(/slice\\\(\\s\*0\\s\*,\\s\*7\\s\*\\\)/);
+  });
+
+  it('M.4: lists thaiTodayISO + thaiYearMonth as canonical replacements', () => {
+    expect(SKILL).toMatch(/thaiTodayISO\(\)/);
+    expect(SKILL).toMatch(/thaiYearMonth\(\)/);
+  });
+
+  it('M.5: documents inlined Vercel-helper pattern for api/', () => {
+    expect(SKILL).toMatch(/_thaiTodayISO|inlined|dependency-free/);
+  });
+
+  it('M.6: closed sanctioned-exception list explicit', () => {
+    expect(SKILL).toMatch(/Closed sanctioned list|sanctioned exception/);
+  });
+});
