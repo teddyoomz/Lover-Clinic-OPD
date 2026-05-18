@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V86 Neon Glow — full brainstorm (Q1-Q4)</title>
+<style>
+  :root {
+    --bg-base: #08080a;
+    --bg-surface: #121214;
+    --bg-card: #161618;
+    --bg-card-2: #1a1a1d;
+    --tx-primary: #f5f5f5;
+    --tx-secondary: #b8b8bd;
+    --tx-muted: #6e6e76;
+    --bd: #2a2a30;
+
+    /* 8 SECTION_COLOR pairs from ArcBloom */
+    --appt-c1: #3b82f6; --appt-c2: #06b6d4;
+    --cust-c1: #14b8a6; --cust-c2: #22c55e;
+    --sale-c1: #ef4444; --sale-c2: #f97316;
+    --mark-c1: #a855f7; --mark-c2: #ec4899;
+    --stock-c1: #f59e0b; --stock-c2: #facc15;
+    --fin-c1: #10b981; --fin-c2: #06b6d4;
+    --rep-c1: #0ea5e9; --rep-c2: #6366f1;
+    --mast-c1: #facc15; --mast-c2: #f97316;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg-base);
+    color: var(--tx-primary);
+    font-family: 'Sukhumvit Set','IBM Plex Sans Thai',-apple-system,BlinkMacSystemFont,sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  /* Sticky nav */
+  .stickynav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,8,10,0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--bd);
+    padding: 14px 24px;
+  }
+  .nav-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .nav-brand {
+    font-weight: 700;
+    background: linear-gradient(90deg, #00f0ff, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .nav-link {
+    color: var(--tx-secondary);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .nav-link:hover {
+    background: rgba(255,255,255,0.04);
+    color: var(--tx-primary);
+    border-color: var(--bd);
+  }
+  .nav-link.done { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+  .nav-link.done::before { content: '✓ '; }
+
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+  }
+  section { padding-top: 40px; }
+  h1 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    background: linear-gradient(90deg, #00f0ff, #a855f7, #ec4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .lede { color: var(--tx-secondary); font-size: 14px; line-height: 1.7; margin: 0 0 8px; }
+  .lede strong { color: var(--tx-primary); }
+
+  h2.qtitle {
+    font-size: 22px;
+    margin: 0 0 4px;
+    color: var(--tx-primary);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2.qtitle .qnum {
+    color: #00f0ff;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    font-size: 16px;
+  }
+  h2.qtitle .qbadge-done {
+    font-size: 11px;
+    background: rgba(74, 222, 128, 0.18);
+    color: #4ade80;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(74, 222, 128, 0.4);
+  }
+  .qsub { color: var(--tx-muted); font-size: 13px; margin: 0 0 20px; }
+
+  /* === Panel === */
+  .panel {
+    background: rgba(20, 20, 22, 0.5);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .panel.selected {
+    border-color: rgba(74, 222, 128, 0.4);
+    background: linear-gradient(180deg, rgba(74,222,128,0.04), rgba(20,20,22,0.5));
+    position: relative;
+  }
+  .panel.selected::after {
+    content: 'ELECTED ✓';
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+  }
+  .panel.selected::before {
+    content: 'S';
+    position: absolute;
+    top: 14px;
+    right: 96px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: #4ade80;
+    font-weight: 700;
+  }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .panel-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tx-muted);
+    font-weight: 700;
+  }
+  .panel-tag .badge {
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  .panel-title { font-size: 18px; font-weight: 700; margin: 0; }
+  .panel-title .star { color: #fbbf24; margin-left: 6px; font-size: 14px; }
+  .panel-desc { color: var(--tx-secondary); font-size: 13px; line-height: 1.65; margin: 4px 0 18px; max-width: 80ch; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .swatch { font-size: 10px; color: var(--tx-muted); padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); }
+
+  /* === Sample card === */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 880px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--bg-card);
+    border-radius: 14px;
+    padding: 16px;
+    position: relative;
+    transition: transform 0.18s ease;
+  }
+  .card-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: white; font-size: 14px; flex-shrink: 0;
+  }
+  .avatar.cyan    { background: #06b6d4; }
+  .avatar.amber   { background: #f59e0b; }
+  .avatar.magenta { background: #ec4899; }
+  .avatar.blue    { background: var(--appt-c1); }
+  .avatar.teal    { background: var(--cust-c1); }
+  .avatar.red     { background: var(--sale-c1); }
+  .avatar.purple  { background: var(--mark-c1); }
+  .avatar.emerald { background: var(--fin-c1); }
+  .avatar.sky     { background: var(--rep-c1); }
+  .avatar.yellow  { background: var(--mast-c1); }
+  .meta { min-width: 0; }
+  .name { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+  .hn { font-size: 11px; color: var(--tx-muted); }
+  .stats { display: flex; gap: 12px; font-size: 11px; color: var(--tx-muted); padding-top: 10px; border-top: 1px solid var(--bd); }
+  .stat-pill { display: inline-flex; align-items: center; gap: 5px; }
+
+  /* ======================================================
+     Q1 — INTENSITY (kept from previous version)
+     ====================================================== */
+  /* V0 baseline (black) */
+  .v0 .card { box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4); }
+
+  /* VA subtle neon */
+  .va .card.cyan    { box-shadow: 0 6px 20px rgba(6, 182, 212, 0.16),  0 0 10px rgba(6, 182, 212, 0.10); }
+  .va .card.amber   { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.16), 0 0 10px rgba(245, 158, 11, 0.10); }
+  .va .card.magenta { box-shadow: 0 6px 20px rgba(236, 72, 153, 0.16), 0 0 10px rgba(236, 72, 153, 0.10); }
+
+  /* VB medium cyberpunk ⭐ */
+  .vb .card { border: 1px solid transparent; }
+  .vb .card.cyan    { border-color: rgba(6, 182, 212, 0.35);  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.10), 0 0 14px rgba(6, 182, 212, 0.40), 0 0 32px rgba(6, 182, 212, 0.18); }
+  .vb .card.amber   { border-color: rgba(245, 158, 11, 0.35); box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.10), 0 0 14px rgba(245, 158, 11, 0.40), 0 0 32px rgba(245, 158, 11, 0.18); }
+  .vb .card.magenta { border-color: rgba(236, 72, 153, 0.35); box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.10), 0 0 14px rgba(236, 72, 153, 0.40), 0 0 32px rgba(236, 72, 153, 0.18); }
+
+  /* VC full cyberpunk animated */
+  .vc .card { border: 1px solid transparent; }
+  .vc .card.cyan {
+    border-color: rgba(6, 182, 212, 0.50);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(6, 182, 212, 0.12),
+                0 0 16px rgba(6, 182, 212, 0.55), 0 0 40px rgba(6, 182, 212, 0.28);
+    animation: vc-pulse-cyan 4s ease-in-out infinite;
+  }
+  .vc .card.amber {
+    border-color: rgba(245, 158, 11, 0.50);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(245, 158, 11, 0.12),
+                0 0 16px rgba(245, 158, 11, 0.55), 0 0 40px rgba(245, 158, 11, 0.28);
+    animation: vc-pulse-amber 4s ease-in-out infinite;
+  }
+  .vc .card.magenta {
+    border-color: rgba(236, 72, 153, 0.50);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(236, 72, 153, 0.12),
+                0 0 16px rgba(236, 72, 153, 0.55), 0 0 40px rgba(236, 72, 153, 0.28);
+    animation: vc-pulse-magenta 4s ease-in-out infinite;
+  }
+  @keyframes vc-pulse-cyan    { 0%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(6,182,212,0.12), 0 0 16px rgba(6,182,212,0.55), 0 0 40px rgba(6,182,212,0.28); } 50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 24px rgba(6,182,212,0.18), 0 0 24px rgba(6,182,212,0.75), 0 0 56px rgba(6,182,212,0.42); } }
+  @keyframes vc-pulse-amber   { 0%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(245,158,11,0.12), 0 0 16px rgba(245,158,11,0.55), 0 0 40px rgba(245,158,11,0.28); } 50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 24px rgba(245,158,11,0.18), 0 0 24px rgba(245,158,11,0.75), 0 0 56px rgba(245,158,11,0.42); } }
+  @keyframes vc-pulse-magenta { 0%,100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(236,72,153,0.12), 0 0 16px rgba(236,72,153,0.55), 0 0 40px rgba(236,72,153,0.28); } 50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 24px rgba(236,72,153,0.18), 0 0 24px rgba(236,72,153,0.75), 0 0 56px rgba(236,72,153,0.42); } }
+
+  /* VD outline-only */
+  .vd .card.cyan    { border: 1.5px solid rgba(6, 182, 212, 0.7);  box-shadow: 0 0 6px rgba(6, 182, 212, 0.45); }
+  .vd .card.amber   { border: 1.5px solid rgba(245, 158, 11, 0.7); box-shadow: 0 0 6px rgba(245, 158, 11, 0.45); }
+  .vd .card.magenta { border: 1.5px solid rgba(236, 72, 153, 0.7); box-shadow: 0 0 6px rgba(236, 72, 153, 0.45); }
+
+  .card:hover { transform: translateY(-2px); }
+
+  /* ======================================================
+     Q2 — PALETTE STRATEGY (8 sections × 3 styles)
+     ====================================================== */
+  .q2-table {
+    display: grid;
+    grid-template-columns: 110px repeat(3, 1fr);
+    gap: 12px;
+    align-items: center;
+  }
+  .q2-header { color: var(--tx-muted); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; padding: 0 8px; }
+  .q2-section-label { font-size: 13px; color: var(--tx-secondary); font-weight: 600; padding: 0 8px; }
+  .q2-section-label .swatch-pair { display: flex; gap: 3px; margin-top: 4px; }
+  .q2-section-label .swatch-pair span { width: 10px; height: 10px; border-radius: 2px; }
+  .q2-cell {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 14px;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid transparent;
+    position: relative;
+  }
+  .q2-cell .mini-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: white; font-size: 12px; flex-shrink: 0;
+  }
+  .q2-cell .mini-name { font-size: 12px; font-weight: 600; }
+  .q2-cell .mini-sub { font-size: 10px; color: var(--tx-muted); }
+
+  /* Style A: single-tone (c1 only — border AND halo from c1) */
+  .q2-cell[data-section="appt"][data-style="A"]  { border-color: rgba(59,130,246,0.4);  box-shadow: 0 0 14px rgba(59,130,246,0.4),  0 0 32px rgba(59,130,246,0.18); }
+  .q2-cell[data-section="cust"][data-style="A"]  { border-color: rgba(20,184,166,0.4);  box-shadow: 0 0 14px rgba(20,184,166,0.4),  0 0 32px rgba(20,184,166,0.18); }
+  .q2-cell[data-section="sale"][data-style="A"]  { border-color: rgba(239,68,68,0.4);   box-shadow: 0 0 14px rgba(239,68,68,0.4),   0 0 32px rgba(239,68,68,0.18); }
+  .q2-cell[data-section="mark"][data-style="A"]  { border-color: rgba(168,85,247,0.4);  box-shadow: 0 0 14px rgba(168,85,247,0.4),  0 0 32px rgba(168,85,247,0.18); }
+  .q2-cell[data-section="stock"][data-style="A"] { border-color: rgba(245,158,11,0.4);  box-shadow: 0 0 14px rgba(245,158,11,0.4),  0 0 32px rgba(245,158,11,0.18); }
+  .q2-cell[data-section="fin"][data-style="A"]   { border-color: rgba(16,185,129,0.4);  box-shadow: 0 0 14px rgba(16,185,129,0.4),  0 0 32px rgba(16,185,129,0.18); }
+  .q2-cell[data-section="rep"][data-style="A"]   { border-color: rgba(14,165,233,0.4);  box-shadow: 0 0 14px rgba(14,165,233,0.4),  0 0 32px rgba(14,165,233,0.18); }
+  .q2-cell[data-section="mast"][data-style="A"]  { border-color: rgba(250,204,21,0.4);  box-shadow: 0 0 14px rgba(250,204,21,0.4),  0 0 32px rgba(250,204,21,0.18); }
+
+  /* Style B: dual-tone (border = c1, halo = c2) ⭐ */
+  .q2-cell[data-section="appt"][data-style="B"]  { border-color: rgba(59,130,246,0.45); box-shadow: 0 0 0 1px rgba(59,130,246,0.08),  0 0 14px rgba(6,182,212,0.5),   0 0 32px rgba(6,182,212,0.22); }
+  .q2-cell[data-section="cust"][data-style="B"]  { border-color: rgba(20,184,166,0.45); box-shadow: 0 0 0 1px rgba(20,184,166,0.08),  0 0 14px rgba(34,197,94,0.5),   0 0 32px rgba(34,197,94,0.22); }
+  .q2-cell[data-section="sale"][data-style="B"]  { border-color: rgba(239,68,68,0.45);  box-shadow: 0 0 0 1px rgba(239,68,68,0.08),   0 0 14px rgba(249,115,22,0.5),  0 0 32px rgba(249,115,22,0.22); }
+  .q2-cell[data-section="mark"][data-style="B"]  { border-color: rgba(168,85,247,0.45); box-shadow: 0 0 0 1px rgba(168,85,247,0.08),  0 0 14px rgba(236,72,153,0.5),  0 0 32px rgba(236,72,153,0.22); }
+  .q2-cell[data-section="stock"][data-style="B"] { border-color: rgba(245,158,11,0.45); box-shadow: 0 0 0 1px rgba(245,158,11,0.08),  0 0 14px rgba(250,204,21,0.5),  0 0 32px rgba(250,204,21,0.22); }
+  .q2-cell[data-section="fin"][data-style="B"]   { border-color: rgba(16,185,129,0.45); box-shadow: 0 0 0 1px rgba(16,185,129,0.08),  0 0 14px rgba(6,182,212,0.5),   0 0 32px rgba(6,182,212,0.22); }
+  .q2-cell[data-section="rep"][data-style="B"]   { border-color: rgba(14,165,233,0.45); box-shadow: 0 0 0 1px rgba(14,165,233,0.08),  0 0 14px rgba(99,102,241,0.5),  0 0 32px rgba(99,102,241,0.22); }
+  .q2-cell[data-section="mast"][data-style="B"]  { border-color: rgba(250,204,21,0.45); box-shadow: 0 0 0 1px rgba(250,204,21,0.08),  0 0 14px rgba(249,115,22,0.5),  0 0 32px rgba(249,115,22,0.22); }
+
+  /* Style C: universal cyberpunk (cyan border + magenta halo for ALL) */
+  .q2-cell[data-style="C"] { border-color: rgba(0,240,255,0.55); box-shadow: 0 0 0 1px rgba(0,240,255,0.08), 0 0 14px rgba(236,72,153,0.5), 0 0 32px rgba(236,72,153,0.22); }
+
+  .q2-style-head {
+    text-align: center;
+    padding: 10px 8px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .q2-style-head.a { background: rgba(255,255,255,0.04); }
+  .q2-style-head.b { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+  .q2-style-head.c { background: rgba(255,255,255,0.04); }
+
+  /* ======================================================
+     Q3 — ANIMATION POLICY (4 modes)
+     ====================================================== */
+  .q3-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 880px) { .q3-grid { grid-template-columns: 1fr; } }
+  .q3-tile {
+    background: var(--bg-surface);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .q3-tile h3 { margin: 0 0 6px; font-size: 15px; }
+  .q3-tile .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tx-muted); font-weight: 700; }
+  .q3-tile p { color: var(--tx-secondary); font-size: 12px; line-height: 1.55; margin: 6px 0 14px; }
+  /* Recreate VB card for Q3 demos */
+  .q3-tile .demo { background: var(--bg-card); border: 1px solid rgba(6,182,212,0.4); border-radius: 12px; padding: 14px; box-shadow: 0 0 0 1px rgba(6,182,212,0.08), 0 0 14px rgba(6,182,212,0.45), 0 0 32px rgba(6,182,212,0.2); transition: all 0.25s; }
+  .q3-tile .demo .ttl { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .q3-tile .demo .sub { font-size: 11px; color: var(--tx-muted); }
+  .q3-tile.static .demo { /* no animation */ }
+  .q3-tile.breath .demo { animation: q3-breath-cyan 4s ease-in-out infinite; }
+  @keyframes q3-breath-cyan {
+    0%,100% { box-shadow: 0 0 0 1px rgba(6,182,212,0.08), 0 0 14px rgba(6,182,212,0.45), 0 0 32px rgba(6,182,212,0.2); }
+    50%     { box-shadow: 0 0 0 1px rgba(6,182,212,0.16), 0 0 22px rgba(6,182,212,0.65), 0 0 52px rgba(6,182,212,0.38); }
+  }
+  .q3-tile.hover .demo:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 0 1px rgba(6,182,212,0.16), 0 0 22px rgba(6,182,212,0.7), 0 0 52px rgba(6,182,212,0.42);
+    border-color: rgba(6,182,212,0.7);
+  }
+  .q3-tile.hybrid .demo { animation: q3-breath-cyan 4s ease-in-out infinite; }
+  .q3-tile.hybrid .demo:hover { animation-play-state: paused; transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(6,182,212,0.2), 0 0 28px rgba(6,182,212,0.85), 0 0 64px rgba(6,182,212,0.5); border-color: rgba(6,182,212,0.85); }
+
+  /* ======================================================
+     Q4 — SCOPE (visualization)
+     ====================================================== */
+  .q4-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 880px) { .q4-grid { grid-template-columns: 1fr; } }
+  .q4-zone {
+    background: var(--bg-surface);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 18px;
+    position: relative;
+  }
+  .q4-zone h3 { margin: 0 0 4px; font-size: 14px; }
+  .q4-zone .badge { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--tx-muted); font-weight: 700; margin-bottom: 8px; display: block; }
+  .q4-zone ul { margin: 8px 0 0; padding-left: 20px; color: var(--tx-secondary); font-size: 12px; line-height: 1.6; }
+  .q4-zone li.skip { color: var(--tx-muted); text-decoration: line-through; }
+  .q4-zone li.add { color: #4ade80; }
+  .q4-zone.recommended { border-color: rgba(74,222,128,0.4); background: linear-gradient(180deg, rgba(74,222,128,0.04), var(--bg-surface)); }
+  .q4-zone.recommended::after { content: '⭐'; position: absolute; top: 14px; right: 18px; font-size: 18px; }
+</style>
+</head>
+<body>
+
+<div class="stickynav">
+  <div class="nav-inner">
+    <span class="nav-brand">V86 Neon Glow Design</span>
+    <a href="#q1" class="nav-link done">Q1 Intensity (B)</a>
+    <a href="#q2" class="nav-link">Q2 Palette</a>
+    <a href="#q3" class="nav-link">Q3 Animation</a>
+    <a href="#q4" class="nav-link">Q4 Scope</a>
+  </div>
+</div>
+
+<div class="page">
+
+  <h1>V86 — Neon Glow (Cyberpunk theme)</h1>
+  <p class="lede">User feedback: <em>"Dark themes ก็ยังไม่รู้สึกว่า box หรือ widget แสดงผลโดด"</em> → V85 ใช้เงาดำ → กลืน background. V86 = เปลี่ยนเป็น <strong>colored neon glow</strong> per-section, ทำให้ cards "เปล่งแสง" เหมือนป้าย neon. กฎ: cosmetic-shell · ไม่แตะ wiring/logic/flow · เฉพาะ <code>src/index.css</code> · V85 AV81 menu/print guardrails ยังลล็อค.</p>
+
+  <!-- ========================================================
+       Q1 — INTENSITY
+       ======================================================== -->
+  <section id="q1">
+    <h2 class="qtitle"><span class="qnum">Q1</span> ระดับ Intensity <span class="qbadge-done">B locked</span></h2>
+    <p class="qsub">5 ระดับ เปรียบเทียบ — user เลือกแล้ว B Medium Cyberpunk. แสดงครบไว้กรณีอยากเปลี่ยน.</p>
+
+    <!-- V0 -->
+    <div class="panel v0">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">0</span> BASELINE</span></div>
+      <h3 class="panel-title">CURRENT V85 — เงาดำ (ปัญหา)</h3>
+      <p class="panel-desc">เงา <code>rgba(0,0,0,0.5)</code> หายไปบน background สีดำ → cards ดูแบน.</p>
+      <div class="cards">
+        <div class="card cyan"><div class="card-row"><div class="avatar cyan">อด</div><div class="meta"><div class="name">นาย อดิศร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card amber"><div class="card-row"><div class="avatar amber">วิ</div><div class="meta"><div class="name">นาย วิเซียร</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card magenta"><div class="card-row"><div class="avatar magenta">มน</div><div class="meta"><div class="name">นาย มนัส</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+
+    <!-- VA -->
+    <div class="panel va">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">A</span> SUBTLE NEON</span></div>
+      <h3 class="panel-title">เงาสีอ่อน — ปลอดภัยสุด</h3>
+      <p class="panel-desc">แค่เปลี่ยนเงาดำ→เงาสี alpha 0.10-0.16. ไม่มีขอบ, ไม่มี animation.</p>
+      <div class="cards">
+        <div class="card cyan"><div class="card-row"><div class="avatar cyan">อด</div><div class="meta"><div class="name">นาย อดิศร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card amber"><div class="card-row"><div class="avatar amber">วิ</div><div class="meta"><div class="name">นาย วิเซียร</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card magenta"><div class="card-row"><div class="avatar magenta">มน</div><div class="meta"><div class="name">นาย มนัส</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+
+    <!-- VB ⭐ SELECTED -->
+    <div class="panel vb selected">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">B</span> MEDIUM CYBERPUNK</span></div>
+      <h3 class="panel-title">Neon ขอบ + Halo คู่ <span class="star">⭐ USER PICK</span></h3>
+      <p class="panel-desc">1px neon border + halo คู่ (14+32px) + 1px outer ring. Cards "เปล่งแสง" จาก background — premium, ไม่กระแทกตา.</p>
+      <div class="cards">
+        <div class="card cyan"><div class="card-row"><div class="avatar cyan">อด</div><div class="meta"><div class="name">นาย อดิศร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card amber"><div class="card-row"><div class="avatar amber">วิ</div><div class="meta"><div class="name">นาย วิเซียร</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card magenta"><div class="card-row"><div class="avatar magenta">มน</div><div class="meta"><div class="name">นาย มนัส</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+
+    <!-- VC -->
+    <div class="panel vc">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">C</span> FULL CYBERPUNK (animated)</span></div>
+      <h3 class="panel-title">เปล่งแสง + เต้นช้า (breath 4s)</h3>
+      <p class="panel-desc">B + inset highlight + 4s breath pulse. แรงสุด, "เปล่งแสงตลอด".</p>
+      <div class="cards">
+        <div class="card cyan"><div class="card-row"><div class="avatar cyan">อด</div><div class="meta"><div class="name">นาย อดิศร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card amber"><div class="card-row"><div class="avatar amber">วิ</div><div class="meta"><div class="name">นาย วิเซียร</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card magenta"><div class="card-row"><div class="avatar magenta">มน</div><div class="meta"><div class="name">นาย มนัส</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+
+    <!-- VD -->
+    <div class="panel vd">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">D</span> OUTLINE-ONLY (signage)</span></div>
+      <h3 class="panel-title">เส้น neon ล้วน</h3>
+      <p class="panel-desc">1.5px neon stroke + tight 6px halo. เฉียบ-เรียบ.</p>
+      <div class="cards">
+        <div class="card cyan"><div class="card-row"><div class="avatar cyan">อด</div><div class="meta"><div class="name">นาย อดิศร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card amber"><div class="card-row"><div class="avatar amber">วิ</div><div class="meta"><div class="name">นาย วิเซียร</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card magenta"><div class="card-row"><div class="avatar magenta">มน</div><div class="meta"><div class="name">นาย มนัส</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================
+       Q2 — PALETTE STRATEGY
+       ======================================================== -->
+  <section id="q2">
+    <h2 class="qtitle"><span class="qnum">Q2</span> Palette per-section: รสไหน?</h2>
+    <p class="qsub">User บอก "Tab นั้นๆ" → per-section locked. คำถามคือ rendering style ของ 8 section colors.<br>เทียบ 3 แบบบนทุก section พร้อมๆ กัน — แต่ละแถวคือ section เดียวกัน, 3 คอลัมน์คือ 3 styles.</p>
+
+    <div class="panel" style="padding: 20px;">
+      <div class="q2-table">
+        <div></div>
+        <div class="q2-style-head a">A — SINGLE-TONE<br><span style="font-weight:400;font-size:11px;color:var(--tx-muted)">border + halo = c1 (same color)</span></div>
+        <div class="q2-style-head b">B — DUAL-TONE ⭐<br><span style="font-weight:400;font-size:11px;opacity:0.85">border = c1, halo = c2 (matches ArcBloom)</span></div>
+        <div class="q2-style-head c">C — UNIVERSAL<br><span style="font-weight:400;font-size:11px;color:var(--tx-muted)">cyan border + magenta halo (all)</span></div>
+
+        <!-- appointments -->
+        <div class="q2-section-label">📅 Appointments<div class="swatch-pair"><span style="background:var(--appt-c1)"></span><span style="background:var(--appt-c2)"></span></div></div>
+        <div class="q2-cell" data-section="appt" data-style="A"><div class="mini-avatar blue">นด</div><div><div class="mini-name">นัดทุกประเภท</div><div class="mini-sub">132 คิว</div></div></div>
+        <div class="q2-cell" data-section="appt" data-style="B"><div class="mini-avatar blue">นด</div><div><div class="mini-name">นัดทุกประเภท</div><div class="mini-sub">132 คิว</div></div></div>
+        <div class="q2-cell" data-section="appt" data-style="C"><div class="mini-avatar blue">นด</div><div><div class="mini-name">นัดทุกประเภท</div><div class="mini-sub">132 คิว</div></div></div>
+
+        <!-- customers -->
+        <div class="q2-section-label">👥 Customers<div class="swatch-pair"><span style="background:var(--cust-c1)"></span><span style="background:var(--cust-c2)"></span></div></div>
+        <div class="q2-cell" data-section="cust" data-style="A"><div class="mini-avatar teal">ลค</div><div><div class="mini-name">ข้อมูลลูกค้า</div><div class="mini-sub">2,841 คน</div></div></div>
+        <div class="q2-cell" data-section="cust" data-style="B"><div class="mini-avatar teal">ลค</div><div><div class="mini-name">ข้อมูลลูกค้า</div><div class="mini-sub">2,841 คน</div></div></div>
+        <div class="q2-cell" data-section="cust" data-style="C"><div class="mini-avatar teal">ลค</div><div><div class="mini-name">ข้อมูลลูกค้า</div><div class="mini-sub">2,841 คน</div></div></div>
+
+        <!-- sales -->
+        <div class="q2-section-label">🛒 Sales<div class="swatch-pair"><span style="background:var(--sale-c1)"></span><span style="background:var(--sale-c2)"></span></div></div>
+        <div class="q2-cell" data-section="sale" data-style="A"><div class="mini-avatar red">ขย</div><div><div class="mini-name">ขาย / ใบเสร็จ</div><div class="mini-sub">฿24,580 วันนี้</div></div></div>
+        <div class="q2-cell" data-section="sale" data-style="B"><div class="mini-avatar red">ขย</div><div><div class="mini-name">ขาย / ใบเสร็จ</div><div class="mini-sub">฿24,580 วันนี้</div></div></div>
+        <div class="q2-cell" data-section="sale" data-style="C"><div class="mini-avatar red">ขย</div><div><div class="mini-name">ขาย / ใบเสร็จ</div><div class="mini-sub">฿24,580 วันนี้</div></div></div>
+
+        <!-- marketing -->
+        <div class="q2-section-label">📣 Marketing<div class="swatch-pair"><span style="background:var(--mark-c1)"></span><span style="background:var(--mark-c2)"></span></div></div>
+        <div class="q2-cell" data-section="mark" data-style="A"><div class="mini-avatar purple">กท</div><div><div class="mini-name">โปรโมชั่น</div><div class="mini-sub">3 โปร · 2 คูปอง</div></div></div>
+        <div class="q2-cell" data-section="mark" data-style="B"><div class="mini-avatar purple">กท</div><div><div class="mini-name">โปรโมชั่น</div><div class="mini-sub">3 โปร · 2 คูปอง</div></div></div>
+        <div class="q2-cell" data-section="mark" data-style="C"><div class="mini-avatar purple">กท</div><div><div class="mini-name">โปรโมชั่น</div><div class="mini-sub">3 โปร · 2 คูปอง</div></div></div>
+
+        <!-- stock -->
+        <div class="q2-section-label">📦 Stock<div class="swatch-pair"><span style="background:var(--stock-c1)"></span><span style="background:var(--stock-c2)"></span></div></div>
+        <div class="q2-cell" data-section="stock" data-style="A"><div class="mini-avatar amber">สค</div><div><div class="mini-name">สินค้า</div><div class="mini-sub">303 รายการ</div></div></div>
+        <div class="q2-cell" data-section="stock" data-style="B"><div class="mini-avatar amber">สค</div><div><div class="mini-name">สินค้า</div><div class="mini-sub">303 รายการ</div></div></div>
+        <div class="q2-cell" data-section="stock" data-style="C"><div class="mini-avatar amber">สค</div><div><div class="mini-name">สินค้า</div><div class="mini-sub">303 รายการ</div></div></div>
+
+        <!-- finance -->
+        <div class="q2-section-label">💰 Finance<div class="swatch-pair"><span style="background:var(--fin-c1)"></span><span style="background:var(--fin-c2)"></span></div></div>
+        <div class="q2-cell" data-section="fin" data-style="A"><div class="mini-avatar emerald">กง</div><div><div class="mini-name">การเงิน</div><div class="mini-sub">฿128k เดือนนี้</div></div></div>
+        <div class="q2-cell" data-section="fin" data-style="B"><div class="mini-avatar emerald">กง</div><div><div class="mini-name">การเงิน</div><div class="mini-sub">฿128k เดือนนี้</div></div></div>
+        <div class="q2-cell" data-section="fin" data-style="C"><div class="mini-avatar emerald">กง</div><div><div class="mini-name">การเงิน</div><div class="mini-sub">฿128k เดือนนี้</div></div></div>
+
+        <!-- reports -->
+        <div class="q2-section-label">📊 Reports<div class="swatch-pair"><span style="background:var(--rep-c1)"></span><span style="background:var(--rep-c2)"></span></div></div>
+        <div class="q2-cell" data-section="rep" data-style="A"><div class="mini-avatar sky">รง</div><div><div class="mini-name">รายงาน</div><div class="mini-sub">14 tabs</div></div></div>
+        <div class="q2-cell" data-section="rep" data-style="B"><div class="mini-avatar sky">รง</div><div><div class="mini-name">รายงาน</div><div class="mini-sub">14 tabs</div></div></div>
+        <div class="q2-cell" data-section="rep" data-style="C"><div class="mini-avatar sky">รง</div><div><div class="mini-name">รายงาน</div><div class="mini-sub">14 tabs</div></div></div>
+
+        <!-- master -->
+        <div class="q2-section-label">🗄️ Master<div class="swatch-pair"><span style="background:var(--mast-c1)"></span><span style="background:var(--mast-c2)"></span></div></div>
+        <div class="q2-cell" data-section="mast" data-style="A"><div class="mini-avatar yellow">มต</div><div><div class="mini-name">ตั้งค่าระบบ</div><div class="mini-sub">11 sub-tabs</div></div></div>
+        <div class="q2-cell" data-section="mast" data-style="B"><div class="mini-avatar yellow">มต</div><div><div class="mini-name">ตั้งค่าระบบ</div><div class="mini-sub">11 sub-tabs</div></div></div>
+        <div class="q2-cell" data-section="mast" data-style="C"><div class="mini-avatar yellow">มต</div><div><div class="mini-name">ตั้งค่าระบบ</div><div class="mini-sub">11 sub-tabs</div></div></div>
+      </div>
+
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--bd); font-size:12px; color:var(--tx-secondary); line-height:1.6;">
+        <strong style="color:#4ade80">⭐ B (DUAL-TONE) RECOMMENDED</strong> เพราะ:<br>
+        ① cyberpunk signature = "two colors in one element" (cyan-magenta คือต้นแบบ)<br>
+        ② Reuse SECTION_COLOR 8 คู่ที่มีอยู่แล้วใน ArcBloom orbs (admin จำได้ "section นี้ = สีนี้คู่นี้")<br>
+        ③ Dual-tone ทำให้ halo "หลอม" — premium มากกว่า single<br>
+        ④ A ดูเรียบไป (เงาสีเดียว), C ทำให้ทุก tab หน้าตาเหมือนกัน (เสียความหมาย)
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================
+       Q3 — ANIMATION POLICY
+       ======================================================== -->
+  <section id="q3">
+    <h2 class="qtitle"><span class="qnum">Q3</span> Animation: เคลื่อนไหวยังไง?</h2>
+    <p class="qsub">ทุก demo card ใช้ B intensity + appointments cyan สี (ตัวอย่างเดียวกัน) — ดูพฤติกรรม animation 4 แบบ.</p>
+
+    <div class="q3-grid">
+      <div class="q3-tile static">
+        <span class="label">A — STATIC</span>
+        <h3>นิ่งสนิท ไม่มี animation</h3>
+        <p>เปล่งแสงคงที่ตลอดเวลา. GPU 0%. Reduced-motion 100% safe. รู้สึก "ติดป้าย" ไม่ใช่ "ทำงานอยู่".</p>
+        <div class="demo"><div class="ttl">นัดหมายทุกประเภท</div><div class="sub">132 คิววันนี้</div></div>
+      </div>
+
+      <div class="q3-tile breath">
+        <span class="label">B — BREATH PULSE</span>
+        <h3>เต้นช้า 4 วินาที</h3>
+        <p>Halo เพิ่ม-ลด intensity ทุก 4s (เหมือนหายใจ). รู้สึก "มีชีวิต" — เลียนแบบป้าย neon จริงๆ ที่เปล่งสว่าง-หรี่. ⚠ GPU mild (15+ cards × pulse).</p>
+        <div class="demo"><div class="ttl">นัดหมายทุกประเภท</div><div class="sub">132 คิววันนี้</div></div>
+      </div>
+
+      <div class="q3-tile hover">
+        <span class="label">C — HOVER-BOOST ONLY</span>
+        <h3>นิ่ง + hover แล้วสว่างขึ้น</h3>
+        <p>Static base + hover ขยาย halo + lift -3px. <strong>Hover ตัวการ์ดด้านบนเพื่อดู →</strong> รู้สึก "responsive" + ไม่กิน GPU steady-state.</p>
+        <div class="demo"><div class="ttl">นัดหมายทุกประเภท ← hover ตัวนี้</div><div class="sub">132 คิววันนี้</div></div>
+      </div>
+
+      <div class="q3-tile hybrid">
+        <span class="label">D — HYBRID ⭐</span>
+        <h3>Breath + hover boost</h3>
+        <p>B + C รวมกัน. นิ่งเต้นช้าตามปกติ, hover แล้ว pause + sharp boost. <strong>Hover ตัวนี้เพื่อดู →</strong> ครบทั้ง "มีชีวิต" + "responsive". ⚠ GPU mild.</p>
+        <div class="demo"><div class="ttl">นัดหมายทุกประเภท ← hover ตัวนี้</div><div class="sub">132 คิววันนี้</div></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; padding:14px 16px; background:rgba(255,255,255,0.03); border-left:2px solid var(--bd); border-radius:0 8px 8px 0; font-size:12px; color:var(--tx-secondary); line-height:1.6;">
+      <strong>Reduced-motion fallback:</strong> ทุก mode มี <code>@media (prefers-reduced-motion: reduce)</code> override → fallback เป็น A static. iOS battery saver + Android dev mode = ใช้ได้สบาย.<br>
+      <strong>⭐ Recommendation: D Hybrid</strong> เพราะ breath pulse ให้ vibe cyberpunk เต็ม + hover boost ให้ feedback การใช้งาน. ถ้ากลัวเปลือง GPU → C (hover-only).
+    </div>
+  </section>
+
+  <!-- ========================================================
+       Q4 — SCOPE
+       ======================================================== -->
+  <section id="q4">
+    <h2 class="qtitle"><span class="qnum">Q4</span> Scope: ที่ไหนได้แสง?</h2>
+    <p class="qsub">User บอก "backend และ frontend เรา" → ทั้งสองฝั่ง. แต่ "frontend" มี 2 ส่วน — admin (queue/chat) vs customer-facing (PatientForm/QR-schedule). เลือก scope.</p>
+
+    <div class="q4-grid">
+      <div class="q4-zone">
+        <span class="badge">A — NARROW</span>
+        <h3>Backend tabs only</h3>
+        <ul>
+          <li>Backend cards (customers, sales, stock, marketing, finance, reports, master)</li>
+          <li>Backend modals (form modals, detail views, audits)</li>
+          <li class="skip">Frontend admin (queue cards, QR panel)</li>
+          <li class="skip">Frontend customer (PatientForm, ClinicSchedule)</li>
+        </ul>
+        <p style="margin-top:12px; font-size:11px; color:var(--tx-muted)">ปลอดภัยสุด. V85 scope = นี่. Lowest blast radius.</p>
+      </div>
+
+      <div class="q4-zone recommended">
+        <span class="badge">B — BACKEND + ADMIN FRONTEND</span>
+        <h3>Backend + Admin-facing Frontend</h3>
+        <ul>
+          <li>Backend ทั้งหมด (เหมือน A)</li>
+          <li class="add">+ AdminDashboard queue cards</li>
+          <li class="add">+ QR/queue panel (รายการคิวผู้ป่วย)</li>
+          <li class="add">+ Chat panel</li>
+          <li class="add">+ Calendar grid (ปฏิทินนัดหมาย, ตารางหมอ)</li>
+          <li class="skip">PatientForm (customer fills) — เก็บเรียบไว้</li>
+          <li class="skip">ClinicSchedule public link — เก็บเรียบไว้</li>
+        </ul>
+        <p style="margin-top:12px; font-size:11px; color:var(--tx-secondary)"><strong>⭐ Recommended.</strong> Glow ทุกที่ที่ admin ใช้งาน. Customer-facing เก็บ minimal (ไม่ทำให้ patients รู้สึก "ตื่นเต้น" ตอนกรอกฟอร์ม).</p>
+      </div>
+
+      <div class="q4-zone">
+        <span class="badge">C — EVERYTHING</span>
+        <h3>Backend + Frontend ทั้งหมด</h3>
+        <ul>
+          <li>Backend (เหมือน A)</li>
+          <li class="add">+ AdminDashboard ทั้งหมด</li>
+          <li class="add">+ PatientForm (customer)</li>
+          <li class="add">+ ClinicSchedule public link</li>
+          <li class="skip">Menu system (AV81 lock — ห้ามแตะ)</li>
+          <li class="skip">Print views (AV81 lock — PDF breaks)</li>
+        </ul>
+        <p style="margin-top:12px; font-size:11px; color:var(--tx-muted)">ทั่วถึง. ⚠ patient-facing pages อาจดู "เกินไป" สำหรับ first impression.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="lede" style="margin-top:60px; text-align:center;">
+    เลือก answer สำหรับ Q2 / Q3 / Q4 ใน chat → จะ build spec + plan → execute.<br>
+    <strong>Default recommendations:</strong> Q2=B (dual-tone) · Q3=D (hybrid) · Q4=B (backend + admin frontend).
+  </p>
+
+</div>
+</body>
+</html>
