@@ -1,13 +1,14 @@
 ---
-updated_at: "2026-05-18 EOD+11 — V87 + V88 SHIPPED + DEPLOYED (combined queue ~32 commits LIVE)"
-status: "MASTER = PROD. Deploy successful · vercel alias 200 · firestore/storage rules idempotent · 4/4 probes pre+post identical · pending user L1 walkthrough"
+updated_at: "2026-05-18 EOD+11 LATE — V89 SHIPPED + DEPLOYED (CustomerListTab mobile responsive) + audit-all in progress"
+status: "MASTER = PROD = e4e62afc + V88 + V89. 2nd deploy this session successful. Audit-all running (6 parallel subagents)"
 branch: "master"
-last_commit: "bfc340d9 style(V88): AdminDashboard top-bar harmony + redder menu-tab-active (cosmetic-shell)"
-tests: "V88 15/15 + V87 20/20 + V86 64/64 = 99/99 V8x family GREEN · build clean (AdminDashboard 414.38 KB)"
+last_commit: "(V89) style: CustomerListTab mobile responsive header (cosmetic-shell)"
+tests: "V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 112/112 V8x family GREEN · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "bfc340d9 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88 stack DEPLOYED 2026-05-18 EOD+11)"
-firestore_rules_version: "unchanged (idempotent re-deploy)"
-storage_rules_version: "unchanged (idempotent re-deploy via --only storage syntax fix)"
+production_commit: "V89 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
+firestore_rules_version: "unchanged (idempotent — combined --only firestore:rules,storage syntax verified)"
+storage_rules_version: "unchanged (idempotent re-deploy combined with firestore)"
+audit_all_status: "Running 6 parallel subagents covering 23 audit skills (238 invariants total). Will aggregate findings into P0-P3 report post-completion."
 ---
 
 # Active Context
