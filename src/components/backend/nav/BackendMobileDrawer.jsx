@@ -57,18 +57,25 @@ export default function BackendMobileDrawer({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          className="fixed inset-y-0 left-0 z-[71] w-[280px] max-w-[85vw] flex flex-col bg-[var(--bg-surface)] shadow-2xl data-[state=open]:animate-slideInLeft data-[state=closed]:animate-slideOutLeft touch-pan-y lg:hidden"
+          className="fixed inset-y-0 left-0 z-[71] w-[280px] max-w-[85vw] flex flex-col bg-[var(--bg-surface)] shadow-2xl border-r-2 border-rose-500/40 data-[state=open]:animate-slideInLeft data-[state=closed]:animate-slideOutLeft touch-pan-y lg:hidden"
           aria-describedby={undefined}
         >
           <Dialog.Title className="sr-only">เมนูระบบหลังบ้าน</Dialog.Title>
 
-          {/* Close button — top-right corner. Sidebar reuse handles the rest. */}
+          {/* V83-followup-20 (EOD8 LATE 2026-05-18) — Close button moved
+              INSIDE the panel boundary + made more prominent. User reported:
+              "ปุ่มปิดแบบโมบาย มันหลุดจากกรอบเมนูอีก" — in light theme drawer
+              bg = white = page bg → drawer's right edge invisible →
+              absolute-positioned X chip appeared to float in empty space.
+              Fix: add visible right rose border + bump X chip size/contrast
+              + clamp right-2 (was right-3) so it stays well inside the
+              drawer's 280px width even on narrow viewports (max-w-85vw). */}
           <Dialog.Close asChild>
             <button
-              className="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] transition-colors"
+              className="absolute top-3 right-2 z-10 w-9 h-9 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-500 hover:bg-rose-500/30 hover:text-rose-700 flex items-center justify-center transition-colors shadow-md"
               aria-label="ปิดเมนู"
             >
-              <X size={16} />
+              <X size={18} strokeWidth={2.5} />
             </button>
           </Dialog.Close>
 

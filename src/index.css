@@ -2871,35 +2871,41 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
 }
 /* LIGHT theme — softer paper-card depth instead of dark inner shadow */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
+  /* V83-followup-21 (EOD8 LATE 2026-05-18) — Light theme V2 parity.
+     User: "Light themes หัวข้อมันสีกลืนไปกับข้อย่อยมาก และหัวข้อใหญ่
+     ที่ยังไม่ได้ select ก็สีจางมาก". Pre-fix light theme used V1's 1px
+     ring + soft tints — inactive sections nearly invisible on white. Match
+     V2 spec: 6px stripe + visible ring + ambient halo + slate-50 bg fill
+     for clear separation from sub-items (which are transparent + bottom-
+     border-only per followup-16). */
+  background: #f8fafc; /* slate-50 — distinct from white sub-item bg */
+  border-left: 6px solid rgba(225, 29, 72, 0.85); /* rose-600 — bolder on white */
+  border-radius: 0 10px 10px 0;
   box-shadow:
-    /* Outer rose ring — visible on white bg */
-    0 0 0 1px rgba(244, 114, 182, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    inset 0 -1px 0 rgba(15, 23, 42, 0.05),
-    0 2px 4px rgba(244, 114, 182, 0.12),
-    0 4px 12px -2px rgba(15, 23, 42, 0.08);
+    0 0 0 1px rgba(225, 29, 72, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 14px -4px rgba(225, 29, 72, 0.25);
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]::before {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, transparent 40%, transparent 60%, rgba(244, 114, 182, 0.05) 100%);
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]:hover {
+  background: #fdf2f8; /* pink-50 — clear hover indication */
+  border-left-color: rgba(190, 24, 93, 1); /* rose-700 punch */
+  transform: translateX(2px);
   box-shadow:
-    /* Brighter ring on hover */
-    0 0 0 1px rgba(244, 114, 182, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(15, 23, 42, 0.08),
-    0 6px 14px -4px rgba(244, 114, 182, 0.35),
-    0 8px 20px -6px rgba(15, 23, 42, 0.12);
-  filter: brightness(1.03);
+    0 0 0 1px rgba(225, 29, 72, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 6px 20px -4px rgba(225, 29, 72, 0.35);
+  filter: none;
 }
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded="true"] {
+  background: linear-gradient(90deg, rgba(244, 114, 182, 0.18), rgba(244, 114, 182, 0.04));
+  border-left-color: #be185d; /* rose-700 — solid bold accent */
   box-shadow:
-    /* Active: solid bold rose ring */
-    0 0 0 1.5px rgba(244, 114, 182, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
-    0 4px 10px rgba(244, 114, 182, 0.20),
-    0 6px 18px -4px rgba(15, 23, 42, 0.10);
+    0 0 0 1.5px rgba(225, 29, 72, 0.70),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 8px 24px -4px rgba(225, 29, 72, 0.40);
 }
 /* Ensure inner content (icon, label, chevron) sits ABOVE the ::before sheen.
    V83-followup-15 dropped the counter-skew (no parallelogram anymore). */
