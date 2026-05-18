@@ -20,9 +20,10 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Settings, Save, AlertTriangle, RefreshCw, ShieldCheck, Eye, EyeOff,
   Loader2, CheckCircle2, X, Plus, AlertCircle, CalendarDays, Activity,
+  Sparkles,
 } from 'lucide-react';
 import { useSystemConfig } from '../../hooks/useSystemConfig.js';
-import { saveSystemConfig, __SYSTEM_CONFIG_VALID_DATE_RANGES as VALID_DATE_RANGES } from '../../lib/systemConfigClient.js';
+import { saveSystemConfig, __SYSTEM_CONFIG_VALID_DATE_RANGES as VALID_DATE_RANGES, V86_GLOW_DEFAULTS } from '../../lib/systemConfigClient.js';
 import { TAB_PERMISSION_MAP } from '../../lib/tabPermissions.js';
 import { ALL_PERMISSION_KEYS } from '../../lib/permissionGroupValidation.js';
 import { useTabAccess, useHasPermission } from '../../hooks/useTabAccess.js';
@@ -386,6 +387,226 @@ function FeatureFlagsSection({ config, executedBy }) {
   );
 }
 
+// ─── V86-followup-2 — Neon Glow Section (2026-05-18 EOD+10) ────────────────
+// Admin tunes V86 universal red glow: 2 color pickers (border c1 + halo c2)
+// with 4 preset dots each + custom hex input, 1 intensity slider 0-150%,
+// enabled toggle, live preview card, Save/Reset/Cancel buttons.
+//
+// Live preview mechanism: local-state useEffect mirrors useV86GlowApply —
+// sets document.documentElement CSS vars on every draft change so ALL cards
+// across the page update immediately. Save persists to system_config.v86Glow
+// + audit doc (via existing saveSystemConfig path with new validateV86Glow
+// validator). Reset → defaults (no save). Cancel → revert to last-saved.
+
+const V86_C1_PRESETS = ['#dc2626', '#3b82f6', '#10b981', '#a855f7']; // red default + blue/green/purple
+const V86_C2_PRESETS = ['#ef4444', '#06b6d4', '#22c55e', '#ec4899']; // red-light default + cyan/green-light/pink
+
+function NeonGlowSection({ config, executedBy }) {
+  const [draft, setDraft] = useState(() => ({ ...V86_GLOW_DEFAULTS, ...(config.v86Glow || {}) }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  // Sync local draft when remote config changes (e.g. another admin saved)
+  useEffect(() => {
+    setDraft({ ...V86_GLOW_DEFAULTS, ...(config.v86Glow || {}) });
+    setSuccess(false);
+  }, [config.v86Glow?.enabled, config.v86Glow?.c1, config.v86Glow?.c2, config.v86Glow?.intensityPercent]);
+
+  // Live preview — apply local draft to CSS vars on every change
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (!draft.enabled) {
+      root.style.setProperty('--neon-intensity', '0');
+      return;
+    }
+    const hexToRgb = (hex) => {
+      const h = (hex || '').replace('#', '');
+      if (h.length !== 6) return '220, 38, 38';
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      if ([r, g, b].some(n => Number.isNaN(n))) return '220, 38, 38';
+      return `${r}, ${g}, ${b}`;
+    };
+    root.style.setProperty('--neon-c1', hexToRgb(draft.c1));
+    root.style.setProperty('--neon-c2', hexToRgb(draft.c2));
+    root.style.setProperty('--neon-intensity', String(draft.intensityPercent / 100));
+  }, [draft.enabled, draft.c1, draft.c2, draft.intensityPercent]);
+
+  const handleHexInput = useCallback((field) => (e) => {
+    const v = e.target.value;
+    setDraft(prev => ({ ...prev, [field]: v.toLowerCase() }));
+    setSuccess(false);
+  }, []);
+
+  const handleV86Save = useCallback(async () => {
+    setSaving(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await saveSystemConfig({
+        patch: { v86Glow: draft },
+        executedBy,
+        reason: 'neon glow tune',
+      });
+      setSuccess(true);
+    } catch (e) {
+      setError(e?.message || 'บันทึกไม่สำเร็จ');
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, executedBy]);
+
+  const handleV86Reset = useCallback(() => {
+    setDraft({ ...V86_GLOW_DEFAULTS });
+    setSuccess(false);
+  }, []);
+
+  const handleV86Cancel = useCallback(() => {
+    setDraft({ ...V86_GLOW_DEFAULTS, ...(config.v86Glow || {}) });
+    setSuccess(false);
+  }, [config.v86Glow]);
+
+  return (
+    <SectionCard
+      icon={Sparkles}
+      title="เอฟเฟกต์แสงเรือง (Neon Glow)"
+      subtitle="ตั้งค่าสีและความสว่างของเรืองทั่วระบบ — ใช้ทั้ง Frontend และ Backend"
+    >
+      {error && <StatusBanner kind="error">{error}</StatusBanner>}
+      {success && <StatusBanner kind="success">บันทึก neon glow เรียบร้อย</StatusBanner>}
+
+      {/* Color section */}
+      <div className="space-y-3 mb-4">
+        <h4 className="text-sm font-bold text-[var(--tx-heading)]">สี (Color)</h4>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs text-[var(--tx-secondary)] min-w-[100px]">สีขอบ (border)</label>
+          <input
+            type="color"
+            value={/^#[0-9a-fA-F]{6}$/.test(draft.c1) ? draft.c1 : V86_GLOW_DEFAULTS.c1}
+            onChange={(e) => setDraft(prev => ({ ...prev, c1: e.target.value.toLowerCase() }))}
+            className="w-12 h-8 border border-[var(--bd)] rounded cursor-pointer bg-transparent"
+            data-field="v86GlowC1"
+          />
+          <input
+            type="text"
+            value={draft.c1}
+            onChange={handleHexInput('c1')}
+            className="bg-[var(--bg-card)] border border-[var(--bd)] rounded px-2 py-1 text-xs font-mono w-24"
+            maxLength={7}
+          />
+          <div className="flex gap-1.5">
+            {V86_C1_PRESETS.map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setDraft(prev => ({ ...prev, c1: p }))}
+                className="w-7 h-7 rounded-full border border-[var(--bd)] cursor-pointer transition hover:scale-110"
+                style={{ background: p }}
+                title={p}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs text-[var(--tx-secondary)] min-w-[100px]">สี halo (glow)</label>
+          <input
+            type="color"
+            value={/^#[0-9a-fA-F]{6}$/.test(draft.c2) ? draft.c2 : V86_GLOW_DEFAULTS.c2}
+            onChange={(e) => setDraft(prev => ({ ...prev, c2: e.target.value.toLowerCase() }))}
+            className="w-12 h-8 border border-[var(--bd)] rounded cursor-pointer bg-transparent"
+            data-field="v86GlowC2"
+          />
+          <input
+            type="text"
+            value={draft.c2}
+            onChange={handleHexInput('c2')}
+            className="bg-[var(--bg-card)] border border-[var(--bd)] rounded px-2 py-1 text-xs font-mono w-24"
+            maxLength={7}
+          />
+          <div className="flex gap-1.5">
+            {V86_C2_PRESETS.map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setDraft(prev => ({ ...prev, c2: p }))}
+                className="w-7 h-7 rounded-full border border-[var(--bd)] cursor-pointer transition hover:scale-110"
+                style={{ background: p }}
+                title={p}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Intensity slider */}
+      <div className="space-y-3 mb-4 pt-4 border-t border-[var(--bd)]">
+        <h4 className="text-sm font-bold text-[var(--tx-heading)]">ความสว่าง (Intensity)</h4>
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-[var(--tx-secondary)] min-w-[100px]">ระดับ</label>
+          <input
+            type="range"
+            min={0}
+            max={150}
+            step={5}
+            value={draft.intensityPercent}
+            onChange={(e) => setDraft(prev => ({ ...prev, intensityPercent: Number(e.target.value) }))}
+            className="flex-1 accent-rose-500"
+            data-field="v86GlowIntensity"
+          />
+          <span className="text-xs font-mono text-[var(--tx-primary)] min-w-[48px] text-right">{draft.intensityPercent}%</span>
+        </div>
+      </div>
+
+      {/* Enabled toggle */}
+      <div className="space-y-3 mb-4 pt-4 border-t border-[var(--bd)]">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draft.enabled !== false}
+            onChange={(e) => setDraft(prev => ({ ...prev, enabled: e.target.checked }))}
+            className="w-4 h-4 accent-rose-500"
+            data-field="v86GlowEnabled"
+          />
+          <span className="text-sm text-[var(--tx-secondary)]">เปิดเอฟเฟกต์แสงเรือง (ปิดเพื่อกลับไปดูแบบ V85)</span>
+        </label>
+      </div>
+
+      {/* Live preview */}
+      <div className="pt-4 border-t border-[var(--bd)]">
+        <h4 className="text-sm font-bold text-[var(--tx-heading)] mb-2">ตัวอย่าง Live Preview</h4>
+        <div className="v86-glow-card bg-[var(--bg-card)] rounded-xl p-4">
+          <div className="text-sm font-bold mb-1">ตัวอย่างการ์ด</div>
+          <div className="text-xs text-[var(--tx-muted)]">เลื่อน slider / เปลี่ยนสี เพื่อดูผลแบบ live</div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-[var(--bd)]">
+        <SaveButton onClick={handleV86Save} saving={saving} success={success} />
+        <button
+          type="button"
+          onClick={handleV86Reset}
+          className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-[var(--tx-secondary)] border border-[var(--bd)] transition"
+        >
+          รีเซ็ตเป็นค่าเริ่มต้น
+        </button>
+        <button
+          type="button"
+          onClick={handleV86Cancel}
+          className="px-4 py-2 rounded-lg text-xs font-bold bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] text-[var(--tx-muted)] border border-[var(--bd)] transition"
+        >
+          ยกเลิก
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────
 export default function SystemSettingsTab() {
   const { config, loading } = useSystemConfig();
@@ -426,6 +647,7 @@ export default function SystemSettingsTab() {
       <TabOverridesSection config={config} executedBy={executedBy} />
       <DefaultsSection config={config} executedBy={executedBy} />
       <FeatureFlagsSection config={config} executedBy={executedBy} />
+      <NeonGlowSection config={config} executedBy={executedBy} />
 
       <SectionCard
         icon={Activity}
