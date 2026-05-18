@@ -107,6 +107,18 @@ Also grep for `token: '[A-Za-z0-9]{20,}'` and `password:\s*['"][^'"]+['"]`.
 - Sanctioned exceptions: NONE. Drawer/sheet/palette/bloom all collapse on nav per the uniform contract.
 **Fix**: every navigation handler at the shell layer = `onNavigate?.(tabId); setXxxOpen(false); setYyyOpen(false); ...`. Children (ArcBloom, SubTabBloom, CmdPalette) may keep their own `onClose?.()` calls — they become redundant but are harmless (React batches same-value setters). Source-grep regression: `tests/backend-menu-d-shell-rtl.test.jsx` T6.13 + T6.14 lock the contract.
 
+### AV83 — V86 Neon Glow consumes CSS vars, never hardcoded RGB (2026-05-18 EOD+10)
+**Why**: V86 — per-section glow color flows through CSS cascade via `--neon-c1` / `--neon-c2` custom properties set on `[data-section="<id>"]` wrappers (8 backend sections + 1 admin-frontend zone alias). If a V86 utility class hardcodes rgba(R,G,B,a), the per-section binding breaks → all cards render with the hardcoded color regardless of section. Also: V85 AV81 menu+print files MUST NOT reference V86 utilities.
+**Grep**:
+- `.v86-glow-` rules in `src/index.css` MUST reference `var(--neon-c1)` or `var(--neon-c2)` for color values (alphas are numerals — fine).
+- `[data-section="<id>"]` selectors in `src/index.css` MUST define BOTH `--neon-c1` and `--neon-c2` (closed list of 8 sections: appointments-section, customers, sales, marketing, stock, finance, reports, master + 1 admin-frontend alias: appointments).
+- `--neon-c1` / `--neon-c2` values MUST equal NAV_SECTIONS-derived ArcBloom SECTION_COLOR pairs (parity test in CG3).
+- Menu files (BackendArcBloom + BackendSubTabBloom + BackendDuoPill + BackendSidebar + BackendMobileDrawer + BackendCmdPalette) MUST contain ZERO `v86-glow-` references.
+- Print files (SalePrintView + QuotationPrintView + BulkPrintModal + DocumentPrintModal + documentPrintEngine) MUST contain ZERO `v86-glow-` references.
+- Customer-facing files (PatientForm + PatientDashboard + ClinicSchedule) MUST contain ZERO `v86-glow-` references AND ZERO `data-section` references AND ZERO `admin-frontend-zone` class references.
+- Sanctioned exceptions: `:root` fallback (no section context) MAY hardcode fallback rgba values.
+**Fix**: any V86 rule with hardcoded section color → refactor to `var(--neon-c1)` / `var(--neon-c2)`. Any new `[data-section]` value → add to the closed list + matching CSS-vars block. Source-grep regression: `tests/v86-neon-glow-css.test.js` CG1-CG8 locks the contract.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
