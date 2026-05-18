@@ -66,13 +66,31 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+9 — **V84 + V85 universal glow rollout** (chat-tab badge fix + 27 utility CSS classes + 2 auto-glow rules + sub-tab portal fix + topbar search-box)
-- **Master**: `0a01100e` · ~21 commits ahead of prod since EOD+8
-- **Prod**: `ef4bd5c3` LIVE (V84 + V85 stack NOT deployed · user must type "deploy")
-- **Tests**: 86/86 V85 source-grep + CG6 application audit · build clean 3.29s · full vitest baseline carries V21 pre-existing fixes only
-- **AV invariants added**: AV80 (overflow-x-auto + absolute-child clip) + AV81 (V85 glow utility discipline)
+- **Date last updated**: 2026-05-18 EOD+10 — **V86 v1 + followup-2 shipped** (per-section dual-tone neon → mid-T7 pivot → universal red + dimmer + admin-tunable Settings UI)
+- **Master**: `cc3aea81` · ~30+ commits ahead of prod since EOD+8
+- **Prod**: `ef4bd5c3` LIVE (V84 + V85 + AV82 + V86 v1 + V86-followup-2 stack NOT deployed · user must type "deploy")
+- **Tests**: Phase A 64/64 vitest (CG1-CG9 + VS1-VS6) + Phase B 8 Playwright (B1-B8 skip-graceful) · build clean
+- **AV invariants added**: AV80 (V84) + AV81 (V85) + AV82 (V85-followup) + AV83 (V86, updated for followup-2 universal red + intensity)
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+10 — V86 v1 + followup-2 (12-task across 2 specs; mid-T7 pivot from blue per-section → universal red)
+
+**V86 v1** (7-task subagent-driven, commits 29c42310 → b73ccad4): shipped per-section dual-tone neon glow — 8 ArcBloom SECTION_COLOR pairs + 4s breath + hover-pause + sharp boost + light theme + reduced-motion fallback + AV81 menu/print lock + AV83 invariant. Phase A vitest 47/47 + Phase B Playwright 7 scenarios skip-graceful. T7 partial — interrupted mid-handoff by user pivot.
+
+**Mid-T7 USER PIVOT**: "เปลี่ยนจากเรืองสีฟ้าเป็นเรืองสีแดง แล้วลดความสว่างลดหน่อย ทั้ง Front และ Backend ทุกที่ … ถ้าทำเมนูให้ตั้งได้ใน tab ตั้งค่ายิ่งดี เพราะมันน่าจะเป็นค่า universal ที่แก้จุดเดียวได้อยู่นะ". Brainstormed Q1=C (Dim Red 45% intensity) + Q2=approved Settings UI scope via Visual Companion `public/v86-followup-2-red-glow-design.html`.
+
+**V86-followup-2** (5-task inline-executed, commits 27f39864 → cc3aea81):
+- T1 (71b4b4ff): CSS pivot — drop 8 [data-section] blocks; single :root with red defaults (c1=#dc2626 + c2=#ef4444 + --neon-intensity:0.45); all V86 alphas wrap in `calc(<base> * var(--neon-intensity))` so single slider drives global brightness via cascade. Defense-in-depth menu :not() chain on admin-frontend-zone per user "ห้ามแตะเมนู".
+- T2 (4444fa3e): systemConfigClient.V86_GLOW_DEFAULTS + validateV86Glow validator + 4 SYSTEM_CONFIG_DEFAULTS extensions (merge + validate + computeChangedFields + saveSystemConfig) + NEW `src/hooks/useV86GlowApply.js` + App.jsx 1-line mount.
+- T3 (f59bae5a): SystemSettingsTab 5th SectionCard "เอฟเฟกต์แสงเรือง" — 2 color pickers (border + halo) + 4 preset dots each + hex text inputs + intensity slider 0-150% + enabled toggle + live preview card + Save/Reset/Cancel buttons.
+- T4 (cc3aea81): CG2/CG3/CG8 rewrite (drop ArcBloom parity, lock red+calc) + CG9 NEW (menu :not() chain) + NEW VS1-VS6 (23 assertions: validator + hook + UI render + Save/Reset/Cancel semantics) + Playwright B1-B4 rewrite (assert RED) + B7 update + B8 NEW (live slider) + AV83 wording update.
+
+AV81 menu+print + Q4-B customer-facing zero-touch preserved through both V86 v1 + followup-2. AV83 wording updated. V86 v1 commits stay in history (forward delta, no revert).
+
+NO DEPLOY this session per V18. V86 v1 + followup-2 joins existing combined queue. Post-deploy: Rule Q L1 user hands-on for all 8 backend tabs + AdminDashboard frontend + Settings UI interaction (color picker / preset dot / intensity slider drag / Save / Reset / Cancel) + dark/light + reduced-motion.
+
+**Checkpoint**: spec/plan files at `docs/superpowers/{specs,plans}/2026-05-18-v86-neon-glow*.md` + `2026-05-18-v86-followup-2-*.md`. Mockups at `public/v86-neon-glow-variants.html` + `public/v86-followup-2-red-glow-design.html`.
 
 ### Session 2026-05-18 EOD+9 — V84 chat-tab fix + V85 universal glow rollout (full 5 phases + 4 follow-up rounds)
 

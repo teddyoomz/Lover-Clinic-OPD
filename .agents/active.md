@@ -1,11 +1,11 @@
 ---
-updated_at: "2026-05-18 EOD+9+1 — V85-followup AV82 Cmd-palette closes bloom overlay (Rule P class-of-bug expansion)"
-status: "22 commits ahead of prod · awaiting deploy verb · 1 OPEN UX bug deferred (chat-tab badge crowding — pre-V85)"
+updated_at: "2026-05-18 EOD+10 — V86 v1 + followup-2 shipped (universal red + dimmer + admin-tunable Settings UI)"
+status: "30+ commits ahead of prod · awaiting deploy verb · V86 ready (Phase A 64/64 vitest + Phase B 8 Playwright skip-graceful · build clean · partial Phase C L1 verified)"
 branch: "master"
-last_commit: "c93287bc fix(V85-followup AV82): Cmd-palette pick now collapses bloom overlay"
-tests: "14/14 backend-menu-d-shell-rtl (T6.13+T6.14 new) · 33/34 sibling suite (FS3-bis pre-existing portal V21) · build clean · preview L1 verified 2 scenarios"
+last_commit: "cc3aea81 test(V86-followup-2 T4): CG2/CG3/CG8 rewrite + CG9 NEW + VS1-VS6 + B1-B4 rewrite + B8 NEW + AV83 update"
+tests: "Phase A vitest 64/64 PASS (CG1-CG9 + VS1-VS6) · Phase B Playwright 8 scenarios skip-graceful · build clean · partial Phase C real-prod L1 (appointments verified pre-pivot)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (V84 + V85 + AV82 stack NOT deployed)"
+production_commit: "ef4bd5c3 LIVE (V84 + V85 + AV82 + V86 v1 + V86-followup-2 stack NOT deployed)"
 firestore_rules_version: "unchanged"
 ---
 
@@ -18,6 +18,7 @@ firestore_rules_version: "unchanged"
 - TopBar (BackendShellNew) Briefcase icon → wide search-box trigger (32×320px) with 3-zone justify-between layout.
 
 ## What this session shipped
+- **V86-followup-2 Universal Red Glow + Admin-Tunable Settings UI** (commits 27f39864 → cc3aea81) — pivot V86 v1 from per-section dual-tone (8 ArcBloom colors) to universal RED (c1=#dc2626 red-600 border + c2=#ef4444 red-500 halo) + `--neon-intensity` multiplier (default 0.45 = Q1=C dim red). All V86 alphas wrap in `calc(<base> * var(--neon-intensity))` so single slider drives global brightness. Dropped 8 per-section [data-section] CSS-vars blocks. NEW `useV86GlowApply` hook at App.jsx root + NEW SystemSettingsTab 5th SectionCard "เอฟเฟกต์แสงเรือง": 2 color pickers + 4 presets each + intensity slider 0-150% + enabled toggle + live preview card + Save/Reset/Cancel buttons + persist to `clinic_settings/system_config.v86Glow` + audit doc. AV83 wording updated. Defense-in-depth menu :not() chain on admin-frontend-zone (per user "ห้ามแตะเมนู"). Tests: Phase A 64/64 vitest (CG1-CG9 + VS1-VS6) + Phase B 8 Playwright (B1-B8 incl. NEW B8 live-slider). 5-task plan inline-executed.
 - **V85-followup AV82 Cmd-palette closes bloom** (commit c93287bc) — `handleNavigate` adds `setBloomOpen(false)` + `setPaletteOpen(false)` after `onNavigate?.(tabId)`. Root cause: shell-owned overlay state leak on navigation through the central handleNavigate handler (single-broken path; ArcBloom paths already explicit). Tier 2 artifacts: AV82 invariant + T6.13/T6.14 regression. Real-prod preview L1: Cmd-K → palette opens over bloom → pick item → both collapse + tab switches (2 scenarios). User report verbatim: "menu ui space ข้างหลังมันไม่ปิด".
 - **V84 chat-tab badge fix** (commit 2dcb4c79) — overflow-y clip + neighbor overlap + halo containment (AV80)
 - **V85 brainstorming** spec + Visual Companion 30 mockups + AV81 invariant (approved by user)
