@@ -1,47 +1,48 @@
 ---
-updated_at: "2026-05-18 EOD+8 LATE — V83 + 21 followups (light/perm/chat-sync/UI polish saga)"
-status: "V83 batch done · awaiting deploy verb · 1 known UX bug (chat-tab unread badge crowds neighbors)"
+updated_at: "2026-05-18 EOD+9 — V84 + V85 universal glow shipped (foundation + auto-glow rules + sub-tab fix + topbar search box)"
+status: "21 commits ahead of prod · awaiting deploy verb · 1 OPEN UX bug deferred (chat-tab badge crowding — pre-V85)"
 branch: "master"
-last_commit: "6f1772ea fix(V83-followup-20+21): mobile drawer X visible + light theme V2 parity"
-tests: "Full vitest 11701 passed / 0 failed / 25 skipped (V83-followup-3 batch) · build clean 2.92s"
+last_commit: "0a01100e feat(V85-followup): topbar 3-zone layout + search box scale + palette backdrop-close"
+tests: "86/86 V85 source-grep + CG6 application audit · build clean 3.29s · full vitest baseline 11826/3F/25S (pre-V85 V21 fixed)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "ef4bd5c3 LIVE (V83 + 21 followups NOT deployed)"
+production_commit: "ef4bd5c3 LIVE (V84 + V85 stack NOT deployed)"
 firestore_rules_version: "unchanged"
 ---
 
 # Active Context
 
 ## State
-- **V83 + 21 followups SHIPPED locally** (~52 commits ahead of prod). All CSS-only after followup-5 except followup-4 (BranchContext access-validation) + followup-19 (BackendSidebar ClinicLogo wire).
-- AV invariants added: AV78 (modal explicit-close) + AV79 (perm/tab mapping completeness).
-- 1 OPEN bug deferred: Frontend top-bar Chat tab unread badge crowds neighbors L/R + top/bottom (user repro screenshot saved). Root cause not yet found — `.menu-badge` is `position:absolute` so SHOULDN'T push siblings; needs investigation in next session.
+- **V84 + V85 SHIPPED locally** (~21 commits ahead of prod since 2026-05-18 EOD).
+- V85 = Universal glow effect (20 utility classes + 2 auto-glow CSS rules covering ALL backend cards + ALL modals at body-root). Spec/plan/AV81 invariant + V21 fixup landed.
+- Sub-tab picker (BackendSubTabBloom) fixed via createPortal — escaped bloom-stage's transform-containing-block so full-viewport blur works.
+- TopBar (BackendShellNew) Briefcase icon → wide search-box trigger (32×320px) with 3-zone justify-between layout.
 
 ## What this session shipped
-- **V83** main: modal explicit-close (AV78) + link_request_management + label cleanup
-- **followup 1-2**: ArcBloom perm-filter wire + sub-tab z-index above logo + tilt viewport-clamped
-- **followup 3**: 11 master-data tabs adminOnly→requires (AV79) + L2 verified
-- **followup 4**: BranchProvider access-validation (chat-branch sync via single-point fix)
-- **followup 5-13**: light theme sidebar contrast + sub-item cards + rose hierarchy + universal shadow polish + grayscale/gradient text-white restore + glass header + outer accent ring
-- **followup 14-17**: R parallelogram → V file-tab swap → V picker + sub-items bottom-border-only
-- **followup 18-19**: V2 (thick stripe + ring) applied + real ClinicLogo in sidebar header (theme-aware)
-- **followup 20-21**: mobile drawer X visible (border + bigger chip) + light theme V2 parity
-- Checkpoint: `.agents/sessions/2026-05-18-v83-batch.md`
+- **V84 chat-tab badge fix** (commit 2dcb4c79) — overflow-y clip + neighbor overlap + halo containment (AV80)
+- **V85 brainstorming** spec + Visual Companion 30 mockups + AV81 invariant (approved by user)
+- **V85 plan** v1 → consolidated v2 (5 phase-tasks + cosmetic-shell banner)
+- **V85 Phase A** (23a82205) — 27 utility classes + 86 source-grep
+- **V21 fixup** (bc9fa52a) — V83-followup-7 SH1/3/4 aligned with -16 strip
+- **V85 Phase B/C/D/Frontend ext** (1ec135ad, 09c99ffc, f5eb24b4, a4fc34d8, 658c93e3) — strategic per-shell tints + V10 modal sweep
+- **V85 Phase E** (97705f99) — CG6 application audit + Playwright L1 spec
+- **V85 auto-glow rules** (118808e3, 780b0664, fb2723fb) — universal backend cards + modals via descendant selectors
+- **Sub-tab picker portal fix** (615f1030, 59fbc7d3, f6fb23ae) — full-viewport blur via React.createPortal escape
+- **TopBar search-box trigger** (b7db41f1, 0a01100e) — 32×320px 3-zone justify-between + Cmd palette backdrop close (AV78 exemption)
+- Checkpoint: `.agents/sessions/2026-05-18-v84-v85-glow-rollout.md`
 
 ## Decisions
-- V83-followup line-comment style `// AV78 (EOD8)` chosen (NOT block `/* */`) — JSX parser edge safety.
-- AV67 was taken → pivoted to AV78 via `sed -i` across 42 files.
-- ClinicLogo in sidebar uses `resolvedTheme` (NOT raw `theme` which can be 'auto').
-- Light theme V2 parity used rose-600/700 family (not pink-400) for proper white-bg contrast.
-- Sub-items: bottom-border-only after followup-16 (was full card chrome in followup-7+9).
-- Chat-tab unread badge crowding bug DEFERRED — not blocking, needs systematic-debugging Phase 1 next session.
+- V85 strategy = "global rule beats per-file edit" — 2 auto-glow CSS rules (one for backend-content cards, one for modal content cards) cover 100s of surfaces from ~10 explicit class additions.
+- Auto-modal rule excludes bloom-overlay/bloom-stage/bloom-backdrop via :not() chain — menu untouched.
+- Sub-tab picker fix = createPortal(picker, document.body) — single-line React change to escape transform containing block.
+- TopBar 3-zone = LEFT cluster flex-shrink-0 + CENTER flex-1 with justify-center + RIGHT cluster flex-shrink-0. justify-between distributes evenly at all widths 768-1920.
+- AV78 exemption for cmd palette (click-outside-to-close) — palette is nav tool, no unsaved data, established convention.
 
 ## Next action
-**Deploy when user types "deploy"** — V83 + 21 followups + 5 prior queue items all vercel-only (no firestore rules change since V82-Phone). Then investigate chat-tab badge crowding bug.
+**Idle until user types "deploy"** — 21 commits queued vercel-only (no firestore rules change since V82-Phone). Post-deploy: Rule Q L1 hands-on visual review of glow rollout across dark + light theme.
 
 ## Outstanding user-triggered actions
-- **Deploy (vercel-only)** — combined queue ~52 commits
-- **Chat-tab unread badge crowding** (OPEN) — root cause TBD; `.menu-badge` is position:absolute so siblings shouldn't shift; investigate via systematic-debugging next session
-- **Rule Q L1 hands-on** post-deploy: verify 11 master-data tabs accessible by perm, ClinicLogo swaps per theme, sub-items bottom-border-only, mobile drawer X visible in light, V2 header chrome
-- Chrome MCP extension reconnect (carryover)
-- V82 Menu V2 mobile L1 re-test (carryover)
-- Playwright L1 mouse-follow tilt (E11) when admin creds env set
+- **Deploy verb** — combined queue (vercel-only)
+- **Chat-tab unread badge crowding** (OPEN — pre-V85, deferred from EOD+8) — `.menu-badge` position:absolute so siblings shouldn't shift; needs systematic-debugging Phase 1
+- **Chrome MCP extension reconnect** (carryover — Claude Preview slow per user request)
+- **V82 Menu V2 mobile L1 re-test** (carryover)
+- **Playwright L1 hands-on** — `npx playwright test tests/e2e/v85-glow-utility-application.spec.js` when admin creds env set

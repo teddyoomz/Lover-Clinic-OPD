@@ -66,13 +66,27 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+8 LATE — **V83 + 21 followups batch** (modal explicit-close + perm correctness + chat-branch sync + extensive light/dark UI polish)
-- **Master**: `6f1772ea` · ~52 commits ahead of prod
-- **Prod**: `ef4bd5c3` LIVE (V83 batch NOT deployed · user must type "deploy")
-- **Tests**: 11701 passed / 0 failed / 25 skipped (full vitest post-V83-followup-3) · build clean 2.92s
-- **AV invariants added**: AV78 (modal backdrop explicit-close) + AV79 (perm/tab mapping completeness)
+- **Date last updated**: 2026-05-18 EOD+9 — **V84 + V85 universal glow rollout** (chat-tab badge fix + 27 utility CSS classes + 2 auto-glow rules + sub-tab portal fix + topbar search-box)
+- **Master**: `0a01100e` · ~21 commits ahead of prod since EOD+8
+- **Prod**: `ef4bd5c3` LIVE (V84 + V85 stack NOT deployed · user must type "deploy")
+- **Tests**: 86/86 V85 source-grep + CG6 application audit · build clean 3.29s · full vitest baseline carries V21 pre-existing fixes only
+- **AV invariants added**: AV80 (overflow-x-auto + absolute-child clip) + AV81 (V85 glow utility discipline)
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+9 — V84 chat-tab fix + V85 universal glow rollout (full 5 phases + 4 follow-up rounds)
+
+**V84** (1 commit `2dcb4c79`): chat-tab badge overflow-y clip + neighbor overlap + halo containment per AV80. Root cause: `overflow-x-auto` on scroll container implicitly clipped `overflow-y` on badge with `top:-6px`. Fix = `.menu-tab-scroll` padding-margin trick + `gap-1.5` + halo 16px→10px. 20 source-grep + AV80 invariant.
+
+**V85** (16 commits): Universal glow effect system. Spec → Visual Companion 30 mockups → user approval → plan v1→v2 (consolidated 47→5 phase-tasks per "47 task สยอง" feedback) → 5 phases shipped + 4 follow-up rounds. 27 utility classes (`.fx-glow-v[2-10]` + `.fx-glow-u[1-10]` + 8 U9 per-domain) + light theme + reduced-motion + 2 auto-glow CSS rules (one for backend-content cards, one for modal content cards via fixed.inset-0 selector with menu/print exclusion) + 86 source-grep + CG6 application audit + 7-scenario Playwright L1 spec.
+
+Strategy = "global rule beats per-file edit" — 2 auto-glow CSS rules + ~10 explicit fx-glow-* additions cover 100s of surfaces via React composition. Menu (BackendArcBloom + SubTabBloom + Sidebar + MobileDrawer + CmdPalette + DuoPill + AdminDashboard menu-shell) UNTOUCHED per user guardrail. Print render path UNTOUCHED.
+
+**Follow-up rounds** (user-driven, mid-session):
+1. **Sub-tab picker dark rectangle** (3 rounds, frustration) — root cause = `bloom-stage` `transform: translate(-50%,-50%)` creates containing block for fixed-position descendants → `.subtab-overlay`'s `fixed inset-0` was constrained to bloom-stage 1100×640 box, not viewport. Fix = React.createPortal escape to document.body. Original dark gradient bg + heavy drop-shadow restored verbatim after misdirected CSS tweaks.
+2. **TopBar search-box trigger** (4 rounds: scale + spread + palette backdrop close) — Briefcase icon → wide 320×32px search box in 3-zone justify-between layout (LEFT cluster / CENTER flex-1 search / RIGHT cluster). Layout balanced at 1024/1280/1920 viewports. BackendCmdPalette AV78 exemption: backdrop click closes palette (currentTarget===target filter).
+
+**Checkpoint**: `.agents/sessions/2026-05-18-v84-v85-glow-rollout.md`. **Next**: user "deploy" verb → combined queue ~21 commits vercel-only · no firestore rules change since V82-Phone.
 
 ### Session 2026-05-18 EOD+8 LATE — V83 + 21 followups (modal+perm+chat-sync+UI polish saga)
 
