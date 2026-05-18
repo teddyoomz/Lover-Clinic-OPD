@@ -1,14 +1,14 @@
 ---
-updated_at: "2026-05-18 EOD+11 LATE — V90 SHIPPED + DEPLOYED (bloom auto-close on entity context) + audit-all report DELIVERED"
-status: "MASTER = PROD. V90 LIVE. 3rd deploy this session. Audit-all 23 skills / 238 invariants done. 3 CRITICAL + 7 HIGH (TZ1 family + S18 + A7 + H7) pending follow-up."
+updated_at: "2026-05-18 EOD+11 LATE — V91 SHIPPED + DEPLOYED (DuoPill toggle + mobile TopBar 3-zone search center)"
+status: "MASTER = PROD. V91 LIVE. 4th deploy this session. Audit follow-ups (TZ1×8, S18, A7, H7) still pending per user discretion."
 branch: "master"
-last_commit: "(V90) fix: bloom auto-closes on specific-entity context (mobile customer-detail block)"
-tests: "V90 13/13 + V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 125/125 V8x family GREEN · build clean"
+last_commit: "(V91) fix: DuoPill toggle close + mobile TopBar 3-zone with search center"
+tests: "V91 18/18 + V90 13/13 + V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 143/143 V8x family GREEN · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "V90 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
+production_commit: "V91 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
 firestore_rules_version: "unchanged (idempotent — combined --only firestore:rules,storage)"
 storage_rules_version: "unchanged (idempotent combined)"
-audit_findings: "P0×3 TZ1 display-path · P1×7 (5×TZ1 write-path + S18 cancelCentralStockOrder atomicity + A7 fetch timeout 60+ sites + H7 TreatmentTimeline delete cascade) · P2×~11 · P3×~4. Auth+admin+backend-firestore+chat-notifications+rules ALL PASS clean. See chat for full P0-P3 report."
+audit_findings: "P0×3 TZ1 display-path · P1×7 (5×TZ1 write-path + S18 + A7 + H7) · P2×~11 · P3×~4. Auth+admin+backend-firestore+chat-notifications+rules ALL PASS clean. Pending user direction."
 ---
 
 # Active Context
