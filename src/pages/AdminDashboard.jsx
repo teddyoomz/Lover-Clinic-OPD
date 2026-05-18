@@ -7965,6 +7965,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {/* Action buttons */}
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                           <button onClick={() => { setSelectedQR(session.id); setTimeout(() => document.getElementById('qr-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} className={`p-2 rounded-lg border transition-colors ${selectedQR === session.id ? 'bg-[var(--bg-input)] border-gray-400 text-white' : 'bg-[var(--bg-hover)] hover:bg-[var(--bg-input)] text-gray-400 hover:text-[var(--tx-heading)] border-[var(--bd)]'}`} title="QR"><QrCode size={15} /></button>
+                          {/* V87 (2026-05-18 EOD+11) — AV84 OPD-save guard.
+                              Mirrors the sibling history-view wrapper (line 6080).
+                              Patient-link button promises customer-view of saved
+                              OPD data; before save there is no data to link to,
+                              so the button MUST stay hidden. V12 multi-reader-
+                              sweep at the action-button boundary. */}
+                          {session.opdRecordedAt && session.brokerStatus === 'done' && (
                           <button
                             onClick={() => setPatientLinkModal(session.id)}
                             title={session.patientLinkToken ? (session.patientLinkEnabled ? 'ลิงก์ดูข้อมูล: เปิดใช้งาน' : 'ลิงก์ดูข้อมูล: ปิดใช้งาน') : 'สร้างลิงก์ดูข้อมูล'}
@@ -7976,6 +7983,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           >
                             {session.patientLinkToken && !session.patientLinkEnabled ? <Unlink size={15}/> : <Link size={15}/>}
                           </button>
+                          )}
                           {session.status === 'completed' && data && (
                             <button onClick={() => handleViewSession(session)} className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูข้อมูล"><FileText size={15} /></button>
                           )}
@@ -8155,14 +8163,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                  {sessionModalTab === 'standard' ? (
                    <div className="space-y-3">
                      {/* Primary actions */}
+                     {/* V87 (2026-05-18 EOD+11): reordered จองมัดจำ → จองไม่มัดจำ → คิว Walk-in
+                         + renamed "OPD Intake" → "คิว Walk-in" per user directive.
+                         Handlers unchanged — pure cosmetic reorder + label swap. */}
                      <div className="grid grid-cols-3 gap-3">
-                        <button onClick={() => openNamePrompt({isPermanent: false, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-red-500/50' : 'bg-white border-gray-200 hover:border-red-400 shadow-sm'}`}>
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-500'}`}>
-                            <ClipboardCheck size={16} />
-                          </div>
-                          <span className="block text-[var(--tx-heading)] font-bold text-sm">OPD Intake</span>
-                          <span className="text-xs text-[var(--tx-muted)] mt-1 block leading-relaxed">บันทึกผู้ป่วยใหม่<br/>หมดอายุ 2 ชม.</span>
-                        </button>
                         <button onClick={() => { setShowSessionModal(false); if (!depositOptions) fetchDepositOptions(); setShowDepositForm(true); }} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-emerald-500/50' : 'bg-white border-gray-200 hover:border-emerald-400 shadow-sm'}`}>
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-emerald-950/50 text-emerald-400' : 'bg-emerald-50 text-emerald-500'}`}>
                             <Banknote size={16} />
@@ -8176,6 +8180,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                           </div>
                           <span className="block text-[var(--tx-heading)] font-bold text-sm">จองไม่มัดจำ</span>
                           <span className="text-xs text-[var(--tx-muted)] mt-1 block leading-relaxed">ลูกค้าจองล่วงหน้า<br/>นัดหมาย ProClinic</span>
+                        </button>
+                        <button onClick={() => openNamePrompt({isPermanent: false, formType: 'intake'})} className={`p-4 text-left rounded-xl transition-all group border-2 hover:shadow-lg ${isDark ? 'bg-[var(--bg-hover)] border-[var(--bd)] hover:border-red-500/50' : 'bg-white border-gray-200 hover:border-red-400 shadow-sm'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${isDark ? 'bg-red-950/50 text-red-400' : 'bg-red-50 text-red-500'}`}>
+                            <ClipboardCheck size={16} />
+                          </div>
+                          <span className="block text-[var(--tx-heading)] font-bold text-sm">คิว Walk-in</span>
+                          <span className="text-xs text-[var(--tx-muted)] mt-1 block leading-relaxed">บันทึกผู้ป่วยใหม่<br/>หมดอายุ 2 ชม.</span>
                         </button>
                      </div>
 

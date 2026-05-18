@@ -101,7 +101,7 @@ export function RecallFrontendView() {
   }, [findRecall, todayISO]);
 
   return (
-    <div data-testid="recall-frontend-view" className="rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] overflow-hidden">
+    <div data-testid="recall-frontend-view" className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] overflow-hidden">
       {error && (
         <div
           className="px-3 py-2 bg-red-500/10 border-b border-red-500/30 text-[11px] text-red-300"
