@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V86-followup-2 — Universal Red Glow + Settings UI</title>
+<style>
+  :root {
+    --bg-base: #08080a;
+    --bg-surface: #121214;
+    --bg-card: #161618;
+    --tx-primary: #f5f5f5;
+    --tx-secondary: #b8b8bd;
+    --tx-muted: #6e6e76;
+    --bd: #2a2a30;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg-base);
+    color: var(--tx-primary);
+    font-family: 'Sukhumvit Set','IBM Plex Sans Thai',-apple-system,sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  .stickynav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,8,10,0.85);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--bd);
+    padding: 14px 24px;
+  }
+  .nav-inner { max-width: 1280px; margin: 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .nav-brand {
+    font-weight: 700;
+    background: linear-gradient(90deg, #ef4444, #fbbf24);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .nav-link {
+    color: var(--tx-secondary); text-decoration: none;
+    padding: 6px 12px; border-radius: 8px; font-size: 13px;
+    border: 1px solid transparent; transition: all 0.15s;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.04); color: var(--tx-primary); border-color: var(--bd); }
+  .page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 80px; }
+  section { padding-top: 40px; }
+  h1 {
+    font-size: 30px; margin: 0 0 6px;
+    background: linear-gradient(90deg, #ef4444, #dc2626, #fbbf24);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .lede { color: var(--tx-secondary); font-size: 14px; line-height: 1.7; margin: 0 0 8px; }
+  .lede strong { color: var(--tx-primary); }
+  h2.qtitle { font-size: 22px; margin: 0 0 4px; color: var(--tx-primary); display: flex; align-items: baseline; gap: 12px; }
+  h2.qtitle .qnum { color: #ef4444; font-weight: 800; letter-spacing: 0.04em; font-size: 16px; }
+  .qsub { color: var(--tx-muted); font-size: 13px; margin: 0 0 20px; }
+
+  .panel {
+    background: rgba(20, 20, 22, 0.5);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 20px; padding: 24px; margin-bottom: 20px;
+  }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 12px; }
+  .panel-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tx-muted); font-weight: 700; }
+  .panel-tag .badge { background: rgba(255,255,255,0.06); color: #fff; padding: 4px 9px; border-radius: 6px; font-size: 11px; }
+  .panel-title { font-size: 18px; font-weight: 700; margin: 0; }
+  .panel-title .star { color: #fbbf24; margin-left: 6px; font-size: 14px; }
+  .panel-desc { color: var(--tx-secondary); font-size: 13px; line-height: 1.65; margin: 4px 0 18px; max-width: 80ch; }
+
+  /* === Sample card === */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 880px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--bg-card); border-radius: 14px; padding: 16px;
+    position: relative; transition: transform 0.18s ease;
+  }
+  .card-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .avatar { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; font-size: 14px; flex-shrink: 0; background: #dc2626; }
+  .name { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+  .hn { font-size: 11px; color: var(--tx-muted); }
+  .stats { display: flex; gap: 12px; font-size: 11px; color: var(--tx-muted); padding-top: 10px; border-top: 1px solid var(--bd); }
+
+  /* ====================================================================
+     V86 v1 BASELINE (current shipped) — per-section blue/cyan, alphas
+     border 0.40, ring 0.08, close 0.45, spread 0.20, hover 0.65/0.20/0.85/0.50
+     ==================================================================== */
+  .v86v1 .card {
+    border: 1px solid rgba(59, 130, 246, 0.40);
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.08),
+      0 0 14px rgba(6, 182, 212, 0.45),
+      0 0 32px rgba(6, 182, 212, 0.20);
+    animation: v86-breath-blue 4s ease-in-out infinite;
+  }
+  @keyframes v86-breath-blue {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(59,130,246,0.08), 0 0 14px rgba(6,182,212,0.45), 0 0 32px rgba(6,182,212,0.20); }
+    50%      { box-shadow: 0 0 0 1px rgba(59,130,246,0.16), 0 0 22px rgba(6,182,212,0.65), 0 0 52px rgba(6,182,212,0.38); }
+  }
+
+  /* ====================================================================
+     OPTION A — Bright red (75% of V86 v1 alphas)
+     c1=#dc2626 red-600 (220,38,38), c2=#ef4444 red-500 (239,68,68)
+     border 0.30, ring 0.06, close 0.34, spread 0.15
+     ==================================================================== */
+  .vA .card {
+    border: 1px solid rgba(220, 38, 38, 0.30);
+    box-shadow:
+      0 0 0 1px rgba(220, 38, 38, 0.06),
+      0 0 14px rgba(239, 68, 68, 0.34),
+      0 0 32px rgba(239, 68, 68, 0.15);
+    animation: vA-breath 4s ease-in-out infinite;
+  }
+  @keyframes vA-breath {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(220,38,38,0.06), 0 0 14px rgba(239,68,68,0.34), 0 0 32px rgba(239,68,68,0.15); }
+    50%      { box-shadow: 0 0 0 1px rgba(220,38,38,0.12), 0 0 22px rgba(239,68,68,0.49), 0 0 52px rgba(239,68,68,0.28); }
+  }
+
+  /* ====================================================================
+     OPTION B — Medium red (60% of V86 v1) ⭐ RECOMMENDED
+     border 0.24, ring 0.05, close 0.27, spread 0.12
+     ==================================================================== */
+  .vB .card {
+    border: 1px solid rgba(220, 38, 38, 0.24);
+    box-shadow:
+      0 0 0 1px rgba(220, 38, 38, 0.05),
+      0 0 14px rgba(239, 68, 68, 0.27),
+      0 0 32px rgba(239, 68, 68, 0.12);
+    animation: vB-breath 4s ease-in-out infinite;
+  }
+  @keyframes vB-breath {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(220,38,38,0.05), 0 0 14px rgba(239,68,68,0.27), 0 0 32px rgba(239,68,68,0.12); }
+    50%      { box-shadow: 0 0 0 1px rgba(220,38,38,0.10), 0 0 22px rgba(239,68,68,0.39), 0 0 52px rgba(239,68,68,0.23); }
+  }
+
+  /* ====================================================================
+     OPTION C — Dim red (45% of V86 v1)
+     border 0.18, ring 0.04, close 0.20, spread 0.09
+     ==================================================================== */
+  .vC .card {
+    border: 1px solid rgba(220, 38, 38, 0.18);
+    box-shadow:
+      0 0 0 1px rgba(220, 38, 38, 0.04),
+      0 0 14px rgba(239, 68, 68, 0.20),
+      0 0 32px rgba(239, 68, 68, 0.09);
+    animation: vC-breath 4s ease-in-out infinite;
+  }
+  @keyframes vC-breath {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(220,38,38,0.04), 0 0 14px rgba(239,68,68,0.20), 0 0 32px rgba(239,68,68,0.09); }
+    50%      { box-shadow: 0 0 0 1px rgba(220,38,38,0.07), 0 0 22px rgba(239,68,68,0.29), 0 0 52px rgba(239,68,68,0.17); }
+  }
+
+  .card:hover { transform: translateY(-2px); }
+
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .swatch { font-size: 10px; color: var(--tx-muted); padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); }
+
+  /* === Q2: Settings UI mockup === */
+  .settings-mockup {
+    background: var(--bg-surface);
+    border: 1px solid var(--bd);
+    border-radius: 16px; padding: 20px;
+    max-width: 720px;
+  }
+  .settings-section { padding: 16px 0; border-bottom: 1px solid var(--bd); }
+  .settings-section:last-child { border-bottom: none; }
+  .settings-section h4 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+  .settings-section .desc { font-size: 12px; color: var(--tx-muted); margin: 0 0 12px; }
+  .color-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .color-row label { font-size: 12px; color: var(--tx-secondary); min-width: 110px; }
+  .color-input { width: 48px; height: 32px; border: 1px solid var(--bd); border-radius: 6px; padding: 0; background: transparent; cursor: pointer; }
+  .hex-input { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 6px; padding: 6px 10px; color: var(--tx-primary); font-family: monospace; font-size: 12px; width: 90px; }
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .preset-dot { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--bd); cursor: pointer; }
+  .slider-row { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+  .slider-row label { font-size: 12px; color: var(--tx-secondary); min-width: 110px; }
+  .slider-row .slider-track { flex: 1; height: 6px; background: var(--bg-card); border-radius: 3px; position: relative; }
+  .slider-row .slider-fill { position: absolute; top: 0; left: 0; height: 100%; background: linear-gradient(90deg, #dc2626, #ef4444); border-radius: 3px; }
+  .slider-row .slider-thumb { position: absolute; top: -4px; width: 14px; height: 14px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  .slider-row .value { font-size: 12px; color: var(--tx-primary); font-family: monospace; min-width: 40px; text-align: right; }
+  .preview-card {
+    margin-top: 16px;
+    background: var(--bg-card); padding: 14px; border-radius: 12px;
+    border: 1px solid rgba(220, 38, 38, 0.24);
+    box-shadow: 0 0 0 1px rgba(220,38,38,0.05), 0 0 14px rgba(239,68,68,0.27), 0 0 32px rgba(239,68,68,0.12);
+    animation: vB-breath 4s ease-in-out infinite;
+  }
+  .preview-card .ttl { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .preview-card .sub { font-size: 11px; color: var(--tx-muted); }
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: #dc2626; color: white; }
+  .btn-secondary { background: var(--bg-card); color: var(--tx-secondary); border-color: var(--bd); }
+</style>
+</head>
+<body>
+
+<div class="stickynav">
+  <div class="nav-inner">
+    <span class="nav-brand">V86-followup-2 · Universal Red Glow + Settings UI</span>
+    <a href="#q1" class="nav-link">Q1 Intensity</a>
+    <a href="#q2" class="nav-link">Q2 Settings UI</a>
+  </div>
+</div>
+
+<div class="page">
+  <h1>เปลี่ยนสีเรือง: น้ำเงิน → แดง (universal) + Settings UI</h1>
+  <p class="lede">User feedback: <em>"เปลี่ยนจากเรืองสีฟ้าเป็นเรืองสีแดง แล้วลดความสว่างลดหน่อย ทั้ง Front และ Backend ทุกที่ ... ถ้าทำเมนูให้ตั้งได้ใน tab ตั้งค่ายิ่งดี"</em></p>
+  <p class="lede">Pivot V86 จาก per-section dual-tone (8 colors จาก ArcBloom) → <strong>universal red dual-tone</strong> (c1=red-600 border + c2=red-500 halo) ใช้ทุก section + เพิ่ม <strong>Settings UI</strong> ใน tab=system-settings ให้ admin tune color + intensity ได้ live. กฎ: cosmetic-shell ยังครอง (CSS values + 1 new section in existing tab) · AV81 menu/print untouched.</p>
+
+  <!-- ======================================================
+       Q1 — INTENSITY (visual: 3 levels side by side)
+       ====================================================== -->
+  <section id="q1">
+    <h2 class="qtitle"><span class="qnum">Q1</span> เลือก default intensity</h2>
+    <p class="qsub">user บอก "ลดความสว่างลดหน่อย" → 3 ระดับให้เลือกเป็น default. (admin tune ต่อใน Settings UI ทีหลังได้)</p>
+
+    <!-- Baseline (current V86 v1) for reference -->
+    <div class="panel v86v1">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">0</span> CURRENT V86 v1 (BLUE)</span></div>
+      <h3 class="panel-title">ปัจจุบัน — เรืองน้ำเงิน 100% intensity</h3>
+      <p class="panel-desc">เปรียบเทียบ — V86 v1 ที่ shipped ตอนนี้ (per-section blue/cyan).</p>
+      <div class="cards">
+        <div class="card"><div class="card-row"><div class="avatar">อด</div><div><div class="name">นาย อดิศร โคตภูธร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">วิ</div><div><div class="name">นาย วิเซียร เสาสูง</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">มน</div><div><div class="name">นาย มนัส เลิศสิทธิสุทธิ์</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+    </div>
+
+    <!-- Option A: Bright red (75%) -->
+    <div class="panel vA">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">A</span> BRIGHT RED · 75%</span></div>
+      <h3 class="panel-title">แดงสว่าง — 75% ของ V86 v1</h3>
+      <p class="panel-desc">เด่นชัด, ใกล้เคียง V86 v1 intensity, แต่เปลี่ยนเป็นสีแดง. เหมาะกับห้องสว่าง / monitor สี dim. <strong>ลดลงจริง 25%</strong>.</p>
+      <div class="cards">
+        <div class="card"><div class="card-row"><div class="avatar">อด</div><div><div class="name">นาย อดิศร โคตภูธร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">วิ</div><div><div class="name">นาย วิเซียร เสาสูง</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">มน</div><div><div class="name">นาย มนัส เลิศสิทธิสุทธิ์</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+      <div class="swatches"><span class="swatch">border 0.30</span><span class="swatch">close halo 0.34</span><span class="swatch">spread 0.15</span></div>
+    </div>
+
+    <!-- Option B: Medium red (60%) ⭐ -->
+    <div class="panel vB">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">B</span> MEDIUM RED · 60%</span></div>
+      <h3 class="panel-title">แดงสมดุล — 60% ของ V86 v1 <span class="star">⭐ RECOMMENDED</span></h3>
+      <p class="panel-desc">สมดุลระหว่าง "เห็นชัด" กับ "ไม่กระแทกตา". น่าจะตรงกับ "ลดความสว่างลดหน่อย" ที่ user หมายถึง. <strong>ลดลงจริง 40%</strong>.</p>
+      <div class="cards">
+        <div class="card"><div class="card-row"><div class="avatar">อด</div><div><div class="name">นาย อดิศร โคตภูธร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">วิ</div><div><div class="name">นาย วิเซียร เสาสูง</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">มน</div><div><div class="name">นาย มนัส เลิศสิทธิสุทธิ์</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+      <div class="swatches"><span class="swatch">border 0.24</span><span class="swatch">close halo 0.27</span><span class="swatch">spread 0.12</span></div>
+    </div>
+
+    <!-- Option C: Dim red (45%) -->
+    <div class="panel vC">
+      <div class="panel-head"><span class="panel-tag"><span class="badge">C</span> DIM RED · 45%</span></div>
+      <h3 class="panel-title">แดงนุ่ม — 45% ของ V86 v1</h3>
+      <p class="panel-desc">แค่ "ติดสี" แทบไม่กระแทก. เหมาะกับใช้งานยาวๆ + จอ HDR. <strong>ลดลงจริง 55%</strong>.</p>
+      <div class="cards">
+        <div class="card"><div class="card-row"><div class="avatar">อด</div><div><div class="name">นาย อดิศร โคตภูธร</div><div class="hn">HN LC-26000077</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">วิ</div><div><div class="name">นาย วิเซียร เสาสูง</div><div class="hn">HN LC-26000076</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+        <div class="card"><div class="card-row"><div class="avatar">มน</div><div><div class="name">นาย มนัส เลิศสิทธิสุทธิ์</div><div class="hn">HN LC-26000075</div></div></div><div class="stats"><span>0 รักษา</span><span>0 คอร์ส</span></div></div>
+      </div>
+      <div class="swatches"><span class="swatch">border 0.18</span><span class="swatch">close halo 0.20</span><span class="swatch">spread 0.09</span></div>
+    </div>
+  </section>
+
+  <!-- ======================================================
+       Q2 — SETTINGS UI MOCKUP (in system-settings tab)
+       ====================================================== -->
+  <section id="q2">
+    <h2 class="qtitle"><span class="qnum">Q2</span> Settings UI ใน tab=system-settings — เห็นด้วยกับ scope นี้?</h2>
+    <p class="qsub">ขยาย <code>SystemSettingsTab.jsx</code> เพิ่ม section 5 "เอฟเฟกต์แสงเรือง" — admin tune live (CSS vars set via JS on slider drag, save → persists ใน clinic_settings/system_config.v86Glow).</p>
+
+    <div class="settings-mockup">
+      <div style="display:flex; align-items:center; gap:12px; padding-bottom:16px; border-bottom:1px solid var(--bd); margin-bottom:8px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#dc2626;display:flex;align-items:center;justify-content:center;">✨</div>
+        <div>
+          <h3 style="margin:0;font-size:16px;font-weight:700;">เอฟเฟกต์แสงเรือง (Neon Glow)</h3>
+          <p style="margin:2px 0 0;font-size:11px;color:var(--tx-muted);">ตั้งค่าสีและความสว่างของเรืองทั่วระบบ — ใช้ทั้ง Frontend และ Backend.</p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h4>สี (Color)</h4>
+        <p class="desc">เลือกสีของขอบ (c1) + สี halo (c2). preset 4 สีหลัก หรือใส่ hex เอง.</p>
+        <div class="color-row">
+          <label>สีขอบ (border)</label>
+          <input type="color" class="color-input" value="#dc2626">
+          <input type="text" class="hex-input" value="#dc2626">
+          <div class="preset-row">
+            <div class="preset-dot" style="background:#dc2626" title="แดง"></div>
+            <div class="preset-dot" style="background:#3b82f6" title="ฟ้า"></div>
+            <div class="preset-dot" style="background:#10b981" title="เขียว"></div>
+            <div class="preset-dot" style="background:#a855f7" title="ม่วง"></div>
+          </div>
+        </div>
+        <div class="color-row">
+          <label>สี halo (glow)</label>
+          <input type="color" class="color-input" value="#ef4444">
+          <input type="text" class="hex-input" value="#ef4444">
+          <div class="preset-row">
+            <div class="preset-dot" style="background:#ef4444" title="แดงอ่อน"></div>
+            <div class="preset-dot" style="background:#06b6d4" title="ฟ้าอ่อน"></div>
+            <div class="preset-dot" style="background:#22c55e" title="เขียวอ่อน"></div>
+            <div class="preset-dot" style="background:#ec4899" title="ชมพู"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h4>ความสว่าง (Intensity)</h4>
+        <p class="desc">slider 0-100% — multiplier กับ alpha ทุก layer (border + halo + breath peak). default 60%.</p>
+        <div class="slider-row">
+          <label>ระดับความสว่าง</label>
+          <div class="slider-track">
+            <div class="slider-fill" style="width:60%"></div>
+            <div class="slider-thumb" style="left:calc(60% - 7px)"></div>
+          </div>
+          <span class="value">60%</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Live Preview</h4>
+        <p class="desc">การ์ดตัวอย่าง — อัพเดทอัตโนมัติเมื่อลาก slider / เปลี่ยนสี.</p>
+        <div class="preview-card">
+          <div class="ttl">ตัวอย่างการ์ด</div>
+          <div class="sub">เลื่อน slider ด้านบนเพื่อดูผลแบบ live</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary">บันทึก</button>
+        <button class="btn btn-secondary">รีเซ็ตเป็นค่าเริ่มต้น</button>
+        <button class="btn btn-secondary">ยกเลิก</button>
+      </div>
+    </div>
+
+    <div style="margin-top:20px; padding:16px; background:rgba(255,255,255,0.03); border-left:2px solid #ef4444; border-radius:0 8px 8px 0; font-size:13px; color:var(--tx-secondary); line-height:1.6;">
+      <strong style="color:#ef4444">⭐ Recommended scope:</strong><br>
+      ① <strong>2 color pickers</strong> (c1 border + c2 halo) — separate to keep V86 dual-tone character<br>
+      ② <strong>4 preset color dots</strong> per picker (red default + 3 alternatives) + custom hex input<br>
+      ③ <strong>1 intensity slider</strong> 0-100% (multiplies all alphas) — default 60% per Q1=B recommend<br>
+      ④ <strong>Live preview card</strong> updates on every change<br>
+      ⑤ <strong>Save + Reset + Cancel</strong> buttons<br>
+      ⑥ Persists ใน <code>clinic_settings/system_config.v86Glow</code> (clinic-wide) + audit doc<br>
+      ⑦ JS applies via <code>document.documentElement.style.setProperty('--neon-c1', ...)</code> on save<br>
+      ⑧ ถ้า settings ยังไม่ตั้ง → fall back to red+60% defaults (the new pivot)
+    </div>
+  </section>
+
+  <p class="lede" style="margin-top:48px; text-align:center;">
+    เลือก Q1 intensity (A 75% / <strong>B 60%</strong> ⭐ / C 45%) + Q2 settings UI scope (approve recommended / tweak).<br>
+    → สั่ง "implement" → build CSS pivot + new settings section + JS plumbing + tests.
+  </p>
+</div>
+</body>
+</html>
