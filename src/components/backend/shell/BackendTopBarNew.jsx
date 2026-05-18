@@ -57,32 +57,50 @@ export default function BackendTopBarNew({
       data-testid="backend-topbar-new"
     >
       {!isDesktop && (
-        /* Mobile <768px : 2-row */
+        /* Mobile <768px : 2-row.
+           V91 (EOD+11 LATE, 2026-05-18) — Row 1 redesigned to 3-zone
+           layout matching desktop balance. User explicit: "นำช่องค้นหา
+           ของเวอร์ชั่น desktop มาไว้ตรงกลาง header ของเวอร์ชั่น mobile
+           พร้อมจัด left/center/right ให้สมดุลด้วย".
+              [LEFT: Home]  |  [CENTER: search-box]  |  [RIGHT: branch+theme+profile]
+           Pre-V91 mobile Row 1: Home + Briefcase + flex-1 spacer + ...
+           which pushed all right-side icons together with no centered
+           search affordance. The Briefcase icon is now replaced by the
+           full search-box trigger (compact 200px cap for mobile width). */
         <div>
           {/* Row 1 — 44px — chrome buttons (NO Mode Toggle on mobile per spec) */}
-          <div className="h-11 px-3 flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/'; }}
-              aria-label="กลับ Frontend"
-              data-testid="topbar-frontend-mobile"
-              className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
-            >
-              <Home size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={onOpenPalette}
-              aria-label="ค้นหาเมนู"
-              data-testid="topbar-shortcut-mobile"
-              className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
-            >
-              <Briefcase size={18} />
-            </button>
-            <div className="flex-1" />
-            <BranchSelector />
-            <ThemeToggle theme={theme} setTheme={setTheme} />
-            <ProfileDropdown />
+          <div className="h-11 px-2 flex items-center gap-1.5 justify-between">
+            {/* LEFT — home */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => { window.location.href = '/'; }}
+                aria-label="กลับ Frontend"
+                data-testid="topbar-frontend-mobile"
+                className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
+              >
+                <Home size={18} />
+              </button>
+            </div>
+            {/* CENTER — search-box trigger (compact mobile mirror of desktop) */}
+            <div className="flex-1 min-w-0 flex justify-center">
+              <button
+                type="button"
+                onClick={onOpenPalette}
+                aria-label="ค้นหาเมนู"
+                data-testid="topbar-shortcut-mobile"
+                className="w-full max-w-[200px] h-8 flex items-center gap-1.5 px-2 rounded-md bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] hover:border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-xs font-medium transition-all"
+              >
+                <Search size={12} className="flex-shrink-0" strokeWidth={2.25} />
+                <span className="flex-1 text-left truncate">ค้นหา…</span>
+              </button>
+            </div>
+            {/* RIGHT — branch + theme + profile */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <BranchSelector />
+              <ThemeToggle theme={theme} setTheme={setTheme} />
+              <ProfileDropdown />
+            </div>
           </div>
           {/* Row 2 — 44px — title + breadcrumb */}
           <div className="h-11 px-3 flex items-center gap-1.5 border-t border-[var(--bd)] bg-[var(--bg-surface)]/30">

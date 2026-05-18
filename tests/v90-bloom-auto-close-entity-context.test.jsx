@@ -177,10 +177,13 @@ describe('V90 — source-grep regression (wiring + V82 lock preservation)', () =
     expect(SOURCE_SHELL).toMatch(/onNavigate\?\.\(tabId\);\s*setBloomOpen\(false\);\s*setPaletteOpen\(false\);/);
   });
 
-  it('S4.2 — V82 menu-untouchable lock: ArcBloom render block + DuoPill + CmdPalette untouched', () => {
-    // No new visual children added to the shell return.
+  it('S4.2 — V82 menu-untouchable lock: ArcBloom + DuoPill + CmdPalette render structure preserved', () => {
+    // Same shell children, same wiring, same composition. V91 (2026-05-18
+    // EOD+11 LATE) swapped DuoPill prop name `onOpenBloom` → `bloomOpen` +
+    // `onToggleBloom` for the new tap-to-close behavior. Lock the V91 shape
+    // here (post-V91 contract).
     expect(SOURCE_SHELL).toMatch(/<BackendArcBloom\s*\n\s*open=\{bloomOpen\}/);
-    expect(SOURCE_SHELL).toMatch(/<BackendDuoPill onOpenBloom=\{openBloom\}\s*\/>/);
+    expect(SOURCE_SHELL).toMatch(/<BackendDuoPill bloomOpen=\{bloomOpen\} onToggleBloom=\{toggleBloom\}/);
     expect(SOURCE_SHELL).toMatch(/<BackendCmdPalette open=\{paletteOpen\}/);
   });
 

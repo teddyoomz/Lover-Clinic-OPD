@@ -1,16 +1,22 @@
 // Backend Menu D — Duo Pill (bottom-right). Two segments:
 //   💬 chat  → dispatches 'lover:staff-chat-open' window event
 //             (StaffChatWidget listens + calls chat.expand())
-//   ≡  menu  → calls onOpenBloom() prop
+//   ≡  menu  → toggles bloom: tap to open, tap again to close (V91, 2026-05-18 EOD+11)
 // Cosmetic — does NOT mount or replace the chat hook.
+//
+// V91 update (EOD+11 LATE) — menu button toggles bloom. Pre-V91 the button
+// only OPENED bloom (and dismissal required backdrop tap which was hard to
+// discover on mobile). User explicit: "ทำปุ่มปิด menu mobile ของเราด้วย
+// อาจจะแตะที่ปุ่มเปิดนั่นแหละเพื่อปิด". Icon swaps Menu→X when bloom is
+// open, aria-label flips between เปิดเมนู/ปิดเมนู.
 //
 // Unread count is consumed via the SAME custom event but in reverse —
 // StaffChatWidget broadcasts 'lover:staff-chat-unread' with the count.
 
 import { useEffect, useState } from 'react';
-import { MessageCircle, Menu as MenuIcon } from 'lucide-react';
+import { MessageCircle, Menu as MenuIcon, X } from 'lucide-react';
 
-export default function BackendDuoPill({ onOpenBloom }) {
+export default function BackendDuoPill({ bloomOpen = false, onToggleBloom, onOpenBloom }) {
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
@@ -23,6 +29,16 @@ export default function BackendDuoPill({ onOpenBloom }) {
     window.dispatchEvent(new CustomEvent('lover:staff-chat-unread-request'));
     return () => window.removeEventListener('lover:staff-chat-unread', onUnread);
   }, []);
+
+  // V91 — toggle handler. Prefer onToggleBloom; fall back to onOpenBloom
+  // for backward-compat with any caller that hasn't migrated yet.
+  const handleMenuClick = () => {
+    if (typeof onToggleBloom === 'function') {
+      onToggleBloom();
+    } else if (typeof onOpenBloom === 'function') {
+      onOpenBloom();
+    }
+  };
 
   return (
     <div className="duo-pill" data-testid="backend-duo-pill">
@@ -47,10 +63,12 @@ export default function BackendDuoPill({ onOpenBloom }) {
         type="button"
         className="duo-pill-btn"
         data-testid="duo-pill-menu"
-        aria-label="เปิดเมนู"
-        onClick={onOpenBloom}
+        data-bloom-open={bloomOpen ? 'true' : 'false'}
+        aria-label={bloomOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
+        aria-expanded={bloomOpen ? 'true' : 'false'}
+        onClick={handleMenuClick}
       >
-        <MenuIcon size={22} color="white" />
+        {bloomOpen ? <X size={22} color="white" /> : <MenuIcon size={22} color="white" />}
       </button>
     </div>
   );

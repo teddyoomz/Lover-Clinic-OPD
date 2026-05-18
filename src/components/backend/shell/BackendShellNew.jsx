@@ -57,6 +57,11 @@ export default function BackendShellNew({
 
   const openBloom = useCallback(() => setBloomOpen(true), []);
   const closeBloom = useCallback(() => setBloomOpen(false), []);
+  // V91 (EOD+11 LATE, 2026-05-18) — toggle handler for DuoPill menu button.
+  // User explicit: "ทำปุ่มปิด menu mobile ของเราด้วย อาจจะแตะที่ปุ่มเปิด
+  // นั่นแหละเพื่อปิด". Pre-V91 button only opened; dismissal required
+  // backdrop tap (poor mobile UX).
+  const toggleBloom = useCallback(() => setBloomOpen((b) => !b), []);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
 
   // Navigate via existing onNavigate prop — same shape as BackendNav.
@@ -91,8 +96,11 @@ export default function BackendShellNew({
       {/* Main content — children slot unchanged from BackendNav contract */}
       <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
 
-      {/* DuoPill bottom-right */}
-      <BackendDuoPill onOpenBloom={openBloom} />
+      {/* DuoPill bottom-right.
+          V91 (EOD+11 LATE) — pass bloomOpen + toggle handler so the menu
+          button can close the bloom on second tap (mobile UX fix). Icon
+          swaps Menu→X when open. */}
+      <BackendDuoPill bloomOpen={bloomOpen} onToggleBloom={toggleBloom} />
 
       {/* ArcBloom overlay — mounted lazily via bloomOpen gate */}
       {bloomOpen && (
