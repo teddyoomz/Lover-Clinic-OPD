@@ -175,8 +175,8 @@ Use Edit tool to replace the entire V86 block (lines 3677 to end of file at line
 */
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
-.admin-frontend-zone [class*="rounded-2xl"],
-.admin-frontend-zone [class*="rounded-xl"] {
+.admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+.admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
   border: 1px solid rgba(var(--neon-c1), calc(0.40 * var(--neon-intensity)));
   box-shadow:
     0 0 0 1px rgba(var(--neon-c1), calc(0.08 * var(--neon-intensity))),
@@ -188,8 +188,8 @@ Use Edit tool to replace the entire V86 block (lines 3677 to end of file at line
 
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
 [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
-.admin-frontend-zone [class*="rounded-2xl"]:hover,
-.admin-frontend-zone [class*="rounded-xl"]:hover {
+.admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover,
+.admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover {
   animation-play-state: paused;
   transform: translateY(-3px);
   border-color: rgba(var(--neon-c1), calc(0.65 * var(--neon-intensity)));
@@ -202,8 +202,8 @@ Use Edit tool to replace the entire V86 block (lines 3677 to end of file at line
 /* Light theme auto-glow override */
 [data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
 [data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
-[data-theme="light"] .admin-frontend-zone [class*="rounded-2xl"],
-[data-theme="light"] .admin-frontend-zone [class*="rounded-xl"] {
+[data-theme="light"] .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+[data-theme="light"] .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
   border-color: rgba(var(--neon-c1), calc(0.55 * var(--neon-intensity)));
   box-shadow:
     0 0 0 1px rgba(var(--neon-c1), calc(0.10 * var(--neon-intensity))),
@@ -216,15 +216,15 @@ Use Edit tool to replace the entire V86 block (lines 3677 to end of file at line
 @media (prefers-reduced-motion: reduce) {
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
-  .admin-frontend-zone [class*="rounded-2xl"],
-  .admin-frontend-zone [class*="rounded-xl"] {
+  .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]),
+  .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]) {
     animation: none !important;
     transition: none !important;
   }
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
   [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
-  .admin-frontend-zone [class*="rounded-2xl"]:hover,
-  .admin-frontend-zone [class*="rounded-xl"]:hover {
+  .admin-frontend-zone [class*="rounded-2xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover,
+  .admin-frontend-zone [class*="rounded-xl"]:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"]):hover {
     transform: none !important;
   }
 }
@@ -997,6 +997,7 @@ Find current AV83 entry in `.claude/skills/audit-anti-vibe-code/SKILL.md` and re
 - `.v86-glow-` rules + V86 auto-glow rules in `src/index.css` MUST reference `var(--neon-c1)` / `var(--neon-c2)` / `var(--neon-intensity)` for color + alpha — NO hardcoded RGB, NO bare alphas outside `calc(<base> * var(--neon-intensity))` factor.
 - `:root` MUST define all 3 vars with V86-followup-2 defaults: `--neon-c1: 220, 38, 38;` + `--neon-c2: 239, 68, 68;` + `--neon-intensity: 0.45;`.
 - `useV86GlowApply` hook is the ONLY sanctioned consumer that calls `document.documentElement.style.setProperty('--neon-c1' | '--neon-c2' | '--neon-intensity', ...)` (SystemSettingsTab also calls these for live preview — sanctioned).
+- `.admin-frontend-zone` auto-glow selectors MUST exclude menu via `:not([data-testid="admin-top-menu"]):not([data-testid="admin-top-menu"] *):not([class*="menu-"])` chain — defense-in-depth against menu glow leak from V86 v1 admin-frontend-zone scope.
 - Menu files (BackendArcBloom + BackendSubTabBloom + BackendDuoPill + BackendSidebar + BackendMobileDrawer + BackendCmdPalette) MUST contain ZERO `v86-glow-` references.
 - Print files (SalePrintView + QuotationPrintView + BulkPrintModal + DocumentPrintModal + documentPrintEngine) MUST contain ZERO `v86-glow-` references.
 - Customer-facing files (PatientForm + PatientDashboard + ClinicSchedule) MUST contain ZERO `v86-glow-` + ZERO `data-section` + ZERO `admin-frontend-zone` references.
