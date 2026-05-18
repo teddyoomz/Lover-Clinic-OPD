@@ -1,26 +1,89 @@
 # V85 Universal Glow Effect — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. The plan is consolidated into **5 phase-tasks** (one dispatch per phase). Each subagent does the entire phase as a coherent batch; tests + smoke verify run AT END OF PHASE only, NOT per-step.
+
+---
+
+## 🚨🚨🚨 COSMETIC-SHELL CONSTRAINT — READ BEFORE EVERY EDIT 🚨🚨🚨
+
+**THIS IS A PURE COSMETIC CHANGE. ZERO BEHAVIORAL CHANGE ALLOWED.**
+
+V85 = adding ONE CSS utility class to EXISTING wrapper divs. Nothing else.
+
+| ❌ FORBIDDEN | ✅ ALLOWED |
+|---|---|
+| Change any event handler (`onClick`, `onChange`, `onSubmit`, etc.) | Add `fx-glow-*` class to an existing `className` string |
+| Add/remove/rename any state variable, hook, ref, useEffect | Wrap an existing className in a template literal to add the new class |
+| Modify any callback / dispatch / reducer / context value | Modify CSS rules in `src/index.css` (new V85 utility block only) |
+| Change any prop name or shape | Modify `[data-theme="light"]` overrides for V85 utilities only |
+| Restructure JSX hierarchy (add/remove/move elements) | Pass `fx-glow-*` through an existing className-receiving prop |
+| Touch ANY menu file (see sanctioned exception list below) | (Nothing else) |
+| Touch ANY print-render file (see sanctioned exception list below) | |
+| Modify business logic, validators, aggregators, Firestore queries | |
+| Run codemod / mass-replace against business logic patterns | |
+| "Improve" or "refactor" anything while passing through | |
+
+**If a subagent thinks "while I'm here, let me also fix/improve/refactor X" — STOP. Don't.**
+
+**Verify after every phase**: open dev preview, click 5+ random buttons (any modals, any list, any form save). Behavior must be IDENTICAL to pre-V85. If ANY button does anything different — revert that edit immediately (Rule A bug-blast).
+
+**Why this banner exists** (user 2026-05-18 EOD+9 verbatim):
+> "ห้ามไปยุ่งกับระบบเมนูที่เราทำนะ ทั้งเมนูแบบเดิมและเมนูแบบใหม่ มันสวยอยู่แล้ว"
+> "ห้ามยุ่งกับการ wiring และ logic หรือ flow ต่างๆของของเดิมเลยนะ เพราะว่าของเดิมทำได้ดีอยู่แล้ว และนี่เป็นแค่การเปลี่ยนดีไซน์ ไม่ควรทำให้การทำงาน ปุ่ม logic wiring พัง"
+
+**Sanctioned NO-TOUCH file list** (per spec §3 + AV81 CG5):
+- Menu system: `BackendArcBloom.jsx`, `BackendSubTabBloom.jsx`, `BackendDuoPill.jsx`, `BackendSidebar.jsx`, `BackendMobileDrawer.jsx`, `BackendCmdPalette.jsx`
+- Menu CSS regions in `src/index.css`: `.menu-*` rules + `.bloom-*` rules — DO NOT MODIFY
+- Print-render: `SalePrintView.jsx`, `QuotationPrintView.jsx`, `BulkPrintModal.jsx`, `DocumentPrintModal.jsx`, `documentPrintEngine.js`
+- Non-UI: every file in `src/lib/`, `api/`, `scripts/`, `firestore.rules`, `storage.rules`
+
+---
 
 **Goal:** Add 20 CSS glow utility classes (`.fx-glow-v[2-10]` + `.fx-glow-u[1-10]`) to `src/index.css` and apply them across ~50 components + ~70 modals so every dark-theme box/card/modal visibly separates from the background — with a matching pink-sakura light-theme palette and full menu-system exemption.
 
-**Architecture:** All 20 effects live in `src/index.css` as additive Tailwind-compatible utility classes. Application is one extra className token per existing wrapper — no JSX restructuring for 95% of files. Light theme uses `[data-theme="light"]` overrides on every utility. Animated variants honor `prefers-reduced-motion: reduce`. The entire menu system (BackendArcBloom / BackendSubTabBloom / BackendSidebar / BackendMobileDrawer / BackendCmdPalette / BackendDuoPill / AdminDashboard `.menu-*` regions) is hard-locked from any cosmetic change per user guardrail. All print-render paths (`SalePrintView`, `QuotationPrintView`, `BulkPrintModal`, `DocumentPrintModal`, `documentPrintEngine.js`) are also hard-locked.
+**Architecture:** All 20 effects live in `src/index.css` as additive Tailwind-compatible utility classes. Application is one extra className token per existing wrapper — no JSX restructuring for any file. Light theme uses `[data-theme="light"]` overrides on every utility. Animated variants honor `prefers-reduced-motion: reduce`.
 
-**Tech Stack:** Vite 8 + React 19 + Tailwind 3.4 + Vitest 4.1 + Playwright. No new dependencies. Uses `@property` CSS Houdini for V6 conic-gradient color cycling (Chrome 85+ / Safari 16.4+ / Firefox 128+ supported; fallback static for older).
+**Tech Stack:** Vite 8 + React 19 + Tailwind 3.4 + Vitest 4.1 + Playwright. No new dependencies. Uses `@property` CSS Houdini for V6 conic-gradient color cycling.
 
 **Spec:** `docs/superpowers/specs/2026-05-18-v85-glow-effect-universal-design.md` (APPROVED 2026-05-18 EOD+9).
 
 **Visual reference:** `public/v85-glow-variants.html` — 30 mockups (Section A=Card 10 / Section B=Modal 10 / Section C=Universal-Box 10).
 
-**Pragmatic deviation note:** Phases B/C/D mass-edit similar-pattern wrappers across N files (~120 total file touches). Strict "one file per step" would produce 300+ steps. Instead, surface-type tasks BATCH similar edits into a single step with the pattern example + full file list. Each batch step is followed by a verify step (build clean + targeted tests pass) before commit. This stays faithful to the skill's intent (small, verifiable units of work) while keeping the plan readable.
+## Task structure (consolidated 5-task model)
+
+Per user guardrail "47 tasks สยอง · ทดสอบจบ phase พอ · ห้ามแตะ wiring/logic/flow":
+- **5 main tasks** — one per phase (A, B, C, D, E)
+- **Each task = full phase done in one subagent dispatch** (subagent batches all file touches internally)
+- **Tests run AT END OF PHASE only** — NOT per-step
+- **Two-stage review per phase** (spec compliance + code quality) per subagent-driven-development skill
+- **Smoke test mandatory at end of each phase**: open dev preview, click 5+ buttons, confirm zero behavioral drift
+
+Mapping below — each section is what the orchestrator briefs the implementer subagent for that phase. Detailed step-by-step code blocks for Phase A onward kept inline for reference (subagent can paste verbatim into edits).
 
 ---
 
-## Phase A — CSS Foundation (single commit, ~700 LOC)
+## Task A — Phase A CSS Foundation (1 subagent dispatch, single commit, ~700 LOC)
 
-Adds 20 utility classes + 8 U9 sub-modifiers + light-theme overrides + reduced-motion overrides + 4 color tokens + `@property` registration to `src/index.css`. Plus the source-grep regression test that locks the contract.
+**Subagent brief**: Add the entire V85 CSS foundation to `src/index.css` + write source-grep regression test. Single commit at end. NO behavioral changes anywhere; this is pure additive CSS + ONE new test file.
 
-### Task A.1 — Infrastructure (color tokens + @property)
+**What to add to `src/index.css`** (paste verbatim from the sub-steps below):
+1. V85 header comment + 4 color tokens (:root + [data-theme="light"]) + `@property --v85-v6-hue`
+2. V2-V10 utility classes (9 variants — `.fx-glow-v[2-10]`)
+3. U1-U10 utility classes (10 variants — `.fx-glow-u[1-10]`)
+4. 8 U9 per-domain sub-modifiers (`.fx-glow-u9-{sales,customers,finance,marketing,stock,reports,master,appointments}`)
+5. Light theme overrides for all 19 utilities + 8 sub-modifiers
+6. `@media (prefers-reduced-motion: reduce)` block disabling animations on V4/V5/V6/V7/V9/U6
+
+**NEW test file**: `tests/v85-glow-utility-css.test.js` with CG1-CG7 source-grep assertions (~83 tests). DO NOT include CG6 yet — added in Phase E.
+
+**End-of-phase verify** (subagent runs all 3 before committing):
+- `npm run build` clean
+- `npx vitest run tests/v85-glow-utility-css.test.js` all green
+- `npm test -- --run` full suite no regressions
+
+**Commit message template** in Phase A.8 below.
+
+### Phase A sub-step A.1 — Infrastructure (color tokens + @property)
 
 **Files:**
 - Modify: `src/index.css:1390` (insert BEFORE the existing `/* Chat tab blink alert */` block)
@@ -83,7 +146,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean, no parse errors. The @property block + comment-only block do not affect any rendered output yet.
 
-### Task A.2 — V-variants utility classes (V2-V10)
+### Phase A sub-step A.2 — V-variants utility classes (V2-V10)
 
 **Files:**
 - Modify: `src/index.css` (append AFTER the infrastructure block from Task A.1)
@@ -343,7 +406,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean, no parse errors. Total V CSS rules: 9 variants × (~20 LOC base + maybe ::before/::after).
 
-### Task A.3 — U-variants utility classes (U1-U10)
+### Phase A sub-step A.3 — U-variants utility classes (U1-U10)
 
 **Files:**
 - Modify: `src/index.css` (append AFTER V10 from Task A.2)
@@ -468,7 +531,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task A.4 — U9 per-domain sub-modifiers
+### Phase A sub-step A.4 — U9 per-domain sub-modifiers
 
 **Files:**
 - Modify: `src/index.css` (append AFTER U10 from Task A.3)
@@ -499,7 +562,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task A.5 — Light theme overrides
+### Phase A sub-step A.5 — Light theme overrides
 
 **Files:**
 - Modify: `src/index.css` (append AFTER U9 sub-modifiers from Task A.4)
@@ -721,7 +784,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task A.6 — Reduced-motion overrides
+### Phase A sub-step A.6 — Reduced-motion overrides
 
 **Files:**
 - Modify: `src/index.css` (append AFTER light theme overrides from Task A.5)
@@ -754,7 +817,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task A.7 — Source-grep regression test (CG1-CG7)
+### Phase A sub-step A.7 — Source-grep regression test (CG1-CG7)
 
 **Files:**
 - Create: `tests/v85-glow-utility-css.test.js`
@@ -920,7 +983,7 @@ npx vitest run tests/v85-glow-utility-css.test.js
 ```
 Expected: PASS — all CG1-CG7 assertions green (CG1: 9+10+8=27, CG2: 27, CG3: 7, CG4: 6, CG5: 11 (some may auto-skip if files missing), CG7: 5 → ~83 total assertions). CG6 is intentionally absent in Phase A — it tests `fx-glow-*` count in src/ which is 0 until Phase B+ ships; added in Phase E.
 
-### Task A.8 — Phase A commit
+### Phase A sub-step A.8 — Phase A commit
 
 - [ ] **Step 1: Run full vitest to verify no regression**
 
@@ -977,11 +1040,30 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Phase B — Universal/Content Layer (single commit, ~20 component touches)
+## Task B — Phase B Universal/Content Layer (1 subagent dispatch, single commit, ~20 component touches)
 
-Apply U-utility classes to non-menu content surfaces. Each task = one surface type. Each step within a task applies ONE pattern across the listed files; the verify step confirms build + targeted tests pass.
+**Subagent brief**: Apply U-utility classes to non-menu content surfaces across ~20 component files in one coherent batch. Single commit at end of phase. **ZERO behavioral change** — every edit is ONE additive className token on an existing wrapper.
 
-### Task B.1 — Page-body wrappers (U3)
+**Surface-type mapping** (subagent works through each sub-step below):
+- B.1 Page-body wrappers (U3) — 2 files
+- B.2 Data tables (U2) — ~12 files
+- B.3 Form panels (U5) — ~6 files
+- B.4 Section group dividers (U4) — ~4 files
+- B.5 In-content popovers (U7) — ~2-3 files (NOT BackendCmdPalette)
+- B.6 Live data widgets (U6) — 1-2 files
+- B.7 Page title bars (U9 per-domain) — 8 tabs
+- B.8 Read-only panels (U8) — within CustomerDetailView
+- B.9 In-content search bars (U1) — 3-4 files
+
+**End-of-phase verify** (subagent runs all 4 before committing):
+- `npm run build` clean
+- `grep -E "fx-glow-" src/components/backend/shell/ src/components/backend/nav/` → MUST be empty (menu untouched)
+- `npx vitest run tests/v85-glow-utility-css.test.js -t "CG5"` → all CG5 assertions PASS
+- **Manual smoke test in dev preview**: open `http://localhost:5173/?backend=1` + click 5 random buttons (any modal open/close, any list row, any tab switch). Behavior MUST be identical to pre-V85. If anything broke → revert that file's edit (Rule A bug-blast).
+
+**Sub-steps below** detail surface-by-surface file lists + example pattern. Subagent dispatches one Edit per file but commits ONLY at end of phase.
+
+### Phase B sub-step B.1 — Page-body wrappers (U3)
 
 **Files** (modify each — add `fx-glow-u3` to the OUTER content wrapper, NOT the menu shell):
 - `src/pages/AdminDashboard.jsx` — the `<main>`-like content `<div>` AFTER `</header>` (the menu shell stays untouched)
@@ -1028,7 +1110,7 @@ grep -E "fx-glow-" src/components/backend/shell/ src/components/backend/nav/ 2>&
 ```
 Expected: empty output (no menu files have any glow class).
 
-### Task B.2 — Data tables (U2)
+### Phase B sub-step B.2 — Data tables (U2)
 
 **Files** (apply `fx-glow-u2` to the outer `<div>` of each list/table wrapper):
 - `src/components/backend/CustomerListTab.jsx` — the customer list grid wrapper
@@ -1065,7 +1147,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.3 — Form panels (U5)
+### Phase B sub-step B.3 — Form panels (U5)
 
 **Files**:
 - `src/components/backend/StaffFormModal.jsx` — main form panel
@@ -1087,7 +1169,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.4 — Section group dividers (U4)
+### Phase B sub-step B.4 — Section group dividers (U4)
 
 **Files** (apply `fx-glow-u4` to in-content section group headers — typically `<h3>` or `<div>` with a group title):
 - `src/components/backend/SystemSettingsTab.jsx` — "ตั้งค่าทั่วไป" / "ความปลอดภัย" / "การแสดงผล" group title boxes
@@ -1107,7 +1189,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.5 — In-content popovers, tooltips, dropdowns (U7)
+### Phase B sub-step B.5 — In-content popovers, tooltips, dropdowns (U7)
 
 **Files** (apply `fx-glow-u7` to in-content overlay popovers — NOT BackendCmdPalette / BackendMobileDrawer / menu-related):
 - `src/components/backend/StaffSelectField.jsx` — staff picker dropdown panel
@@ -1134,7 +1216,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.6 — Live data widgets (U6)
+### Phase B sub-step B.6 — Live data widgets (U6)
 
 **Files** (apply `fx-glow-u6` to widgets that show real-time data — restricted scope to avoid breathing on everything):
 - `src/pages/AdminDashboard.jsx` — the today/queue tile (the small panel that shows live count of patients waiting)
@@ -1160,7 +1242,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.7 — Page title bars (U9 per-domain)
+### Phase B sub-step B.7 — Page title bars (U9 per-domain)
 
 **Files** — every Backend tab content has a title bar at the top of its rendered content. Apply `fx-glow-u9` + the matching `fx-glow-u9-{domain}` sub-modifier:
 - `src/components/backend/SaleTab.jsx` — title bar → `fx-glow-u9 fx-glow-u9-sales`
@@ -1198,7 +1280,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.8 — Read-only panels (U8)
+### Phase B sub-step B.8 — Read-only panels (U8)
 
 **Files** (apply `fx-glow-u8` to read-only / archived / history-display panels):
 - `src/components/backend/CustomerDetailView.jsx` — the audit-trail / history sub-panels (NOT the main detail card — that gets V9 in Phase C)
@@ -1224,7 +1306,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.9 — In-content search bars + secondary controls (U1)
+### Phase B sub-step B.9 — In-content search bars + secondary controls (U1)
 
 **Files** (apply `fx-glow-u1` to in-content search bars — NOT the menu search):
 - `src/components/backend/CustomerListTab.jsx` — search input wrapper at top of tab
@@ -1244,7 +1326,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task B.10 — Phase B verify + commit
+### Phase B sub-step B.10 — Phase B verify + commit
 
 - [ ] **Step 1: Run full vitest**
 
@@ -1326,11 +1408,26 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Phase C — Card/Focal Layer (single commit, ~30 component touches)
+## Task C — Phase C Card/Focal Layer (1 subagent dispatch, single commit, ~15-30 components)
 
-Apply V-utility classes to focal cards (the "look here" elements).
+**Subagent brief**: Apply V-utility classes to focal cards (the "look here" elements) across Frontend + Backend dashboards. Single commit at end of phase. **ZERO behavioral change** — every edit is ONE additive className token on an existing wrapper. Conditional classes (V2/V4/V7) use existing predicates only; no new state variables.
 
-### Task C.1 — KPI hero cards (V5)
+**Surface-type mapping** (subagent works through each sub-step below):
+- C.1 KPI hero cards (V5) — AdminDashboard top stat strip + Reports landing tiles
+- C.2 Detail-view focal cards (V9) — CustomerDetailView main, RecallDetailModal body, TreatmentTimelineModal body
+- C.3 Page-level large containers (V3) — BackupManagerTab, BranchBackupTab outer panels
+- C.4 Active/selected list rows (V2 conditional) — CustomerListTab, SaleTab, ProductsTab when isSelected
+- C.5 Alert cards (V4 conditional) — recall pending, stock low, sale overdue
+- C.6 VIP/Premium cards (V7 conditional) — VIP-tier display
+- C.7 Read-only cards (V8) — TreatmentReadOnlyMirror
+
+**End-of-phase verify** (subagent runs all 4 before committing):
+- `npm run build` clean
+- `npx vitest run tests/v85-glow-utility-css.test.js -t "CG5"` → all PASS
+- `grep -E "fx-glow-" src/components/backend/shell/BackendArcBloom.jsx` → MUST be empty
+- Manual smoke test: open CustomerDetailView for any customer, open a confirm modal, click 5 random buttons — behavior identical to pre-V85.
+
+### Phase C sub-step C.1 — KPI hero cards (V5)
 
 **Files** (apply `fx-glow-v5` to the topmost stat/KPI cards):
 - `src/pages/AdminDashboard.jsx` — top stat strip (3-4 KPI cards showing today's count / revenue / etc.)
@@ -1353,7 +1450,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.2 — Detail-view focal cards (V9)
+### Phase C sub-step C.2 — Detail-view focal cards (V9)
 
 **Files**:
 - `src/components/backend/CustomerDetailView.jsx` — the main grid/panel that shows customer info (NOT the audit-log sub-panel which got U8 in Phase B)
@@ -1376,7 +1473,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.3 — Page-level large containers (V3)
+### Phase C sub-step C.3 — Page-level large containers (V3)
 
 **Files**:
 - `src/components/backend/BackupManagerTab.jsx` — outer panel of the backup management page (typically a large `<div>` that holds the whole backup UI)
@@ -1408,7 +1505,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.4 — Active/selected list rows (V2)
+### Phase C sub-step C.4 — Active/selected list rows (V2)
 
 **Files** — apply `fx-glow-v2` CONDITIONALLY on the active/selected state:
 - `src/components/backend/CustomerListTab.jsx` — selected customer row
@@ -1441,7 +1538,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.5 — Alert cards (V4)
+### Phase C sub-step C.5 — Alert cards (V4)
 
 **Files**:
 - `src/components/backend/RecallTab.jsx` (or RecallListTab) — pending-recall rows that need attention
@@ -1468,7 +1565,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.6 — VIP/Premium cards (V7)
+### Phase C sub-step C.6 — VIP/Premium cards (V7)
 
 **Files**:
 - `src/components/backend/CustomerDetailView.jsx` — VIP-tier badge card (typically a small panel showing tier level)
@@ -1486,7 +1583,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.7 — Read-only cards (V8)
+### Phase C sub-step C.7 — Read-only cards (V8)
 
 **Files**:
 - `src/components/backend/customer-detail/TreatmentReadOnlyMirror.jsx` — read-only treatment view mirror
@@ -1504,7 +1601,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task C.8 — Phase C verify + commit
+### Phase C sub-step C.8 — Phase C verify + commit
 
 - [ ] **Step 1: Run full vitest**
 
@@ -1572,11 +1669,25 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Phase D — Modal Layer (single commit, ~70 modals)
+## Task D — Phase D Modal Layer (1 subagent dispatch, single commit, ~70 modals)
 
-Apply `fx-glow-v10` as default to all generic modals + `fx-glow-u10` to all modal backdrops + special-case overrides.
+**Subagent brief**: Apply `fx-glow-v10` default (or V4/V6/V8/V9 special-case) to every modal content card + `fx-glow-u10` to every modal backdrop in `src/components/**/*Modal.jsx` (~70 files). Single commit at end of phase. **ZERO behavioral change** — every edit is ONE additive className token.
 
-### Task D.1 — Enumerate all modal files
+**Excluded** (sanctioned NO-TOUCH per AV81 CG5): `BackendMobileDrawer.jsx` + `BackendCmdPalette.jsx` (menu drawers), `BulkPrintModal.jsx` + `DocumentPrintModal.jsx` (print render).
+
+**Strategy**:
+1. Enumerate modal files via `find src/components -name "*Modal.jsx"` (sub-step D.1)
+2. Categorize each: confirm-delete (V4) / detail-view (V9) / read-only (V8) / celebration (V6 if any) / DEFAULT (V10)
+3. Apply categorized className to content card across all modals
+4. Apply `fx-glow-u10` to ALL backdrops (except 2 sanctioned exceptions)
+
+**End-of-phase verify** (subagent runs all 4 before committing):
+- `npm run build` clean
+- `npx vitest run tests/v85-glow-utility-css.test.js -t "CG5"` → all PASS
+- `grep "fx-glow-" src/components/backend/nav/BackendMobileDrawer.jsx src/components/backend/nav/BackendCmdPalette.jsx src/components/backend/BulkPrintModal.jsx src/components/backend/DocumentPrintModal.jsx` → MUST be empty
+- Manual smoke test: open 5 different modals (confirm-delete, detail-view, generic info, form save, customer detail) + click action buttons inside — all behavior identical to pre-V85.
+
+### Phase D sub-step D.1 — Enumerate all modal files
 
 - [ ] **Step 1: List every modal file in src/**
 
@@ -1596,7 +1707,7 @@ Categorize each modal by type using the file name and content. Save categories t
 - **Read-only display modals** → V8 inner glow (view-only history, archive viewers)
 - **Default (everything else)** → V10 drop+ambient
 
-### Task D.2 — Apply V10 default to generic modal content cards
+### Phase D sub-step D.2 — Apply V10 default to generic modal content cards
 
 **Pattern**: every modal has a content card structure like:
 ```jsx
@@ -1631,7 +1742,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.3 — Apply V4 to confirm/delete modals
+### Phase D sub-step D.3 — Apply V4 to confirm/delete modals
 
 **Files** (confirm/delete modal patterns):
 - Any modal file containing `confirm` or `delete` in the filename or in the modal title text — discover via grep:
@@ -1651,7 +1762,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.4 — Apply V9 to detail-view modals
+### Phase D sub-step D.4 — Apply V9 to detail-view modals
 
 **Files**:
 - `src/components/backend/TreatmentTimelineModal.jsx` (already touched in C.2, double-check)
@@ -1671,7 +1782,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.5 — Apply V8 to read-only display modals
+### Phase D sub-step D.5 — Apply V8 to read-only display modals
 
 **Files**:
 - Any modal that displays archived/historical data with NO editable inputs
@@ -1694,7 +1805,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.6 — Apply V6 to celebration modals
+### Phase D sub-step D.6 — Apply V6 to celebration modals
 
 **Files** (if any exist):
 - Look for modals related to: VIP upgrade, milestone reach, payout success, achievement, festive events. Common keywords: `tier`, `upgrade`, `milestone`, `achievement`, `success` (where success means a positive emotional moment, not just a successful save).
@@ -1717,7 +1828,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.7 — Apply U10 glassmorphism to ALL modal backdrops
+### Phase D sub-step D.7 — Apply U10 glassmorphism to ALL modal backdrops
 
 **Pattern**: every modal's backdrop is the absolutely-positioned bg-black/50-or-similar div.
 
@@ -1752,7 +1863,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task D.8 — Phase D verify + commit
+### Phase D sub-step D.8 — Phase D verify + commit
 
 - [ ] **Step 1: Run full vitest**
 
@@ -1825,11 +1936,24 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Phase E — Light Theme Parity + Playwright L1 Verification (single commit)
+## Task E — Phase E Light Parity + Playwright L1 + CG6 (1 subagent dispatch, single commit)
 
-Visual audit + fine-tune + Rule Q L1 spec.
+**Subagent brief**: Visual audit on 10 key screens (dark + light), fine-tune any utility opacity if needed, write Playwright L1 spec (7 scenarios per Rule Q V66), add CG6 application count test, final commit + push.
 
-### Task E.1 — Visual audit on 10 key dark-theme screens
+**Sub-steps**:
+- E.1 Dark theme visual audit (10 screens via preview_eval)
+- E.2 Light theme visual audit (same 10 screens)
+- E.3 Fine-tune utilities if audit surfaces issues (typically: opacity 20% reduction OR 20% raise)
+- E.4 Write Playwright L1 spec `tests/e2e/v85-glow-utility-application.spec.js` (7 scenarios)
+- E.5 Add CG6 to `tests/v85-glow-utility-css.test.js` (application count ≥ 80 fx-glow-* refs)
+
+**End-of-phase verify**:
+- Full `npm test -- --run` green
+- `npm run build` clean
+- Playwright spec authored (skips at-rest without admin creds env vars; runs in CI / by user with `ADMIN_EMAIL`/`ADMIN_PASSWORD`/`FIREBASE_API_KEY`)
+- Final smoke test across dark + light theme on all 10 key screens — menu UNCHANGED, all cards/modals visibly separated from bg.
+
+### Phase E sub-step E.1 — Visual audit on 10 key dark-theme screens
 
 - [ ] **Step 1: Confirm dev server is on dark theme**
 
@@ -1862,7 +1986,7 @@ Record findings (paper note OR comment block):
 - Which surface has glow too strong?
 - Which surface has glow invisible?
 
-### Task E.2 — Switch to light theme, repeat visual audit
+### Phase E sub-step E.2 — Switch to light theme, repeat visual audit
 
 - [ ] **Step 1: Toggle theme to light**
 
@@ -1880,7 +2004,7 @@ For each, verify:
 - Modals still render correctly
 - KPI hero cards (V5) still feel "look here"
 
-### Task E.3 — Fine-tune utilities based on findings (if needed)
+### Phase E sub-step E.3 — Fine-tune utilities based on findings (if needed)
 
 - [ ] **Step 1: Adjust any utility's opacity if too loud or invisible**
 
@@ -1899,7 +2023,7 @@ npm run build 2>&1 | tail -5
 ```
 Expected: build clean.
 
-### Task E.4 — Write Playwright L1 spec (Rule Q V66)
+### Phase E sub-step E.4 — Write Playwright L1 spec (Rule Q V66)
 
 **Files:**
 - Create: `tests/e2e/v85-glow-utility-application.spec.js`
@@ -2052,7 +2176,7 @@ If `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `FIREBASE_API_KEY` env vars are not set, t
 
 If env vars ARE set, all 7 scenarios should PASS.
 
-### Task E.5 — Add CG6 application audit + final commit
+### Phase E sub-step E.5 — Add CG6 application audit + final commit
 
 - [ ] **Step 1: Add CG6 to the source-grep regression test**
 
