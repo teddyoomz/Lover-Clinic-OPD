@@ -107,15 +107,40 @@ export default function BackendSubTabBloom({
     const LERP = 0.12;
 
     // Pure bias-from-cursor compute (also used to seed initial state on mount)
+    //
+    // V83-followup-2 (EOD8 2026-05-18) — VIEWPORT-CLAMPED sensing center.
+    // User report: "sub tab มันบิดไปข้างบนได้ดีกว่าข้างล่าง พอเอาเม้าวางข้างล่าง
+    // แล้วแทบจะไม่หมุนหาเลย เช็คว่าจุดเช็คตรงกลาง จุดศูนย์กลางในการ sense
+    // ซ้าย ขวา บน ล่าง มันอยู่กลางจอและกลาง sub tab นั้นๆที่สร้างจริงๆไหม".
+    //
+    // Pre-fix bug: when modal taller/wider than viewport (data section has 22
+    // sub-tabs → ~1100px tall on 800px viewport), getBoundingClientRect returns
+    // FULL rect including the part that overflows below the viewport. cy ended
+    // up at ~y=740 on an 800px viewport → cursor at viewport bottom (clientY=800)
+    // gave dy=(800-740)/550=0.11 → barely any forward tilt. Cursor above had
+    // plenty of room (clientY=0 → dy=(0-740)/550=-1.34 → maxed to -1.0) so
+    // tilted up easily. Asymmetric UX.
+    //
+    // Fix: clamp rect to viewport intersection. Use VISIBLE half-extents for
+    // normalization → cursor at any viewport edge can reach ±MAX_BIAS regardless
+    // of how much the modal overflows.
     const biasFromCursor = (clientX, clientY) => {
       const modal = modalRef.current;
       if (!modal) return null;
       const rect = modal.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return null;
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = (clientX - cx) / (rect.width / 2);
-      const dy = (clientY - cy) / (rect.height / 2);
+      const vw = window.innerWidth || rect.width;
+      const vh = window.innerHeight || rect.height;
+      const visLeft   = Math.max(rect.left,   0);
+      const visRight  = Math.min(rect.right,  vw);
+      const visTop    = Math.max(rect.top,    0);
+      const visBottom = Math.min(rect.bottom, vh);
+      const cx = (visLeft + visRight) / 2;
+      const cy = (visTop + visBottom) / 2;
+      const halfW = Math.max(1, (visRight - visLeft) / 2);
+      const halfH = Math.max(1, (visBottom - visTop) / 2);
+      const dx = (clientX - cx) / halfW;
+      const dy = (clientY - cy) / halfH;
       return {
         x: Math.max(-1, Math.min(1, dx)) * MAX_BIAS,
         y: -Math.max(-1, Math.min(1, dy)) * MAX_BIAS,
