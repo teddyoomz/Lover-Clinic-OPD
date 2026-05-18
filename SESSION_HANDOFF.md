@@ -66,13 +66,36 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+10 — **V86 v1 + followup-2 shipped** (per-section dual-tone neon → mid-T7 pivot → universal red + dimmer + admin-tunable Settings UI)
-- **Master**: `cc3aea81` · ~30+ commits ahead of prod since EOD+8
-- **Prod**: `ef4bd5c3` LIVE (V84 + V85 + AV82 + V86 v1 + V86-followup-2 stack NOT deployed · user must type "deploy")
-- **Tests**: Phase A 64/64 vitest (CG1-CG9 + VS1-VS6) + Phase B 8 Playwright (B1-B8 skip-graceful) · build clean
-- **AV invariants added**: AV80 (V84) + AV81 (V85) + AV82 (V85-followup) + AV83 (V86, updated for followup-2 universal red + intensity)
-- **HN counter**: absent → next addCustomer = **LC-26000001**
-- **opd_sessions**: state unchanged
+- **Date last updated**: 2026-05-18 EOD+11 LATE — **V87+V88+V89+V90+V91+V92 shipped + 5 combined deploys + audit-all 23 skills delivered**
+- **Master = Prod**: `56e25aca` (after V92 deploy) — stack V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 ALL LIVE
+- **Tests**: V8x family 158/158 GREEN (V92 15 + V91 18 + V90 13 + V89 13 + V88 15 + V87 20 + V86 64) · full vitest run 195s · build clean
+- **AV invariants added this session**: AV84 (V87 link-button OPD-save guard) — extends V83 chain
+- **Audit findings**: 3 CRITICAL + 7 HIGH all isolated (TZ1 family × 8 sites + S18 atomicity + A7 fetch timeout + H7 cascade gap). Auth + admin + backend-firestore + chat-notifications + rules ALL PASS clean.
+- **HN counter**: unchanged
+- **opd_sessions**: unchanged
+
+### Session 2026-05-18 EOD+11 LATE — V87→V92 (5 deploys) + audit-all 23 skills via 6 parallel subagents
+
+**5 user-driven ship cycles + 5 combined deploys + 1 audit-all sweep**. Stack post-V86 followup-2 fully cleared user backlog + closed mobile UX series.
+
+- **V87** (`e4e62afc`): Recall sub-tab glow (RecallFrontendView wrapper rounded-lg→rounded-xl so V86 auto-glow selector matches) + CreateQueueModal reorder (จองมัดจำ first / จองไม่มัดจำ middle / `OPD Intake` renamed to `คิว Walk-in` rightmost) + AV84 link-button OPD-save guard (cross-file grep: 2 trigger sites; only history-view was guarded; walk-in queue site now wrapped per V12 multi-reader-sweep family). 20 source-grep + Rule Q L1 verified mobile.
+- **V88** (`bfc340d9`): `.menu-tab-active` redder (orange-400 → red-500 gradient + border) per "ตีมเราแดงกว่านี้". AdminDashboard right-rail harmonized — Bell + Online indicator + Signout removed solid bg-input frame → transparent-base + hover-fill matching `.menu-tab` philosophy. CTA สร้างคิวใหม่ stays solid red. 15/15 + W1.x handler-lock assertions (V82 cosmetic-shell honored).
+- **V89** (`df7611c0`): CustomerListTab mobile responsive (`flex flex-col md:flex-row` + search w-full mobile + Refresh/Add flex-1 50/50 + `พิมพ์ Bulk hidden md:inline-flex` per "ปีนึงจะใช้สักที"). L1 verified 375 + 1280. 13/13.
+- **V90** (`7d2f0e84`): BackendShellNew bloom auto-close on `isSpecificEntityContext` (derived from viewingCustomer || treatmentFormMode || editingCustomer). Initial mount default + useEffect transition both close bloom. V82 menu-untouchable handleNavigate UNCHANGED. 13/13.
+- **V91** (`4231abc3`): BackendDuoPill tap-to-toggle (Menu↔X icon swap + aria-label flip + aria-expanded + data-bloom-open) + BackendTopBarNew mobile Row 1 3-zone (LEFT Home / CENTER search-box 200px max / RIGHT Branch+Theme+Profile via justify-between). Briefcase icon removed (search box replaces it). Desktop UNCHANGED. 18/18.
+- **V92** (`90ebeac3`): BackendCmdPalette mobile sheet (mt-12 48px top backdrop + max-h-[calc(100vh-3rem)] + rounded-b-2xl) + explicit X close button in header (mobile + desktop). Pre-V92 was full-screen with no dismiss affordance. Desktop UNCHANGED. 15/15.
+
+**audit-all sweep** — 23 audit skills × 238 invariants via 6 parallel general-purpose subagents (12-min wall). Consolidated P0-P3 report delivered in chat. Outstanding follow-ups (P0-P1, user-discretion): 3 CRITICAL + 5 HIGH **TZ1 family** (`new Date().toISOString().slice(0,10)` → `thaiTodayISO()` × 8 sites) + 1 HIGH **S18** (`cancelCentralStockOrder` writeBatch atomicity) + 1 HIGH **A7** (`AbortSignal.timeout(5000)` × 60+ api/ fetch sites) + 1 HIGH **H7** (TreatmentTimeline.jsx:118 cascade gap).
+
+**5 combined deploys** (V15 syntax canonicalized: `firebase deploy --only firestore:rules,storage` ✓ NOT `:rules` suffix for storage):
+1. V87+V88 → vercel `gt0cpudf7-...`
+2. V89 → vercel `f6pnhs61m-...`
+3. V90 → vercel `r9uc6rx40-...`
+4. V91 → vercel `l0lxbc05h-...`
+5. V92 → vercel `ddzmhpd08-...`
+All aliased to `https://lover-clinic-app.vercel.app`. Probe-Deploy-Probe 4/4 identical pre+post across all 5 (chat_conv 200 · be_line_reminder_log 403 · be_fb_configs 403 · be_staff_chat_messages 403). Firestore + storage rules idempotent across all 5 (no rule-file change since V82-Phone).
+
+**Checkpoint**: `.agents/sessions/2026-05-18-v87-thru-v92-and-audit-all.md` for full V-by-V detail + audit findings + Rule Q L1 evidence per ship.
 
 ### Session 2026-05-18 EOD+10 — V86 v1 + followup-2 (12-task across 2 specs; mid-T7 pivot from blue per-section → universal red)
 

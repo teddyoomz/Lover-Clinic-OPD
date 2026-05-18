@@ -1,52 +1,43 @@
 ---
-updated_at: "2026-05-18 EOD+11 LATE — V92 SHIPPED + DEPLOYED (cmd-palette mobile sheet + X close button)"
-status: "MASTER = PROD. V92 LIVE. 5th deploy this session. Audit follow-ups (TZ1×8, S18, A7, H7) still pending per user discretion."
+updated_at: "2026-05-18 EOD+11 LATE — session-end: V87+V88+V89+V90+V91+V92 stack DEPLOYED (5 deploys) + audit-all 23 skills delivered"
+status: "MASTER = PROD. 5 combined deploys this session. Audit-all P0-P3 report delivered. Pending follow-ups: TZ1×8 + S18 + A7 + H7 (user-discretion)."
 branch: "master"
-last_commit: "(V92) fix: BackendCmdPalette mobile sheet redesign + visible X close"
-tests: "V92 15/15 + V91 18/18 + V90 13/13 + V89 13/13 + V88 15/15 + V87 20/20 + V86 64/64 = 158/158 V8x family GREEN · build clean"
+last_commit: "56e25aca docs(active.md): V92 LIVE — 5th deploy this session"
+tests: "V92 15 + V91 18 + V90 13 + V89 13 + V88 15 + V87 20 + V86 64 = 158/158 V8x family GREEN · build clean · full vitest run completed (195s) — no V8x family fails"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "V92 LIVE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 stack DEPLOYED 2026-05-18 EOD+11 LATE)"
-firestore_rules_version: "unchanged (idempotent — combined --only firestore:rules,storage)"
-storage_rules_version: "unchanged (idempotent combined)"
-audit_findings: "P0×3 TZ1 display-path · P1×7 (5×TZ1 write-path + S18 + A7 + H7) · P2×~11 · P3×~4. Auth+admin+backend-firestore+chat-notifications+rules ALL PASS clean. Pending user direction."
+production_commit: "V92 LIVE — ddzmhpd08-... aliased 2026-05-18 EOD+11 LATE (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92)"
+firestore_rules_version: "unchanged (idempotent across 5 deploys — combined --only firestore:rules,storage)"
+storage_rules_version: "unchanged (idempotent combined syntax verified)"
 ---
 
 # Active Context
 
 ## State
-- **V84 + V85 SHIPPED locally** (~21 commits ahead of prod since 2026-05-18 EOD).
-- V85 = Universal glow effect (20 utility classes + 2 auto-glow CSS rules covering ALL backend cards + ALL modals at body-root). Spec/plan/AV81 invariant + V21 fixup landed.
-- Sub-tab picker (BackendSubTabBloom) fixed via createPortal — escaped bloom-stage's transform-containing-block so full-viewport blur works.
-- TopBar (BackendShellNew) Briefcase icon → wide search-box trigger (32×320px) with 3-zone justify-between layout.
+- **5 deploys shipped tonight** — V87+V88 / V89 / V90 / V91 / V92 each with Probe-Deploy-Probe pre+post (200/403/403/403 identical).
+- **audit-all 23 skills · 238 invariants** ran via 6 parallel subagents. Zero CRITICAL/HIGH on auth+admin+backend-firestore+chat-notifications+rules. 3 CRITICAL + 7 HIGH all isolated to TZ correctness + 1 atomicity gap + 1 fetch-timeout class + 1 cascade gap.
+- **Mobile UX series closed**: customer-list responsive (V89) · bloom auto-close on entity-context (V90) · DuoPill tap-to-close + topbar 3-zone search (V91) · cmd-palette sheet + X close (V92). All 4 follow Rule Q V66 L1 verification at 375×812.
 
 ## What this session shipped
-- **V86-followup-2 Universal Red Glow + Admin-Tunable Settings UI** (commits 27f39864 → cc3aea81) — pivot V86 v1 from per-section dual-tone (8 ArcBloom colors) to universal RED (c1=#dc2626 red-600 border + c2=#ef4444 red-500 halo) + `--neon-intensity` multiplier (default 0.45 = Q1=C dim red). All V86 alphas wrap in `calc(<base> * var(--neon-intensity))` so single slider drives global brightness. Dropped 8 per-section [data-section] CSS-vars blocks. NEW `useV86GlowApply` hook at App.jsx root + NEW SystemSettingsTab 5th SectionCard "เอฟเฟกต์แสงเรือง": 2 color pickers + 4 presets each + intensity slider 0-150% + enabled toggle + live preview card + Save/Reset/Cancel buttons + persist to `clinic_settings/system_config.v86Glow` + audit doc. AV83 wording updated. Defense-in-depth menu :not() chain on admin-frontend-zone (per user "ห้ามแตะเมนู"). Tests: Phase A 64/64 vitest (CG1-CG9 + VS1-VS6) + Phase B 8 Playwright (B1-B8 incl. NEW B8 live-slider). 5-task plan inline-executed.
-- **V85-followup AV82 Cmd-palette closes bloom** (commit c93287bc) — `handleNavigate` adds `setBloomOpen(false)` + `setPaletteOpen(false)` after `onNavigate?.(tabId)`. Root cause: shell-owned overlay state leak on navigation through the central handleNavigate handler (single-broken path; ArcBloom paths already explicit). Tier 2 artifacts: AV82 invariant + T6.13/T6.14 regression. Real-prod preview L1: Cmd-K → palette opens over bloom → pick item → both collapse + tab switches (2 scenarios). User report verbatim: "menu ui space ข้างหลังมันไม่ปิด".
-- **V84 chat-tab badge fix** (commit 2dcb4c79) — overflow-y clip + neighbor overlap + halo containment (AV80)
-- **V85 brainstorming** spec + Visual Companion 30 mockups + AV81 invariant (approved by user)
-- **V85 plan** v1 → consolidated v2 (5 phase-tasks + cosmetic-shell banner)
-- **V85 Phase A** (23a82205) — 27 utility classes + 86 source-grep
-- **V21 fixup** (bc9fa52a) — V83-followup-7 SH1/3/4 aligned with -16 strip
-- **V85 Phase B/C/D/Frontend ext** (1ec135ad, 09c99ffc, f5eb24b4, a4fc34d8, 658c93e3) — strategic per-shell tints + V10 modal sweep
-- **V85 Phase E** (97705f99) — CG6 application audit + Playwright L1 spec
-- **V85 auto-glow rules** (118808e3, 780b0664, fb2723fb) — universal backend cards + modals via descendant selectors
-- **Sub-tab picker portal fix** (615f1030, 59fbc7d3, f6fb23ae) — full-viewport blur via React.createPortal escape
-- **TopBar search-box trigger** (b7db41f1, 0a01100e) — 32×320px 3-zone justify-between + Cmd palette backdrop close (AV78 exemption)
-- Checkpoint: `.agents/sessions/2026-05-18-v84-v85-glow-rollout.md`
-
-## Decisions
-- V85 strategy = "global rule beats per-file edit" — 2 auto-glow CSS rules (one for backend-content cards, one for modal content cards) cover 100s of surfaces from ~10 explicit class additions.
-- Auto-modal rule excludes bloom-overlay/bloom-stage/bloom-backdrop via :not() chain — menu untouched.
-- Sub-tab picker fix = createPortal(picker, document.body) — single-line React change to escape transform containing block.
-- TopBar 3-zone = LEFT cluster flex-shrink-0 + CENTER flex-1 with justify-center + RIGHT cluster flex-shrink-0. justify-between distributes evenly at all widths 768-1920.
-- AV78 exemption for cmd palette (click-outside-to-close) — palette is nav tool, no unsaved data, established convention.
+- **V87** — Recall sub-tab glow (rounded-lg→xl fits V86 auto-glow) + CreateQueueModal reorder (จองมัดจำ→จองไม่มัดจำ→คิว Walk-in) + AV84 link-button OPD-save guard.
+- **V88** — `.menu-tab-active` redder gradient (orange-400 → red-500) + AdminDashboard right-rail harmonized to transparent-base (Bell/Online/Signout).
+- **V89** — CustomerListTab mobile responsive (search prominent · `พิมพ์ Bulk` hidden `md:inline-flex` per user "ปีนึงจะใช้สักที").
+- **V90** — Bloom auto-close on entity-context (BackendShellNew `isSpecificEntityContext` from `viewingCustomer || treatmentFormMode || editingCustomer`).
+- **V91** — DuoPill tap-to-close toggle (Menu↔X icon swap + aria-label flip) + BackendTopBarNew mobile Row 1 3-zone (search center replaces Briefcase).
+- **V92** — BackendCmdPalette mobile sheet (mt-12 + max-h-[calc(100vh-3rem)] + rounded-b-2xl) + explicit X close button.
+- **audit-all** — 23 audit skills × 238 invariants via 6 parallel general-purpose subagents → consolidated P0-P3 report delivered.
+- Full checkpoint: `.agents/sessions/2026-05-18-v87-thru-v92-and-audit-all.md`
 
 ## Next action
-**Idle until user types "deploy"** — 21 commits queued vercel-only (no firestore rules change since V82-Phone). Post-deploy: Rule Q L1 hands-on visual review of glow rollout across dark + light theme.
+**Idle until user direction.** Options:
+1. Fix audit P0-P1 follow-ups in one batch (~4-5 hrs): TZ1 family × 8 sites + S18 cancelCentralStockOrder atomicity + A7 fetch timeout × 60+ sites + H7 TreatmentTimeline cascade.
+2. New user request.
+3. Continue audit-loop until 0 findings per user's earlier directive "ทำให้จบแล้ว audit all อีกรอบ ถ้าเจอบั๊คก็ทำอีกรอบ" — but this was interrupted by /session-end.
 
 ## Outstanding user-triggered actions
-- **Deploy verb** — combined queue (vercel-only)
-- **Chat-tab unread badge crowding** (OPEN — pre-V85, deferred from EOD+8) — `.menu-badge` position:absolute so siblings shouldn't shift; needs systematic-debugging Phase 1
-- **Chrome MCP extension reconnect** (carryover — Claude Preview slow per user request)
-- **V82 Menu V2 mobile L1 re-test** (carryover)
-- **Playwright L1 hands-on** — `npx playwright test tests/e2e/v85-glow-utility-application.spec.js` when admin creds env set
+- TZ1 P0-P1 family fix (8 sites — single trivial `→ thaiTodayISO()` pattern)
+- S18 cancelCentralStockOrder writeBatch atomicity
+- A7 `AbortSignal.timeout(5000)` × 60+ api/ fetch sites
+- H7 TreatmentTimeline.jsx:118 cascade (course-reverse port from BackendDashboard)
+- L1 hands-on multi-device walkthrough across V87-V92 deployed surfaces (mobile customer-detail flow, cmd-palette open+close, DuoPill toggle, menu-tab-active red color, customer-list mobile layout, recall sub-tab glow)
+- 2026-04-22 chat-tab badge crowding (pre-V85 carryover, deferred)
+- V82 Menu V2 mobile L1 re-test (carryover)
