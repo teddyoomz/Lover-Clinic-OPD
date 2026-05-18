@@ -3145,12 +3145,20 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 .subtab-overlay.desktop { perspective: 1200px; }
 
 .subtab-modal {
-  background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(8,12,24,0.96));
+  /* V85-followup (EOD9, 2026-05-18) — bg + heavy dark drop-shadow REMOVED
+     per user feedback: "ฟิล์มดำๆมาติดด้านหลัง ... ยังมีอยู่ไอ้สัส". The first
+     edit removed background:linear-gradient(rgba(15,23,42,0.95)) but user
+     reported the dark rectangle was STILL visible. Root cause #2 found:
+     box-shadow had 0 30px 90px rgba(0,0,0,0.7) — 90px blur at 0.7 alpha
+     creates a dense dark halo AROUND the picker that LOOKS like a dark
+     rectangle behind it. That dark drop is now removed; only the colored
+     ring (40px blur tinted to the parent orb color) remains. Full-screen
+     blur handled by .subtab-overlay stays as the canonical scrim. */
+  background: transparent;
   border: 1px solid color-mix(in srgb, var(--c1, #0ea5e9) 35%, transparent);
   border-radius: 22px;
   padding: 18px;
   box-shadow:
-    0 30px 90px rgba(0,0,0,0.7),
     0 0 40px color-mix(in srgb, var(--c1, #0ea5e9) 25%, transparent);
   transform-style: preserve-3d;
   will-change: transform;
