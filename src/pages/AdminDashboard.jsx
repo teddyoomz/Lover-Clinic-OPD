@@ -5935,7 +5935,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       </header>
 
       {adminMode === 'chat' ? (
-        <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6">
+        <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-4 sm:p-6 fx-glow-u3">
           <ChatPanel db={db} appId={appId} user={user} clinicSettings={clinicSettings} />
         </div>
       ) : adminMode === 'clinicSettings' ? (
@@ -5983,7 +5983,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       ) : adminMode === 'formBuilder' ? (
         <CustomFormBuilder db={db} appId={appId} user={user} onBack={() => setAdminMode('clinicSettings')} />
       ) : adminMode === 'history' ? (
-        <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden">
+        <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] overflow-hidden fx-glow-v8">
           {/* Header */}
           <div className="p-5 sm:p-6 border-b border-[var(--bd)] flex flex-col gap-3">
             <div className="flex items-center gap-3">
