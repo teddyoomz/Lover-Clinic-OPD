@@ -1977,9 +1977,10 @@ select.pf-input {
 [data-theme="light"] [data-testid="backend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]),
 [data-theme="light"] [data-testid="frontend-content"] :where(.bg-\[var\(--bg-card\)\], .bg-\[var\(--bg-surface\)\])[class*="rounded"]:not([class*="fx-glow-"]):not([data-glow-skip]) {
   box-shadow:
-    0 8px 16px rgba(0,0,0,0.06),
-    0 0 12px rgba(var(--v85-ember-rgb), 0.04),
-    inset 0 1px 0 rgba(0,0,0,0.04);
+    0 12px 24px rgba(0,0,0,0.1),
+    0 4px 8px rgba(0,0,0,0.06),
+    0 0 16px rgba(var(--v85-ember-rgb), 0.06),
+    inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
 @media (prefers-reduced-motion: reduce) {
