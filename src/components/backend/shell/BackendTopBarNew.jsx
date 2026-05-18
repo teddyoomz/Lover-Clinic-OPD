@@ -104,62 +104,65 @@ export default function BackendTopBarNew({
 
       {isDesktop && (
         /* Desktop ≥768px : 1-row 48px.
-           V85-followup (EOD9, 2026-05-18) — Briefcase icon-button replaced
-           by a wide search-box trigger placed in the center. User: "นำปุ่ม
-           เปิดเมนูมาทำเป็นช่องค้นหาไว้ตรงกลางเลย สะดวกกว่า กดไปแล้วมีเมนู
-           เด้ง". Click still opens cmd palette (onOpenPalette wiring
-           preserved verbatim); only the visual treatment changes from a
-           28×28 icon button → a wide input-shaped trigger.  Breadcrumb
-           pushed to the right of the search box (lg+ visible). */
-        <div className="flex h-12 px-4 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => { window.location.href = '/'; }}
-            aria-label="กลับ Frontend"
-            data-testid="topbar-frontend-desktop"
-            className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
-          >
-            <Home size={18} />
-          </button>
-          <BackendMenuModeToggle />
-          <BranchSelector />
-          {/* Wide search-box trigger — replaces former briefcase icon button.
-              Click → onOpenPalette opens BackendCmdPalette with real search
-              input + keyboard nav. Visually mimics an input so users can
-              "type here" intent at a glance. Cmd+K shortcut still wired
-              inside BackendCmdPalette. */}
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            aria-label="ค้นหาเมนู (Cmd+K)"
-            data-testid="topbar-shortcut-desktop"
-            className="flex-1 min-w-0 max-w-[320px] h-8 mx-1 flex items-center gap-1.5 px-2.5 rounded-md bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] hover:border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-xs font-medium transition-all"
-          >
-            <Search size={13} className="flex-shrink-0" strokeWidth={2.25} />
-            <span className="flex-1 text-left truncate">ค้นหาเมนู…</span>
-            <kbd
-              className="text-[9px] font-mono leading-none px-1 py-[3px] rounded bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-muted)] flex-shrink-0"
-              aria-hidden="true"
-            >⌘K</kbd>
-          </button>
-          {/* Breadcrumb — compact, right of search, hidden on smaller screens
-              so the search box gets priority width. */}
-          <div className="hidden 2xl:flex items-center gap-1.5 min-w-0 max-w-xs">
-            {section && (
-              <>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)] truncate">
-                  {section.label}
-                </span>
-                <span className="text-[var(--tx-muted)] flex-shrink-0">›</span>
-              </>
-            )}
-            <h1 className="text-sm font-black truncate" style={{ color: ac }}>
-              {item?.label || 'ระบบหลังบ้าน'}
-            </h1>
+           V85-followup (EOD9, 2026-05-18) — 3-zone flex layout.
+              [LEFT cluster] | flex-1 center (search) | [RIGHT cluster]
+           justify-between distributes the zones so right-side icons
+           always sit at the right edge instead of clumping on the left.
+           Search box stays centered between the left and right clusters
+           with max-w-[320px] cap. */
+        <div className="flex h-12 px-4 items-center gap-3 justify-between">
+          {/* LEFT cluster — home + mode toggle + branch */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/'; }}
+              aria-label="กลับ Frontend"
+              data-testid="topbar-frontend-desktop"
+              className="p-2 rounded-lg hover:bg-[var(--bg-hover)] active:scale-95 transition-all"
+            >
+              <Home size={18} />
+            </button>
+            <BackendMenuModeToggle />
+            <BranchSelector />
           </div>
-          {topBarSlot && <div className="flex-shrink-0">{topBarSlot}</div>}
-          <ThemeToggle theme={theme} setTheme={setTheme} />
-          <ProfileDropdown />
+          {/* CENTER — search-box trigger (max 320px), centered in remaining
+              flex space between left and right clusters. Click opens
+              BackendCmdPalette with the real search input. */}
+          <div className="flex-1 min-w-0 flex justify-center">
+            <button
+              type="button"
+              onClick={onOpenPalette}
+              aria-label="ค้นหาเมนู (Cmd+K)"
+              data-testid="topbar-shortcut-desktop"
+              className="w-full max-w-[320px] h-8 flex items-center gap-1.5 px-2.5 rounded-md bg-[var(--bg-hover)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] hover:border-[var(--bd-strong)] text-[var(--tx-muted)] hover:text-[var(--tx-primary)] text-xs font-medium transition-all"
+            >
+              <Search size={13} className="flex-shrink-0" strokeWidth={2.25} />
+              <span className="flex-1 text-left truncate">ค้นหาเมนู…</span>
+              <kbd
+                className="text-[9px] font-mono leading-none px-1 py-[3px] rounded bg-[var(--bg-surface)] border border-[var(--bd)] text-[var(--tx-muted)] flex-shrink-0"
+                aria-hidden="true"
+              >⌘K</kbd>
+            </button>
+          </div>
+          {/* RIGHT cluster — breadcrumb (xl+) + topBarSlot + theme + profile */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="hidden 2xl:flex items-center gap-1.5 min-w-0 max-w-xs mr-2">
+              {section && (
+                <>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)] truncate">
+                    {section.label}
+                  </span>
+                  <span className="text-[var(--tx-muted)] flex-shrink-0">›</span>
+                </>
+              )}
+              <h1 className="text-sm font-black truncate" style={{ color: ac }}>
+                {item?.label || 'ระบบหลังบ้าน'}
+              </h1>
+            </div>
+            {topBarSlot && <div className="flex-shrink-0">{topBarSlot}</div>}
+            <ThemeToggle theme={theme} setTheme={setTheme} />
+            <ProfileDropdown />
+          </div>
         </div>
       )}
     </header>
