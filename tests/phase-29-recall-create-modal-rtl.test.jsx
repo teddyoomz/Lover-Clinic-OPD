@@ -266,12 +266,13 @@ describe('Phase 29 · M7 modal close behaviors', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('M7.2 backdrop click closes modal', async () => {
+  it('M7.2 V83/AV78: backdrop click does NOT close (explicit close only)', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<RecallCreateModal customer={customer} onClose={onClose} />);
     await user.click(screen.getByTestId('recall-create-modal'));
-    expect(onClose).toHaveBeenCalled();
+    // V83 (EOD8 2026-05-18): modals only close via X / Cancel / ESC. See AV78.
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('M7.3 close button (X) closes modal', async () => {

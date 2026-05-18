@@ -145,11 +145,12 @@ describe('Phase 29 · SN4 modal close behaviors', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('SN4.4 backdrop click closes', async () => {
+  it('SN4.4 V83/AV78: backdrop click does NOT close (explicit close only)', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<RecallSnoozeMenu recall={recall} onClose={onClose} />);
     await user.click(screen.getByTestId('recall-snooze-menu'));
-    expect(onClose).toHaveBeenCalled();
+    // V83 (EOD8 2026-05-18): modals only close via X / Cancel / ESC. See AV78.
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

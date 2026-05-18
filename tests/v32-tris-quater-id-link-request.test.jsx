@@ -416,8 +416,13 @@ describe('Q8 nav + dashboard + tabPermissions', () => {
     expect(DASH_SRC).toMatch(/activeTab === ['"]link-requests['"]/);
     expect(DASH_SRC).toMatch(/<LinkRequestsTab/);
   });
-  test('Q8.3 tabPermissions has link-requests adminOnly', () => {
-    expect(TAB_PERMS_SRC).toMatch(/['"]link-requests['"]:\s*\{\s*adminOnly:\s*true\s*\}/);
+  test('Q8.3 V83: tabPermissions has link-requests requires:[link_request_management]', () => {
+    // V83 (EOD8 2026-05-18): flipped from adminOnly:true → requires:['link_request_management']
+    // Admin bypass still works via canAccessTab isAdmin early-return.
+    // Per-branch staff with the perm can now manage their branch's queue.
+    expect(TAB_PERMS_SRC).toMatch(/['"]link-requests['"]:\s*\{\s*requires:\s*\[\s*['"]link_request_management['"]\s*\]\s*\}/);
+    // Anti-regression: old adminOnly form removed
+    expect(TAB_PERMS_SRC).not.toMatch(/['"]link-requests['"]:\s*\{\s*adminOnly:\s*true\s*\}/);
   });
 });
 

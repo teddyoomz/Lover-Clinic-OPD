@@ -140,7 +140,7 @@ describe('Phase 29.23 E1 — RecallEditModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('E1.5 — closes via backdrop click', () => {
+  it('E1.5 — V83/AV78: backdrop click does NOT close (explicit close only)', () => {
     const onClose = vi.fn();
     render(
       <RecallEditModal
@@ -150,7 +150,9 @@ describe('Phase 29.23 E1 — RecallEditModal', () => {
       />
     );
     fireEvent.click(screen.getByTestId('recall-edit-modal'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // V83 (EOD8 2026-05-18): modals only close via X / Cancel / ESC.
+    // User: "คลิ๊กพลาดปิด modal บ่อยจนอยากจะทุบคอมทิ้ง". See AV78.
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('E1.6 — backdrop click on inner card does NOT close', () => {

@@ -197,12 +197,13 @@ describe('Phase 29 · O5 modal close behaviors', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('O5.2 backdrop click closes', async () => {
+  it('O5.2 V83/AV78: backdrop click does NOT close (explicit close only)', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<RecallOutcomeModal recall={recall} onClose={onClose} />);
     await user.click(screen.getByTestId('recall-outcome-modal'));
-    expect(onClose).toHaveBeenCalled();
+    // V83 (EOD8 2026-05-18): modals only close via X / Cancel / ESC. See AV78.
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('O5.3 close button (X) closes', async () => {
