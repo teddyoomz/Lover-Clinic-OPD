@@ -19,6 +19,12 @@ import { ChevronDown, ChevronLeft, ChevronRight, Search, Database } from 'lucide
 import { NAV_SECTIONS, PINNED_ITEMS, TAB_COLOR_MAP, sectionOf } from './navConfig.js';
 import { hexToRgb } from '../../../utils.js';
 import { useTabAccess } from '../../../hooks/useTabAccess.js';
+// V83-followup-19 (EOD8 LATE 2026-05-18) — Real clinic logo in sidebar header.
+// User: "ตรงคำว่าระบบหลังบ้าน ... ใส่โลโก้คลินิกมาใส่จริงๆด้วย โดย ตีม Dark
+// ก็ใส่โลโก้สำหรับตีม Dark ตีม Light ก็ใส่สำหรับตีม Light ซึ่งเรามีโลโก้ทั้ง 2
+// แบบอยู่แล้ว". ClinicLogo handles theme-aware logo URL selection.
+import ClinicLogo from '../../ClinicLogo.jsx';
+import { useTheme } from '../../../hooks/useTheme.js';
 
 const STORAGE_KEY_COLLAPSED = 'backend-nav-collapsed-v1';
 const STORAGE_KEY_EXPANDED_SECTIONS = 'backend-nav-expanded-sections-v1';
@@ -52,6 +58,10 @@ export default function BackendSidebar({
   hideCollapseToggle = false,
   hidePaletteButton = false,
 }) {
+  // useTheme: prefer `resolvedTheme` (actual rendered 'dark' | 'light') over
+  // raw `theme` which can be 'auto'. ClinicLogo selects logoUrl/logoUrlLight
+  // based on this string.
+  const { resolvedTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(() => forceExpanded ? false : loadCollapsed());
   const [expandedSections, setExpandedSections] = useState(() => loadExpandedSections(activeTabId));
 
@@ -96,20 +106,25 @@ export default function BackendSidebar({
       aria-label="เมนูระบบหลังบ้าน"
       className={`${widthClass} shrink-0 flex flex-col bg-[var(--bg-surface)] border-r border-[var(--bd)] transition-[width] duration-200 ease-out h-full`}
     >
-      {/* Header: icon chip + clinic name. Typeset 2026-04-19 — h1 bumped
-          11→16px font-black white text (was tiny accent-color tracking-wider
-          uppercase = unreadable Thai). Clinic name subtitle moved to text-xs
-          weight 500 muted for clear secondary info. */}
+      {/* V83-followup-19 — Real clinic logo (theme-aware) in sidebar header.
+          Replaces Database icon chip. ClinicLogo picks logoUrl / logoUrlLight
+          from clinicSettings based on `theme` prop. Falls back to text-logo
+          when no image URL set (handles fresh clinic install). */}
       <div className="px-3 py-4 border-b border-[var(--bd)] flex items-center gap-3 flex-shrink-0">
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 p-1.5"
           style={{
-            background: `linear-gradient(135deg, rgba(${acRgb},0.30), rgba(${acRgb},0.10))`,
-            border: `1px solid rgba(${acRgb},0.40)`,
-            boxShadow: `0 0 22px -4px rgba(${acRgb},0.40)`,
+            background: `linear-gradient(135deg, rgba(${acRgb},0.18), rgba(${acRgb},0.04))`,
+            border: `1px solid rgba(${acRgb},0.35)`,
+            boxShadow: `0 0 22px -4px rgba(${acRgb},0.35)`,
           }}
         >
-          <Database size={20} strokeWidth={2.25} style={{ color: ac }} />
+          <ClinicLogo
+            clinicSettings={clinicSettings}
+            theme={resolvedTheme}
+            showText={false}
+            className="w-full h-full"
+          />
         </div>
         {!effectiveCollapsed && (
           <div className="min-w-0">

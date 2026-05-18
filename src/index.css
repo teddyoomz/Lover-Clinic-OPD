@@ -2826,17 +2826,15 @@ html[data-backend-menu-mode="new"] [data-testid="staff-chat-bubble"] {
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
   position: relative;
   overflow: hidden;
-  /* V83-followup-15 (EOD8 LATE 2026-05-18) — Variant V: FILE-TAB STYLE.
-     User switched from R parallelogram → V file-tab. Left accent bar +
-     right-rounded corners + sharp left. Section header reads as "I am a
-     selected file tab pulling out of the sidebar" — browser-tab feel. */
-  border-left: 4px solid rgba(244, 114, 182, 0.55);
-  border-radius: 0 8px 8px 0; /* sharp-left, round-right = file tab */
+  /* V83-followup-18 (EOD8 LATE 2026-05-18) — Variant V2: THICK STRIPE +
+     AMBIENT RING. User picked V2 from refinement picker. 6px bar (vs V1's
+     4px) + outer accent ring + stronger ambient halo. Bolder presence. */
+  border-left: 6px solid rgba(244, 114, 182, 0.65);
+  border-radius: 0 10px 10px 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
-    0 2px 4px rgba(0, 0, 0, 0.18),
-    0 4px 12px -4px rgba(244, 114, 182, 0.12);
+    0 0 0 1px rgba(244, 114, 182, 0.18),
+    0 4px 14px -4px rgba(244, 114, 182, 0.20);
   transition:
     transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.18s ease,
@@ -2855,23 +2853,21 @@ nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-e
   border-radius: inherit;
 }
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded]:hover {
-  border-left-color: rgba(244, 114, 182, 0.85);
+  border-left-color: rgba(244, 114, 182, 0.95);
   transform: translateX(2px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 4px 10px rgba(0, 0, 0, 0.30),
-    0 8px 24px -4px rgba(244, 114, 182, 0.30);
+    0 0 0 1px rgba(244, 114, 182, 0.40),
+    0 6px 20px -4px rgba(244, 114, 182, 0.35);
   filter: brightness(1.08) saturate(1.10);
 }
-/* Active section (expanded with active child) — bold accent presence */
+/* Active section (expanded) — V2 spec: brighter ring + #ec4899 bar + halo */
 nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded="true"] {
-  border-left-color: rgba(244, 114, 182, 1);
+  border-left-color: #ec4899;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
-    0 3px 6px rgba(0, 0, 0, 0.22),
-    0 6px 20px -4px rgba(244, 114, 182, 0.45);
+    0 0 0 1.5px rgba(244, 114, 182, 0.65),
+    0 8px 28px -4px rgba(244, 114, 182, 0.55);
 }
 /* LIGHT theme — softer paper-card depth instead of dark inner shadow */
 [data-theme="light"] nav[aria-label="เมนูระบบหลังบ้าน"] button[aria-expanded] {
