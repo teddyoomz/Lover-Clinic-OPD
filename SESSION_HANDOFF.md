@@ -66,12 +66,34 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-18 EOD+7 — **ClinicLogo at bloom center + slow glow + iterative size tune**
-- **Master**: `033a1101` (round 7 mobile logo -2% tune) · ~20 commits ahead of prod
-- **Prod**: `ef4bd5c3` LIVE (logo polish NOT deployed · joins existing queue · user must type "deploy")
-- **Tests**: Backend Menu D pyramid 136/136 PASS · build clean 3.55s
+- **Date last updated**: 2026-05-18 EOD+8 LATE — **V83 + 21 followups batch** (modal explicit-close + perm correctness + chat-branch sync + extensive light/dark UI polish)
+- **Master**: `6f1772ea` · ~52 commits ahead of prod
+- **Prod**: `ef4bd5c3` LIVE (V83 batch NOT deployed · user must type "deploy")
+- **Tests**: 11701 passed / 0 failed / 25 skipped (full vitest post-V83-followup-3) · build clean 2.92s
+- **AV invariants added**: AV78 (modal backdrop explicit-close) + AV79 (perm/tab mapping completeness)
 - **HN counter**: absent → next addCustomer = **LC-26000001**
 - **opd_sessions**: state unchanged
+
+### Session 2026-05-18 EOD+8 LATE — V83 + 21 followups (modal+perm+chat-sync+UI polish saga)
+
+V83 main: modal explicit-close-only universal strip (56 files / 80+ backdrops) + AV78 invariant + 2 sanctioned lightboxes + link_request_management perm key + (16.3)/(29.22) phase tag cleanup + Rule Q L2 verified.
+
+21 followups in single session:
+- **1-2**: ArcBloom perm-filter wire + sub-tab z-index above logo + tilt viewport-clamped (JS bias calc)
+- **3**: 11 master-data tabs `adminOnly:true` → `requires:[perm_key]` (AV79) — perm grants now actually grant access; was dead code due to canAccessTab short-circuit
+- **4**: BranchProvider `selectionStillValid` now verifies `staffAccessible.includes(stored)` — single-point fix for chat-branch sync divergence (BranchSelector vs StaffChatWidget)
+- **5-13**: Light theme sidebar contrast + sub-item cards + rose hierarchy + universal Tailwind shadow polish + grayscale/gradient text-white restore + glass-card header chrome + outer accent ring
+- **14-17**: R parallelogram skew → V file-tab swap + sub-items bottom-border-only + V picker (6 refinements)
+- **18-19**: V2 (thick stripe + ambient ring) chosen + real ClinicLogo wired in BackendSidebar header (theme-aware via `useTheme().resolvedTheme`)
+- **20-21**: Mobile drawer X visible (border-r-2 + bigger chip) + light theme V2 parity (rose-600/700 family)
+
+Visual companion pattern: 2 picker pages at `public/v83-variants.html` (round 1: 8 shape variants A-H · round 2: 14 shapes I-V · round 3: 6 V refinements V1-V6). User picked R then switched to V then V2.
+
+**1 OPEN bug**: Frontend top-bar Chat tab unread badge crowds neighbors (L/R + top/bottom). `.menu-badge` is `position:absolute` per CSS read — root cause non-obvious. User has screenshot repro. Deferred to next session via systematic-debugging Phase 1.
+
+All CSS-only after followup-5 EXCEPT followup-4 (BranchContext) + followup-19 (BackendSidebar JSX wire). Zero JSX touch for visual changes after followup-7. Build clean throughout.
+
+**Checkpoint**: `.agents/sessions/2026-05-18-v83-batch.md`. **Next**: user "deploy" verb → combined queue ~52 commits vercel-only · no firestore rules change since V82-Phone.
 
 ### Session 2026-05-18 EOD+7 — ClinicLogo at bloom center + slow glow + iterative size tune
 
