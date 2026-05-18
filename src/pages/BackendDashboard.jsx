@@ -24,7 +24,7 @@ import BackendNav from '../components/backend/nav/BackendNav.jsx';
 import BackendShellNew from '../components/backend/shell/BackendShellNew.jsx';
 import BackendMenuModeToggle from '../components/backend/shell/BackendMenuModeToggle.jsx';
 import { useBackendMenuMode } from '../components/backend/shell/backendMenuMode.js';
-import { ALL_ITEM_IDS } from '../components/backend/nav/navConfig.js';
+import { ALL_ITEM_IDS, NAV_SECTIONS } from '../components/backend/nav/navConfig.js';
 // Phase 17.2 (2026-05-05) — BranchProvider hoisted to App.jsx; this file
 // no longer wraps. BranchSelector still rendered here (top-bar slot).
 import BranchSelector from '../components/backend/BranchSelector.jsx';
@@ -370,7 +370,10 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   // IDENTICAL children. Cosmetic-shell rule: no logic diverges per mode.
   const mainContent = (
     <>
-      <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6 fx-glow-u3`} data-testid="backend-content">
+      {/* V86 (EOD10, 2026-05-18) — data-section drives per-section neon glow via CSS vars
+          set on this wrapper. Cosmetic-shell: display metadata only, NO handler/state/prop touch.
+          AV83 lock: --neon-c1/c2 binding flows through CSS cascade. */}
+      <div className={`${activeTab === 'reports' || activeTab.startsWith('reports-') ? 'max-w-none' : 'max-w-7xl'} mx-auto px-4 py-6 fx-glow-u3`} data-testid="backend-content" data-section={NAV_SECTIONS.find(s => s.items.some(it => it.id === activeTab))?.id || 'appointments-section'}>
         {/* Audit P2 (2026-04-26 perf code-split): Suspense boundary catches
             in-flight tab loads. Eager-imported tabs render immediately;
             lazy-imported tabs (reports + heavy modals) trigger this fallback

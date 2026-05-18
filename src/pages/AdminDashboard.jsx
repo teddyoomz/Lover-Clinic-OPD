@@ -5740,7 +5740,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   };
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden">
+    /* V86 (EOD10, 2026-05-18) — admin-frontend-zone + data-section drives per-section
+       neon glow (appointments tint for queue/chat/calendar). Cosmetic-shell: display
+       metadata only, NO handler/state/prop touch. */
+    <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in duration-500 overflow-x-hidden admin-frontend-zone" data-section="appointments">
 
       {toastMsg && (
         <div className="fixed bottom-6 right-6 bg-blue-600 text-white px-5 py-4 rounded-2xl shadow-[0_10px_30px_rgba(37,99,235,0.3)] flex items-center gap-4 animate-in slide-in-from-bottom-5 z-[100] border border-blue-400">

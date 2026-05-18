@@ -3807,3 +3807,65 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
 [data-theme="light"] .v86-glow-card {
   animation: v86-breath-light 4s ease-in-out infinite;
 }
+
+/* --- V86 auto-glow override (replaces V85 black-shadow auto-glow) ---
+   Strategy: every card-shaped element inside [data-testid="backend-content"]
+   or .admin-frontend-zone auto-receives V86 neon glow via the per-section
+   CSS vars set on the [data-section] ancestor. Menu overlays + subtab picker
+   excluded by :not() chain (AV81 lock). Print views never reach these scopes.
+*/
+[data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
+[data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:not([data-testid="bloom-overlay"]):not([data-testid^="bloom-orb-"]):not([data-testid^="subtab-"]),
+.admin-frontend-zone [class*="rounded-2xl"],
+.admin-frontend-zone [class*="rounded-xl"] {
+  border: 1px solid rgba(var(--neon-c1), 0.40);
+  box-shadow:
+    0 0 0 1px rgba(var(--neon-c1), 0.08),
+    0 0 14px rgba(var(--neon-c2), 0.45),
+    0 0 32px rgba(var(--neon-c2), 0.20);
+  animation: v86-breath 4s ease-in-out infinite;
+  transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+[data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
+[data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
+.admin-frontend-zone [class*="rounded-2xl"]:hover,
+.admin-frontend-zone [class*="rounded-xl"]:hover {
+  animation-play-state: paused;
+  transform: translateY(-3px);
+  border-color: rgba(var(--neon-c1), 0.65);
+  box-shadow:
+    0 0 0 1px rgba(var(--neon-c1), 0.20),
+    0 0 28px rgba(var(--neon-c2), 0.85),
+    0 0 64px rgba(var(--neon-c2), 0.50);
+}
+
+/* Light theme auto-glow override */
+[data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
+[data-theme="light"] [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
+[data-theme="light"] .admin-frontend-zone [class*="rounded-2xl"],
+[data-theme="light"] .admin-frontend-zone [class*="rounded-xl"] {
+  border-color: rgba(var(--neon-c1), 0.55);
+  box-shadow:
+    0 0 0 1px rgba(var(--neon-c1), 0.10),
+    0 0 12px rgba(var(--neon-c2), 0.30),
+    0 0 28px rgba(var(--neon-c2), 0.15);
+  animation: v86-breath-light 4s ease-in-out infinite;
+}
+
+/* Reduced-motion override for auto-glow */
+@media (prefers-reduced-motion: reduce) {
+  [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"],
+  [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"],
+  .admin-frontend-zone [class*="rounded-2xl"],
+  .admin-frontend-zone [class*="rounded-xl"] {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-2xl"]:hover,
+  [data-backend-menu-mode="new"] [data-testid="backend-content"] [class*="rounded-xl"]:hover,
+  .admin-frontend-zone [class*="rounded-2xl"]:hover,
+  .admin-frontend-zone [class*="rounded-xl"]:hover {
+    transform: none !important;
+  }
+}
