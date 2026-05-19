@@ -201,6 +201,29 @@ AV85 locks the FAMILY of TZ-unsafe truncation patterns including future-date ari
 
 **Source-grep regression**: future `Number(req.body?...)` patterns in api/ must use `safeNumber` from `api/_lib/safeNumber.js` OR explicit `Number.isFinite()` + 400 return.
 
+### AV88 — TFP treatmentItems↔courseItems link MUST be auto-rescued at save boundary (V101, 2026-05-19 LATE+2)
+**Why**: System-wide audit 2026-05-19 LATE+2 found **4 of 4 auditable treatments (100% bug rate)** where `treatment.detail.treatmentItems[].productId` matched a `customer.courses[].productId` BUT `treatment.detail.courseItems[]` saved as empty array → `customer.courses[].qty.remaining` NEVER decremented + `be_course_changes` audit log emitted ZERO 'use' events for those treatments. User-reported (วันเพ็ญ LC-26000078): "ตัดช็อคเวฟไปตั้งหลายรอบ ทำไมไม่เห็นตัดคอร์สเลย".
+
+3 desync channels: (a) **edit-load self-perpetuating loop** at TFP:991 — `t.treatmentItems` load assigned `id=existing-${i}` while `selectedCourseItems` Set stayed empty (gate on `t.courseItems?.length` at line 1054 never fired when prior save had empty courseItems) → every subsequent edit save reproduced empty courseItems. (b) **State-sync race** between `selectedCourseItems` Set, `options.customerCourses` array, and `treatmentItems` array at save time. (c) **Purchase + use-immediately mismatch** where rowId lookup against post-buy customerCourses missed.
+
+V100/V99/V96 missed it because every test layered admin-SDK on top of a synthesized `backendDetail` object — **never chained the React state lifecycle** (toggleCourseItem → setSelectedCourseItems → setTreatmentItems → handleSubmit → serialization). Mock-shadowed exactly per Rule Q V66 anti-pattern.
+
+**Grep** (forbidden):
+- `courseItems:\s*Array\.from\(selectedCourseItems\)\.map\([^)]+\)\.filter\(Boolean\)` — single-pass rowId-only serialization. Must use V101 two-pass `(() => { ... Pass 1 ... Pass 2 productId fallback ... })()` IIFE.
+
+**Required pattern** (canonical V101):
+- Pass 1: rowId-based lookup against `options.customerCourses[].products[].rowId` (preserves explicit selection)
+- Pass 2: productId-based fallback for every `treatmentItem` with `productId` NOT covered by Pass 1 — finds first `customer.courses[].products[]` entry with matching productId + remaining > 0 (or fillLater / buffet) + stamps `_v101AutoLinked: true` forensic marker
+- Edit-load (TFP:991): when restoring `t.treatmentItems`, prefer rebind to current `customerCoursesForForm[].products[].productId` (assigns matched `rowId` + populates `selectedCourseItems`). Falls back to `existing-${i}` ID only when no match.
+
+**Closed sanctioned exception list** (0 entries — every TFP save MUST run V101 two-pass + edit-load rebind).
+
+**Source-grep regression**:
+- `tests/v101-treatment-course-link-desync.test.js` locks V101 source markers (`_v101AutoLinked` + two-pass IIFE shape + edit-load rebind productId match)
+- Rule I flow-simulate via RTL mount of TreatmentFormPage with mock customer.courses[] state — verify save emits non-empty courseItems even when selectedCourseItems Set is stale OR when treatmentItems loaded via existing-N IDs.
+
+**Rule M backfill required**: any prod treatment with `treatmentItems[].productId` + `courseItems[]` empty + matching customer.courses entry → retroactively (a) decrement customer.courses[].qty, (b) emit be_course_changes kind='use' with treatmentId, (c) stamp `_v101BackfilledAt` + `_v101BackfilledFrom` forensic fields.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

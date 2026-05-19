@@ -988,7 +988,45 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.labItems?.length) setLabItems(t.labItems);
               if (t.medications?.length) setMedications(t.medications);
               if (t.consumables?.length) setConsumables(t.consumables);
-              if (t.treatmentItems?.length) setTreatmentItems(t.treatmentItems.map((item, i) => ({ id: `existing-${i}`, name: item.name || '', qty: item.qty || '1', unit: item.unit || '', price: item.price || '' })));
+              if (t.treatmentItems?.length) {
+                // V101 (2026-05-19 LATE+2) — edit-load rebind by productId.
+                // Pre-V101: every treatmentItem got id=`existing-${i}` and
+                // selectedCourseItems stayed empty when t.courseItems was empty
+                // (line 1054 gate). On save → courseItems serialization saw
+                // empty Set → wrote courseItems=[] again → self-perpetuating
+                // loop where customer.courses[] never decremented across edits.
+                // V101 rebind: when treatmentItem has productId AND matches an
+                // entry in customerCoursesForForm, restore the rowId+selectedCourseItems
+                // pair so save-time serialization works. Falls back to legacy
+                // `existing-${i}` ID when no match (preserves orphan/manual rows).
+                const restoredItems = [];
+                const restoredSelection = new Set();
+                t.treatmentItems.forEach((item, i) => {
+                  const baseShape = {
+                    name: item.name || '',
+                    qty: item.qty || '1',
+                    unit: item.unit || '',
+                    price: item.price || '',
+                    productId: item.productId || '',
+                  };
+                  if (item.productId && Array.isArray(customerCoursesForForm) && customerCoursesForForm.length > 0) {
+                    let matched = null;
+                    for (const course of customerCoursesForForm) {
+                      const product = (course.products || []).find(p => String(p.productId) === String(item.productId));
+                      if (product) { matched = product; break; }
+                    }
+                    if (matched && matched.rowId) {
+                      restoredItems.push({ ...baseShape, id: matched.rowId });
+                      restoredSelection.add(matched.rowId);
+                      return;
+                    }
+                  }
+                  // Fallback — no productId or no match → legacy existing-N id
+                  restoredItems.push({ ...baseShape, id: `existing-${i}` });
+                });
+                setTreatmentItems(restoredItems);
+                if (restoredSelection.size > 0) setSelectedCourseItems(restoredSelection);
+              }
               // Phase 14.7.F — snapshot stock-bearing arrays for diff-on-save.
               // Captured AFTER setters so the comparison normalizer has the same
               // shape both old and new go through. Stored as raw doc shape (not
@@ -2349,22 +2387,90 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           // `courseIndex` (when present) targets a specific customer.courses entry —
           // lets deductCourseItems hit the exact row the user selected instead of
           // falling back to FIFO name/product match across possibly many duplicates.
-          courseItems: Array.from(selectedCourseItems).map(rowId => {
-            for (const course of (options?.customerCourses || [])) {
-              const product = course.products?.find(p => p.rowId === rowId);
-              if (product) {
-                return {
-                  courseName: course.courseName,
-                  productName: product.name,
-                  rowId: product.rowId,
-                  courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
-                  deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
-                  unit: product.unit || '',
-                };
+          //
+          // V101 (2026-05-19 LATE+2) — TWO-PASS defensive serialization.
+          // User report (real prod, วันเพ็ญ LC-26000078): 4 of 4 auditable treatments
+          // had treatmentItems with productId matching customer.courses[].productId
+          // but courseItems serialized to []. Class-of-bug: "treatmentItems-
+          // courseItems desync at save boundary" — root cause channels include
+          // (a) edit-load self-perpetuating loop (line 991 sets id=`existing-${i}`
+          //     while selectedCourseItems stays empty → save with empty courseItems
+          //     → loop), (b) state-sync race between selectedCourseItems Set +
+          //     options.customerCourses array (timing-dependent, not always
+          //     reproducible), (c) purchase + use-immediately path where rowId
+          //     lookup in customerCourses misses post-confirmBuyModal append.
+          // V101 backstop: Pass 1 = original rowId-based lookup; Pass 2 =
+          // productId-based fallback that catches all 3 channels.
+          courseItems: (() => {
+            const liveCustomerCourses = options?.customerCourses || [];
+            const out = [];
+            const usedRowIds = new Set();
+            // Pass 1 — original rowId-based serialization (happy path)
+            for (const rowId of selectedCourseItems) {
+              let found = false;
+              for (const course of liveCustomerCourses) {
+                const product = course.products?.find(p => p.rowId === rowId);
+                if (product) {
+                  out.push({
+                    courseName: course.courseName,
+                    productName: product.name,
+                    rowId: product.rowId,
+                    courseIndex: typeof product.courseIndex === 'number' ? product.courseIndex : undefined,
+                    deductQty: Number(treatmentItems.find(t => t.id === rowId)?.qty || 1),
+                    unit: product.unit || '',
+                  });
+                  usedRowIds.add(rowId);
+                  found = true;
+                  break;
+                }
+              }
+              // If not found in customerCourses but rowId is still tracked,
+              // log for forensic debugging (Pass 2 may still rescue via productId).
+              if (!found && typeof console !== 'undefined') {
+                try { console.warn(`[TFP V101] selectedCourseItems rowId="${rowId}" not found in options.customerCourses — Pass 2 will attempt productId fallback`); } catch {}
               }
             }
-            return null;
-          }).filter(Boolean),
+            // Pass 2 — V101 defensive auto-link via productId for any
+            // treatmentItem not yet covered. Catches ALL desync channels.
+            for (const ti of treatmentItems) {
+              if (!ti.id || !ti.productId) continue;
+              if (usedRowIds.has(ti.id)) continue;
+              // Already in out via Pass 1 lookup by-rowId or by treatmentItems with
+              // matching id? skip
+              if (out.some(c => String(c.rowId) === String(ti.id))) continue;
+              // Find first customer.courses[].products[] entry with matching productId
+              // and remaining > 0 (or fillLater / buffet). FIFO across customerCourses
+              // order — mapRawCoursesToForm preserves customer.courses array order.
+              let match = null;
+              for (const course of liveCustomerCourses) {
+                for (const product of (course.products || [])) {
+                  if (String(product.productId) === String(ti.productId)) {
+                    const rem = parseFloat(product.remaining);
+                    const isFillLater = !!product.fillLater;
+                    const isBuffet = !!product.isBuffet;
+                    if (isFillLater || isBuffet || (Number.isFinite(rem) && rem > 0)) {
+                      match = { course, product };
+                      break;
+                    }
+                  }
+                }
+                if (match) break;
+              }
+              if (match) {
+                out.push({
+                  courseName: match.course.courseName,
+                  productName: match.product.name,
+                  rowId: match.product.rowId,
+                  courseIndex: typeof match.product.courseIndex === 'number' ? match.product.courseIndex : undefined,
+                  deductQty: Number(ti.qty) || 1,
+                  unit: match.product.unit || ti.unit || '',
+                  _v101AutoLinked: true, // forensic marker — admin can see which
+                                          // deductions were rescued by Pass 2
+                });
+              }
+            }
+            return out;
+          })(),
         });
         // Phase 6: Course deduction BEFORE save — only deduct EXISTING courses (not purchased-in-session).
         // Reversal on edit: split old deductions into existing + purchased so the reversal algorithm
