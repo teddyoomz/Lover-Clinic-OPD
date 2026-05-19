@@ -66,8 +66,32 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-19 LATE+3 NIGHT+5 — V104→V107 mega-session (5 V-entries + 4 Rule M backfills + 6 AV invariants + light-theme universal fix)
-- **Master = Prod**: `f076a45d` (V107) — V104→V107 ALL LIVE at https://lover-clinic-app.vercel.app (deploy `85pg892xe-...`)
+- **Date last updated**: 2026-05-19 NIGHT+5 EOD+1 — V43-followup 12-task subagent-driven implementation COMPLETE locally (hide skipped products from stock balance + edit shortcut)
+- **Master**: Task 12 final-verify commit (13 commits ahead of prod `f076a45d` V107). V43-followup local-only — NOT YET DEPLOYED.
+- **Prod**: `f076a45d` (V107) still LIVE at https://lover-clinic-app.vercel.app — V43-followup awaits user `deploy` authorization per V18
+
+### Session 2026-05-19 NIGHT+5 EOD+1 — V43-followup hide skipped products from stock balance + Edit shortcut (12-task subagent-driven complete)
+
+12 tasks via subagent-driven-development. Brainstorming → spec → plan → 12 implementations + 2-stage review per task. ALL LOCAL — NO deploy. User authorizes "deploy" separately per V18.
+
+- **T1** `9b764ebf` + `9b764ebf` — pure `src/lib/skipStockFilter.js` helper + 31 unit tests (5 groups A-E: predicate + happy + adversarial + idempotency + forward-compat). Adversarial includes Thai / Unicode NFC vs NFD (explicit `é` + `é`) / NUL byte (explicit ` `) / 10K-char / numeric-vs-string-flag / 1000-product perf budget.
+- **T2** `ee6a896f` — `listenToProducts` Layer 1 (`backendClient.js`) + Layer 2 wrapper (`scopedDataLayer.js`). BS-18 invariant. Mirror of V54/BS-13 + V75/BS-16. Safe-by-default: empty branchId + !allBranches → emit [] + noop unsub. V38 spread-order safe.
+- **T3** `01a8344e` — StockBalancePanel refactor: replaced one-shot listProducts → onSnapshot listenToProducts; stamps `skipStockDeduction` per row in groupBy; calls `filterOutSkippedProducts(Array.from(byProduct.values()))` (single-source contract); added `[✎ แก้ไข]` button rightmost in Actions with sky-blue tint + `onEditProduct` callback prop. Fixed pre-existing V21 test asserting old `listProducts` import.
+- **T4** `fb974539` — Symmetric parent wire on StockTab + CentralStockTab: own `editingProduct` state + render `<ProductFormModal>` when Edit button fires `setEditingProduct`. `clinicSettings` already in scope on both files.
+- **T5** `25c2b420` — AV97 (skip-stock filter discipline on balance readers) + BS-18 (listenToProducts safe-by-default) codified in audit-skill SKILL.md files. Closed exception list (2 sanctioned: ProductsTab + MovementLogPanel).
+- **T6** `ff013ea` — AV97 source-grep enforcer test (9 assertions: required consumer / sanctioned files / closed-list / helper integrity / SKILL.md cross-link).
+- **T7** `9d8f9ac0` — Rule I flow-simulate (10 tests F1-F7): single toggle, mid-stream listener update, user-reported screenshot mirror, cross-branch isolation, multi-batch, source-grep wiring, full reversibility lifecycle.
+- **T8** `d1451e5a` — Adversarial mulberry32 1204 fixtures (4 product types × 3 tiers × 100 seeds + 3 bulk + 1 cross-tier).
+- **T9** `34b5870d` — Admin-SDK e2e on real prod: 12 TEST-V43F products created → toggle verified hidden → untoggle verified reappear → cleanup zero orphans. Audit doc `e2e-v43f-hide-from-balance-1779220273857-553259b4` emitted. 7/0 PASS on real prod.
+- **T10** `50029f59` — Playwright L1 scaffold (3 tests): real-browser dev-server localhost:5173 → admin-SDK toggle simulation → flag persistence verified. Rule Q V66 contract.
+- **T11** `2ffb6501` — Stress: 50-concurrent toggle convergence, 100-iter mutation chain, mid-render array-mutate defense, 10K-product 200ms perf budget, cross-tab listener agreement.
+- **T12** (this commit) — Final verify: V43-followup-specific tests 1270/1270 PASS + V43 legacy e2e 39/39 PASS + build clean + audit greps confirmed (AV97 in audit-anti-vibe-code SKILL.md + BS-18 in audit-branch-scope SKILL.md + filterOutSkippedProducts + listenToProducts in StockBalancePanel). **Full vitest pre-existing failures (24)**: backend-menu-d 6 / RP1 SaleTab IIFE 2 / tf3 1 / v36 2 / phase15.5b 1 / v81-emulator 1 / audit-branch-scope AV37 1 / phase-26-0 1. ALL pre-V43-followup baseline — verified via `git diff --name-only 371221f3 HEAD` shows V43-followup touched NONE of the failing test files or related source files (SaleTab.jsx + TreatmentFormPage.jsx untouched).
+
+**Outstanding**: user L1 hands-on on iPhone Safari + dev-server (open `/?backend=1` → click stock tab → verify 4 flagged services (Shock wave, ผ่าตัดทำหมันชาย, ติดตามอาการกับแพทย์, เพิ่ม ตัดเส้นสองสลึง) HIDDEN from balance + click `[✎ แก้ไข]` → modal opens → untick ไม่ตัดสต็อค + save → row REAPPEARS within 5s without F5 + retick + save → row DISAPPEARS again).
+
+**NO DEPLOY this turn** per V18 lock. User authorizes `deploy` separately.
+
+### (V107-era state below remains LIVE on prod — replaced by V43-followup state above)
 - **Tests**: V101 18 + V102 29 + V103 27 + V104 13 + V104-followup 9 + V105 14 + V105-followup 13 + V107 8 + course-skip 64 = **195 cumulative GREEN** · 39/39 E2E stress · 24/24 V107 L2 verify · 0 fail · build clean
 - **AV invariants added this session**: AV91 (param shadow) + AV92 (audit shape) + AV93 (customer name resolver) + AV94 (atomic rollback) + AV95 (stock movement ISO createdAt) + AV96 (light-theme exception narrowing)
 - **Deploy state**: 4 combined deploys this saga. V104+V104-followup+V105+V105-followup live earlier; V107 deploy `85pg892xe` aliased canonical 2026-05-19 NIGHT+5. Probe-Deploy-Probe 4/4 IDENTICAL pre+post on EVERY round. Firebase rules+storage idempotent throughout
