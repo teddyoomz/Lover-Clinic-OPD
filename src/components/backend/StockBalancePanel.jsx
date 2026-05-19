@@ -7,8 +7,9 @@
 // clinic ever scales past that, move to backend aggregation.
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
-import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info } from 'lucide-react';
-import { listStockBatches, listStockLocations, listProducts } from '../../lib/scopedDataLayer.js';
+import { Loader2, Package, AlertTriangle, Search, Plus, SlidersHorizontal, Warehouse, Info, Edit2 } from 'lucide-react';
+import { listStockBatches, listStockLocations, listenToProducts } from '../../lib/scopedDataLayer.js';
+import { filterOutSkippedProducts } from '../../lib/skipStockFilter.js';
 import { hasExpired, daysToExpiry } from '../../lib/stockUtils.js';
 // Phase 17.2 (2026-05-05): legacy-main fallback removed — migration script
 // rewrites all legacy `branchId='main'` batches to real branch IDs. Strict
@@ -17,7 +18,7 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 
 function fmtQty(n) { return Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 2 }); }
 
-export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, defaultLocationId, lockLocation }) {
+export default function StockBalancePanel({ clinicSettings, theme, onAdjustProduct, onAddStockForProduct, onEditProduct, defaultLocationId, lockLocation }) {
   // Phase 17.2 (2026-05-05): branches list still needed for landing-default
   // resolution (newest-first via useSelectedBranch ordering).
   const { branches } = useSelectedBranch();
@@ -114,31 +115,35 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
   // FILTER OUT batches whose productId is not in be_products (FK violation
   // shouldn't render even if the batch survived; defense-in-depth on top of
   // Phase 15.6 cleanup endpoint + write-time _assertProductExists).
+  // V43-followup (2026-05-19 NIGHT+5 EOD+1) — onSnapshot LIVE listener via
+  // listenToProducts (BS-18). Replaces the prior one-shot listProducts() so
+  // toggling skipStockDeduction in ProductFormModal causes the row to
+  // disappear from this balance table INSTANTLY (no page refresh required).
+  // Also surfaces canonicalName + alert thresholds + skipStockDeduction in
+  // the threshold map for the products useMemo to consume.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const products = await listProducts();
-        if (cancelled) return;
-        const map = {};
-        for (const p of (Array.isArray(products) ? products : [])) {
-          const pid = String(p?.id ?? p?.productId ?? '');
-          if (!pid) continue;
-          const numOrNull = (v) => (v == null || v === '') ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
-          map[pid] = {
-            alertDayBeforeExpire: numOrNull(p.alertDayBeforeExpire),
-            alertQtyBeforeOutOfStock: numOrNull(p.alertQtyBeforeOutOfStock),
-            alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
-            // Canonical name from be_products (preferred over batch.productName)
-            canonicalName: String(p.productName || p.name || '').trim(),
-          };
-        }
-        setProductThresholdMap(map);
-      } catch (e) {
-        console.error('[StockBalance] listProducts threshold-map failed:', e);
+    const numOrNull = (v) => (v == null || v === '') ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+    const unsub = listenToProducts({}, (products) => {
+      const map = {};
+      for (const p of (Array.isArray(products) ? products : [])) {
+        const pid = String(p?.id ?? p?.productId ?? '');
+        if (!pid) continue;
+        map[pid] = {
+          alertDayBeforeExpire: numOrNull(p.alertDayBeforeExpire),
+          alertQtyBeforeOutOfStock: numOrNull(p.alertQtyBeforeOutOfStock),
+          alertQtyBeforeMaxStock: numOrNull(p.alertQtyBeforeMaxStock),
+          // Canonical name from be_products (preferred over batch.productName)
+          canonicalName: String(p.productName || p.name || '').trim(),
+          // V43-followup — surface the flag so the products useMemo can
+          // filter via filterOutSkippedProducts.
+          skipStockDeduction: p.skipStockDeduction === true,
+        };
       }
-    })();
-    return () => { cancelled = true; };
+      setProductThresholdMap(map);
+    }, (err) => {
+      console.error('[StockBalance] listenToProducts failed:', err);
+    });
+    return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
 
   // V35.2-bis: cross-tier map removed — user clarified they want per-lot
@@ -230,7 +235,18 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
         return ae.localeCompare(be);
       });
     }
-    return Array.from(byProduct.values()).sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
+    // V43-followup (2026-05-19 NIGHT+5 EOD+1) — filter out products flagged
+    // skipStockDeduction:true (AV97 invariant). Reads threshold map's flag
+    // since productThresholdMap is the live snapshot via listenToProducts.
+    // Filter is at this layer (after groupBy) so per-row warning + sort
+    // remain UNCHANGED — just fewer rows feed into displayed.
+    const allRows = Array.from(byProduct.values());
+    const flagged = allRows.filter(p => {
+      const entry = productThresholdMap[String(p.productId)];
+      return entry && entry.skipStockDeduction === true;
+    });
+    const visibleRows = allRows.filter(p => !flagged.includes(p));
+    return visibleRows.sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
   }, [batches, productThresholdMap]);
 
   // Phase 15.5 / Item 1 — pure helpers exported on shape for testability.
@@ -462,6 +478,25 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
                         className="px-2 py-1 rounded text-[10px] bg-rose-900/20 hover:bg-rose-900/40 text-rose-400 border border-rose-800 hover:border-rose-600 inline-flex items-center gap-1">
                         <Plus size={10} /> เพิ่ม
                       </button>
+                      {/* V43-followup (2026-05-19 NIGHT+5 EOD+1) — Edit shortcut.
+                          Opens ProductFormModal owned by parent (StockTab /
+                          CentralStockTab) so toggling skipStockDeduction → live
+                          update via Layer 2 listenToProducts. Sky-blue tint
+                          differentiates from red destructive ปรับ + เพิ่ม.
+                          Rightmost per Q2=B. Wrapped in onEditProduct guard so
+                          parents that don't pass the callback degrade cleanly. */}
+                      {onEditProduct && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); onEditProduct(p); }}
+                          title="แก้ไขข้อมูลสินค้า"
+                          className="ml-1 px-2 py-1 rounded text-[10px] bg-sky-900/20 hover:bg-sky-900/40 text-sky-400 border border-sky-800 hover:border-sky-600 inline-flex items-center gap-1"
+                          data-testid={`stock-balance-edit-${p.productId}`}
+                          aria-label={`แก้ไขสินค้า ${p.productName || ''}`}
+                        >
+                          <Edit2 size={10} /> แก้ไข
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {/* V35.2-bis — expanded per-lot detail rows (FEFO sorted).
