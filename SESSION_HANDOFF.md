@@ -74,6 +74,29 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **HN counter**: unchanged
 - **opd_sessions**: unchanged
 
+### Session 2026-05-19 (LATE+2) — V96+V97+V98+V99+V100 EXHAUSTIVE TFP CORE verification
+
+**5 stack additions in 1 session**. Triggered by user bug report ("setDoc invalid data ... deleteField") + escalating verification requests ("ลองทุกอย่าง" + "เค้นมันสุดๆ" + "หาจุดผิดจริงๆ ไม่หลอกตัวเอง").
+
+- **V96** — TFP `status: deleteField()` gated on `isEdit` only (TreatmentFormPage.jsx:2451) + `createBackendTreatment.setDoc({merge:true})` defense-in-depth (backendClient.js:1025). Phase 27.2-bis (2026-05-14) removed save-button gates → exposed latent deleteField() crash on CREATE-mode staff save. Single root cause = 3 symptoms (auto-sale skipped + database error + course deduction skipped). AV86 invariant codifies Firestore sentinel `deleteField()` must use `updateDoc()` OR `setDoc({merge:true})`. Tests: 15 source-grep + 54 admin-SDK e2e.
+
+- **V97** — Filler-unit data fix (Rule M canonical). diag-filler-unit-audit found be_products fillers already CC ✓ but 53 be_courses master `courseProducts[].unit` were empty + 1 customer (วันเพ็ญ LC-26000078) had Neuramis-ครั้ง entry. Two-phase fix: deleted 1 customer entry + updated 53 master courses unit "" → "CC". Forensic stamps + audit doc.
+
+- **V98** — Wallet + Deposit comprehensive wiring (29/29 e2e). topUp + getCustomerWallets (FETCH) + deductWallet + insufficient gate + refundToWallet + conservation. Deposit: create + getCustomerDeposits + getActiveDeposits filter + applyDepositToSale partial→full transitions + insufficient gate.
+
+- **V99 iter2** — Randomized adversarial stress (164/164 PASS, 0 real bugs). mulberry32 PRNG · 100 scenarios across 3 real branches + 1 future zero-master · 4 save modes (staff-create/staff-edit/doctor/vitals) · 4 course types (regular/บุฟเฟต์/เหมาตามจริง/pick-at-treatment) · 50 concurrent parallel saves · 14 adversarial attacks. Conservation invariants held universally.
+
+- **V100** — safeNumber defense-in-depth + AV87. NEW `api/_lib/safeNumber.js` exports safeNumber/strictNumber/isFiniteNumber. Migrated `backup-manager-list.js:85-86`. AV87 invariant: Firestore numeric writes MUST go through `Number.isFinite()` guard. The `|| fallback` short-circuit is FRAGILE for Infinity (Infinity is truthy). Closed sanctioned-exception list of 3 entries.
+
+**Deploys** (2 combined deploys this session):
+1. V96 — vercel `lover-clinic-5873tvvvf-...` + firebase rules+storage idempotent ✓
+2. V100 — vercel `lover-clinic-rg0by1t0a-...` + firebase rules+storage idempotent ✓
+- Probe-Deploy-Probe 4/4 IDENTICAL pre+post on both rounds
+
+**Audit docs on real prod**: v96-tfp-full-save-chain + v97-filler-unit-fix + v98-wallet-deposit-tfp-wiring + v99-randomized-adversarial-stress (multiple iterations).
+
+**Outstanding**: L1 user hands-on per Rule Q V66 gold standard (browse to TFP create → ซื้อคอร์ส → DF → deposit → wallet → ยืนยันการรักษา → verify no error + auto-sale + course/stock/wallet/deposit deducted).
+
 ### Session 2026-05-19 (EOD+11 LATE+1) — 🎉 V1.0 LIVE: V93/V94/V95 audit batch + 3-iter audit-fix-audit loop converged GREEN
 
 **Single deploy this turn (combined Vercel + Firebase per V15)**. Closes the audit-all 2026-05-18 P0-P1 backlog completely via 3 audit-fix-audit loop iterations. User declared V1.0 at end-of-session: "เรามาพักกัน โปรแกรมเราเริ่มที่ Version 1.0 แล้ว".
