@@ -369,6 +369,67 @@ Class-of-bug: V12 multi-writer-sweep at the audit-shape boundary. canonical `bui
 
 **Rule M migration available**: `scripts/v104-migrate-broken-course-change-audits.mjs --apply` repairs any future garbage entries. Idempotent via `_v104Migrated:true` flag. Two-phase. Audit doc to be_admin_audit.
 
+### AV93 — Customer display-name MUST resolve via canonical helper across all shape variants (V105, 2026-05-19 LATE+3 NIGHT+2)
+**Why**: V105 — customer LC-26000079 (Facebook-source) had `patientData.firstName="สุขเกษม"` + `patientData.lastName="วิทยชาญวิฑูร"` (camelCase nested) but top-level `firstname / lastname` (lowercase) EMPTY. TFP auto-sale chain passed `customerName: patientName` where `patientName` prop reads top-level lowercase → empty → `sale.customerName=""` → SaleTab row shows "-". User reported on INV-20260519-0008. Multiple customer-creation paths populate DIFFERENT subsets of name fields (manual admin form / kiosk patient form / Facebook import / LINE bot / customer-link flow / ProClinic clone) — any single read-site picking ONE shape silently misses the others.
+
+**Canonical resolver** (`src/lib/customerDisplayName.js`): walks shape variants in priority order — `patientData.firstNameTh+lastNameTh` → `patientData.firstName+lastName` → top-level `firstname+lastname` → top-level `customerName / name` → nickname fallback. Returns empty string ONLY when all variants empty.
+
+**Grep** (forbidden — any of these in src/* outside the canonical helper = AV93 violation):
+- `customerName:\s*patientName\b` (alone, no canonical resolver wrap)
+- `customer\.firstname\s*\+\s*customer\.lastname` (single shape, no fallback)
+- `pd\.firstName\s*\+\s*pd\.lastName` (single shape) without fallback chain
+- Display-time `sale\.customerName \|\| '-'` (no canonical fallback via customer lookup)
+
+**Canonical pattern**:
+1. WRITE-TIME (auto-sale, sale-create, sale-edit, etc.): resolve via `resolveCustomerDisplayName({patientData})` BEFORE passing to `createBackendSale`. Fallback chain to prop is OK for backward-compat.
+2. DISPLAY-TIME (SaleTab list, sale view modal, etc.): when `sale.customerName` is empty AND `sale.customerId` is linked, look up customer + resolve via helper before showing "-".
+3. Sanctioned exceptions: NONE for sale rows. Other surfaces (deposits / appointments) follow the same pattern as they're added.
+
+**Source-grep regression**: `tests/v105-customer-display-name.test.js` SG1-SG6 + U1-U5 lock parity between helper output across shape variants + write-time + display-time wiring.
+
+**Rule M backfill available**: `scripts/v105-backfill-sale-customer-and-rededuct-stock.mjs` Part A. Idempotent via `_v105NameBackfilledAt` flag. APPLIED on prod 2026-05-19 NIGHT+2 (audit doc `be_admin_audit/v105-backfill-...-d341ccf7`).
+
+### AV94 — Multi-step destructive flows MUST be atomic OR have rollback on partial failure (V105, 2026-05-19 LATE+3 NIGHT+2)
+**Why**: V105 — `SaleTab.jsx:1528` cancel-sale flow runs `reverseStockForSale(saleId)` THEN `cancelBackendSale(saleId, ...)`. Pre-V105, if `cancelBackendSale` threw or was interrupted (modal closed / page navigated / network error), stock movements were already reversed but sale stayed `status='active'` → INCONSISTENT STATE. User-visible on INV-20260519-0008: 7 medication stock movements all had matching reverses (net=0 per product) but sale appeared normal in the list → user perceived "stock didn't deduct".
+
+**Class-of-bug**: V31-family silent partial-failure at destructive multi-step boundary. Same pattern: orphaned Firebase Auth user when `deleteAdminUser` succeeded but `deleteStaff` was interrupted (V31). The two-step sequence MUST be atomic at the system level (Firestore tx) OR have an explicit rollback path.
+
+**Canonical pattern (V105 fix)**:
+```js
+await reverseStockForSale(saleId);
+try {
+  await cancelBackendSale(saleId, /* args */);
+} catch (cancelErr) {
+  // ATOMIC ROLLBACK: re-deduct the stock we just reversed.
+  // Sale data is intact (cancelBackendSale didn't touch it), so the
+  // original sale.items[] is the rededuct source. Idempotent +
+  // best-effort — log to console on rollback failure (rare).
+  try {
+    const sale = sales.find(...);
+    if (sale && sale.items) {
+      await deductStockForSale(saleId, flattenPromotionsForStockDeduction(sale.items), {...});
+    }
+  } catch (rollbackErr) {
+    console.error('atomic-rollback FAILED — stock now INCONSISTENT', rollbackErr);
+  }
+  throw cancelErr; // surface original cancel error to user
+}
+```
+
+**Grep** (forbidden):
+- `await\s+reverseStockForSale\([^)]+\)\s*;\s*[\s\n]*await\s+cancelBackendSale\b` without an enclosing `try/catch` on `cancelBackendSale` that re-deducts on failure
+- Similar pattern: `reverseDepositUsage` then a side-effect setter without rollback
+- Any sequence of "reverse-X then commit-Y" where Y can throw without rollback
+
+**Canonical sanctioned consumers**:
+1. `SaleTab.jsx` cancel-flow at line ~1528-1574 (post-V105) — explicit atomic-rollback
+2. `SaleTab.jsx` edit-flow at line ~801-840 — explicit re-deduct via try/catch (was always there for stock)
+3. `SaleTab.jsx` delete-flow at line ~1025 — sale IS deleted on success; rollback would be re-creating the sale (not implemented; admin manual fix on this rare error path)
+
+**Source-grep regression**: `tests/v105-cancel-flow-atomic.test.js` SG1-SG3 lock the cancel-flow shape.
+
+**Rule M backfill available**: V105 Part B re-deducts stock for sales with status='active' + fully-reversed movements (net=0). Idempotent via `_v105ReDeductedAt`. APPLIED on prod 2026-05-19 NIGHT+2 (7 re-deducts on INV-20260519-0008).
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

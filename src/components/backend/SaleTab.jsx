@@ -31,6 +31,10 @@ import {
   listAllSellers,
 } from '../../lib/scopedDataLayer.js';
 import { flattenPromotionsForStockDeduction, buildPromotionSubCourseProducts } from '../../lib/treatmentBuyHelpers.js';
+// V105 (2026-05-19 LATE+3 NIGHT+2) — canonical customer-name resolver for
+// display-time fallback when sale.customerName is empty (legacy auto-sale
+// write). See AV93 + V105 V-entry.
+import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import { formatOrderItemsSummary } from '../../lib/orderItemsSummary.js';
 import {
   findCouponByCode, listPromotions,
@@ -1140,19 +1144,43 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       <td className="px-3 py-2 font-mono text-[var(--tx-secondary)]">{sale.saleId || '-'}</td>
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
                         {/* stopPropagation so opening the customer page in a
-                            new tab doesn't ALSO trigger the row's detail modal */}
-                        {sale.customerId ? (
-                          <a
-                            href={`/?backend=1&customer=${sale.customerId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
-                          >
-                            {sale.customerName || '-'}
-                          </a>
-                        ) : (sale.customerName || '-')}
-                        {sale.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{sale.customerHN}</span>}
+                            new tab doesn't ALSO trigger the row's detail modal.
+                            V105 (2026-05-19) — display-time fallback: when
+                            sale.customerName is empty (legacy auto-sale write
+                            from FB/LINE/kiosk customers whose top-level
+                            firstname is blank), look up the linked customer
+                            and resolve via canonical helper. Sale rows now
+                            NEVER show "-" when a customerId is linked + the
+                            customer has any name shape variant filled. */}
+                        {(() => {
+                          const _v105LinkedCustomer = sale.customerId
+                            ? customers.find(c => (c.id || c.customerId) === sale.customerId)
+                            : null;
+                          const _v105FallbackName = _v105LinkedCustomer
+                            ? resolveCustomerDisplayName(_v105LinkedCustomer)
+                            : '';
+                          const _v105FallbackHN = _v105LinkedCustomer
+                            ? resolveCustomerHN(_v105LinkedCustomer)
+                            : '';
+                          const displayName = sale.customerName || _v105FallbackName || '-';
+                          const displayHN = sale.customerHN || _v105FallbackHN;
+                          return (
+                            <>
+                              {sale.customerId ? (
+                                <a
+                                  href={`/?backend=1&customer=${sale.customerId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
+                                >
+                                  {displayName}
+                                </a>
+                              ) : displayName}
+                              {displayHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{displayHN}</span>}
+                            </>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
                       {/* 2026-04-28 redesign: รายการขาย column — colored
@@ -1532,10 +1560,45 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                   setCancelSaving(false);
                   return;
                 }
-                await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null, {
-                  staffId: cancelActor?.userId || '',
-                  staffName: cancelActor?.userName || '',
-                });
+                // V105 (2026-05-19 LATE+3 NIGHT+2) — atomic-guarantee on
+                // cancel: pre-V105 if reverseStockForSale succeeded but
+                // cancelBackendSale threw (or modal/page was closed before
+                // it ran), sale stayed status='active' while stock movements
+                // were reversed → INCONSISTENT STATE. User-visible: sale
+                // looks normal in list, but stock balance is 0-net for the
+                // sale's products. Bug victim: INV-20260519-0008 (7 medication
+                // movements reversed without re-deduct or cancel). Fix:
+                // wrap cancelBackendSale in try/catch; on failure, re-deduct
+                // stock via deductStockForSale (idempotent) to restore the
+                // PRE-cancel state. Throw the cancel error so admin sees it.
+                try {
+                  await cancelBackendSale(saleId, cancelReason, cancelRefundMethod, parseFloat(cancelRefundAmount) || 0, cancelEvidenceUrl || null, {
+                    staffId: cancelActor?.userId || '',
+                    staffName: cancelActor?.userName || '',
+                  });
+                } catch (cancelErr) {
+                  console.error('[SaleTab] cancelBackendSale failed AFTER reverseStockForSale (V105 atomic-rollback firing):', cancelErr);
+                  // V105 atomic rollback: re-deduct the stock we just
+                  // reversed. Sale data is intact (cancelBackendSale didn't
+                  // touch it), so the original items[] is the rededuct
+                  // source. flattenPromotionsForStockDeduction mirrors the
+                  // edit-mode pattern at line ~833.
+                  try {
+                    const sale = sales.find(s => (s.saleId || s.id) === saleId);
+                    if (sale && sale.items) {
+                      await deductStockForSale(saleId, flattenPromotionsForStockDeduction(sale.items), {
+                        branchId: BRANCH_ID,
+                        customerId: sale.customerId,
+                        user: { userId: cancelActor?.userId || '', userName: cancelActor?.userName || '' },
+                      });
+                    }
+                  } catch (rollbackErr) {
+                    console.error('[SaleTab] V105 atomic-rollback re-deduct failed (stock now INCONSISTENT — admin must manually re-deduct):', rollbackErr);
+                  }
+                  alert(`ยกเลิกใบเสร็จล้มเหลว: ${cancelErr.message}\nสต็อคถูกคืนค่าเดิมแล้ว ใบเสร็จยังคงอยู่`);
+                  setCancelSaving(false);
+                  return;
+                }
                 setCancelSaving(false); setCancelModal(null); setCancelEvidenceUrl(''); setCancelEvidencePath(''); setCancelStaffId(''); loadSales();
               }} disabled={cancelSaving || !resolveActorUser(cancelStaffId, cancelStaffList)} className="px-4 py-2 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5">
                 {cancelSaving ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}

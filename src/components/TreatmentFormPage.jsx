@@ -79,6 +79,13 @@ import { LayoutSwapButton } from './LayoutSwapButton.jsx';
 // docs/superpowers/specs/2026-05-13-doctor-save-and-admin-finalize-mode-design.md
 // section 5.1 (TFP changes) and v-log V26.0 entry.
 import { auth } from '../firebase.js';
+// V105 (2026-05-19 LATE+3 NIGHT+2) — canonical customer-name resolver.
+// Pre-V105 used parent-prop `patientName` directly which only read top-level
+// firstname/lastname (lowercase). Customers from FB/LINE/kiosk only have
+// `patientData.firstName/lastName` (camelCase nested). Resolver walks ALL
+// shape variants. Used in auto-sale chain (createBackendSale customerName +
+// customerHN). See AV93 + V105 V-entry.
+import { resolveCustomerDisplayName, resolveCustomerHN } from '../lib/customerDisplayName.js';
 
 // ── data-field tag registry (TF2 audit, 2026-05-04) ────────────────────────
 //
@@ -2724,12 +2731,31 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
             const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
             const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
             const firstSeller = pmSellers.find(s => s.enabled && s.id);
+            // V105 (2026-05-19 LATE+3 NIGHT+2) — canonical customer-name
+            // resolution. Pre-V105 used `customerName: patientName` directly,
+            // but `patientName` parent-prop is derived from top-level
+            // `firstname / lastname` lowercase fields. Customers created via
+            // Facebook/LINE/kiosk paths only populate `patientData.firstName
+            // / lastName` (camelCase nested) → patientName=='' → sale shows
+            // "-". User report 2026-05-19 LATE+3 (LC-26000079 / INV-20260519-
+            // 0008). Resolver walks ALL shape variants in priority order
+            // (patientData.firstNameTh > patientData.firstName > top-level
+            // firstname > customerName legacy > nickname) and returns
+            // first non-empty. Fallback to patientName prop preserves
+            // backward-compat for customers populated via legacy path.
+            const _v105ResolvedName = resolveCustomerDisplayName(
+              { patientData },
+              { includePrefix: true }
+            ) || patientName || '';
+            const _v105ResolvedHN = resolveCustomerHN({ patientData })
+              || customerHNProp
+              || '';
             const createRes = await createBackendSale(clean({
-              customerId, customerName: patientName,
-              // 2026-04-19 fix — was hard-coded '' so all auto-sales had no
-              // HN in รายการขาย. Now flows from BackendDashboard via the
-              // customerHN prop (read from viewingCustomer.proClinicHN).
-              customerHN: customerHNProp || patientData?.proClinicHN || patientData?.hn || '',
+              customerId, customerName: _v105ResolvedName,
+              // V105 canonical HN resolver covers patientData.hn /
+              // patientData.HN / patientData.proClinicHN / top-level
+              // proClinicHN / top-level hn variants.
+              customerHN: _v105ResolvedHN,
               saleDate: treatmentDate, saleNote: '',
               items: grouped,
               billing: {
@@ -2902,12 +2928,18 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 const walletTypeIdPayload = selectedWallet?.walletTypeId && walletAppliedValue > 0 ? String(selectedWallet.walletTypeId) : '';
                 const walletTypeNamePayload = walletTypeIdPayload ? (selectedWallet?.walletTypeName || '') : '';
                 const firstSeller = pmSellers.find(s => s.enabled && s.id);
+                // V105 — canonical customer-name resolution. Mirror of
+                // create-mode block above. See AV93 + V105 V-entry.
+                const _v105EditResolvedName = resolveCustomerDisplayName(
+                  { patientData },
+                  { includePrefix: true }
+                ) || patientName || '';
+                const _v105EditResolvedHN = resolveCustomerHN({ patientData })
+                  || customerHNProp
+                  || '';
                 const createRes = await createBackendSale(clean({
-                  customerId, customerName: patientName,
-              // 2026-04-19 fix — was hard-coded '' so all auto-sales had no
-              // HN in รายการขาย. Now flows from BackendDashboard via the
-              // customerHN prop (read from viewingCustomer.proClinicHN).
-              customerHN: customerHNProp || patientData?.proClinicHN || patientData?.hn || '',
+                  customerId, customerName: _v105EditResolvedName,
+                  customerHN: _v105EditResolvedHN,
                   saleDate: treatmentDate, saleNote: '',
                   items: newGrouped,
                   billing: {
