@@ -229,7 +229,13 @@ async function main(applyMode = false) {
           ...deductMov,
           movementId: newId,
           qty: deductMov.qty, // same negative value
-          createdAt: FieldValue.serverTimestamp(),
+          // V105-followup (2026-05-19 NIGHT+3) — MUST be ISO string, NOT
+          // FieldValue.serverTimestamp(). MovementLogPanel.jsx:161 sort
+          // calls `.localeCompare()` on `m.createdAt`; Timestamp objects
+          // have no `.localeCompare` → sort throws → catch → empty list.
+          // 60 existing stock movements use ISO string; matching that shape
+          // is the canonical pattern. AV95 invariant locks.
+          createdAt: new Date().toISOString(),
           reversedByMovementId: '',
           reverseOfMovementId: '',
           _v105ReDeductOf: deductMov.id,

@@ -140,14 +140,47 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
     return String(id);
   }, [locations, branches]);
 
+  // V105-followup (2026-05-19 NIGHT+3) — defensive createdAt normalizer.
+  // Pre-V105-followup: V105 backfill wrote 7 RE-DEDUCT movements with
+  // `createdAt: FieldValue.serverTimestamp()` → Timestamp object. Existing
+  // 60 movements used ISO string. Mixed shape → `.localeCompare()` on
+  // Timestamp throws → sort fails → catch → setMovements([]) → user sees
+  // "ไม่พบ movement" on entire log even though branch + filters correct.
+  // V105-followup data fix re-wrote those 7 to ISO string AND fixed the
+  // V105 backfill source. This normalizer is the ARCHITECTURAL backstop
+  // for ANY future write that uses Timestamp instead of ISO string.
+  // AV95 invariant locks the canonical write shape; this helper is the
+  // safe-read fallback.
+  const _v105NormalizeCreatedAt = (m) => {
+    const ca = m.createdAt;
+    if (typeof ca === 'string' || ca == null) return ca || '';
+    if (typeof ca === 'object') {
+      // Firebase client SDK Timestamp instance (has .toDate())
+      if (typeof ca.toDate === 'function') {
+        try { return ca.toDate().toISOString(); } catch { return ''; }
+      }
+      // Admin SDK serialized Timestamp ({_seconds, _nanoseconds})
+      if (ca._seconds != null) {
+        return new Date(ca._seconds * 1000 + Math.floor((ca._nanoseconds || 0) / 1e6)).toISOString();
+      }
+      // Plain object ({seconds, nanoseconds})
+      if (ca.seconds != null) {
+        return new Date(ca.seconds * 1000 + Math.floor((ca.nanoseconds || 0) / 1e6)).toISOString();
+      }
+    }
+    return '';
+  };
+
   const loadMovements = useCallback(async () => {
     setLoading(true);
     try {
       const filters = { branchId: BRANCH_ID, includeReversed };
       if (productId) filters.productId = productId;
       const all = await listStockMovements(filters);
+      // V105-followup: normalize createdAt to ISO string for safe sort/filter
+      const allNormalized = all.map(m => ({ ...m, createdAt: _v105NormalizeCreatedAt(m) }));
       // Filter by typeGroup and date range client-side (list query can't combine all)
-      let filtered = all;
+      let filtered = allNormalized;
       if (typeGroup) {
         const group = TYPE_GROUPS.find(g => g.id === typeGroup);
         if (group?.types?.length) {

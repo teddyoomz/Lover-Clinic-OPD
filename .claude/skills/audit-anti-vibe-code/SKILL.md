@@ -430,6 +430,47 @@ try {
 
 **Rule M backfill available**: V105 Part B re-deducts stock for sales with status='active' + fully-reversed movements (net=0). Idempotent via `_v105ReDeductedAt`. APPLIED on prod 2026-05-19 NIGHT+2 (7 re-deducts on INV-20260519-0008).
 
+### AV95 — be_stock_movements createdAt MUST be ISO string (or readers MUST normalize Timestamp) (V105-followup, 2026-05-19 LATE+3 NIGHT+3)
+**Why**: V105-followup — `scripts/v105-backfill-sale-customer-and-rededuct-stock.mjs` initial version wrote 7 RE-DEDUCT movements with `createdAt: FieldValue.serverTimestamp()` (Firestore Timestamp object). Existing 60 movements used ISO STRING for createdAt. Mixed shape → `MovementLogPanel.jsx:161` sort `(b.createdAt || '').localeCompare(a.createdAt || '')` threw on Timestamp object (no `.localeCompare` method) → catch block → `setMovements([])` → user saw EMPTY movement log even with correct branch + no filters → "movement log ของ stock นครราชสีมาหาย" complaint.
+
+Class-of-bug: V12 multi-writer-sweep at SERIALIZATION-SHAPE boundary (sibling of V81-fix1 Timestamp/GeoPoint round-trip). Mixed shapes from different writers crash downstream readers that picked ONE shape implicitly.
+
+**Canonical shape** (60 of 67 movements use this):
+```js
+createdAt: new Date().toISOString()  // "2026-05-19T13:14:14.298Z"
+```
+
+**Forbidden shape** (admin-SDK FieldValue is convenient but produces Timestamp object on read):
+```js
+createdAt: FieldValue.serverTimestamp()  // {_seconds, _nanoseconds} on read
+```
+
+**Grep** (forbidden — any of these in scripts/* OR src/* that writes be_stock_movements = AV95 violation):
+- `createdAt:\s*FieldValue\.serverTimestamp\(\)` near `be_stock_movements.*\.set\(`
+- `createdAt:\s*Timestamp\.now\(\)` in any stock-movement writer
+- Defensive read-side: a reader that calls `.localeCompare()` on `createdAt` WITHOUT first normalizing the shape
+
+**Canonical pattern for writers**:
+1. UI / src/lib code: `createdAt: new Date().toISOString()` (matches existing 60 movements)
+2. Admin-SDK ESM scripts: same — `new Date().toISOString()` (NOT `FieldValue.serverTimestamp()`)
+3. If FieldValue is REQUIRED (e.g. for atomic ordering during contention), the reader MUST normalize via `_v105NormalizeCreatedAt` helper or equivalent
+
+**Canonical pattern for readers** (defense in depth):
+- `MovementLogPanel.jsx:_v105NormalizeCreatedAt` handles 3 shapes:
+  - string (ISO) → passthrough
+  - Firestore client SDK Timestamp instance (.toDate()) → toDate().toISOString()
+  - Admin SDK serialized Timestamp ({_seconds, _nanoseconds} OR {seconds, nanoseconds}) → manual ISO build
+- Apply the normalizer BEFORE any sort/filter/comparison on createdAt
+
+**Sanctioned exceptions**: NONE for writes. Read-side normalization is mandatory; do NOT write Timestamp shapes.
+
+**Source-grep regression**: `tests/v105-followup-stock-movement-createdat.test.js`:
+- SG1: V105 backfill writer uses `new Date().toISOString()` not `FieldValue.serverTimestamp()`
+- SG2: MovementLogPanel has `_v105NormalizeCreatedAt` helper + applies it BEFORE sort/filter
+- U1-U3: normalize handles all 3 shapes correctly
+
+**Rule M migration available**: `scripts/v105-followup-fix-rededuct-createdat.mjs --apply` converts Timestamp shapes to ISO string. Idempotent via `_v105FixedCreatedAtAt` flag. APPLIED on prod 2026-05-19 NIGHT+3 (audit doc `be_admin_audit/v105-followup-fix-rededuct-createdat-...-8db5edeb`).
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
