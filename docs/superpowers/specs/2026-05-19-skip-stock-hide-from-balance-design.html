@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Hide-Skipped Products from Stock Balance + Edit Shortcut — Design Spec</title>
+  <style>
+    :root {
+      --accent: #dc2626;
+      --accent-2: #f97316;
+      --bd: #e5e5e5;
+      --bg-meta: #f0f4f8;
+      --bg-section: #fafafa;
+      --bg-card-dark: #0a0a0a;
+      --bg-card-row: #161616;
+      --bd-dark: #2a2a2a;
+      --tx-muted: #666;
+      --tx-light: #cccccc;
+      --tx-dim: #777;
+      --green: #22c55e;
+      --red: #ef4444;
+      --sky: #38bdf8;
+      --amber: #f59e0b;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: var(--accent); margin-top: 1.5em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.9em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--tx-muted); margin-bottom: 0.8em; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .stock-table { background: var(--bg-card-dark); color: var(--tx-light); border-radius: 8px; overflow: hidden; font-size: 0.85em; }
+    .stock-table th { background: var(--bg-card-row); color: var(--tx-dim); border: none; border-bottom: 1px solid var(--bd-dark); font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.7em 1em; }
+    .stock-table td { border: none; border-bottom: 1px solid var(--bd-dark); padding: 0.8em 1em; }
+    .stock-table tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: 600; margin-left: 6px; }
+    .badge-out  { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+    .badge-near { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.4); }
+    .badge-neg  { background: rgba(239,68,68,0.2);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.5); }
+    .qty-green { color: var(--green); font-weight: 600; }
+    .qty-red { color: var(--red); font-weight: 600; }
+    .btn { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 0.78em; font-weight: 600; border: 1px solid; }
+    .btn-red { background: rgba(239,68,68,0.1); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+    .btn-sky-new { background: rgba(56,189,248,0.12); color: #7dd3fc; border-color: rgba(56,189,248,0.4); position: relative; }
+    .btn-sky-new::after { content: "NEW"; position: absolute; top: -7px; right: -10px; background: var(--accent); color: white; font-size: 0.55em; padding: 1px 5px; border-radius: 3px; }
+    .hidden-row { opacity: 0.35; text-decoration: line-through; color: var(--tx-dim); }
+    .strike-overlay { position: relative; }
+    .strike-overlay::after { content: "↓ HIDDEN BY FILTER"; position: absolute; right: 1em; top: 50%; transform: translateY(-50%); background: var(--accent); color: white; font-size: 0.65em; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+    .flow-svg { width: 100%; max-width: 900px; margin: 0 auto; display: block; }
+    .decision-table tr td:first-child { font-weight: 600; width: 100px; }
+    .ac { background: #ecfdf5; border-left: 4px solid var(--green); padding: 0.5em 1em; margin: 0.5em 0; border-radius: 0 6px 6px 0; }
+    .risk { background: #fefce8; border-left: 4px solid var(--amber); padding: 0.5em 1em; margin: 0.5em 0; border-radius: 0 6px 6px 0; }
+    .tier-card { background: white; border: 1px solid var(--bd); border-radius: 6px; padding: 0.8em 1em; margin: 0.5em 0; }
+    .tier-num { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: white; text-align: center; line-height: 22px; font-weight: 700; font-size: 0.8em; margin-right: 0.5em; }
+    .checkbox-mock { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--accent); border-radius: 3px; vertical-align: middle; position: relative; background: var(--accent); }
+    .checkbox-mock::before { content: "✓"; color: white; font-weight: 700; position: absolute; top: -2px; left: 2px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<h1>Hide Skipped Products from Stock Balance + Edit Shortcut</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-19 NIGHT+5 EOD<br>
+  <strong>Status:</strong> Approved by user (Q1=B · Q2=B · Q3=A · Q4=A)<br>
+  <strong>Origin:</strong> User pain — 4 service products (Shock wave, ผ่าตัดทำหมันชาย, ติดตามอาการกับแพทย์, เพิ่ม ตัดเส้นสองสลึง) with <code>skipStockDeduction:true</code> appear in <em>ตารางยอดคงเหลือ</em> rows with -1/-16/-100/-1 negative qty. Visual noise prevents admin from scanning real stock; "ไม่ตัดสต็อคจะเสือกเข้าระบบ stock ทำไม"<br>
+  <strong>Implementation plan:</strong> [link to plan.html — TBD]<br>
+  <strong>Parent V-entries:</strong> V43 (skip-stock direct-product flag) · V46 (Rule O productId-as-identity) · V54 (BS-13 listener safe-by-default) · V81 (live-update onSnapshot pattern)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The <strong>"ไม่ตัดสต็อค"</strong> toggle on <code>ProductFormModal</code> (V43, 2026-05-08) lets admin mark a product as opt-out of stock decrement. The toggle works correctly at the <em>deduction</em> boundary (verified Rule Q L2 — Playwright spec <code>tests/e2e/v43-skip-stock-deduction-toggle.spec.js</code> 2/2 PASS).</p>
+<p>However, products marked <code>skipStockDeduction:true</code> still <strong>appear in the balance table</strong> (<em>ตารางยอดคงเหลือ</em>) — both per-branch + central warehouse. They take up visual real-estate, often show stale or negative qty (Shock wave = -100), and serve no functional purpose because they're never deducted.</p>
+<p><strong>User directive (verbatim):</strong> <em>"เพราะมันรบกวน User ในการใช้สายตา Scan หาสินค้าที่ตัดจริงๆ และยังดูไร้ประโยชน์ที่ถ้าไม่ตัดสต็อคจะเสือกเข้าระบบ stock ทำไม เปลือง Data เปลืองการ Management มากๆ"</em></p>
+<p><strong>Two-part solution:</strong></p>
+<ol>
+  <li>Filter products with <code>skipStockDeduction:true</code> out of the balance table — both per-branch + central + future branches</li>
+  <li>Add <strong>"แก้ไข"</strong> shortcut button in Actions column → opens <code>ProductFormModal</code> on the row's product → live-update via onSnapshot listener so toggling the flag makes the row disappear instantly (no page refresh)</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State 1 — BEFORE (current balance table, user's screenshot)</div>
+  <p style="font-size:0.85em; color:var(--tx-muted); margin-bottom:0.8em;">4 service products with <code>skipStockDeduction:true</code> visible (highlighted red) — visual noise + scan friction.</p>
+  <table class="stock-table">
+    <thead><tr><th>สินค้า</th><th>BATCHES</th><th>คงเหลือ</th><th>ความจุ</th><th>มูลค่าทุน</th><th>หมดอายุถัดไป</th><th>ACTIONS</th></tr></thead>
+    <tbody>
+      <tr><td>2% Lidocain without adrenaline <span class="badge badge-near">ใกล้หมด</span></td><td>1</td><td class="qty-green">1 ขวด</td><td>30</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr><td>Augmentin 1 gm <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 เม็ด</td><td>1,000</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr><td>Neuramis Deep <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 ครั้ง</td><td>-</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr style="background: rgba(239,68,68,0.08);"><td><strong>Shock wave</strong> <span class="badge badge-neg">ติดลบ</span> <span style="color:#fca5a5; font-size:0.75em; margin-left:6px;">⚠ skipStockDeduction:true</span></td><td>1</td><td class="qty-red">-100 ครั้ง</td><td>0</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr><td>Stapple no 22 <span class="badge badge-near">ใกล้หมด</span></td><td>1</td><td class="qty-green">1 ชิ้น</td><td>3</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr style="background: rgba(239,68,68,0.08);"><td><strong>ติดตามอาการกับแพทย์</strong> <span class="badge badge-neg">ติดลบ</span> <span style="color:#fca5a5; font-size:0.75em; margin-left:6px;">⚠ skipStockDeduction:true</span></td><td>1</td><td class="qty-red">-16 ครั้ง</td><td>0</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr style="background: rgba(239,68,68,0.08);"><td><strong>ผ่าตัดทำหมันชาย</strong> <span class="badge badge-neg">ติดลบ</span> <span style="color:#fca5a5; font-size:0.75em; margin-left:6px;">⚠ skipStockDeduction:true</span></td><td>1</td><td class="qty-red">-1 ครั้ง</td><td>0</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr style="background: rgba(239,68,68,0.08);"><td><strong>เพิ่ม ตัดเส้นสองสลึง</strong> <span class="badge badge-neg">ติดลบ</span> <span style="color:#fca5a5; font-size:0.75em; margin-left:6px;">⚠ skipStockDeduction:true</span></td><td>1</td><td class="qty-red">-1 ครั้ง</td><td>-</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+      <tr><td>ไม้พันสำลี <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 ห่อ</td><td>5</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 2 — AFTER (filter applied + new "แก้ไข" button)</div>
+  <p style="font-size:0.85em; color:var(--tx-muted); margin-bottom:0.8em;">4 skipped rows removed. New <code>[✎ แก้ไข]</code> button rightmost (sky-blue tinted to differentiate from red stock-action buttons).</p>
+  <table class="stock-table">
+    <thead><tr><th>สินค้า</th><th>BATCHES</th><th>คงเหลือ</th><th>ความจุ</th><th>มูลค่าทุน</th><th>หมดอายุถัดไป</th><th>ACTIONS</th></tr></thead>
+    <tbody>
+      <tr><td>2% Lidocain without adrenaline <span class="badge badge-near">ใกล้หมด</span></td><td>1</td><td class="qty-green">1 ขวด</td><td>30</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+      <tr><td>Augmentin 1 gm <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 เม็ด</td><td>1,000</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+      <tr><td>Neuramis Deep <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 ครั้ง</td><td>-</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+      <tr><td>Stapple no 22 <span class="badge badge-near">ใกล้หมด</span></td><td>1</td><td class="qty-green">1 ชิ้น</td><td>3</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+      <tr><td>ไม้พันสำลี <span class="badge badge-out">หมด</span></td><td>1</td><td class="qty-green">0 ห่อ</td><td>5</td><td>฿0</td><td>-</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 3 — Live-update flow (user toggles "ไม่ตัดสต็อค" then saves)</div>
+  <p style="font-size:0.85em; color:var(--tx-muted); margin-bottom:1em;">Admin clicks <code>✎ แก้ไข</code> on "Stapple no 22" → modal opens → ticks checkbox → บันทึก → row disappears instantly via onSnapshot.</p>
+  <div style="background: var(--bg-card-dark); border-radius: 8px; padding: 1em; color: var(--tx-light);">
+    <div style="background: #1a1a1a; padding: 1em; border-radius: 6px; border: 1px solid rgba(239,68,68,0.5); margin-bottom: 1em;">
+      <div style="font-weight:700; margin-bottom:0.5em; color:var(--accent);">📝 แก้ไขสินค้า — Stapple no 22</div>
+      <div style="font-size:0.9em; color: var(--tx-dim); margin-bottom: 0.5em;">รหัส: 22 | หมวด: อุปกรณ์</div>
+      <div style="background: rgba(239,68,68,0.06); padding: 0.7em; border-top: 1px solid var(--bd-dark); margin: 0.7em -1em -0.5em -1em; padding-left: 1em;">
+        <span class="checkbox-mock"></span>
+        <span style="vertical-align:middle; margin-left:6px; font-weight:600;">ไม่ตัดสต็อค</span>
+        <div style="font-size:0.78em; color: var(--tx-dim); margin-top:0.3em; margin-left:24px;">เมื่อเปิด: สินค้านี้จะไม่ถูกตัดสต็อค + จะหายจาก ตารางยอดคงเหลือ ทันที</div>
+      </div>
+      <div style="text-align:right; margin-top:1em;"><span class="btn btn-red" style="background:rgba(239,68,68,0.2); padding:6px 14px;">💾 บันทึก</span></div>
+    </div>
+    <div style="text-align:center; color: var(--sky); margin: 0.5em 0; font-size:0.85em;">⬇ onSnapshot fires (be_products listener) ⬇</div>
+    <table class="stock-table" style="margin:0;">
+      <thead><tr><th>สินค้า</th><th>คงเหลือ</th><th>ACTIONS</th></tr></thead>
+      <tbody>
+        <tr><td>2% Lidocain without adrenaline</td><td class="qty-green">1 ขวด</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+        <tr><td>Augmentin 1 gm</td><td class="qty-green">0 เม็ด</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+        <tr><td>Neuramis Deep</td><td class="qty-green">0 ครั้ง</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+        <tr class="hidden-row" style="background: rgba(239,68,68,0.05);"><td>Stapple no 22 <span style="color: var(--accent); font-size: 0.7em; margin-left:8px;">↓ filtered out (live)</span></td><td class="qty-green">1 ชิ้น</td><td>—</td></tr>
+        <tr><td>ไม้พันสำลี</td><td class="qty-green">0 ห่อ</td><td><span class="btn btn-red">≡ ปรับ</span> <span class="btn btn-red">+ เพิ่ม</span> <span class="btn btn-sky-new">✎ แก้ไข</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 4 — Data flow diagram</div>
+  <svg class="flow-svg" viewBox="0 0 880 380" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L0,10 L10,5 z" fill="#dc2626"/>
+      </marker>
+    </defs>
+    <!-- Step 1: User -->
+    <rect x="20" y="20" width="200" height="60" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="120" y="45" text-anchor="middle" font-size="14" font-weight="700">Admin clicks ✎ แก้ไข</text>
+    <text x="120" y="65" text-anchor="middle" font-size="12" fill="#666">in StockBalancePanel row</text>
+    <!-- Step 2: Modal opens -->
+    <rect x="320" y="20" width="240" height="60" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="440" y="45" text-anchor="middle" font-size="14" font-weight="700">ProductFormModal opens</text>
+    <text x="440" y="65" text-anchor="middle" font-size="12" fill="#666">parent owns editingProduct state</text>
+    <line x1="220" y1="50" x2="320" y2="50" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 3: User saves -->
+    <rect x="640" y="20" width="220" height="60" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="750" y="40" text-anchor="middle" font-size="14" font-weight="700">Tick "ไม่ตัดสต็อค"</text>
+    <text x="750" y="58" text-anchor="middle" font-size="12" fill="#666">→ คลิก "บันทึก"</text>
+    <text x="750" y="73" text-anchor="middle" font-size="11" fill="#999">(saveProduct setDoc)</text>
+    <line x1="560" y1="50" x2="640" y2="50" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 4: Firestore -->
+    <rect x="640" y="130" width="220" height="70" rx="8" fill="#fdf4ff" stroke="#a855f7" stroke-width="2"/>
+    <text x="750" y="155" text-anchor="middle" font-size="14" font-weight="700">be_products doc updated</text>
+    <text x="750" y="175" text-anchor="middle" font-size="12" fill="#666">skipStockDeduction: true</text>
+    <text x="750" y="190" text-anchor="middle" font-size="11" fill="#999">in real prod Firestore</text>
+    <line x1="750" y1="80" x2="750" y2="130" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 5: Listener fires -->
+    <rect x="320" y="130" width="240" height="70" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+    <text x="440" y="155" text-anchor="middle" font-size="14" font-weight="700">listenToProducts onSnapshot</text>
+    <text x="440" y="175" text-anchor="middle" font-size="12" fill="#666">fires automatically</text>
+    <text x="440" y="190" text-anchor="middle" font-size="11" fill="#999">(NEW Layer 1/2 BS-18)</text>
+    <line x1="640" y1="165" x2="560" y2="165" stroke="#f97316" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 6: State update -->
+    <rect x="20" y="130" width="240" height="70" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+    <text x="140" y="155" text-anchor="middle" font-size="14" font-weight="700">productThresholdMap</text>
+    <text x="140" y="175" text-anchor="middle" font-size="12" fill="#666">rebuilt with skipFlag:true</text>
+    <text x="140" y="190" text-anchor="middle" font-size="11" fill="#999">(setProductThresholdMap)</text>
+    <line x1="320" y1="165" x2="260" y2="165" stroke="#f97316" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 7: useMemo re-derives -->
+    <rect x="20" y="240" width="240" height="70" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+    <text x="140" y="265" text-anchor="middle" font-size="14" font-weight="700">products useMemo</text>
+    <text x="140" y="283" text-anchor="middle" font-size="12" fill="#666">re-derives (deps changed)</text>
+    <text x="140" y="297" text-anchor="middle" font-size="11" fill="#999">+ filterOutSkippedProducts</text>
+    <line x1="140" y1="200" x2="140" y2="240" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Step 8: DOM update -->
+    <rect x="320" y="240" width="240" height="70" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="440" y="265" text-anchor="middle" font-size="14" font-weight="700">Row DISAPPEARS from DOM</text>
+    <text x="440" y="283" text-anchor="middle" font-size="12" fill="#666">live, no page refresh</text>
+    <text x="440" y="297" text-anchor="middle" font-size="11" fill="#999">(displayed useMemo → JSX)</text>
+    <line x1="260" y1="275" x2="320" y2="275" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Audit -->
+    <rect x="620" y="240" width="240" height="70" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+    <text x="740" y="265" text-anchor="middle" font-size="14" font-weight="700">AV97 grep guard</text>
+    <text x="740" y="283" text-anchor="middle" font-size="12" fill="#666">every balance reader →</text>
+    <text x="740" y="297" text-anchor="middle" font-size="11" fill="#999">filterOutSkippedProducts</text>
+    <line x1="560" y1="275" x2="620" y2="275" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+    <text x="595" y="335" text-anchor="middle" font-size="10" fill="#999">(audit-time, not runtime)</text>
+  </svg>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Files to add/modify</h3>
+<table>
+  <thead><tr><th>#</th><th>File</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>NEW</strong> <code>src/lib/skipStockFilter.js</code></td><td>Pure JS helper. <code>filterOutSkippedProducts(products: Product[]) → Product[]</code> + <code>isSkippedProduct(p) → boolean</code>. Branch-agnostic. Single-source contract per Rule O / V46 lesson.</td></tr>
+    <tr><td>2</td><td><code>src/lib/backendClient.js</code></td><td>ADD <code>listenToProducts({branchId, allBranches}, onChange, onError)</code> — Layer 1 safe-by-default (mirror V54/BS-13 listener pattern; resolves <code>selectedBranchId</code> via <code>resolveSelectedBranchId()</code> when neither opt given; returns empty + noop unsub when no branch resolvable AND <code>!allBranches</code>).</td></tr>
+    <tr><td>3</td><td><code>src/lib/scopedDataLayer.js</code></td><td>ADD <code>listenToProducts</code> Layer 2 wrapper (<code>_autoInject(raw.listenToProducts)</code>).</td></tr>
+    <tr><td>4</td><td><code>src/components/backend/StockBalancePanel.jsx</code></td><td>(a) Replace one-shot <code>listProducts()</code> at line 117–142 with <code>listenToProducts()</code> + unsubscribe cleanup; (b) Add <code>skipStockDeduction</code> to <code>productThresholdMap</code> shape; (c) Apply <code>filterOutSkippedProducts</code> in <code>products</code> useMemo (line 189–234) AFTER groupBy + threshold attach; (d) Accept <code>onEditProduct?: (product) =&gt; void</code> prop; (e) Render <code>[✎ แก้ไข]</code> button rightmost in Actions column with sky-blue tint.</td></tr>
+    <tr><td>5</td><td><code>src/components/backend/StockTab.jsx</code></td><td>Own <code>editingProduct</code> useState + render <code>&lt;ProductFormModal&gt;</code> when truthy; pass <code>onEditProduct={setEditingProduct}</code> to <code>StockBalancePanel</code>.</td></tr>
+    <tr><td>6</td><td><code>src/components/backend/CentralStockTab.jsx</code></td><td>Symmetric to StockTab — central warehouse uses the same <code>StockBalancePanel</code> component, so identical wiring.</td></tr>
+  </tbody>
+</table>
+
+<h3>NEW audit invariants</h3>
+<ul>
+  <li><strong>AV97</strong> — Every "stock balance reader" (any component rendering <code>be_products</code> + <code>be_stock_batches</code> as a balance table) MUST route products through <code>filterOutSkippedProducts</code>. Source-grep regression locks the contract. Sanctioned exceptions: ProductsTab (master CRUD list — admin needs to see all products to edit them), MovementLogPanel (history audit — immutable).</li>
+  <li><strong>BS-18</strong> — <code>listenToProducts</code> Layer 1 safe-by-default + Layer 2 auto-inject (mirror V54/BS-13). Sanctioned exceptions: NONE.</li>
+</ul>
+
+<h3>Branch coverage (per-branch + central + future)</h3>
+<ul>
+  <li><strong>Per-branch (existing)</strong>: <code>listenToProducts({branchId: resolveSelectedBranchId()})</code> — auto-inject per V54/BS-13 + BS-18.</li>
+  <li><strong>Central warehouse</strong>: <code>StockBalancePanel</code> is shared between StockTab + CentralStockTab. CentralStockTab passes <code>defaultLocationId</code> = warehouse ID. The listener uses the same <code>be_products</code> source; the filter is product-level (not location-level) — so it applies identically.</li>
+  <li><strong>Future-branch</strong>: filter is a product-level field — <strong>branch-agnostic at filter time</strong>. New branches created in the future automatically inherit the filter behavior (no code change needed).</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<table class="decision-table">
+  <tr><td><strong>Q1 = B</strong></td><td><strong>Live-update via onSnapshot listener.</strong> Mirror V54/BS-13 listener pattern + V81 onSnapshot architecture. Covers multi-tab, multi-device, save-from-anywhere paths. Cost: 1 extra Firestore listener per StockBalancePanel mount (norm in BSA).</td></tr>
+  <tr><td><strong>Q2 = B</strong></td><td><strong>Edit button placement: rightmost</strong> in Actions column → <code>[≡ ปรับ] [+ เพิ่ม] [✎ แก้ไข]</code>. Sky-blue tinted (mirror ProductsTab edit convention) to differentiate from red destructive stock actions.</td></tr>
+  <tr><td><strong>Q3 = A</strong></td><td><strong>Strict hide, reversible.</strong> Batch data preserved in Firestore. Admin untoggle → row reappears with original qty (including -100 negative). Movement Log keeps historical entries (audit-immutable per Rule D). No "show hidden" checkbox. No auto-zero.</td></tr>
+  <tr><td><strong>Q4 = A</strong></td><td><strong>V48-style prof-grade 7-tier test bank, ~800-1200 assertions.</strong> Covers: unit + source-grep + Rule I flow-simulate + mulberry32 adversarial × 4 product types × 3 tiers + admin-SDK e2e on real prod + Playwright L1 + stress (race / concurrent / branch switch).</td></tr>
+</table>
+
+<h2>Acceptance Criteria (testable + verifiable)</h2>
+
+<div class="ac"><strong>AC1</strong> — On <code>StockBalancePanel</code> mount with <code>locationId</code> = any branch: every product appearing in the rendered DOM table has <code>be_products[productId].skipStockDeduction !== true</code> (admin-SDK readback after L1 Playwright spec).</div>
+
+<div class="ac"><strong>AC2</strong> — On <code>StockBalancePanel</code> mount with <code>locationId</code> = central warehouse: same as AC1. (Symmetry test.)</div>
+
+<div class="ac"><strong>AC3</strong> — When admin clicks <code>[✎ แก้ไข]</code> in row: <code>ProductFormModal</code> opens with that row's product loaded into <code>form</code> state (verified via DOM input values).</div>
+
+<div class="ac"><strong>AC4 (LIVE-UPDATE)</strong> — When admin toggles <code>ไม่ตัดสต็อค</code> ON + clicks <code>บันทึก</code>: within 5s, the row disappears from the DOM table <strong>without any page refresh, branch switch, or manual reload</strong>. Verified via Playwright L1 (real browser).</div>
+
+<div class="ac"><strong>AC5 (REVERSIBILITY)</strong> — When admin untoggles <code>ไม่ตัดสต็อค</code> + saves: row reappears within 5s with the SAME qty as before (negative or positive preserved). Verified via Playwright L1.</div>
+
+<div class="ac"><strong>AC6 (BRANCH ISOLATION)</strong> — Toggling <code>skipStockDeduction</code> on a product at branch A does NOT affect filter behavior at branch B (unless the product is shared cross-branch via <code>allBranches</code>). Verified via 3-tier adversarial e2e.</div>
+
+<div class="ac"><strong>AC7 (FUTURE-BRANCH)</strong> — Create a NEW branch during the test run (TEST-BR-<code>{ts}</code>); load StockBalancePanel for that branch; verify same filter behavior as existing branches. Verified via adversarial e2e Layer 5.</div>
+
+<div class="ac"><strong>AC8 (NO REGRESSION)</strong> — V43 e2e <code>scripts/e2e-skip-stock-deduction.mjs</code> still PASSES 39/39 (decision tree at deduction layer untouched).</div>
+
+<div class="ac"><strong>AC9 (AUDIT)</strong> — <code>/audit-anti-vibe-code</code> AV97 grep passes (zero balance readers bypass <code>filterOutSkippedProducts</code>). <code>/audit-branch-scope</code> BS-18 passes (no UI bypasses Layer 2 <code>listenToProducts</code>).</div>
+
+<div class="ac"><strong>AC10 (STRESS)</strong> — Concurrent saves from 2 tabs: both eventually converge to filtered state. Branch switch during open modal: modal stays for the original product; balance table reflects new branch immediately on close.</div>
+
+<h2>Test plan (7-tier prof-grade, V48-style)</h2>
+
+<div class="tier-card"><span class="tier-num">1</span><strong>Unit (~50 assertions)</strong> — <code>tests/skip-stock-filter.test.js</code>. Pure-helper <code>filterOutSkippedProducts</code> + <code>isSkippedProduct</code> + adversarial null/undefined/Thai/Unicode NFC vs NFD/10K-char/numeric-vs-string-flag/NUL-byte.</div>
+
+<div class="tier-card"><span class="tier-num">2</span><strong>Source-grep regression (~30)</strong> — <code>tests/av97-balance-reader-filter-discipline.test.js</code>. Every balance-reader file MUST import + invoke <code>filterOutSkippedProducts</code>. Closed sanctioned-exception list (ProductsTab + MovementLogPanel). Anti-regression on inline <code>p.skipStockDeduction === true</code> patterns outside the helper.</div>
+
+<div class="tier-card"><span class="tier-num">3</span><strong>Rule I flow-simulate (~30)</strong> — <code>tests/v43-followup-hide-from-balance-flow-simulate.test.js</code>. Chain: master save → listener fires → setProductThresholdMap → products useMemo → filter → displayed useMemo → mock DOM snapshot. 7 flow dimensions × adversarial seeds.</div>
+
+<div class="tier-card"><span class="tier-num">4</span><strong>Adversarial mulberry32 (~1200 fixtures = 100 × 4 product types × 3 tiers)</strong> — <code>tests/v43-followup-hide-from-balance-adversarial.test.js</code>. PRNG-seeded random fixtures across:
+  <ul style="margin: 0.4em 0;">
+    <li><strong>4 product types</strong>: ยา / สินค้าหน้าร้าน / สินค้าสิ้นเปลือง / บริการ</li>
+    <li><strong>3 tiers</strong>: per-branch existing (3 branches) / future-branch created mid-test / central warehouse</li>
+    <li><strong>Per-fixture random</strong>: positive qty / zero / negative / multi-batch / expired / near-expiry / missing-batch / flag-pre-set / flag-flip-mid-test / shared cross-branch</li>
+  </ul>
+  100 unique seeds per (type × tier) combination.
+</div>
+
+<div class="tier-card"><span class="tier-num">5</span><strong>Admin-SDK e2e on real prod (~70)</strong> — <code>scripts/e2e-v43-followup-hide-from-balance-real-prod.mjs</code>. TEST-V43F- prefix fixtures × 3 tiers. Phases: seed → toggle ON via saveProduct → readback balance via listProducts+filter → assert row hidden → toggle OFF → assert row reappears → cleanup.</div>
+
+<div class="tier-card"><span class="tier-num">6</span><strong>Playwright L1 (~10-15 specs)</strong> — <code>tests/e2e/v43-followup-hide-from-balance.spec.js</code>. Full real-browser flows:
+  <ul style="margin: 0.4em 0;">
+    <li>L1.1 — Click <code>✎ แก้ไข</code> opens modal with correct product</li>
+    <li>L1.2 — Toggle + save → row disappears from DOM within 5s (per-branch)</li>
+    <li>L1.3 — Untoggle + save → row reappears (reversibility)</li>
+    <li>L1.4 — Same flow for central warehouse</li>
+    <li>L1.5 — Multi-product type smoke (4 product types)</li>
+    <li>L1.6 — Cross-branch isolation (toggle at A, no effect at B)</li>
+    <li>L1.7 — Future-branch (created during test, then loaded)</li>
+    <li>L1.8 — onSnapshot true-live (toggle from admin-SDK, no UI interaction → DOM auto-updates)</li>
+  </ul>
+</div>
+
+<div class="tier-card"><span class="tier-num">7</span><strong>Stress (~30)</strong> — <code>tests/v43-followup-hide-from-balance-stress.test.js</code>. Race conditions (toggle mid-listener fire) / concurrent admin edits from 2 tabs / branch switch during open modal / 50× parallel saves / listener-resubscribe under network blip simulation.</div>
+
+<h3>Test prefix discipline</h3>
+<ul>
+  <li>Products: <code>TEST-V43F-...-PROD</code></li>
+  <li>Batches: <code>TEST-V43F-...-BATCH</code></li>
+  <li>Branches: <code>TEST-V43F-...-BR-FUTURE</code></li>
+  <li>Customers: <code>TEST-V43F-...-CUST</code> (if needed for e2e deduction sub-flows)</li>
+  <li>Audit doc emit on every batch op (Rule M)</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+
+<div class="risk"><strong>R1 — Listener cost</strong>: adding <code>listenToProducts</code> at StockBalancePanel mount = 1 more onSnapshot subscription per panel render. Mitigated by: (a) panel unmounts cleanly cleanup unsub; (b) cost scales linearly with be_products count (~606 docs in prod = trivial). No throttling needed.</div>
+
+<div class="risk"><strong>R2 — productThresholdMap dependency cascade</strong>: changing one-shot → listener triggers a re-render on EVERY product update (not just skipStockDeduction). For 606 products, this is ~10ms per fire — negligible. If perf becomes an issue, narrow the listener to <code>where('skipStockDeduction', '==', true)</code> + Date-based + diff comparison.</div>
+
+<div class="risk"><strong>R3 — Sanctioned-exception list discipline</strong>: ProductsTab + MovementLogPanel must NOT route through <code>filterOutSkippedProducts</code> (admin needs to see all products to edit them; movement log is history). AV97 closed exception list enforced via source-grep test. Adding a 3rd exception requires V-entry (per Rule P 7-step).</div>
+
+<div class="risk"><strong>R4 — Concurrent toggle race</strong>: admin saves at branch A while another tab subscribes at branch B. Both listeners fire independently. Resolution: each panel's listener is independent — no shared state to race. Verified in Tier 7 stress.</div>
+
+<div class="risk"><strong>R5 — Negative qty visibility loss</strong>: 4 current prod products have -100/-1/-16/-1 historical qty. After filter, admin loses direct visibility. Mitigation accepted (Q3=A): admin can untoggle to inspect; movement log still shows the historical writes. If recurring concern → V-entry for opt-in "show hidden" filter checkbox (future).</div>
+
+<h2>Out of scope (explicit)</h2>
+<ul>
+  <li>Movement Log (history audit — immutable per Rule D)</li>
+  <li>Product picker dropdowns in Stock Order / Transfer / Withdrawal flows (admin may still want to receive stock for service products as audit; their choice)</li>
+  <li>Adjust / Add modals reached from other entry points (e.g. via central stock order form) — filter only applies to balance table view</li>
+  <li>ProductsTab master CRUD (admin needs all products visible to edit; sanctioned AV97 exception)</li>
+  <li>Auto-zero / auto-archive of existing batches when flag flips (Q3=A — strict hide, batches preserved)</li>
+</ul>
+
+</body>
+</html>

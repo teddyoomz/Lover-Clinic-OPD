@@ -209,3 +209,4 @@ Phase 17.0 closes both:
 - 2026-05-04 — Phase BS V3 LINE per-branch (commit `40e9d8e`): no scopedDataLayer changes (LINE config has its own client `lineConfigClient.js`).
 - 2026-05-04 — BSA leak sweep 2 (commit `45ad80c`): `getAllDeposits` moved from universal pass-through to branch-scoped auto-inject.
 - 2026-05-05 — Wiki extended with function reference table + Phase 17.0 context (BS-9 invariant).
+- 2026-05-19 NIGHT+5 EOD+1 — V43-followup added `listenToProducts` Layer 2 wrapper (BS-18, commit `ee6a896f`). Auto-injects `resolveSelectedBranchId()` on `{}` input; pass-through on explicit `branchId` OR `allBranches:true`; null-resolve → empty emit + noop unsub. Mirror of V75/BS-16 `listenToChatConversationsByBranch` wrapper. Powers live hide-from-balance behavior in [StockBalancePanel](../entities/skip-stock-filter.md) via the [skip-stock hide-from-balance concept](../concepts/skip-stock-hide-from-balance.md).

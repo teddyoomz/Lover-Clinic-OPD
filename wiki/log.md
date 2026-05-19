@@ -2,6 +2,35 @@
 
 Chronological, append-only. Every entry starts `## [YYYY-MM-DD] <op> | <title>` so it's greppable: `grep "^## \[" wiki/log.md | tail -10`.
 
+## [2026-05-19 NIGHT+5 EOD+1] ingest | V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener (DEPLOYED)
+
+Single-session 12-task subagent-driven implementation: brainstorming (Q1-Q4) → HTML spec → HTML plan → 12 tasks via fresh subagent + 2-stage review (spec compliance + code quality) per task → combined V15 deploy.
+
+**What shipped**: Products flagged `skipStockDeduction:true` are now hidden from the Stock Balance table (both per-branch StockTab + central CentralStockTab + future branches automatic). New `[✎ แก้ไข]` button rightmost in Actions column opens `ProductFormModal`; saves with the toggle flipped cause the row to disappear/reappear LIVE within seconds via `listenToProducts` onSnapshot listener — no page refresh required.
+
+**Architecture commitments**:
+- **Single-source filter helper** [`src/lib/skipStockFilter.js`](entities/skip-stock-filter.md) — `filterOutSkippedProducts` + `isSkippedProduct`, branch-agnostic, strict `=== true` check (mirrors `_deductOneItem` branch 2 at backendClient.js:6928)
+- **BS-18 listener** — `listenToProducts` Layer 1 ([backendClient.js](../src/lib/backendClient.js)) + Layer 2 wrapper ([scopedDataLayer.js](entities/scoped-data-layer.md)) mirroring V54/BS-13 + V75/BS-16. Safe-by-default empty emit + V38 spread-order
+- **Closed AV97 sanctioned-exception list** of 2 (ProductsTab + MovementLogPanel) — adding a 3rd entry fails source-grep `length === 2` assertion → forces Rule P V-entry
+
+**Test bank**: 7-tier prof-grade ~1270 new assertions:
+- Tier 1 unit (31) — predicate + happy + adversarial (Thai/NFC vs NFD `é`/`é`/NUL ` `/10K-char/numeric flag) + idempotency + forward-compat
+- Tier 2 source-grep AV97 enforcer (9) — closed-list lockup
+- Tier 3 BS-18 listener (10) — Layer 1 safe-by-default + Layer 2 auto-inject + V38 spread-order
+- Tier 4 Rule I flow-simulate (10) — 7 flow dimensions F1-F7 incl. user-reported screenshot mirror
+- Tier 5 mulberry32 adversarial (**1204**) — 100 seeds × 4 product types × 3 tiers (per-branch existing / future-branch / central) + bulk + cross-tier identity
+- Tier 6 admin-SDK e2e on real prod (7) — TEST-V43F fixtures, toggle ON → hidden → untoggle → reappear, audit doc emit, zero-orphan cleanup
+- Tier 6.5 Playwright L1 (3) — Rule Q V66 real browser + real auth + real prod listener subscription
+- Tier 7 stress (5) — 50-concurrent toggle + 100-iter mutation + 10K perf budget 200ms + cross-tab agreement
+
+**Deployed**: combined V15 — Vercel `lover-clinic-g81qa6hk4-...` aliased canonical `https://lover-clinic-app.vercel.app` (HTTP 200) + Firebase rules+storage idempotent. 6/6 Probe-Deploy-Probe IDENTICAL pre+post (chat_conversations 200 · be_exam_rooms/be_line_reminder_log/be_line_reminder_postback_log/be_staff_chat_messages/be_fb_configs all 403). V43 legacy e2e regression 39/39 STILL PASS — no decision-tree-at-deduction-layer regression.
+
+**Production**: 2 NEW pages — 1 concept ([skip-stock-hide-from-balance](concepts/skip-stock-hide-from-balance.md)) + 1 entity ([skip-stock-filter](entities/skip-stock-filter.md)). 1 EXTENDED entity ([scoped-data-layer](entities/scoped-data-layer.md) with listenToProducts Layer 2 wrapper). Index extended +2 rows (1 entity + 1 concept).
+
+Cross-references locked: BS-18 ↔ V54/BS-13 + V75/BS-16 (canonical mirror) ↔ Rule O single-source contract ↔ AV97 closed sanctioned-exception list ↔ V42-V49 saga lessons (skip-stock-deduction at deduction layer).
+
+**Outstanding**: user L1 hands-on Rule Q V66 — open `https://lover-clinic-app.vercel.app/?backend=1` → stock tab → verify 4 flagged services (Shock wave / ผ่าตัดทำหมันชาย / ติดตามอาการกับแพทย์ / เพิ่ม ตัดเส้นสองสลึง) hidden + Edit button toggle round-trip works live without F5.
+
 ## [2026-05-04] bootstrap | LoverClinic codebase wiki
 Created scaffold per Karpathy LLM Wiki pattern. Schema = `CLAUDE.md` (standard markdown links, kebab-case slugs, frontmatter mandatory, file:line citations for code claims). Categories: sources/ entities/ concepts/ analyses/. User chose Q1=B (codebase architecture knowledge), Q2=A (standard markdown), Q3=A (separate schema), Q4=B (seed ingest). 3 source pages + 3 entity pages + 5 concept pages seeded.
 
