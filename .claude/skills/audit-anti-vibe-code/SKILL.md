@@ -179,6 +179,28 @@ AV85 locks the FAMILY of TZ-unsafe truncation patterns including future-date ari
 
 **Source-grep regression**: `tests/v96-tfp-create-treatment-deletefield-fix.test.js` A-F groups (TFP isEdit gate + backendClient merge:true + updateBackendTreatment intact + post-fix shape simulation + AV86 SKILL.md presence + cross-file deleteField count = 1 + setDoc external-data must merge:true).
 
+### AV87 — Firestore numeric writes MUST be finite (V100, 2026-05-19)
+**Why**: V99 e2e (2026-05-19) found 2 latent defense gaps — admin SDK with `ignoreUndefinedProperties: true` accepts `NaN` + `Infinity` + `-Infinity` as values in numeric fields. Once persisted, reads return these poisoned values which break arithmetic everywhere downstream (balance comparisons fail, sums become NaN, aggregation queries return wrong totals). The common `Number(x) || fallback` pattern is FRAGILE because `Infinity || 1 === Infinity` (Infinity is truthy). AV87 mandates explicit `Number.isFinite()` checking via the canonical `safeNumber()` helper from `api/_lib/safeNumber.js`.
+
+**Grep** (any of these = AV87 violation):
+- `Number\(req\.body\?\..*\)\s*\|\|\s*\d` — bare `|| fallback` pattern in api/ writes (use `safeNumber()` instead)
+- `parseFloat\(.*\)\.toString` writing to Firestore without `Number.isFinite()` guard
+- Any Firestore `setDoc`/`update` receiving a freshly-computed numeric without finite-check
+- Any admin SDK init missing the AV87 sanitization layer
+
+**Canonical replacements**:
+- Replace `Number(x) || 0` → `safeNumber(x, 0)` from `api/_lib/safeNumber.js`
+- Replace `Number(x) || 1` → `safeNumber(x, 1, { min: 1 })`
+- Use `strictNumber(x, 'fieldName')` when a transaction MUST receive a valid number (throws on non-finite)
+- Use `isFiniteNumber(x)` as predicate before writes
+
+**Closed sanctioned exception list** (3 entries):
+1. `api/admin/backup-manager-list.js:85-86` — migrated to safeNumber (was the only `|| 1`/`|| 50` pattern in api/)
+2. `api/admin/whole-fleet-customer-backup-export.js:218-232` — explicit `Number.isFinite()` + 400 response (defense already correct; not migrated to safeNumber because it returns HTTP 400 instead of silent fallback)
+3. `api/admin/stock-withdrawal-approve.js:93,149` — `Number(data.status) !== 0` enum comparison, not arithmetic (NaN !== 0 returns true — correct rejection semantics)
+
+**Source-grep regression**: future `Number(req.body?...)` patterns in api/ must use `safeNumber` from `api/_lib/safeNumber.js` OR explicit `Number.isFinite()` + 400 return.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

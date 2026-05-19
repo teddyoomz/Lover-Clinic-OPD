@@ -7,6 +7,9 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { verifyAdminToken } from './_lib/adminAuth.js';
+// V100 (2026-05-19, AV87) — defensive numeric coercion that rejects
+// NaN/Infinity (admin SDK gap surfaced by V99 e2e).
+import { safeNumber } from '../_lib/safeNumber.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -82,8 +85,9 @@ export default async function handler(req, res) {
   const from = req.body?.from || null;
   const to = req.body?.to || null;
   const search = String(req.body?.search || '').trim().toLowerCase();
-  const page = Math.max(1, Number(req.body?.page) || 1);
-  const pageSize = Math.min(200, Math.max(1, Number(req.body?.pageSize) || 50));
+  // V100 (AV87) — safeNumber rejects NaN/Infinity in addition to `|| fallback`
+  const page = safeNumber(req.body?.page, 1, { min: 1 });
+  const pageSize = safeNumber(req.body?.pageSize, 50, { min: 1, max: 200 });
 
   try {
     const bucket = getAdminBucket();

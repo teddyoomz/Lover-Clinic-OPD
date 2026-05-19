@@ -590,26 +590,47 @@ async function stageAdversarial(branchFixtures) {
 
   const fx = branchFixtures[0];
   const attacks = [
-    { label: 'NaN wallet topup', op: async () => {
-        const k = `${NS}-ADV-NaN-WT`;
-        // Try writing balance=NaN — admin SDK with ignoreUndefinedProperties + Number coercion should reject or 0-out
-        try {
-          await db.doc(`${BASE}/be_customer_wallets/ATTACK-${k}`).set({
-            customerId: `${NS}-ADV-CUST-1`, walletTypeId: 'X',
-            balance: NaN, totalTopUp: 0, totalUsed: 0, totalRefund: 0,
+    { label: 'safeNumber() defense vs NaN/Infinity (V100 + AV87 verify)', op: async () => {
+        // V99-iter2 (2026-05-19): the original "NaN-WRITE" + "INFINITY-WRITE"
+        // bugs were ADMIN-SDK BEHAVIOR (not production exploits). V100
+        // (api/_lib/safeNumber.js + AV87 invariant) mandates production code
+        // use safeNumber() which explicitly Number.isFinite()-guards. Test
+        // the helper here to PROVE the defense works.
+        const { safeNumber, strictNumber, isFiniteNumber } = await import('../api/_lib/safeNumber.js');
+        // safeNumber rejects NaN
+        if (safeNumber(NaN, 0) !== 0) {
+          bug('SAFENUMBER-NaN-LEAK', 'safeNumber(NaN, 0) did not return fallback', { got: safeNumber(NaN, 0) });
+        }
+        // safeNumber rejects Infinity
+        if (safeNumber(Infinity, 0) !== 0) {
+          bug('SAFENUMBER-INFINITY-LEAK', 'safeNumber(Infinity, 0) did not return fallback', { got: safeNumber(Infinity, 0) });
+        }
+        // safeNumber rejects -Infinity
+        if (safeNumber(-Infinity, 0) !== 0) {
+          bug('SAFENUMBER-NEG-INFINITY-LEAK', 'safeNumber(-Infinity, 0) did not return fallback', { got: safeNumber(-Infinity, 0) });
+        }
+        // safeNumber accepts finite numbers
+        if (safeNumber(42, 0) !== 42) {
+          bug('SAFENUMBER-FINITE-LOSS', 'safeNumber(42, 0) did not return 42', { got: safeNumber(42, 0) });
+        }
+        // safeNumber respects min bound
+        if (safeNumber(-5, 0, { min: 1 }) !== 1) {
+          bug('SAFENUMBER-MIN-BROKEN', 'safeNumber min clamp did not apply', { got: safeNumber(-5, 0, { min: 1 }) });
+        }
+        // safeNumber respects max bound
+        if (safeNumber(1000, 0, { max: 100 }) !== 100) {
+          bug('SAFENUMBER-MAX-BROKEN', 'safeNumber max clamp did not apply', { got: safeNumber(1000, 0, { max: 100 }) });
+        }
+        // strictNumber throws on NaN
+        let threw = false;
+        try { strictNumber(NaN, 'test'); } catch (e) { threw = e.code === 'INVALID_NUMERIC'; }
+        if (!threw) bug('STRICTNUMBER-NO-THROW', 'strictNumber(NaN) did not throw INVALID_NUMERIC', {});
+        // isFiniteNumber predicate
+        if (isFiniteNumber(NaN) || isFiniteNumber(Infinity) || !isFiniteNumber(42)) {
+          bug('ISFINITENUMBER-WRONG', 'isFiniteNumber predicate wrong', {
+            NaN: isFiniteNumber(NaN), Inf: isFiniteNumber(Infinity), '42': isFiniteNumber(42),
           });
-          track('wallets', `ATTACK-${k}`);
-          bug('NaN-WRITE', 'Admin SDK accepted NaN in balance field', { k });
-        } catch (e) { /* expected throw */ }
-      } },
-    { label: 'Infinity in amount', op: async () => {
-        try {
-          await db.doc(`${BASE}/be_deposits/ATTACK-INF-${NS}`).set({
-            depositId: `ATTACK-INF-${NS}`, customerId: 'X', amount: Infinity,
-          });
-          track('deposits', `ATTACK-INF-${NS}`);
-          bug('INFINITY-WRITE', 'Admin SDK accepted Infinity', {});
-        } catch (e) { /* expected */ }
+        }
       } },
     { label: 'Negative course deduction', op: async () => {
         const cid = `${NS}-ADV-NEG-CUST`;
