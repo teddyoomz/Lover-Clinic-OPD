@@ -368,6 +368,12 @@ export function mapRawCoursesToForm(rawCourses) {
   return list
     .map((c, idx) => {
       if (!c || !c.name) return null;
+      // V103 (2026-05-19 LATE+2) — terminal-status filter at TFP picker
+      // source. Refunded ('คืนเงิน') / cancelled ('ยกเลิก') entries are
+      // preserved in customer.courses[] for audit-trail integrity but
+      // MUST NOT show in TFP "ข้อมูลการใช้คอร์ส" picker. AV90 invariant.
+      // Mirrors CDV.activeCourses + lineBotResponder.active filters.
+      if (isTerminalCourseStatus(c)) return null;
       // Branch 1: pick-at-treatment placeholder (late-visit flow).
       if (c.needsPickSelection && Array.isArray(c.availableProducts)) {
         const persistedCourseId = typeof c.courseId === 'string' && c.courseId
@@ -836,8 +842,37 @@ export function buildCustomerCourseGroups(customerCourses) {
  * } | null | undefined} c
  * @returns {boolean} true if the course should be shown in the use list
  */
+// V103 (2026-05-19 LATE+2) — canonical predicate for "terminal" course
+// status. Refunded (status='คืนเงิน') and cancelled (status='ยกเลิก')
+// customer.courses[] entries are kept in the array for audit-trail
+// integrity (refundCustomerCourse + cancelCustomerCourse design intent
+// per courseExchange.js + backendClient.js:3944, 4001) but MUST NOT
+// appear in ANY active-display surface: CustomerDetailView "คอร์สของฉัน"
+// tab, TreatmentFormPage picker, LINE bot active-course reply, etc.
+//
+// Bug-class: V12 multi-reader-sweep at the active-display filter
+// boundary. lineBotResponder filters status correctly (line 376-377)
+// but CDV.activeCourses + mapRawCoursesToForm did NOT → refunded
+// courses still showed as active in admin UI. User report 2026-05-19
+// LATE+2 (verbatim): "คอร์สที่คืนเงินแล้วก็ยกเลิกออกไปจากคอร์สของฉันสิวะ
+// ... ไม่ใช่แค่โชว์ในคอร์สของฉัน แต่ในตัวลูกค้ายังมีอยู่เลย".
+//
+// AV90 invariant locks: every reader filtering customer.courses for
+// active display MUST use this helper (no inline status checks).
+//
+// @param {object|null|undefined} c — course-like entry (raw or form shape)
+// @returns {boolean} true if status is 'คืนเงิน' or 'ยกเลิก'
+export function isTerminalCourseStatus(c) {
+  if (!c || typeof c !== 'object') return false;
+  const s = String(c.status || '').trim();
+  return s === 'คืนเงิน' || s === 'ยกเลิก';
+}
+
 export function isCourseUsableInTreatment(c) {
   if (!c || typeof c !== 'object') return false;
+  // V103 — terminal-status guard. Refunded/cancelled courses MUST NOT be
+  // usable in treatment (TFP picker should not render their checkboxes).
+  if (isTerminalCourseStatus(c)) return false;
   const courseType = String(c.courseType || '');
   const qtyStr = typeof c.qty === 'string' ? c.qty : '';
   // Special types that don't follow the remaining/total contract.

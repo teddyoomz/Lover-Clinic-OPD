@@ -280,8 +280,11 @@ describe('V47.B — Group key parity with buildCustomerCourseGroups', () => {
 // ════════════════════════════════════════════════════════════════════════════
 describe('V47.C — CustomerDetailView source-grep wires', () => {
   it('C.1 imports groupCustomerCoursesForDetailView from treatmentBuyHelpers', () => {
+    // V103 fixup (2026-05-19 LATE+2) — relaxed to allow sibling imports
+    // alongside groupCustomerCoursesForDetailView (V103 added
+    // `isTerminalCourseStatus` to the same import block for AV90).
     expect(cdvSrc).toMatch(
-      /import\s*\{\s*groupCustomerCoursesForDetailView\s*\}\s*from\s*['"][^'"]*treatmentBuyHelpers\.js['"]/
+      /import\s*\{[^}]*groupCustomerCoursesForDetailView[^}]*\}\s*from\s*['"][^'"]*treatmentBuyHelpers\.js['"]/
     );
   });
 

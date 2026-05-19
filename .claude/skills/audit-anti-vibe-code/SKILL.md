@@ -256,6 +256,31 @@ Spread AFTER the branchId line so caller-provided `data.branchId` (when set) ove
 
 **Rule M backfill required**: any prod doc missing branchId in branch-scoped collection → retroactively resolve via linkedTreatmentId / detail.branchId / nakhonratchasima fallback + stamp `_v102BackfilledAt` forensic field. Canonical script: `scripts/v102-backfill-branchid-stamp.mjs`.
 
+### AV90 — Refunded/cancelled customer.courses[] entries MUST be filtered from active-display readers (V103, 2026-05-19 LATE+2)
+**Why**: `refundCustomerCourse` (backendClient.js:3958) + `cancelCustomerCourse` (backendClient.js:4009) intentionally SOFT-MARK entries with `status: 'คืนเงิน'` or `'ยกเลิก'` + preserve in `customer.courses[]` for audit-trail integrity (refund/cancel history). Display readers MUST filter these out from active-course surfaces. User report 2026-05-19 LATE+2 (วันเพ็ญ LC-26000078): "คอร์สที่คืนเงินแล้วก็ยกเลิกออกไปจากคอร์สของฉันสิวะ ... ในตัวลูกค้ายังมีอยู่เลย".
+
+Real-prod diag found 6/6 entries on วันเพ็ญ all `status='คืนเงิน'` + still rendering in CDV "คอร์สของฉัน" tab + TFP picker. Class-of-bug: V12 multi-reader-sweep — `lineBotResponder.active` (line 374-380) correctly filters by status whitelist; `CustomerDetailView.activeCourses` + `mapRawCoursesToForm` did NOT.
+
+**Canonical helper** (added V103): `isTerminalCourseStatus(c)` in `src/lib/treatmentBuyHelpers.js` returns true iff `status === 'คืนเงิน' || 'ยกเลิก'`.
+
+**Grep** (forbidden — any of these in src/ active-display readers = AV90 violation):
+- Inline `c.status === 'คืนเงิน'` / `c.status === 'ยกเลิก'` checks (must call `isTerminalCourseStatus` for Rule of 3 consistency)
+- Active-display filter that does NOT include `isTerminalCourseStatus` guard early in the chain
+
+**Canonical pattern** (3 sanctioned consumers post-V103):
+1. `CustomerDetailView.activeCourses` (line 486+) — `if (isTerminalCourseStatus(c)) return false`
+2. `mapRawCoursesToForm` (treatmentBuyHelpers.js:366+) — `if (isTerminalCourseStatus(c)) return null` (drops from form-shape entirely)
+3. `isCourseUsableInTreatment` (treatmentBuyHelpers.js:839+) — `if (isTerminalCourseStatus(c)) return false`
+
+**Sanctioned exceptions**:
+- `lineBotResponder.active` (line 374-380): uses status whitelist semantic ('กำลังใช้งาน' / '' / 'active'); naturally rejects terminal status without calling helper. Documented different-semantic exception.
+- `applyCourseRefund` / `applyCourseCancel` (courseExchange.js): WRITERS — set terminal status; not filter-readers.
+- `backendClient.js:3349` (idempotent skip in stamp loop): not active-display.
+
+**Source-grep regression**: `tests/v103-terminal-course-status-filter.test.js` locks the 3 sanctioned consumers + drift catcher.
+
+**Audit trail preservation**: refunded/cancelled entries STAY in `customer.courses[]` doc-array for historical reference (refund button click → `applyCourseRefund` → status stamp + audit log emit). "ประวัติการคืนเงิน" + be_course_changes audit collection are the canonical surfaces for terminal-status visibility.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

@@ -72,7 +72,7 @@ import { parseQtyString } from '../../lib/courseUtils.js';
 // V47 (2026-05-08) — group raw customer.courses[] by purchase event for
 // display parity with TFP "ข้อมูลการใช้คอร์ส" panel. Pre-V47, CustomerDetailView
 // rendered N CARDS for one logical course (one per per-product entry).
-import { groupCustomerCoursesForDetailView } from '../../lib/treatmentBuyHelpers.js';
+import { groupCustomerCoursesForDetailView, isTerminalCourseStatus } from '../../lib/treatmentBuyHelpers.js';
 import { fmtMoney, fmtPoints } from '../../lib/financeUtils.js';
 // Phase 28 (2026-05-14) — Rule C1 extraction; CDV originally used these for
 // badge display. Phase 28 Task 8 (2026-05-14) — these imports were the inline
@@ -484,6 +484,14 @@ export default function CustomerDetailView({
   // Filter out courses with 0 remaining from active (they're effectively "used up")
   const allCourses = customer?.courses || [];
   const activeCourses = useMemo(() => allCourses.filter(c => {
+    // V103 (2026-05-19 LATE+2) — terminal-status guard. Refunded
+    // (status='คืนเงิน') and cancelled (status='ยกเลิก') entries are
+    // preserved in customer.courses[] for audit-trail integrity
+    // (refundCustomerCourse + cancelCustomerCourse design intent) but
+    // MUST NOT show in active "คอร์สของฉัน" tab. User report
+    // (วันเพ็ญ LC-26000078, 2026-05-19): "คอร์สที่คืนเงินแล้วก็ยกเลิก
+    // ออกไปจากคอร์สของฉันสิวะ ... ในตัวลูกค้ายังมีอยู่เลย".
+    if (isTerminalCourseStatus(c)) return false;
     // Phase 12.2b follow-up (2026-04-24): pick-at-treatment placeholders
     // carry qty='' (picks haven't happened yet) → parseQtyString returns
     // remaining=0 → would be dropped. Keep them in active so the
