@@ -404,7 +404,93 @@ html.theme-transitioning *::after {
 [data-theme="light"] .text-white,
 [data-theme="auto"] .text-white         { color: var(--tx-heading) !important; }
 
-/* ── Restore white text on colored backgrounds ── */
+/* ─────────────────────────────────────────────────────────────────
+   V107 (2026-05-19 LATE+3 NIGHT+5) — UNIVERSAL form-element safety net
+   ─────────────────────────────────────────────────────────────────
+   User report (verbatim, 22:21 BKK iPhone): "Light theme มีปัญหาเรื่อง
+   Clearly Visible มากๆ ... ตัวพิมพ์ใน modal มันมีสีตัวอักษรสีขาว
+   แล้วใครมันจะไปมองเห็นวะ ... ห้ามปล่อยไว้แม้แต่ที่เดียว".
+
+   Root cause: 108 source files use `text-white` on inputs/textareas in
+   modals. The base `[data-theme="light"] .text-white { color: var(--tx-heading) }`
+   override (line 405) DOES work for plain divs but FAILS in modal
+   contexts due to:
+     (a) iOS Safari `-webkit-text-fill-color` override for inputs ignores
+         color: rules (especially for autofill + browser-managed input chrome)
+     (b) Tailwind arbitrary classes `text-[#fff]` / `text-[#ffffff]` don't
+         match the `.text-white` selector
+     (c) Element-level color inheritance bugs in deep nested modals
+
+   Single-source-of-truth fix: target form elements DIRECTLY by tag,
+   bypassing class-based overrides. Covers ALL modals in one rule set.
+
+   Sanctioned opt-out: explicit `data-light-text-white` attribute (zero
+   current consumers; opt-in only for buttons over solid colored bg). */
+
+/* Form element text — always dark in light mode (canonical helper) */
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([data-light-text-white]),
+[data-theme="auto"] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([data-light-text-white]),
+[data-theme="light"] textarea:not([data-light-text-white]),
+[data-theme="auto"] textarea:not([data-light-text-white]),
+[data-theme="light"] select:not([data-light-text-white]),
+[data-theme="auto"] select:not([data-light-text-white]) {
+  color: var(--tx-heading) !important;
+  -webkit-text-fill-color: var(--tx-heading) !important;
+}
+
+/* Placeholder — visible muted dark in light mode (was inheriting white) */
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder,
+[data-theme="auto"] input::placeholder,
+[data-theme="auto"] textarea::placeholder {
+  color: var(--tx-muted) !important;
+  opacity: 0.7 !important;
+}
+
+/* Select option text — dark in light mode (browser picks own bg by default) */
+[data-theme="light"] select option,
+[data-theme="auto"] select option {
+  background: var(--bg-card);
+  color: var(--tx-heading);
+}
+
+/* White-bg buttons need a visible border in light mode to distinguish from
+   the page background. Without this, pure-white buttons disappear into
+   the light card surface (user report image 1 — "ปุ่มสร้าง QR code สีขาวล้วน"). */
+[data-theme="light"] button.bg-white:not([class*="border-"]),
+[data-theme="light"] a.bg-white:not([class*="border-"]),
+[data-theme="auto"] button.bg-white:not([class*="border-"]),
+[data-theme="auto"] a.bg-white:not([class*="border-"]) {
+  border: 1px solid var(--bd) !important;
+}
+
+/* (REMOVED V107 catch-all button rule — too many :not() pumped specificity
+   above the narrowed accent exception at line ~548, so CTA buttons lost
+   their white text. The line-405 base override `[data-theme="light"]
+   .text-white { color: var(--tx-heading) !important }` already handles
+   plain text-white correctly; explicit bg-color exceptions restore white
+   for CTA contexts. No additional catch-all needed.) */
+
+/* Tailwind arbitrary white text — also override */
+[data-theme="light"] .text-\[\#fff\],
+[data-theme="light"] .text-\[\#FFF\],
+[data-theme="light"] .text-\[\#ffffff\],
+[data-theme="light"] .text-\[\#FFFFFF\],
+[data-theme="light"] .text-\[white\],
+[data-theme="auto"] .text-\[\#fff\],
+[data-theme="auto"] .text-\[\#FFF\],
+[data-theme="auto"] .text-\[\#ffffff\],
+[data-theme="auto"] .text-\[\#FFFFFF\],
+[data-theme="auto"] .text-\[white\] {
+  color: var(--tx-heading) !important;
+}
+/* ───────────── END V107 universal safety net ───────────── */
+
+/* ── Restore white text on colored backgrounds ──
+   V107 (2026-05-19 NIGHT+5) — extended palette to cover all Tailwind
+   named colors that signal accent/CTA: emerald, amber, rose, violet,
+   fuchsia, sky, lime were previously missing → emerald-500 CTA buttons
+   went dark in light mode. Same for amber CTAs etc. */
 [data-theme="light"] [class*="bg-red-"].text-white,
 [data-theme="light"] [class*="bg-blue-"].text-white,
 [data-theme="light"] [class*="bg-green-"].text-white,
@@ -415,6 +501,13 @@ html.theme-transitioning *::after {
 [data-theme="light"] [class*="bg-indigo-"].text-white,
 [data-theme="light"] [class*="bg-teal-"].text-white,
 [data-theme="light"] [class*="bg-yellow-"].text-white,
+[data-theme="light"] [class*="bg-emerald-"].text-white,
+[data-theme="light"] [class*="bg-amber-"].text-white,
+[data-theme="light"] [class*="bg-rose-"].text-white,
+[data-theme="light"] [class*="bg-violet-"].text-white,
+[data-theme="light"] [class*="bg-fuchsia-"].text-white,
+[data-theme="light"] [class*="bg-sky-"].text-white,
+[data-theme="light"] [class*="bg-lime-"].text-white,
 [data-theme="auto"] [class*="bg-red-"].text-white,
 [data-theme="auto"] [class*="bg-blue-"].text-white,
 [data-theme="auto"] [class*="bg-green-"].text-white,
@@ -424,7 +517,14 @@ html.theme-transitioning *::after {
 [data-theme="auto"] [class*="bg-cyan-"].text-white,
 [data-theme="auto"] [class*="bg-indigo-"].text-white,
 [data-theme="auto"] [class*="bg-teal-"].text-white,
-[data-theme="auto"] [class*="bg-yellow-"].text-white { color: #ffffff !important; }
+[data-theme="auto"] [class*="bg-yellow-"].text-white,
+[data-theme="auto"] [class*="bg-emerald-"].text-white,
+[data-theme="auto"] [class*="bg-amber-"].text-white,
+[data-theme="auto"] [class*="bg-rose-"].text-white,
+[data-theme="auto"] [class*="bg-violet-"].text-white,
+[data-theme="auto"] [class*="bg-fuchsia-"].text-white,
+[data-theme="auto"] [class*="bg-sky-"].text-white,
+[data-theme="auto"] [class*="bg-lime-"].text-white { color: #ffffff !important; }
 
 /* V83-followup-11 (EOD8 LATE 2026-05-18) — Restore white text on:
    (a) slate/gray/zinc/neutral/stone bg classes (missing from grayscale palette)
@@ -459,9 +559,21 @@ html.theme-transitioning *::after {
 [data-theme="light"] [style*="background-color"].text-white,
 [data-theme="auto"] [style*="background-color"].text-white { color: #ffffff !important; }
 
-/* ── Restore white text on CSS-var accent backgrounds (ThemeToggle active) ── */
-[data-theme="light"] [class*="bg-[var"].text-white,
-[data-theme="auto"] [class*="bg-[var"].text-white { color: #ffffff !important; }
+/* ── Restore white text on CSS-var ACCENT backgrounds (ThemeToggle active) ──
+   V107 (2026-05-19 NIGHT+5) — NARROWED from `[class*="bg-[var"]` to ONLY
+   accent-style variables. The old broad pattern matched
+   `bg-[var(--bg-card)]` (modal inputs in light mode) and forced their text
+   white — invisible against the light card surface. User report:
+   "ตัวพิมพ์ใน modal มันมีสีตัวอักษรสีขาว แล้วใครมันจะไปมองเห็นวะ".
+   New pattern only restores white text for solid accent backgrounds. */
+[data-theme="light"] [class*="bg-[var(--accent"].text-white,
+[data-theme="light"] [class*="bg-[var(--ember"].text-white,
+[data-theme="light"] [class*="bg-[var(--fire"].text-white,
+[data-theme="light"] [class*="bg-[var(--brand"].text-white,
+[data-theme="auto"] [class*="bg-[var(--accent"].text-white,
+[data-theme="auto"] [class*="bg-[var(--ember"].text-white,
+[data-theme="auto"] [class*="bg-[var(--fire"].text-white,
+[data-theme="auto"] [class*="bg-[var(--brand"].text-white { color: #ffffff !important; }
 
 /* Accent-colored badge text — darken in light mode for contrast */
 [data-theme="light"] .bg-purple-950\/50 .text-purple-400,

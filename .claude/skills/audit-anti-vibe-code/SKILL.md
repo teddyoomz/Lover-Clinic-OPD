@@ -471,6 +471,35 @@ createdAt: FieldValue.serverTimestamp()  // {_seconds, _nanoseconds} on read
 
 **Rule M migration available**: `scripts/v105-followup-fix-rededuct-createdat.mjs --apply` converts Timestamp shapes to ISO string. Idempotent via `_v105FixedCreatedAtAt` flag. APPLIED on prod 2026-05-19 NIGHT+3 (audit doc `be_admin_audit/v105-followup-fix-rededuct-createdat-...-8db5edeb`).
 
+### AV96 — Light-theme CSS exception rules MUST narrow `[class*="bg-..."]` patterns to AVOID matching non-accent var classes (V107, 2026-05-19 LATE+3 NIGHT+5)
+**Why**: V107 — `src/index.css` had a too-broad exception rule that matched ANY class containing `bg-[var` substring AND combined with `text-white`:
+```css
+[data-theme="light"] [class*="bg-[var"].text-white { color: #ffffff !important; }
+```
+This matched the CTA-button intent (`bg-[var(--accent)] text-white`) BUT ALSO matched 108 source-file occurrences of `bg-[var(--bg-card)] text-white` on modal inputs/textareas/selects — forcing white-on-light in light mode → invisible text. User report 2026-05-19 NIGHT+5 (iPhone screenshot): "ตัวพิมพ์ใน modal มันมีสีตัวอักษรสีขาว แล้วใครมันจะไปมองเห็นวะ ... ห้ามปล่อยไว้แม้แต่ที่เดียว".
+
+Plus 7 Tailwind named-color palettes (emerald, amber, rose, violet, fuchsia, sky, lime) were MISSING from the existing exception list at line 408-427 → CTAs using those colors silently went dark in light mode.
+
+**Grep** (forbidden — any of these in `src/index.css` = AV96 violation):
+- `\[class\*="bg-\[var"\]\.text-white` (too-broad accent exception)
+- Missing palette from exception list (must include all 17 Tailwind named colors)
+- Catch-all `button.text-white:not(...)` rule with >5 :not() exclusions (specificity inflation beats narrow accent exception)
+
+**Canonical pattern**:
+1. Accent-var exceptions NARROW to canonical names: `bg-[var(--accent`, `bg-[var(--ember`, `bg-[var(--fire`, `bg-[var(--brand`. NEVER bare `bg-[var`.
+2. Tailwind named-color exception list MUST include all 17 palettes: red, blue, green, orange, pink, purple, cyan, indigo, teal, yellow, emerald, amber, rose, violet, fuchsia, sky, lime.
+3. Form elements use UNIVERSAL safety net: `[data-theme="light"] input/textarea/select { color: var(--tx-heading) !important; -webkit-text-fill-color: var(--tx-heading) !important }`. Element-type selector — bypasses all class-based confusion.
+4. `bg-white` buttons without explicit border class get `border: 1px solid var(--bd)` in light mode.
+5. Tailwind arbitrary white-text variants overridden: `.text-[#fff]`, `.text-[#FFF]`, `.text-[#ffffff]`, `.text-[#FFFFFF]`, `.text-[white]`.
+
+**Sanctioned opt-out**: explicit `data-light-text-white` attribute on the element (zero current consumers).
+
+**Source-grep regression**: `tests/v107-light-theme-text-visibility.test.js` SG1-SG8 lock the rule set permanently.
+
+**Real-browser verification** (Rule Q V66 L2 via preview_eval against dev server):
+- 24/24 PASS across modal inputs (3) + 17 Tailwind named-color CTAs + 4 var-accent CTAs + gradient menu + plain text-white (3) + bg-white border probe
+- All assertions: form elements + plain text → dark in light mode; colored CTAs → white preserved
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
