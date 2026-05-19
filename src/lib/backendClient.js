@@ -1022,6 +1022,13 @@ export async function createBackendTreatment(customerId, detail) {
   if (doctorRecordedBy !== undefined) topLevelPatch.doctorRecordedBy = doctorRecordedBy;
   if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
   if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
+  // V96 (2026-05-19) — defense-in-depth: pass {merge:true} so any future caller
+  // that smuggles a Firestore sentinel (deleteField(), arrayUnion(), etc.)
+  // through the `detail` payload doesn't crash the create path. TFP v26
+  // status patch was the surfaced instance; this layer ensures no future
+  // class-of-bug at the same boundary. For a fresh BT-${Date.now()} id,
+  // merge:true is functionally identical to non-merge (no existing fields
+  // to preserve — collision probability is effectively zero).
   await setDoc(treatmentDoc(treatmentId), {
     treatmentId,
     customerId: String(customerId),
@@ -1029,7 +1036,7 @@ export async function createBackendTreatment(customerId, detail) {
     createdBy: 'backend',
     createdAt: now,
     ...topLevelPatch,
-  });
+  }, { merge: true });
   return { treatmentId, success: true };
 }
 

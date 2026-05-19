@@ -161,6 +161,24 @@ AV85 locks the FAMILY of TZ-unsafe truncation patterns including future-date ari
 - `tests/v93-tz1-batch-2026-05-18.test.js` (9 files V93 + iter-2 clinicReportAggregator + AV85 SKILL.md = 95 assertions)
 - `tests/v95-tz1-iter3-validity-date.test.js` (NEW iter-3 — locks backendClient.js:1523 + courseExchange.js:81 + thaiDateNDaysFromNow helper unit + AV85 sanctioned list growth)
 
+### AV86 — Firestore sentinel `deleteField()` requires `updateDoc()` OR `setDoc({merge:true})` (V96, 2026-05-19)
+**Why**: V96 — TFP `v26StatusPatch` set `status: deleteField()` for staff/admin save (Phase 26.0b spec — clear status when admin finalizes treatment). In CREATE mode this payload was passed to `createBackendTreatment` which used `setDoc()` WITHOUT `{merge:true}` → Firestore client SDK throws: "deleteField() cannot be used with set() unless you pass {merge:true}". The throw blocked the WHOLE treatment save → cascade failures: auto-sale chain skipped (Bug A), database error visible (Bug B), course deduction skipped (Bug C). Phase 27.2-bis (2026-05-14) removed save-button gates → allowed direct staff-create → surfaced the latent bug. User report 2026-05-19: "ขึ้นแบบในภาพ" with screenshot of `setDoc() called with invalid data ... in document be_treatments/BT-1779181253570`.
+
+**Grep** (any of these = AV86 violation):
+- `setDoc\([^)]+,\s*\{[^}]*deleteField\(\)[^}]*\}\s*\)` — setDoc with deleteField inline (no merge option)
+- Any helper that accepts arbitrary `detail` / `data` / `payload` and forwards to `setDoc()` without `{merge:true}` → defensive `{merge:true}` required (architectural backstop)
+- TFP-style v26StatusPatch: `status: deleteField()` MUST be gated on `isEdit` (write happens via `updateDoc()` only, never `setDoc()`)
+
+**Canonical replacements**:
+- `updateDoc(docRef, { field: deleteField() })` — always valid; only on existing docs
+- `setDoc(docRef, { field: deleteField() }, { merge: true })` — valid for create-or-update; deleteField is no-op for new docs (no field to delete)
+- Pre-filter sentinels at caller: `if (status !== deleteFieldSentinel) topLevelPatch.status = status;` — keeps non-merge setDoc semantics
+
+**Closed sanctioned exception list** (1 entry — adding a 2nd requires V-entry):
+1. `src/components/TreatmentFormPage.jsx:2451-2462` — `status: deleteField()` is GATED on `isEdit` so it only reaches `updateBackendTreatment` (which uses `updateDoc()`). CREATE-mode skips the field entirely. Defense-in-depth at `src/lib/backendClient.js:createBackendTreatment` uses `setDoc({merge:true})` regardless — catches any future caller smuggling sentinels through `detail`.
+
+**Source-grep regression**: `tests/v96-tfp-create-treatment-deletefield-fix.test.js` A-F groups (TFP isEdit gate + backendClient merge:true + updateBackendTreatment intact + post-fix shape simulation + AV86 SKILL.md presence + cross-file deleteField count = 1 + setDoc external-data must merge:true).
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:

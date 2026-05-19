@@ -2448,7 +2448,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           vitalsignsRecordedBy: auth.currentUser?.uid || null,
         } : {
           // admin/staff save clears status (advances to "completed" state)
-          status: deleteField(),
+          // V96 (2026-05-19) — deleteField() ONLY in EDIT mode. For CREATE mode
+          // (`!isEdit`), the new treatment doc has no `status` field to delete;
+          // Firestore client SDK rejects `setDoc()` (non-merge) with deleteField()
+          // sentinels per its API contract ("deleteField() cannot be used with
+          // set() unless you pass {merge:true}"). Phase 27.2-bis allowed direct
+          // staff-create which surfaced this latent bug; user saw it 2026-05-19
+          // as "Function setDoc() called with invalid data" on BT-1779181253570.
+          // The thrown error blocked the WHOLE save → auto-sale + course
+          // deduction never ran (all 3 symptoms = 1 root cause).
+          ...(isEdit ? { status: deleteField() } : {}),
           // Phase 27.2-bis — always stamp completedAt to latest staff save
           // (was previously gated on !loadedTreatmentCompletedAt; user wants
           // each click to refresh the badge time).
