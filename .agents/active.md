@@ -1,57 +1,78 @@
 ---
-updated_at: "2026-05-18 EOD+11 LATE+1 — V1.0 LIVE: V93/V94/V95 audit-all batch deployed + 3-iter audit-fix-audit converged GREEN"
-status: "🎉 VERSION 1.0 LIVE. master = prod = `31368682`. Combined deploy complete (Vercel + Firebase rules/storage). Pre+post probes 4/4 IDENTICAL."
+updated_at: "2026-05-19 — V96 LIVE: TFP create-mode + deleteField() fix deployed + 54/54 comprehensive e2e GREEN"
+status: "🚀 V96 LIVE. master = prod = `2c1b1d44` (or similar — V96 commit). Combined deploy complete (Vercel + Firebase rules/storage). Pre+post probes 4/4 IDENTICAL."
 branch: "master"
-last_commit: "31368682 fix(audit-iter3): TZ1 family expansion — validity-date arithmetic"
-tests: "V93 35 + V94 41 + V95 21 + bsa-task6 1 = 116/116 audit batch GREEN · V8x 158/158 GREEN · full vitest ~12,000 PASS (17 pre-existing menu-d V90 test-debt + 1 Java-gated emulator unchanged)"
+last_commit: "fix(V96): TFP create-mode + deleteField() Firestore API misuse — 3 bugs, 1 root cause"
+tests: "V93 35 + V94 41 + V95 21 + V96 15 = 112 audit batch GREEN · V8x 158/158 GREEN · V96 e2e 54/54 GREEN on real prod (CORE TFP wiring verified: course/stock/sale/deposit/wallet/points/DF + concurrent + adversarial)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "V1.0 LIVE — lover-clinic-94ywl4274-... aliased 2026-05-18 EOD+11 LATE+1 (V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 + V93/V94/V95 audit batch + 3-iter audit-fix-audit GREEN)"
-firestore_rules_version: "unchanged (idempotent — V82-Phone baseline; iter-all batch contains zero rule changes)"
-storage_rules_version: "unchanged (idempotent)"
+production_commit: "V96 LIVE — lover-clinic-5873tvvvf-... aliased 2026-05-19"
+firestore_rules_version: "unchanged (idempotent — V82-Phone baseline; V96 fix has zero rule changes)"
+storage_rules_version: "unchanged"
 ---
 
 # Active Context
 
-## 🎉 V1.0 MILESTONE
-User declared (2026-05-18 EOD+11 LATE): "เรามาพักกัน โปรแกรมเราเริ่มที่ Version 1.0 แล้ว". V93/V94/V95 audit-all batch closes the pre-1.0 audit gap; iter-3 audit confirmed 0 P0-P1 remaining. Production live + alias serving. See `~/.claude/projects/F--LoverClinic-app/memory/project_v1_0_milestone.md` for full V1.0 baseline summary.
+## 🚀 V96 LIVE — TFP CORE save chain fixed + verified
 
-## What this session shipped (post-V92)
+User reported 2026-05-19 (screenshot of error banner):
+> "Function setDoc() called with invalid data. deleteField() cannot be used with set() unless you pass {merge:true} (found in field status in document be_treatments/BT-1779181253570)"
 
-- **V93 — TZ1 family × 11 sites**: `new Date().toISOString().slice(0,10)` → `thaiTodayISO()`. 9 files (AdminDashboard / PatientDashboard / backendClient / centralStockOrderValidation×2 / QuotationPrintView / SalePrintView / RemainingCourseTab / CustomerCreatePage / lineBotResponder×2 inlined). audit-all flagged 8; Rule P Step 3 cross-file grep caught 3 more.
-- **V94.S — S18 atomicity**: `cancelCentralStockOrder` writeBatch wraps cascade (batch.update + movement.set + order.update). Mirror of V34 cancelStockOrder pattern.
-- **V94.H — H7 cascade port**: TreatmentTimeline.confirmCancel adds course-reverse cascade via scopedDataLayer.js (BS-1 compliant). Mirrors BackendDashboard:475-493. Safe fallback (try/catch + customerId-gated).
-- **V94.A — A7 apiFetch helper**: NEW `api/_lib/apiFetch.js` (5s default timeout, AbortSignal.timeout). 18 sites in 9 api/ files migrated.
-- **Iter-1 fix — clinicReportAggregator.js:298**: `slice(0,7)` → `thaiYearMonth()`. AV85 invariant added to audit-anti-vibe-code SKILL.md (TZ1 family lock).
-- **Iter-3 fix — validity-date arithmetic × 2 sites**: backendClient.js:1523 + courseExchange.js:81 use NEW `thaiDateNDaysFromNow(days)` helper in utils.js. AV85 expanded with 5-entry closed sanctioned-exception list.
-- **Test bank**: V93 (35) + V94 (41) + V95 (21) + bsa-task6 (1) = 116 assertions GREEN.
-- **3 iterations audit-all** × 6 parallel general-purpose subagents → iter-3 confirmed 0 NEW P0-P1.
+Plus: "ตอนนี้เมื่อซื้อคอร์สใน TFP แล้ว มันไม่ไปสร้างรายการขายโดยอัตโนมัติ ให้แก้ให้เหมือนเดิมด้วย" + "ฝากเช็คให้แน่ใจด้วยว่าการใช้คอร์สใน TFP แล้วมันตัดคอร์สคงเหลือของลูกค้าคนนั้นจริงๆ" + "มันต้องตัดมัดจำด้วยนะ และอื่นๆๆ"
 
-## Commits deployed this turn
+## Root cause = 1, symptoms = 3
 
-```
-31368682 fix(audit-iter3): TZ1 family expansion — validity-date arithmetic
-79cf6fb6 fix(audit-iter2): V93 missed 12th TZ1 site + AV85 invariant lock
-820601b1 fix(audit-batch): V93+V94 audit P0-P1 batch — TZ1×11 + S18 + H7 + A7
-```
+TFP `v26StatusPatch` set `status: deleteField()` for staff/admin save in ALL modes. CREATE mode passes payload to `createBackendTreatment.setDoc()` (no `{merge:true}`) → Firestore client SDK throws → upstream throw blocks **everything**:
+- ❌ Bug A: auto-sale chain (line 2567) skipped
+- ❌ Bug B: visible database error
+- ❌ Bug C: course deduction (line 2484) skipped
+
+Phase 27.2-bis (2026-05-14) removed save-button gates → exposed the latent deleteField() bug.
+
+## V96 FIX (2 layers, defense-in-depth)
+
+1. **TFP source** (`TreatmentFormPage.jsx:2451-2462`) — gate `status: deleteField()` on `isEdit` only. CREATE mode omits the field entirely.
+2. **backendClient defense-in-depth** (`backendClient.js:1025-1033`) — `createBackendTreatment.setDoc(..., { merge: true })`.
+
+**AV86** invariant added — Firestore sentinel `deleteField()` requires `updateDoc()` OR `setDoc({merge:true})`. Closed sanctioned exception list: 1 (TFP isEdit-gated).
+
+## V96 verification (per Rule Q V66 + user "ขอแบบเข้มข้นมากๆ")
+
+### Tier 2 source-grep + flow
+- `tests/v96-tfp-create-treatment-deletefield-fix.test.js` 15 assertions in 6 groups (A-F): TFP isEdit gate + backendClient merge:true + updateBackendTreatment intact + post-fix shape simulation + AV86 SKILL.md presence + cross-file deleteField count = 1
+
+### Tier 3 REAL-PROD admin-SDK e2e (NEW)
+- `scripts/e2e-v96-tfp-full-save-chain.mjs` 54/54 PASS on real prod (TEST-V96-* fixtures, 0 orphan post-cleanup, audit doc emitted)
+- 7 stages covered:
+  - **A. Setup**: branch + product + stock batch + course master + customer + 2 deposits
+  - **B. Buy course**: customer.courses[] assignment + expiry = thaiDateNDaysFromNow(30) Bangkok-anchored
+  - **C. handleSubmit chain** (26 assertions): treatment doc + DF entries + course-deduct (5→4) + course-change audit + stock-deduct + movement type 6 + auto-sale create + movement type 2 + 2× applyDepositToSale (500→350 + 300→250) + treatment↔sale bidirectional links
+  - **D. Conservation** (14 invariants): customer.courses delta + stock total/remaining + sale↔treatment backlinks + movement count + deposits applied + DF preserved + course-change audit
+  - **E. Stress**: 3× concurrent customer-treatment writes
+  - **F. Adversarial**: empty courses + NaN qty + missing status (V96 CREATE-mode shape)
+  - **G. Cleanup**: 21 fixtures deleted + 0 orphans verified
 
 ## Deploy
 
-- **Vercel** `lover-clinic-94ywl4274-teddyoomz-4523s-projects.vercel.app` → aliased `lover-clinic-app.vercel.app` HTTP 200 ✓
-- **Firebase** `firebase deploy --only firestore:rules,storage` ✓ (rules + storage both up-to-date — idempotent; iter-all has zero rule changes)
+- **Vercel** `lover-clinic-5873tvvvf-teddyoomz-4523s-projects.vercel.app` → aliased `https://lover-clinic-app.vercel.app` HTTP 200 ✓
+- **Firebase** `firebase deploy --only firestore:rules,storage` ✓ (idempotent — V96 has zero rule changes)
 - **Probe-Deploy-Probe** 4/4 IDENTICAL pre+post (chat_conv 200 / be_line_reminder_log 403 / be_fb_configs 403 / be_staff_chat_messages 403)
-- **Build clean** (BackendDashboard 952.14 KB unchanged)
+- **Build clean** 3.26s (BackendDashboard 952 KB unchanged)
+
+## Stack live
+
+V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 + V93/V94/V95 audit batch + **V96 (TFP create-mode fix)**
 
 ## Next action
 
-**Idle until user direction.** V1.0 is the production baseline. Options:
-1. Fix 17× backend-menu-d V90 test-debt (pre-existing fails — older V21-T6 tests don't account for V90 entity-context auto-close).
-2. New v1.0.x patch / v1.1.0 minor / v2.0.0 work.
-3. L1 Rule Q hands-on multi-device verification across V93/V94/V95 surfaces.
+**Idle until user direction.** Rule Q L1 user hands-on can confirm in browser:
+- นางวันเพ็ญเดือนสิบสอง TFP save with purchased course → no error + sale auto-created + course remaining deducted in CDV
 
-## Outstanding user-triggered
+## Outstanding (user-triggered)
 
-- 17× backend-menu-d V90 test-debt fix (separate session — not blocking V1.0)
+- **Neuramis-ครั้ง cleanup** (separate Rule M data op from earlier session):
+  - Delete from นางวันเพ็ญ's customer.courses[] (Neuramis with unit "ครั้ง")
+  - Delete from นครราชสีมา's stock (Neuramis-ครั้ง batches)
+  - Audit other filler products with unit="ครั้ง" → convert to "CC"
+- Rule Q L1 multi-device hands-on across V96 surface (TFP save → CDV update)
+- 17× backend-menu-d V90 test-debt (pre-existing)
 - v81 emulator Java-gated skip (intentional)
-- L1 multi-device hands-on across V87-V95 surfaces (audit + visual verify on mobile)
-- Chat-tab badge crowding (pre-V85 carryover)
-- V82 Menu V2 mobile L1 re-test (carryover)
