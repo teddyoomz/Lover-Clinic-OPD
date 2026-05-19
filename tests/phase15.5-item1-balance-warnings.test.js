@@ -173,9 +173,12 @@ describe('Phase 15.5/Item 1 — IT.A pure threshold logic', () => {
 // IT.B — source-grep regression guards (StockBalancePanel wires thresholds)
 // ════════════════════════════════════════════════════════════════════════════
 describe('Phase 15.5/Item 1 — IT.B source-grep guards', () => {
-  it('B1 panel imports listProducts (threshold lookup source)', () => {
+  it('B1 panel imports listenToProducts (threshold lookup source)', () => {
     // BSA Task 6: UI imports backendClient via scopedDataLayer Layer 2
-    expect(PANEL_SRC).toMatch(/import\s*\{[^}]*listProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
+    // V43-followup (2026-05-19 NIGHT+5 EOD+1) — StockBalancePanel migrated from
+    // one-shot listProducts() to live listenToProducts() onSnapshot listener
+    // (BS-18). This regression-lock asserts the new import shape.
+    expect(PANEL_SRC).toMatch(/import\s*\{[^}]*listenToProducts[^}]*\}\s*from\s*['"]\.\.\/\.\.\/lib\/scopedDataLayer/);
   });
 
   it('B2 panel maintains productThresholdMap state', () => {

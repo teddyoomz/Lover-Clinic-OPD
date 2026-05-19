@@ -215,6 +215,8 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
           alertDayBeforeExpire: tEntry?.alertDayBeforeExpire ?? null,
           alertQtyBeforeOutOfStock: tEntry?.alertQtyBeforeOutOfStock ?? null,
           alertQtyBeforeMaxStock: tEntry?.alertQtyBeforeMaxStock ?? null,
+          // V43-followup — stamp the flag on each row so filterOutSkippedProducts works
+          skipStockDeduction: tEntry?.skipStockDeduction === true,
         });
       }
       const p = byProduct.get(b.productId);
@@ -236,16 +238,10 @@ export default function StockBalancePanel({ clinicSettings, theme, onAdjustProdu
       });
     }
     // V43-followup (2026-05-19 NIGHT+5 EOD+1) — filter out products flagged
-    // skipStockDeduction:true (AV97 invariant). Reads threshold map's flag
-    // since productThresholdMap is the live snapshot via listenToProducts.
-    // Filter is at this layer (after groupBy) so per-row warning + sort
-    // remain UNCHANGED — just fewer rows feed into displayed.
-    const allRows = Array.from(byProduct.values());
-    const flagged = allRows.filter(p => {
-      const entry = productThresholdMap[String(p.productId)];
-      return entry && entry.skipStockDeduction === true;
-    });
-    const visibleRows = allRows.filter(p => !flagged.includes(p));
+    // skipStockDeduction:true via the single-source helper (AV97 invariant).
+    // The flag is stamped on each row inside the groupBy loop above so the
+    // helper can read it directly (Rule O single-source contract).
+    const visibleRows = filterOutSkippedProducts(Array.from(byProduct.values()));
     return visibleRows.sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
   }, [batches, productThresholdMap]);
 
