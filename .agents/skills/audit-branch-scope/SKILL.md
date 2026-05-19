@@ -16,7 +16,7 @@ allowed-tools: "Read, Grep, Glob, Bash"
 
 This audit guards the seams between layers. Drift = stale data showing across branches, listeners stuck on old branch, writers losing their branchId stamp.
 
-## Scope — 17 invariants (BS-1..BS-17)
+## Scope — 18 invariants (BS-1..BS-18)
 
 | ID | Rule | Pattern |
 |---|---|---|
@@ -36,6 +36,31 @@ This audit guards the seams between layers. Drift = stale data showing across br
 | **BS-15** | **Doctor schedule room-assignment integrity** — `validateStaffScheduleStrict` in `staffScheduleValidation.js` MUST enforce SS-10 (doctor + working type → roomIds required, min 1) and SS-11 (assistant → roomIds forbidden). `ScheduleEntryFormModal` MUST gate room-checkbox UI to `staffKind === 'doctor' && showTime` and pass `staffKind` into `validateStaffScheduleStrict`. `TodaysDoctorsPanel` MUST import `expandRoomIdsForDisplay` and render per-doctor room chips. `AdminDashboard.handleGenScheduleLink` MUST import `derivedAutoClosedDates`, union into `closedDaysUnion`, and write `closedDays: closedDaysUnion`. Sanctioned exceptions: NONE. V56 / 2026-05-08 | grep SS-10/SS-11 in `staffScheduleValidation.js`; grep `staffKind` prop in `ScheduleEntryFormModal`; grep `expandRoomIdsForDisplay` in `TodaysDoctorsPanel`; grep `derivedAutoClosedDates + closedDaysUnion` in `AdminDashboard.jsx` |
 | **BS-16** | **AppointmentHub* components branch-scope discipline** — `src/components/admin/AppointmentHubView.jsx` MUST: (a) import `useSelectedBranch` from `BranchContext`; (b) import all data loaders from `scopedDataLayer.js` (NOT raw `backendClient.js`); (c) include `selectedBranchId` in the data-load `useEffect` deps array `[range.from, range.to, selectedBranchId]`; (d) carry the V64 marker comment. Pure helpers `appointmentHubFilters.js` (`dateRangeForTab`, `applyTabFilter`, `isMissedAppointment`) and `appointmentHubAggregator.js` (`buildCustomerSummaryMap`) MUST be branch-blind (no `branchId` reference inside their function bodies — verified via `fn.toString()` grep). Sanctioned exceptions: NONE. V64 / 2026-05-09 | grep AppointmentHubView for required imports + deps array + V64 marker; helper toString-grep for branch-blindness |
 | **BS-17** | **chat_conversations branch-scope discipline** — `backendClient.js` MUST export `listenToChatConversationsByBranch` with V54/BS-13 safe-by-default pattern (empty branchId + !allBranches → `onChange([])` + noop unsub; never falls back to whole-collection query unless `allBranches:true` explicit). `scopedDataLayer.js` MUST export Layer 2 wrapper that auto-injects `resolveSelectedBranchId()` when caller passes `{}`. Webhook chat_conversations writes MUST stamp `branchId` + `branchIdSource` (AV57 cross-link). UI components MUST NOT access `chat_conversations` directly via `firebase/firestore` imports (BS-1 mirror) — go through scopedDataLayer wrapper. Sanctioned exceptions: NONE. V75 / 2026-05-16 | grep `listenToChatConversationsByBranch` exports in both files; grep `resolveSelectedBranchId` in Layer 2 block; grep `chat_conversations` in webhooks for branchId stamp; grep `chat_conversations` literal in src/components/ for direct-access offenders |
+| **BS-18** | **listenToProducts Layer 1 safe-by-default + Layer 2 auto-inject** — mirror of V54/BS-13 (appointments) + V75/BS-17 (chat_conversations). `listenToProducts` is the live onSnapshot listener for `be_products`. Layer 1 (`src/lib/backendClient.js`): function signature `listenToProducts({branchId, allBranches}, onChange, onError)`; empty branchId AND `!allBranches` → emit `[]` + return noop unsub (safe-by-default); `allBranches:true` → cross-branch query (no `where` clause); V38 spread-order safe (`{...d.data(), id: d.id}` — docId wins). Layer 2 (`src/lib/scopedDataLayer.js`): auto-injects `resolveSelectedBranchId()` when caller passes `{}`; explicit branchId OR `allBranches:true` bypasses auto-inject; null branch resolved → empty emit + noop unsub. Sanctioned exceptions: NONE. V43-followup / 2026-05-19 | grep `listenToProducts` exports in both files; grep `resolveSelectedBranchId` in Layer 2 block; verify Layer 1 returns empty `[]` + noop on null branchId + !allBranches; verify V38 spread-order pattern in `.map` callback |
+
+## BS-18 — listenToProducts Layer 1 safe-by-default + Layer 2 auto-inject (V43-followup, 2026-05-19)
+
+**Pattern**: mirror of V54/BS-13 (appointments) + V75/BS-16
+(chat_conversations). `listenToProducts` is the live onSnapshot listener
+for `be_products`.
+
+Layer 1 (`src/lib/backendClient.js`):
+- Function `listenToProducts({branchId, allBranches}, onChange, onError)`
+- Empty branchId AND !allBranches → emit `[]` + return noop unsub (safe).
+- allBranches:true → cross-branch query (no `where` clause).
+- V38 spread-order safe (`{...d.data(), id: d.id}` — docId wins).
+
+Layer 2 (`src/lib/scopedDataLayer.js`):
+- Auto-injects `resolveSelectedBranchId()` when caller passes `{}`.
+- Explicit branchId OR allBranches:true bypasses auto-inject.
+- Null branch resolved → empty emit + noop unsub.
+
+**Sanctioned exceptions**: NONE.
+
+**Cross-link**: tests
+`tests/listen-to-products-bs18.test.js` ·
+`tests/av97-balance-reader-filter-discipline.test.js` (consumer audit) ·
+spec `docs/superpowers/specs/2026-05-19-skip-stock-hide-from-balance-design.html`.
 
 ## How to run
 

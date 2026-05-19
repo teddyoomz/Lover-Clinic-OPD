@@ -2319,6 +2319,33 @@ modal files (some files have multiple backdrops). Pair-edit discipline:
 any new modal added to src/components MUST follow explicit-close-only
 contract OR be added to sanctioned lightbox list.
 
+### AV97 — Skip-stock filter discipline on balance readers (V43-followup, 2026-05-19)
+
+**Pattern**: every "stock balance reader" (component that renders
+`be_products` + `be_stock_batches` as a balance table) MUST route products
+through `filterOutSkippedProducts` from `src/lib/skipStockFilter.js` so
+`skipStockDeduction:true` products don't appear in the table.
+
+**Grep target (regression)**:
+- File `src/components/backend/StockBalancePanel.jsx` MUST import
+  `filterOutSkippedProducts`.
+- Any NEW balance-reader file must also import OR be added to the closed
+  sanctioned-exception list below.
+
+**Sanctioned exceptions (closed list)**:
+- `src/components/backend/ProductsTab.jsx` — master CRUD list; admin needs
+  to see ALL products to edit them. Filter would hide rows the admin must
+  reach. Exempted by design.
+- `src/components/backend/MovementLogPanel.jsx` — history audit; immutable
+  per Rule D. Showing historical movements for now-skipped products is
+  required.
+
+Adding a 3rd exception requires a V-entry + this list extension (Rule P).
+
+**Cross-link**: spec
+`docs/superpowers/specs/2026-05-19-skip-stock-hide-from-balance-design.html`
+· tests `tests/av97-balance-reader-filter-discipline.test.js`.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
