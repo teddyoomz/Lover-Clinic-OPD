@@ -1,7 +1,24 @@
 # LoverClinic App — Claude Master Index
 
-> อัพเดท: 2026-05-14 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
-> Tests: Vitest 9600+ | Playwright E2E 45+ | RTL 40+ | Phase: 29/29 DONE
+> อัพเดท: 2026-05-19 | Stack: React 19 + Vite 8 + Firebase + Tailwind 3.4 | Deploy: Vercel
+> Tests: Vitest 12,000+ | Playwright E2E 45+ | RTL 40+ | Phase: 29/29 DONE | **🎉 V1.0 LIVE**
+
+---
+
+## 📐 PLANS + SPECS = HTML WITH MOCKUP DESIGN (2026-05-19, user directive)
+
+**ทุกแพลน + spec ใหม่ = `.html` (ไม่ใช่ `.md`) + ต้องมี `<h2>Mockup Design</h2>` section พร้อมภาพ visual.**
+
+- `writing-plans` → `docs/superpowers/plans/YYYY-MM-DD-<feature>.html` (HTML template + mockup mandatory)
+- `brainstorming` → `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.html` (Spec HTML Template + mockup mandatory)
+- `executing-plans` / `subagent-driven-development` → read `.html` plan; review Mockup Design first; cross-check tasks vs visual target
+- UI features → HTML+CSS mockup per state (empty / loaded / error / mobile / desktop)
+- Backend / data / migration → SVG flow diagram OR styled boxes for cascade/schema/data-flow
+- Legacy `.md` plans (pre-2026-05-19) ยัง read ได้; **ใหม่ทั้งหมด = `.html`**
+
+User directive verbatim: "ต่อไปฝากแก้ทุกสกิลให้เขียนไฟล์แพลนลง HTML แทน .md และใส่ mock up design ลงไปด้วย แล้วอ่านแพลน HTML แทน .md ตลอดไป ทุกสกิล".
+
+Full detail: `~/.claude/CLAUDE.md` § PLANS + SPECS + memory `feedback_plans_html_with_mockup.md`. Skill files updated at `~/.claude/skills/{writing-plans,executing-plans,brainstorming,subagent-driven-development}/SKILL.md`.
 
 ---
 
