@@ -33,6 +33,7 @@ import MovementLogPanel from './MovementLogPanel.jsx';
 import CentralWarehousePanel from './CentralWarehousePanel.jsx';
 // Phase 15.2 (2026-04-27) — Central PO write flow
 import CentralStockOrderPanel from './CentralStockOrderPanel.jsx';
+import ProductFormModal from './ProductFormModal.jsx';
 
 const SUB_TABS = [
   { id: 'balance',     label: 'ยอดคงเหลือ',  icon: <Package size={14} /> },
@@ -57,6 +58,11 @@ export default function CentralStockTab({ clinicSettings, theme }) {
   // Clicking "+" routes to 'orders' (Central PO) with the picked product prefilled.
   const [adjustPrefill, setAdjustPrefill] = useState(null);
   const [orderPrefill, setOrderPrefill] = useState(null);
+  // V43-followup (2026-05-19 NIGHT+5 EOD+1) — own the ProductFormModal state
+  // for the [✎ แก้ไข] button in StockBalancePanel Actions column. When admin
+  // toggles skipStockDeduction + saves, the BS-18 listener in
+  // StockBalancePanel will live-update; the row disappears instantly.
+  const [editingProduct, setEditingProduct] = useState(null);
 
   const handleCentralAdjustProduct = (product) => {
     setAdjustPrefill(product);
@@ -201,6 +207,7 @@ export default function CentralStockTab({ clinicSettings, theme }) {
           // sub-tabs (was no-op before; user reported broken UX).
           onAdjustProduct={handleCentralAdjustProduct}
           onAddStockForProduct={handleCentralAddStockForProduct}
+          onEditProduct={setEditingProduct}
         />
       )}
 
@@ -245,6 +252,15 @@ export default function CentralStockTab({ clinicSettings, theme }) {
 
       {subTab === 'warehouses' && (
         <CentralWarehousePanel clinicSettings={clinicSettings} theme={theme} onAfterCreate={loadWarehouses} />
+      )}
+
+      {editingProduct && (
+        <ProductFormModal
+          product={editingProduct}
+          clinicSettings={clinicSettings}
+          onClose={() => setEditingProduct(null)}
+          onSaved={() => setEditingProduct(null)}
+        />
       )}
     </div>
   );

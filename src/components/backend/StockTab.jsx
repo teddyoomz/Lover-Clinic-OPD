@@ -10,6 +10,7 @@ import StockBalancePanel from './StockBalancePanel.jsx';
 import StockTransferPanel from './StockTransferPanel.jsx';
 import StockWithdrawalPanel from './StockWithdrawalPanel.jsx';
 import CentralWarehousePanel from './CentralWarehousePanel.jsx';
+import ProductFormModal from './ProductFormModal.jsx';
 
 const SUB_TABS = [
   { id: 'balance', label: 'ยอดคงเหลือ', icon: <Package size={14} /> },
@@ -27,6 +28,11 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
   // target sub-tab so its create-form opens pre-filled.
   const [adjustPrefill, setAdjustPrefill] = useState(null);
   const [orderPrefill, setOrderPrefill] = useState(null);
+  // V43-followup (2026-05-19 NIGHT+5 EOD+1) — own the ProductFormModal state
+  // for the [✎ แก้ไข] button in StockBalancePanel Actions column. When admin
+  // toggles skipStockDeduction + saves, the BS-18 listener in
+  // StockBalancePanel will live-update; the row disappears instantly.
+  const [editingProduct, setEditingProduct] = useState(null);
 
   const handleAdjustProduct = (product) => {
     setAdjustPrefill(product);
@@ -60,6 +66,7 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
           clinicSettings={clinicSettings} theme={theme}
           onAdjustProduct={handleAdjustProduct}
           onAddStockForProduct={handleAddStockForProduct}
+          onEditProduct={setEditingProduct}
         />
       )}
       {subTab === 'orders' && (
@@ -80,6 +87,15 @@ export default function StockTab({ clinicSettings, theme, initialSubTab }) {
       {subTab === 'withdrawal' && <StockWithdrawalPanel clinicSettings={clinicSettings} theme={theme} />}
       {subTab === 'warehouses' && <CentralWarehousePanel clinicSettings={clinicSettings} theme={theme} />}
       {subTab === 'log' && <MovementLogPanel clinicSettings={clinicSettings} theme={theme} />}
+
+      {editingProduct && (
+        <ProductFormModal
+          product={editingProduct}
+          clinicSettings={clinicSettings}
+          onClose={() => setEditingProduct(null)}
+          onSaved={() => setEditingProduct(null)}
+        />
+      )}
     </div>
   );
 }
