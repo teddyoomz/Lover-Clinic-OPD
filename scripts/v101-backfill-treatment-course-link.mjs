@@ -25,6 +25,49 @@ import { randomBytes } from 'node:crypto';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+// V104-followup (2026-05-19 LATE+3 EOD+1 NIGHT+1) — canonical buildChangeAuditEntry
+// shape mirror. Pre-V104-followup the backfill wrote a FLAT shape
+// {courseName, productName, qty, performedAtIso, treatmentId, ...} that did
+// NOT match the canonical shape from src/lib/courseExchange.js:246. Display
+// reader CourseHistoryTab.jsx:66 reads `entry.fromCourse?.name` → falls back
+// to "(ไม่ระบุคอร์ส)" + qtyDelta missing → "-". User report 2026-05-19 NIGHT+1
+// with image of 11 "(ไม่ระบุคอร์ส) -" entries on LC-26000078.
+//
+// This local helper MIRRORS the canonical shape exactly. Admin-SDK ESM
+// can't import the React/Vite module directly, so the shape is duplicated
+// here. Regression test v104-followup-backfill-audit-shape.test.js locks
+// the parity.
+function buildCanonicalUseAudit({ customerId, fromCourseName, fromCourseStatus, fromCourseValue, fromCourseType, qtyDelta, qtyBefore, qtyAfter, productName, productQty, productUnit, linkedTreatmentId, reason, staffId, staffName, actor, createdAt }) {
+  return {
+    changeId: '', // populated by caller
+    customerId: String(customerId),
+    kind: 'use',
+    fromCourse: {
+      courseId: null,
+      name: String(fromCourseName || ''),
+      status: String(fromCourseStatus || 'กำลังใช้งาน'),
+      value: String(fromCourseValue || ''),
+      courseType: String(fromCourseType || ''),
+    },
+    toCourse: null,
+    refundAmount: null,
+    reason: String(reason || 'ตัดคอร์สจากการรักษา').slice(0, 500),
+    actor: String(actor || ''),
+    staffId: String(staffId || ''),
+    staffName: String(staffName || ''),
+    qtyDelta: typeof qtyDelta === 'number' ? qtyDelta : null,
+    qtyBefore: String(qtyBefore || ''),
+    qtyAfter: String(qtyAfter || ''),
+    toCustomerId: '',
+    toCustomerName: '',
+    linkedTreatmentId: String(linkedTreatmentId || ''),
+    productName: String(productName || ''),
+    productQty: typeof productQty === 'number' ? productQty : (Number(productQty) || 0),
+    productUnit: String(productUnit || ''),
+    createdAt: createdAt || new Date().toISOString(),
+  };
+}
+
 function loadEnv() {
   return readFileSync('.env.local.prod', 'utf8').split('\n').reduce((acc, l) => {
     const m = l.match(/^([^#=]+)=(.*)$/);
@@ -166,21 +209,38 @@ async function main(applyMode = false) {
           _v101AutoLinked: true,
           _v101BackfilledAt: true,
         });
-        changeEmitOut.push({
+        // V104-followup canonical shape: mirror buildChangeAuditEntry output
+        // so display reader at CourseHistoryTab.jsx:66 (entry.fromCourse?.name)
+        // resolves correctly. Pre-V104-followup wrote flat shape → "(ไม่ระบุคอร์ส)".
+        const performedAtIso = treatment.createdAt?._seconds
+          ? new Date(treatment.createdAt._seconds * 1000).toISOString()
+          : new Date().toISOString();
+        const canonicalAudit = buildCanonicalUseAudit({
           customerId,
-          treatmentId: treatment.treatmentId || treatment.id,
-          courseName: targetCourse.name,
+          fromCourseName: targetCourse.name,
+          fromCourseStatus: targetCourse.status || 'กำลังใช้งาน',
+          fromCourseValue: targetCourse.value || '',
+          fromCourseType: targetCourse.courseType || '',
+          qtyDelta: -deductQty, // negative for use
+          qtyBefore: targetCourse.qty || '',
+          qtyAfter: newQtyStr,
           productName: targetCourse.product || targetCourse.productName || ti.name,
-          productId: ti.productId,
-          courseIndex: matchIdx,
-          kind: 'use',
-          qty: deductQty,
-          unit: parsed.unit,
-          // Use treatment.createdAt as the audit timestamp
-          performedAtIso: treatment.createdAt?._seconds
-            ? new Date(treatment.createdAt._seconds * 1000).toISOString()
-            : new Date().toISOString(),
+          productQty: deductQty,
+          productUnit: parsed.unit,
+          linkedTreatmentId: treatment.treatmentId || treatment.id,
+          reason: 'ตัดคอร์สจากการรักษา (V101 backfill — V104-followup canonical shape)',
+          createdAt: performedAtIso,
+        });
+        changeEmitOut.push({
+          ...canonicalAudit,
+          // Forensic fields (NOT part of canonical schema — kept for migration tracing)
           _v101Backfill: true,
+          _v101LegacyMeta: {
+            treatmentId: treatment.treatmentId || treatment.id,
+            productId: ti.productId,
+            courseIndex: matchIdx,
+            performedAtIso,
+          },
         });
         courseDecrements.push({ index: matchIdx, beforeQty: targetCourse.qty, afterQty: newQtyStr });
 
@@ -218,12 +278,16 @@ async function main(applyMode = false) {
           _v101BackfillTreatmentItemsCount: treatmentItems.length,
         });
         // (b) Emit be_course_changes entries (one per courseItem)
+        // V104-followup: ev is already canonical shape (buildCanonicalUseAudit output)
+        // + forensic _v101Backfill / _v101LegacyMeta fields. changeId is stamped
+        // per emit so the canonical shape parity matches the canonical buildChangeAuditEntry.
         for (const ev of changeEmitOut) {
           const evId = `cc-v101-${Date.now()}-${randomBytes(4).toString('hex')}`;
           await db.doc(`${BASE}/be_course_changes/${evId}`).set({
             ...ev,
+            changeId: evId,
             timestamp: FieldValue.serverTimestamp(),
-            backfilledTimestamp: ev.performedAtIso, // historical reference
+            backfilledTimestamp: ev._v101LegacyMeta?.performedAtIso || ev.createdAt,
           });
         }
       }

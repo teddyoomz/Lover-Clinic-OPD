@@ -317,6 +317,58 @@ Class-of-bug: V12 multi-reader-sweep at the FUNCTION PARAMETER shadow boundary. 
 
 **Companion fix** at TFP:3134 (silent-swallow rip): pre-V104 `catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }` HID the shadow bug. Post-V104: mirror `existingDeductions` atomic-rollback (throw Thai error + delete just-created treatment doc in create mode).
 
+### AV92 — be_course_changes audit writers MUST use canonical buildChangeAuditEntry shape (V104-followup, 2026-05-19 LATE+3 NIGHT+1)
+**Why**: V104-followup — `scripts/v101-backfill-treatment-course-link.mjs` (V101 Rule M backfill script) wrote a FLAT non-canonical audit shape `{customerId, treatmentId, courseName, productName, qty, unit, performedAtIso, _v101Backfill:true}` that BYPASSED the canonical `buildChangeAuditEntry` output (src/lib/courseExchange.js:246). 11 entries on LC-26000078 written across 3 backfill rounds. Display reader `CustomerDetailView → CourseHistoryTab.jsx:66` reads `entry.fromCourse?.name || '(ไม่ระบุคอร์ส)'` + `entry.qtyDelta` → ALL 11 rendered as "(ไม่ระบุคอร์ส) -" in user's "ประวัติการใช้คอร์ส" tab (image 2026-05-19 NIGHT+1).
+
+Class-of-bug: V12 multi-writer-sweep at the audit-shape boundary. canonical `buildChangeAuditEntry` is the SINGLE SOURCE OF TRUTH for be_course_changes shape; legitimate writers in src/lib/backendClient.js (deductCourseItems / addCourseRemainingQty / exchangeCourseProduct / refundCustomerCourse / cancelCustomerCourse / assignCourseToCustomer) + src/components/backend/CustomerDetailView.jsx (share course) all use it. The Rule M backfill script — an admin-SDK ESM that can't import the React/Vite module — duplicated the shape WRONG.
+
+**Canonical shape** (per `src/lib/courseExchange.js:246`):
+```
+{
+  changeId, customerId, kind,
+  fromCourse: { courseId, name, status, value, courseType } | null,
+  toCourse: { courseId, name, value } | null,
+  refundAmount: number | null,
+  reason, actor, staffId, staffName,
+  qtyDelta: number | null,   // ← NEGATIVE for 'use' kind
+  qtyBefore: string, qtyAfter: string,
+  toCustomerId, toCustomerName,
+  linkedTreatmentId,
+  productName, productQty: number, productUnit,
+  createdAt,
+}
+```
+
+**Grep** (forbidden — any of these in scripts/* OR src/* outside courseExchange.js = AV92 violation):
+- `setDoc\(courseChangeDoc` OR `\.collection.*be_course_changes.*\.set\(` followed by NO `buildChangeAuditEntry` call in surrounding code → audit-shape bypass
+- Top-level `courseName:` (not nested in `fromCourse`) on a be_course_changes write
+- Top-level `qty:` (not `qtyDelta`) on a be_course_changes write
+- Top-level `treatmentId:` (not `linkedTreatmentId`) on a be_course_changes write
+- Admin-SDK ESM script writing be_course_changes WITHOUT a `buildCanonicalUseAudit`-style helper (mirror of canonical)
+
+**Canonical pattern**:
+1. UI / src/lib code → import { buildChangeAuditEntry } from './courseExchange.js' + use directly
+2. Admin-SDK ESM scripts → define local `buildCanonical<Kind>Audit` helper that mirrors canonical shape verbatim; add source-grep test that ALL canonical keys appear in the helper
+
+**Sanctioned exceptions**: NONE. Every writer to be_course_changes MUST emit canonical shape.
+
+**Forensic-trail fields** (allowed alongside canonical shape but NOT as substitutes):
+- `_v101Backfill:true` (V101 Rule M backfill origin)
+- `_v104Migrated:true` + `_v104MigratedFrom:{legacyShape}` (V104-followup migration)
+- `backfilledTimestamp` (historical reference; canonical `createdAt` is authoritative)
+- `timestamp` (Firestore serverTimestamp for index)
+
+**Source-grep regression**: `tests/v104-followup-course-audit-canonical-shape.test.js` SG1-SG7 + U1-U2:
+- SG1-SG3: V101 backfill uses `buildCanonicalUseAudit` helper + writes nested `fromCourse` + signed `qtyDelta:-deductQty`
+- SG4: V104 migration script structure + idempotency check
+- SG5: AV92 invariant text present
+- SG6: CourseHistoryTab reader still reads `entry.fromCourse?.name`
+- SG7: V104-followup marker comment present
+- U1: canonical buildChangeAuditEntry returns ALL required keys
+- U2: V104 migrate + V101 backfill scripts contain ALL canonical keys (regex grep)
+
+**Rule M migration available**: `scripts/v104-migrate-broken-course-change-audits.mjs --apply` repairs any future garbage entries. Idempotent via `_v104Migrated:true` flag. Two-phase. Audit doc to be_admin_audit.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
