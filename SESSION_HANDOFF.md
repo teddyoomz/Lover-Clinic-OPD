@@ -66,13 +66,29 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-19 LATE+3 — V101+V102+V103 LIVE (3 V-entries shipped + 2 combined deploys + 3 Rule M backfill rounds)
-- **Master = Prod**: `4b1e3d8e` (V103) — stack V84..V100 + V101 + V102 + V102-audit + V103 ALL LIVE at https://lover-clinic-app.vercel.app
-- **Tests**: V101 18 + V102 29 + V103 27 = 74 cumulative GREEN · 1014 wider regression V8/V9/V10/V101/V102/V103 PASS · 0 fail · build clean
-- **AV invariants added this session**: AV88 (treatmentItems↔courseItems desync) + AV89 (sale/treatment branchId stamp) + AV90 (refunded course filter)
-- **Deploy state**: V101+V102 first combined deploy at ~12:13 UTC (`ng1oxwvho-...`); V103 second combined deploy at 12:35:37 UTC (`gtihropqd-...`). Probe-Deploy-Probe 4/4 IDENTICAL pre+post both rounds. Firebase rules+storage idempotent (no rule changes since V82-Phone)
+- **Date last updated**: 2026-05-19 LATE+3 NIGHT+5 — V104→V107 mega-session (5 V-entries + 4 Rule M backfills + 6 AV invariants + light-theme universal fix)
+- **Master = Prod**: `f076a45d` (V107) — V104→V107 ALL LIVE at https://lover-clinic-app.vercel.app (deploy `85pg892xe-...`)
+- **Tests**: V101 18 + V102 29 + V103 27 + V104 13 + V104-followup 9 + V105 14 + V105-followup 13 + V107 8 + course-skip 64 = **195 cumulative GREEN** · 39/39 E2E stress · 24/24 V107 L2 verify · 0 fail · build clean
+- **AV invariants added this session**: AV91 (param shadow) + AV92 (audit shape) + AV93 (customer name resolver) + AV94 (atomic rollback) + AV95 (stock movement ISO createdAt) + AV96 (light-theme exception narrowing)
+- **Deploy state**: 4 combined deploys this saga. V104+V104-followup+V105+V105-followup live earlier; V107 deploy `85pg892xe` aliased canonical 2026-05-19 NIGHT+5. Probe-Deploy-Probe 4/4 IDENTICAL pre+post on EVERY round. Firebase rules+storage idempotent throughout
 - **HN counter**: unchanged
 - **opd_sessions**: unchanged
+
+### Session 2026-05-19 LATE+3 NIGHT+5 — V104→V107 mega-session (5 V-entries + Rule M backfills + light-theme universal fix)
+
+**5 V-entries + 4 Rule M backfills + 6 AV invariants + V101 victim sweep + V106 brainstorming locked-but-stashed**. Triggered by ongoing วันเพ็ญ (LC-26000078) class-of-bug saga + light-theme iPhone Safari bug report.
+
+- **V104** (`f3b0706a`) — TFP handleSubmit param `options = {}` SHADOWED React state `options` since Phase 26.1 (2026-05-13). 9 `options?.X` reads inside body silently resolved to empty `{}`. V101 IIFE produced `courseItems=[]` → deductCourseItems NEVER called → customer.courses[] never decremented. Plus silent-swallow at TFP:3134 hid the error. Fix: rename param to `submitOpts` + atomic-rollback. AV91. 13 tests.
+- **V104-followup** (`96535012`) — V101 backfill script wrote NON-CANONICAL flat audit shape (top-level courseName/qty/treatmentId vs canonical fromCourse:{name}/qtyDelta/linkedTreatmentId). 11 garbage entries on LC-26000078 → "(ไม่ระบุคอร์ส)" display. Rule M --apply'd: 11→canonical. AV92. 9 tests.
+- **V105** (`1a16e98b`) — INV-20260519-0008 customer name "-" (customer LC-26000079 patientData.firstName filled but top-level firstname empty); plus SaleTab cancel-flow partial-failure (reverseStockForSale succeeded but cancelBackendSale aborted → 7 stock movements reversed without re-deduct). Fix: NEW src/lib/customerDisplayName.js canonical resolver + atomic-rollback on cancel. AV93+AV94. 14 tests + Rule M --apply'd: 1 name + 7 stock re-deducts.
+- **V105-followup** (`cb88770c`) — V105 RE-DEDUCT 7 movements used `FieldValue.serverTimestamp()` (Timestamp object); existing 60 used ISO string → MovementLogPanel.localeCompare() threw → empty log "นครราชสีมาหาย". Fix: writer ISO string + defensive _v105NormalizeCreatedAt in MovementLogPanel + AV95. Rule M --apply'd: 7 entries Timestamp→ISO. **E2E stress 39/39 PASS** on real prod across 6 scenarios (สั่งยา/ไม่สั่งยา × ตัดคอร์สเลย/ตัดคอร์สทีหลัง EDIT + edit-change-qty + edit-images-only).
+- **V107** (`f076a45d`) — iPhone Safari light-theme: ALL modal inputs/textareas show white-on-white text + bg-white buttons invisible against light cards. Root cause: too-broad CSS exception `[class*="bg-[var"].text-white` matched 108 modal-input occurrences of `bg-[var(--bg-card)] text-white`. Fix in ONE CSS file (src/index.css): narrow exception to `bg-[var(--accent/ember/fire/brand)]` + extend 7 missing palettes (emerald/amber/rose/violet/fuchsia/sky/lime) + universal form-element safety net (input/textarea/select color via -webkit-text-fill-color) + placeholder muted-dark + bg-white button border + arbitrary text-[#fff] overrides. AV96. **24/24 L2 verify** (real-browser preview_eval). 8 source-grep tests.
+
+**V101 victim sweep this session** (`backfill` verb): `scripts/v101-backfill-treatment-course-link.mjs --apply` confirmed all stuck victims (LC-26000079 3 courses + LC-26000078 12 courses) at 0/N — idempotent skip on this run, prior rounds already decremented.
+
+**V106 stock-movement 30-day retention** brainstorming completed (4 Qs locked: Q1=hard delete + balance snapshot, Q2=daily cron 03:00 BKK, Q3=rolling 30d, Q4=all types). Design presented. STASHED awaiting user approval before writing spec → writing-plans skill.
+
+**Outstanding**: User L1 hands-on Rule Q V66 on iPhone Safari — hard-refresh + verify modal text dark in light mode + CTA buttons preserve white + bg-white button has border. Plus V106 resume if user approves design.
 
 ### Session 2026-05-19 LATE+3 — V101 + V102 + V103 architectural class-of-bug closure (3 user-visible bugs CLOSED)
 
