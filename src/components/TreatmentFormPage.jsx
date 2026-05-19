@@ -2082,7 +2082,34 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     }, 50);
   };
 
-  const handleSubmit = async (eventOrSaveMode, options = {}) => {
+  // V104 (2026-05-19 LATE+3 EOD+1) — RENAMED 2nd param from `options` →
+  // `submitOpts` to eliminate parameter-shadowing of the React-state
+  // `options` declared at line 461 (`const [options, setOptions] = useState(null)`).
+  //
+  // Pre-V104: handleSubmit(eventOrSaveMode, options = {}) shadowed the
+  // React state inside the entire function body. EVERY `options?.X` read
+  // in this body (customerCourses, doctors, assistants, etc.) read the
+  // EMPTY parameter default `{}` instead of the React state.
+  //
+  // User-visible consequence (the bug that triggered V104):
+  // - V101 IIFE at ~line 2405 read `options?.customerCourses` → undefined
+  //   → liveCustomerCourses=[] → Pass 1+2 both no-op → courseItems=[]
+  //   → existingDeductions=[] + purchasedDeductions=[] → deductCourseItems
+  //   NEVER called → customer.courses[] NEVER decremented
+  // - User saved a treatment ใช้คอร์ส 12 ครั้ง → customer.courses[] still
+  //   showed 12/12. "ไม่ตัดสักครั้ง บั๊คคค ไอ้สัส" (real user quote).
+  // - 4-of-4 latest treatments evidence: scripts/diag-v104-all-today-treatments.mjs.
+  // - JS shadow proof: `node -e "const x={};const f=(_,x={})=>console.log(x);f()"` → {}
+  //
+  // V101 backfill silently rescued treatments by writing
+  // _v101BackfilledAt:true forensic stamps on courseItems retroactively
+  // — but live save path was always broken.
+  //
+  // Bug has been live since Phase 26.1 (2026-05-13) when `options = {}`
+  // 2nd param was added for editorContext (which was never actually
+  // passed via 2nd arg — re-invoke at line 578 passes it via FIRST arg
+  // as `{saveMode, editorContext}`).
+  const handleSubmit = async (eventOrSaveMode, submitOpts = {}) => {
     // Phase 26.0a (V26.0, 2026-05-13) — Doctor-Save scaffold. Defensive
     // coercion: any value OTHER than the literal string 'doctor' resolves
     // to 'staff' default. Backward-compat: existing callers pass either
@@ -2098,7 +2125,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     // when eventOrSaveMode is a plain object WITHOUT preventDefault (i.e.,
     // not a React SyntheticEvent).
     let saveMode = 'staff';
-    let editorContext = options.editorContext || null;
+    let editorContext = submitOpts.editorContext || null;
 
     if (typeof eventOrSaveMode === 'string') {
       // Phase 26.0 form: handleSubmit('doctor') OR handleSubmit('staff')
@@ -3107,31 +3134,54 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // BOTH the assignCourseToCustomer chain AND this purchased-deduction step.
         const purchasedDeductions = (backendDetail.courseItems || []).filter(ci => isPurchasedSessionRowId(ci.rowId));
         if (saveMode !== 'doctor' && saveMode !== 'vitals' && purchasedDeductions.length > 0) {
+          // V104 (2026-05-19 LATE+3 EOD+1) — RIP silent-swallow.
+          // Pre-V104: `catch (e) { console.warn(...); }` hid ALL deductCourseItems
+          // errors → user saw "บันทึกสำเร็จ" while customer.courses[] silently
+          // failed to decrement (combined with V104 shadow bug, this masked
+          // 100% of buy-this-visit course deductions).
+          // Mirror of existingDeductions atomic-rollback at line ~2599: throw
+          // a clear Thai error AND delete the just-created treatment doc so
+          // admin can fix + retry without orphan.
+          const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
+          // Phase 16.5-quater — same treatment-deduction audit emit
+          // V36-quater (2026-04-29) — V12 multi-writer-sweep miss fix.
+          // Pre-V36-quater used bare `treatmentId` prop (empty in
+          // create-mode) → audit emit gate at backendClient.js:938
+          // skipped → "ประวัติการใช้คอร์ส" tab empty for purchased-in-
+          // session course usage. User report 2026-04-29: "ไม่เห็นขึ้น
+          // เลยไอ้สั้ส เห็นคอร์สที่เพิ่งใช้ไหม". V36-bis already fixed
+          // the existingDeductions sibling call site (line ~2156) but
+          // missed THIS call site — exact V12 lesson repeat (every
+          // grep-replace must enumerate ALL call sites of the target).
+          // Customer + branch invariant per user directive
+          // "อย่าให้พลาดอีก ในคนอื่นและสาขาอื่นด้วย" — deductCourseItems
+          // is branch-agnostic (reads only customerDoc + opts), so this
+          // fix works for any customer at any branch.
+          const purchasedNewTid = result.treatmentId || treatmentId;
+          const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
           try {
-            const { deductCourseItems } = await import('../lib/scopedDataLayer.js');
-            // Phase 16.5-quater — same treatment-deduction audit emit
-            // V36-quater (2026-04-29) — V12 multi-writer-sweep miss fix.
-            // Pre-V36-quater used bare `treatmentId` prop (empty in
-            // create-mode) → audit emit gate at backendClient.js:938
-            // skipped → "ประวัติการใช้คอร์ส" tab empty for purchased-in-
-            // session course usage. User report 2026-04-29: "ไม่เห็นขึ้น
-            // เลยไอ้สั้ส เห็นคอร์สที่เพิ่งใช้ไหม". V36-bis already fixed
-            // the existingDeductions sibling call site (line ~2156) but
-            // missed THIS call site — exact V12 lesson repeat (every
-            // grep-replace must enumerate ALL call sites of the target).
-            // Customer + branch invariant per user directive
-            // "อย่าให้พลาดอีก ในคนอื่นและสาขาอื่นด้วย" — deductCourseItems
-            // is branch-agnostic (reads only customerDoc + opts), so this
-            // fix works for any customer at any branch.
-            const purchasedNewTid = result.treatmentId || treatmentId;
-            const treatingDoctor = (options?.doctors || []).find(d => String(d.id) === String(doctorId));
             await deductCourseItems(customerId, purchasedDeductions, {
               preferNewest: true,
               treatmentId: purchasedNewTid,
               staffId: doctorId || '',
               staffName: treatingDoctor?.name || '',
             });
-          } catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }
+          } catch (courseErr) {
+            // V104 atomic-rollback contract: if purchased-course deduction
+            // throws (shortfall / index drift / etc.), delete the just-
+            // created treatment doc so admin retries cleanly. Edit-mode
+            // preserves original doc — no rollback needed. Mirror of
+            // existingDeductions handler at line ~2604.
+            if (!isEdit && result?.treatmentId) {
+              try {
+                const { deleteBackendTreatment } = await import('../lib/scopedDataLayer.js');
+                await deleteBackendTreatment(result.treatmentId);
+              } catch (rbErr) {
+                console.error('[TreatmentForm] V104 orphan-treatment rollback failed:', rbErr);
+              }
+            }
+            throw new Error(`ตัดคอร์สที่ซื้อในการรักษาไม่สำเร็จ: ${courseErr.message}`);
+          }
         }
 
         setSuccess(true);

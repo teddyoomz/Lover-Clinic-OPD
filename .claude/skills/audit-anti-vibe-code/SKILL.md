@@ -281,6 +281,42 @@ Real-prod diag found 6/6 entries on วันเพ็ญ all `status='คืน
 
 **Audit trail preservation**: refunded/cancelled entries STAY in `customer.courses[]` doc-array for historical reference (refund button click → `applyCourseRefund` → status stamp + audit log emit). "ประวัติการคืนเงิน" + be_course_changes audit collection are the canonical surfaces for terminal-status visibility.
 
+### AV91 — Function parameter MUST NOT shadow a React-state variable read inside its body (V104, 2026-05-19 LATE+3 EOD+1)
+**Why**: V104 — `TreatmentFormPage.handleSubmit` was declared `async (eventOrSaveMode, options = {}) => { ... }` at line 2085. The 2nd parameter `options = {}` SHADOWED the React state `options` declared at line 461 (`const [options, setOptions] = useState(null)`). Inside the function body, EVERY `options?.X` read resolved to the EMPTY parameter (`{}`) instead of React state. 9 critical reads silently broke:
+- V101 IIFE at ~line 2405: `options?.customerCourses` → `[]` → Pass 1+2 no-op → `courseItems=[]` → both `existingDeductions` + `purchasedDeductions` filters empty → `deductCourseItems` NEVER called → `customer.courses[].qty.remaining` NEVER decremented
+- doctorName lookup at line 2346: `options?.doctors` → `[]` → name saved as ''
+- assistants mapper at line 2348: `options?.doctors + assistants` → `[]` → names empty
+- treatingDoctor reads at lines 2597 + 3127: same → audit emit staffName empty
+- resolvePurchasedCourseForAssign at lines 2799 + 2949: `options?.customerCourses` → null → dedup against existing courses broken in auto-sale chain
+
+Bug live since Phase 26.1 (2026-05-13) when `options = {}` 2nd param was added for editorContext (never actually passed via 2nd arg — re-invoke at line 578 passes via FIRST arg `{saveMode, editorContext}`). V101 IIFE (2026-05-19) specifically exposed the user-visible symptom because it was the first reader of `options?.customerCourses` that mattered for save-time data. V101 backfill script (`scripts/v101-backfill-treatment-course-link.mjs:166-167`) wrote `_v101AutoLinked:true + _v101BackfilledAt:true` retroactively, MASKING the live-path bug for 4 days until user-reproduced fresh save at 20:53 BKK 2026-05-19 (BT-1779196388660, LC-26000078, Shock Wave 12+2).
+
+User quote (verbatim): *"บั๊ค ซื้อคอร์สใน TFP แล้วตัดการรักษาเลยใน TFP แต่มันไม่ตัด กดออกมา คอร์สแม่งยังเหลือเต็ม แบบไม่เคยตัดสักครั้ง"*
+
+Class-of-bug: V12 multi-reader-sweep at the FUNCTION PARAMETER shadow boundary. Pattern: a function parameter using the SAME identifier as a React state declared at component-level → all reads of that name inside the function body resolve to the (possibly empty/default) parameter, NEVER the React state. Affects EVERY downstream consumer that depended on the React state.
+
+**Grep** (forbidden — any of these in src/ React components = AV91 violation):
+- `\(\s*\w+\s*,\s*(options|customer|treatments|sales|appointments|deposits|wallets|points)\s*=\s*\{\}\s*\)` (or single-param variant) — 2nd-arg parameter named like a common React state with default
+- Same pattern with destructured 2nd arg whose first identifier shadows a state name
+- ANY function inside a React component with `const Foo = (...) => { ... }` style that re-uses the SAME identifier as a state variable declared via `useState` in the same component
+
+**Canonical pattern** (post-V104):
+1. NEVER name a function parameter the same as a React state in the same component
+2. If the parameter is needed: prefix with `submitOpts` / `_opts` / `fnArgs` / etc.
+3. Update ALL reads of the parameter to use the new name
+
+**Sanctioned exceptions**: NONE. Even one-letter rename is preferable to shadow.
+
+**Source-grep regression**: `tests/v104-handle-submit-options-shadow.test.js` SG1-SG6:
+- SG1: `handleSubmit` 2nd param is `submitOpts` (NOT `options`)
+- SG2: `editorContext` read uses `submitOpts.editorContext`
+- SG3: V101 IIFE still reads `options?.customerCourses` (now resolves to React state)
+- SG4: TFP:3134 NO silent-swallow on purchased deduction
+- SG5: NO function in TFP shadows React-state-named identifiers
+- SG6: V104 marker comment present
+
+**Companion fix** at TFP:3134 (silent-swallow rip): pre-V104 `catch (e) { console.warn('[TreatmentForm] purchased course deduction failed:', e); }` HID the shadow bug. Post-V104: mirror `existingDeductions` atomic-rollback (throw Thai error + delete just-created treatment doc in create mode).
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
