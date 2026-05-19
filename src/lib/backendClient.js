@@ -2776,6 +2776,39 @@ export function listenToChatConversationsByBranch({ branchId, allBranches = fals
   );
 }
 
+// V43-followup (2026-05-19 NIGHT+5 EOD+1) — BS-18 listener safe-by-default
+// for be_products. Mirror of V54/BS-13 + V75/BS-16 pattern. Powers live
+// hide-from-balance behavior when admin toggles skipStockDeduction.
+//
+// Caller passes {} → resolveSelectedBranchId() injected at Layer 2 (scopedDataLayer).
+// Caller passes {allBranches:true} → cross-branch read for reports.
+// Caller passes {branchId:'BR-X'} → explicit branch override.
+// No branch resolvable AND !allBranches → emit [] + noop unsub (safe).
+export function listenToProducts({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/be_products`);
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) {
+    constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  }
+  const q = query(col, ...constraints);
+  return onSnapshot(
+    q,
+    (snap) => {
+      // V38 spread-order safe: doc.id wins over any stray data.id field.
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (typeof onChange === 'function') onChange(list);
+    },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
 /**
  * Real-time listener for customer's finance summary — bundles 4 listeners
  * into one unsubscribe. Mirrors the {depositBalance, walletBalance, wallets,

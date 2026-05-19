@@ -346,6 +346,23 @@ export const listenToChatHistoryByBranch = (opts = {}, onChange, onError) => {
   return raw.listenToChatHistoryByBranch(resolved, onChange, onError);
 };
 
+// V43-followup (2026-05-19 NIGHT+5 EOD+1) — Layer 2 wrapper for be_products
+// live listener. BS-18 invariant. Auto-injects resolveSelectedBranchId() when
+// caller passes {}; safe-by-default empty emit when no branch resolvable.
+export const listenToProducts = (opts = {}, onChange, onError) => {
+  const hasExplicitBranchId = typeof opts.branchId === 'string' && opts.branchId.length > 0;
+  const isAllBranches = opts.allBranches === true;
+  if (hasExplicitBranchId || isAllBranches) {
+    return raw.listenToProducts(opts, onChange, onError);
+  }
+  const id = resolveSelectedBranchId();
+  if (!id) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  return raw.listenToProducts({ ...opts, branchId: id }, onChange, onError);
+};
+
 // Phase 17.2-ter (2026-05-05) — listenToScheduleByDay has positional signature
 // (targetDate, onChange, staffIdsFilter, onError, branchId). The signature
 // was extended to accept branchId so AppointmentTab can thread the current
