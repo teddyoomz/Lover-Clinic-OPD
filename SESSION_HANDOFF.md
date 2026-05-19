@@ -66,13 +66,29 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-19 (EOD+11 LATE+1) — **🎉 VERSION 1.0 LIVE. V93/V94/V95 audit-all batch deployed + 3-iter audit-fix-audit converged GREEN**
-- **Master = Prod**: `31368682` (after V93+V94+V95 + 3 iter fixes deploy) — stack V84+V85+AV82+V86 v1+V86-followup-2+V87+V88+V89+V90+V91+V92 + V93/V94/V95 audit batch ALL LIVE
-- **Tests**: 116/116 audit batch GREEN (V93 35 + V94 41 + V95 21 + bsa-task6 1) · V8x family 158/158 GREEN · full vitest ~12,000 PASS (17 pre-existing menu-d V90 test-debt + 1 Java-gated emulator unchanged) · build clean
-- **AV invariants added this session**: AV85 (TZ1 family lock — slice/substring/split for date arithmetic) with 5-entry closed sanctioned-exception list
-- **Audit findings**: 3-iter audit-fix-audit converged to 0 P0-P1 remaining. Iter-1 caught 1 missed TZ1 site (`clinicReportAggregator.js:298`). Iter-2 caught TZ1 family expansion (`split('T')[0]` for validity-date arithmetic × 2 sites). Iter-3 confirmed GREEN. Auth + admin + backend-firestore + chat-notifications + rules ALL PASS clean.
+- **Date last updated**: 2026-05-19 LATE+3 — V101+V102+V103 LIVE (3 V-entries shipped + 2 combined deploys + 3 Rule M backfill rounds)
+- **Master = Prod**: `4b1e3d8e` (V103) — stack V84..V100 + V101 + V102 + V102-audit + V103 ALL LIVE at https://lover-clinic-app.vercel.app
+- **Tests**: V101 18 + V102 29 + V103 27 = 74 cumulative GREEN · 1014 wider regression V8/V9/V10/V101/V102/V103 PASS · 0 fail · build clean
+- **AV invariants added this session**: AV88 (treatmentItems↔courseItems desync) + AV89 (sale/treatment branchId stamp) + AV90 (refunded course filter)
+- **Deploy state**: V101+V102 first combined deploy at ~12:13 UTC (`ng1oxwvho-...`); V103 second combined deploy at 12:35:37 UTC (`gtihropqd-...`). Probe-Deploy-Probe 4/4 IDENTICAL pre+post both rounds. Firebase rules+storage idempotent (no rule changes since V82-Phone)
 - **HN counter**: unchanged
 - **opd_sessions**: unchanged
+
+### Session 2026-05-19 LATE+3 — V101 + V102 + V103 architectural class-of-bug closure (3 user-visible bugs CLOSED)
+
+**3 user-reported bugs in one session, 3 V-entries, 2 deploys, 3 Rule M backfills.** Triggered by วันเพ็ญ (LC-26000078) test session uncovering V12 multi-reader-sweep cousins across course-deduction + sale-branchId + refund-filter boundaries.
+
+- **V101** (`068a2ea5`) — TFP courseItems serialization at line 2352. ROOT CAUSE: single-pass `Array.from(selectedCourseItems).map(...).filter(Boolean)` returned `[]` when rowId lookup missed (3 channels: edit-load loop / state-sync race / purchase+use mismatch). FIX: two-pass IIFE (Pass 1 rowId / Pass 2 productId-fallback with `_v101AutoLinked: true` forensic) + edit-load rebind. AV88. 18 tests. 5 affected treatments backfilled across 3 rounds.
+
+- **V102** (`4dcf217e`) — createBackendSale + createBackendTreatment missing top-level branchId stamp. Graphify-confirmed: `_resolveBranchIdForWrite` has 24 EXTRACTED `--calls→` edges (saveProduct/saveCourse/savePromotion/createDeposit/createBackendAppointment/createRecall/etc.); sale+treatment had 0. Per-branch SaleTab BSA filter (`where('branchId','==', X)`) hid 5/5 sales → user reported "ใบเสร็จไม่ไปสร้าง". FIX: stamp via helper in both writers; updateBackendSale/Treatment preserve-explicit-only (defensive delete-on-empty). AV89. 29 tests + 7 sales/treatments backfilled.
+
+- **V102-audit fix** (`16db55d5`) — stock collections use `branchId` not `locationId`. Original audit script's field assumption mis-flagged 37 stock docs as desync. Re-audit confirmed all stock writers correctly stamp branchId. V102.C scope eliminated.
+
+- **V103** (`4b1e3d8e`) — refunded/cancelled customer.courses[] entries still showed as active in CDV "คอร์สของฉัน" + TFP picker. `refundCustomerCourse` + `cancelCustomerCourse` SOFT-MARK status='คืนเงิน'/'ยกเลิก' (audit-trail design); 3 display readers missed filtering. FIX: NEW canonical helper `isTerminalCourseStatus` in treatmentBuyHelpers.js + plug into CDV.activeCourses + mapRawCoursesToForm + isCourseUsableInTreatment. lineBotResponder sanctioned exception (whitelist semantic). AV90. 27 tests + 1 V21 fixup (V47 C.1 import regex relaxed). NO backfill (filter-only fix; data already correctly stamped).
+
+**Browser-cache root cause discovered**: 3 treatments saved during deploy window kept pre-V101 JS in memory (SPA hot-swap doesn't update minified bundles in active tabs). Verified V101 IIFE byte-present in deployed `appointmentDisplay-CwH71V4k.js` (281K chunk) but tab kept old code. Backfill closed retroactively. V104 architectural cache-bust deferred to user discretion.
+
+**Outstanding**: L1 hands-on user verify per Rule Q V66 — Ctrl+Shift+R hard refresh + test TFP save with course/sale/refund to confirm V101+V102+V103 fire correctly with fresh JS. Plus 4 minor BSA edge cases (df_staff_rates×2 empty-string + link_requests×2) — backfill if desired.
 
 ### Session 2026-05-19 (LATE+2) — V96+V97+V98+V99+V100 EXHAUSTIVE TFP CORE verification
 
