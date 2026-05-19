@@ -67,12 +67,12 @@ const BRANCH_SCOPED = [
   { col: 'be_link_requests',       field: 'branchId' },
   { col: 'be_recalls',             field: 'branchId' },
   { col: 'be_exam_rooms',          field: 'branchId' },
-  { col: 'be_stock_batches',       field: 'locationId' },
-  { col: 'be_stock_orders',        field: 'locationId' },
-  { col: 'be_stock_movements',     field: 'locationId' },
-  { col: 'be_stock_adjustments',   field: 'locationId' },
-  { col: 'be_stock_transfers',     field: 'fromLocationId' },
-  { col: 'be_stock_withdrawals',   field: 'locationId' },
+  { col: 'be_stock_batches',       field: 'branchId' },
+  { col: 'be_stock_orders',        field: 'branchId' },
+  { col: 'be_stock_movements',     field: 'branchId' },
+  { col: 'be_stock_adjustments',   field: 'branchId' },
+  { col: 'be_stock_transfers',     field: 'fromBranchId' },
+  { col: 'be_stock_withdrawals',   field: 'branchId' },
 ];
 
 // Marketing OR-merge — branchId may be present OR allBranches:true
