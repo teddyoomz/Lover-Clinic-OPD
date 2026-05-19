@@ -1022,6 +1022,15 @@ export async function createBackendTreatment(customerId, detail) {
   if (doctorRecordedBy !== undefined) topLevelPatch.doctorRecordedBy = doctorRecordedBy;
   if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
   if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
+  // V102 (2026-05-19 LATE+2) — stamp TOP-LEVEL branchId per BSA Rule L.
+  // Pre-V102: only detail.branchId was set (TFP backendDetail had branchId
+  // inside the spread); top-level doc had NO branchId field → per-branch
+  // be_treatments queries via `where('branchId', '==', X)` returned 0
+  // results → treatments invisible in per-branch report tabs.
+  // Mirror of V102.A createBackendSale fix; same class-of-bug. See AV89.
+  // Diag (scripts/diag-system-wide-branchid-stamp-audit.mjs):
+  // 5/5 prod treatments missing top-level branchId pre-fix.
+  topLevelPatch.branchId = _resolveBranchIdForWrite(detail);
   // V96 (2026-05-19) — defense-in-depth: pass {merge:true} so any future caller
   // that smuggles a Firestore sentinel (deleteField(), arrayUnion(), etc.)
   // through the `detail` payload doesn't crash the create path. TFP v26
@@ -1072,8 +1081,22 @@ export async function updateBackendTreatment(treatmentId, detail) {
   if (doctorRecordedBy !== undefined) topLevelPatch.doctorRecordedBy = doctorRecordedBy;
   if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
   if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
+  // V102 (2026-05-19 LATE+2) — preserve branchId on update when caller
+  // explicitly passes it (mirrors updateBackendSale semantics). Don't
+  // auto-fill from selected branch — admin cross-branch edits would
+  // corrupt original stamping. New writes flow through
+  // createBackendTreatment which stamps unconditionally.
+  // Defensive: empty-string detail.branchId would clobber existing via
+  // detailRest spread → strip from detailRest when not valid.
+  const safeDetailRest = { ...detailRest };
+  if (detail && typeof detail.branchId === 'string' && detail.branchId.trim()) {
+    topLevelPatch.branchId = detail.branchId;
+    // keep detail.branchId in detailRest too (caller-explicit override)
+  } else {
+    delete safeDetailRest.branchId;
+  }
   await updateDoc(treatmentDoc(treatmentId), {
-    detail: detailRest,
+    detail: safeDetailRest,
     updatedAt: new Date().toISOString(),
     ...topLevelPatch,
   });
@@ -2911,7 +2934,19 @@ function _normalizeSaleData(data) {
  *  Returns the ACTUAL saleId used (may include a `-<ts>` suffix when the
  *  primary invoice number collides — the doc is stored under `finalId`, so
  *  callers must use this return value when referencing the sale elsewhere
- *  (applyDepositToSale, deductWallet, earnPoints, etc.). */
+ *  (applyDepositToSale, deductWallet, earnPoints, etc.).
+ *
+ *  V102 (2026-05-19 LATE+2) — branchId STAMPED via `_resolveBranchIdForWrite`
+ *  to bring createBackendSale in line with the 24 sibling writers
+ *  (saveProduct, saveCourse, savePromotion, createDeposit,
+ *  createBackendAppointment, createRecall, etc. — graphify EXTRACTED edges
+ *  confirm). Pre-V102: createBackendSale was the ONLY primary writer
+ *  that never adopted Phase BS V2/V3 branchId stamping. Result: every
+ *  auto-sale created from TFP handleSubmit produced `branchId=(none)` →
+ *  invisible in per-branch SaleTab (BSA `where('branchId','==', selectedBranchId)`
+ *  query). User-reported (วันเพ็ญ LC-26000078, real prod, 2026-05-19 LATE+2):
+ *  "ใบเสร็จในหน้าใบขายก็ไม่ไปสร้าง". Diag found 3 of 3 audited sales
+ *  linked to current treatments had `branchId=(none)`. */
 export async function createBackendSale(data) {
   const saleId = await generateInvoiceNumber();
   const now = new Date().toISOString();
@@ -2920,6 +2955,7 @@ export async function createBackendSale(data) {
   const finalId = existing.exists() ? `${saleId}-${Date.now().toString(36)}` : saleId;
   await setDoc(saleDoc(finalId), {
     saleId: finalId,
+    branchId: _resolveBranchIdForWrite(data), // V102
     ..._normalizeSaleData(data),
     status: data.status || 'active',
     createdAt: now,
@@ -2928,9 +2964,26 @@ export async function createBackendSale(data) {
   return { saleId: finalId, success: true };
 }
 
-/** Update an existing sale */
+/** Update an existing sale.
+ *  V102 — branchId preserved on update: when caller explicitly passes
+ *  `data.branchId`, that takes precedence; otherwise leaves existing
+ *  branchId intact (no resolveSelectedBranchId fallback here because
+ *  update flows can legitimately run from cross-branch admin actions
+ *  like report-side reconciliation). New writes flow through
+ *  createBackendSale which stamps unconditionally. */
 export async function updateBackendSale(saleId, data) {
-  await updateDoc(saleDoc(saleId), { ..._normalizeSaleData(data), updatedAt: new Date().toISOString() });
+  const patch = { ..._normalizeSaleData(data), updatedAt: new Date().toISOString() };
+  // V102 — defensive branchId handling: only patch when explicit non-empty
+  // string; otherwise REMOVE from patch so existing top-level branchId
+  // stays intact. Without this delete, empty/undefined `data.branchId`
+  // smuggled through the _normalizeSaleData spread would clobber a
+  // correctly-stamped sale. Test V102.F6 locks this contract.
+  if (data && typeof data.branchId === 'string' && data.branchId.trim()) {
+    patch.branchId = data.branchId;
+  } else {
+    delete patch.branchId;
+  }
+  await updateDoc(saleDoc(saleId), patch);
   return { success: true };
 }
 

@@ -224,6 +224,38 @@ V100/V99/V96 missed it because every test layered admin-SDK on top of a synthesi
 
 **Rule M backfill required**: any prod treatment with `treatmentItems[].productId` + `courseItems[]` empty + matching customer.courses entry → retroactively (a) decrement customer.courses[].qty, (b) emit be_course_changes kind='use' with treatmentId, (c) stamp `_v101BackfilledAt` + `_v101BackfilledFrom` forensic fields.
 
+### AV89 — Primary writers to branch-scoped collections MUST stamp top-level `branchId` (V102, 2026-05-19 LATE+2)
+**Why**: System-wide audit 2026-05-19 LATE+2 (scripts/diag-system-wide-branchid-stamp-audit.mjs) found **51 docs across 7 collections missing top-level branchId** despite BSA Rule L declaring them branch-scoped. Worst offenders:
+- `be_treatments`: 5/5 missing → BSA listener `where('branchId','==',selectedBranchId)` returned 0 rows → per-branch treatment timeline empty
+- `be_sales`: 5/5 missing → per-branch SaleTab invisible → user-reported "ใบเสร็จในหน้าใบขายก็ไม่ไปสร้าง" (wanphen, LC-26000078)
+- `be_stock_*` (orders/movements/batches): 37 missing `locationId` (stock-tier scope analog)
+- `be_link_requests` + `be_df_staff_rates`: minor edge cases
+
+Class-of-bug: **V12 multi-writer-sweep at Phase BS V2/V3 BSA migration**. 24 sibling writers (saveProduct, saveCourse, savePromotion, createDeposit, createBackendAppointment, createRecall, etc.) adopted `_resolveBranchIdForWrite()` via Phase BS V2/V3. `createBackendSale` + `createBackendTreatment` were missed.
+
+**Graphify-confirmed** (post-update): `_resolveBranchIdForWrite` has 24 EXTRACTED `--calls→` edges in graphify-out/graph.json. createBackendSale + createBackendTreatment have ZERO incoming edges from this helper. Audit-via-graph caught the gap that grep-only would have missed.
+
+**Grep** (forbidden — any of these = AV89 violation):
+- New `export async function (create|save|add)[A-Z]\w*` in `src/lib/backendClient.js` that writes to a BSA branch-scoped collection (be_treatments, be_sales, be_appointments, etc.) but does NOT contain `_resolveBranchIdForWrite` call in the function body
+- New write site that hardcodes `branchId` to a literal string OR omits the field entirely on `setDoc(...)`/`tx.set(...)` to a branch-scoped collection
+
+**Canonical pattern** (mirror V102 in createBackendSale at backendClient.js:2915+):
+```js
+await setDoc(saleDoc(finalId), {
+  saleId: finalId,
+  branchId: _resolveBranchIdForWrite(data),  // V102 — BEFORE the spread
+  ..._normalizeSaleData(data),
+  ...
+});
+```
+Spread AFTER the branchId line so caller-provided `data.branchId` (when set) overrides via the `_resolveBranchIdForWrite` early-return path. update writers should preserve existing branchId unless caller explicitly passes (cross-branch admin edit).
+
+**Closed sanctioned exception list** (zero entries — every primary writer to a branch-scoped collection must stamp).
+
+**Source-grep regression**: `tests/v102-sale-treatment-branchid-stamp.test.js` locks createBackendSale + createBackendTreatment to contain `_resolveBranchIdForWrite` call + V102 marker.
+
+**Rule M backfill required**: any prod doc missing branchId in branch-scoped collection → retroactively resolve via linkedTreatmentId / detail.branchId / nakhonratchasima fallback + stamp `_v102BackfilledAt` forensic field. Canonical script: `scripts/v102-backfill-branchid-stamp.mjs`.
+
 ### AV15 — No silent-swallow of destructive operations + missing token revoke on credential change (V31)
 **Why**: V31 — StaffTab/DoctorsTab `handleDelete` wrapped `deleteAdminUser` in `try { ... } catch (e) { console.warn('continuing with Firestore delete'); }` then proceeded with the second destructive op (Firestore delete). Any Firebase Auth deletion failure left an orphan user (login still worked, email blocked re-creation). Bug LIVE since Phase 12.1 (~Q1 2026). Sister bug: `handleUpdate` and `setCustomUserClaims`-using actions never called `auth.revokeRefreshTokens(uid)` → old session tokens remained valid for ~1h after admin changed credentials or removed claims.
 **Grep**:
