@@ -2847,9 +2847,11 @@ export async function createChartEditSession(payload) {
   const presRef = chartTabletPresenceDoc(payload.tabletDeviceId);
   await runTransaction(db, async (tx) => {
     const pres = await tx.get(presRef);
-    if (!pres.exists() || !isPresenceReady(pres.data(), Date.now())) {
-      const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e;
-    }
+    const data = pres.exists() ? pres.data() : null;
+    // Distinguish genuinely-busy (in a session) from offline/stale (tab backgrounded,
+    // screen asleep, disconnected) so the PC shows an accurate reason.
+    if (data && data.status === 'busy') { const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e; }
+    if (!isPresenceReady(data, Date.now())) { const e = new Error('TABLET_OFFLINE'); e.code = 'TABLET_OFFLINE'; throw e; }
     tx.set(presRef, { status: 'busy', updatedAt: serverTimestamp() }, { merge: true });
     tx.set(chartEditSessionDoc(payload.sessionId), { ...buildSessionCreate({ ...payload, branchId: bid }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   });

@@ -14,7 +14,8 @@ function fire(id) { const cb = store.listeners.get(id); if (cb) cb(store.session
 vi.mock('../src/lib/chartEditSession.js', () => ({
   createChartEditSession: vi.fn(async (payload) => {
     const pres = store.presence.get(payload.tabletDeviceId);
-    if (!isPresenceReady(pres, Date.now())) { const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e; }
+    if (pres && pres.status === 'busy') { const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e; }
+    if (!isPresenceReady(pres, Date.now())) { const e = new Error('TABLET_OFFLINE'); e.code = 'TABLET_OFFLINE'; throw e; }
     store.presence.set(payload.tabletDeviceId, { ...pres, status: 'busy' });   // TX guard: claim the tablet
     store.sessions.set(payload.sessionId, { ...payload, status: 'requested', cancelledBy: null, templateImageUrl: null, resultImageUrl: null, tabletHeartbeatAt: null });
   }),
@@ -83,6 +84,14 @@ describe('Rule I — tablet chart editor full-flow simulate', () => {
     await act(async () => { await pc2.result.current.start(startArgs()); });
     expect(pc2.result.current.phase).toBe('failed');
     expect(pc2.result.current.error).toMatch(/กำลังถูกใช้งาน/);
+  });
+  it('F6 a stale/offline tablet → TABLET_OFFLINE (accurate message, not "in use")', async () => {
+    store.presence.set('TEST-T1', { deviceId: 'TEST-T1', status: 'idle', lastHeartbeatAt: Date.now() - 60000 }); // 60s stale
+    const { result } = renderHook(() => useChartEditSession({ pcDeviceId: 'PC1', pcUid: 'u1', onSaved: vi.fn() }));
+    await act(async () => { await result.current.start(startArgs()); });
+    expect(result.current.phase).toBe('failed');
+    expect(result.current.error).toMatch(/ไม่พร้อม|หลุดการเชื่อมต่อ/);
+    expect(result.current.error).not.toMatch(/กำลังถูกใช้งาน/);
   });
   it('F5 image bytes travel via Storage, NEVER in the session doc', async () => {
     seedReadyTablet();

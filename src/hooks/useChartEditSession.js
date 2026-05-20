@@ -27,7 +27,13 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
       const url = await uploadTransportImage(sessionId, 'template', templateDataUrl);
       await updateChartEditSession(sessionId, { templateImageUrl: url });
     } catch (e) {
-      setPhase('failed'); setError(e.code === 'TABLET_BUSY' ? 'แท็บเล็ตเครื่องนี้กำลังถูกใช้งานอยู่' : 'เริ่มการเชื่อมต่อไม่สำเร็จ'); idRef.current = null;
+      setPhase('failed');
+      setError(
+        e.code === 'TABLET_BUSY' ? 'แท็บเล็ตเครื่องนี้กำลังถูกใช้งานอยู่'
+          : e.code === 'TABLET_OFFLINE' ? 'แท็บเล็ตไม่พร้อม (อาจปิดหน้าจอหรือหลุดการเชื่อมต่อ) — ลองเลือกใหม่'
+            : 'เริ่มการเชื่อมต่อไม่สำเร็จ'
+      );
+      idRef.current = null;
       return;
     }
     unsubRef.current = listenToChartEditSession(sessionId, async (doc) => {
