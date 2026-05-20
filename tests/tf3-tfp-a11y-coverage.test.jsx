@@ -73,7 +73,8 @@ describe('TF3 — TreatmentFormPage a11y wiring', () => {
       // Regex updated to accept the optional `, options = {}` 2nd param;
       // window bumped 2500 → 4000 chars. V21-class regex fixup (Phase 26.1c).
       // setFieldErrors({}) early-clear contract preserved.
-      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*(?:,\s*options\s*=\s*\{\s*\}\s*)?\)[\s\S]{0,4000}?setFieldErrors\(\{\}\)/);
+      // V104 (2026-05-19): 2nd param renamed options→submitOpts (shadowed React state).
+      const m = TFP.match(/handleSubmit\s*=\s*async\s*\(\s*(eventOrSaveMode)?\s*(?:,\s*submitOpts\s*=\s*\{\s*\}\s*)?\)[\s\S]{0,4000}?setFieldErrors\(\{\}\)/);
       expect(m).toBeTruthy();
     });
   });

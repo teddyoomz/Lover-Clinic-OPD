@@ -1082,10 +1082,12 @@ describe('AV37 Phase 26.0 — TFP doctor-save gate discipline', () => {
     }
   });
 
-  it('AV37.10 TFP handleSubmit signature accepts (eventOrSaveMode, options) (Phase 26.1 ext)', async () => {
+  it('AV37.10 TFP handleSubmit signature accepts (eventOrSaveMode, submitOpts) (Phase 26.1 ext; V104 renamed options→submitOpts)', async () => {
     const fs = await import('node:fs/promises');
     const src = await fs.readFile('src/components/TreatmentFormPage.jsx', 'utf8');
-    expect(src).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*options\s*=\s*\{\s*\}\s*\)/);
+    // V104 (2026-05-19) renamed the 2nd param options→submitOpts to stop it
+    // shadowing the React `options` state. App behavior unchanged; regex updated.
+    expect(src).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*submitOpts\s*=\s*\{\s*\}\s*\)/);
     expect(src).toMatch(/editorContext/);
   });
 

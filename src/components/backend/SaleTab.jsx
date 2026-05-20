@@ -1178,6 +1178,21 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               <tbody>
                 {filtered.map((sale, i) => {
                   const st = resolveSaleStatus(sale);
+                  // V105 (2026-05-19) customerName display-time fallback —
+                  // RP1 (EOD+1, 2026-05-20): hoisted out of JSX (previously an
+                  // inline IIFE returning JSX) per the anti-IIFE-in-JSX rule
+                  // (Vite OXC). Identical output; zero behavior change.
+                  const _v105LinkedCustomer = sale.customerId
+                    ? customers.find(c => (c.id || c.customerId) === sale.customerId)
+                    : null;
+                  const _v105FallbackName = _v105LinkedCustomer
+                    ? resolveCustomerDisplayName(_v105LinkedCustomer)
+                    : '';
+                  const _v105FallbackHN = _v105LinkedCustomer
+                    ? resolveCustomerHN(_v105LinkedCustomer)
+                    : '';
+                  const _v105DisplayName = sale.customerName || _v105FallbackName || '-';
+                  const _v105DisplayHN = sale.customerHN || _v105FallbackHN;
                   return (
                     <tr
                       key={sale.saleId || sale.id || i}
@@ -1190,42 +1205,20 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium">
                         {/* stopPropagation so opening the customer page in a
                             new tab doesn't ALSO trigger the row's detail modal.
-                            V105 (2026-05-19) — display-time fallback: when
-                            sale.customerName is empty (legacy auto-sale write
-                            from FB/LINE/kiosk customers whose top-level
-                            firstname is blank), look up the linked customer
-                            and resolve via canonical helper. Sale rows now
-                            NEVER show "-" when a customerId is linked + the
-                            customer has any name shape variant filled. */}
-                        {(() => {
-                          const _v105LinkedCustomer = sale.customerId
-                            ? customers.find(c => (c.id || c.customerId) === sale.customerId)
-                            : null;
-                          const _v105FallbackName = _v105LinkedCustomer
-                            ? resolveCustomerDisplayName(_v105LinkedCustomer)
-                            : '';
-                          const _v105FallbackHN = _v105LinkedCustomer
-                            ? resolveCustomerHN(_v105LinkedCustomer)
-                            : '';
-                          const displayName = sale.customerName || _v105FallbackName || '-';
-                          const displayHN = sale.customerHN || _v105FallbackHN;
-                          return (
-                            <>
-                              {sale.customerId ? (
-                                <a
-                                  href={`/?backend=1&customer=${sale.customerId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                  className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
-                                >
-                                  {displayName}
-                                </a>
-                              ) : displayName}
-                              {displayHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{displayHN}</span>}
-                            </>
-                          );
-                        })()}
+                            V105 customerName display-time fallback computed
+                            above the return (RP1 anti-IIFE-in-JSX). */}
+                        {sale.customerId ? (
+                          <a
+                            href={`/?backend=1&customer=${sale.customerId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors"
+                          >
+                            {_v105DisplayName}
+                          </a>
+                        ) : _v105DisplayName}
+                        {_v105DisplayHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{_v105DisplayHN}</span>}
                       </td>
                       <td className="px-3 py-2 text-[var(--tx-secondary)]">{fmtDate(sale.saleDate)}</td>
                       {/* 2026-04-28 redesign: รายการขาย column — colored

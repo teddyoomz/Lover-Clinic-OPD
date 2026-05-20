@@ -48,10 +48,17 @@ describe('Backend Menu D — Stress', () => {
   });
 
   it('S3 orb click 20× — activeTab toggles deterministically', () => {
+    // V90/V91 (2026-05-18): bloom opens by default, duo-pill TOGGLES it, and
+    // navigation auto-closes it (single-item orb) or opens a picker (multi-item
+    // orb). To stress orb clicks deterministically, reset to a fresh open bloom
+    // each iteration: Escape clears any open picker/bloom, then open if closed.
     render(<Harness />);
     let lastTab = null;
     for (let i = 0; i < 20; i++) {
-      fireEvent.click(screen.getByTestId('duo-pill-menu'));
+      fireEvent.keyDown(window, { key: 'Escape' });
+      if (!screen.queryByTestId('bloom-overlay')) {
+        fireEvent.click(screen.getByTestId('duo-pill-menu'));
+      }
       const orbs = screen.getAllByRole('menuitem');
       const idx = i % orbs.length;
       fireEvent.click(orbs[idx]);

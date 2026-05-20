@@ -336,8 +336,6 @@ describe('Phase 11.1 — BackendDashboard routing (deep-link)', () => {
     expect(await screen.findByTestId('t-permission-groups')).toBeInTheDocument();
   });
 
-  it.skip('R7 V50 (2026-05-08) — ?tab=masterdata SKIPPED (MasterDataTab deleted)', async () => {
-    await renderWith('masterdata');
-    expect(await screen.findByTestId('t-masterdata')).toBeInTheDocument();
-  });
+  // R7 removed 2026-05-20 (was a .skip tombstone — MasterDataTab was deleted in
+  // V50; removal locked by tests/v50-av28-no-proclinic-imports.test.js).
 });

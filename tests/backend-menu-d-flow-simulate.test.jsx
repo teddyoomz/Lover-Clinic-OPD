@@ -14,6 +14,9 @@ vi.mock('../src/components/backend/ProfileDropdown.jsx', () => ({ default: () =>
 function HarnessApp() {
   const [activeTab, setActiveTab] = useState('customers');
   const [theme, setTheme] = useState('dark');
+  // V90/V91 (2026-05-18): the bloom opens by default + duo-pill toggles it.
+  // Pass isSpecificEntityContext so the bloom starts CLOSED — each test's
+  // duo-pill-menu click then OPENS it (preserving "tap menu → bloom opens").
   return (
     <BackendShellNew
       activeTabId={activeTab}
@@ -21,6 +24,7 @@ function HarnessApp() {
       clinicSettings={{ accentColor: '#dc2626' }}
       theme={theme}
       setTheme={setTheme}
+      isSpecificEntityContext={true}
     >
       <div data-testid="active-tab">{activeTab}</div>
     </BackendShellNew>
@@ -71,12 +75,14 @@ describe('Backend Menu D — Rule I full-flow simulate', () => {
   });
 
   it('FS3-bis (V21-T6 fixup) multi-item orb click keeps ArcBloom open with picker mounted on top', () => {
-    const { container } = render(<HarnessApp />);
+    render(<HarnessApp />);
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     const multiIdx = NAV_SECTIONS.findIndex(s => s.items.length >= 2);
     fireEvent.click(screen.getAllByRole('menuitem')[multiIdx]);
-    expect(container.querySelector('[data-testid="bloom-overlay"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="subtab-overlay"]')).not.toBeNull();
+    // bloom + picker render via portal (createPortal → document.body), so query
+    // the whole document via screen, not the render container (cf. FP1/FP3/FP4).
+    expect(screen.queryByTestId('bloom-overlay')).not.toBeNull();
+    expect(screen.queryByTestId('subtab-overlay')).not.toBeNull();
   });
 
   it('FS4 (V21-T6 fixup) every section reachable — multi-item goes via picker, single-item direct', () => {

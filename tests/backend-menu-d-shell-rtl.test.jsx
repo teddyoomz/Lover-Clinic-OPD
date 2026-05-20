@@ -119,7 +119,9 @@ describe('Backend Menu D — Shell RTL', () => {
   });
 
   it('T6.8 Esc closes bloom when open', () => {
-    setup();
+    // V90/V91: bloom opens by default + duo-pill toggles. Start CLOSED so the
+    // duo-pill-menu click OPENS the bloom (T6.6/T6.13 still cover open-by-default).
+    setup({ isSpecificEntityContext: true });
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     expect(screen.getByTestId('bloom-overlay')).toBeTruthy();
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -133,7 +135,8 @@ describe('Backend Menu D — Shell RTL', () => {
     const singleIdx = NAV_SECTIONS.findIndex((s) => s.items.length === 1);
     expect(singleIdx).toBeGreaterThanOrEqual(0);
     const onNavigate = vi.fn();
-    setup({ onNavigate });
+    // V90/V91: start CLOSED so the duo-pill-menu click OPENS the bloom.
+    setup({ onNavigate, isSpecificEntityContext: true });
     fireEvent.click(screen.getByTestId('duo-pill-menu'));
     const orbs = screen.getAllByRole('menuitem');
     fireEvent.click(orbs[singleIdx]);

@@ -14,6 +14,9 @@ vi.mock('../src/components/backend/ProfileDropdown.jsx', () => ({ default: () =>
 function HarnessApp() {
   const [activeTab, setActiveTab] = useState('customers');
   const [theme, setTheme] = useState('dark');
+  // V90/V91 (2026-05-18): the bloom opens by default + duo-pill toggles it.
+  // Pass isSpecificEntityContext so the bloom starts CLOSED — each test's
+  // duo-pill-menu click then OPENS it (preserving "tap menu → bloom opens").
   return (
     <BackendShellNew
       activeTabId={activeTab}
@@ -21,6 +24,7 @@ function HarnessApp() {
       clinicSettings={{ accentColor: '#dc2626' }}
       theme={theme}
       setTheme={setTheme}
+      isSpecificEntityContext={true}
     >
       <div data-testid="active-tab">{activeTab}</div>
     </BackendShellNew>

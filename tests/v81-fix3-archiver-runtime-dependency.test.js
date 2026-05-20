@@ -84,16 +84,8 @@ describe('V81-fix3 / AV67 — api/** must not import devDeps (Vercel runtime cra
   const apiDir = resolve(REPO_ROOT, 'api');
   const apiFiles = walkApiDir(apiDir);
 
-  // V21 fix-up (V82-followup, 2026-05-17): V81-fix6b BYPASSED archiver entirely with
-  // pure JSON bundle (Vercel runtime FUNCTION_INVOCATION_FAILED 500). `archiver` was
-  // removed from package.json dependencies after the bypass. AV67.1 originally
-  // asserted archiver is a runtime dep; that contract is obsolete. AV67.2/3/4 (the
-  // universal devDeps-import scanner) still enforces the broader policy and remains
-  // active — those still validate any future api/** import hygiene.
-  it.skip('AV67.1 — archiver is in dependencies (V81 root cause regression) [REMOVED V81-fix6b: archiver dep removed; bypass via pure JSON bundle]', () => {
-    expect(DEPS.has('archiver')).toBe(true);
-    expect(DEV_DEPS.has('archiver')).toBe(false);
-  });
+  // AV67.1 removed 2026-05-20 (was a .skip tombstone — archiver dep was removed
+  // in V81-fix6b; AV67.2/3/4 below still enforce api/** import hygiene).
 
   it('AV67.2 — every api/** import resolves to a runtime dependency', () => {
     const violations = [];

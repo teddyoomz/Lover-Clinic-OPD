@@ -69,6 +69,19 @@ const CENTRAL_PANEL = readFileSync(
   'utf-8'
 );
 
+// V36 EOD+1 (2026-05-20) fixup: strip JS comments before extracting
+// deductStockForSale CALL sites. A cancel-recovery comment in SaleTab
+// ("// ...deductStockForSale (idempotent)...") otherwise fools the call
+// extraction regex into grabbing a prose mention + the adjacent
+// cancelBackendSale block (which has no branchId). All 3 REAL
+// deductStockForSale calls (SaleTab.jsx ~857/893/1634) pass
+// `branchId: BRANCH_ID`; this just makes the extractor ignore comments.
+// Test-only; no app behavior change.
+function stripJsComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+const SALE_TAB_CODE = stripJsComments(SALE_TAB);
+
 describe('V36.G.1-8 — SaleTab branchId source', () => {
   test('G.1 — imports useSelectedBranch from BranchContext', () => {
     expect(SALE_TAB).toMatch(/import\s*\{\s*useSelectedBranch\s*\}\s*from\s*['"][^'"]*BranchContext\.jsx/);
@@ -79,7 +92,7 @@ describe('V36.G.1-8 — SaleTab branchId source', () => {
   });
 
   test('G.3 — deductStockForSale receives branchId: BRANCH_ID', () => {
-    const calls = SALE_TAB.match(/deductStockForSale\s*\([\s\S]{0,500}\)/g) || [];
+    const calls = SALE_TAB_CODE.match(/deductStockForSale\s*\([\s\S]{0,500}\)/g) || [];
     expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const c of calls) {
       expect(c).toMatch(/branchId:\s*BRANCH_ID/);
@@ -112,7 +125,7 @@ describe('V36.G.1-8 — SaleTab branchId source', () => {
     // Filter to actual call sites by requiring the closing brace pattern
     // `})` of the opts object. Excludes prose-style mentions that may
     // contain " deductStockForSale (movement type ...)" in JSDoc/comments.
-    const calls = SALE_TAB.match(/deductStockForSale\s*\(\s*[A-Za-z_][\w.]*[\s\S]{20,500}?\}\s*\)/g) || [];
+    const calls = SALE_TAB_CODE.match(/deductStockForSale\s*\(\s*[A-Za-z_][\w.]*[\s\S]{20,500}?\}\s*\)/g) || [];
     expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const c of calls) {
       expect(c).toMatch(/branchId:\s*BRANCH_ID/);

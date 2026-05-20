@@ -151,12 +151,14 @@ describe('Phase 26.0 — AV37 source-grep regression locks', () => {
       expect(TFP_SOURCE).toMatch(/import\s+EditAttributionModal\s+from\s+['"][^'"]*EditAttributionModal[^'"]*['"]/);
     });
 
-    it('G3.4 — handleSubmit signature accepts (eventOrSaveMode, options) form', () => {
+    it('G3.4 — handleSubmit signature accepts (eventOrSaveMode, submitOpts) form', () => {
       // V26.1 — extends Phase 26.0a defensive coercion to support internal
       // re-invoke from EditAttributionModal confirmation with editor context.
       // Original Phase 26.0 form: handleSubmit = async (eventOrSaveMode) => {}
       // V26.1 form:               handleSubmit = async (eventOrSaveMode, options = {}) => {}
-      expect(TFP_SOURCE).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*options\s*=\s*\{\s*\}\s*\)/);
+      // V104 (2026-05-19): renamed 2nd param options→submitOpts (it shadowed the
+      // React `options` state). App behavior unchanged; regex updated to match.
+      expect(TFP_SOURCE).toMatch(/const\s+handleSubmit\s*=\s*async\s*\(\s*eventOrSaveMode\s*,\s*submitOpts\s*=\s*\{\s*\}\s*\)/);
     });
 
     it('G3.5 — editorContext extracted from options OR from internal re-invoke object form', () => {

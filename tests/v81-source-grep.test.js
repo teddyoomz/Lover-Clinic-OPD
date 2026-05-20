@@ -235,25 +235,10 @@ describe('V81 — restore endpoint (Fresh + Replace modes)', () => {
 describe('V81 — download endpoint (post-V81-fix6b: pure JSON bundle)', () => {
   const src = READ('api/admin/whole-system-backup-download.js');
 
-  // V21 fix-up (V82-followup, 2026-05-17): V81-fix6b BYPASSED `archiver` entirely
-  // due to Vercel runtime FUNCTION_INVOCATION_FAILED 500 (archiver tarball generation
-  // crashed in serverless). Replaced with pure JSON bundle download. The archiver-
-  // based tar.gz endpoint + ARCHIVE_TTL_MS caching are GONE. These 3 archiver
-  // assertions are obsolete; skipped with marker. JSON-bundle behavior is locked by
-  // V81-fix6b's own dedicated test bank (not this file).
-  it.skip('uses archiver lib + tar gzip [REMOVED V81-fix6b — see V21 fix-up note]', () => {
-    expect(src).toMatch(/import\s+archiver/);
-    expect(src).toMatch(/archiver\(['"]tar['"][\s\S]{0,100}gzip:\s*true/);
-  });
-
-  it.skip('reuses existing __archive.tar.gz if < 24h old (avoid re-zipping) [REMOVED V81-fix6b — see V21 fix-up note]', () => {
-    expect(src).toMatch(/__archive\.tar\.gz/);
-    expect(src).toMatch(/ARCHIVE_TTL_MS\s*=\s*24/);
-  });
-
-  it.skip('does NOT include archive in itself (recursion gate) [REMOVED V81-fix6b — see V21 fix-up note]', () => {
-    expect(src).toMatch(/endsWith\(['"]__archive\.tar\.gz['"]\)[\s\S]{0,80}continue/);
-  });
+  // archiver tar.gz assertions removed 2026-05-20 (were .skip tombstones —
+  // V81-fix6b replaced archiver with a pure JSON bundle after a Vercel runtime
+  // 500). JSON-bundle behavior is locked by
+  // tests/v81-fix6-customer-only-and-list-filter.test.js + AV67.2/3/4.
 
   it('returns 24h signed URL', () => {
     expect(src).toMatch(/getSignedUrl/);
