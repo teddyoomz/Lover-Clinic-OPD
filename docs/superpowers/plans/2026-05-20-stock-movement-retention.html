@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock-Movement Retention (V106) Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; --ok:#059669; --warn:#d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow-box { display:inline-block; background:#fff; border:2px solid var(--accent); border-radius:8px; padding:0.5em 0.8em; margin:0.25em 0; font-size:0.86em; }
+    .flow-box.guard { border-color: var(--warn); }
+    .flow-box.terminal { border-color: var(--ok); }
+    .flow-arrow { color: var(--tx-muted); margin:0 0.25em; }
+    .flow-row { display:flex; align-items:center; flex-wrap:wrap; gap:0.2em; margin:0.4em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Stock-Movement Retention (V106) Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:executing-plans (inline, chosen) to implement task-by-task. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-20-stock-movement-retention-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Daily cron archives <code>be_stock_movements</code> older than 90 days to permanent Storage JSON, then hard-deletes them from Firestore — controlling doc-count/cost while preserving the MOPH audit trail.</p>
+  <p><strong>Architecture:</strong> Pure helper (<code>stockMovementRetentionCore.js</code>) + cron endpoint (mirrors <code>whole-system-backup-daily.js</code>: CRON_SECRET + admin-SDK). Archive-before-delete (AV99). Cron-only, idempotent, incremental (≤2000/run self-drains the launch backlog). Balance untouched (it's <code>be_stock_batches</code>-authoritative, never replayed from movements).</p>
+  <p><strong>Tech Stack:</strong> firebase-admin (Firestore + Storage), Vitest, Vercel Cron. No firestore.rules change; storage.rules adds one admin-only match.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Backend / data-lifecycle feature — the "mockup" is the shape of each artifact + the one UI line. (Full detail in the spec.)</p>
+
+<div class="mockup">
+  <div class="mockup-label">Archive file · <code>gs://&lt;bucket&gt;/stock-movements-archive/{branchId}/{YYYY-MM}.json</code></div>
+<pre>{ "schemaVersion": 1, "branchId": "BR-...", "month": "2026-01",
+  "archivedAt": "2026-05-20T20:30:11.482Z", "count": 1843,
+  "movements": [ { "movementId":"MOV-...", "type":2, "productId":"38699",
+    "productName":"Stapple no 22", "qty":-1, "before":10, "after":9,
+    "branchId":"BR-...", "createdAt":"2026-01-14T07:23:45.123Z", ... } ] }</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Audit doc · <code>be_admin_audit/stock-movement-retention-{ts}-{rand}</code></div>
+<pre>{ "op":"stock-movement-retention", "cutoffISO":"2026-02-19T20:30:00.000Z",
+  "retentionDays":90, "scanned":2000, "archived":2000, "deleted":2000,
+  "monthsTouched":["BR-A|2026-01","BR-B|2026-01"], "archiveRefs":[...],
+  "moreRemaining":true, "ranAt":"2026-05-20T20:30:11.500Z" }</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">storage.rules · archive path admin-only (mirror backups/)</div>
+<pre>match /stock-movements-archive/{branchId}/{file=**} {
+  allow read, write, delete: if request.auth != null
+                             &amp;&amp; request.auth.token.admin == true;
+}</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">MovementLogPanel · static 90-day info line (informational, not a trigger — Q5 cron-only preserved)</div>
+  <div style="border:1px solid var(--bd); border-radius:6px; padding:0.7em; background:#fff;">
+    <div style="font-weight:700;">Stock Movement Log</div>
+    <div style="font-size:0.8em; color:var(--tx-muted);">บันทึกการเคลื่อนไหวทุก transaction (append-only, MOPH audit trail)</div>
+    <div style="margin-top:0.5em; font-size:0.78em; color:var(--tx-muted); background:rgba(148,163,184,0.10); border-radius:6px; padding:0.4em 0.7em; display:inline-block;">
+      ℹ️ แสดงย้อนหลัง 90 วัน — ข้อมูลเก่ากว่านั้นถูกเก็บถาวรใน archive
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cron run cascade — archive-before-delete (AV99 capture-before-destroy)</div>
+  <div class="flow-row">
+    <span class="flow-box">⏰ 03:30 BKK<br><code>30 20 * * *</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box guard">CRON_SECRET<br>(else 401)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">admin-SDK · <code>artifacts/{APP_ID}/public/data/be_stock_movements</code></span><span class="flow-arrow">→</span>
+    <span class="flow-box">query <code>createdAt &lt; cutoff</code><br>asc, limit 2000</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-arrow">↳</span>
+    <span class="flow-box guard">in-memory re-gate<br>normalized ISO &lt; cutoff</span><span class="flow-arrow">→</span>
+    <span class="flow-box">group (branchId, YYYY-MM)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">per group: read Storage → mergeArchive (dedup movementId) → write Storage</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-arrow">↳</span>
+    <span class="flow-box guard">GATE: archive write confirmed?</span><span class="flow-arrow">→</span>
+    <span class="flow-box">deleteBatch(450) only archived groups</span><span class="flow-arrow">→</span>
+    <span class="flow-box">audit doc</span><span class="flow-arrow">→</span>
+    <span class="flow-box terminal">respond {scanned, archived, deleted, moreRemaining}</span>
+  </div>
+  <p style="font-size:0.84em; color:var(--tx-muted); margin-top:0.6em;">A movement is <strong>never</strong> deleted unless its archive write succeeded first. <code>be_stock_batches</code> (balance) is never read/written. Next daily run repeats until backlog drains (<code>moreRemaining</code> tracks progress). Idempotent — mergeArchive dedups, deleted docs don't re-appear → no concurrency lock needed (cron-only + 300s cap = no overlap).</p>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/stockMovementRetentionCore.js</code></td><td>Create</td><td>Pure helpers: constants, cutoff, paths, grouping, merge, normalize. No Firebase.</td></tr>
+  <tr><td><code>api/cron/stock-movement-retention.js</code></td><td>Create</td><td>Cron handler: auth + admin-SDK + query + re-gate + archive-before-delete + audit.</td></tr>
+  <tr><td><code>vercel.json</code></td><td>Modify</td><td>Add 4th cron + function maxDuration 300.</td></tr>
+  <tr><td><code>storage.rules</code></td><td>Modify</td><td>Add admin-only match for <code>stock-movements-archive/</code>.</td></tr>
+  <tr><td><code>src/components/backend/MovementLogPanel.jsx</code></td><td>Modify</td><td>Add static 90-day info line.</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>Modify</td><td>Add AV99 invariant.</td></tr>
+  <tr><td><code>tests/v106-stock-movement-retention-core.test.js</code></td><td>Create</td><td>Unit + adversarial for the pure helper.</td></tr>
+  <tr><td><code>tests/v106-av99-archive-before-delete.test.js</code></td><td>Create</td><td>Source-grep enforcer (AV99 + info-line + cron shape).</td></tr>
+  <tr><td><code>tests/v106-stock-movement-retention-flow-simulate.test.js</code></td><td>Create</td><td>Rule I full-cycle simulate (logic coverage).</td></tr>
+  <tr><td><code>scripts/e2e-stock-movement-retention.mjs</code></td><td>Create</td><td>Rule Q L2 admin-SDK e2e on real prod (TEST- fixtures) — the real verification.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ===================== TASK 1 ===================== -->
+<div class="task">
+  <h3>Task 1: Pure helper <code>stockMovementRetentionCore.js</code> (TDD)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/stockMovementRetentionCore.js</code></li>
+    <li>Test: <code>tests/v106-stock-movement-retention-core.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing tests</strong></label></div>
+<pre><code class="language-js">// tests/v106-stock-movement-retention-core.test.js
+import { describe, it, expect } from 'vitest';
+import {
+  RETENTION_DAYS, RETENTION_BATCH_LIMIT, ARCHIVE_SCHEMA_VERSION,
+  computeCutoffISO, archiveStoragePath, monthKeyFromISO,
+  normalizeCreatedAtForCompare, groupKeyForMovement, groupByBranchMonth,
+  mergeArchive, buildArchiveFileBody,
+} from '../src/lib/stockMovementRetentionCore.js';
+
+describe('V106 A — constants', () => {
+  it('A1 retention defaults', () => {
+    expect(RETENTION_DAYS).toBe(90);
+    expect(RETENTION_BATCH_LIMIT).toBe(2000);
+    expect(ARCHIVE_SCHEMA_VERSION).toBe(1);
+  });
+});
+
+describe('V106 B — computeCutoffISO', () => {
+  it('B1 now − 90d as ISO', () => {
+    const now = new Date('2026-05-20T00:00:00.000Z');
+    expect(computeCutoffISO(now)).toBe('2026-02-19T00:00:00.000Z');
+  });
+  it('B2 custom days', () => {
+    const now = new Date('2026-05-20T00:00:00.000Z');
+    expect(computeCutoffISO(now, 30)).toBe('2026-04-20T00:00:00.000Z');
+  });
+});
+
+describe('V106 C — paths + month key', () => {
+  it('C1 archive path', () => {
+    expect(archiveStoragePath('BR-x', '2026-01')).toBe('stock-movements-archive/BR-x/2026-01.json');
+  });
+  it('C2 monthKey from ISO', () => {
+    expect(monthKeyFromISO('2026-01-14T07:23:45.123Z')).toBe('2026-01');
+  });
+  it('C3 monthKey rejects junk', () => {
+    expect(monthKeyFromISO('')).toBe('');
+    expect(monthKeyFromISO(null)).toBe('');
+    expect(monthKeyFromISO(123)).toBe('');
+  });
+});
+
+describe('V106 D — normalizeCreatedAtForCompare (mixed types)', () => {
+  it('D1 ISO string passthrough', () => {
+    expect(normalizeCreatedAtForCompare('2026-01-14T07:23:45.123Z')).toBe('2026-01-14T07:23:45.123Z');
+  });
+  it('D2 client Timestamp (.toDate)', () => {
+    const ts = { toDate: () => new Date('2026-01-14T07:23:45.000Z') };
+    expect(normalizeCreatedAtForCompare(ts)).toBe('2026-01-14T07:23:45.000Z');
+  });
+  it('D3 admin {_seconds,_nanoseconds}', () => {
+    const ts = { _seconds: 1768375425, _nanoseconds: 0 };
+    expect(normalizeCreatedAtForCompare(ts)).toBe(new Date(1768375425000).toISOString());
+  });
+  it('D4 plain {seconds,nanoseconds}', () => {
+    const ts = { seconds: 1768375425, nanoseconds: 0 };
+    expect(normalizeCreatedAtForCompare(ts)).toBe(new Date(1768375425000).toISOString());
+  });
+  it('D5 null/undefined/garbage → empty string', () => {
+    expect(normalizeCreatedAtForCompare(null)).toBe('');
+    expect(normalizeCreatedAtForCompare(undefined)).toBe('');
+    expect(normalizeCreatedAtForCompare({})).toBe('');
+    expect(normalizeCreatedAtForCompare({ toDate: () => { throw new Error('x'); } })).toBe('');
+  });
+});
+
+describe('V106 E — groupKeyForMovement + groupByBranchMonth', () => {
+  it('E1 key = branchId|YYYY-MM', () => {
+    expect(groupKeyForMovement({ branchId: 'BR-a', createdAt: '2026-01-14T00:00:00.000Z' })).toBe('BR-a|2026-01');
+  });
+  it('E2 missing branchId → empty-string branch', () => {
+    expect(groupKeyForMovement({ createdAt: '2026-01-14T00:00:00.000Z' })).toBe('|2026-01');
+  });
+  it('E3 unparseable createdAt → empty key (never archived)', () => {
+    expect(groupKeyForMovement({ branchId: 'BR-a', createdAt: null })).toBe('');
+  });
+  it('E4 group splits by branch and month, skips empty-key', () => {
+    const ms = [
+      { movementId: '1', branchId: 'BR-a', createdAt: '2026-01-02T00:00:00.000Z' },
+      { movementId: '2', branchId: 'BR-a', createdAt: '2026-01-09T00:00:00.000Z' },
+      { movementId: '3', branchId: 'BR-b', createdAt: '2026-02-01T00:00:00.000Z' },
+      { movementId: '4', branchId: 'BR-a', createdAt: null }, // skipped
+    ];
+    const g = groupByBranchMonth(ms);
+    expect(Object.keys(g).sort()).toEqual(['BR-a|2026-01', 'BR-b|2026-02']);
+    expect(g['BR-a|2026-01'].map(m => m.movementId)).toEqual(['1', '2']);
+  });
+});
+
+describe('V106 F — mergeArchive (dedup + idempotent)', () => {
+  it('F1 union dedup by movementId', () => {
+    const a = [{ movementId: '1' }, { movementId: '2' }];
+    const b = [{ movementId: '2' }, { movementId: '3' }];
+    expect(mergeArchive(a, b).map(m => m.movementId)).toEqual(['1', '2', '3']);
+  });
+  it('F2 idempotent: merge(existing, existing) = existing', () => {
+    const a = [{ movementId: '1' }, { movementId: '2' }];
+    expect(mergeArchive(a, a).map(m => m.movementId)).toEqual(['1', '2']);
+  });
+  it('F3 handles null/undefined args', () => {
+    expect(mergeArchive(null, [{ movementId: '1' }]).length).toBe(1);
+    expect(mergeArchive([{ movementId: '1' }], undefined).length).toBe(1);
+  });
+});
+
+describe('V106 G — buildArchiveFileBody', () => {
+  it('G1 shape', () => {
+    const body = buildArchiveFileBody({ branchId: 'BR-a', month: '2026-01', movements: [{ movementId: '1' }], archivedAt: 'T' });
+    expect(body).toEqual({ schemaVersion: 1, branchId: 'BR-a', month: '2026-01', archivedAt: 'T', count: 1, movements: [{ movementId: '1' }] });
+  });
+});
+
+describe('V106 H — adversarial', () => {
+  it('H1 Thai/NFC≠NFD/NUL in branchId survive grouping', () => {
+    const nfc = 'café'; const nfd = 'café';
+    const g = groupByBranchMonth([
+      { movementId: '1', branchId: nfc, createdAt: '2026-01-01T00:00:00.000Z' },
+      { movementId: '2', branchId: nfd, createdAt: '2026-01-01T00:00:00.000Z' },
+      { movementId: '3', branchId: 'a b', createdAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+    expect(Object.keys(g).length).toBe(3); // NFC and NFD are distinct keys
+  });
+  it('H2 10k movements group under perf budget', () => {
+    const ms = Array.from({ length: 10000 }, (_, i) => ({ movementId: String(i), branchId: 'BR-a', createdAt: '2026-01-01T00:00:00.000Z' }));
+    const t = Date.now();
+    const g = groupByBranchMonth(ms);
+    expect(g['BR-a|2026-01'].length).toBe(10000);
+    expect(Date.now() - t).toBeLessThan(200);
+  });
+  it('H3 mixed createdAt types in one batch group correctly', () => {
+    const g = groupByBranchMonth([
+      { movementId: '1', branchId: 'BR-a', createdAt: '2026-01-05T00:00:00.000Z' },
+      { movementId: '2', branchId: 'BR-a', createdAt: { _seconds: Math.floor(new Date('2026-01-20T00:00:00Z').getTime() / 1000), _nanoseconds: 0 } },
+    ]);
+    expect(g['BR-a|2026-01'].map(m => m.movementId)).toEqual(['1', '2']);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run — verify it FAILS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v106-stock-movement-retention-core.test.js</code> → Expected: FAIL (cannot resolve <code>../src/lib/stockMovementRetentionCore.js</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Write the helper</strong></label></div>
+<pre><code class="language-js">// src/lib/stockMovementRetentionCore.js
+// V106 — pure helpers for stock-movement retention. NO Firebase imports.
+// Single source of truth for retention constants + transforms.
+
+export const RETENTION_DAYS = 90;
+export const RETENTION_BATCH_LIMIT = 2000;
+export const ARCHIVE_SCHEMA_VERSION = 1;
+
+// now − days, as ISO string (UTC instant). Movements whose normalized
+// createdAt < cutoff are eligible for archive+delete.
+export function computeCutoffISO(now = new Date(), days = RETENTION_DAYS) {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function archiveStoragePath(branchId, yyyyMM) {
+  return `stock-movements-archive/${branchId}/${yyyyMM}.json`;
+}
+
+export function monthKeyFromISO(createdAtISO) {
+  if (typeof createdAtISO !== 'string' || createdAtISO.length < 7) return '';
+  return createdAtISO.slice(0, 7);
+}
+
+// Normalize createdAt → ISO string for safe age comparison.
+// Ported from MovementLogPanel._v105NormalizeCreatedAt (AV95 safe-read backstop).
+export function normalizeCreatedAtForCompare(value) {
+  const ca = value;
+  if (typeof ca === 'string' || ca == null) return ca || '';
+  if (typeof ca === 'object') {
+    if (typeof ca.toDate === 'function') {
+      try { return ca.toDate().toISOString(); } catch { return ''; }
+    }
+    if (ca._seconds != null) {
+      return new Date(ca._seconds * 1000 + Math.floor((ca._nanoseconds || 0) / 1e6)).toISOString();
+    }
+    if (ca.seconds != null) {
+      return new Date(ca.seconds * 1000 + Math.floor((ca.nanoseconds || 0) / 1e6)).toISOString();
+    }
+  }
+  return '';
+}
+
+// "{branchId}|{YYYY-MM}" key for a movement. '' when createdAt unparseable
+// (such a doc is NEVER archived or deleted — defensive).
+export function groupKeyForMovement(m) {
+  const month = monthKeyFromISO(normalizeCreatedAtForCompare(m && m.createdAt));
+  if (!month) return '';
+  const branchId = (m && typeof m.branchId === 'string' && m.branchId) ? m.branchId : '';
+  return `${branchId}|${month}`;
+}
+
+export function groupByBranchMonth(movements) {
+  const groups = {};
+  for (const m of (Array.isArray(movements) ? movements : [])) {
+    const key = groupKeyForMovement(m);
+    if (!key) continue;
+    (groups[key] = groups[key] || []).push(m);
+  }
+  return groups;
+}
+
+// Union deduped by movementId. Idempotent. Order: existing first, then new.
+export function mergeArchive(existing, incoming) {
+  const seen = new Set();
+  const out = [];
+  const push = (arr) => {
+    for (const m of (Array.isArray(arr) ? arr : [])) {
+      const id = m && m.movementId;
+      if (id == null) { out.push(m); continue; } // keep id-less legacy rows
+      if (seen.has(id)) continue;
+      seen.add(id); out.push(m);
+    }
+  };
+  push(existing); push(incoming);
+  return out;
+}
+
+export function buildArchiveFileBody({ branchId, month, movements, archivedAt = new Date().toISOString() }) {
+  const arr = Array.isArray(movements) ? movements : [];
+  return { schemaVersion: ARCHIVE_SCHEMA_VERSION, branchId, month, archivedAt, count: arr.length, movements: arr };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run — verify PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v106-stock-movement-retention-core.test.js</code> → Expected: all PASS (~18 assertions).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/stockMovementRetentionCore.js tests/v106-stock-movement-retention-core.test.js
+git commit -m "feat(V106): stock-movement retention pure helper + unit tests (T1)"</code></pre>
+</div>
+
+<!-- ===================== TASK 2 ===================== -->
+<div class="task">
+  <h3>Task 2: Cron endpoint <code>api/cron/stock-movement-retention.js</code></h3>
+  <p><strong>Files:</strong> Create <code>api/cron/stock-movement-retention.js</code>. (Verified via Task 5 flow-simulate + Task 6 real-prod e2e — the handler can't be meaningfully unit-tested without admin SDK; mock tests would be Rule Q violations.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the cron handler</strong></label></div>
+<pre><code class="language-js">// api/cron/stock-movement-retention.js
+// V106 — Daily stock-movement retention. Fires 03:30 BKK (= 20:30 UTC).
+// Archive→Storage then hard-delete movements older than RETENTION_DAYS.
+// Cron-only · idempotent · incremental (≤ RETENTION_BATCH_LIMIT/run drains backlog).
+// AV99: archive-before-delete; THIS cron is the ONLY deleter of be_stock_movements.
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import { randomBytes } from 'node:crypto';
+import {
+  RETENTION_DAYS, RETENTION_BATCH_LIMIT, computeCutoffISO, archiveStoragePath,
+  groupByBranchMonth, groupKeyForMovement, mergeArchive, buildArchiveFileBody,
+  normalizeCreatedAtForCompare,
+} from '../../src/lib/stockMovementRetentionCore.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const PREFIX = `artifacts/${APP_ID}/public/data`;
+const MOVEMENTS_COL = `${PREFIX}/be_stock_movements`;
+const AUDIT_COL = `${PREFIX}/be_admin_audit`;
+
+function initAdmin() {
+  if (getApps().length) return;
+  const privateKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      privateKey,
+    }),
+    storageBucket: `${APP_ID}.firebasestorage.app`,
+  });
+}
+
+async function readArchiveMovements(storage, path) {
+  const file = storage.file(path);
+  const [exists] = await file.exists();
+  if (!exists) return [];
+  try {
+    const [buf] = await file.download();
+    const body = JSON.parse(buf.toString('utf8'));
+    return Array.isArray(body && body.movements) ? body.movements : [];
+  } catch {
+    return []; // corrupt file — mergeArchive rebuilds; never block delete-gate on a read error
+  }
+}
+
+export default async function handler(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization || '';
+  const provided = authHeader.replace(/^Bearer\s+/i, '') || req.headers['x-cron-secret'];
+  if (!cronSecret || provided !== cronSecret) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'CRON_SECRET mismatch' });
+  }
+
+  initAdmin();
+  const db = getFirestore();
+  const storage = getStorage().bucket();
+
+  try {
+    const cutoffISO = computeCutoffISO();
+
+    // Coarse fetch — single-field range+order on createdAt (no composite index needed).
+    const snap = await db.collection(MOVEMENTS_COL)
+      .where('createdAt', '<', cutoffISO)
+      .orderBy('createdAt', 'asc')
+      .limit(RETENTION_BATCH_LIMIT)
+      .get();
+    const scanned = snap.size;
+
+    // Precise re-gate: normalized ISO age < cutoff (guards mixed Timestamp/ISO type-ordering).
+    const eligible = [];
+    for (const doc of snap.docs) {
+      const data = { ...doc.data(), movementId: doc.id };
+      const isoAge = normalizeCreatedAtForCompare(data.createdAt);
+      if (isoAge && isoAge < cutoffISO) eligible.push({ ref: doc.ref, data });
+    }
+
+    // Group + archive FIRST (capture-before-destroy / AV99).
+    const groups = groupByBranchMonth(eligible.map(e => e.data));
+    const archivedKeys = new Set();
+    const archiveRefs = [];
+    for (const [key, movements] of Object.entries(groups)) {
+      const [branchId, month] = key.split('|');
+      const path = archiveStoragePath(branchId, month);
+      const existing = await readArchiveMovements(storage, path);
+      const merged = mergeArchive(existing, movements);
+      const body = buildArchiveFileBody({ branchId, month, movements: merged });
+      await storage.file(path).save(JSON.stringify(body), { contentType: 'application/json' });
+      archivedKeys.add(key);
+      archiveRefs.push(path);
+    }
+
+    // Delete ONLY docs whose group archive write succeeded.
+    let deleted = 0, inBatch = 0;
+    let batch = db.batch();
+    for (const e of eligible) {
+      if (!archivedKeys.has(groupKeyForMovement(e.data))) continue;
+      batch.delete(e.ref); deleted++; inBatch++;
+      if (inBatch >= 450) { await batch.commit(); batch = db.batch(); inBatch = 0; }
+    }
+    if (inBatch > 0) await batch.commit();
+
+    const auditId = `stock-movement-retention-${Date.now()}-${randomBytes(4).toString('hex')}`;
+    const moreRemaining = scanned >= RETENTION_BATCH_LIMIT;
+    await db.collection(AUDIT_COL).doc(auditId).set({
+      op: 'stock-movement-retention',
+      cutoffISO, retentionDays: RETENTION_DAYS,
+      scanned, archived: eligible.length, deleted,
+      monthsTouched: Object.keys(groups), archiveRefs, moreRemaining,
+      ranAt: new Date().toISOString(),
+    });
+
+    return res.status(200).json({ scanned, archived: eligible.length, deleted, moreRemaining, cutoffISO });
+  } catch (e) {
+    return res.status(500).json({ error: 'RETENTION_FAILED', message: e.message });
+  }
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Build sanity</strong></label></div>
+  <p>Run: <code>npm run build</code> → Expected: clean (no import-resolution error; confirms the <code>../../src/lib/</code> import resolves like <code>whole-system-backup-daily.js</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add api/cron/stock-movement-retention.js
+git commit -m "feat(V106): stock-movement retention cron endpoint (archive-before-delete) (T2)"</code></pre>
+</div>
+
+<!-- ===================== TASK 3 ===================== -->
+<div class="task">
+  <h3>Task 3: Wiring — vercel.json + storage.rules + MovementLogPanel info line</h3>
+  <p><strong>Files:</strong> Modify <code>vercel.json</code>, <code>storage.rules</code>, <code>src/components/backend/MovementLogPanel.jsx</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: vercel.json — add cron + maxDuration</strong></label></div>
+  <p>In the <code>"functions"</code> object, add (after the <code>whole-system-backup-daily.js</code> entry):</p>
+<pre><code class="language-json">    "api/cron/stock-movement-retention.js": {
+      "maxDuration": 300
+    },</code></pre>
+  <p>In the <code>"crons"</code> array, add a 4th entry:</p>
+<pre><code class="language-json">    { "path": "/api/cron/stock-movement-retention", "schedule": "30 20 * * *" }</code></pre>
+  <p>(Add a comma after the existing <code>whole-system-backup-daily</code> cron line.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: storage.rules — admin-only archive match</strong></label></div>
+  <p>Insert directly AFTER the <code>match /backups/{prefix}/{file=**} { ... }</code> block (after its closing <code>}</code> at line ~34), BEFORE the V73 staff-chat match:</p>
+<pre><code class="language-js">    // ─── V106 (2026-05-20) — stock-movement retention archive (admin-only) ──
+    // Pattern: stock-movements-archive/{branchId}/{YYYY-MM}.json
+    // Permanent audit archive written by the daily retention cron (admin SDK,
+    // bypasses rules). Client read/write blocked. Probe-Deploy-Probe: anon
+    // write → 403.
+    match /stock-movements-archive/{branchId}/{file=**} {
+      allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
+    }</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: MovementLogPanel — info line</strong></label></div>
+  <p>In <code>src/components/backend/MovementLogPanel.jsx</code>, the header flex row closes at line ~242 then a blank line then <code>{/* Filters */}</code>. Insert the info line between them. Edit anchor:</p>
+<pre><code class="language-jsx">// OLD (lines ~242-244):
+        </div>
+
+        {/* Filters */}
+
+// NEW:
+        </div>
+
+        {/* V106: 90-day live-window notice — older movements archived to Storage by daily cron */}
+        <div className="mt-3 text-[11px] text-[var(--tx-muted)] rounded-md px-3 py-2"
+             style={{ background: 'rgba(148,163,184,0.10)' }} data-testid="movement-retention-info">
+          ℹ️ แสดงย้อนหลัง 90 วัน — ข้อมูลเก่ากว่านั้นถูกเก็บถาวรใน archive
+        </div>
+
+        {/* Filters */}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Build sanity</strong></label></div>
+  <p>Run: <code>npm run build</code> → Expected: clean.</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add vercel.json storage.rules src/components/backend/MovementLogPanel.jsx
+git commit -m "feat(V106): wire retention cron (vercel.json) + archive storage.rules + MovementLog 90d notice (T3)"</code></pre>
+</div>
+
+<!-- ===================== TASK 4 ===================== -->
+<div class="task">
+  <h3>Task 4: AV99 invariant + source-grep enforcer</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code>; Create <code>tests/v106-av99-archive-before-delete.test.js</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Add AV99 to the audit skill</strong></label></div>
+  <p>Append after the AV98 entry in <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code>:</p>
+<pre><code class="language-markdown">### AV99 — Stock-movement deletion MUST be archive-gated (V106, 2026-05-20)
+
+`be_stock_movements` are the MOPH audit/legal record (V34) — `firestore.rules`
+blocks client delete (`if false`). The ONLY permitted deleter is the retention
+cron `api/cron/stock-movement-retention.js`, and it MUST:
+1. write the (branchId, month) archive to Storage AND confirm the write
+   BEFORE deleting any doc of that group (archive-before-delete /
+   capture-before-destroy);
+2. compare age via `normalizeCreatedAtForCompare` (normalized ISO), NEVER rely
+   on the raw Firestore string range query alone (mixed Timestamp/ISO hazard);
+3. be idempotent (mergeArchive dedups by movementId).
+
+**Grep guard**: any new `.delete()` / `deleteDoc(` / `batch.delete(` targeting
+`be_stock_movements` outside the retention cron = violation. Sanctioned
+deleter (closed list of 1): `api/cron/stock-movement-retention.js`.
+Cross-link: `tests/v106-av99-archive-before-delete.test.js`.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Write the source-grep enforcer test</strong></label></div>
+<pre><code class="language-js">// tests/v106-av99-archive-before-delete.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+const cron = readFileSync('api/cron/stock-movement-retention.js', 'utf8');
+const panel = readFileSync('src/components/backend/MovementLogPanel.jsx', 'utf8');
+const skill = readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8');
+const vercel = readFileSync('vercel.json', 'utf8');
+const storage = readFileSync('storage.rules', 'utf8');
+
+describe('V106 AV99 — archive-before-delete cron shape', () => {
+  it('AV99.1 cron auth via CRON_SECRET', () => {
+    expect(cron).toContain('CRON_SECRET');
+    expect(cron).toContain("status(401)");
+  });
+  it('AV99.2 archive write precedes delete in source order', () => {
+    const saveIdx = cron.indexOf('.save(');
+    const delIdx = cron.indexOf('batch.delete(');
+    expect(saveIdx).toBeGreaterThan(0);
+    expect(delIdx).toBeGreaterThan(saveIdx); // archive-before-delete
+  });
+  it('AV99.3 delete gated on archivedKeys', () => {
+    expect(cron).toContain('archivedKeys.has(groupKeyForMovement');
+  });
+  it('AV99.4 precise re-gate via normalizeCreatedAtForCompare', () => {
+    expect(cron).toContain('normalizeCreatedAtForCompare');
+    expect(cron).toContain('isoAge < cutoffISO');
+  });
+  it('AV99.5 batched delete chunked at 450', () => {
+    expect(cron).toContain('inBatch >= 450');
+  });
+  it('AV99.6 audit doc emitted', () => {
+    expect(cron).toContain("op: 'stock-movement-retention'");
+  });
+});
+
+describe('V106 — wiring guards', () => {
+  it('W1 vercel cron registered at 30 20 * * *', () => {
+    expect(vercel).toContain('/api/cron/stock-movement-retention');
+    expect(vercel).toContain('30 20 * * *');
+  });
+  it('W2 storage.rules archive path admin-only', () => {
+    expect(storage).toContain('stock-movements-archive/{branchId}/{file=**}');
+    expect(storage).toMatch(/stock-movements-archive[\s\S]{0,160}token\.admin == true/);
+  });
+  it('W3 MovementLogPanel 90-day notice present', () => {
+    expect(panel).toContain('data-testid="movement-retention-info"');
+    expect(panel).toContain('แสดงย้อนหลัง 90 วัน');
+  });
+  it('W4 AV99 codified in audit skill', () => {
+    expect(skill).toContain('AV99');
+    expect(skill).toContain('archive-before-delete');
+  });
+});
+
+describe('V106 — closed-deleter list (no other be_stock_movements deleter)', () => {
+  it('D1 only the cron deletes be_stock_movements', () => {
+    // Coarse heuristic: no app source under src/lib calls a movements-collection delete.
+    const lib = readFileSync('src/lib/backendClient.js', 'utf8');
+    // backendClient REVERSES movements (creates compensating movement); it must NOT hard-delete them.
+    expect(lib).not.toMatch(/stockMovementDoc\([^)]*\)\s*\)?\s*\.delete\(/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Run — verify PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v106-av99-archive-before-delete.test.js</code> → Expected: all PASS. (If D1 fails, inspect the matched line — a legitimate movement reversal creates a compensating doc, it must not hard-delete; adjust only if the regex over-matches a non-delete.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md tests/v106-av99-archive-before-delete.test.js
+git commit -m "feat(V106): AV99 archive-before-delete invariant + source-grep enforcer (T4)"</code></pre>
+</div>
+
+<!-- ===================== TASK 5 ===================== -->
+<div class="task">
+  <h3>Task 5: Rule I flow-simulate (full retention cycle — logic coverage)</h3>
+  <p><strong>Files:</strong> Create <code>tests/v106-stock-movement-retention-flow-simulate.test.js</code>.</p>
+  <blockquote>Per Rule Q V66 this is LOGIC/code-shape coverage (in-memory mirror of the cron loop), NOT real verification. The real verification is Task 6 (admin-SDK e2e on real prod).</blockquote>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write the flow-simulate test</strong></label></div>
+<pre><code class="language-js">// tests/v106-stock-movement-retention-flow-simulate.test.js
+// Rule I — mirror the cron's archive-before-delete loop over in-memory db+storage.
+import { describe, it, expect } from 'vitest';
+import {
+  computeCutoffISO, archiveStoragePath, groupByBranchMonth, groupKeyForMovement,
+  mergeArchive, buildArchiveFileBody, normalizeCreatedAtForCompare,
+} from '../src/lib/stockMovementRetentionCore.js';
+
+// In-memory mirror of the cron handler body (Task 2). storage = Map(path→bodyObj).
+function simulateRetentionRun({ db, storage, now, limit = 2000 }) {
+  const cutoffISO = computeCutoffISO(now);
+  const all = [...db.values()]
+    .filter(m => { const a = normalizeCreatedAtForCompare(m.createdAt); return a && a < cutoffISO; })
+    .sort((a, b) => normalizeCreatedAtForCompare(a.createdAt).localeCompare(normalizeCreatedAtForCompare(b.createdAt)))
+    .slice(0, limit);
+  const groups = groupByBranchMonth(all);
+  const archivedKeys = new Set();
+  for (const [key, ms] of Object.entries(groups)) {
+    const [branchId, month] = key.split('|');
+    const path = archiveStoragePath(branchId, month);
+    const existing = storage.get(path)?.movements || [];
+    storage.set(path, buildArchiveFileBody({ branchId, month, movements: mergeArchive(existing, ms) }));
+    archivedKeys.add(key);
+  }
+  let deleted = 0;
+  for (const m of all) {
+    if (!archivedKeys.has(groupKeyForMovement(m))) continue;
+    db.delete(m.movementId); deleted++;
+  }
+  return { scanned: all.length, archived: all.length, deleted, cutoffISO };
+}
+
+function seedDb() {
+  const db = new Map();
+  const add = (id, branchId, createdAt) => db.set(id, { movementId: id, branchId, createdAt, qty: -1 });
+  add('old1', 'BR-a', '2026-01-05T00:00:00.000Z'); // >90d (old)
+  add('old2', 'BR-a', '2026-01-20T00:00:00.000Z');
+  add('old3', 'BR-b', '2026-02-10T00:00:00.000Z');
+  add('recent1', 'BR-a', '2026-05-10T00:00:00.000Z'); // <90d → kept
+  // recent doc with legacy Timestamp createdAt — must NOT be deleted
+  add('recentTs', 'BR-a', { _seconds: Math.floor(new Date('2026-05-12T00:00:00Z').getTime() / 1000), _nanoseconds: 0 });
+  return db;
+}
+
+const NOW = new Date('2026-05-20T00:00:00.000Z'); // cutoff = 2026-02-19
+
+describe('V106 F1 — archive then delete', () => {
+  it('old movements archived to monthly files + deleted; recent kept', () => {
+    const db = seedDb(); const storage = new Map();
+    const r = simulateRetentionRun({ db, storage, now: NOW });
+    expect(r.deleted).toBe(3);
+    expect(db.has('recent1')).toBe(true);
+    expect(db.has('recentTs')).toBe(true);   // legacy-Timestamp recent doc preserved
+    expect(db.has('old1')).toBe(false);
+    expect(storage.get('stock-movements-archive/BR-a/2026-01.json').movements.map(m => m.movementId).sort())
+      .toEqual(['old1', 'old2']);
+    expect(storage.get('stock-movements-archive/BR-b/2026-02.json').count).toBe(1);
+  });
+});
+
+describe('V106 F2 — idempotent re-run', () => {
+  it('second run deletes 0 + archive does not grow', () => {
+    const db = seedDb(); const storage = new Map();
+    simulateRetentionRun({ db, storage, now: NOW });
+    const before = storage.get('stock-movements-archive/BR-a/2026-01.json').count;
+    const r2 = simulateRetentionRun({ db, storage, now: NOW });
+    expect(r2.deleted).toBe(0);
+    expect(storage.get('stock-movements-archive/BR-a/2026-01.json').count).toBe(before);
+  });
+});
+
+describe('V106 F3 — incremental backlog drain (limit)', () => {
+  it('limit caps per run; consecutive runs drain remainder', () => {
+    const db = seedDb(); const storage = new Map();
+    const r1 = simulateRetentionRun({ db, storage, now: NOW, limit: 2 });
+    expect(r1.deleted).toBe(2);
+    const r2 = simulateRetentionRun({ db, storage, now: NOW, limit: 2 });
+    expect(r2.deleted).toBe(1);            // last old one
+    const r3 = simulateRetentionRun({ db, storage, now: NOW, limit: 2 });
+    expect(r3.deleted).toBe(0);            // drained
+  });
+});
+
+describe('V106 F4 — balance untouched', () => {
+  it('batches map (separate from movements) is never read or written', () => {
+    const db = seedDb(); const storage = new Map();
+    const batches = new Map([['BR-a:38699', { remaining: 9, total: 10 }]]);
+    const snapshot = JSON.stringify([...batches]);
+    simulateRetentionRun({ db, storage, now: NOW });
+    expect(JSON.stringify([...batches])).toBe(snapshot); // byte-identical
+  });
+});
+
+describe('V106 F5 — archive-before-delete ordering (no orphan delete)', () => {
+  it('a movement is only deleted after its group archive exists', () => {
+    const db = seedDb(); const storage = new Map();
+    simulateRetentionRun({ db, storage, now: NOW });
+    // every deleted month-key has a corresponding archive file
+    expect(storage.has('stock-movements-archive/BR-a/2026-01.json')).toBe(true);
+    expect(storage.has('stock-movements-archive/BR-b/2026-02.json')).toBe(true);
+  });
+});
+
+describe('V106 F6 — source-grep: simulate mirrors cron', () => {
+  it('cron uses the same helpers this simulate uses', () => {
+    const cron = readFileSync('api/cron/stock-movement-retention.js', 'utf8');
+    for (const fn of ['computeCutoffISO', 'groupByBranchMonth', 'groupKeyForMovement', 'mergeArchive', 'buildArchiveFileBody', 'normalizeCreatedAtForCompare', 'archiveStoragePath'])
+      expect(cron).toContain(fn);
+  });
+});
+import { readFileSync } from 'node:fs';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Run — verify PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v106-stock-movement-retention-flow-simulate.test.js</code> → Expected: all PASS. (Move the <code>import { readFileSync }</code> to the top of the file if your linter complains — vitest hoists imports, but keep it tidy.)</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v106-stock-movement-retention-flow-simulate.test.js
+git commit -m "test(V106): Rule I flow-simulate — archive/delete/idempotent/drain/balance (T5)"</code></pre>
+</div>
+
+<!-- ===================== TASK 6 ===================== -->
+<div class="task">
+  <h3>Task 6: Rule Q L2 — admin-SDK e2e on real prod (the real verification)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-stock-movement-retention.mjs</code>. Run from local with pulled prod env (Rule R authorizes the env pull; this seeds + cleans TEST- fixtures only, so it's a verification run not a Rule M migration).</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write the e2e verification script</strong></label></div>
+<pre><code class="language-js">// scripts/e2e-stock-movement-retention.mjs
+// Rule Q V66 L2 — exercises the retention logic against REAL prod Firestore + Storage
+// using TEST-prefixed, old-dated movement fixtures (V33.11 stock-test prefix).
+// Seeds → runs the same archive-before-delete loop the cron runs → verifies
+// archived to Storage + deleted from Firestore + a sibling batch untouched → cleanup.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import { randomBytes } from 'node:crypto';
+import {
+  computeCutoffISO, archiveStoragePath, groupByBranchMonth, groupKeyForMovement,
+  mergeArchive, buildArchiveFileBody, normalizeCreatedAtForCompare,
+} from '../src/lib/stockMovementRetentionCore.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const PREFIX = `artifacts/${APP_ID}/public/data`;
+
+function loadEnv() { // read .env.local.prod (vercel env pull --environment=production)
+  const txt = readFileSync('.env.local.prod', 'utf8');
+  const env = {};
+  for (const line of txt.split('\n')) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (m) env[m[1]] = m[2].replace(/^"|"$/g, '');
+  }
+  return env;
+}
+
+async function main() {
+  const env = loadEnv();
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert({
+        projectId: APP_ID,
+        clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL,
+        privateKey: (env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n'),
+      }),
+      storageBucket: `${APP_ID}.firebasestorage.app`,
+    });
+  }
+  const db = getFirestore();
+  const storage = getStorage().bucket();
+  const col = db.collection(`${PREFIX}/be_stock_movements`);
+
+  const tag = `TEST-V106-${Date.now()}`;
+  const branchId = `TEST-BR-${randomBytes(3).toString('hex')}`;
+  const oldISO = '2026-01-05T00:00:00.000Z';   // certainly &gt; 90d before now
+  const recentISO = new Date().toISOString();   // &lt; 90d
+  const seedIds = [];
+  let pass = 0, fail = 0;
+  const ok = (c, m) => { if (c) { pass++; console.log('  PASS', m); } else { fail++; console.log('  FAIL', m); } };
+
+  try {
+    // 1. seed 2 old + 1 recent TEST movements
+    for (const [suffix, createdAt] of [['old-a', oldISO], ['old-b', oldISO], ['recent', recentISO]]) {
+      const id = `${tag}-${suffix}`;
+      await col.doc(id).set({ movementId: id, branchId, productId: 'TEST-P', productName: 'TEST', qty: -1, before: 5, after: 4, type: 2, createdAt, note: tag });
+      seedIds.push(id);
+    }
+    console.log('Seeded 3 fixtures under', branchId);
+
+    // 2. run the retention loop (mirror of cron) scoped to TEST fixtures
+    const cutoffISO = computeCutoffISO();
+    const snap = await col.where('branchId', '==', branchId).get();
+    const eligible = [];
+    for (const d of snap.docs) {
+      const data = { ...d.data(), movementId: d.id };
+      const a = normalizeCreatedAtForCompare(data.createdAt);
+      if (a && a < cutoffISO) eligible.push({ ref: d.ref, data });
+    }
+    const groups = groupByBranchMonth(eligible.map(e => e.data));
+    const archivedKeys = new Set(); const archiveRefs = [];
+    for (const [key, ms] of Object.entries(groups)) {
+      const [bid, month] = key.split('|');
+      const path = archiveStoragePath(bid, month);
+      const file = storage.file(path);
+      const [exists] = await file.exists();
+      const existing = exists ? (JSON.parse((await file.download())[0].toString('utf8')).movements || []) : [];
+      await file.save(JSON.stringify(buildArchiveFileBody({ branchId: bid, month, movements: mergeArchive(existing, ms) })), { contentType: 'application/json' });
+      archivedKeys.add(key); archiveRefs.push(path);
+    }
+    let deleted = 0;
+    for (const e of eligible) { if (archivedKeys.has(groupKeyForMovement(e.data))) { await e.ref.delete(); deleted++; } }
+
+    // 3. assertions
+    ok(deleted === 2, `deleted 2 old (got ${deleted})`);
+    ok((await col.doc(`${tag}-recent`).get()).exists, 'recent fixture preserved');
+    ok(!(await col.doc(`${tag}-old-a`).get()).exists, 'old-a deleted from Firestore');
+    const archPath = archiveStoragePath(branchId, '2026-01');
+    const [archExists] = await storage.file(archPath).exists();
+    ok(archExists, `archive file written: ${archPath}`);
+    if (archExists) {
+      const body = JSON.parse((await storage.file(archPath).download())[0].toString('utf8'));
+      ok(body.movements.length === 2 && body.schemaVersion === 1, 'archive has 2 movements + schemaVersion 1');
+      // idempotent re-merge
+      const remerged = mergeArchive(body.movements, body.movements);
+      ok(remerged.length === 2, 'mergeArchive idempotent on real archive');
+    }
+  } finally {
+    // 4. cleanup — delete remaining TEST docs + archive file
+    for (const id of seedIds) await db.doc(`${PREFIX}/be_stock_movements/${id}`).delete().catch(() => {});
+    await storage.file(archiveStoragePath(branchId, '2026-01')).delete().catch(() => {});
+    console.log('Cleanup done.');
+  }
+  console.log(`\nRESULT: PASS ${pass} / FAIL ${fail}`);
+  process.exit(fail === 0 ? 0 : 1);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(e => { console.error(e); process.exit(1); });</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Pull prod env (Rule R) + run</strong></label></div>
+<pre><code class="language-bash">vercel env pull .env.local.prod --environment=production   # if not pulled this session
+node scripts/e2e-stock-movement-retention.mjs</code></pre>
+  <p>Expected: <code>RESULT: PASS 7 / FAIL 0</code>; "Cleanup done." Confirms archive-before-delete works on real Firestore + Storage, recent fixture preserved, archive shape correct, idempotent — zero orphans left.</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/e2e-stock-movement-retention.mjs
+git commit -m "test(V106): Rule Q L2 admin-SDK e2e on real prod (TEST fixtures, zero-orphan) (T6)"</code></pre>
+</div>
+
+<!-- ===================== TASK 7 ===================== -->
+<div class="task">
+  <h3>Task 7: Final verify + deploy handoff</h3>
+  <p><strong>Files:</strong> none (verification + state).</p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Targeted tests</strong></label></div>
+<pre><code class="language-bash">npm test -- --run tests/v106-stock-movement-retention-core.test.js tests/v106-av99-archive-before-delete.test.js tests/v106-stock-movement-retention-flow-simulate.test.js</code></pre>
+  <p>Expected: all V106 tests PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Full suite + build (end-of-batch per Rule N)</strong></label></div>
+<pre><code class="language-bash">npm test -- --run
+npm run build</code></pre>
+  <p>Expected: full vitest baseline (13756) + new V106 tests, 0 NEW failures; build clean. (Pre-existing baseline failures, if any, must be confirmed unrelated via <code>git diff --name-only</code>.)</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Update state + commit</strong></label></div>
+  <p>Update <code>.agents/active.md</code> + <code>SESSION_HANDOFF.md</code> (V106 shipped, LOCAL, awaiting deploy). Commit.</p>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Deploy handoff (DO NOT auto-deploy — V18)</strong></label></div>
+  <p>Report to user. Deploy = combined <code>vercel --prod</code> (cron + endpoint + vercel.json + MovementLogPanel) + <code>firebase deploy --only storage:rules</code> with Probe-Deploy-Probe (NEW probe: anon write to <code>stock-movements-archive/PROBE/x.json</code> → expect 403). NO firestore.rules change. The cron's first backlog drain happens over the days following deploy. <strong>Only on explicit "deploy" this turn.</strong></p>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> Q1 archive→delete → Task 2 (archive-before-delete) ✓ · Q2 90d → <code>RETENTION_DAYS</code> Task 1 ✓ · Q3 daily 03:30 + monthly file → Task 3 cron + Task 2 grouping ✓ · Q4 all types → no type filter in query ✓ · Q5 cron-only → no CLI/UI trigger ✓ · Sub-1 info line → Task 3 ✓ · Sub-2 storage.rules → Task 3 ✓ · AV99 → Task 4 ✓ · mixed-createdAt re-gate → Task 2 + Task 1 D-tests + Task 5 F1 ✓ · incremental drain → Task 5 F3 ✓ · Rule Q L2 → Task 6 ✓.</p>
+<p><strong>Placeholder scan:</strong> none — all code complete, all commands exact.</p>
+<p><strong>Type consistency:</strong> helper exports (computeCutoffISO / archiveStoragePath / monthKeyFromISO / normalizeCreatedAtForCompare / groupKeyForMovement / groupByBranchMonth / mergeArchive / buildArchiveFileBody / RETENTION_DAYS / RETENTION_BATCH_LIMIT / ARCHIVE_SCHEMA_VERSION) used identically in Tasks 2, 5, 6. Audit doc field set identical between spec, cron (Task 2), audit mockup. <code>data-testid="movement-retention-info"</code> consistent between Task 3 and Task 4 W3.</p>
+
+</body>
+</html>

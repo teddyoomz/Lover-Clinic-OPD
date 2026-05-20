@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stock-Movement Retention (V106) Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok: #059669; --warn: #d97706; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #333; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow-box { display: inline-block; background: #fff; border: 2px solid var(--accent); border-radius: 8px; padding: 0.6em 0.9em; margin: 0.3em 0; font-size: 0.9em; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .flow-box.guard { border-color: var(--warn); }
+    .flow-box.terminal { border-color: var(--ok); }
+    .flow-arrow { font-size: 1.3em; color: var(--tx-muted); margin: 0 0.3em; }
+    .flow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.2em; margin: 0.4em 0; }
+    .pill { display:inline-block; font-size:0.72em; padding:0.1em 0.5em; border-radius:999px; background:var(--bg-meta); color:var(--tx-muted); margin-left:0.4em; }
+    .ok { color: var(--ok); font-weight:600; }
+    .warn { color: var(--warn); font-weight:600; }
+  </style>
+</head>
+<body>
+
+<h1>Stock-Movement Retention (V106) — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 (EOD+4) · <strong>Status:</strong> Approved by user · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-20-stock-movement-retention.html (pending writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p><code>be_stock_movements</code> grows monotonically: every sale, treatment, adjustment, transfer, withdrawal and negative-repay writes one append-only doc (writers in <code>src/lib/backendClient.js</code>: <code>_deductOneItem</code>, <code>createStockAdjustment</code>, <code>_repayNegativeBalances</code>, <code>updateStockTransferStatus</code>, <code>updateStockWithdrawalStatus</code>). They are never deleted, so Firestore doc-count + read-cost climbs forever.</p>
+<p><strong>Re-grounding finding that reshaped the original brainstorm:</strong> stock <strong>balance is <code>be_stock_batches</code>-authoritative</strong> — <code>StockBalancePanel</code> sums <code>batch.qty.remaining</code> directly and never replays movements. So pruning movements <em>cannot</em> break the balance, and a "balance snapshot" step is <strong>YAGNI</strong> (the batches already are the snapshot). The original Q1 "hard delete + balance snapshot" therefore drops its snapshot half.</p>
+<p>The remaining constraint is the audit/legal record: <code>firestore.rules</code> blocks client deletes (<code>allow delete: if false</code>) and V34 locked "movements are the legal record" (MOPH audit-trail). So old movements must be <strong>preserved permanently in a cheaper store before deletion</strong>, not hard-deleted outright.</p>
+
+<h2>Mockup Design</h2>
+<p>Backend / data-lifecycle feature — the "mockup" is the data shape of each artifact the cron produces, plus the one informational UI line.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape · permanent archive file in Firebase Storage</div>
+  <p style="margin:0 0 0.4em;"><code>gs://&lt;bucket&gt;/stock-movements-archive/{branchId}/{YYYY-MM}.json</code> &nbsp;<span class="pill">one file per (branch, calendar-month)</span></p>
+<pre>{
+  "schemaVersion": 1,
+  "branchId": "BR-1777873556815-26df6480",
+  "month": "2026-01",
+  "archivedAt": "2026-05-20T20:30:11.482Z",   // last cron touch (ISO)
+  "count": 1843,
+  "movements": [
+    {
+      "movementId": "MOV-...", "type": 2,        // full original doc, verbatim
+      "productId": "38699", "productName": "Stapple no 22",
+      "qty": -1, "before": 10, "after": 9,
+      "branchId": "BR-...", "branchIds": ["BR-..."],   // transfers/withdrawals carry array
+      "sourceDocPath": "...", "linkedSaleId": "...",
+      "revenueImpact": 0, "costBasis": 0, "negativeRepay": false,
+      "user": "...", "note": "...", "customerId": "...",
+      "createdAt": "2026-01-14T07:23:45.123Z"    // ISO string (AV95)
+    }
+    /* ...append-merged across daily runs, deduped by movementId... */
+  ]
+}</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape · audit doc (one per cron run)</div>
+  <p style="margin:0 0 0.4em;"><code>be_admin_audit/stock-movement-retention-{ts}-{rand}</code></p>
+<pre>{
+  "op": "stock-movement-retention",
+  "cutoffISO": "2026-02-19T20:30:00.000Z",   // now − 90d
+  "scanned": 2000,            // fetched this run (≤ RETENTION_BATCH_LIMIT)
+  "archived": 2000,           // written to Storage archive files
+  "deleted": 2000,            // removed from be_stock_movements
+  "monthsTouched": ["BR-A|2026-01", "BR-A|2025-12", "BR-B|2026-01"],
+  "archiveRefs": ["stock-movements-archive/BR-A/2026-01.json", "..."],
+  "ranAt": "2026-05-20T20:30:11.500Z",
+  "moreRemaining": true       // true ⇒ backlog not yet drained, next daily run continues
+}</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">storage.rules · archive path admin-only (mirror of backups/)</div>
+<pre>match /stock-movements-archive/{branchId}/{file=**} {
+  allow read, write, delete: if request.auth != null
+                             &amp;&amp; request.auth.token.admin == true;
+}
+// admin SDK (the cron) bypasses rules; this blocks any CLIENT read/write.</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">UI · MovementLogPanel — single static info line (informational, NOT a trigger; Q5 cron-only preserved)</div>
+  <div style="border:1px solid var(--bd); border-radius:6px; padding:0.8em; background:#fff;">
+    <div style="font-weight:600; margin-bottom:0.3em;">บันทึกการเคลื่อนไหวสต็อก</div>
+    <div style="font-size:0.82em; color:var(--tx-muted); background:var(--bg-meta); padding:0.4em 0.7em; border-radius:6px; display:inline-block;">
+      ℹ️ แสดงย้อนหลัง 90 วัน — ข้อมูลเก่ากว่านั้นถูกเก็บถาวรใน archive
+    </div>
+    <div style="margin-top:0.6em; color:#aaa; font-size:0.85em;">[ ตารางรายการ movement 90 วันล่าสุด … ]</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<p>Daily cron cascade. Each run is bounded (≤ 2000 movements) so the launch backlog drains incrementally over consecutive days without hitting Vercel <code>maxDuration</code>.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Cron run cascade — archive-before-delete (AV19-class capture-before-destroy)</div>
+  <div class="flow-row">
+    <span class="flow-box">⏰ cron 03:30 BKK<br><code>30 20 * * *</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box guard">auth: <code>CRON_SECRET</code> Bearer<br>(else 401, no data touched)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">admin-SDK · canonical path<br><code>artifacts/{APP_ID}/public/data/be_stock_movements</code></span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-arrow">↳</span>
+    <span class="flow-box">query <code>where createdAt &lt; cutoffISO</code><br><code>orderBy createdAt asc · limit 2000</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box guard">in-memory re-gate<br><code>normalizeCreatedAtForCompare(d) &lt; cutoff</code><br><span class="warn">guards mixed Timestamp/ISO</span></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">group by (branchId, YYYY-MM)</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-arrow">↳</span>
+    <span class="flow-box">per group: read Storage file<br>→ <code>mergeArchive</code> (dedup by movementId)<br>→ write Storage file</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box guard"><span class="warn">GATE</span>: all Storage writes confirmed?</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">delete fetched docs<br><code>writeBatch</code> chunks of 450</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-arrow">↳</span>
+    <span class="flow-box">write audit doc<br><code>be_admin_audit/stock-movement-retention-*</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box terminal"><span class="ok">respond</span> {scanned, archived, deleted, moreRemaining}</span>
+    <span class="flow-arrow">⟳</span>
+    <span class="flow-box">next day: repeat until backlog drained</span>
+  </div>
+  <p style="font-size:0.85em; color:var(--tx-muted); margin-top:0.8em;">
+    <strong>Invariant:</strong> a movement is <em>never</em> deleted unless its archive file write was confirmed first. If any group's Storage write fails → that group's docs are <em>not</em> deleted this run; logged; re-attempted next run. <code>be_stock_batches</code> (balance source) is never read or written by this flow.
+  </p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Stage table</div>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>Failure handling</th></tr>
+    <tr><td>1</td><td>Cron fires 03:30 BKK; verify <code>CRON_SECRET</code></td><td>401 → exit, zero data touched</td></tr>
+    <tr><td>2</td><td>Query oldest ≤2000 movements with <code>createdAt &lt; cutoff</code></td><td>Empty → exit "nothing to prune"</td></tr>
+    <tr><td>3</td><td>In-memory re-gate via normalized ISO age</td><td>Drops any doc whose true age &lt; window (mixed-type safety)</td></tr>
+    <tr><td>4</td><td>Group by (branchId, month); per group merge+write Storage archive</td><td>Group write fails → skip that group's delete; continue others</td></tr>
+    <tr><td>5</td><td>Delete only the docs whose archive write succeeded (batch 450)</td><td>Partial delete is safe (idempotent re-run)</td></tr>
+    <tr><td>6</td><td>Write audit doc; respond with counts + <code>moreRemaining</code></td><td>—</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>1. Pure helper — <code>src/lib/stockMovementRetentionCore.js</code></h3>
+<p>No Firebase imports → fully unit-testable. Single source of truth for retention constants + transforms.</p>
+<ul>
+  <li><code>RETENTION_DAYS = 90</code> · <code>RETENTION_BATCH_LIMIT = 2000</code></li>
+  <li><code>computeCutoffISO(now = new Date())</code> → <code>(now − 90d).toISOString()</code></li>
+  <li><code>archiveStoragePath(branchId, yyyyMM)</code> → <code>stock-movements-archive/{branchId}/{YYYY-MM}.json</code></li>
+  <li><code>monthKeyFromISO(createdAtISO)</code> → <code>"YYYY-MM"</code> · <code>groupByBranchMonth(movements)</code> → <code>{ "branchId|YYYY-MM": [...] }</code></li>
+  <li><code>mergeArchive(existing[], incoming[])</code> → union deduped by <code>movementId</code> (idempotent re-runs)</li>
+  <li><code>normalizeCreatedAtForCompare(value)</code> → ISO string from ISO | Firestore Timestamp | <code>{_seconds,_nanoseconds}</code> | <code>{seconds,nanoseconds}</code> (reuses V105 <code>_v105NormalizeCreatedAt</code> shape)</li>
+  <li><code>buildArchiveFileBody({branchId, month, movements})</code> → <code>{schemaVersion:1, branchId, month, archivedAt, count, movements}</code></li>
+</ul>
+
+<h3>2. Cron — <code>api/cron/stock-movement-retention.js</code></h3>
+<p>Mirrors <code>api/cron/whole-system-backup-daily.js</code> (auth + admin-SDK init + PEM parse). Uses canonical <code>artifacts/{APP_ID}/public/data/be_stock_movements</code> path (Rule M). Per-run cap = <code>RETENTION_BATCH_LIMIT</code>. <code>maxDuration: 300</code>. Archive-before-delete ordering enforced.</p>
+
+<h3>3. <code>vercel.json</code></h3>
+<pre>"crons": [
+  /* ...existing 3: line-reminder-fire, line-reminder-retry, whole-system-backup-daily... */
+  { "path": "/api/cron/stock-movement-retention", "schedule": "30 20 * * *" }   // 03:30 BKK
+]
+// + function config maxDuration: 300 for the new endpoint</pre>
+
+<h3>4. <code>storage.rules</code></h3>
+<p>Add admin-only <code>match /stock-movements-archive/{branchId}/{file=**}</code> (mirror <code>backups/</code>). <strong>No <code>firestore.rules</code> change</strong> (<code>be_stock_movements</code> delete already <code>if false</code>; admin SDK bypasses).</p>
+
+<h3>5. <code>MovementLogPanel.jsx</code></h3>
+<p>Query unchanged. Add one static info line "แสดงย้อนหลัง 90 วัน — ข้อมูลเก่ากว่านั้นถูกเก็บถาวรใน archive". Informational only — does not violate cron-only (Q5).</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = Archive→Storage then hard-delete</strong> (V81/AV64 pattern). Balance snapshot dropped — YAGNI (batches authoritative).</li>
+  <li><strong>Q2 = 90-day</strong> live retention window. Older → archive only.</li>
+  <li><strong>Q3 = Daily cron, monthly-file archive</strong> — <code>30 20 * * *</code> (03:30 BKK), append-merge per (branch, month).</li>
+  <li><strong>Q4 = All movement types</strong> uniformly (archive preserves everything, incl. adjustments → no audit loss).</li>
+  <li><strong>Q5 = Cron-only</strong> — no CLI, no admin UI button. ⇒ cron must self-drain the launch backlog incrementally (≤2000/run).</li>
+  <li><strong>Sub-1 = include</strong> MovementLogPanel static info line.</li>
+  <li><strong>Sub-2 = include</strong> explicit <code>storage.rules</code> admin-only match for the archive path.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Movements whose normalized <code>createdAt &lt; now−90d</code> are written to <code>stock-movements-archive/{branchId}/{YYYY-MM}.json</code> then deleted from <code>be_stock_movements</code>.</li>
+  <li>Archive file content = dedup-by-<code>movementId</code> union; running the cron twice yields 0 additional deletions (idempotent).</li>
+  <li>No movement is deleted unless its archive write is confirmed first (archive-before-delete).</li>
+  <li>Each run processes ≤ 2000 movements; a large backlog drains over consecutive daily runs without timeout.</li>
+  <li>Stock balance (<code>be_stock_batches.qty.remaining</code> via StockBalancePanel) is byte-identical before vs after retention.</li>
+  <li>A movement with a legacy Timestamp <code>createdAt</code> is age-gated correctly by normalized ISO compare (never wrongly deleted by Firestore type-ordering).</li>
+  <li>Request without valid <code>CRON_SECRET</code> → 401, zero data touched.</li>
+  <li>Each run writes an audit doc with <code>{scanned, archived, deleted, cutoffISO, monthsTouched, archiveRefs, ranAt, moreRemaining}</code>.</li>
+  <li>Anon/client cannot read or write <code>stock-movements-archive/</code> (Storage 403).</li>
+  <li>MovementLogPanel renders the 90-day info line.</li>
+</ol>
+
+<h2>Testing (Rule Q V66)</h2>
+<ul>
+  <li><strong>Pure-helper units</strong> — cutoff math, grouping, mergeArchive dedup/idempotency, path builder, normalizeCreatedAtForCompare across ISO/Timestamp/_seconds shapes, batch-limit. Adversarial: empty, mixed createdAt types, NFC≠NFD, NUL byte, 10k-movement perf budget, concurrent.</li>
+  <li><strong>Rule I flow-simulate</strong> — fixture run → archive files produced → docs deleted → re-run = 0 extra → balance/batches unchanged → backlog drains over N simulated runs.</li>
+  <li><strong>NEW AV99 invariant</strong> — deletion MUST be preceded by a confirmed Storage archive (archive-before-delete); the cron is the ONLY deleter of <code>be_stock_movements</code>; age compared via normalized ISO. Source-grep guard + closed-deleter list. (AV98 is the current max.)</li>
+  <li><strong>Rule Q L2</strong> — admin-SDK e2e on real prod: seed <code>TEST-</code>-prefixed old-dated movements (V33.11 stock-test prefix) → run retention logic → assert archived to Storage + deleted from Firestore + batches/balance untouched → cleanup zero orphans + audit doc. Live cron itself = L3 (curl with <code>CRON_SECRET</code> post-deploy, or user observes the scheduled run).</li>
+</ul>
+
+<h2>Deploy</h2>
+<p>Combined <code>vercel --prod</code> (cron + endpoint + vercel.json) + <code>firebase deploy --only storage:rules</code> with Probe-Deploy-Probe (new probe: anon write to <code>stock-movements-archive/</code> → expect 403). <strong>No <code>firestore.rules</code> change. No data ops at deploy</strong> — the cron performs the first backlog drain over the days following deploy. User authorizes deploy explicitly per V18.</p>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Vercel cron count</strong> — this is the 4th cron (3 already run: line-reminder ×2 + whole-system-backup-daily). Plan already supports ≥3 schedules; the 4th is within limits. Confirm at deploy.</li>
+  <li><strong>Mixed <code>createdAt</code> types in legacy data</strong> — mitigated by the in-memory re-gate. If many legacy Timestamp docs exist, the Firestore range query (string compare) may over-fetch them, but the re-gate prevents wrong deletion; over-fetched docs simply consume part of the 2000-cap that run. Acceptable.</li>
+  <li><strong>maxDuration</strong> — if 2000 docs × Storage round-trips exceed 300s, lower <code>RETENTION_BATCH_LIMIT</code> (single constant, tunable).</li>
+  <li><strong>Archive Storage growth</strong> — permanent by design (it IS the legal record). JSON is far cheaper than Firestore docs; no archive-of-archive retention.</li>
+  <li><strong>First-run backlog size</strong> — everything &gt;90d since the stock system shipped; incremental drain handles it but full clearance may take several daily runs. Acceptable; <code>moreRemaining</code> in the audit doc tracks progress.</li>
+</ul>
+
+</body>
+</html>
