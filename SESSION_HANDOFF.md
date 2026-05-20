@@ -66,10 +66,21 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+4 — appt-calendar-density T1-T7 implemented (popover + adaptive cell + agenda + responsive) — LOCAL, pushed
-- **Master**: `224da316` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD..EOD+4 all queued, NOTHING deployed yet.
-- **Tests**: full vitest **13756 PASS / 0 FAIL / 0 SKIP** · build clean
-- **Deploy**: NONE (UI-only cluster, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+4 checkpoint: `.agents/sessions/2026-05-20-appt-calendar-density-impl.md`
+- **Date last updated**: 2026-05-20 EOD+5 — V106 stock-movement retention shipped (cron archive→delete, AV99) — LOCAL, pushed
+- **Master**: `6d0d86b4` (clean, all pushed). **Prod**: `0511be1e` LIVE — EOD..EOD+5 all queued, NOTHING deployed yet.
+- **Tests**: full vitest **13800 PASS / 0 FAIL / 0 SKIP** · build clean (2.68s)
+- **Deploy**: NONE. V106 adds a storage.rules change (admin-only archive) + Vercel cron — combined `vercel --prod` + `firebase deploy --only storage:rules` (Probe-Deploy-Probe) pending user "deploy" (V18). EOD+4 checkpoint: `.agents/sessions/2026-05-20-appt-calendar-density-impl.md`
+
+### Session 2026-05-20 EOD+5 — V106 Stock-Movement Retention (cron archive→delete, T1-T7) — LOCAL, awaiting deploy
+
+Brainstorm→spec→plan→executing-plans inline (T1-T7). Daily cron archives `be_stock_movements` >90d to permanent Storage JSON then hard-deletes — controls Firestore cost while preserving the MOPH audit trail. **Re-grounding finding that corrected the old brainstorm: stock balance is `be_stock_batches`-authoritative (never replayed from movements) → the old Q1 "balance snapshot" was YAGNI and dropped.**
+
+- **Decisions (Q&A)**: Q1 archive→Storage then delete (V81/AV64 pattern) · Q2 90-day window · Q3 daily cron `30 20 * * *` (03:30 BKK) + monthly-file archive · Q4 all movement types · Q5 cron-only (no CLI/UI) · Sub-1 MovementLogPanel info line · Sub-2 explicit storage.rules admin-only match.
+- **Files**: NEW `src/lib/stockMovementRetentionCore.js` (pure: RETENTION_DAYS=90, computeCutoffISO, archiveStoragePath, monthKeyFromISO, normalizeCreatedAtForCompare [ported from MovementLogPanel `_v105NormalizeCreatedAt` AV95 backstop], groupKeyForMovement, groupByBranchMonth, mergeArchive [dedup-by-movementId idempotent], buildArchiveFileBody) · NEW `api/cron/stock-movement-retention.js` (mirrors whole-system-backup-daily: CRON_SECRET + admin-SDK; query `createdAt<cutoff asc limit 2000` single-field → no composite index; in-memory normalized-ISO re-gate guards mixed Timestamp/ISO; archive-before-delete AV99 capture-before-destroy; batch delete 450; audit doc; ≤2000/run incremental backlog drain; idempotent → no lock) · MOD `vercel.json` (4th cron + maxDuration 300) · MOD `storage.rules` (admin-only `stock-movements-archive/{branchId}/{file=**}` mirror backups/) · MOD `MovementLogPanel.jsx` (90-day notice, data-testid=movement-retention-info) · MOD `audit-anti-vibe-code/SKILL.md` (AV99).
+- **AV99**: be_stock_movements deletion MUST be archive-gated; the cron is the ONLY deleter (closed list of 1); age compared via normalized ISO. backendClient.js never hard-deletes a movement (reversal creates a compensating doc + sets reversedByMovementId).
+- **Tests (+44)**: `v106-stock-movement-retention-core` 24 (unit + adversarial NFC≠NFD/NUL/10k-perf/mixed-createdAt) · `v106-av99-archive-before-delete` 13 (source-grep: save-before-delete ordering, archivedKeys gate, single-field query, vercel/storage/panel/skill wiring, closed-deleter) · `v106-stock-movement-retention-flow-simulate` 7 (Rule I: archive/delete/idempotent/drain/balance-untouched/ordering/cutoff-boundary). Full vitest **13756→13800 / 0 fail**; build clean 2.68s.
+- **Rule Q V66 L2 — PASS 7/0 on REAL prod** (`scripts/e2e-stock-movement-retention.mjs`): branch-isolated TEST-V106 fixtures (2 old + 1 recent) → 2 archived to Storage + deleted from Firestore, recent preserved, archive shape (2 movements + schemaVersion 1), mergeArchive idempotent on the real archive file → cleanup zero orphans. Mechanism verified end-to-end against real Firestore+Storage; the live HTTP-cron firing is the post-deploy L3 confirmation.
+- **NOT deployed** (V18). Combined `vercel --prod` + `firebase deploy --only storage:rules` (Probe-Deploy-Probe: NEW probe anon write `stock-movements-archive/PROBE/x.json` → expect 403) pending user "deploy". First backlog drain runs over the days following deploy.
 
 ### Session 2026-05-20 EOD+4 — Appointment calendar density A+B+C (T1-T7) — LOCAL, awaiting deploy
 
