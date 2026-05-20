@@ -2395,6 +2395,39 @@ the glow layer. A future modal rendered inside a glow card MUST portal or regres
 viewing-customer breadcrumbSlot controls gated `menuMode === 'classic'`
 (duplicate-header bug, same commit).
 
+### AV99 — Stock-movement deletion MUST be archive-gated (V106, 2026-05-20)
+
+`be_stock_movements` are the MOPH audit/legal record (V34) — `firestore.rules`
+blocks client delete (`allow delete: if false`). The ONLY permitted deleter is
+the retention cron `api/cron/stock-movement-retention.js`, and it MUST:
+
+1. write the (branchId, month) archive JSON to Storage AND confirm the write
+   BEFORE deleting any doc of that group (archive-before-delete /
+   capture-before-destroy — same lineage as AV19/V40/V74/V81);
+2. compare age via `normalizeCreatedAtForCompare` (normalized ISO string),
+   NEVER rely on the raw Firestore string range query alone — a stray
+   Timestamp-typed `createdAt` sorts BEFORE every string in Firestore type
+   ordering, so a `where createdAt < <isoString>` would always match it; the
+   in-memory normalized re-gate prevents wrong deletion;
+3. be idempotent (`mergeArchive` dedups by `movementId`; deleted docs do not
+   re-appear) — no concurrency lock needed (cron-only + 300s cap = no overlap).
+
+**Grep target (regression)**: any new `.delete()` / `deleteDoc(` / `batch.delete(`
+targeting `be_stock_movements` OUTSIDE the retention cron = violation.
+`api/cron/stock-movement-retention.js` must contain `.save(` BEFORE
+`batch.delete(` in source order, gate delete on `archivedKeys.has(...)`, and
+call `normalizeCreatedAtForCompare`. `src/lib/backendClient.js` REVERSES
+movements (creates a compensating movement + sets `reversedByMovementId`) — it
+must NEVER hard-delete a `be_stock_movements` doc.
+
+**Sanctioned deleter (closed list of 1)**: `api/cron/stock-movement-retention.js`.
+Adding a 2nd deleter requires a V-entry + this list extension (Rule P).
+
+**Cross-link**: spec
+`docs/superpowers/specs/2026-05-20-stock-movement-retention-design.html` ·
+plan `docs/superpowers/plans/2026-05-20-stock-movement-retention.html` ·
+tests `tests/v106-av99-archive-before-delete.test.js`.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
