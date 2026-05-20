@@ -2785,7 +2785,12 @@ export function listenToChatConversationsByBranch({ branchId, allBranches = fals
 // result flows back into the TFP charts[] via the PC merge (Q1); images travel
 // through Storage, not the doc (Q5). Heartbeats use client Date.now() (consistent
 // with the session-hook heartbeats + no serverTimestamp null-blip flickering the
-// PC ready-list every 10s).
+// PC ready-list every 10s). Doc/Col accessors follow the file convention (xDoc/xCol).
+const chartTabletPresenceCol = () => collection(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`);
+const chartTabletPresenceDoc = (deviceId) => doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, deviceId);
+const chartEditSessionCol = () => collection(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`);
+const chartEditSessionDoc = (sessionId) => doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId);
+
 export function listenToChartTabletPresenceByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
   const effectiveBranchId = (typeof branchId === 'string' && branchId)
     ? branchId
@@ -2794,10 +2799,9 @@ export function listenToChartTabletPresenceByBranch({ branchId, allBranches = fa
     if (typeof onChange === 'function') onChange([]);
     return () => {};
   }
-  const col = collection(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`);
   const constraints = [];
   if (!allBranches && effectiveBranchId) constraints.push(where('branchId', '==', String(effectiveBranchId)));
-  const q = query(col, ...constraints);
+  const q = query(chartTabletPresenceCol(), ...constraints);
   return onSnapshot(
     q,
     (snap) => { if (typeof onChange === 'function') onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))); },
@@ -2813,8 +2817,7 @@ export function listenToRequestedSessionForTablet({ branchId, tabletDeviceId } =
     if (typeof onChange === 'function') onChange(null);
     return () => {};
   }
-  const col = collection(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`);
-  const q = query(col,
+  const q = query(chartEditSessionCol(),
     where('branchId', '==', String(effectiveBranchId)),
     where('tabletDeviceId', '==', String(tabletDeviceId)),
     where('status', '==', 'requested'));
@@ -2826,9 +2829,8 @@ export function listenToRequestedSessionForTablet({ branchId, tabletDeviceId } =
 }
 
 export function listenToChartEditSession(sessionId, onChange, onError) {
-  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId);
   return onSnapshot(
-    ref,
+    chartEditSessionDoc(sessionId),
     (snap) => { if (typeof onChange === 'function') onChange(snap.exists() ? { ...snap.data(), id: snap.id } : null); },
     (err) => { if (typeof onError === 'function') onError(err); }
   );
@@ -2836,37 +2838,33 @@ export function listenToChartEditSession(sessionId, onChange, onError) {
 
 export async function upsertChartTabletPresence(deviceId, { deviceName, branchId, uid, byName, status } = {}) {
   const bid = (typeof branchId === 'string' && branchId) ? branchId : resolveSelectedBranchId();
-  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, deviceId);
-  await setDoc(ref, { ...buildPresenceUpsert({ deviceId, deviceName, branchId: bid, uid, byName, status }), updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(chartTabletPresenceDoc(deviceId), { ...buildPresenceUpsert({ deviceId, deviceName, branchId: bid, uid, byName, status }), updatedAt: serverTimestamp() }, { merge: true });
 }
 
 // TX guard: only create when the target tablet is genuinely idle+fresh → prevents 2 PCs driving one tablet.
 export async function createChartEditSession(payload) {
   const bid = (typeof payload.branchId === 'string' && payload.branchId) ? payload.branchId : resolveSelectedBranchId();
-  const presRef = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, payload.tabletDeviceId);
-  const sesRef = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, payload.sessionId);
+  const presRef = chartTabletPresenceDoc(payload.tabletDeviceId);
   await runTransaction(db, async (tx) => {
     const pres = await tx.get(presRef);
     if (!pres.exists() || !isPresenceReady(pres.data(), Date.now())) {
       const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e;
     }
     tx.set(presRef, { status: 'busy', updatedAt: serverTimestamp() }, { merge: true });
-    tx.set(sesRef, { ...buildSessionCreate({ ...payload, branchId: bid }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    tx.set(chartEditSessionDoc(payload.sessionId), { ...buildSessionCreate({ ...payload, branchId: bid }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   });
 }
 
 export async function updateChartEditSession(sessionId, patch) {
-  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId);
-  await updateDoc(ref, { ...patch, updatedAt: serverTimestamp() });
+  await updateDoc(chartEditSessionDoc(sessionId), { ...patch, updatedAt: serverTimestamp() });
 }
 
 export async function freeChartTablet(deviceId) {
-  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, deviceId);
-  await setDoc(ref, { status: 'idle', updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(chartTabletPresenceDoc(deviceId), { status: 'idle', updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function deleteChartEditSession(sessionId) {
-  await deleteDoc(doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId));
+  await deleteDoc(chartEditSessionDoc(sessionId));
 }
 
 // V43-followup (2026-05-19 NIGHT+5 EOD+1) — BS-18 listener safe-by-default

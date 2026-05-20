@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "be_chart_edit_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "tabletDeviceId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "be_stock_batches",
       "queryScope": "COLLECTION",
       "fields": [

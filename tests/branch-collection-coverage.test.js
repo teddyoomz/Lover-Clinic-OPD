@@ -64,6 +64,8 @@ const COLLECTION_MATRIX = {
   // customer across branches.
   'be_recalls':            { scope: 'branch',         source: 'RecallCreateModal; createRecall + createRecallPair both call _resolveBranchIdForWrite. Per-customer reads are universal (SG10).' },
   'be_staff_chat_messages':{ scope: 'branch',         source: 'V73 (2026-05-16) — staff in-branch chat. addStaffChatMessage stamps branchId from useStaffChat hook bound to selectedBranchId. listenToStaffChatMessages safe-by-default (BS-13).' },
+  'be_chart_tablet_presence':{ scope: 'branch',       source: 'Tablet Chart Editor (2026-05-20) — standby presence; upsertChartTabletPresence stamps branchId; listenToChartTabletPresenceByBranch safe-by-default (BS-13).' },
+  'be_chart_edit_sessions':{ scope: 'branch',         source: 'Tablet Chart Editor (2026-05-20) — PC↔tablet session relay; createChartEditSession stamps branchId; listenToRequestedSessionForTablet branch-filtered.' },
 
   // ─── Global (no branchId) ──
   'be_customers':          { scope: 'global',  reason: 'Customer can visit any branch' },
@@ -177,6 +179,8 @@ describe('BC2: branch-scoped collections — branchId presence per scope class',
     'be_stock_withdrawals':  'stockWithdrawalDoc',
     'be_recalls':            'recallDoc',               // Phase 29 (2026-05-14) — createRecall + createRecallPair stamp via _resolveBranchIdForWrite
     'be_staff_chat_messages':'staffChatMessageDoc',     // V73 (2026-05-16) — addStaffChatMessage setDoc(staffChatMessageDoc(id), {...branchId})
+    'be_chart_tablet_presence':'chartTabletPresenceDoc',// Tablet Chart Editor (2026-05-20) — upsertChartTabletPresence setDoc(chartTabletPresenceDoc(id), {...branchId})
+    'be_chart_edit_sessions':'chartEditSessionDoc',     // Tablet Chart Editor (2026-05-20) — createChartEditSession tx.set(chartEditSessionDoc(id), {...branchId})
   };
 
   for (const coll of directBranch) {

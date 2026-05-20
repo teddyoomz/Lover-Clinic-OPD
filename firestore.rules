@@ -239,6 +239,14 @@ service cloud.firestore {
       match /be_exam_rooms/{roomId} {
         allow read, write: if isClinicStaff();
       }
+      // Tablet Chart Editor (2026-05-20) — pairing presence + session relay.
+      // Both PC + tablet are clinic staff (Q2); branch-scoped at query time (BSA).
+      match /be_chart_tablet_presence/{deviceId} {
+        allow read, write: if isClinicStaff();
+      }
+      match /be_chart_edit_sessions/{sessionId} {
+        allow read, write: if isClinicStaff();
+      }
       match /be_permission_groups/{groupId} {
         allow read, write: if isClinicStaff();
       }
