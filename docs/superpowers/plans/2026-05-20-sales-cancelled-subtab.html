@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales Cancelled Sub-Tab Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .ui { background: #0a0a0a; border-radius: 12px; padding: 14px; font-size: 12px; color: #e5e5e5; }
+    .pillrow { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 6px; display: flex; gap: 6px; margin-bottom: 10px; }
+    .pill { padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 12px; color: #888; }
+    .pill.active { background: #be123c; color: #fff; box-shadow: 0 0 12px rgba(244,63,94,0.3); }
+  </style>
+</head>
+<body>
+
+<h1>Sales Cancelled Sub-Tab Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute task-by-task. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-20-sales-cancelled-subtab-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Split cancelled sales out of the main "ขาย / ใบเสร็จ" list into a separate in-page sub-tab ("ยกเลิกแล้ว"), leaving the default "การขาย" tab showing only non-cancelled sales.</p>
+  <p><strong>Architecture:</strong> One new pure helper (<code>src/lib/saleSubTabFilter.js</code>) + edits to one component (<code>src/components/backend/SaleTab.jsx</code>). Client-side split over the already-loaded <code>sales</code> array — no backend, no new fetch, no BSA change. Mirrors the V43-followup <code>skipStockFilter.js</code> pure-helper pattern and the StockTab segmented sub-tab pattern.</p>
+  <p><strong>Tech Stack:</strong> React 19 (hooks), Vite, Vitest 4.1 + RTL, Playwright/preview for Rule Q L1. Thai UI.</p>
+  <p><strong>Iron-clad notes:</strong> Rule N (targeted tests during iteration; full suite at batch end) · Rule I (flow-simulate at sub-phase end) · Rule Q V66 (real-browser/real-SDK before "verified") · Rule C1 (helper extraction = Rule of 3 testability, mirrors skipStockFilter) · NO deploy without explicit "deploy" this turn (V18) · preview against prod = read-only pill clicks ONLY, never click cancel/edit/save on real data (feedback_no_real_action_in_preview_eval).</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">"การขาย" (active, default) — dropdown WITHOUT "ยกเลิก"</div>
+  <div class="ui">
+    <div class="pillrow"><div class="pill active">การขาย</div><div class="pill">ยกเลิกแล้ว</div></div>
+    <div style="background:#141414;border:1.5px solid rgba(244,63,94,0.15);border-radius:14px;padding:12px;display:flex;gap:8px;align-items:center;">
+      <span style="flex:1;background:#1c1c1c;border:2px solid #333;border-radius:9px;padding:8px 11px;color:#777;">🔍 ค้นหาใบเสร็จ...</span>
+      <span style="background:#1c1c1c;border:2px solid #333;border-radius:9px;padding:8px 11px;color:#ccc;font-weight:700;">ทุกสถานะ ▾</span>
+      <span style="background:linear-gradient(135deg,#be123c,#e11d48);color:#fff;font-weight:900;border-radius:9px;padding:8px 16px;">+ ขาย</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">"ยกเลิกแล้ว" — dropdown HIDDEN, search kept</div>
+  <div class="ui">
+    <div class="pillrow"><div class="pill">การขาย</div><div class="pill active">ยกเลิกแล้ว</div></div>
+    <div style="background:#141414;border:1.5px solid rgba(244,63,94,0.15);border-radius:14px;padding:12px;display:flex;gap:8px;align-items:center;">
+      <span style="flex:1;background:#1c1c1c;border:2px solid #333;border-radius:9px;padding:8px 11px;color:#777;">🔍 ค้นหาใบเสร็จ...</span>
+      <span style="background:linear-gradient(135deg,#be123c,#e11d48);color:#fff;font-weight:900;border-radius:9px;padding:8px 16px;">+ ขาย</span>
+    </div>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Create</strong> <code>src/lib/saleSubTabFilter.js</code> — pure: <code>isCancelledSale(sale)</code> + <code>filterSalesBySubTab(sales, subTab)</code>. Single responsibility: classify/partition sales by cancelled status. No React, no Firestore.</li>
+  <li><strong>Modify</strong> <code>src/components/backend/SaleTab.jsx</code> — add <code>SALE_SUB_TABS</code> const + <code>subTab</code> state + <code>handleSubTabChange</code> (resets payment filter) + use the helper in <code>filtered</code> + pill row UI + conditional dropdown + per-tab header text + cancelled/active empty states.</li>
+  <li><strong>Create</strong> <code>tests/sale-subtab-filter.test.js</code> — helper unit + adversarial.</li>
+  <li><strong>Create</strong> <code>tests/sales-cancelled-subtab-rtl.test.jsx</code> — RTL: pill toggle splits rows, dropdown conditional, reset-on-switch, empty states.</li>
+  <li><strong>Create</strong> <code>tests/sales-cancelled-subtab-flow-simulate.test.js</code> — Rule I flow chain + source-grep regression locks.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<!-- ============ TASK 1 ============ -->
+<div class="task">
+  <h3>Task 1: Pure helper <code>saleSubTabFilter.js</code> + unit tests (TDD)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/saleSubTabFilter.js</code></li>
+    <li>Test: <code>tests/sale-subtab-filter.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/sale-subtab-filter.test.js
+import { describe, it, expect } from 'vitest';
+import { isCancelledSale, filterSalesBySubTab } from '../src/lib/saleSubTabFilter.js';
+
+const A = { saleId: 'INV-1', status: 'completed', payment: { status: 'paid' } };
+const A2 = { saleId: 'INV-2', payment: { status: 'unpaid' } };          // no top-level status
+const C = { saleId: 'INV-3', status: 'cancelled', payment: { status: 'paid' } };
+
+describe('saleSubTabFilter — A. predicate', () => {
+  it('A.1 cancelled sale → true', () => expect(isCancelledSale(C)).toBe(true));
+  it('A.2 completed sale → false', () => expect(isCancelledSale(A)).toBe(false));
+  it('A.3 missing status → false', () => expect(isCancelledSale(A2)).toBe(false));
+  it('A.4 null/undefined → false', () => { expect(isCancelledSale(null)).toBe(false); expect(isCancelledSale(undefined)).toBe(false); });
+});
+
+describe('saleSubTabFilter — B. partition', () => {
+  const sales = [A, A2, C];
+  it('B.1 active tab excludes cancelled', () => {
+    const r = filterSalesBySubTab(sales, 'active');
+    expect(r).toHaveLength(2);
+    expect(r.every(s => s.status !== 'cancelled')).toBe(true);
+  });
+  it('B.2 cancelled tab keeps only cancelled', () => {
+    const r = filterSalesBySubTab(sales, 'cancelled');
+    expect(r).toHaveLength(1);
+    expect(r[0].saleId).toBe('INV-3');
+  });
+  it('B.3 unknown subTab defaults to active behaviour', () => {
+    expect(filterSalesBySubTab(sales, 'whatever').every(s => s.status !== 'cancelled')).toBe(true);
+  });
+  it('B.4 active + cancelled partition is complete + disjoint', () => {
+    const act = filterSalesBySubTab(sales, 'active');
+    const can = filterSalesBySubTab(sales, 'cancelled');
+    expect(act.length + can.length).toBe(sales.length);
+    expect(act.some(s => can.includes(s))).toBe(false);
+  });
+});
+
+describe('saleSubTabFilter — C. adversarial', () => {
+  it('C.1 non-array input → []', () => {
+    expect(filterSalesBySubTab(null, 'active')).toEqual([]);
+    expect(filterSalesBySubTab(undefined, 'cancelled')).toEqual([]);
+    expect(filterSalesBySubTab({}, 'active')).toEqual([]);
+  });
+  it('C.2 empty array → []', () => expect(filterSalesBySubTab([], 'active')).toEqual([]);
+  it('C.3 entries with null members are tolerated', () => {
+    const r = filterSalesBySubTab([null, A, undefined, C], 'cancelled');
+    expect(r).toEqual([C]);
+  });
+  it('C.4 Thai customerName + commas do not affect partition', () => {
+    const t = { saleId: 'INV-ก', status: 'cancelled', customerName: 'นางสาว วันเพ็ญ เดือนสิบสอง' };
+    expect(filterSalesBySubTab([t], 'cancelled')).toEqual([t]);
+  });
+  it('C.5 status other than cancelled (draft/deferred) lands in active', () => {
+    const d = { saleId: 'INV-d', status: 'draft' };
+    expect(filterSalesBySubTab([d], 'active')).toEqual([d]);
+    expect(filterSalesBySubTab([d], 'cancelled')).toEqual([]);
+  });
+  it('C.6 idempotent — re-filtering active yields same set', () => {
+    const once = filterSalesBySubTab([A, A2, C], 'active');
+    expect(filterSalesBySubTab(once, 'active')).toEqual(once);
+  });
+  it('C.7 forward-compat — unknown fields preserved on returned objects', () => {
+    const f = { saleId: 'INV-f', status: 'cancelled', _futureField: 42 };
+    expect(filterSalesBySubTab([f], 'cancelled')[0]._futureField).toBe(42);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run the test, confirm it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/sale-subtab-filter.test.js</code> — Expected: FAIL ("Failed to resolve import ../src/lib/saleSubTabFilter.js").</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Write the helper</strong></label></div>
+<pre><code class="language-javascript">// src/lib/saleSubTabFilter.js
+// Sales-page sub-tab partition (2026-05-20). Splits the SaleTab list into the
+// "การขาย" (non-cancelled) and "ยกเลิกแล้ว" (cancelled) sub-tabs. Pure JS — no
+// React, no Firestore. Mirrors the V43-followup skipStockFilter.js pattern:
+// single-source predicate so every reader agrees on what "cancelled" means.
+
+/** A sale is cancelled iff its top-level status === 'cancelled'
+ *  (sale.status, set by the cancel flow; beats payment.status). */
+export function isCancelledSale(sale) {
+  return sale?.status === 'cancelled';
+}
+
+/** Partition the loaded sales list for the given sub-tab.
+ *  subTab === 'cancelled' → only cancelled; anything else → non-cancelled.
+ *  Tolerates non-array input + null members (defensive). */
+export function filterSalesBySubTab(sales, subTab) {
+  const list = Array.isArray(sales) ? sales : [];
+  if (subTab === 'cancelled') return list.filter(isCancelledSale);
+  return list.filter((s) => !isCancelledSale(s));
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run the test, confirm it passes</strong></label></div>
+  <p>Run: <code>npx vitest run tests/sale-subtab-filter.test.js</code> — Expected: PASS (all A/B/C groups).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/saleSubTabFilter.js tests/sale-subtab-filter.test.js
+git commit -m "feat(sales-subtab): pure saleSubTabFilter helper + unit tests"</code></pre>
+</div>
+
+<!-- ============ TASK 2 ============ -->
+<div class="task">
+  <h3>Task 2: SaleTab — sub-tab state, helper-driven split, conditional dropdown, pill row, empty states</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/SaleTab.jsx</code> (const block ~line 64-71; state ~line 245; <code>filtered</code> useMemo ~line 479-487; render return ~line 1053-1122)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Import the helper</strong></label></div>
+  <p>At the top of <code>SaleTab.jsx</code> with the other <code>src/lib</code> imports, add:</p>
+<pre><code class="language-javascript">import { filterSalesBySubTab } from '../../lib/saleSubTabFilter.js';</code></pre>
+  <p>(Verify the relative path: <code>src/components/backend/SaleTab.jsx</code> → <code>src/lib/</code> = <code>../../lib/</code>. Confirm by grepping an existing lib import in the file, e.g. <code>grep -n "from '../../lib/" src/components/backend/SaleTab.jsx</code>.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Add the SALE_SUB_TABS const</strong></label></div>
+  <p>Immediately after the <code>PAYMENT_STATUSES</code> array (ends ~line 71), add:</p>
+<pre><code class="language-javascript">// Sub-tabs on the sales page (2026-05-20). "การขาย" = non-cancelled (default);
+// "ยกเลิกแล้ว" = cancelled-only. Pill style mirrors StockTab's segmented row.
+const SALE_SUB_TABS = [
+  { id: 'active', label: 'การขาย' },
+  { id: 'cancelled', label: 'ยกเลิกแล้ว' },
+];</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Add subTab state + tab-switch handler</strong></label></div>
+  <p>Right after the existing <code>const [filterStatus, setFilterStatus] = useState('');</code> (~line 245), add:</p>
+<pre><code class="language-javascript">const [subTab, setSubTab] = useState('active');
+// Switching sub-tab: payment-status filter is meaningful only on the active
+// tab, so reset it when moving to (or returning from) "ยกเลิกแล้ว" to avoid a
+// stale filter silently emptying a tab.
+const handleSubTabChange = (id) => {
+  setSubTab(id);
+  setFilterStatus('');
+};</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Rewrite the <code>filtered</code> useMemo to split by sub-tab first</strong></label></div>
+  <p>Replace the existing useMemo (lines ~479-487):</p>
+<pre><code class="language-javascript">// ── Filtered list ──
+const filtered = useMemo(() => {
+  // 2026-05-20: split by sub-tab FIRST (active = non-cancelled, cancelled =
+  // cancelled-only) via the single-source helper, then apply search; the
+  // payment-status dropdown applies on the active tab only.
+  let list = filterSalesBySubTab(sales, subTab);
+  if (subTab === 'active' && filterStatus) {
+    list = list.filter(s => s.payment?.status === filterStatus || s.status === filterStatus);
+  }
+  if (filterQuery.trim()) {
+    const q = filterQuery.toLowerCase();
+    list = list.filter(s => (s.customerName || '').toLowerCase().includes(q) || (s.saleId || '').toLowerCase().includes(q) || (s.customerHN || '').includes(q));
+  }
+  return list;
+}, [sales, filterQuery, filterStatus, subTab]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Add the pill row as the first child of the render return</strong></label></div>
+  <p>The render currently returns <code>&lt;div className="space-y-4"&gt;</code> (~line 1054) whose first child is the header <code>{/* Header */}</code>. Insert this pill row BEFORE the header block:</p>
+<pre><code class="language-jsx">{/* Sub-tab pills (2026-05-20) — การขาย / ยกเลิกแล้ว */}
+&lt;div className="bg-[var(--bg-surface)] rounded-xl p-1.5 shadow border border-[var(--bd)] flex gap-1 overflow-x-auto"&gt;
+  {SALE_SUB_TABS.map(t =&gt; {
+    const active = subTab === t.id;
+    return (
+      &lt;button key={t.id} onClick={() =&gt; handleSubTabChange(t.id)}
+        data-testid={`saletab-subtab-${t.id}`}
+        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+          active
+            ? 'bg-rose-700 text-white shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+            : 'text-[var(--tx-muted)] hover:text-rose-400 hover:bg-[var(--bg-hover)]'
+        }`}&gt;
+        {t.label}
+      &lt;/button&gt;
+    );
+  })}
+&lt;/div&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Make the status dropdown render only on the active tab + drop the cancelled option</strong></label></div>
+  <p>Replace the <code>&lt;select&gt;</code> block (lines ~1064-1068) with a conditional that also filters out the <code>cancelled</code> option:</p>
+<pre><code class="language-jsx">{subTab === 'active' && (
+  &lt;select value={filterStatus} onChange={e =&gt; setFilterStatus(e.target.value)}
+    className="px-3 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-xs font-bold text-[var(--tx-primary)] focus:outline-none transition-all"&gt;
+    &lt;option value=""&gt;ทุกสถานะ&lt;/option&gt;
+    {PAYMENT_STATUSES.filter(s =&gt; s.value !== 'cancelled').map(s =&gt; &lt;option key={s.value} value={s.value}&gt;{s.label}&lt;/option&gt;)}
+  &lt;/select&gt;
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: Per-tab header description text</strong></label></div>
+  <p>Replace the description paragraph in the header meta (lines ~1076-1078):</p>
+<pre><code class="language-jsx">&lt;p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5"&gt;
+  &lt;ShoppingCart size={12} /&gt; {subTab === 'cancelled' ? 'รายการที่ยกเลิกแล้ว — ดูรายละเอียดหรือพิมพ์ได้' : 'จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม'}
+&lt;/p&gt;</code></pre>
+  <p>(The <code>&lt;span&gt;{filtered.length} รายการ&lt;/span&gt;</code> count line directly below stays unchanged — it now reflects the selected sub-tab's count.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s8"> <label for="t2s8"><strong>Step 8: Empty states — cancelled-empty + active-no-filter</strong></label></div>
+  <p>The empty-state block (lines ~1086-1121) currently is <code>filtered.length === 0 ? ( sales.length === 0 ? (onboarding) : ("ไม่พบรายการที่ตรงกับตัวกรอง") ) : (table)</code>. Restructure the inner ternary so the cancelled tab gets its own empty message and the active tab discriminates "no sales at all" vs "filter no match" vs "all cancelled":</p>
+<pre><code class="language-jsx">) : filtered.length === 0 ? (
+  subTab === 'cancelled' ? (
+    &lt;div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl"&gt;
+      &lt;ShoppingCart size={28} className="mx-auto text-[var(--tx-muted)] mb-2" /&gt;
+      &lt;p className="text-sm text-[var(--tx-muted)]"&gt;ยังไม่มีรายการที่ยกเลิก&lt;/p&gt;
+    &lt;/div&gt;
+  ) : sales.length === 0 ? (
+    /* ── existing onboarding 3-step block, UNCHANGED ── */
+  ) : (
+    &lt;div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl"&gt;
+      &lt;Search size={28} className="mx-auto text-[var(--tx-muted)] mb-2" /&gt;
+      &lt;p className="text-sm text-[var(--tx-muted)]"&gt;{filterQuery || filterStatus ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ยังไม่มีรายการขาย'}&lt;/p&gt;
+    &lt;/div&gt;
+  )
+) : (
+  /* ── existing table block, UNCHANGED ── */
+)</code></pre>
+  <p><strong>Important:</strong> keep the existing onboarding block and the existing table block exactly as they are — only the wrapping ternary changes. Do not delete/rewrite the onboarding 3-step JSX or the <code>&lt;table&gt;</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t2s9"> <label for="t2s9"><strong>Step 9: Build to catch syntax/import errors (V11 lock)</strong></label></div>
+  <p>Run: <code>npm run build</code> — Expected: clean build (no MISSING_EXPORT, no JSX parse error). If it fails, fix before continuing (do not trust focused tests over the build per V11).</p>
+
+  <div class="step"><input type="checkbox" id="t2s10"> <label for="t2s10"><strong>Step 10: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/SaleTab.jsx
+git commit -m "feat(sales-subtab): split cancelled sales into ยกเลิกแล้ว sub-tab"</code></pre>
+</div>
+
+<!-- ============ TASK 3 ============ -->
+<div class="task">
+  <h3>Task 3: RTL test bank — pill toggle, dropdown conditional, reset, empty states</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/sales-cancelled-subtab-rtl.test.jsx</code></li>
+  </ul>
+  <p><strong>Note on mocking:</strong> SaleTab pulls many deps. Before writing, grep the top of an existing SaleTab-related RTL/test file (e.g. <code>grep -rln "SaleTab" tests/</code>) to copy its established mock shape for <code>../src/lib/scopedDataLayer.js</code> / <code>../src/lib/backendClient.js</code> / <code>../src/lib/BranchContext.jsx</code>. Reuse that exact mock surface; only override <code>getAllSales</code> to return the fixture below. If no SaleTab RTL test exists, mock the named imports SaleTab uses (at minimum <code>getAllSales</code>, <code>listAllSellers</code>, and <code>useSelectedBranch</code>/<code>BRANCH_ID</code> source) to no-op/empty so the component renders.</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the RTL tests</strong></label></div>
+<pre><code class="language-jsx">// tests/sales-cancelled-subtab-rtl.test.jsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+// Mock the data layer so SaleTab renders against a known fixture.
+// (Copy the mock shape from the existing SaleTab test if one exists.)
+const FIXTURE = [
+  { saleId: 'INV-A1', status: 'completed', payment: { status: 'paid' }, customerName: 'ลูกค้า เอ', total: 100, date: '2026-05-20' },
+  { saleId: 'INV-A2', payment: { status: 'unpaid' }, customerName: 'ลูกค้า บี', total: 200, date: '2026-05-20' },
+  { saleId: 'INV-C1', status: 'cancelled', payment: { status: 'paid' }, customerName: 'ลูกค้า ซี', total: 300, date: '2026-05-19' },
+  { saleId: 'INV-C2', status: 'cancelled', payment: { status: 'paid' }, customerName: 'ลูกค้า ดี', total: 400, date: '2026-05-19' },
+];
+
+vi.mock('../src/lib/scopedDataLayer.js', () =&gt; ({
+  getAllSales: vi.fn(async () =&gt; FIXTURE),
+  listAllSellers: vi.fn(async () =&gt; []),
+  // add any other named imports SaleTab pulls from scopedDataLayer as no-ops
+}));
+// If SaleTab reads branch via BranchContext, mock useSelectedBranch to a fixed id.
+vi.mock('../src/lib/BranchContext.jsx', async (orig) =&gt; {
+  const actual = await orig();
+  return { ...actual, useSelectedBranch: () =&gt; ({ branchId: 'BR-TEST' }) };
+});
+
+import SaleTab from '../src/components/backend/SaleTab.jsx';
+
+const renderTab = () =&gt; render(&lt;SaleTab clinicSettings={{}} theme="dark" /&gt;);
+
+describe('SaleTab cancelled sub-tab — RTL', () =&gt; {
+  beforeEach(() =&gt; vi.clearAllMocks());
+
+  it('R1 defaults to การขาย showing only non-cancelled rows', async () =&gt; {
+    renderTab();
+    await waitFor(() =&gt; expect(screen.getByText('INV-A1')).toBeInTheDocument());
+    expect(screen.getByText('INV-A2')).toBeInTheDocument();
+    expect(screen.queryByText('INV-C1')).not.toBeInTheDocument();
+    expect(screen.queryByText('INV-C2')).not.toBeInTheDocument();
+  });
+
+  it('R2 clicking ยกเลิกแล้ว shows only cancelled rows', async () =&gt; {
+    renderTab();
+    await waitFor(() =&gt; expect(screen.getByText('INV-A1')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('saletab-subtab-cancelled'));
+    await waitFor(() =&gt; expect(screen.getByText('INV-C1')).toBeInTheDocument());
+    expect(screen.getByText('INV-C2')).toBeInTheDocument();
+    expect(screen.queryByText('INV-A1')).not.toBeInTheDocument();
+    expect(screen.queryByText('INV-A2')).not.toBeInTheDocument();
+  });
+
+  it('R3 status dropdown is present on active tab, absent on cancelled tab', async () =&gt; {
+    renderTab();
+    await waitFor(() =&gt; expect(screen.getByText('INV-A1')).toBeInTheDocument());
+    // active tab: the ทุกสถานะ option exists
+    expect(screen.getByRole('option', { name: 'ทุกสถานะ' })).toBeInTheDocument();
+    // and there is NO ยกเลิก option (cancelled removed from dropdown)
+    expect(screen.queryByRole('option', { name: 'ยกเลิก' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('saletab-subtab-cancelled'));
+    await waitFor(() =&gt; expect(screen.queryByRole('option', { name: 'ทุกสถานะ' })).not.toBeInTheDocument());
+  });
+
+  it('R4 search filters within the active sub-tab only', async () =&gt; {
+    renderTab();
+    await waitFor(() =&gt; expect(screen.getByText('INV-A1')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText(/ค้นหาใบเสร็จ/), { target: { value: 'INV-A2' } });
+    await waitFor(() =&gt; expect(screen.queryByText('INV-A1')).not.toBeInTheDocument());
+    expect(screen.getByText('INV-A2')).toBeInTheDocument();
+  });
+
+  it('R5 cancelled empty state shows when no cancelled sales', async () =&gt; {
+    const mod = await import('../src/lib/scopedDataLayer.js');
+    mod.getAllSales.mockResolvedValueOnce([FIXTURE[0], FIXTURE[1]]); // active only
+    renderTab();
+    await waitFor(() =&gt; expect(screen.getByText('INV-A1')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('saletab-subtab-cancelled'));
+    await waitFor(() =&gt; expect(screen.getByText('ยังไม่มีรายการที่ยกเลิก')).toBeInTheDocument());
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run the RTL tests</strong></label></div>
+  <p>Run: <code>npx vitest run tests/sales-cancelled-subtab-rtl.test.jsx</code> — Expected: PASS R1-R5. If a mock import is missing (component throws on render), add the missing named export to the <code>vi.mock</code> factory and re-run. (Per Rule Q, these RTL/mock tests are code-shape coverage only — real verification is Task 5.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/sales-cancelled-subtab-rtl.test.jsx
+git commit -m "test(sales-subtab): RTL pill toggle + dropdown conditional + empty state"</code></pre>
+</div>
+
+<!-- ============ TASK 4 ============ -->
+<div class="task">
+  <h3>Task 4: Rule I flow-simulate + source-grep regression locks</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/sales-cancelled-subtab-flow-simulate.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write the flow-simulate + source-grep test</strong></label></div>
+<pre><code class="language-javascript">// tests/sales-cancelled-subtab-flow-simulate.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { filterSalesBySubTab } from '../src/lib/saleSubTabFilter.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SALETAB = readFileSync(join(__dirname, '../src/components/backend/SaleTab.jsx'), 'utf8');
+
+describe('F1 flow — load → switch tab → cancel → migrate', () => {
+  it('F1.1 a cancelled sale migrates from active list to cancelled list', () => {
+    // mirrors the real cancel flow: a sale's status flips to 'cancelled'
+    let sales = [
+      { saleId: 'INV-1', status: 'completed' },
+      { saleId: 'INV-2', status: 'completed' },
+    ];
+    expect(filterSalesBySubTab(sales, 'active').map(s => s.saleId)).toEqual(['INV-1', 'INV-2']);
+    expect(filterSalesBySubTab(sales, 'cancelled')).toEqual([]);
+
+    // cancel INV-1 (reload returns it with status cancelled)
+    sales = [
+      { saleId: 'INV-1', status: 'cancelled' },
+      { saleId: 'INV-2', status: 'completed' },
+    ];
+    expect(filterSalesBySubTab(sales, 'active').map(s => s.saleId)).toEqual(['INV-2']);
+    expect(filterSalesBySubTab(sales, 'cancelled').map(s => s.saleId)).toEqual(['INV-1']);
+  });
+
+  it('F1.2 count line = selected sub-tab length (no double-count)', () => {
+    const sales = [
+      { saleId: 'A', status: 'completed' }, { saleId: 'B', status: 'cancelled' },
+      { saleId: 'C', status: 'cancelled' },
+    ];
+    expect(filterSalesBySubTab(sales, 'active').length).toBe(1);
+    expect(filterSalesBySubTab(sales, 'cancelled').length).toBe(2);
+  });
+});
+
+describe('F2 source-grep regression locks on SaleTab.jsx', () => {
+  it('F2.1 imports + uses the single-source helper', () => {
+    expect(SALETAB).toMatch(/from '\.\.\/\.\.\/lib\/saleSubTabFilter\.js'/);
+    expect(SALETAB).toMatch(/filterSalesBySubTab\(sales, subTab\)/);
+  });
+  it('F2.2 defines the two sub-tabs', () => {
+    expect(SALETAB).toMatch(/SALE_SUB_TABS/);
+    expect(SALETAB).toMatch(/id: 'cancelled', label: 'ยกเลิกแล้ว'/);
+  });
+  it('F2.3 dropdown is gated on the active tab', () => {
+    expect(SALETAB).toMatch(/subTab === 'active' &&\s*\(/);
+  });
+  it('F2.4 dropdown drops the cancelled option', () => {
+    expect(SALETAB).toMatch(/PAYMENT_STATUSES\.filter\(s => s\.value !== 'cancelled'\)/);
+  });
+  it('F2.5 tab switch resets the payment filter', () => {
+    expect(SALETAB).toMatch(/handleSubTabChange/);
+    expect(SALETAB).toMatch(/setFilterStatus\(''\)/);
+  });
+  it('F2.6 cancelled empty state copy present', () => {
+    expect(SALETAB).toMatch(/ยังไม่มีรายการที่ยกเลิก/);
+  });
+  it('F2.7 anti-regression — no raw cancelled merge left in filtered useMemo deps', () => {
+    // subTab must be in the filtered useMemo deps so a switch re-computes
+    expect(SALETAB).toMatch(/\[sales, filterQuery, filterStatus, subTab\]/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run it</strong></label></div>
+  <p>Run: <code>npx vitest run tests/sales-cancelled-subtab-flow-simulate.test.js</code> — Expected: PASS F1.1-F2.7. If a source-grep assertion fails, the SaleTab edit drifted from the plan — reconcile the code to match (don't loosen the test unless the chosen code shape is deliberately different, in which case update the regex to the actual shape).</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/sales-cancelled-subtab-flow-simulate.test.js
+git commit -m "test(sales-subtab): Rule I flow-simulate + source-grep regression"</code></pre>
+</div>
+
+<!-- ============ TASK 5 ============ -->
+<div class="task">
+  <h3>Task 5: Verify — targeted tests, build, Rule Q L1 real-browser</h3>
+  <p><strong>Files:</strong> none (verification only)</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Targeted test run (Rule N)</strong></label></div>
+  <p>Run: <code>npx vitest run tests/sale-subtab-filter.test.js tests/sales-cancelled-subtab-rtl.test.jsx tests/sales-cancelled-subtab-flow-simulate.test.js</code> — Expected: all GREEN. Also grep for any other test that imports SaleTab and run it: <code>grep -rln "SaleTab" tests/</code> → run those files too (catch V21 lock-ins from the dropdown/empty-state edits).</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> — Expected: clean.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Rule Q V66 — real-browser L1 verification (read-only on prod)</strong></label></div>
+  <p>Start the dev server and drive the real UI. The dev server talks to PROD Firestore, so <strong>only click the sub-tab pills + observe</strong> — do NOT click cancel/edit/save/ขาย on real rows (feedback_no_real_action_in_preview_eval).</p>
+  <ul>
+    <li><code>preview_start</code> → navigate to <code>/?backend=1</code> → open the การขาย / ใบเสร็จ tab.</li>
+    <li><code>preview_snapshot</code> — confirm the default view ("การขาย") shows no "ยกเลิก" status rows; the status dropdown is present.</li>
+    <li><code>preview_click</code> the <code>[data-testid="saletab-subtab-cancelled"]</code> pill → <code>preview_snapshot</code> — confirm only "ยกเลิก" rows show, the status dropdown is gone, and the description reads "รายการที่ยกเลิกแล้ว…".</li>
+    <li><code>preview_click</code> back to <code>saletab-subtab-active</code> → confirm cancelled rows are gone again and the payment filter is reset to "ทุกสถานะ".</li>
+    <li><code>preview_screenshot</code> both tabs as evidence.</li>
+    <li><code>preview_console_logs</code> — confirm no new errors.</li>
+  </ul>
+  <p>If any check fails, read the source, fix, and re-run from Step 1.</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Full suite at batch end (Rule N) + report</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> — Expected: new tests GREEN; pre-existing 24 known failures (backend-menu-d / phase-26 / v36 / rp1-iife / Java-emulator) unchanged and unrelated (confirm via <code>git diff --name-only</code> that this change touched none of those files). Report the result + the preview screenshots. Do NOT claim "verified" without the Step 3 L1 evidence. Do NOT deploy without an explicit "deploy" from the user this turn.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Final commit (state docs)</strong></label></div>
+<pre><code class="language-bash">git add .agents/active.md SESSION_HANDOFF.md
+git commit -m "docs(sales-subtab): session state — cancelled sub-tab shipped (local, awaiting deploy)"</code></pre>
+</div>
+
+<h2>Self-Review (plan vs spec)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> 2 sub-tabs (Task 2 S2/S5) ✓ · cancelled moves out (Task 2 S4) ✓ · dropdown drops cancelled + hidden on cancelled tab (Task 2 S6) ✓ · search both tabs (Task 2 S4) ✓ · reset filter on switch (Task 2 S3) ✓ · no count badge / count line tracks tab (Task 2 S7) ✓ · default active (Task 2 S3) ✓ · cancelled rows keep view/print/edit, ✕ stays gated (untouched) ✓ · empty states (Task 2 S8) ✓ · branch-scope unchanged (no fetch change) ✓ · Rule Q L1 (Task 5 S3) ✓.</li>
+  <li><strong>Placeholder scan:</strong> the two "UNCHANGED" markers in Task 2 S8 refer to real existing blocks (onboarding + table) the engineer must leave intact — explicit instruction, not a TODO. No other placeholders.</li>
+  <li><strong>Type consistency:</strong> <code>filterSalesBySubTab(sales, subTab)</code>, <code>SALE_SUB_TABS</code>, <code>subTab</code>, <code>handleSubTabChange</code>, <code>saletab-subtab-{id}</code> test ids used consistently across Tasks 2-4. ✓</li>
+</ul>
+
+</body>
+</html>
