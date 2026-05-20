@@ -2463,10 +2463,37 @@ Two failure modes produced persistent "-" on the SaleTab list (user report
 **Sanctioned exceptions**: NONE — every `createBackendSale` write flows through
 the chokepoint. Cross-link: tests `tests/v108-sale-customer-name-chokepoint.test.js`.
 
+### AV101 — Tablet Chart Editor pairing boundaries (2026-05-20)
+
+The tablet chart editor pairs a PC (TFP chart modal) with a standby tablet via two
+ephemeral branch-scoped collections (`be_chart_tablet_presence`,
+`be_chart_edit_sessions`) + Storage transport. To keep it isolated + safe:
+
+1. **TFP-untouched**: `src/components/TreatmentFormPage.jsx` MUST NOT import any
+   chart-edit module (`useChartEditSession` / `chartEditSession` / `PcPairingModal` /
+   `TabletChartEditorPage` / `chartEditSessionCore`). The whole feature lives in new
+   files + `ChartSection.jsx`; one `patientLabel` prop is the only TFP-render touch.
+2. **Result funnels through `ChartSection.handleSave`**: the tablet drawing merges
+   into the TFP `charts[]` (`{dataUrl, fabricJson:null, templateId, source:'tablet'}`)
+   — the tablet path MUST NOT write `be_treatments` directly (works in TFP create
+   mode where no treatment doc exists yet).
+3. **Closed writer list**: the two pairing collections are written ONLY by
+   `src/lib/backendClient.js` (UI/hooks call its exported wrappers) + the
+   `api/cron/chart-edit-session-sweep.js` orphan reaper. No other
+   `setDoc`/`updateDoc`/`tx.set` on `be_chart_*` anywhere in `src/`.
+4. **Images via Storage, never the doc**: the session doc carries only URLs; PNGs
+   travel through `uploads/chart-edit-sessions/{sessionId}/` (1 MB doc-cap protection).
+   Presence stays `busy` while editing (heartbeat-driven, never an unmount-free flip).
+
+**Grep target (regression)**: TFP free of chart-edit imports; `ChartSection` has
+`onSaved:...handleSave` + no `be_treatments`; no `(setDoc|updateDoc|tx.set)(...be_chart_*`
+outside backendClient.js. **Sanctioned exceptions**: NONE. Cross-link: tests
+`tests/tablet-chart-av.test.js` + `tests/tablet-chart-editor-flow-simulate.jsx`.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 
