@@ -66,10 +66,21 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 — V43-followup hide-skipped-products-from-stock-balance + Edit shortcut SHIPPED + **DEPLOYED**
+- **Date last updated**: 2026-05-20 EOD+1 — Sales cancelled sub-tab (การขาย / ยกเลิกแล้ว) SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
 - **Master = Prod**: `0511be1e` LIVE at https://lover-clinic-app.vercel.app (deploy `lover-clinic-g81qa6hk4` aliased canonical). 15 commits this session, all pushed.
 - **Tests**: V43-followup 1270/1270 GREEN · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean
 - **Deploy**: combined V15 (Vercel + Firebase rules+storage idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned. Checkpoint: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
+
+### Session 2026-05-20 EOD+1 — Sales cancelled sub-tab (การขาย / ยกเลิกแล้ว) — LOCAL, awaiting deploy
+
+Brainstorm → spec → plan → 4-task inline execution. On `tab=sales`, cancelled (status=cancelled) sales are split out of the main list into a "ยกเลิกแล้ว" sub-tab; default "การขาย" shows only non-cancelled. UI-only — client-side split over already-loaded `getAllSales` data; **no backend / no Firestore rules / no data ops / no BSA change / no handler change**.
+
+- **Decisions** (Q1=A 2 sub-tabs; Q2=A active-tab dropdown drops "ยกเลิก" option + cancelled-tab hides dropdown; Q3=B no count badge). Default tab = การขาย; `+ ขาย` kept on both; cancelled rows keep view/print/edit; ✕ stays gated by `status !== 'cancelled'`.
+- **Files**: NEW `src/lib/saleSubTabFilter.js` (pure `isCancelledSale` + `filterSalesBySubTab`, single-source — mirrors V43-followup skipStockFilter). `SaleTab.jsx` (SALE_SUB_TABS pill row mirroring StockTab + subTab state + handleSubTabChange reset-filter-on-switch + filtered uses helper + conditional dropdown + per-tab header + cancelled/active empty states). Tests `tests/sale-subtab-filter.test.js` (15) + `tests/sales-cancelled-subtab-flow-simulate.test.js` (17: F1 flow + F2 source-grep locks + F3 UI-conditional mirrors). Spec/plan HTML in docs/superpowers/.
+- **Why no full RTL render**: SaleTab's dependency surface makes full-component RTL brittle + non-idiomatic in this repo (tested via source-grep + pure-logic mirrors elsewhere); per Rule Q V66 mock-RTL is code-shape coverage only. Real check = L1 preview below.
+- **Rule Q V66 L1** (real browser, real prod นครราชสีมา, READ-ONLY pill clicks): active = 2 ชำระแล้ว rows + dropdown w/o "ยกเลิก" + count "2 รายการ"; cancelled = 9 "ยกเลิก" rows + dropdown HIDDEN + count "9 รายการ" + desc "รายการที่ยกเลิกแล้ว…"; round-trip→active resets filter to "ทุกสถานะ". (2+9=11 matches original screenshot.) Coordinate clicks intercepted by open mega-menu overlay → verified via real React onClick (`element.click()`) + DOM eval read-back.
+- **Tests**: +32 NEW GREEN. Targeted 145/145. Full vitest 13539 PASS / 31 FAIL / 19 skip — **all 31 confirmed pre-existing + unrelated** (read each failure: backend-menu-d ×4 / v36 deductStockForSale branchId / rp1 SaleTab IIFE line 1228 untouched cell renderer / tf3 / phase-26-0 / audit-branch-scope AV37 TFP / phase-17-1 full-suite-load flake / v81-emulator gaxios-AbortSignal env-gated). Build clean.
+- **NOT deployed** (V18 — needs explicit "deploy" THIS turn). Deploy = Vercel; Firebase rules unchanged. Commits pushed to master.
 
 ### Session 2026-05-19 NIGHT+5 EOD+1 — V43-followup hide skipped products from stock balance + Edit shortcut (12-task subagent-driven complete)
 

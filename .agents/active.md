@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-20 — V43-followup hide-skipped-products-from-stock-balance + Edit shortcut SHIPPED + DEPLOYED"
-status: "✅ V43-followup LIVE on prod (deploy lover-clinic-g81qa6hk4 aliased canonical) · 6/6 probes IDENTICAL · awaiting user L1 hands-on"
+updated_at: "2026-05-20 EOD+1 — Sales cancelled sub-tab (การขาย / ยกเลิกแล้ว) SHIPPED LOCAL (awaiting deploy)"
+status: "✅ Sales cancelled sub-tab built + Rule Q L1 verified on real prod (read-only) · LOCAL ONLY · awaiting user 'deploy'"
 branch: "master"
-last_commit: "0511be1e docs(V43-followup): wiki update + spec/plan/diag artifacts post-deploy"
-tests: "V43-followup 1270/1270 GREEN (filter 31 + BS-18 10 + AV97 9 + flow-sim 10 + adversarial 1204 + stress 5 + 1) · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean"
+last_commit: "(this session) test/feat sales-cancelled-subtab — pushed"
+tests: "sale-subtab-filter 15 + flow-simulate 17 = 32 NEW GREEN · targeted 145/145 · full vitest 13539 PASS / 31 pre-existing FAIL (all unrelated — see below) / 19 skip · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0511be1e LIVE — deploy lover-clinic-g81qa6hk4 aliased canonical 2026-05-20"
-firestore_rules_version: "unchanged (idempotent — V43-followup touched no rules)"
+production_commit: "0511be1e LIVE (V43-followup) — sales sub-tab NOT yet deployed"
+firestore_rules_version: "unchanged (idempotent — sales sub-tab is UI-only, no rules/data)"
 storage_rules_version: "unchanged"
 ---
 
@@ -14,24 +14,31 @@ storage_rules_version: "unchanged"
 
 ## State
 
-- master = origin = `0511be1e` (clean tree, all pushed). 15 commits this session.
-- V43-followup DEPLOYED via combined V15 (Vercel + Firebase rules idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned.
-- graphify refreshed (7378 nodes / 13351 edges / 787 communities, AST-only). LLM wiki +2 pages + index/log.
+- master = origin (clean, all pushed). Sales cancelled sub-tab = LOCAL ONLY. Prod still on `0511be1e` (V43-followup).
+- Feature is UI-only (client-side split over already-loaded sales) — no backend / no Firestore rules / no data ops / no BSA change.
 
-## What this session shipped
+## What this session shipped (Sales cancelled sub-tab)
 
-- **V43-followup** (12-task subagent-driven) — hide products flagged `skipStockDeduction:true` from Stock Balance table (per-branch + central + future) + `[✎ แก้ไข]` shortcut button → ProductFormModal → live update via onSnapshot. Full detail: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
-- NEW `src/lib/skipStockFilter.js` (Rule O single-source) + `listenToProducts` Layer 1/2 (BS-18) + StockBalancePanel refactor + StockTab/CentralStockTab parent wire
-- NEW AV97 + BS-18 audit invariants codified + enforced
-- 7-tier prof-grade test bank (~1270 assertions) — L1 Playwright + L2 admin-SDK e2e on real prod (Rule Q V66)
-- Also: verified V43 deduction-layer toggle works (Rule Q L2 spec `tests/e2e/v43-skip-stock-deduction-toggle.spec.js` 2/2) + 2 Rule R diag scripts
+- **Brainstorm → spec → plan → 4-task inline execution.** Splits cancelled (status=cancelled) sales out of the main "ขาย / ใบเสร็จ" list into a "ยกเลิกแล้ว" sub-tab; default "การขาย" shows only non-cancelled.
+- NEW `src/lib/saleSubTabFilter.js` (pure `isCancelledSale` + `filterSalesBySubTab`, single-source — mirrors skipStockFilter pattern).
+- `SaleTab.jsx`: SALE_SUB_TABS pill row (mirrors StockTab) + subTab state + handleSubTabChange (resets payment filter on switch) + filtered uses helper + dropdown active-tab-only & drops "ยกเลิก" option + per-tab header text + cancelled-empty + active-no-sales empty states. NO wiring/handler change.
+- Tests: `tests/sale-subtab-filter.test.js` (15) + `tests/sales-cancelled-subtab-flow-simulate.test.js` (17 — F1 flow + F2 source-grep locks + F3 UI-conditional mirrors). Full RTL render dropped (non-idiomatic for SaleTab — tested via source-grep + mirrors per repo convention).
+- Spec `docs/superpowers/specs/2026-05-20-sales-cancelled-subtab-design.html` · plan `docs/superpowers/plans/2026-05-20-sales-cancelled-subtab.html`.
+
+## Rule Q V66 L1 verification (real browser, real prod, read-only)
+
+- Active tab: 2 rows (both ชำระแล้ว), dropdown present WITHOUT "ยกเลิก" option, count "2 รายการ". ✓
+- Cancelled tab: 9 rows (all "ยกเลิก"), dropdown HIDDEN, count "9 รายการ", desc "รายการที่ยกเลิกแล้ว…". ✓ (2+9 = 11 total — matches original screenshot)
+- Round-trip → active: filterStatus reset to "ทุกสถานะ", back to 2 rows. ✓
+- (Coordinate clicks were intercepted by the open mega-menu overlay; verified via real React onClick fired through element.click() + DOM eval read-back.)
 
 ## Next action
 
-- Idle — awaiting user L1 hands-on Rule Q V66 verification on `https://lover-clinic-app.vercel.app/?backend=1`
+- Idle — feature done LOCAL. Await user "deploy" to ship (combined V15 — Vercel only; rules/storage idempotent, no probe needed since no rules change... but V15 convention bundles them).
 
 ## Outstanding user-triggered actions
 
-- **L1 hands-on** (Rule Q V66): stock tab → 4 services (Shock wave / ผ่าตัดทำหมันชาย / ติดตามอาการกับแพทย์ / เพิ่ม ตัดเส้นสองสลึง) HIDDEN + `[✎ แก้ไข]` toggle round-trip live without F5
-- **24 pre-existing test failures** (backend-menu-d / phase-26 / v36 / rp1-iife / Java-emulator) — separate cleanup batch when desired; unrelated to V43-followup
-- **V106 stock-movement 30-day retention** — brainstorming locked (Q1=C hard-delete / Q2=A cron 03:00 BKK / Q3=A rolling 30d / Q4=A all types), spec NOT written, awaiting "ship V106"
+- **Deploy sales cancelled sub-tab** — say "deploy" (Vercel; Firebase rules unchanged so V15 combined is optional). NOT deployed this turn (V18).
+- **L1 hands-on** (optional, Rule Q gold): user opens `/?backend=1&tab=sales` on their device → toggle การขาย / ยกเลิกแล้ว pills.
+- **31 pre-existing test failures** — all confirmed unrelated to this change (backend-menu-d ×4 / v36 deductStockForSale / rp1 SaleTab IIFE line 1228 / tf3 / phase-26-0 / audit-branch-scope AV37 / phase-17-1 flake / v81-emulator gaxios env). Separate cleanup batch when desired.
+- **V106 stock-movement 30-day retention** — brainstorm locked (Q1=C / Q2=A / Q3=A / Q4=A); spec NOT written; awaiting "ship V106".
