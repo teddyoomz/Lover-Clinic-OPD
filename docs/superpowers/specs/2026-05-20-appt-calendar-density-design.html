@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Calendar Density &amp; Mobile — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1000px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    .mockup-grid { display: flex; gap: 1.2em; flex-wrap: wrap; align-items: flex-start; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Calendar — Density &amp; Mobile Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 (EOD+3) · <strong>Status:</strong> Approved by user (A+B+C + Q1–Q3 locked) · <strong>Research:</strong> docs/superpowers/research/2026-05-20-appt-calendar-density-research.html · <strong>Plan:</strong> docs/superpowers/plans/2026-05-20-appt-calendar-density.html (next, via writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The appointment time-grid (<code>AppointmentCalendarView.jsx</code>) hard-couples block height to duration: <code>height = span × SLOT_H − 4</code> (<code>SLOT_H = 22px</code>/15-min). A 15-min appointment = <strong>18px tall</strong> → the customer-name line clips + overlaps the grid line; dense back-to-back short appointments become an illegible column (user screenshot). The grid already scales content by span (🎯 service@30min, 👨‍⚕️ doctor@45min, +assistant@60min) so span≥2 reads fine — <strong>span=1 is the failure</strong>. <code>SLOT_H</code> was already bumped 18→22 once for the same complaint, so bumping again is a symptom fix (architecture signal). On mobile the grid also horizontally scrolls (columns <code>min-w-160px</code> in <code>overflow-x-auto</code>) → 2D-scroll + tiny blocks.</p>
+<p><strong>Goal:</strong> let users see full details at ANY density, make the grid itself legible, and be mobile-friendly — by adding 3 layers (A popover + B adaptive cell + C mobile agenda) WITHOUT re-tuning the broken pixel-per-minute dimension.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup-label" style="margin-top:1em;">A — tap-to-detail popover (read-only quick view + แก้ไข) · DARK</div>
+<div class="mockup" style="background:#0a0a0a;">
+  <div style="background:#141414; border:1px solid #38bdf8; border-radius:10px; padding:0.8em 0.95em; width:250px; font-family:sans-serif; box-shadow:0 8px 24px rgba(0,0,0,.6);">
+    <div style="color:#fff; font-weight:700; font-size:15px;">นาย วีรวัศ รจิราเกียรติ</div>
+    <div style="color:#9ca3af; font-size:13px; margin-top:3px;">HN-26-0042 · 17:00–17:15 · ห้องแพทย์</div>
+    <div style="font-size:13px; margin-top:3px;">📞 <span style="color:#f87171; font-weight:700;">081-234-5678</span> <span style="color:#6b7280;">(แตะโทร)</span></div>
+    <div style="font-size:13px; margin-top:3px;">🎯 <span style="color:#6ee7b7;">Shock wave</span></div>
+    <div style="font-size:13px; margin-top:3px; color:#cbd5e1;">👨‍⚕️ หมอมายด์ · + ยาหยี</div>
+    <div style="margin-top:6px;"><span style="background:rgba(52,211,153,.2); color:#6ee7b7; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px;">● ยืนยันแล้ว</span></div>
+    <div style="margin-top:8px; display:flex; gap:6px;"><span style="background:#dc2626; color:#fff; font-size:12px; font-weight:700; padding:4px 12px; border-radius:6px;">✎ แก้ไข</span><span style="background:#1f1f1f; color:#9ca3af; font-size:12px; padding:4px 12px; border-radius:6px;">ปิด</span></div>
+  </div>
+</div>
+
+<div class="mockup-grid">
+  <div class="mockup" style="background:#0a0a0a; flex:0 0 230px;">
+    <div class="mockup-label">B — adaptive cell + "+N" rollup · DARK</div>
+    <div style="background:#050505; border:1px solid #222; border-radius:6px; width:190px; font-family:sans-serif;">
+      <div style="color:#38bdf8; font-size:11px; font-weight:700; text-align:center; padding:5px; border-bottom:1px solid #222;">ห้องแพทย์/ผ่าตัด</div>
+      <div style="display:flex; border-top:1px solid #1c1c1c;"><span style="width:42px;font-size:10px;color:#6b7280;font-family:monospace;padding:3px;">17:00</span><span style="flex:1;padding:2px;"><span style="display:flex;align-items:center;gap:5px;height:18px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.5);color:#7dd3fc;border-radius:5px;padding:0 6px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#38bdf8;"></span>วีรวัศ ร.<span style="width:3px;align-self:stretch;background:#34d399;border-radius:2px;margin:2px 0;"></span></span></span></div>
+      <div style="display:flex; border-top:1px solid #1c1c1c;"><span style="width:42px;font-size:10px;color:#6b7280;font-family:monospace;padding:3px;">17:15</span><span style="flex:1;padding:2px;"><span style="display:flex;align-items:center;gap:5px;height:18px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.5);color:#7dd3fc;border-radius:5px;padding:0 6px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#38bdf8;"></span>ณภดล ธ.<span style="width:3px;align-self:stretch;background:#38bdf8;border-radius:2px;margin:2px 0;"></span></span></span></div>
+      <div style="display:flex; border-top:1px solid #1c1c1c;"><span style="width:42px;font-size:10px;color:#6b7280;font-family:monospace;padding:3px;">17:30</span><span style="flex:1;padding:2px;"><span style="display:block;font-size:10px;color:#9ca3af;text-align:center;padding:2px;border:1px dashed #333;border-radius:5px;">+3 รายการ (แตะดู)</span></span></div>
+    </div>
+  </div>
+  <div class="mockup" style="flex:0 0 230px;">
+    <div class="mockup-label">B — adaptive cell · LIGHT</div>
+    <div style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; width:190px; font-family:sans-serif;">
+      <div style="color:#0369a1; font-size:11px; font-weight:700; text-align:center; padding:5px; border-bottom:1px solid #e2e8f0;">ห้องแพทย์/ผ่าตัด</div>
+      <div style="display:flex; border-top:1px solid #eef2f6;"><span style="width:42px;font-size:10px;color:#94a3b8;font-family:monospace;padding:3px;">17:00</span><span style="flex:1;padding:2px;"><span style="display:flex;align-items:center;gap:5px;height:18px;background:#eff6ff;border:1px solid #bae6fd;color:#0369a1;border-radius:5px;padding:0 6px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#0ea5e9;"></span>วีรวัศ ร.<span style="width:3px;align-self:stretch;background:#10b981;border-radius:2px;margin:2px 0;"></span></span></span></div>
+      <div style="display:flex; border-top:1px solid #eef2f6;"><span style="width:42px;font-size:10px;color:#94a3b8;font-family:monospace;padding:3px;">17:15</span><span style="flex:1;padding:2px;"><span style="display:flex;align-items:center;gap:5px;height:18px;background:#eff6ff;border:1px solid #bae6fd;color:#0369a1;border-radius:5px;padding:0 6px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#0ea5e9;"></span>ณภดล ธ.<span style="width:3px;align-self:stretch;background:#0ea5e9;border-radius:2px;margin:2px 0;"></span></span></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup-grid">
+  <div class="mockup" style="background:#0a0a0a; flex:0 0 250px;">
+    <div class="mockup-label">C — mobile Agenda (chronological + room tag) · DARK</div>
+    <div style="width:220px; background:#050505; border:1px solid #333; border-radius:16px; padding:10px; font-family:sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="color:#fff;font-weight:800;font-size:13px;">นัดวันนี้ · 13 คน</span><span style="font-size:10px;color:#9ca3af;border:1px solid #333;border-radius:6px;padding:2px 6px;">⊞ ตาราง</span></div>
+      <div style="background:#141414; border:1px solid #333; border-left:3px solid #38bdf8; border-radius:9px; padding:8px 10px; margin-bottom:7px;">
+        <div style="font-family:monospace;font-size:11px;color:#9ca3af;">17:00–17:15 <span style="background:#1f2937;color:#7dd3fc;border-radius:4px;padding:1px 5px;font-size:9px;">ห้องแพทย์</span></div>
+        <div style="color:#fff;font-weight:700;font-size:13px;">นาย วีรวัศ รจิราเกียรติ</div>
+        <div style="color:#6ee7b7;font-size:12px;">🎯 Shock wave</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#f87171;">081-…</span> · ● ยืนยัน</div>
+      </div>
+      <div style="background:#141414; border:1px solid #333; border-left:3px solid #fbbf24; border-radius:9px; padding:8px 10px;">
+        <div style="font-family:monospace;font-size:11px;color:#9ca3af;">18:00–18:15 <span style="background:#1f2937;color:#7dd3fc;border-radius:4px;padding:1px 5px;font-size:9px;">ห้องแพทย์</span></div>
+        <div style="color:#fff;font-weight:700;font-size:13px;">นาย นรพล บุญประจวบโชค</div>
+        <div style="color:#6ee7b7;font-size:12px;">🎯 ขลิบเลเซอร์</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#f87171;">089-…</span> · ● รอยืนยัน</div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup" style="flex:0 0 250px;">
+    <div class="mockup-label">C — mobile Agenda · LIGHT</div>
+    <div style="width:220px; background:#f0f4f8; border:1px solid #cbd5e1; border-radius:16px; padding:10px; font-family:sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="color:#0f172a;font-weight:800;font-size:13px;">นัดวันนี้ · 13 คน</span><span style="font-size:10px;color:#475569;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;">⊞ ตาราง</span></div>
+      <div style="background:#fff; border:1px solid #e2e8f0; border-left:3px solid #0ea5e9; border-radius:9px; padding:8px 10px;">
+        <div style="font-family:monospace;font-size:11px;color:#64748b;">17:00–17:15 <span style="background:#e0f2fe;color:#0369a1;border-radius:4px;padding:1px 5px;font-size:9px;">ห้องแพทย์</span></div>
+        <div style="color:#0f172a;font-weight:700;font-size:13px;">นาย วีรวัศ รจิราเกียรติ</div>
+        <div style="color:#047857;font-size:12px;">🎯 Shock wave</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px;">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#dc2626;">081-…</span> · ● ยืนยัน</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>Flow A — interaction (tap → popover → edit)</h3>
+<div class="mockup">
+  <div class="mockup-label">click/tap any block (incl 15-min) → read-only popover → แก้ไข opens existing modal</div>
+  <svg viewBox="0 0 900 110" style="width:100%;height:auto;font-family:sans-serif;">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="11" text-anchor="middle">
+      <rect x="6" y="36" width="150" height="44" rx="6" fill="#fff" stroke="#999"/><text x="81" y="54">tap block</text><text x="81" y="68">(any height)</text>
+      <rect x="190" y="30" width="180" height="56" rx="6" fill="#eff6ff" stroke="#3b82f6"/><text x="280" y="48">AppointmentDetailPopover</text><text x="280" y="62">(read-only: name/HN/📞/</text><text x="280" y="74" font-size="9">service/doctor/assistant/status)</text>
+      <rect x="404" y="22" width="150" height="32" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="479" y="42">✎ แก้ไข → edit modal</text>
+      <rect x="404" y="64" width="150" height="32" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="479" y="84">ปิด / นอกพื้นที่ → close</text>
+      <rect x="590" y="36" width="150" height="44" rx="6" fill="#f0fdf4" stroke="#10b981"/><text x="665" y="54">📞 tel: link</text><text x="665" y="68">(tap-to-call)</text>
+      <line x1="156" y1="58" x2="188" y2="58" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="370" y1="50" x2="402" y2="40" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="370" y1="66" x2="402" y2="78" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="370" y1="58" x2="588" y2="58" stroke="#10b981" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+    </g>
+  </svg>
+</div>
+
+<h3>Flow B — responsive switch + adaptive cell render</h3>
+<div class="mockup">
+  <div class="mockup-label">viewport gate (auto below lg + toggle) · per-block span → render tier</div>
+  <svg viewBox="0 0 900 170" style="width:100%;height:auto;font-family:sans-serif;">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="10.5" text-anchor="middle">
+      <text x="10" y="16" text-anchor="start" font-weight="bold" font-size="11">Responsive (Q2=A)</text>
+      <rect x="6" y="26" width="150" height="40" rx="6" fill="#fff" stroke="#999"/><text x="81" y="44">viewMode + viewport</text><text x="81" y="58" font-size="9">(useMediaQuery lg)</text>
+      <rect x="190" y="20" width="150" height="24" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="265" y="36">&lt; lg → Agenda (default)</text>
+      <rect x="190" y="52" width="150" height="24" rx="6" fill="#eff6ff" stroke="#3b82f6"/><text x="265" y="68">≥ lg → Grid</text>
+      <text x="372" y="46" text-anchor="start" font-size="9" fill="#555">toggle ⊞/☰ overrides either way</text>
+      <line x1="156" y1="40" x2="188" y2="32" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="156" y1="48" x2="188" y2="62" stroke="#dc2626" marker-end="url(#ar2)"/>
+
+      <text x="10" y="104" text-anchor="start" font-weight="bold" font-size="11">Adaptive cell (B) — per block</text>
+      <rect x="6" y="114" width="120" height="40" rx="6" fill="#fff" stroke="#999"/><text x="66" y="132">span = endIdx</text><text x="66" y="146" font-size="9">− startIdx</text>
+      <rect x="160" y="110" width="150" height="20" rx="5" fill="#f0fdf4" stroke="#10b981"/><text x="235" y="124">span≥2: existing tiers</text>
+      <rect x="160" y="134" width="150" height="20" rx="5" fill="#fffbeb" stroke="#f59e0b"/><text x="235" y="148">span=1: single clean line</text>
+      <rect x="330" y="122" width="170" height="24" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="415" y="138">overlap (same room+time) → "+N" rollup → tap → list</text>
+      <line x1="126" y1="134" x2="158" y2="124" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="126" y1="136" x2="158" y2="144" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="310" y1="144" x2="328" y2="136" stroke="#dc2626" marker-end="url(#ar2)"/>
+    </g>
+  </svg>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>AppointmentDetailPopover.jsx</code> (NEW)</td><td>Read-only quick-view: customerName, HN, 📞 <code>tel:</code> phone, 🎯 service/purpose, 👨‍⚕️ doctor, +assistant(s), time range + room, status chip, LINE badge; "✎ แก้ไข" → calls existing <code>openEdit(appt)</code>; "ปิด"/backdrop/ESC → close. Anchored popover on desktop, bottom-sheet on mobile. Theme via CSS vars; name/HN never red.</td></tr>
+  <tr><td><code>AppointmentCalendarView.jsx</code> (modify)</td><td>Block <code>onClick</code> → open popover (replaces direct <code>openEdit</code>). <strong>span=1</strong> renders a clean single line (● status dot + truncated name + service color bar) instead of clipped multi-line; span≥2 keeps existing tiers. Overlap (same room + intersecting time) → "+N" rollup chip → tap opens a popover list (extend existing <code>+1</code> indicator). Min hit-area so 18px blocks are tappable.</td></tr>
+  <tr><td><code>AppointmentAgendaView.jsx</code> (NEW)</td><td>Chronological list of full-detail cards (time range + room tag + name + HN + 🎯 service + 👨‍⚕️ doctor + 📞 tap-to-call + status); card click → same popover/edit. Reuses status colors + doctorMap + AppointmentLineBadge.</td></tr>
+  <tr><td>Calendar tab host (modify — in <code>AppointmentCalendarView</code> or its parent)</td><td>Responsive switch: <code>&lt; lg</code> → AgendaView (default), <code>≥ lg</code> → Grid; a ⊞/☰ toggle overrides; remembered in state (optional localStorage). Shared selected-date + data feed both views.</td></tr>
+</table>
+<p><strong>Reuse (no duplication):</strong> status color tokens + room list + <code>doctorMap</code> + <code>resolveAssistantNames</code> + <code>AppointmentLineBadge</code> + the existing edit modal (<code>AppointmentFormModal</code>). Popover + agenda card share one detail-presentation helper (Rule of 3).</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> click/tap any block → read-only popover (full details + 📞 tap-to-call) with "✎ แก้ไข" → existing edit modal. (Popover-first, not edit-first.)</li>
+  <li><strong>Q2 = A:</strong> below <code>lg</code> → auto-switch to Agenda list; ⊞ toggle to return to grid. (≥ lg defaults to grid.)</li>
+  <li><strong>Q3 = A:</strong> Agenda is chronological (by time) with the room shown as a tag in each card.</li>
+  <li><strong>Architecture:</strong> add 3 layers; do NOT bump <code>SLOT_H</code> again (symptom). Names/HN never red (Thai-culture); phone uses call-accent.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Clicking/tapping ANY block (including a 15-min block) opens a popover with full details + a working 📞 <code>tel:</code> link + "แก้ไข" that opens the existing edit modal.</li>
+  <li>15-min (span=1) blocks render one clean legible line (status dot + name + service color) with NO clip/overlap of the grid line.</li>
+  <li>Overlapping appointments (same room, intersecting time) collapse to a "+N" rollup; tapping it lists them.</li>
+  <li>Below <code>lg</code>, the view defaults to a chronological Agenda list (room-tagged, full details); a toggle switches to the grid and back. ≥ lg defaults to grid.</li>
+  <li>Both dark + light themes render cleanly; customer name/HN are never red.</li>
+  <li>Verified per Rule Q (L1 real browser OR L2 real client SDK) before "done".</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Popover positioning:</strong> near viewport edges must flip / use a portal (avoid clipping inside the <code>overflow-x-auto</code> grid).</li>
+  <li><strong>Overlap detection:</strong> "+N" needs correct same-room + time-range intersection logic; build on the existing duplicate/+1 indicator rather than a parallel path.</li>
+  <li><strong>View/state sync:</strong> Agenda + Grid share selected-date + data; the toggle + auto-switch must not fight each other (explicit user toggle wins until date/route change).</li>
+  <li><strong>Don't regress sparse days:</strong> the grid must still look right when appointments are few (span≥2 tiers unchanged).</li>
+  <li><strong>Verification:</strong> headless preview can't fully show theme/tap nuance — final L1 is the user on a real screen (per standing "user tests UI" preference).</li>
+</ul>
+
+</body>
+</html>

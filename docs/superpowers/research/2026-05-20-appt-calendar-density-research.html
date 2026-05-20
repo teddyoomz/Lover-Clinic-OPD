@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ตารางนัดหมาย — Density / Mobile Research</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background:#0a0a0a; color:#e5e7eb; max-width:1100px; margin:1.5em auto; padding:1em; line-height:1.6; }
+  h1 { color:#fff; border-bottom:2px solid #dc2626; padding-bottom:.3em; }
+  h2 { color:#fff; border-bottom:1px solid #333; padding-bottom:.2em; margin-top:2em; }
+  .muted { color:#6b7280; }
+  .grid { display:flex; gap:1.4em; flex-wrap:wrap; align-items:flex-start; }
+  .panel { background:#0f0f0f; border:1px solid #333; border-radius:10px; padding:1em; flex:1 1 300px; }
+  .panel h3 { margin:.1em 0 .2em; color:#fff; font-size:1em; }
+  .cap { font-size:.8em; color:#9ca3af; margin-bottom:.8em; }
+  .col { background:#050505; border:1px solid #222; border-radius:6px; width:170px; }
+  .colhead { color:#38bdf8; font-size:.72em; font-weight:700; text-align:center; padding:.4em; border-bottom:1px solid #222; }
+  .slot { display:flex; border-top:1px solid #1c1c1c; }
+  .tlabel { width:42px; font-size:.6em; color:#6b7280; padding:.15em .2em; font-family:monospace; }
+  .cell { flex:1; position:relative; }
+  /* current = tiny 18px blocks, clipped */
+  .blk-tiny { height:18px; margin:1px 2px; border-radius:5px; padding:0 6px; font-size:.72em; font-weight:700; white-space:nowrap; overflow:hidden; line-height:20px; }
+  .row18 { height:22px; }
+  .b-sky { background:rgba(56,189,248,.12); border:1px solid rgba(56,189,248,.5); color:#7dd3fc; }
+  .b-amber { background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.5); color:#fcd34d; }
+  .b-em { background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.5); color:#6ee7b7; }
+  .b-red { background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.5); color:#fca5a5; }
+  /* option B clean single-line */
+  .blk-clean { display:flex; align-items:center; gap:5px; height:18px; margin:1px 2px; border-radius:5px; padding:0 6px; font-size:.72em; font-weight:600; white-space:nowrap; overflow:hidden; line-height:18px; }
+  .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .bar { width:3px; align-self:stretch; border-radius:2px; margin:2px 0; }
+  .rollup { font-size:.66em; color:#9ca3af; text-align:center; padding:2px; border:1px dashed #333; border-radius:5px; margin:1px 2px; }
+  /* popover */
+  .pop { background:#141414; border:1px solid #38bdf8; border-radius:10px; padding:.8em .9em; width:230px; box-shadow:0 8px 24px rgba(0,0,0,.6); }
+  .pop .nm { color:#fff; font-weight:700; font-size:.95em; }
+  .pop .ln { font-size:.78em; color:#cbd5e1; margin-top:.25em; }
+  .pop .tel { color:#f87171; font-weight:700; }
+  .chip { display:inline-block; font-size:.66em; font-weight:700; padding:.1em .5em; border-radius:999px; }
+  .editbtn { margin-top:.6em; background:#dc2626; color:#fff; border:0; border-radius:6px; padding:.3em .8em; font-size:.78em; font-weight:700; }
+  /* mobile agenda */
+  .phone { width:300px; background:#050505; border:1px solid #333; border-radius:18px; padding:.8em; }
+  .acard { background:#141414; border:1px solid #333; border-left:3px solid #38bdf8; border-radius:9px; padding:.6em .7em; margin-bottom:.55em; }
+  .acard .t { font-family:monospace; font-size:.72em; color:#9ca3af; }
+  .acard .nm { color:#fff; font-weight:700; font-size:.9em; }
+  .acard .sv { color:#6ee7b7; font-size:.8em; }
+  .acard .mt { font-size:.72em; color:#9ca3af; margin-top:.15em; }
+  .rec { background:#1a1207; border:1px solid #a16207; border-radius:8px; padding:1em 1.2em; }
+  code { background:#1c1c1c; padding:.1em .4em; border-radius:4px; color:#fca5a5; font-size:.88em; }
+  table { border-collapse:collapse; width:100%; margin:1em 0; font-size:.9em; }
+  th,td { border:1px solid #333; padding:.45em .7em; text-align:left; vertical-align:top; }
+  th { background:#161616; color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>ตารางนัดหมาย — Density &amp; Mobile Research (2026-05-20)</h1>
+<p class="muted">Root cause + 3 candidate approaches. NOT a final design — direction-finding only (brainstorming + spec come after the user picks).</p>
+
+<h2>Root cause</h2>
+<p>The time-grid hard-couples block height to duration: <code>height = span × SLOT_H − 4</code> (<code>SLOT_H = 22px</code> per 15-min slot, <code>AppointmentCalendarView.jsx:119,927</code>).
+A <strong>15-min appointment = 18px tall</strong> — physically too short for the customer-name line (text-sm), so it clips + overlaps the grid line. Dense back-to-back 15-min appointments → a column of illegible 18px blocks (the screenshot).</p>
+<ul>
+  <li>The grid <em>already</em> scales content by height: 🎯 purpose@span≥2 (30min), 👨‍⚕️ doctor@span≥3 (45min), + assistant@span≥4 (60min). So span≥2 reads fine — <strong>span=1 (15-min) is the failure</strong>.</li>
+  <li><strong>Architecture signal:</strong> <code>SLOT_H</code> was already bumped 18→22 once (Phase 21.0-quinquies) for the <em>same</em> "ลายตา/ดูยาก" complaint. Bumping again is symptom-fix #2 → don't tune the broken dimension; add layers.</li>
+  <li><strong>Mobile:</strong> columns are <code>min-w-160px</code> each (<code>_colMinClass</code>) inside <code>overflow-x-auto</code> → time-col + 3 rooms ≈ 480px+ → horizontal scroll on a 375px phone, on top of 56 rows × 22px = 1232px vertical scroll + the 18px blocks. 2D-scroll + illegible.</li>
+</ul>
+
+<h2>The problem, visually</h2>
+<div class="grid">
+  <div class="panel" style="flex:0 0 200px;">
+    <h3>ปัจจุบัน (พัง)</h3>
+    <div class="cap">15-min blocks = 18px → clipped + overlap</div>
+    <div class="col">
+      <div class="colhead">ห้องแพทย์/ผ่าตัด</div>
+      <div class="slot"><div class="tlabel">17:00</div><div class="cell"><div class="blk-tiny b-sky">นาย วีรวัศ รจิรา…</div></div></div>
+      <div class="slot"><div class="tlabel">17:15</div><div class="cell"><div class="blk-tiny b-sky">นาย ณภดล ธปท…</div></div></div>
+      <div class="slot"><div class="tlabel">17:30</div><div class="cell"><div class="blk-tiny b-sky">นาย ณรงค์ศัก…</div></div></div>
+      <div class="slot"><div class="tlabel">17:45</div><div class="cell"><div class="blk-tiny b-sky">พาณิภัค พบโ…</div></div></div>
+      <div class="slot"><div class="tlabel">18:00</div><div class="cell"><div class="blk-tiny b-amber">นาย นรพล บุญ…</div></div></div>
+    </div>
+    <div class="cap" style="margin-top:.5em;">ชื่ออ่านไม่ออก · ไม่เห็นบริการ/หมอ · แตะยากบนมือถือ</div>
+  </div>
+</div>
+
+<h2>Candidate approaches</h2>
+<div class="grid">
+
+  <div class="panel">
+    <h3>A — แตะ/คลิกดูรายละเอียด (popover) ★ core</h3>
+    <div class="cap">block ใดก็แตะได้ → การ์ดสรุปอ่านง่าย (read-only) + ปุ่มแก้ไข. ได้ผลทุกความถี่ + มือถือ (เพิ่ม min hit-area).</div>
+    <div class="pop">
+      <div class="nm">นาย วีรวัศ รจิราเกียรติ</div>
+      <div class="ln muted">HN-26-0042 · 17:00–17:15</div>
+      <div class="ln">📞 <span class="tel">081-234-5678</span> <span class="muted">(แตะโทร)</span></div>
+      <div class="ln">🎯 <span style="color:#6ee7b7;">Shock wave</span></div>
+      <div class="ln">👨‍⚕️ หมอมายด์ · + ยาหยี</div>
+      <div class="ln"><span class="chip" style="background:rgba(52,211,153,.2);color:#6ee7b7;">● ยืนยันแล้ว</span></div>
+      <button class="editbtn">✎ แก้ไข</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>B — ช่องอ่านง่าย + รวบ "+N" ★ companion</h3>
+    <div class="cap">span=1 = บรรทัดเดียวสะอาด: ● สีสถานะ + ชื่อ + แถบสีบริการ ไม่ล้นเส้น. ถ้าถี่เกินก็รวบเป็น "+N".</div>
+    <div class="col">
+      <div class="colhead">ห้องแพทย์/ผ่าตัด</div>
+      <div class="slot"><div class="tlabel">17:00</div><div class="cell"><div class="blk-clean b-sky"><span class="dot" style="background:#38bdf8;"></span>วีรวัศ&nbsp;ร.<span class="bar" style="background:#34d399;"></span></div></div></div>
+      <div class="slot"><div class="tlabel">17:15</div><div class="cell"><div class="blk-clean b-sky"><span class="dot" style="background:#38bdf8;"></span>ณภดล&nbsp;ธ.<span class="bar" style="background:#38bdf8;"></span></div></div></div>
+      <div class="slot"><div class="tlabel">17:30</div><div class="cell"><div class="rollup">+3 รายการ (แตะเพื่อดู)</div></div></div>
+    </div>
+    <div class="cap" style="margin-top:.5em;">อ่านชื่อออกในตาราง · สีบอกบริการ/สถานะ · รายละเอียดเต็มผ่าน A</div>
+  </div>
+
+  <div class="panel">
+    <h3>C — มือถือ/วันที่ถี่ → Agenda list ★ mobile</h3>
+    <div class="cap">จอเล็ก/วันถี่ → สลับเป็นลิสต์การ์ดเรียงตามเวลา อ่านครบทุก field. (มี view "รายการ" อยู่แล้ว — ทำให้เป็น default บนมือถือ)</div>
+    <div class="phone">
+      <div class="acard">
+        <div class="t">17:00–17:15 · ห้องแพทย์</div>
+        <div class="nm">นาย วีรวัศ รจิราเกียรติ <span class="muted" style="font-size:.8em;">HN-26-0042</span></div>
+        <div class="sv">🎯 Shock wave</div>
+        <div class="mt">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#f87171;">081-234-5678</span> · ● ยืนยัน</div>
+      </div>
+      <div class="acard" style="border-left-color:#fbbf24;">
+        <div class="t">18:00–18:15 · ห้องแพทย์</div>
+        <div class="nm">นาย นรพล บุญประจวบโชค</div>
+        <div class="sv">🎯 ขลิบเลเซอร์</div>
+        <div class="mt">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#f87171;">089-…</span> · ● รอยืนยัน</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Comparison</h2>
+<table>
+  <tr><th>Approach</th><th>เห็นรายละเอียดตอนถี่?</th><th>มือถือ?</th><th>เสี่ยง/ต้นทุน</th></tr>
+  <tr><td><strong>A — tap popover</strong></td><td>✅ เต็ม (ทุกความถี่)</td><td>✅ tap target ดี</td><td>ต่ำ — เพิ่ม popover + min hit-area (click→edit มีอยู่แล้ว)</td></tr>
+  <tr><td><strong>B — adaptive cell + rollup</strong></td><td>🟡 ในตารางอ่านชื่อ/สีออก</td><td>🟡 ช่วยแนวตั้ง</td><td>กลาง — ปรับ render span=1 + logic รวบ overlap</td></tr>
+  <tr><td><strong>C — mobile agenda</strong></td><td>✅ เต็ม</td><td>✅✅ ดีสุด</td><td>กลาง — view ใหม่/ต่อยอด "รายการ" + responsive switch</td></tr>
+  <tr><td class="muted">✗ bump SLOT_H อีก</td><td class="muted">❌ symptom (ทำไปแล้ว)</td><td class="muted">❌ scroll ยาวขึ้น</td><td class="muted">—</td></tr>
+  <tr><td class="muted">✗ side-by-side overlap (Google-cal)</td><td class="muted">🟡</td><td class="muted">❌ sub-col แคบมาก (มี 3 ห้องแล้ว)</td><td class="muted">สูง</td></tr>
+</table>
+
+<div class="rec">
+  <strong>คำแนะนำ: ทำทั้ง 3 ชั้น แบบแบ่งเฟส</strong>
+  <ol style="margin:.5em 0 0;">
+    <li><strong>A (popover)</strong> ก่อน — แก้ปัญหาหลัก "เห็นรายละเอียดตอนถี่" ได้ทันที, เสี่ยงต่ำสุด, ใช้ทั้ง desktop + mobile.</li>
+    <li><strong>B (adaptive cell + rollup)</strong> — ให้ตารางเองอ่านง่ายขึ้น (ไม่ล้นเส้น) + รวบ overlap.</li>
+    <li><strong>C (mobile agenda)</strong> — มือถือ default เป็นลิสต์การ์ด; เก็บ grid ไว้ให้ toggle.</li>
+  </ol>
+  <p class="muted" style="margin:.5em 0 0;">เฟส 1 (A) ให้ผลมากสุดต่อความเสี่ยงน้อยสุด. ถ้าอยากเริ่มเล็ก เริ่มที่ A ก่อน.</p>
+</div>
+
+</body>
+</html>
