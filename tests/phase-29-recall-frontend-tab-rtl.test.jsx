@@ -20,6 +20,8 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: vi.fn(async () => {}),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
+  // 2026-05-20 (Q2=B) — RecallOutcomeModal staff dropdown.
+  listStaff: vi.fn(async () => [{ id: 'S1', firstName: 'พิมพ์ชนก', lastName: 'ใจดี' }]),
   // Phase 29.22 (2026-05-14) — useRecallCases shared hook reads these.
   listRecallCases: vi.fn(async () => []),
   saveRecallCase: vi.fn(async () => ({ id: 'CASE-mock' })),
@@ -45,7 +47,7 @@ import { RecallTogglePill } from '../src/components/backend/recall/RecallToggleP
 const fixture = [
   { id: 'O1', recallDate: '2026-05-12', status: 'pending', customerName: 'A overdue', reason: 'r1' },
   { id: 'T1', recallDate: '2026-05-14', status: 'pending', customerName: 'B today', reason: 'r2', customerLineUserId: 'U_y' },
-  // The following should NOT appear in compact view
+  // 2026-05-20: "Recall วันนี้" compact now shows tomorrow too; later stays hidden
   { id: 'TM1', recallDate: '2026-05-15', status: 'pending', customerName: 'C tomorrow', reason: 'r3' },
   { id: 'LT1', recallDate: '2026-06-14', status: 'pending', customerName: 'D later', reason: 'r4' },
   // Done — shouldn't count
@@ -57,13 +59,24 @@ beforeEach(() => {
 });
 
 describe('Phase 29 · F1 RecallFrontendView compact rendering', () => {
-  it('F1.1 renders only overdue + today sections (NO tomorrow/week/later)', () => {
+  it('F1.1 renders today + overdue + tomorrow sections (NO thisWeek/later) — 2026-05-20 Recall วันนี้', () => {
     render(<RecallFrontendView />);
-    expect(screen.getByTestId('recall-section-overdue')).toBeInTheDocument();
     expect(screen.getByTestId('recall-section-today')).toBeInTheDocument();
-    expect(screen.queryByTestId('recall-section-tomorrow')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recall-section-overdue')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-section-tomorrow')).toBeInTheDocument();
     expect(screen.queryByTestId('recall-section-thisWeek')).not.toBeInTheDocument();
     expect(screen.queryByTestId('recall-section-later')).not.toBeInTheDocument();
+  });
+
+  it('F1.1b today section is prominent (data-prominent="true")', () => {
+    render(<RecallFrontendView />);
+    expect(screen.getByTestId('recall-section-today')).toHaveAttribute('data-prominent', 'true');
+    expect(screen.getByTestId('recall-section-overdue')).toHaveAttribute('data-prominent', 'false');
+  });
+
+  it('F1.1c "Recall วันนี้" heading rendered', () => {
+    render(<RecallFrontendView />);
+    expect(screen.getByTestId('recall-frontend-heading')).toHaveTextContent('Recall วันนี้');
   });
 
   it('F1.2 list mode is compact', () => {
@@ -82,11 +95,11 @@ describe('Phase 29 · F1 RecallFrontendView compact rendering', () => {
     expect(screen.getByTestId('recall-frontend-create')).toBeInTheDocument();
   });
 
-  it('F1.5 rows render only for overdue + today', () => {
+  it('F1.5 rows render for today + overdue + tomorrow (NOT later) — 2026-05-20', () => {
     render(<RecallFrontendView />);
     expect(screen.getByTestId('recall-row-O1')).toBeInTheDocument();
     expect(screen.getByTestId('recall-row-T1')).toBeInTheDocument();
-    expect(screen.queryByTestId('recall-row-TM1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recall-row-TM1')).toBeInTheDocument();
     expect(screen.queryByTestId('recall-row-LT1')).not.toBeInTheDocument();
   });
 });

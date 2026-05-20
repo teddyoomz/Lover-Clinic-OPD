@@ -22,6 +22,8 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: vi.fn(async () => {}),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
+  // 2026-05-20 (Q2=B) — RecallOutcomeModal required staff dropdown.
+  listStaff: vi.fn(async () => [{ id: 'S1', firstName: 'พิมพ์ชนก', lastName: 'ใจดี' }]),
   // Phase 29.22 (2026-05-14) — useRecallCases hook reads these.
   listRecallCases: vi.fn(async () => []),
   saveRecallCase: vi.fn(async () => ({ id: 'CASE-mock' })),
@@ -170,10 +172,15 @@ describe('Phase 29 · F3 outcome save flows optimistically', () => {
     render(<RecallTab />);
     await user.click(screen.getByTestId('recall-record-R3'));
     await user.click(screen.getByTestId('recall-outcome-card-will-come'));
+    // 2026-05-20 (Q2=B) — must pick a staff before Save is enabled.
+    const staffInput = screen.getByTestId('staff-select-outcomeStaff').querySelector('input');
+    await user.click(staffInput);
+    await user.click(await screen.findByText('พิมพ์ชนก ใจดี'));
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(recordRecallOutcome).toHaveBeenCalledWith('R3', expect.objectContaining({
       outcome: 'will-come',
       currentNoAnswerCount: 0,
+      recordedBy: expect.objectContaining({ name: 'พิมพ์ชนก ใจดี', staffId: 'S1' }),
     }));
   });
 });

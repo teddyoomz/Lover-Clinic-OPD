@@ -74,13 +74,20 @@ describe('Phase 29 · L1 RecallList section render', () => {
     expect(screen.getByTestId('recall-section-later')).not.toHaveTextContent('เสร็จ');
   });
 
-  it('L1.5 compact mode renders only overdue + today', () => {
+  it('L1.5 compact mode renders today + overdue + tomorrow, today first + prominent (NOT thisWeek/later) — 2026-05-20 Recall วันนี้', () => {
     render(<RecallList recalls={FIXTURE} todayISO={TODAY} mode="compact" />);
-    expect(screen.getByTestId('recall-section-overdue')).toBeInTheDocument();
     expect(screen.getByTestId('recall-section-today')).toBeInTheDocument();
-    expect(screen.queryByTestId('recall-section-tomorrow')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recall-section-overdue')).toBeInTheDocument();
+    expect(screen.getByTestId('recall-section-tomorrow')).toBeInTheDocument();
+    expect(screen.queryByTestId('recall-section-thisWeek')).not.toBeInTheDocument();
     expect(screen.queryByTestId('recall-section-later')).not.toBeInTheDocument();
     expect(screen.getByTestId('recall-list')).toHaveAttribute('data-mode', 'compact');
+    // today on top + prominent
+    expect(screen.getByTestId('recall-section-today')).toHaveAttribute('data-prominent', 'true');
+    const sections = screen.getByTestId('recall-list').querySelectorAll('[data-testid^="recall-section-"]');
+    expect(sections[0].getAttribute('data-bucket')).toBe('today');
+    expect(sections[1].getAttribute('data-bucket')).toBe('overdue');
+    expect(sections[2].getAttribute('data-bucket')).toBe('tomorrow');
   });
 
   it('L1.6 rows render with stable id keys', () => {

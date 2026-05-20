@@ -41,6 +41,7 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   createRecall: vi.fn(async () => ({ id: 'RECALL-mock' })),
   createRecallPair: vi.fn(async () => ({ id1: 'R-new-1', id2: 'R-new-2' })),
   recordRecallOutcome: vi.fn(async () => {}),
+  listStaff: vi.fn(async () => [{ id: 'S1', firstName: 'พิมพ์ชนก', lastName: 'ใจดี' }]),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
   // Phase 29.22 (2026-05-14) — useRecallCases hook reads these.
@@ -276,8 +277,8 @@ describe('Phase 29 · MS7 server-shape differs from optimistic shape', () => {
     rerender(<RecallTab />);
     // Same DOM node still here
     expect(screen.getByTestId('recall-row-R-x')).toBe(row);
-    // Outcome callout now visible
-    expect(screen.getByTestId('recall-outcome-callout-R-x')).toHaveTextContent('มาแน่ใจ');
+    // 2026-05-20: outcomeNote now fills the prominent note slot (Q1=A)
+    expect(screen.getByTestId('recall-note-R-x')).toHaveTextContent('มาแน่ใจ');
   });
 });
 

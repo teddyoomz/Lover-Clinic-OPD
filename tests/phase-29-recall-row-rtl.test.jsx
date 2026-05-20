@@ -87,7 +87,7 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('R-Row.8 outcome callout appears when status=done', () => {
+  it('R-Row.8 prominent note + logged-by byline appear when status=done (2026-05-20)', () => {
     const recall = {
       ...baseRecall,
       status: 'done',
@@ -96,8 +96,10 @@ describe('Phase 29 · R-Row.1-13 RecallRow rendering', () => {
       outcomeBy: { name: 'พี่ X' },
     };
     render(<RecallRow recall={recall} todayISO={TODAY} />);
-    expect(screen.getByTestId('recall-outcome-callout-R1')).toHaveTextContent('ลูกค้าจะมา');
-    expect(screen.getByTestId('recall-outcome-callout-R1')).toHaveTextContent('พี่ X');
+    // Q1=A: outcomeNote takes the prominent note slot; byline shows who logged it.
+    expect(screen.getByTestId('recall-note-R1')).toHaveTextContent('ลูกค้าจะมา');
+    expect(screen.getByTestId('recall-note-R1')).toHaveAttribute('data-note-source', 'outcome');
+    expect(screen.getByTestId('recall-logged-by-R1')).toHaveTextContent('พี่ X');
   });
 
   it('R-Row.9 record button HIDDEN when status=done', () => {

@@ -9,9 +9,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockRecord = vi.fn(async () => {});
+const MOCK_STAFF = [
+  { id: 'S1', firstName: 'พิมพ์ชนก', lastName: 'ใจดี' },
+  { id: 'S2', firstName: 'สมชาย', lastName: 'มั่นคง' },
+];
 
 vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: (...args) => mockRecord(...args),
+  listStaff: vi.fn(async () => MOCK_STAFF),
 }));
 
 import { RecallOutcomeModal } from '../src/components/backend/recall/RecallOutcomeModal.jsx';
@@ -23,6 +28,15 @@ const recall = {
   status: 'pending',
   noAnswerCount: 0,
 };
+
+// 2026-05-20 (Q2=B) — staff dropdown is required; pick a staff before Save.
+async function pickStaff(user, name = 'พิมพ์ชนก ใจดี') {
+  const wrap = screen.getByTestId('staff-select-outcomeStaff');
+  const input = wrap.querySelector('input');
+  await user.click(input);
+  const opt = await screen.findByText(name);
+  await user.click(opt);
+}
 
 beforeEach(() => {
   mockRecord.mockClear();
@@ -79,10 +93,13 @@ describe('Phase 29 · O2 outcome selection', () => {
     expect(screen.getByTestId('recall-outcome-card-no-answer')).toHaveAttribute('data-selected', 'true');
   });
 
-  it('O2.3 save enabled after outcome picked', async () => {
+  it('O2.3 save enabled only after outcome AND staff picked (Q2=B)', async () => {
     const user = userEvent.setup();
     render(<RecallOutcomeModal recall={recall} onClose={() => {}} />);
     await user.click(screen.getByTestId('recall-outcome-card-will-come'));
+    // 2026-05-20: staff is required → still disabled until picked
+    expect(screen.getByTestId('recall-outcome-save')).toBeDisabled();
+    await pickStaff(user);
     expect(screen.getByTestId('recall-outcome-save')).not.toBeDisabled();
   });
 });
@@ -132,13 +149,15 @@ describe('Phase 29 · O4 save dispatch', () => {
     const onClose = vi.fn();
     render(<RecallOutcomeModal recall={recall} onClose={onClose} onSaved={onSaved} />);
     await user.click(screen.getByTestId('recall-outcome-card-will-come'));
+    await pickStaff(user);
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(mockRecord).toHaveBeenCalledTimes(1);
-    expect(mockRecord).toHaveBeenCalledWith('RECALL-test-1', {
+    expect(mockRecord).toHaveBeenCalledWith('RECALL-test-1', expect.objectContaining({
       outcome: 'will-come',
       outcomeNote: '',
       currentNoAnswerCount: 0,
-    });
+      recordedBy: expect.objectContaining({ name: 'พิมพ์ชนก ใจดี', staffId: 'S1' }),
+    }));
     expect(onSaved).toHaveBeenCalledWith('will-come');
     expect(onClose).toHaveBeenCalled();
   });
@@ -148,6 +167,7 @@ describe('Phase 29 · O4 save dispatch', () => {
     render(<RecallOutcomeModal recall={recall} onClose={() => {}} />);
     await user.click(screen.getByTestId('recall-outcome-card-will-come'));
     await user.type(screen.getByTestId('recall-outcome-note'), 'มาแน่');
+    await pickStaff(user);
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(mockRecord.mock.calls[0][1]).toMatchObject({
       outcome: 'will-come',
@@ -159,6 +179,7 @@ describe('Phase 29 · O4 save dispatch', () => {
     const user = userEvent.setup();
     render(<RecallOutcomeModal recall={{ ...recall, noAnswerCount: 1 }} onClose={() => {}} />);
     await user.click(screen.getByTestId('recall-outcome-card-no-answer'));
+    await pickStaff(user);
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(mockRecord.mock.calls[0][1]).toMatchObject({
       outcome: 'no-answer',
@@ -172,6 +193,7 @@ describe('Phase 29 · O4 save dispatch', () => {
     const onClose = vi.fn();
     render(<RecallOutcomeModal recall={recall} onClose={onClose} onReschedule={onReschedule} />);
     await user.click(screen.getByTestId('recall-outcome-card-reschedule'));
+    await pickStaff(user);
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(onReschedule).toHaveBeenCalledWith('RECALL-test-1');
     expect(onClose).toHaveBeenCalled();
@@ -183,6 +205,7 @@ describe('Phase 29 · O4 save dispatch', () => {
     const onClose = vi.fn();
     render(<RecallOutcomeModal recall={recall} onClose={onClose} />);
     await user.click(screen.getByTestId('recall-outcome-card-will-come'));
+    await pickStaff(user);
     await user.click(screen.getByTestId('recall-outcome-save'));
     expect(screen.getByTestId('recall-outcome-error')).toHaveTextContent('boom');
     expect(onClose).not.toHaveBeenCalled();
@@ -235,5 +258,20 @@ describe('Phase 29 · O6 note textarea', () => {
   it('O6.2 maxLength 1000 enforced', () => {
     render(<RecallOutcomeModal recall={recall} onClose={() => {}} />);
     expect(screen.getByTestId('recall-outcome-note')).toHaveAttribute('maxLength', '1000');
+  });
+});
+
+describe('Phase 29 · O7 required staff dropdown (2026-05-20, Q2=B)', () => {
+  it('O7.1 renders the required "พนักงานผู้ลงบันทึก" dropdown', () => {
+    render(<RecallOutcomeModal recall={recall} onClose={() => {}} />);
+    expect(screen.getByTestId('staff-select-outcomeStaff')).toBeInTheDocument();
+    expect(screen.getByText(/พนักงานผู้ลงบันทึก/)).toBeInTheDocument();
+  });
+
+  it('O7.2 save stays disabled with outcome picked but no staff', async () => {
+    const user = userEvent.setup();
+    render(<RecallOutcomeModal recall={recall} onClose={() => {}} />);
+    await user.click(screen.getByTestId('recall-outcome-card-will-come'));
+    expect(screen.getByTestId('recall-outcome-save')).toBeDisabled();
   });
 });

@@ -104,8 +104,11 @@ describe('Phase 29 · B1 backendClient recall functions', () => {
   it('B1.7 updateRecall resolves without throw', async () => {
     await expect(updateRecall('RECALL-1', { status: 'done' })).resolves.toBeUndefined();
   });
-  it('B1.8 recordRecallOutcome resolves without throw', async () => {
-    await expect(recordRecallOutcome('RECALL-1', { outcome: 'will-come', outcomeNote: 'ok' })).resolves.toBeUndefined();
+  it('B1.8 recordRecallOutcome resolves with recordedBy (2026-05-20 Q2=B)', async () => {
+    await expect(recordRecallOutcome('RECALL-1', { outcome: 'will-come', outcomeNote: 'ok', recordedBy: { name: 'พิมพ์ชนก', staffId: 'S1' } })).resolves.toBeUndefined();
+  });
+  it('B1.8b recordRecallOutcome throws when recordedBy missing (required staff)', async () => {
+    await expect(recordRecallOutcome('RECALL-1', { outcome: 'will-come' })).rejects.toThrow('พนักงานผู้ลงบันทึก');
   });
   it('B1.9 recordRecallLineSend resolves without throw', async () => {
     await expect(recordRecallLineSend('RECALL-1', { templateId: 'recall-default', messageText: 'hi' })).resolves.toBeUndefined();

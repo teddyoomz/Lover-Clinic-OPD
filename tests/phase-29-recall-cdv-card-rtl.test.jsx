@@ -20,6 +20,8 @@ vi.mock('../src/lib/scopedDataLayer.js', () => ({
   recordRecallOutcome: vi.fn(async () => {}),
   recordRecallLineSend: vi.fn(async () => {}),
   snoozeRecall: vi.fn(async () => {}),
+  // 2026-05-20 (Q2=B) — RecallOutcomeModal staff dropdown.
+  listStaff: vi.fn(async () => [{ id: 'S1', firstName: 'พิมพ์ชนก', lastName: 'ใจดี' }]),
   // Phase 29.22 (2026-05-14) — useRecallCases shared hook reads these.
   listRecallCases: vi.fn(async () => []),
   saveRecallCase: vi.fn(async () => ({ id: 'CASE-mock' })),
