@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Sub-Tab + Comprehensive Cross-Wiring Test Bank — Implementation Plan</title>
+  <style>
+    :root { --accent: #047857; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Finance Sub-Tab + Comprehensive Cross-Wiring Test Bank</h1>
+
+<blockquote>
+  Specs: <code>2026-05-20-finance-finished-deposit-subtab-design.html</code> + <code>2026-05-20-sales-cancelled-subtab-design.html</code>. Sales sub-tab already shipped (local). This plan adds the finance sub-tab AND a brutal cross-wiring test bank for BOTH features.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (A) Implement the finance finished-deposit sub-tab (mirror sales). (B) Build a comprehensive brutal test bank covering every wiring/flow into both the sales and deposit lists — create from all surfaces, status-transition migration, stress, end-to-end user simulation, edge cases. (C) Verify reactivity (no-F5) via Rule Q L1.</p>
+  <p><strong>Architecture:</strong> Pure helper <code>depositSubTabFilter.js</code> + edits to <code>DepositPanel.jsx</code> (client-side split, emerald). Tests are pure-logic + source-grep + adversarial + e2e-simulation (the repo's idiom for these big components; full RTL render is non-idiomatic). Rule Q L1 = real browser on real prod (read-only).</p>
+  <p><strong>Confirmed status map (from backendClient.js):</strong> createDeposit→<code>active</code>; applyDepositToSale→<code>used</code> (remaining 0) | <code>partial</code>; cancel→<code>cancelled</code>; refund(full)→<code>refunded</code>; expire→<code>expired</code>. Codebase already treats <code>active|partial</code> = usable (lines 2863/3746/3827/4283). New sale → no <code>status:'cancelled'</code> → active pill. Cancel sale → <code>cancelled</code>.</p>
+  <p><strong>Iron-clad:</strong> Rule N (targeted during iter, full suite at end) · Rule I (flow-simulate) · Rule Q V66 (L1 before "verified") · Rule C1 (helper single-source) · NO deploy without explicit "deploy" (V18) · preview against prod = READ-ONLY pill clicks, NEVER create/cancel/use real data (feedback_no_real_action_in_preview_eval — use TEST- fixtures via admin-SDK for write flows).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <strong>Finance "มัดจำ" → pill row:</strong> <code>[ ใช้งานอยู่ ] [ สิ้นสุดแล้ว ]</code> (emerald active). ใช้งานอยู่ = active+partial + scoped dropdown (ทุกสถานะ/ใช้งาน/ใช้บางส่วน). สิ้นสุดแล้ว = used+cancelled+refunded+expired + scoped dropdown (ทุกสถานะ/ใช้หมด/ยกเลิก/คืนเงิน/หมดอายุ). Search + date-range + count on both. Full visual in the spec HTML.
+</div>
+
+<h2>Status → sub-tab routing matrix (the contract the tests lock)</h2>
+<table>
+  <tr><th>Entity</th><th>status</th><th>Sales pill</th><th>Deposit pill</th><th>Trigger</th></tr>
+  <tr><td>Sale</td><td>(none / paid / unpaid / split / draft / deferred)</td><td>การขาย</td><td>—</td><td>create (SaleTab / TFP auto-sale)</td></tr>
+  <tr><td>Sale</td><td>cancelled</td><td>ยกเลิกแล้ว</td><td>—</td><td>cancelBackendSale</td></tr>
+  <tr><td>Deposit</td><td>active</td><td>—</td><td>ใช้งานอยู่</td><td>createDeposit (DepositPanel / Frontend booking)</td></tr>
+  <tr><td>Deposit</td><td>partial</td><td>—</td><td>ใช้งานอยู่</td><td>applyDepositToSale (remaining &gt; 0)</td></tr>
+  <tr><td>Deposit</td><td>used</td><td>—</td><td>สิ้นสุดแล้ว</td><td>applyDepositToSale (remaining 0)</td></tr>
+  <tr><td>Deposit</td><td>cancelled</td><td>—</td><td>สิ้นสุดแล้ว</td><td>cancel deposit</td></tr>
+  <tr><td>Deposit</td><td>refunded</td><td>—</td><td>สิ้นสุดแล้ว</td><td>full refund</td></tr>
+  <tr><td>Deposit</td><td>expired</td><td>—</td><td>สิ้นสุดแล้ว</td><td>expiry</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>A1: depositSubTabFilter helper + unit tests (TDD)</h3>
+  <p>Create <code>src/lib/depositSubTabFilter.js</code> + <code>tests/deposit-subtab-filter.test.js</code>. Mirror saleSubTabFilter.</p>
+<pre><code class="language-javascript">// src/lib/depositSubTabFilter.js
+export const ACTIVE_DEPOSIT_STATUSES = ['active', 'partial'];
+export const FINISHED_DEPOSIT_STATUSES = ['used', 'cancelled', 'refunded', 'expired'];
+
+/** A deposit is "finished" iff its status is one of the terminal states.
+ *  Mirrors the codebase's existing active|partial = usable convention
+ *  (backendClient.js getDepositBalance / customer summary). */
+export function isFinishedDeposit(dep) {
+  return FINISHED_DEPOSIT_STATUSES.includes(dep?.status);
+}
+
+/** Partition loaded deposits for the given sub-tab.
+ *  'finished' → terminal statuses; anything else → still-usable (active+partial).
+ *  Defensive: non-array → []; null members tolerated. Unknown status (not in
+ *  either set) defaults to the active pill (safer — stays visible/actionable). */
+export function filterDepositsBySubTab(deposits, subTab) {
+  const list = Array.isArray(deposits) ? deposits : [];
+  if (subTab === 'finished') return list.filter(isFinishedDeposit);
+  return list.filter((d) => !isFinishedDeposit(d));
+}</code></pre>
+  <p>Tests (groups A/B/C mirroring sale-subtab-filter): predicate (each of 6 statuses + null/missing), partition (active+partial→active pill; 4 finished→finished pill; complete+disjoint), adversarial (non-array, empty, null members, Thai name, unknown-status→active pill, idempotent, forward-compat). Run, expect PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>A2: DepositPanel edits + build</h3>
+  <p>Modify <code>src/components/backend/DepositPanel.jsx</code>:</p>
+  <ul>
+    <li>Import <code>{ filterDepositsBySubTab, ACTIVE_DEPOSIT_STATUSES, FINISHED_DEPOSIT_STATUSES }</code> from <code>../../lib/depositSubTabFilter.js</code>.</li>
+    <li>Add <code>DEPOSIT_SUB_TABS = [{id:'active',label:'ใช้งานอยู่'},{id:'finished',label:'สิ้นสุดแล้ว'}]</code>.</li>
+    <li>Add <code>const [subTab, setSubTab] = useState('active')</code> + <code>handleSubTabChange = (id) =&gt; { setSubTab(id); setFilterStatus(''); }</code>.</li>
+    <li>Rewrite <code>filteredDeposits</code>: <code>let list = filterDepositsBySubTab(deposits, subTab);</code> then existing filterStatus + search + date-range; add <code>subTab</code> to deps.</li>
+    <li>Pill row (emerald) above the toolbar — mirror SaleTab pill row, emerald active: <code>bg-emerald-700 text-white shadow-[0_0_12px_rgba(16,185,129,0.3)]</code>; <code>data-testid={`depositpanel-subtab-${id}`}</code>.</li>
+    <li>Scoped dropdown: replace <code>{Object.entries(STATUS_META).map(...)}</code> with <code>{(subTab === 'active' ? ACTIVE_DEPOSIT_STATUSES : FINISHED_DEPOSIT_STATUSES).map(k =&gt; &lt;option key={k} value={k}&gt;{STATUS_META[k].label}&lt;/option&gt;)}</code> (keep "ทุกสถานะ" option + visible on both tabs).</li>
+    <li>Empty states: finished-empty → "ยังไม่มีมัดจำที่สิ้นสุด"; active filtered-empty → existing "ไม่พบ..." (keep), but when no filter active show "ยังไม่มีมัดจำที่ใช้งานอยู่"; <code>deposits.length===0</code> → existing EmptyState (unchanged).</li>
+  </ul>
+  <p><code>npm run build</code> → clean. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>A3: Finance flow-simulate + source-grep + UI-conditional mirrors</h3>
+  <p><code>tests/finance-finished-deposit-subtab-flow-simulate.test.js</code> — mirror the sales flow-simulate file:</p>
+  <ul>
+    <li>F1 flow: create→active; applyDepositToSale fully→migrate active→finished; partial→stays active; cancel/refund/expire→migrate. Count per pill.</li>
+    <li>F2 source-grep on DepositPanel.jsx: helper import+use, DEPOSIT_SUB_TABS + 'สิ้นสุดแล้ว', scoped dropdown (ACTIVE/FINISHED status arrays), reset filterStatus on switch, subTab in deps, "ยังไม่มีมัดจำที่สิ้นสุด".</li>
+    <li>F3 UI mirrors: scoped dropdown option sets per pill; reset-on-switch; empty-state selection (finished/onboarding/no-filter/filter-no-match).</li>
+  </ul>
+  <p>Run, PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>B1: Cross-wiring — sale creation routing (SaleTab + TFP auto-sale)</h3>
+  <p><code>tests/sales-subtab-wiring-flow-simulate.test.js</code>. Verify a sale created from EITHER surface routes to การขาย:</p>
+  <ul>
+    <li>Source-grep <code>src/components/TreatmentFormPage.jsx</code>: the auto-sale write (createBackendSale / assignCourseToCustomer path) does NOT set <code>status: 'cancelled'</code> → resulting sale lands in active pill via filterSalesBySubTab.</li>
+    <li>Source-grep <code>backendClient.js createBackendSale</code>: created sale has no top-level <code>status:'cancelled'</code> (cancel is a separate mutation at line 3421).</li>
+    <li>Pure flow: sale shapes {paid}, {unpaid}, {split}, {draft}, {deferred}, {no-status} all → filterSalesBySubTab → 'active'. Only {cancelled} → 'cancelled'.</li>
+    <li>Lifecycle: create (active pill) → cancelBackendSale sets status='cancelled' → reload → migrates to cancelled pill.</li>
+  </ul>
+  <p>Run, PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>B2: Cross-wiring — deposit creation routing (DepositPanel + Frontend booking)</h3>
+  <p><code>tests/finance-subtab-wiring-flow-simulate.test.js</code>. Verify deposit creation + frontend booking route to ใช้งานอยู่:</p>
+  <ul>
+    <li>Source-grep <code>backendClient.js createDeposit</code>: sets <code>status:'active'</code> (line 4128) → active pill.</li>
+    <li>Grep the Frontend/booking deposit-creation path (DepositBookingModal / AdminDashboard deposit-with-appointment) → confirm it calls createDeposit (same 'active' default) — locate via <code>grep -rn "createDeposit" src/</code>; assert callers don't override status to a finished one.</li>
+    <li>Pure flow: applyDepositToSale newStatus = remaining===0?'used':'partial' → fully-used migrates to finished; partial stays active.</li>
+    <li>refund(full)→'refunded'→finished; cancel→'cancelled'→finished; updateDeposit recalc active/partial/used routing.</li>
+  </ul>
+  <p>Run, PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>B3: Stress + adversarial (mulberry32) for BOTH helpers</h3>
+  <p><code>tests/subtab-filters-stress.test.js</code> — deterministic mulberry32:</p>
+  <ul>
+    <li>Generate 1000+ random sales (random status incl unknowns) → assert partition complete+disjoint, active∩cancelled=∅, every cancelled has status==='cancelled'.</li>
+    <li>Generate 1000+ random deposits (6 statuses + unknowns) → assert active pill = active+partial only, finished pill = the 4 terminal, complete+disjoint.</li>
+    <li>Rapid toggle simulation: 100 alternating subTab values → output stable + matches direct filter.</li>
+    <li>Perf budget: 10k items filtered &lt; 50ms each helper.</li>
+    <li>Adversarial: Thai/Unicode NFC≠NFD names, NUL byte, 10k-char names, numeric-vs-string status, concurrent-mutation snapshot (status flips mid-list).</li>
+  </ul>
+  <p>Run, PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>B4: End-to-end user simulation for BOTH</h3>
+  <p><code>tests/subtab-e2e-user-simulation.test.js</code> — chain the full mental model a user exercises (pure mirrors of SaleTab/DepositPanel filtered + handlers):</p>
+  <ul>
+    <li>Sales: load 11 (2 active + 9 cancelled) → default active shows 2 → search "INV-A" → 1 → switch cancelled → 9 + filter reset → pick status (n/a single) → switch back → filter reset → cancel a sale → reload → active 1, cancelled 10.</li>
+    <li>Deposits: load mixed (active/partial/used/cancelled/refunded/expired) → default ใช้งานอยู่ shows active+partial → scoped dropdown picks 'partial' → switch สิ้นสุดแล้ว (filter reset) → scoped dropdown picks 'refunded' → date-range narrows → apply deposit fully → reload → migrates to finished.</li>
+    <li>Branch isolation: deposits/sales from branch A vs B (the loaded list is already branch-scoped) — assert split operates within the loaded set only.</li>
+  </ul>
+  <p>Run, PASS. Commit.</p>
+</div>
+
+<div class="task">
+  <h3>C1: Rule Q L1 — real browser on real prod (read-only) for BOTH + reactivity</h3>
+  <p>preview_start → real prod, READ-ONLY (pill clicks + DOM eval only; NEVER click create/cancel/use on real rows):</p>
+  <ul>
+    <li><code>/?backend=1&tab=sales</code> → verify active (no cancelled rows, dropdown w/o ยกเลิก) → click ยกเลิกแล้ว pill (via element.click, overlay-safe) → verify only cancelled + dropdown hidden → round-trip resets filter. (Already verified for sales; re-confirm post-merge.)</li>
+    <li><code>/?backend=1&tab=finance&subtab=deposit</code> → verify ใช้งานอยู่ shows active+partial + scoped dropdown (3 options) → click สิ้นสุดแล้ว pill → verify only terminal statuses + scoped dropdown (5 options) → round-trip resets filter → empty state if none.</li>
+    <li><strong>Reactivity check (no write on prod):</strong> confirm via code-path + the existing L1 sales evidence that cancel/create handlers call loadSales/loadDeposits and tabs re-mount on navigation. If a genuine stale-without-F5 gap is observed, THEN add an onSnapshot listener (Layer 1+2) for that surface in a follow-up task; otherwise document reactivity satisfied.</li>
+    <li>preview_console_logs (error) — confirm no NEW errors from the finance change.</li>
+  </ul>
+</div>
+
+<div class="task">
+  <h3>C2: Full suite (Rule N batch end) + state docs</h3>
+  <ul>
+    <li>Targeted: all new test files + <code>grep -rln "DepositPanel\|SaleTab" tests/</code> affected files.</li>
+    <li><code>npm run build</code> clean.</li>
+    <li><code>npm test -- --run</code> — new tests GREEN; the known ~31 pre-existing failures unchanged (confirm none newly added; verify via failing-file list = same set).</li>
+    <li>Update <code>.agents/active.md</code> + <code>SESSION_HANDOFF.md</code>; commit. NO deploy without explicit "deploy".</li>
+  </ul>
+</div>
+
+<h2>Self-Review (plan vs spec)</h2>
+<ul>
+  <li><strong>Coverage:</strong> finance Q1-Q4 (A1/A2) ✓; cross-wiring create-from-all-surfaces (B1/B2) ✓; status-transition migration (B1/B2/B4) ✓; stress (B3) ✓; e2e user simulation (B4) ✓; edge (B3 adversarial + A3 empty states) ✓; reactivity/no-F5 (C1) ✓; both features (B1/B3/B4/C1 cover sales + finance) ✓.</li>
+  <li><strong>Placeholders:</strong> none — status map + helper code are concrete; test specs enumerate exact assertions.</li>
+  <li><strong>Type consistency:</strong> <code>filterDepositsBySubTab</code>, <code>ACTIVE/FINISHED_DEPOSIT_STATUSES</code>, <code>isFinishedDeposit</code>, <code>subTab</code>, <code>depositpanel-subtab-{id}</code> consistent across tasks; sales side reuses existing <code>filterSalesBySubTab</code>.</li>
+</ul>
+
+</body>
+</html>
