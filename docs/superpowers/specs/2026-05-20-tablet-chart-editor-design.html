@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tablet Chart Editor Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .grid2 { display:flex; gap:1em; flex-wrap:wrap; }
+    .grid2 > * { flex:1; min-width:280px; }
+    .pill { display:inline-block; border:1px solid var(--ok); border-radius:999px; padding:2px 10px; font-size:.8em; margin:2px; }
+    .filetree { font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.82em; line-height:1.7; background:#0f0f0f; color:#d6d6d6; border-radius:8px; padding:14px; }
+    .new { color:#10b981; font-weight:700; }
+    .edit { color:#f59e0b; font-weight:700; }
+    .cm { color:#888; }
+  </style>
+</head>
+<body>
+
+<h1>Tablet Chart Editor Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 · <strong>Status:</strong> Approved by user (Q1–Q5 + device-cache locked) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-20-tablet-chart-editor.html (created next via writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Doctors want to annotate medical chart templates (face / body / teeth / blank / uploaded) with a stylus on an iPad or Android tablet, and have that drawing land on the patient's treatment chart. Today the only editor is <code>ChartCanvas.jsx</code> (fabric.js) which runs on the same device that opened the TreatmentFormPage (TFP) and has <strong>no pressure / stylus support at all</strong>.</p>
+<p>This feature adds a <strong>paired tablet editor</strong>: a clinician on a PC (or any device) opens the TFP chart modal, picks a template, and chooses to edit it on a standby tablet in the same branch. The tablet pops a full-screen, best-in-class pen editor (Apple Pencil / Android stylus — the hard requirement), the clinician draws, taps Save, and the finished image flows back into the PC's TFP form. The whole feature must live in <strong>new files</strong> — TFP itself is not touched.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">📱 Tablet — full-screen editor (the core surface)</div>
+  <div style="background:#0f0f0f;border-radius:8px;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#1a1a1a;border-bottom:1px solid #2a2a2a;color:#eee;font-size:13px;">
+      <span style="padding:6px 12px;border:1px solid #444;border-radius:8px;">✕ ยกเลิก</span>
+      <span style="opacity:.85;">ใบหน้าผู้หญิง · คุณ มะลิ (HN 0042)</span>
+      <span style="padding:6px 14px;background:#10b981;color:#06281d;border-radius:8px;font-weight:700;">✓ บันทึก</span>
+    </div>
+    <div style="display:flex;">
+      <div style="display:flex;flex-direction:column;gap:9px;padding:12px 8px;background:#141414;border-right:1px solid #2a2a2a;align-items:center;font-size:17px;">
+        <div style="width:38px;height:38px;border-radius:9px;background:#10b981;color:#06281d;display:flex;align-items:center;justify-content:center;">✏️</div>
+        <div style="width:38px;height:38px;border-radius:9px;background:#222;display:flex;align-items:center;justify-content:center;">🖍️</div>
+        <div style="width:38px;height:38px;border-radius:9px;background:#222;display:flex;align-items:center;justify-content:center;">🩹</div>
+        <div style="width:38px;height:38px;border-radius:9px;background:#222;display:flex;align-items:center;justify-content:center;">↩️</div>
+        <div style="width:38px;height:38px;border-radius:9px;background:#222;display:flex;align-items:center;justify-content:center;">↪️</div>
+        <div style="height:1px;width:24px;background:#333;"></div>
+        <div style="width:22px;height:22px;border-radius:50%;background:#ef4444;border:2px solid #fff;"></div>
+        <div style="width:22px;height:22px;border-radius:50%;background:#3b82f6;"></div>
+        <div style="width:22px;height:22px;border-radius:50%;background:#111;border:1px solid #555;"></div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px;">◖ size</div>
+      </div>
+      <div style="flex:1;background:#fff;display:flex;align-items:center;justify-content:center;padding:14px;min-height:230px;">
+        <svg viewBox="0 0 220 250" width="180" style="max-width:100%;">
+          <g stroke="#cfcfcf" fill="none" stroke-width="1.3">
+            <ellipse cx="110" cy="105" rx="62" ry="80"/>
+            <ellipse cx="86" cy="98" rx="10" ry="6"/><ellipse cx="134" cy="98" rx="10" ry="6"/>
+            <path d="M110 105 L104 128 L118 128"/>
+            <path d="M92 150 Q110 160 128 150"/>
+            <line x1="110" y1="25" x2="110" y2="185" stroke-dasharray="3 4"/>
+          </g>
+          <path d="M60 70 C70 66 92 64 100 72 C108 80 96 86 84 88 C74 90 64 86 60 80 Z" fill="#ef4444" opacity="0.9"/>
+          <text x="50" y="64" font-size="9" fill="#ef4444">รอยแผล</text>
+          <path d="M150 130 q14 -6 24 4" stroke="#3b82f6" stroke-width="2.4" fill="none"/>
+          <text x="150" y="150" font-size="9" fill="#3b82f6">ฉีด 2cc</text>
+        </svg>
+      </div>
+    </div>
+    <div style="padding:7px 14px;background:#141414;color:#888;font-size:11px;border-top:1px solid #2a2a2a;">full-screen · Apple Pencil pressure (thin→thick) · palm rejection · low-latency · perfect-freehand strokes</div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="mockup">
+    <div class="mockup-label">✅ pressure stroke (perfect-freehand)</div>
+    <div style="background:#fff;text-align:center;padding:14px;border-radius:6px;">
+      <svg viewBox="0 0 240 50" width="100%"><path d="M8 30 C40 8 70 8 100 26 C130 44 165 44 200 22 C214 14 226 14 232 18 L232 26 C226 24 216 26 202 33 C166 53 128 53 98 35 C72 20 44 20 14 38 Z" fill="#111"/></svg>
+      <p style="font-size:12px;color:#444;margin:6px 0 0;">tapers with pen pressure & speed</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">⚪ uniform stroke (fabric.js today)</div>
+    <div style="background:#fff;text-align:center;padding:14px;border-radius:6px;">
+      <svg viewBox="0 0 240 50" width="100%"><path d="M8 30 C40 12 70 12 100 28 C130 44 165 44 200 24" fill="none" stroke="#111" stroke-width="3"/></svg>
+      <p style="font-size:12px;color:#444;margin:6px 0 0;">constant width, ignores pressure</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">🖥️ PC — pairing UX inside TFP (ChartSection), four states</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:160px;border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fafafa;">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">1 · after picking a template</div>
+      <div style="font-size:12.5px;margin-bottom:8px;">แก้ไข Chart ที่ไหน?</div>
+      <div style="border:1px solid #888;border-radius:7px;padding:7px;text-align:center;font-size:12px;margin-bottom:6px;">🖥️ แก้ที่เครื่องนี้</div>
+      <div style="border:1px solid var(--ok);border-radius:7px;padding:7px;text-align:center;font-size:12px;background:rgba(16,185,129,.14);">📱 แก้ที่แท็บเล็ต</div>
+    </div>
+    <div style="flex:1;min-width:160px;border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fafafa;">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">2 · choose a ready tablet</div>
+      <div style="font-size:12px;display:flex;gap:6px;border:1px solid var(--ok);border-radius:6px;padding:5px 7px;margin-bottom:5px;">🔘 iPad ห้องตรวจ 1 <span style="color:var(--ok);margin-left:auto;">● พร้อม</span></div>
+      <div style="font-size:12px;display:flex;gap:6px;border:1px solid #ccc;border-radius:6px;padding:5px 7px;margin-bottom:7px;">⚪ iPad เคาน์เตอร์ <span style="color:var(--ok);margin-left:auto;">● พร้อม</span></div>
+      <div style="border:1px solid var(--ok);border-radius:7px;padding:6px;text-align:center;font-size:12px;background:rgba(16,185,129,.14);">ส่งไปแท็บเล็ต →</div>
+    </div>
+    <div style="flex:1;min-width:160px;border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fafafa;">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">3 · waiting</div>
+      <div style="text-align:center;font-size:22px;margin:6px 0;">⏳</div>
+      <div style="font-size:12px;text-align:center;margin-bottom:8px;">กำลังแก้ที่ iPad ห้องตรวจ 1…<br><span style="color:#999;font-size:11px;">รอการบันทึกจากแท็บเล็ต</span></div>
+      <div style="border:1px solid #888;border-radius:7px;padding:6px;text-align:center;font-size:12px;">ยกเลิก</div>
+    </div>
+    <div style="flex:1;min-width:160px;border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:10px;background:rgba(239,68,68,.06);">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">4 · if it fails</div>
+      <div style="text-align:center;font-size:22px;margin:6px 0;">❌</div>
+      <div style="font-size:12px;text-align:center;margin-bottom:8px;">การแก้ไขล้มเหลว<br><span style="color:#999;font-size:11px;">แท็บเล็ตยกเลิก หรือหลุดเกิน 30 วิ</span></div>
+      <div style="border:1px solid #888;border-radius:7px;padding:6px;text-align:center;font-size:12px;">ลองใหม่</div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#555;">On success the drawn image simply appears in the PC's chart section (no extra screen) and saves with the treatment.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">📱 Tablet — standby & cancelled states</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;border:1px solid var(--bd);border-radius:10px;padding:12px;background:#fafafa;">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">standby (after login + branch — both cached on-device)</div>
+      <div style="text-align:center;font-size:30px;margin:8px 0;">📡</div>
+      <div style="font-size:13px;text-align:center;">พร้อมรับงานแก้ไข Chart</div>
+      <div style="font-size:11px;text-align:center;color:#888;margin-top:4px;">สาขานครราชสีมา · <u>iPad ห้องตรวจ 1</u> ✎<br>กำลังรอจากเครื่อง PC…</div>
+    </div>
+    <div style="flex:1;min-width:200px;border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:12px;background:rgba(239,68,68,.06);">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;">if PC cancels / disconnect</div>
+      <div style="text-align:center;font-size:30px;margin:8px 0;">🔌</div>
+      <div style="font-size:12px;text-align:center;">การเชื่อมต่อถูกยกเลิก<br><span style="color:#888;font-size:11px;">กลับสู่หน้ารอโดยอัตโนมัติ</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="mockup">
+    <div class="mockup-label">data shape — be_chart_tablet_presence/{deviceId}</div>
+    <pre style="margin:0;">{ deviceId, deviceName, branchId,
+  status: 'idle' | 'busy',
+  lastHeartbeatAt, byUid, byName }
+// ready = idle && now − heartbeat < 30s</pre>
+  </div>
+  <div class="mockup">
+    <div class="mockup-label">data shape — be_chart_edit_sessions/{sessionId}</div>
+    <pre style="margin:0;">{ sessionId, branchId,
+  pcDeviceId, pcUid, tabletDeviceId,
+  status:'requested'|'active'|'saved'|'cancelled',
+  cancelledBy: null|'pc'|'tablet'|'timeout',
+  template:{id,name,category}, patientLabel,
+  templateImageUrl, resultImageUrl, // Storage
+  pcHeartbeatAt, tabletHeartbeatAt,
+  createdAt, updatedAt, expiresAt }</pre>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State machine — session lifecycle</div>
+  <pre style="margin:0;background:#fff;">
+PC: pick template → "แก้ที่แท็บเล็ต" → pick ready tablet
+        │  [transaction: re-check tablet idle → create session 'requested'
+        │   + presence→busy + upload template image to Storage]
+        ▼
+  (session 'requested', targets tabletDeviceId)
+        │  tablet onSnapshot sees a session for ITS deviceId
+        ▼
+📱 editor pops INSTANTLY → status 'active' → (tablet heartbeat starts) → draw ✏️
+        │  Save → upload result PNG to Storage → status 'saved'
+        ▼
+🖥️ PC onSnapshot 'saved' → download result → merge into charts[] (dataURL)
+        │  → delete session + Storage folder → presence→idle ✅ → save w/ treatment
+
+CANCEL / TIMEOUT (any state before 'saved'):
+  tablet Cancel → 'cancelled' (by:tablet)   → PC shows ❌ failed
+  PC Cancel     → 'cancelled' (by:pc)        → tablet shows 🔌 → standby
+  heartbeat>30s → 'cancelled' (by:timeout)   → both exit
+  → on every terminal state: presence→idle, Storage folder cleaned</pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Sequence — who writes what (PC ⟷ Firestore ⟷ Storage ⟷ tablet)</div>
+  <table style="margin:0;">
+    <tr><th>#</th><th>Actor</th><th>Action</th></tr>
+    <tr><td>1</td><td>Tablet</td><td>On standby: upsert <code>be_chart_tablet_presence/{deviceId}</code> {idle, branchId, name}; heartbeat every ~10s.</td></tr>
+    <tr><td>2</td><td>PC</td><td>Lists idle+fresh presences in branch (BSA listener). User picks one.</td></tr>
+    <tr><td>3</td><td>PC</td><td>Transaction: re-read target presence is idle → set busy + create <code>be_chart_edit_sessions</code> 'requested'. Upload template image to <code>uploads/chart-edit-sessions/{sessionId}/template.png</code>; write <code>templateImageUrl</code>.</td></tr>
+    <tr><td>4</td><td>Tablet</td><td>onSnapshot: a 'requested' session for my deviceId → download template → open editor → set 'active' + start tablet heartbeat.</td></tr>
+    <tr><td>5</td><td>Tablet</td><td>Save: upload result PNG → write <code>resultImageUrl</code> + status 'saved'.</td></tr>
+    <tr><td>6</td><td>PC</td><td>onSnapshot 'saved': download result → push {dataUrl, templateId, source:'tablet'} into <code>charts[]</code> → delete session doc + Storage folder → presence→idle.</td></tr>
+    <tr><td>7</td><td>Both</td><td>Heartbeat watchdog: if the other side's heartbeat is &gt;30s stale → set 'cancelled'/timeout → exit + cleanup.</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Error / disconnect matrix</div>
+  <table style="margin:0;">
+    <tr><th>Event</th><th>Tablet shows</th><th>PC shows</th></tr>
+    <tr><td>Tablet Save</td><td>back to standby</td><td>image appears + saved</td></tr>
+    <tr><td>Tablet Cancel</td><td>back to standby</td><td>❌ ล้มเหลว — แท็บเล็ตยกเลิก</td></tr>
+    <tr><td>PC Cancel</td><td>🔌 ถูกยกเลิกจาก PC → standby</td><td>closes back to picker</td></tr>
+    <tr><td>Tablet offline &gt;30s</td><td>—</td><td>❌ ล้มเหลว — หลุดการเชื่อมต่อ</td></tr>
+    <tr><td>PC offline &gt;30s</td><td>🔌 หลุดการเชื่อมต่อ → standby</td><td>—</td></tr>
+    <tr><td>Device crash mid-session</td><td>(orphan)</td><td>(orphan)</td></tr>
+    <tr><td colspan="3" style="color:#555;font-size:12px;">Orphans are reaped by a scheduled sweep that cancels sessions with stale heartbeats &amp; deletes their Storage folders (mirrors the existing cron pattern, e.g. stock-movement-retention).</td></tr>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+<p>All new logic lives in new files plus the existing <code>ChartSection.jsx</code> (already a separate component that owns the chart flow; <strong>TFP itself: 0 lines changed</strong>) and a small route addition in <code>App.jsx</code>.</p>
+<div class="filetree">
+src/<br>
+├─ pages/<span class="new">TabletChartEditorPage.jsx</span>   <span class="cm"># the ?tablet=chart link target: standby ↔ editor</span><br>
+├─ components/tablet-chart/   <span class="cm"># NEW folder</span><br>
+│&nbsp;&nbsp;├─ <span class="new">TabletStandby.jsx</span>        <span class="cm"># name + branch picker + waiting; both cached (localStorage)</span><br>
+│&nbsp;&nbsp;├─ <span class="new">PenCanvas.jsx</span>            <span class="cm"># Pointer Events + perfect-freehand; pressure + palm rejection</span><br>
+│&nbsp;&nbsp;├─ <span class="new">EditorToolRail.jsx</span>      <span class="cm"># pen / highlighter / eraser / color / size / undo-redo / clear</span><br>
+│&nbsp;&nbsp;├─ <span class="new">PcPairingModal.jsx</span>      <span class="cm"># "edit here / on tablet" + ready-list + waiting/failed</span><br>
+│&nbsp;&nbsp;└─ <span class="new">TabletReadyList.jsx</span>     <span class="cm"># live idle-tablet picker (branch-scoped)</span><br>
+├─ lib/<span class="new">chartEditSession.js</span>      <span class="cm"># create/listen/update/cancel/heartbeat/cleanup + Storage up/download</span><br>
+├─ hooks/<span class="new">useChartEditSession.js</span> <span class="cm"># PC-side session hook</span><br>
+├─ hooks/<span class="new">useTabletPresence.js</span>   <span class="cm"># tablet heartbeat + idle/busy</span><br>
+├─ components/<span class="edit">ChartSection.jsx</span>     <span class="cm"># EDIT (small): insert choice + relay between template-pick and local canvas</span><br>
+└─ <span class="edit">App.jsx</span>                       <span class="cm"># EDIT (small): route ?tablet=chart → TabletChartEditorPage</span>
+</div>
+<ul>
+  <li><strong>Boundaries.</strong> <code>chartEditSession.js</code> is the only module that talks to Firestore/Storage for this feature; hooks wrap it; components are presentational. <code>PenCanvas.jsx</code> knows nothing about sessions (pure draw → onSave(dataUrl)). The PC editor (<code>ChartCanvas.jsx</code>, fabric.js) is left exactly as-is for local edits.</li>
+  <li><strong>Branch scoping (BSA).</strong> Both new collections are <code>be_*</code> and branch-scoped: listeners go through <code>scopedDataLayer</code> / <code>useBranchAwareListener</code>; writers stamp <code>branchId</code> via the standard resolver. Registered in the branch-coverage audit.</li>
+  <li><strong>Final persistence unchanged.</strong> The PC merges the tablet result into <code>charts[]</code> as <code>{dataUrl, templateId, fabricJson:null, source:'tablet'}</code> — the same shape used today — so the treatment-timeline, prints, and treatment save all work without modification.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Session-doc relay — the tablet never writes the treatment; the PC merges the result into its in-memory <code>charts[]</code> and persists on treatment save. Works in TFP create mode (no treatmentId yet).</li>
+  <li><strong>Q2 = A:</strong> Tablet authenticates as real staff (existing email+password), <em>any</em> permission tier; branch via the normal selector; only ever writes the session/presence docs.</li>
+  <li><strong>Q3 = A:</strong> Purpose-built pen canvas (Pointer Events API + perfect-freehand), isolated from the fabric.js PC editor. Tools: pen / highlighter / eraser / colors / size / undo-redo / clear.</li>
+  <li><strong>Q4 = A:</strong> Named tablets + live ready-list (auto-select if one; "ไม่มีแท็บเล็ตพร้อม" if none). Editor pops <em>instantly</em> on the tablet — no accept tap (spec point 5).</li>
+  <li><strong>Q5 = A:</strong> Firebase Storage as image transport (session doc carries only URLs); final chart still stored as a dataURL in <code>charts[]</code> = zero downstream change; session Storage folder cleaned on terminal state.</li>
+  <li><strong>Device cache:</strong> tablet's device name + branch are saved on-device (localStorage); Firebase keeps the staff session logged in → no re-entry on reopen.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>A tablet opening the link, logging in (any staff tier), naming itself, and choosing a branch appears as a ready device to PCs in that same branch; name + branch survive a reload with no re-entry.</li>
+  <li>From the TFP chart modal, picking a template offers "แก้ที่เครื่องนี้ / แก้ที่แท็บเล็ต"; "เครื่องนี้" behaves exactly as today (no regression).</li>
+  <li>"แก้ที่แท็บเล็ต" lists only tablets currently idle &amp; fresh in the same branch; sending opens the editor on the chosen tablet <em>instantly</em> with the exact template (including a just-uploaded one).</li>
+  <li>The tablet editor supports Apple Pencil + Android stylus with pressure-variable strokes, palm rejection, low latency, and the listed tools.</li>
+  <li>Tablet Save → the image appears in the PC's chart section and persists when the treatment is saved (create &amp; edit mode).</li>
+  <li>Cancel from either side, or a &gt;30s disconnect on either side, exits both screens with the correct message per the error matrix; presence returns to idle and the Storage folder is cleaned.</li>
+  <li>Two PCs cannot drive the same tablet (transaction guard); a busy tablet is not offered as ready.</li>
+  <li>TFP source is unchanged (0 lines); all new behavior is in new files + <code>ChartSection.jsx</code> + a small <code>App.jsx</code> route.</li>
+  <li>Tests: unit + RTL + Rule I flow-simulate + stress all green; Rule Q L2 real-client-SDK relay e2e passes on real Firestore + Storage.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Stylus feel can't be verified headless.</strong> Per Rule Q V66: pressure / palm-rejection / latency <em>feel</em> is an <strong>L1 hands-on on a real iPad + Apple Pencil</strong> by the user. Automated tests cover the relay contract, state machine, and tool logic — not the tactile feel.</li>
+  <li><strong>Re-editing a tablet-drawn chart.</strong> Tablet charts have <code>fabricJson:null</code> (perfect-freehand, not fabric). Re-opening one for edit is out of scope for v1 (YAGNI — the flow is pick→draw→save). If needed later, store native stroke JSON for tablet re-edit. Flagged, not built.</li>
+  <li><strong>Image size.</strong> Storage transport removes the 1 MB Firestore-doc risk; we still cap result PNG resolution sensibly so the final dataURL in <code>charts[]</code> stays reasonable (matching today's behavior).</li>
+  <li><strong>Orphan cleanup.</strong> Heartbeat-driven cancel handles live disconnects; a scheduled sweep is the backstop for crashes. Sweep cadence + Storage-lifecycle policy to be finalized in the plan.</li>
+  <li><strong>Deploy.</strong> Two new <code>be_*</code> collections + (possibly) a Storage match → a rules change requiring Probe-Deploy-Probe (Rule B) + explicit user "deploy". No data migration.</li>
+</ul>
+
+</body>
+</html>
