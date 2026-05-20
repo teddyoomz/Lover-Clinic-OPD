@@ -71,3 +71,27 @@ describe('appt-calendar-density · T4 span=1 single-line cell + rollup', () => {
     expect(SRC).toMatch(/\+\{dupCount\}/);
   });
 });
+
+describe('appt-calendar-density · T6 responsive switch + toggle', () => {
+  it('T6.1 imports useIsBelowLg + AppointmentAgendaView', () => {
+    expect(SRC).toMatch(/import \{ useIsBelowLg \} from '\.\.\/\.\.\/hooks\/useIsBelowLg\.js'/);
+    expect(SRC).toMatch(/import AppointmentAgendaView from '\.\/AppointmentAgendaView\.jsx'/);
+  });
+
+  it('T6.2 derives effectiveView from viewModeOverride || (belowLg ? agenda : grid)', () => {
+    expect(SRC).toMatch(/const belowLg = useIsBelowLg\(\)/);
+    expect(SRC).toMatch(/const \[viewModeOverride, setViewModeOverride\] = useState\(null\)/);
+    expect(SRC).toMatch(/const effectiveView = viewModeOverride \|\| \(belowLg \? 'agenda' : 'grid'\)/);
+  });
+
+  it('T6.3 toggle button flips viewModeOverride', () => {
+    expect(SRC).toMatch(/data-testid="appt-view-toggle"/);
+    expect(SRC).toMatch(/setViewModeOverride\(effectiveView === 'grid' \? 'agenda' : 'grid'\)/);
+    expect(SRC).toMatch(/effectiveView === 'grid' \? '☰ ลิสต์' : '⊞ ตาราง'/);
+  });
+
+  it('T6.4 render gated on effectiveView; agenda branch fed by typedDayAppts + effectiveRoom + openDetail', () => {
+    expect(SRC).toMatch(/\{effectiveView === 'agenda' \? \(/);
+    expect(SRC).toMatch(/<AppointmentAgendaView appts=\{typedDayAppts\} resolveRoom=\{effectiveRoom\} onSelect=\{openDetail\} \/>/);
+  });
+});

@@ -37,12 +37,14 @@ import {
   listExamRooms,
 } from '../../lib/scopedDataLayer.js';
 import { useBranchAwareListener } from '../../hooks/useBranchAwareListener.js';
+import { useIsBelowLg } from '../../hooks/useIsBelowLg.js';
 import { bangkokNow } from '../../utils.js';
 import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.js';
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
 import AppointmentDetailPopover from './AppointmentDetailPopover.jsx';
+import AppointmentAgendaView from './AppointmentAgendaView.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the appt grid cell
@@ -269,6 +271,13 @@ export default function AppointmentCalendarView({
   // read-only detail popover first; แก้ไข inside it routes to the edit modal.
   const [detailAppt, setDetailAppt] = useState(null);
   const openDetail = useCallback((appt) => setDetailAppt(appt), []);
+  // Calendar-density (2026-05-20) — below `lg` (mobile/tablet) default to the
+  // chronological agenda (the 2D room×time grid forces 2-axis scroll on a
+  // phone); ≥lg default to the grid. viewModeOverride (null | 'grid' |
+  // 'agenda') lets admin pin a view; null = follow viewport.
+  const belowLg = useIsBelowLg();
+  const [viewModeOverride, setViewModeOverride] = useState(null);
+  const effectiveView = viewModeOverride || (belowLg ? 'agenda' : 'grid');
 
   const today = dateStr(new Date());
   const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
@@ -783,11 +792,25 @@ export default function AppointmentCalendarView({
             </span>
             {dayLoading && <Loader2 size={14} className="animate-spin text-[var(--tx-muted)]" />}
           </div>
-          <button onClick={() => openCreate(selectedDate)}
-            className="px-4 py-2.5 rounded-xl text-xs font-black text-white transition-all flex items-center gap-1.5 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
-            style={{ background: 'linear-gradient(135deg, #047857, #059669)', boxShadow: '0 4px 15px rgba(5,150,105,0.3)' }}>
-            <Plus size={14} /> เพิ่มนัดหมาย
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Calendar-density (2026-05-20) — grid ⇄ agenda toggle. Pins
+                viewModeOverride; below-lg defaults to agenda automatically. */}
+            <button
+              type="button"
+              onClick={() => setViewModeOverride(effectiveView === 'grid' ? 'agenda' : 'grid')}
+              data-testid="appt-view-toggle"
+              data-effective-view={effectiveView}
+              title={effectiveView === 'grid' ? 'สลับเป็นมุมมองลิสต์' : 'สลับเป็นมุมมองตาราง'}
+              className="px-3 py-2.5 rounded-xl text-xs font-bold text-[var(--tx-secondary)] border border-[var(--bd)] hover:bg-[var(--bg-hover)] transition-all flex items-center gap-1.5"
+            >
+              {effectiveView === 'grid' ? '☰ ลิสต์' : '⊞ ตาราง'}
+            </button>
+            <button onClick={() => openCreate(selectedDate)}
+              className="px-4 py-2.5 rounded-xl text-xs font-black text-white transition-all flex items-center gap-1.5 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider"
+              style={{ background: 'linear-gradient(135deg, #047857, #059669)', boxShadow: '0 4px 15px rgba(5,150,105,0.3)' }}>
+              <Plus size={14} /> เพิ่มนัดหมาย
+            </button>
+          </div>
         </div>
 
         {/* Phase 11.8 wiring: Holiday banner. Warns admin that the selected
@@ -832,7 +855,14 @@ export default function AppointmentCalendarView({
             ได้"). The "ไม่มีนัดหมายวันนี้" empty-state was removed; the
             virtual ไม่ระบุห้อง column ensures at least one clickable
             column even when the branch has no exam rooms. */}
-        {(
+        {effectiveView === 'agenda' ? (
+          /* Calendar-density (2026-05-20) — mobile/pinned agenda view. Fed by
+             the SAME typedDayAppts the grid uses (no refetch); room labels
+             resolve via effectiveRoom; card tap → openDetail (popover). */
+          <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }} data-testid="appt-agenda-wrapper">
+            <AppointmentAgendaView appts={typedDayAppts} resolveRoom={effectiveRoom} onSelect={openDetail} />
+          </div>
+        ) : (
         <div className="bg-[var(--bg-surface)] rounded-xl overflow-hidden shadow-lg" style={{ border: '1.5px solid rgba(14,165,233,0.1)' }}>
           <div className="overflow-x-auto">
             {/* Phase 15.7-quinquies (2026-04-28) — column width scales with
