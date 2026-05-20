@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall List Enhancements — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    .mockup-grid { display: flex; gap: 1.2em; flex-wrap: wrap; }
+    .mockup-grid > .mockup { flex: 1 1 380px; margin: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .tag { display:inline-block; font-size:0.7em; padding:0.1em 0.5em; border-radius:999px; font-weight:600; }
+  </style>
+</head>
+<body>
+
+<h1>Recall List Enhancements — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 (EOD+2) · <strong>Status:</strong> Approved by user (decisions Q1–Q3 locked) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-20-recall-list-enhancements.html (to be written by writing-plans)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The Recall (patient follow-up) feature is shown on three surfaces — the Frontend "Recall" tab, the Backend Recall tab, and the customer-detail page — but the cards omit the customer's phone number and bury the free-text note. Staff calling patients have to open each customer to find the phone, and the reason/result of a call (which staff <em>always</em> fill in) is rendered small. There is also no record of <em>which staff member</em> logged a result, and the Frontend tab only surfaces today's recalls, so yesterday's missed follow-ups silently fall off the radar.</p>
+<p>This spec makes every recall card show a <strong>tap-to-call phone number</strong> and a <strong>large, prominent note</strong>, captures and displays the <strong>staff member who recorded the result</strong>, and reworks the Frontend tab into <strong>"Recall วันนี้"</strong> with Today (top, most prominent) + all overdue + tomorrow — beautiful in both dark and light themes.</p>
+
+<h2>Mockup Design</h2>
+<p>All three surfaces render through one shared component, <code>RecallRow.jsx</code>, so the card below is the single visual target for backend / frontend / customer-detail. Shown in both themes (the app switches via <code>data-theme</code> + CSS vars).</p>
+
+<div class="mockup-label" style="margin-top:1em;">Recall card — contacted recall (has outcome) · DARK + LIGHT</div>
+<div class="mockup-grid">
+
+  <!-- DARK card -->
+  <div class="mockup" style="background:#0f0f0f;">
+    <div class="mockup-label" style="color:#6b7280;">Dark · contacted</div>
+    <div style="background:#141414; border:1px solid #333; border-left:3px solid #ef4444; border-radius:10px; padding:0.9em 1em; font-family:-apple-system,sans-serif;">
+      <div style="display:flex; align-items:center; gap:0.6em; flex-wrap:wrap;">
+        <span style="background:#1f1f1f; color:#9ca3af; font-size:0.72em; padding:0.15em 0.5em; border-radius:6px;">20/05</span>
+        <span style="color:#ffffff; font-weight:700; font-size:0.98em;">นางสาว สมหญิง ใจดี</span>
+        <span style="color:#6b7280; font-size:0.78em;">HN-26-0042</span>
+        <a href="tel:0812345678" style="margin-left:auto; display:inline-flex; align-items:center; gap:0.3em; background:rgba(220,38,38,0.14); color:#f87171; border:1px solid rgba(220,38,38,0.4); font-size:0.82em; font-weight:600; padding:0.2em 0.6em; border-radius:999px; text-decoration:none;">📞 081-234-5678</a>
+      </div>
+      <div style="margin-top:0.7em; background:#0c0c0c; border:1px solid #262626; border-radius:8px; padding:0.7em 0.85em;">
+        <div style="color:#6b7280; font-size:0.68em; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25em;">📝 ผลการติดต่อ</div>
+        <div style="color:#e5e7eb; font-size:0.95em; line-height:1.5;">ลูกค้าขอเลื่อนนัดเป็นสัปดาห์หน้า ติดธุระต่างจังหวัด นัดโทรกลับวันจันทร์เช้า</div>
+      </div>
+      <div style="margin-top:0.6em; display:flex; align-items:center; gap:0.5em; flex-wrap:wrap;">
+        <span style="background:rgba(245,158,11,0.16); color:#fbbf24; font-size:0.72em; padding:0.12em 0.55em; border-radius:999px;">⏰ ขอเลื่อน</span>
+        <span style="color:#6b7280; font-size:0.74em;">บันทึกโดย: พิมพ์ชนก (ผู้ช่วย)</span>
+        <span style="margin-left:auto; color:#4b5563; font-size:0.95em; letter-spacing:0.15em;">💬 ⏰ ✎ 🗑</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHT card -->
+  <div class="mockup" style="background:#f0f4f8;">
+    <div class="mockup-label" style="color:#64748b;">Light · contacted</div>
+    <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3px solid #dc2626; border-radius:10px; padding:0.9em 1em; font-family:-apple-system,sans-serif;">
+      <div style="display:flex; align-items:center; gap:0.6em; flex-wrap:wrap;">
+        <span style="background:#f1f5f9; color:#475569; font-size:0.72em; padding:0.15em 0.5em; border-radius:6px;">20/05</span>
+        <span style="color:#0f172a; font-weight:700; font-size:0.98em;">นางสาว สมหญิง ใจดี</span>
+        <span style="color:#64748b; font-size:0.78em;">HN-26-0042</span>
+        <a href="tel:0812345678" style="margin-left:auto; display:inline-flex; align-items:center; gap:0.3em; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:0.82em; font-weight:600; padding:0.2em 0.6em; border-radius:999px; text-decoration:none;">📞 081-234-5678</a>
+      </div>
+      <div style="margin-top:0.7em; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.7em 0.85em;">
+        <div style="color:#64748b; font-size:0.68em; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25em;">📝 ผลการติดต่อ</div>
+        <div style="color:#0f172a; font-size:0.95em; line-height:1.5;">ลูกค้าขอเลื่อนนัดเป็นสัปดาห์หน้า ติดธุระต่างจังหวัด นัดโทรกลับวันจันทร์เช้า</div>
+      </div>
+      <div style="margin-top:0.6em; display:flex; align-items:center; gap:0.5em; flex-wrap:wrap;">
+        <span style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-size:0.72em; padding:0.12em 0.55em; border-radius:999px;">⏰ ขอเลื่อน</span>
+        <span style="color:#64748b; font-size:0.74em;">บันทึกโดย: พิมพ์ชนก (ผู้ช่วย)</span>
+        <span style="margin-left:auto; color:#94a3b8; font-size:0.95em; letter-spacing:0.15em;">💬 ⏰ ✎ 🗑</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="mockup-label" style="margin-top:1.5em;">Recall card — pending recall (no outcome yet → note falls back to <code>reason</code>; no logged-by byline) · DARK</div>
+<div class="mockup" style="background:#0f0f0f;">
+  <div style="background:#141414; border:1px solid #333; border-radius:10px; padding:0.9em 1em; font-family:-apple-system,sans-serif;">
+    <div style="display:flex; align-items:center; gap:0.6em; flex-wrap:wrap;">
+      <span style="background:#1f1f1f; color:#9ca3af; font-size:0.72em; padding:0.15em 0.5em; border-radius:6px;">21/05</span>
+      <span style="color:#ffffff; font-weight:700; font-size:0.98em;">นาย ก้องภพ มั่นคง</span>
+      <span style="color:#6b7280; font-size:0.78em;">HN-26-0107</span>
+      <a href="tel:0998887766" style="margin-left:auto; display:inline-flex; align-items:center; gap:0.3em; background:rgba(220,38,38,0.14); color:#f87171; border:1px solid rgba(220,38,38,0.4); font-size:0.82em; font-weight:600; padding:0.2em 0.6em; border-radius:999px; text-decoration:none;">📞 099-888-7766</a>
+    </div>
+    <div style="margin-top:0.7em; background:#0c0c0c; border:1px solid #262626; border-radius:8px; padding:0.7em 0.85em;">
+      <div style="color:#6b7280; font-size:0.68em; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25em;">📝 เหตุผลนัด recall</div>
+      <div style="color:#e5e7eb; font-size:0.95em; line-height:1.5;">ติดตามผลหลังทำเลเซอร์ 7 วัน — เช็กรอยแดง/บวม และนัดทาครีมต่อเนื่อง</div>
+    </div>
+    <div style="margin-top:0.6em; display:flex; align-items:center; gap:0.5em;">
+      <span style="background:rgba(96,165,250,0.16); color:#60a5fa; font-size:0.72em; padding:0.12em 0.55em; border-radius:999px;">รอติดต่อ</span>
+      <span style="margin-left:auto; color:#4b5563; font-size:0.95em; letter-spacing:0.15em;">💬 ⏰ ✎ 🗑</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup-label" style="margin-top:1.5em;">Frontend tab "Recall วันนี้" — Today (top/prominent) → ค้าง/เลยกำหนด → พรุ่งนี้ · DARK + LIGHT</div>
+<div class="mockup-grid">
+
+  <!-- DARK frontend -->
+  <div class="mockup" style="background:#050505;">
+    <div class="mockup-label" style="color:#6b7280;">Dark</div>
+    <div style="font-family:-apple-system,sans-serif;">
+      <div style="color:#ffffff; font-size:1.15em; font-weight:800; margin-bottom:0.8em;">Recall วันนี้</div>
+
+      <div style="border-left:3px solid #ef4444; padding-left:0.7em; margin-bottom:0.4em;">
+        <div style="color:#ffffff; font-weight:700; font-size:0.95em;">🔥 วันนี้ <span style="color:#9ca3af; font-weight:500;">(4)</span></div>
+      </div>
+      <div style="background:#141414; border:1px solid #333; border-radius:8px; padding:0.55em 0.75em; margin-bottom:0.4em; color:#e5e7eb; font-size:0.85em;">
+        นางสาว สมหญิง ใจดี &nbsp;<span style="color:#f87171;">📞 081-234-5678</span><br><span style="color:#9ca3af;">📝 ติดตามผลหลังฉีดฟิลเลอร์…</span>
+      </div>
+
+      <div style="margin-top:1em; color:#fbbf24; font-weight:700; font-size:0.9em;">⚠ ค้าง/เลยกำหนด <span style="color:#9ca3af; font-weight:500;">(2)</span></div>
+      <div style="background:#141414; border:1px solid #333; border-left:3px solid #ef4444; border-radius:8px; padding:0.55em 0.75em; margin-top:0.4em; color:#e5e7eb; font-size:0.85em;">
+        นาย ก้องภพ มั่นคง &nbsp;<span style="color:#f87171;">📞 099-888-7766</span><br><span style="color:#9ca3af;">📝 ติดตามผลเลเซอร์ 7 วัน…</span>
+      </div>
+
+      <div style="margin-top:1em; color:#9ca3af; font-weight:600; font-size:0.85em;">พรุ่งนี้ <span style="font-weight:500;">(3)</span></div>
+      <div style="background:#0f0f0f; border:1px solid #262626; border-radius:8px; padding:0.55em 0.75em; margin-top:0.4em; color:#9ca3af; font-size:0.83em;">
+        นาง วันเพ็ญ ศรีสุข &nbsp;<span style="color:#f87171;">📞 086-555-1212</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHT frontend -->
+  <div class="mockup" style="background:#f0f4f8;">
+    <div class="mockup-label" style="color:#64748b;">Light</div>
+    <div style="font-family:-apple-system,sans-serif;">
+      <div style="color:#0f172a; font-size:1.15em; font-weight:800; margin-bottom:0.8em;">Recall วันนี้</div>
+
+      <div style="border-left:3px solid #dc2626; padding-left:0.7em; margin-bottom:0.4em;">
+        <div style="color:#0f172a; font-weight:700; font-size:0.95em;">🔥 วันนี้ <span style="color:#64748b; font-weight:500;">(4)</span></div>
+      </div>
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:0.55em 0.75em; margin-bottom:0.4em; color:#0f172a; font-size:0.85em;">
+        นางสาว สมหญิง ใจดี &nbsp;<span style="color:#dc2626;">📞 081-234-5678</span><br><span style="color:#64748b;">📝 ติดตามผลหลังฉีดฟิลเลอร์…</span>
+      </div>
+
+      <div style="margin-top:1em; color:#b45309; font-weight:700; font-size:0.9em;">⚠ ค้าง/เลยกำหนด <span style="color:#64748b; font-weight:500;">(2)</span></div>
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:3px solid #dc2626; border-radius:8px; padding:0.55em 0.75em; margin-top:0.4em; color:#0f172a; font-size:0.85em;">
+        นาย ก้องภพ มั่นคง &nbsp;<span style="color:#dc2626;">📞 099-888-7766</span><br><span style="color:#64748b;">📝 ติดตามผลเลเซอร์ 7 วัน…</span>
+      </div>
+
+      <div style="margin-top:1em; color:#64748b; font-weight:600; font-size:0.85em;">พรุ่งนี้ <span style="font-weight:500;">(3)</span></div>
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.55em 0.75em; margin-top:0.4em; color:#64748b; font-size:0.83em;">
+        นาง วันเพ็ญ ศรีสุข &nbsp;<span style="color:#dc2626;">📞 086-555-1212</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="mockup-label" style="margin-top:1.5em;">RecallOutcomeModal — NEW required "พนักงานผู้ลงบันทึก" dropdown (starts blank; Save disabled until picked) · DARK</div>
+<div class="mockup" style="background:#0f0f0f;">
+  <div style="background:#141414; border:1px solid #333; border-radius:12px; padding:1.1em 1.2em; max-width:440px; font-family:-apple-system,sans-serif;">
+    <div style="color:#ffffff; font-weight:700; margin-bottom:0.8em;">บันทึกผลการติดต่อ — นางสาว สมหญิง ใจดี</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5em;">
+      <div style="border:1px solid #10b981; background:rgba(16,185,129,0.12); color:#34d399; border-radius:8px; padding:0.6em; text-align:center; font-size:0.85em;">✓ จะมาตามนัด</div>
+      <div style="border:1px solid #f59e0b; background:rgba(245,158,11,0.18); color:#fbbf24; border-radius:8px; padding:0.6em; text-align:center; font-size:0.85em;">⏰ ขอเลื่อน ✔</div>
+      <div style="border:1px solid #333; color:#9ca3af; border-radius:8px; padding:0.6em; text-align:center; font-size:0.85em;">💭 ไม่สนใจ</div>
+      <div style="border:1px solid #333; color:#9ca3af; border-radius:8px; padding:0.6em; text-align:center; font-size:0.85em;">📵 ติดต่อไม่ได้</div>
+    </div>
+    <div style="margin-top:0.9em;" data-field="outcomeStaff">
+      <div style="color:#e5e7eb; font-size:0.82em; margin-bottom:0.3em;">พนักงานผู้ลงบันทึก <span style="color:#f87171;">*</span></div>
+      <div style="background:#0c0c0c; border:1px solid #ef4444; color:#9ca3af; border-radius:8px; padding:0.55em 0.75em; font-size:0.85em; display:flex; justify-content:space-between;"><span>— เลือกพนักงาน —</span><span>▾</span></div>
+      <div style="color:#f87171; font-size:0.72em; margin-top:0.25em;">⚠ กรุณาเลือกพนักงานผู้ลงบันทึกก่อนบันทึก</div>
+    </div>
+    <div style="margin-top:0.9em;">
+      <div style="color:#e5e7eb; font-size:0.82em; margin-bottom:0.3em;">หมายเหตุ / รายละเอียด</div>
+      <div style="background:#0c0c0c; border:1px solid #262626; color:#6b7280; border-radius:8px; padding:0.55em 0.75em; font-size:0.85em; min-height:2.6em;">ลูกค้าขอเลื่อนนัด…</div>
+    </div>
+    <div style="margin-top:1em; display:flex; gap:0.5em; justify-content:flex-end;">
+      <span style="color:#9ca3af; font-size:0.85em; padding:0.45em 0.9em;">ยกเลิก</span>
+      <span style="background:#3f1212; color:#7f1d1d; border:1px solid #5b1a1a; border-radius:8px; padding:0.45em 1.1em; font-size:0.85em;">บันทึก (ปิดอยู่จนเลือกพนักงาน)</span>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>Flow A — Record outcome (with required staff)</h3>
+<div class="mockup">
+  <div class="mockup-label">Outcome modal → write → listener re-render</div>
+  <svg viewBox="0 0 940 150" style="width:100%; height:auto; font-family:-apple-system,sans-serif;">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="11" text-anchor="middle">
+      <rect x="6" y="46" width="118" height="52" rx="7" fill="#fef2f2" stroke="#dc2626"/><text x="65" y="66">open</text><text x="65" y="80">RecallOutcomeModal</text>
+      <rect x="156" y="46" width="118" height="52" rx="7" fill="#fff" stroke="#999"/><text x="215" y="66">pick outcome card</text><text x="215" y="80">(✓/⏰/💭/📵)</text>
+      <rect x="306" y="40" width="128" height="64" rx="7" fill="#fffbeb" stroke="#f59e0b"/><text x="370" y="60" font-weight="bold">pick STAFF *</text><text x="370" y="74">(required —</text><text x="370" y="88">Save disabled)</text>
+      <rect x="466" y="46" width="110" height="52" rx="7" fill="#fff" stroke="#999"/><text x="521" y="66">type note</text><text x="521" y="80">(outcomeNote)</text>
+      <rect x="608" y="46" width="150" height="52" rx="7" fill="#f0fdf4" stroke="#10b981"/><text x="683" y="62">recordRecallOutcome(</text><text x="683" y="76">id,{outcome,note,staff})</text><text x="683" y="90" font-size="9">throws if staff missing</text>
+      <rect x="790" y="40" width="144" height="64" rx="7" fill="#eff6ff" stroke="#3b82f6"/><text x="862" y="58">write outcomeBy=</text><text x="862" y="72">{id,displayName}</text><text x="862" y="86" font-size="9">+ updatedBy=account</text>
+      <line x1="124" y1="72" x2="154" y2="72" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="274" y1="72" x2="304" y2="72" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="434" y1="72" x2="464" y2="72" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="576" y1="72" x2="606" y2="72" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="758" y1="72" x2="788" y2="72" stroke="#dc2626" marker-end="url(#ar)"/>
+      <text x="470" y="130" text-anchor="start" fill="#555" font-size="10.5">→ Firestore onSnapshot fires → RecallRow re-renders: note shown prominent + "บันทึกโดย: {staff}" byline appears.</text>
+    </g>
+  </svg>
+</div>
+
+<h3>Flow B — Frontend "Recall วันนี้" bucketing</h3>
+<div class="mockup">
+  <div class="mockup-label">load → group → render (Today on top, most prominent)</div>
+  <svg viewBox="0 0 940 200" style="width:100%; height:auto; font-family:-apple-system,sans-serif;">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="11" text-anchor="middle">
+      <rect x="6" y="80" width="150" height="48" rx="7" fill="#fff" stroke="#999"/><text x="81" y="100">listenToRecalls</text><text x="81" y="114">(branch-scoped)</text>
+      <rect x="190" y="80" width="200" height="48" rx="7" fill="#fef2f2" stroke="#dc2626"/><text x="290" y="100">groupRecallsByTimeBucket</text><text x="290" y="114">(recalls, thaiTodayISO())</text>
+      <line x1="156" y1="104" x2="188" y2="104" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="390" y1="104" x2="430" y2="104" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <rect x="432" y="14" width="180" height="40" rx="7" fill="#fee2e2" stroke="#dc2626"/><text x="522" y="30" font-weight="bold">🔥 วันนี้ (today)</text><text x="522" y="44" font-size="9">TOP · largest · accent header</text>
+      <rect x="432" y="84" width="180" height="40" rx="7" fill="#fffbeb" stroke="#f59e0b"/><text x="522" y="100" font-weight="bold">⚠ ค้าง/เลยกำหนด</text><text x="522" y="114" font-size="9">all overdue pending (Q3=A)</text>
+      <rect x="432" y="154" width="180" height="40" rx="7" fill="#f8fafc" stroke="#94a3b8"/><text x="522" y="170">พรุ่งนี้ (tomorrow)</text><text x="522" y="184" font-size="9">muted look-ahead</text>
+      <line x1="612" y1="34" x2="660" y2="34" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="612" y1="104" x2="660" y2="104" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <line x1="612" y1="174" x2="660" y2="174" stroke="#dc2626" marker-end="url(#ar2)"/>
+      <rect x="662" y="14" width="270" height="180" rx="9" fill="#fafafa" stroke="#ddd"/>
+      <text x="797" y="34" font-weight="bold">RecallFrontendView</text>
+      <text x="797" y="54" font-size="9.5">renders 3 sections in this order;</text>
+      <text x="797" y="68" font-size="9.5">each card = shared RecallRow</text>
+      <text x="797" y="82" font-size="9.5">(phone tel: + prominent note +</text>
+      <text x="797" y="96" font-size="9.5">logged-by). thisWeek/later dropped.</text>
+      <text x="797" y="118" font-size="9.5">"overdue" already exists in the</text>
+      <text x="797" y="132" font-size="9.5">resolver = effective date &lt; today</text>
+      <text x="797" y="146" font-size="9.5">&amp; not done → no new bucket needed.</text>
+    </g>
+  </svg>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Approach: single-source.</strong> All three surfaces (backend tab, frontend view, customer-detail) render through the shared <code>src/components/backend/recall/RecallRow.jsx</code>. Phone + prominent-note + logged-by land in that one file and propagate everywhere. No new card component, no per-surface duplication.</p>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>RecallRow.jsx</code> (shared)</td><td>Add tel: phone link (<code>customerPhone</code>, call-accent, non-red name); replace small reason line with a prominent note block showing <code>outcomeNote || reason</code>; add "บันทึกโดย: {outcomeBy.displayName}" byline when an outcome exists. All via existing CSS vars (<code>--bg-input/--tx-primary/--tx-muted/--bd</code>) + the existing light-mode (<code>resolvedTheme</code>) path.</td></tr>
+  <tr><td><code>RecallOutcomeModal.jsx</code></td><td>NEW required staff dropdown "พนักงานผู้ลงบันทึก" — starts blank, Save disabled until picked, <code>data-field="outcomeStaff"</code> for scroll-to-error. Populated from <code>listStaff</code> (universal). On save passes <code>{id,displayName}</code>.</td></tr>
+  <tr><td><code>backendClient.js</code> → <code>recordRecallOutcome</code></td><td>Accept a <code>recordedBy {id,displayName}</code> arg; write it to <code>outcomeBy</code>; throw if missing (defense behind the modal gate). Keep auto <code>_resolveRecallAttribution()</code> account as <code>updatedBy</code> for the audit trail.</td></tr>
+  <tr><td><code>recallValidation.js</code></td><td>Validate the recorded-by staff arg on outcome.</td></tr>
+  <tr><td><code>RecallFrontendView.jsx</code> + <code>RecallList.jsx</code> + <code>recallResolvers.js</code></td><td>Heading → "Recall วันนี้". Render order: <strong>today (top, prominent)</strong> → <strong>overdue (ค้าง/เลยกำหนด)</strong> → <strong>tomorrow</strong>; drop thisWeek/later from this view. The <code>overdue/today/tomorrow</code> buckets already exist in <code>groupRecallsByTimeBucket</code> — mostly render-order + today-prominence restyle.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Prominent note = <code>outcomeNote</code> when present, else fall back to <code>reason</code> (pending recalls show the recall reason; contacted recalls show the contact result). Label adapts: "📝 ผลการติดต่อ" vs "📝 เหตุผลนัด recall".</li>
+  <li><strong>Q2 = B:</strong> Staff dropdown starts <strong>blank and is REQUIRED</strong> every time — Save is disabled until a staff member is picked. Stored in <code>outcomeBy {id,displayName}</code> and shown as the "บันทึกโดย" byline.</li>
+  <li><strong>Q3 = A:</strong> Frontend past section = <strong>all overdue/past-due pending</strong> ("ค้าง/เลยกำหนด"), not just literally yesterday — so older forgotten recalls surface too. Today stays on top + most prominent; tomorrow below.</li>
+  <li><strong>Theme:</strong> both dark + light, on-theme, via existing CSS vars. <strong>No red on customer name / HN</strong> (Thai-culture rule); phone uses the app's call-action accent.</li>
+  <li><strong>YAGNI / out of scope:</strong> no staff picker on recall <em>create</em> (outcome only); no LINE-flow change; no new collection or schema field (reuse <code>customerPhone</code> + <code>outcomeBy</code>).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Every recall card on all 3 surfaces shows the customer phone as a <code>tel:</code> link that initiates a call; cards with no phone degrade gracefully (no broken link).</li>
+  <li>The note block is visually prominent (larger font + tinted box) and shows <code>outcomeNote || reason</code>; contacted recalls show outcomeNote, pending show reason.</li>
+  <li>Recording an outcome is <strong>blocked</strong> until a staff member is selected; the selected staff is persisted to <code>outcomeBy</code> and rendered as "บันทึกโดย: {name}" on the card.</li>
+  <li>The Frontend tab is titled "Recall วันนี้" and renders today (top, most prominent) + all overdue + tomorrow, in that order.</li>
+  <li>All of the above render correctly and attractively in BOTH dark and light themes; customer name/HN are never red.</li>
+  <li>Verified per Rule Q (L1 real browser OR L2 real client SDK) before "done" — not mock-only.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Phone format / missing phone:</strong> <code>customerPhone</code> is denormalized at recall create-time; some legacy recalls may lack it. Render falls back to hidden (no link) when empty; the tel: link strips non-digits. (Live-resolve from be_customers is out of scope — denormalized value is acceptable.)</li>
+  <li><strong>outcomeBy overload:</strong> we reuse <code>outcomeBy</code> for the explicitly-picked staff and move the logged-in account to <code>updatedBy</code>. Confirm no existing reader expects <code>outcomeBy</code> to be the account (none found in explore; verify during implementation).</li>
+  <li><strong>Customer-detail redundancy:</strong> phone is shown even on the customer's own detail page (user said "ทุกๆที่"); minor redundancy accepted intentionally.</li>
+  <li><strong>Verification limitation:</strong> headless preview can't show visual flicker/theme nuance at tiny viewport — final theme + tap-to-call confirmation needs user L1 hands-on (Rule Q).</li>
+</ul>
+
+</body>
+</html>
