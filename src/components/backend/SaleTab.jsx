@@ -48,6 +48,8 @@ import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import { hexToRgb, thaiTodayISO } from '../../utils.js';
 import { fmtThaiDate } from '../../lib/dateFormat.js';
+// 2026-05-20 — sub-tab partition (การขาย / ยกเลิกแล้ว). Single-source predicate.
+import { filterSalesBySubTab } from '../../lib/saleSubTabFilter.js';
 import { LocalInput, LocalTextarea } from '../form/LocalField.jsx';
 import FileUploadField from './FileUploadField.jsx';
 import DepositPicker from './DepositPicker.jsx';
@@ -68,6 +70,13 @@ const PAYMENT_STATUSES = [
   { value: 'deferred', label: 'ชำระภายหลัง', color: 'purple' },
   { value: 'draft', label: 'แบบร่าง', color: 'gray' },
   { value: 'cancelled', label: 'ยกเลิก', color: 'red' },
+];
+
+// Sub-tabs on the sales page (2026-05-20). "การขาย" = non-cancelled (default);
+// "ยกเลิกแล้ว" = cancelled-only. Pill style mirrors StockTab's segmented row.
+const SALE_SUB_TABS = [
+  { id: 'active', label: 'การขาย' },
+  { id: 'cancelled', label: 'ยกเลิกแล้ว' },
 ];
 
 /** Resolve the display status for a sale row. Cancelled is top-level
@@ -243,6 +252,14 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   const [listLoading, setListLoading] = useState(true);
   const [filterQuery, setFilterQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // 2026-05-20 — sub-tab: 'active' (non-cancelled, default) | 'cancelled'.
+  const [subTab, setSubTab] = useState('active');
+  // The payment-status filter is meaningful only on the active tab, so reset
+  // it on any tab switch to avoid a stale filter silently emptying a tab.
+  const handleSubTabChange = (id) => {
+    setSubTab(id);
+    setFilterStatus('');
+  };
 
   // ── Detail / Cancel / Payment modals ──
   const [viewingSale, setViewingSale] = useState(null);
@@ -477,14 +494,17 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
   // ── Filtered list ──
   const filtered = useMemo(() => {
-    let list = sales;
-    if (filterStatus) list = list.filter(s => s.payment?.status === filterStatus || s.status === filterStatus);
+    // 2026-05-20: split by sub-tab FIRST (active = non-cancelled, cancelled =
+    // cancelled-only) via the single-source helper, then apply search. The
+    // payment-status dropdown applies on the active tab only.
+    let list = filterSalesBySubTab(sales, subTab);
+    if (subTab === 'active' && filterStatus) list = list.filter(s => s.payment?.status === filterStatus || s.status === filterStatus);
     if (filterQuery.trim()) {
       const q = filterQuery.toLowerCase();
       list = list.filter(s => (s.customerName || '').toLowerCase().includes(q) || (s.saleId || '').toLowerCase().includes(q) || (s.customerHN || '').includes(q));
     }
     return list;
-  }, [sales, filterQuery, filterStatus]);
+  }, [sales, filterQuery, filterStatus, subTab]);
 
   // ── Load form options ──
   // Phase 14.10-tris (2026-04-26) — sellers loaded from be_staff +
@@ -1052,6 +1072,24 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
 
   return (
     <div className="space-y-4">
+      {/* Sub-tab pills (2026-05-20) — การขาย / ยกเลิกแล้ว */}
+      <div className="bg-[var(--bg-surface)] rounded-xl p-1.5 shadow border border-[var(--bd)] flex gap-1 overflow-x-auto">
+        {SALE_SUB_TABS.map(t => {
+          const active = subTab === t.id;
+          return (
+            <button key={t.id} onClick={() => handleSubTabChange(t.id)}
+              data-testid={`saletab-subtab-${t.id}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                active
+                  ? 'bg-rose-700 text-white shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                  : 'text-[var(--tx-muted)] hover:text-rose-400 hover:bg-[var(--bg-hover)]'
+              }`}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Header */}
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg fx-glow-u9 fx-glow-u9-sales" style={{ border: '1.5px solid rgba(244,63,94,0.15)' }}>
         <div className="flex items-center gap-3">
@@ -1061,11 +1099,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
               className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-sm text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none transition-all"
               style={{ boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }} />
           </div>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-xs font-bold text-[var(--tx-primary)] focus:outline-none transition-all">
-            <option value="">ทุกสถานะ</option>
-            {PAYMENT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
+          {subTab === 'active' && (
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="px-3 py-3 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-xs font-bold text-[var(--tx-primary)] focus:outline-none transition-all">
+              <option value="">ทุกสถานะ</option>
+              {PAYMENT_STATUSES.filter(s => s.value !== 'cancelled').map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          )}
           <button onClick={openCreate}
             className="px-6 py-3 rounded-xl font-black text-sm text-white transition-all flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider whitespace-nowrap"
             style={{ background: 'linear-gradient(135deg, #be123c, #e11d48)', boxShadow: '0 4px 20px rgba(244,63,94,0.35)' }}>
@@ -1074,7 +1114,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         </div>
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-[var(--tx-muted)] flex items-center gap-1.5">
-            <ShoppingCart size={12} /> จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม
+            <ShoppingCart size={12} /> {subTab === 'cancelled' ? 'รายการที่ยกเลิกแล้ว — ดูรายละเอียดหรือพิมพ์ได้' : 'จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม'}
           </p>
           <span className="text-xs text-[var(--tx-muted)] font-bold">{filtered.length} รายการ</span>
         </div>
@@ -1084,7 +1124,12 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       {listLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 size={22} className="animate-spin text-[var(--tx-muted)]" /><span className="ml-3 text-sm text-[var(--tx-muted)]">กำลังโหลด...</span></div>
       ) : filtered.length === 0 ? (
-        sales.length === 0 ? (
+        subTab === 'cancelled' ? (
+          <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
+            <ShoppingCart size={28} className="mx-auto text-[var(--tx-muted)] mb-2" />
+            <p className="text-sm text-[var(--tx-muted)]">ยังไม่มีรายการที่ยกเลิก</p>
+          </div>
+        ) : sales.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="relative mb-6">
               <div className="w-20 h-20 rounded-2xl flex items-center justify-center"
@@ -1116,7 +1161,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
         ) : (
           <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
             <Search size={28} className="mx-auto text-[var(--tx-muted)] mb-2" />
-            <p className="text-sm text-[var(--tx-muted)]">ไม่พบรายการที่ตรงกับตัวกรอง</p>
+            <p className="text-sm text-[var(--tx-muted)]">{filterQuery || filterStatus ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ยังไม่มีรายการขาย'}</p>
           </div>
         )
       ) : (
