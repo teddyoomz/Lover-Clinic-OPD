@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tablet Chart Editor Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .filetree { font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.82em; line-height:1.7; background:#0f0f0f; color:#d6d6d6; border-radius:8px; padding:14px; }
+    .new { color:#10b981; font-weight:700; } .edit { color:#f59e0b; font-weight:700; } .cm { color:#888; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Tablet Chart Editor Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-20-tablet-chart-editor-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Let a clinician annotate a TFP chart template on a paired iPad/Android tablet (Apple Pencil/stylus), triggered from the PC, with the drawing relayed back into the treatment's <code>charts[]</code>.</p>
+  <p><strong>Architecture:</strong> Session-doc relay (Q1). Tablet authenticates as real staff, any tier (Q2). Purpose-built Pointer-Events + perfect-freehand pen canvas (Q3). Named tablets + live ready-list, instant-pop (Q4). Firebase Storage transports the images; final chart stored as a dataURL in <code>charts[]</code> exactly like today (Q5). TFP source is untouched — all logic in new files + small edits to <code>ChartSection.jsx</code> + <code>App.jsx</code>.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Firebase Firestore + Storage, Tailwind, <code>perfect-freehand</code> (new dep), Vitest + RTL, Pointer Events API. BSA (branch-scope) Layers 1–3.</p>
+  <p><strong>Iron-clad to honor:</strong> Rule I (flow-simulate), Rule Q V66 (L2 real-client-SDK e2e; Pencil <em>feel</em> = user L1), Rule B (Probe-Deploy-Probe on rules deploy), BSA (BS-13 safe-by-default + branch-coverage classification), Rule of 3, V81-fix1 (Firestore Timestamp shapes in <code>toMillis</code>), V21 (no comment-vs-code drift), V20 (TEST-/E2E- prefixed fixtures).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Full rendered mockups live in the spec. Representative shapes:</p>
+<div class="mockup">
+  <div class="mockup-label">📱 Tablet — full-screen editor</div>
+  <div style="background:#0f0f0f;border-radius:8px;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#1a1a1a;color:#eee;font-size:12px;">
+      <span style="padding:5px 10px;border:1px solid #444;border-radius:7px;">✕ ยกเลิก</span>
+      <span style="opacity:.85;">ใบหน้าผู้หญิง · คุณ มะลิ (HN 0042)</span>
+      <span style="padding:5px 12px;background:#10b981;color:#06281d;border-radius:7px;font-weight:700;">✓ บันทึก</span>
+    </div>
+    <div style="display:flex;">
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 7px;background:#141414;border-right:1px solid #2a2a2a;align-items:center;font-size:15px;">
+        <div style="width:32px;height:32px;border-radius:8px;background:#10b981;display:flex;align-items:center;justify-content:center;">✏️</div>
+        <div style="width:32px;height:32px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;">🖍️</div>
+        <div style="width:32px;height:32px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;">🩹</div>
+        <div style="width:32px;height:32px;border-radius:8px;background:#222;display:flex;align-items:center;justify-content:center;">↩️</div>
+        <div style="width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #fff;"></div>
+        <div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;"></div>
+      </div>
+      <div style="flex:1;background:#fff;display:flex;align-items:center;justify-content:center;padding:12px;min-height:160px;">
+        <svg viewBox="0 0 220 230" width="140">
+          <g stroke="#cfcfcf" fill="none" stroke-width="1.3"><ellipse cx="110" cy="100" rx="60" ry="76"/><ellipse cx="88" cy="94" rx="9" ry="5"/><ellipse cx="132" cy="94" rx="9" ry="5"/><path d="M110 100 L104 122 L118 122"/><path d="M92 144 Q110 154 128 144"/></g>
+          <path d="M60 68 C70 64 92 62 100 70 C108 78 96 84 84 86 C74 88 64 84 60 78 Z" fill="#ef4444" opacity=".9"/>
+        </svg>
+      </div>
+    </div>
+    <div style="padding:6px 12px;background:#141414;color:#888;font-size:10.5px;">full-screen · pressure (thin→thick) · palm rejection · perfect-freehand</div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">🖥️ PC pairing states (inside ChartSection)</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11.5px;">
+    <div style="flex:1;min-width:140px;border:1px solid var(--bd);border-radius:8px;padding:8px;">แก้ที่ไหน?<br><span style="display:block;border:1px solid #888;border-radius:6px;padding:5px;text-align:center;margin-top:5px;">🖥️ เครื่องนี้</span><span style="display:block;border:1px solid var(--ok);border-radius:6px;padding:5px;text-align:center;margin-top:4px;background:rgba(16,185,129,.14);">📱 แท็บเล็ต</span></div>
+    <div style="flex:1;min-width:140px;border:1px solid var(--bd);border-radius:8px;padding:8px;">เลือกแท็บเล็ต<br><span style="display:block;border:1px solid var(--ok);border-radius:6px;padding:5px;margin-top:5px;">🔘 iPad ห้อง 1 ●พร้อม</span><span style="display:block;border:1px solid #ccc;border-radius:6px;padding:5px;margin-top:4px;">⚪ iPad เคาน์เตอร์</span></div>
+    <div style="flex:1;min-width:140px;border:1px solid var(--bd);border-radius:8px;padding:8px;text-align:center;">⏳<br>รอบันทึกจากแท็บเล็ต<br><span style="display:inline-block;border:1px solid #888;border-radius:6px;padding:4px 10px;margin-top:5px;">ยกเลิก</span></div>
+    <div style="flex:1;min-width:140px;border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:8px;text-align:center;background:rgba(239,68,68,.06);">❌<br>ล้มเหลว — ยกเลิก/หลุด&gt;30วิ<br><span style="display:inline-block;border:1px solid #888;border-radius:6px;padding:4px 10px;margin-top:5px;">ลองใหม่</span></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Data shapes</div>
+  <pre style="margin:0;">be_chart_tablet_presence/{deviceId} = { deviceId, deviceName, branchId, status:'idle'|'busy', lastHeartbeatAt, byUid, byName }
+be_chart_edit_sessions/{sessionId}  = { sessionId, branchId, pcDeviceId, pcUid, tabletDeviceId,
+  status:'requested'|'active'|'saved'|'cancelled', cancelledBy:null|'pc'|'tablet'|'timeout',
+  template:{id,name,category}, patientLabel, templateImageUrl, resultImageUrl,
+  pcHeartbeatAt, tabletHeartbeatAt, createdAt, updatedAt, expiresAt }
+Storage transport: uploads/chart-edit-sessions/{sessionId}/{template|result}.png  (cleaned on terminal)
+charts[] entry (unchanged shape): { dataUrl, fabricJson:null, templateId, source:'tablet', savedAt }</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Session state machine</div>
+  <pre style="margin:0;background:#fff;">PC pick template → "แท็บเล็ต" → pick ready tablet
+   │ [TX: re-check target idle → presence→busy + create session 'requested' + upload template]
+   ▼ tablet onSnapshot sees session for ITS deviceId
+📱 editor pops INSTANTLY → 'active' (tablet heartbeat starts) → draw → Save → upload result → 'saved'
+   ▼ PC onSnapshot 'saved' → download → charts[] merge (dataURL) → delete session + Storage → presence→idle ✅
+CANCEL/TIMEOUT (any pre-'saved' state):
+   tablet Cancel → 'cancelled'/tablet → PC ❌ failed
+   PC Cancel     → 'cancelled'/pc     → tablet 🔌 → standby
+   heartbeat>30s → 'cancelled'/timeout → both exit
+   → every terminal: presence→idle + Storage cleaned</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Sequence — who writes what</div>
+  <table style="margin:0;">
+    <tr><th>#</th><th>Actor</th><th>Action</th></tr>
+    <tr><td>1</td><td>Tablet</td><td>standby: upsert presence {idle, branchId, name}; heartbeat ~10s</td></tr>
+    <tr><td>2</td><td>PC</td><td>list idle+fresh presences in branch; user picks</td></tr>
+    <tr><td>3</td><td>PC</td><td>TX: re-read target idle → busy + create session 'requested'; upload template; write templateImageUrl</td></tr>
+    <tr><td>4</td><td>Tablet</td><td>onSnapshot 'requested' for my deviceId → download template → open editor → 'active' + heartbeat</td></tr>
+    <tr><td>5</td><td>Tablet</td><td>Save: upload result PNG → write resultImageUrl + 'saved'</td></tr>
+    <tr><td>6</td><td>PC</td><td>onSnapshot 'saved' → download → charts[] merge → delete session + Storage → presence idle</td></tr>
+    <tr><td>7</td><td>Both</td><td>watchdog: other heartbeat &gt;30s stale → 'cancelled'/timeout → exit + cleanup</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<div class="filetree">
+src/<br>
+├─ lib/<span class="new">chartEditSessionCore.js</span>     <span class="cm"># PURE: status enum, transition guards, ready/stale, toMillis, doc builders</span><br>
+├─ lib/<span class="new">chartEditSession.js</span>         <span class="cm"># IO: Storage transport up/download + cleanup; thin re-export of backend writers</span><br>
+├─ lib/<span class="new">penStroke.js</span>                <span class="cm"># PURE: perfect-freehand → canvas Path2D + options preset</span><br>
+├─ lib/<span class="new">tabletDeviceCache.js</span>        <span class="cm"># PURE: localStorage get/set deviceId+name+branch</span><br>
+├─ lib/<span class="edit">backendClient.js</span>            <span class="cm"># EDIT: 2 listeners + presence upsert + createSession TX + updateSession (BS-13 safe)</span><br>
+├─ lib/<span class="edit">scopedDataLayer.js</span>          <span class="cm"># EDIT: Layer-2 wrappers for the branch-scoped fns</span><br>
+├─ hooks/<span class="new">useTabletPresence.js</span>       <span class="cm"># tablet heartbeat + idle/busy</span><br>
+├─ hooks/<span class="new">useChartEditSession.js</span>     <span class="cm"># PC-side: create/listen/cancel/heartbeat/onSaved</span><br>
+├─ components/tablet-chart/<span class="new">PenCanvas.jsx</span>        <span class="cm"># Pointer Events + perfect-freehand; forwardRef api</span><br>
+├─ components/tablet-chart/<span class="new">EditorToolRail.jsx</span>   <span class="cm"># pen/highlighter/eraser/color/size/undo/redo/clear</span><br>
+├─ components/tablet-chart/<span class="new">TabletStandby.jsx</span>    <span class="cm"># name+branch (cached) + waiting status</span><br>
+├─ components/tablet-chart/<span class="new">TabletReadyList.jsx</span>  <span class="cm"># PC live idle-tablet picker</span><br>
+├─ components/tablet-chart/<span class="new">PcPairingModal.jsx</span>   <span class="cm"># choice + picker + waiting + failed</span><br>
+├─ pages/<span class="new">TabletChartEditorPage.jsx</span>   <span class="cm"># ?tablet=chart target: orchestrate standby ↔ editor</span><br>
+├─ components/<span class="edit">ChartSection.jsx</span>          <span class="cm"># EDIT (small): choice between template-pick and local canvas; tablet result → existing handleSave</span><br>
+└─ <span class="edit">App.jsx</span>                            <span class="cm"># EDIT (small): route ?tablet=chart → TabletChartEditorPage (after staff auth)</span><br>
+<br>
+api/cron/<span class="new">chart-edit-session-sweep.js</span>  <span class="cm"># orphan reaper (CRON_SECRET + admin SDK)</span><br>
+<span class="edit">vercel.json</span>  <span class="cm"># EDIT: cron entry</span> · <span class="edit">firestore.rules</span> <span class="cm"># EDIT: 2 collections</span> · <span class="edit">storage.rules</span> <span class="cm"># verify uploads/ match covers transport</span><br>
+tests/  <span class="cm"># chart-edit-session-core · pen-stroke · tablet-device-cache · *-rtl · flow-simulate · stress · av</span><br>
+scripts/<span class="new">e2e-tablet-chart-editor.mjs</span>  <span class="cm"># Rule Q L2 two-client relay on real prod</span>
+</div>
+
+<h2>Tasks</h2>
+
+<!-- ============ TASK 1 ============ -->
+<div class="task">
+  <h3>Task 1: Session core (pure) + perfect-freehand dependency</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/chartEditSessionCore.js</code></li>
+    <li>Create: <code>src/lib/tabletDeviceCache.js</code></li>
+    <li>Test: <code>tests/chart-edit-session-core.test.js</code></li>
+    <li>Modify: <code>package.json</code> (add <code>perfect-freehand</code>)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Install dependency</strong></label></div>
+  <pre><code class="language-bash">npm install perfect-freehand
+# expect: added 1 package, perfect-freehand@^1.2.x in package.json</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Write failing unit tests for the core</strong></label></div>
+<pre><code class="language-js">// tests/chart-edit-session-core.test.js
+import { describe, it, expect } from 'vitest';
+import {
+  SESSION_STATUS, CANCELLED_BY, HEARTBEAT_STALE_MS, HEARTBEAT_INTERVAL_MS,
+  isTerminal, isHeartbeatStale, isPresenceReady, canTransition, toMillis,
+  buildPresenceUpsert, buildSessionCreate,
+} from '../src/lib/chartEditSessionCore.js';
+
+describe('chartEditSessionCore', () => {
+  it('A1 status enum + terminal detection', () => {
+    expect(SESSION_STATUS.REQUESTED).toBe('requested');
+    expect(isTerminal('saved')).toBe(true);
+    expect(isTerminal('cancelled')).toBe(true);
+    expect(isTerminal('active')).toBe(false);
+  });
+  it('A2 toMillis handles number / ISO / Date / Firestore Timestamp shapes (V81-fix1)', () => {
+    expect(toMillis(1000)).toBe(1000);
+    expect(toMillis(new Date(1000))).toBe(1000);
+    expect(toMillis('1970-01-01T00:00:01.000Z')).toBe(1000);
+    expect(toMillis({ seconds: 1, nanoseconds: 0 })).toBe(1000);          // admin/raw shape
+    expect(toMillis({ _seconds: 1, _nanoseconds: 0 })).toBe(1000);        // JSON-roundtrip shape
+    expect(toMillis({ toMillis: () => 1000 })).toBe(1000);                // client SDK Timestamp
+    expect(toMillis(null)).toBe(0);
+  });
+  it('A3 isHeartbeatStale uses 30s default', () => {
+    expect(isHeartbeatStale(0, 29999)).toBe(false);
+    expect(isHeartbeatStale(0, 30001)).toBe(true);
+    expect(HEARTBEAT_STALE_MS).toBe(30000);
+    expect(HEARTBEAT_INTERVAL_MS).toBe(10000);
+  });
+  it('A4 isPresenceReady = idle && fresh', () => {
+    const now = 100000;
+    expect(isPresenceReady({ status: 'idle', lastHeartbeatAt: 90000 }, now)).toBe(true);
+    expect(isPresenceReady({ status: 'busy', lastHeartbeatAt: 99000 }, now)).toBe(false);
+    expect(isPresenceReady({ status: 'idle', lastHeartbeatAt: 1000 }, now)).toBe(false); // stale
+    expect(isPresenceReady(null, now)).toBe(false);
+  });
+  it('A5 canTransition allows only the legal edges', () => {
+    expect(canTransition('requested', 'active')).toBe(true);
+    expect(canTransition('active', 'saved')).toBe(true);
+    expect(canTransition('requested', 'cancelled')).toBe(true);
+    expect(canTransition('active', 'cancelled')).toBe(true);
+    expect(canTransition('saved', 'active')).toBe(false);     // terminal is final
+    expect(canTransition('cancelled', 'active')).toBe(false);
+    expect(canTransition('requested', 'saved')).toBe(false);  // must go active first
+  });
+  it('A6 buildPresenceUpsert stamps shape + branchId', () => {
+    const d = buildPresenceUpsert({ deviceId: 'TEST-T1', deviceName: 'iPad 1', branchId: 'BR-x', uid: 'u1', byName: 'Dr A' });
+    expect(d).toMatchObject({ deviceId: 'TEST-T1', deviceName: 'iPad 1', branchId: 'BR-x', status: 'idle', byUid: 'u1', byName: 'Dr A' });
+    expect(d.lastHeartbeatAt).toBeDefined();
+  });
+  it('A7 buildSessionCreate produces a requested session', () => {
+    const s = buildSessionCreate({ sessionId: 'TEST-S1', branchId: 'BR-x', pcDeviceId: 'PC1', pcUid: 'u1',
+      tabletDeviceId: 'TEST-T1', tabletName: 'iPad 1', template: { id: 'tpl', name: 'face', category: 'head' }, patientLabel: 'คุณ มะลิ' });
+    expect(s).toMatchObject({ sessionId: 'TEST-S1', status: 'requested', cancelledBy: null, tabletDeviceId: 'TEST-T1' });
+    expect(s.template).toEqual({ id: 'tpl', name: 'face', category: 'head' });
+    expect(s.templateImageUrl).toBe(null);
+    expect(s.resultImageUrl).toBe(null);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Run — verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/chart-edit-session-core.test.js</code> → Expected: FAIL ("Failed to resolve import ../src/lib/chartEditSessionCore.js").</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Implement the core (pure, no Firebase)</strong></label></div>
+<pre><code class="language-js">// src/lib/chartEditSessionCore.js
+export const SESSION_STATUS = Object.freeze({ REQUESTED: 'requested', ACTIVE: 'active', SAVED: 'saved', CANCELLED: 'cancelled' });
+export const CANCELLED_BY = Object.freeze({ PC: 'pc', TABLET: 'tablet', TIMEOUT: 'timeout' });
+export const HEARTBEAT_INTERVAL_MS = 10000;
+export const HEARTBEAT_STALE_MS = 30000;
+export const SESSION_MAX_AGE_MS = 60 * 60 * 1000; // 1h orphan cap (cron sweep)
+
+const TERMINAL = new Set([SESSION_STATUS.SAVED, SESSION_STATUS.CANCELLED]);
+export function isTerminal(status) { return TERMINAL.has(status); }
+
+// V81-fix1: tolerate every Firestore Timestamp serialization shape + JS primitives.
+export function toMillis(ts) {
+  if (ts == null) return 0;
+  if (typeof ts === 'number') return ts;
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'string') { const n = Date.parse(ts); return Number.isNaN(n) ? 0 : n; }
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000 + Math.floor((ts.nanoseconds || 0) / 1e6);
+  if (typeof ts._seconds === 'number') return ts._seconds * 1000 + Math.floor((ts._nanoseconds || 0) / 1e6);
+  return 0;
+}
+
+export function isHeartbeatStale(lastMs, nowMs, staleMs = HEARTBEAT_STALE_MS) {
+  return (nowMs - toMillis(lastMs)) > staleMs;
+}
+export function isPresenceReady(presence, nowMs) {
+  if (!presence || presence.status !== 'idle') return false;
+  return !isHeartbeatStale(presence.lastHeartbeatAt, nowMs);
+}
+
+const EDGES = {
+  requested: new Set(['active', 'cancelled']),
+  active: new Set(['saved', 'cancelled']),
+  saved: new Set(), cancelled: new Set(),
+};
+export function canTransition(from, to) { return !!EDGES[from] && EDGES[from].has(to); }
+
+export function buildPresenceUpsert({ deviceId, deviceName, branchId, uid, byName, status = 'idle', nowMs = Date.now() }) {
+  return { deviceId, deviceName: deviceName || '', branchId: branchId || '', status, byUid: uid || '', byName: byName || '', lastHeartbeatAt: nowMs, updatedAt: nowMs };
+}
+export function buildSessionCreate({ sessionId, branchId, pcDeviceId, pcUid, tabletDeviceId, tabletName, template, patientLabel, nowMs = Date.now() }) {
+  return {
+    sessionId, branchId: branchId || '', pcDeviceId, pcUid: pcUid || '', tabletDeviceId, tabletName: tabletName || '',
+    status: SESSION_STATUS.REQUESTED, cancelledBy: null,
+    template: { id: template?.id || '', name: template?.name || '', category: template?.category || '' },
+    patientLabel: patientLabel || '', templateImageUrl: null, resultImageUrl: null,
+    pcHeartbeatAt: nowMs, tabletHeartbeatAt: null,
+    createdAt: nowMs, updatedAt: nowMs, expiresAt: nowMs + SESSION_MAX_AGE_MS,
+  };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Implement the device cache (localStorage, pure-wrapper)</strong></label></div>
+<pre><code class="language-js">// src/lib/tabletDeviceCache.js
+// Per-device persistence so the tablet never re-enters name/branch (user directive).
+const K_ID = 'chartTablet:deviceId', K_NAME = 'chartTablet:deviceName', K_BRANCH = 'chartTablet:branchId';
+function ls() { try { return window.localStorage; } catch { return null; } }
+function randId() {
+  const a = new Uint8Array(8);
+  (window.crypto || window.msCrypto).getRandomValues(a);            // crypto, per Rule C2 (no Math.random ids)
+  return 'TBL-' + Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
+}
+export function getOrCreateDeviceId() {
+  const s = ls(); if (!s) return randId();
+  let id = s.getItem(K_ID); if (!id) { id = randId(); s.setItem(K_ID, id); } return id;
+}
+export function getCachedDeviceName() { return ls()?.getItem(K_NAME) || ''; }
+export function setCachedDeviceName(v) { ls()?.setItem(K_NAME, v || ''); }
+export function getCachedBranchId() { return ls()?.getItem(K_BRANCH) || ''; }
+export function setCachedBranchId(v) { ls()?.setItem(K_BRANCH, v || ''); }</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Run — verify PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/chart-edit-session-core.test.js</code> → Expected: PASS (7 tests).</p>
+
+  <div class="step"><input type="checkbox" id="t1s7"> <label for="t1s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add package.json package-lock.json src/lib/chartEditSessionCore.js src/lib/tabletDeviceCache.js tests/chart-edit-session-core.test.js
+git commit -m "feat(tablet-chart): session core + device cache + perfect-freehand dep"</code></pre>
+</div>
+
+<!-- ============ TASK 2 ============ -->
+<div class="task">
+  <h3>Task 2: Backend wiring (Firestore writers/listeners) + Storage transport</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/backendClient.js</code> (add the pairing fns near other <code>be_*</code> listeners; follow the V54/BS-13 safe-by-default template used by <code>listenToScheduleByDay</code>)</li>
+    <li>Modify: <code>src/lib/scopedDataLayer.js</code> (Layer-2 wrappers)</li>
+    <li>Create: <code>src/lib/chartEditSession.js</code> (Storage transport up/download + cleanup; re-export backend writers)</li>
+    <li>Test: <code>tests/chart-edit-session-backend.test.js</code> (source-grep contracts + Storage helper unit with mocked Storage)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Read the canonical safe-by-default listener template</strong></label></div>
+  <p>Read <code>src/lib/backendClient.js</code> — locate <code>listenToScheduleByDay</code> (the BS-13 safe-by-default template) and the <code>be_staff_chat_messages</code> listener (per-branch onSnapshot shape). Copy their structure exactly. Note <code>resolveSelectedBranchId</code> import and the <code>artifacts/{appId}/public/data</code> base-path helper.</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Add the 5 backend functions (backendClient.js)</strong></label></div>
+<pre><code class="language-js">// --- chart edit pairing (V-tablet-chart) — branch-scoped, BS-13 safe-by-default ---
+import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, SESSION_STATUS } from './chartEditSessionCore.js';
+// (collections live under the standard artifacts/{appId}/public/data base path via the existing colRef helper)
+
+// presence: live list of tablets in a branch (safe-by-default — never whole-collection without allBranches)
+export function listenToChartTabletPresenceByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effective = (typeof branchId === 'string' && branchId) ? branchId : (allBranches ? null : resolveSelectedBranchId());
+  if (!effective && !allBranches) { onChange?.([]); return () => {}; }
+  const base = colRef('be_chart_tablet_presence');
+  const q = (!allBranches && effective) ? query(base, where('branchId', '==', String(effective))) : base;
+  return onSnapshot(q, snap => onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))), err => onError?.(err)); // V38 spread order: id last
+}
+export async function upsertChartTabletPresence(deviceId, { deviceName, branchId, uid, byName, status }) {
+  const bid = (typeof branchId === 'string' && branchId) ? branchId : resolveSelectedBranchId();
+  await setDoc(docRef('be_chart_tablet_presence', deviceId),
+    { ...buildPresenceUpsert({ deviceId, deviceName, branchId: bid, uid, byName, status }), lastHeartbeatAt: serverTimestamp(), updatedAt: serverTimestamp() },
+    { merge: true });
+}
+export function listenToChartEditSession(sessionId, onChange, onError) {
+  return onSnapshot(docRef('be_chart_edit_sessions', sessionId),
+    snap => onChange(snap.exists() ? { ...snap.data(), id: snap.id } : null), err => onError?.(err));
+}
+// per-tablet instant-pop trigger: the 'requested' session aimed at THIS tablet (composite index — Task 9)
+export function listenToRequestedSessionForTablet({ branchId, tabletDeviceId } = {}, onChange, onError) {
+  const bid = (typeof branchId === 'string' && branchId) ? branchId : resolveSelectedBranchId();
+  if (!bid || !tabletDeviceId) { onChange?.(null); return () => {}; }
+  const q = query(colRef('be_chart_edit_sessions'), where('branchId', '==', bid), where('tabletDeviceId', '==', tabletDeviceId), where('status', '==', 'requested'));
+  return onSnapshot(q, snap => onChange(snap.docs.length ? { ...snap.docs[0].data(), id: snap.docs[0].id } : null), err => onError?.(err));
+}
+// TX guard: only create when the target tablet is genuinely idle+fresh → prevents 2 PCs driving one tablet.
+export async function createChartEditSession(payload) {
+  const bid = (typeof payload.branchId === 'string' && payload.branchId) ? payload.branchId : resolveSelectedBranchId();
+  const presRef = docRef('be_chart_tablet_presence', payload.tabletDeviceId);
+  const sesRef = docRef('be_chart_edit_sessions', payload.sessionId);
+  await runTransaction(db, async (tx) => {
+    const pres = await tx.get(presRef);
+    if (!pres.exists() || !isPresenceReady(pres.data(), Date.now())) { const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e; }
+    tx.set(presRef, { status: 'busy', updatedAt: serverTimestamp() }, { merge: true });
+    tx.set(sesRef, { ...buildSessionCreate({ ...payload, branchId: bid }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  });
+}
+export async function updateChartEditSession(sessionId, patch) {
+  await updateDoc(docRef('be_chart_edit_sessions', sessionId), { ...patch, updatedAt: serverTimestamp() });
+}
+export async function freeChartTablet(deviceId) {
+  await setDoc(docRef('be_chart_tablet_presence', deviceId), { status: 'idle', updatedAt: serverTimestamp() }, { merge: true });
+}
+export async function deleteChartEditSession(sessionId) { await deleteDoc(docRef('be_chart_edit_sessions', sessionId)); }</code></pre>
+  <blockquote>Use the file's existing helpers (<code>colRef</code>/<code>docRef</code>/<code>query</code>/<code>where</code>/<code>onSnapshot</code>/<code>runTransaction</code>/<code>serverTimestamp</code>/<code>setDoc</code>/<code>updateDoc</code>/<code>deleteDoc</code>/<code>db</code>). If a helper has a different local name, match the file's convention — do not invent new imports.</blockquote>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 2b: Layer-2 wrappers (scopedDataLayer.js)</strong></label></div>
+<pre><code class="language-js">// scopedDataLayer.js — auto-inject branchId for the branch-scoped pairing fns (mirror listenToStaffChatMessages wrappers)
+export const listenToChartTabletPresenceByBranch = _autoInject(raw.listenToChartTabletPresenceByBranch);
+export const upsertChartTabletPresence  = (deviceId, data) => raw.upsertChartTabletPresence(deviceId, _withBranch(data));
+export const createChartEditSession     = (payload) => raw.createChartEditSession(_withBranch(payload));
+export const listenToRequestedSessionForTablet = (opts, onChange, onError) => raw.listenToRequestedSessionForTablet(_withBranch(opts), onChange, onError);
+// session-id-keyed fns are NOT branch-scoped → pass-through
+export const listenToChartEditSession   = (...a) => raw.listenToChartEditSession(...a);
+export const updateChartEditSession     = (...a) => raw.updateChartEditSession(...a);
+export const freeChartTablet            = (...a) => raw.freeChartTablet(...a);
+export const deleteChartEditSession     = (...a) => raw.deleteChartEditSession(...a);</code></pre>
+  <blockquote>Match the file's existing auto-inject helper names (e.g. <code>_autoInject</code> / <code>_withBranch</code> may be named differently). Read an existing branch-scoped wrapper (e.g. <code>listenToChatConversationsByBranch</code>) and copy its exact pattern.</blockquote>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 3: Storage transport module (chartEditSession.js)</strong></label></div>
+<pre><code class="language-js">// src/lib/chartEditSession.js
+import { ref as storageRef, uploadString, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
+import { storage } from '../firebase.js';
+export {
+  listenToChartTabletPresenceByBranch, upsertChartTabletPresence, listenToChartEditSession,
+  createChartEditSession, updateChartEditSession, freeChartTablet, deleteChartEditSession,
+} from './scopedDataLayer.js';
+
+const folder = (sessionId) => `uploads/chart-edit-sessions/${sessionId}`;
+// kind: 'template' | 'result'. dataUrl is a PNG data URL.
+export async function uploadTransportImage(sessionId, kind, dataUrl) {
+  const r = storageRef(storage, `${folder(sessionId)}/${kind}.png`);
+  await uploadString(r, dataUrl, 'data_url');
+  return getDownloadURL(r);
+}
+export async function downloadTransportImageAsDataUrl(url) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+export async function cleanupSessionStorage(sessionId) {
+  try { const all = await listAll(storageRef(storage, folder(sessionId)));
+    await Promise.all(all.items.map(i => deleteObject(i).catch(() => {}))); } catch { /* already gone */ }
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 4: Source-grep + Storage-helper tests</strong></label></div>
+<pre><code class="language-js">// tests/chart-edit-session-backend.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const bc = fs.readFileSync('src/lib/backendClient.js', 'utf8');
+const sdl = fs.readFileSync('src/lib/scopedDataLayer.js', 'utf8');
+describe('chart-edit backend wiring', () => {
+  it('B1 presence listener is BS-13 safe-by-default (no whole-collection without allBranches)', () => {
+    expect(bc).toMatch(/listenToChartTabletPresenceByBranch/);
+    expect(bc).toMatch(/resolveSelectedBranchId\(\)/);
+    expect(bc).toMatch(/if \(!effective && !allBranches\)/);
+  });
+  it('B2 createChartEditSession uses a transaction + TABLET_BUSY guard', () => {
+    expect(bc).toMatch(/runTransaction/);
+    expect(bc).toMatch(/TABLET_BUSY/);
+    expect(bc).toMatch(/isPresenceReady/);
+  });
+  it('B3 spread order is V38-safe (id last)', () => { expect(bc).toMatch(/\.\.\.d\.data\(\),\s*id:\s*d\.id/); });
+  it('B4 scopedDataLayer exposes all 8 wrappers', () => {
+    for (const fn of ['listenToChartTabletPresenceByBranch','upsertChartTabletPresence','createChartEditSession','listenToRequestedSessionForTablet','listenToChartEditSession','updateChartEditSession','freeChartTablet','deleteChartEditSession'])
+      expect(sdl).toMatch(new RegExp(fn));
+  });
+});</code></pre>
+  <p>(Storage helpers + the transaction are verified end-to-end in Task 11's Rule Q L2 e2e against real Firebase — admin/mock SDK can't exercise the composite/transaction contract per Rule Q.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 5: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/chart-edit-session-backend.test.js   # PASS
+git add src/lib/backendClient.js src/lib/scopedDataLayer.js src/lib/chartEditSession.js tests/chart-edit-session-backend.test.js
+git commit -m "feat(tablet-chart): backend writers/listeners (BS-13 TX guard) + Storage transport"</code></pre>
+</div>
+
+<!-- ============ TASK 3 ============ -->
+<div class="task">
+  <h3>Task 3: Pairing hooks — useTabletPresence + useChartEditSession</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/hooks/useTabletPresence.js</code></li>
+    <li>Create: <code>src/hooks/useChartEditSession.js</code></li>
+    <li>Test: <code>tests/pairing-hooks-rtl.test.jsx</code> (renderHook + fake timers; mock chartEditSession.js)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write failing hook tests</strong></label></div>
+<pre><code class="language-js">// tests/pairing-hooks-rtl.test.jsx
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+const upsert = vi.fn(() => Promise.resolve());
+const free = vi.fn(() => Promise.resolve());
+vi.mock('../src/lib/chartEditSession.js', () => ({
+  upsertChartTabletPresence: (...a) => upsert(...a),
+  freeChartTablet: (...a) => free(...a),
+  listenToChartEditSession: () => () => {},
+  createChartEditSession: vi.fn(() => Promise.resolve()),
+  updateChartEditSession: vi.fn(() => Promise.resolve()),
+  deleteChartEditSession: vi.fn(() => Promise.resolve()),
+  uploadTransportImage: vi.fn(), downloadTransportImageAsDataUrl: vi.fn(), cleanupSessionStorage: vi.fn(),
+}));
+import { useTabletPresence } from '../src/hooks/useTabletPresence.js';
+beforeEach(() => { vi.useFakeTimers(); upsert.mockClear(); free.mockClear(); });
+afterEach(() => { vi.useRealTimers(); });
+describe('useTabletPresence', () => {
+  it('H1 upserts on mount then heartbeats on the interval', () => {
+    renderHook(() => useTabletPresence({ deviceId: 'TEST-T1', deviceName: 'iPad 1', branchId: 'BR-x', uid: 'u1', byName: 'A', enabled: true }));
+    expect(upsert).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(10000); });
+    expect(upsert).toHaveBeenCalledTimes(2);   // heartbeat
+  });
+  it('H2 disabled (no branch yet) → no upsert', () => {
+    renderHook(() => useTabletPresence({ deviceId: 'TEST-T1', enabled: false }));
+    expect(upsert).not.toHaveBeenCalled();
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run — verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/pairing-hooks-rtl.test.jsx</code> → FAIL (hook not found).</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Implement useTabletPresence</strong></label></div>
+<pre><code class="language-js">// src/hooks/useTabletPresence.js
+import { useEffect, useRef, useCallback } from 'react';
+import { upsertChartTabletPresence, freeChartTablet } from '../lib/chartEditSession.js';
+import { HEARTBEAT_INTERVAL_MS } from '../lib/chartEditSessionCore.js';
+export function useTabletPresence({ deviceId, deviceName, branchId, uid, byName, enabled }) {
+  const dataRef = useRef({});
+  dataRef.current = { deviceName, branchId, uid, byName };
+  const beat = useCallback((status = 'idle') => {
+    if (!enabled || !deviceId) return;
+    upsertChartTabletPresence(deviceId, { ...dataRef.current, status }).catch(() => {});
+  }, [enabled, deviceId]);
+  useEffect(() => {
+    if (!enabled || !deviceId) return;
+    beat('idle');
+    const t = setInterval(() => beat('idle'), HEARTBEAT_INTERVAL_MS);
+    const onVis = () => { if (document.visibilityState === 'visible') beat('idle'); };
+    document.addEventListener('visibilitychange', onVis);  // V17 mobile-resume reconnect
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); freeChartTablet(deviceId).catch(() => {}); };
+  }, [enabled, deviceId, beat]);
+  return { setBusy: () => beat('busy'), setIdle: () => beat('idle') };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Implement useChartEditSession (PC side)</strong></label></div>
+<pre><code class="language-js">// src/hooks/useChartEditSession.js
+import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  createChartEditSession, listenToChartEditSession, updateChartEditSession,
+  deleteChartEditSession, freeChartTablet, uploadTransportImage,
+  downloadTransportImageAsDataUrl, cleanupSessionStorage,
+} from '../lib/chartEditSession.js';
+import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS, HEARTBEAT_STALE_MS, isHeartbeatStale, toMillis } from '../lib/chartEditSessionCore.js';
+function randSessionId() { const a = new Uint8Array(8); window.crypto.getRandomValues(a); return 'CES-' + Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); }
+
+// onSaved(chartData) is called with { dataUrl, fabricJson:null, templateId, source:'tablet' } — same shape ChartSection.handleSave expects.
+export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
+  const [session, setSession] = useState(null);   // live session doc
+  const [phase, setPhase] = useState('idle');      // idle | waiting | failed
+  const [error, setError] = useState('');
+  const idRef = useRef(null); const unsubRef = useRef(null); const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
+
+  const teardown = useCallback(() => { unsubRef.current?.(); unsubRef.current = null; idRef.current = null; }, []);
+
+  const start = useCallback(async ({ tablet, template, patientLabel, templateDataUrl, branchId }) => {
+    setError(''); setPhase('waiting');
+    const sessionId = randSessionId(); idRef.current = sessionId;
+    try {
+      await createChartEditSession({ sessionId, branchId, pcDeviceId, pcUid, tabletDeviceId: tablet.deviceId, tabletName: tablet.deviceName, template, patientLabel });
+      const url = await uploadTransportImage(sessionId, 'template', templateDataUrl);
+      await updateChartEditSession(sessionId, { templateImageUrl: url });
+    } catch (e) {
+      setPhase('failed'); setError(e.code === 'TABLET_BUSY' ? 'แท็บเล็ตเครื่องนี้กำลังถูกใช้งานอยู่' : 'เริ่มการเชื่อมต่อไม่สำเร็จ'); idRef.current = null;
+      return;
+    }
+    unsubRef.current = listenToChartEditSession(sessionId, async (doc) => {
+      if (!doc) return; setSession(doc);
+      if (doc.status === SESSION_STATUS.CANCELLED) {
+        setPhase('failed'); setError(doc.cancelledBy === CANCELLED_BY.TABLET ? 'แท็บเล็ตยกเลิกการแก้ไข' : 'หลุดการเชื่อมต่อกับแท็บเล็ต');
+        teardown(); return;
+      }
+      if (doc.status === SESSION_STATUS.SAVED && doc.resultImageUrl) {
+        const dataUrl = await downloadTransportImageAsDataUrl(doc.resultImageUrl);
+        onSavedRef.current?.({ dataUrl, fabricJson: null, templateId: doc.template?.id || 'blank', source: 'tablet' });
+        await Promise.allSettled([deleteChartEditSession(sessionId), cleanupSessionStorage(sessionId), freeChartTablet(doc.tabletDeviceId)]);
+        setPhase('idle'); teardown();
+      }
+    }, () => { setPhase('failed'); setError('การเชื่อมต่อขัดข้อง'); });
+  }, [pcDeviceId, pcUid, teardown]);
+
+  const cancel = useCallback(async (reason = CANCELLED_BY.PC) => {
+    const id = idRef.current; if (!id) { setPhase('idle'); return; }
+    await updateChartEditSession(id, { status: SESSION_STATUS.CANCELLED, cancelledBy: reason }).catch(() => {});
+    await Promise.allSettled([cleanupSessionStorage(id), session?.tabletDeviceId && freeChartTablet(session.tabletDeviceId)]);
+    setPhase('idle'); teardown();
+  }, [teardown, session]);
+
+  // PC heartbeat + watchdog on the tablet side
+  useEffect(() => {
+    if (phase !== 'waiting' || !idRef.current) return;
+    const beat = setInterval(() => updateChartEditSession(idRef.current, { pcHeartbeatAt: Date.now() }).catch(() => {}), HEARTBEAT_INTERVAL_MS);
+    const watch = setInterval(() => {
+      const tb = session?.tabletHeartbeatAt;
+      if (session?.status === SESSION_STATUS.ACTIVE && tb && isHeartbeatStale(tb, Date.now(), HEARTBEAT_STALE_MS)) cancel(CANCELLED_BY.TIMEOUT);
+    }, 5000);
+    return () => { clearInterval(beat); clearInterval(watch); };
+  }, [phase, session, cancel]);
+
+  useEffect(() => () => teardown(), [teardown]);
+  return { phase, error, session, start, cancel };
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/pairing-hooks-rtl.test.jsx   # PASS (H1,H2)
+git add src/hooks/useTabletPresence.js src/hooks/useChartEditSession.js tests/pairing-hooks-rtl.test.jsx
+git commit -m "feat(tablet-chart): useTabletPresence + useChartEditSession hooks"</code></pre>
+</div>
+
+<!-- ============ TASK 4 ============ -->
+<div class="task">
+  <h3>Task 4: Pen canvas engine + tool rail</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/penStroke.js</code> (PURE: perfect-freehand → Path2D)</li>
+    <li>Create: <code>src/components/tablet-chart/PenCanvas.jsx</code> (forwardRef: <code>exportDataUrl/undo/redo/clear</code>)</li>
+    <li>Create: <code>src/components/tablet-chart/EditorToolRail.jsx</code></li>
+    <li>Test: <code>tests/pen-stroke.test.js</code> + <code>tests/pen-canvas-rtl.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Failing test for the pure stroke helper</strong></label></div>
+<pre><code class="language-js">// tests/pen-stroke.test.js
+import { describe, it, expect } from 'vitest';
+import { strokeOutline, PEN_PRESETS } from '../src/lib/penStroke.js';
+describe('penStroke', () => {
+  it('P1 returns an outline polygon for pressure points', () => {
+    const pts = [[0,0,0.2],[5,1,0.5],[10,0,0.8]];
+    const out = strokeOutline(pts, PEN_PRESETS.pen(4));
+    expect(Array.isArray(out)).toBe(true);
+    expect(out.length).toBeGreaterThan(2);
+    expect(out[0].length).toBe(2);            // [x,y]
+  });
+  it('P2 empty input → empty outline', () => { expect(strokeOutline([], PEN_PRESETS.pen(4))).toEqual([]); });
+  it('P3 presets differ (highlighter thicker + less thinning than pen)', () => {
+    expect(PEN_PRESETS.highlighter(4).thinning).toBeLessThan(PEN_PRESETS.pen(4).thinning);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run FAIL → implement penStroke.js</strong></label></div>
+<pre><code class="language-js">// src/lib/penStroke.js
+import { getStroke } from 'perfect-freehand';
+export const PEN_PRESETS = {
+  pen: (size) => ({ size, thinning: 0.6, smoothing: 0.5, streamline: 0.5, simulatePressure: false }),
+  highlighter: (size) => ({ size: size * 2.2, thinning: 0.1, smoothing: 0.6, streamline: 0.6, simulatePressure: false }),
+};
+// points: array of [x, y, pressure]
+export function strokeOutline(points, options) {
+  if (!points || points.length === 0) return [];
+  return getStroke(points, options);
+}
+// Build a Path2D from an outline polygon (for canvas fill).
+export function outlineToPath2D(outline) {
+  const p = new Path2D();
+  if (!outline.length) return p;
+  p.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 1; i < outline.length; i++) p.lineTo(outline[i][0], outline[i][1]);
+  p.closePath();
+  return p;
+}</code></pre>
+  <p>Run: <code>npm test -- --run tests/pen-stroke.test.js</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Implement PenCanvas.jsx (Pointer Events + pressure + palm rejection)</strong></label></div>
+<pre><code class="language-jsx">// src/components/tablet-chart/PenCanvas.jsx
+import { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { strokeOutline, outlineToPath2D, PEN_PRESETS } from '../../lib/penStroke.js';
+// props: templateImageUrl, tool ('pen'|'highlighter'|'eraser'), color, size. Ref api: exportDataUrl(), undo(), redo(), clear().
+const PenCanvas = forwardRef(function PenCanvas({ templateImageUrl, tool, color, size }, ref) {
+  const canvasRef = useRef(null); const imgRef = useRef(null);
+  const strokesRef = useRef([]);      // committed: { tool, color, size, points:[[x,y,p]] }
+  const redoRef = useRef([]);
+  const drawingRef = useRef(null);    // active stroke
+  const penActiveRef = useRef(false); // palm rejection: a pen is currently down
+  const toolRef = useRef({ tool, color, size }); toolRef.current = { tool, color, size };
+
+  const redraw = useCallback(() => {
+    const c = canvasRef.current; if (!c) return; const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (imgRef.current) ctx.drawImage(imgRef.current, 0, 0, c.width, c.height);   // template background
+    const all = drawingRef.current ? [...strokesRef.current, drawingRef.current] : strokesRef.current;
+    for (const s of all) {
+      const outline = strokeOutline(s.points, s.tool === 'highlighter' ? PEN_PRESETS.highlighter(s.size) : PEN_PRESETS.pen(s.size));
+      if (!outline.length) continue;
+      ctx.save();
+      if (s.tool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
+      else { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = s.tool === 'highlighter' ? 0.4 : 1; ctx.fillStyle = s.color; }
+      ctx.fill(outlineToPath2D(outline));
+      ctx.restore();
+    }
+  }, []);
+
+  // load template once
+  useEffect(() => {
+    if (!templateImageUrl) { redraw(); return; }
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { imgRef.current = img; redraw(); };
+    img.src = templateImageUrl;
+  }, [templateImageUrl, redraw]);
+
+  const ptFromEvent = (e) => {
+    const r = canvasRef.current.getBoundingClientRect();
+    const sx = canvasRef.current.width / r.width, sy = canvasRef.current.height / r.height;
+    return [(e.clientX - r.left) * sx, (e.clientY - r.top) * sy, e.pressure || 0.5];
+  };
+  const onPointerDown = (e) => {
+    if (e.pointerType === 'touch' && penActiveRef.current) return;        // palm rejection
+    if (e.pointerType === 'pen') penActiveRef.current = true;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const { tool, color, size } = toolRef.current;
+    drawingRef.current = { tool, color, size, points: [ptFromEvent(e)] };
+    redoRef.current = []; redraw();
+  };
+  const onPointerMove = (e) => {
+    if (!drawingRef.current) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];        // low-latency sampling
+    for (const ev of evs) drawingRef.current.points.push(ptFromEvent(ev));
+    redraw();
+  };
+  const onPointerUp = (e) => {
+    if (e.pointerType === 'pen') penActiveRef.current = false;
+    if (!drawingRef.current) return;
+    if (drawingRef.current.points.length > 1) strokesRef.current.push(drawingRef.current);
+    drawingRef.current = null; redraw();
+  };
+
+  useImperativeHandle(ref, () => ({
+    exportDataUrl: () => { drawingRef.current = null; redraw(); return canvasRef.current.toDataURL('image/png'); },
+    undo: () => { const s = strokesRef.current.pop(); if (s) redoRef.current.push(s); redraw(); },
+    redo: () => { const s = redoRef.current.pop(); if (s) strokesRef.current.push(s); redraw(); },
+    clear: () => { strokesRef.current = []; redoRef.current = []; redraw(); },
+  }), [redraw]);
+
+  return (
+    <canvas ref={canvasRef} width={1024} height={1280}
+      style={{ touchAction: 'none', width: '100%', height: '100%', background: '#fff', display: 'block' }}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />
+  );
+});
+export default PenCanvas;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Implement EditorToolRail.jsx</strong></label></div>
+<pre><code class="language-jsx">// src/components/tablet-chart/EditorToolRail.jsx
+const COLORS = ['#ef4444', '#3b82f6', '#111111', '#16a34a'];
+const SIZES = [4, 8, 14];
+// props: tool, setTool, color, setColor, size, setSize, onUndo, onRedo, onClear
+export default function EditorToolRail({ tool, setTool, color, setColor, size, setSize, onUndo, onRedo, onClear }) {
+  const Btn = ({ id, label, active }) => (
+    <button data-testid={`tool-${id}`} aria-pressed={active} onClick={() => setTool(id)}
+      className={`w-12 h-12 rounded-lg text-xl flex items-center justify-center ${active ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-200'}`}>{label}</button>
+  );
+  return (
+    <div className="flex flex-col gap-2 p-2 bg-neutral-900 border-r border-neutral-800 items-center select-none">
+      <Btn id="pen" label="✏️" active={tool === 'pen'} />
+      <Btn id="highlighter" label="🖍️" active={tool === 'highlighter'} />
+      <Btn id="eraser" label="🩹" active={tool === 'eraser'} />
+      <button data-testid="tool-undo" onClick={onUndo} className="w-12 h-12 rounded-lg bg-neutral-800 text-xl">↩️</button>
+      <button data-testid="tool-redo" onClick={onRedo} className="w-12 h-12 rounded-lg bg-neutral-800 text-xl">↪️</button>
+      <button data-testid="tool-clear" onClick={onClear} className="w-12 h-12 rounded-lg bg-neutral-800 text-xs">ล้าง</button>
+      <div className="h-px w-6 bg-neutral-700 my-1" />
+      {COLORS.map(c => (
+        <button key={c} data-testid={`color-${c}`} onClick={() => setColor(c)}
+          className="w-6 h-6 rounded-full" style={{ background: c, outline: color === c ? '2px solid #fff' : 'none' }} />
+      ))}
+      <div className="flex flex-col gap-1 mt-1">
+        {SIZES.map(s => (
+          <button key={s} data-testid={`size-${s}`} onClick={() => setSize(s)}
+            className={`w-6 h-6 rounded-full mx-auto ${size === s ? 'ring-2 ring-emerald-400' : ''}`}
+            style={{ background: '#777', transform: `scale(${0.4 + s / 20})` }} />
+        ))}
+      </div>
+    </div>
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: RTL test (tool selection + ref api wired)</strong></label></div>
+<pre><code class="language-jsx">// tests/pen-canvas-rtl.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import EditorToolRail from '../src/components/tablet-chart/EditorToolRail.jsx';
+describe('EditorToolRail', () => {
+  it('PC1 selecting a tool calls setTool', () => {
+    const setTool = vi.fn();
+    render(<EditorToolRail tool="pen" setTool={setTool} color="#ef4444" setColor={() => {}} size={4} setSize={() => {}} onUndo={() => {}} onRedo={() => {}} onClear={() => {}} />);
+    fireEvent.click(screen.getByTestId('tool-eraser'));
+    expect(setTool).toHaveBeenCalledWith('eraser');
+  });
+  it('PC2 undo/redo/clear wired', () => {
+    const onUndo = vi.fn(), onRedo = vi.fn(), onClear = vi.fn();
+    render(<EditorToolRail tool="pen" setTool={() => {}} color="#ef4444" setColor={() => {}} size={4} setSize={() => {}} onUndo={onUndo} onRedo={onRedo} onClear={onClear} />);
+    fireEvent.click(screen.getByTestId('tool-undo')); expect(onUndo).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('tool-clear')); expect(onClear).toHaveBeenCalled();
+  });
+});</code></pre>
+  <blockquote>Note: jsdom has no Canvas 2D context or PointerEvents; PenCanvas drawing math is covered by <code>penStroke.test.js</code> (pure) + the Rule Q L1 real-iPad hands-on. RTL covers the tool rail only.</blockquote>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 6: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/pen-stroke.test.js tests/pen-canvas-rtl.test.jsx   # PASS
+git add src/lib/penStroke.js src/components/tablet-chart/PenCanvas.jsx src/components/tablet-chart/EditorToolRail.jsx tests/pen-stroke.test.js tests/pen-canvas-rtl.test.jsx
+git commit -m "feat(tablet-chart): perfect-freehand pen canvas + tool rail"</code></pre>
+</div>
+
+<!-- ============ TASK 5 ============ -->
+<div class="task">
+  <h3>Task 5: Tablet standby screen</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/components/tablet-chart/TabletStandby.jsx</code></li>
+    <li>Test: <code>tests/tablet-standby-rtl.test.jsx</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Implement TabletStandby (name + branch, cached)</strong></label></div>
+<pre><code class="language-jsx">// src/components/tablet-chart/TabletStandby.jsx
+import { useState, useEffect } from 'react';
+import { useSelectedBranch } from '../../lib/BranchContext.jsx';
+import { getCachedDeviceName, setCachedDeviceName, getCachedBranchId, setCachedBranchId } from '../../lib/tabletDeviceCache.js';
+import { useTabletPresence } from '../../hooks/useTabletPresence.js';
+// props: deviceId, uid, byName
+export default function TabletStandby({ deviceId, uid, byName }) {
+  const { branches, branchId, selectBranch, isReady } = useSelectedBranch();
+  const [name, setName] = useState(() => getCachedDeviceName());
+  const [editingName, setEditingName] = useState(() => !getCachedDeviceName());
+  // restore cached branch once branches load
+  useEffect(() => {
+    const cached = getCachedBranchId();
+    if (isReady && cached && cached !== branchId && branches.some(b => b.branchId === cached)) selectBranch(cached);
+  }, [isReady, branches, branchId, selectBranch]);
+  const ready = !!(name && branchId);
+  useTabletPresence({ deviceId, deviceName: name, branchId, uid, byName, enabled: ready });
+  const saveName = () => { setCachedDeviceName(name.trim()); setEditingName(false); };
+  const onBranch = (e) => { selectBranch(e.target.value); setCachedBranchId(e.target.value); };
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center gap-5 p-6">
+      <div className="text-5xl">{ready ? '📡' : '⚙️'}</div>
+      <div className="text-lg font-semibold">{ready ? 'พร้อมรับงานแก้ไข Chart' : 'ตั้งค่าแท็บเล็ต'}</div>
+      <label className="text-sm text-neutral-400">สาขา
+        <select data-testid="standby-branch" value={branchId || ''} onChange={onBranch} className="ml-2 bg-neutral-800 rounded px-2 py-1 text-neutral-100">
+          <option value="" disabled>เลือกสาขา</option>
+          {branches.map(b => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
+        </select>
+      </label>
+      {editingName ? (
+        <div className="flex gap-2 items-center">
+          <input data-testid="standby-name-input" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="ชื่อเครื่อง เช่น iPad ห้องตรวจ 1"
+            className="bg-neutral-800 rounded px-3 py-2 text-neutral-100" />
+          <button data-testid="standby-name-save" disabled={!name.trim()} onClick={saveName} className="bg-emerald-500 text-black rounded px-3 py-2 disabled:opacity-40">บันทึก</button>
+        </div>
+      ) : (
+        <button data-testid="standby-name" onClick={() => setEditingName(true)} className="text-neutral-300 underline">{name} ✎</button>
+      )}
+      {ready && <div className="text-sm text-neutral-500 animate-pulse">กำลังรอจากเครื่อง PC…</div>}
+    </div>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: RTL test (cache restore + ready gating)</strong></label></div>
+<pre><code class="language-jsx">// tests/tablet-standby-rtl.test.jsx — mock BranchContext + useTabletPresence + tabletDeviceCache
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+let cachedName = '';
+vi.mock('../src/lib/tabletDeviceCache.js', () => ({
+  getCachedDeviceName: () => cachedName, setCachedDeviceName: (v) => { cachedName = v; },
+  getCachedBranchId: () => 'BR-x', setCachedBranchId: vi.fn(), getOrCreateDeviceId: () => 'TEST-T1',
+}));
+vi.mock('../src/lib/BranchContext.jsx', () => ({ useSelectedBranch: () => ({ branches: [{ branchId: 'BR-x', name: 'นครราชสีมา' }], branchId: 'BR-x', selectBranch: vi.fn(), isReady: true }) }));
+const presenceSpy = vi.fn();
+vi.mock('../src/hooks/useTabletPresence.js', () => ({ useTabletPresence: (a) => { presenceSpy(a); return { setBusy: () => {}, setIdle: () => {} }; } }));
+import TabletStandby from '../src/components/tablet-chart/TabletStandby.jsx';
+beforeEach(() => { cachedName = ''; presenceSpy.mockClear(); });
+describe('TabletStandby', () => {
+  it('S1 no cached name → asks for name, presence disabled', () => {
+    render(<TabletStandby deviceId="TEST-T1" uid="u1" byName="A" />);
+    expect(screen.getByTestId('standby-name-input')).toBeTruthy();
+    expect(presenceSpy).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+  });
+  it('S2 saving a name enables presence (ready)', () => {
+    render(<TabletStandby deviceId="TEST-T1" uid="u1" byName="A" />);
+    fireEvent.change(screen.getByTestId('standby-name-input'), { target: { value: 'iPad ห้อง 1' } });
+    fireEvent.click(screen.getByTestId('standby-name-save'));
+    expect(presenceSpy).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true, deviceName: 'iPad ห้อง 1', branchId: 'BR-x' }));
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/tablet-standby-rtl.test.jsx   # PASS
+git add src/components/tablet-chart/TabletStandby.jsx tests/tablet-standby-rtl.test.jsx
+git commit -m "feat(tablet-chart): tablet standby (name + branch, cached on-device)"</code></pre>
+</div>
+
+<!-- ============ TASK 6 ============ -->
+<div class="task">
+  <h3>Task 6: Tablet editor page (orchestration)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/pages/TabletChartEditorPage.jsx</code></li>
+    <li>Test: <code>tests/tablet-editor-page-rtl.test.jsx</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Implement the page (standby ↔ editor, listen for incoming session)</strong></label></div>
+<pre><code class="language-jsx">// src/pages/TabletChartEditorPage.jsx
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { auth } from '../firebase.js';
+import { getOrCreateDeviceId } from '../lib/tabletDeviceCache.js';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import {
+  listenToRequestedSessionForTablet, listenToChartEditSession, updateChartEditSession,
+  freeChartTablet, uploadTransportImage, downloadTransportImageAsDataUrl,
+} from '../lib/chartEditSession.js';
+import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS, HEARTBEAT_STALE_MS, isHeartbeatStale } from '../lib/chartEditSessionCore.js';
+import TabletStandby from '../components/tablet-chart/TabletStandby.jsx';
+import PenCanvas from '../components/tablet-chart/PenCanvas.jsx';
+import EditorToolRail from '../components/tablet-chart/EditorToolRail.jsx';
+
+export default function TabletChartEditorPage() {
+  const deviceId = getOrCreateDeviceId();
+  const { branchId } = useSelectedBranch();
+  const uid = auth.currentUser?.uid || ''; const byName = auth.currentUser?.displayName || auth.currentUser?.email || '';
+  const [active, setActive] = useState(null);     // active session doc being edited
+  const [templateDataUrl, setTemplateDataUrl] = useState('');
+  const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
+  const [notice, setNotice] = useState('');
+  const canvasRef = useRef(null); const sesUnsubRef = useRef(null);
+
+  // Q4 instant-pop: watch for a 'requested' session aimed at THIS device → open immediately.
+  useEffect(() => {
+    if (!branchId || active) return;
+    const unsub = listenToRequestedSessionForTablet({ branchId, tabletDeviceId: deviceId },
+      (doc) => { if (doc) openSession(doc); }, () => {});
+    return () => unsub?.();
+  }, [branchId, deviceId, active, openSession]);
+
+  const openSession = useCallback(async (doc) => {
+    const dataUrl = doc.templateImageUrl ? await downloadTransportImageAsDataUrl(doc.templateImageUrl) : '';
+    setTemplateDataUrl(dataUrl); setActive(doc);
+    await updateChartEditSession(doc.sessionId, { status: SESSION_STATUS.ACTIVE, tabletHeartbeatAt: Date.now() });
+    sesUnsubRef.current = listenToChartEditSession(doc.sessionId, (live) => {
+      if (live && live.status === SESSION_STATUS.CANCELLED && live.cancelledBy !== CANCELLED_BY.TABLET) {
+        setNotice('การเชื่อมต่อถูกยกเลิกจาก PC'); closeEditor(false);
+      }
+    }, () => {});
+  }, []);
+
+  const closeEditor = useCallback((free = true) => {
+    sesUnsubRef.current?.(); sesUnsubRef.current = null;
+    if (free) freeChartTablet(deviceId).catch(() => {});
+    setActive(null); setTemplateDataUrl('');
+  }, [deviceId]);
+
+  const onSave = useCallback(async () => {
+    if (!active) return;
+    const dataUrl = canvasRef.current.exportDataUrl();
+    const url = await uploadTransportImage(active.sessionId, 'result', dataUrl);
+    await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url });
+    closeEditor(true);
+  }, [active, closeEditor]);
+
+  const onCancel = useCallback(async () => {
+    if (active) await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.CANCELLED, cancelledBy: CANCELLED_BY.TABLET }).catch(() => {});
+    closeEditor(true);
+  }, [active, closeEditor]);
+
+  // tablet heartbeat while editing
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => updateChartEditSession(active.sessionId, { tabletHeartbeatAt: Date.now() }).catch(() => {}), HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [active]);
+
+  if (notice && !active) return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center gap-4">
+      <div className="text-5xl">🔌</div><div>{notice}</div>
+      <button className="bg-neutral-800 rounded px-4 py-2" onClick={() => setNotice('')}>กลับสู่หน้ารอ</button>
+    </div>
+  );
+  if (!active) return <TabletStandby deviceId={deviceId} uid={uid} byName={byName} />;
+
+  return (
+    <div className="fixed inset-0 bg-neutral-950 flex flex-col">
+      <header className="flex items-center justify-between px-4 py-2 bg-neutral-900 text-neutral-100 border-b border-neutral-800">
+        <button data-testid="editor-cancel" onClick={onCancel} className="px-3 py-1.5 border border-neutral-600 rounded">✕ ยกเลิก</button>
+        <span className="text-sm opacity-80">{active.template?.name} · {active.patientLabel}</span>
+        <button data-testid="editor-save" onClick={onSave} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded">✓ บันทึก</button>
+      </header>
+      <div className="flex flex-1 min-h-0">
+        <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
+          onUndo={() => canvasRef.current.undo()} onRedo={() => canvasRef.current.redo()} onClear={() => canvasRef.current.clear()} />
+        <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
+          <PenCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size} />
+        </div>
+      </div>
+    </div>
+  );
+}</code></pre>
+  <blockquote><strong>Instant-pop trigger:</strong> the <code>listenToRequestedSessionForTablet</code> listener is defined in Task 2 (backendClient + scopedDataLayer wrapper) and its composite index is declared in Task 9. The page wires it above to call <code>openSession(doc)</code> the moment a 'requested' session for this device appears — no tablet-side tap (Q4).</blockquote>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: RTL — save path emits SAVED + uploads result</strong></label></div>
+<pre><code class="language-jsx">// tests/tablet-editor-page-rtl.test.jsx — mock chartEditSession + BranchContext + firebase; render with an injected active session
+// Assert: clicking editor-save → uploadTransportImage('result') + updateChartEditSession(status:'saved'); editor-cancel → cancelledBy:'tablet'.
+// (Inject the active session via a small test-only prop hook OR by mocking the session listener to immediately deliver a 'requested' doc.)</code></pre>
+  <p>Write the RTL test to mock <code>../src/lib/chartEditSession.js</code> so the session listener delivers a fixture 'requested' doc, then assert the save + cancel writes. Run: <code>npm test -- --run tests/tablet-editor-page-rtl.test.jsx</code> → PASS.</p>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Commit</strong></label></div>
+  <pre><code class="language-bash">git add src/pages/TabletChartEditorPage.jsx tests/tablet-editor-page-rtl.test.jsx
+git commit -m "feat(tablet-chart): tablet editor page + instant-pop session listener"</code></pre>
+</div>
+
+<!-- ============ TASK 7 ============ -->
+<div class="task">
+  <h3>Task 7: PC pairing UI (ready-list + pairing modal)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/components/tablet-chart/TabletReadyList.jsx</code></li>
+    <li>Create: <code>src/components/tablet-chart/PcPairingModal.jsx</code></li>
+    <li>Test: <code>tests/pc-pairing-rtl.test.jsx</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: TabletReadyList (live idle tablets in branch)</strong></label></div>
+<pre><code class="language-jsx">// src/components/tablet-chart/TabletReadyList.jsx
+import { useEffect, useState } from 'react';
+import { listenToChartTabletPresenceByBranch } from '../../lib/chartEditSession.js';
+import { isPresenceReady } from '../../lib/chartEditSessionCore.js';
+// props: branchId, value (deviceId), onChange(deviceObj)
+export default function TabletReadyList({ branchId, value, onChange }) {
+  const [all, setAll] = useState([]);
+  useEffect(() => {
+    const unsub = listenToChartTabletPresenceByBranch({ branchId }, setAll, () => {});
+    return () => unsub?.();
+  }, [branchId]);
+  const ready = all.filter(p => isPresenceReady(p, Date.now()));
+  useEffect(() => { if (ready.length === 1 && !value) onChange(ready[0]); }, [ready, value, onChange]); // auto-select single
+  if (ready.length === 0) return <p data-testid="no-tablet" className="text-sm text-neutral-400">ไม่มีแท็บเล็ตพร้อมใช้งานในสาขานี้</p>;
+  return (
+    <ul className="space-y-1">
+      {ready.map(t => (
+        <li key={t.deviceId}><button data-testid={`tablet-${t.deviceId}`} onClick={() => onChange(t)}
+          className={`w-full flex items-center gap-2 border rounded px-3 py-2 text-sm ${value === t.deviceId ? 'border-emerald-500 bg-emerald-500/10' : 'border-neutral-600'}`}>
+          {value === t.deviceId ? '🔘' : '⚪'} {t.deviceName}<span className="ml-auto text-emerald-500">● พร้อม</span></button></li>
+      ))}
+    </ul>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: PcPairingModal (choice → picker → waiting → failed)</strong></label></div>
+<pre><code class="language-jsx">// src/components/tablet-chart/PcPairingModal.jsx
+import { useState } from 'react';
+import TabletReadyList from './TabletReadyList.jsx';
+// props: branchId, phase ('choose'|'waiting'|'failed'), error, onEditHere, onSendToTablet(deviceObj), onCancel, onRetry, onClose
+export default function PcPairingModal({ branchId, phase, error, onEditHere, onSendToTablet, onCancel, onRetry, onClose }) {
+  const [picked, setPicked] = useState(null);
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center" >
+      <div className="bg-neutral-900 text-neutral-100 rounded-xl p-5 w-[360px] max-w-[92vw]" onClick={e => e.stopPropagation()}> {/* AV78: backdrop does NOT close */}
+        {phase === 'choose' && (<>
+          <h3 className="text-base mb-3">แก้ไข Chart ที่ไหน?</h3>
+          <button data-testid="edit-here" onClick={onEditHere} className="w-full border border-neutral-600 rounded py-2 mb-2">🖥️ แก้ที่เครื่องนี้</button>
+          <div className="border border-emerald-600 rounded p-2 mb-3 bg-emerald-500/10">
+            <div className="text-sm mb-2">📱 แก้ที่แท็บเล็ต</div>
+            <TabletReadyList branchId={branchId} value={picked?.deviceId} onChange={setPicked} />
+            <button data-testid="send-tablet" disabled={!picked} onClick={() => onSendToTablet(picked)}
+              className="w-full mt-2 bg-emerald-500 text-black rounded py-2 disabled:opacity-40">ส่งไปแท็บเล็ต →</button>
+          </div>
+          <button data-testid="pairing-close" onClick={onClose} className="text-sm text-neutral-400">ปิด</button>
+        </>)}
+        {phase === 'waiting' && (<div className="text-center">
+          <div className="text-3xl my-2">⏳</div>
+          <div className="text-sm mb-1">กำลังแก้ที่ {picked?.deviceName || 'แท็บเล็ต'}…</div>
+          <div className="text-xs text-neutral-500 mb-3">รอการบันทึกจากแท็บเล็ต</div>
+          <button data-testid="waiting-cancel" onClick={onCancel} className="border border-neutral-600 rounded px-4 py-2">ยกเลิก</button>
+        </div>)}
+        {phase === 'failed' && (<div className="text-center">
+          <div className="text-3xl my-2">❌</div>
+          <div className="text-sm mb-1">การแก้ไขล้มเหลว</div>
+          <div className="text-xs text-neutral-500 mb-3">{error}</div>
+          <button data-testid="failed-retry" onClick={onRetry} className="border border-neutral-600 rounded px-4 py-2">ลองใหม่</button>
+        </div>)}
+      </div>
+    </div>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: RTL test</strong></label></div>
+<pre><code class="language-jsx">// tests/pc-pairing-rtl.test.jsx — mock chartEditSession listener to emit one idle+fresh tablet
+// PP1 choose: edit-here calls onEditHere · PP2 one ready tablet auto-selects, send-tablet enabled → onSendToTablet(deviceObj)
+// PP3 zero ready → "no-tablet" shown, send disabled · PP4 backdrop click does NOT close (AV78) · PP5 waiting→cancel calls onCancel · PP6 failed shows error + retry</code></pre>
+  <p>Run: <code>npm test -- --run tests/pc-pairing-rtl.test.jsx</code> → PASS (PP1–PP6).</p>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Commit</strong></label></div>
+  <pre><code class="language-bash">git add src/components/tablet-chart/TabletReadyList.jsx src/components/tablet-chart/PcPairingModal.jsx tests/pc-pairing-rtl.test.jsx
+git commit -m "feat(tablet-chart): PC pairing modal + live ready-tablet list"</code></pre>
+</div>
+
+<!-- ============ TASK 8 ============ -->
+<div class="task">
+  <h3>Task 8: Integrate into ChartSection + route the tablet link (App.jsx) — minimal, TFP untouched</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/ChartSection.jsx</code> (insert the choice between template-pick and local canvas)</li>
+    <li>Modify: <code>src/App.jsx</code> (route <code>?tablet=chart</code> → <code>TabletChartEditorPage</code>, AFTER staff auth)</li>
+    <li>Test: <code>tests/chart-section-tablet-integration.test.jsx</code> + source-grep that <code>TreatmentFormPage.jsx</code> is unchanged for this feature</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Read ChartSection.jsx, confirm the insertion point</strong></label></div>
+  <p>Read <code>src/components/ChartSection.jsx</code>. Confirm: <code>handleSelectTemplate(tmpl)</code> currently sets <code>canvasTemplate</code> + opens the local canvas; <code>handleSave(chartData)</code> merges into <code>charts[]</code> via <code>onChartsChange</code>. The integration funnels the tablet result through the EXISTING <code>handleSave</code> (same shape) — do not change <code>handleSave</code> or the local <code>ChartCanvas</code> path.</p>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Insert the choice + relay in ChartSection</strong></label></div>
+<pre><code class="language-jsx">// ChartSection.jsx — add near the top of the component
+import { useState as _useState } from 'react';
+import PcPairingModal from './tablet-chart/PcPairingModal.jsx';
+import { useChartEditSession } from '../hooks/useChartEditSession.js';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { auth } from '../firebase.js';
+// inside the component:
+const { branchId } = useSelectedBranch();
+const pcDeviceId = (auth.currentUser?.uid || 'pc') + ':' + (window.name || 'main');
+const [pendingTemplate, setPendingTemplate] = _useState(null);   // template chosen, awaiting where-to-edit
+const { phase, error, start, cancel } = useChartEditSession({
+  pcDeviceId, pcUid: auth.currentUser?.uid,
+  onSaved: (chartData) => { handleSave(chartData); setPendingTemplate(null); },   // reuse existing handleSave → charts[]
+});
+
+// MODIFY handleSelectTemplate: instead of opening the local canvas directly, stage the template + open the choice.
+function handleSelectTemplate(tmpl) {
+  setSelectorOpen(false);
+  setPendingTemplate(tmpl);            // opens PcPairingModal in 'choose' phase
+}
+
+// NEW: edit-here keeps today's behavior exactly (open the local fabric.js ChartCanvas).
+function editHere() { const t = pendingTemplate; setPendingTemplate(null); setCanvasTemplate(t); setCanvasOpen(true); }
+
+// NEW: send to a tablet (resolve the template's image to a dataURL for transport).
+async function sendToTablet(tablet) {
+  const templateDataUrl = pendingTemplate.imageUrl;   // already a dataURL/managed URL in the selector model
+  await start({ tablet, template: { id: pendingTemplate.id, name: pendingTemplate.name, category: pendingTemplate.category || '' },
+    patientLabel, templateDataUrl, branchId });
+}
+
+// RENDER (add alongside the existing selector/canvas):
+{pendingTemplate && (
+  <PcPairingModal branchId={branchId} phase={phase === 'idle' ? 'choose' : phase} error={error}
+    onEditHere={editHere} onSendToTablet={sendToTablet}
+    onCancel={() => cancel()} onRetry={() => setPendingTemplate(pendingTemplate)} onClose={() => setPendingTemplate(null)} />
+)}</code></pre>
+  <blockquote><code>patientLabel</code>: build from the customer name + HN that ChartSection already receives via props (or via the resolver the treatment form uses). If ChartSection does not currently receive the patient, add a single new prop <code>patientLabel</code> passed from where <code>&lt;ChartSection&gt;</code> is rendered — this is the ONLY change to TFP's render line (one prop), still 0 logic change.</blockquote>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Route the tablet link in App.jsx</strong></label></div>
+<pre><code class="language-jsx">// App.jsx — near the existing ?session/?patient/?schedule routing
+import TabletChartEditorPage from './pages/TabletChartEditorPage.jsx';
+const tabletParam = new URLSearchParams(window.location.search).get('tablet');
+// ... after auth/login resolves (this link uses NORMAL staff auth — NOT signInAnonymously):
+if (tabletParam === 'chart') {
+  if (!user) return /* render the existing AdminLogin/login screen */;
+  return <TabletChartEditorPage />;
+}</code></pre>
+  <blockquote>Place the <code>?tablet=chart</code> branch so it renders ONLY for an authenticated staff user (reuse the app's existing login gate — do NOT add it to <code>needsPublicAuth</code>/<code>signInAnonymously</code>; this is staff auth per Q2). It must sit inside <code>&lt;BranchProvider&gt;</code> so <code>useSelectedBranch</code> works.</blockquote>
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Integration + TFP-untouched tests</strong></label></div>
+<pre><code class="language-jsx">// tests/chart-section-tablet-integration.test.jsx
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+describe('ChartSection tablet integration', () => {
+  it('I1 ChartSection imports the pairing modal + session hook', () => {
+    const s = fs.readFileSync('src/components/ChartSection.jsx', 'utf8');
+    expect(s).toMatch(/PcPairingModal/); expect(s).toMatch(/useChartEditSession/);
+    expect(s).toMatch(/onSaved:.*handleSave/);   // tablet result funnels through existing handleSave
+  });
+  it('I2 App routes ?tablet=chart to the editor page (staff auth, NOT anon)', () => {
+    const a = fs.readFileSync('src/App.jsx', 'utf8');
+    expect(a).toMatch(/tablet.*===.*'chart'/); expect(a).toMatch(/TabletChartEditorPage/);
+  });
+  it('I3 TFP is NOT wired to chart-edit internals (only an optional patientLabel prop)', () => {
+    const tfp = fs.readFileSync('src/components/TreatmentFormPage.jsx', 'utf8');
+    expect(tfp).not.toMatch(/useChartEditSession|chartEditSession|PcPairingModal|TabletChartEditorPage/);
+  });
+});</code></pre>
+  <p>(RTL: rendering full ChartSection requires the TFP context — keep the RTL coverage at the PcPairingModal level (Task 7); this task's gate is the source-grep integration contract + I3 TFP-clean guard.)</p>
+  <div class="step"><input type="checkbox" id="t8s5"> <label for="t8s5"><strong>Step 5: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/chart-section-tablet-integration.test.jsx   # PASS (I1,I2,I3)
+git add src/components/ChartSection.jsx src/App.jsx tests/chart-section-tablet-integration.test.jsx
+git commit -m "feat(tablet-chart): ChartSection choice + ?tablet=chart route (TFP untouched)"</code></pre>
+</div>
+
+<!-- ============ TASK 9 ============ -->
+<div class="task">
+  <h3>Task 9: Firestore + Storage rules, composite index, branch-coverage classification</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>firestore.rules</code> · <code>firestore.indexes.json</code> · <code>storage.rules</code> (verify)</li>
+    <li>Modify: <code>tests/branch-collection-coverage.test.js</code> (BC1.1 — classify the 2 new collections)</li>
+    <li>Test: <code>tests/tablet-chart-rules.test.js</code> (source-grep)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Add Firestore rules (both collections — isClinicStaff, like other be_*)</strong></label></div>
+<pre><code class="language-js">// firestore.rules — inside the artifacts/.../public/data match block, near other be_* matches
+match /be_chart_tablet_presence/{deviceId} { allow read, write: if isClinicStaff(); }
+match /be_chart_edit_sessions/{sessionId}  { allow read, write: if isClinicStaff(); }</code></pre>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Composite index for the tablet's instant-pop query</strong></label></div>
+<pre><code class="language-json">// firestore.indexes.json — add to "indexes"
+{ "collectionGroup": "be_chart_edit_sessions", "queryScope": "COLLECTION",
+  "fields": [ { "fieldPath": "branchId", "order": "ASCENDING" },
+              { "fieldPath": "tabletDeviceId", "order": "ASCENDING" },
+              { "fieldPath": "status", "order": "ASCENDING" } ] }</code></pre>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Verify Storage rule covers the transport path</strong></label></div>
+  <p>Read <code>storage.rules</code>. Confirm <code>match /uploads/{collection}/{docId}/{fileName}</code> (staff-only) covers <code>uploads/chart-edit-sessions/{sessionId}/{template|result}.png</code> (collection=<code>chart-edit-sessions</code>, docId=<code>{sessionId}</code>, fileName=<code>*.png</code>). If the existing rule already matches, add NO new rule. If not, add an explicit admin/staff-only match mirroring it.</p>
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4: Classify in branch-coverage (BSA, BC1.1) + rules source-grep test</strong></label></div>
+<pre><code class="language-js">// tests/branch-collection-coverage.test.js — add both to COLLECTION_MATRIX as branch-scoped
+// be_chart_tablet_presence: 'branch', be_chart_edit_sessions: 'branch'
+// tests/tablet-chart-rules.test.js
+import fs from 'node:fs'; import { describe, it, expect } from 'vitest';
+describe('tablet-chart rules', () => {
+  const r = fs.readFileSync('firestore.rules', 'utf8');
+  it('R1 both collections gated by isClinicStaff', () => {
+    expect(r).toMatch(/be_chart_tablet_presence\/\{deviceId\}\s*\{\s*allow read, write: if isClinicStaff\(\);/);
+    expect(r).toMatch(/be_chart_edit_sessions\/\{sessionId\}\s*\{\s*allow read, write: if isClinicStaff\(\);/);
+  });
+  it('R2 composite index declared', () => {
+    const idx = fs.readFileSync('firestore.indexes.json', 'utf8');
+    expect(idx).toMatch(/be_chart_edit_sessions/); expect(idx).toMatch(/tabletDeviceId/);
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t9s5"> <label for="t9s5"><strong>Step 5: Run + commit (NO deploy — rules deploy is user-gated, Rule B)</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/tablet-chart-rules.test.js tests/branch-collection-coverage.test.js   # PASS
+git add firestore.rules firestore.indexes.json storage.rules tests/tablet-chart-rules.test.js tests/branch-collection-coverage.test.js
+git commit -m "feat(tablet-chart): firestore rules + composite index + BSA classification"</code></pre>
+  <blockquote><strong>Deploy is user-gated.</strong> When the user says "deploy": Rule B Probe-Deploy-Probe (anon write to both new collections → expect 403 pre+post) + <code>firebase deploy --only firestore:rules,firestore:indexes,storage</code> (note: <code>storage</code> not <code>storage:rules</code> — V106 CLI lesson). Indexes take 2–30 min to BUILD after deploy (Rule Q V66) — verify the instant-pop query via the Task 11 L2 e2e against the built index before claiming ready.</blockquote>
+</div>
+
+<!-- ============ TASK 10 ============ -->
+<div class="task">
+  <h3>Task 10: Orphan-session sweep cron (backstop for crashes)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>api/cron/chart-edit-session-sweep.js</code> (mirror <code>api/cron/stock-movement-retention.js</code>)</li>
+    <li>Modify: <code>vercel.json</code> (cron entry)</li>
+    <li>Test: <code>tests/chart-edit-session-sweep.test.js</code> (pure decision helper)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Pure sweep-decision helper + test (add to core)</strong></label></div>
+<pre><code class="language-js">// add to src/lib/chartEditSessionCore.js
+import /* already has */ {} from './chartEditSessionCore.js'; // (illustrative)
+export function shouldReap(session, nowMs) {
+  if (!session) return false;
+  if (isTerminal(session.status)) return (nowMs - toMillis(session.updatedAt)) > SESSION_MAX_AGE_MS; // GC old terminals
+  const pcStale = isHeartbeatStale(session.pcHeartbeatAt, nowMs);
+  const tbStale = session.tabletHeartbeatAt != null && isHeartbeatStale(session.tabletHeartbeatAt, nowMs);
+  return pcStale || tbStale || (nowMs - toMillis(session.createdAt)) > SESSION_MAX_AGE_MS;
+}</code></pre>
+<pre><code class="language-js">// tests/chart-edit-session-sweep.test.js
+import { describe, it, expect } from 'vitest';
+import { shouldReap, SESSION_MAX_AGE_MS } from '../src/lib/chartEditSessionCore.js';
+describe('shouldReap', () => {
+  const now = 10_000_000;
+  it('SW1 active w/ fresh heartbeats → keep', () => expect(shouldReap({ status: 'active', pcHeartbeatAt: now - 1000, tabletHeartbeatAt: now - 1000, createdAt: now - 2000 }, now)).toBe(false));
+  it('SW2 active w/ stale tablet heartbeat → reap', () => expect(shouldReap({ status: 'active', pcHeartbeatAt: now - 1000, tabletHeartbeatAt: now - 60000, createdAt: now - 70000 }, now)).toBe(true));
+  it('SW3 requested but pc gone → reap', () => expect(shouldReap({ status: 'requested', pcHeartbeatAt: now - 60000, createdAt: now - 60000 }, now)).toBe(true));
+  it('SW4 saved + older than max age → GC', () => expect(shouldReap({ status: 'saved', updatedAt: now - SESSION_MAX_AGE_MS - 1 }, now)).toBe(true));
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Cron endpoint (CRON_SECRET + admin SDK; archive-not-needed, just cancel + cleanup)</strong></label></div>
+  <p>Mirror <code>api/cron/stock-movement-retention.js</code> exactly for the boilerplate (CRON_SECRET gate, admin-SDK init with the <code>\n</code> PEM fix, canonical <code>artifacts/{APP_ID}/public/data</code> path). Logic: query <code>be_chart_edit_sessions</code> (limit 500), for each where <code>shouldReap(doc, Date.now())</code>: if non-terminal → <code>update(status:'cancelled', cancelledBy:'timeout')</code> then free its tablet presence (set idle); delete its Storage folder <code>uploads/chart-edit-sessions/{sessionId}/*</code>; delete the session doc. Write an audit doc to <code>be_admin_audit</code>. Idempotent.</p>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: vercel.json cron entry</strong></label></div>
+<pre><code class="language-json">// vercel.json "crons": add
+{ "path": "/api/cron/chart-edit-session-sweep", "schedule": "*/15 * * * *" }
+// + ensure the function has maxDuration set if needed (mirror the other cron entries)</code></pre>
+  <div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4: Run + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run tests/chart-edit-session-sweep.test.js   # PASS (SW1-4)
+git add src/lib/chartEditSessionCore.js api/cron/chart-edit-session-sweep.js vercel.json tests/chart-edit-session-sweep.test.js
+git commit -m "feat(tablet-chart): orphan-session sweep cron + shouldReap helper"</code></pre>
+</div>
+
+<!-- ============ TASK 11 ============ -->
+<div class="task">
+  <h3>Task 11: Verification — Rule I flow-simulate + stress + Rule Q L2 e2e + AV invariant</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/tablet-chart-editor-flow-simulate.test.js</code> (Rule I — full chain + every cancel/timeout branch)</li>
+    <li>Create: <code>tests/tablet-chart-stress.test.js</code> (concurrency / races / adversarial)</li>
+    <li>Create: <code>scripts/e2e-tablet-chart-editor.mjs</code> (Rule Q L2 — two real client-SDK clients on real Firestore + Storage)</li>
+    <li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (new AVxx invariant)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Rule I full-flow simulate</strong></label></div>
+  <p>Chain pure-core + a fake in-memory session store (Map) wired through the hook contract: (F1) requested→active→saved → <code>onSaved</code> fires with <code>{dataUrl, fabricJson:null, templateId, source:'tablet'}</code> and presence returns idle; (F2) tablet cancel → PC <code>phase:'failed'</code> error "แท็บเล็ตยกเลิก"; (F3) PC cancel → tablet receives cancelled (by !== tablet) → notice; (F4) tablet heartbeat goes stale → watchdog cancels with <code>timeout</code>; (F5) TABLET_BUSY on create → <code>phase:'failed'</code> "กำลังถูกใช้งาน". Assert presence idle + storage cleanup called on every terminal path. Use vi fake timers for the heartbeat/watchdog.</p>
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: Stress test</strong></label></div>
+  <p>(ST1) 50 concurrent sessions in the fake store → each resolves independently, no cross-talk. (ST2) two PCs call <code>createChartEditSession</code> for the SAME idle tablet → exactly one wins, the other throws TABLET_BUSY (simulate the TX guard with a serialized presence check). (ST3) rapid cancel→retry→cancel ×20 → no dangling listeners (assert teardown count == start count). (ST4) oversized result dataURL (8 MB string) → upload path is invoked (Storage, not the doc) — assert the session doc never carries the image bytes. (ST5) NFC≠NFD + 10k-char deviceName → presence builder stays well-formed.</p>
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: Rule Q L2 e2e (real client SDK, two clients)</strong></label></div>
+  <p>Mirror an existing <code>scripts/e2e-*.mjs</code> using the <strong>client SDK</strong> (<code>firebase/firestore</code> + <code>firebase/storage</code>, NOT firebase-admin) with <code>signInWithEmailAndPassword</code> for a real staff account (creds via <code>vercel env pull</code> per Rule R). Use <code>TEST-</code>/<code>E2E-</code> prefixed deviceIds + sessionIds (V20). Drive: client P (PC) creates a session via the TX + uploads a template; client T (tablet) queries the composite index for its requested session, opens (active), uploads a result, sets saved; client P reads saved, downloads result, asserts bytes round-trip, deletes session + Storage + frees presence. Also run the cancel-from-each-side + a forced 2-PC-one-tablet race. Assert zero orphans at the end. This is the proof the composite index + transaction + Storage rules actually work on real prod.</p>
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: AV invariant (lock the boundaries)</strong></label></div>
+  <p>Add an AVxx to <code>audit-anti-vibe-code</code>: (a) <code>TreatmentFormPage.jsx</code> must NOT import any chart-edit-session/pairing module (TFP-untouched guard); (b) the only writers of <code>be_chart_edit_sessions</code> / <code>be_chart_tablet_presence</code> are <code>backendClient.js</code> + the sweep cron (closed list); (c) the tablet result must funnel through <code>ChartSection.handleSave</code> (no direct <code>be_treatments</code> write from the tablet path). Source-grep enforced.</p>
+  <div class="step"><input type="checkbox" id="t11s5"> <label for="t11s5"><strong>Step 5: Full suite + build + commit</strong></label></div>
+  <pre><code class="language-bash">npm test -- --run        # full suite GREEN (Rule N: full run at batch end)
+npm run build            # clean
+node scripts/e2e-tablet-chart-editor.mjs   # Rule Q L2 PASS on real prod (after rules+index deployed)
+git add tests/tablet-chart-editor-flow-simulate.test.js tests/tablet-chart-stress.test.js scripts/e2e-tablet-chart-editor.mjs .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "test(tablet-chart): Rule I flow-simulate + stress + Rule Q L2 e2e + AV invariant"</code></pre>
+  <blockquote><strong>Rule Q V66 honesty:</strong> Apple Pencil pressure / palm-rejection / latency <em>feel</em> is NOT covered by any automated layer — it is an <strong>L1 hands-on by the user on a real iPad + Apple Pencil</strong> (and an Android stylus). Do not claim "stylus verified" without that hands-on. Everything else (relay contract, state machine, races, index, Storage round-trip) is covered by L2 + the suites above.</blockquote>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> Q1 relay → Tasks 3,8 (onSaved→handleSave). Q2 staff auth/branch → Tasks 5,8 (App route, useSelectedBranch). Q3 pen engine → Task 4. Q4 named tablets + ready-list + instant-pop → Tasks 5,6,7 + the composite-index session listener (Task 6 addendum / Task 9). Q5 Storage transport + dataURL final → Tasks 2,3,6. Device-cache → Tasks 1,5. Error/timeout matrix → Task 3 (watchdog) + Task 6 (tablet side) + Task 10 (cron backstop). Rules/deploy → Task 9. Testing (point 11) → Task 11. All spec sections map to a task.</p>
+<p><strong>Placeholder scan:</strong> No placeholders. The instant-pop trigger is the real <code>listenToRequestedSessionForTablet</code> (defined Task 2, indexed Task 9, wired Task 6). No "TODO/TBD/handle edge cases" remain.</p>
+<p><strong>Type consistency:</strong> <code>onSaved</code> chartData shape <code>{dataUrl, fabricJson:null, templateId, source:'tablet'}</code> identical in Task 3 (hook), Task 6 (tablet save → upload), Task 8 (handleSave). Status enum + <code>cancelledBy</code> + <code>toMillis</code> + <code>isPresenceReady</code> reused from core everywhere. Storage path string identical in Tasks 2/6/10. Collection names identical across rules (Task 9), backend (Task 2), coverage (Task 9).</p>
+<p><strong>One known dependency to confirm during execution:</strong> ChartSection's access to the patient label + the template's <code>imageUrl</code> shape — Task 8 Step 1 reads the file first to confirm before wiring. If the patient isn't in ChartSection's props, the only TFP change is passing one <code>patientLabel</code> prop (no logic).</p>
+
+</body>
+</html>
