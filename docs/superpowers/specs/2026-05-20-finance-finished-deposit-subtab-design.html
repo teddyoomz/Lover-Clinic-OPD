@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Finished-Deposit Sub-Tab Design Spec</title>
+  <style>
+    :root { --accent: #047857; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .ui { background: #0a0a0a; border-radius: 12px; padding: 14px; font-size: 12px; color: #e5e5e5; }
+    .pillrow { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 6px; display: flex; gap: 6px; margin-bottom: 10px; }
+    .pill { padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 12px; color: #888; }
+    .pill.active { background: #047857; color: #fff; box-shadow: 0 0 12px rgba(16,185,129,0.3); }
+    .bar { background: #141414; border: 1.5px solid rgba(16,185,129,0.15); border-radius: 14px; padding: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .search { flex: 1; min-width: 180px; background: #1c1c1c; border: 2px solid #333; border-radius: 9px; padding: 8px 11px; color: #777; }
+    .ddl { background: #1c1c1c; border: 2px solid #333; border-radius: 9px; padding: 8px 11px; color: #ccc; font-weight: 700; }
+    .btn { background: linear-gradient(135deg,#047857,#10b981); color: #fff; font-weight: 900; border-radius: 9px; padding: 8px 16px; }
+    .daterow { margin-top: 8px; color: #888; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<h1>Finance Finished-Deposit Sub-Tab Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 · <strong>Status:</strong> Approved by user (Q1-Q4 locked + verbal go) · <strong>Scope:</strong> <code>src/components/backend/DepositPanel.jsx</code> + new pure helper · <strong>Sibling:</strong> mirrors the sales cancelled sub-tab (<code>2026-05-20-sales-cancelled-subtab-design.html</code>)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+On <code>tab=finance</code> → "มัดจำ" (DepositPanel), finished deposits (used / cancelled / refunded / expired) are interleaved with still-usable ones, cluttering the list the user works in day-to-day. Mirroring the just-shipped sales cancelled sub-tab, split finished deposits into a separate in-page pill so the default "ใช้งานอยู่" view shows only deposits that still have a usable balance.
+</p>
+<p>User directive: <em>"ในหน้า tab=finance ฝากให้แยกมัดจำที่ใช้หมดแล้วออกไป โดยสร้าง Tab ย่อยใหม่ขึ้นมา ในลักษณะเดียวกับ tab=sales เมื่อกี้เลย"</em> (then chose: move all finished statuses, not just <code>used</code>).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">"ใช้งานอยู่" (active, DEFAULT) — dropdown scoped to active+partial</div>
+  <div class="ui">
+    <div class="pillrow"><div class="pill active">ใช้งานอยู่</div><div class="pill">สิ้นสุดแล้ว</div></div>
+    <div class="bar">
+      <div class="row">
+        <span class="search">🔍 ค้นหามัดจำ... (DEP-, ชื่อลูกค้า, HN)</span>
+        <span class="ddl">ทุกสถานะ ▾</span>
+        <span class="btn">+ สร้างมัดจำ</span>
+      </div>
+      <div class="daterow">ช่วงวันที่: [เริ่ม] — [สิ้นสุด] &nbsp;&nbsp; <b>3 รายการ</b></div>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:#666;">dropdown options = ทุกสถานะ / ใช้งาน / ใช้บางส่วน. Rows = status ∈ {active, partial}.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">"สิ้นสุดแล้ว" (finished) — dropdown scoped to the 4 finished statuses, kept visible</div>
+  <div class="ui">
+    <div class="pillrow"><div class="pill">ใช้งานอยู่</div><div class="pill active">สิ้นสุดแล้ว</div></div>
+    <div class="bar">
+      <div class="row">
+        <span class="search">🔍 ค้นหามัดจำ... (DEP-, ชื่อลูกค้า, HN)</span>
+        <span class="ddl">ทุกสถานะ ▾</span>
+        <span class="btn">+ สร้างมัดจำ</span>
+      </div>
+      <div class="daterow">ช่วงวันที่: [เริ่ม] — [สิ้นสุด] &nbsp;&nbsp; <b>12 รายการ</b></div>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:#666;">dropdown options = ทุกสถานะ / ใช้หมด / ยกเลิก / คืนเงิน / หมดอายุ. Rows = status ∈ {used, cancelled, refunded, expired}.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">"สิ้นสุดแล้ว" · empty</div>
+  <div class="ui">
+    <div class="pillrow"><div class="pill">ใช้งานอยู่</div><div class="pill active">สิ้นสุดแล้ว</div></div>
+    <div style="background:#141414;border:1px solid #262626;border-radius:12px;padding:40px;text-align:center;color:#888;">ยังไม่มีมัดจำที่สิ้นสุด</div>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<p><strong>One new pure helper + edits to <code>DepositPanel.jsx</code>.</strong> Client-side split over the already-loaded <code>deposits</code> (one-shot <code>getAllDeposits</code>); no backend, no new fetch, no BSA change. Mirrors <code>saleSubTabFilter.js</code> + the SaleTab pill pattern (emerald accent for deposits).</p>
+<ol>
+  <li><strong>NEW <code>src/lib/depositSubTabFilter.js</code></strong> — <code>ACTIVE_DEPOSIT_STATUSES = ['active','partial']</code>, <code>FINISHED_DEPOSIT_STATUSES = ['used','cancelled','refunded','expired']</code>, <code>isFinishedDeposit(dep)</code>, <code>filterDepositsBySubTab(deposits, subTab)</code>.</li>
+  <li><strong>State</strong> — <code>subTab</code> ('active' default) + <code>handleSubTabChange</code> that resets <code>filterStatus = ''</code> (the dropdown option sets differ per tab, so a stale value must not carry over).</li>
+  <li><strong><code>filteredDeposits</code></strong> — split by <code>subTab</code> via the helper FIRST, then apply existing <code>filterStatus</code> + search + date-range; add <code>subTab</code> to deps.</li>
+  <li><strong>Pill row</strong> (emerald) above the toolbar: <code>[ ใช้งานอยู่ ] [ สิ้นสุดแล้ว ]</code>.</li>
+  <li><strong>Scoped dropdown</strong> — options = <code>(subTab === 'active' ? ACTIVE_DEPOSIT_STATUSES : FINISHED_DEPOSIT_STATUSES)</code> mapped through STATUS_META, kept visible on BOTH tabs (Q4). Search + date-range + "สร้างมัดจำ" + count line kept on both.</li>
+  <li><strong>Empty states</strong> — finished empty → "ยังไม่มีมัดจำที่สิ้นสุด"; active: <code>deposits.length===0</code> → existing EmptyState; filtered-empty with a filter → existing "ไม่พบ…"; filtered-empty with no filter → "ยังไม่มีมัดจำที่ใช้งานอยู่".</li>
+  <li><strong>Untouched</strong> — create/use/refund/cancel/edit/delete handlers, modals, branch-scope, <code>getAllDeposits</code>, the 4 finance entity sub-tabs.</li>
+</ol>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Pill row INSIDE DepositPanel (mirrors sales placement); the 4 finance entity sub-tabs are unchanged.</li>
+  <li><strong>Q2 = B:</strong> Finished pill = used + cancelled + refunded + expired; active pill = active + partial.</li>
+  <li><strong>Q3 = A:</strong> Labels "ใช้งานอยู่" / "สิ้นสุดแล้ว".</li>
+  <li><strong>Q4 = A:</strong> Scoped status dropdown kept on BOTH pills (active → ใช้งาน/ใช้บางส่วน; finished → ใช้หมด/ยกเลิก/คืนเงิน/หมดอายุ); search + date-range on both.</li>
+  <li><strong>Reactivity:</strong> verify-first (Rule Q L1) — list updates without F5 via reload-after-action + re-mount-on-navigation; add onSnapshot only if a real stale gap is found.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Default opens on "ใช้งานอยู่" showing only active+partial deposits.</li>
+  <li>"สิ้นสุดแล้ว" shows only used+cancelled+refunded+expired for the current branch.</li>
+  <li>Status dropdown visible on both pills, scoped to the pill's status set.</li>
+  <li>Search + date-range work on both pills, within the pill's split.</li>
+  <li>Switching pills resets the status filter (no stale value).</li>
+  <li>A deposit fully-consumed/cancelled/refunded/expired migrates from ใช้งานอยู่ → สิ้นสุดแล้ว after reload.</li>
+  <li>Empty states: finished-empty → "ยังไม่มีมัดจำที่สิ้นสุด"; active no-deposits → existing onboarding.</li>
+  <li>Count line reflects the selected pill's filtered count.</li>
+  <li>Branch switch reloads deposits; both pills reflect the new branch.</li>
+  <li><strong>Rule Q V66:</strong> verified via L1 (real browser) before any "verified" claim.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<p>Low risk — client-side split over loaded data, mirrors the shipped sales pattern. Watch: (1) filterStatus reset-on-switch (different option sets per tab); (2) the active-tab empty-state must discriminate "no deposits at all" (onboarding) vs "all finished" (no-filter message) vs "filter no match"; (3) date-range + search must compose with the split. No open questions.</p>
+
+</body>
+</html>
