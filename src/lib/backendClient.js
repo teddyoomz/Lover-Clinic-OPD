@@ -11543,13 +11543,26 @@ export async function updateRecall(id, patch = {}) {
  *     closed-no-answer), RESET noAnswerCount=0 + requiresManualReview=false
  *     so a future re-open + new no-answer cycle starts clean.
  */
-export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoAnswerCount = 0 } = {}) {
+export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoAnswerCount = 0, recordedBy = null } = {}) {
   const me = _resolveRecallAttribution();
+  // 2026-05-20 (Q2=B) — the staff who logged this result is REQUIRED. It is
+  // stored in outcomeBy (shown in the list "บันทึกโดย:"); the logged-in
+  // account stays in updatedBy for the audit trail.
+  const recordedName = recordedBy && typeof recordedBy.name === 'string' ? recordedBy.name.trim() : '';
+  if (!recordedName) {
+    throw new Error('กรุณาเลือกพนักงานผู้ลงบันทึก');
+  }
+  const outcomeStamp = {
+    uid: recordedBy?.staffId || null,
+    name: recordedName,
+    role: 'staff',
+    staffId: recordedBy?.staffId || null,
+  };
   const patch = {
     outcome,
     outcomeNote: outcomeNote || '',
     outcomeAt: serverTimestamp(),
-    outcomeBy: me,
+    outcomeBy: outcomeStamp,
     updatedAt: serverTimestamp(),
     updatedBy: me,
   };

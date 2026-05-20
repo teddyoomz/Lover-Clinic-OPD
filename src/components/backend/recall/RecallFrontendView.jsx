@@ -102,6 +102,17 @@ export function RecallFrontendView() {
 
   return (
     <div data-testid="recall-frontend-view" className="rounded-xl border border-[var(--bd)] bg-[var(--bg-card)] overflow-hidden">
+      {/* 2026-05-20 — "Recall วันนี้" heading. Today is the top + most prominent
+          section, then ค้าง/เลยกำหนด + พรุ่งนี้ (RecallList mode=compact). */}
+      <div className="px-4 pt-3 pb-2 border-b border-[var(--bd)]">
+        <h2
+          className="text-base font-extrabold text-[var(--tx-primary)] flex items-center gap-2"
+          data-testid="recall-frontend-heading"
+        >
+          <PhoneCall size={16} className="text-red-500" /> Recall วันนี้
+        </h2>
+        <p className="text-[10px] text-[var(--tx-muted)] mt-0.5">วันนี้ · ค้าง/เลยกำหนด · พรุ่งนี้</p>
+      </div>
       {error && (
         <div
           className="px-3 py-2 bg-red-500/10 border-b border-red-500/30 text-[11px] text-red-300"

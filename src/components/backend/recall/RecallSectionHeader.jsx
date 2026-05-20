@@ -63,7 +63,7 @@ const BUCKET_THEMES = Object.freeze({
   },
 });
 
-export function RecallSectionHeader({ bucketKey, count, doneCount }) {
+export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = false }) {
   const theme = BUCKET_THEMES[bucketKey];
   if (!theme || !count) return null;
 
@@ -71,10 +71,11 @@ export function RecallSectionHeader({ bucketKey, count, doneCount }) {
     <div
       data-testid={`recall-section-${bucketKey}`}
       data-bucket={bucketKey}
-      className={`flex items-center gap-2 px-3 py-2 border-l-2 ${theme.borderLeft} ${theme.bg} border-b border-[var(--bd)]`}
+      data-prominent={prominent ? 'true' : 'false'}
+      className={`flex items-center gap-2 border-l-2 ${theme.borderLeft} ${theme.bg} border-b border-[var(--bd)] ${prominent ? 'px-3 py-3 rounded-t-lg' : 'px-3 py-2'}`}
     >
-      <span className="text-sm" aria-hidden="true">{theme.icon}</span>
-      <span className="text-[12px] font-bold text-[var(--tx-primary)]">{theme.label}</span>
+      <span className={prominent ? 'text-lg' : 'text-sm'} aria-hidden="true">{theme.icon}</span>
+      <span className={`font-bold text-[var(--tx-primary)] ${prominent ? 'text-base' : 'text-[12px]'}`}>{theme.label}</span>
       <span
         className="text-[9px] px-1.5 py-0.5 rounded font-bold"
         style={{ background: theme.pillColor, color: theme.pillText }}

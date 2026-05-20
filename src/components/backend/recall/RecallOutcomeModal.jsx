@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Clock, MessageSquare, PhoneOff, Archive } from 'lucide-react';
-import { recordRecallOutcome } from '../../../lib/scopedDataLayer.js';
+import { recordRecallOutcome, listStaff } from '../../../lib/scopedDataLayer.js';
+import StaffSelectField from '../StaffSelectField.jsx';
 
 /**
  * Phase 29 (2026-05-14) — Record-outcome modal.
@@ -95,6 +96,10 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
   const [outcomeNote, setOutcomeNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // 2026-05-20 (Q2=B) — required "พนักงานผู้ลงบันทึก" dropdown (starts blank).
+  const [staffList, setStaffList] = useState(null);
+  const [staffName, setStaffName] = useState('');
+  const [staffRecord, setStaffRecord] = useState(null);
 
   // ESC closes
   useEffect(() => {
@@ -103,8 +108,17 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Load staff for the "ผู้ลงบันทึก" dropdown (be_staff is universal — listStaff()).
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(listStaff())
+      .then((rows) => { if (alive) setStaffList(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) setStaffList([]); });
+    return () => { alive = false; };
+  }, []);
+
   const handleSave = async () => {
-    if (!outcome || !recall?.id || saving) return;
+    if (!outcome || !staffName.trim() || !recall?.id || saving) return;
     setError('');
     setSaving(true);
     try {
@@ -112,6 +126,7 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
         outcome,
         outcomeNote,
         currentNoAnswerCount: recall.noAnswerCount || 0,
+        recordedBy: { name: staffName, staffId: staffRecord?.id || null },
       });
       onSaved?.(outcome);
       if (outcome === 'reschedule' && typeof onReschedule === 'function') {
@@ -235,6 +250,16 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
             </div>
           )}
 
+          {/* 2026-05-20 (Q2=B) — required staff-who-logged dropdown. Reuses the
+              shared StaffSelectField (renders data-field="outcomeStaff" for
+              scroll-to-error). Save stays disabled until a staff is picked. */}
+          <StaffSelectField
+            field={{ key: 'outcomeStaff', label: 'พนักงานผู้ลงบันทึก', required: true }}
+            value={staffName}
+            list={staffList}
+            onChange={(name, rec) => { setStaffName(name); setStaffRecord(rec || null); }}
+          />
+
           {/* Note textarea */}
           <div data-field="outcomeNote">
             <label className="block text-[11px] font-bold text-[var(--tx-muted)] mb-1 uppercase">
@@ -275,7 +300,7 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!outcome || saving}
+            disabled={!outcome || !staffName.trim() || saving}
             data-testid="recall-outcome-save"
             className="px-4 py-2 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >

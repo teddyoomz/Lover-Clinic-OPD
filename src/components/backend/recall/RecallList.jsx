@@ -57,9 +57,11 @@ export function RecallList({
     return m;
   }, [recalls]);
 
-  // Buckets to render based on mode
+  // Buckets to render based on mode.
+  // 2026-05-20 — Frontend "Recall วันนี้" (compact): TODAY on top (most
+  // prominent), then ค้าง/เลยกำหนด (all overdue, Q3=A), then พรุ่งนี้.
   const orderedBuckets = mode === 'compact'
-    ? ['overdue', 'today']
+    ? ['today', 'overdue', 'tomorrow']
     : ['overdue', 'today', 'tomorrow', 'thisWeek', 'later'];
 
   const totalShown = orderedBuckets.reduce((sum, k) => sum + (buckets[k]?.length || 0), 0);
@@ -87,6 +89,7 @@ export function RecallList({
               bucketKey={bucketKey}
               count={items.length}
               doneCount={doneCount}
+              prominent={mode === 'compact' && bucketKey === 'today'}
             />
             <div className="flex flex-col gap-2 mt-2">
               {items.map((r) => (

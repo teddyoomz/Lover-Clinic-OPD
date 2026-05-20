@@ -55,3 +55,19 @@ export function normalizeRecallSlot(slot) {
     saveToMaster: !!slot.saveToMaster,
   };
 }
+
+/**
+ * 2026-05-20 — validate a record-outcome submission.
+ * Requires a non-empty outcome AND a recordedBy with a non-empty name (Q2=B:
+ * the staff dropdown is required every time). Pure — the modal gates Save with
+ * this AND recordRecallOutcome throws on the same condition (defense in depth).
+ * @param {{outcome?:string, recordedBy?:{name?:string}}} payload
+ * @returns {{ok:boolean, errors:string[]}}
+ */
+export function validateRecallOutcome(payload) {
+  const errors = [];
+  if (!payload?.outcome || typeof payload.outcome !== 'string') errors.push('outcome-required');
+  const name = payload?.recordedBy?.name;
+  if (typeof name !== 'string' || name.trim() === '') errors.push('recorded-by-required');
+  return { ok: errors.length === 0, errors };
+}

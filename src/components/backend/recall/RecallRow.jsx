@@ -100,6 +100,18 @@ export function RecallRow({
     ? getRecallOutcomeMeta(recall.outcome)
     : null;
 
+  // 2026-05-20 — tap-to-call phone (denormalized customerPhone on the recall doc).
+  const phoneRaw = recall.customerPhone ? String(recall.customerPhone).trim() : '';
+  const phoneDigits = phoneRaw.replace(/[^0-9+]/g, '');
+
+  // 2026-05-20 (Q1=A) — prominent note: outcomeNote when present, else the recall reason.
+  const hasOutcomeNote = !!(recall.outcomeNote && String(recall.outcomeNote).trim());
+  const noteText = hasOutcomeNote ? recall.outcomeNote : (recall.reason || '');
+  const noteLabel = hasOutcomeNote ? '📝 ผลการติดต่อ' : '📝 เหตุผลนัด recall';
+  const loggedByName = (recall.status === 'done' || recall.status === 'no-answer' || recall.status === 'closed-no-answer')
+    ? (recall.outcomeBy?.name || '')
+    : '';
+
   return (
     <div
       data-testid={`recall-row-${recall.id}`}
@@ -156,6 +168,18 @@ export function RecallRow({
               title="ลูกค้าผูก LINE แล้ว"
             >L</span>
           )}
+          {phoneDigits && (
+            <a
+              href={`tel:${phoneDigits}`}
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`recall-phone-${recall.id}`}
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 hover:bg-red-500/20 active:scale-95 transition-transform"
+              title={`โทรหา ${recall.customerName || ''}`}
+              aria-label={`โทร ${phoneRaw}`}
+            >
+              <Phone className="w-3 h-3" /> {phoneRaw}
+            </a>
+          )}
         </div>
         <span
           className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap"
@@ -202,6 +226,18 @@ export function RecallRow({
               aria-label="LINE linked"
               title="ลูกค้าผูก LINE แล้ว"
             >L</span>
+          )}
+          {phoneDigits && (
+            <a
+              href={`tel:${phoneDigits}`}
+              onClick={(e) => e.stopPropagation()}
+              data-testid={`recall-phone-desktop-${recall.id}`}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 hover:bg-red-500/20 active:scale-95 transition-transform"
+              title={`โทรหา ${recall.customerName || ''}`}
+              aria-label={`โทร ${phoneRaw}`}
+            >
+              <Phone className="w-3 h-3" /> {phoneRaw}
+            </a>
           )}
           <span
             className="text-[10px] px-2 py-0.5 rounded-md font-bold border"
@@ -261,22 +297,26 @@ export function RecallRow({
           </div>
         )}
 
-        {/* REASON — mobile gets bumped sizing (text-sm font-bold) for editorial weight. */}
-        <div
-          className="text-sm md:text-[13px] font-bold md:font-medium text-[var(--tx-primary)] md:mt-1.5 line-clamp-2 leading-snug"
-          data-testid={`recall-reason-${recall.id}`}
-        >
-          {recall.reason || ''}
-        </div>
+        {/* PROMINENT NOTE (2026-05-20, Q1=A) — outcomeNote when present, else the recall reason.
+            Larger + boxed so it's the visual anchor. User: "User จะใส่เหตุผลเสมอ". */}
+        {noteText && (
+          <div
+            className="mt-1 md:mt-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] px-2.5 py-2"
+            data-testid={`recall-note-${recall.id}`}
+            data-note-source={hasOutcomeNote ? 'outcome' : 'reason'}
+          >
+            <div className="text-[9px] uppercase tracking-wide text-[var(--tx-muted)] mb-0.5">{noteLabel}</div>
+            <div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3">
+              {noteText}
+            </div>
+          </div>
+        )}
         {!compact && recall.sourceProductName && (
           <div className="text-[9px] text-[var(--tx-muted)] opacity-70 mt-0.5">{recall.sourceProductName}</div>
         )}
-        {recall.outcomeNote && recall.status === 'done' && (
-          <div
-            className="mt-1.5 px-2 py-1 bg-emerald-500/5 border-l-2 border-emerald-500 text-[10px] md:text-[9.5px] text-emerald-300 italic rounded"
-            data-testid={`recall-outcome-callout-${recall.id}`}
-          >
-            "{recall.outcomeNote}" — {recall.outcomeBy?.name || ''}
+        {loggedByName && (
+          <div className="mt-1 text-[10px] text-[var(--tx-muted)]" data-testid={`recall-logged-by-${recall.id}`}>
+            บันทึกโดย: <span className="font-semibold text-[var(--tx-primary)]">{loggedByName}</span>
           </div>
         )}
         {recall.lineMessageSent && (
