@@ -2365,10 +2365,19 @@ Reported 2026-05-20 (recall modal "in a box" + กระพริบรัวๆ
 descendant of a glow card (i.e. NOT at page/tab root) MUST `createPortal(...,
 document.body)` so the fixed overlay escapes ANY transformed/filtered ancestor.
 
-**Grep target (regression)**: the 4 recall modals (`RecallCreateModal`,
-`RecallEditModal`, `RecallOutcomeModal`, `RecallSnoozeMenu`) MUST
+**Grep target (regression)**: ALL 6 recall modals (`RecallCreateModal`,
+`RecallEditModal`, `RecallOutcomeModal`, `RecallSnoozeMenu`,
+`RecallLineTemplateModal`, `RecallCaseFormModal`) MUST
 `import { createPortal } from 'react-dom'` + `return createPortal(<div
-className="fixed inset-0 ...">, ..., document.body)`.
+className="fixed inset-0 ...">, ..., document.body)`. **The grep must span the
+whole recall-modal SET, not one rendering component** — round 1 (2026-05-20)
+portaled only the 4 modals `RecallCard` renders and the user re-reported the
+SAME bug on the Frontend Recall tab (`.admin-frontend-zone` → `RecallFrontendView`
+renders a 5th, `RecallLineTemplateModal`; `RecallCaseFormModal` is a 6th). The
+V86 glow has TWO scopes — `[data-backend-menu-mode="new"] [data-testid="backend-content"]`
+AND `.admin-frontend-zone` — so BOTH the backend-new-menu and the frontend
+admin zone trigger the hijack. Class-completeness locked by test group D
+(every `fixed inset-0` file in the recall dir must portal).
 
 **Sanctioned exceptions (closed list)**: modals rendered at PAGE/TAB ROOT (not
 inside a rounded card) need not portal — CustomerDetailView's

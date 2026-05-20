@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MessageCircle } from 'lucide-react';
 import {
   DEFAULT_RECALL_TEMPLATES,
@@ -104,7 +105,10 @@ export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
     }
   };
 
-  return (
+  // 2026-05-20 (recall modal flicker→freeze, AV98) — portal to document.body so
+  // the fixed overlay escapes any transformed ancestor (V86 hover-transform on
+  // rounded cards in new-menu backend-content AND .admin-frontend-zone).
+  return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -228,7 +232,8 @@ export function RecallLineTemplateModal({ recall, customer, onClose, onSent }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

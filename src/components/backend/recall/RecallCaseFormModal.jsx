@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   emptyRecallCaseForm,
   normalizeRecallCase,
@@ -59,7 +60,10 @@ export function RecallCaseFormModal({ initial, existingCases = [], onSave, onClo
     }
   }
 
-  return (
+  // 2026-05-20 (recall modal flicker→freeze, AV98) — portal to document.body so
+  // the fixed overlay escapes any transformed ancestor (V86 hover-transform on
+  // rounded cards in new-menu backend-content AND .admin-frontend-zone).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={() => !busy && onClose?.()}
@@ -125,6 +129,7 @@ export function RecallCaseFormModal({ initial, existingCases = [], onSave, onClo
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -27,11 +27,18 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const read = (rel) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
+// 2026-05-20 round 2 — exhaustive grep of every recall modal with `fixed inset-0`.
+// Round 1 portaled the 4 modals RecallCard renders (Create/Edit/Outcome/Snooze)
+// but MISSED 2 that RecallFrontendView (frontend .admin-frontend-zone) renders:
+// RecallLineTemplateModal + RecallCaseFormModal. Rule P: the class grep must
+// span the whole modal set, not one rendering component. All 6 now portal.
 const RECALL_MODAL_FILES = [
   'src/components/backend/recall/RecallCreateModal.jsx',
   'src/components/backend/recall/RecallEditModal.jsx',
   'src/components/backend/recall/RecallOutcomeModal.jsx',
   'src/components/backend/recall/RecallSnoozeMenu.jsx',
+  'src/components/backend/recall/RecallLineTemplateModal.jsx',
+  'src/components/backend/recall/RecallCaseFormModal.jsx',
 ];
 
 // =============================================================================
@@ -106,4 +113,28 @@ describe('C. AV98 invariant documented', () => {
     expect(skill).toMatch(/AV98/);
     expect(skill).toMatch(/createPortal/);
   });
+});
+
+// =============================================================================
+describe('D. class-completeness — EVERY fixed-inset-0 modal in the recall dir portals', () => {
+  // Rule P exhaustive classifier: walk every .jsx in the recall dir; any file
+  // whose component renders a `fixed inset-0` overlay MUST createPortal. Catches
+  // a future recall modal added without a portal (round-1 missed 2 this way).
+  const recallDir = join(__dirname, '..', 'src/components/backend/recall');
+  const fs = require('node:fs');
+  const files = fs.readdirSync(recallDir).filter((f) => f.endsWith('.jsx'));
+
+  it('D.1 found the expected recall modal files', () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const f of files) {
+    const src = readFileSync(join(recallDir, f), 'utf8');
+    const hasFixedOverlay = /className="fixed inset-0/.test(src);
+    if (!hasFixedOverlay) continue;
+    it(`D.${f} (renders fixed inset-0) MUST createPortal to document.body`, () => {
+      expect(src, `${f} has a fixed inset-0 overlay but no createPortal`).toMatch(/createPortal\(/);
+      expect(src).toMatch(/document\.body\s*\)\s*;/);
+    });
+  }
 });
