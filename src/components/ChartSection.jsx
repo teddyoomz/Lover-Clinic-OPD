@@ -2,17 +2,27 @@ import { useState } from 'react';
 import { Plus, Edit3, Trash2, FileImage } from 'lucide-react';
 import ChartTemplateSelector from './ChartTemplateSelector.jsx';
 import ChartCanvas from './ChartCanvas.jsx';
+import PcPairingModal from './tablet-chart/PcPairingModal.jsx';
+import { useChartEditSession } from '../hooks/useChartEditSession.js';
+import { useSelectedBranch } from '../lib/BranchContext.jsx';
+import { auth } from '../firebase.js';
 
-export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId }) {
+export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '' }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasTemplate, setCanvasTemplate] = useState(null);
   const [editingIdx, setEditingIdx] = useState(-1);
+  const [pendingTemplate, setPendingTemplate] = useState(null);   // staged template awaiting "edit here vs tablet"
+  const { branchId } = useSelectedBranch();
+  const pcDeviceId = (auth.currentUser?.uid || 'pc') + ':' + (typeof window !== 'undefined' ? (window.name || 'main') : 'main');
 
+  // New chart → stage template + open the choice (edit here vs tablet). Editing an
+  // EXISTING chart (handleEdit) stays local — the tablet flow is for new charts only.
   const handleSelectTemplate = (tmpl) => {
     setCanvasTemplate(tmpl);
     setEditingIdx(-1);
-    setCanvasOpen(true);
+    setSelectorOpen(false);
+    setPendingTemplate(tmpl);
   };
 
   const handleEdit = (idx) => {
@@ -36,6 +46,22 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
   const handleDelete = (idx) => {
     onChartsChange(prev => prev.filter((_, i) => i !== idx));
   };
+
+  // Tablet-pairing relay (Q1): the tablet result funnels through the SAME handleSave
+  // the local canvas uses → identical charts[] shape. ChartSection owns this; TFP is untouched.
+  const { phase, error, start, cancel } = useChartEditSession({
+    pcDeviceId, pcUid: auth.currentUser?.uid,
+    onSaved: (chartData) => { handleSave(chartData); setPendingTemplate(null); },
+  });
+  const editHere = () => { setPendingTemplate(null); setCanvasOpen(true); };
+  const sendToTablet = (tablet) => start({
+    tablet,
+    template: { id: pendingTemplate?.id, name: pendingTemplate?.name, category: pendingTemplate?.category || '' },
+    patientLabel,
+    templateDataUrl: pendingTemplate?.imageUrl,
+    branchId,
+  });
+  const closePairing = () => { cancel(); setPendingTemplate(null); };
 
   return (
     <>
@@ -80,7 +106,21 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
       {/* Template selector modal */}
       <ChartTemplateSelector isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} onSelect={handleSelectTemplate} isDark={isDark} db={db} appId={appId} />
 
-      {/* Drawing canvas (full-screen) */}
+      {/* Edit-on-tablet choice / waiting / failed (new charts only) */}
+      {pendingTemplate && (
+        <PcPairingModal
+          branchId={branchId}
+          phase={phase === 'idle' ? 'choose' : phase}
+          error={error}
+          onEditHere={editHere}
+          onSendToTablet={sendToTablet}
+          onCancel={closePairing}
+          onRetry={() => cancel()}
+          onClose={closePairing}
+        />
+      )}
+
+      {/* Drawing canvas (full-screen) — local edit */}
       {canvasOpen && (
         <ChartCanvas
           template={canvasTemplate}

@@ -24,6 +24,7 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const PatientDashboard = lazy(() => import('./pages/PatientDashboard.jsx'));
 const ClinicSchedule = lazy(() => import('./pages/ClinicSchedule.jsx'));
 const BackendDashboard = lazy(() => import('./pages/BackendDashboard.jsx'));
+const TabletChartEditorPage = lazy(() => import('./pages/TabletChartEditorPage.jsx'));
 // V73 (2026-05-16) — staff chat widget. Self-gates internally on user +
 // selectedBranchId + !needsPublicAuth, so safe to mount globally inside
 // provider chain.
@@ -60,6 +61,7 @@ export default function App() {
   const sessionFromUrl = params.get('session');
   const patientFromUrl = params.get('patient');
   const scheduleFromUrl = params.get('schedule');
+  const tabletFromUrl = params.get('tablet');   // ?tablet=chart — staff-auth tablet chart editor (NOT a public/anon link)
   const backendMode = params.get('backend');
 
   useEffect(() => {
@@ -218,6 +220,18 @@ export default function App() {
 
   if (!user || user.isAnonymous) {
     return <AdminLogin auth={auth} clinicSettings={clinicSettings} theme={theme} setTheme={setTheme} />;
+  }
+
+  // ?tablet=chart — staff-auth standby chart editor (paired with the PC TFP chart
+  // modal). Inside UserPermissionProvider + BranchProvider so useSelectedBranch resolves.
+  if (tabletFromUrl === 'chart') {
+    return (
+      <UserPermissionProvider user={user}>
+        <BranchProvider>
+          <Suspense fallback={<LazyFallback />}><TabletChartEditorPage /></Suspense>
+        </BranchProvider>
+      </UserPermissionProvider>
+    );
   }
 
   // Backend Dashboard — opens in a new browser tab.

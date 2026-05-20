@@ -3697,7 +3697,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
           {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
           <FormSection isDark={isDark}>
-            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} />
+            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} patientLabel={patientName ? `คุณ ${patientName}${customerHNProp ? ` (HN ${customerHNProp})` : ''}` : (customerHNProp ? `HN ${customerHNProp}` : '')} />
           </FormSection>
 
           {/* ── Treatment Images (รูปภาพการรักษา) ────────────────────────── */}
