@@ -66,9 +66,10 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-19 NIGHT+5 EOD+1 — V43-followup 12-task subagent-driven implementation COMPLETE locally (hide skipped products from stock balance + edit shortcut)
-- **Master**: Task 12 final-verify commit (13 commits ahead of prod `f076a45d` V107). V43-followup local-only — NOT YET DEPLOYED.
-- **Prod**: `f076a45d` (V107) still LIVE at https://lover-clinic-app.vercel.app — V43-followup awaits user `deploy` authorization per V18
+- **Date last updated**: 2026-05-20 — V43-followup hide-skipped-products-from-stock-balance + Edit shortcut SHIPPED + **DEPLOYED**
+- **Master = Prod**: `0511be1e` LIVE at https://lover-clinic-app.vercel.app (deploy `lover-clinic-g81qa6hk4` aliased canonical). 15 commits this session, all pushed.
+- **Tests**: V43-followup 1270/1270 GREEN · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean
+- **Deploy**: combined V15 (Vercel + Firebase rules+storage idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned. Checkpoint: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
 
 ### Session 2026-05-19 NIGHT+5 EOD+1 — V43-followup hide skipped products from stock balance + Edit shortcut (12-task subagent-driven complete)
 
@@ -89,7 +90,7 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 **Outstanding**: user L1 hands-on on iPhone Safari + dev-server (open `/?backend=1` → click stock tab → verify 4 flagged services (Shock wave, ผ่าตัดทำหมันชาย, ติดตามอาการกับแพทย์, เพิ่ม ตัดเส้นสองสลึง) HIDDEN from balance + click `[✎ แก้ไข]` → modal opens → untick ไม่ตัดสต็อค + save → row REAPPEARS within 5s without F5 + retick + save → row DISAPPEARS again).
 
-**NO DEPLOY this turn** per V18 lock. User authorizes `deploy` separately.
+**DEPLOYED 2026-05-20** (user `deploy` verb): combined V15 — Vercel `lover-clinic-g81qa6hk4` aliased canonical `https://lover-clinic-app.vercel.app` (HTTP 200) + Firebase rules+storage idempotent. 6/6 Probe-Deploy-Probe IDENTICAL pre+post (chat_conv 200 · be_exam_rooms/be_line_reminder_log/be_line_reminder_postback_log/be_staff_chat_messages/be_fb_configs 403). 30 chat_conversations test-probe-* cleaned. Final commits: `45ee04e0` (verify) + `0511be1e` (wiki + spec/plan/diag + graphify refresh). Awaiting user L1 hands-on per Rule Q V66.
 
 ### (V107-era state below remains LIVE on prod — replaced by V43-followup state above)
 - **Tests**: V101 18 + V102 29 + V103 27 + V104 13 + V104-followup 9 + V105 14 + V105-followup 13 + V107 8 + course-skip 64 = **195 cumulative GREEN** · 39/39 E2E stress · 24/24 V107 L2 verify · 0 fail · build clean
