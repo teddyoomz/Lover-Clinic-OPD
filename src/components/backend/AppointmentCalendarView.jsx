@@ -42,6 +42,7 @@ import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.j
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
+import AppointmentDetailPopover from './AppointmentDetailPopover.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock). Used in the appt grid cell
@@ -264,6 +265,10 @@ export default function AppointmentCalendarView({
   // the modal, which auto-ticks LINE in notifyChannel based on per-branch
   // customer linkage. AV45 LR-4 invariant satisfied via delegation.
   const [formMode, setFormMode] = useState(null);
+  // Calendar-density (2026-05-20) — tapping a block/agenda card opens a
+  // read-only detail popover first; แก้ไข inside it routes to the edit modal.
+  const [detailAppt, setDetailAppt] = useState(null);
+  const openDetail = useCallback((appt) => setDetailAppt(appt), []);
 
   const today = dateStr(new Date());
   const monthStr = `${calMonth.year}-${String(calMonth.month+1).padStart(2,'0')}`;
@@ -917,8 +922,8 @@ export default function AppointmentCalendarView({
                             <div
                               role="button"
                               tabIndex={0}
-                              onClick={() => openEdit(appt)}
-                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEdit(appt); } }}
+                              onClick={() => openDetail(appt)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(appt); } }}
                               className={`absolute left-0.5 right-0.5 top-0.5 rounded-lg px-2 py-1 text-left overflow-hidden transition-all hover:ring-2 hover:ring-sky-400 hover:shadow-lg z-[5] ${st.bg} border border-[var(--bd)]/40 cursor-pointer shadow-sm`}
                               style={{
                                 height: span * SLOT_H - 4,
@@ -1143,6 +1148,19 @@ export default function AppointmentCalendarView({
           // We just enable the link here. The Phase 15.7-sexies in-page
           // redirect callback (onOpenCustomer) is removed per user directive.
           enableCustomerLink={true}
+        />
+      )}
+
+      {/* Calendar-density (2026-05-20) — read-only detail popover. roomName
+          resolved via effectiveRoom (the grid loop's `room` var isn't in
+          scope here). แก้ไข → close popover, then open the edit modal. */}
+      {detailAppt && (
+        <AppointmentDetailPopover
+          appt={detailAppt}
+          roomName={effectiveRoom(detailAppt)}
+          doctorMap={doctorMap}
+          onEdit={() => { const a = detailAppt; setDetailAppt(null); openEdit(a); }}
+          onClose={() => setDetailAppt(null)}
         />
       )}
     </div>
