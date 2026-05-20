@@ -66,10 +66,20 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+5 — V106 stock-movement retention SHIPPED + DEPLOYED
-- **Master**: `864ef9fd` (clean, all pushed). **Prod**: `864ef9fd` LIVE — full EOD..EOD+5 cluster DEPLOYED 2026-05-20.
-- **Tests**: full vitest **13800 PASS / 0 FAIL / 0 SKIP** · build clean (2.68s)
-- **Deploy**: DONE 2026-05-20 (user "deploy") — Vercel aliased canonical `https://lover-clinic-app.vercel.app` (root 200) + `firebase deploy --only storage` (⚠ CLI 15.x: `--only storage`, NOT `storage:rules` — sub-target "rules" rejected). Probe-Deploy-Probe 4/4 IDENTICAL 403 pre+post. Cron endpoint no-auth → 401. Checkpoint: `.agents/sessions/2026-05-20-v106-stock-movement-retention.md`
+- **Date last updated**: 2026-05-20 EOD+5 — V108 SaleTab customer-name "-" fix (chokepoint + list resolver) — LOCAL, awaiting deploy
+- **Master**: `44e03f6e` (clean, all pushed). **Prod**: `864ef9fd` LIVE (V106 deployed) — V108 + session-end docs awaiting one `vercel --prod`.
+- **Tests**: full vitest **13808 PASS / 0 FAIL / 0 SKIP** · build clean (2.77s)
+- **Deploy**: V106 DONE 2026-05-20 (Vercel canonical + `firebase deploy --only storage` [⚠ CLI 15.x: `--only storage`, NOT `storage:rules`]; Probe-Deploy-Probe 4/4 IDENTICAL 403). **V108 PENDING** one `vercel --prod` (UI/lib only — no rules/data; V18 needs explicit "deploy"). Checkpoint: `.agents/sessions/2026-05-20-v106-stock-movement-retention.md`
+
+### Session 2026-05-20 EOD+5 — V108 SaleTab customer-name "-" fix (chokepoint + list resolver) — LOCAL, awaiting deploy
+
+`/systematic-debugging` (4 phases) on user report: การขาย/ใบเสร็จ list loads customer name/HN slowly + new sales always show "-" + not real-time (screenshot INV-20260520-0010 = "-"). Real-prod diag (Rule R) decisive.
+
+- **Root cause (2 layers, V105-class)**: (A write) TFP auto-sale resolved the name from the `{patientData}` PROP (`TreatmentFormPage.jsx:2746`), NOT the authoritative `be_customers` doc → empty `customerName`/`customerHN` for LC-26000074 → `clean()` stripped → INV-20260520-0010 wrote empty. (B display) SaleTab's V105 list fallback (`customers.find`) was DEAD on the list view — `customers` loaded ONLY in `loadOptions` (form-open), never on list mount. Diag: all 9 recent customers resolve via `resolveCustomerDisplayName` — data exists, write+display just didn't use it.
+- **Fix A (chokepoint, root, Rule P)**: `createBackendSale` resolves customerName/HN from `be_customers` when empty via NEW `_resolveSaleCustomerIdentity` (set AFTER the `_normalizeSaleData` spread → resolved wins). One guard protects all 7 callers (TFP×2 / CustomerDetailView×3 / SaleTab form / online-sale). Rule O / V102 `_resolveBranchIdForWrite` resolve-at-writer lineage; backendClient now imports resolveCustomerDisplayName/HN.
+- **Fix B (display)**: eager-load `customers` on SaleTab mount (mirror sellers eager-load) + `loadOptions` refactored load-only-missing (per-resource gate so `medProducts` still loads). V105 fallback now resolves on the list. **No prod data mutation** (existing "-" display via fallback; chokepoint fixes future). Deferred: full real-time sale-list listener (`listenToAllSales` caps at 365d → would hide older sales; "real-time name" pain fixed by A+B).
+- **AV100** + `tests/v108-sale-customer-name-chokepoint.test.js` (8 source-grep) + `scripts/e2e-v108-sale-customer-name.mjs` (**Rule Q L2 — 6/0 real prod**: chokepoint resolves the INV-0010 shape, preserves non-empty caller value, victim LC-26000074 resolves) + `scripts/diag-sale-customer-name.mjs` (Rule R). **V21 fixup**: sale-tab-buy-mapping A.4 (loadOptions deps gained `medProducts.length`). Full vitest 13800→**13808**/0; build clean. L1 (list visual) user-pending.
+- **NOT deployed** (V18). One `vercel --prod` (Vercel only; rules unchanged) pending explicit "deploy".
 
 ### Session 2026-05-20 EOD+5 — V106 Stock-Movement Retention (cron archive→delete, T1-T7) — LOCAL, awaiting deploy
 

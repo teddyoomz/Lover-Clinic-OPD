@@ -1,34 +1,35 @@
 ---
-updated_at: "2026-05-20 EOD+5 — V106 stock-movement retention SHIPPED + DEPLOYED"
-status: "✅ V106 deployed (storage.rules + Vercel cron); 13800 pass/0 fail; prod LIVE"
+updated_at: "2026-05-20 EOD+5 — V108 SaleTab customer-name '-' fix (chokepoint + list resolver)"
+status: "✅ V108 shipped local (13808 pass/0 fail/build clean); pushed; awaiting deploy"
 branch: "master"
-last_commit: "864ef9fd docs(V106): session state (T7)"
-tests: "13800 pass / 0 fail / 0 skip · build clean (2.68s)"
+last_commit: "44e03f6e fix(V108): SaleTab customer name/HN '-' — write chokepoint + list resolver (AV100)"
+tests: "13808 pass / 0 fail / 0 skip · build clean (2.77s)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "864ef9fd LIVE — full EOD..EOD+5 cluster DEPLOYED 2026-05-20"
-firestore_rules_version: "unchanged"
-storage_rules_version: "DEPLOYED 2026-05-20 (V106 stock-movements-archive admin-only)"
+production_commit: "864ef9fd LIVE (V106 deployed) — V108 + session-end docs NOT deployed yet"
+firestore_rules_version: "unchanged (V108 = UI/lib only — no rules/data)"
+storage_rules_version: "unchanged (V106 stock-movements-archive already deployed)"
 ---
 
 # Active Context
 
 ## State
 
-- master = origin = prod = `864ef9fd` (clean, pushed, DEPLOYED). Vercel aliased canonical; storage.rules released.
-- V106 stock-movement retention LIVE: daily cron `30 20 * * *` (03:30 BKK) archives `be_stock_movements` >90d to Storage then hard-deletes. First backlog drain = next scheduled fire.
-- Checkpoint: `.agents/sessions/2026-05-20-v106-stock-movement-retention.md`.
+- master = origin = `44e03f6e` (clean, pushed). Prod `864ef9fd` (V106 LIVE) — V108 awaiting one `vercel --prod` (UI/lib only, no rules).
+- V108 fixes the SaleTab "การขาย/ใบเสร็จ" customer name/HN showing "-" for new sales + slow + not-real-time.
+- Checkpoint: this active.md + SESSION_HANDOFF EOD+5 V108 block.
 
-## What this session shipped (DEPLOYED)
+## What this session shipped (V108 — LOCAL, awaiting deploy)
 
-- **V106 Stock-Movement Retention** (brainstorm→spec→plan→executing-plans inline, T1-T7, 8 commits): pure helper + cron (archive-before-delete, AV99) + vercel.json 4th cron + storage.rules admin-only archive + MovementLogPanel 90d notice. Decisions: archive→delete · 90d · daily 03:30 BKK + monthly-file · all types · cron-only. Balance untouched (be_stock_batches authoritative — corrected old brainstorm's YAGNI "snapshot").
-- Tests +44 (24 core + 13 AV99 + 7 Rule I) → 13800/0. **Rule Q L2 PASS 7/0 on real prod**. AV99 codified.
-- **Deployed**: Vercel (canonical alias, root 200) + `firebase deploy --only storage` (⚠ CLI 15.x: `--only storage`, NOT `storage:rules` — sub-target rejected). Probe-Deploy-Probe 4/4 IDENTICAL 403 pre+post. Cron no-auth → 401.
+- **V108 — SaleTab customer-name "-" fix** (`/systematic-debugging`, real-prod diag). Root cause (2 layers): (A write) TFP auto-sale resolved name from the `{patientData}` PROP not the `be_customers` doc → empty `customerName`/`customerHN` written (INV-20260520-0010 / LC-26000074); (B display) SaleTab's V105 list fallback was dead — `customers` loaded only on form-open, not list mount.
+- **Fix A (chokepoint, root)**: `createBackendSale` resolves name/HN from `be_customers` when empty via `_resolveSaleCustomerIdentity` → protects all 7 callers (TFP×2, CustomerDetailView×3, SaleTab form, online-sale). Rule O / V102 lineage.
+- **Fix B (display)**: eager-load `customers` on SaleTab mount + `loadOptions` load-only-missing (medProducts still loads) → V105 fallback resolves on the list. No prod data mutation.
+- **AV100** + 8 source-grep regression + Rule Q L2 e2e (6/0 real prod) + Rule R diag + V21 fixup (sale-tab-buy-mapping A.4 deps). Full vitest 13800→**13808**/0; build clean.
 
 ## Next action
 
-- idle. Optional: observe the cron's first 03:30 BKK scheduled run, or trigger now via curl with CRON_SECRET (drains real >90d backlog). Else next feature.
+- **Deploy** `vercel --prod` (V108 + queued session-end docs; no rules change) when user says "deploy" (V18). Then optional /session-end.
 
 ## Outstanding user-triggered actions
 
-- **L1 hands-on** (real screen): calendar-density (span=1 18px · tap→popover · resize<lg→agenda · dark+light) + Recall enhancements + V106 MovementLog 90d notice.
-- **V106 cron L3**: confirm 03:30 BKK scheduled run fires + drains backlog (mechanism already L2-verified). Trigger early via curl + CRON_SECRET if desired.
+- **Deploy** V108 — one `vercel --prod` (Vercel only; firestore/storage rules unchanged).
+- **L1 hands-on** (real screen): open `tab=sales` → new sales show customer name + HN (not "-"), resolve promptly on list load. + V106 cron 03:30 BKK first drain + prior calendar-density/Recall.
