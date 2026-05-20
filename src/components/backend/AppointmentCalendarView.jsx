@@ -80,7 +80,7 @@ import {
 // Phase 15.7 (2026-04-28) — shared assistant-name resolver. Used for
 // rendering "+ ผู้ช่วย: A, B, C" below the doctor name. Helper falls back
 // to doctorMap lookup for legacy appts that lack assistantNames denorm.
-import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisplay.js';
+import { resolveAssistantNames, buildDoctorMap, APPT_STATUSES } from '../../lib/appointmentDisplay.js';
 import { TIME_SLOTS } from '../../lib/staffScheduleValidation.js';
 // V53 (2026-05-08, BS-12) — per-branch openHours filter the visible time grid
 // + flag legacy out-of-hours appts. Helper is pure JS; reads V51 merged
@@ -103,12 +103,9 @@ const CAL_HEADERS = ['จ','อ','พ','พฤ','ศ','ส','อา'];
 // status color. Makes the block "pop" visually + lets admin parse status
 // at a glance (orange = pending, sky = confirmed, emerald = done,
 // red = cancelled).
-const STATUSES = [
-  { value: 'pending',   label: 'รอยืนยัน',   bg: 'bg-orange-500/20',  text: 'text-orange-400',  dot: 'bg-orange-400',  accent: 'rgb(251 146 60)'  },
-  { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20',     text: 'text-sky-400',     dot: 'bg-sky-400',     accent: 'rgb(56 189 248)'  },
-  { value: 'done',      label: 'เสร็จแล้ว',  bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400', accent: 'rgb(52 211 153)'  },
-  { value: 'cancelled', label: 'ยกเลิก',     bg: 'bg-red-500/20',     text: 'text-red-400',     dot: 'bg-red-400',     accent: 'rgb(248 113 113)' },
-];
+// Calendar-density (2026-05-20) — STATUSES moved to src/lib/appointmentDisplay.js
+// as APPT_STATUSES (single source, Rule of 3: shared with popover + agenda).
+const STATUSES = APPT_STATUSES;
 const ROOMS_CACHE_KEY = 'appt-rooms-seen'; // localStorage: cumulative room list across month nav (read by AppointmentFormModal)
 // Phase 19.0 (2026-05-06) — SLOT_H halved to 18 (was 36 per 30-min); 15-min
 // canonical TIME_SLOTS imported from staffScheduleValidation.

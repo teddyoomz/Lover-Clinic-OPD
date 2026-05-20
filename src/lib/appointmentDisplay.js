@@ -80,6 +80,45 @@ export function buildDoctorMap(doctors) {
   return m;
 }
 
+// ─── Appointment display formatting (calendar-density, 2026-05-20) ─────────
+// Shared by AppointmentDetailPopover + AppointmentAgendaView + the calendar
+// grid block. APPT_STATUSES is the SINGLE source for the status palette —
+// was previously duplicated as a local `STATUSES` const inside
+// AppointmentCalendarView.jsx (Rule C1 Rule-of-3: referenced at the def + 2
+// `.find()` callsites). The grid now imports it from here.
+//
+// Shape: { value, label, bg, text, dot, accent }. `accent` is a CSS color
+// string used for the block's 4px left border + dot glow. Keep this shape in
+// sync with every consumer (grid block, popover status pill, agenda card).
+export const APPT_STATUSES = [
+  { value: 'pending',   label: 'รอยืนยัน',   bg: 'bg-orange-500/20',  text: 'text-orange-400',  dot: 'bg-orange-400',  accent: 'rgb(251 146 60)'  },
+  { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20',     text: 'text-sky-400',     dot: 'bg-sky-400',     accent: 'rgb(56 189 248)'  },
+  { value: 'done',      label: 'เสร็จแล้ว',  bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400', accent: 'rgb(52 211 153)'  },
+  { value: 'cancelled', label: 'ยกเลิก',     bg: 'bg-red-500/20',     text: 'text-red-400',     dot: 'bg-red-400',     accent: 'rgb(248 113 113)' },
+];
+
+/** Resolve a status's render meta; unknown/missing → first entry (pending). */
+export function getApptStatusMeta(status) {
+  return APPT_STATUSES.find((s) => s.value === status) || APPT_STATUSES[0];
+}
+
+/** Display name with fallback: customerName → customerNameTemp → '-'. */
+export function apptDisplayName(appt) {
+  return (appt && (appt.customerName || appt.customerNameTemp)) || '-';
+}
+
+/** Phone value preferring the linked customer's phone over the booking temp. */
+export function apptPhoneValue(appt) {
+  if (!appt) return '';
+  return appt.customerPhone || appt.customerPhoneTemp || '';
+}
+
+/** "HH:MM–HH:MM" (en-dash) · "HH:MM" when no end · '' when no start. */
+export function apptTimeRange(appt) {
+  if (!appt || !appt.startTime) return '';
+  return appt.endTime ? `${appt.startTime}–${appt.endTime}` : appt.startTime;
+}
+
 // Phase 19.0 (2026-05-06) — re-export type-resolution helpers from
 // appointmentTypes.js so chip-rendering callers (AppointmentTab,
 // CustomerDetailView, AdminDashboard) have a single import surface.
