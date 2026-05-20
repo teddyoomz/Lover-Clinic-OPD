@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales Cancelled Sub-Tab Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; }
+    th { background: var(--bg-meta); }
+
+    /* dark-theme mockup canvas mirroring the real SaleTab UI */
+    .ui { background: #0a0a0a; border-radius: 12px; padding: 16px; font-size: 13px; color: #e5e5e5; }
+    .pillrow { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 6px; display: flex; gap: 6px; margin-bottom: 12px; }
+    .pill { padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 12px; color: #888; cursor: pointer; }
+    .pill.active { background: #be123c; color: #fff; box-shadow: 0 0 12px rgba(244,63,94,0.3); }
+    .hdr { background: #141414; border: 1.5px solid rgba(244,63,94,0.15); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+    .hdr-row { display: flex; gap: 10px; align-items: center; }
+    .search { flex: 1; background: #1c1c1c; border: 2px solid #333; border-radius: 10px; padding: 9px 12px; color: #777; }
+    .ddl { background: #1c1c1c; border: 2px solid #333; border-radius: 10px; padding: 9px 12px; color: #ccc; font-weight: 700; font-size: 12px; }
+    .btn-sale { background: linear-gradient(135deg,#be123c,#e11d48); color: #fff; font-weight: 900; border-radius: 10px; padding: 9px 18px; font-size: 13px; }
+    .hdr-meta { display: flex; justify-content: space-between; margin-top: 10px; color: #888; font-size: 11px; }
+    .tbl { background: #141414; border: 1px solid #262626; border-radius: 12px; overflow: hidden; }
+    .tbl table { width: 100%; border-collapse: collapse; margin: 0; }
+    .tbl th { background: #1a1a1a; color: #888; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; padding: 8px 10px; border: none; text-align: left; }
+    .tbl td { padding: 9px 10px; border: none; border-top: 1px solid #222; color: #ddd; font-size: 12px; }
+    .tag-paid { background: rgba(16,185,129,0.15); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+    .tag-cancel { color: #f87171; font-weight: 700; font-size: 12px; }
+    .act { color: #9ca3af; }
+    .empty { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 48px 16px; text-align: center; color: #888; }
+  </style>
+</head>
+<body>
+
+<h1>Sales Cancelled Sub-Tab Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-20 · <strong>Status:</strong> Approved by user ("ok go") · <strong>Scope:</strong> single file <code>src/components/backend/SaleTab.jsx</code> · <strong>Implementation plan:</strong> (to be created by writing-plans skill)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>
+On the <code>tab=sales</code> page (ขาย / ใบเสร็จ) cancelled sales (<code>status === 'cancelled'</code>, label "ยกเลิก") are interleaved with active sales in one list. In the user's branch the cancelled rows dominate the list (screenshot: 9 of 11 rows are "ยกเลิก"), burying the live receipts. The user wants cancelled sales <em>moved out</em> of the main list into a separate in-page sub-tab so the default view is clean.
+</p>
+<p>
+User directive (verbatim): <em>"ในหน้า tab=sales ฝากให้แยกการขายที่ยกเลิกแล้วไปใน Tab ย่อยต่างหาก ซึ่งเราจะสร้าง tab ย่อยนั้นมาในหน้านี้เลย ง่ายดี"</em>.
+</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Sub-tab "การขาย" (active, DEFAULT) · status dropdown WITHOUT "ยกเลิก" option</div>
+  <div class="ui">
+    <div class="pillrow">
+      <div class="pill active">การขาย</div>
+      <div class="pill">ยกเลิกแล้ว</div>
+    </div>
+    <div class="hdr">
+      <div class="hdr-row">
+        <div class="search">🔍 ค้นหาใบเสร็จ... (เลขที่, ชื่อลูกค้า, HN)</div>
+        <div class="ddl">ทุกสถานะ ▾</div>
+        <div class="btn-sale">+ ขาย</div>
+      </div>
+      <div class="hdr-meta">
+        <span>🛒 จัดการใบเสร็จ ดูรายละเอียด ยกเลิก หรือรับชำระเพิ่ม</span>
+        <span><strong>2 รายการ</strong></span>
+      </div>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th>ยอดรวม</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          <tr><td>INV-20260520-0003</td><td>นาย ชาติชาย มวยมัน</td><td>20 พ.ค. 2569</td><td>Shock Wave 12 ครั้ง…</td><td>0.00 ฿</td><td><span class="tag-paid">ชำระแล้ว</span></td><td class="act">👁 🖨 ✎ ✕</td></tr>
+          <tr><td>INV-20260519-0008</td><td>นาย สุขเกษม วิทยาญวิช... </td><td>19 พ.ค. 2569</td><td>ขลิบเลเซอร์ 1 ครั้ง…</td><td>31,500.00 ฿</td><td><span class="tag-paid">ชำระแล้ว</span></td><td class="act">👁 🖨 ✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:#666;margin-top:0.4em;">Status dropdown options here = ชำระแล้ว / แบ่งชำระ / ค้างชำระ / ชำระภายหลัง / แบบร่าง (the <code>cancelled</code> option is removed). The <code>✕ (ยกเลิก)</code> action remains on non-cancelled rows.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Sub-tab "ยกเลิกแล้ว" (cancelled) · status dropdown HIDDEN · search kept</div>
+  <div class="ui">
+    <div class="pillrow">
+      <div class="pill">การขาย</div>
+      <div class="pill active">ยกเลิกแล้ว</div>
+    </div>
+    <div class="hdr">
+      <div class="hdr-row">
+        <div class="search">🔍 ค้นหาใบเสร็จ... (เลขที่, ชื่อลูกค้า, HN)</div>
+        <div class="btn-sale">+ ขาย</div>
+      </div>
+      <div class="hdr-meta">
+        <span>🛒 รายการที่ยกเลิกแล้ว — ดูรายละเอียด / พิมพ์ได้</span>
+        <span><strong>9 รายการ</strong></span>
+      </div>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>วันที่</th><th>รายการขาย</th><th>ยอดรวม</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          <tr><td>INV-20260520-0001</td><td>นางสาว วันเพ็ญ เดือนสิบสอง</td><td>20 พ.ค. 2569</td><td>Shock Wave 12 ครั้ง…</td><td>15,000.00 ฿</td><td><span class="tag-cancel">ยกเลิก</span></td><td class="act">👁 🖨 ✎</td></tr>
+          <tr><td>INV-20260519-0009</td><td>นางสาว วันเพ็ญ เดือนสิบสอง</td><td>19 พ.ค. 2569</td><td>Shock Wave 12 ครั้ง…</td><td>15,000.00 ฿</td><td><span class="tag-cancel">ยกเลิก</span></td><td class="act">👁 🖨 ✎</td></tr>
+          <tr><td>INV-20260519-0007</td><td>นางสาว วันเพ็ญ เดือนสิบสอง</td><td>19 พ.ค. 2569</td><td>Shock Wave 12 ครั้ง…</td><td>15,000.00 ฿</td><td><span class="tag-cancel">ยกเลิก</span></td><td class="act">👁 🖨 ✎</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:#666;margin-top:0.4em;">No status dropdown (every row is cancelled). The <code>✕ (ยกเลิก)</code> action is naturally absent (already gated by <code>sale.status !== 'cancelled'</code>). 👁 view / 🖨 print / ✎ edit remain.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Sub-tab "ยกเลิกแล้ว" · empty state</div>
+  <div class="ui">
+    <div class="pillrow">
+      <div class="pill">การขาย</div>
+      <div class="pill active">ยกเลิกแล้ว</div>
+    </div>
+    <div class="empty">🛒<br><br>ยังไม่มีรายการที่ยกเลิก</div>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+<div class="section">
+<p><strong>Single-file change: <code>src/components/backend/SaleTab.jsx</code>.</strong> No backend, no new fetch, no BSA change. <code>getAllSales({ branchId })</code> already returns all statuses for the selected branch; the split is purely client-side over the already-loaded <code>sales</code> array.</p>
+<ol>
+  <li><strong>State</strong> — add <code>const [subTab, setSubTab] = useState('active')</code> (values: <code>'active'</code> | <code>'cancelled'</code>; default <code>'active'</code>).</li>
+  <li><strong>Sub-tab definition</strong> — small <code>SALE_SUB_TABS = [{id:'active',label:'การขาย'},{id:'cancelled',label:'ยกเลิกแล้ว'}]</code>. Pill row mirrors the StockTab segmented pattern (rose-700 active / muted inactive), placed as the first child above the existing header card.</li>
+  <li><strong>Filter logic</strong> — extend the <code>filtered</code> useMemo: split first by <code>subTab</code> (<code>active</code> → <code>s.status !== 'cancelled'</code>; <code>cancelled</code> → <code>s.status === 'cancelled'</code>), THEN apply existing text search on both; apply the payment-status <code>filterStatus</code> dropdown only on the active tab. Add <code>subTab</code> to the deps array.</li>
+  <li><strong>Dropdown</strong> — render the status <code>&lt;select&gt;</code> only when <code>subTab === 'active'</code>; its options exclude the <code>cancelled</code> entry (e.g. <code>PAYMENT_STATUSES.filter(s =&gt; s.value !== 'cancelled')</code>). On switching to the cancelled tab, reset <code>filterStatus = ''</code> so a stale payment filter can't carry over.</li>
+  <li><strong>Empty states</strong> — active tab keeps the existing two empty states (onboarding when <code>sales.length === 0</code>; "ไม่พบรายการที่ตรงกับตัวกรอง" when filter empty). cancelled tab shows a new "ยังไม่มีรายการที่ยกเลิก" empty state.</li>
+  <li><strong>Untouched</strong> — cancel/edit/view/print handlers, the cancel modal, the <code>+ ขาย</code> create flow, <code>getAllSales</code>, branch-scope, and the <code>{filtered.length} รายการ</code> count line (now reflects the selected sub-tab). The <code>✕</code> cancel action stays gated by <code>sale.status !== 'cancelled'</code> (unchanged), so it never appears on the cancelled tab.</li>
+</ol>
+</div>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Two sub-tabs — "การขาย" (non-cancelled only) + "ยกเลิกแล้ว" (cancelled only). Cancelled rows move entirely out of the main list.</li>
+  <li><strong>Q2 = A:</strong> Active tab keeps the status dropdown but drops the "ยกเลิก" option; cancelled tab hides the dropdown; search box stays on both tabs.</li>
+  <li><strong>Q3 = B:</strong> No count badge on the sub-tab pills — labels only; the existing "{N} รายการ" line under the search shows the selected tab's count.</li>
+  <li><strong>Assumption (confirmed at design review):</strong> default sub-tab = "การขาย"; <code>+ ขาย</code> button kept on both tabs; cancelled rows keep 👁 view / 🖨 print / ✎ edit actions.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>On load the page opens on "การขาย" showing only non-cancelled sales; cancelled sales do NOT appear.</li>
+  <li>Clicking "ยกเลิกแล้ว" shows only <code>status === 'cancelled'</code> sales for the current branch.</li>
+  <li>The status dropdown is visible only on "การขาย" and contains no "ยกเลิก" option; it is hidden on "ยกเลิกแล้ว".</li>
+  <li>Text search works on both tabs and filters within the active sub-tab only.</li>
+  <li>Switching from "การขาย" (with a payment filter set) to "ยกเลิกแล้ว" resets the payment filter; switching back does not show a stale filter.</li>
+  <li>Cancelling a sale from "การขาย" moves that row out of "การขาย" and into "ยกเลิกแล้ว" after the list reloads.</li>
+  <li>"ยกเลิกแล้ว" with zero cancelled sales shows "ยังไม่มีรายการที่ยกเลิก"; "การขาย" with zero sales overall keeps the existing onboarding empty state.</li>
+  <li>The "{N} รายการ" count reflects the selected sub-tab's filtered count.</li>
+  <li>Switching the top-right branch reloads sales and both sub-tabs reflect the new branch (existing branch-scope behaviour preserved).</li>
+  <li><strong>Rule Q V66:</strong> verified via L1 (Playwright real browser) or L2 (real client SDK) before any "verified" claim — not mock-only.</li>
+</ol>
+
+<h2>Testing strategy</h2>
+<div class="section">
+<ul>
+  <li><strong>RTL/unit</strong> — pill row renders 2 tabs; default active; split correctness (active excludes cancelled, cancelled excludes non-cancelled); dropdown conditional render + cancelled option absent; search per tab; filterStatus reset on tab switch; both empty states.</li>
+  <li><strong>Rule I flow-simulate</strong> — load → switch tab → search → cancel a sale → reload → row migrates active→cancelled; count line tracks tab.</li>
+  <li><strong>Rule Q L1/L2</strong> — real-browser or real client-SDK exercise on real prod (TEST-SALE-prefixed fixtures per V33.12) before claiming verified.</li>
+  <li><strong>Source-grep regression</strong> — lock the split predicate + dropdown-conditional + reset-on-switch so future edits can't silently re-merge cancelled into the main list.</li>
+</ul>
+</div>
+
+<h2>Risks / Open Questions</h2>
+<p>
+<strong>Low risk</strong> — client-side split over already-loaded data, single file, no wiring change. Watch items: (1) the <code>filterStatus</code>-reset-on-switch must fire so a stale payment filter never silently empties a tab; (2) the count line must read the post-split list (already handled since it reads <code>filtered.length</code>); (3) ensure the active tab's "no results" vs "no sales at all" empty states still discriminate correctly when all of a branch's sales happen to be cancelled (active tab should show "ไม่พบ…"/onboarding appropriately, not break). No open questions — all four decision points are locked.
+</p>
+
+</body>
+</html>
