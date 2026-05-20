@@ -7,6 +7,7 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
+import { resolveCustomerDisplayName, resolveCustomerHN } from './customerDisplayName.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
 // in Bangkok 00:00-07:00 window (Vercel prod 2026-04-19 lesson). Same
@@ -2980,16 +2981,47 @@ function _normalizeSaleData(data) {
  *  query). User-reported (วันเพ็ญ LC-26000078, real prod, 2026-05-19 LATE+2):
  *  "ใบเสร็จในหน้าใบขายก็ไม่ไปสร้าง". Diag found 3 of 3 audited sales
  *  linked to current treatments had `branchId=(none)`. */
+/** V108 (followup to V105; Rule O / V102 resolve-at-writer lineage) — resolve
+ *  sale customerName/HN from the AUTHORITATIVE be_customers doc when the caller
+ *  passes empty. Root cause: every createBackendSale caller (TFP auto-sale ×2,
+ *  CustomerDetailView ×3, SaleTab form, online-sale) derives customerName from
+ *  props/state that can be empty even when the customer doc resolves fine —
+ *  V105's TFP fix read `{patientData}` PROP, not the doc, so customers whose
+ *  prop was empty (e.g. LC-26000074 → INV-20260520-0010) wrote empty name → "-".
+ *  One write-chokepoint guard protects ALL callers. Idempotent + non-fatal:
+ *  a missing/unreadable customer leaves values as-is. AV100 locks this. */
+async function _resolveSaleCustomerIdentity(data) {
+  let customerName = (data && typeof data.customerName === 'string') ? data.customerName.trim() : '';
+  let customerHN = (data && typeof data.customerHN === 'string') ? data.customerHN.trim() : '';
+  const cid = data && data.customerId;
+  if (cid && (!customerName || !customerHN)) {
+    try {
+      const snap = await getDoc(customerDoc(cid));
+      if (snap.exists()) {
+        const c = snap.data();
+        if (!customerName) customerName = resolveCustomerDisplayName(c);
+        if (!customerHN) customerHN = resolveCustomerHN(c);
+      }
+    } catch { /* non-fatal — leave as-is */ }
+  }
+  return { customerName: customerName || '', customerHN: customerHN || '' };
+}
+
 export async function createBackendSale(data) {
   const saleId = await generateInvoiceNumber();
   const now = new Date().toISOString();
   // Check if doc already exists (safety net against race conditions)
   const existing = await getDoc(saleDoc(saleId));
   const finalId = existing.exists() ? `${saleId}-${Date.now().toString(36)}` : saleId;
+  // V108: resolve customer name/HN from be_customers when caller passes empty.
+  // Set AFTER the _normalizeSaleData spread so resolved values win.
+  const _ident = await _resolveSaleCustomerIdentity(data);
   await setDoc(saleDoc(finalId), {
     saleId: finalId,
     branchId: _resolveBranchIdForWrite(data), // V102
     ..._normalizeSaleData(data),
+    customerName: _ident.customerName, // V108
+    customerHN: _ident.customerHN,     // V108
     status: data.status || 'active',
     createdAt: now,
     updatedAt: now,

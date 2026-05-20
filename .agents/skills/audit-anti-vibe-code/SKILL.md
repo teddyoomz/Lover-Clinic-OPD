@@ -2428,6 +2428,41 @@ Adding a 2nd deleter requires a V-entry + this list extension (Rule P).
 plan `docs/superpowers/plans/2026-05-20-stock-movement-retention.html` ·
 tests `tests/v106-av99-archive-before-delete.test.js`.
 
+### AV100 — Sale customerName/HN resolved at the write chokepoint + list resolver fed (V108, 2026-05-20)
+
+`be_sales` rows display `sale.customerName || resolve-from-customers || '-'` (V105).
+Two failure modes produced persistent "-" on the SaleTab list (user report
+2026-05-20, INV-20260520-0010, real prod — `customerName=<empty>` while
+`be_customers/LC-26000074` resolved fine):
+
+1. **Write (root)**: `createBackendSale` callers (TFP auto-sale ×2,
+   CustomerDetailView ×3, SaleTab form, online-sale) derive `customerName` from
+   props/state that can be EMPTY even when the customer doc resolves (V105's TFP
+   fix read the `{patientData}` PROP, not the doc). Empty name → `clean()` strips
+   it → sale doc has no name → "-".
+2. **Display**: SaleTab's V105 fallback resolves via the `customers` lookup, but
+   `customers` was loaded ONLY in `loadOptions` (form-open), never on list mount
+   → empty on the list → fallback dead.
+
+**Rule (chokepoint, resolve-at-writer — Rule O / V102 lineage)**:
+- `createBackendSale` MUST resolve `customerName`/`customerHN` from the
+  authoritative `be_customers` doc (`resolveCustomerDisplayName` /
+  `resolveCustomerHN`) when the passed value is empty, via
+  `_resolveSaleCustomerIdentity`. One guard protects ALL callers. Set AFTER the
+  `_normalizeSaleData` spread so resolved values win.
+- SaleTab MUST eager-load `customers` on mount (not only on form-open) so the
+  V105 list fallback can resolve. `loadOptions` MUST load-only-missing (per-
+  resource gate) so `medProducts` still loads for the buy modal.
+
+**Grep target (regression)**: `createBackendSale` body must reference
+`_resolveSaleCustomerIdentity`; the helper must call `resolveCustomerDisplayName`
++ `resolveCustomerHN` on a `customerDoc(...)` read. SaleTab must contain an eager
+`getAllCustomers()` in a mount `useEffect`, and `loadOptions` must NOT guard on
+`customers.length && sellers.length` alone (must include `medProducts`).
+
+**Sanctioned exceptions**: NONE — every `createBackendSale` write flows through
+the chokepoint. Cross-link: tests `tests/v108-sale-customer-name-chokepoint.test.js`.
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.

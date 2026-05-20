@@ -58,7 +58,10 @@ describe('STB.A — buy-modal field mapping source-grep', () => {
   });
 
   it('A.4 medProducts mapping (loadOptions) aliases be_products field names', () => {
-    const loadOpts = saleTabSrc.match(/const loadOptions[\s\S]+?\n\s*\}, \[customers\.length, sellers\.length\]\);/);
+    // V108 (2026-05-20): loadOptions deps gained `medProducts.length` (load-only-
+    // missing refactor so customers can be eager-loaded on mount for the list
+    // name resolver). The medProducts field-alias mapping intent is unchanged.
+    const loadOpts = saleTabSrc.match(/const loadOptions[\s\S]+?\n\s*\}, \[customers\.length, sellers\.length, medProducts\.length\]\);/);
     expect(loadOpts?.[0]).toMatch(/x\.productName\s*\|\|\s*x\.name/);
     expect(loadOpts?.[0]).toMatch(/x\.productCategory\s*\|\|\s*x\.category/);
   });

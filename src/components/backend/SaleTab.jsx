@@ -411,6 +411,29 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     return () => { cancelled = true; };
   }, [BRANCH_ID]);
 
+  // ── V108 (2026-05-20) — eager-load customers on mount for the LIST view ──
+  // The sale-row name/HN display falls back to resolveCustomerDisplayName via
+  // the `customers` lookup (V105). Pre-V108 `customers` loaded ONLY in
+  // loadOptions (form-open) → empty on the plain list → the V105 fallback was
+  // dead → any sale with an empty denormalized customerName (legacy / pre-
+  // chokepoint, e.g. INV-20260520-0010) showed "-" until the form was opened.
+  // be_customers is universal (not branch-scoped). Non-blocking: the list
+  // renders first, names fill in when the fetch resolves. Pairs with the
+  // createBackendSale write-chokepoint (V108 _resolveSaleCustomerIdentity) so
+  // future sales carry the name on the doc and never need this fallback.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getAllCustomers();
+        if (!cancelled && Array.isArray(list)) setCustomers(list);
+      } catch (e) {
+        console.warn('[SaleTab] eager getAllCustomers failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Load cancel analysis (courses + money + stock) whenever the cancel modal opens
   useEffect(() => {
     if (!cancelModal) { setCancelAnalysis(null); setCancelAlsoRemoveUsed(false); return; }
@@ -513,20 +536,28 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
   // Med products: still loaded from master_data here pending be_products
   // migration of the medication-flag (isTakeaway/isMedication discriminator).
   const loadOptions = useCallback(async () => {
-    if (customers.length && sellers.length) return;
+    // V108 (2026-05-20): load ONLY what's missing. customers + sellers are
+    // eager-loaded on mount (for the list-view name resolver); medProducts is
+    // form-only. The pre-V108 guard `if (customers.length && sellers.length)
+    // return` would short-circuit once both were eager-loaded → medProducts
+    // never fetched → empty buy modal. Gate per-resource instead.
+    const needCustomers = !customers.length;
+    const needSellers = !sellers.length;
+    const needProducts = !medProducts.length;
+    if (!needCustomers && !needSellers && !needProducts) return;
     const [c, sellerList, p] = await Promise.all([
-      getAllCustomers(),
-      listAllSellers(),
-      listProducts(),
+      needCustomers ? getAllCustomers() : Promise.resolve(null),
+      needSellers ? listAllSellers() : Promise.resolve(null),
+      needProducts ? listProducts() : Promise.resolve(null),
     ]);
-    setCustomers(c);
-    setSellers(sellerList);
+    if (c) setCustomers(c);
+    if (sellerList) setSellers(sellerList);
     // 2026-04-28 fix: be_products uses productName / productType.
     // Phase 20.0 SaleTab audit (2026-05-06) — corrected categoryName
     // (productCategory does NOT exist on be_products; canonical schema
     // per productValidation.js is `categoryName`) + canonical-first order
     // on `unit` (Phase 17.2-septies pattern: mainUnitName||unit).
-    setMedProducts(p.map(x => ({
+    if (p) setMedProducts(p.map(x => ({
       id: x.id || x.productId,
       name: x.productName || x.name || '',
       price: x.price != null ? x.price : (x.salePrice != null ? x.salePrice : 0),
@@ -534,7 +565,7 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
       category: x.categoryName || x.productCategory || x.category || '',
       type: x.productType || x.type || '',
     })));
-  }, [customers.length, sellers.length]);
+  }, [customers.length, sellers.length, medProducts.length]);
 
   // ── Open buy modal ──
   const openBuyModal = useCallback(async (type) => {
