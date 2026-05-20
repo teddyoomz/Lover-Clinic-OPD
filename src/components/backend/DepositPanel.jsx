@@ -63,12 +63,24 @@ import {
   getVisibleTimeSlotsForDate,
   isTimeOutsideOpenHours,
 } from '../../lib/scheduleFilterUtils.js';
+// 2026-05-20 — sub-tab partition (ใช้งานอยู่ / สิ้นสุดแล้ว). Single-source.
+import {
+  filterDepositsBySubTab,
+  ACTIVE_DEPOSIT_STATUSES,
+  FINISHED_DEPOSIT_STATUSES,
+} from '../../lib/depositSubTabFilter.js';
 
 const PAYMENT_CHANNELS = ['เงินสด', 'โอนธนาคาร', 'บัตรเครดิต', 'QR Payment', 'อื่นๆ'];
 const CUSTOMER_SOURCES = ['Walk-in', 'Drag-in', 'เพื่อนแนะนำ', 'BNI', 'ChatGPT', 'Facebook', 'Gemini', 'Influencer', 'Instagram', 'LINE', 'TikTok', 'Google', 'อื่นๆ'];
 // Phase 19.0 — APPT_TYPES sourced from appointmentTypes.js SSOT (was inline 2-value array pre-Phase-19.0).
 const APPT_CHANNELS = ['เคาน์เตอร์', 'โทรศัพท์', 'Walk-in', 'Facebook', 'Instagram', 'TikTok', 'Line', 'อื่นๆ'];
 const APPT_COLORS = ['ใช้สีเริ่มต้น', 'เหลืองอ่อน', 'เขียวอ่อน', 'ส้มอ่อน', 'แดงอ่อน', 'น้ำตาลอ่อน', 'ชมพูอ่อน', 'ม่วงอ่อน', 'น้ำเงินอ่อน'];
+// Sub-tabs inside มัดจำ (2026-05-20). "ใช้งานอยู่" = active+partial (default);
+// "สิ้นสุดแล้ว" = used/cancelled/refunded/expired. Pill mirrors SaleTab (emerald).
+const DEPOSIT_SUB_TABS = [
+  { id: 'active', label: 'ใช้งานอยู่' },
+  { id: 'finished', label: 'สิ้นสุดแล้ว' },
+];
 
 const STATUS_META = {
   active:    { label: 'ใช้งาน',    cls: 'bg-emerald-900/30 text-emerald-400 border-emerald-700/40', lightCls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -114,6 +126,14 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [filterStatus, setFilterStatus] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  // 2026-05-20 — sub-tab: 'active' (active+partial, default) | 'finished'.
+  const [subTab, setSubTab] = useState('active');
+  // The status dropdown's option set differs per sub-tab, so reset the status
+  // filter on any switch to avoid a stale value silently emptying a tab.
+  const handleSubTabChange = (id) => {
+    setSubTab(id);
+    setFilterStatus('');
+  };
 
   // ── Modal state ─────────────────────────────────────────────────────────
   const [viewingDeposit, setViewingDeposit] = useState(null);
@@ -346,7 +366,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   // ── Filtered list ──────────────────────────────────────────────────────
   const filteredDeposits = useMemo(() => {
-    let list = deposits;
+    // 2026-05-20: split by sub-tab FIRST (active = active+partial, finished =
+    // used/cancelled/refunded/expired) via the single-source helper, then apply
+    // the scoped status dropdown + date-range + search.
+    let list = filterDepositsBySubTab(deposits, subTab);
     if (filterStatus) list = list.filter(d => d.status === filterStatus);
     if (filterFrom) list = list.filter(d => (d.paymentDate || '') >= filterFrom);
     if (filterTo) list = list.filter(d => (d.paymentDate || '') <= filterTo);
@@ -359,7 +382,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       );
     }
     return list;
-  }, [deposits, filterQuery, filterStatus, filterFrom, filterTo]);
+  }, [deposits, filterQuery, filterStatus, filterFrom, filterTo, subTab]);
 
   // ── Customer search (in form) ──────────────────────────────────────────
   const filteredCustomers = useMemo(() => {
@@ -538,6 +561,24 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   return (
     <div className="space-y-4">
+      {/* Sub-tab pills (2026-05-20) — ใช้งานอยู่ / สิ้นสุดแล้ว */}
+      <div className="bg-[var(--bg-surface)] rounded-xl p-1.5 shadow border border-[var(--bd)] flex gap-1 overflow-x-auto">
+        {DEPOSIT_SUB_TABS.map(t => {
+          const active = subTab === t.id;
+          return (
+            <button key={t.id} onClick={() => handleSubTabChange(t.id)}
+              data-testid={`depositpanel-subtab-${t.id}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                active
+                  ? 'bg-emerald-700 text-white shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                  : 'text-[var(--tx-muted)] hover:text-emerald-400 hover:bg-[var(--bg-hover)]'
+              }`}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Header / Toolbar ── */}
       <div className="bg-[var(--bg-surface)] rounded-2xl p-5 shadow-lg" style={{ border: '1.5px solid rgba(16,185,129,0.15)' }}>
         <div className="flex items-center gap-3 flex-wrap">
@@ -550,7 +591,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
             className="px-3 py-2.5 rounded-xl bg-[var(--bg-input)] border-2 border-[var(--bd-strong)] text-xs font-bold text-[var(--tx-primary)] focus:outline-none transition-all">
             <option value="">ทุกสถานะ</option>
-            {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {(subTab === 'active' ? ACTIVE_DEPOSIT_STATUSES : FINISHED_DEPOSIT_STATUSES).map(k => <option key={k} value={k}>{STATUS_META[k].label}</option>)}
           </select>
           <button onClick={() => openCreate()}
             className="px-5 py-2.5 rounded-xl font-black text-sm text-white transition-all flex items-center gap-2 hover:shadow-xl active:scale-[0.97] uppercase tracking-wider whitespace-nowrap"
@@ -581,10 +622,17 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       ) : deposits.length === 0 ? (
         <EmptyState onCreate={() => openCreate()} isDark={isDark} />
       ) : filteredDeposits.length === 0 ? (
-        <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
-          <Search size={24} className="mx-auto text-[var(--tx-muted)] mb-2" />
-          <p className="text-xs text-[var(--tx-muted)]">ไม่พบรายการที่ตรงกับตัวกรอง</p>
-        </div>
+        subTab === 'finished' ? (
+          <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
+            <Wallet size={24} className="mx-auto text-[var(--tx-muted)] mb-2" />
+            <p className="text-xs text-[var(--tx-muted)]">ยังไม่มีมัดจำที่สิ้นสุด</p>
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl">
+            <Search size={24} className="mx-auto text-[var(--tx-muted)] mb-2" />
+            <p className="text-xs text-[var(--tx-muted)]">{(filterQuery || filterStatus || filterFrom || filterTo) ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ยังไม่มีมัดจำที่ใช้งานอยู่'}</p>
+          </div>
+        )
       ) : (
         <div className="bg-[var(--bg-surface)] border border-[var(--bd)] rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
