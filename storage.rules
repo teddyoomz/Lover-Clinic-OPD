@@ -33,6 +33,18 @@ service firebase.storage {
       allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
+    // ─── V106 (2026-05-20) — stock-movement retention archive (admin-only) ──
+    // Pattern: stock-movements-archive/{branchId}/{YYYY-MM}.json
+    // Permanent audit archive written by the daily retention cron
+    // (api/cron/stock-movement-retention.js) via admin SDK, which bypasses
+    // these rules. Client read/write blocked (medical audit data). The
+    // default-deny catch-all already blocks unmatched paths; this explicit
+    // match documents intent + mirrors the backups/ admin-only contract.
+    // Probe-Deploy-Probe: anon write to stock-movements-archive/ → 403.
+    match /stock-movements-archive/{branchId}/{file=**} {
+      allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
+    }
+
     // ─── V73 Feature F (2026-05-16) — Staff chat image attachments ────────
     // Pattern: staff-chat-attachments/{branchId}/{timestamp}-{hex}.jpg
     // Clinic-staff-only WRITE (client-side resize → JPEG → upload), and

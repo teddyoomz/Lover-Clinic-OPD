@@ -241,6 +241,12 @@ export default function MovementLogPanel({ clinicSettings, theme, branchIdOverri
           </div>
         </div>
 
+        {/* V106: 90-day live-window notice — older movements archived to Storage by daily cron */}
+        <div className="mt-3 text-[11px] text-[var(--tx-muted)] rounded-md px-3 py-2"
+             style={{ background: 'rgba(148,163,184,0.10)' }} data-testid="movement-retention-info">
+          ℹ️ แสดงย้อนหลัง 90 วัน — ข้อมูลเก่ากว่านั้นถูกเก็บถาวรใน archive
+        </div>
+
         {/* Filters */}
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
