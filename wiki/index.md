@@ -2,12 +2,12 @@
 title: Wiki Index
 type: index
 date-created: 2026-05-04
-date-updated: 2026-05-19
+date-updated: 2026-05-21
 ---
 
 # LoverClinic Wiki — Index
 
-Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener).
+Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener). Extended 2026-05-21 (Tablet Chart Editor session-doc relay — separate-files feature, TFP one-prop touch).
 
 **Schema**: see [CLAUDE.md](CLAUDE.md) for conventions.
 **Activity log**: see [log.md](log.md) for chronological history.
@@ -19,6 +19,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [Karpathy — LLM Wiki gist](sources/karpathy-llm-wiki.md) | 2026-04 (ingested 2026-05-04) | The pattern this wiki implements. 3-layer architecture + 3 ops + index/log convention. |
 | [BSA design spec](sources/bsa-spec.md) | 2026-05-04 | Branch-Scope Architecture spec — eliminate branch-leak bug class via 3-layer wrapper + audit. |
 | [BSA implementation plan](sources/bsa-plan.md) | 2026-05-04 | 12-task TDD plan that shipped BSA over a single session. |
+| [Tablet Chart Editor design](sources/tablet-chart-editor-design.md) | 2026-05-20 (filed 2026-05-21) | Spec + 11-task plan for the PC→tablet chart-annotation relay. Q1-Q5 locked; 11-point requirement → where each landed. |
 
 ## Entities
 
@@ -45,6 +46,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [appointmentRoomColumns](entities/appointment-room-columns.md) | Helper / Lib | Pure render-side helpers for AppointmentTab grid columns (`effectiveRoomId`, `buildRoomColumnList`, `UNASSIGNED_ROOM_ID`). 16 unit tests. |
 | [appointmentTypes.js (SSOT)](entities/appointment-types-ssot.md) | Helper / Lib | Phase 19.0 4-type taxonomy SSOT. `APPOINTMENT_TYPES` + `DEFAULT_APPOINTMENT_TYPE` + 4 helpers. Replaces 2-value `'sales'`/`'followup'` enum across 7+ consumers. |
 | [skipStockFilter.js (V43-followup)](entities/skip-stock-filter.md) | Helper / Lib | Branch-agnostic pure helper for hiding flagged products from balance views. `isSkippedProduct` + `filterOutSkippedProducts`. Rule O single-source contract; closed AV97 sanctioned-exception list of 2 (ProductsTab + MovementLogPanel). |
+| [chartEditSessionCore.js](entities/chart-edit-session-core.md) | Helper / Lib | Branch-blind pure SSOT for the Tablet Chart Editor relay: status enums, heartbeat/staleness math, transition graph, doc builders, `shouldReap`. Shared by PC hook + tablet page + backend TX guard + cron — no drift. `toMillis` covers V81-fix1 Timestamp shapes. |
 
 ## Concepts
 
@@ -66,6 +68,7 @@ Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM W
 | [Appointment 15-min slots + 4-type taxonomy (Phase 19.0)](concepts/appointment-15min-and-4types.md) | Slot interval 30→15 min everywhere; type taxonomy `'sales'`/`'followup'` → 4 explicit (`deposit-booking`/`no-deposit-booking`/`treatment-in`/`follow-up`). Shipped V15 #22. Migration `--apply` (27 docs, Option B uniform). |
 | [Data ops via local + admin SDK (Rule M)](concepts/data-ops-via-local-sdk.md) | Codified 2026-05-06. Any data manipulation on prod = `vercel env pull` + admin-SDK + canonical artifacts path + dry-run/apply + audit doc + idempotency + forensic-trail. Never deploy-coupled. |
 | [Skip-stock hide-from-balance (V43-followup)](concepts/skip-stock-hide-from-balance.md) | Products flagged `skipStockDeduction:true` hidden from balance table via single-source pure filter + onSnapshot live listener (BS-18). Edit shortcut button opens ProductFormModal; row disappears live on save. AV97 + BS-18 audit invariants. 1270 new assertions across 7-tier prof-grade test bank. Shipped + deployed 2026-05-19 NIGHT+5 EOD+1. |
+| [Tablet Chart Editor — session-doc relay](concepts/tablet-chart-editor-relay.md) | PC→tablet chart-annotation relay over a Firestore session doc + Storage image transport. Compound-query instant-pop, busy-aware heartbeat presence, TX guard (BUSY vs OFFLINE — FP4), orphan-sweep cron (verified live), perfect-freehand pen. Separate files; TFP touched 1 prop. L2 e2e 6/6 on prod + Rule I + stress + AV101. Shipped + deployed 2026-05-20/21. |
 
 ## Analyses
 
