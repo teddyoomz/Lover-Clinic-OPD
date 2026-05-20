@@ -66,10 +66,21 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+1 — Sales cancelled sub-tab + Finance finished-deposit sub-tab + comprehensive cross-wiring test bank SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
+- **Date last updated**: 2026-05-20 EOD+1 — Sales+Finance sub-tabs + Backend Menu D customer-detail bug fixes (dup header + recall modal flicker→freeze, AV98) SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
 - **Master = Prod**: `0511be1e` LIVE at https://lover-clinic-app.vercel.app (deploy `lover-clinic-g81qa6hk4` aliased canonical). 15 commits this session, all pushed.
 - **Tests**: V43-followup 1270/1270 GREEN · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean
 - **Deploy**: combined V15 (Vercel + Firebase rules+storage idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned. Checkpoint: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
+
+### Session 2026-05-20 EOD+1 — Backend Menu D customer-detail bug fixes (dup header + recall modal flicker→freeze) — LOCAL, awaiting deploy
+
+`/systematic-debugging`. Two new-menu-mode-only bugs on the backend customer-detail page (user screenshots). Both root-caused with LIVE preview evidence + exact source lines; NO fixes before root cause (Iron Law).
+
+- **Bug #1 — duplicate header** (2× BranchSelector / ThemeToggle / ProfileDropdown): `BackendDashboard.jsx` viewing-customer `breadcrumbSlot` rendered Frontend/Branch/Theme/Profile UNCONDITIONALLY; in new mode `BackendShellNew→BackendTopBarNew` renders them too. The sibling (non-customer) breadcrumb branch already gated them `menuMode==='classic'`. Fix: gate the viewing-customer controls the same way (keep breadcrumb back/name/copy-link always). Live-confirmed LC-26000079: before branch 2 / profile 2 / theme 4 → after 1 / 1 / 2.
+- **Bug #2 — recall modal "in a box" + กระพริบรัวๆ จนค้าง**: PURE CSS hover-feedback loop (not React: live `modalCount:1`, no "Maximum update depth", no double-mount). V86 auto-glow (`src/index.css:3909-3919`) applies `transition:transform` + `:hover{transform:translateY(-3px)}` to EVERY `rounded-xl/2xl` inside `[data-backend-menu-mode="new"] [data-testid="backend-content"]`. RecallCard's `rounded-xl` wrapper matches; the recall modals (`fixed inset-0`) render as its DESCENDANTS (no portal) → a non-`none` transform on the wrapper makes it the fixed modal's containing block → confine to card box (image 1). Because the full-screen overlay is the wrapper's descendant, hovering it keeps wrapper `:hover` → transform → confine → mouse leaves shrunk modal → transform releases → overlay re-expands → re-hover: self-sustaining flicker → repaint-storm freeze. New-menu-scoped (V86 selector) + recall-specific (only modal rendered inside a glow card; sale/deposit/CDV modals render at tab/page root → escape). Live-confirmed: modal's parent = RecallCard wrapper carrying `animation:v86-breath`.
+- **Fix (user chose KEEP V86 lift)**: portal RecallCreate/Edit/Outcome/Snooze modals via `createPortal(<div fixed inset-0…>, document.body)` → escape ANY transformed ancestor. Live-verified post-fix: modal `parentIsBody=true`, `animatedAncestorOfModal=null`.
+- **AV98** invariant: fixed modal rendered inside a glow card MUST `createPortal(document.body)`. Sanctioned closed list: tab/page-root modals (CDV AddQty/Exchange/Share/AppointmentList/Timeline + SaleTab/DepositPanel) need not portal. Tests `tests/recall-modal-portal-and-header-dedup.test.js` (20: A portal × 4 modals + B breadcrumb-dedup + C invariant) + 2 V21 fixups (`backend-menu-d-bugfix-orb-and-mode-toggle` B2.2 window + B2.4 marker).
+- **Tests**: full vitest 13642 PASS / 24 FAIL (identical pre-existing 10-file baseline — audit-branch-scope AV37 / backend-menu-d ×4 / phase-26-0 / rp1 / tf3 / v36 / v81-emulator) / 25 skip. +20 new, 0 regression. Build clean.
+- **Preview limitation**: headless 11px viewport → visual flicker can't be SEEN; structural root cause provably eliminated (modal no longer a transform-ancestor descendant; header dedup). User L1 hands-on on real screen pending. NOT deployed (V18).
 
 ### Session 2026-05-20 EOD+1 — Finance finished-deposit sub-tab + comprehensive cross-wiring test bank — LOCAL, awaiting deploy
 

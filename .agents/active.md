@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-20 EOD+1 — Sales cancelled sub-tab + Finance finished-deposit sub-tab + comprehensive cross-wiring test bank SHIPPED LOCAL (awaiting deploy)"
-status: "✅ Both sub-tabs built + comprehensive test bank + Rule Q L1 verified on real prod (read-only) · LOCAL ONLY · awaiting user 'deploy'"
+updated_at: "2026-05-20 EOD+1 — Sales+Finance sub-tabs + Backend Menu D customer-detail bug fixes (dup header + recall modal flicker) SHIPPED LOCAL (awaiting deploy)"
+status: "✅ Sub-tabs + 2 Menu-D bug fixes + AV98 · Rule Q L1 structural-verified on real prod · LOCAL ONLY · awaiting user 'deploy' + L1 hands-on"
 branch: "master"
-last_commit: "(this session) finance sub-tab + cross-wiring test bank — pushed"
-tests: "114 NEW GREEN (sales 32 + finance/cross-wiring 82) · full vitest 13622 PASS / 24 pre-existing FAIL (all unrelated) / 25 skip · build clean"
+last_commit: "(this session) fix(backend-menu-d): customer-detail dup header + recall modal flicker — pushed"
+tests: "134 NEW GREEN (sales 32 + finance/cross-wiring 82 + menu-D bugfix 20) · full vitest 13642 PASS / 24 pre-existing FAIL (all unrelated) / 25 skip · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "0511be1e LIVE (V43-followup) — sub-tabs NOT yet deployed"
 firestore_rules_version: "unchanged (idempotent — both features UI-only, no rules/data)"
@@ -34,13 +34,21 @@ storage_rules_version: "unchanged"
 
 - DepositPanel `loadList()` fires after save/cancel/refund/delete/booking (lines 492/522/546/555/861/897); SaleTab `loadSales()` after create/cancel/delete. Both re-mount on tab navigation. Sub-tab split re-computes over fresh data → migration without F5. NO stale-data gap found → NO onSnapshot listener added (user chose verify-first / YAGNI).
 
+## Backend Menu D — customer-detail bug fixes (2026-05-20, /systematic-debugging)
+
+Two new-menu-mode-only bugs reported on the customer detail page:
+- **Bug #1 dup header**: BackendDashboard viewing-customer breadcrumbSlot rendered Frontend/Branch/Theme/Profile UNCONDITIONALLY while BackendTopBarNew renders them too → 2× branch/theme/profile. Fix: gate those controls `menuMode==='classic'` (matches sibling non-customer branch). Live-confirmed before (branch 2 / profile 2 / theme 4) → after (branch 1 / profile 1 / theme 2).
+- **Bug #2 recall modal flicker→freeze**: V86 auto-glow (`index.css:3909-3933`) applies `:hover{transform:translateY(-3px)}` to rounded cards in new-menu backend-content; RecallCard's rounded-xl wrapper became the containing block for the `fixed inset-0` recall modals rendered as its descendants → confine to box + self-sustaining hover-feedback flicker → repaint-storm freeze. Fix: portal RecallCreate/Edit/Outcome/Snooze modals to `document.body` (user chose KEEP V86 lift). Live-confirmed: modal `parentIsBody=true`, no animated ancestor.
+- **Root-cause method**: live preview eval (modal ancestor chain → found `animation:v86-breath` on RecallCard wrapper) + index.css read (`:hover{transform}`). NOT a React loop (no "Maximum update depth"), NOT double-mount (modalCount=1). Preview is headless 11px so visual flicker can't be seen — structural root cause provably eliminated.
+- **AV98** invariant: fixed modal rendered inside a glow card MUST `createPortal(document.body)`. Sanctioned: tab/page-root modals (CDV AddQty/Exchange/Timeline + SaleTab/DepositPanel) — not inside a glow card. Tests `tests/recall-modal-portal-and-header-dedup.test.js` (20) + 2 V21 fixups.
+
 ## Next action
 
-- Idle — both features done LOCAL. Await user "deploy" (Vercel; Firebase rules unchanged → V15 combined optional).
+- Idle — sub-tabs + Menu-D fixes done LOCAL. Await user "deploy" (Vercel; Firebase rules unchanged → V15 combined optional) + L1 hands-on.
 
 ## Outstanding user-triggered actions
 
-- **Deploy** sales + finance sub-tabs — say "deploy". NOT deployed this turn (V18).
-- **L1 hands-on** (optional): toggle pills on `/?backend=1&tab=sales` and `&tab=finance&subtab=deposit`.
+- **Deploy** sales + finance sub-tabs + Menu-D bug fixes — say "deploy". NOT deployed this turn (V18).
+- **L1 hands-on** (user's real ~2000px screen — preview is headless 11px so can't show the visual): (a) customer detail in new menu → header shows ONE branch/theme/profile; (b) click Recall → "ตั้ง Recall ใหม่" opens as a proper centered overlay, NO flicker/freeze, hover anywhere stable; (c) sub-tab pills on `/?backend=1&tab=sales` + `&tab=finance&subtab=deposit`.
 - **31/24 pre-existing test failures** — all confirmed unrelated (backend-menu-d ×4 / v36 deductStockForSale / rp1 SaleTab IIFE line 1228 / tf3 / phase-26-0 / audit-branch-scope AV37 / phase-17-1 flake / v81-emulator gaxios env). Separate cleanup batch when desired.
 - **V106 stock-movement 30-day retention** — brainstorm locked; spec NOT written; awaiting "ship V106".
