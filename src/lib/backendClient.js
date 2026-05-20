@@ -7,6 +7,7 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
+import { buildPresenceUpsert, buildSessionCreate, isPresenceReady } from './chartEditSessionCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from './customerDisplayName.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
@@ -2775,6 +2776,97 @@ export function listenToChatConversationsByBranch({ branchId, allBranches = fals
     },
     (err) => { if (typeof onError === 'function') onError(err); }
   );
+}
+
+// ─── Tablet Chart Editor (2026-05-20) — pairing presence + session relay ───
+// Branch-scoped, BS-13 safe-by-default (mirror listenToChatConversationsByBranch).
+// Both PC + tablet are clinic staff (Q2) → collections gated by isClinicStaff
+// (firestore.rules, Task 9). The final chart is NEVER written here — the tablet's
+// result flows back into the TFP charts[] via the PC merge (Q1); images travel
+// through Storage, not the doc (Q5). Heartbeats use client Date.now() (consistent
+// with the session-hook heartbeats + no serverTimestamp null-blip flickering the
+// PC ready-list every 10s).
+export function listenToChartTabletPresenceByBranch({ branchId, allBranches = false } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId)
+    ? branchId
+    : (allBranches ? null : '');
+  if (!effectiveBranchId && !allBranches) {
+    if (typeof onChange === 'function') onChange([]);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`);
+  const constraints = [];
+  if (!allBranches && effectiveBranchId) constraints.push(where('branchId', '==', String(effectiveBranchId)));
+  const q = query(col, ...constraints);
+  return onSnapshot(
+    q,
+    (snap) => { if (typeof onChange === 'function') onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))); },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
+// Instant-pop trigger: the single 'requested' session aimed at THIS tablet.
+// Composite index (branchId + tabletDeviceId + status) declared in firestore.indexes.json (Task 9).
+export function listenToRequestedSessionForTablet({ branchId, tabletDeviceId } = {}, onChange, onError) {
+  const effectiveBranchId = (typeof branchId === 'string' && branchId) ? branchId : '';
+  if (!effectiveBranchId || !tabletDeviceId) {
+    if (typeof onChange === 'function') onChange(null);
+    return () => {};
+  }
+  const col = collection(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`);
+  const q = query(col,
+    where('branchId', '==', String(effectiveBranchId)),
+    where('tabletDeviceId', '==', String(tabletDeviceId)),
+    where('status', '==', 'requested'));
+  return onSnapshot(
+    q,
+    (snap) => { if (typeof onChange === 'function') onChange(snap.docs.length ? { ...snap.docs[0].data(), id: snap.docs[0].id } : null); },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
+export function listenToChartEditSession(sessionId, onChange, onError) {
+  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId);
+  return onSnapshot(
+    ref,
+    (snap) => { if (typeof onChange === 'function') onChange(snap.exists() ? { ...snap.data(), id: snap.id } : null); },
+    (err) => { if (typeof onError === 'function') onError(err); }
+  );
+}
+
+export async function upsertChartTabletPresence(deviceId, { deviceName, branchId, uid, byName, status } = {}) {
+  const bid = (typeof branchId === 'string' && branchId) ? branchId : resolveSelectedBranchId();
+  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, deviceId);
+  await setDoc(ref, { ...buildPresenceUpsert({ deviceId, deviceName, branchId: bid, uid, byName, status }), updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// TX guard: only create when the target tablet is genuinely idle+fresh → prevents 2 PCs driving one tablet.
+export async function createChartEditSession(payload) {
+  const bid = (typeof payload.branchId === 'string' && payload.branchId) ? payload.branchId : resolveSelectedBranchId();
+  const presRef = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, payload.tabletDeviceId);
+  const sesRef = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, payload.sessionId);
+  await runTransaction(db, async (tx) => {
+    const pres = await tx.get(presRef);
+    if (!pres.exists() || !isPresenceReady(pres.data(), Date.now())) {
+      const e = new Error('TABLET_BUSY'); e.code = 'TABLET_BUSY'; throw e;
+    }
+    tx.set(presRef, { status: 'busy', updatedAt: serverTimestamp() }, { merge: true });
+    tx.set(sesRef, { ...buildSessionCreate({ ...payload, branchId: bid }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  });
+}
+
+export async function updateChartEditSession(sessionId, patch) {
+  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId);
+  await updateDoc(ref, { ...patch, updatedAt: serverTimestamp() });
+}
+
+export async function freeChartTablet(deviceId) {
+  const ref = doc(db, `artifacts/${appId}/public/data/be_chart_tablet_presence`, deviceId);
+  await setDoc(ref, { status: 'idle', updatedAt: serverTimestamp() }, { merge: true });
+}
+
+export async function deleteChartEditSession(sessionId) {
+  await deleteDoc(doc(db, `artifacts/${appId}/public/data/be_chart_edit_sessions`, sessionId));
 }
 
 // V43-followup (2026-05-19 NIGHT+5 EOD+1) — BS-18 listener safe-by-default

@@ -313,6 +313,19 @@ export const listenToAppointmentsByMonth = (...args) => raw.listenToAppointments
 export const listenToAllSales = (...args) => raw.listenToAllSales(...args);
 export const listenToHolidays = (...args) => raw.listenToHolidays(...args);
 export const listenToExamRoomsByBranch = (...args) => raw.listenToExamRoomsByBranch(...args);
+// ─── Tablet Chart Editor (2026-05-20) — branch-scoped listeners + writers.
+// Raw passthrough: callers pass branchId explicitly (PC has selectedBranch; tablet
+// page has its branch) + manage re-subscribe via useEffect deps; writers resolve
+// branchId internally (resolveSelectedBranchId fallback). Mirrors the listener
+// re-export convention above.
+export const listenToChartTabletPresenceByBranch = (...args) => raw.listenToChartTabletPresenceByBranch(...args);
+export const listenToRequestedSessionForTablet = (...args) => raw.listenToRequestedSessionForTablet(...args);
+export const listenToChartEditSession = (...args) => raw.listenToChartEditSession(...args);
+export const upsertChartTabletPresence = (...args) => raw.upsertChartTabletPresence(...args);
+export const createChartEditSession = (...args) => raw.createChartEditSession(...args);
+export const updateChartEditSession = (...args) => raw.updateChartEditSession(...args);
+export const freeChartTablet = (...args) => raw.freeChartTablet(...args);
+export const deleteChartEditSession = (...args) => raw.deleteChartEditSession(...args);
 // V73 Task 2 (2026-05-16) — Staff Chat passthrough (branch-scoped raw wrapper
 // already applies safe-by-default + resolveSelectedBranchId per BS-13).
 // addStaffChatMessage is a writer; passthrough.
