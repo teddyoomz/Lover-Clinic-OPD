@@ -6,7 +6,7 @@ import { useTabletPresence } from '../../hooks/useTabletPresence.js';
 // The ?tablet=chart standby screen. Name + branch are cached on-device (user
 // directive) so the tablet never re-enters them. Presence is disabled until both
 // are set. Patient/branch text uses neutral colors (Rule 04 — no red on names/HN).
-export default function TabletStandby({ deviceId, uid, byName }) {
+export default function TabletStandby({ deviceId, uid, byName, busy = false }) {
   const { branches, branchId, selectBranch, isReady } = useSelectedBranch();
   const [name, setName] = useState(() => getCachedDeviceName());
   const [editingName, setEditingName] = useState(() => !getCachedDeviceName());
@@ -16,7 +16,7 @@ export default function TabletStandby({ deviceId, uid, byName }) {
     if (isReady && cached && cached !== branchId && branches.some(b => b.branchId === cached)) selectBranch(cached);
   }, [isReady, branches, branchId, selectBranch]);
   const ready = !!(name && branchId);
-  useTabletPresence({ deviceId, deviceName: name, branchId, uid, byName, enabled: ready });
+  useTabletPresence({ deviceId, deviceName: name, branchId, uid, byName, enabled: ready, busy });
   const saveName = () => { setCachedDeviceName(name.trim()); setEditingName(false); };
   const onBranch = (e) => { selectBranch(e.target.value); setCachedBranchId(e.target.value); };
   return (

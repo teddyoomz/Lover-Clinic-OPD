@@ -70,28 +70,35 @@ export default function TabletChartEditorPage() {
     return () => clearInterval(t);
   }, [active]);
 
-  if (notice && !active) return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center gap-4">
-      <div className="text-5xl">🔌</div><div data-testid="editor-notice">{notice}</div>
-      <button className="bg-neutral-800 rounded px-4 py-2" onClick={() => setNotice('')}>กลับสู่หน้ารอ</button>
-    </div>
-  );
-  if (!active) return <TabletStandby deviceId={deviceId} uid={uid} byName={byName} />;
-
+  // Always render the standby — it keeps useTabletPresence mounted, so the heartbeat
+  // holds the presence 'busy' while editing (instead of an unmount-free flipping it
+  // 'idle' and letting a 2nd PC grab a tablet that's mid-session). Editor + notice
+  // are full-screen overlays on top.
   return (
-    <div className="fixed inset-0 bg-neutral-950 flex flex-col">
-      <header className="flex items-center justify-between px-4 py-2 bg-neutral-900 text-neutral-100 border-b border-neutral-800">
-        <button data-testid="editor-cancel" onClick={onCancel} className="px-3 py-1.5 border border-neutral-600 rounded">✕ ยกเลิก</button>
-        <span className="text-sm opacity-80">{active.template?.name} · {active.patientLabel}</span>
-        <button data-testid="editor-save" onClick={onSave} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded">✓ บันทึก</button>
-      </header>
-      <div className="flex flex-1 min-h-0">
-        <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
-          onUndo={() => canvasRef.current.undo()} onRedo={() => canvasRef.current.redo()} onClear={() => canvasRef.current.clear()} />
-        <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
-          <PenCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size} />
+    <>
+      <TabletStandby deviceId={deviceId} uid={uid} byName={byName} busy={!!active} />
+      {notice && !active && (
+        <div className="fixed inset-0 z-[130] bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center gap-4">
+          <div className="text-5xl">🔌</div><div data-testid="editor-notice">{notice}</div>
+          <button className="bg-neutral-800 rounded px-4 py-2" onClick={() => setNotice('')}>กลับสู่หน้ารอ</button>
         </div>
-      </div>
-    </div>
+      )}
+      {active && (
+        <div className="fixed inset-0 z-[125] bg-neutral-950 flex flex-col">
+          <header className="flex items-center justify-between px-4 py-2 bg-neutral-900 text-neutral-100 border-b border-neutral-800">
+            <button data-testid="editor-cancel" onClick={onCancel} className="px-3 py-1.5 border border-neutral-600 rounded">✕ ยกเลิก</button>
+            <span className="text-sm opacity-80">{active.template?.name} · {active.patientLabel}</span>
+            <button data-testid="editor-save" onClick={onSave} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded">✓ บันทึก</button>
+          </header>
+          <div className="flex flex-1 min-h-0">
+            <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
+              onUndo={() => canvasRef.current.undo()} onRedo={() => canvasRef.current.redo()} onClear={() => canvasRef.current.clear()} />
+            <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
+              <PenCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

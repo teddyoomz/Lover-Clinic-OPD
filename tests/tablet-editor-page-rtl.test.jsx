@@ -6,6 +6,7 @@ const update = vi.fn(() => Promise.resolve());
 const upload = vi.fn(() => Promise.resolve('https://storage/result.png'));
 const download = vi.fn(() => Promise.resolve('data:image/png;base64,TPL'));
 const free = vi.fn(() => Promise.resolve());
+const standbySpy = vi.fn();
 let requestedCb = null;
 let sessionCb = null;
 
@@ -20,7 +21,7 @@ vi.mock('../src/lib/chartEditSession.js', () => ({
 vi.mock('../src/lib/BranchContext.jsx', () => ({ useSelectedBranch: () => ({ branchId: 'BR-x', branches: [], selectBranch: vi.fn(), isReady: true }) }));
 vi.mock('../src/firebase.js', () => ({ auth: { currentUser: { uid: 'u1', email: 'a@x.com', displayName: 'Dr A' } } }));
 vi.mock('../src/lib/tabletDeviceCache.js', () => ({ getOrCreateDeviceId: () => 'TEST-T1' }));
-vi.mock('../src/components/tablet-chart/TabletStandby.jsx', () => ({ default: () => <div data-testid="standby-stub">standby</div> }));
+vi.mock('../src/components/tablet-chart/TabletStandby.jsx', () => ({ default: (props) => { standbySpy(props); return <div data-testid="standby-stub">standby</div>; } }));
 vi.mock('../src/components/tablet-chart/PenCanvas.jsx', () => ({
   default: forwardRef((props, ref) => {
     useImperativeHandle(ref, () => ({ exportDataUrl: () => 'data:image/png;base64,DRAWN', undo: () => {}, redo: () => {}, clear: () => {} }));
@@ -32,12 +33,18 @@ import TabletChartEditorPage from '../src/pages/TabletChartEditorPage.jsx';
 
 const requested = { sessionId: 'CES-1', template: { id: 'tpl', name: 'ใบหน้า' }, patientLabel: 'คุณ มะลิ', templateImageUrl: 'https://storage/template.png', tabletDeviceId: 'TEST-T1' };
 
-beforeEach(() => { update.mockClear(); upload.mockClear(); download.mockClear(); free.mockClear(); requestedCb = null; sessionCb = null; });
+beforeEach(() => { update.mockClear(); upload.mockClear(); download.mockClear(); free.mockClear(); standbySpy.mockClear(); requestedCb = null; sessionCb = null; });
 
 describe('TabletChartEditorPage (T6)', () => {
   it('E1 standby until a requested session arrives', () => {
     render(<TabletChartEditorPage />);
     expect(screen.getByTestId('standby-stub')).toBeTruthy();
+  });
+  it('E6 presence stays busy while editing (standby kept mounted, busy flips true)', async () => {
+    render(<TabletChartEditorPage />);
+    expect(standbySpy).toHaveBeenLastCalledWith(expect.objectContaining({ busy: false }));
+    await act(async () => { await requestedCb(requested); });
+    expect(standbySpy).toHaveBeenLastCalledWith(expect.objectContaining({ busy: true }));
   });
   it('E2 requested session → editor pops (active) + marks active', async () => {
     render(<TabletChartEditorPage />);

@@ -30,11 +30,16 @@ import { useChartEditSession } from '../src/hooks/useChartEditSession.js';
 describe('useTabletPresence (T3)', () => {
   beforeEach(() => { vi.useFakeTimers(); upsert.mockClear(); free.mockClear(); });
   afterEach(() => { vi.useRealTimers(); });
-  it('H1 upserts on mount then heartbeats on the interval', () => {
+  it('H1 upserts idle on mount then heartbeats on the interval', () => {
     renderHook(() => useTabletPresence({ deviceId: 'TEST-T1', deviceName: 'iPad 1', branchId: 'BR-x', uid: 'u1', byName: 'A', enabled: true }));
     expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenLastCalledWith('TEST-T1', expect.objectContaining({ status: 'idle' }));
     act(() => { vi.advanceTimersByTime(10000); });
     expect(upsert).toHaveBeenCalledTimes(2);
+  });
+  it('H1b heartbeats busy status while editing (busy=true)', () => {
+    renderHook(() => useTabletPresence({ deviceId: 'TEST-T1', deviceName: 'iPad 1', branchId: 'BR-x', uid: 'u1', byName: 'A', enabled: true, busy: true }));
+    expect(upsert).toHaveBeenLastCalledWith('TEST-T1', expect.objectContaining({ status: 'busy' }));
   });
   it('H2 disabled (no branch yet) → no upsert', () => {
     renderHook(() => useTabletPresence({ deviceId: 'TEST-T1', enabled: false }));
