@@ -66,10 +66,10 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+5 — V106 stock-movement retention shipped (cron archive→delete, AV99) — LOCAL, pushed
-- **Master**: `6d0d86b4` (clean, all pushed). **Prod**: `0511be1e` LIVE — EOD..EOD+5 all queued, NOTHING deployed yet.
+- **Date last updated**: 2026-05-20 EOD+5 — V106 stock-movement retention SHIPPED + DEPLOYED
+- **Master**: `864ef9fd` (clean, all pushed). **Prod**: `864ef9fd` LIVE — full EOD..EOD+5 cluster DEPLOYED 2026-05-20.
 - **Tests**: full vitest **13800 PASS / 0 FAIL / 0 SKIP** · build clean (2.68s)
-- **Deploy**: NONE. V106 adds a storage.rules change (admin-only archive) + Vercel cron — combined `vercel --prod` + `firebase deploy --only storage:rules` (Probe-Deploy-Probe) pending user "deploy" (V18). EOD+4 checkpoint: `.agents/sessions/2026-05-20-appt-calendar-density-impl.md`
+- **Deploy**: DONE 2026-05-20 (user "deploy") — Vercel aliased canonical `https://lover-clinic-app.vercel.app` (root 200) + `firebase deploy --only storage` (⚠ CLI 15.x: `--only storage`, NOT `storage:rules` — sub-target "rules" rejected). Probe-Deploy-Probe 4/4 IDENTICAL 403 pre+post. Cron endpoint no-auth → 401. Checkpoint: `.agents/sessions/2026-05-20-v106-stock-movement-retention.md`
 
 ### Session 2026-05-20 EOD+5 — V106 Stock-Movement Retention (cron archive→delete, T1-T7) — LOCAL, awaiting deploy
 
@@ -80,7 +80,7 @@ Brainstorm→spec→plan→executing-plans inline (T1-T7). Daily cron archives `
 - **AV99**: be_stock_movements deletion MUST be archive-gated; the cron is the ONLY deleter (closed list of 1); age compared via normalized ISO. backendClient.js never hard-deletes a movement (reversal creates a compensating doc + sets reversedByMovementId).
 - **Tests (+44)**: `v106-stock-movement-retention-core` 24 (unit + adversarial NFC≠NFD/NUL/10k-perf/mixed-createdAt) · `v106-av99-archive-before-delete` 13 (source-grep: save-before-delete ordering, archivedKeys gate, single-field query, vercel/storage/panel/skill wiring, closed-deleter) · `v106-stock-movement-retention-flow-simulate` 7 (Rule I: archive/delete/idempotent/drain/balance-untouched/ordering/cutoff-boundary). Full vitest **13756→13800 / 0 fail**; build clean 2.68s.
 - **Rule Q V66 L2 — PASS 7/0 on REAL prod** (`scripts/e2e-stock-movement-retention.mjs`): branch-isolated TEST-V106 fixtures (2 old + 1 recent) → 2 archived to Storage + deleted from Firestore, recent preserved, archive shape (2 movements + schemaVersion 1), mergeArchive idempotent on the real archive file → cleanup zero orphans. Mechanism verified end-to-end against real Firestore+Storage; the live HTTP-cron firing is the post-deploy L3 confirmation.
-- **NOT deployed** (V18). Combined `vercel --prod` + `firebase deploy --only storage:rules` (Probe-Deploy-Probe: NEW probe anon write `stock-movements-archive/PROBE/x.json` → expect 403) pending user "deploy". First backlog drain runs over the days following deploy.
+- **DEPLOYED 2026-05-20** (user "deploy"): Vercel `lover-clinic-7hahitj97-…` aliased canonical `https://lover-clinic-app.vercel.app` (root 200) + `firebase deploy --only storage`. **CLI lesson**: `firebase deploy --only storage:rules` FAILS in CLI 15.x ("Could not find rules for the following storage targets: rules") — storage has no `:rules` sub-target (only named multi-bucket targets do); use `--only storage`. Combined form = `firebase deploy --only firestore:rules,storage` (NOT `...,storage:rules`). Probe-Deploy-Probe: 4 Storage paths (stock-movements-archive / backups / backups-customers / staff-chat-attachments) IDENTICAL 403 pre+post — nothing opened. Cron endpoint no-auth → 401 (deployed + gated). First backlog drain = next 03:30 BKK scheduled fire (post-deploy L3).
 
 ### Session 2026-05-20 EOD+4 — Appointment calendar density A+B+C (T1-T7) — LOCAL, awaiting deploy
 
