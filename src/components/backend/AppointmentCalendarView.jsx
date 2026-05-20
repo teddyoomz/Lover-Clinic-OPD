@@ -899,6 +899,13 @@ export default function AppointmentCalendarView({
                         const endIdx = appt.endTime ? TIME_SLOTS.indexOf(appt.endTime) : startIdx + 1;
                         const span = Math.max(1, endIdx - startIdx);
                         const st = STATUSES.find(s => s.value === appt.status) || STATUSES[0];
+                        // Calendar-density (2026-05-20) — a span=1 (15-min)
+                        // block is only SLOT_H-4 = 18px tall. Render a tight
+                        // single line (py-0 + 11px) that fits without clipping
+                        // the name. AppointmentSlotMeta is already span>1-gated,
+                        // so span=1 is name-only. span>=2 keeps the roomy card.
+                        const isShortBlock = span === 1;
+                        const nameSizeCls = isShortBlock ? 'text-[11px] leading-[18px]' : 'text-sm leading-tight';
                         // V53 (BS-12) — flag this appt's startTime as "outside
                         // current branch open hours" so admin sees an orange
                         // chip + can reschedule. Helper returns false when
@@ -924,7 +931,7 @@ export default function AppointmentCalendarView({
                               tabIndex={0}
                               onClick={() => openDetail(appt)}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(appt); } }}
-                              className={`absolute left-0.5 right-0.5 top-0.5 rounded-lg px-2 py-1 text-left overflow-hidden transition-all hover:ring-2 hover:ring-sky-400 hover:shadow-lg z-[5] ${st.bg} border border-[var(--bd)]/40 cursor-pointer shadow-sm`}
+                              className={`absolute left-0.5 right-0.5 top-0.5 rounded-lg px-2 ${isShortBlock ? 'py-0' : 'py-1'} text-left overflow-hidden transition-all hover:ring-2 hover:ring-sky-400 hover:shadow-lg z-[5] ${st.bg} border border-[var(--bd)]/40 cursor-pointer shadow-sm`}
                               style={{
                                 height: span * SLOT_H - 4,
                                 // Phase 21.0-quinquies — 4px status-color left
@@ -966,7 +973,7 @@ export default function AppointmentCalendarView({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => { e.stopPropagation(); }}
-                                    className="text-sm font-bold text-[var(--tx-heading)] leading-tight truncate hover:underline underline-offset-2 hover:text-sky-300"
+                                    className={`${nameSizeCls} font-bold text-[var(--tx-heading)] truncate hover:underline underline-offset-2 hover:text-sky-300`}
                                     title={`เปิดข้อมูล ${appt.customerName || appt.customerNameTemp || ''} ในแท็บใหม่`}
                                     data-testid="appt-grid-customer-link"
                                   >
@@ -987,7 +994,7 @@ export default function AppointmentCalendarView({
                                   </a>
                                 ) : (
                                   <span
-                                    className="text-sm font-bold text-[var(--tx-heading)] leading-tight truncate"
+                                    className={`${nameSizeCls} font-bold text-[var(--tx-heading)] truncate`}
                                     data-testid={(appt.customerNameTemp || appt.customerPhoneTemp) ? 'appt-grid-customer-temp' : undefined}
                                     title={appt.customerPhoneTemp ? `เบอร์: ${appt.customerPhoneTemp}` : undefined}
                                   >
@@ -1027,7 +1034,7 @@ export default function AppointmentCalendarView({
                                     return (
                                       <button
                                         key={dup.appointmentId || dup.id || di}
-                                        onClick={(e) => { e.stopPropagation(); openEdit(dup); }}
+                                        onClick={(e) => { e.stopPropagation(); openDetail(dup); }}
                                         className={`text-[9px] px-1 py-0.5 rounded border ${dupSt.bg} border-[var(--bd)]/50 truncate max-w-[120px]`}
                                         title={`ซ้ำ #${di + 2}: ${dup.customerName || '-'}`}
                                         data-testid="appt-collision-dupe"

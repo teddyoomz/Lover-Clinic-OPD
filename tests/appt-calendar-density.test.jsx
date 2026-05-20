@@ -44,3 +44,30 @@ describe('appt-calendar-density · T3 popover wiring', () => {
     expect(SRC).toMatch(/const openEdit = \(appt\) =>/);
   });
 });
+
+describe('appt-calendar-density · T4 span=1 single-line cell + rollup', () => {
+  it('T4.1 derives isShortBlock + nameSizeCls from span', () => {
+    expect(SRC).toMatch(/const isShortBlock = span === 1/);
+    expect(SRC).toMatch(/const nameSizeCls = isShortBlock \? 'text-\[11px\] leading-\[18px\]' : 'text-sm leading-tight'/);
+  });
+
+  it('T4.2 block padding gates on isShortBlock (py-0 when short)', () => {
+    expect(SRC).toMatch(/rounded-lg px-2 \$\{isShortBlock \? 'py-0' : 'py-1'\} text-left/);
+  });
+
+  it('T4.3 both name wrappers use nameSizeCls (no hardcoded text-sm leading-tight on the name)', () => {
+    // <a> link name + <span> temp name both interpolate nameSizeCls
+    const nameUses = SRC.match(/\$\{nameSizeCls\} font-bold text-\[var\(--tx-heading\)\] truncate/g) || [];
+    expect(nameUses.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('T4.4 dupe rollup pills open the popover (openDetail, not openEdit)', () => {
+    expect(SRC).toMatch(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); openDetail\(dup\); \}\}/);
+    expect(SRC).not.toMatch(/openEdit\(dup\)/);
+  });
+
+  it('T4.5 +N collision badge preserved (at-a-glance count)', () => {
+    expect(SRC).toMatch(/data-testid="appt-collision-badge"/);
+    expect(SRC).toMatch(/\+\{dupCount\}/);
+  });
+});
