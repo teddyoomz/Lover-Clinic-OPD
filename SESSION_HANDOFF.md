@@ -66,10 +66,10 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+1 — Sales+Finance sub-tabs + Backend Menu D customer-detail bug fixes (dup header + recall modal flicker→freeze, AV98) SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
-- **Master = Prod**: `0511be1e` LIVE at https://lover-clinic-app.vercel.app (deploy `lover-clinic-g81qa6hk4` aliased canonical). 15 commits this session, all pushed.
-- **Tests**: V43-followup 1270/1270 GREEN · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean
-- **Deploy**: combined V15 (Vercel + Firebase rules+storage idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned. Checkpoint: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
+- **Date last updated**: 2026-05-20 EOD+1 — Sales+Finance sub-tabs + comprehensive test bank + Backend Menu D bug fixes (dup header + recall modal flicker, AV98, both backend + frontend) — ALL SHIPPED LOCAL (awaiting deploy)
+- **Master**: `29f139d1` (clean, all pushed, ~16 commits this session). **Prod**: `0511be1e` LIVE (V43-followup) — NOTHING from this session deployed yet.
+- **Tests**: 149 NEW GREEN this session · full vitest 13657 PASS / 24 pre-existing FAIL (identical 10-file baseline — backend-menu-d ×4 / audit-branch-scope AV37 / phase-26-0 / rp1 / tf3 / v36 / v81-emulator) / 25 skip · build clean
+- **Deploy**: NONE this session (all UI-only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). Checkpoint: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md`
 
 ### Session 2026-05-20 EOD+1 — Backend Menu D customer-detail bug fixes (dup header + recall modal flicker→freeze) — LOCAL, awaiting deploy
 

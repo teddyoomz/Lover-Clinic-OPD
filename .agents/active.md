@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-20 EOD+1 — Sales+Finance sub-tabs + Backend Menu D customer-detail bug fixes (dup header + recall modal flicker) SHIPPED LOCAL (awaiting deploy)"
-status: "✅ Sub-tabs + 2 Menu-D bug fixes + AV98 · Rule Q L1 structural-verified on real prod · LOCAL ONLY · awaiting user 'deploy' + L1 hands-on"
+updated_at: "2026-05-20 EOD+1 — Sales+Finance cancelled/finished sub-tabs + Backend Menu D customer-detail/frontend bug fixes (dup header + recall modal flicker, AV98) — ALL LOCAL"
+status: "✅ 3 features + 2 bug-fix rounds shipped LOCAL · Rule Q L1 structural-verified on real prod · awaiting user 'deploy' + L1 hands-on"
 branch: "master"
-last_commit: "(this session) fix(backend-menu-d): customer-detail dup header + recall modal flicker — pushed"
-tests: "149 NEW GREEN (sales 32 + finance/cross-wiring 82 + menu-D bugfix 35 incl all-6-recall-portal completeness) · full vitest 13657 PASS / 24 pre-existing FAIL (all unrelated) / 25 skip · build clean"
+last_commit: "29f139d1 docs(recall-portal-round2): session state — frontend Recall tab fixed (all 6 recall modals portal)"
+tests: "149 NEW GREEN this session · full vitest 13657 PASS / 24 pre-existing FAIL (unrelated baseline) / 25 skip · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0511be1e LIVE (V43-followup) — sub-tabs NOT yet deployed"
-firestore_rules_version: "unchanged (idempotent — both features UI-only, no rules/data)"
+production_commit: "0511be1e LIVE (V43-followup) — NOTHING from this session deployed yet"
+firestore_rules_version: "unchanged (all this-session work is UI-only — no rules/data ops)"
 storage_rules_version: "unchanged"
 ---
 
@@ -14,43 +14,26 @@ storage_rules_version: "unchanged"
 
 ## State
 
-- master = origin (clean, all pushed). Sales + Finance sub-tabs = LOCAL ONLY. Prod still on `0511be1e` (V43-followup).
-- Both features UI-only (client-side split over already-loaded lists) — no backend / no Firestore rules / no data ops / no BSA change / no handler change.
+- master = origin = `29f139d1` (clean, all pushed). ~16 commits this session. Prod still `0511be1e`.
+- Everything this session is UI-only / client-side — no backend, no Firestore rules, no data ops, no BSA change.
+- Full detail: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md`.
 
-## What this session shipped
+## What this session shipped (all LOCAL, awaiting deploy)
 
-- **Sales cancelled sub-tab** (SaleTab) — การขาย (non-cancelled, default) / ยกเลิกแล้ว (status=cancelled). Helper `src/lib/saleSubTabFilter.js`. Spec + plan in docs/superpowers/.
-- **Finance finished-deposit sub-tab** (DepositPanel under tab=finance → มัดจำ) — ใช้งานอยู่ (active+partial, default) / สิ้นสุดแล้ว (used+cancelled+refunded+expired). Helper `src/lib/depositSubTabFilter.js`. Scoped status dropdown per pill (active→3 opts / finished→5 opts). Spec + plan in docs/superpowers/.
-- Both: pill row + subTab state + handleSubTabChange (reset filter on switch) + split-first useMemo + per-pill empty states. Active|partial = usable matches codebase getDepositBalance convention.
-- **Comprehensive cross-wiring test bank (114 NEW tests)**: helper units (sale 15 + deposit 18) · flow-simulate + source-grep + UI mirrors (sale 17 + finance 22) · cross-wiring routing (sale 8 + deposit 11 — TFP auto-sale + Frontend booking-pair both default to active/usable, source-grep grounded against real createBackendSale/createDeposit/createDepositBookingPair/applyDepositToSale) · stress mulberry32 (10 — 1200 fixtures, 10k perf <50ms, NFC/NFD/NUL/concurrent) · e2e user simulation (13 — full sessions both + branch isolation).
-
-## Rule Q V66 L1 verification (real browser, real prod, read-only)
-
-- **Sales** (verified earlier this session): active 2 ชำระแล้ว + dropdown w/o ยกเลิก; cancelled 9 + dropdown hidden; round-trip resets filter.
-- **Finance** (verified this batch on นครราชสีมา): ใช้งานอยู่ = 3 rows (all ใช้งาน) + scoped dropdown 3 opts (ทุกสถานะ/ใช้งาน/ใช้บางส่วน); สิ้นสุดแล้ว = 1 row (ใช้หมด) + scoped dropdown 5 opts (ทุกสถานะ/ใช้หมด/ยกเลิก/คืนเงิน/หมดอายุ) + filterStatus reset; round-trip back to 3 active + 3-opt dropdown + reset. (3+1=4 deposits.)
-- (Coordinate clicks intercepted by mega-menu overlay → verified via real React onClick element.click() + DOM eval read-back.)
-
-## Reactivity ("ไม่ต้อง refresh จอ") — verified, no listener needed
-
-- DepositPanel `loadList()` fires after save/cancel/refund/delete/booking (lines 492/522/546/555/861/897); SaleTab `loadSales()` after create/cancel/delete. Both re-mount on tab navigation. Sub-tab split re-computes over fresh data → migration without F5. NO stale-data gap found → NO onSnapshot listener added (user chose verify-first / YAGNI).
-
-## Backend Menu D — customer-detail bug fixes (2026-05-20, /systematic-debugging)
-
-Two new-menu-mode-only bugs reported on the customer detail page:
-- **Bug #1 dup header**: BackendDashboard viewing-customer breadcrumbSlot rendered Frontend/Branch/Theme/Profile UNCONDITIONALLY while BackendTopBarNew renders them too → 2× branch/theme/profile. Fix: gate those controls `menuMode==='classic'` (matches sibling non-customer branch). Live-confirmed before (branch 2 / profile 2 / theme 4) → after (branch 1 / profile 1 / theme 2).
-- **Bug #2 recall modal flicker→freeze**: V86 auto-glow (`index.css:3909-3933`, TWO scopes: `[data-backend-menu-mode="new"] [data-testid="backend-content"]` AND `.admin-frontend-zone`) applies `:hover{transform:translateY(-3px)}` to rounded cards; a recall card wrapper became the containing block for the `fixed inset-0` recall modals rendered as its descendants → confine to box + self-sustaining hover-feedback flicker → repaint-storm freeze. Fix: portal ALL 6 recall modals to `document.body` (user chose KEEP V86 lift). Live-confirmed backend + frontend: modal `parentIsBody=true`, `inFrontendZone=false`, no animated ancestor.
-  - **Round 1** (commit 92fad5fc): portaled the 4 modals RecallCard renders (Create/Edit/Outcome/Snooze) — covered the backend customer-detail.
-  - **Round 2** (commit after — Rule P): user re-reported the SAME flicker on the **Frontend Recall tab** (`.admin-frontend-zone` → `RecallFrontendView`). Exhaustive grep of every recall modal with `fixed inset-0` found 2 MISSED: `RecallLineTemplateModal` + `RecallCaseFormModal`. Now all 6 portal. Lesson: class-of-bug grep must span the whole modal SET, not one rendering component. Test group D locks completeness (every `fixed inset-0` recall file must portal).
-- **Root-cause method**: live preview eval (modal ancestor chain → found `animation:v86-breath` on RecallCard wrapper) + index.css read (`:hover{transform}`). NOT a React loop (no "Maximum update depth"), NOT double-mount (modalCount=1). Preview is headless 11px so visual flicker can't be seen — structural root cause provably eliminated.
-- **AV98** invariant: fixed modal rendered inside a glow card MUST `createPortal(document.body)`; ALL 6 recall modals portal (Create/Edit/Outcome/Snooze/LineTemplate/CaseForm). Sanctioned: tab/page-root modals (CDV AddQty/Exchange/Timeline + SaleTab/DepositPanel). Tests `tests/recall-modal-portal-and-header-dedup.test.js` (35, incl group D completeness) + 2 V21 fixups.
+- **Sales cancelled sub-tab** (SaleTab): การขาย / ยกเลิกแล้ว · helper `src/lib/saleSubTabFilter.js` · spec+plan in docs/superpowers.
+- **Finance finished-deposit sub-tab** (DepositPanel): ใช้งานอยู่ (active+partial) / สิ้นสุดแล้ว (used+cancelled+refunded+expired) · scoped dropdown per pill · helper `src/lib/depositSubTabFilter.js`.
+- **Comprehensive cross-wiring test bank** (114 tests): helpers + flow-simulate + source-grep + UI mirrors + cross-wiring routing (TFP auto-sale + Frontend booking-pair, source-grep grounded) + mulberry32 stress + e2e user simulation.
+- **Bug fix #1 — dup header** (new menu, customer detail): BackendDashboard breadcrumbSlot gated controls `menuMode==='classic'` (was unconditional → 2× branch/theme/profile).
+- **Bug fix #2 — recall modal flicker→freeze** (new menu backend + `.admin-frontend-zone` frontend): V86 auto-glow `:hover{transform}` on rounded cards hijacked the `fixed inset-0` recall modals' containing block → portal ALL 6 recall modals (Create/Edit/Outcome/Snooze/LineTemplate/CaseForm) to `document.body`. Round 1 = 4 (backend); Round 2 (Rule P) = +2 missed (frontend). AV98 + group-D completeness test.
+- Reactivity ("ไม่ต้อง refresh"): verified reload-after-action + re-mount-on-nav → no listener needed (user chose verify-first).
 
 ## Next action
 
-- Idle — sub-tabs + Menu-D fixes done LOCAL. Await user "deploy" (Vercel; Firebase rules unchanged → V15 combined optional) + L1 hands-on.
+- Idle — await user "deploy" (Vercel; Firebase rules unchanged) + L1 hands-on.
 
 ## Outstanding user-triggered actions
 
-- **Deploy** sales + finance sub-tabs + Menu-D bug fixes — say "deploy". NOT deployed this turn (V18).
-- **L1 hands-on** (user's real ~2000px screen — preview is headless 11px so can't show the visual): (a) customer detail in new menu → header shows ONE branch/theme/profile; (b) click Recall (backend customer-detail AND **Frontend นัดหมาย→Recall tab**) → modal opens as a proper centered overlay, NO flicker/freeze, hover stable; (c) sub-tab pills on `/?backend=1&tab=sales` + `&tab=finance&subtab=deposit`.
-- **31/24 pre-existing test failures** — all confirmed unrelated (backend-menu-d ×4 / v36 deductStockForSale / rp1 SaleTab IIFE line 1228 / tf3 / phase-26-0 / audit-branch-scope AV37 / phase-17-1 flake / v81-emulator gaxios env). Separate cleanup batch when desired.
-- **V106 stock-movement 30-day retention** — brainstorm locked; spec NOT written; awaiting "ship V106".
+- **Deploy** all this-session work — one combined `vercel --prod` (V18: needs explicit "deploy" this turn).
+- **L1 hands-on** (real ~2000px screen — preview is headless 11px): (a) customer detail new menu → ONE branch/theme/profile; (b) Recall modal (backend customer-detail AND Frontend นัดหมาย→Recall) opens centered, no flicker/freeze; (c) sub-tab pills on `tab=sales` + `tab=finance&subtab=deposit`.
+- **24 pre-existing test failures** (backend-menu-d ×4 / audit-branch-scope AV37 / phase-26-0 / rp1 / tf3 / v36 / v81-emulator) — separate cleanup batch; all unrelated.
+- **V106 stock-movement 30-day retention** — brainstorm locked, spec NOT written; awaiting "ship V106".
