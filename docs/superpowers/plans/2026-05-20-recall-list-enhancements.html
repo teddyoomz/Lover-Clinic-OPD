@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall List Enhancements — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+  </style>
+</head>
+<body>
+
+<h1>Recall List Enhancements — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Implement task-by-task. Spec: <code>docs/superpowers/specs/2026-05-20-recall-list-enhancements-design.html</code>. Decisions: Q1=A (note=outcomeNote||reason), Q2=B (staff dropdown blank+required), Q3=A (frontend = all overdue).
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Every recall card shows a tap-to-call phone + a prominent note + who-logged-it; outcome recording requires picking a staff member; the Frontend tab becomes "Recall วันนี้" (today/overdue/tomorrow), in dark + light.</p>
+  <p><strong>Architecture:</strong> Single-source through the shared <code>RecallRow.jsx</code> (propagates to backend tab / frontend / customer-detail). Plus <code>RecallOutcomeModal</code> + <code>recordRecallOutcome</code> + <code>recallValidation</code> for the staff dropdown, and <code>RecallList</code>/<code>RecallSectionHeader</code>/<code>RecallFrontendView</code> for the day-sections. Reuse existing <code>StaffSelectField</code> + <code>listStaff</code>. All via existing CSS vars + <code>useTheme().resolvedTheme</code>.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Tailwind (CSS-var theme), Firebase (be_recalls), Vitest + RTL.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Recall card (shared RecallRow) — DARK</div>
+  <div style="background:#0f0f0f; border-radius:8px; padding:0.8em;">
+    <div style="background:#141414; border:1px solid #333; border-left:3px solid #ef4444; border-radius:10px; padding:0.9em 1em; font-family:sans-serif;">
+      <div style="display:flex; align-items:center; gap:0.6em; flex-wrap:wrap;">
+        <span style="background:#1f1f1f; color:#9ca3af; font-size:0.72em; padding:0.15em 0.5em; border-radius:6px;">20/05</span>
+        <span style="color:#7dd3fc; font-weight:700; font-size:0.95em;">นางสาว สมหญิง ใจดี</span>
+        <a href="tel:0812345678" style="margin-left:auto; display:inline-flex; align-items:center; gap:0.3em; background:rgba(220,38,38,0.14); color:#f87171; border:1px solid rgba(220,38,38,0.4); font-size:0.82em; font-weight:600; padding:0.2em 0.6em; border-radius:999px; text-decoration:none;">📞 081-234-5678</a>
+      </div>
+      <div style="margin-top:0.7em; background:#0c0c0c; border:1px solid #262626; border-radius:8px; padding:0.7em 0.85em;">
+        <div style="color:#6b7280; font-size:0.66em; text-transform:uppercase; margin-bottom:0.25em;">📝 ผลการติดต่อ</div>
+        <div style="color:#e5e7eb; font-size:0.92em; line-height:1.5;">ลูกค้าขอเลื่อนนัดเป็นสัปดาห์หน้า ติดธุระต่างจังหวัด</div>
+      </div>
+      <div style="margin-top:0.5em; display:flex; gap:0.5em; align-items:center;">
+        <span style="color:#6b7280; font-size:0.72em;">บันทึกโดย: พิมพ์ชนก</span>
+        <span style="margin-left:auto; color:#4b5563; font-size:0.9em; letter-spacing:0.15em;">📞 ⏰ ✎ 🗑</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Card LIGHT (pending → note falls back to reason; no byline) + Outcome modal staff dropdown</div>
+  <div style="background:#f0f4f8; border-radius:8px; padding:0.8em; display:flex; gap:0.8em; flex-wrap:wrap;">
+    <div style="flex:1 1 280px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:0.9em 1em; font-family:sans-serif;">
+      <div style="display:flex; align-items:center; gap:0.6em;">
+        <span style="background:#f1f5f9; color:#475569; font-size:0.72em; padding:0.15em 0.5em; border-radius:6px;">21/05</span>
+        <span style="color:#0369a1; font-weight:700; font-size:0.95em;">นาย ก้องภพ มั่นคง</span>
+        <a href="tel:0998887766" style="margin-left:auto; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:0.82em; font-weight:600; padding:0.2em 0.6em; border-radius:999px; text-decoration:none;">📞 099-888-7766</a>
+      </div>
+      <div style="margin-top:0.7em; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.7em 0.85em;">
+        <div style="color:#64748b; font-size:0.66em; text-transform:uppercase; margin-bottom:0.25em;">📝 เหตุผลนัด recall</div>
+        <div style="color:#0f172a; font-size:0.92em; line-height:1.5;">ติดตามผลหลังทำเลเซอร์ 7 วัน</div>
+      </div>
+    </div>
+    <div style="flex:1 1 240px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:0.9em 1em; font-family:sans-serif;">
+      <div style="color:#0f172a; font-weight:700; font-size:0.85em; margin-bottom:0.5em;">บันทึกผลการ Recall</div>
+      <div style="color:#475569; font-size:0.75em;">พนักงานผู้ลงบันทึก <span style="color:#dc2626;">*</span></div>
+      <div style="background:#f8fafc; border:1px solid #dc2626; color:#94a3b8; border-radius:6px; padding:0.4em 0.6em; font-size:0.8em; margin-top:0.2em; display:flex; justify-content:space-between;"><span>พิมพ์ค้นหา หรือคลิกเพื่อเลือก</span><span>▾</span></div>
+      <div style="margin-top:0.7em; background:#fee2e2; color:#7f1d1d; border:1px solid #fca5a5; border-radius:6px; padding:0.4em 0.8em; font-size:0.78em; text-align:center;">บันทึกผล (ปิดอยู่จนเลือกพนักงาน)</div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Frontend "Recall วันนี้" — today(top,prominent) → overdue → tomorrow · DARK</div>
+  <div style="background:#050505; border-radius:8px; padding:0.8em; font-family:sans-serif;">
+    <div style="color:#fff; font-size:1.1em; font-weight:800; margin-bottom:0.6em;">Recall วันนี้</div>
+    <div style="border-left:3px solid #ef4444; padding:0.4em 0.7em; background:rgba(239,68,68,0.06); border-radius:0 6px 6px 0;"><span style="color:#fff; font-weight:800; font-size:1em;">📅 วันนี้</span> <span style="color:#fca5a5; font-size:0.8em;">(4 รายการ)</span></div>
+    <div style="margin-top:0.8em; border-left:2px solid #ef4444; padding:0.3em 0.7em;"><span style="color:#fca5a5; font-weight:700; font-size:0.85em;">🚨 เกินกำหนด</span> <span style="color:#9ca3af; font-size:0.75em;">(2)</span></div>
+    <div style="margin-top:0.8em; border-left:2px solid #f59e0b; padding:0.3em 0.7em;"><span style="color:#fcd34d; font-weight:700; font-size:0.85em;">📅 พรุ่งนี้</span> <span style="color:#9ca3af; font-size:0.75em;">(3)</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Flow A — record outcome (staff required) · Flow B — frontend bucketing</div>
+  <svg viewBox="0 0 940 230" style="width:100%; height:auto; font-family:sans-serif;">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="10.5" text-anchor="middle">
+      <text x="10" y="16" text-anchor="start" font-weight="bold" font-size="11">Flow A — RecallOutcomeModal</text>
+      <rect x="6" y="30" width="120" height="44" rx="6" fill="#fff" stroke="#999"/><text x="66" y="48">pick outcome</text><text x="66" y="62">(✓/⏰/💭/📵)</text>
+      <rect x="150" y="26" width="130" height="52" rx="6" fill="#fffbeb" stroke="#f59e0b"/><text x="215" y="44" font-weight="bold">pick STAFF *</text><text x="215" y="58">(blank+required;</text><text x="215" y="70">Save disabled)</text>
+      <rect x="304" y="30" width="120" height="44" rx="6" fill="#fff" stroke="#999"/><text x="364" y="48">type note</text><text x="364" y="62">(optional)</text>
+      <rect x="448" y="24" width="190" height="56" rx="6" fill="#f0fdf4" stroke="#10b981"/><text x="543" y="42">recordRecallOutcome(id,{</text><text x="543" y="56">outcome,note,recordedBy})</text><text x="543" y="70" font-size="9">throws if recordedBy missing</text>
+      <rect x="662" y="24" width="180" height="56" rx="6" fill="#eff6ff" stroke="#3b82f6"/><text x="752" y="42">outcomeBy={name,staffId}</text><text x="752" y="56">updatedBy=account</text><text x="752" y="70" font-size="9">listener → RecallRow byline</text>
+      <line x1="126" y1="52" x2="148" y2="52" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="280" y1="52" x2="302" y2="52" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="424" y1="52" x2="446" y2="52" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="638" y1="52" x2="660" y2="52" stroke="#dc2626" marker-end="url(#ar)"/>
+
+      <text x="10" y="130" text-anchor="start" font-weight="bold" font-size="11">Flow B — Frontend "Recall วันนี้"</text>
+      <rect x="6" y="146" width="150" height="44" rx="6" fill="#fff" stroke="#999"/><text x="81" y="164">useRecallListener</text><text x="81" y="178">→ recalls[]</text>
+      <rect x="186" y="146" width="180" height="44" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="276" y="164">groupRecallsByTimeBucket</text><text x="276" y="178">(recalls, thaiTodayISO())</text>
+      <rect x="396" y="120" width="150" height="30" rx="6" fill="#fee2e2" stroke="#dc2626"/><text x="471" y="139" font-weight="bold">วันนี้ (TOP, prominent)</text>
+      <rect x="396" y="158" width="150" height="28" rx="6" fill="#fffbeb" stroke="#f59e0b"/><text x="471" y="176">เกินกำหนด (all overdue)</text>
+      <rect x="396" y="192" width="150" height="28" rx="6" fill="#f8fafc" stroke="#94a3b8"/><text x="471" y="210">พรุ่งนี้</text>
+      <rect x="576" y="146" width="260" height="44" rx="6" fill="#fafafa" stroke="#ddd"/><text x="706" y="164">RecallList mode=compact renders</text><text x="706" y="178">[today, overdue, tomorrow] in order</text>
+      <line x1="156" y1="168" x2="184" y2="168" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="366" y1="168" x2="394" y2="168" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="546" y1="168" x2="574" y2="168" stroke="#dc2626" marker-end="url(#ar)"/>
+    </g>
+  </svg>
+</div>
+
+<h2>File Structure</h2>
+<table style="border-collapse:collapse; width:100%;">
+  <tr style="background:#f0f4f8;"><th style="border:1px solid #ddd; padding:0.4em; text-align:left;">File</th><th style="border:1px solid #ddd; padding:0.4em; text-align:left;">Responsibility</th></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;"><code>src/components/backend/recall/RecallRow.jsx</code> (modify)</td><td style="border:1px solid #ddd; padding:0.4em;">Phone tel: link + prominent note (outcomeNote||reason) + logged-by byline. Hits all 3 surfaces.</td></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;"><code>src/lib/recallValidation.js</code> (modify)</td><td style="border:1px solid #ddd; padding:0.4em;">NEW pure <code>validateRecallOutcome</code>.</td></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;"><code>src/lib/backendClient.js</code> (modify ~11546)</td><td style="border:1px solid #ddd; padding:0.4em;"><code>recordRecallOutcome</code> accepts <code>recordedBy</code>, stamps <code>outcomeBy</code>, throws if missing; <code>updatedBy</code>=account.</td></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;"><code>src/components/backend/recall/RecallOutcomeModal.jsx</code> (modify)</td><td style="border:1px solid #ddd; padding:0.4em;">Required StaffSelectField; fetch listStaff; pass recordedBy; Save gated.</td></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;"><code>RecallList.jsx</code> + <code>RecallSectionHeader.jsx</code> + <code>RecallFrontendView.jsx</code> (modify)</td><td style="border:1px solid #ddd; padding:0.4em;">compact buckets = today→overdue→tomorrow; today prominent; "Recall วันนี้" heading.</td></tr>
+  <tr><td style="border:1px solid #ddd; padding:0.4em;">tests (new + V21 fixups)</td><td style="border:1px solid #ddd; padding:0.4em;">Cover new behavior + update phase-29 tests calling the old recordRecallOutcome contract.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: RecallRow — phone tel: link + prominent note + logged-by byline</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/recall/RecallRow.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Add phone tel: link in BOTH the mobile header (after the name block) and the desktop header (after the name link).</strong></label></div>
+  <p>Helper near top of component body:</p>
+<pre><code class="language-jsx">const phoneRaw = recall.customerPhone ? String(recall.customerPhone).trim() : '';
+const phoneDigits = phoneRaw.replace(/[^0-9+]/g, '');
+</code></pre>
+  <p>Phone link element (insert in mobile header after the LINE "L" badge / inside the name flex; and in desktop header inside the name flex). Uses call-accent, NOT red on the name:</p>
+<pre><code class="language-jsx">{phoneDigits && (
+  &lt;a
+    href={`tel:${phoneDigits}`}
+    onClick={(e) =&gt; e.stopPropagation()}
+    data-testid={`recall-phone-${recall.id}`}
+    className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] md:text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 hover:bg-red-500/20 active:scale-95 transition-transform"
+    title={`โทรหา ${recall.customerName || ''}`}
+    aria-label={`โทร ${phoneRaw}`}
+  &gt;
+    &lt;Phone className="w-3 h-3" /&gt; {phoneRaw}
+  &lt;/a&gt;
+)}</code></pre>
+  <p>(Place it with <code>ml-auto</code> on the mobile header row's container so it sits at the right, before the status pill — or on its own line on narrow widths. Keep customer name color sky/blue as today; never red.)</p>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Replace the small reason line + done-only outcome callout with ONE prominent note block (Q1=A: outcomeNote||reason).</strong></label></div>
+  <p>Compute before the return:</p>
+<pre><code class="language-jsx">const hasOutcomeNote = !!(recall.outcomeNote &amp;&amp; String(recall.outcomeNote).trim());
+const noteText = hasOutcomeNote ? recall.outcomeNote : (recall.reason || '');
+const noteLabel = hasOutcomeNote ? '📝 ผลการติดต่อ' : '📝 เหตุผลนัด recall';
+const loggedByName = (recall.status === 'done' || recall.status === 'no-answer' || recall.status === 'closed-no-answer')
+  ? (recall.outcomeBy?.name || '') : '';
+</code></pre>
+  <p>Replace the existing <code>data-testid={`recall-reason-...`}</code> block AND the <code>recall-outcome-callout</code> block with:</p>
+<pre><code class="language-jsx">{noteText &amp;&amp; (
+  &lt;div
+    className="mt-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg-card)] px-2.5 py-2"
+    data-testid={`recall-note-${recall.id}`}
+  &gt;
+    &lt;div className="text-[9px] uppercase tracking-wide text-[var(--tx-muted)] mb-0.5"&gt;{noteLabel}&lt;/div&gt;
+    &lt;div className="text-[13px] md:text-sm font-semibold text-[var(--tx-primary)] leading-snug line-clamp-3"&gt;{noteText}&lt;/div&gt;
+  &lt;/div&gt;
+)}
+{loggedByName &amp;&amp; (
+  &lt;div className="mt-1 text-[10px] text-[var(--tx-muted)]" data-testid={`recall-logged-by-${recall.id}`}&gt;
+    บันทึกโดย: &lt;span className="font-semibold text-[var(--tx-primary)]"&gt;{loggedByName}&lt;/span&gt;
+  &lt;/div&gt;
+)}</code></pre>
+  <p>Keep <code>sourceProductName</code>, LINE-sent badge, and PairBadge as-is below the note.</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Verify build</strong></label></div>
+  <p>Run: <code>npm run build</code> · Expected: clean (no missing import — <code>Phone</code> already imported from lucide-react).</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/recall/RecallRow.jsx
+git commit -m "feat(recall): RecallRow tap-to-call phone + prominent note + logged-by byline"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: recallValidation — validateRecallOutcome (pure)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/recallValidation.js</code> · Test <code>tests/recall-list-enhancements.test.js</code> (new)</p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add validator</strong></label></div>
+<pre><code class="language-js">/**
+ * 2026-05-20 — validate a record-outcome submission.
+ * Requires a non-empty outcome AND a recordedBy with a non-empty name (Q2=B).
+ * @param {{outcome?:string, recordedBy?:{name?:string}}} payload
+ * @returns {{ok:boolean, errors:string[]}}
+ */
+export function validateRecallOutcome(payload) {
+  const errors = [];
+  if (!payload?.outcome || typeof payload.outcome !== 'string') errors.push('outcome-required');
+  const name = payload?.recordedBy?.name;
+  if (typeof name !== 'string' || name.trim() === '') errors.push('recorded-by-required');
+  return { ok: errors.length === 0, errors };
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Unit tests</strong></label></div>
+<pre><code class="language-js">import { validateRecallOutcome } from '../src/lib/recallValidation.js';
+test('ok with outcome + recordedBy.name', () =&gt; {
+  expect(validateRecallOutcome({ outcome: 'will-come', recordedBy: { name: 'พิมพ์ชนก' } }).ok).toBe(true);
+});
+test('fails without staff', () =&gt; {
+  const r = validateRecallOutcome({ outcome: 'will-come', recordedBy: { name: '' } });
+  expect(r.ok).toBe(false); expect(r.errors).toContain('recorded-by-required');
+});
+test('fails without outcome', () =&gt; {
+  expect(validateRecallOutcome({ recordedBy: { name: 'x' } }).errors).toContain('outcome-required');
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Run</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/recall-list-enhancements.test.js</code> · Expected: PASS.</p>
+</div>
+
+<div class="task">
+  <h3>Task 3: recordRecallOutcome — accept recordedBy, stamp outcomeBy, throw if missing</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> (~line 11546) · Test <code>tests/recall-list-enhancements.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Change signature + stamp</strong></label></div>
+<pre><code class="language-js">export async function recordRecallOutcome(id, { outcome, outcomeNote, currentNoAnswerCount = 0, recordedBy = null } = {}) {
+  const me = _resolveRecallAttribution();
+  const recordedName = recordedBy &amp;&amp; typeof recordedBy.name === 'string' ? recordedBy.name.trim() : '';
+  if (!recordedName) {
+    throw new Error('กรุณาเลือกพนักงานผู้ลงบันทึก');
+  }
+  const outcomeStamp = { uid: recordedBy?.staffId || null, name: recordedName, role: 'staff', staffId: recordedBy?.staffId || null };
+  const patch = {
+    outcome,
+    outcomeNote: outcomeNote || '',
+    outcomeAt: serverTimestamp(),
+    outcomeBy: outcomeStamp,        // 2026-05-20: picked staff (Q2=B), shown in list
+    updatedAt: serverTimestamp(),
+    updatedBy: me,                  // logged-in account — audit trail
+  };
+  // ...(if/else branches for status unchanged)...
+}</code></pre>
+  <p>(Leave the existing <code>if (outcome === 'no-answer') {...} else if ... {...}</code> branches exactly as-is below the patch object.)</p>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Test (integration-style assertion via a thin mock of recallDoc/updateDoc is brittle — assert the throw + the stamp shape with a spy)</strong></label></div>
+<pre><code class="language-js">// In tests/recall-list-enhancements.test.js — mock backendClient internals are
+// heavy; assert behavior via source-grep + the validator. Throw path:
+import { recordRecallOutcome } from '../src/lib/backendClient.js';
+test('recordRecallOutcome throws without recordedBy', async () =&gt; {
+  await expect(recordRecallOutcome('R1', { outcome: 'will-come' })).rejects.toThrow('พนักงานผู้ลงบันทึก');
+});
+// (Firestore write path verified by Rule Q L2 below, not by mock.)</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Run + commit (Tasks 2+3 together)</strong></label></div>
+<pre><code class="language-bash">npm test -- --run tests/recall-list-enhancements.test.js
+git add src/lib/recallValidation.js src/lib/backendClient.js tests/recall-list-enhancements.test.js
+git commit -m "feat(recall): recordRecallOutcome requires recordedBy → outcomeBy; validateRecallOutcome"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: RecallOutcomeModal — required staff dropdown</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/recall/RecallOutcomeModal.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Imports + staff fetch + state</strong></label></div>
+<pre><code class="language-jsx">import { recordRecallOutcome, listStaff } from '../../../lib/scopedDataLayer.js';
+import StaffSelectField from '../StaffSelectField.jsx';
+// inside component:
+const [staffList, setStaffList] = useState(null);
+const [staffName, setStaffName] = useState('');
+const [staffRecord, setStaffRecord] = useState(null);
+useEffect(() =&gt; {
+  let alive = true;
+  listStaff().then(rows =&gt; { if (alive) setStaffList(Array.isArray(rows) ? rows : []); })
+    .catch(() =&gt; { if (alive) setStaffList([]); });
+  return () =&gt; { alive = false; };
+}, []);</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Render the dropdown above the note textarea</strong></label></div>
+<pre><code class="language-jsx">&lt;StaffSelectField
+  field={{ key: 'outcomeStaff', label: 'พนักงานผู้ลงบันทึก', required: true }}
+  value={staffName}
+  list={staffList}
+  onChange={(name, rec) =&gt; { setStaffName(name); setStaffRecord(rec); }}
+/&gt;</code></pre>
+  <p>(StaffSelectField already renders <code>data-field="outcomeStaff"</code> on its input for scroll-to-error.)</p>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Pass recordedBy + gate Save</strong></label></div>
+<pre><code class="language-jsx">// in handleSave, replace the recordRecallOutcome call:
+await recordRecallOutcome(recall.id, {
+  outcome,
+  outcomeNote,
+  currentNoAnswerCount: recall.noAnswerCount || 0,
+  recordedBy: { name: staffName, staffId: staffRecord?.id || null },
+});
+// guard at top of handleSave:
+if (!outcome || !staffName.trim() || !recall?.id || saving) return;
+// Save button disabled prop:
+disabled={!outcome || !staffName.trim() || saving}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build
+git add src/components/backend/recall/RecallOutcomeModal.jsx
+git commit -m "feat(recall): outcome modal — required staff dropdown (blank, gates Save)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Frontend "Recall วันนี้" — today/overdue/tomorrow + prominence</h3>
+  <p><strong>Files:</strong> Modify <code>RecallList.jsx</code>, <code>RecallSectionHeader.jsx</code>, <code>RecallFrontendView.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: RecallList — compact buckets order = today, overdue, tomorrow; pass prominent for today in compact</strong></label></div>
+<pre><code class="language-jsx">const orderedBuckets = mode === 'compact'
+  ? ['today', 'overdue', 'tomorrow']
+  : ['overdue', 'today', 'tomorrow', 'thisWeek', 'later'];
+// in the .map, pass prominent:
+&lt;RecallSectionHeader
+  bucketKey={bucketKey}
+  count={items.length}
+  doneCount={doneCount}
+  prominent={mode === 'compact' &amp;&amp; bucketKey === 'today'}
+/&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: RecallSectionHeader — add prominent prop (backward-compat default false)</strong></label></div>
+<pre><code class="language-jsx">export function RecallSectionHeader({ bucketKey, count, doneCount, prominent = false }) {
+  const theme = BUCKET_THEMES[bucketKey];
+  if (!theme || !count) return null;
+  return (
+    &lt;div
+      data-testid={`recall-section-${bucketKey}`}
+      data-bucket={bucketKey}
+      data-prominent={prominent ? 'true' : 'false'}
+      className={`flex items-center gap-2 border-l-2 ${theme.borderLeft} ${theme.bg} border-b border-[var(--bd)] ${prominent ? 'px-3 py-3 rounded-t-lg' : 'px-3 py-2'}`}
+    &gt;
+      &lt;span className={prominent ? 'text-lg' : 'text-sm'} aria-hidden="true"&gt;{theme.icon}&lt;/span&gt;
+      &lt;span className={`font-bold text-[var(--tx-primary)] ${prominent ? 'text-base' : 'text-[12px]'}`}&gt;{theme.label}&lt;/span&gt;
+      {/* ...rest unchanged (relativePill + count)... */}
+    &lt;/div&gt;
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: RecallFrontendView — "Recall วันนี้" heading at top of the card</strong></label></div>
+<pre><code class="language-jsx">{/* directly inside the outer card div, before error/loading */}
+&lt;div className="px-4 pt-3 pb-1 border-b border-[var(--bd)]"&gt;
+  &lt;h2 className="text-base font-extrabold text-[var(--tx-primary)] flex items-center gap-2"&gt;
+    &lt;PhoneCall size={16} className="text-red-500" /&gt; Recall วันนี้
+  &lt;/h2&gt;
+  &lt;p className="text-[10px] text-[var(--tx-muted)] mt-0.5"&gt;วันนี้ · ค้าง/เลยกำหนด · พรุ่งนี้&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build
+git add src/components/backend/recall/RecallList.jsx src/components/backend/recall/RecallSectionHeader.jsx src/components/backend/recall/RecallFrontendView.jsx
+git commit -m "feat(recall): Frontend Recall วันนี้ — today(prominent)/overdue/tomorrow"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Tests (new + V21 fixups) + full build + Rule Q verification</h3>
+  <p><strong>Files:</strong> <code>tests/recall-list-enhancements.test.js(x)</code> (extend) + update phase-29 tests that call the old contract.</p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Add RTL/source-grep coverage for the new behavior</strong></label></div>
+<pre><code class="language-js">// RecallRow: phone tel: link present when customerPhone; absent when empty;
+//            note block shows outcomeNote when present else reason; byline shows outcomeBy.name.
+// RecallList compact: orderedBuckets === ['today','overdue','tomorrow'] (source-grep).
+// RecallSectionHeader: prominent=true → text-base + data-prominent="true".
+// RecallOutcomeModal: Save disabled until staff picked (RTL: render, pick outcome, Save still disabled; pick staff → enabled).</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Fix phase-29 tests broken by the recordedBy contract</strong></label></div>
+  <p>Search + update each call site that now needs a staff pick / recordedBy:</p>
+<pre><code class="language-bash">grep -rln "recordRecallOutcome" tests/
+# Update: phase-29-recall-backend-client (add recordedBy or expect throw),
+#         phase-29-recall-outcome-modal-rtl (pick staff before Save),
+#         phase-29-recall-flow-simulate, phase-29-recall-multi-surface-realtime
+#         + any source-grep test asserting the old outcome-callout / reason shape on RecallRow.</code></pre>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Full suite + build</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> (Rule N: full suite at batch end — this changes shared RecallRow + a function contract) · <code>npm run build</code> · Expected: 0 fail, clean.</p>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Rule Q verification (L1 preview OR L2) + commit</strong></label></div>
+  <p>L1: dev-server preview — open backend Recall tab + frontend "Recall วันนี้"; confirm phone link renders + tel: href + prominent note + section order in dark AND light (toggle <code>data-theme</code>). Outcome modal: Save disabled until staff picked. Phone link must not be red on the customer NAME. If preview can't show theme nuance → user L1 hands-on.</p>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(recall): list-enhancements coverage + phase-29 recordedBy fixups"</code></pre>
+</div>
+
+<h2>Self-Review notes</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> phone tap-to-call (T1) · prominent note outcomeNote||reason (T1) · staff dropdown blank+required + display (T3/T4/T1 byline) · "Recall วันนี้" today/overdue/tomorrow (T5) · dark+light via CSS vars (all) · Rule Q (T6). ✓</li>
+  <li><strong>Type consistency:</strong> <code>outcomeBy.name</code> read by RecallRow ↔ written by recordRecallOutcome stamp ↔ built from StaffSelectField <code>(displayName, record)</code> as <code>{name, staffId}</code>. ✓</li>
+  <li><strong>No-red rule:</strong> phone uses red-tinted call accent (button-like); customer name stays sky/blue. Names/HN never red. ✓</li>
+  <li><strong>Out of scope:</strong> no staff picker on create; no LINE-flow change; no new collection/field (reuse customerPhone + outcomeBy).</li>
+</ul>
+
+</body>
+</html>
