@@ -66,10 +66,22 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+1 — Sales cancelled sub-tab (การขาย / ยกเลิกแล้ว) SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
+- **Date last updated**: 2026-05-20 EOD+1 — Sales cancelled sub-tab + Finance finished-deposit sub-tab + comprehensive cross-wiring test bank SHIPPED LOCAL (awaiting deploy); V43-followup still LIVE on prod
 - **Master = Prod**: `0511be1e` LIVE at https://lover-clinic-app.vercel.app (deploy `lover-clinic-g81qa6hk4` aliased canonical). 15 commits this session, all pushed.
 - **Tests**: V43-followup 1270/1270 GREEN · V43 legacy e2e 39/39 · full vitest 13508 PASS / 24 pre-existing FAIL (unrelated) / 25 skip · build clean
 - **Deploy**: combined V15 (Vercel + Firebase rules+storage idempotent). 6/6 Probe-Deploy-Probe IDENTICAL pre+post. 30 chat_conversations test-probe-* cleaned. Checkpoint: `.agents/sessions/2026-05-20-v43-followup-hide-from-balance.md`
+
+### Session 2026-05-20 EOD+1 — Finance finished-deposit sub-tab + comprehensive cross-wiring test bank — LOCAL, awaiting deploy
+
+Sibling to the sales cancelled sub-tab (same session). On `tab=finance` → "มัดจำ" (DepositPanel), split finished deposits into a "สิ้นสุดแล้ว" pill; default "ใช้งานอยู่" shows only active+partial. UI-only client-side split over loaded `getAllDeposits`; **no backend / rules / data / handler change**.
+
+- **Decisions** (Q1=A pill inside DepositPanel; Q2=B finished = used+cancelled+refunded+expired; Q3=A labels ใช้งานอยู่/สิ้นสุดแล้ว; Q4=A scoped status dropdown BOTH pills — active→ใช้งาน/ใช้บางส่วน, finished→ใช้หมด/ยกเลิก/คืนเงิน/หมดอายุ). Reactivity: verify-first, listener only if gap (none found). active|partial = usable matches codebase getDepositBalance convention.
+- **Files**: NEW `src/lib/depositSubTabFilter.js` (ACTIVE/FINISHED status sets + isFinishedDeposit + filterDepositsBySubTab). `DepositPanel.jsx` (DEPOSIT_SUB_TABS emerald pill + subTab state + handleSubTabChange reset-filter + filteredDeposits split + scoped dropdown + finished/active empty states). Spec/plan HTML in docs/superpowers/.
+- **Comprehensive cross-wiring test bank (114 NEW tests total this session, both features)**: helper units (sale 15 + deposit 18); flow-simulate+source-grep+UI mirrors (sale 17 + finance 22); cross-wiring routing (sale 8 + deposit 11 — TFP auto-sale + Frontend booking-pair, source-grep grounded against real createBackendSale `status:data.status||'active'` + createDeposit `'active'` + createDepositBookingPair `'active'` + applyDepositToSale `remaining===0?'used':'partial'`); stress mulberry32 (10 — 1200 fixtures partition invariants, 10k perf <50ms, NFC≠NFD/NUL/concurrent-snapshot); e2e user simulation (13 — full admin sessions both + branch isolation).
+- **Rule Q V66 L1** (real browser, real prod นครราชสีมา, READ-ONLY): finance ใช้งานอยู่ = 3 rows + scoped dropdown 3 opts; สิ้นสุดแล้ว = 1 row (ใช้หมด) + scoped dropdown 5 opts + filterStatus reset; round-trip resets. Sales re-confirmed (unchanged). Coordinate clicks intercepted by mega-menu overlay → verified via real React onClick + DOM eval.
+- **Reactivity ("ไม่ต้อง refresh จอ") verified — NO listener added**: DepositPanel `loadList()` after save/cancel/refund/delete/booking (lines 492/522/546/555/861/897); SaleTab `loadSales()` after mutations; both re-mount on tab nav → split re-computes on fresh data without F5. No stale gap → YAGNI per user choice.
+- **Tests**: full vitest 13622 PASS / 24 FAIL / 25 skip — all 24 confirmed pre-existing + unrelated (audit-branch-scope AV37 TFP / rp1 SaleTab IIFE line 1228 / v36 deductStockForSale / backend-menu-d ×4 / tf3 / phase-26-0 / v81-emulator gaxios env). DepositPanel edit added 0 failures (audit-branch-scope still 1=AV37; rp1 still SaleTab-only). Build clean.
+- **NOT deployed** (V18). Both sub-tabs await one combined `vercel --prod` (Firebase rules unchanged). Commits pushed to master.
 
 ### Session 2026-05-20 EOD+1 — Sales cancelled sub-tab (การขาย / ยกเลิกแล้ว) — LOCAL, awaiting deploy
 
