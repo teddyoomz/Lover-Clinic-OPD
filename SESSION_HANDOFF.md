@@ -66,10 +66,20 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+3 LATE — Recall enhancements + pill rename shipped; appt-calendar-density spec+plan ready (NOT implemented) — LOCAL, pushed
-- **Master**: `c5144c46` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD..EOD+3 all queued, NOTHING deployed yet.
-- **Tests**: full vitest **13697 PASS / 0 FAIL / 0 SKIP** · build clean
-- **Deploy**: NONE (UI + 1 fn-contract only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+3 checkpoint: `.agents/sessions/2026-05-20-recall-and-calendar-density.md`
+- **Date last updated**: 2026-05-20 EOD+4 — appt-calendar-density T1-T7 implemented (popover + adaptive cell + agenda + responsive) — LOCAL, pushed
+- **Master**: `224da316` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD..EOD+4 all queued, NOTHING deployed yet.
+- **Tests**: full vitest **13756 PASS / 0 FAIL / 0 SKIP** · build clean
+- **Deploy**: NONE (UI-only cluster, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+4 checkpoint: `.agents/sessions/2026-05-20-appt-calendar-density-impl.md`
+
+### Session 2026-05-20 EOD+4 — Appointment calendar density A+B+C (T1-T7) — LOCAL, awaiting deploy
+
+Executed `docs/superpowers/plans/2026-05-20-appt-calendar-density.html` T1-T7 inline (executing-plans). Detail: `.agents/sessions/2026-05-20-appt-calendar-density-impl.md`.
+
+- **A popover + B adaptive cell + C agenda + responsive**: T1 `appointmentDisplay.js` EXTENDED — `APPT_STATUSES` (single source, real 4 statuses) + `getApptStatusMeta`/`apptDisplayName`/`apptPhoneValue`/`apptTimeRange`; grid imports palette (Rule of 3). T2 NEW `AppointmentDetailPopover` (portaled AV98, reuses PhoneLink + helpers, AV78 backdrop-no-close, name/HN non-red, แก้ไข→onEdit). T3 grid block onClick/keydown → `openDetail` (popover); แก้ไข→edit modal; roomName via `effectiveRoom`. T4 span=1 (15-min, 18px) → tight single line (`py-0`+`text-[11px]` via `nameSizeCls`); +N rollup pills→popover; **no SLOT_H bump**. T5 NEW `AppointmentAgendaView` (chronological cards, `<div role="button">` so nested `tel:` `<a>` legal, `resolveRoom` prop). T6 NEW `useIsBelowLg`; `viewModeOverride`→`effectiveView` (auto-agenda <lg, grid ≥lg) + toggle in day-header; agenda fed same `typedDayAppts` (no refetch). T7 Rule I flow-simulate.
+- **Plan-vs-reality adaptations**: `appointmentDisplay.js` already existed → EXTENDED not created; real 4 STATUSES (no 'arrived'; pending=orange); per-day array = `typedDayAppts` (plan said `dayAppts`); agenda room via `effectiveRoom`/`resolveRoom` (appts carry roomId/roomName, not appt.room).
+- **3 V21 fixups** (tests locking old grid shape): phase-21-0-quinquies Q2 (STATUSES→APPT_STATUSES palette move) + Q4 (span-gated name size) + phase15.7-septies SE2.4 (block onClick openEdit→openDetail). Each carries a calendar-density marker.
+- **Tests**: NEW appointment-display-helpers (5) + appointment-detail-popover-rtl (14) + appointment-agenda-view-rtl (11) + appt-calendar-density source-grep (14) + use-is-below-lg (3) + appt-calendar-density-flow-simulate (12). Full vitest 13697→13756 (+59). Build clean.
+- **Rule Q**: logic/wiring/leaf-render/interactions covered (Rule I + RTL real renders + source-grep + full suite); visual/tactile/responsive L1 = user-pending (real screen — headless can't show). NOT deployed (V18); 7 commits pushed `eb04dffa`..`224da316`.
 
 ### Session 2026-05-20 EOD+3 — Recall enhancements + pill rename + appt-calendar-density spec/plan — LOCAL
 
