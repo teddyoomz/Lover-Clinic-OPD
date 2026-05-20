@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-20 EOD+3 — Recall list enhancements (phone tap-to-call + prominent note + staff logged-by + 'Recall วันนี้') shipped LOCAL"
-status: "✅ Recall enhancements coded + full suite green (13697 pass / 0 fail) + build clean + Rule R real-data confirmed · pushed · awaiting user L1 + 'deploy'"
+updated_at: "2026-05-20 EOD+3 LATE — Recall enhancements + pill rename shipped; calendar-density spec+plan ready to implement (next session)"
+status: "✅ Recall shipped (13697 pass/0 fail/build clean); appt-calendar-density = spec+plan committed, NOT implemented yet · pushed · awaiting deploy + L1"
 branch: "master"
-last_commit: "Recall list enhancements (feat + test + Rule R diag) — pushed"
-tests: "13697 pass / 0 fail / 0 skip · build clean (was 13681 baseline)"
+last_commit: "c5144c46 docs(plan): appointment calendar density — 7-task plan"
+tests: "13697 pass / 0 fail / 0 skip · build clean (docs-only since last full run)"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "0511be1e LIVE — NOTHING from EOD/EOD+1/EOD+2/EOD+3 deployed yet"
-firestore_rules_version: "unchanged (UI + 1 fn-contract only — no rules/data ops)"
+firestore_rules_version: "unchanged (UI + 1 fn-contract only — no rules/data ops this cluster)"
 storage_rules_version: "unchanged"
 ---
 
@@ -14,31 +14,22 @@ storage_rules_version: "unchanged"
 
 ## State
 
-- master = origin = pushed (Recall enhancements + earlier EOD/EOD+1/EOD+2 cluster all LOCAL). Prod still `0511be1e`.
-- This session: (1) durable skill+rule update — brainstorming auto-uses Visual Companion from the question stage for design + plans/specs = HTML with mockup AND flow always (user/project CLAUDE.md + 4 skills + 2 memory files). (2) Recall list enhancements feature (brainstorm → spec → plan → code → test → Rule R).
+- master = origin = `c5144c46` (clean, pushed). Prod still `0511be1e` — full EOD..EOD+3 cluster queued for ONE combined deploy.
+- This session ended early (user: "context จะเต็ม") to resume the **appointment-calendar-density implementation** fresh next session.
+- Checkpoint: `.agents/sessions/2026-05-20-recall-and-calendar-density.md`.
 
 ## What this session shipped (all LOCAL, awaiting deploy)
 
-- **Skill/rule directive**: Visual Companion auto-use for design (question stage) + plan IS HTML too (not just spec) + mockup AND flow always. Edited `~/.claude/skills/{brainstorming,writing-plans,executing-plans,subagent-driven-development}/SKILL.md` + both CLAUDE.md + `feedback_visual_companion_always_allowed.md` + `feedback_plans_html_with_mockup.md` + MEMORY.md.
-- **Recall enhancements** (Q1=A note=outcomeNote||reason · Q2=B staff dropdown blank+required · Q3=A frontend=all overdue):
-  - Shared `RecallRow.jsx`: `customerPhone` tap-to-call (`tel:`, call-accent, name stays non-red) + prominent note block + "บันทึกโดย" byline. Propagates to backend tab / frontend / customer-detail.
-  - `recordRecallOutcome` requires `recordedBy` → `outcomeBy {name,staffId}` (throws if missing); `updatedBy` = account. `validateRecallOutcome` pure helper.
-  - `RecallOutcomeModal`: required `StaffSelectField` (blank, gates Save) via `listStaff`.
-  - Frontend: "Recall วันนี้" heading; compact buckets today(prominent)→overdue→tomorrow.
-  - Spec + plan HTML in `docs/superpowers/`. NEW `tests/recall-list-enhancements.test.jsx` + 10 phase-29 V21 fixups. Rule R diag `scripts/diag-recall-list-enhancements-shape.mjs`.
-
-## Verification
-
-- Full vitest 13697 pass / 0 fail · build clean.
-- Rule R (real prod, READ-ONLY): customerPhone 100% populated, outcomeBy.name present on finalized, reason/outcomeNote present → UI renders against real data.
-- **Rule Q L1 (real-browser visual + tactile) PENDING USER** — tap-to-call, prominent note, byline, today/overdue/tomorrow order + today prominence, Save-gated-until-staff, dark+light beauty. (Per standing "user tests UI" preference + headless-preview visual limit.)
+- **Recall list enhancements** (Q1=A note=outcomeNote||reason · Q2=B staff dropdown blank+required · Q3=A frontend all-overdue): shared RecallRow tap-to-call phone + prominent note + "บันทึกโดย" byline; recordRecallOutcome requires recordedBy→outcomeBy; RecallOutcomeModal required StaffSelectField; Frontend "Recall วันนี้" today(prominent)/overdue/tomorrow. + pill rename `🔔 Recall`→`Recall วันนี้`. Full vitest 13697/0; Rule R real-data confirmed; Rule Q L1 (visual/tactile) pending user.
+- **Durable rule/skill change**: design topics → brainstorming auto-uses Visual Companion from question stage; plans (not just specs) = HTML with **mockup AND flow always**. Edited 4 user skills + both CLAUDE.md + 2 memory files + MEMORY.md.
+- **Appointment calendar density (RESEARCH + DESIGN ONLY — not coded)**: root cause = block height `span×SLOT_H` (15min=18px illegible) + mobile 2D-scroll. Approved A+B+C. Research `docs/superpowers/research/2026-05-20-appt-calendar-density-research.html`; spec `docs/superpowers/specs/2026-05-20-appt-calendar-density-design.html`; **plan `docs/superpowers/plans/2026-05-20-appt-calendar-density.html` (7 tasks)**.
 
 ## Next action
 
-- Await user L1 hands-on + "deploy" (combined `vercel --prod`; rules unchanged) for the whole queued cluster.
+- **Implement the calendar-density plan T1→T7** (inline recommended — T3/T4/T6 edit AppointmentCalendarView.jsx sequentially). T1 appointmentDisplay helpers → T2 AppointmentDetailPopover → T3 wire popover → T4 span=1 single-line + "+N" → T5 AppointmentAgendaView → T6 responsive auto-agenda<lg + toggle → T7 flow-simulate + full suite + Rule Q.
 
 ## Outstanding user-triggered actions
 
-- **Deploy** all queued work (EOD sub-tabs + Menu-D fixes + EOD+2 baseline + EOD+3 Recall enhancements) — one combined `vercel --prod` (V18).
-- **L1 hands-on** Recall enhancements (above) + prior EOD/EOD+1 UI.
+- **Deploy** all queued work (EOD..EOD+3: sub-tabs + Menu-D fixes + baseline + Recall enhancements) — one combined `vercel --prod` (V18; rules unchanged).
+- **L1 hands-on** Recall enhancements (tap-to-call / note / byline / "Recall วันนี้" sections / Save-gated-until-staff / dark+light) + prior EOD UI.
 - **V106** stock-movement 30-day retention — brainstorm locked, spec NOT written.

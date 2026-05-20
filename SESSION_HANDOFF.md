@@ -66,10 +66,19 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+2 — test baseline cleanup: 24 pre-existing fails + 26 skips → 0/0 (test-side; 1 behavior-identical SaleTab IIFE hoist) — LOCAL, pushed
-- **Master**: `bfed2c61` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD/EOD+1/EOD+2 all queued, NOTHING deployed yet.
-- **Tests**: full vitest **13681 PASS / 0 FAIL / 0 SKIP** · build clean (was 13657 pass / 24 fail / 26 skip — baseline now spotless)
-- **Deploy**: NONE (UI/test/config only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+1 checkpoint: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md` (EOD+2 = no checkpoint; see session block below)
+- **Date last updated**: 2026-05-20 EOD+3 LATE — Recall enhancements + pill rename shipped; appt-calendar-density spec+plan ready (NOT implemented) — LOCAL, pushed
+- **Master**: `c5144c46` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD..EOD+3 all queued, NOTHING deployed yet.
+- **Tests**: full vitest **13697 PASS / 0 FAIL / 0 SKIP** · build clean
+- **Deploy**: NONE (UI + 1 fn-contract only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+3 checkpoint: `.agents/sessions/2026-05-20-recall-and-calendar-density.md`
+
+### Session 2026-05-20 EOD+3 — Recall enhancements + pill rename + appt-calendar-density spec/plan — LOCAL
+
+Three threads. Detail: `.agents/sessions/2026-05-20-recall-and-calendar-density.md`.
+
+- **Recall list enhancements** (brainstorm→spec→plan→code→test→Rule R): shared `RecallRow` tap-to-call phone (`tel:`) + prominent note (`outcomeNote||reason`, Q1=A) + "บันทึกโดย" byline; `recordRecallOutcome` requires `recordedBy`→`outcomeBy {name,staffId}` (throws if missing); `RecallOutcomeModal` required StaffSelectField (blank, gates Save) via `listStaff`; Frontend "Recall วันนี้" today(prominent)/overdue/tomorrow; pill rename `🔔 Recall`→`Recall วันนี้`. NEW `tests/recall-list-enhancements.test.jsx` + 10 phase-29 V21 fixups + Rule R diag. Full vitest 13697/0. Rule Q L1 (visual/tactile) pending user.
+- **Durable rule/skill change**: design topics → brainstorming auto-uses Visual Companion from question stage; plans (not just specs) = HTML with **mockup AND flow always**. Edited 4 user skills + both CLAUDE.md + 2 memory + MEMORY.md.
+- **Appt calendar density (RESEARCH + DESIGN ONLY — not coded)**: root cause = block height `span×SLOT_H` (15min=18px illegible) + mobile 2D-scroll; approved A(popover)+B(adaptive cell+"+N")+C(mobile agenda). research/spec/plan in `docs/superpowers/`. **NEXT SESSION: implement plan `2026-05-20-appt-calendar-density.html` T1→T7 (inline).**
+- **NOT deployed** (V18). Combined `vercel --prod` pending; rules unchanged.
 
 ### Session 2026-05-20 EOD+2 — test baseline cleanup: 24 fails + 26 skips → 0/0 — LOCAL, pushed
 
