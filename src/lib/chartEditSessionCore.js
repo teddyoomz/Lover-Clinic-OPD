@@ -47,3 +47,14 @@ export function buildSessionCreate({ sessionId, branchId, pcDeviceId, pcUid, tab
     createdAt: nowMs, updatedAt: nowMs, expiresAt: nowMs + SESSION_MAX_AGE_MS,
   };
 }
+
+// Orphan-sweep decision (cron, Task 10). Non-terminal: reap when either side's
+// heartbeat is stale OR the session is older than the 1h cap. Terminal: GC when
+// older than the cap (the client deletes on success; this catches crashed clients).
+export function shouldReap(session, nowMs) {
+  if (!session) return false;
+  if (isTerminal(session.status)) return (nowMs - toMillis(session.updatedAt)) > SESSION_MAX_AGE_MS;
+  const pcStale = isHeartbeatStale(session.pcHeartbeatAt, nowMs);
+  const tbStale = session.tabletHeartbeatAt != null && isHeartbeatStale(session.tabletHeartbeatAt, nowMs);
+  return pcStale || tbStale || (nowMs - toMillis(session.createdAt)) > SESSION_MAX_AGE_MS;
+}
