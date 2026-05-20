@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-20 EOD+1 — Sales+Finance cancelled/finished sub-tabs + Backend Menu D customer-detail/frontend bug fixes (dup header + recall modal flicker, AV98) — ALL LOCAL"
-status: "✅ 3 features + 2 bug-fix rounds shipped LOCAL · Rule Q L1 structural-verified on real prod · awaiting user 'deploy' + L1 hands-on"
+updated_at: "2026-05-20 EOD+2 — test baseline cleanup: 24 pre-existing fails + 26 skips → 0/0 (test-side; 1 behavior-identical SaleTab IIFE hoist) — LOCAL"
+status: "✅ Baseline spotless (13681 pass / 0 fail / 0 skip / build clean) · pushed to origin · awaiting user 'deploy'"
 branch: "master"
-last_commit: "29f139d1 docs(recall-portal-round2): session state — frontend Recall tab fixed (all 6 recall modals portal)"
-tests: "149 NEW GREEN this session · full vitest 13657 PASS / 24 pre-existing FAIL (unrelated baseline) / 25 skip · build clean"
+last_commit: "bfed2c61 test(baseline): clear 24 pre-existing failures + 26 skips → 0 fail / 0 skip"
+tests: "13681 pass / 0 fail / 0 skip · build clean (was 13657 pass / 24 fail / 26 skip)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0511be1e LIVE (V43-followup) — NOTHING from this session deployed yet"
-firestore_rules_version: "unchanged (all this-session work is UI-only — no rules/data ops)"
+production_commit: "0511be1e LIVE (V43-followup) — NOTHING from EOD/EOD+1/EOD+2 deployed yet"
+firestore_rules_version: "unchanged (UI/test/config only — no rules/data ops)"
 storage_rules_version: "unchanged"
 ---
 
@@ -14,26 +14,23 @@ storage_rules_version: "unchanged"
 
 ## State
 
-- master = origin = `29f139d1` (clean, all pushed). ~16 commits this session. Prod still `0511be1e`.
-- Everything this session is UI-only / client-side — no backend, no Firestore rules, no data ops, no BSA change.
-- Full detail: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md`.
+- master = origin = `bfed2c61` (clean, pushed). Prod still `0511be1e` — full session-cluster (EOD/EOD+1/EOD+2) queued for ONE combined deploy.
+- This turn = test-baseline cleanup ONLY (16 files: 14 test + vite.config + 1 behavior-identical SaleTab IIFE hoist). No app flow/logic/wiring/rules/data change. passed count unchanged (13681) → zero regression.
+- Done via /systematic-debugging: each fail/skip root-caused + classified before touching.
 
 ## What this session shipped (all LOCAL, awaiting deploy)
 
-- **Sales cancelled sub-tab** (SaleTab): การขาย / ยกเลิกแล้ว · helper `src/lib/saleSubTabFilter.js` · spec+plan in docs/superpowers.
-- **Finance finished-deposit sub-tab** (DepositPanel): ใช้งานอยู่ (active+partial) / สิ้นสุดแล้ว (used+cancelled+refunded+expired) · scoped dropdown per pill · helper `src/lib/depositSubTabFilter.js`.
-- **Comprehensive cross-wiring test bank** (114 tests): helpers + flow-simulate + source-grep + UI mirrors + cross-wiring routing (TFP auto-sale + Frontend booking-pair, source-grep grounded) + mulberry32 stress + e2e user simulation.
-- **Bug fix #1 — dup header** (new menu, customer detail): BackendDashboard breadcrumbSlot gated controls `menuMode==='classic'` (was unconditional → 2× branch/theme/profile).
-- **Bug fix #2 — recall modal flicker→freeze** (new menu backend + `.admin-frontend-zone` frontend): V86 auto-glow `:hover{transform}` on rounded cards hijacked the `fixed inset-0` recall modals' containing block → portal ALL 6 recall modals (Create/Edit/Outcome/Snooze/LineTemplate/CaseForm) to `document.body`. Round 1 = 4 (backend); Round 2 (Rule P) = +2 missed (frontend). AV98 + group-D completeness test.
-- Reactivity ("ไม่ต้อง refresh"): verified reload-after-action + re-mount-on-nav → no listener needed (user chose verify-first).
+- **24 pre-existing fails → 0**: G2 handleSubmit regex options→submitOpts (V104) · G4 v36 deductStockForSale extractor strips comments (3 real calls pass branchId) · G1 backend-menu-d bloom open-by-default precondition (isSpecificEntityContext V90/V91 + FS3-bis screen-vs-portal + S3 re-open guard, 17 tests) · G3 SaleTab V105 name-cell IIFE hoisted out of JSX (RP1, output-identical) · G5 v81-emulator opt-in gate.
+- **26 skips → 0**: deleted 19 `.skip` tombstones (removed-feature tests; relocated coverage verified) + excluded 7 v81-emulator tests from default run (preserved as real Rule Q backup gate; run via `RUN_V81_EMULATOR=1 npm test`).
+- No checkpoint file (test cleanup, not a feature/phase/V-entry). Detail in SESSION_HANDOFF EOD+2 block.
 
 ## Next action
 
-- Idle — await user "deploy" (Vercel; Firebase rules unchanged) + L1 hands-on.
+- Idle — await user "deploy" (combined `vercel --prod`; rules unchanged) + L1 hands-on for prior EOD/EOD+1 UI work.
 
 ## Outstanding user-triggered actions
 
-- **Deploy** all this-session work — one combined `vercel --prod` (V18: needs explicit "deploy" this turn).
-- **L1 hands-on** (real ~2000px screen — preview is headless 11px): (a) customer detail new menu → ONE branch/theme/profile; (b) Recall modal (backend customer-detail AND Frontend นัดหมาย→Recall) opens centered, no flicker/freeze; (c) sub-tab pills on `tab=sales` + `tab=finance&subtab=deposit`.
-- **24 pre-existing test failures** (backend-menu-d ×4 / audit-branch-scope AV37 / phase-26-0 / rp1 / tf3 / v36 / v81-emulator) — separate cleanup batch; all unrelated.
-- **V106 stock-movement 30-day retention** — brainstorm locked, spec NOT written; awaiting "ship V106".
+- **Deploy** all queued work (EOD sub-tabs + Menu-D fixes + EOD+2 baseline cleanup) — one combined `vercel --prod` (V18: explicit "deploy" this turn).
+- **L1 hands-on** (prior EOD/EOD+1): dup-header gone · recall modal centered/no-flicker (backend + Frontend นัดหมาย→Recall) · sub-tab pills (tab=sales + tab=finance&subtab=deposit).
+- **V106 stock-movement 30-day retention** — brainstorm locked, spec NOT written.
+- Optional: log V-entry for V104 stale-test cleanup + skip-tombstone removal (user can request).

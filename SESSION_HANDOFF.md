@@ -66,10 +66,18 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-20 EOD+1 — Sales+Finance sub-tabs + comprehensive test bank + Backend Menu D bug fixes (dup header + recall modal flicker, AV98, both backend + frontend) — ALL SHIPPED LOCAL (awaiting deploy)
-- **Master**: `29f139d1` (clean, all pushed, ~16 commits this session). **Prod**: `0511be1e` LIVE (V43-followup) — NOTHING from this session deployed yet.
-- **Tests**: 149 NEW GREEN this session · full vitest 13657 PASS / 24 pre-existing FAIL (identical 10-file baseline — backend-menu-d ×4 / audit-branch-scope AV37 / phase-26-0 / rp1 / tf3 / v36 / v81-emulator) / 25 skip · build clean
-- **Deploy**: NONE this session (all UI-only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). Checkpoint: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md`
+- **Date last updated**: 2026-05-20 EOD+2 — test baseline cleanup: 24 pre-existing fails + 26 skips → 0/0 (test-side; 1 behavior-identical SaleTab IIFE hoist) — LOCAL, pushed
+- **Master**: `bfed2c61` (clean, all pushed). **Prod**: `0511be1e` LIVE (V43-followup) — EOD/EOD+1/EOD+2 all queued, NOTHING deployed yet.
+- **Tests**: full vitest **13681 PASS / 0 FAIL / 0 SKIP** · build clean (was 13657 pass / 24 fail / 26 skip — baseline now spotless)
+- **Deploy**: NONE (UI/test/config only, no rules/data). One combined `vercel --prod` pending user "deploy" (V18). EOD+1 checkpoint: `.agents/sessions/2026-05-20-subtabs-finance-recall-portal.md` (EOD+2 = no checkpoint; see session block below)
+
+### Session 2026-05-20 EOD+2 — test baseline cleanup: 24 fails + 26 skips → 0/0 — LOCAL, pushed
+
+`/systematic-debugging` + user "เก็บ" + "แก้ 26 skip". Cleared the whole red+skip baseline. **All test-side except one behavior-identical SaleTab refactor — zero app flow/logic/wiring/rules/data change** (passed 13657→13681 = exactly the 24 ex-fails; no regression). Commit `bfed2c61` (16 files, +115/−247).
+
+- **24 fails → 0** (5 groups): G2 handleSubmit regex `options`→`submitOpts` (V104 rename left 3 tests stale: audit-branch-scope AV37.10 + phase-26-0 G3.4 + tf3 TF3.A.6) · G4 v36 deductStockForSale extractor now strips comments (cancel-recovery comment `// …deductStockForSale (idempotent)…` fooled it; all 3 real calls at SaleTab 857/893/1634 pass branchId) · G1 backend-menu-d 17 tests — bloom is open-by-default + duo-pill toggles (V90/V91); fixed via `isSpecificEntityContext` start-closed in harnesses/setup + FS3-bis `container.querySelector`→`screen.queryByTestId` (overlays portal to body) + S3 re-open guard · G3 SaleTab V105 name-cell IIFE hoisted out of JSX (RP1 anti-IIFE; output byte-identical) · G5 v81-emulator gate flipped to opt-in `RUN_V81_EMULATOR=1`.
+- **26 skips → 0**: deleted 19 `.skip` tombstones for removed features (UI3 MakeFreshModal ×11, BMT1.2-1.4, archiver source-grep ×3, R7 masterdata, AV67.1) — relocated coverage verified live (`branch-make-fresh-selective-*`, `v50-av28`, `v81-fix6-*`, AV67.2/3/4); excluded 7 v81-emulator tests from default `npm test` via vite.config (preserved as real Rule Q V66 backup gate; run `RUN_V81_EMULATOR=1 npm test`).
+- 16 files (14 test + vite.config + SaleTab). No new V-entry logged (offered; user may request). No deploy this turn (V18).
 
 ### Session 2026-05-20 EOD+1 — Backend Menu D customer-detail bug fixes (dup header + recall modal flicker→freeze) — LOCAL, awaiting deploy
 
