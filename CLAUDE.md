@@ -5,20 +5,20 @@
 
 ---
 
-## 📐 PLANS + SPECS = HTML WITH MOCKUP DESIGN (2026-05-19, user directive)
+## 📐 PLANS + SPECS = HTML WITH MOCKUP + FLOW · VISUAL COMPANION FOR DESIGN (2026-05-19 + 2026-05-20, user directive)
 
-**ทุกแพลน + spec ใหม่ = `.html` (ไม่ใช่ `.md`) + ต้องมี `<h2>Mockup Design</h2>` section พร้อมภาพ visual.**
+**ทุกแพลน + spec ใหม่ = `.html` (ไม่ใช่ `.md`) + ต้องมี BOTH `<h2>Mockup Design</h2>` AND `<h2>Flow</h2>` — mockup และ flow เสมอ. แพลนก็เป็น HTML ด้วย ไม่ใช่แค่ spec.**
 
-- `writing-plans` → `docs/superpowers/plans/YYYY-MM-DD-<feature>.html` (HTML template + mockup mandatory)
-- `brainstorming` → `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.html` (Spec HTML Template + mockup mandatory)
-- `executing-plans` / `subagent-driven-development` → read `.html` plan; review Mockup Design first; cross-check tasks vs visual target
-- UI features → HTML+CSS mockup per state (empty / loaded / error / mobile / desktop)
-- Backend / data / migration → SVG flow diagram OR styled boxes for cascade/schema/data-flow
+- `writing-plans` → `docs/superpowers/plans/YYYY-MM-DD-<feature>.html` (HTML template + mockup AND flow mandatory)
+- `brainstorming` → `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.html` (Spec HTML Template + mockup AND flow mandatory) + **Design topic → ดึง Visual Companion มาใช้ตั้งแต่ตอนถาม (auto จากขั้นถาม, ไม่ต้องขอ consent)**
+- `executing-plans` / `subagent-driven-development` → read `.html` plan; review Mockup Design + Flow first; cross-check tasks vs visual target
+- Mockup Design: UI = HTML+CSS mockup per state (empty / loaded / error / mobile / desktop); Backend/data = schema/data-shape boxes
+- Flow: UI = interaction/state-transition flow; Backend/data/migration = SVG/boxes/table showing cascade/data-flow/write-order
 - Legacy `.md` plans (pre-2026-05-19) ยัง read ได้; **ใหม่ทั้งหมด = `.html`**
 
-User directive verbatim: "ต่อไปฝากแก้ทุกสกิลให้เขียนไฟล์แพลนลง HTML แทน .md และใส่ mock up design ลงไปด้วย แล้วอ่านแพลน HTML แทน .md ตลอดไป ทุกสกิล".
+User directives verbatim: (2026-05-19) "ต่อไปฝากแก้ทุกสกิลให้เขียนไฟล์แพลนลง HTML แทน .md และใส่ mock up design ลงไปด้วย แล้วอ่านแพลน HTML แทน .md ตลอดไป ทุกสกิล" · (2026-05-20) "ถ้ามีอะไรเกี่ยวกับการ Design ทำให้ skill brainstorming ดึง Visual Companion มาใช้ตั้งแต่ตอนถามเสมอ" + "ทำให้การเขียน plan เป็น HTML ด้วย ไม่ใช่แค่ SPEC ที่เป็น HTML อย่างเดียว และต้องประกอบด้วย mock up และ flow เสมอ".
 
-Full detail: `~/.claude/CLAUDE.md` § PLANS + SPECS + memory `feedback_plans_html_with_mockup.md`. Skill files updated at `~/.claude/skills/{writing-plans,executing-plans,brainstorming,subagent-driven-development}/SKILL.md`.
+Full detail: `~/.claude/CLAUDE.md` § PLANS + SPECS + memory `feedback_plans_html_with_mockup.md` + `feedback_visual_companion_always_allowed.md`. Skill files updated at `~/.claude/skills/{writing-plans,executing-plans,brainstorming,subagent-driven-development}/SKILL.md`.
 
 ---
 
