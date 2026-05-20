@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Search } from 'lucide-react';
 import { RecallSlotCard } from './RecallSlotCard.jsx';
 import {
@@ -291,7 +292,12 @@ export function RecallCreateModal({
     }
   };
 
-  return (
+  // 2026-05-20 (recall modal flicker→freeze) — portal to document.body so the
+  // fixed overlay escapes any transformed ancestor (V86 auto-glow applies a
+  // hover `transform` to rounded cards in new-menu backend-content; RecallCard's
+  // rounded-xl wrapper would otherwise become this fixed modal's containing
+  // block → confine + hover-feedback flicker). AV98.
+  return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -499,7 +505,8 @@ export function RecallCreateModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

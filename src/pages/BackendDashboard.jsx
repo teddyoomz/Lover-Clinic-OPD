@@ -324,24 +324,31 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
       >
         {linkCopied ? <><Check size={10} className="text-emerald-400" /> คัดลอกแล้ว</> : <><Link2 size={10} /> คัดลอกลิงก์</>}
       </button>
-      {/* V64-fix9 (2026-05-09) — back-to-frontend (admin queue) button. Placed
-          BEFORE BranchSelector so BS-B.1 adjacency test (BranchSelector ↔
-          ProfileDropdown < 600 chars) stays green. */}
-      <button
-        onClick={() => { window.location.href = '/'; }}
-        title="กลับ Frontend (สาขาเดิม)"
-        data-testid="back-to-frontend-desktop"
-        className="hidden lg:flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
-      >
-        <Home size={12} /> Frontend
-      </button>
-      {/* Phase 14.7.H follow-up A — branch selector (auto-hides when <2 branches) */}
-      <BranchSelector className="hidden lg:flex" />
-      {/* Bugfix 2026-05-18 — mode toggle visible in classic mode (no one-way trap).
-          In 'new' mode it's rendered by BackendTopBarNew; here it appears only when classic. */}
-      {menuMode === 'classic' && <div className="hidden lg:block"><BackendMenuModeToggle /></div>}
-      <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
-      <div className="hidden lg:block"><ProfileDropdown /></div>
+      {/* Bugfix 2026-05-20 (dup header in new menu) — in NEW mode
+          BackendTopBarNew already renders Frontend/Branch/Theme/Profile, so
+          render these controls ONLY in classic mode here (matches the
+          non-customer branch below). The breadcrumb above (back / name /
+          copy-link) stays unconditional. Pre-fix these were ungated → 2×
+          BranchSelector + 2× ThemeToggle + 2× ProfileDropdown on customer
+          detail in new mode. */}
+      {menuMode === 'classic' && (
+        <>
+          {/* V64-fix9 (2026-05-09) — back-to-frontend (admin queue) button. */}
+          <button
+            onClick={() => { window.location.href = '/'; }}
+            title="กลับ Frontend (สาขาเดิม)"
+            data-testid="back-to-frontend-desktop"
+            className="hidden lg:flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold bg-[var(--bg-hover)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-emerald-400 hover:border-emerald-700/40 transition-all"
+          >
+            <Home size={12} /> Frontend
+          </button>
+          {/* Phase 14.7.H follow-up A — branch selector (auto-hides when <2 branches) */}
+          <BranchSelector className="hidden lg:flex" />
+          <div className="hidden lg:block"><BackendMenuModeToggle /></div>
+          <div className="hidden lg:block"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
+          <div className="hidden lg:block"><ProfileDropdown /></div>
+        </>
+      )}
     </div>
   ) : (
     // Bugfix 2026-05-18 — only render chrome in classic mode. New mode's

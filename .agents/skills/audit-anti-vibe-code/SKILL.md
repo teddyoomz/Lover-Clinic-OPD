@@ -2346,6 +2346,46 @@ Adding a 3rd exception requires a V-entry + this list extension (Rule P).
 `docs/superpowers/specs/2026-05-19-skip-stock-hide-from-balance-design.html`
 · tests `tests/av97-balance-reader-filter-discipline.test.js`.
 
+### AV98 — Fixed-position modal rendered inside a glow card MUST portal to document.body (2026-05-20)
+
+**Pattern**: the V86 auto-glow (`src/index.css` ~3909-3933) applies
+`transition: transform` + `:hover { transform: translateY(-3px) }` to EVERY
+`rounded-xl`/`rounded-2xl` element inside
+`[data-backend-menu-mode="new"] [data-testid="backend-content"]`. A non-`none`
+`transform` on an element makes it the **containing block** for any
+`position: fixed` descendant. So a `fixed inset-0` modal rendered as a
+DESCENDANT of a rounded card (e.g. RecallCard's `rounded-xl` wrapper) is
+confined to that card's box on hover — and because the full-screen overlay is
+itself the card's descendant, hovering it keeps the card `:hover` true →
+transform → confine → mouse leaves the shrunk modal → transform releases →
+overlay re-expands → re-hover: a self-sustaining flicker → repaint-storm freeze.
+Reported 2026-05-20 (recall modal "in a box" + กระพริบรัวๆ จนค้าง, new menu only).
+
+**Rule**: any `fixed inset-0` modal/overlay that may be rendered as a
+descendant of a glow card (i.e. NOT at page/tab root) MUST `createPortal(...,
+document.body)` so the fixed overlay escapes ANY transformed/filtered ancestor.
+
+**Grep target (regression)**: the 4 recall modals (`RecallCreateModal`,
+`RecallEditModal`, `RecallOutcomeModal`, `RecallSnoozeMenu`) MUST
+`import { createPortal } from 'react-dom'` + `return createPortal(<div
+className="fixed inset-0 ...">, ..., document.body)`.
+
+**Sanctioned exceptions (closed list)**: modals rendered at PAGE/TAB ROOT (not
+inside a rounded card) need not portal — CustomerDetailView's
+AddQty/Exchange/Share/AppointmentList/Timeline modals (rendered at the CDV root
+`</div>`, siblings of the layout), and SaleTab / DepositPanel tab-root modals.
+These have no transformed rounded-card ancestor → safe without portal. Adding a
+new modal INSIDE a glow card requires portal (or this list extension) per Rule P.
+
+**Why not remove the V86 hover-transform instead**: user chose to KEEP the V86
+hover-lift micro-interaction (2026-05-20) → fix at the modal layer (portal), not
+the glow layer. A future modal rendered inside a glow card MUST portal or regress.
+
+**Cross-link**: tests `tests/recall-modal-portal-and-header-dedup.test.js`
+(A portal + B breadcrumb-dedup + C this invariant). Companion fix: BackendDashboard
+viewing-customer breadcrumbSlot controls gated `menuMode === 'classic'`
+(duplicate-header bug, same commit).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.

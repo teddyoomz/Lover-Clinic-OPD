@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, Clock, MessageSquare, PhoneOff, Archive } from 'lucide-react';
 import { recordRecallOutcome } from '../../../lib/scopedDataLayer.js';
 
@@ -131,7 +132,10 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
   // flagged for manual review).
   const showCloseOption = !!recall?.requiresManualReview || (recall?.noAnswerCount || 0) >= 3;
 
-  return (
+  // 2026-05-20 (recall modal flicker→freeze) — portal to document.body so the
+  // fixed overlay escapes any transformed ancestor (V86 hover-transform on
+  // rounded cards in new-menu backend-content). AV98.
+  return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -279,7 +283,8 @@ export function RecallOutcomeModal({ recall, onClose, onSaved, onReschedule }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -133,7 +133,12 @@ describe('Bug B fix — Mode toggle accessible in classic mode (no one-way trap)
 
   it('B2.2 BackendMenuModeToggle conditionally rendered in classic mode (return-path)', () => {
     const src = readFileSync('src/pages/BackendDashboard.jsx', 'utf-8');
-    expect(src).toMatch(/menuMode\s*===\s*'classic'[\s\S]{0,200}<BackendMenuModeToggle/);
+    // 2026-05-20 (dup-header fix) — the viewing-customer branch now gates the
+    // WHOLE control group (Frontend/Branch/Toggle/Theme/Profile) behind one
+    // `menuMode === 'classic' && (` opener, so the toggle sits farther from the
+    // gate than the pre-fix inline `{classic && <Toggle/>}` (~450 chars). Window
+    // widened 200 → 900; intent unchanged (toggle is classic-gated).
+    expect(src).toMatch(/menuMode\s*===\s*'classic'[\s\S]{0,900}<BackendMenuModeToggle/);
   });
 
   it('B2.3 BackendMenuModeToggle gated by menuMode === classic in BOTH breadcrumbSlot branches', () => {
@@ -145,6 +150,12 @@ describe('Bug B fix — Mode toggle accessible in classic mode (no one-way trap)
 
   it('B2.4 fix marker comment present', () => {
     const src = readFileSync('src/pages/BackendDashboard.jsx', 'utf-8');
-    expect(src).toMatch(/Bugfix 2026-05-18[\s\S]{0,200}toggle/i);
+    // 2026-05-20 — the 2026-05-18 "mode toggle visible in classic mode" inline
+    // comment was superseded by the dup-header fix, which gates the whole
+    // control group (incl. the toggle) behind menuMode === 'classic'. The
+    // current marker documents that grouping. Either marker satisfies intent
+    // ("a fix comment explains the classic-only control gating").
+    expect(src).toMatch(/Bugfix 2026-05-(18|20)/);
+    expect(src).toMatch(/Bugfix 2026-05-20 \(dup header in new menu\)/);
   });
 });

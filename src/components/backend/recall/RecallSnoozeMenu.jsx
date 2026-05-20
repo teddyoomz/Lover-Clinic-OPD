@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Clock } from 'lucide-react';
 import DateField from '../../DateField.jsx';
 import { snoozeRecall } from '../../../lib/scopedDataLayer.js';
@@ -67,7 +68,10 @@ export function RecallSnoozeMenu({ recall, initialDate, onClose, onSnoozed }) {
     }
   };
 
-  return (
+  // 2026-05-20 (recall modal flicker→freeze) — portal to document.body so the
+  // fixed overlay escapes any transformed ancestor (V86 hover-transform on
+  // rounded cards in new-menu backend-content). AV98.
+  return createPortal(
     // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
     <div
       className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
@@ -171,7 +175,8 @@ export function RecallSnoozeMenu({ recall, initialDate, onClose, onSnoozed }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
