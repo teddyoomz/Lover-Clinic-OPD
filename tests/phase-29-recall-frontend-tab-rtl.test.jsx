@@ -162,7 +162,7 @@ describe('Phase 29 · F4 RecallTogglePill', () => {
     const onClick = vi.fn();
     render(<RecallTogglePill active={false} onClick={onClick} />);
     expect(screen.getByTestId('appt-view-toggle-recall')).toBeInTheDocument();
-    expect(screen.getByText(/Recall/)).toBeInTheDocument();
+    expect(screen.getByText(/Recall วันนี้/)).toBeInTheDocument();
     await user.click(screen.getByTestId('appt-view-toggle-recall'));
     expect(onClick).toHaveBeenCalled();
   });

@@ -48,7 +48,7 @@ export function RecallTogglePill({ active, onClick }) {
           : 'bg-[var(--bg-hover)] border-[var(--bd)] text-[var(--tx-muted)] hover:text-red-400'
       }`}
     >
-      🔔 Recall
+      🔔 Recall วันนี้
       {count > 0 && (
         <span
           className={`ml-0.5 px-1.5 py-0 rounded-full text-[10px] font-bold ${
