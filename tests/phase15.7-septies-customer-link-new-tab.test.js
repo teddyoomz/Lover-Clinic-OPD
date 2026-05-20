@@ -115,8 +115,10 @@ describe('Phase 15.7-septies — customer link opens new browser tab', () => {
       // <a> inside <button> is invalid HTML5. The cell must now be <div role="button">
       // to allow the nested <a> for the customer name.
       // Search for a div with role="button" + tabIndex={0} + onKeyDown handler.
-      expect(TabSrc).toMatch(/role="button"\s+tabIndex=\{0\}\s+onClick=\{\(\)\s*=>\s*openEdit\(appt\)\}/);
-      expect(TabSrc).toMatch(/onKeyDown=\{[\s\S]{0,200}openEdit\(appt\)/);
+      // Calendar-density (2026-05-20) — block click now opens the read-only
+      // detail popover (openDetail); แก้ไข inside it routes to the edit modal.
+      expect(TabSrc).toMatch(/role="button"\s+tabIndex=\{0\}\s+onClick=\{\(\)\s*=>\s*openDetail\(appt\)\}/);
+      expect(TabSrc).toMatch(/onKeyDown=\{[\s\S]{0,200}openDetail\(appt\)/);
     });
 
     it('SE2.5 grid cell falls back to non-link <span> when appt.customerId is empty', () => {

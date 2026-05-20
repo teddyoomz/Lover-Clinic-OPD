@@ -15,26 +15,37 @@ import { readFileSync } from 'node:fs';
 
 const ACV = readFileSync('src/components/backend/AppointmentCalendarView.jsx', 'utf8');
 const DP  = readFileSync('src/components/backend/DepositPanel.jsx', 'utf8');
+// Calendar-density (2026-05-20) — STATUSES palette moved to this shared lib
+// module (APPT_STATUSES, single source / Rule of 3); the grid imports it.
+const ADJS = readFileSync('src/lib/appointmentDisplay.js', 'utf8');
 
 describe('Phase 21.0-quinquies — Calendar grid visual polish', () => {
   test('Q1 SLOT_H bumped to 22 (was 18) for breathing room', () => {
     expect(ACV).toMatch(/const SLOT_H = 22;/);
   });
 
-  test('Q2 STATUSES array exposes per-status `accent` color (4px left-border)', () => {
-    // Each of the 4 statuses must have an `accent: 'rgb(...)'` field.
-    expect(ACV).toMatch(/value:\s*['"]pending['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
-    expect(ACV).toMatch(/value:\s*['"]confirmed['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
-    expect(ACV).toMatch(/value:\s*['"]done['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
-    expect(ACV).toMatch(/value:\s*['"]cancelled['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
+  test('Q2 STATUSES palette exposes per-status `accent` color (4px left-border)', () => {
+    // Calendar-density (2026-05-20) — palette moved to APPT_STATUSES in the
+    // shared lib (single source); the grid imports it as STATUSES.
+    expect(ACV).toMatch(/import \{[^}]*APPT_STATUSES[^}]*\} from '\.\.\/\.\.\/lib\/appointmentDisplay\.js'/);
+    expect(ACV).toMatch(/const STATUSES = APPT_STATUSES;/);
+    // Each of the 4 statuses must still carry an `accent: 'rgb(...)'` field.
+    expect(ADJS).toMatch(/value:\s*['"]pending['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
+    expect(ADJS).toMatch(/value:\s*['"]confirmed['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
+    expect(ADJS).toMatch(/value:\s*['"]done['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
+    expect(ADJS).toMatch(/value:\s*['"]cancelled['"][\s\S]{0,200}?accent:\s*['"]rgb\(/);
   });
 
   test('Q3 appointment block applies 4px status-accent left border', () => {
     expect(ACV).toMatch(/borderLeft:\s*`4px solid \$\{st\.accent\}`/);
   });
 
-  test('Q4 customer name uses text-sm font-bold leading-tight (legibility)', () => {
-    expect(ACV).toMatch(/text-sm font-bold text-\[var\(--tx-heading\)\] leading-tight/);
+  test('Q4 customer name uses text-sm font-bold for normal blocks (span-gated legibility)', () => {
+    // Calendar-density (2026-05-20) — name size is span-gated via nameSizeCls
+    // (span=1 → text-[11px] single-line; span>=2 → text-sm). Legibility for
+    // normal/long blocks is preserved through the text-sm branch.
+    expect(ACV).toMatch(/const nameSizeCls = isShortBlock \? 'text-\[11px\] leading-\[18px\]' : 'text-sm leading-tight'/);
+    expect(ACV).toMatch(/\$\{nameSizeCls\} font-bold text-\[var\(--tx-heading\)\]/);
   });
 
   test('Q5 AppointmentSlotMeta exposes purpose chip with 🎯 emoji + data-testid', () => {
