@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Calendar Density &amp; Mobile — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Calendar Density &amp; Mobile — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> implement task-by-task. Spec: <code>docs/superpowers/specs/2026-05-20-appt-calendar-density-design.html</code>. Decisions: Q1=A click→popover(+แก้ไข), Q2=A auto-agenda below <code>lg</code> + toggle, Q3=A agenda chronological+room-tag. Root cause: block height = <code>span × SLOT_H − 4</code> (15-min = 18px). Do NOT bump SLOT_H.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> See full appointment details at any density + mobile-friendly, via 3 layers: tap→detail popover (A), adaptive span=1 cell + "+N" rollup (B), mobile auto-agenda + toggle (C).</p>
+  <p><strong>Architecture:</strong> One shared display helper feeds a new read-only Popover + a new Agenda view; the existing grid block opens the popover (not the edit modal directly) and renders span=1 as a clean single line; a responsive switch defaults to agenda below <code>lg</code>. Reuse existing <code>STATUSES</code>, <code>doctorMap</code>, <code>resolveAssistantNames</code>, <code>PhoneLink</code>, <code>CustomerOption</code>, <code>AppointmentLineBadge</code>, and the existing edit modal.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Tailwind (CSS-var theme), <code>createPortal</code>, Vitest + RTL.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">A popover (DARK) + B adaptive cell + "+N"</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;background:#0a0a0a;padding:12px;border-radius:8px;">
+    <div style="background:#141414;border:1px solid #38bdf8;border-radius:10px;padding:10px 12px;width:240px;font-family:sans-serif;">
+      <div style="color:#fff;font-weight:700;">นาย วีรวัศ รจิราเกียรติ</div>
+      <div style="color:#9ca3af;font-size:13px;">HN-26-0042 · 17:00–17:15 · ห้องแพทย์</div>
+      <div style="font-size:13px;">📞 <span style="color:#f87171;font-weight:700;">081-234-5678</span></div>
+      <div style="font-size:13px;color:#6ee7b7;">🎯 Shock wave</div>
+      <div style="font-size:13px;color:#cbd5e1;">👨‍⚕️ หมอมายด์ · + ยาหยี</div>
+      <div style="margin-top:6px;"><span style="background:#dc2626;color:#fff;font-size:12px;font-weight:700;padding:3px 12px;border-radius:6px;">✎ แก้ไข</span></div>
+    </div>
+    <div style="background:#050505;border:1px solid #222;border-radius:6px;width:180px;font-family:sans-serif;">
+      <div style="color:#38bdf8;font-size:11px;font-weight:700;text-align:center;padding:5px;border-bottom:1px solid #222;">ห้องแพทย์</div>
+      <div style="display:flex;border-top:1px solid #1c1c1c;"><span style="width:40px;font-size:10px;color:#6b7280;font-family:monospace;padding:3px;">17:00</span><span style="flex:1;padding:2px;"><span style="display:flex;align-items:center;gap:5px;height:18px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.5);color:#7dd3fc;border-radius:5px;padding:0 6px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#38bdf8;"></span>วีรวัศ ร.</span></span></div>
+      <div style="display:flex;border-top:1px solid #1c1c1c;"><span style="width:40px;font-size:10px;color:#6b7280;font-family:monospace;padding:3px;">17:15</span><span style="flex:1;padding:2px;"><span style="display:block;font-size:10px;color:#9ca3af;text-align:center;padding:2px;border:1px dashed #333;border-radius:5px;">+3 รายการ</span></span></div>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">C mobile Agenda (chronological + room tag) + toggle ⊞</div>
+  <div style="width:230px;background:#050505;border:1px solid #333;border-radius:16px;padding:10px;font-family:sans-serif;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#fff;font-weight:800;font-size:13px;">นัดวันนี้ · 13 คน</span><span style="font-size:10px;color:#9ca3af;border:1px solid #333;border-radius:6px;padding:2px 6px;">⊞ ตาราง</span></div>
+    <div style="background:#141414;border:1px solid #333;border-left:3px solid #38bdf8;border-radius:9px;padding:8px 10px;">
+      <div style="font-family:monospace;font-size:11px;color:#9ca3af;">17:00–17:15 <span style="background:#1f2937;color:#7dd3fc;border-radius:4px;padding:1px 5px;font-size:9px;">ห้องแพทย์</span></div>
+      <div style="color:#fff;font-weight:700;font-size:13px;">นาย วีรวัศ รจิราเกียรติ</div>
+      <div style="color:#6ee7b7;font-size:12px;">🎯 Shock wave</div>
+      <div style="font-size:11px;color:#9ca3af;">👨‍⚕️ หมอมายด์ · 📞 <span style="color:#f87171;">081-…</span> · ● ยืนยัน</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">interaction + responsive + adaptive-cell</div>
+  <svg viewBox="0 0 920 180" style="width:100%;height:auto;font-family:sans-serif;">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"/></marker></defs>
+    <g font-size="10.5" text-anchor="middle">
+      <text x="8" y="14" text-anchor="start" font-weight="bold" font-size="11">Interaction (A)</text>
+      <rect x="6" y="22" width="120" height="38" rx="6" fill="#fff" stroke="#999"/><text x="66" y="38">tap block</text><text x="66" y="52" font-size="9">(any height)</text>
+      <rect x="158" y="18" width="150" height="46" rx="6" fill="#eff6ff" stroke="#3b82f6"/><text x="233" y="36">DetailPopover</text><text x="233" y="50" font-size="9">read-only + 📞 + แก้ไข/ปิด</text>
+      <rect x="342" y="14" width="130" height="24" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="407" y="30">แก้ไข → edit modal</text>
+      <rect x="342" y="44" width="130" height="24" rx="6" fill="#f0fdf4" stroke="#10b981"/><text x="407" y="60">📞 tel: tap-to-call</text>
+      <line x1="126" y1="40" x2="156" y2="40" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="308" y1="36" x2="340" y2="28" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="308" y1="44" x2="340" y2="54" stroke="#10b981" marker-end="url(#ar)"/>
+
+      <text x="8" y="100" text-anchor="start" font-weight="bold" font-size="11">Responsive (C) + Adaptive cell (B)</text>
+      <rect x="6" y="110" width="140" height="38" rx="6" fill="#fff" stroke="#999"/><text x="76" y="126">useIsBelowLg + viewMode</text><text x="76" y="140" font-size="9">(toggle overrides)</text>
+      <rect x="178" y="104" width="130" height="22" rx="5" fill="#fef2f2" stroke="#dc2626"/><text x="243" y="119">&lt; lg → AgendaView</text>
+      <rect x="178" y="132" width="130" height="22" rx="5" fill="#eff6ff" stroke="#3b82f6"/><text x="243" y="147">≥ lg → Grid</text>
+      <line x1="146" y1="124" x2="176" y2="116" stroke="#dc2626" marker-end="url(#ar)"/>
+      <line x1="146" y1="134" x2="176" y2="143" stroke="#dc2626" marker-end="url(#ar)"/>
+      <rect x="346" y="104" width="150" height="22" rx="5" fill="#f0fdf4" stroke="#10b981"/><text x="421" y="119">span≥2: existing tiers</text>
+      <rect x="346" y="132" width="150" height="22" rx="5" fill="#fffbeb" stroke="#f59e0b"/><text x="421" y="147">span=1: single clean line</text>
+      <rect x="516" y="118" width="150" height="24" rx="6" fill="#fef2f2" stroke="#dc2626"/><text x="591" y="134">dupCount → "+N" → popover-list</text>
+      <line x1="496" y1="143" x2="514" y2="135" stroke="#dc2626" marker-end="url(#ar)"/>
+    </g>
+  </svg>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/appointmentDisplay.js</code> (NEW)</td><td>Pure display helpers shared by popover + agenda + (optionally) cell: <code>getApptStatusMeta</code>, <code>apptDisplayName</code>, <code>apptPhoneValue</code>, <code>apptTimeRange</code>. No React, no Firestore.</td></tr>
+  <tr><td><code>src/components/backend/AppointmentDetailPopover.jsx</code> (NEW)</td><td>Read-only quick-view (portal). Props: <code>appt</code>, <code>roomName</code>, <code>doctorMap</code>, <code>onEdit</code>, <code>onClose</code>. Renders name/HN/📞/service/doctor/assistant/status + แก้ไข/ปิด.</td></tr>
+  <tr><td><code>src/components/backend/AppointmentAgendaView.jsx</code> (NEW)</td><td>Chronological full-detail cards (room tag), card click → <code>onSelect(appt)</code>.</td></tr>
+  <tr><td><code>src/hooks/useIsBelowLg.js</code> (NEW)</td><td>Tiny <code>matchMedia('(max-width: 1023px)')</code> hook for the responsive switch.</td></tr>
+  <tr><td><code>src/components/backend/AppointmentCalendarView.jsx</code> (modify)</td><td>Block onClick → open popover (not edit). span=1 single-line render. "+N" rollup. viewMode state + responsive switch + toggle + render AgendaView.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: appointmentDisplay shared helpers</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/appointmentDisplay.js</code> · Test <code>tests/appointment-display-helpers.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code class="language-js">import { getApptStatusMeta, apptDisplayName, apptPhoneValue, apptTimeRange } from '../src/lib/appointmentDisplay.js';
+test('status meta resolves + falls back to first', () => {
+  expect(getApptStatusMeta('confirmed').label).toBeTruthy();
+  expect(getApptStatusMeta('???')).toEqual(getApptStatusMeta(undefined)); // fallback
+});
+test('display name falls back name→nameTemp→-', () => {
+  expect(apptDisplayName({ customerName: 'A' })).toBe('A');
+  expect(apptDisplayName({ customerNameTemp: 'T' })).toBe('T');
+  expect(apptDisplayName({})).toBe('-');
+});
+test('phone value prefers customer phone then temp', () => {
+  expect(apptPhoneValue({ customerPhone: '081', customerPhoneTemp: '099' })).toBe('081');
+  expect(apptPhoneValue({ customerPhoneTemp: '099' })).toBe('099');
+  expect(apptPhoneValue({})).toBe('');
+});
+test('time range', () => {
+  expect(apptTimeRange({ startTime: '17:00', endTime: '17:15' })).toBe('17:00–17:15');
+  expect(apptTimeRange({ startTime: '17:00' })).toBe('17:00');
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Implement</strong></label></div>
+<pre><code class="language-js">// Status palette mirrors AppointmentCalendarView STATUSES (single source — import
+// from a shared const if extracted; else duplicate the 5 entries here and have the
+// grid import from this module). Keep value/label/bg/text/dot/accent shape.
+export const APPT_STATUSES = [
+  { value: 'pending',   label: 'รอยืนยัน', bg: 'bg-amber-500/20',   text: 'text-amber-400',   dot: 'bg-amber-400',   accent: 'rgb(251 191 36)' },
+  { value: 'confirmed', label: 'ยืนยันแล้ว', bg: 'bg-sky-500/20',     text: 'text-sky-400',     dot: 'bg-sky-400',     accent: 'rgb(56 189 248)' },
+  { value: 'arrived',   label: 'มาแล้ว',   bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400', accent: 'rgb(52 211 153)' },
+  { value: 'done',      label: 'เสร็จ',    bg: 'bg-emerald-600/25', text: 'text-emerald-300', dot: 'bg-emerald-300', accent: 'rgb(16 185 129)' },
+  { value: 'cancelled', label: 'ยกเลิก',   bg: 'bg-red-500/20',     text: 'text-red-400',     dot: 'bg-red-400',     accent: 'rgb(248 113 113)' },
+];
+export function getApptStatusMeta(status) {
+  return APPT_STATUSES.find(s => s.value === status) || APPT_STATUSES[0];
+}
+export function apptDisplayName(appt) {
+  return (appt &amp;&amp; (appt.customerName || appt.customerNameTemp)) || '-';
+}
+export function apptPhoneValue(appt) {
+  if (!appt) return '';
+  return appt.customerPhone || appt.customerPhoneTemp || '';
+}
+export function apptTimeRange(appt) {
+  if (!appt || !appt.startTime) return '';
+  return appt.endTime ? `${appt.startTime}–${appt.endTime}` : appt.startTime;
+}</code></pre>
+  <p><strong>NOTE:</strong> verify the real status values/labels in <code>AppointmentCalendarView.jsx</code> <code>STATUSES</code> (lines ~100–111) and copy them EXACTLY. If they differ from the sample above, use the real ones. Prefer importing <code>APPT_STATUSES</code> back into the grid to keep one source (Rule of 3).</p>
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Run + commit</strong></label></div>
+<pre><code class="language-bash">npx vitest run tests/appointment-display-helpers.test.js
+git add src/lib/appointmentDisplay.js tests/appointment-display-helpers.test.js
+git commit -m "feat(appt): shared appointment display helpers"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: AppointmentDetailPopover (read-only quick view)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/AppointmentDetailPopover.jsx</code> · Test <code>tests/appointment-detail-popover-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Component (createPortal, ESC + ปิด close; แก้ไข → onEdit; 📞 tel: link; name/HN non-red)</strong></label></div>
+<pre><code class="language-jsx">import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Pencil } from 'lucide-react';
+import { getApptStatusMeta, apptDisplayName, apptPhoneValue, apptTimeRange } from '../../lib/appointmentDisplay.js';
+import { resolveAssistantNames } from '../../lib/...; // reuse the SAME helper the grid uses
+
+export function AppointmentDetailPopover({ appt, roomName, doctorMap, onEdit, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  if (!appt) return null;
+  const st = getApptStatusMeta(appt.status);
+  const phone = apptPhoneValue(appt);
+  const phoneDigits = phone.replace(/[^0-9+]/g, '');
+  const assistants = resolveAssistantNames(appt, doctorMap);
+  return createPortal(
+    // AV78: backdrop click does NOT close — only ปิด / X / ESC
+    &lt;div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 bg-black/50 backdrop-blur-sm" data-testid="appt-detail-popover"&gt;
+      &lt;div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--bd)] shadow-2xl p-4" onClick={(e)=&gt;e.stopPropagation()}&gt;
+        &lt;div className="flex items-start justify-between gap-2"&gt;
+          &lt;div className="text-base font-bold text-[var(--tx-heading)]" data-testid="appt-detail-name"&gt;{apptDisplayName(appt)}&lt;/div&gt;
+          &lt;button onClick={onClose} data-testid="appt-detail-close" className="w-7 h-7 rounded-lg hover:bg-[var(--bg-hover)] flex items-center justify-center text-[var(--tx-muted)]"&gt;&lt;X size={14}/&gt;&lt;/button&gt;
+        &lt;/div&gt;
+        &lt;div className="text-xs text-[var(--tx-muted)] mt-0.5"&gt;{appt.customerHN ? `${appt.customerHN} · ` : ''}{apptTimeRange(appt)}{roomName ? ` · ${roomName}` : ''}&lt;/div&gt;
+        {phoneDigits &amp;&amp; (
+          &lt;a href={`tel:${phoneDigits}`} data-testid="appt-detail-phone" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-red-600 dark:text-red-300"&gt;📞 {phone}&lt;/a&gt;
+        )}
+        {appt.appointmentTo &amp;&amp; &lt;div className="mt-1 text-sm text-emerald-600 dark:text-emerald-300" data-testid="appt-detail-service"&gt;🎯 {appt.appointmentTo}&lt;/div&gt;}
+        &lt;div className="mt-1 text-xs text-[var(--tx-muted)]"&gt;👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}{assistants.length ? ` · + ${assistants.join(', ')}` : ''}&lt;/div&gt;
+        &lt;div className="mt-2"&gt;&lt;span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`}&gt;● {st.label}&lt;/span&gt;&lt;/div&gt;
+        &lt;div className="mt-3 flex justify-end gap-2"&gt;
+          &lt;button onClick={onClose} className="px-3 py-2 rounded-lg text-xs text-[var(--tx-muted)] hover:bg-[var(--bg-hover)]"&gt;ปิด&lt;/button&gt;
+          &lt;button onClick={onEdit} data-testid="appt-detail-edit" className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-500 inline-flex items-center gap-1"&gt;&lt;Pencil size={12}/&gt; แก้ไข&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;,
+    document.body
+  );
+}
+export default AppointmentDetailPopover;</code></pre>
+  <p><strong>NOTE:</strong> find the real import path of <code>resolveAssistantNames</code> (used by <code>AppointmentSlotMeta</code> in the calendar — grep it) and reuse it. Do not duplicate.</p>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: RTL tests</strong></label></div>
+<pre><code class="language-jsx">// render with a fixture appt → assert name/HN/time, tel: href (digits stripped),
+// service, status; click แก้ไข → onEdit called; click ปิด/ESC → onClose called;
+// name element className NOT /text-red/ (Thai-culture).</code></pre>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build &amp;&amp; npx vitest run tests/appointment-detail-popover-rtl.test.jsx
+git add src/components/backend/AppointmentDetailPopover.jsx tests/appointment-detail-popover-rtl.test.jsx
+git commit -m "feat(appt): read-only AppointmentDetailPopover"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Wire popover into the grid (block click → popover; แก้ไข → edit)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentCalendarView.jsx</code> (block onClick ~923; dupe pill onClick ~1028; add state + render) · Test source-grep in <code>tests/appt-calendar-density.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add detail-popover state + handler near the editing state</strong></label></div>
+<pre><code class="language-jsx">const [detailAppt, setDetailAppt] = useState(null);
+const openDetail = useCallback((appt) =&gt; setDetailAppt(appt), []);</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Block onClick → openDetail (line ~923 + keydown ~924). Replace openEdit(appt) with openDetail(appt).</strong></label></div>
+<pre><code class="language-jsx">onClick={() =&gt; openDetail(appt)}
+onKeyDown={(e) =&gt; { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(appt); } }}</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Render the popover (near the edit modal render). Pass roomName + doctorMap + onEdit→openEdit.</strong></label></div>
+<pre><code class="language-jsx">{detailAppt &amp;&amp; (
+  &lt;AppointmentDetailPopover
+    appt={detailAppt}
+    roomName={detailAppt.room || detailAppt.examRoom || ''}
+    doctorMap={doctorMap}
+    onEdit={() =&gt; { const a = detailAppt; setDetailAppt(null); openEdit(a); }}
+    onClose={() =&gt; setDetailAppt(null)}
+  /&gt;
+)}</code></pre>
+  <p><strong>NOTE:</strong> confirm the room field name on the appt object (grep the apptMap build — it keys by <code>room</code>). Use the same field for <code>roomName</code>.</p>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: source-grep test + build + commit</strong></label></div>
+<pre><code class="language-js">// assert: block onClick references openDetail (NOT openEdit); AppointmentDetailPopover imported + rendered; openEdit still reachable via popover onEdit.</code></pre>
+<pre><code class="language-bash">npm run build &amp;&amp; npx vitest run tests/appt-calendar-density.test.jsx
+git add src/components/backend/AppointmentCalendarView.jsx tests/appt-calendar-density.test.jsx
+git commit -m "feat(appt): grid block click opens detail popover (แก้ไข → edit modal)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: B — adaptive span=1 single-line cell + "+N" rollup</h3>
+  <p><strong>Files:</strong> Modify <code>AppointmentCalendarView.jsx</code> block render (~920–1037) · Test in <code>tests/appt-calendar-density.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: For span=1, render a tight single line that fits 18px without overlap.</strong></label></div>
+  <p>Make the block content density depend on span. For <code>span === 1</code>: reduce padding (<code>py-0</code>) + name to <code>text-[11px] leading-[18px]</code> + keep the status dot + append a small service color sliver; suppress the LINE-badge wrapper. For <code>span ≥ 2</code>: keep current <code>text-sm</code> + <code>AppointmentSlotMeta</code> tiers. Concretely, gate the name font + the block padding on span:</p>
+<pre><code class="language-jsx">// block className: swap "px-2 py-1" → `px-2 ${span === 1 ? 'py-0' : 'py-1'}`
+// name className: `${span === 1 ? 'text-[11px] leading-[18px]' : 'text-sm leading-tight'} font-bold text-[var(--tx-heading)] truncate ...`
+// (CustomerOption renders the name text; pass a sizeClass prop OR wrap so span=1 uses the tighter size.)</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: "+N" rollup — keep the existing <code>+{dupCount}</code> badge (line ~1003) but make the dupe list (lines ~1020–1037) open via the popover instead of stacked pills when the cell is short.</strong></label></div>
+  <p>Minimal change: the existing dupe pills already call <code>openEdit(dup)</code>; switch them to <code>openDetail(dup)</code> so the rollup is consistent with Task 3 (tap → popover). Keep the <code>+N</code> badge as the at-a-glance count.</p>
+<pre><code class="language-jsx">onClick={(e) =&gt; { e.stopPropagation(); openDetail(dup); }}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: tests (span=1 single-line render shape; dupe → openDetail) + build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build &amp;&amp; npx vitest run tests/appt-calendar-density.test.jsx
+git add src/components/backend/AppointmentCalendarView.jsx tests/appt-calendar-density.test.jsx
+git commit -m "feat(appt): span=1 single-line cell + +N rollup via popover"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: AppointmentAgendaView (chronological cards + room tag)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/backend/AppointmentAgendaView.jsx</code> · Test <code>tests/appointment-agenda-view-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Component — sort appts by startTime; full-detail card; room tag; card click → onSelect(appt).</strong></label></div>
+<pre><code class="language-jsx">import React, { useMemo } from 'react';
+import { getApptStatusMeta, apptDisplayName, apptPhoneValue, apptTimeRange } from '../../lib/appointmentDisplay.js';
+
+export function AppointmentAgendaView({ appts, onSelect }) {
+  const sorted = useMemo(() =&gt; [...(appts || [])].sort((a, b) =&gt; String(a.startTime||'').localeCompare(String(b.startTime||''))), [appts]);
+  if (!sorted.length) return &lt;div data-testid="appt-agenda-empty" className="py-8 text-center text-xs text-[var(--tx-muted)]"&gt;ไม่มีนัดหมายในวันนี้&lt;/div&gt;;
+  return (
+    &lt;div data-testid="appt-agenda-view" className="flex flex-col gap-2 p-2"&gt;
+      {sorted.map((appt) =&gt; {
+        const st = getApptStatusMeta(appt.status);
+        const phone = apptPhoneValue(appt); const digits = phone.replace(/[^0-9+]/g,'');
+        return (
+          &lt;button key={appt.appointmentId || appt.id} type="button" onClick={() =&gt; onSelect?.(appt)}
+            data-testid={`appt-agenda-card-${appt.appointmentId || appt.id}`}
+            className="text-left rounded-xl bg-[var(--bg-input)] border border-[var(--bd-strong)] border-l-[3px] p-3 hover:shadow-lg"
+            style={{ borderLeftColor: st.accent }}&gt;
+            &lt;div className="flex items-center gap-2 text-[11px] font-mono text-[var(--tx-muted)]"&gt;
+              &lt;span&gt;{apptTimeRange(appt)}&lt;/span&gt;
+              {(appt.room || appt.examRoom) &amp;&amp; &lt;span className="px-1.5 py-0.5 rounded bg-[var(--bg-hover)] text-sky-400 text-[9px]"&gt;{appt.room || appt.examRoom}&lt;/span&gt;}
+              &lt;span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`}&gt;● {st.label}&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div className="text-sm font-bold text-[var(--tx-heading)] mt-0.5"&gt;{apptDisplayName(appt)}{appt.customerHN ? &lt;span className="ml-1.5 text-[10px] font-normal text-[var(--tx-muted)]"&gt;{appt.customerHN}&lt;/span&gt; : null}&lt;/div&gt;
+            {appt.appointmentTo &amp;&amp; &lt;div className="text-xs text-emerald-600 dark:text-emerald-300"&gt;🎯 {appt.appointmentTo}&lt;/div&gt;}
+            &lt;div className="text-[11px] text-[var(--tx-muted)] mt-0.5"&gt;👨‍⚕️ {appt.doctorName || 'ไม่ระบุแพทย์'}{digits ? ' · 📞 ' : ''}{digits &amp;&amp; &lt;a href={`tel:${digits}`} onClick={(e)=&gt;e.stopPropagation()} className="text-red-600 dark:text-red-300 font-bold"&gt;{phone}&lt;/a&gt;}&lt;/div&gt;
+          &lt;/button&gt;
+        );
+      })}
+    &lt;/div&gt;
+  );
+}
+export default AppointmentAgendaView;</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: RTL tests</strong></label></div>
+<pre><code class="language-jsx">// fixture of 3 appts (out of order) → assert chronological order, room tag,
+// name/HN/service/doctor/tel: render; click card → onSelect(appt); empty → empty state;
+// name NOT /text-red/.</code></pre>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build &amp;&amp; npx vitest run tests/appointment-agenda-view-rtl.test.jsx
+git add src/components/backend/AppointmentAgendaView.jsx tests/appointment-agenda-view-rtl.test.jsx
+git commit -m "feat(appt): AppointmentAgendaView chronological cards"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Responsive switch (auto-agenda below lg + toggle) + agenda data feed</h3>
+  <p><strong>Files:</strong> Create <code>src/hooks/useIsBelowLg.js</code> · Modify <code>AppointmentCalendarView.jsx</code> (viewMode + render switch + toggle, feed AgendaView from the same day's appt list) · Test <code>tests/appt-calendar-density.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: useIsBelowLg hook</strong></label></div>
+<pre><code class="language-js">import { useState, useEffect } from 'react';
+export function useIsBelowLg() {
+  const q = '(max-width: 1023px)';
+  const [below, setBelow] = useState(() =&gt; typeof window !== 'undefined' &amp;&amp; window.matchMedia ? window.matchMedia(q).matches : false);
+  useEffect(() =&gt; {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(q);
+    const on = () =&gt; setBelow(mq.matches);
+    mq.addEventListener ? mq.addEventListener('change', on) : mq.addListener(on);
+    return () =&gt; { mq.removeEventListener ? mq.removeEventListener('change', on) : mq.removeListener(on); };
+  }, []);
+  return below;
+}
+export default useIsBelowLg;</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: viewMode state — null = auto (follow viewport); 'grid' / 'agenda' = explicit toggle override.</strong></label></div>
+<pre><code class="language-jsx">const belowLg = useIsBelowLg();
+const [viewModeOverride, setViewModeOverride] = useState(null); // null | 'grid' | 'agenda'
+const effectiveView = viewModeOverride || (belowLg ? 'agenda' : 'grid');
+// the day's appointments already exist for the grid; reuse that list (e.g. dayAppts).
+// Add a toggle button near the date controls:
+// &lt;button onClick={() =&gt; setViewModeOverride(effectiveView === 'grid' ? 'agenda' : 'grid')} data-testid="appt-view-toggle"&gt;
+//   {effectiveView === 'grid' ? '☰ ลิสต์' : '⊞ ตาราง'}
+// &lt;/button&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Render switch — when effectiveView==='agenda', render AppointmentAgendaView (onSelect → openDetail) instead of the grid block; else the grid.</strong></label></div>
+<pre><code class="language-jsx">{effectiveView === 'agenda' ? (
+  &lt;AppointmentAgendaView appts={dayAppts} onSelect={openDetail} /&gt;
+) : (
+  /* existing grid JSX */
+)}</code></pre>
+  <p><strong>NOTE:</strong> identify the existing per-day appt array the grid derives <code>apptMap</code> from; pass that same flat array to <code>AppointmentAgendaView</code>. Don't refetch.</p>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: tests (effectiveView logic: auto below lg = agenda; toggle override; agenda onSelect→openDetail) + build + commit</strong></label></div>
+<pre><code class="language-bash">npm run build &amp;&amp; npx vitest run tests/appt-calendar-density.test.jsx
+git add src/hooks/useIsBelowLg.js src/components/backend/AppointmentCalendarView.jsx tests/appt-calendar-density.test.jsx
+git commit -m "feat(appt): responsive auto-agenda below lg + grid/agenda toggle"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: Full test batch + build + Rule Q verification</h3>
+  <p><strong>Files:</strong> <code>tests/appt-calendar-density-flow-simulate.test.jsx</code> (Rule I) + run full suite</p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Rule I flow-simulate — chain the full interaction</strong></label></div>
+<pre><code class="language-jsx">// Render AppointmentCalendarView with a dense fixture (several 15-min appts +
+// an overlap pair + a long appt). Assert: 15-min blocks render single-line (no
+// AppointmentSlotMeta); click a block → popover appears with details; click แก้ไข
+// → edit modal opens; +N badge present for overlap; below-lg (mock matchMedia) →
+// AgendaView renders chronological cards. Mock scopedDataLayer + useRecallListener-
+// equivalents as the existing AppointmentCalendarView tests do.</code></pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Fix any pre-existing AppointmentCalendarView tests broken by block-onClick change</strong></label></div>
+  <p>Grep tests that assert <code>openEdit</code> fires on block click; update them to expect the popover first, then แก้ไข → edit (mirror the Recall outcome-modal fixup pattern).</p>
+<pre><code class="language-bash">grep -rln "AppointmentCalendarView\|appt-grid-customer-link\|openEdit" tests/ | head</code></pre>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Full suite + build (Rule N: shared grid component + new components → full suite)</strong></label></div>
+<pre><code class="language-bash">npx vitest run   # expect 0 fail
+npm run build    # clean</code></pre>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Rule Q verification + commit</strong></label></div>
+  <p>L1 preview (dev server) OR L2: open the appointment calendar on a dense day → confirm span=1 legible single line, tap block → popover (details + tel:), แก้ไข → edit, +N rollup, resize &lt; lg → agenda + toggle, dark AND light. Names/HN never red. If headless preview can't show theme/tap → user L1 hands-on (standing "user tests UI" preference).</p>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(appt): calendar-density flow-simulate + RTL + pre-existing fixups"</code></pre>
+</div>
+
+<h2>Self-Review notes</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> A popover (T2+T3) · B span=1 + rollup (T4) · C agenda (T5) + responsive (T6) · shared helper (T1) · tests/Rule Q (T7). ✓</li>
+  <li><strong>Type consistency:</strong> <code>getApptStatusMeta/apptDisplayName/apptPhoneValue/apptTimeRange</code> defined in T1, consumed identically in T2/T5. <code>openDetail</code> (T3) reused in T4/T6. <code>AppointmentDetailPopover</code> props match its render (T2) + callsite (T3).</li>
+  <li><strong>Reuse / no-dup:</strong> <code>resolveAssistantNames</code>, <code>STATUSES→APPT_STATUSES</code>, <code>PhoneLink</code>/<code>tel:</code>, edit modal — reused, not duplicated. Verify exact import paths during impl (grep).</li>
+  <li><strong>No SLOT_H bump</strong> (root-cause discipline). Names/HN never red (Thai-culture). No new Firestore collection/field.</li>
+</ul>
+
+</body>
+</html>
