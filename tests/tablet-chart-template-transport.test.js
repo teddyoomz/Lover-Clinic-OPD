@@ -8,13 +8,17 @@
 //   #2 (race) the tablet read templateImageUrl ONCE at instant-pop (still null) and ignored
 //      the later update. Fix: tablet listener loads a late-arriving templateImageUrl.
 // Plus defense-in-depth: PC cancels + frees the tablet if a post-create step fails.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(resolve(__dir, p), 'utf8');
+
+// AV41 global.fetch isolation (Phase 17.1 flake-fix) — R1/R2 assign global.fetch; restore it.
+const ORIGINAL_FETCH = global.fetch;
+afterAll(() => { if (ORIGINAL_FETCH === undefined) delete global.fetch; else global.fetch = ORIGINAL_FETCH; });
 
 vi.mock('../src/firebase.js', () => ({ storage: {}, db: {}, auth: {}, appId: 'test' }));
 vi.mock('firebase/storage', () => ({

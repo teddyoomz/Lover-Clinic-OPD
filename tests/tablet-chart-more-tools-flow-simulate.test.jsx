@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import fs from 'node:fs';
+
+// AV41 global.fetch isolation (Phase 17.1 flake-fix) — F1.2 assigns global.fetch; restore it.
+const ORIGINAL_FETCH = global.fetch;
+afterAll(() => { if (ORIGINAL_FETCH === undefined) delete global.fetch; else global.fetch = ORIGINAL_FETCH; });
 
 vi.mock('../src/firebase.js', () => ({ storage: {}, db: {}, auth: {}, appId: 'test' }));
 vi.mock('firebase/storage', () => ({

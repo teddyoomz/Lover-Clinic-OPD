@@ -137,6 +137,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
       const fabric = await import('fabric'); fabricRef.current = fabric;
       if (cancelled || !elRef.current) return;
       await new Promise(r => setTimeout(r, 30));                 // let flex layout settle
+      if (cancelled || !elRef.current) return;                   // may have unmounted during the wait
       const wrap = elRef.current.parentElement;
       const maxW = (wrap?.clientWidth || 700) - 8, maxH = (wrap?.clientHeight || 800) - 8;
       const mkImg = (src) => new Promise((res) => { const i = new window.Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });

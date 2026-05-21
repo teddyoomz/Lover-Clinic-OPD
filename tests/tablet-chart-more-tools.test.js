@@ -1,4 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterAll } from 'vitest';
+
+// AV41 global.fetch isolation (Phase 17.1 flake-fix) — U3/U4 assign global.fetch; restore it.
+const ORIGINAL_FETCH = global.fetch;
+afterAll(() => { if (ORIGINAL_FETCH === undefined) delete global.fetch; else global.fetch = ORIGINAL_FETCH; });
 
 vi.mock('../src/firebase.js', () => ({ storage: {}, db: {}, auth: {}, appId: 'test' }));
 vi.mock('firebase/storage', () => ({
