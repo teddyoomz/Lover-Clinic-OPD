@@ -66,10 +66,22 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-21 — Tablet Chart Editor verification close-out + wiki/graphify (feature LIVE)
-- **Master**: `f3ec63ac` (clean, all pushed; 2 docs/tooling commits ahead of prod). **Prod**: `fa1773b7` LIVE — **Tablet Chart Editor + FP4 fix DEPLOYED** (frontend + firestore.rules be_chart_* + composite index, via Probe-Deploy-Probe). V106 + V108 also live.
-- **Tests**: full vitest **13880 PASS / 0 FAIL / 0 SKIP** (591 files) · build clean · Tablet Chart Editor added +72 over V108's 13808.
-- **Deploy**: Tablet Chart Editor DEPLOYED prior session (last deploy-affecting commit `fa1773b7`; frontend + `firestore.rules` + composite index). This session = FP3 verification + FP5 wiki/graphify + diag tool; the 2 commits ahead of prod (`b9a06553` diag + `f3ec63ac` wiki) are NON-deploy-affecting (script + markdown) → prod functionally current, no re-deploy needed. [⚠ firebase CLI 15.x storage: `--only storage`, NOT `storage:rules`.]
+- **Date last updated**: 2026-05-21 — Tablet Chart Editor bugfix saga (template/relay/CORS/ratio) + more-tools brainstorm PENDING
+- **Master**: `da71fa01` (clean, pushed). **Prod**: `dc9d230c` — relay fixes #1/#3 LIVE; **ratio fix `72ea7585` NOT deployed** (body still stretched on prod until deploy). **Storage CORS = applied bucket-side (live)** via `scripts/set-storage-cors.mjs --apply` (NOT a code/deploy thing). V106 + V108 also live.
+- **Tests**: full vitest **GREEN (exit 0; ~13889 = 13880 + tablet-chart bugfix tests)** · build clean. Added tablet-chart-template-transport R1-R7 + flow-simulate F7 + B3 fixup.
+- **Deploy**: Relay **VERIFIED working end-to-end on real prod** (iPad renders chart, draw+save, PC fetches 123KB result) AFTER the CORS bucket config. master ahead of prod by `fb74f0b5` (CORS tooling — CORS itself already applied) + `72ea7585` (**ratio fix — needs `vercel --prod` to reach the iPad**) + `da71fa01` (diag). [⚠ firebase CLI 15.x storage: `--only storage`, NOT `storage:rules`.]
+
+### Session 2026-05-21 LATE — Tablet Chart Editor bugfix saga (4 root causes from user L1) + more-tools brainstorm PENDING
+
+User hands-on (L1, real iPad+PC) surfaced a chain of bugs the e2e missed. `/systematic-debugging` each round (root cause from real prod data before any fix). Detail + lessons: `.agents/sessions/2026-05-21-tablet-chart-bugfix-saga.md`.
+
+- **#1 template format** (`dc9d230c`): default chart templates store a PATH (`/chart-templates/face.svg`), not a data URL → `uploadString(...,'data_url')` threw → PC "เริ่มการเชื่อมต่อไม่สำเร็จ" + no template. Fix: `resolveToDataUrl` chokepoint (data: passthrough / path → fetch+convert / blank → null).
+- **#2 instant-pop race** (`dc9d230c`): tablet read `templateImageUrl` once at pop (still null) → blank. Fix: tablet listener loads a late-arriving templateImageUrl (PenCanvas already re-renders on prop change).
+- **#3 PC stuck after save** (`dc9d230c`): saved-handler awaited the result download un-guarded → a throw left the PC hung on "waiting" forever. Fix: try/catch + always teardown + free tablet; phase=failed on download error. Plus newest-requested-session selection + cancel-on-post-create-failure.
+- **#4 CORS — THE blocker** (`fb74f0b5`): Storage bucket had `cors:null` → browser `fetch()` of Storage download URLs blocked → both iPad template + PC result downloads failed. First app feature to browser-fetch Storage (others stored dataURLs in Firestore). **Node L2 e2e couldn't catch it (no CORS).** Fix: `scripts/set-storage-cors.mjs --apply` (origin:['*'] GET/HEAD; token is the access control). **Applied + VERIFIED live**: browser fetch of a real Storage URL from prod origin → 200 + data URL.
+- **#5 aspect-ratio** (`72ea7585`): PenCanvas fixed 1024×1280 buffer + CSS width/height:100% stretched every template (faces 4:5, body 1:2). Fix: buffer = real image ratio + CSS contain (mirrors the working PC ChartCanvas). **NOT deployed yet** (prod still shows stretched body — confirmed live).
+- **VERIFIED end-to-end on prod** (post-CORS): iPad renders the real ใบหน้า/ร่างกาย chart, draw+save, PC fetches the 123KB annotated result. AV102 (#1-#6) locks all. Tier-2 tests landed.
+- **more-tools feature**: brainstorm at design-approval gate, NOT started. User chose B (select/move/resize editing). Pen approach UNANSWERED: **Fabric constant-pen (recommended, reuse ChartCanvas)** vs hybrid perfect-freehand pressure-pen. Next session: get answer → spec→plan→implement.
 
 ### Session 2026-05-21 — Tablet Chart Editor: verification close-out + wiki/graphify + diag tool — DEPLOYED (feature live)
 
