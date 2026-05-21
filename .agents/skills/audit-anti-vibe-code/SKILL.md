@@ -2568,6 +2568,25 @@ result legitimately has no object data; the PNG still merges). Cross-link: tests
 (F1/F2). **Class**: lossless-transport — every drawing tool's object must survive the relay to
 the PC (user mandate "ไม่มีเครื่องมือไหน ... ส่งไป pc แล้วไม่ติดการ edit").
 
+**AV103 follow-up (2026-05-21 more-tools-fix5 — object-level RE-EDIT completion)**: transporting
+the fabricJson is pointless if re-edit ignores it. Three more boundaries: (1) BOTH canvases export
+via `serializeFabricCanvas` (in `tabletChartTools.js`) which embeds `canvasWidth`/`canvasHeight` —
+fabric objects carry absolute coords, so re-edit MUST recreate the SAME-sized canvas or objects
+misplace; (2) `ChartCanvas` re-edit MUST consume the fabricJson object-level (`isObjectLevelReeditable`
+→ `loadFromJSON(reeditJson)` at the saved dims, re-lock object[0] template) when present, falling
+back to the PNG-background raster path ONLY when there's no re-editable json (legacy / pre-storage-
+deploy null); (3) the OPD persist MUST go through `chartEntryForPersist` (size guard) — the chart
+PNG dataUrl + fabricJson are BOTH inlined into the `be_treatments` Firestore doc (~1MB cap), so an
+oversized fabricJson (big embedded template) is DROPPED (PNG always kept → the treatment save NEVER
+breaks; that chart re-edits as raster). **Grep**: `ChartCanvas.jsx` has `isObjectLevelReeditable` +
+`loadFromJSON(reeditJson)`; `serializeFabricCanvas(canvas)` in ChartCanvas + `serializeFabricCanvas(fcRef.current)`
+in TabletChartCanvas; `TreatmentFormPage.jsx` persists via `.map(chartEntryForPersist)`. Cross-link:
+`tests/chart-relay-roundtrip.test.js` (U1-U3 + SG1-SG3 + F1) + `scripts/e2e-chart-relay-roundtrip.mjs`
+(real-prod 14/0). **Known limit (pre-existing, NOT this feature)**: a single chart PNG dataUrl that
+ALONE exceeds ~1MB still risks the Firestore doc cap — inlining chart images in the doc is the
+pre-existing design; Storage-ref is the architectural follow-up (see V-log). The size guard prevents
+the NEW fabricJson from compounding it.
+
 ### AV104 — Fabric canvas editor components MUST paint via SYNCHRONOUS renderAll, never the rAF-deferred request-render path (2026-05-21 more-tools-fix3)
 
 A Fabric canvas/editor component that paints via the rAF-deferred request-render path

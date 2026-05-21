@@ -1,6 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { strokeOutline, outlineToSvgPath, PEN_PRESETS } from '../../lib/penStroke.js';
-import { isDrawTool, isShapeTool } from '../../lib/tabletChartTools.js';
+import { isDrawTool, isShapeTool, serializeFabricCanvas } from '../../lib/tabletChartTools.js';
 
 // Tablet chart editor canvas — Fabric v7 object model + perfect-freehand pressure pen.
 // Rides Fabric's own mouse:down/move/up pipeline (no raw upperCanvasEl listeners → no
@@ -233,7 +233,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
 
   useImperativeHandle(ref, () => ({
     exportDataUrl: () => { const fc = fcRef.current; if (!fc) return null; fc.discardActiveObject(); fc.renderAll(); return fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 }); },
-    exportFabricJson: () => { const fc = fcRef.current; return fc ? JSON.stringify(fc.toJSON()) : null; },
+    exportFabricJson: () => serializeFabricCanvas(fcRef.current),   // includes canvas dims → lossless object-level re-edit
     undo: async () => { const fc = fcRef.current; if (!fc || hiRef.current <= 0) return; hiRef.current--; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
     redo: async () => { const fc = fcRef.current; if (!fc || hiRef.current >= histRef.current.length - 1) return; hiRef.current++; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
     clear: () => { const fc = fcRef.current; if (!fc) return; fc.getObjects().filter(o => o !== templateObjRef.current).forEach(o => fc.remove(o)); fc.discardActiveObject(); fc.renderAll(); pushHistory(); },

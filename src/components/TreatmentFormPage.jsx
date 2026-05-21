@@ -15,6 +15,7 @@ import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/
 // backend code paths converge — one unified system, branch-aware via BSA.
 import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
+import { chartEntryForPersist } from '../lib/tabletChartTools.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -2396,7 +2397,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           healthInfo: { bloodType, congenitalDisease, drugAllergy, treatmentHistory },
           medCertActuallyCome, medCertIsRest, medCertPeriod, medCertIsOther, medCertOtherDetail,
           beforeImages, afterImages, otherImages,
-          charts: charts.filter(c => c.dataUrl).map(c => ({ dataUrl: c.dataUrl, fabricJson: c.fabricJson, templateId: c.templateId })),
+          charts: charts.filter(c => c.dataUrl).map(chartEntryForPersist),   // size-guarded: drops oversized fabricJson so a big chart can't blow the 1MB Firestore doc + break the save
           // Phase 12.2b follow-up (2026-04-24): preserve productId +
           // fillLater on the save payload so deductStockForTreatment's
           // _normalizeStockItems can resolve real be_products batches

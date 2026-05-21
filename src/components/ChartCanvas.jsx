@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pencil, Circle, Minus, Type, Eraser, Undo2, Redo2, Check, Trash2, MousePointer } from 'lucide-react';
+import { serializeFabricCanvas, isObjectLevelReeditable } from '../lib/tabletChartTools.js';
 
 const COLORS = ['#000000', '#e53e3e', '#3182ce', '#38a169', '#d69e2e', '#805ad5', '#dd6b20', '#ffffff'];
 const WIDTHS = [2, 4, 8];
@@ -58,8 +59,27 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
       };
 
       // ── Restore existing chart (edit mode) ──
-      // Use the saved PNG dataUrl as background (faster + no loadFromJSON hang)
-      if (existingData?.dataUrl) {
+      // LOSSLESS object-level re-edit: if the saved chart carries a fabricJson WITH its canvas dims
+      // (serializeFabricCanvas), recreate the SAME coordinate space + loadFromJSON so every prior
+      // stroke/shape/text is a MOVABLE/ERASABLE object (not baked into a flat raster). The template
+      // (object[0]) is re-locked. Falls back to the PNG-background raster path below when there's no
+      // re-editable json (legacy charts, or pre-storage-deploy when the tablet json upload is denied
+      // → fabricJson is null). Native dims (no zoom) keep object coords consistent across re-edits;
+      // the overflow-auto container scrolls if the canvas is larger than the viewport.
+      const reeditJson = existingData?.fabricJson
+        ? (() => { try { return JSON.parse(existingData.fabricJson); } catch { return null; } })()
+        : null;
+      if (reeditJson && isObjectLevelReeditable(reeditJson)) {
+        const canvas = initCanvas(reeditJson.canvasWidth, reeditJson.canvasHeight);
+        await canvas.loadFromJSON(reeditJson);
+        if (cancelled || !canvasElRef.current) return;   // unmounted during the async load (V21 guard)
+        canvas.backgroundColor = '#ffffff';              // force white — loadFromJSON adopts the json's bg (may be empty/transparent)
+        const objs0 = canvas.getObjects();
+        if (objs0[0]) objs0[0].set({ selectable: false, evented: false, hoverCursor: 'default' }); // re-lock template
+        canvas.renderAll();
+
+      // Raster fallback — use the saved PNG dataUrl as background (legacy / no re-editable json)
+      } else if (existingData?.dataUrl) {
         const imgEl = await new Promise((resolve) => {
           const img = new window.Image();
           img.onload = () => resolve(img);
@@ -216,7 +236,7 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
     const canvas = fabricRef.current;
     if (!canvas) return;
     const dataUrl = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
-    const fabricJson = JSON.stringify(canvas.toJSON());
+    const fabricJson = serializeFabricCanvas(canvas);   // includes canvas dims → lossless object-level re-edit
     onSave({ dataUrl, fabricJson, templateId: template?.id || 'blank' });
   };
 

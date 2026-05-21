@@ -1,34 +1,33 @@
 ---
-updated_at: "2026-05-21 EOD+1 LATE+3 — Tablet Chart more-tools: LIVE-DISPLAY bug REAL on-device cause FOUND + FIXED — inline `background:#fff` on the canvas → Fabric copies it to the opaque upper-canvas → covered the painted lower-canvas (blank live + correct save). Proven in a real browser; fix = remove inline bg (mirror ChartCanvas). Awaiting on-device re-confirm + deploy."
-status: "more-tools complete; 4 post-ship fixes (init-once + save + sync-render + upper-canvas-cover); fix4 is the REAL on-device cause (proven via real-browser isolation + on-device DIAG); full vitest GREEN; NOT deployed — awaiting 'deploy' (vercel + storage.rules Probe-Deploy-Probe #13)"
+updated_at: "2026-05-21 EOD+1 LATE+4 — Tablet Chart more-tools: real-use round-trip VERIFIED on real prod (14/0: persist to OPD + re-edit + fresh image + stress) + object-level RE-EDIT completed (ChartCanvas now consumes fabricJson, verified in real browser) + 1MB-persist size guard. Awaiting deploy."
+status: "more-tools complete; 5 post-ship rounds (init / save / sync-render / cover / round-trip+re-edit+guard); data layer SOLID (real-prod e2e 14/0); object-level re-edit live-gated on storage deploy; full vitest 13949/0; NOT deployed — awaiting 'deploy' (vercel + storage Probe-Deploy-Probe #13)"
 branch: "master"
-last_commit: "fix(tablet-chart): COVER — remove inline canvas background (Fabric copies it to the opaque upper-canvas → covered the painted lower-canvas); RC9-RC11 + AV105"
-tests: "full vitest GREEN · build clean · fix4 proven in a real browser (fabric-reexport isolation: WITH inline bg → upper-canvas opaque white cover; WITHOUT → transparent) + on-device DIAG (lower-canvas painted t0, screen white = covered)"
+last_commit: "feat(tablet-chart): object-level re-edit (ChartCanvas consumes fabricJson + canvas dims) + 1MB-persist size guard + real-prod round-trip e2e"
+tests: "full vitest 13949/0 · build clean · real-prod round-trip e2e 14/0 (scripts/e2e-chart-relay-roundtrip.mjs) · object-level re-edit verified in a real browser (objectLevelPathTaken:true, objects render)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "d750c725 — ratio fix LIVE. more-tools + 4 post-ship fixes NOT deployed."
-firestore_rules_version: "be_chart_* unchanged. storage.rules: NEW uploads/chart-edit-sessions match allows application/json — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13)."
+production_commit: "d750c725 — ratio fix LIVE. more-tools + all post-ship work NOT deployed."
+firestore_rules_version: "be_chart_* unchanged. storage.rules: NEW uploads/chart-edit-sessions match allows application/json — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13). Object-level re-edit's fabricJson is live-gated on this deploy."
 ---
 
 # Active Context
 
-## State — LIVE-DISPLAY bug REAL cause found + fixed (the user tests localhost dev from a real browser)
-The tablet chart more-tools editor had FOUR post-ship rounds. The live-display "blank canvas" had TWO causes; fix4 is the real on-device one:
-- **fix1 (init-once)**: init effect keyed on `[templateImageUrl]` → late template re-ran it → `fc.dispose()` destroyed the React-owned `<canvas>`. Fixed: init ONCE + template on live canvas.
-- **fix2 (save)**: storage.rules denied the `result.json` (application/json) client upload → onSave threw silently. Fixed: storage.rules allows json + onSave json non-fatal.
-- **fix3 (sync-render)**: replaced `requestRenderAll` (rAF-deferred) → sync `renderAll`. **HONEST: this fixed a headless-PREVIEW-only artifact (rAF dead there), NOT the device bug.** KEPT anyway — mirrors the proven ChartCanvas + rAF-independent defensive.
-- **fix4 (upper-canvas COVER — THE REAL on-device cause)**: an inline `background:#fff` on the `<canvas>` element → **Fabric v7 copies the element's inline style to the upper-canvas** (interaction layer, absolutely positioned ON TOP) → opaque white upper-canvas **covered** the correctly-painted lower-canvas → blank-white screen while save (object model) stayed correct. Proven in a real browser (isolation: WITH inline bg → upper opaque white; WITHOUT → transparent) + on-device DIAG (`paint c7 w42 t0` = lower IS painted; screen white = covered). **Fix: remove the inline `background:#fff`** (white fill comes from Fabric `backgroundColor:'#fff'` on the LOWER canvas). Class-of-bug grep: `TabletChartCanvas` was the ONLY canvas in src/ with an inline bg; the working PC `ChartCanvas` has none → that's why it works. RC9-RC11 + AV105.
+## State — real-use flows verified + object-level re-edit completed
+User confirmed fix4 ("โอเคใช้ได้แล้ว" — the live editor renders). Then asked for comprehensive real-use verification + bug/edge hunt. Result:
+- **Real-prod round-trip e2e 14/0** (`scripts/e2e-chart-relay-roundtrip.mjs`): fresh PC image → relay → tablet result (PNG+json) → PC download → **persist to `be_treatments.detail.charts[]`** → re-read → re-edit → stress (68-obj json / 2026-char emoji+Thai+RTL byte-identical / 2 concurrent patients no cross-contamination / rapid re-save last-wins). **Data layer SOLID, zero data bugs.**
+- **Real gap fixed (object-level re-edit)**: `ChartCanvas` re-edit IGNORED the persisted `fabricJson` (loaded the flat PNG → raster-only, couldn't move/delete prior strokes — defeated AV103). Fix: `serializeFabricCanvas` embeds canvas dims; `ChartCanvas` re-edit `loadFromJSON` at saved dims (object-level) + PNG-raster fallback. **Verified in a real browser** (objectLevelPathTaken:true + objects render).
+- **Edge case guarded**: chart PNG + fabricJson both inline the `be_treatments` doc (~1MB cap) → oversized fabricJson dropped by `chartEntryForPersist` (PNG kept → save never breaks).
+- **Pre-existing limit flagged (NOT this feature)**: a single chart PNG dataUrl > ~1MB still risks the cap — Storage-ref is the architectural follow-up (decide separately).
 
-## Lessons (this saga)
-- Verify in a browser with **rAF ALIVE** — the headless preview's dead-rAF was a confound that sent fix3 down the wrong path. Rule S (NEW: Chrome MCP / real-browser standing auth) + on-device DIAG overlay = the pattern for devices I can't open devtools on.
-- **Fabric copies the canvas element's inline style to the opaque upper-canvas** — never set an opaque `background` on a Fabric-wrapped canvas; use Fabric `backgroundColor`. (AV105)
-- "Painted backing + correct save + blank screen" ⇒ a COVER, not a render failure. Look for an opaque layer on top.
-- The working sibling (ChartCanvas) had the answer — `grep "<canvas"` diff would have found it round 1. Diff the working example FIRST, structurally.
+## Lessons (this round)
+- Transporting data is pointless if the consumer ignores it — re-edit dropped the fabricJson for the whole feature life; verify the CONSUMER, not just the transport.
+- Fabric object coords are absolute → re-edit must carry + recreate the canvas dims (no zoom, or re-save corrupts the dims).
+- Inlining images/json in a Firestore doc has a ~1MB ceiling — guard it; Storage-ref is the real fix for large media.
 
 ## Next action
-- **User on-device re-confirm**: reload `?tablet=chart` on the device → template shows live + every tool draws live + erase + save → PC merges. (High confidence — mechanism proven in a real browser.)
-- **DEPLOY** (user-triggered, V18): `vercel --prod` (more-tools + all 4 post-ship fixes) **+** `firebase deploy --only storage` (storage.rules json → lossless re-edit; **Probe-Deploy-Probe #13**: anon write `uploads/chart-edit-sessions/...` → 403, staff json → 200). [⚠ CLI 15.x: `--only storage`.]
+- **DEPLOY** (user-triggered, V18): `vercel --prod` (more-tools + all 5 post-ship rounds) **+** `firebase deploy --only storage` (storage.rules json → unlocks object-level re-edit live; **Probe-Deploy-Probe #13**: anon write `uploads/chart-edit-sessions/...` → 403, staff json → 200). [⚠ CLI 15.x: `--only storage`.]
+- After deploy: on-device — tablet edit → save → PC re-edit shows prior strokes as MOVABLE objects (object-level); confirm OPD persist.
 
 ## Outstanding user-triggered
-- on-device re-confirm (the fix4 cover removal).
-- **deploy** (vercel + storage.rules, Probe-Deploy-Probe #13).
+- **deploy** (vercel + storage, Probe-Deploy-Probe #13) — unlocks live object-level re-edit.
+- (decision) Storage-ref for chart images (pre-existing 1MB-inline limit) — architectural follow-up.
 - (carryover) V106 cron 03:30 BKK first drain; calendar-density / Recall / V108 list-visual L1.
