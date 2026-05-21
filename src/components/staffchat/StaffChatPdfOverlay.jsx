@@ -1,39 +1,36 @@
 // src/components/staffchat/StaffChatPdfOverlay.jsx
-// (2026-05-22) Any-file attachments — fullscreen file-preview overlay.
-// Opened from a previewable attachment card's 👁 button. Renders the file in a
-// browser <iframe>:
-//   - PDF  → the file URL directly (browser-native PDF, no 3rd party).
-//   - Office (Word/Excel/PPT) → the Microsoft Office Online embed viewer URL.
-//     ⚠ The MS viewer FETCHES the file from its public Storage URL — the file
-//     content transits Microsoft. The card decides the viewerUrl; this overlay
-//     just renders whatever `viewerUrl` it's given + downloads `fileUrl`.
-// Closes via the ✕ button + Esc ONLY — backdrop click does NOT close (AV78
-// normal-modal discipline). z-9700 above modals.
+// (2026-05-22) Any-file attachments — fullscreen PDF preview overlay.
+// Opened from a PDF attachment card's 👁 button. Renders the PDF via a native
+// browser <iframe> (CORS-exempt) + a ⬇ download. Closes via the ✕ button + Esc
+// ONLY — a backdrop click does NOT close (AV78 normal-modal discipline). z-9700.
+//
+// PDF-only by design: in-browser Word/Excel/PPT preview was reverted (the only
+// browser-feasible route was a 3rd-party viewer that failed for Firebase URLs +
+// would transmit patient files off-site). Office files are download-only.
 import React, { useEffect } from 'react';
 import { X, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
 
-export function StaffChatPdfOverlay({ viewerUrl, fileUrl, name, size, onClose }) {
+export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  if (!viewerUrl) return null;
+  if (!fileUrl) return null;
 
   return (
     <div
       data-testid="staff-chat-pdf-overlay"
       className="fixed inset-0 bg-black/90 flex flex-col z-[9700]"
     >
-      {/* top bar: filename + download (the real file) + close (NO backdrop-close — AV78) */}
       <div className="flex items-center justify-between px-4 py-3 text-white bg-gradient-to-b from-black/70 to-transparent">
         <span className="text-sm truncate pr-3" title={name}>{name || 'ไฟล์'}</span>
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => downloadUrlAsFile(fileUrl || viewerUrl, name, size)}
+            onClick={() => downloadUrlAsFile(fileUrl, name, size)}
             data-testid="staff-chat-pdf-download"
             className="px-2.5 py-1.5 rounded bg-white/15 hover:bg-white/25 text-xs flex items-center gap-1"
             aria-label="ดาวน์โหลด"
@@ -52,7 +49,7 @@ export function StaffChatPdfOverlay({ viewerUrl, fileUrl, name, size, onClose })
         </div>
       </div>
       <iframe
-        src={viewerUrl}
+        src={fileUrl}
         title={name || 'ไฟล์'}
         data-testid="staff-chat-pdf-frame"
         className="flex-1 w-full bg-white border-0"

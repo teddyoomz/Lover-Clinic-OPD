@@ -222,7 +222,6 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
       )}
       {fileViewer && (
         <StaffChatPdfOverlay
-          viewerUrl={fileViewer.viewerUrl}
           fileUrl={fileViewer.fileUrl}
           name={fileViewer.name}
           size={fileViewer.size}

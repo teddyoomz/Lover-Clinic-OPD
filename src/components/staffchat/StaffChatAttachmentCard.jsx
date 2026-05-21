@@ -8,28 +8,10 @@ import { Download, Eye } from 'lucide-react';
 import { attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
 
-// (2026-05-22) Previewable kinds → returns { viewerUrl, fileUrl } for the overlay.
-//   - PDF   → the file URL itself (browser-native iframe; no 3rd party).
-//   - Office (Word/Excel/PPT/CSV) → Microsoft Office Online embed viewer.
-//     ⚠ PRIVACY: the MS viewer FETCHES the file from its public Storage URL, so
-//     the file content transits Microsoft's servers. Fine for general docs; for
-//     sensitive/patient files, drop the OFFICE_EXT branch (office → download-only)
-//     or swap to a client-side renderer. PDF stays fully local.
-const OFFICE_EXT = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv']);
-function fileExt(name) {
-  return (String(name || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
-}
-export function previewInfoFor(att) {
-  if (!att || !att.fullUrl) return null;
-  if (attachmentKindFor(att.mimeType) === 'pdf') return { viewerUrl: att.fullUrl, fileUrl: att.fullUrl };
-  if (OFFICE_EXT.has(fileExt(att.name))) {
-    return {
-      viewerUrl: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(att.fullUrl)}`,
-      fileUrl: att.fullUrl,
-    };
-  }
-  return null;
-}
+// (2026-05-22) Preview is PDF-only (browser-native <iframe>, CORS-exempt, fully
+// local). Office files (Word/Excel/PPT) are DOWNLOAD-ONLY — in-browser office
+// preview was reverted: the only browser-feasible route was a 3rd-party viewer
+// that failed for Firebase URLs + would transmit patient files off-site.
 
 function iconFor(att) {
   const kind = attachmentKindFor(att && att.mimeType);
@@ -55,7 +37,7 @@ export function humanFileSize(n) {
 
 export function StaffChatAttachmentCard({ att, onPreview }) {
   if (!att) return null;
-  const preview = onPreview ? previewInfoFor(att) : null;
+  const isPdf = attachmentKindFor(att.mimeType) === 'pdf';
   const name = att.name || 'ไฟล์';
   return (
     <div
@@ -68,10 +50,10 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
         <div className="text-[10px] text-[var(--tx-muted)]">{humanFileSize(att.size)}</div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        {preview && (
+        {isPdf && onPreview && (
           <button
             type="button"
-            onClick={() => onPreview(preview)}
+            onClick={() => onPreview({ fileUrl: att.fullUrl, name: att.name, size: att.size })}
             data-testid="staff-chat-attach-preview"
             className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
             aria-label="ดูตัวอย่าง"

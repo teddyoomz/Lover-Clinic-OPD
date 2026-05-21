@@ -195,28 +195,27 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // the backdrop root no longer has onClick={onClose} directly before onTouchStart
     expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
   });
-  it('attachment card: download + preview (pdf direct + office via MS viewer)', () => {
+  it('attachment card: PDF preview only + download; office = download-only (NO in-browser office preview, NO 3rd-party viewer)', () => {
     const s = read('src/components/staffchat/StaffChatAttachmentCard.jsx');
     expect(s).toMatch(/attachmentKindFor/);
     expect(s).toMatch(/downloadUrlAsFile/);
     expect(s).toMatch(/onPreview/);
     expect(s).toMatch(/staff-chat-attach-download/);
-    // (2026-05-22) office preview (Word/Excel/PPT) via Microsoft Office Online embed
-    expect(s).toMatch(/previewInfoFor/);
-    expect(s).toMatch(/OFFICE_EXT/);
-    expect(s).toMatch(/view\.officeapps\.live\.com\/op\/embed\.aspx/);
-    expect(s).toMatch(/'docx'|"docx"/);
-    expect(s).toMatch(/'xlsx'|"xlsx"/);
-    expect(s).toMatch(/'pptx'|"pptx"/);
+    // preview gated to PDF only; office (word/excel/ppt) is download-only (reverted)
+    expect(s).toMatch(/isPdf/);
+    expect(s).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);  // no 3rd-party doc viewer
+    expect(s).not.toMatch(/renderSheetToHtml|renderDocxToHtml|SHEET_EXT/);  // no client-side office render
   });
-  it('file-viewer overlay: iframe(viewerUrl) + download(fileUrl) + Esc, NO backdrop close', () => {
+  it('pdf overlay: iframe(fileUrl) + download + Esc, NO backdrop close, NO 3rd-party viewer', () => {
     const s = read('src/components/staffchat/StaffChatPdfOverlay.jsx');
     expect(s).toMatch(/<iframe/);
-    expect(s).toMatch(/src=\{viewerUrl\}/);
+    expect(s).toMatch(/src=\{fileUrl\}/);          // pdf → native iframe of the file
     expect(s).toMatch(/downloadUrlAsFile\(fileUrl/);
     expect(s).toMatch(/staff-chat-pdf-close/);
     expect(s).toMatch(/Escape/);
-    expect(s).not.toMatch(/staff-chat-pdf-overlay"[\s\S]{0,140}onClick=\{onClose\}/);
+    expect(s).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);  // no 3rd-party viewer
+    expect(s).not.toMatch(/renderSheetToHtml|renderDocxToHtml/);            // no client-side office render
+    expect(s).not.toMatch(/staff-chat-pdf-overlay"[\s\S]{0,160}onClick=\{onClose\}/);
   });
   it('shared download helper (Rule of 3) + large-file new-tab fallback', () => {
     const s = read('src/lib/staffChatDownload.js');
