@@ -155,7 +155,7 @@ describe('AF4 · Rule I flow-simulate (pick → validate → kind-split → doc 
 });
 
 describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/retry · polish)', () => {
-  it('composer: any-file (no accept=image) + multiple + cancel/retry plumbing', () => {
+  it('composer: any-file (no accept=image) + multiple + cancel/retry + filename below thumb box', () => {
     const s = read('src/components/staffchat/StaffChatComposer.jsx');
     expect(s).not.toMatch(/accept="image/);
     expect(s).toMatch(/validateStaffChatFile/);
@@ -164,6 +164,9 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     expect(s).toMatch(/taskRefs/);
     expect(s).toMatch(/\.cancel\(\)/);     // per-file cancel
     expect(s).toMatch(/failed/);           // retry path
+    // (2026-05-22 fix) progress bar lives in a FIXED 64px thumb box so it cannot
+    // overlap the filename label rendered BELOW that box.
+    expect(s).toMatch(/relative w-16 h-16/);
   });
   it('hook: prepareAndUpload uses uploadStaffChatFile + returns failed[]', () => {
     const s = read('src/hooks/useStaffChat.js');
@@ -192,16 +195,25 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // the backdrop root no longer has onClick={onClose} directly before onTouchStart
     expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
   });
-  it('attachment card: download + pdf preview, by kind', () => {
+  it('attachment card: download + preview (pdf direct + office via MS viewer)', () => {
     const s = read('src/components/staffchat/StaffChatAttachmentCard.jsx');
     expect(s).toMatch(/attachmentKindFor/);
     expect(s).toMatch(/downloadUrlAsFile/);
     expect(s).toMatch(/onPreview/);
     expect(s).toMatch(/staff-chat-attach-download/);
+    // (2026-05-22) office preview (Word/Excel/PPT) via Microsoft Office Online embed
+    expect(s).toMatch(/previewInfoFor/);
+    expect(s).toMatch(/OFFICE_EXT/);
+    expect(s).toMatch(/view\.officeapps\.live\.com\/op\/embed\.aspx/);
+    expect(s).toMatch(/'docx'|"docx"/);
+    expect(s).toMatch(/'xlsx'|"xlsx"/);
+    expect(s).toMatch(/'pptx'|"pptx"/);
   });
-  it('pdf overlay: iframe + close button + Esc, NO backdrop close', () => {
+  it('file-viewer overlay: iframe(viewerUrl) + download(fileUrl) + Esc, NO backdrop close', () => {
     const s = read('src/components/staffchat/StaffChatPdfOverlay.jsx');
     expect(s).toMatch(/<iframe/);
+    expect(s).toMatch(/src=\{viewerUrl\}/);
+    expect(s).toMatch(/downloadUrlAsFile\(fileUrl/);
     expect(s).toMatch(/staff-chat-pdf-close/);
     expect(s).toMatch(/Escape/);
     expect(s).not.toMatch(/staff-chat-pdf-overlay"[\s\S]{0,140}onClick=\{onClose\}/);

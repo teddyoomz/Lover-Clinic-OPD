@@ -80,8 +80,8 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
   // V73 Feature F — local lightbox state. (2026-05-22) null = closed; else
   // { images, start } so the swipe lightbox opens at the clicked image.
   const [lightbox, setLightbox] = useState(null);
-  // (2026-05-22) any-file: PDF preview overlay state ({ url, name, size }).
-  const [pdfOverlay, setPdfOverlay] = useState(null);
+  // (2026-05-22) any-file: file-preview overlay state ({ viewerUrl, fileUrl, name, size }).
+  const [fileViewer, setFileViewer] = useState(null);
   // V73 color-picker (2026-05-18) — resolve sender color from message doc.
   const senderColor = resolveSenderColor(message, isOwn);
   const bubbleStyle = {
@@ -180,7 +180,7 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
               <StaffChatAttachmentCard
                 key={i}
                 att={a}
-                onPreview={kind === 'pdf' ? () => setPdfOverlay({ url: a.fullUrl, name: a.name, size: a.size }) : undefined}
+                onPreview={(info) => setFileViewer(info)}
               />
             );
           })}
@@ -220,12 +220,13 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           onClose={() => setLightbox(null)}
         />
       )}
-      {pdfOverlay && (
+      {fileViewer && (
         <StaffChatPdfOverlay
-          url={pdfOverlay.url}
-          name={pdfOverlay.name}
-          size={pdfOverlay.size}
-          onClose={() => setPdfOverlay(null)}
+          viewerUrl={fileViewer.viewerUrl}
+          fileUrl={fileViewer.fileUrl}
+          name={fileViewer.name}
+          size={fileViewer.size}
+          onClose={() => setFileViewer(null)}
         />
       )}
     </div>

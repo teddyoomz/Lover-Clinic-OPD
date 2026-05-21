@@ -244,30 +244,35 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
       {pendingFiles.length > 0 && (
         <div data-testid="staff-chat-composer-image-preview" className="px-3 py-2 flex items-start gap-2 flex-wrap">
           {pendingFiles.map((p, index) => (
-            <div key={p.id} className={`relative w-16 ${p.cancelled ? 'opacity-40' : ''}`} data-testid="staff-chat-composer-image-thumb">
-              {p.kind === 'image' && p.previewUrl ? (
-                <img src={p.previewUrl} className="w-16 h-16 object-cover rounded-md border border-[var(--bd)]" alt="" />
-              ) : (
-                <div className="w-16 h-16 rounded-md border border-[var(--bd)] bg-[var(--bg-hover)] flex items-center justify-center text-2xl" aria-hidden="true">
-                  {pendingIcon(p)}
-                </div>
-              )}
-              {!p.cancelled && (
-                <button
-                  type="button"
-                  onClick={() => removeOrCancel(p.id, index)}
-                  data-testid="staff-chat-composer-image-clear"
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
-                  aria-label={uploading ? 'ยกเลิก' : 'ลบไฟล์'}
-                >
-                  <XIcon size={12} />
-                </button>
-              )}
-              {uploading && !p.cancelled && (
-                <div className="absolute left-1 right-1 bottom-1 h-1 rounded bg-white/40 overflow-hidden">
-                  <div className="h-full bg-emerald-400 transition-all" style={{ width: `${Math.round((p.progress || 0) * 100)}%` }} />
-                </div>
-              )}
+            <div key={p.id} className={`w-16 ${p.cancelled ? 'opacity-40' : ''}`} data-testid="staff-chat-composer-image-thumb">
+              {/* The 64px thumb box is the ONLY positioning context for the ✕ +
+                  progress bar — the filename label below MUST sit outside it, or
+                  the absolute bottom-1 bar overlaps the name (2026-05-22 fix). */}
+              <div className="relative w-16 h-16">
+                {p.kind === 'image' && p.previewUrl ? (
+                  <img src={p.previewUrl} className="w-16 h-16 object-cover rounded-md border border-[var(--bd)]" alt="" />
+                ) : (
+                  <div className="w-16 h-16 rounded-md border border-[var(--bd)] bg-[var(--bg-hover)] flex items-center justify-center text-2xl" aria-hidden="true">
+                    {pendingIcon(p)}
+                  </div>
+                )}
+                {!p.cancelled && (
+                  <button
+                    type="button"
+                    onClick={() => removeOrCancel(p.id, index)}
+                    data-testid="staff-chat-composer-image-clear"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
+                    aria-label={uploading ? 'ยกเลิก' : 'ลบไฟล์'}
+                  >
+                    <XIcon size={12} />
+                  </button>
+                )}
+                {uploading && !p.cancelled && (
+                  <div className="absolute left-1 right-1 bottom-1 h-1 rounded bg-white/40 overflow-hidden">
+                    <div className="h-full bg-emerald-400 transition-all" style={{ width: `${Math.round((p.progress || 0) * 100)}%` }} />
+                  </div>
+                )}
+              </div>
               <div className="text-[9px] text-[var(--tx-muted)] mt-0.5 w-16 truncate" title={p.name}>{p.name}</div>
             </div>
           ))}
