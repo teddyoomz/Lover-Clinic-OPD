@@ -20,3 +20,14 @@ export function outlineToPath2D(outline) {
   p.closePath();
   return p;
 }
+
+// Build an SVG path d-string from a getStroke outline (array of [x,y]). fabric.Path consumes
+// a d-string (unlike Path2D), so the tablet editor turns each perfect-freehand stroke into a
+// selectable fabric.Path. Coords rounded to 2dp to keep the JSON transport small.
+export function outlineToSvgPath(outline) {
+  if (!outline || !outline.length) return '';
+  const r = (n) => Math.round(n * 100) / 100;
+  let d = `M${r(outline[0][0])} ${r(outline[0][1])}`;
+  for (let i = 1; i < outline.length; i++) d += ` L${r(outline[i][0])} ${r(outline[i][1])}`;
+  return d + ' Z';
+}
