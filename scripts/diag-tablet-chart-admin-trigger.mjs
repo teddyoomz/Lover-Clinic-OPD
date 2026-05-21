@@ -10,7 +10,7 @@
 //   node scripts/diag-tablet-chart-admin-trigger.mjs create <tabletDeviceId> <branchId>  → prints SESSION
 //   node scripts/diag-tablet-chart-admin-trigger.mjs verify <sessionId>
 //   node scripts/diag-tablet-chart-admin-trigger.mjs cleanup <sessionId> <tabletDeviceId>
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -59,8 +59,12 @@ async function main() {
     const token = randomBytes(16).toString('hex');
     const objPath = `uploads/chart-edit-sessions/${sessionId}/template.png`;
     const file = bucket.file(objPath);
-    await file.save(Buffer.from(TPL_B64, 'base64'), {
-      contentType: 'image/png',
+    // Use the REAL face-female.svg if present so the tablet shows a recognizable chart
+    // (proves the download+render path visibly), else fall back to the 1px PNG.
+    let body = Buffer.from(TPL_B64, 'base64'); let ctype = 'image/png';
+    if (existsSync('public/chart-templates/face-female.svg')) { body = readFileSync('public/chart-templates/face-female.svg'); ctype = 'image/svg+xml'; }
+    await file.save(body, {
+      contentType: ctype,
       metadata: { metadata: { firebaseStorageDownloadTokens: token } },
     });
     const url = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(objPath)}?alt=media&token=${token}`;
@@ -77,7 +81,7 @@ async function main() {
   } else if (action === 'verify') {
     const snap = await db.doc(`${P}/be_chart_edit_sessions/${a1}`).get();
     const d = snap.data() || {};
-    console.log(JSON.stringify({ exists: snap.exists, status: d.status, cancelledBy: d.cancelledBy, hasResult: !!d.resultImageUrl, tabletHeartbeatAt: d.tabletHeartbeatAt }));
+    console.log(JSON.stringify({ exists: snap.exists, status: d.status, cancelledBy: d.cancelledBy, hasResult: !!d.resultImageUrl, resultImageUrl: d.resultImageUrl || null, tabletHeartbeatAt: d.tabletHeartbeatAt }));
   } else if (action === 'presence') {
     const snap = await db.doc(`${P}/be_chart_tablet_presence/${a1}`).get();
     const d = snap.data() || {};
@@ -90,6 +94,16 @@ async function main() {
     const presence = presSnap.docs.map(d => { const x = d.data(); return { id: d.id, deviceName: x.deviceName, status: x.status, branchId: x.branchId, ageMs: Date.now() - (typeof x.lastHeartbeatAt === 'number' ? x.lastHeartbeatAt : 0) }; });
     const requested = sessions.filter(s => s.status === 'requested');
     console.log(JSON.stringify({ sessionCount: sessions.length, requestedCount: requested.length, sessions, presence }, null, 2));
+  } else if (action === 'cors') {
+    const [meta] = await bucket.getMetadata();
+    console.log(JSON.stringify({ bucket: BUCKET, cors: meta.cors || null }, null, 2));
+  } else if (action === 'urltest') {
+    // Upload a probe with a download token + print the firebasestorage URL (same shape as
+    // getDownloadURL) so a browser can test the CORS fetch against a real Storage URL.
+    const token = randomBytes(16).toString('hex');
+    const objPath = `uploads/chart-edit-sessions/CORS-PROBE/template.png`;
+    await bucket.file(objPath).save(Buffer.from(TPL_B64, 'base64'), { contentType: 'image/png', metadata: { metadata: { firebaseStorageDownloadTokens: token } } });
+    console.log('URL=' + `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(objPath)}?alt=media&token=${token}`);
   } else if (action === 'cleanup') {
     await db.doc(`${P}/be_chart_edit_sessions/${a1}`).delete().catch(() => {});
     if (a2) await db.doc(`${P}/be_chart_tablet_presence/${a2}`).set({ status: 'idle', updatedAt: Date.now() }, { merge: true }).catch(() => {});
