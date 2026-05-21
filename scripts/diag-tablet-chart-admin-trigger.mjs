@@ -62,7 +62,8 @@ async function main() {
     // Use the REAL face-female.svg if present so the tablet shows a recognizable chart
     // (proves the download+render path visibly), else fall back to the 1px PNG.
     let body = Buffer.from(TPL_B64, 'base64'); let ctype = 'image/png';
-    if (existsSync('public/chart-templates/face-female.svg')) { body = readFileSync('public/chart-templates/face-female.svg'); ctype = 'image/svg+xml'; }
+    const tplFile = process.env.DIAG_TPL || 'face-female.svg';   // DIAG_TPL=body-back.svg to test 1:2 ratio
+    if (existsSync(`public/chart-templates/${tplFile}`)) { body = readFileSync(`public/chart-templates/${tplFile}`); ctype = 'image/svg+xml'; }
     await file.save(body, {
       contentType: ctype,
       metadata: { metadata: { firebaseStorageDownloadTokens: token } },
