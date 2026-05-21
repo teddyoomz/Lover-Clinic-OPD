@@ -27,11 +27,26 @@ const PenCanvas = forwardRef(function PenCanvas({ templateImageUrl, tool, color,
     }
   }, []);
 
-  // load template once
+  // Load the template + size the drawing buffer to the image's REAL aspect ratio (high-res),
+  // so it renders WITHOUT distortion. The element then displays "contain" via CSS
+  // (max-width/height) — fills the screen while keeping the true ratio. Buffer ratio ==
+  // display ratio ⇒ pointer-coord scale stays uniform. (bugfix: was a fixed 1024x1280 buffer
+  // + width/height:100% which stretched every template to the screen's landscape ratio.)
   useEffect(() => {
-    if (!templateImageUrl) { redraw(); return; }
+    const c = canvasRef.current; if (!c) return;
+    if (!templateImageUrl) {
+      if (c.width !== 1024 || c.height !== 1280) { c.width = 1024; c.height = 1280; }  // blank default
+      imgRef.current = null; redraw(); return;
+    }
     const img = new Image(); img.crossOrigin = 'anonymous';
-    img.onload = () => { imgRef.current = img; redraw(); };
+    img.onload = () => {
+      const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
+      const s = 1600 / Math.max(nw, nh);   // longest side → 1600px (crisp + scales to fill)
+      c.width = Math.max(1, Math.round(nw * s));
+      c.height = Math.max(1, Math.round(nh * s));
+      imgRef.current = img; redraw();
+    };
+    img.onerror = () => { imgRef.current = null; redraw(); };
     img.src = templateImageUrl;
   }, [templateImageUrl, redraw]);
 
@@ -70,7 +85,7 @@ const PenCanvas = forwardRef(function PenCanvas({ templateImageUrl, tool, color,
 
   return (
     <canvas ref={canvasRef} width={1024} height={1280}
-      style={{ touchAction: 'none', width: '100%', height: '100%', background: '#fff', display: 'block' }}
+      style={{ touchAction: 'none', maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', background: '#fff', display: 'block' }}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />
   );
 });

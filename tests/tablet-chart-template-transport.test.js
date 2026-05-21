@@ -138,4 +138,18 @@ describe('Tablet Chart Editor — template transport normalization (bugfix)', ()
     expect(fn).toMatch(/toMillis\(b\.createdAt\) - toMillis\(a\.createdAt\)/);
     expect(fn).not.toMatch(/snap\.docs\[0\]\.data\(\)/);
   });
+
+  // ── R7 PenCanvas shows the template at its TRUE aspect ratio (contain, not stretch) ──
+  it('R7.1 PenCanvas canvas does NOT stretch (no width:100%+height:100%); uses contain (max-width/height)', () => {
+    const pc = read('../src/components/tablet-chart/PenCanvas.jsx');
+    expect(pc).toMatch(/maxWidth:\s*'100%',\s*maxHeight:\s*'100%'/);
+    // the stretch pattern (both width AND height 100%) must be gone from the canvas style
+    expect(pc).not.toMatch(/touchAction:\s*'none',\s*width:\s*'100%',\s*height:\s*'100%'/);
+  });
+  it('R7.2 PenCanvas sizes the drawing buffer to the image REAL ratio (naturalWidth/Height), not a fixed buffer', () => {
+    const pc = read('../src/components/tablet-chart/PenCanvas.jsx');
+    expect(pc).toMatch(/img\.naturalWidth/);
+    expect(pc).toMatch(/img\.naturalHeight/);
+    expect(pc).toMatch(/c\.width\s*=\s*Math\.max\(1,\s*Math\.round\(nw\s*\*\s*s\)\)/);
+  });
 });

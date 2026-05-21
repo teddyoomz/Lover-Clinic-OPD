@@ -2516,6 +2516,12 @@ is not a `data:` URL**. Two boundaries were wrong (user-reported "ไม่ข�
 4. **The requested-session listener MUST pick the NEWEST session**, not an arbitrary
    `snap.docs[0]` (the query has no orderBy). A stale 'requested' doc must not be opened
    instead of the PC's just-created one (→ PC waits on a session the tablet never touches).
+6. **The pen canvas MUST render the template at its TRUE aspect ratio.** `PenCanvas` sizes
+   its drawing buffer to the image's real `naturalWidth/Height` and the element uses CSS
+   `max-width/max-height:100%` (contain) — NEVER a fixed buffer + `width/height:100%` (which
+   stretches every template to the screen ratio; body templates are 1:2, faces 4:5). The
+   working reference is `ChartCanvas` (PC edit-here) which already fits-to-ratio. Buffer
+   ratio == display ratio keeps pointer coords uniform.
 5. **The Storage bucket MUST have a CORS config allowing the app origin (or `*`) for GET.**
    `downloadTransportImageAsDataUrl` browser-`fetch()`es a `firebasestorage.googleapis.com`
    download URL — with `cors:null` (the default), the browser BLOCKS it → iPad template
