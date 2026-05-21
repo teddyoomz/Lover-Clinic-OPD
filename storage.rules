@@ -76,6 +76,25 @@ service firebase.storage {
       allow delete: if isClinicStaff();
     }
 
+    // ─── Tablet chart-editor relay transport (2026-05-21) ────────────────
+    // Pattern: uploads/chart-edit-sessions/{sessionId}/{template.png|result.png|result.json}
+    // The relay transports the template + flattened result as image/* AND the
+    // editor's object model as result.json (application/json — the lossless,
+    // re-editable fabricJson). The generic uploads rule below allows ONLY
+    // image/* + pdf, so the client-SDK result.json upload (application/json)
+    // was DENIED → uploadTransportJson threw → the whole onSave rejected → save
+    // failed silently (the admin-SDK L2 e2e missed it — admin bypasses rules).
+    // This match allows image/* + application/json, staff-only, 10MB cap.
+    // Probe-Deploy-Probe #13: anon write here → 403; staff json write → 200.
+    match /uploads/chart-edit-sessions/{sessionId}/{file=**} {
+      allow read: if isClinicStaff();
+      allow create: if isClinicStaff()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*')
+                        || request.resource.contentType == 'application/json');
+      allow delete: if isClinicStaff();
+    }
+
     // Generic uploads — clinic staff only (other be_* collections like
     // be_treatments, be_documents, etc. land here). Same MIME + size gate.
     match /uploads/{collection}/{docId}/{fileName} {

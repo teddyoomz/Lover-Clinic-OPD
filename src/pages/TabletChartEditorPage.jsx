@@ -24,6 +24,7 @@ export default function TabletChartEditorPage() {
   const [templateDataUrl, setTemplateDataUrl] = useState('');
   const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
   const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false); const [saveErr, setSaveErr] = useState('');
   const canvasRef = useRef(null); const sesUnsubRef = useRef(null);
 
   const closeEditor = useCallback((free = true) => {
@@ -60,16 +61,26 @@ export default function TabletChartEditorPage() {
   }, [branchId, deviceId, active, openSession]);
 
   const onSave = useCallback(async () => {
-    if (!active) return;
-    const dataUrl = canvasRef.current.exportDataUrl();
-    const fabricJson = canvasRef.current.exportFabricJson();   // lossless object data → re-editable-ready
-    const [url, jsonUrl] = await Promise.all([
-      uploadTransportImage(active.sessionId, 'result', dataUrl),
-      fabricJson ? uploadTransportJson(active.sessionId, 'result', JSON.parse(fabricJson)) : Promise.resolve(null),
-    ]);
-    await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url, resultFabricJsonUrl: jsonUrl });
-    closeEditor(true);
-  }, [active, closeEditor]);
+    if (!active || saving) return;
+    setSaving(true); setSaveErr('');
+    try {
+      const dataUrl = canvasRef.current.exportDataUrl();
+      const fabricJson = canvasRef.current.exportFabricJson();
+      // PNG carries every VISIBLE edit (flattened) into charts[] — this is the essential save.
+      const url = await uploadTransportImage(active.sessionId, 'result', dataUrl);
+      // The lossless fabricJson (object-level re-edit) is OPTIONAL. A json upload failure — e.g.
+      // storage.rules not yet allowing application/json — must NEVER block the save (the PNG
+      // already has all the edits). Guard it so a json hiccup can't reject the whole onSave.
+      let jsonUrl = null;
+      if (fabricJson) { try { jsonUrl = await uploadTransportJson(active.sessionId, 'result', JSON.parse(fabricJson)); } catch { jsonUrl = null; } }
+      await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url, resultFabricJsonUrl: jsonUrl });
+      closeEditor(true);
+    } catch {
+      setSaveErr('บันทึกไม่สำเร็จ — ลองใหม่อีกครั้ง');   // never silently fail; editor stays open to retry
+    } finally {
+      setSaving(false);
+    }
+  }, [active, saving, closeEditor]);
 
   const onCancel = useCallback(async () => {
     if (active) await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.CANCELLED, cancelledBy: CANCELLED_BY.TABLET }).catch(() => {});
@@ -100,8 +111,8 @@ export default function TabletChartEditorPage() {
         <div className="fixed inset-0 z-[125] bg-neutral-950 flex flex-col">
           <header className="flex items-center justify-between px-4 py-2 bg-neutral-900 text-neutral-100 border-b border-neutral-800">
             <button data-testid="editor-cancel" onClick={onCancel} className="px-3 py-1.5 border border-neutral-600 rounded">✕ ยกเลิก</button>
-            <span className="text-sm opacity-80">{active.template?.name} · {active.patientLabel}</span>
-            <button data-testid="editor-save" onClick={onSave} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded">✓ บันทึก</button>
+            <span className={`text-sm ${saveErr ? 'text-red-400 font-semibold' : 'opacity-80'}`} data-testid="editor-header-label">{saveErr || `${active.template?.name} · ${active.patientLabel}`}</span>
+            <button data-testid="editor-save" onClick={onSave} disabled={saving} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded disabled:opacity-50">{saving ? 'กำลังบันทึก…' : '✓ บันทึก'}</button>
           </header>
           <div className="flex flex-1 min-h-0">
             <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}

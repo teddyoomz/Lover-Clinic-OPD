@@ -144,3 +144,26 @@ describe('RC root-cause: canvas init-once; template on live canvas; no dispose o
     expect(lt).not.toContain('.dispose(');
   });
 });
+
+// RC-save — the SAVE bug the full-relay e2e caught (template+draw worked but save failed): the
+// generic storage.rules allowed only image/* + pdf, so the client-SDK result.json upload
+// (application/json) was DENIED → uploadTransportJson threw → onSave's Promise.all rejected →
+// save silently failed. The admin-SDK L2 e2e missed it (admin bypasses storage rules). Two fixes:
+// (RC4) storage.rules allows application/json for the chart path; (RC5) onSave makes the json
+// upload non-fatal so the PNG (which carries every visible edit) always saves.
+describe('RC-save root-cause: storage.rules allows result.json + onSave json-upload non-fatal', () => {
+  const rules = fs.readFileSync('storage.rules', 'utf8');
+  const page = fs.readFileSync('src/pages/TabletChartEditorPage.jsx', 'utf8');
+  it('RC4 storage.rules allows application/json for the chart-edit-sessions upload path', () => {
+    expect(rules).toMatch(/match \/uploads\/chart-edit-sessions\/\{sessionId\}\/\{file=\*\*\}/);
+    const block = rules.slice(rules.indexOf('uploads/chart-edit-sessions'), rules.indexOf('Generic uploads'));
+    expect(block).toContain('application/json');
+    expect(block).toContain('isClinicStaff()');
+  });
+  it('RC5 onSave guards the json upload (non-fatal) + surfaces save errors (never silent)', () => {
+    const onSave = page.slice(page.indexOf('const onSave ='), page.indexOf('const onCancel ='));
+    expect(onSave).toMatch(/try \{ jsonUrl = await uploadTransportJson[\s\S]*?\} catch \{ jsonUrl = null; \}/);
+    expect(onSave).toContain('setSaveErr');
+    expect(onSave).toContain('SESSION_STATUS.SAVED');
+  });
+});
