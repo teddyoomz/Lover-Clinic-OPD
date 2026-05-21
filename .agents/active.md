@@ -1,38 +1,30 @@
 ---
-updated_at: "2026-05-21 EOD+1 LATE+5 — PAUSED for context (continue next chat). NEW feature 'RE-EDIT saved chart ON TABLET' = brainstormed + design APPROVED by user ('โอเค ลุยเลย'); NOT yet implemented. Prior: more-tools + 5 post-ship rounds DONE (full vitest 13949/0, real-prod round-trip e2e 14/0), NOT deployed."
-status: "more-tools + 5 post-ship rounds COMPLETE (local, 13949/0). NEXT (approved, not started): re-edit-saved-chart-on-tablet → write HTML spec → writing-plans → implement → round-trip e2e + real-browser verify. Still awaiting 'deploy' (vercel + storage Probe-Deploy-Probe #13)."
+updated_at: "2026-05-21 EOD+2 — RE-EDIT a saved chart ON TABLET: IMPLEMENTED + verified (local, NOT deployed). full vitest 13965/0 · L2 e2e ALL PASS real prod (Phase E) · L1 real-browser object-level hydrate confirmed. Prior more-tools + 5 rounds also local. Next = deploy (vercel + firebase --only storage, Probe #13) → on-device L1."
+status: "re-edit-on-tablet DONE + verified (local). Awaiting 'deploy' (V18) — combined vercel + storage deploy unlocks LIVE object-level tablet re-edit (pre-deploy = raster fallback, works)."
 branch: "master"
-last_commit: "feat(tablet-chart): object-level re-edit (consume fabricJson + canvas dims) + 1MB-persist guard + real-prod round-trip e2e — 468b5ff5"
-tests: "full vitest 13949/0 · build clean · real-prod round-trip e2e 14/0 · object-level PC re-edit verified in real browser. (re-edit-on-tablet feature NOT yet built/tested.)"
+last_commit: "feat(tablet-chart): re-edit a saved chart ON TABLET — editFabricJsonUrl relay leg + object-level hydrate + same-slot merge (verified L1+L2)"
+tests: "full vitest 13965/0 · build clean 3.43s · L2 e2e ALL PASS real prod (re-edit Phase E + A/B/C1-C4) · L1 real-browser object-level (exportObjects 2, dims 600×800). RT1-RT7 + RC2/R4.2/R4.4 V21 fixups."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "d750c725 — ratio fix LIVE. more-tools + all 5 post-ship rounds (~24 commits) NOT deployed."
-firestore_rules_version: "storage.rules NEW uploads/chart-edit-sessions/{sessionId}/{file=**} allows image/* + application/json — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13). Covers the future edit.json too. Object-level re-edit (PC + the new tablet flow) is live-gated on this deploy."
+production_commit: "d750c725 — ratio fix LIVE. more-tools + 5 post-ship rounds + re-edit-on-tablet (~25 commits) NOT deployed."
+firestore_rules_version: "storage.rules uploads/chart-edit-sessions/{sessionId}/{file=**} allows image/* + application/json (covers result.json AND the NEW edit.json) — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13). Object-level re-edit (PC + tablet) is live-gated on this deploy."
 ---
 
 # Active Context
 
-## ▶ RESUME HERE (next chat) — implement the APPROVED feature: RE-EDIT saved chart ON TABLET
+## ▶ RESUME HERE (next chat) — re-edit-on-tablet DONE; next = DEPLOY (user-triggered)
 
-**Status: brainstormed + design APPROVED by user ("โอเค ลุยเลย"). NOT implemented. Next = write HTML spec (mockup+flow) → writing-plans → implement → verify.** (Brainstorming HARD-GATE already satisfied — do NOT re-brainstorm; go straight to writing-plans/spec.)
+**Status: re-edit a saved chart ON TABLET is IMPLEMENTED + verified (local, NOT deployed).** No code work pending — the only outstanding action is the user-triggered deploy.
 
-**Problem**: clicking edit on a saved chart opens the PC `ChartCanvas` only — no way to send the existing annotated chart back to the iPad to re-edit. User wants a tablet option + the iPad loads the existing chart (prior annotations) → edits → saves back into the SAME chart slot.
+**What shipped**: edit ✏️ on a saved chart → `PcPairingModal` (PC/tablet choice, reuses add-new) → send-to-tablet ships the existing chart PNG (`templateImageUrl` raster fallback) + `fabricJson` (NEW `editFabricJsonUrl`) → `TabletChartEditorPage` resolves json-first → `TabletChartCanvas` `initialFabricJson` → object-level `loadFromJSON` at saved dims (mirror PC ChartCanvas) else raster → result merges back to the SAME slot (`editingIdx`). Reuses serializeFabricCanvas/isObjectLevelReeditable/uploadTransportJson; **no new collection, no new storage rule**. Spec/plan: `docs/superpowers/{specs,plans}/2026-05-21-re-edit-saved-chart-on-tablet*`.
 
-**APPROVED DESIGN (Q1=A automatic)**:
-- **UX**: edit (pencil) button on a saved chart → open the EXISTING `PcPairingModal` (same as add-new-chart): "แก้ที่นี่ (PC)" / "ส่งไปแก้ที่ iPad <device>". (Today edit goes straight to PC; new-chart already shows the modal — make edit consistent.)
-- **Send existing chart to tablet** via relay `start()`: chart PNG → `templateImageUrl` (Storage, existing mechanism, for display + raster); chart `fabricJson` (when present + `isObjectLevelReeditable`) → NEW session field **`editFabricJsonUrl`** uploaded to `uploads/chart-edit-sessions/{id}/edit.json` (already covered by the fix2 storage.rules `{file=**}` json allowance — NO new rule). Remember `editingIdx` so the saved result merges into the SAME slot.
-- **Tablet loads** (`TabletChartEditorPage` → `TabletChartCanvas`): if session has `editFabricJsonUrl` → download → pass as NEW prop `initialFabricJson`. TabletChartCanvas: if `initialFabricJson` present + `isObjectLevelReeditable` → `loadFromJSON` at saved dims (prior strokes = movable/erasable objects; reuse `serializeFabricCanvas`/`isObjectLevelReeditable` from `src/lib/tabletChartTools.js`) INSTEAD of `loadTemplate`; else → `loadTemplate` (raster, current).
-- **Save back**: unchanged (PNG + fabricJson) → PC hook SAVED → `ChartSection.handleSave` with `editingIdx≥0` → replace the slot.
-- **Graceful**: json upload denied (pre-deploy) → `editFabricJsonUrl` null → tablet uses the PNG (raster). Works now; object-level unlocks after the storage deploy.
+**Verified (Rule Q/S)**: full vitest 13965/0 · build clean · L2 e2e ALL PASS real prod (Phase E new leg: editFabricJsonUrl + PRODUCTION isObjectLevelReeditable on the round-tripped edit.json + same-slot merge) · L1 real-browser object-level hydrate (mounted REAL component → exportObjects 2, native 600×800, NOT container-fit raster). `tests/re-edit-chart-on-tablet.test.jsx` RT1-RT7 + RC2/R4.2/R4.4 V21 fixups. Verbose: `v-log-archive.md` "Tablet Chart more-tools" §followup-6.
 
-**Files to touch**: `src/components/ChartSection.jsx` (edit → PcPairingModal + send existing chart; keep editingIdx through the async relay) · `src/hooks/useChartEditSession.js` (`start` accepts the existing chart {dataUrl, fabricJson}) · `src/lib/chartEditSession.js` (+ `editFabricJsonUrl` upload helper, reuse uploadTransportJson 'edit') · `src/lib/chartEditSessionCore.js` (`editFabricJsonUrl: null` in buildSessionCreate) · `src/pages/TabletChartEditorPage.jsx` (download `editFabricJsonUrl` → initialFabricJson) · `src/components/tablet-chart/TabletChartCanvas.jsx` (NEW prop `initialFabricJson` → object-level hydrate branch in the template effect, with raster fallback).
-
-**Verify (Rule Q/S)**: extend `scripts/e2e-chart-relay-roundtrip.mjs` (or new) — send-existing-chart round-trip on real prod; real-browser verify the tablet object-level hydrate (mount TabletChartCanvas with initialFabricJson → objects render); flow-simulate + full vitest. NOTE: object-level tablet re-edit is live-gated on the storage deploy (edit.json upload).
-
-## Done this session (more-tools + 5 post-ship rounds — local, 13949/0, NOT deployed)
-init-once (fix1) · save/storage.rules+onSave (fix2) · sync-render (fix3, preview-artifact, kept) · **upper-canvas COVER = real on-device cause** (fix4, remove inline canvas bg — user confirmed "ใช้ได้แล้ว") · real-prod round-trip e2e 14/0 + object-level PC re-edit + 1MB-persist guard (fix5). AV103/AV104/AV105 + RC1-RC11 + Rule S (Chrome MCP standing auth). Verbose: `v-log-archive.md` "Tablet Chart more-tools" §followup + §followup-2/3/4/5.
-
-## Outstanding user-triggered
-- **implement the approved re-edit-on-tablet feature** (next chat — design approved, go to spec/plan/impl).
-- **deploy** (vercel + storage, Probe-Deploy-Probe #13) — unlocks live object-level re-edit (PC + tablet).
-- (decision) Storage-ref for chart images (pre-existing 1MB-inline limit) — architectural follow-up.
+## Outstanding (user-triggered)
+- **deploy** (combined, V18): `vercel --prod` (more-tools + 5 rounds + re-edit-on-tablet, ~25 commits) **+** `firebase deploy --only storage` (Probe-Deploy-Probe #13: anon write `uploads/chart-edit-sessions/...` → 403, staff json → 200) — **unlocks LIVE object-level re-edit (PC + tablet)**. [⚠ firebase CLI 15.x: `--only storage`, NOT `storage:rules`.]
+- After deploy → on-device L1: tablet edit a saved chart → prior strokes load as MOVABLE/erasable objects → save → PC same slot updated.
+- (decision) Storage-ref for chart images (pre-existing ~1MB Firestore-doc inline limit) — architectural follow-up.
 - (carryover) V106 cron 03:30 BKK first drain; calendar-density / Recall / V108 list-visual L1.
+
+## Done recent (local, NOT deployed)
+- **re-edit-on-tablet** (this session) — editFabricJsonUrl relay leg + object-level tablet hydrate + same-slot merge. 13965/0; L1+L2 verified.
+- **more-tools + 5 post-ship rounds** — Fabric v7 pro toolset + init/save/sync-render/cover/round-trip+re-edit+guard. AV103/AV104/AV105 + RC1-RC11 + Rule S.

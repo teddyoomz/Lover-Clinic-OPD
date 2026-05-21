@@ -1,6 +1,8 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { strokeOutline, outlineToSvgPath, PEN_PRESETS } from '../../lib/penStroke.js';
-import { isDrawTool, isShapeTool, serializeFabricCanvas } from '../../lib/tabletChartTools.js';
+import { isDrawTool, isShapeTool, serializeFabricCanvas, isObjectLevelReeditable } from '../../lib/tabletChartTools.js';
+
+const safeParse = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; } };
 
 // Tablet chart editor canvas — Fabric v7 object model + perfect-freehand pressure pen.
 // Rides Fabric's own mouse:down/move/up pipeline (no raw upperCanvasEl listeners → no
@@ -27,7 +29,7 @@ import { isDrawTool, isShapeTool, serializeFabricCanvas } from '../../lib/tablet
 // path; mirror it. Sync render is rAF-independent, so it always reaches the screen. Verified in a
 // real browser at dpr=2: the rAF path → 0 painted px; sync renderAll → template + strokes paint.
 // props: templateImageUrl, tool, color, size, onRequestSelect (auto-switch after shape/text).
-const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, tool, color, size, onRequestSelect }, ref) {
+const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, initialFabricJson, tool, color, size, onRequestSelect }, ref) {
   const elRef = useRef(null);
   const fcRef = useRef(null);
   const fabricRef = useRef(null);
@@ -35,6 +37,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const templateObjRef = useRef(null);
   const hasTemplateRef = useRef(false);
   const templateUrlRef = useRef(templateImageUrl); templateUrlRef.current = templateImageUrl;  // always-current (race-safe)
+  const initialJsonRef = useRef(initialFabricJson); initialJsonRef.current = initialFabricJson;  // re-edit object-level source (race-safe)
   const loadedTplRef = useRef(undefined);  // the template url currently loaded on the canvas
   const toolRef = useRef({ tool, color, size }); toolRef.current = { tool, color, size };
   const onSelectRef = useRef(onRequestSelect); onSelectRef.current = onRequestSelect;
@@ -99,6 +102,25 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     fc.renderAll();
     baselineHistory();   // template is part of the baseline → undo never removes it
   }, []);
+
+  // Object-level re-edit (re-edit-on-tablet): hydrate from a saved chart's fabricJson so prior
+  // strokes/shapes/text return as MOVABLE/ERASABLE objects (not a flat raster). Mirrors the PC
+  // ChartCanvas object-level path: recreate the SAME coordinate space (objects carry absolute coords)
+  // + loadFromJSON + force white bg + re-lock the template (object[0]). Operates on the LIVE fcRef,
+  // never disposes. The template effect skips loadTemplate while this owns the canvas (no double-load).
+  const hydrateFromJson = useCallback(async (jsonStr) => {
+    const fc = fcRef.current; if (!fc) return;
+    const parsed = safeParse(jsonStr); if (!isObjectLevelReeditable(parsed)) return;
+    fc.setDimensions({ width: parsed.canvasWidth, height: parsed.canvasHeight });
+    await fc.loadFromJSON(parsed);
+    if (fcRef.current !== fc) return;                    // unmounted during async load (V21 guard)
+    fc.backgroundColor = '#fff';                         // loadFromJSON adopts the json bg (may be transparent)
+    const objs = fc.getObjects();
+    if (objs[0]) { objs[0].set({ selectable: false, evented: false, hoverCursor: 'default' }); templateObjRef.current = objs[0]; hasTemplateRef.current = true; }
+    applyTool();                                         // normalize non-template objects to the current tool's selectable state
+    fc.renderAll();
+    histRef.current = [JSON.stringify(fc.toJSON())]; hiRef.current = 0;   // baseline (inline; refs only)
+  }, [applyTool]);
 
   // ── pen: rebuild the fabric.Path from accumulated pressure points (Fabric renders) ──
   const renderPenStroke = () => {
@@ -220,13 +242,27 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
       };
       fc.on('mouse:up', finish);
       applyTool();
-      loadTemplate(templateUrlRef.current);   // load whatever template is current (race-safe via the ref)
+      // load whatever source is current (race-safe via refs): a reeditable json (object-level
+      // re-edit) owns the canvas; otherwise the template image (raster / new chart).
+      if (initialJsonRef.current && isObjectLevelReeditable(safeParse(initialJsonRef.current))) hydrateFromJson(initialJsonRef.current);
+      else loadTemplate(templateUrlRef.current);
     })();
     return () => { cancelled = true; const fc = fcRef.current; if (fc) { try { fc.dispose(); } catch { /* ignore */ } fcRef.current = null; } readyRef.current = false; templateObjRef.current = null; loadedTplRef.current = undefined; };
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps  ← init ONCE; template handled by the effect below
 
-  // load/replace the template on the LIVE canvas when it arrives/changes (no re-init)
-  useEffect(() => { if (readyRef.current) loadTemplate(templateImageUrl); }, [templateImageUrl, loadTemplate]);
+  // load/replace the template on the LIVE canvas when it arrives/changes (no re-init) — UNLESS a
+  // reeditable json owns the canvas (object-level re-edit): raster-loading the PNG then would bake
+  // the annotations twice. The page resolves json-first, so this stays the raster/new-chart path.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    if (initialJsonRef.current && isObjectLevelReeditable(safeParse(initialJsonRef.current))) return;
+    loadTemplate(templateImageUrl);
+  }, [templateImageUrl, loadTemplate]);
+  // object-level hydrate when a reeditable json arrives (late via the instant-pop race)
+  useEffect(() => {
+    if (!readyRef.current || !initialFabricJson) return;
+    if (isObjectLevelReeditable(safeParse(initialFabricJson))) hydrateFromJson(initialFabricJson);
+  }, [initialFabricJson, hydrateFromJson]);
 
   // react to tool change (color/size are read live from toolRef at draw time)
   useEffect(() => { applyTool(); }, [tool, applyTool]);

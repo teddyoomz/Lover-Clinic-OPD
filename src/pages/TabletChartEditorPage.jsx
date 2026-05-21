@@ -4,9 +4,10 @@ import { getOrCreateDeviceId } from '../lib/tabletDeviceCache.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import {
   listenToRequestedSessionForTablet, listenToChartEditSession, updateChartEditSession,
-  freeChartTablet, uploadTransportImage, uploadTransportJson, downloadTransportImageAsDataUrl,
+  freeChartTablet, uploadTransportImage, uploadTransportJson, downloadTransportImageAsDataUrl, downloadTransportJson,
 } from '../lib/chartEditSession.js';
 import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS } from '../lib/chartEditSessionCore.js';
+import { isObjectLevelReeditable } from '../lib/tabletChartTools.js';
 import TabletStandby from '../components/tablet-chart/TabletStandby.jsx';
 import TabletChartCanvas from '../components/tablet-chart/TabletChartCanvas.jsx';
 import EditorToolRail from '../components/tablet-chart/EditorToolRail.jsx';
@@ -22,6 +23,7 @@ export default function TabletChartEditorPage() {
   const byName = auth.currentUser?.displayName || auth.currentUser?.email || '';
   const [active, setActive] = useState(null);     // active session doc being edited
   const [templateDataUrl, setTemplateDataUrl] = useState('');
+  const [initialFabricJson, setInitialFabricJson] = useState('');   // object-level re-edit source (re-edit-on-tablet)
   const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false); const [saveErr, setSaveErr] = useState('');
@@ -30,26 +32,36 @@ export default function TabletChartEditorPage() {
   const closeEditor = useCallback((free = true) => {
     sesUnsubRef.current?.(); sesUnsubRef.current = null;
     if (free) freeChartTablet(deviceId).catch(() => {});
-    setActive(null); setTemplateDataUrl('');
+    setActive(null); setTemplateDataUrl(''); setInitialFabricJson('');
   }, [deviceId]);
 
   const openSession = useCallback(async (sdoc) => {
-    let loadedUrl = sdoc.templateImageUrl || '';
-    const dataUrl = loadedUrl ? await downloadTransportImageAsDataUrl(loadedUrl) : '';
-    setTemplateDataUrl(dataUrl); setActive(sdoc);
+    let loadedUrl = '', loadedEditUrl = '';
+    setActive(sdoc);
+    // Resolve the editor source. Object-level re-edit json takes priority: a reeditable
+    // editFabricJsonUrl → hydrate from objects + SKIP the raster PNG (canvas never double-loads).
+    // Otherwise fall back to the template / annotated PNG (raster / new chart). Re-runnable for the
+    // Q4 instant-pop race (urls arrive on the 'requested' doc a moment after pop).
+    const resolveSource = async (doc) => {
+      if (doc.editFabricJsonUrl && doc.editFabricJsonUrl !== loadedEditUrl) {
+        loadedEditUrl = doc.editFabricJsonUrl;
+        const j = await downloadTransportJson(doc.editFabricJsonUrl);
+        if (j && isObjectLevelReeditable(j)) { setInitialFabricJson(JSON.stringify(j)); return; }
+      }
+      if (doc.templateImageUrl && doc.templateImageUrl !== loadedUrl) {
+        loadedUrl = doc.templateImageUrl;
+        const d = await downloadTransportImageAsDataUrl(doc.templateImageUrl);
+        setTemplateDataUrl(d);
+      }
+    };
+    await resolveSource(sdoc);
     await updateChartEditSession(sdoc.sessionId, { status: SESSION_STATUS.ACTIVE, tabletHeartbeatAt: Date.now() });
     sesUnsubRef.current = listenToChartEditSession(sdoc.sessionId, async (live) => {
       if (!live) return;
       if (live.status === SESSION_STATUS.CANCELLED && live.cancelledBy !== CANCELLED_BY.TABLET) {
         setNotice('การเชื่อมต่อถูกยกเลิกจาก PC'); closeEditor(false); return;
       }
-      // Q4 instant-pop can fire on the 'requested' doc BEFORE the PC finishes uploading the
-      // template, so templateImageUrl arrives a moment later → load it when it lands/changes.
-      if (live.templateImageUrl && live.templateImageUrl !== loadedUrl) {
-        loadedUrl = live.templateImageUrl;
-        const d = await downloadTransportImageAsDataUrl(live.templateImageUrl);
-        setTemplateDataUrl(d);
-      }
+      await resolveSource(live);
     }, () => {});
   }, [closeEditor]);
 
@@ -119,7 +131,7 @@ export default function TabletChartEditorPage() {
               onUndo={() => canvasRef.current?.undo()} onRedo={() => canvasRef.current?.redo()}
               onClear={() => canvasRef.current?.clear()} onDelete={() => canvasRef.current?.deleteSelected()} />
             <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
-              <TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size}
+              <TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} initialFabricJson={initialFabricJson} tool={tool} color={color} size={size}
                 onRequestSelect={() => setTool('select')} />
             </div>
           </div>

@@ -13,22 +13,27 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
   const [canvasTemplate, setCanvasTemplate] = useState(null);
   const [editingIdx, setEditingIdx] = useState(-1);
   const [pendingTemplate, setPendingTemplate] = useState(null);   // staged template awaiting "edit here vs tablet"
+  const [pendingChart, setPendingChart] = useState(null);         // existing chart being re-edited via the modal (null = new chart)
   const { branchId } = useSelectedBranch();
   const pcDeviceId = (auth.currentUser?.uid || 'pc') + ':' + (typeof window !== 'undefined' ? (window.name || 'main') : 'main');
 
-  // New chart → stage template + open the choice (edit here vs tablet). Editing an
-  // EXISTING chart (handleEdit) stays local — the tablet flow is for new charts only.
+  // New chart OR editing an existing one both stage the "edit here vs tablet" choice (PcPairingModal).
+  // pendingChart distinguishes them: null = new chart (send the blank template), set = re-edit (send the
+  // existing chart's PNG + fabricJson so the tablet can object-level re-edit + merge back to the same slot).
   const handleSelectTemplate = (tmpl) => {
     setCanvasTemplate(tmpl);
     setEditingIdx(-1);
     setSelectorOpen(false);
+    setPendingChart(null);
     setPendingTemplate(tmpl);
   };
 
   const handleEdit = (idx) => {
-    setCanvasTemplate(charts[idx]?.template || null);
+    const chart = charts[idx];
+    setCanvasTemplate(chart?.template || null);
     setEditingIdx(idx);
-    setCanvasOpen(true);
+    setPendingChart(chart || null);
+    setPendingTemplate(chart?.template || { id: chart?.templateId || 'blank', name: 'Chart', category: '' });
   };
 
   const handleSave = (chartData) => {
@@ -49,19 +54,22 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
 
   // Tablet-pairing relay (Q1): the tablet result funnels through the SAME handleSave
   // the local canvas uses → identical charts[] shape. ChartSection owns this; TFP is untouched.
+  // Re-edit: when pendingChart is set, send the existing chart's PNG (raster fallback) + fabricJson
+  // (object-level) → result merges back into the SAME slot (editingIdx preserved through the relay).
   const { phase, error, start, cancel } = useChartEditSession({
     pcDeviceId, pcUid: auth.currentUser?.uid,
-    onSaved: (chartData) => { handleSave(chartData); setPendingTemplate(null); },
+    onSaved: (chartData) => { handleSave(chartData); setPendingTemplate(null); setPendingChart(null); },
   });
-  const editHere = () => { setPendingTemplate(null); setCanvasOpen(true); };
+  const editHere = () => { setPendingTemplate(null); setPendingChart(null); setCanvasOpen(true); };
   const sendToTablet = (tablet) => start({
     tablet,
     template: { id: pendingTemplate?.id, name: pendingTemplate?.name, category: pendingTemplate?.category || '' },
     patientLabel,
-    templateDataUrl: pendingTemplate?.imageUrl,
+    templateDataUrl: pendingChart ? pendingChart.dataUrl : pendingTemplate?.imageUrl,
+    editFabricJson: pendingChart ? pendingChart.fabricJson : undefined,
     branchId,
   });
-  const closePairing = () => { cancel(); setPendingTemplate(null); };
+  const closePairing = () => { cancel(); setPendingTemplate(null); setPendingChart(null); };
 
   return (
     <>
@@ -92,8 +100,8 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
             <div key={idx} className={`relative rounded-lg border overflow-hidden group ${isDark ? 'border-[#333]' : 'border-gray-200'}`}>
               <img src={chart.dataUrl} alt={`Chart ${idx + 1}`} className="w-full object-contain bg-white" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                <button onClick={() => handleEdit(idx)} className="p-2 bg-white/90 rounded-full text-blue-600 hover:bg-white shadow"><Edit3 size={14} /></button>
-                <button onClick={() => handleDelete(idx)} className="p-2 bg-white/90 rounded-full text-red-500 hover:bg-white shadow"><Trash2 size={14} /></button>
+                <button data-testid={`chart-edit-${idx}`} onClick={() => handleEdit(idx)} className="p-2 bg-white/90 rounded-full text-blue-600 hover:bg-white shadow"><Edit3 size={14} /></button>
+                <button data-testid={`chart-delete-${idx}`} onClick={() => handleDelete(idx)} className="p-2 bg-white/90 rounded-full text-red-500 hover:bg-white shadow"><Trash2 size={14} /></button>
               </div>
               <div className={`text-center py-1 text-[11px] font-bold ${isDark ? 'bg-[#111] text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
                 Chart {idx + 1}
@@ -106,8 +114,8 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
       {/* Template selector modal */}
       <ChartTemplateSelector isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} onSelect={handleSelectTemplate} isDark={isDark} db={db} appId={appId} />
 
-      {/* Edit-on-tablet choice / waiting / failed (new charts only) */}
-      {pendingTemplate && (
+      {/* Edit-on-tablet choice / waiting / failed (new charts AND re-edit) */}
+      {(pendingTemplate || pendingChart) && (
         <PcPairingModal
           branchId={branchId}
           phase={phase === 'idle' ? 'choose' : phase}

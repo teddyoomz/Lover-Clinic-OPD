@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChartEditSession, listenToChartEditSession, updateChartEditSession,
-  deleteChartEditSession, freeChartTablet, uploadTransportImage,
+  deleteChartEditSession, freeChartTablet, uploadTransportImage, uploadTransportJson,
   downloadTransportImageAsDataUrl, downloadTransportJson, cleanupSessionStorage,
 } from '../lib/chartEditSession.js';
 import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS, HEARTBEAT_STALE_MS, isHeartbeatStale } from '../lib/chartEditSessionCore.js';
@@ -21,7 +21,7 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
 
   const teardown = useCallback(() => { unsubRef.current?.(); unsubRef.current = null; idRef.current = null; }, []);
 
-  const start = useCallback(async ({ tablet, template, patientLabel, templateDataUrl, branchId }) => {
+  const start = useCallback(async ({ tablet, template, patientLabel, templateDataUrl, editFabricJson, branchId }) => {
     setError(''); setPhase('waiting');
     const sessionId = randSessionId(); idRef.current = sessionId;
     let created = false;
@@ -29,7 +29,17 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
       await createChartEditSession({ sessionId, branchId, pcDeviceId, pcUid, tabletDeviceId: tablet.deviceId, tabletName: tablet.deviceName, template, patientLabel });
       created = true;
       const url = await uploadTransportImage(sessionId, 'template', templateDataUrl);
-      await updateChartEditSession(sessionId, { templateImageUrl: url });
+      // Re-edit: ship the chart's lossless object model as edit.json (object-level tablet re-edit).
+      // GUARDED — a json upload failure (storage.rules pre-deploy) must NEVER block the relay; the
+      // tablet falls back to the annotated-PNG raster (templateImageUrl). Mirror the onSave json guard.
+      let editUrl = null;
+      if (editFabricJson) {
+        try {
+          const parsed = typeof editFabricJson === 'string' ? JSON.parse(editFabricJson) : editFabricJson;
+          editUrl = await uploadTransportJson(sessionId, 'edit', parsed);
+        } catch { editUrl = null; }
+      }
+      await updateChartEditSession(sessionId, { templateImageUrl: url, editFabricJsonUrl: editUrl });
     } catch (e) {
       setPhase('failed');
       setError(

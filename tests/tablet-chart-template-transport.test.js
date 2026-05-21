@@ -112,15 +112,19 @@ describe('Tablet Chart Editor — template transport normalization (bugfix)', ()
   it('R4.1 uploadTransportImage routes through resolveToDataUrl', () => {
     expect(SRC).toMatch(/export async function uploadTransportImage[\s\S]*?resolveToDataUrl\(/);
   });
-  it('R4.2 ChartSection passes the selector template imageUrl as templateDataUrl', () => {
-    expect(CHARTSEC).toMatch(/templateDataUrl:\s*pendingTemplate\?\.imageUrl/);
+  it('R4.2 ChartSection passes the selector template imageUrl as templateDataUrl (re-edit sends the existing chart dataUrl)', () => {
+    // re-edit-on-tablet: new chart → blank template imageUrl; re-edit → the existing chart's dataUrl (raster fallback)
+    expect(CHARTSEC).toMatch(/templateDataUrl:\s*pendingChart \? pendingChart\.dataUrl : pendingTemplate\?\.imageUrl/);
   });
   it('R4.3 PC start cancels + frees the tablet on a post-create failure', () => {
     expect(HOOK).toMatch(/let created = false/);
     expect(HOOK).toMatch(/if \(created\)[\s\S]*?CANCELLED[\s\S]*?freeChartTablet/);
   });
-  it('R4.4 tablet loads a late-arriving templateImageUrl (instant-pop race)', () => {
-    expect(TABPAGE).toMatch(/live\.templateImageUrl && live\.templateImageUrl !== loadedUrl/);
+  it('R4.4 tablet loads a late-arriving templateImageUrl via resolveSource (instant-pop race)', () => {
+    // re-edit-on-tablet: the late-arrival handling moved into resolveSource(doc) (json-first, then
+    // the raster PNG); the session listener routes late arrivals through it.
+    expect(TABPAGE).toMatch(/doc\.templateImageUrl && doc\.templateImageUrl !== loadedUrl/);
+    expect(TABPAGE).toMatch(/await resolveSource\(live\)/);
   });
 
   // ── R5 PC saved-handler MUST NOT hang on a download failure ──

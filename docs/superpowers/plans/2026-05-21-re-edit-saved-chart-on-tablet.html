@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Re-edit saved chart ON TABLET — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .canvas-mock{background:repeating-linear-gradient(45deg,#fff,#fff 10px,#f1f5f9 10px,#f1f5f9 20px);border:1px solid #94a3b8;border-radius:6px;min-height:90px;position:relative}
+    .stroke{position:absolute;border:2px dashed #e11d48;border-radius:40%}
+    .stroke.locked{border-style:solid;border-color:#64748b}
+    table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+    th,td{border:1px solid #ccc;padding:5px 8px;text-align:left}
+    th{background:#e6fffa}
+  </style>
+</head>
+<body>
+
+<h1>Re-edit saved chart ON TABLET — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> execute via superpowers:executing-plans (inline — the 6 files are tightly coupled; subagents thrash on this baseline per V81/V86). Brainstorming HARD-GATE already satisfied (design APPROVED "โอเค ลุยเลย"). Spec: <code>docs/superpowers/specs/2026-05-21-re-edit-saved-chart-on-tablet-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Edit (✏️) on a saved chart opens the same PC/tablet choice as add-new; sending an existing chart to the iPad loads its prior annotations (object-level when a re-editable <code>fabricJson</code> exists, raster otherwise) and the result merges back into the SAME slot.</p>
+  <p><strong>Architecture:</strong> Thread a NEW session field <code>editFabricJsonUrl</code> through the existing Firestore-relay (no new collection, no new storage rule). PC sends the chart PNG (<code>templateImageUrl</code>, raster fallback) + the chart <code>fabricJson</code> (<code>editFabricJsonUrl</code> via the existing <code>uploadTransportJson</code>); the tablet resolves json-first → object-level <code>loadFromJSON</code> mirroring PC <code>ChartCanvas:69-79</code>, else raster <code>loadTemplate</code>. <code>TreatmentFormPage</code> untouched (<code>ChartSection</code> owns the relay).</p>
+  <p><strong>Tech Stack:</strong> React, Fabric v7, Firebase Firestore + Storage, Vitest + RTL + Playwright-style real-prod e2e.</p>
+  <p><strong>Rule K</strong> (work-first, test-last): build the 6-file structure (Tasks 1–5), then the test bank (Task 6), then Rule Q/S verify (Task 7). <strong>No deploy</strong> without explicit "deploy" (V18); object-level tablet path is live-gated on <code>firebase deploy --only storage</code> (#13).</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Tablet — object-level (fabricJson present) vs raster fallback</div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px">
+      <div class="canvas-mock" style="padding:8px">
+        <div class="stroke" style="left:20px;top:18px;width:80px;height:30px"></div>
+        <div class="stroke" style="left:60px;top:50px;width:46px;height:34px;border-radius:50%"></div>
+        <span style="position:absolute;right:6px;bottom:4px;font-size:11px;background:#0f172a;color:#fff;border-radius:5px;padding:1px 6px">↕ movable/erasable</span>
+      </div>
+      <small>object-level: <code>loadFromJSON</code> at saved dims, template = locked object[0]</small>
+    </div>
+    <div style="flex:1;min-width:240px">
+      <div class="canvas-mock" style="padding:8px">
+        <div class="stroke locked" style="left:20px;top:18px;width:80px;height:30px"></div>
+        <span style="position:absolute;right:6px;bottom:4px;font-size:11px;background:#0f172a;color:#fff;border-radius:5px;padding:1px 6px">prior = flat bg</span>
+      </div>
+      <small>raster: <code>loadTemplate(annotated PNG)</code>, add NEW strokes on top (graceful, works today)</small>
+    </div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Session doc shape — NEW field</div>
+  <pre><code>{
+  sessionId, branchId, status:'requested'→'active'→'saved',
+  template:{id,name,category}, patientLabel,
+  templateImageUrl: null,        // annotated chart PNG (raster fallback)
+  editFabricJsonUrl: null,       // ◀ NEW — chart fabricJson (object-level re-edit)
+  resultImageUrl: null, resultFabricJsonUrl: null, ...
+}</code></pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">PC → tablet → PC (new editFabricJsonUrl leg)</div>
+  <pre><code>handleEdit(idx) ── set editingIdx + pendingChart=charts[idx] ──▶ PcPairingModal (REUSED)
+       │
+   pick 📱 + tablet
+       ▼
+sendToTablet ──▶ start({ templateDataUrl: chart.dataUrl, editFabricJson: chart.fabricJson })
+       ▼
+start(): createSession(editFabricJsonUrl:null) ─▶ upload template.png
+        ─▶ if editFabricJson: uploadTransportJson('edit') [GUARDED]
+        ─▶ updateChartEditSession({ templateImageUrl, editFabricJsonUrl })   // ONE patch
+       ▼  (Firestore listener; instant-pop already fired on 'requested')
+TABLET resolve(doc): editFabricJsonUrl FIRST → downloadTransportJson
+        ─ reeditable?  YES → setInitialFabricJson(json) + SKIP raster
+                       NO  → downloadImage(templateImageUrl) → setTemplateDataUrl
+       ▼
+TabletChartCanvas: initialFabricJson reeditable → setDimensions + loadFromJSON + relock obj[0] + white bg
+                   else → loadTemplate(templateImageUrl)   // raster; NO double-load
+       ▼  edit → ✓ บันทึก  (onSave UNCHANGED: PNG + fabricJson)
+PC SAVED → onSaved({dataUrl,fabricJson,...}) → handleSave: editingIdx≥0 → REPLACE same slot</code></pre>
+</div>
+<table>
+<tr><th>Path</th><th>editFabricJsonUrl</th><th>Tablet load</th></tr>
+<tr><td>New chart (today)</td><td>null (never sent)</td><td><code>loadTemplate</code> blank template</td></tr>
+<tr><td>Re-edit · json + deployed</td><td>set → reeditable</td><td><code>loadFromJSON</code> object-level ✓</td></tr>
+<tr><td>Re-edit · pre-deploy / legacy</td><td>null (denied/absent)</td><td><code>loadTemplate</code> annotated PNG (raster)</td></tr>
+</table>
+
+<h2>File Structure</h2>
+<ul>
+<li><code>src/lib/chartEditSessionCore.js</code> — pure session-doc builder. Add the field.</li>
+<li><code>src/hooks/useChartEditSession.js</code> — PC relay orchestrator. <code>start()</code> ships the edit json.</li>
+<li><code>src/components/tablet-chart/TabletChartCanvas.jsx</code> — Fabric editor. New <code>initialFabricJson</code> hydrate path.</li>
+<li><code>src/pages/TabletChartEditorPage.jsx</code> — tablet page. Resolve json-first, pass props.</li>
+<li><code>src/components/ChartSection.jsx</code> — PC orchestrator. Edit → modal + send existing chart.</li>
+<li><code>src/lib/chartEditSession.js</code> — transport. <strong>No change</strong> (reuse <code>uploadTransportJson('edit')</code> + <code>downloadTransportJson</code>).</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: session-doc field</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/chartEditSessionCore.js:45</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> add <code>editFabricJsonUrl: null</code> after <code>templateImageUrl: null</code> in <code>buildSessionCreate</code>.</div>
+<pre><code>patientLabel: patientLabel || '', templateImageUrl: null, editFabricJsonUrl: null, resultImageUrl: null, resultFabricJsonUrl: null,</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> verify <code>npm run build</code> clean (no test yet — covered by Task 6 source-grep + flow-simulate).</div>
+</div>
+
+<div class="task">
+<h3>Task 2: PC start() ships the edit json</h3>
+<p><strong>Files:</strong> Modify <code>src/hooks/useChartEditSession.js</code> (imports + <code>start</code> signature + body)</p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> add <code>uploadTransportJson</code> to the import from <code>../lib/chartEditSession.js</code>.</div>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> add <code>editFabricJson</code> to the <code>start</code> destructure.</div>
+<pre><code>const start = useCallback(async ({ tablet, template, patientLabel, templateDataUrl, editFabricJson, branchId }) => {</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> after the template upload, ship the edit json (GUARDED — never blocks) + patch both URLs in one update.</div>
+<pre><code>const url = await uploadTransportImage(sessionId, 'template', templateDataUrl);
+// Re-edit: ship the chart's lossless object model as edit.json (object-level tablet re-edit).
+// GUARDED — a json upload failure (storage.rules pre-deploy) must NEVER block the relay; the
+// tablet falls back to the annotated-PNG raster (templateImageUrl). Mirror the onSave json guard.
+let editUrl = null;
+if (editFabricJson) {
+  try {
+    const parsed = typeof editFabricJson === 'string' ? JSON.parse(editFabricJson) : editFabricJson;
+    editUrl = await uploadTransportJson(sessionId, 'edit', parsed);
+  } catch { editUrl = null; }
+}
+await updateChartEditSession(sessionId, { templateImageUrl: url, editFabricJsonUrl: editUrl });</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 3: TabletChartCanvas object-level hydrate</h3>
+<p><strong>Files:</strong> Modify <code>src/components/tablet-chart/TabletChartCanvas.jsx</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> import <code>isObjectLevelReeditable</code> (alongside <code>serializeFabricCanvas</code>); add a module-level <code>safeParse</code>.</div>
+<pre><code>import { isDrawTool, isShapeTool, serializeFabricCanvas, isObjectLevelReeditable } from '../../lib/tabletChartTools.js';
+const safeParse = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; } };</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> add the prop + an always-current ref.</div>
+<pre><code>const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, initialFabricJson, tool, color, size, onRequestSelect }, ref) {
+  // ...
+  const initialJsonRef = useRef(initialFabricJson); initialJsonRef.current = initialFabricJson;</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> add <code>hydrateFromJson</code> (mirror PC ChartCanvas:72-79 — dims + loadFromJSON + force white + relock obj[0] + applyTool + baseline).</div>
+<pre><code>const hydrateFromJson = useCallback(async (jsonStr) => {
+  const fc = fcRef.current; if (!fc) return;
+  const parsed = safeParse(jsonStr); if (!isObjectLevelReeditable(parsed)) return;
+  loadedTplRef.current = '__object-level__';          // template effect must NOT also loadTemplate
+  fc.setDimensions({ width: parsed.canvasWidth, height: parsed.canvasHeight });
+  await fc.loadFromJSON(parsed);
+  if (fcRef.current !== fc) return;                    // unmounted during async load (V21 guard)
+  fc.backgroundColor = '#fff';                         // loadFromJSON adopts json bg (may be transparent)
+  const objs = fc.getObjects();
+  if (objs[0]) { objs[0].set({ selectable: false, evented: false, hoverCursor: 'default' }); templateObjRef.current = objs[0]; hasTemplateRef.current = true; }
+  applyTool();                                         // normalize non-template objs to current tool's selectable
+  fc.renderAll();
+  histRef.current = [JSON.stringify(fc.toJSON())]; hiRef.current = 0;   // baseline (inline; refs only)
+}, [applyTool]);</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> at the END of the init effect, decide json-vs-template (replace the bare <code>loadTemplate(templateUrlRef.current);</code> at ~line 223).</div>
+<pre><code>      applyTool();
+      if (initialJsonRef.current &amp;&amp; isObjectLevelReeditable(safeParse(initialJsonRef.current))) hydrateFromJson(initialJsonRef.current);
+      else loadTemplate(templateUrlRef.current);</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> gate the template effect (don't raster-load when object-level owns the canvas) + add an initialFabricJson effect (~line 229).</div>
+<pre><code>// load/replace the template on the LIVE canvas — UNLESS a reeditable json owns it (no double-load)
+useEffect(() => {
+  if (!readyRef.current) return;
+  if (initialJsonRef.current &amp;&amp; isObjectLevelReeditable(safeParse(initialJsonRef.current))) return;
+  loadTemplate(templateImageUrl);
+}, [templateImageUrl, loadTemplate]);
+// object-level hydrate when a reeditable json arrives (late via the instant-pop race)
+useEffect(() => {
+  if (!readyRef.current || !initialFabricJson) return;
+  if (isObjectLevelReeditable(safeParse(initialFabricJson))) hydrateFromJson(initialFabricJson);
+}, [initialFabricJson, hydrateFromJson]);</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 4: TabletChartEditorPage — resolve json-first + pass props</h3>
+<p><strong>Files:</strong> Modify <code>src/pages/TabletChartEditorPage.jsx</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> import <code>downloadTransportJson</code> (from chartEditSession.js) + <code>isObjectLevelReeditable</code> (from tabletChartTools.js). Add state + clear it in <code>closeEditor</code>.</div>
+<pre><code>const [initialFabricJson, setInitialFabricJson] = useState('');
+// in closeEditor: setActive(null); setTemplateDataUrl(''); setInitialFabricJson('');</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> rewrite <code>openSession</code> with a single <code>resolve(doc)</code> (json-first → object-level skips raster) used for both initial + late-arrival.</div>
+<pre><code>const openSession = useCallback(async (sdoc) => {
+  let loadedUrl = '', loadedEditUrl = '';
+  setActive(sdoc);
+  const resolve = async (doc) => {
+    if (doc.editFabricJsonUrl &amp;&amp; doc.editFabricJsonUrl !== loadedEditUrl) {
+      loadedEditUrl = doc.editFabricJsonUrl;
+      const j = await downloadTransportJson(doc.editFabricJsonUrl);
+      if (j &amp;&amp; isObjectLevelReeditable(j)) { setInitialFabricJson(JSON.stringify(j)); return; }  // object-level; skip raster
+    }
+    if (doc.templateImageUrl &amp;&amp; doc.templateImageUrl !== loadedUrl) {
+      loadedUrl = doc.templateImageUrl;
+      const d = await downloadTransportImageAsDataUrl(doc.templateImageUrl);
+      setTemplateDataUrl(d);
+    }
+  };
+  await resolve(sdoc);
+  await updateChartEditSession(sdoc.sessionId, { status: SESSION_STATUS.ACTIVE, tabletHeartbeatAt: Date.now() });
+  sesUnsubRef.current = listenToChartEditSession(sdoc.sessionId, async (live) => {
+    if (!live) return;
+    if (live.status === SESSION_STATUS.CANCELLED &amp;&amp; live.cancelledBy !== CANCELLED_BY.TABLET) {
+      setNotice('การเชื่อมต่อถูกยกเลิกจาก PC'); closeEditor(false); return;
+    }
+    await resolve(live);
+  }, () => {});
+}, [closeEditor]);</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> pass the prop to the canvas.</div>
+<pre><code>&lt;TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} initialFabricJson={initialFabricJson} tool={tool} color={color} size={size} onRequestSelect={() =&gt; setTool('select')} /&gt;</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 5: ChartSection — edit → modal + send existing chart</h3>
+<p><strong>Files:</strong> Modify <code>src/components/ChartSection.jsx</code></p>
+<div class="step"><input type="checkbox"> <strong>Step 1:</strong> add <code>pendingChart</code> state (existing chart being re-edited; null = new).</div>
+<pre><code>const [pendingChart, setPendingChart] = useState(null);</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 2:</strong> <code>handleSelectTemplate</code> clears <code>pendingChart</code>; <code>handleEdit</code> opens the modal (not the canvas) with the existing chart staged.</div>
+<pre><code>const handleSelectTemplate = (tmpl) => {
+  setCanvasTemplate(tmpl); setEditingIdx(-1); setSelectorOpen(false);
+  setPendingChart(null); setPendingTemplate(tmpl);
+};
+const handleEdit = (idx) => {
+  const chart = charts[idx];
+  setCanvasTemplate(chart?.template || null);
+  setEditingIdx(idx);
+  setPendingChart(chart || null);
+  setPendingTemplate(chart?.template || { id: chart?.templateId || 'blank', name: 'Chart', category: '' });
+};</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 3:</strong> <code>onSaved</code> + <code>editHere</code> + <code>sendToTablet</code> + <code>closePairing</code> handle the existing chart and clear both pendings.</div>
+<pre><code>const { phase, error, start, cancel } = useChartEditSession({
+  pcDeviceId, pcUid: auth.currentUser?.uid,
+  onSaved: (chartData) =&gt; { handleSave(chartData); setPendingTemplate(null); setPendingChart(null); },
+});
+const editHere = () =&gt; { setPendingTemplate(null); setPendingChart(null); setCanvasOpen(true); };
+const sendToTablet = (tablet) =&gt; start({
+  tablet,
+  template: { id: pendingTemplate?.id, name: pendingTemplate?.name, category: pendingTemplate?.category || '' },
+  patientLabel,
+  templateDataUrl: pendingChart ? pendingChart.dataUrl : pendingTemplate?.imageUrl,
+  editFabricJson: pendingChart ? pendingChart.fabricJson : undefined,
+  branchId,
+});
+const closePairing = () =&gt; { cancel(); setPendingTemplate(null); setPendingChart(null); };</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 4:</strong> render the modal when either pending is set.</div>
+<pre><code>{(pendingTemplate || pendingChart) &amp;&amp; (
+  &lt;PcPairingModal branchId={branchId} phase={phase === 'idle' ? 'choose' : phase} error={error}
+    onEditHere={editHere} onSendToTablet={sendToTablet} onCancel={closePairing} onRetry={() =&gt; cancel()} onClose={closePairing} /&gt;
+)}</code></pre>
+<div class="step"><input type="checkbox"> <strong>Step 5:</strong> the comment at line 19-20 ("Editing an EXISTING chart stays local") is now stale → update it (edit goes through the modal too).</div>
+</div>
+
+<div class="task">
+<h3>Task 6: Test bank (Rule I + RTL + source-grep)</h3>
+<p><strong>Files:</strong> Create <code>tests/re-edit-chart-on-tablet.test.jsx</code>; extend <code>tests/tablet-chart-more-tools-flow-simulate.test.jsx</code> if a sibling lock fits.</p>
+<div class="step"><input type="checkbox"> <strong>RT1 — buildSessionCreate</strong>: asserts <code>editFabricJsonUrl: null</code> present in the doc shape.</div>
+<div class="step"><input type="checkbox"> <strong>RT2 — start() source-grep</strong>: <code>useChartEditSession.js</code> imports <code>uploadTransportJson</code>, <code>start</code> takes <code>editFabricJson</code>, the patch carries <code>editFabricJsonUrl</code>, the json upload is try/guarded.</div>
+<div class="step"><input type="checkbox"> <strong>RT3 — TabletChartCanvas source-grep</strong>: <code>initialFabricJson</code> prop + <code>hydrateFromJson</code> + <code>setDimensions</code>+<code>loadFromJSON</code> + the no-double-load gate (template effect early-returns when reeditable) + <code>__object-level__</code> marker.</div>
+<div class="step"><input type="checkbox"> <strong>RT4 — page json-first</strong>: <code>TabletChartEditorPage</code> resolves <code>editFabricJsonUrl</code> before <code>templateImageUrl</code> + skips raster when reeditable + passes the prop.</div>
+<div class="step"><input type="checkbox"> <strong>RT5 — ChartSection RTL</strong>: render with one saved chart → click ✏️ → <code>PcPairingModal</code> appears (data-testid <code>edit-here</code>/<code>send-tablet</code>) NOT the canvas; clicking 🖥️ "แก้ที่เครื่องนี้" opens the canvas with the existing chart.</div>
+<div class="step"><input type="checkbox"> <strong>RT6 — flow-simulate</strong>: pure chain — handleEdit sets editingIdx; relay onSaved (editingIdx≥0) replaces the same slot (not append); pendingChart carries dataUrl+fabricJson into <code>start</code>.</div>
+<div class="step"><input type="checkbox"> <strong>RT7 — AV103 family</strong>: re-edit path still transports fabricJson (the edit leg) — assert no <code>editFabricJsonUrl</code> hardcoded null in start when editFabricJson present.</div>
+<div class="step"><input type="checkbox"> <strong>Run:</strong> <code>npm test -- --run tests/re-edit-chart-on-tablet.test.jsx</code> → PASS; then full <code>npm test -- --run</code> + <code>npm run build</code> (Rule N batch-end + Rule K test-last).</div>
+</div>
+
+<div class="task">
+<h3>Task 7: Rule Q / Rule S verification</h3>
+<p><strong>Files:</strong> Extend <code>scripts/e2e-chart-relay-roundtrip.mjs</code> (new send-existing-chart phase); real-browser probe (temp, deleted after).</p>
+<div class="step"><input type="checkbox"> <strong>L2 real prod</strong>: chart.fabricJson → <code>uploadTransportJson('edit')</code> → read back → assert reeditable shape (objects + canvasWidth/Height) → simulate tablet save → assert same-slot merge payload. Real Firestore + Storage; cleanup zero orphans.</div>
+<div class="step"><input type="checkbox"> <strong>L1 real browser (Rule S)</strong>: mount the REAL <code>TabletChartCanvas</code> with a tablet-style <code>initialFabricJson</code> (objects + dims) → assert the OBJECT-LEVEL path was taken (canvas at the json's native dims, prior objects present + selectable under the select tool) — NOT a fit-to-container raster. Delete the probe.</div>
+<div class="step"><input type="checkbox"> <strong>Honest scope</strong>: object-level tablet re-edit is live-gated on <code>firebase deploy --only storage</code> (#13); pre-deploy = raster (verify the fallback path renders the annotated PNG). Record in V-log + active.md.</div>
+<div class="step"><input type="checkbox"> <strong>Commit</strong> each task; NO deploy without explicit "deploy" (V18).</div>
+</div>
+
+<h2>Self-Review</h2>
+<table>
+<tr><th>Spec requirement</th><th>Task</th></tr>
+<tr><td>edit ✏️ → PcPairingModal choice</td><td>Task 5</td></tr>
+<tr><td>send existing chart (PNG + fabricJson)</td><td>Task 2 + 5</td></tr>
+<tr><td>NEW editFabricJsonUrl field</td><td>Task 1 + 2</td></tr>
+<tr><td>tablet object-level hydrate (mirror ChartCanvas)</td><td>Task 3</td></tr>
+<tr><td>json-first resolution + no double-load</td><td>Task 3 + 4</td></tr>
+<tr><td>merge into SAME slot (editingIdx)</td><td>Task 5 + RT6</td></tr>
+<tr><td>graceful raster fallback (pre-deploy/legacy)</td><td>Task 3 + 4 + RT (fallback path)</td></tr>
+<tr><td>Rule Q L2 + Rule S L1 verify</td><td>Task 7</td></tr>
+</table>
+<p><strong>Type consistency:</strong> <code>editFabricJson</code> (start param, string|undefined) → <code>editFabricJsonUrl</code> (session field, string|null) → <code>initialFabricJson</code> (canvas prop, string). <code>isObjectLevelReeditable</code> + <code>serializeFabricCanvas</code> reused from <code>tabletChartTools.js</code> (no new helpers — DRY).</p>
+
+</body>
+</html>

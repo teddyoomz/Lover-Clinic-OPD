@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Spec — Re-edit saved chart ON TABLET (2026-05-21)</title>
+<style>
+  body{font:14px/1.6 system-ui,sans-serif;max-width:1100px;margin:24px auto;padding:0 20px;color:#1a1a1a;background:#fafafa}
+  h1{font-size:24px;border-bottom:3px solid #14b8a6;padding-bottom:8px}
+  h2{font-size:19px;margin-top:32px;border-left:5px solid #14b8a6;padding-left:10px}
+  h3{font-size:15px;margin-top:20px;color:#0f766e}
+  code{background:#eef2f2;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
+  th,td{border:1px solid #ccc;padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:#e6fffa}
+  .approved{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px}
+  .warn{background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px}
+  .mock{border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin:10px 0;background:#fff}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .col{flex:1;min-width:280px}
+  .chip{display:inline-block;background:#0f172a;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;margin:2px}
+  .canvas-mock{background:repeating-linear-gradient(45deg,#fff,#fff 10px,#f1f5f9 10px,#f1f5f9 20px);border:1px solid #94a3b8;border-radius:6px;min-height:120px;position:relative;padding:8px}
+  .stroke{position:absolute;border:2px dashed #e11d48;border-radius:40%}
+  .stroke.locked{border-style:solid}
+  .pill{border:1px solid #475569;border-radius:6px;padding:6px 10px;text-align:center;margin:4px 0}
+  .pill.primary{background:#10b981;color:#000;font-weight:700}
+  .arrow{font-size:18px;color:#0f766e;text-align:center;margin:4px 0}
+  .step{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin:6px 0}
+  .new{color:#b91c1c;font-weight:700}
+  small{color:#64748b}
+</style>
+</head>
+<body>
+<h1>Spec — Re-edit a saved chart ON THE TABLET</h1>
+<p><strong>Date</strong> 2026-05-21 · <strong>Status</strong> brainstormed + design APPROVED by user ("โอเค ลุยเลย") — HARD-GATE satisfied · <strong>Q1=A</strong> automatic object-level (raster fallback).</p>
+
+<div class="approved">
+<strong>Problem.</strong> Clicking edit (✏️) on a saved chart opens the PC <code>ChartCanvas</code> ONLY — there is no way to send an EXISTING annotated chart back to the iPad to re-edit. New charts already show the "edit here / send to tablet" choice; <strong>edit should be consistent</strong> + the iPad must load the existing chart's prior annotations.
+</div>
+
+<h3>Goal</h3>
+<ul>
+<li>Edit (✏️) on a saved chart → open the EXISTING <code>PcPairingModal</code> (same as add-new): <strong>🖥️ แก้ที่เครื่องนี้</strong> / <strong>📱 ส่งไปแก้ที่แท็บเล็ต</strong>.</li>
+<li>Send-to-tablet for an existing chart → the iPad loads the prior annotations and the result merges back into the <strong>SAME chart slot</strong>.</li>
+<li><strong>Object-level when possible</strong> (prior strokes = movable/erasable), <strong>raster fallback</strong> when no re-editable <code>fabricJson</code> (legacy chart / pre-storage-deploy json upload denied).</li>
+<li><strong>Constraint</strong>: separate files; <code>TreatmentFormPage</code> stays untouched (<code>ChartSection</code> owns the relay, as today).</li>
+</ul>
+
+<h3>Approved decisions</h3>
+<table>
+<tr><th>Q</th><th>Decision</th></tr>
+<tr><td>Q1 UX</td><td><b>A</b> — automatic object-level when <code>fabricJson</code> present + <code>isObjectLevelReeditable</code>; raster fallback otherwise. No extra user toggle.</td></tr>
+<tr><td>Edit affordance</td><td>Reuse <code>PcPairingModal</code> (agnostic to new/edit — heading already "แก้ไข Chart ที่ไหน?"). Edit-here keeps today's <code>ChartCanvas</code> path.</td></tr>
+<tr><td>Transport</td><td>Chart PNG → <code>templateImageUrl</code> (raster fallback display). Chart <code>fabricJson</code> → <span class="new">NEW <code>editFabricJsonUrl</code></span> via <code>uploadTransportJson(id,'edit',json)</code> → <code>uploads/chart-edit-sessions/{id}/edit.json</code>. <b>No new storage rule</b> — covered by the existing <code>{file=**}</code> json allowance.</td></tr>
+<tr><td>Merge target</td><td><code>editingIdx</code> preserved through the async relay → <code>handleSave</code> replaces the same slot.</td></tr>
+<tr><td>Graceful</td><td>json upload denied (pre-deploy) → <code>editFabricJsonUrl</code> null → tablet uses the PNG (raster). Works today; object-level unlocks after <code>firebase deploy --only storage</code> (Probe-Deploy-Probe #13).</td></tr>
+</table>
+
+<h2>Mockup Design</h2>
+
+<div class="row">
+<div class="col">
+  <h3>State 1 — saved chart hover (PC) <span class="new">CHANGED</span></h3>
+  <div class="mock">
+    <div class="canvas-mock" style="min-height:90px">
+      <span style="position:absolute;right:6px;top:6px" class="chip">✏️ → modal</span>
+      <span style="position:absolute;right:64px;top:6px" class="chip">🗑️</span>
+      <div class="stroke" style="left:30px;top:30px;width:60px;height:30px"></div>
+    </div>
+    <small>✏️ now opens the pairing choice (was: straight to PC canvas).</small>
+  </div>
+</div>
+<div class="col">
+  <h3>State 2 — PcPairingModal (REUSED)</h3>
+  <div class="mock">
+    <div style="background:#0f172a;color:#fff;border-radius:8px;padding:12px">
+      <div style="margin-bottom:8px">แก้ไข Chart ที่ไหน?</div>
+      <div class="pill">🖥️ แก้ที่เครื่องนี้</div>
+      <div style="border:1px solid #10b981;border-radius:6px;padding:6px;margin-top:6px">
+        📱 แก้ที่แท็บเล็ต<br><small style="color:#94a3b8">— ready list —</small>
+        <div class="pill primary">ส่งไปแท็บเล็ต →</div>
+      </div>
+    </div>
+    <small>Identical component + phases (choose/waiting/failed).</small>
+  </div>
+</div>
+</div>
+
+<div class="row">
+<div class="col">
+  <h3>State 3 — tablet: object-level <span class="chip">fabricJson present</span></h3>
+  <div class="mock">
+    <div class="canvas-mock">
+      <div class="stroke" style="left:20px;top:20px;width:80px;height:34px"></div>
+      <div class="stroke" style="left:60px;top:60px;width:50px;height:40px;border-radius:50%"></div>
+      <span style="position:absolute;right:8px;bottom:6px" class="chip">↕ movable / erasable</span>
+    </div>
+    <small><code>loadFromJSON</code> at saved dims → every prior stroke is a real object (select/move/erase). Template = locked object[0].</small>
+  </div>
+</div>
+<div class="col">
+  <h3>State 4 — tablet: raster fallback <span class="chip">no json / pre-deploy</span></h3>
+  <div class="mock">
+    <div class="canvas-mock">
+      <div class="stroke locked" style="left:20px;top:20px;width:80px;height:34px;border-color:#64748b"></div>
+      <span style="position:absolute;right:8px;bottom:6px" class="chip">prior = flat bg</span>
+    </div>
+    <small><code>loadTemplate(templateImageUrl)</code> = annotated PNG as locked background; user adds NEW strokes on top. Graceful, works today.</small>
+  </div>
+</div>
+</div>
+
+<div class="warn"><strong>No-double-load invariant.</strong> When the reeditable json is the source, the canvas must NOT also <code>loadTemplate</code> the PNG (would bake annotations twice). The page resolves json FIRST; if reeditable → set <code>initialFabricJson</code> + skip raster. The canvas prefers <code>initialFabricJson</code> over <code>templateImageUrl</code>.</div>
+
+<h2>Flow</h2>
+
+<h3>Data flow — PC → tablet → PC (the NEW <code>editFabricJsonUrl</code> leg in red)</h3>
+<div class="step">1. <b>PC</b> <code>ChartSection.handleEdit(idx)</code> → set <code>editingIdx=idx</code> + <code>canvasTemplate=charts[idx].template</code> + <code>pendingChart=charts[idx]</code> → render <code>PcPairingModal</code>.</div>
+<div class="arrow">▼ user picks 📱 + a tablet</div>
+<div class="step">2. <b>PC</b> <code>sendToTablet(tablet)</code> → <code>start({ tablet, template, patientLabel, templateDataUrl: <span class="new">pendingChart.dataUrl</span>, editFabricJson: <span class="new">pendingChart.fabricJson</span>, branchId })</code>.</div>
+<div class="arrow">▼</div>
+<div class="step">3. <b>PC hook</b> <code>start()</code>: <code>createChartEditSession</code> (doc has <span class="new"><code>editFabricJsonUrl:null</code></span>) → <code>uploadTransportImage('template', dataUrl)</code> → <span class="new">if editFabricJson → <code>uploadTransportJson('edit', json)</code> (guarded)</span> → <code>updateChartEditSession({ templateImageUrl, <span class="new">editFabricJsonUrl</span> })</code> in ONE patch (no flash).</div>
+<div class="arrow">▼ Firestore listener (instant-pop already fired on <code>requested</code>)</div>
+<div class="step">4. <b>Tablet</b> listener: resolve <span class="new"><code>editFabricJsonUrl</code> FIRST</span> → <code>downloadTransportJson</code> → if <code>isObjectLevelReeditable</code> → <code>setInitialFabricJson(json)</code> + skip raster; ELSE → <code>downloadTransportImageAsDataUrl(templateImageUrl)</code> → <code>setTemplateDataUrl</code>.</div>
+<div class="arrow">▼</div>
+<div class="step">5. <b>TabletChartCanvas</b>: <span class="new"><code>initialFabricJson</code> reeditable</span> → <code>setDimensions(canvasW,canvasH)</code> + <code>loadFromJSON</code> + relock object[0] + force white bg + baseline history (mirror PC <code>ChartCanvas:69-79</code>). ELSE → <code>loadTemplate(templateImageUrl)</code> (raster, current).</div>
+<div class="arrow">▼ user edits → ✓ บันทึก</div>
+<div class="step">6. <b>Tablet</b> <code>onSave</code> (UNCHANGED): PNG + fabricJson → <code>updateChartEditSession({status:saved, resultImageUrl, resultFabricJsonUrl})</code>.</div>
+<div class="arrow">▼</div>
+<div class="step">7. <b>PC hook</b> SAVED → <code>onSaved({dataUrl, fabricJson, templateId, source})</code> → <code>ChartSection.handleSave</code>: <code>editingIdx≥0</code> → <b>replace the SAME slot</b> (template = canvasTemplate, savedAt). Clear <code>pendingChart</code>+<code>pendingTemplate</code>.</div>
+
+<h3>Branch matrix</h3>
+<table>
+<tr><th>Path</th><th>editFabricJsonUrl</th><th>Tablet load</th><th>Re-edit fidelity</th></tr>
+<tr><td>New chart (today)</td><td>null (never sent)</td><td><code>loadTemplate</code> blank template</td><td>n/a — fresh</td></tr>
+<tr><td>Re-edit, json present + deployed</td><td>set → reeditable</td><td><code>loadFromJSON</code> object-level</td><td>movable/erasable objects ✓</td></tr>
+<tr><td>Re-edit, pre-storage-deploy</td><td>upload denied → null</td><td><code>loadTemplate</code> annotated PNG</td><td>raster (add-on-top) — graceful</td></tr>
+<tr><td>Re-edit, legacy chart (no fabricJson)</td><td>not sent</td><td><code>loadTemplate</code> annotated PNG</td><td>raster — graceful</td></tr>
+</table>
+
+<h3>Files to touch (6) + verify</h3>
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>src/lib/chartEditSessionCore.js</code></td><td><code>buildSessionCreate</code> + <code>editFabricJsonUrl: null</code>.</td></tr>
+<tr><td><code>src/hooks/useChartEditSession.js</code></td><td><code>start({...editFabricJson})</code> → upload <code>edit.json</code> (guarded) → patch <code>editFabricJsonUrl</code> in the same template patch.</td></tr>
+<tr><td><code>src/pages/TabletChartEditorPage.jsx</code></td><td><code>initialFabricJson</code> state; resolve json-first in <code>openSession</code> + listener; pass both props to canvas.</td></tr>
+<tr><td><code>src/components/tablet-chart/TabletChartCanvas.jsx</code></td><td>NEW prop <code>initialFabricJson</code> → object-level hydrate effect (mirror ChartCanvas) + raster-fallback gating (no double load).</td></tr>
+<tr><td><code>src/components/ChartSection.jsx</code></td><td><code>handleEdit</code> → modal; <code>pendingChart</code>; <code>sendToTablet</code> sends existing chart; preserve <code>editingIdx</code>; <code>onSaved</code>/<code>closePairing</code> clear both pendings.</td></tr>
+<tr><td><small>(reuse)</small> <code>src/lib/chartEditSession.js</code></td><td>No change — reuse <code>uploadTransportJson('edit')</code> + <code>downloadTransportJson</code>.</td></tr>
+</table>
+
+<h3>Verification (Rule Q / Rule S)</h3>
+<ul>
+<li><b>L2 real-prod</b>: extend <code>scripts/e2e-chart-relay-roundtrip.mjs</code> — send-existing-chart round-trip (chart.fabricJson → edit.json → tablet hydrate shape → re-save → same-slot merge) on real Firestore + Storage.</li>
+<li><b>L1 real browser</b> (Rule S): mount <code>TabletChartCanvas</code> with <code>initialFabricJson</code> → assert object-level path (canvas at saved dims, prior objects render + movable) NOT fit-to-container raster.</li>
+<li><b>Rule I flow-simulate + RTL</b>: ChartSection edit→modal→sendToTablet wiring; tablet json-first resolution; source-grep RC + AV103-family lock.</li>
+<li><b>Full vitest + build clean.</b></li>
+<li><b>Live-gated</b>: object-level tablet re-edit unlocks after <code>firebase deploy --only storage</code> (#13); pre-deploy = raster (verified working).</li>
+</ul>
+</body>
+</html>

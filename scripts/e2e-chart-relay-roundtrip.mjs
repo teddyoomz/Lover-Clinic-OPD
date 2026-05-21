@@ -22,6 +22,7 @@ import { randomBytes } from 'node:crypto';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { getFirestore } from 'firebase-admin/firestore';
+import { isObjectLevelReeditable } from '../src/lib/tabletChartTools.js';   // the PRODUCTION predicate (not a hand-rolled mirror — V66)
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = 'loverclinic-opd-4c39b.firebasestorage.app';
@@ -128,6 +129,40 @@ async function main() {
     const rereadB = (await db.doc(`${DATA}/be_treatments/${A.treatmentId}`).get()).data();
     const editedObjs = JSON.parse(rereadB.detail.charts[0].fabricJson).objects;
     assert(editedObjs.length === 9, `B: re-edit persisted (+1 stroke → 9 objects) (got ${editedObjs.length})`);
+
+    // ───────────────────────── ROUND-TRIP E: RE-EDIT a saved chart ON THE TABLET (the new feature) ─────────────────────────
+    // PC has a saved chart (PNG + fabricJson). It ships BOTH to the tablet: PNG → templateImageUrl
+    // (raster fallback) + fabricJson → editFabricJsonUrl (NEW field, object-level). The tablet's
+    // resolveSource uses the PRODUCTION isObjectLevelReeditable predicate to choose object-level vs
+    // raster; the result merges back into the SAME slot (editingIdx preserved). Verifies the NEW
+    // editFabricJsonUrl leg + the json-first object-level decision on real prod Storage.
+    const eSession = `TEST-CES-RT-E-${STAMP}`, eFolder = `uploads/chart-edit-sessions/${eSession}`, eTreat = `TEST-BT-E-${STAMP}`;
+    created.folders.push(eFolder); created.sessions.push(eSession); created.treatments.push(eTreat);
+    // the existing saved chart the PC is re-editing — mirror serializeFabricCanvas (toJSON + canvas dims)
+    const savedJson = { ...makeFabricJson({ textValue: 'EXISTING' }), canvasWidth: 600, canvasHeight: 800 };
+    // PC start(): upload the chart PNG as 'template' (raster fallback) + the chart fabricJson as 'edit' (object-level)
+    const eTemplateUrl = await upPng(eFolder, 'template', PNG_B64);
+    const eEditUrl = await upJson(eFolder, 'edit', savedJson);
+    await db.doc(`${DATA}/be_chart_edit_sessions/${eSession}`).set({
+      sessionId: eSession, branchId: 'TEST-BR', status: 'requested', template: { id: 'face-male', name: 'face' },
+      patientLabel: 'TEST', templateImageUrl: eTemplateUrl, editFabricJsonUrl: eEditUrl,
+      resultImageUrl: null, resultFabricJsonUrl: null, createdAt: STAMP, updatedAt: Date.now(),
+    });
+    const eDoc = (await db.doc(`${DATA}/be_chart_edit_sessions/${eSession}`).get()).data();
+    assert(!!eDoc.editFabricJsonUrl, 'E: session doc carries the NEW editFabricJsonUrl field');
+    // TABLET resolveSource: json-first → download edit.json → PRODUCTION isObjectLevelReeditable? → object-level
+    const editJsonBack = JSON.parse(await (await fetch(eDoc.editFabricJsonUrl)).text());
+    assert(isObjectLevelReeditable(editJsonBack), 'E: round-tripped edit.json passes the PRODUCTION isObjectLevelReeditable predicate → tablet takes OBJECT-LEVEL (not raster)');
+    assert(editJsonBack.canvasWidth === 600 && editJsonBack.canvasHeight === 800, 'E: canvas dims survive the round-trip (object coords stay consistent on re-edit)');
+    assert(editJsonBack.objects.find(o => o.type === 'Textbox')?.text === 'EXISTING', 'E: prior annotations present in the re-edit source (continue editing, not blank)');
+    // tablet edits (adds a stroke) → saves result → PC onSaved → handleSave(editingIdx=0) → replace SAME slot
+    editJsonBack.objects.push({ type: 'Path', fill: '#000', path: [['M', 1, 1], ['L', 2, 2], ['Z']] });
+    const eResultJson = await upJson(eFolder, 'result', editJsonBack);
+    await db.doc(`${DATA}/be_chart_edit_sessions/${eSession}`).set({ status: 'saved', resultImageUrl: await upPng(eFolder, 'result', PNG_B64), resultFabricJsonUrl: eResultJson }, { merge: true });
+    const eMerged = { dataUrl: `data:image/png;base64,${PNG_B64}`, fabricJson: JSON.stringify(editJsonBack), templateId: 'face-male' };
+    await db.doc(`${DATA}/be_treatments/${eTreat}`).set({ treatmentId: eTreat, customerId: `TEST-CUST-E-${STAMP}`, detail: { charts: [eMerged] } }, { merge: true });
+    const eReread = JSON.parse((await db.doc(`${DATA}/be_treatments/${eTreat}`).get()).data().detail.charts[0].fabricJson).objects;
+    assert(eReread.length === 9, `E: re-edited-on-tablet result merged back into the SAME slot (8 + 1 = 9 objects) (got ${eReread.length})`);
 
     // ───────────────────────── STRESS C1: large fabricJson (60 extra objects) ─────────────────────────
     const C1 = await relayAndPersist({ sessionId: `TEST-CES-RT-C1-${STAMP}`, customerId: `TEST-CUST-C1-${STAMP}`, treatmentId: `TEST-BT-C1-${STAMP}`, extraPaths: 60 });

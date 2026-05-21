@@ -131,8 +131,14 @@ describe('RC root-cause: canvas init-once; template on live canvas; no dispose o
     expect(initBlock).toContain('fc.dispose()');
     expect(initBlock).not.toMatch(/\}, \[templateImageUrl/);   // init MUST NOT re-run on template change
   });
-  it('RC2 a separate effect loads the template on the live canvas keyed on templateImageUrl', () => {
-    expect(canvasSrc).toMatch(/useEffect\(\(\) => \{ if \(readyRef\.current\) loadTemplate\(templateImageUrl\); \}, \[templateImageUrl/);
+  it('RC2 a separate effect loads the template on the live canvas keyed on templateImageUrl (raster path; object-level json early-returns — re-edit-on-tablet)', () => {
+    const tplStart = canvasSrc.indexOf('load/replace the template on the LIVE canvas');
+    const tplEnd = canvasSrc.indexOf('object-level hydrate when a reeditable json arrives');
+    expect(tplStart).toBeGreaterThan(-1); expect(tplEnd).toBeGreaterThan(tplStart);
+    const tplEffect = canvasSrc.slice(tplStart, tplEnd);
+    expect(tplEffect).toContain('loadTemplate(templateImageUrl)');
+    expect(tplEffect).toMatch(/\}, \[templateImageUrl/);
+    expect(tplEffect).toContain('isObjectLevelReeditable');   // re-edit: object-level json owns the canvas → skip raster (no double-load)
   });
   it('RC3 loadTemplate mutates the existing fcRef canvas — never disposes / news a Canvas', () => {
     const ltStart = canvasSrc.indexOf('const loadTemplate = useCallback');
