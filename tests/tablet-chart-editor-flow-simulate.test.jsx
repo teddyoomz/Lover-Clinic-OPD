@@ -29,6 +29,7 @@ vi.mock('../src/lib/chartEditSession.js', () => ({
 }));
 
 import { useChartEditSession } from '../src/hooks/useChartEditSession.js';
+import { downloadTransportImageAsDataUrl } from '../src/lib/chartEditSession.js';
 
 function seedReadyTablet(deviceId = 'TEST-T1') { store.presence.set(deviceId, { deviceId, status: 'idle', lastHeartbeatAt: Date.now() }); }
 const firstSessionId = () => [...store.sessions.keys()][0];
@@ -102,5 +103,20 @@ describe('Rule I — tablet chart editor full-flow simulate', () => {
     expect(typeof doc.templateImageUrl).toBe('string');
     expect(doc.templateImageUrl.startsWith('mem://')).toBe(true);        // a URL, not the bytes
     expect(JSON.stringify(doc).length).toBeLessThan(5000);               // doc stays tiny (no base64 payload)
+  });
+  it('F7 tablet saved but result download FAILS → PC phase=failed + session cleaned (NEVER stuck on waiting)', async () => {
+    seedReadyTablet();
+    const onSaved = vi.fn();
+    const { result } = renderHook(() => useChartEditSession({ pcDeviceId: 'PC1', pcUid: 'u1', onSaved }));
+    await act(async () => { await result.current.start(startArgs()); });
+    const id = firstSessionId();
+    await act(async () => { await tabletOpen(id); });
+    downloadTransportImageAsDataUrl.mockRejectedValueOnce(new Error('result fetch failed (CORS/network)'));
+    await act(async () => { await tabletSave(id); });
+    expect(result.current.phase).toBe('failed');                 // NOT stuck on 'waiting' (the bug)
+    expect(result.current.phase).not.toBe('waiting');
+    expect(onSaved).not.toHaveBeenCalled();                      // download threw → no merge
+    expect(store.sessions.has(id)).toBe(false);                  // session STILL cleaned up
+    expect(store.presence.get('TEST-T1').status).toBe('idle');   // tablet STILL freed
   });
 });

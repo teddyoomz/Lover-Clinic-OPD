@@ -7,7 +7,7 @@ import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDo
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
-import { buildPresenceUpsert, buildSessionCreate, isPresenceReady } from './chartEditSessionCore.js';
+import { buildPresenceUpsert, buildSessionCreate, isPresenceReady, toMillis } from './chartEditSessionCore.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from './customerDisplayName.js';
 // TZ1 (2026-05-18 audit-fix) — Thai timezone helpers.
 // Raw `new Date().toISOString().slice(0,10)` drifts to UTC = previous-day
@@ -2823,7 +2823,18 @@ export function listenToRequestedSessionForTablet({ branchId, tabletDeviceId } =
     where('status', '==', 'requested'));
   return onSnapshot(
     q,
-    (snap) => { if (typeof onChange === 'function') onChange(snap.docs.length ? { ...snap.docs[0].data(), id: snap.docs[0].id } : null); },
+    (snap) => {
+      if (typeof onChange !== 'function') return;
+      if (!snap.docs.length) { onChange(null); return; }
+      // No orderBy on the query (composite index is branchId+tabletDeviceId+status only),
+      // so pick the NEWEST 'requested' client-side. Guards against a stale 'requested'
+      // session (rare, but the TX guard isn't the only path) being opened instead of the
+      // PC's just-created one — which would leave the PC waiting on a session the tablet
+      // never touches.
+      const newest = snap.docs.map(d => ({ ...d.data(), id: d.id }))
+        .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))[0];
+      onChange(newest);
+    },
     (err) => { if (typeof onError === 'function') onError(err); }
   );
 }

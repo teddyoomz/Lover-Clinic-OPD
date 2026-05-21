@@ -2490,10 +2490,48 @@ ephemeral branch-scoped collections (`be_chart_tablet_presence`,
 outside backendClient.js. **Sanctioned exceptions**: NONE. Cross-link: tests
 `tests/tablet-chart-av.test.js` + `tests/tablet-chart-editor-flow-simulate.jsx`.
 
+### AV102 — Image transport MUST normalize to a data URL + tablet MUST load a late template (2026-05-21 bugfix)
+
+The chart-editor relay transports image bytes via Storage with
+`uploadString(ref, x, 'data_url')`, which **throws `storage/invalid-format` if `x`
+is not a `data:` URL**. Two boundaries were wrong (user-reported "ไม่ขึ้นรูป" + PC
+"เริ่มการเชื่อมต่อไม่สำเร็จ"):
+
+1. **A model `imageUrl` is NOT a data URL.** `defaultChartTemplates` store public-asset
+   PATHS (`/chart-templates/face-female.svg`). Every image transported via
+   `uploadTransportImage` MUST go through `resolveToDataUrl` (data: → passthrough /
+   fetchable path → fetch+convert / blank → null). NEVER pass a model `imageUrl`
+   straight to `uploadString('data_url')`.
+2. **Instant-pop race.** The tablet's Q4 listener fires on the `requested` doc BEFORE the
+   PC finishes the template upload, so `templateImageUrl` arrives a moment later. The
+   tablet's ongoing `listenToChartEditSession` callback MUST load a late-arriving /
+   changed `templateImageUrl` (read-once-at-open = silent blank canvas).
+
+3. **The PC saved-merge MUST NOT hang.** The `useChartEditSession` SAVED handler awaits a
+   result download; an un-guarded `await` there left the PC stuck on "รอการบันทึกจากแท็บเล็ต"
+   forever after the tablet had already saved (download throw → callback rejects → phase
+   never leaves 'waiting'; the doc is never deleted). Wrap the download in try/catch →
+   surface a failure phase + ALWAYS teardown + free the tablet; only `setPhase('idle')` when
+   the merge actually completed.
+4. **The requested-session listener MUST pick the NEWEST session**, not an arbitrary
+   `snap.docs[0]` (the query has no orderBy). A stale 'requested' doc must not be opened
+   instead of the PC's just-created one (→ PC waits on a session the tablet never touches).
+
+**Grep target (regression)**: `uploadTransportImage` body references `resolveToDataUrl`;
+`TabletChartEditorPage` openSession listener checks `live.templateImageUrl !== loadedUrl`;
+no `uploadString(.*'data_url')` is fed a `*.imageUrl`/path directly; the SAVED handler in
+`useChartEditSession` wraps `downloadTransportImageAsDataUrl` in try/catch + always
+`teardown()`; `listenToRequestedSessionForTablet` sorts by `createdAt` desc (no bare
+`snap.docs[0].data()`).
+**Sanctioned exception**: the result upload passes a canvas `toDataURL()` (already a
+data: URL → `resolveToDataUrl` passthrough, no fetch). Cross-link: tests
+`tests/tablet-chart-template-transport.test.js`. **Class**: V66 mock-shadow (fixtures used
+data URLs; the real producer supplied paths) + read-once-vs-live (instant-pop race).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

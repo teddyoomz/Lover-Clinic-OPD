@@ -33,12 +33,21 @@ export default function TabletChartEditorPage() {
   }, [deviceId]);
 
   const openSession = useCallback(async (sdoc) => {
-    const dataUrl = sdoc.templateImageUrl ? await downloadTransportImageAsDataUrl(sdoc.templateImageUrl) : '';
+    let loadedUrl = sdoc.templateImageUrl || '';
+    const dataUrl = loadedUrl ? await downloadTransportImageAsDataUrl(loadedUrl) : '';
     setTemplateDataUrl(dataUrl); setActive(sdoc);
     await updateChartEditSession(sdoc.sessionId, { status: SESSION_STATUS.ACTIVE, tabletHeartbeatAt: Date.now() });
-    sesUnsubRef.current = listenToChartEditSession(sdoc.sessionId, (live) => {
-      if (live && live.status === SESSION_STATUS.CANCELLED && live.cancelledBy !== CANCELLED_BY.TABLET) {
-        setNotice('การเชื่อมต่อถูกยกเลิกจาก PC'); closeEditor(false);
+    sesUnsubRef.current = listenToChartEditSession(sdoc.sessionId, async (live) => {
+      if (!live) return;
+      if (live.status === SESSION_STATUS.CANCELLED && live.cancelledBy !== CANCELLED_BY.TABLET) {
+        setNotice('การเชื่อมต่อถูกยกเลิกจาก PC'); closeEditor(false); return;
+      }
+      // Q4 instant-pop can fire on the 'requested' doc BEFORE the PC finishes uploading the
+      // template, so templateImageUrl arrives a moment later → load it when it lands/changes.
+      if (live.templateImageUrl && live.templateImageUrl !== loadedUrl) {
+        loadedUrl = live.templateImageUrl;
+        const d = await downloadTransportImageAsDataUrl(live.templateImageUrl);
+        setTemplateDataUrl(d);
       }
     }, () => {});
   }, [closeEditor]);

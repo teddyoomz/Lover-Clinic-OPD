@@ -83,6 +83,13 @@ async function main() {
     const d = snap.data() || {};
     const lhb = typeof d.lastHeartbeatAt === 'number' ? d.lastHeartbeatAt : 0;
     console.log(JSON.stringify({ exists: snap.exists, status: d.status, ageMs: Date.now() - lhb }));
+  } else if (action === 'list') {
+    const sesSnap = await db.collection(`${P}/be_chart_edit_sessions`).get();
+    const sessions = sesSnap.docs.map(d => { const x = d.data(); return { id: d.id, status: x.status, tabletDeviceId: x.tabletDeviceId, branchId: x.branchId, hasTemplate: !!x.templateImageUrl, hasResult: !!x.resultImageUrl, createdAt: x.createdAt, cancelledBy: x.cancelledBy }; });
+    const presSnap = await db.collection(`${P}/be_chart_tablet_presence`).get();
+    const presence = presSnap.docs.map(d => { const x = d.data(); return { id: d.id, deviceName: x.deviceName, status: x.status, branchId: x.branchId, ageMs: Date.now() - (typeof x.lastHeartbeatAt === 'number' ? x.lastHeartbeatAt : 0) }; });
+    const requested = sessions.filter(s => s.status === 'requested');
+    console.log(JSON.stringify({ sessionCount: sessions.length, requestedCount: requested.length, sessions, presence }, null, 2));
   } else if (action === 'cleanup') {
     await db.doc(`${P}/be_chart_edit_sessions/${a1}`).delete().catch(() => {});
     if (a2) await db.doc(`${P}/be_chart_tablet_presence/${a2}`).set({ status: 'idle', updatedAt: Date.now() }, { merge: true }).catch(() => {});

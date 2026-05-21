@@ -17,9 +17,14 @@ describe('chart-edit backend wiring (T2)', () => {
     expect(bc).toMatch(/TABLET_BUSY/);
     expect(bc).toMatch(/isPresenceReady/);
   });
-  it('B3 V38 spread order (id last) in the new listeners', () => {
-    expect(bc).toMatch(/\.\.\.snap\.docs\[0\]\.data\(\), id: snap\.docs\[0\]\.id/);
+  it('B3 V38 spread order (id last) in the new listeners + newest-requested selection (bugfix 2026-05-21)', () => {
+    // V38 spread order (id last) preserved in the listener maps.
     expect(bc).toMatch(/\.\.\.d\.data\(\), id: d\.id/);
+    // Bugfix: the requested-session listener now picks the NEWEST requested session
+    // (createdAt desc) instead of an arbitrary snap.docs[0] (which could open a stale
+    // session and leave the PC waiting on one the tablet never touches).
+    expect(bc).toMatch(/toMillis\(b\.createdAt\) - toMillis\(a\.createdAt\)/);
+    expect(bc).not.toMatch(/\.\.\.snap\.docs\[0\]\.data\(\), id: snap\.docs\[0\]\.id/);
   });
   it('B4 instant-pop listener queries branchId + tabletDeviceId + requested', () => {
     expect(bc).toMatch(/export function listenToRequestedSessionForTablet/);

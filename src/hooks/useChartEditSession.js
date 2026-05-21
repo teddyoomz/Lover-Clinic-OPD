@@ -22,8 +22,10 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
   const start = useCallback(async ({ tablet, template, patientLabel, templateDataUrl, branchId }) => {
     setError(''); setPhase('waiting');
     const sessionId = randSessionId(); idRef.current = sessionId;
+    let created = false;
     try {
       await createChartEditSession({ sessionId, branchId, pcDeviceId, pcUid, tabletDeviceId: tablet.deviceId, tabletName: tablet.deviceName, template, patientLabel });
+      created = true;
       const url = await uploadTransportImage(sessionId, 'template', templateDataUrl);
       await updateChartEditSession(sessionId, { templateImageUrl: url });
     } catch (e) {
@@ -33,6 +35,13 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
           : e.code === 'TABLET_OFFLINE' ? 'แท็บเล็ตไม่พร้อม (อาจปิดหน้าจอหรือหลุดการเชื่อมต่อ) — ลองเลือกใหม่'
             : 'เริ่มการเชื่อมต่อไม่สำเร็จ'
       );
+      // Defense-in-depth: if the session was created before a later step failed (e.g. the
+      // template upload), cancel it + free the tablet so the tablet exits its editor instead
+      // of sitting open with no image. The tablet is already subscribed → reacts to cancelled.
+      if (created) {
+        await updateChartEditSession(sessionId, { status: SESSION_STATUS.CANCELLED, cancelledBy: CANCELLED_BY.PC }).catch(() => {});
+        await freeChartTablet(tablet.deviceId).catch(() => {});
+      }
       idRef.current = null;
       return;
     }
@@ -43,10 +52,20 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
         teardown(); return;
       }
       if (doc.status === SESSION_STATUS.SAVED && doc.resultImageUrl) {
-        const dataUrl = await downloadTransportImageAsDataUrl(doc.resultImageUrl);
-        onSavedRef.current?.({ dataUrl, fabricJson: null, templateId: doc.template?.id || 'blank', source: 'tablet' });
+        // The merge MUST NOT hang: if the result download throws, surface a failure +
+        // still clean up the session/tablet (an un-guarded await here left the PC stuck
+        // forever on "รอการบันทึกจากแท็บเล็ต" while the tablet had already saved).
+        let merged = false;
+        try {
+          const dataUrl = await downloadTransportImageAsDataUrl(doc.resultImageUrl);
+          onSavedRef.current?.({ dataUrl, fabricJson: null, templateId: doc.template?.id || 'blank', source: 'tablet' });
+          merged = true;
+        } catch {
+          setPhase('failed'); setError('รับรูปจากแท็บเล็ตไม่สำเร็จ — ลองใหม่');
+        }
         await Promise.allSettled([deleteChartEditSession(sessionId), cleanupSessionStorage(sessionId), freeChartTablet(doc.tabletDeviceId)]);
-        setPhase('idle'); teardown();
+        teardown();
+        if (merged) setPhase('idle');
       }
     }, () => { setPhase('failed'); setError('การเชื่อมต่อขัดข้อง'); });
   }, [pcDeviceId, pcUid, teardown]);
