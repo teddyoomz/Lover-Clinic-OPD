@@ -1,38 +1,39 @@
 ---
-updated_at: "2026-05-21 EOD+3 LATE — tablet-chart pinch-zoom RE-SHIPPED with the REAL black-screen fix (React insertBefore crash) + DEPLOYED + verified LIVE on prod via Chrome MCP (9 tools + functions + zoom, screenshots). Rule Q-vis added."
-status: "prod LIVE with zoom (e71ef782). All tools+functions+zoom verified by SCREENSHOT on the deployed prod URL. NEXT: optional on-device iPad confirm + carryover."
+updated_at: "2026-05-22 — Staff Chat multi-image attachments SHIPPED + DEPLOYED + verified real-prod (commit a90b6706). ≤10 images/msg, swipe lightbox, 30d auto-retention (ลบเกลี้ยง). Rule Q L1/L2 + Q-vis: อัพ/ส่ง/ลบ/preview จริง — all screenshot-confirmed, no bugs."
+status: "prod LIVE with staff-chat multi-image (a90b6706). vercel + firestore/storage rules deployed (P-D-P #9/#10 green). Verified real prod. Awaiting user hands-on + next task."
 branch: "master"
-last_commit: "e71ef782 — feat(tablet-chart): re-ship pinch-zoom + palm-rejection with the REAL black-screen fix"
-tests: "vitest 14007/0; build clean. chart-area 158/0."
+last_commit: "a90b6706 — feat(staff-chat): multi-image attachments + swipe lightbox + 30d auto-retention"
+tests: "vitest 14030/0; build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "e71ef782 — zoom LIVE (frontend; vercel --prod, aliased)"
-firestore_rules_version: "unchanged this session (frontend-only change; NO rules/storage deploy)."
+production_commit: "a90b6706 — vercel --prod (aliased) + firebase deploy --only firestore:rules,storage"
+firestore_rules_version: "deployed 2026-05-22 — be_staff_chat_messages accepts attachments[] (≤10); storage staff-chat-attachments cap 50MB. P-D-P #9/#10 green pre+post."
 ---
 
 # Active Context
 
 ## State
-- prod = `e71ef782` LIVE — tablet-chart pinch-zoom (1-4x) + palm-rejection RE-SHIPPED + DEPLOYED (vercel --prod; no rules change).
-- REAL black-screen cause = a React `insertBefore` crash (the ⤢ fit button rendered BEFORE the Fabric-wrapped `<canvas>` → `surf.insertBefore(button, canvas)` on zoom → tree unmount → blank). Fix = render the fit button AFTER the canvas (append). The `upperCanvasEl`-listener lead was unconfirmed; kept that fix as defensive.
-- Verified LIVE on the prod URL via Chrome MCP (Rule S/Q-vis): all 9 tools + undo/redo/clear/delete/save-relay + pinch-zoom-4x + fit-reset — every item by SCREENSHOT, NO crash. Detail: checkpoint `.agents/sessions/2026-05-21-zoom-reship-real-fix.md`.
+- prod = `a90b6706` LIVE — Staff Chat multi-image attachments (V73 extension). Send up to 10 images/message; adaptive grid (1/2/3/4/5+ "+N"); swipe lightbox; hybrid thumb + original ≤50MB; auto-retention cron (daily, 30d) deletes whole message + images with NO orphan ("ลบเกลี้ยง").
+- DEPLOYED (user "deploy เพื่อเทส"): `vercel --prod` (aliased) + `firebase deploy --only firestore:rules,storage` (Probe-Deploy-Probe #9/#10 green pre+post).
+- Verified on REAL prod via Chrome MCP (Rule Q L1/L2 + Q-vis, every step by SCREENSHOT, NO bugs):
+  - **ลบจริงหายจริง**: retention sweep --apply → `deletedFiles:12`, `getFiles(prefix)=0`, doc gone.
+  - **อัพจริง + ส่งจริง**: real composer multi-pick → real Storage upload (authed, 50MB rule) → `setDoc` attachments[] (firestore rule accepted) → 3-image grid rendered real-time.
+  - **preview จริง**: 5-image grid (2×2 + "+1") + lightbox (counter 1/5..5/5, next/prev, filmstrip jump, end-clamp, close, download).
 
 ## What this session shipped
-- `chartGestureMath.js` (restored) + `TabletChartCanvas.jsx` gesture layer (CAPTURE-phase on the OWNED wrapper, never `fc.upperCanvasEl` + stopPropagation isolation) + `TabletChartEditorPage.jsx` (fit button moved AFTER the canvas).
-- **Rule Q-vis** (`01-iron-clad.md`): no test-cheating; UI evidence = a SCREENSHOT you LOOK AT (not pixel-probe/object-model/code); probe-vs-screenshot → screenshot wins; use the most appropriate tool; verify every element. Origin = missed iPad black screen (desktop-only "verified") + a `select` pixel-probe false-negative.
-- AV107 PART A (listener placement) + PART B (the insertBefore fix). Tests F1-F5.
-- Found the root cause by reproducing the black screen ON DESKTOP via a synthetic 2-touch pinch (Chrome MCP — drives my gesture layer, which doesn't gate `isTrusted`) + reading the console.
-- NEW Rule R helper `scripts/diag-chart-session-keepalive.mjs` (keeps a relay session alive during manual/on-device tests).
-- vitest 14007/0; build clean; deployed + live-verified on prod; test sessions cleaned (0 orphan).
+- NEW `src/lib/staffChatRetentionCore.js` (pure: paths/isExpired/isOrphanFolder/gridLayoutFor) + extend `staffChatImageResize.js` (validate/thumb/resumable-upload/paths) + `staffChatClient.js` (newStaffChatMessageId + attachments[]) + `useStaffChat.js` (prepareAndUpload) + `StaffChatComposer.jsx` (multi-pick/preview/progress) + `StaffChatMessage.jsx` (adaptive grid) + `StaffChatImageLightbox.jsx` (swipe).
+- NEW `api/cron/staff-chat-retention-sweep.js` (2-pass age-out+orphan; admin SDK; CRON_SECRET) + `vercel.json` cron (daily 19:45 UTC) + `scripts/staff-chat-retention-sweep.mjs` (Rule M CLI) + `scripts/e2e-staff-chat-image-retention.mjs` (Rule Q L2 harness + cleanup).
+- `storage.rules` cap 1MB→50MB; `firestore.rules` accepts attachments[] (≤10). **AV108** invariant.
+- `tests/staff-chat-multi-image.test.js` (23: unit + Rule I flow-simulate + AV108 source-grep). full vitest **14030/0**.
+- spec + plan HTML (`docs/superpowers/{specs,plans}/2026-05-22-staff-chat-image-attachments*`).
 
 ## Next action
-- (optional, user) on-device iPad L1: open prod `?tablet=chart`, send a chart from PC, 2-finger zoom → confirm no black screen. Fix is browser-agnostic (desktop + prod verified) so it covers iPad; final confirmation only.
-- (carryover) V106 cron drain / calendar-density / Recall / V108 L1.
+- (user) hands-on: open staff chat → send your own images → confirm (your "ทดลองเอง" — feature is real-prod verified).
+- (carryover) none pending.
 
 ## Outstanding user-triggered actions
-- on-device iPad confirm (optional, above).
-- carryover: V106 / calendar / Recall / V108 L1.
+- none.
 
 ## Decisions (1-line)
-- Frontend-only change → vercel --prod only, NO rules deploy (no firestore/storage rule change; avoids V1/V9 overwrite risk).
-- Rule Q-vis: screenshots are ground truth for UI; pixel-probes/code are supplements only (a probe false-negative nearly mislabeled `select` as broken).
-- Synthetic 2-touch pinch (Chrome MCP) = legit desktop L1 for the zoom logic + the React-mount crash; only Fabric's trusted-touch pipeline still needs a real iPad.
+- Q1 auto-retention only · Q2 hybrid thumb+original · Q3 delete whole msg+images · Q4 30d · Q5 ≤10 images/msg.
+- Deletion = admin-SDK cron only (client delete rule-blocked); per-message Storage folder → prefix-sweep guarantees no orphan.
+- Real-client send proven via injected File objects (synthetic selection, real upload+setDoc+rule path) — file_upload sandbox blocked arbitrary paths.
