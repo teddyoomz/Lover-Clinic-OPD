@@ -2542,10 +2542,36 @@ data: URL → `resolveToDataUrl` passthrough, no fetch). Cross-link: tests
 `tests/tablet-chart-template-transport.test.js`. **Class**: V66 mock-shadow (fixtures used
 data URLs; the real producer supplied paths) + read-once-vs-live (instant-pop race).
 
+### AV103 — Tablet chart result MUST transport fabricJson (lossless object data), never `fabricJson: null` (2026-05-21 more-tools)
+
+The more-tools tablet editor (Fabric v7 object model) saves a flattened PNG **and** the full
+`fabricJson` so the merged `charts[]` entry is lossless / re-editable-ready — not a flat
+throwaway image. Two boundaries enforce it:
+
+1. **The tablet `onSave` MUST upload BOTH** the PNG (`uploadTransportImage`) AND
+   `canvas.toJSON()` via `uploadTransportJson(sessionId, 'result', ...)`, and set
+   `resultFabricJsonUrl` on the session doc (alongside `resultImageUrl`).
+2. **The PC `useChartEditSession` SAVED handler MUST download `resultFabricJsonUrl`** (guarded —
+   returns null on failure, never hangs) and pass the **real** `fabricJson` to `onSaved`. It MUST
+   NOT hard-code `fabricJson: null` for a tablet result (that throws away every object the
+   clinician drew → the chart can't carry per-tool edits to the PC).
+
+**Grep target (regression)**: `TabletChartEditorPage` `onSave` references `exportFabricJson` +
+`uploadTransportJson` + `resultFabricJsonUrl`; `useChartEditSession` references
+`downloadTransportJson` + `resultFabricJsonUrl` and does NOT match `/fabricJson:\s*null/`; the
+page imports `TabletChartCanvas` (not `PenCanvas`); `TabletChartCanvas` exposes `exportFabricJson`
++ `deleteSelected` and rides Fabric `mouse:*` via `getScenePoint` (no raw upperCanvasEl
+listeners). **Sanctioned exception**: `downloadTransportJson` returns null when
+`resultFabricJsonUrl` is absent OR the fetch fails → `fabricJson` stays null (a blank/legacy
+result legitimately has no object data; the PNG still merges). Cross-link: tests
+`tests/tablet-chart-more-tools.test.js` (U3) + `tests/tablet-chart-more-tools-flow-simulate.test.jsx`
+(F1/F2). **Class**: lossless-transport — every drawing tool's object must survive the relay to
+the PC (user mandate "ไม่มีเครื่องมือไหน ... ส่งไป pc แล้วไม่ติดการ edit").
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 
