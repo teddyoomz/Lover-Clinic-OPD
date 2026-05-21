@@ -167,3 +167,27 @@ describe('RC-save root-cause: storage.rules allows result.json + onSave json-upl
     expect(onSave).toContain('SESSION_STATUS.SAVED');
   });
 });
+
+// RC-render — the LIVE-DISPLAY bug the user's on-device test caught (save was correct + carried
+// every edit, but the tablet screen rendered NOTHING live — template + strokes invisible). Root
+// cause: the canvas painted via the rAF-deferred request-render path; rAF is unreliable on the
+// tablet (throttled / stuck nextRenderHandle / not firing in some editor states) so the paint
+// never landed, while the object model stayed correct (toDataURL save bypasses on-screen render).
+// Proven in a real browser at dpr=2: the rAF path → 0 painted px; sync renderAll → template +
+// strokes paint. Fix (mirror the PROVEN PC ChartCanvas): render synchronously, never via rAF.
+describe('RC-render root-cause: synchronous renderAll only — never the rAF-deferred path', () => {
+  const canvasSrc = fs.readFileSync('src/components/tablet-chart/TabletChartCanvas.jsx', 'utf8');
+  const chartSrc = fs.readFileSync('src/components/ChartCanvas.jsx', 'utf8');
+  it('RC6 TabletChartCanvas paints via SYNC fc.renderAll() — ZERO fc.requestRenderAll() calls', () => {
+    expect(canvasSrc).not.toMatch(/fc\.requestRenderAll\s*\(/);     // no rAF-deferred call sites
+    expect(canvasSrc).not.toMatch(/\brequestRenderAll\b/);          // not even in prose (drift guard)
+    expect((canvasSrc.match(/fc\.renderAll\s*\(/g) || []).length).toBeGreaterThanOrEqual(15);
+  });
+  it('RC7 the proven-working PC ChartCanvas is the reference: sync renderAll, never rAF', () => {
+    expect(chartSrc).not.toMatch(/requestRenderAll/);
+    expect((chartSrc.match(/\.renderAll\s*\(/g) || []).length).toBeGreaterThanOrEqual(4);
+  });
+  it('RC8 the render-fix rationale is documented at the top of the component', () => {
+    expect(canvasSrc).toMatch(/CRITICAL \(render fix\)[\s\S]*?SYNCHRONOUS renderAll/);
+  });
+});

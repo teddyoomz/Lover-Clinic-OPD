@@ -2568,10 +2568,33 @@ result legitimately has no object data; the PNG still merges). Cross-link: tests
 (F1/F2). **Class**: lossless-transport — every drawing tool's object must survive the relay to
 the PC (user mandate "ไม่มีเครื่องมือไหน ... ส่งไป pc แล้วไม่ติดการ edit").
 
+### AV104 — Fabric canvas editor components MUST paint via SYNCHRONOUS renderAll, never the rAF-deferred request-render path (2026-05-21 more-tools-fix3)
+
+A Fabric canvas/editor component that paints via the rAF-deferred request-render path
+(`fc.requestRenderAll()`) can render NOTHING on screen on devices/contexts where
+`requestAnimationFrame` is unreliable — throttled, a stuck `nextRenderHandle`, or simply not
+firing (backgrounded/throttled tab, some iOS-Safari editor states, headless browsers). The
+object model stays correct, so `toDataURL()` save (which renders to a FRESH canvas, bypassing the
+on-screen render) still produces the right image — masking the bug. Net symptom: **blank live
+canvas (template + every stroke invisible) but a correct save** — the EXACT user report.
+
+**Rule**: in `src/components/**/*Canvas*.jsx` (Fabric editor components), every on-screen paint
+MUST be a synchronous `renderAll()`. The rAF-deferred `requestRenderAll` is FORBIDDEN — sync
+render is rAF-independent so it always reaches the screen. Mirror the proven PC `ChartCanvas`.
+
+**Grep target (regression)**: no `requestRenderAll` token (call OR prose) in
+`TabletChartCanvas.jsx`; `fc.renderAll(` appears ≥15×; `ChartCanvas.jsx` (the reference) has 0
+`requestRenderAll` + ≥4 sync `.renderAll(`. **Sanctioned exception**: NONE — perf-sensitive
+high-frequency renders (pen-move) still use sync renderAll (the chart is light; correctness >
+micro-perf; optimize the path, never re-introduce rAF). Cross-link: tests
+`tests/tablet-chart-more-tools-flow-simulate.test.jsx` (RC6/RC7/RC8). **Class**: rAF-dependent
+on-screen render (object-model-correct + save-correct masks a never-painting live canvas) —
+verified at the rendered-pixel level in a real browser at dpr=2 (V66: pixels, not object model).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**, **AV104 (Fabric canvas editor MUST paint via synchronous renderAll, never the rAF-deferred request-render path — blank live canvas + correct save when rAF is unreliable)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

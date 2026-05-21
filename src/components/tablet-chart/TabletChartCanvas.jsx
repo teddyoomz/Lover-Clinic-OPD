@@ -17,6 +17,15 @@ import { isDrawTool, isShapeTool } from '../../lib/tabletChartTools.js';
 // `fc.dispose()` removed the React-owned <canvas> → the re-init could not recover (elRef.current
 // null) → fcRef=null → blank template + no drawing + broken save. Init-once + a template effect
 // (mirror PC ChartCanvas / old PenCanvas) avoids the React↔Fabric DOM-ownership conflict.
+//
+// CRITICAL (render fix): every paint is a SYNCHRONOUS renderAll — NEVER the rAF-deferred
+// request-render path. That path defers the paint to a requestAnimationFrame tick; on the tablet
+// that rAF is unreliable (throttled / stuck nextRenderHandle / not firing in some editor states)
+// → the paint never lands → the template + strokes stay invisible on screen while the object
+// model stays correct (so the toDataURL save still works — the EXACT reported symptom: blank
+// live, correct save). The proven PC ChartCanvas renders synchronously and never uses the rAF
+// path; mirror it. Sync render is rAF-independent, so it always reaches the screen. Verified in a
+// real browser at dpr=2: the rAF path → 0 painted px; sync renderAll → template + strokes paint.
 // props: templateImageUrl, tool, color, size, onRequestSelect (auto-switch after shape/text).
 const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, tool, color, size, onRequestSelect }, ref) {
   const elRef = useRef(null);
@@ -55,7 +64,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     fc.defaultCursor = (t === 'select') ? 'default' : 'crosshair';
     fc.forEachObject(o => { if (o !== templateObjRef.current) { o.selectable = (t === 'select'); o.evented = (t === 'select'); } });
     if (t !== 'select') fc.discardActiveObject();
-    fc.requestRenderAll();
+    fc.renderAll();
   }, []);
 
   const relockTemplate = () => {
@@ -75,7 +84,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     hasTemplateRef.current = false;
     const wrap = wrapRef.current;
     const maxW = (wrap?.clientWidth || 700) - 8, maxH = (wrap?.clientHeight || 800) - 8;
-    if (!url) { fc.setDimensions({ width: Math.min(maxW, Math.round(maxH * 0.78)), height: maxH }); fc.requestRenderAll(); baselineHistory(); return; }
+    if (!url) { fc.setDimensions({ width: Math.min(maxW, Math.round(maxH * 0.78)), height: maxH }); fc.renderAll(); baselineHistory(); return; }
     const img = await new Promise((res) => { const i = new window.Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
     if (!img || fcRef.current !== fc || loadedTplRef.current !== url) return;  // unmounted / superseded during load
     const fi = new fabric.FabricImage(img);
@@ -87,7 +96,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     fi.set({ scaleX: s, scaleY: s, left: Math.round((cw - iw * s) / 2), top: Math.round((ch - ih * s) / 2), selectable: false, evented: false, hoverCursor: 'default', originX: 'left', originY: 'top' });
     fc.setDimensions({ width: cw, height: ch });
     fc.add(fi); fc.sendObjectToBack(fi); templateObjRef.current = fi; hasTemplateRef.current = true;
-    fc.requestRenderAll();
+    fc.renderAll();
     baselineHistory();   // template is part of the baseline → undo never removes it
   }, []);
 
@@ -99,19 +108,19 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     if (s.pathObj) { fc.remove(s.pathObj); s.pathObj = null; }
     if (!d) return;
     const path = new fabric.Path(d, { fill: s.color, stroke: null, opacity: s.tool === 'highlighter' ? 0.4 : 1, selectable: false, evented: false, objectCaching: false });
-    fc.add(path); s.pathObj = path; fc.requestRenderAll();
+    fc.add(path); s.pathObj = path; fc.renderAll();
   };
   const commitPen = () => {
     const fc = fcRef.current, fabric = fabricRef.current, s = penRef.current; penRef.current = null;
     if (!fc || !s) return;
     if (s.pathObj) fc.remove(s.pathObj);
-    if (s.points.length < 2) { fc.requestRenderAll(); return; }
+    if (s.points.length < 2) { fc.renderAll(); return; }
     const opts = s.tool === 'highlighter' ? PEN_PRESETS.highlighter(s.size) : PEN_PRESETS.pen(s.size);
     const d = outlineToSvgPath(strokeOutline(s.points, opts));
-    if (!d) { fc.requestRenderAll(); return; }
+    if (!d) { fc.renderAll(); return; }
     const sel = toolRef.current.tool === 'select';
     const path = new fabric.Path(d, { fill: s.color, stroke: null, opacity: s.tool === 'highlighter' ? 0.4 : 1, selectable: sel, evented: sel, objectCaching: false });
-    fc.add(path); fc.requestRenderAll(); pushHistory();
+    fc.add(path); fc.renderAll(); pushHistory();
   };
 
   // ── shapes (drag start→end) ──
@@ -136,16 +145,16 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     else if (s.tool === 'circle') o.set({ left: Math.min(p.x, s.sx), top: Math.min(p.y, s.sy), rx: Math.abs(p.x - s.sx) / 2, ry: Math.abs(p.y - s.sy) / 2 });
     else if (s.tool === 'line') o.set({ x2: p.x, y2: p.y });
     else if (s.tool === 'arrow') { fc.remove(o); const g = buildArrow(fabricRef.current, s.sx, s.sy, p.x, p.y, s.color, s.size); fc.add(g); s.obj = g; }
-    o.setCoords?.(); fc.requestRenderAll();
+    o.setCoords?.(); fc.renderAll();
   };
   const commitShape = () => {
     const fc = fcRef.current, s = shapeRef.current; shapeRef.current = null; if (!s) return; const o = s.obj;
     const w = o.width || 0, h = o.height || 0;
     const dist = Math.hypot((o.x2 ?? 0) - (o.x1 ?? 0), (o.y2 ?? 0) - (o.y1 ?? 0));
     const tiny = ((s.tool === 'rect' || s.tool === 'circle') && w < 4 && h < 4) || ((s.tool === 'line' || s.tool === 'arrow') && dist < 4);
-    if (tiny) { fc.remove(o); fc.requestRenderAll(); return; }
+    if (tiny) { fc.remove(o); fc.renderAll(); return; }
     o.set({ selectable: true, evented: true }); o.setCoords?.();
-    fc.requestRenderAll(); pushHistory();
+    fc.renderAll(); pushHistory();
     onSelectRef.current?.();
   };
 
@@ -153,9 +162,9 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const addText = (color, sz, p) => {
     const fc = fcRef.current, fabric = fabricRef.current;
     const tb = new fabric.Textbox('ข้อความ', { left: p.x, top: p.y, fontSize: Math.max(18, sz * 4), fill: color, fontFamily: 'sans-serif', width: 160 });
-    fc.add(tb); fc.setActiveObject(tb); fc.requestRenderAll(); pushHistory();
+    fc.add(tb); fc.setActiveObject(tb); fc.renderAll(); pushHistory();
     onSelectRef.current?.();
-    setTimeout(() => { try { tb.enterEditing?.(); tb.selectAll?.(); fc.requestRenderAll(); } catch { /* ignore */ } }, 0);
+    setTimeout(() => { try { tb.enterEditing?.(); tb.selectAll?.(); fc.renderAll(); } catch { /* ignore */ } }, 0);
   };
 
   // ── eraser: object-granular tap/scrub (getBoundingRect hit-test, topmost first) ──
@@ -165,7 +174,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     for (let i = objs.length - 1; i >= 0; i--) {
       const o = objs[i]; if (o === templateObjRef.current) continue;
       const r = o.getBoundingRect ? o.getBoundingRect() : null; if (!r) continue;
-      if (p.x >= r.left && p.x <= r.left + r.width && p.y >= r.top && p.y <= r.top + r.height) { fc.remove(o); fc.requestRenderAll(); pushHistory(); return; }
+      if (p.x >= r.left && p.x <= r.left + r.width && p.y >= r.top && p.y <= r.top + r.height) { fc.remove(o); fc.renderAll(); pushHistory(); return; }
     }
   };
 
@@ -223,12 +232,12 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   useEffect(() => { applyTool(); }, [tool, applyTool]);
 
   useImperativeHandle(ref, () => ({
-    exportDataUrl: () => { const fc = fcRef.current; if (!fc) return null; fc.discardActiveObject(); fc.requestRenderAll(); return fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 }); },
+    exportDataUrl: () => { const fc = fcRef.current; if (!fc) return null; fc.discardActiveObject(); fc.renderAll(); return fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 }); },
     exportFabricJson: () => { const fc = fcRef.current; return fc ? JSON.stringify(fc.toJSON()) : null; },
-    undo: async () => { const fc = fcRef.current; if (!fc || hiRef.current <= 0) return; hiRef.current--; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.requestRenderAll(); },
-    redo: async () => { const fc = fcRef.current; if (!fc || hiRef.current >= histRef.current.length - 1) return; hiRef.current++; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.requestRenderAll(); },
-    clear: () => { const fc = fcRef.current; if (!fc) return; fc.getObjects().filter(o => o !== templateObjRef.current).forEach(o => fc.remove(o)); fc.discardActiveObject(); fc.requestRenderAll(); pushHistory(); },
-    deleteSelected: () => { const fc = fcRef.current; if (!fc) return; const a = fc.getActiveObjects ? fc.getActiveObjects() : []; let n = 0; a.forEach(o => { if (o !== templateObjRef.current) { fc.remove(o); n++; } }); fc.discardActiveObject(); fc.requestRenderAll(); if (n) pushHistory(); },
+    undo: async () => { const fc = fcRef.current; if (!fc || hiRef.current <= 0) return; hiRef.current--; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
+    redo: async () => { const fc = fcRef.current; if (!fc || hiRef.current >= histRef.current.length - 1) return; hiRef.current++; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
+    clear: () => { const fc = fcRef.current; if (!fc) return; fc.getObjects().filter(o => o !== templateObjRef.current).forEach(o => fc.remove(o)); fc.discardActiveObject(); fc.renderAll(); pushHistory(); },
+    deleteSelected: () => { const fc = fcRef.current; if (!fc) return; const a = fc.getActiveObjects ? fc.getActiveObjects() : []; let n = 0; a.forEach(o => { if (o !== templateObjRef.current) { fc.remove(o); n++; } }); fc.discardActiveObject(); fc.renderAll(); if (n) pushHistory(); },
   }), [pushHistory, applyTool]);
 
   return <canvas ref={elRef} style={{ touchAction: 'none', background: '#fff', display: 'block' }} />;
