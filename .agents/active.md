@@ -1,37 +1,36 @@
 ---
-updated_at: "2026-05-21 EOD+2 — re-edit-a-saved-chart-ON-TABLET feature + 2 tool-bug fixes (arrow/text) SHIPPED + DEPLOYED + comprehensively verified. Object-level re-edit LIVE (storage rules deployed)."
-status: "DEPLOYED + verified — no code work pending (idle / await next task). Optional polish flagged: re-edit ~0.8s template-load spinner (user to decide; NOT a bug)."
+updated_at: "2026-05-21 EOD+3 — chart-relay Rule Q adversarial pass (handleSave null fix DEPLOYED) + zoom+palm feature built→deployed→REVERTED (iPad/WebKit black screen on 2-finger zoom). prod safe."
+status: "prod SAFE (zoom reverted). NEXT (user directive): make the project reliably USE Chrome MCP + full Chrome-MCP test of the tablet canvas editor (every tool + function), then stop."
 branch: "master"
-last_commit: "1bfe1767 — fix(tablet-chart): arrow vanished on release + text trapped-in-editing (drag-delta commit + addText no-auto-edit) + AV106"
-tests: "vitest 13970/0 · build clean · L1 real-browser ALL tools + 11 edge cases · L2 e2e prod ALL PASS · object-level re-edit confirmed (render 10610px)"
+last_commit: "00a9da2f — revert: tablet-chart pinch-zoom + palm-rejection (iPad black screen); handleSave fix 7a4b7f47 retained"
+tests: "chart area 38/0 green post-revert; build clean. (zoom tests removed by the revert)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "1bfe1767 — tablet-chart batch LIVE (more-tools + 5 post-ship rounds + re-edit-on-tablet + tool-bugs). Vercel aliased + storage rules deployed (P-D-P #13)."
-firestore_rules_version: "storage.rules uploads/chart-edit-sessions/{sessionId}/{file=**} image/*+application/json DEPLOYED → object-level re-edit (PC + tablet) UNLOCKED LIVE. firestore.rules unchanged."
+production_commit: "00a9da2f — REVERT live (zoom+palm removed; handleSave null fix retained; editor = pre-zoom more-tools version)"
+firestore_rules_version: "unchanged this session (no rules/storage deploy). Last: storage chart-edit-sessions json allowance (prior session)."
 ---
 
 # Active Context
 
 ## State
-- re-edit-a-saved-chart-ON-TABLET + 2 tool-bug fixes (arrow/text) **DEPLOYED + verified**. Object-level re-edit is **LIVE** (storage rules deployed).
-- prod = `1bfe1767` (Vercel aliased to lover-clinic-app.vercel.app + storage rules). vitest **13970/0**.
-- No pending code work. Idle / await next task.
+- prod = `00a9da2f` LIVE — zoom+palm **REVERTED** (Rule A, iPad black screen); `handleSave "null"` fix **retained**; editor back to the proven pre-zoom more-tools version.
+- chart-area tests 38/0 green; build clean.
+- NEXT (user directive): Chrome-MCP setup + full tablet-canvas tool test.
 
-## What this session shipped (detail: checkpoint + v-log-archive §followup-6/7)
-- **re-edit a saved chart ON the tablet** — edit ✏️ → PcPairingModal (PC/tablet); send-to-tablet ships the existing chart PNG + `fabricJson` (NEW `editFabricJsonUrl`); tablet resolves json-first → `initialFabricJson` → object-level `loadFromJSON` at saved dims (else raster); result merges to the SAME slot. Reuses serializeFabricCanvas/isObjectLevelReeditable/uploadTransportJson — no new collection/rule. §followup-6.
-- **2 tool bugs fixed** (`/systematic-debugging`): arrow vanished-on-release (`commitShape` measured dist off the arrow Group's missing x1/x2 → 0 → "tiny" → removed; fix = drag-delta) + text trapped-in-editing/no-handles (`addText` auto-entered editing → `hasControls=false`; fix = mirror PC ChartCanvas, leave selected-with-handles, double-tap to edit). §followup-7 + **AV106**.
-- **Comprehensive verification**: vitest 13970/0 + 18 chart files/147 + L1 real-browser ALL 9 tools + 11 edge cases (text-width / scrub-erase / undo-redo / production+raster re-edit / double-hydrate / re-edit-textbox) all via `getImageData` real pixels + L2 e2e prod ALL PASS. No product bugs found.
-- **Combined deploy** (V15, user-authorized "ผ่านหมดจริงๆค่อย deploy"): `vercel --prod` + `firebase deploy --only storage` (P-D-P #13: anon 403 pre+post).
-- Tests: `tests/re-edit-chart-on-tablet.test.jsx` (RT1-RT7) + `tests/tablet-chart-tool-bugs.test.jsx` (TB1/TB2).
+## What this session shipped (detail: checkpoint .agents/sessions/2026-05-21-chart-relay-fix-zoom-revert.md)
+- **Rule Q adversarial pass** on the chart relay (REAL client SDK — not admin): storage+firestore rules / composite-index / cleanup all verified clean; **found+fixed `ChartSection.handleSave` persisting the string `"null"`** (RT8 regression) + Rule M cleanup of 2 prod charts. DEPLOYED.
+- **Built zoom+palm feature** (brainstorm→spec→plan→impl, desktop-verified via real-browser probe) → deployed → **iPad 2-finger-zoom = BLACK SCREEN** → `/systematic-debugging`.
+- **Root-cause LEAD**: the zoom added raw `addEventListener('pointer*')` on `fc.upperCanvasEl` → conflicts with Fabric's native trusted-touch pipeline on iPad (the original code explicitly warned "no raw upperCanvasEl listeners"). Desktop can't repro (mouse skips Fabric's touch path) — that's why my "verified in a real browser" was false (desktop-only).
+- **REVERTED** the feat (Rule A) + redeployed safe.
 
 ## Next action
-- idle / await next task.
+- **(user directive — carry to next chat)** Make the project reliably USE **Chrome MCP** (Rule S — it IS authorized + connected: deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d` "Browser 1", local). Then **comprehensively test the tablet canvas editor (`?tablet=chart`) via Chrome MCP** — EVERY tool (pen/highlighter/line/arrow/rect/circle/text/eraser/select) + every function — make them all work, THEN stop.
 
 ## Outstanding user-triggered actions
-- **on-device L1** (user, iPad): re-edit a saved chart → prior strokes load as MOVABLE objects → save → PC slot updated. (Note: re-edit shows ~0.8s blank while the template image enlivens, then the chart appears — inherent to image load, NOT a bug.)
-- (optional polish) re-edit template-load loading spinner — user decides; flagged not-a-bug.
-- (carryover) V106 cron 03:30 BKK first drain; calendar-density / Recall / V108 list-visual L1.
+- Chrome-MCP full tablet-canvas test (above) — NEXT.
+- Zoom+palm **re-ship** (shelved): on-device iPad diag to confirm the upperCanvasEl-listener lead → **overlay-based fix** (capture pinch on a separate layer / Fabric's own events, NOT raw listeners on Fabric's element). spec/plan recoverable from commit `e36a73e9`.
+- (carryover) V106 cron drain / calendar-density / Recall / V108 L1.
 
 ## Decisions (1-line)
-- Object-level re-edit (PC + tablet) live-gated on the storage deploy → DEPLOYED this session (P-D-P #13 ✓).
-- Tool-bug fixes verified L1 via `fc.fire` (drives real handlers past the synthetic-event isTrusted limit); getImageData = the rendered-pixel proof (screenshot tool flaky this session — harness, not product).
-- "Really no bugs?" → genuine adversarial pass (11 edges); 2 apparent issues were probe-measured-too-early (confirmed via polling/clean reads), not product bugs.
+- Reverted zoom (Rule A): iPad-specific black screen unconfirmable without the device; desktop renders fine.
+- **Chrome MCP is the correct real-browser tool (Rule S) — use it FIRST for device/touch verification, not Claude Preview.** (User flagged twice.)
+- handleSave "null" fix kept (separate commit `7a4b7f47`, unrelated to zoom).
