@@ -24,6 +24,11 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   }, [imagesProp, src]);
   const N = images.length;
   const [idx, setIdx] = useState(() => Math.min(Math.max(0, Number(startIndex) || 0), Math.max(0, N - 1)));
+  // (2026-05-22) Track which fullUrl has finished decoding so we can fade the
+  // sharp original in OVER an instantly-shown thumb. Without this, navigating
+  // re-used the same <img> node which kept showing the PREVIOUS picture until
+  // the next full-res (≤50MB) downloaded → "กดแล้วรูปไม่เปลี่ยน / ค้างๆ".
+  const [loadedSrc, setLoadedSrc] = useState(null);
   const touchX = useRef(null);
 
   useEffect(() => {
@@ -35,6 +40,19 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, N]);
+
+  // (2026-05-22) Warm the neighbouring originals (idx ±1, ±2) into the browser
+  // cache so a left/right tap shows the sharp image instantly instead of
+  // kicking off a fresh multi-MB fetch on every navigation.
+  useEffect(() => {
+    if (N <= 1) return undefined;
+    const warm = [];
+    for (const j of [idx + 1, idx - 1, idx + 2, idx - 2]) {
+      const u = images[j]?.fullUrl;
+      if (u) { const im = new Image(); im.src = u; warm.push(im); }
+    }
+    return () => { warm.length = 0; };
+  }, [idx, images, N]);
 
   if (N === 0) return null;
 
@@ -110,14 +128,31 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
         </button>
       )}
 
-      {/* main image (original) */}
-      <img
-        src={images[idx]?.fullUrl}
-        alt=""
-        data-testid="staff-chat-lightbox-image"
+      {/* main image — thumb shows INSTANTLY on nav (already cached from the chat
+          grid), sharp original fades in on top once decoded. keyed by idx so the
+          stale previous picture never lingers. */}
+      <div
+        className="relative w-full max-w-4xl h-[78vh] flex items-center justify-center"
         onClick={stop}
-        className="max-w-full max-h-[78vh] object-contain rounded"
-      />
+      >
+        <img
+          key={`thumb-${idx}`}
+          src={images[idx]?.thumbUrl || images[idx]?.fullUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-contain rounded blur-[2px]"
+        />
+        <img
+          key={`full-${idx}`}
+          src={images[idx]?.fullUrl}
+          alt=""
+          data-testid="staff-chat-lightbox-image"
+          onLoad={() => setLoadedSrc(images[idx]?.fullUrl)}
+          className={`absolute inset-0 w-full h-full object-contain rounded transition-opacity duration-150 ${
+            loadedSrc === images[idx]?.fullUrl ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      </div>
 
       {/* next arrow */}
       {N > 1 && idx < N - 1 && (

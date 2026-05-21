@@ -195,6 +195,20 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // the backdrop root no longer has onClick={onClose} directly before onTouchStart
     expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
   });
+  it('lightbox: instant nav — preload neighbours + thumb-first staged display (2026-05-22 lag fix)', () => {
+    const s = read('src/components/staffchat/StaffChatImageLightbox.jsx');
+    // (a) warm idx ±1/±2 originals into cache so arrows are instant, not a fresh multi-MB fetch
+    expect(s).toMatch(/new Image\(\)/);
+    expect(s).toMatch(/idx \+ 1, idx - 1, idx \+ 2, idx - 2/);
+    // (b) thumb shown INSTANTLY (already cached from chat grid) under the sharp original
+    expect(s).toMatch(/thumb-\$\{idx\}/);
+    expect(s).toMatch(/thumbUrl \|\| images\[idx\]\?\.fullUrl/);
+    // (c) full-res keyed by idx (stale previous never lingers) + fades in on decode
+    expect(s).toMatch(/full-\$\{idx\}/);
+    expect(s).toMatch(/loadedSrc/);
+    expect(s).toMatch(/onLoad=\{\(\) => setLoadedSrc/);
+    expect(s).toMatch(/loadedSrc === images\[idx\]\?\.fullUrl \? 'opacity-100' : 'opacity-0'/);
+  });
   it('attachment card: PDF preview only + download; office = download-only (NO in-browser office preview, NO 3rd-party viewer)', () => {
     const s = read('src/components/staffchat/StaffChatAttachmentCard.jsx');
     expect(s).toMatch(/attachmentKindFor/);
