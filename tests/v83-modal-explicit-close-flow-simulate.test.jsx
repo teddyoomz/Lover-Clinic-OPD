@@ -111,8 +111,10 @@ describe('V83 — Modal explicit-close-only flow-simulate (AV78)', () => {
     });
   });
 
-  describe('F6 — Sanctioned lightbox EXCEPTION (StaffChatImageLightbox shape)', () => {
-    // Mirror the sanctioned lightbox shape — click backdrop CLOSES.
+  describe('F6 — Sanctioned lightbox EXCEPTION (TreatmentReadOnlyMirror inner-lightbox shape)', () => {
+    // Mirror the remaining sanctioned lightbox shape — click backdrop CLOSES.
+    // (StaffChatImageLightbox left the closed list 2026-05-22 → it's now a normal
+    //  modal: ✕/Esc only. This abstract shape still covers TreatmentReadOnlyMirror.)
     function LightboxModal({ onClose }) {
       return (
         // audit-anti-vibe-code: AV78 lightbox-explicit-exception

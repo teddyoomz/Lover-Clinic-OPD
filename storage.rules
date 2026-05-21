@@ -45,10 +45,11 @@ service firebase.storage {
       allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // ─── V73 Feature F (2026-05-16) — Staff chat image attachments ────────
-    // (2026-05-22) Multi-image: now staff-chat-attachments/{branchId}/{messageId}/{imgId}-{t|o}.{ext}
-    //   — thumbnail (~512px jpeg, tiny) + original ≤50MB (hybrid). {file=**} matches
-    //   the nested {messageId}/ folder. Cap raised 1MB → 50MB for the original.
+    // ─── V73 Feature F (2026-05-16) — Staff chat attachments ──────────────
+    // (2026-05-22) Multi-image: staff-chat-attachments/{branchId}/{messageId}/{id}-{t|o}.{ext}
+    //   — thumbnail (~512px jpeg, tiny) + original. {file=**} matches the nested
+    //   {messageId}/ folder. (2026-05-22 any-file) Split cap (Q4): image/* < 50MB;
+    //   every other file type < 1GB. Render kind is derived client-side from mime.
     // Clinic-staff-only WRITE + READ. UPDATE + DELETE blocked (append-only by
     // design; the retention cron deletes via admin SDK which bypasses these rules
     // — keeps client-delete locked for defense-in-depth).
@@ -56,7 +57,10 @@ service firebase.storage {
       allow read: if request.auth != null && (request.auth.token.isClinicStaff == true || request.auth.token.admin == true);
       allow create: if request.auth != null
                     && (request.auth.token.isClinicStaff == true || request.auth.token.admin == true)
-                    && request.resource.size < 50 * 1024 * 1024;
+                    && (
+                         (request.resource.contentType.matches('image/.*')  && request.resource.size < 50 * 1024 * 1024)
+                      || (!request.resource.contentType.matches('image/.*') && request.resource.size < 1024 * 1024 * 1024)
+                    );
       allow update, delete: if false;
     }
 

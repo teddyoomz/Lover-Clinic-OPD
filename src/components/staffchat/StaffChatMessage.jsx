@@ -9,9 +9,11 @@ import React, { useState } from 'react';
 import { Reply } from 'lucide-react';
 import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
+import { StaffChatAttachmentCard } from './StaffChatAttachmentCard.jsx';
+import { StaffChatPdfOverlay } from './StaffChatPdfOverlay.jsx';
 import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
-import { gridLayoutFor } from '../../lib/staffChatRetentionCore.js';
+import { gridLayoutFor, attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 
 // (2026-05-22) Adaptive thumbnail grid for message.attachments[] (LINE-style).
 // 1 image renders at natural aspect; 2+ render as a fixed-height grid of square
@@ -39,7 +41,7 @@ function AttachmentGrid({ attachments, onOpen }) {
     <div
       data-testid="staff-chat-attach-grid"
       className="grid gap-0.5 rounded-lg overflow-hidden mb-1"
-      style={{ gridTemplateColumns: layout.cols, gridTemplateRows: layout.rows || undefined, width: 240, height: gridHeight }}
+      style={{ gridTemplateColumns: layout.cols, gridTemplateRows: layout.rows || undefined, width: '100%', maxWidth: 240, height: gridHeight }}
     >
       {atts.slice(0, layout.show).map((a, i) => {
         const isLast = i === layout.show - 1;
@@ -78,6 +80,8 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
   // V73 Feature F — local lightbox state. (2026-05-22) null = closed; else
   // { images, start } so the swipe lightbox opens at the clicked image.
   const [lightbox, setLightbox] = useState(null);
+  // (2026-05-22) any-file: PDF preview overlay state ({ url, name, size }).
+  const [pdfOverlay, setPdfOverlay] = useState(null);
   // V73 color-picker (2026-05-18) — resolve sender color from message doc.
   const senderColor = resolveSenderColor(message, isOwn);
   const bubbleStyle = {
@@ -85,6 +89,13 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
     borderColor: hexToRgba(senderColor, 0.45),
   };
   const nameStyle = { color: senderColor };
+  // (2026-05-22) any-file: split attachments by render kind. Images group into
+  // the existing grid (+ lightbox); every other kind renders in order below
+  // (inline video/audio players · pdf/file download cards). Legacy multi-image
+  // records carry image/* mimeType → land in imageAtts unchanged.
+  const atts = Array.isArray(message.attachments) ? message.attachments : [];
+  const imageAtts = atts.filter((a) => attachmentKindFor(a && a.mimeType) === 'image');
+  const otherAtts = atts.filter((a) => attachmentKindFor(a && a.mimeType) !== 'image');
   return (
     <div
       data-testid="staff-chat-message"
@@ -131,14 +142,49 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           style={bubbleStyle}
           data-testid={`staff-chat-message-bubble-${message.id}`}
         >
-          {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
+          {imageAtts.length > 0 && (
             <div data-testid={`staff-chat-message-image-${message.id}`}>
               <AttachmentGrid
-                attachments={message.attachments}
-                onOpen={(i) => setLightbox({ images: message.attachments, start: i })}
+                attachments={imageAtts}
+                onOpen={(i) => setLightbox({ images: imageAtts, start: i })}
               />
             </div>
-          ) : message.attachmentUrl ? (
+          )}
+          {otherAtts.map((a, i) => {
+            const kind = attachmentKindFor(a && a.mimeType);
+            if (kind === 'video') {
+              return (
+                <video
+                  key={i}
+                  src={a.fullUrl}
+                  controls
+                  preload="metadata"
+                  data-testid="staff-chat-attach-video"
+                  className="block w-full max-w-[240px] rounded-lg mb-1 bg-black"
+                />
+              );
+            }
+            if (kind === 'audio') {
+              return (
+                <audio
+                  key={i}
+                  src={a.fullUrl}
+                  controls
+                  preload="metadata"
+                  data-testid="staff-chat-attach-audio"
+                  className="block w-full max-w-[240px] mb-1"
+                />
+              );
+            }
+            return (
+              <StaffChatAttachmentCard
+                key={i}
+                att={a}
+                onPreview={kind === 'pdf' ? () => setPdfOverlay({ url: a.fullUrl, name: a.name, size: a.size }) : undefined}
+              />
+            );
+          })}
+          {imageAtts.length === 0 && otherAtts.length === 0 && message.attachmentUrl && (
             // Legacy V73 single-image message (attachmentUrl scalar) — still renders.
             <button
               type="button"
@@ -148,7 +194,7 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
             >
               <img src={message.attachmentUrl} alt="" className="w-full h-auto" />
             </button>
-          ) : null}
+          )}
           {message.text && <StaffChatMessageBody text={message.text} />}
         </div>
         {onReply && (
@@ -172,6 +218,14 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           images={lightbox.images}
           startIndex={lightbox.start}
           onClose={() => setLightbox(null)}
+        />
+      )}
+      {pdfOverlay && (
+        <StaffChatPdfOverlay
+          url={pdfOverlay.url}
+          name={pdfOverlay.name}
+          size={pdfOverlay.size}
+          onClose={() => setPdfOverlay(null)}
         />
       )}
     </div>

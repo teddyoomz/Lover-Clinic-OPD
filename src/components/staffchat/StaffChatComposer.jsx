@@ -3,40 +3,61 @@
 // V73 Feature B — @-mention dropdown + auto-extract mentions on send.
 // V73 Feature C — Reply-to-message quote strip + replyTo passed in extras.
 // V73 Feature F — Image paste / drag-drop / file-input + upload.
-// (2026-05-22) Multi-image: pick/paste/drag MULTIPLE (≤10) + preview strip with
-//   per-image remove + per-image upload progress. Uploads via onPrepareAndUpload
-//   (hybrid thumb+original) → threads { id: messageId, attachments } into onSend.
+// (2026-05-22) Any-file: pick / paste / drag MULTIPLE (≤10) files of ANY type
+//   (≤1GB; images ≤50MB) + preview strip (image thumb | icon+name) with per-file
+//   upload progress + per-file CANCEL (task.cancel) + retry-on-failure. Uploads
+//   via onPrepareAndUpload (hybrid thumb+original for images; original-only for
+//   files) → threads { id: messageId, attachments } into onSend.
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, X as XIcon } from 'lucide-react';
 import { extractMentions } from '../../lib/staffChatClient.js';
 import { StaffChatMentionDropdown } from './StaffChatMentionDropdown.jsx';
 import {
-  validateStaffChatImage,
-  STAFF_CHAT_MAX_IMAGES,
+  validateStaffChatFile,
+  attachmentKindFor,
+  STAFF_CHAT_MAX_ATTACHMENTS,
 } from '../../lib/staffChatImageResize.js';
+
+// Pending-chip icon for non-image files (image kind shows a real thumbnail).
+const KIND_ICON = { pdf: '📄', video: '🎬', audio: '🎵', file: '📎' };
+function pendingIcon(p) {
+  const k = attachmentKindFor(p.file && p.file.type);
+  if (k === 'file') {
+    const ext = (String(p.name || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '🗜️';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
+    if (['doc', 'docx', 'txt', 'rtf', 'md'].includes(ext)) return '📝';
+    if (['ppt', 'pptx', 'key'].includes(ext)) return '📽️';
+  }
+  return KIND_ICON[k] || '📎';
+}
 
 export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload }) {
   const [text, setText] = useState('');
   const [mentionTrigger, setMentionTrigger] = useState(null);
-  // pendingImages: [{ id, file, previewUrl, progress }]
-  const [pendingImages, setPendingImages] = useState([]);
+  // pendingFiles: [{ id, file, previewUrl|null, kind, name, progress, cancelled }]
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const idRef = useRef(0);
-  const localId = () => `img-${++idRef.current}`;
+  const localId = () => `att-${++idRef.current}`;
+  // (2026-05-22) per-file resumable task refs (index→task) + cancelled-index set,
+  // so a chip's ✕ during upload can task.cancel() and the pipeline skips it.
+  const taskRefs = useRef({});
+  const cancelRef = useRef(new Set());
 
   // Revoke object URLs on unmount (memory hygiene) — track via ref so the
   // cleanup sees the latest list, not a stale closure.
   const pendingRef = useRef([]);
-  useEffect(() => { pendingRef.current = pendingImages; }, [pendingImages]);
+  useEffect(() => { pendingRef.current = pendingFiles; }, [pendingFiles]);
   useEffect(() => () => {
     pendingRef.current.forEach(p => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); });
   }, []);
 
   const trimmed = text.trim();
   const tooLong = trimmed.length > 500;
-  const canSend = (trimmed.length > 0 || pendingImages.length > 0) && !tooLong && !uploading;
+  const canSend = (trimmed.length > 0 || pendingFiles.length > 0) && !tooLong && !uploading;
 
   const onChange = (e) => {
     const v = e.target.value;
@@ -56,39 +77,59 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
     textareaRef.current?.focus();
   };
 
-  // (2026-05-22) Accept N files (paste/drop/file-input). Validate each (type +
-  // ≤50MB); reject with Thai message; cap total at STAFF_CHAT_MAX_IMAGES.
+  // (2026-05-22) Accept N files of ANY type (paste/drop/file-input). Validate
+  // each (allow-all type + split caps); reject with Thai message; cap total at
+  // STAFF_CHAT_MAX_ATTACHMENTS.
   const acceptFiles = (fileList) => {
     if (uploading) return;
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
-    setPendingImages((prev) => {
+    setPendingFiles((prev) => {
       const next = [...prev];
       for (const f of files) {
-        if (next.length >= STAFF_CHAT_MAX_IMAGES) {
-          window.alert(`ส่งได้สูงสุด ${STAFF_CHAT_MAX_IMAGES} รูปต่อข้อความ`);
+        if (next.length >= STAFF_CHAT_MAX_ATTACHMENTS) {
+          window.alert(`ส่งได้สูงสุด ${STAFF_CHAT_MAX_ATTACHMENTS} ไฟล์ต่อข้อความ`);
           break;
         }
-        const v = validateStaffChatImage(f);
+        const v = validateStaffChatFile(f);
         if (!v.ok) { window.alert(v.message); continue; }
-        next.push({ id: localId(), file: f, previewUrl: URL.createObjectURL(f), progress: 0 });
+        const kind = attachmentKindFor(f.type);
+        next.push({
+          id: localId(),
+          file: f,
+          previewUrl: kind === 'image' ? URL.createObjectURL(f) : null,
+          kind,
+          name: f.name || 'file',
+          progress: 0,
+          cancelled: false,
+        });
       }
       return next;
     });
   };
 
-  const removeImage = (id) => {
-    if (uploading) return;
-    setPendingImages((prev) => {
+  // Pre-upload: remove a pending chip. During upload: cancel that file's task +
+  // mark it cancelled (index-stable — never splice while the upload loop runs,
+  // or progress callbacks would target the wrong chip).
+  const removeOrCancel = (id, index) => {
+    if (uploading) {
+      cancelRef.current.add(index);
+      try { taskRefs.current[index]?.cancel(); } catch { /* already settled */ }
+      setPendingFiles((prev) => prev.map((p, i) => (i === index ? { ...p, cancelled: true } : p)));
+      return;
+    }
+    setPendingFiles((prev) => {
       const target = prev.find(p => p.id === id);
       if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return prev.filter(p => p.id !== id);
     });
   };
 
-  const clearAllImages = () => {
-    pendingImages.forEach(p => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); });
-    setPendingImages([]);
+  const clearAllFiles = () => {
+    pendingFiles.forEach(p => { if (p.previewUrl) URL.revokeObjectURL(p.previewUrl); });
+    setPendingFiles([]);
+    taskRefs.current = {};
+    cancelRef.current = new Set();
   };
 
   const onPaste = (e) => {
@@ -119,27 +160,48 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
     if (mentions.length > 0) extras.mentions = mentions;
     if (replyingTo) extras.replyTo = replyingTo;
 
-    if (pendingImages.length > 0 && onPrepareAndUpload) {
+    if (pendingFiles.length > 0 && onPrepareAndUpload) {
+      // Reset per-attempt cancel/task state + progress (also covers retry: the
+      // user keeps the strip after a failure and clicks Send again).
+      taskRefs.current = {};
+      cancelRef.current = new Set();
+      setPendingFiles(prev => prev.map(p => ({ ...p, progress: 0, cancelled: false })));
       setUploading(true);
+      let result;
       try {
-        const files = pendingImages.map(p => p.file);
-        const { messageId, attachments } = await onPrepareAndUpload(files, (i, frac) => {
-          setPendingImages(prev => prev.map((p, idx) => idx === i ? { ...p, progress: frac } : p));
-        });
-        extras.id = messageId;
-        extras.attachments = attachments;
+        const files = pendingFiles.map(p => p.file);
+        result = await onPrepareAndUpload(
+          files,
+          (i, frac) => setPendingFiles(prev => prev.map((p, idx) => (idx === i ? { ...p, progress: frac } : p))),
+          (i, task) => { taskRefs.current[i] = task; },
+          cancelRef,
+        );
       } catch (e) {
-        window.alert('อัพโหลดรูปไม่สำเร็จ: ' + (e?.message || e));
+        window.alert('อัพโหลดไฟล์ไม่สำเร็จ: ' + (e?.message || e));
         setUploading(false);
         return;
       }
       setUploading(false);
+      const { messageId, attachments, failed } = result || {};
+      if (Array.isArray(failed) && failed.length > 0) {
+        // Keep the strip so the user can click Send again to retry the failures.
+        window.alert(`อัพโหลด ${failed.length} ไฟล์ไม่สำเร็จ — กดส่งอีกครั้งเพื่อลองใหม่`);
+        return;
+      }
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        extras.id = messageId;
+        extras.attachments = attachments;
+      } else if (!trimmed) {
+        // All files cancelled + no text → nothing to send.
+        clearAllFiles();
+        return;
+      }
     }
 
     onSend(trimmed, extras);
     setText('');
     setMentionTrigger(null);
-    clearAllImages();
+    clearAllFiles();
     onClearReply?.();
   };
 
@@ -179,31 +241,38 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
           </button>
         </div>
       )}
-      {pendingImages.length > 0 && (
-        <div data-testid="staff-chat-composer-image-preview" className="px-3 py-2 flex items-center gap-2 flex-wrap">
-          {pendingImages.map((p) => (
-            <div key={p.id} className="relative w-16 h-16" data-testid="staff-chat-composer-image-thumb">
-              <img src={p.previewUrl} className="w-16 h-16 object-cover rounded-md border border-[var(--bd)]" alt="" />
-              {!uploading && (
+      {pendingFiles.length > 0 && (
+        <div data-testid="staff-chat-composer-image-preview" className="px-3 py-2 flex items-start gap-2 flex-wrap">
+          {pendingFiles.map((p, index) => (
+            <div key={p.id} className={`relative w-16 ${p.cancelled ? 'opacity-40' : ''}`} data-testid="staff-chat-composer-image-thumb">
+              {p.kind === 'image' && p.previewUrl ? (
+                <img src={p.previewUrl} className="w-16 h-16 object-cover rounded-md border border-[var(--bd)]" alt="" />
+              ) : (
+                <div className="w-16 h-16 rounded-md border border-[var(--bd)] bg-[var(--bg-hover)] flex items-center justify-center text-2xl" aria-hidden="true">
+                  {pendingIcon(p)}
+                </div>
+              )}
+              {!p.cancelled && (
                 <button
                   type="button"
-                  onClick={() => removeImage(p.id)}
+                  onClick={() => removeOrCancel(p.id, index)}
                   data-testid="staff-chat-composer-image-clear"
                   className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
-                  aria-label="ลบรูป"
+                  aria-label={uploading ? 'ยกเลิก' : 'ลบไฟล์'}
                 >
                   <XIcon size={12} />
                 </button>
               )}
-              {uploading && (
+              {uploading && !p.cancelled && (
                 <div className="absolute left-1 right-1 bottom-1 h-1 rounded bg-white/40 overflow-hidden">
                   <div className="h-full bg-emerald-400 transition-all" style={{ width: `${Math.round((p.progress || 0) * 100)}%` }} />
                 </div>
               )}
+              <div className="text-[9px] text-[var(--tx-muted)] mt-0.5 w-16 truncate" title={p.name}>{p.name}</div>
             </div>
           ))}
-          <span className="text-[10px] text-[var(--tx-muted)]">
-            {uploading ? 'กำลังอัพโหลด...' : `${pendingImages.length}/${STAFF_CHAT_MAX_IMAGES} รูป`}
+          <span className="text-[10px] text-[var(--tx-muted)] self-center">
+            {uploading ? 'กำลังอัพโหลด...' : `${pendingFiles.length}/${STAFF_CHAT_MAX_ATTACHMENTS} ไฟล์`}
           </span>
         </div>
       )}
@@ -214,13 +283,12 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
           disabled={uploading}
           data-testid="staff-chat-composer-attach"
           className="w-9 h-9 rounded-lg hover:bg-rose-500/10 flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          aria-label="แนบรูป"
+          aria-label="แนบไฟล์"
         >
           <Paperclip size={16} />
         </button>
         <input
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
           multiple
           ref={fileInputRef}
           onChange={onFileSelect}

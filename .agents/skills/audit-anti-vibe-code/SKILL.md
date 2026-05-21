@@ -2290,14 +2290,17 @@ After this audit pattern, the source-grep regression test
 - M3: ESC OR X-button close affordance still present (positive check)
 - M4: AV78 marker comment present where strip happened
 
-**Sanctioned exceptions** (closed list — adding a 4th requires extending
+**Sanctioned exceptions** (closed list — adding another requires extending
 both the test file AND filing a V-entry justifying the UX deviation):
-1. `src/components/staffchat/StaffChatImageLightbox.jsx` — fullscreen
-   chat image viewer; click-anywhere-closes IS expected UX
-2. `src/components/backend/TreatmentReadOnlyMirror.jsx` (inner
+1. `src/components/backend/TreatmentReadOnlyMirror.jsx` (inner
    ImageLightbox helper) — same pattern for treatment image zoom
 
-Both annotated with `// audit-anti-vibe-code: AV78 lightbox-explicit-exception`.
+(2026-05-22, any-file ship) `StaffChatImageLightbox.jsx` LEFT this closed list —
+it is now a NORMAL modal (✕/Esc only, no backdrop close); the NEW
+`StaffChatPdfOverlay.jsx` also follows explicit-close (NOT an exception). Reason:
+accidental outside-clicks closing a viewer mid-look = ใช้ยาก. List 2 → 1.
+
+Annotated with `// audit-anti-vibe-code: AV78 lightbox-explicit-exception`.
 
 **Detection**: regression test `tests/v83-modal-explicit-close-only.test.js`
 (M1-M4) + Rule I flow-simulate `tests/v83-modal-explicit-close-flow-simulate.test.jsx`
@@ -2664,6 +2667,8 @@ Multi-image staff chat (Q1 auto-retention-only, Q3 delete whole message+images, 
 **Rule**: (a) every staff-chat image write goes under `{branchId}/{messageId}/` via `staffChatImagePaths` (root from the shared `STAFF_CHAT_STORAGE_ROOT`); (b) the retention cron `sweepStaffChatRetention` deletes a message's images via `bucket.getFiles({ prefix: storagePrefixForMessage(...) })` (Pass A age-out >30d) + sweeps doc-less folders older than the grace window (Pass B orphan = abandoned uploads); (c) legacy scalar `attachmentUrl` files are cleaned via `extractStoragePathFromUrl`; (d) deletes are ADMIN-SDK ONLY — `storage.rules` + `firestore.rules` keep `update,delete: if false` for the client (defense-in-depth). `buildMessageDoc` normalizes attachments Firestore-undefined-safe (V14) + caps at `STAFF_CHAT_MAX_IMAGES`.
 
 **Grep target (regression)**: `staffChatImageResize.js` builds `${branchId}/${messageId}/`; `api/cron/staff-chat-retention-sweep.js` uses `getFiles({prefix`, `storagePrefixForMessage`, `isOrphanFolder`, `extractStoragePathFromUrl`, `CRON_SECRET`; `storage.rules` staff-chat-attachments `< 50 * 1024 * 1024` + `allow update, delete: if false`; `firestore.rules` `get('attachments', []) is list … <= 10`; NO `deleteObject` in any staff-chat client file. **Sanctioned exception**: NONE. Cross-link: `tests/staff-chat-multi-image.test.js` (G5 source-grep) + `scripts/e2e-staff-chat-image-retention.mjs` (Rule Q L2 real-prod deletion proof). **Class**: when files are deleted by a cascade, group them under ONE deletable prefix so the sweep can't miss one; never trust the client to delete (admin-SDK only). **VERIFIED real prod 2026-05-22 (Rule Q L1/L2 + Q-vis)**: sweep `deletedFiles:12 → getFiles=0 + doc gone`; real client multi-image send + grid + full lightbox all screenshot-confirmed; NO bugs.
+
+**(2026-05-22 any-file extension)**: staff chat now sends ANY file type ≤1GB (images ≤50MB). `storage.rules` uses a SPLIT cap (`image/* < 50 * 1024 * 1024` OR `!image/* < 1024 * 1024 * 1024`) — the per-message folder + prefix-sweep retention is UNCHANGED + file-type-agnostic (a 1GB video is swept exactly like a thumbnail). Render kind is derived client-side via `attachmentKindFor(mime)` (`staffChatRetentionCore.js`): image→grid+lightbox · `video/*`→inline `<video>` · `audio/*`→inline `<audio>` · `application/pdf`→PDF overlay · else→download card. `image` is limited to jpeg/png/webp/gif so a HEIC/SVG never produces a broken `<img>`. The attachment record gains a `name` field (download filename); `normalizeStaffChatAttachment` defaults missing mime to `application/octet-stream` + omits thumb/w/h for non-image kinds. Upload via `uploadStaffChatFile` (resumable + `registerTask` for per-file cancel + retry; Q3). NEW grep: `attachmentKindFor` in `StaffChatMessage.jsx` + `StaffChatAttachmentCard.jsx`; `storage.rules` split `contentType.matches('image/.*') … < 50 * 1024 * 1024` + `!…matches('image/.*') … < 1024 * 1024 * 1024`; shared `downloadUrlAsFile` (`staffChatDownload.js`, Rule of 3: lightbox + card + overlay; >100MB → new-tab to avoid a 1GB in-memory blob). Cross-link: `tests/staff-chat-any-file.test.js` (AF1-AF5) + `scripts/e2e-staff-chat-any-file.mjs` (Rule Q L2). **AV78 update**: `StaffChatImageLightbox` left the AV78 sanctioned-lightbox list (now ✕/Esc-only normal modal); NEW `StaffChatPdfOverlay` also explicit-close.
 
 ## Priority
 

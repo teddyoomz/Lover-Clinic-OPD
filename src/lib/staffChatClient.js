@@ -7,7 +7,7 @@
 //   - optional mentions[] / replyTo / attachment fields
 // Used by ChatPanel + scopedDataLayer.addStaffChatMessage.
 import { serverTimestamp } from 'firebase/firestore';
-import { STAFF_CHAT_MAX_IMAGES } from './staffChatRetentionCore.js';
+import { STAFF_CHAT_MAX_ATTACHMENTS } from './staffChatRetentionCore.js';
 
 // Crypto-secure CHAT-<ts>-<hex> id (Rule C2 — no Math.random). Exported so the
 // upload pipeline can mint the id BEFORE uploading images (images live under
@@ -23,13 +23,17 @@ export function newStaffChatMessageId() {
 // undefined leaves; only known fields).
 function normalizeStaffChatAttachment(a) {
   const o = {
-    thumbUrl: String((a && a.thumbUrl) || ''),
+    // (2026-05-22) any-file: name = original filename (card label + download
+    // name); mimeType drives the render kind. thumb/w/h are images-only and
+    // omitted for non-image kinds (Firestore-undefined-safe, V14).
+    name: String((a && a.name) || ''),
     fullUrl: String((a && a.fullUrl) || ''),
-    thumbPath: String((a && a.thumbPath) || ''),
     fullPath: String((a && a.fullPath) || ''),
     size: Number(a && a.size) || 0,
-    mimeType: String((a && a.mimeType) || 'image/jpeg'),
+    mimeType: String((a && a.mimeType) || 'application/octet-stream'),
   };
+  if (a && a.thumbUrl) o.thumbUrl = String(a.thumbUrl);
+  if (a && a.thumbPath) o.thumbPath = String(a.thumbPath);
   if (a && Number.isFinite(a.w) && a.w > 0) o.w = Math.round(a.w);
   if (a && Number.isFinite(a.h) && a.h > 0) o.h = Math.round(a.h);
   return o;
@@ -65,7 +69,7 @@ export function buildMessageDoc({
     createdAt: serverTimestamp(),
   };
   if (hasAttachments) {
-    doc.attachments = attachments.slice(0, STAFF_CHAT_MAX_IMAGES).map(normalizeStaffChatAttachment);
+    doc.attachments = attachments.slice(0, STAFF_CHAT_MAX_ATTACHMENTS).map(normalizeStaffChatAttachment);
   }
   if (Array.isArray(mentions) && mentions.length > 0) doc.mentions = mentions.slice(0, 5);
   if (replyTo && replyTo.msgId) doc.replyTo = {

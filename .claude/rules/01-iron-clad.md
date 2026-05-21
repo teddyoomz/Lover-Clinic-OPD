@@ -342,6 +342,8 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 - Inspecting layout / responsive / dark-mode / computed styles on the deployed OR local app.
 - Building a temp probe page that mounts a REAL component to drive its real lifecycle (delete it after — never commit).
 
+**When Rule S does NOT apply — TIMING (2026-05-22, user directive "ไม่ต้องใช้ Chrome MCP ตอนถามกับตอนแพลน … นาน … ให้ใช้ตอนทดสอบ ตรวจสอบ inspect บลาๆ อย่างอื่นเท่านั้น")**: Chrome MCP / Claude Preview are for the **test / verify / inspect / debug** phase ONLY. Do **NOT** spin them up during the **ask** (brainstorming clarifying questions) or **plan** (writing-plans) stages — they are slow ("นาน") and premature while the design is still being decided. During design Q&A, show visuals the lightweight way — AskUserQuestion `preview` mockups, or write the HTML mockup into the spec for the user to open — **NOT** by driving a live browser. Reach for the real browser only once there is something built to TEST / a rendered result to VERIFY / a live page to INSPECT.
+
 **How**:
 - Chrome MCP needs the Chrome extension connected; if it isn't, ASK the user to connect it (don't silently fall back to a weaker tier).
 - For the local dev server, the Claude Preview MCP (`preview_start` / `preview_eval` / `preview_screenshot` / `preview_resize` / `preview_console_logs` / ...) is wired via `.claude/launch.json` — use it freely.
@@ -352,6 +354,7 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 - ❌ Claiming "verified" from a ref / object-model inspection when a real-browser pixel check was feasible — Rule Q + Rule S make it feasible, so use it.
 - ❌ Asking "may I use Chrome to test?" every turn — it is pre-authorized; just use it.
 - ❌ Leaving a temp probe page committed — delete probe HTML/JSX after debugging.
+- ❌ Driving Chrome MCP / Claude Preview during brainstorming questions or plan-writing — slow + premature; it belongs to the test/verify/inspect stage (2026-05-22).
 
 **Lesson lock**: real-browser viewing/testing is now a first-class, always-available tool. Reach for it whenever "does the user actually SEE this work?" is the question — that's the only verification that doesn't lie (Rule Q).
 

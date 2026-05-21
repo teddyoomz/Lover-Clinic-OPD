@@ -15,7 +15,7 @@
 // (2026-05-22) Multi-image extension: validateStaffChatImage / makeStaffChatThumbnail /
 // uploadStaffChatImage (hybrid thumb + original ≤50MB, resumable for progress).
 // Images for ONE message live under staff-chat-attachments/{branchId}/{messageId}/.
-import { STAFF_CHAT_STORAGE_ROOT, STAFF_CHAT_MAX_IMAGES } from './staffChatRetentionCore.js';
+import { STAFF_CHAT_STORAGE_ROOT, STAFF_CHAT_MAX_IMAGES, STAFF_CHAT_MAX_ATTACHMENTS, attachmentKindFor } from './staffChatRetentionCore.js';
 
 export function isImageFile(file) {
   return !!file && typeof file.type === 'string' && file.type.startsWith('image/');
@@ -71,7 +71,7 @@ export async function uploadAttachment(blob, branchId) {
 export const STAFF_CHAT_MAX_BYTES = 50 * 1024 * 1024;        // ≤50MB per image (input gate)
 export const STAFF_CHAT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 export const STAFF_CHAT_THUMB_MAX = 512;                     // thumbnail max edge (px)
-export { STAFF_CHAT_MAX_IMAGES };                            // re-export for composer/client
+export { STAFF_CHAT_MAX_IMAGES, STAFF_CHAT_MAX_ATTACHMENTS, attachmentKindFor };  // re-export for composer/client/hook
 
 // Validate one selected file. HEIC (iPhone) is rejected so the lightbox never
 // shows a broken image — staff convert to JPEG first.
@@ -164,4 +164,80 @@ export async function uploadStaffChatImage({ file, branchId, messageId, onProgre
     size: file.size, mimeType: file.type,
     w: thumb.srcW, h: thumb.srcH,
   };
+}
+
+// ─── (2026-05-22) Any-file pipeline (Q1 allow-all type · Q4 split caps) ──────
+
+export const STAFF_CHAT_FILE_MAX_BYTES = 1024 * 1024 * 1024;  // 1 GiB — non-image cap
+
+// Validate one selected file for the any-file composer. Type = allow-all (Q1).
+// Size = split (Q4): image/* ≤ 50 MB; everything else ≤ 1 GB.
+export function validateStaffChatFile(file) {
+  if (!file || typeof file.type !== 'string') {
+    return { ok: false, reason: 'type', message: 'ไฟล์ไม่ถูกต้อง' };
+  }
+  const isImg = file.type.startsWith('image/');
+  const cap = isImg ? STAFF_CHAT_MAX_BYTES : STAFF_CHAT_FILE_MAX_BYTES;
+  if (file.size > cap) {
+    return { ok: false, reason: 'size', message: isImg ? 'รูปใหญ่เกิน 50MB' : 'ไฟล์ใหญ่เกิน 1GB' };
+  }
+  return { ok: true };
+}
+
+// Real-filename extension for the Storage object path (keeps .docx/.xlsx/.zip
+// correct). Cosmetic — the download uses the `name` field for the real filename.
+export function extForName(name) {
+  const m = String(name || '').match(/\.([a-z0-9]+)$/i);
+  return m ? m[1].toLowerCase() : 'bin';
+}
+
+// Upload ONE attachment of ANY type under the message folder. A renderable image
+// also gets a ≤512px thumbnail (for the grid); every other kind uploads the
+// original only. The original always uses uploadBytesResumable so the composer
+// can show per-file progress AND cancel mid-upload via the registered task
+// (Q3). Returns the attachment record stored in message.attachments[].
+export async function uploadStaffChatFile({ file, branchId, messageId, onProgress, registerTask }) {
+  const v = validateStaffChatFile(file);
+  if (!v.ok) throw new Error(v.message);
+  if (!branchId || !messageId) throw new Error('STAFF_CHAT_UPLOAD_CONTEXT_MISSING');
+  const { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
+  const storage = getStorage();
+  const fileId = shortHex(4);
+  const kind = attachmentKindFor(file.type);
+  const ext = extForName(file.name);
+  const base = `${STAFF_CHAT_STORAGE_ROOT}/${branchId}/${messageId}/${fileId}`;
+  const fullPath = `${base}-o.${ext}`;
+
+  const rec = {
+    name: String(file.name || 'file'),
+    mimeType: file.type || 'application/octet-stream',
+    size: file.size,
+    fullPath,
+  };
+
+  // Renderable image → thumbnail + natural dims (grid + lightbox aspect).
+  // Thumbnail failure (huge/exotic) degrades gracefully to a file card.
+  if (kind === 'image') {
+    try {
+      const thumb = await makeStaffChatThumbnail(file);
+      const thumbPath = `${base}-t.jpg`;
+      await uploadBytes(ref(storage, thumbPath), thumb.blob, { contentType: 'image/jpeg' });
+      rec.thumbUrl = await getDownloadURL(ref(storage, thumbPath));
+      rec.thumbPath = thumbPath;
+      rec.w = thumb.srcW;
+      rec.h = thumb.srcH;
+    } catch { /* degrade to file-card (no thumb) */ }
+  }
+
+  const oRef = ref(storage, fullPath);
+  await new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(oRef, file, { contentType: rec.mimeType });
+    if (typeof registerTask === 'function') registerTask(task);
+    task.on('state_changed',
+      (s) => { if (onProgress && s.totalBytes) onProgress(s.bytesTransferred / s.totalBytes); },
+      (err) => reject(err && err.code === 'storage/canceled' ? new Error('STAFF_CHAT_UPLOAD_CANCELLED') : err),
+      resolve);
+  });
+  rec.fullUrl = await getDownloadURL(oRef);
+  return rec;
 }

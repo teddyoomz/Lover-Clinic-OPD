@@ -57,12 +57,13 @@ import {
 // V73 Feature F (T15) — uploadAttachment lets the composer upload a resized
 // image blob to Storage and inject the attachment metadata into the next
 // send() call via extras.
-// (2026-05-22) Multi-image: uploadStaffChatImage (hybrid thumb+original) +
-// STAFF_CHAT_MAX_IMAGES for the multi-pick composer.
+// (2026-05-22) Any-file: uploadStaffChatFile (any type ≤1GB; thumb+original for
+// images, original-only for files) + STAFF_CHAT_MAX_ATTACHMENTS for the
+// multi-pick composer.
 import {
   uploadAttachment,
-  uploadStaffChatImage,
-  STAFF_CHAT_MAX_IMAGES,
+  uploadStaffChatFile,
+  STAFF_CHAT_MAX_ATTACHMENTS,
 } from '../lib/staffChatImageResize.js';
 
 export function useStaffChat() {
@@ -368,27 +369,41 @@ export function useStaffChat() {
     return uploadAttachment(blob, selectedBranchId);
   }, [selectedBranchId]);
 
-  // (2026-05-22) Multi-image upload pipeline. Mints the messageId ONCE so all
-  // images land under staff-chat-attachments/{branchId}/{messageId}/ (per-message
-  // folder → retention prefix-sweep deletes them cleanly). Uploads sequentially
-  // (bounds memory for up to 10×50MB). Returns { messageId, attachments } which
-  // the composer threads into send(text, { id: messageId, attachments }).
-  const prepareAndUpload = useCallback(async (files, onItemProgress) => {
+  // (2026-05-22) Any-file upload pipeline. Mints the messageId ONCE so all
+  // attachments land under staff-chat-attachments/{branchId}/{messageId}/
+  // (per-message folder → retention prefix-sweep deletes them cleanly).
+  // Uploads sequentially (bounds memory for big files). Each file is uploaded
+  // via uploadStaffChatFile (any type ≤1GB; image kind also gets a thumbnail).
+  // registerTask(i, task) exposes each resumable task so the composer can
+  // task.cancel() (Q3); cancelRef carries indices the user cancelled before
+  // their turn. A cancelled file is skipped; a real (non-cancel) failure is
+  // collected in `failed[]` so the composer can offer retry. Returns
+  // { messageId, attachments, failed } — composer sends { id, attachments }.
+  const prepareAndUpload = useCallback(async (files, onItemProgress, registerTask, cancelRef) => {
     if (!selectedBranchId) throw new Error('STAFF_CHAT_NO_BRANCH');
-    const list = Array.from(files || []).slice(0, STAFF_CHAT_MAX_IMAGES);
+    const list = Array.from(files || []).slice(0, STAFF_CHAT_MAX_ATTACHMENTS);
     const messageId = newStaffChatMessageId();
     const attachments = [];
+    const failed = [];
     for (let i = 0; i < list.length; i++) {
-      const att = await uploadStaffChatImage({
-        file: list[i],
-        branchId: selectedBranchId,
-        messageId,
-        onProgress: (frac) => { if (onItemProgress) onItemProgress(i, frac); },
-      });
-      attachments.push(att);
-      if (onItemProgress) onItemProgress(i, 1);
+      // ✕ tapped before this file's turn → skip
+      if (cancelRef && cancelRef.current && cancelRef.current.has(i)) continue;
+      try {
+        const att = await uploadStaffChatFile({
+          file: list[i],
+          branchId: selectedBranchId,
+          messageId,
+          onProgress: (frac) => { if (onItemProgress) onItemProgress(i, frac); },
+          registerTask: (task) => { if (registerTask) registerTask(i, task); },
+        });
+        attachments.push(att);
+        if (onItemProgress) onItemProgress(i, 1);
+      } catch (e) {
+        if (String(e?.message) === 'STAFF_CHAT_UPLOAD_CANCELLED') continue;  // ✕ mid-upload → skip
+        failed.push({ index: i, name: list[i]?.name || '', message: String(e?.message || e) });
+      }
     }
-    return { messageId, attachments };
+    return { messageId, attachments, failed };
   }, [selectedBranchId]);
 
   return {

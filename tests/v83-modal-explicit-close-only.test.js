@@ -2,7 +2,8 @@
 // EOD8 (2026-05-18). Source-grep over src/components/**/*.jsx.
 // Every modal backdrop MUST NOT have onClick={onClose} or
 // onClick={(e) => currentTarget guard}. Sanctioned exception list is
-// closed: 2 files (StaffChatImageLightbox + TreatmentReadOnlyMirror inner Lightbox).
+// closed: 1 file (TreatmentReadOnlyMirror inner Lightbox). StaffChatImageLightbox
+// became a NORMAL modal on 2026-05-22 (any-file ship) — ✕/Esc only, no backdrop close.
 //
 // User pain (locked permanent): "พอกรอกข้อมูลใน modal ใกล้จะหมดแล้ว ดันไป
 // เผลอคลิ๊กตรงบริเวณที่ที่ว่างรอบๆ modal แล้ว modal มันปิดไปเอง ... user
@@ -15,9 +16,8 @@ import { join, relative } from 'path';
 const PROJECT_ROOT = process.cwd();
 const COMPONENTS_DIR = join(PROJECT_ROOT, 'src/components');
 
-// Closed sanctioned list — adding a 4th lightbox MUST extend this AND file a V-entry
+// Closed sanctioned list — adding another lightbox MUST extend this AND file a V-entry
 const SANCTIONED_EXCEPTIONS = Object.freeze([
-  'staffchat/StaffChatImageLightbox.jsx',
   'backend/TreatmentReadOnlyMirror.jsx', // inner ImageLightbox helper for treatment image zoom
 ]);
 
@@ -51,8 +51,8 @@ function hasAV78MarkerAbove(lines, lineIndex, lookback = 4) {
 
 describe('V83 — Modal explicit-close-only (AV78)', () => {
   describe('M1 — Sanctioned exception list is closed', () => {
-    it('M1.1 — exactly 2 sanctioned files', () => {
-      expect(SANCTIONED_EXCEPTIONS).toHaveLength(2);
+    it('M1.1 — exactly 1 sanctioned file', () => {
+      expect(SANCTIONED_EXCEPTIONS).toHaveLength(1);
     });
 
     it('M1.2 — both sanctioned files exist on disk', () => {
@@ -62,7 +62,7 @@ describe('V83 — Modal explicit-close-only (AV78)', () => {
       }
     });
 
-    it('M1.3 — both sanctioned files carry AV78 lightbox-explicit-exception annotation', () => {
+    it('M1.3 — the sanctioned file carries AV78 lightbox-explicit-exception annotation', () => {
       for (const rel of SANCTIONED_EXCEPTIONS) {
         const content = readFileSync(join(COMPONENTS_DIR, rel), 'utf8');
         expect(content).toMatch(/AV78\s+lightbox-explicit-exception/);

@@ -4,9 +4,12 @@
 //   filmstrip + keyboard ←→ + touch swipe + download. Loads the ORIGINAL
 //   (fullUrl) at full size; arrows/filmstrip hidden when a single image.
 //   Backward-compat: a single `src` string is wrapped as one image.
-// Esc / ✕ / backdrop-click close (AV78 sanctioned lightbox). z-9700 above modals.
+// Esc / ✕ close (AV78 NORMAL modal — backdrop does NOT close, 2026-05-22; same
+//   pain as the user's report: accidental outside-click closing a viewer = ใช้ยาก).
+//   z-9700 above modals.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
 
 function extFromUrl(u) {
   const m = String(u || '').match(/-o\.(\w+)(?:\?|$)/) || String(u || '').match(/\.(jpg|jpeg|png|webp|gif)(?:\?|$)/i);
@@ -48,32 +51,25 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     touchX.current = null;
   };
 
-  const download = async (e) => {
+  const download = (e) => {
     stop(e);
-    const url = images[idx]?.fullUrl;
+    const cur = images[idx];
+    const url = cur?.fullUrl;
     if (!url) return;
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `staff-chat-${Date.now()}.${extFromUrl(url)}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(a.href);
-    } catch { /* swallow — network/CORS; user can long-press to save */ }
+    // (2026-05-22) shared helper (Rule of 3 — image lightbox + file card + PDF overlay).
+    const fname = cur?.name || `staff-chat-${Date.now()}.${extFromUrl(url)}`;
+    downloadUrlAsFile(url, fname, cur?.size);
   };
 
-  // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen image viewer.
-  // Click-anywhere(backdrop)-closes IS expected UX; inner controls stopPropagation.
+  // (2026-05-22) AV78 normal modal — backdrop click does NOT close; only ✕ + Esc.
+  // (was a sanctioned lightbox-exception; user reported accidental outside-clicks
+  //  closing the viewer mid-look = ใช้ยาก, so it now matches every other modal.)
   return (
     <div
       data-testid="staff-chat-image-lightbox"
-      onClick={onClose}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] p-4 cursor-pointer"
+      className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] p-4"
     >
       {/* top bar: counter + download + close */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 text-white z-10 bg-gradient-to-b from-black/60 to-transparent" onClick={stop}>

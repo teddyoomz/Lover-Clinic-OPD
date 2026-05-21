@@ -12,6 +12,24 @@ export const RETENTION_DAYS = 30;
 export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000; // 1 day
 export const STAFF_CHAT_STORAGE_ROOT = 'staff-chat-attachments';
 export const STAFF_CHAT_MAX_IMAGES = 10;
+// (2026-05-22) any-file: a message now holds up to 10 mixed attachments (images
+// + files), not just images. Same value; both exported so existing image
+// callers + new file callers read the limit they expect (semantic alias).
+export const STAFF_CHAT_MAX_ATTACHMENTS = STAFF_CHAT_MAX_IMAGES;
+
+// (2026-05-22) any-file: derive the render kind from a file's mimeType. PURE +
+// shared (cron / CLI / components / tests — Rule of 3). 'image' is limited to
+// the four browser-renderable raster types so a HEIC/SVG never produces a
+// broken <img> — it falls to a download card ('file').
+const STAFF_CHAT_RENDERABLE_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+export function attachmentKindFor(mime) {
+  const m = typeof mime === 'string' ? mime.toLowerCase().trim() : '';
+  if (STAFF_CHAT_RENDERABLE_IMAGE.has(m)) return 'image';
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('audio/')) return 'audio';
+  if (m === 'application/pdf') return 'pdf';
+  return 'file';
+}
 
 export function storagePrefixForMessage(branchId, messageId) {
   return `${STAFF_CHAT_STORAGE_ROOT}/${branchId}/${messageId}/`;

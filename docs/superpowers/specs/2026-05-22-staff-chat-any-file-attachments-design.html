@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat — Any-File Attachments (≤1 GB) Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #333; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    /* ── chat mockup primitives ───────────────────────────────── */
+    .chat-pane { background: #18181b; border-radius: 10px; padding: 14px; max-width: 360px; }
+    .bubble { background: rgba(225,29,72,0.20); border: 1px solid rgba(225,29,72,0.45); color: #f4f4f5;
+              border-radius: 16px; border-bottom-right-radius: 6px; padding: 8px 12px; max-width: 80%;
+              margin-left: auto; font-size: 13px; }
+    .bubble .name { font-size: 10px; font-weight: 700; color: #fb7185; margin-bottom: 4px; }
+    .att-grid { display: grid; gap: 2px; border-radius: 8px; overflow: hidden; margin-bottom: 4px; width: 100%; max-width: 240px; }
+    .att-grid .tile { position: relative; background: #3f3f46; aspect-ratio: 1; display:flex; align-items:center; justify-content:center; color:#a1a1aa; font-size: 22px; }
+    .att-grid .tile .more { position:absolute; inset:0; background:rgba(0,0,0,0.55); color:#fff; font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+    .vid { background:#000; border-radius:8px; overflow:hidden; margin-bottom:4px; max-width: 240px; }
+    .vid .frame { aspect-ratio: 16/9; background: linear-gradient(135deg,#27272a,#3f3f46); display:flex; align-items:center; justify-content:center; color:#fff; font-size:30px; position:relative;}
+    .vid .ctrls { background:#111; color:#d4d4d8; font-size:10px; padding:4px 8px; display:flex; align-items:center; gap:6px;}
+    .vid .bar { flex:1; height:4px; background:#3f3f46; border-radius:2px; position:relative;}
+    .vid .bar i { position:absolute; left:0; top:0; bottom:0; width:35%; background:#e11d48; border-radius:2px;}
+    .filecard { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+                border-radius:10px; padding:8px 10px; margin-bottom:4px; max-width:240px; }
+    .filecard .ico { font-size:22px; }
+    .filecard .meta { flex:1; min-width:0; }
+    .filecard .meta .fn { font-size:12px; color:#fafafa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .filecard .meta .sz { font-size:10px; color:#a1a1aa; }
+    .filecard .act { font-size:11px; color:#fb7185; white-space:nowrap; }
+    .composer { background:#27272a; border-radius:10px; padding:10px; max-width:360px; }
+    .chip-row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+    .pchip { position:relative; width:72px; }
+    .pchip .thumb { position:relative; width:72px; height:72px; border-radius:8px; background:#52525b; display:flex; align-items:center; justify-content:center; font-size:24px; color:#d4d4d8; overflow:hidden;}
+    .pchip .x { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:#000; color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center;}
+    .pchip .pg { position:absolute; left:4px; right:4px; bottom:4px; height:4px; background:rgba(255,255,255,0.4); border-radius:2px; overflow:hidden;}
+    .pchip .pg i { display:block; height:100%; background:#34d399;}
+    .pchip .fn { font-size:9px; color:#a1a1aa; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .overlay { background:#0a0a0a; border-radius:10px; padding:0; max-width:420px; overflow:hidden; }
+    .overlay .top { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; color:#e4e4e7; font-size:12px; background:#18181b;}
+    .overlay .body { background:#3f3f46; height:160px; display:flex; align-items:center; justify-content:center; color:#a1a1aa; font-size:13px;}
+    .flowbox { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:1em 0; }
+    .step { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:8px 12px; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+    .arrow { color:var(--accent); font-weight:700; }
+    .new { color:var(--accent); font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat — Any-File Attachments (≤1 GB) Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-22 · <strong>Status:</strong> Approved by user (Q1–Q4 locked) · <strong>Base:</strong> V73 staff chat + 2026-05-22 multi-image · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-22-staff-chat-any-file-attachments.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Staff chat today accepts <strong>images only</strong> (jpeg/png/webp/gif, ≤50 MB, thumbnail+original, ≤10/msg, 30-day prefix-sweep retention, grid+lightbox). Staff need to send <strong>every other kind of file too</strong> — PDFs, Office docs, video, audio, zip — up to <strong>1 GB each</strong> (user: <em>"ส่งไฟล์ได้ทุกประเภทขนาดไม่เกิน 1 GB … มีไฟล์อื่นๆต้องส่งอีกเยอะที่ไม่ใช่แค่รูปภาพ"</em>). This spec extends the existing attachment pipeline (no reinvent) to mixed any-file attachments, with rich rendering (inline video/audio, PDF preview, download cards) while keeping the proven storage/retention/no-orphan design. Two pending image-polish issues (lightbox backdrop-close + grid overflow) are folded in.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = allow-all:</strong> accept ANY file type, no restriction (the staff-chat Storage path already does not gate content-type; only client validation changes).</li>
+  <li><strong>Q2 = cards + inline media:</strong> non-image files render as cards (icon+name+size+download); <em>video/audio play inline in the bubble</em>; PDF gets a preview overlay; everything else = download card. Images keep grid+lightbox.</li>
+  <li><strong>Q3 = progress + cancel + retry:</strong> resumable per-file upload with % progress, a cancel button, and retry-on-failure (essential for 1 GB on slow networks).</li>
+  <li><strong>Q4 = split caps:</strong> <code>image/*</code> ≤ 50 MB (keep), all other files ≤ 1 GB. ≤10 attachments/message, 30-day retention — unchanged.</li>
+</ul>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">A · Composer — multi-file pick + preview (mixed images + files, uploading)</div>
+  <div class="composer">
+    <div class="chip-row">
+      <div class="pchip"><div class="thumb" style="background:#6b21a8">🖼️</div><div class="fn">photo1.jpg</div></div>
+      <div class="pchip"><div class="thumb" style="background:#6b21a8">🖼️</div><div class="fn">scan.png</div></div>
+      <div class="pchip"><div class="thumb">📄<div class="pg"><i style="width:62%"></i></div></div><span class="x">✕</span><div class="fn">รายงาน.pdf</div></div>
+      <div class="pchip"><div class="thumb">🎬<div class="pg"><i style="width:18%"></i></div></div><span class="x">✕</span><div class="fn">vdo.mp4</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;color:#a1a1aa;font-size:11px">
+      <span>📎 แนบไฟล์ (ทุกประเภท ≤1GB · รูป ≤50MB)</span><span>4/10 · กำลังอัพโหลด…</span>
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Image picks show a thumbnail; non-image picks show an icon-chip with the filename + per-file progress bar + ✕ cancel/remove. <code>accept</code> no longer filters to images.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">B · Message bubble — image grid (unchanged, NOW fits the bubble — polish #2)</div>
+  <div class="chat-pane">
+    <div class="bubble">
+      <div class="name">👩‍⚕️ พยาบาลเอ</div>
+      <div class="att-grid" style="grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; height:158px;">
+        <div class="tile">🖼️</div><div class="tile">🖼️</div><div class="tile">🖼️</div>
+        <div class="tile">🖼️<span class="more">+1</span></div>
+      </div>
+      ภาพแผลก่อน/หลัง
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Grid is <code>width:100%; max-width:240px</code> inside the bubble (was a fixed <code>width:240</code> that overflowed <code>max-w-[80%]</code>). Tap a tile → image lightbox.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">C · Message bubble — rich non-image render (Q2)</div>
+  <div class="chat-pane">
+    <div class="bubble" style="max-width:92%">
+      <div class="name">🧑‍⚕️ หมอบี</div>
+      <div class="vid">
+        <div class="frame">🎬 ▶</div>
+        <div class="ctrls">▶ <span class="bar"><i></i></span> 0:42 / 3:10 ⛶</div>
+      </div>
+      <div class="filecard"><span class="ico">🎵</span><div class="meta"><div class="fn">เสียงคนไข้.m4a</div><div class="sz">▶ ──●───────  1:12</div></div></div>
+      <div class="filecard"><span class="ico">📄</span><div class="meta"><div class="fn">รายงานผลตรวจ.pdf</div><div class="sz">2.4 MB</div></div><span class="act">👁 ดู · ⬇</span></div>
+      <div class="filecard"><span class="ico">🗜️</span><div class="meta"><div class="fn">เคสเก่า.zip</div><div class="sz">180 MB</div></div><span class="act">⬇ โหลด</span></div>
+      <div class="filecard"><span class="ico">📊</span><div class="meta"><div class="fn">สต๊อก.xlsx</div><div class="sz">320 KB</div></div><span class="act">⬇ โหลด</span></div>
+      ส่งไฟล์เคสมาให้นะคะ
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">video → inline <code>&lt;video controls preload="metadata"&gt;</code> (streams on play, never auto-downloads 1 GB). audio → inline <code>&lt;audio controls&gt;</code>. pdf → card + 👁 preview + ⬇. others → icon card + ⬇ (download keeps the original filename).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">D · Viewers — PDF preview overlay + image lightbox (✕/Esc ONLY, no backdrop-close — polish #1)</div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+    <div class="overlay">
+      <div class="top"><span>รายงานผลตรวจ.pdf</span><span>⬇ &nbsp; ✕</span></div>
+      <div class="body">📄 &lt;iframe src=…&gt; (browser-native PDF)</div>
+    </div>
+    <div class="overlay">
+      <div class="top"><span>3 / 5</span><span>⬇ &nbsp; ✕</span></div>
+      <div class="body">‹ &nbsp;&nbsp; 🖼️ &nbsp;&nbsp; ›</div>
+    </div>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)"><strong>Backdrop click does NOT close</strong> (AV78 normal-modal): only ✕ button + Esc. Applies to both the image lightbox and the new PDF overlay.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">E · Data shape — one unified attachments[] (≤10), per-item</div>
+<pre><code>// be_staff_chat_messages/{id}.attachments[i]
+{
+  name:     "รายงานผลตรวจ.pdf",   // <span class="new">NEW</span> — original filename (card label + download name)
+  mimeType: "application/pdf",      // existing — drives render kind
+  size:     2516582,                // existing — bytes
+  fullUrl:  "https://…/o/…-o.pdf",  // existing — the file (download / stream)
+  fullPath: "staff-chat-attachments/{branchId}/{messageId}/{fileId}-o.pdf",
+  // images (jpeg/png/webp/gif) ONLY:
+  thumbUrl: "https://…/o/…-t.jpg",  // grid thumbnail
+  thumbPath:"…-t.jpg",
+  w: 1280, h: 960                   // natural dims (grid aspect + lightbox)
+}
+// kind is DERIVED at render: attachmentKindFor(mimeType) →
+//   'image' (jpeg|png|webp|gif) | 'video' (video/*) | 'audio' (audio/*)
+//   | 'pdf' (application/pdf) | 'file' (everything else incl. heic/svg)
+// Legacy V73 records (no name/kind) → render as image (back-compat).
+// Firestore-undefined-safe (V14): omit thumb/w/h for non-image kinds.</code></pre>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 · Send (pick → validate → resumable upload → setDoc → render-by-kind)</div>
+  <div class="flowbox">
+    <span class="step">1. pick / paste / drop N files</span><span class="arrow">→</span>
+    <span class="step">2. <strong>validate each</strong><br>type = allow-all<br>image/* &lt;50MB · else &lt;1GB</span><span class="arrow">→</span>
+    <span class="step">3. preview chip (thumb|icon)<br>+ ✕ remove</span><span class="arrow">→</span>
+    <span class="step">4. <strong>Send</strong>: mint messageId<br>upload each (resumable)</span>
+  </div>
+  <div class="flowbox">
+    <span class="step">5a. image → thumbnail + original<br>5b. other → original only</span><span class="arrow">→</span>
+    <span class="step">6. per-file <strong>%/cancel/retry</strong></span><span class="arrow">→</span>
+    <span class="step">7. build attachments[]<br>(+ name, kind-derived)</span><span class="arrow">→</span>
+    <span class="step">8. <strong>setDoc</strong> be_staff_chat_messages</span><span class="arrow">→</span>
+    <span class="step">9. render by <code>attachmentKindFor(mime)</code></span>
+  </div>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Upload happens BEFORE setDoc (existing flow) → a cancel during step 6 just drops that file from the pending set; the doc is only written once the kept files finish. Files live under the per-message folder <code>staff-chat-attachments/{branchId}/{messageId}/</code>.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 · Retention (daily cron — UNCHANGED, already file-type-agnostic)</div>
+  <table>
+    <tr><th>Pass</th><th>Condition</th><th>Action</th></tr>
+    <tr><td>A · age-out</td><td>message doc <code>createdAt</code> &gt; 30 days</td><td>delete doc + <strong>prefix-sweep</strong> <code>{branchId}/{messageId}/</code> (every file in the folder — image OR not) + legacy <code>attachmentUrl</code> via <code>extractStoragePathFromUrl</code></td></tr>
+    <tr><td>B · orphan</td><td>folder exists, no message doc, age &gt; 1-day grace</td><td>delete the orphan folder</td></tr>
+  </table>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Per-message folder ⇒ prefix-sweep deletes everything with no orphan ("ลบเกลี้ยง") regardless of file type. <strong>No retention change needed</strong> — the 1 GB video in a folder is swept exactly like a thumbnail. Admin-SDK-only delete (client <code>update,delete: if false</code>).</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 3 · Size-bracket + render-kind decision (mime → cap → render)</div>
+  <table>
+    <tr><th>mimeType</th><th>size cap (client + storage.rules)</th><th>thumbnail?</th><th>render kind</th></tr>
+    <tr><td>image/jpeg · png · webp · gif</td><td>&lt; 50 MB</td><td>yes (≤512px jpeg)</td><td>image — grid + lightbox</td></tr>
+    <tr><td>video/*</td><td>&lt; 1 GB</td><td>no</td><td>video — inline <code>&lt;video&gt;</code></td></tr>
+    <tr><td>audio/*</td><td>&lt; 1 GB</td><td>no</td><td>audio — inline <code>&lt;audio&gt;</code></td></tr>
+    <tr><td>application/pdf</td><td>&lt; 1 GB</td><td>no</td><td>pdf — card + 👁 overlay + ⬇</td></tr>
+    <tr><td>image/heic · image/svg+xml · everything else</td><td>image/* &lt; 50 MB · else &lt; 1 GB</td><td>no</td><td>file — icon card + ⬇</td></tr>
+  </table>
+  <p style="font-size:0.85em;color:var(--tx-muted)">Storage rule keys the bracket on <code>request.resource.contentType.matches('image/.*')</code>. Render-kind ("image" grid) is limited to the 4 browser-renderable image types so a HEIC/SVG never produces a broken <code>&lt;img&gt;</code> — it falls to a download card.</p>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Storage</h3>
+<p>Path unchanged: <code>staff-chat-attachments/{branchId}/{messageId}/{fileId}-o.{ext}</code> (images additionally <code>-t.jpg</code>). <code>storage.rules</code> raises the cap with a split:</p>
+<pre><code>match /staff-chat-attachments/{branchId}/{file=**} {
+  allow read: if isClinicStaff();
+  allow create: if isClinicStaff() && (
+       (request.resource.contentType.matches('image/.*')  && request.resource.size &lt; 50 * 1024 * 1024)
+    || (!request.resource.contentType.matches('image/.*') && request.resource.size &lt; 1024 * 1024 * 1024)
+  );
+  allow update, delete: if false;   // retention via admin SDK (bypasses rules)
+}</code></pre>
+<p>Probe-Deploy-Probe (#10): anon write here → 403, both pre + post deploy.</p>
+
+<h3>Firestore</h3>
+<p><code>be_staff_chat_messages</code> rule: <code>attachments[]</code> already allowed (≤10); extend the per-item validation to accept the new <code>name</code> (string) field. <code>buildMessageDoc.normalizeStaffChatAttachment</code> adds <code>name</code> (string, required for non-image) and keeps thumb/w/h optional (Firestore-undefined-safe, V14). Probe-Deploy-Probe (#9): anon create → 403.</p>
+
+<h3>Upload pipeline (<code>staffChatImageResize.js</code> — extend, do not fork)</h3>
+<ul>
+  <li><code>attachmentKindFor(mime)</code> — pure: image|video|audio|pdf|file (shared via <code>staffChatRetentionCore.js</code> so cron/CLI/components agree — Rule of 3).</li>
+  <li><code>validateStaffChatFile(file)</code> — allow-all type; <code>image/*</code> &lt; 50 MB else &lt; 1 GB; Thai messages. (<code>validateStaffChatImage</code> kept for the image fast-path / back-compat.)</li>
+  <li><code>uploadStaffChatFile({file, branchId, messageId, onProgress, taskRef})</code> — renderable-image → thumbnail + resumable original; else → resumable original only (no thumb). Returns the attachment record incl. <code>name = file.name</code>. Exposes the <code>uploadBytesResumable</code> task via <code>taskRef</code> so the composer can <code>.cancel()</code> (Q3). <code>preload="metadata"</code> is a render concern (component), not upload.</li>
+</ul>
+
+<h3>Components</h3>
+<ul>
+  <li><strong>StaffChatComposer</strong> — <code>accept</code> removed (any file); preview strip: image thumb OR icon-chip (filename + progress + ✕ cancel); retry button on a failed chip; per-file task cancel.</li>
+  <li><strong>StaffChatMessage</strong> — split <code>attachments[]</code> by <code>attachmentKindFor</code>: images → existing <code>AttachmentGrid</code> (now <code>w-full max-w</code>, polish #2) → image lightbox; video/audio → inline players; pdf/file → <code>StaffChatAttachmentCard</code>.</li>
+  <li><strong>NEW StaffChatAttachmentCard.jsx</strong> — icon-by-category + name (truncate) + human size + ⬇ download (anchor with <code>download={name}</code>); pdf adds 👁 → opens the PDF overlay viewer.</li>
+  <li><strong>StaffChatImageLightbox</strong> — (polish #1) remove backdrop <code>onClick={onClose}</code>; close via ✕ + Esc only. Add a sibling <strong>PDF overlay</strong> with the same close discipline + an <code>&lt;iframe&gt;</code> body + ⬇.</li>
+</ul>
+
+<h3>Folded-in polish (the 2 pending image issues)</h3>
+<ol>
+  <li><strong>Lightbox backdrop-no-close (AV78):</strong> close only via ✕/Esc. Flip the AV78 sanctioned-exception list (remove <code>StaffChatImageLightbox</code> from the closed list), fix <code>tests/v83-modal-explicit-close-only.test.js</code> closed-list + any backdrop-close assertion (v73-image-rtl / AV78). New PDF overlay follows the same rule from day one.</li>
+  <li><strong>Grid fits the bubble:</strong> <code>AttachmentGrid</code> + cards use <code>width:100%; max-width:240px</code> so attachments never overflow the bubble's <code>max-w-[80%]</code>.</li>
+</ol>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>One message can mix images + a PDF + a video + a zip; each renders by its kind; order preserved.</li>
+  <li>Video & audio play <strong>inline</strong> in the bubble; <code>preload="metadata"</code> means a 1 GB video does NOT download until play.</li>
+  <li>PDF 👁 opens a preview overlay (iframe) with ⬇ + ✕; backdrop click does NOT close it.</li>
+  <li>Non-image/non-media files show an icon card; ⬇ downloads with the original filename.</li>
+  <li>A 1 GB file uploads with visible % progress; <strong>cancel</strong> aborts it; a failed upload offers <strong>retry</strong>.</li>
+  <li>Size caps: a 60 MB image is rejected; a 60 MB PDF/video is accepted; a &gt;1 GB file is rejected — enforced client-side AND by storage.rules.</li>
+  <li>Retention sweep deletes the whole message + every file in its folder (no orphan), verified with a non-image file present.</li>
+  <li>Image lightbox ignores backdrop click (✕/Esc only); image grid + cards never overflow the chat bubble.</li>
+  <li>Legacy image messages (<code>attachmentUrl</code> scalar + old image <code>attachments[]</code>) still render unchanged.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>1 GB Firestore doc</strong> — N/A: only the Storage URL + metadata are stored on the doc, never the bytes.</li>
+  <li><strong>Huge-image thumbnail decode</strong> — a very large/exotic image may fail <code>makeStaffChatThumbnail</code>; fall back to a file card (and/or raw <code>&lt;img&gt;</code>) rather than throwing.</li>
+  <li><strong>firestore.rules <code>name</code> field</strong> — must be accepted by the per-item validation; covered by Probe-Deploy-Probe on the rules deploy.</li>
+  <li><strong>PDF overlay vs new tab</strong> — chosen: in-app <code>&lt;iframe&gt;</code> overlay (consistent with the lightbox + AV78 close discipline) with a download fallback if the browser can't render it inline.</li>
+  <li><strong>Cancel mid-upload cleanup</strong> — <code>task.cancel()</code> aborts before the object commits; if a thumbnail uploaded but the original was cancelled, the partial thumbnail is an orphan within the message folder and is swept by the same retention prefix-sweep (or never written since setDoc only happens after success).</li>
+  <li><strong>Verification (Rule Q)</strong> — done at build/test time only (real client SDK L2 + Chrome MCP screenshots for the rendered bubble/players/overlay), NOT during this spec/plan stage.</li>
+</ul>
+
+</body>
+</html>

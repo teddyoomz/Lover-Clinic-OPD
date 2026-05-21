@@ -115,7 +115,7 @@ describe('G3 · buildMessageDoc + newStaffChatMessageId', () => {
     const a0 = doc.attachments[0];
     for (const v of Object.values(a0)) expect(v).not.toBeUndefined();
     expect(a0.size).toBe(0);
-    expect(a0.mimeType).toBe('image/jpeg');
+    expect(a0.mimeType).toBe('application/octet-stream'); // (2026-05-22) any-file default (was image/jpeg when image-only)
     expect('w' in a0).toBe(false); // w/h omitted when not finite
     const eleven = Array.from({ length: 11 }, () => att);
     expect(buildMessageDoc({ ...base, attachments: eleven }).attachments).toHaveLength(STAFF_CHAT_MAX_IMAGES);
