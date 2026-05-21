@@ -319,6 +319,31 @@ Rule M (data ops) covers MUTATION authorization (edit/migrate/delete/create). Ru
 
 **Standing authorization**: this rule supersedes the per-turn "should I pull env?" question. Just pull when needed for diagnosis. The env file lives in `.env.local.prod` (gitignored) and is reusable across the session.
 
+### S. Chrome MCP / real-browser authorization for viewing + testing (iron-clad 2026-05-21)
+
+User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ chrome mcp ได้ทุกเมื่อที่ต้องการดูหรือทดสอบให้เห็นจริงๆ ใส่ไว้ในกฎของโปรเจ็คด้วย"**.
+
+**Standing authorization** for the LoverClinic project — Claude MAY use the Chrome MCP (`mcp__Claude_in_Chrome__*`) AND the Claude Preview MCP (`mcp__Claude_Preview__*`) AT ANY TIME to VIEW or TEST the app in a real browser, with NO per-turn re-confirmation. This is the primary tooling for **Rule Q (V66) Level-1 verification**: real browser, real DOM, real pixels.
+
+**When Rule S applies**:
+- Rule Q L1 verification of any user-visible change — drive the real UI, assert real DOM / real pixels (not the object model).
+- Reproducing a user-reported visual / interaction bug. (The tablet-chart render bug, 2026-05-21 §followup-3, was invisible to mocks + object-model probes across 3 rounds; only forcing `config.devicePixelRatio=2` + reading `getImageData` on the live canvas in a real browser localized it.)
+- Inspecting layout / responsive / dark-mode / computed styles on the deployed OR local app.
+- Building a temp probe page that mounts a REAL component to drive its real lifecycle (delete it after — never commit).
+
+**How**:
+- Chrome MCP needs the Chrome extension connected; if it isn't, ASK the user to connect it (don't silently fall back to a weaker tier).
+- For the local dev server, the Claude Preview MCP (`preview_start` / `preview_eval` / `preview_screenshot` / `preview_resize` / `preview_console_logs` / ...) is wired via `.claude/launch.json` — use it freely.
+- **Verify RENDERED PIXELS, not the object model** (V66 — the object model said `['Image']` while the screen was blank for 3 rounds).
+- Sanity-check the harness BEFORE trusting a measurement: tiny/zero viewport, `requestAnimationFrame` not firing in headless, dpr=1 vs the device's dpr≥2. An environment artifact is not a root cause.
+
+**Anti-patterns**:
+- ❌ Claiming "verified" from a ref / object-model inspection when a real-browser pixel check was feasible — Rule Q + Rule S make it feasible, so use it.
+- ❌ Asking "may I use Chrome to test?" every turn — it is pre-authorized; just use it.
+- ❌ Leaving a temp probe page committed — delete probe HTML/JSX after debugging.
+
+**Lesson lock**: real-browser viewing/testing is now a first-class, always-available tool. Reach for it whenever "does the user actually SEE this work?" is the question — that's the only verification that doesn't lie (Rule Q).
+
 ### Anti-patterns (all 4 rules)
 - Fix bug แต่ไม่เพิ่ม test + skill → regression guaranteed
 - Skill ไม่มี grep patterns / invariant numbers → documentation ไม่ใช่ audit
