@@ -4,11 +4,11 @@ import { getOrCreateDeviceId } from '../lib/tabletDeviceCache.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import {
   listenToRequestedSessionForTablet, listenToChartEditSession, updateChartEditSession,
-  freeChartTablet, uploadTransportImage, downloadTransportImageAsDataUrl,
+  freeChartTablet, uploadTransportImage, uploadTransportJson, downloadTransportImageAsDataUrl,
 } from '../lib/chartEditSession.js';
 import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS } from '../lib/chartEditSessionCore.js';
 import TabletStandby from '../components/tablet-chart/TabletStandby.jsx';
-import PenCanvas from '../components/tablet-chart/PenCanvas.jsx';
+import TabletChartCanvas from '../components/tablet-chart/TabletChartCanvas.jsx';
 import EditorToolRail from '../components/tablet-chart/EditorToolRail.jsx';
 
 // The ?tablet=chart target. Renders the standby screen until a 'requested' session
@@ -62,8 +62,12 @@ export default function TabletChartEditorPage() {
   const onSave = useCallback(async () => {
     if (!active) return;
     const dataUrl = canvasRef.current.exportDataUrl();
-    const url = await uploadTransportImage(active.sessionId, 'result', dataUrl);
-    await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url });
+    const fabricJson = canvasRef.current.exportFabricJson();   // lossless object data → re-editable-ready
+    const [url, jsonUrl] = await Promise.all([
+      uploadTransportImage(active.sessionId, 'result', dataUrl),
+      fabricJson ? uploadTransportJson(active.sessionId, 'result', JSON.parse(fabricJson)) : Promise.resolve(null),
+    ]);
+    await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url, resultFabricJsonUrl: jsonUrl });
     closeEditor(true);
   }, [active, closeEditor]);
 
@@ -101,9 +105,11 @@ export default function TabletChartEditorPage() {
           </header>
           <div className="flex flex-1 min-h-0">
             <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
-              onUndo={() => canvasRef.current.undo()} onRedo={() => canvasRef.current.redo()} onClear={() => canvasRef.current.clear()} />
+              onUndo={() => canvasRef.current?.undo()} onRedo={() => canvasRef.current?.redo()}
+              onClear={() => canvasRef.current?.clear()} onDelete={() => canvasRef.current?.deleteSelected()} />
             <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
-              <PenCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size} />
+              <TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size}
+                onRequestSelect={() => setTool('select')} />
             </div>
           </div>
         </div>

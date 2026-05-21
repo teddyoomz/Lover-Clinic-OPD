@@ -2,14 +2,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChartEditSession, listenToChartEditSession, updateChartEditSession,
   deleteChartEditSession, freeChartTablet, uploadTransportImage,
-  downloadTransportImageAsDataUrl, cleanupSessionStorage,
+  downloadTransportImageAsDataUrl, downloadTransportJson, cleanupSessionStorage,
 } from '../lib/chartEditSession.js';
 import { SESSION_STATUS, CANCELLED_BY, HEARTBEAT_INTERVAL_MS, HEARTBEAT_STALE_MS, isHeartbeatStale } from '../lib/chartEditSessionCore.js';
 
 function randSessionId() { const a = new Uint8Array(8); window.crypto.getRandomValues(a); return 'CES-' + Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); }
 
-// PC side. onSaved(chartData) is called with { dataUrl, fabricJson:null, templateId, source:'tablet' }
-// — the same shape ChartSection.handleSave expects, so the tablet result funnels through the existing path.
+// PC side. onSaved(chartData) is called with { dataUrl, fabricJson, templateId, source:'tablet' }
+// — fabricJson comes from the tablet's result.json (lossless object data) when present, else
+// it stays null; same shape ChartSection.handleSave expects, so the result funnels through the
+// existing path. Both downloads are guarded so a Storage hiccup can never hang the PC merge.
 export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
   const [session, setSession] = useState(null);   // live session doc
   const [phase, setPhase] = useState('idle');      // idle | waiting | failed
@@ -58,7 +60,9 @@ export function useChartEditSession({ pcDeviceId, pcUid, onSaved }) {
         let merged = false;
         try {
           const dataUrl = await downloadTransportImageAsDataUrl(doc.resultImageUrl);
-          onSavedRef.current?.({ dataUrl, fabricJson: null, templateId: doc.template?.id || 'blank', source: 'tablet' });
+          let fabricJson = null;
+          if (doc.resultFabricJsonUrl) { const j = await downloadTransportJson(doc.resultFabricJsonUrl); fabricJson = j ? JSON.stringify(j) : null; }
+          onSavedRef.current?.({ dataUrl, fabricJson, templateId: doc.template?.id || 'blank', source: 'tablet' });
           merged = true;
         } catch {
           setPhase('failed'); setError('รับรูปจากแท็บเล็ตไม่สำเร็จ — ลองใหม่');
