@@ -1,32 +1,30 @@
 ---
-updated_at: "2026-05-21 EOD+1 LATE — Tablet Chart more-tools: post-ship CRITICAL canvas-init bug FIXED (user on-device L1 caught it); ratio fix DEPLOYED earlier this session"
-status: "more-tools feature complete + post-ship init-once fix landed (local, 13 commits ahead of prod); full vitest 13927/0; build clean; NOT deployed — awaiting 'deploy' + user on-device re-test"
+updated_at: "2026-05-21 EOD+1 LATE+1 — Tablet Chart more-tools: ALL 3 symptoms FIXED + verified via full-relay Playwright e2e (template renders + pen+rect draw + save 123KB PNG→PC). storage.rules json fix awaits deploy."
+status: "more-tools complete; 2 post-ship bugs fixed (init-once + storage.rules/onSave save); full-relay e2e GREEN on real prod; full vitest 13929/0; NOT deployed — awaiting 'deploy' (vercel + storage.rules Probe-Deploy-Probe)"
 branch: "master"
-last_commit: "b638fe9d fix(tablet-chart): canvas init-once + template on live canvas — late-template re-init was disposing the React-owned <canvas>"
-tests: "full vitest GREEN (13927/0) · build clean (~3s)"
+last_commit: "fix(tablet-chart): SAVE — storage.rules denied result.json client upload → save threw; allow json + non-fatal json upload + visible save error; full-relay e2e"
+tests: "full vitest GREEN (13929/0) · build clean · full-relay Playwright e2e GREEN (real prod, trusted events)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "d750c725 — ratio fix (72ea7585) LIVE. more-tools + the init-once fix (13 commits) NOT deployed."
-firestore_rules_version: "be_chart_* (isClinicStaff) — UNCHANGED. more-tools adds NO rules change."
+production_commit: "d750c725 — ratio fix LIVE. more-tools + 2 post-ship fixes (~16 commits) NOT deployed."
+firestore_rules_version: "be_chart_* unchanged. storage.rules: NEW uploads/chart-edit-sessions match allows application/json — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13)."
 ---
 
 # Active Context
 
-## State
-- master = `b638fe9d`; prod = `d750c725`. master AHEAD by 13 commits (more-tools T1-T9 + the post-ship init-once fix). **NOT deployed.**
-- Ratio fix `72ea7585` deployed earlier this session (user confirmed "ipad ration ตรงแล้ว").
+## State — ALL 3 user symptoms FIXED + verified e2e (real prod, trusted events)
+The user's on-device L1 found the more-tools editor broken (template ไม่ขึ้น / วาดไม่ติด / กดบันทึกไม่ได้). `/systematic-debugging` × 2 rounds → **2 distinct root causes**, both fixed + proven by a **full-relay Playwright e2e** (`tests/e2e/tablet-chart-more-tools-relay.spec.js`): admin-SDK PC uploads the real face-male.svg → authed Playwright tablet pops → draws with TRUSTED mouse → save → PC reads result.
+- **Bug 1 (init re-init destroyed the canvas)** → fixed: init ONCE + template on the live canvas. e2e: **template renders (205 px), pen draws (52 px), rect draws (52→164 px)**.
+- **Bug 2 (save) — storage.rules denied result.json (application/json) client upload** → `uploadTransportJson` threw → onSave rejected → silent fail. (Admin-SDK L2 e2e missed it — admin bypasses rules; V66 blind spot 3rd time.) Fixed: storage.rules allows json for the chart path + onSave makes the json upload **non-fatal** (PNG always saves) + visible save error. e2e: **save works — 123KB PNG (template+pen+rect) → PC**.
+- json (lossless re-edit) gracefully deferred until storage.rules deploys.
 
-## Post-ship CRITICAL bug — FOUND + FIXED (this is the V66 lesson manifesting)
-- **User on-device L1 hit 3 symptoms** (ภาพไม่ขึ้น + วาดไม่ติด + กดบันทึกไม่ได้) from **ONE** root cause.
-- `/systematic-debugging` (Iron Law): root cause verified in a REAL browser BEFORE fixing; **2 hypotheses rejected** (re-init mechanism + SVG-0-size — both work in isolation).
-- **Root cause** (proven via a temp probe mounting the REAL component + driving the late-template race): `TabletChartCanvas` init `useEffect` was keyed on `[templateImageUrl]` → the template arrives LATE via the instant-pop race (`''`→dataUrl) → effect re-ran → cleanup `fc.dispose()` removed the React-owned `<canvas>` → re-init couldn't recover (`elRef.current` null) → `fcRef=null` → all 3 symptoms. Probe proof: after late template `wrappers:0, fcRef:null` (canvas gone).
-- **Fix**: init the Fabric canvas ONCE (`[]` deps, mirror PC ChartCanvas) + a separate `[templateImageUrl]` effect loads/replaces the template on the LIVE canvas (`loadTemplate`, never disposes). Probe re-verify: late template → `wrappers:1, json:['Image']` + survives tool change. **RC1-RC3** regression locks it.
-- Full vitest **13927/0**; build clean.
+## Lesson (V66, reinforced)
+Ref-inspection ("exportDataUrl returns a string") is NOT verification. Only a real user-flow e2e proves a relay feature. **Any client upload/relay feature needs a CLIENT-SDK or real-browser e2e — admin-SDK e2e can't see rule denials.**
 
 ## Next action
-- **DEPLOY** the more-tools feature + fix: `vercel --prod` (user-triggered) — **Vercel-only** (no rules/data change). 13 commits.
-- **User on-device re-test** after deploy: open `?tablet=chart` on the iPad → template now shows → draw with each tool → erase → save → confirm PC merges with objects.
+- **DEPLOY** (user-triggered): `vercel --prod` (more-tools + both fixes — makes template/draw/save work; ~16 commits) **+** `firebase deploy --only storage` (storage.rules → enables the lossless json; **Probe-Deploy-Probe** #13: anon write to `uploads/chart-edit-sessions/...` → 403, staff json write → 200). [⚠ CLI 15.x: `--only storage`, NOT `storage:rules`.]
+- After deploy: user on-device re-test on the iPad → template shows + draw each tool + save → PC merges. Then re-run the relay e2e → STEP6 should now verify the json carries Image+Path.
 
-## Outstanding user-triggered actions
-- **deploy** (more-tools + init-once fix, 13 commits) — Vercel-only.
-- on-device re-test (the bug it fixes).
+## Outstanding user-triggered
+- **deploy** (vercel + storage.rules, Probe-Deploy-Probe).
+- on-device re-test (iPad).
 - (carryover) V106 cron 03:30 BKK first drain; calendar-density / Recall / V108 list-visual L1.
