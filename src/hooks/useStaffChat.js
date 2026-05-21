@@ -33,7 +33,7 @@ import {
   listenToStaffChatMessages,
   addStaffChatMessage,
 } from '../lib/scopedDataLayer.js';
-import { buildMessageDoc } from '../lib/staffChatClient.js';
+import { buildMessageDoc, newStaffChatMessageId } from '../lib/staffChatClient.js';
 import {
   getDisplayName,
   getDeviceId,
@@ -57,7 +57,13 @@ import {
 // V73 Feature F (T15) — uploadAttachment lets the composer upload a resized
 // image blob to Storage and inject the attachment metadata into the next
 // send() call via extras.
-import { uploadAttachment } from '../lib/staffChatImageResize.js';
+// (2026-05-22) Multi-image: uploadStaffChatImage (hybrid thumb+original) +
+// STAFF_CHAT_MAX_IMAGES for the multi-pick composer.
+import {
+  uploadAttachment,
+  uploadStaffChatImage,
+  STAFF_CHAT_MAX_IMAGES,
+} from '../lib/staffChatImageResize.js';
 
 export function useStaffChat() {
   const { branchId: selectedBranchId } = useSelectedBranch();
@@ -362,6 +368,29 @@ export function useStaffChat() {
     return uploadAttachment(blob, selectedBranchId);
   }, [selectedBranchId]);
 
+  // (2026-05-22) Multi-image upload pipeline. Mints the messageId ONCE so all
+  // images land under staff-chat-attachments/{branchId}/{messageId}/ (per-message
+  // folder → retention prefix-sweep deletes them cleanly). Uploads sequentially
+  // (bounds memory for up to 10×50MB). Returns { messageId, attachments } which
+  // the composer threads into send(text, { id: messageId, attachments }).
+  const prepareAndUpload = useCallback(async (files, onItemProgress) => {
+    if (!selectedBranchId) throw new Error('STAFF_CHAT_NO_BRANCH');
+    const list = Array.from(files || []).slice(0, STAFF_CHAT_MAX_IMAGES);
+    const messageId = newStaffChatMessageId();
+    const attachments = [];
+    for (let i = 0; i < list.length; i++) {
+      const att = await uploadStaffChatImage({
+        file: list[i],
+        branchId: selectedBranchId,
+        messageId,
+        onProgress: (frac) => { if (onItemProgress) onItemProgress(i, frac); },
+      });
+      attachments.push(att);
+      if (onItemProgress) onItemProgress(i, 1);
+    }
+    return { messageId, attachments };
+  }, [selectedBranchId]);
+
   return {
     messages, minimized, unreadCount,
     deviceId, error, loading,
@@ -372,6 +401,8 @@ export function useStaffChat() {
     replyingTo, setReplyingTo,
     // V73 Feature F — image upload surface.
     uploadImage,
+    // (2026-05-22) multi-image upload surface (mints messageId + uploads thumb+original).
+    prepareAndUpload,
     // V73 name-edit (2026-05-18) — surface for header chip + NamePicker pre-fill.
     displayName: currentDisplayName,
     nameEditMode,

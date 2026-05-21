@@ -131,8 +131,12 @@ service cloud.firestore {
                         request.resource.data.get('text', '').size() > 0
                         || (request.resource.data.get('attachmentUrl', '') is string
                             && request.resource.data.get('attachmentUrl', '').size() > 0)
+                        // (2026-05-22) multi-image: attachments[] (≤10) counts as content
+                        || (request.resource.data.get('attachments', []) is list
+                            && request.resource.data.get('attachments', []).size() > 0
+                            && request.resource.data.get('attachments', []).size() <= 10)
                       );
-        allow update, delete: if false;  // immutable from client; admin SDK only (cleanup)
+        allow update, delete: if false;  // immutable from client; admin SDK only (retention cron)
       }
 
       // ── Backend: Phase 29 Recall System (2026-05-14) ──

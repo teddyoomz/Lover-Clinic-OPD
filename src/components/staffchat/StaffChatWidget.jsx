@@ -2,7 +2,8 @@
 // V73 (2026-05-16) — Root staff chat widget. Mounts globally; self-gates on
 // user + selectedBranchId + !needsPublicAuth.
 // V73 Feature C (2026-05-16) — Wires reply state from useStaffChat to MessageList + Composer.
-// V73 Feature F (2026-05-16) — Passes uploadImage from useStaffChat to Composer for paste/drag uploads.
+// V73 Feature F (2026-05-16) — Passes image-upload handler from useStaffChat to Composer.
+// (2026-05-22) Multi-image: now passes prepareAndUpload (mints messageId + uploads thumb+original).
 // V73 L1 fix (2026-05-18, AV51) — Widget self-resolves branchName from
 // useSelectedBranch.branches (Bug A from L1: App.jsx never passed branchName
 // prop → header rendered "—"). Also surfaces hook error to UI banner (Bug D
@@ -86,7 +87,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
             recentMentionCandidates={chat.recentMentionCandidates}
             replyingTo={chat.replyingTo}
             onClearReply={() => chat.setReplyingTo?.(null)}
-            onUploadImage={chat.uploadImage}
+            onPrepareAndUpload={chat.prepareAndUpload}
           />
         </StaffChatPanel>
       )}

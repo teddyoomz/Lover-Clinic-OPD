@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff Chat · Multi-Image Attachments — Design Spec</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+    h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { margin-top:1.4em; }
+    pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:#444; }
+    .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.7em; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; font-size:.92em; }
+    th { background:var(--bg-meta); }
+    .ok { color:#15803d; font-weight:600; }
+    .warn { color:#b45309; font-weight:600; }
+    /* ---- chat mockup ---- */
+    .scrow { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+    .scol { display:flex; flex-direction:column; gap:10px; }
+    .sc-bubble { background:#0c4a6e; border-radius:14px; padding:8px; width:230px; }
+    .sc-bubble .who { font-size:11px; color:#bae6fd; margin:0 2px 6px; font-weight:600; }
+    .sc-grid { display:grid; gap:3px; border-radius:9px; overflow:hidden; }
+    .ph { aspect-ratio:1/1; border-radius:5px; position:relative; }
+    .p1{background:linear-gradient(135deg,#f59e0b,#b45309);} .p2{background:linear-gradient(135deg,#10b981,#065f46);}
+    .p3{background:linear-gradient(135deg,#6366f1,#3730a3);} .p4{background:linear-gradient(135deg,#ec4899,#9d174d);}
+    .p5{background:linear-gradient(135deg,#06b6d4,#155e75);} .p6{background:linear-gradient(135deg,#84cc16,#3f6212);}
+    .g1{grid-template-columns:1fr;} .g1 .ph{aspect-ratio:4/3;}
+    .g2{grid-template-columns:1fr 1fr;}
+    .g3{grid-template-columns:2fr 1fr; grid-template-rows:1fr 1fr;} .g3 .ph:first-child{grid-row:span 2; aspect-ratio:auto;}
+    .g4{grid-template-columns:1fr 1fr;}
+    .more{position:absolute; inset:0; background:rgba(0,0,0,.55); color:#fff; font-size:22px; font-weight:700; display:flex; align-items:center; justify-content:center; border-radius:5px;}
+    .tag{font-size:11px; color:#0c4a6e; margin:2px 2px 0;}
+    /* lightbox */
+    .lb { background:#000; border-radius:10px; overflow:hidden; position:relative; width:460px; max-width:100%; }
+    .lb-top { position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:9px 13px; color:#fff; font-size:13px; z-index:2; background:linear-gradient(180deg,rgba(0,0,0,.65),transparent); }
+    .lb-stage { display:flex; align-items:center; justify-content:center; position:relative; padding:32px 0 8px; }
+    .lb-img { width:74%; aspect-ratio:4/3; border-radius:6px; }
+    .arrow { position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .arrow.l{left:10px;} .arrow.r{right:10px;}
+    .film { display:flex; gap:6px; justify-content:center; padding:9px; background:rgba(0,0,0,.45); }
+    .film .ph{ width:38px; height:38px; opacity:.45; }
+    .film .ph.active{ opacity:1; outline:2px solid #fff; }
+    .save{color:#fff; font-size:12px; background:rgba(255,255,255,.18); padding:4px 9px; border-radius:6px;}
+    /* composer */
+    .composer { border:1px solid #cbd5e1; border-radius:12px; padding:10px; max-width:420px; background:#fff; }
+    .strip { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    .thumb { width:62px; height:62px; border-radius:8px; position:relative; }
+    .thumb .x { position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#111; color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; }
+    .thumb .bar { position:absolute; left:4px; right:4px; bottom:4px; height:4px; border-radius:2px; background:rgba(255,255,255,.4); overflow:hidden; }
+    .thumb .bar i { display:block; height:100%; background:#22c55e; }
+    .crow { display:flex; align-items:center; gap:8px; }
+    .ci { flex:1; border:1px solid #e2e8f0; border-radius:18px; padding:7px 12px; color:#94a3b8; font-size:13px; }
+    .send { width:34px; height:34px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; }
+    /* flow */
+    .flow { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+    .step { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:.6em .8em; font-size:.85em; min-width:120px; flex:1; }
+    .step b { display:block; color:var(--accent); font-size:.92em; }
+    .arr { display:flex; align-items:center; padding:0 .4em; color:var(--accent); font-weight:700; font-size:1.2em; }
+    .databox { background:#fff; border:1px dashed #94a3b8; border-radius:8px; padding:.8em 1em; font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.82em; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat · Multi-Image Attachments — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-22 · <strong>Status:</strong> Approved by user (design + visual layout) ·
+  <strong>Builds on:</strong> V73 staff chat (be_staff_chat_messages) ·
+  <strong>Implementation plan:</strong> (TBD — writing-plans next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>แชทภายในของทีม (V73 staff chat) ส่งรูปได้แค่ <b>รูปเดียวต่อข้อความ</b> และ resize เหลือ ~1024px เสมอ (cap 1MB). ทีมอยากส่ง <b>หลายรูปพร้อมกัน</b>, ดูรูปย่อในแชทแล้วกดเปิดรูปใหญ่เลื่อนซ้าย/ขวาดูทั้งชุด, รับรูปได้ <b>≤50MB/รูป</b>. และเพราะ staff chat ปัจจุบัน <b>ไม่มีระบบลบประวัติเลย</b> (Firestore + Storage append-only ถาวร) — ฟีเจอร์นี้ต้องสร้าง <b>auto-retention</b> ที่ลบทั้งข้อความ + ไฟล์รูปใน Storage ให้ <b>เกลี้ยง ไม่เหลือ orphan</b> (กันค่า storage บาน).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State · ในห้องแชท — adaptive thumbnail grid (กดใบไหนเปิด lightbox ที่ใบนั้น)</div>
+  <div style="background:#082f49; padding:16px; border-radius:8px;">
+    <div class="scrow">
+      <div class="scol"><div class="sc-bubble"><div class="who">พยาบาล A</div><div class="sc-grid g1"><div class="ph p1"></div></div></div><div class="tag">1 รูป → เต็มใบ</div></div>
+      <div class="scol"><div class="sc-bubble"><div class="who">หมอ B</div><div class="sc-grid g2"><div class="ph p2"></div><div class="ph p3"></div></div></div><div class="tag">2 รูป → คู่</div></div>
+      <div class="scol"><div class="sc-bubble"><div class="who">พยาบาล A</div><div class="sc-grid g3"><div class="ph p4"></div><div class="ph p5"></div><div class="ph p6"></div></div></div><div class="tag">3 รูป → ใหญ่ + เล็ก 2</div></div>
+      <div class="scol"><div class="sc-bubble"><div class="who">ผู้จัดการ C</div><div class="sc-grid g4"><div class="ph p1"></div><div class="ph p2"></div><div class="ph p3"></div><div class="ph p4"><div class="more">+2</div></div></div></div><div class="tag">6 รูป → 2×2 + "+N" บนใบที่ 4</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State · Lightbox เต็มจอ — swipe / arrows / keyboard</div>
+  <div style="display:flex; justify-content:center; background:#111; padding:16px; border-radius:8px;">
+    <div class="lb">
+      <div class="lb-top"><span>📷 2 / 5</span><span class="save">⤓ บันทึกรูป</span><span style="font-size:18px;">✕</span></div>
+      <div class="lb-stage"><div class="arrow l">‹</div><div class="ph p3 lb-img"></div><div class="arrow r">›</div></div>
+      <div class="film"><div class="ph p1"></div><div class="ph p3 active"></div><div class="ph p4"></div><div class="ph p5"></div><div class="ph p6"></div></div>
+    </div>
+  </div>
+  <p style="font-size:.85em; color:#666;">รูปใหญ่ = โหลด <b>original ≤50MB</b> ตอนเปิดเท่านั้น · ตัวนับ "2/5" · ‹ › + ปัดมือถือ + ลูกศรคีย์บอร์ด · filmstrip · ⤓ บันทึก · ✕/Esc/แตะนอกรูป = ปิด (AV78 sanctioned lightbox)</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State · Composer — เลือกหลายรูป + preview strip + progress ก่อนส่ง</div>
+  <div class="composer">
+    <div class="strip">
+      <div class="thumb p1"><div class="x">✕</div><div class="bar"><i style="width:100%"></i></div></div>
+      <div class="thumb p2"><div class="x">✕</div><div class="bar"><i style="width:100%"></i></div></div>
+      <div class="thumb p3"><div class="x">✕</div><div class="bar"><i style="width:62%"></i></div></div>
+      <div class="thumb p4"><div class="x">✕</div><div class="bar"><i style="width:18%"></i></div></div>
+    </div>
+    <div class="crow"><div class="ci">พิมพ์ข้อความ… (แนบ 4/10 รูป · กำลังอัพโหลด 2 รูป)</div><div class="send">➤</div></div>
+  </div>
+  <p style="font-size:.85em; color:#666;">เลือกหลายไฟล์ / วาง (paste) / ลาก-วาง · กบ ✕ ลบก่อนส่ง · progress bar ต่อรูป (resumable) · ปุ่มส่ง disable ระหว่างอัพโหลด · validate type (jpeg/png/webp/gif) + size ≤50MB ต่อใบ</p>
+</div>
+
+<h3>Data shape (message doc + Storage layout)</h3>
+<div class="databox">be_staff_chat_messages/{messageId}
+  ...existing (branchId, displayName, deviceId, text, createdAt, mentions, replyTo, senderColor, senderRole)...
+  attachments: [                          // NEW · ≤ 10
+    { thumbUrl, fullUrl, thumbPath, fullPath, size, mimeType, w, h },
+    ...
+  ]
+  // legacy single-image docs keep `attachmentUrl` scalar → reader renders ทั้งสองแบบ
+
+Firebase Storage (ทุกรูปของ 1 ข้อความ อยู่ใต้ folder เดียว → ลบด้วย prefix-sweep):
+  staff-chat-attachments/{branchId}/{messageId}/{imgId}-t.jpg     ← thumbnail (~512px jpeg, เล็ก)
+  staff-chat-attachments/{branchId}/{messageId}/{imgId}-o.{ext}   ← original ≤50MB (เก็บ as-is)</div>
+
+<h2>Flow</h2>
+
+<h3>A · ส่งรูป (upload → store → render)</h3>
+<div class="mockup">
+  <div class="mockup-label">Send pipeline</div>
+  <div class="flow">
+    <div class="step"><b>1 เลือก</b>≤10 รูป (pick / paste / drag)</div>
+    <div class="arr">→</div>
+    <div class="step"><b>2 validate</b>type ∈ jpeg/png/webp/gif · ≤50MB/ใบ</div>
+    <div class="arr">→</div>
+    <div class="step"><b>3 thumb</b>canvas resize ~512px jpeg</div>
+    <div class="arr">→</div>
+    <div class="step"><b>4 upload</b>thumb + original (resumable, progress) → <code>{branchId}/{messageId}/</code></div>
+    <div class="arr">→</div>
+    <div class="step"><b>5 setDoc</b>messageId เดิม + <code>attachments[]</code></div>
+    <div class="arr">→</div>
+    <div class="step"><b>6 render</b>grid → กด → lightbox</div>
+  </div>
+  <p style="font-size:.83em; color:#666; margin-top:.6em;">⚠ <b>messageId ถูก gen ก่อน upload</b> (client) เพื่อให้รูปเข้า folder <code>{messageId}/</code> ตั้งแต่ต้น → cleanup ลบได้ครบด้วย prefix.</p>
+</div>
+
+<h3>B · 🎯 Auto-retention cron — รับประกัน "ลบจริงหายจริง" (2 pass)</h3>
+<p><code>api/cron/staff-chat-retention-sweep.js</code> · Vercel cron รายวัน · CRON_SECRET · firebase-admin SDK (rule บล็อก client delete อยู่แล้ว → ลบฝั่ง server เชื่อถือได้):</p>
+<table>
+  <tr><th>Pass</th><th>เป้าหมาย</th><th>ขั้นตอน</th><th>การันตี</th></tr>
+  <tr>
+    <td><b>A · age-out</b></td>
+    <td>ข้อความเก่ากว่า 30 วัน</td>
+    <td>query <code>createdAt &lt; now−30d</code> (paginate) → ต่อ msg: <code>bucket.getFiles({prefix:'staff-chat-attachments/{branchId}/{messageId}/'})</code> ลบทุกไฟล์ + ลบ doc. (legacy scalar → ถอด path จาก <code>attachmentUrl</code> แล้วลบ)</td>
+    <td class="ok">prefix-sweep → ไม่มีไฟล์ตกหล่นแม้ attachments[] เพี้ยน</td>
+  </tr>
+  <tr>
+    <td><b>B · orphan-sweep</b></td>
+    <td>folder ที่ไม่มี doc คู่</td>
+    <td>list folder ใต้ <code>{branchId}/</code> → folder ไหนไม่มี <code>be_staff_chat_messages/{messageId}</code> + เก่ากว่า ~1 วัน (ส่งไม่สำเร็จ/ปิดจอกลางคัน) → ลบ folder</td>
+    <td class="ok">เก็บกวาด orphan upload ที่ doc ไม่เคยถูกสร้าง</td>
+  </tr>
+</table>
+<p style="font-size:.85em;">idempotent · เขียน audit doc → <code>be_admin_audit</code> (จำนวน msg + ไฟล์ที่ลบ). <b>Proof (Rule Q L2)</b>: หลังรัน sweep บน prod จริง → <code>bucket.getFiles({prefix})</code> กลับมา <span class="ok">0 ไฟล์</span>.</p>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Unit</th><th>หน้าที่ / การเปลี่ยน</th></tr>
+  <tr><td><code>src/lib/staffChatImageResize.js</code></td><td>เพิ่ม: thumb-resize (~512px), <code>uploadBytesResumable</code> + progress callback, path builder <code>{branchId}/{messageId}/{imgId}-{t|o}.{ext}</code>, คืน <code>{thumbUrl,fullUrl,thumbPath,fullPath,size,mimeType,w,h}</code>. คง resize เดิมไว้ (ไม่ทับ)</td></tr>
+  <tr><td><code>src/lib/staffChatClient.js</code></td><td><code>buildMessageDoc</code> รับ <code>attachments[]</code> (≤10) แทน scalar; gen <code>messageId</code> ให้เรียกใช้ได้ก่อน upload</td></tr>
+  <tr><td><code>src/hooks/useStaffChat.js</code></td><td>orchestrate multi-upload (messageId-first), state ของ pending images + progress, send หลัง upload ครบ</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatComposer.jsx</code></td><td>multi-pick + paste-many + drag-many + preview strip (remove-X) + per-image progress + disable-send-while-uploading + Thai validation errors</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatMessage.jsx</code></td><td>adaptive grid (1/2/3/4/5+→"+N") จาก <code>attachments[]</code>; legacy <code>attachmentUrl</code> → 1 รูปเดิม; กดใบ → เปิด lightbox ที่ index</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatImageLightbox.jsx</code></td><td>extend <code>src</code>→<code>images[]</code>+<code>startIndex</code>: prev/next, counter, filmstrip, ←→, swipe, ⤓บันทึก. backward-compat รูปเดียว = array 1 ใบ</td></tr>
+  <tr><td><b>NEW</b> <code>api/cron/staff-chat-retention-sweep.js</code></td><td>cron 2-pass (age-out + orphan-sweep) admin SDK + audit doc</td></tr>
+  <tr><td><code>vercel.json</code></td><td>cron schedule (รายวัน)</td></tr>
+  <tr><td><code>storage.rules</code></td><td>cap <code>&lt; 1MB</code> → <code>&lt; 50MB</code> ที่ <code>staff-chat-attachments/{branchId}/{file=**}</code> (path เดิมครอบ nested อยู่แล้ว); create-only + delete:if false คงเดิม → <b>Probe #10</b></td></tr>
+  <tr><td><code>firestore.rules</code></td><td><code>be_staff_chat_messages</code> create: ยอมรับ <code>attachments</code> (list, ≤10) เป็น "has content"; update/delete:if false คงเดิม → <b>Probe #9</b></td></tr>
+</table>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = Auto-retention only:</strong> ไม่มีปุ่ม manual; cron ลบอัตโนมัติ (เป็นตัวคุม storage หลัก)</li>
+  <li><strong>Q2 = Hybrid:</strong> thumbnail (โชว์ในแชท/grid) + original ≤50MB (กดดูใน lightbox) — 2 ไฟล์ต่อรูป</li>
+  <li><strong>Q3 = ลบทั้งข้อความ + รูป:</strong> retention ลบทั้ง doc (text) + thumb + original (ไม่ใช่ลบเฉพาะรูป)</li>
+  <li><strong>Q4 = 30 วัน:</strong> retention period</li>
+  <li><strong>Q5 = ≤10 รูป/ข้อความ</strong></li>
+  <li><strong>Layout approved:</strong> adaptive grid (สไตล์ LINE) + swipe lightbox (mockup ด้านบน)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ส่ง 1–10 รูปใน 1 ข้อความได้ (pick / paste / drag); &gt;10 หรือ &gt;50MB หรือ type ไม่รองรับ → reject + ข้อความไทย</li>
+  <li>แชทโชว์ adaptive grid (1/2/3/4/5+→"+N") จาก thumbnail (โหลดเร็ว)</li>
+  <li>กดรูป → lightbox เปิดที่ใบนั้น, เลื่อน ‹ › / ปัด / ←→ ดูทั้งชุดได้, counter ถูก, ⤓บันทึกได้, ✕/Esc/แตะนอกปิด</li>
+  <li>ข้อความเก่า (legacy <code>attachmentUrl</code> รูปเดียว) ยัง render ได้ปกติ (backward-compat)</li>
+  <li><b>retention:</b> ข้อความ &gt; 30 วัน → cron ลบ doc + thumb + original; <span class="ok"><code>bucket.getFiles({prefix})</code> = 0 ไฟล์ บน prod จริง</span> (Rule Q L2)</li>
+  <li><b>orphan:</b> upload-แล้ว-ส่งไม่สำเร็จ (folder ไร้ doc) เก่ากว่า ~1 วัน → Pass B ลบทิ้ง; ยืนยันด้วยการ list prod = 0</li>
+  <li>Probe-Deploy-Probe: Probe #9 (firestore) + #10 (storage 50MB) ผ่านทั้ง pre/post</li>
+  <li>vitest เขียว + build clean; AV108 + Rule I flow-simulate ครบ</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><b>HEIC (iPhone):</b> reject + ข้อความ "แปลงเป็น JPEG ก่อน" (กัน lightbox โชว์ไม่ขึ้น). future: แปลง HEIC→JPEG ฝั่ง client. <span class="warn">ยืนยัน: reject ก่อน (ไม่ทำ convert ในรอบนี้)</span></li>
+  <li><b>500MB/ข้อความ:</b> 10×50MB = สูงสุด ~500MB upload ต่อข้อความ — resumable รับได้แต่ช้าบนเน็ตช้า; progress + ยกเลิกรายใบช่วยได้</li>
+  <li><b>canvas memory:</b> สร้าง thumb จากรูปใหญ่มาก (เช่น 100MP) อาจกิน RAM — ลด canvas ทันทีหลังได้ blob; ทดสอบ adversarial รูปใหญ่</li>
+  <li><b>original เก็บ as-is:</b> รักษาคุณภาพ/ความคม/โปร่งใส (PNG) — แต่ไม่ re-encode → ขึ้นกับ type ที่รองรับ (jpeg/png/webp/gif)</li>
+  <li><b>cron pagination:</b> ถ้าค้างนานแล้วข้อความเก่าเยอะ batch แรกอาจใหญ่ — paginate + limit ต่อ run</li>
+  <li><b>legacy scalar cleanup:</b> รูปเดิม (path <code>{branchId}/{ts}-{hex}.jpg</code> ไม่อยู่ใต้ <code>{messageId}/</code>) → Pass A ถอด path จาก <code>attachmentUrl</code> มาลบ; ทดสอบเคสนี้แยก</li>
+  <li><b>retention เริ่มนับ:</b> หลัง deploy cron จะลบข้อความ &gt;30 วันที่มีอยู่แล้วทันทีรอบแรก — แจ้ง user (เป็นพฤติกรรมที่ตั้งใจ)</li>
+</ul>
+
+</body>
+</html>

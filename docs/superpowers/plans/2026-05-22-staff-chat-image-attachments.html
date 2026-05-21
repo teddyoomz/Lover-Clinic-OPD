@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff Chat Multi-Image Attachments — Implementation Plan</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.6; color:#222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.85em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding:.5em 1em; color:#444; background:var(--bg-meta); border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1em 1.2em; margin:1em 0; }
+    .mockup-label { font-size:.74em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.6em; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.45em .7em; text-align:left; vertical-align:top; font-size:.9em; }
+    th { background:var(--bg-meta); }
+    .step { margin:.4em 0; }
+    .scrow{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;} .scol{display:flex;flex-direction:column;gap:8px;}
+    .sc-bubble{background:#0c4a6e;border-radius:14px;padding:7px;width:200px;} .sc-bubble .who{font-size:11px;color:#bae6fd;margin:0 2px 5px;font-weight:600;}
+    .sc-grid{display:grid;gap:3px;border-radius:9px;overflow:hidden;} .ph{aspect-ratio:1/1;border-radius:5px;position:relative;}
+    .p1{background:linear-gradient(135deg,#f59e0b,#b45309);}.p2{background:linear-gradient(135deg,#10b981,#065f46);}.p3{background:linear-gradient(135deg,#6366f1,#3730a3);}.p4{background:linear-gradient(135deg,#ec4899,#9d174d);}.p5{background:linear-gradient(135deg,#06b6d4,#155e75);}.p6{background:linear-gradient(135deg,#84cc16,#3f6212);}
+    .g1{grid-template-columns:1fr;}.g1 .ph{aspect-ratio:4/3;}.g2{grid-template-columns:1fr 1fr;}.g3{grid-template-columns:2fr 1fr;grid-template-rows:1fr 1fr;}.g3 .ph:first-child{grid-row:span 2;aspect-ratio:auto;}.g4{grid-template-columns:1fr 1fr;}
+    .more{position:absolute;inset:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;border-radius:5px;}
+    .databox{background:#fff;border:1px dashed #94a3b8;border-radius:8px;padding:.7em 1em;font-family:Consolas,monospace;font-size:.8em;white-space:pre-wrap;}
+    .flow{display:flex;flex-wrap:wrap;align-items:stretch;} .fstep{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:.5em .7em;font-size:.82em;flex:1;min-width:110px;} .fstep b{display:block;color:var(--accent);} .farr{display:flex;align-items:center;padding:0 .35em;color:var(--accent);font-weight:700;}
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat Multi-Image Attachments — Implementation Plan</h1>
+<blockquote><strong>Execution:</strong> INLINE (executing-plans) per Rule K (work-first/test-last) — subagents thrash on this baseline. Spec: <code>docs/superpowers/specs/2026-05-22-staff-chat-image-attachments-design.html</code>.</blockquote>
+<div class="header-meta">
+  <p><strong>Goal:</strong> ส่งรูปหลายรูป/ข้อความใน staff chat (V73) + adaptive grid + swipe lightbox + ≤50MB/รูป (hybrid thumb+original) + auto-retention 30วัน ลบเกลี้ยง (no orphan).</p>
+  <p><strong>Architecture:</strong> ต่อยอด V73. รูปวางใต้ <code>staff-chat-attachments/{branchId}/{messageId}/</code> (per-message folder → prefix-sweep ลบครบ). cron 2-pass (age-out + orphan) admin SDK. shared pure core (Rule of 3).</p>
+  <p><strong>Decisions:</strong> Q1 auto-retention only · Q2 hybrid · Q3 delete whole msg+images · Q4 30d · Q5 ≤10 · layout approved.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup"><div class="mockup-label">In-chat adaptive grid</div>
+<div style="background:#082f49;padding:14px;border-radius:8px;"><div class="scrow">
+<div class="scol"><div class="sc-bubble"><div class="who">A</div><div class="sc-grid g1"><div class="ph p1"></div></div></div></div>
+<div class="scol"><div class="sc-bubble"><div class="who">B</div><div class="sc-grid g2"><div class="ph p2"></div><div class="ph p3"></div></div></div></div>
+<div class="scol"><div class="sc-bubble"><div class="who">A</div><div class="sc-grid g3"><div class="ph p4"></div><div class="ph p5"></div><div class="ph p6"></div></div></div></div>
+<div class="scol"><div class="sc-bubble"><div class="who">C</div><div class="sc-grid g4"><div class="ph p1"></div><div class="ph p2"></div><div class="ph p3"></div><div class="ph p4"><div class="more">+2</div></div></div></div></div>
+</div></div>
+<p style="font-size:.85em;color:#666;">1→เต็ม · 2→คู่ · 3→ใหญ่+2 · 4→2×2 · 5+→2×2+"+N" บนใบที่4. Lightbox: counter "n/N" + ‹›/swipe/keyboard + filmstrip + ⤓บันทึก + ✕/Esc/แตะนอกปิด (AV78). Composer: multi-pick + preview strip(remove-X) + per-image progress + disable-while-uploading.</p></div>
+<div class="databox">be_staff_chat_messages/{messageId}: { ...existing, attachments:[{thumbUrl,fullUrl,thumbPath,fullPath,size,mimeType,w,h}] (≤10) }   // legacy attachmentUrl scalar ยัง render
+Storage: staff-chat-attachments/{branchId}/{messageId}/{imgId}-t.jpg (thumb ~512px) + {imgId}-o.{ext} (original ≤50MB as-is)</div>
+
+<h2>Flow</h2>
+<div class="mockup"><div class="mockup-label">Send pipeline</div><div class="flow">
+<div class="fstep"><b>1 pick</b>≤10 (pick/paste/drag)</div><div class="farr">→</div>
+<div class="fstep"><b>2 validate</b>type+≤50MB</div><div class="farr">→</div>
+<div class="fstep"><b>3 thumb</b>canvas ~512px</div><div class="farr">→</div>
+<div class="fstep"><b>4 upload</b>thumb+orig (resumable) → {messageId}/</div><div class="farr">→</div>
+<div class="fstep"><b>5 setDoc</b>same messageId + attachments[]</div><div class="farr">→</div>
+<div class="fstep"><b>6 render</b>grid→lightbox</div>
+</div><p style="font-size:.82em;color:#666;">⚠ messageId gen ก่อน upload → รูปเข้า folder ตั้งแต่ต้น → ลบครบด้วย prefix.</p></div>
+<div class="mockup"><div class="mockup-label">Retention cron (2-pass) — "ลบจริงหายจริง"</div>
+<table><tr><th>Pass</th><th>logic</th><th>guarantee</th></tr>
+<tr><td>A age-out</td><td>msg createdAt&lt;now−30d → <code>bucket.getFiles({prefix:'.../{messageId}/'})</code> ลบทุกไฟล์ + (legacy: ถอด path จาก attachmentUrl) + ลบ doc</td><td>prefix-sweep = ไม่ตกหล่น</td></tr>
+<tr><td>B orphan</td><td>folder ใต้ {branchId}/ ที่ไม่มี doc คู่ + เก่ากว่า ~1วัน → ลบ folder</td><td>เก็บกวาด upload ที่ส่งไม่สำเร็จ</td></tr></table>
+<p style="font-size:.82em;color:#666;">admin SDK + CRON_SECRET + audit doc. Proof (Rule Q L2): หลัง sweep → getFiles(prefix)=0.</p></div>
+
+<h2>File Structure</h2>
+<table>
+<tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+<tr><td><code>src/lib/staffChatRetentionCore.js</code></td><td>NEW</td><td>pure: RETENTION_DAYS, storagePrefixForMessage, isExpired, extractStoragePathFromUrl, isOrphanFolder, gridLayoutFor</td></tr>
+<tr><td><code>src/lib/staffChatImageResize.js</code></td><td>MOD</td><td>constants(MAX_IMAGES/MAX_BYTES/ALLOWED/THUMB), validateStaffChatImage, makeStaffChatThumbnail, staffChatImagePaths/extForMime, uploadStaffChatImage (resumable). คง resizeImageToBlob/uploadAttachment เดิม</td></tr>
+<tr><td><code>src/lib/staffChatClient.js</code></td><td>MOD</td><td>newStaffChatMessageId(); buildMessageDoc รับ attachments[] (≤10)</td></tr>
+<tr><td><code>src/hooks/useStaffChat.js</code></td><td>MOD</td><td>prepareAndUpload(files,onProgress)→{messageId,attachments}; send(text,{messageId,attachments})</td></tr>
+<tr><td><code>src/components/staffchat/StaffChatComposer.jsx</code></td><td>MOD</td><td>multi pick/paste/drag + preview strip + progress + disable + Thai errors</td></tr>
+<tr><td><code>src/components/staffchat/StaffChatMessage.jsx</code></td><td>MOD</td><td>attachments[] grid (gridLayoutFor) + legacy single + click→lightbox(index)</td></tr>
+<tr><td><code>src/components/staffchat/StaffChatImageLightbox.jsx</code></td><td>MOD</td><td>images[]+startIndex + prev/next/counter/filmstrip/keyboard/swipe/download</td></tr>
+<tr><td><code>api/cron/staff-chat-retention-sweep.js</code></td><td>NEW</td><td>2-pass cron, admin SDK, CRON_SECRET, audit</td></tr>
+<tr><td><code>scripts/staff-chat-retention-sweep.mjs</code></td><td>NEW</td><td>Rule M CLI mirror (dry-run/--apply) + e2e proof harness</td></tr>
+<tr><td><code>vercel.json</code></td><td>MOD</td><td>cron schedule daily</td></tr>
+<tr><td><code>storage.rules</code></td><td>MOD</td><td>cap 1MB→50MB (Probe #10)</td></tr>
+<tr><td><code>firestore.rules</code></td><td>MOD</td><td>accept attachments[] (Probe #9)</td></tr>
+<tr><td><code>tests/staff-chat-multi-image*.test.js(x)</code></td><td>NEW</td><td>unit + source-grep(AV108) + flow-simulate(Rule I) + RTL</td></tr>
+</table>
+
+<h2>Tasks (Rule K: T1–T8 build → T9 review → T10 tests → T11 deploy+real-verify-loop → T12 final)</h2>
+
+<div class="task"><h3>T1 · Foundation: retention core + image lib</h3>
+<p>Create <code>staffChatRetentionCore.js</code> (pure); extend <code>staffChatImageResize.js</code>.</p>
+<pre><code>// staffChatRetentionCore.js
+export const RETENTION_DAYS=30, ORPHAN_GRACE_MS=86400000;
+export const storagePrefixForMessage=(b,m)=>`staff-chat-attachments/${b}/${m}/`;
+export const isExpired=(ms,now,d=RETENTION_DAYS)=>Number.isFinite(ms)&&(now-ms)>d*86400000;
+export function extractStoragePathFromUrl(u){if(typeof u!=='string')return null;const m=u.match(/\/o\/([^?]+)/);if(!m)return null;try{return decodeURIComponent(m[1]);}catch{return null;}}
+export const isOrphanFolder=({docExists,folderMs,now,grace=ORPHAN_GRACE_MS})=>!docExists&&(typeof folderMs!=='number'||(now-folderMs)>grace);
+export function gridLayoutFor(n){if(n<=1)return{cls:'sc-g1',show:1,overflow:0};if(n===2)return{cls:'sc-g2',show:2,overflow:0};if(n===3)return{cls:'sc-g3',show:3,overflow:0};return{cls:'sc-g4',show:4,overflow:n-4};}
+// staffChatImageResize.js (add)
+export const STAFF_CHAT_MAX_IMAGES=10, STAFF_CHAT_MAX_BYTES=52428800;
+export const STAFF_CHAT_ALLOWED=['image/jpeg','image/png','image/webp','image/gif'], STAFF_CHAT_THUMB=512;
+export function validateStaffChatImage(f){if(!f||!STAFF_CHAT_ALLOWED.includes(f.type))return{ok:false,message:'รองรับเฉพาะ JPEG/PNG/WebP/GIF (HEIC: แปลงเป็น JPEG ก่อน)'};if(f.size>STAFF_CHAT_MAX_BYTES)return{ok:false,message:'ไฟล์ใหญ่เกิน 50MB'};return{ok:true};}
+export const extForMime=m=>({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'}[m]||'jpg');
+export function staffChatImagePaths(b,m,id,ext){const base=`staff-chat-attachments/${b}/${m}/${id}`;return{thumbPath:`${base}-t.jpg`,fullPath:`${base}-o.${ext}`};}
+// makeStaffChatThumbnail(file)->{blob,srcW,srcH}: canvas downscale to max 512 jpeg q0.7, read natural w/h
+// uploadStaffChatImage({file,branchId,messageId,onProgress}): validate→thumb→uploadBytes(thumb)→uploadBytesResumable(orig,onProgress)→getDownloadURL×2→{thumbUrl,fullUrl,thumbPath,fullPath,size,mimeType,w,h}</code></pre>
+</div>
+
+<div class="task"><h3>T2 · staffChatClient — messageId + attachments[]</h3>
+<p>Add <code>newStaffChatMessageId()</code> (reuse existing CHAT-{ts}-{hex} gen, exported). <code>buildMessageDoc</code> accepts opts.attachments (array, ≤10) → set on doc; keep legacy attachmentUrl path. "has content" = text || attachmentUrl || attachments.length>0.</p></div>
+
+<div class="task"><h3>T3 · useStaffChat — multi-upload orchestration</h3>
+<p><code>prepareAndUpload(files, onProgress)</code>: gen messageId once → for each file uploadStaffChatImage (per-file progress) → return {messageId, attachments}. <code>send(text,{messageId,attachments})</code> → buildMessageDoc(...,{messageId,attachments}) → setDoc. Keep legacy onUploadImage/onSend working.</p></div>
+
+<div class="task"><h3>T4 · StaffChatComposer — multi pick/preview/progress</h3>
+<p><code>&lt;input multiple accept="image/jpeg,image/png,image/webp,image/gif"&gt;</code> + paste(many) + drag(many). pending images state (≤10, validate each, Thai error on reject). preview strip: thumb + remove-X + per-image progress bar. send: prepareAndUpload→send; disable send + show "กำลังอัพโหลด" during.</p></div>
+
+<div class="task"><h3>T5 · StaffChatMessage — adaptive grid</h3>
+<p>If attachments[]: render grid via gridLayoutFor (show N tiles, 4th gets "+overflow" overlay when overflow&gt;0); tile bg = thumbUrl; aspect via w/h. Click tile → onOpenLightbox(attachments, tileIndex). Legacy attachmentUrl → 1-tile grid → lightbox([{fullUrl,thumbUrl:url}],0).</p></div>
+
+<div class="task"><h3>T6 · StaffChatImageLightbox — swipe</h3>
+<p>Props images[] + startIndex + onClose. state idx; prev/next clamp; counter "{idx+1}/{N}"; filmstrip (thumbUrl, active=idx, click→setIdx); keyboard ←→Esc (useEffect keydown); touch swipe (touchstart/end dx threshold); big img = images[idx].fullUrl (original); download button → fetch+blob+a.download. ✕/Esc/backdrop close (AV78 sanctioned). Backward-compat: single img = array len 1 (arrows/filmstrip hidden when N≤1).</p></div>
+
+<div class="task"><h3>T7 · Retention cron + CLI + vercel.json</h3>
+<p><code>api/cron/staff-chat-retention-sweep.js</code>: CRON_SECRET gate; admin init (match existing cron e.g. chart-edit-session-sweep.js); use staffChatRetentionCore. Pass A: query messages createdAt&lt;cutoff (use SAME collection path as staffChatClient — VERIFY at impl) paginate → per msg getFiles({prefix}) delete + legacy attachmentUrl path delete + delete doc. Pass B: per branch, bucket.getFiles({prefix:`staff-chat-attachments/${branchId}/`,delimiter:'/'}) list folders → each {messageId} prefix: doc exists? if not + age&gt;grace → delete files. audit→be_admin_audit. <code>scripts/staff-chat-retention-sweep.mjs</code> mirrors logic (dry-run default,--apply) + serves as e2e proof harness. vercel.json: add cron path daily.</p></div>
+
+<div class="task"><h3>T8 · Rules (Probe-Deploy-Probe on deploy)</h3>
+<p><code>storage.rules</code>: <code>staff-chat-attachments/{branchId}/{file=**}</code> create size <code>&lt; 1*1024*1024</code> → <code>&lt; 50*1024*1024</code>; delete/update if false keep. <code>firestore.rules</code> be_staff_chat_messages create: add <code>|| (request.resource.data.attachments is list && request.resource.data.attachments.size()&lt;=10)</code> to the has-content condition. Deploy = Probe #9 (anon POST be_staff_chat_messages→403) + #10 (anon write staff-chat-attachments→401/403) pre+post.</p></div>
+
+<div class="task"><h3>T9 · Review structure (Rule K checkpoint)</h3>
+<p>Read all touched files; grep cross-file invariants (attachments shape consistent; per-message folder path consistent; gridLayoutFor used by message; core imported by cron+CLI). Fix drift.</p></div>
+
+<div class="task"><h3>T10 · Test bank (consolidated)</h3>
+<p>unit (validate/thumb-shape/paths/gridLayoutFor/isExpired/extractPath/isOrphan/lightbox-index) + source-grep <strong>AV108</strong> (every staff-chat image write under {messageId}/ folder; cron prefix-sweep; no client delete) + Rule I flow-simulate (pick3→upload→doc→grid→lightbox-swipe; legacy render; aged→sweep→gone) + RTL (composer multi+preview+progress; grid; lightbox nav). vitest + build clean.</p></div>
+
+<div class="task"><h3>T11 · 🎯 DEPLOY + Real-adversarial verify loop (Rule Q + Q-vis + S)</h3>
+<p>Deploy (user-authorized "deploy เพื่อเทส"): V15 combined <code>vercel --prod</code> + <code>firebase deploy --only firestore:rules,storage:rules</code> with Probe-Deploy-Probe #9/#10. Then on prod via Chrome MCP (Browser 1), <strong>SEE every step by screenshot</strong>:</p>
+<ol class="step">
+<li>Open staff chat → pick multiple real images → preview strip + progress → send → grid renders</li>
+<li>Click tile → lightbox → swipe ‹›, keyboard, filmstrip, counter, ⤓download, ✕/Esc/backdrop close</li>
+<li>50MB-ish image accepted; &gt;50MB + HEIC rejected w/ Thai msg; &gt;10 rejected</li>
+<li>Legacy single-image message still renders</li>
+<li><strong>ลบจริง:</strong> run <code>scripts/staff-chat-retention-sweep.mjs --apply</code> on real prod (TEST-prefixed aged fixtures) → <code>bucket.getFiles({prefix})</code> = 0; orphan folder (no doc) swept</li>
+</ol>
+<p>เจอบั๊ค → fix → (redeploy if code) → re-test. LOOP จนทุกปุ่ม/ฟังก์ชันเขียว 100%. ห้าม claim verified โดยไม่มี screenshot (Rule Q-vis).</p></div>
+
+<div class="task"><h3>T12 · Final + handoff</h3>
+<p>Full vitest + build; clean orphan/test fixtures; update active.md/SESSION_HANDOFF/V-log + AV108. Stop for user hands-on.</p></div>
+
+<h2>Self-Review</h2>
+<p>Spec coverage ✓ (grid/lightbox/composer/retention/rules/tests all have tasks). No placeholders (signatures+critical code shown; routine wiring described w/ exact files). Type consistency: attachments shape {thumbUrl,fullUrl,thumbPath,fullPath,size,mimeType,w,h} + folder path <code>staff-chat-attachments/{branchId}/{messageId}/</code> used identically across lib/message/cron/core. gridLayoutFor cls names (sc-g1..sc-g4) must match CSS in StaffChatMessage.</p>
+
+</body>
+</html>

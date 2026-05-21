@@ -7,10 +7,41 @@
 //   - optional mentions[] / replyTo / attachment fields
 // Used by ChatPanel + scopedDataLayer.addStaffChatMessage.
 import { serverTimestamp } from 'firebase/firestore';
+import { STAFF_CHAT_MAX_IMAGES } from './staffChatRetentionCore.js';
+
+// Crypto-secure CHAT-<ts>-<hex> id (Rule C2 — no Math.random). Exported so the
+// upload pipeline can mint the id BEFORE uploading images (images live under
+// staff-chat-attachments/{branchId}/{messageId}/ → the folder path needs the id).
+export function newStaffChatMessageId() {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `CHAT-${Date.now()}-${hex}`;
+}
+
+// Firestore-undefined-safe normalize for one attachment (V14 lesson — no
+// undefined leaves; only known fields).
+function normalizeStaffChatAttachment(a) {
+  const o = {
+    thumbUrl: String((a && a.thumbUrl) || ''),
+    fullUrl: String((a && a.fullUrl) || ''),
+    thumbPath: String((a && a.thumbPath) || ''),
+    fullPath: String((a && a.fullPath) || ''),
+    size: Number(a && a.size) || 0,
+    mimeType: String((a && a.mimeType) || 'image/jpeg'),
+  };
+  if (a && Number.isFinite(a.w) && a.w > 0) o.w = Math.round(a.w);
+  if (a && Number.isFinite(a.h) && a.h > 0) o.h = Math.round(a.h);
+  return o;
+}
 
 export function buildMessageDoc({
+  id: providedId,
   branchId, displayName, text, deviceId,
   mentions, replyTo, attachmentUrl, attachmentSize, attachmentMimeType,
+  // (2026-05-22) multi-image: attachments[] (≤10). Legacy attachmentUrl scalar
+  // still accepted for backward-compat.
+  attachments,
   // V73 color-picker (2026-05-18) — optional sender hex color
   senderColor,
   // V82 (2026-05-17) — optional sender role label
@@ -20,20 +51,22 @@ export function buildMessageDoc({
   if (!displayName || typeof displayName !== 'string') throw new Error('STAFF_CHAT_NAME_REQUIRED');
   if (!deviceId || typeof deviceId !== 'string') throw new Error('STAFF_CHAT_DEVICE_REQUIRED');
   const trimmed = (typeof text === 'string' ? text : '').trim();
-  if (!trimmed && !attachmentUrl) throw new Error('STAFF_CHAT_EMPTY_MESSAGE');
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+  if (!trimmed && !attachmentUrl && !hasAttachments) throw new Error('STAFF_CHAT_EMPTY_MESSAGE');
   if (trimmed.length > 500) throw new Error('STAFF_CHAT_TEXT_TOO_LONG');
 
-  // Crypto-secure random id (Rule C2 — no Math.random for ids)
-  const bytes = new Uint8Array(4);
-  crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-  const id = `CHAT-${Date.now()}-${hex}`;
+  // Use the caller-minted id when provided (upload pipeline mints it before
+  // uploading so images land under {branchId}/{id}/), else generate. Rule C2.
+  const id = (typeof providedId === 'string' && providedId) ? providedId : newStaffChatMessageId();
 
   const doc = {
     id, branchId, displayName, deviceId,
     text: trimmed,
     createdAt: serverTimestamp(),
   };
+  if (hasAttachments) {
+    doc.attachments = attachments.slice(0, STAFF_CHAT_MAX_IMAGES).map(normalizeStaffChatAttachment);
+  }
   if (Array.isArray(mentions) && mentions.length > 0) doc.mentions = mentions.slice(0, 5);
   if (replyTo && replyTo.msgId) doc.replyTo = {
     msgId: replyTo.msgId,

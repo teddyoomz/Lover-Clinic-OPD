@@ -11,6 +11,60 @@ import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
 import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
+import { gridLayoutFor } from '../../lib/staffChatRetentionCore.js';
+
+// (2026-05-22) Adaptive thumbnail grid for message.attachments[] (LINE-style).
+// 1 image renders at natural aspect; 2+ render as a fixed-height grid of square
+// cover tiles; the 4th tile shows "+N" when there are more than 4. Click a tile
+// → onOpen(index) opens the lightbox at that image.
+function AttachmentGrid({ attachments, onOpen }) {
+  const atts = Array.isArray(attachments) ? attachments : [];
+  if (atts.length === 0) return null;
+  if (atts.length === 1) {
+    const a = atts[0];
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(0)}
+        data-testid="staff-chat-attach-tile"
+        className="block max-w-[220px] rounded-lg overflow-hidden mb-1 cursor-zoom-in"
+      >
+        <img src={a.thumbUrl || a.fullUrl} alt="" className="w-full h-auto" />
+      </button>
+    );
+  }
+  const layout = gridLayoutFor(atts.length);
+  const gridHeight = atts.length === 2 ? 118 : 158;
+  return (
+    <div
+      data-testid="staff-chat-attach-grid"
+      className="grid gap-0.5 rounded-lg overflow-hidden mb-1"
+      style={{ gridTemplateColumns: layout.cols, gridTemplateRows: layout.rows || undefined, width: 240, height: gridHeight }}
+    >
+      {atts.slice(0, layout.show).map((a, i) => {
+        const isLast = i === layout.show - 1;
+        const overflow = isLast && layout.overflow > 0 ? layout.overflow : 0;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onOpen(i)}
+            data-testid="staff-chat-attach-tile"
+            className="relative overflow-hidden cursor-zoom-in"
+            style={layout.firstBig && i === 0 ? { gridRow: 'span 2' } : undefined}
+          >
+            <img src={a.thumbUrl || a.fullUrl} alt="" className="w-full h-full object-cover block" />
+            {overflow > 0 && (
+              <span className="absolute inset-0 bg-black/55 text-white text-lg font-bold flex items-center justify-center">
+                +{overflow}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function formatTime(createdAt) {
   if (!createdAt) return '';
@@ -21,8 +75,9 @@ function formatTime(createdAt) {
 }
 
 export function StaffChatMessage({ message, isOwn, onReply }) {
-  // V73 Feature F — local lightbox toggle for attachment view.
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  // V73 Feature F — local lightbox state. (2026-05-22) null = closed; else
+  // { images, start } so the swipe lightbox opens at the clicked image.
+  const [lightbox, setLightbox] = useState(null);
   // V73 color-picker (2026-05-18) — resolve sender color from message doc.
   const senderColor = resolveSenderColor(message, isOwn);
   const bubbleStyle = {
@@ -76,16 +131,24 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           style={bubbleStyle}
           data-testid={`staff-chat-message-bubble-${message.id}`}
         >
-          {message.attachmentUrl && (
+          {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
+            <div data-testid={`staff-chat-message-image-${message.id}`}>
+              <AttachmentGrid
+                attachments={message.attachments}
+                onOpen={(i) => setLightbox({ images: message.attachments, start: i })}
+              />
+            </div>
+          ) : message.attachmentUrl ? (
+            // Legacy V73 single-image message (attachmentUrl scalar) — still renders.
             <button
               type="button"
-              onClick={() => setLightboxOpen(true)}
+              onClick={() => setLightbox({ images: [{ fullUrl: message.attachmentUrl, thumbUrl: message.attachmentUrl }], start: 0 })}
               data-testid={`staff-chat-message-image-${message.id}`}
               className="block max-w-[200px] rounded-lg overflow-hidden mb-1 cursor-zoom-in"
             >
               <img src={message.attachmentUrl} alt="" className="w-full h-auto" />
             </button>
-          )}
+          ) : null}
           {message.text && <StaffChatMessageBody text={message.text} />}
         </div>
         {onReply && (
@@ -104,8 +167,12 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
       <div className="text-[9px] text-[var(--tx-muted)] mt-0.5 px-1">
         {formatTime(message.createdAt)}
       </div>
-      {lightboxOpen && (
-        <StaffChatImageLightbox src={message.attachmentUrl} onClose={() => setLightboxOpen(false)} />
+      {lightbox && (
+        <StaffChatImageLightbox
+          images={lightbox.images}
+          startIndex={lightbox.start}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </div>
   );

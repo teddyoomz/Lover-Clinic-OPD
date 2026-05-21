@@ -45,6 +45,9 @@
     "api/cron/chart-edit-session-sweep.js": {
       "maxDuration": 60
     },
+    "api/cron/staff-chat-retention-sweep.js": {
+      "maxDuration": 300
+    },
     "api/admin/customer-only-backup-export.js": {
       "maxDuration": 300
     },
@@ -64,6 +67,7 @@
     { "path": "/api/cron/line-reminder-retry", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/whole-system-backup-daily", "schedule": "0 20 * * *" },
     { "path": "/api/cron/stock-movement-retention", "schedule": "30 20 * * *" },
-    { "path": "/api/cron/chart-edit-session-sweep", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/chart-edit-session-sweep", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/staff-chat-retention-sweep", "schedule": "45 19 * * *" }
   ]
 }
