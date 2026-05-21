@@ -37,8 +37,12 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
   };
 
   const handleSave = (chartData) => {
-    // Ensure fabricJson is serialized as string for reliable storage/restore
-    const fabricJson = typeof chartData.fabricJson === 'string' ? chartData.fabricJson : JSON.stringify(chartData.fabricJson);
+    // fabricJson is ALREADY a JSON string (serializeFabricCanvas / useChartEditSession) or null when
+    // there is no object data. Keep null when absent — JSON.stringify(null) persists the useless string
+    // "null" (masks "no object data", bloats the doc, and is truthy → fools `if (fabricJson)`). Defensive:
+    // a raw object still stringifies; only null/undefined → null. (Found via Rule Q adversarial pass.)
+    const fj = chartData.fabricJson;
+    const fabricJson = typeof fj === 'string' ? fj : (fj == null ? null : JSON.stringify(fj));
     const entry = { ...chartData, fabricJson, template: canvasTemplate, savedAt: new Date().toISOString() };
     if (editingIdx >= 0) {
       onChartsChange(prev => prev.map((c, i) => i === editingIdx ? entry : c));

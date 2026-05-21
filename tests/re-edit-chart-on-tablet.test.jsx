@@ -158,3 +158,32 @@ describe('RT6 re-edit result merges into the SAME slot (Rule I: handleEdit → o
     expect(capped).toHaveLength(2); // cap holds
   });
 });
+
+// ── RT8: handleSave must NEVER persist the STRING "null" for absent object data ──
+// Found via the Rule Q adversarial pass (diag-chart-relay-adversarial / diag-chart-fabricjson-dump):
+// 2 real prod charts had fabricJson === "null" (4-char string) because the old code did
+// JSON.stringify(chartData.fabricJson) on a JS-null fabricJson. Graceful on read (JSON.parse("null")
+// → null → raster fallback) but wrong: pollutes data, masks "no object data", and "null" is truthy.
+describe('RT8 handleSave never persists the string "null" (absent object data → JS null)', () => {
+  it('RT8.1 onSaved with fabricJson:null → entry.fabricJson is JS null, NOT the string "null"', () => {
+    const onChartsChange = vi.fn();
+    render(<ChartSection {...props([], onChartsChange)} />);
+    act(() => capturedOnSaved({ dataUrl: 'data:image/png;base64,X', fabricJson: null, templateId: 't', source: 'tablet' }));
+    const out = onChartsChange.mock.calls.at(-1)[0]([]);
+    expect(out).toHaveLength(1);
+    expect(out[0].fabricJson).toBeNull();
+    expect(out[0].fabricJson).not.toBe('null');
+  });
+  it('RT8.2 a real JSON-string fabricJson is kept verbatim (not double-encoded)', () => {
+    const onChartsChange = vi.fn();
+    render(<ChartSection {...props([], onChartsChange)} />);
+    const json = '{"objects":[],"canvasWidth":600,"canvasHeight":800}';
+    act(() => capturedOnSaved({ dataUrl: 'data:image/png;base64,X', fabricJson: json, templateId: 't', source: 'tablet' }));
+    const out = onChartsChange.mock.calls.at(-1)[0]([]);
+    expect(out[0].fabricJson).toBe(json);
+  });
+  it('RT8.3 source: no JSON.stringify(chartData.fabricJson) (the null→"null" bug pattern)', () => {
+    const section = fs.readFileSync('src/components/ChartSection.jsx', 'utf8');
+    expect(section).not.toMatch(/JSON\.stringify\(chartData\.fabricJson\)/);
+  });
+});
