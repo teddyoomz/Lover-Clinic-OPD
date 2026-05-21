@@ -109,3 +109,38 @@ describe('F2 wiring source-grep (AV103 — fabricJson transport, no fabricJson:n
     expect(canvas).toMatch(/mouse:down|mouse:move|mouse:up/);
   });
 });
+
+// RC — root-cause regression for the user-reported "ภาพไม่ขึ้น + วาดไม่ติด + กดบันทึกไม่ได้".
+// Cause: the fabric init effect was keyed on templateImageUrl, so the LATE template (instant-pop
+// race, ''→dataUrl) re-ran it → cleanup fc.dispose() removed the React-owned <canvas> → re-init
+// could not recover (elRef.current null) → fcRef=null → blank template + no draw + broken save.
+// Verified live in a real browser: after the late template, the canvas was GONE (wrappers=0,
+// fcRef=null). Fix: init the canvas ONCE ([] deps) + load/replace the template on the LIVE canvas
+// in a separate effect (mirror PC ChartCanvas + old PenCanvas). Class: React↔DOM-library
+// ownership — a library that takes over a React-owned element must be initialized ONCE; reactive
+// prop updates mutate the live instance, never dispose+re-init.
+describe('RC root-cause: canvas init-once; template on live canvas; no dispose on prop change', () => {
+  const canvasSrc = fs.readFileSync('src/components/tablet-chart/TabletChartCanvas.jsx', 'utf8');
+  it('RC1 the fabric init effect uses [] deps (init ONCE) — NOT keyed on templateImageUrl', () => {
+    expect(canvasSrc).toMatch(/\}, \[\]\);\s*\/\/ eslint-disable-line[\s\S]*?init ONCE/);
+    const initStart = canvasSrc.indexOf('init fabric ONCE');
+    const initEnd = canvasSrc.indexOf('load/replace the template on the LIVE canvas');
+    expect(initStart).toBeGreaterThan(-1); expect(initEnd).toBeGreaterThan(initStart);
+    const initBlock = canvasSrc.slice(initStart, initEnd);
+    expect(initBlock).toContain('new fabric.Canvas');
+    expect(initBlock).toContain('fc.dispose()');
+    expect(initBlock).not.toMatch(/\}, \[templateImageUrl/);   // init MUST NOT re-run on template change
+  });
+  it('RC2 a separate effect loads the template on the live canvas keyed on templateImageUrl', () => {
+    expect(canvasSrc).toMatch(/useEffect\(\(\) => \{ if \(readyRef\.current\) loadTemplate\(templateImageUrl\); \}, \[templateImageUrl/);
+  });
+  it('RC3 loadTemplate mutates the existing fcRef canvas — never disposes / news a Canvas', () => {
+    const ltStart = canvasSrc.indexOf('const loadTemplate = useCallback');
+    const ltEnd = canvasSrc.indexOf('// ── pen:');
+    expect(ltStart).toBeGreaterThan(-1); expect(ltEnd).toBeGreaterThan(ltStart);
+    const lt = canvasSrc.slice(ltStart, ltEnd);
+    expect(lt).toContain('fcRef.current');
+    expect(lt).not.toContain('new fabric.Canvas');
+    expect(lt).not.toContain('.dispose(');
+  });
+});

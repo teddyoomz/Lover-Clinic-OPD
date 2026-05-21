@@ -9,13 +9,24 @@ import { isDrawTool, isShapeTool } from '../../lib/tabletChartTools.js';
 // text, select/move/resize are Fabric-native. Eraser = object-granular tap + scrub
 // (getBoundingRect hit-test, no new dependency). Same ref API as the old PenCanvas
 // (exportDataUrl/undo/redo/clear) + exportFabricJson + deleteSelected.
+//
+// CRITICAL (root-cause fix): the Fabric canvas is initialized EXACTLY ONCE (init effect has
+// [] deps). The template is loaded/replaced on the LIVE canvas by a SEPARATE effect keyed on
+// templateImageUrl. Putting templateImageUrl in the init effect's deps was a bug: the template
+// arrives late via the instant-pop race (''→dataUrl), so the effect re-ran → cleanup
+// `fc.dispose()` removed the React-owned <canvas> → the re-init could not recover (elRef.current
+// null) → fcRef=null → blank template + no drawing + broken save. Init-once + a template effect
+// (mirror PC ChartCanvas / old PenCanvas) avoids the React↔Fabric DOM-ownership conflict.
 // props: templateImageUrl, tool, color, size, onRequestSelect (auto-switch after shape/text).
 const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, tool, color, size, onRequestSelect }, ref) {
   const elRef = useRef(null);
   const fcRef = useRef(null);
   const fabricRef = useRef(null);
+  const wrapRef = useRef(null);            // the outer flex container (captured before Fabric wraps the canvas)
   const templateObjRef = useRef(null);
   const hasTemplateRef = useRef(false);
+  const templateUrlRef = useRef(templateImageUrl); templateUrlRef.current = templateImageUrl;  // always-current (race-safe)
+  const loadedTplRef = useRef(undefined);  // the template url currently loaded on the canvas
   const toolRef = useRef({ tool, color, size }); toolRef.current = { tool, color, size };
   const onSelectRef = useRef(onRequestSelect); onSelectRef.current = onRequestSelect;
   const histRef = useRef([]); const hiRef = useRef(-1);
@@ -31,6 +42,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     const h = histRef.current; h.length = hiRef.current + 1; h.push(json);
     if (h.length > 40) h.shift(); hiRef.current = h.length - 1;
   }, []);
+  const baselineHistory = () => { const fc = fcRef.current; if (!fc) return; histRef.current = [JSON.stringify(fc.toJSON())]; hiRef.current = 0; };
 
   // Apply current tool to the canvas: only 'select' makes objects interactive; all other
   // tools turn selection off + skipTargetFind on (we drive draw/shape/text/erase ourselves).
@@ -51,6 +63,33 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     const first = fc.getObjects()[0];
     if (first) { first.set({ selectable: false, evented: false, hoverCursor: 'default' }); templateObjRef.current = first; }
   };
+
+  // Load / replace the locked template image on the LIVE canvas + fit the canvas to its true
+  // ratio. Safe to call repeatedly (idempotent on the same url). Operates on the existing
+  // fcRef — NEVER disposes/recreates the canvas.
+  const loadTemplate = useCallback(async (url) => {
+    const fc = fcRef.current, fabric = fabricRef.current; if (!fc || !fabric) return;
+    if (url === loadedTplRef.current) return;
+    loadedTplRef.current = url;
+    if (templateObjRef.current) { fc.remove(templateObjRef.current); templateObjRef.current = null; }
+    hasTemplateRef.current = false;
+    const wrap = wrapRef.current;
+    const maxW = (wrap?.clientWidth || 700) - 8, maxH = (wrap?.clientHeight || 800) - 8;
+    if (!url) { fc.setDimensions({ width: Math.min(maxW, Math.round(maxH * 0.78)), height: maxH }); fc.requestRenderAll(); baselineHistory(); return; }
+    const img = await new Promise((res) => { const i = new window.Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = url; });
+    if (!img || fcRef.current !== fc || loadedTplRef.current !== url) return;  // unmounted / superseded during load
+    const fi = new fabric.FabricImage(img);
+    const iw = fi.width || img.naturalWidth || 1, ih = fi.height || img.naturalHeight || 1;
+    const ar = iw / ih;
+    let cw, ch;
+    if (maxW / maxH > ar) { ch = maxH; cw = Math.round(maxH * ar); } else { cw = maxW; ch = Math.round(maxW / ar); }
+    const s = Math.min(cw / iw, ch / ih);
+    fi.set({ scaleX: s, scaleY: s, left: Math.round((cw - iw * s) / 2), top: Math.round((ch - ih * s) / 2), selectable: false, evented: false, hoverCursor: 'default', originX: 'left', originY: 'top' });
+    fc.setDimensions({ width: cw, height: ch });
+    fc.add(fi); fc.sendObjectToBack(fi); templateObjRef.current = fi; hasTemplateRef.current = true;
+    fc.requestRenderAll();
+    baselineHistory();   // template is part of the baseline → undo never removes it
+  }, []);
 
   // ── pen: rebuild the fabric.Path from accumulated pressure points (Fabric renders) ──
   const renderPenStroke = () => {
@@ -130,7 +169,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     }
   };
 
-  // init fabric + locked template at true ratio (mirror ChartCanvas fit logic)
+  // init fabric ONCE ([] deps) — NEVER re-inits on prop change (avoids React↔Fabric DOM conflict)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -138,26 +177,13 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
       if (cancelled || !elRef.current) return;
       await new Promise(r => setTimeout(r, 30));                 // let flex layout settle
       if (cancelled || !elRef.current) return;                   // may have unmounted during the wait
-      const wrap = elRef.current.parentElement;
+      const wrap = elRef.current.parentElement; wrapRef.current = wrap;
       const maxW = (wrap?.clientWidth || 700) - 8, maxH = (wrap?.clientHeight || 800) - 8;
-      const mkImg = (src) => new Promise((res) => { const i = new window.Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
-      let cw = Math.min(maxW, Math.round(maxH * 0.78)), ch = maxH, imgEl = null;
-      if (templateImageUrl) {
-        imgEl = await mkImg(templateImageUrl);
-        if (imgEl) { const ar = (imgEl.naturalWidth || 1) / (imgEl.naturalHeight || 1);
-          if (maxW / maxH > ar) { ch = maxH; cw = Math.round(maxH * ar); } else { cw = maxW; ch = Math.round(maxW / ar); } }
-      }
-      if (cancelled || !elRef.current) return;
+      const cw = Math.min(maxW, Math.round(maxH * 0.78)), ch = maxH;   // provisional; loadTemplate fits to ratio
       const fc = new fabric.Canvas(elRef.current, { width: cw, height: ch, backgroundColor: '#fff', isDrawingMode: false, selection: false, preserveObjectStacking: true, enableRetinaScaling: true });
-      fcRef.current = fc; hasTemplateRef.current = !!imgEl;
-      if (imgEl) {
-        const fi = new fabric.FabricImage(imgEl);
-        const s = Math.min(cw / fi.width, ch / fi.height);
-        fi.set({ scaleX: s, scaleY: s, left: Math.round((cw - fi.width * s) / 2), top: Math.round((ch - fi.height * s) / 2), selectable: false, evented: false, hoverCursor: 'default', originX: 'left', originY: 'top' });
-        fc.add(fi); fc.sendObjectToBack(fi); templateObjRef.current = fi;
-      }
+      fcRef.current = fc;
       fc.renderAll();
-      histRef.current = [JSON.stringify(fc.toJSON())]; hiRef.current = 0; readyRef.current = true;
+      baselineHistory(); readyRef.current = true;
       fc.on('object:modified', pushHistory);
 
       fc.on('mouse:down', (opt) => {
@@ -185,9 +211,13 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
       };
       fc.on('mouse:up', finish);
       applyTool();
+      loadTemplate(templateUrlRef.current);   // load whatever template is current (race-safe via the ref)
     })();
-    return () => { cancelled = true; const fc = fcRef.current; if (fc) { try { fc.dispose(); } catch { /* ignore */ } fcRef.current = null; } readyRef.current = false; templateObjRef.current = null; };
-  }, [templateImageUrl, pushHistory, applyTool]);
+    return () => { cancelled = true; const fc = fcRef.current; if (fc) { try { fc.dispose(); } catch { /* ignore */ } fcRef.current = null; } readyRef.current = false; templateObjRef.current = null; loadedTplRef.current = undefined; };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps  ← init ONCE; template handled by the effect below
+
+  // load/replace the template on the LIVE canvas when it arrives/changes (no re-init)
+  useEffect(() => { if (readyRef.current) loadTemplate(templateImageUrl); }, [templateImageUrl, loadTemplate]);
 
   // react to tool change (color/size are read live from toolRef at draw time)
   useEffect(() => { applyTool(); }, [tool, applyTool]);
