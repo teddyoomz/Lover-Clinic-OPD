@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tablet Chart Editor — Pro Toolset Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Tablet Chart Editor — Pro Toolset Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute task-by-task (inline via executing-plans — chosen because the project baseline thrashes subagents, per V81/V86). Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-21-tablet-chart-more-tools-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Upgrade the tablet chart editor from a flat raster canvas to a full Fabric v7 object editor (select/move/resize + line/arrow/rect/circle/text + color picker), keeping the perfect-freehand pressure pen, and transporting a lossless <code>fabricJson</code> to the PC alongside the flattened PNG.</p>
+  <p><strong>Architecture:</strong> Fabric v7 object model (reuse PC <code>ChartCanvas</code> patterns: locked template image, shapes, Textbox, JSON-history undo/redo, toDataURL). Pen = direct pointer-capture (mirror <code>PenCanvas</code> palm-rejection/coalesced) → <code>fabric.Path</code> from perfect-freehand outline on pointer-up (NOT BaseBrush subclass — avoids v7 brush-internal assumptions). Eraser = object-granular tap+scrub. Relay protocol unchanged; transport payload grows by one JSON Storage blob.</p>
+  <p><strong>Tech Stack:</strong> React 19, Fabric v7.2 (lazy-imported), perfect-freehand 1.2, Firebase Storage, Vitest, Claude Preview (L1) + admin/client-SDK e2e (L2).</p>
+  <p><strong>Verification mandate (user, this turn):</strong> EVERY tool must draw 100%, be erasable 100%, and round-trip to the PC carrying its object 100% — verified per Rule Q (real browser L1 + real-SDK L2), not mocks.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">iPad editor — tool rail (left) + canvas, object selected</div>
+  <div style="display:flex;gap:10px;background:#0a0a0a;border-radius:8px;padding:8px">
+    <div style="display:flex;flex-direction:column;gap:5px;align-items:center;font-size:15px">
+      <span style="width:34px;height:34px;border-radius:7px;background:#10b981;color:#000;display:flex;align-items:center;justify-content:center">↖</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;display:flex;align-items:center;justify-content:center">✏️</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;display:flex;align-items:center;justify-content:center">🖍️</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;color:#eee;display:flex;align-items:center;justify-content:center">╱</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;color:#eee;display:flex;align-items:center;justify-content:center">↗</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;color:#eee;display:flex;align-items:center;justify-content:center;font-size:13px">▭</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;color:#eee;display:flex;align-items:center;justify-content:center">◯</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;color:#eee;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">T</span>
+      <span style="width:34px;height:34px;border-radius:7px;background:#262626;display:flex;align-items:center;justify-content:center">🧽</span>
+    </div>
+    <div style="flex:1;background:#fff;border-radius:6px;min-height:160px;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:12px">[ template + marks · selected box with handles ]</div>
+  </div>
+</div>
+<p>Full visual detail (per-state + interaction table) lives in the spec's Mockup Design section — render <code>docs/superpowers/specs/2026-05-21-tablet-chart-more-tools-design.html</code> in a browser.</p>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Save → transport → merge (relay protocol UNCHANGED; payload grows by result.json)</div>
+<pre style="background:#fff;border:1px solid #e5e5e5;margin:0">
+ TABLET onSave                                    PC useChartEditSession (status==='saved')
+ ───────────                                      ─────────────────────────────────────────
+ png  = canvas.toDataURL(png, multiplier 2)  ──▶ Storage result.png  ─▶ dataUrl   = download(resultImageUrl)
+ json = JSON.stringify(canvas.toJSON())       ─▶ Storage result.json ─▶ fabricJson= download(resultFabricJsonUrl) [guarded]
+ updateSession{ status:'saved',                                          onSaved({dataUrl, fabricJson, templateId, source:'tablet'})
+   resultImageUrl, resultFabricJsonUrl }                              ─▶ ChartSection.handleSave → charts[]  (PNG shows; fabricJson stored)
+                                                                      ─▶ delete session + cleanup Storage + free tablet (existing teardown)
+</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Tool interaction</div>
+<pre style="background:#fff;border:1px solid #e5e5e5;margin:0">
+ setTool(id) → TabletChartCanvas reacts:
+   pen/highlighter → isDrawingMode off; OUR pointer capture: down→move(coalesced)→up
+                     → fabric.Path(outlineToSvgPath(getStroke(pts))) added (selectable)
+   line/arrow/rect/circle → isDrawingMode off; drag start→end → add fabric object → auto setTool('select')
+   text            → tap → fabric.Textbox (editing) → type → commit
+   select          → tap object → handles: drag move / corner resize / rotate
+   eraser          → tap object → remove; drag → remove every object the path intersects
+   undo/redo       → loadFromJSON(history[idx∓1])   ·   clear → remove all but locked template
+ every commit → pushHistory() (toJSON snapshot, 40 deep)
+</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/penStroke.js</code></td><td>Modify</td><td>Add pure <code>outlineToSvgPath(outline)</code> (getStroke outline → SVG path d-string for fabric.Path).</td></tr>
+  <tr><td><code>src/lib/tabletChartTools.js</code></td><td>Create</td><td>Pure tool descriptors: <code>TOOL_IDS</code>, <code>isDrawTool</code>, <code>isShapeTool</code>, <code>shapeObjectType(tool)</code> (line→'path'/'line', arrow→'group', rect→'rect', circle→'ellipse', text→'textbox', pen→'path'). Pure, fully unit-testable.</td></tr>
+  <tr><td><code>src/lib/chartEditSession.js</code></td><td>Modify</td><td>Add <code>uploadTransportJson(sessionId, kind, obj)</code> + <code>downloadTransportJson(url)</code> (mirror the PNG helpers; store as <code>{kind}.json</code>).</td></tr>
+  <tr><td><code>src/lib/chartEditSessionCore.js</code></td><td>Modify</td><td>Allow <code>resultFabricJsonUrl</code> in the session-doc field allow-list (still URL-only).</td></tr>
+  <tr><td><code>src/components/tablet-chart/TabletChartCanvas.jsx</code></td><td>Create</td><td>Fabric v7 canvas (lazy <code>import('fabric')</code>). Ref API: <code>exportDataUrl, exportFabricJson, undo, redo, clear, deleteSelected</code>. Props: <code>templateImageUrl, tool, color, size</code>. Pen pointer-capture + palm rejection; shapes; text; eraser tap+scrub; locked template fit-to-ratio; JSON history.</td></tr>
+  <tr><td><code>src/components/tablet-chart/EditorToolRail.jsx</code></td><td>Modify</td><td>Add tools select/line/arrow/rect/circle/text/eraser + 🎨 <code>&lt;input type=color&gt;</code>. Keep colors/sizes/undo/redo/clear. Preserve+extend <code>data-testid</code>s.</td></tr>
+  <tr><td><code>src/pages/TabletChartEditorPage.jsx</code></td><td>Modify</td><td>Swap <code>PenCanvas</code>→<code>TabletChartCanvas</code>; <code>onSave</code> also exports+uploads fabricJson + sets <code>resultFabricJsonUrl</code>. Relay/heartbeat/standby/instant-pop unchanged.</td></tr>
+  <tr><td><code>src/hooks/useChartEditSession.js</code></td><td>Modify</td><td>On <code>saved</code>: also download <code>resultFabricJsonUrl</code> (guarded) → pass real <code>fabricJson</code> to <code>onSaved</code>.</td></tr>
+  <tr><td><code>src/components/tablet-chart/PenCanvas.jsx</code></td><td>Keep</td><td>Leave file (no importer after swap). Not deleted — zero-risk; remove in a later cleanup if desired.</td></tr>
+  <tr><td><code>tests/tablet-chart-more-tools.test.js</code></td><td>Create</td><td>Pure units: outlineToSvgPath, tool descriptors, transport JSON helpers (mocked storage).</td></tr>
+  <tr><td><code>tests/tablet-chart-more-tools-flow-simulate.test.js</code></td><td>Create</td><td>Rule I: per-tool object-type → export-json contains it → transport round-trip → merge shape carries fabricJson. Source-grep wiring + AV103.</td></tr>
+  <tr><td><code>scripts/e2e-tablet-chart-more-tools.mjs</code></td><td>Create</td><td>Rule Q L2: real prod Storage round-trip of result.png + result.json; assert downloaded json parses + carries each object type; cleanup.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+<h3>Task 1: Pure helpers — outlineToSvgPath + tool descriptors (risk-free foundation)</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/penStroke.js</code>; Create <code>src/lib/tabletChartTools.js</code>; Test <code>tests/tablet-chart-more-tools.test.js</code>.</p>
+
+<div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Failing test for outlineToSvgPath + tool descriptors</strong></label></div>
+<pre><code>// tests/tablet-chart-more-tools.test.js
+import { describe, it, expect, vi } from 'vitest';
+import { outlineToSvgPath, strokeOutline, PEN_PRESETS } from '../src/lib/penStroke.js';
+import { TOOL_IDS, isDrawTool, isShapeTool, shapeObjectType } from '../src/lib/tabletChartTools.js';
+
+describe('U1 outlineToSvgPath', () => {
+  it('U1.1 empty outline → empty string', () => { expect(outlineToSvgPath([])).toBe(''); });
+  it('U1.2 builds a closed M/L/Z path', () => {
+    const d = outlineToSvgPath([[0,0],[10,0],[10,10]]);
+    expect(d.startsWith('M0 0')).toBe(true);
+    expect(d).toContain('L10 0'); expect(d.endsWith('Z')).toBe(true);
+  });
+  it('U1.3 real perfect-freehand outline → non-empty closed path', () => {
+    const out = strokeOutline([[0,0,0.5],[5,5,0.6],[10,2,0.5]], PEN_PRESETS.pen(4));
+    const d = outlineToSvgPath(out);
+    expect(d.length).toBeGreaterThan(5); expect(d.endsWith('Z')).toBe(true);
+  });
+});
+
+describe('U2 tool descriptors', () => {
+  it('U2.1 TOOL_IDS lists all 9 tools', () => {
+    expect(TOOL_IDS).toEqual(['select','pen','highlighter','line','arrow','rect','circle','text','eraser']);
+  });
+  it('U2.2 isDrawTool only pen/highlighter', () => {
+    expect(isDrawTool('pen')).toBe(true); expect(isDrawTool('highlighter')).toBe(true);
+    expect(isDrawTool('line')).toBe(false); expect(isDrawTool('select')).toBe(false);
+  });
+  it('U2.3 isShapeTool line/arrow/rect/circle', () => {
+    expect(['line','arrow','rect','circle'].every(isShapeTool)).toBe(true);
+    expect(isShapeTool('pen')).toBe(false); expect(isShapeTool('text')).toBe(false);
+  });
+  it('U2.4 shapeObjectType maps each tool to its fabric type', () => {
+    expect(shapeObjectType('rect')).toBe('rect');
+    expect(shapeObjectType('circle')).toBe('ellipse');
+    expect(shapeObjectType('line')).toBe('line');
+    expect(shapeObjectType('arrow')).toBe('group');
+    expect(shapeObjectType('text')).toBe('textbox');
+    expect(shapeObjectType('pen')).toBe('path');
+    expect(shapeObjectType('highlighter')).toBe('path');
+  });
+});</code></pre>
+
+<div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL (outlineToSvgPath / module not defined)</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools.test.js</code> · Expected: FAIL.</p>
+
+<div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code>// append to src/lib/penStroke.js
+// outline = array of [x,y] (perfect-freehand getStroke output). Build an SVG path
+// d-string (fabric.Path consumes a d-string, unlike Path2D). Numbers rounded to 2dp.
+export function outlineToSvgPath(outline) {
+  if (!outline || !outline.length) return '';
+  const r = (n) => Math.round(n * 100) / 100;
+  let d = `M${r(outline[0][0])} ${r(outline[0][1])}`;
+  for (let i = 1; i < outline.length; i++) d += ` L${r(outline[i][0])} ${r(outline[i][1])}`;
+  return d + ' Z';
+}</code></pre>
+<pre><code>// src/lib/tabletChartTools.js  (pure — no fabric/react import)
+export const TOOL_IDS = ['select','pen','highlighter','line','arrow','rect','circle','text','eraser'];
+export const isDrawTool  = (t) => t === 'pen' || t === 'highlighter';
+export const isShapeTool = (t) => t === 'line' || t === 'arrow' || t === 'rect' || t === 'circle';
+const TYPE = { pen:'path', highlighter:'path', line:'line', arrow:'group', rect:'rect', circle:'ellipse', text:'textbox' };
+export function shapeObjectType(tool) { return TYPE[tool] || 'path'; }</code></pre>
+
+<div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → PASS</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools.test.js</code> · Expected: U1 + U2 PASS.</p>
+
+<div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git add src/lib/penStroke.js src/lib/tabletChartTools.js tests/tablet-chart-more-tools.test.js
+git commit -m "feat(tablet-chart): pure helpers — outlineToSvgPath + tool descriptors"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 2: Transport JSON helpers + session-doc field</h3>
+<p><strong>Files:</strong> Modify <code>src/lib/chartEditSession.js</code>, <code>src/lib/chartEditSessionCore.js</code>; Test (extend) <code>tests/tablet-chart-more-tools.test.js</code>.</p>
+
+<div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Failing test (mock firebase/storage)</strong></label></div>
+<pre><code>// append to tests/tablet-chart-more-tools.test.js
+import { uploadTransportJson, downloadTransportJson } from '../src/lib/chartEditSession.js';
+
+vi.mock('firebase/storage', () => ({
+  ref: (_s, p) => ({ path: p }),
+  uploadString: vi.fn(async () => ({})),
+  getDownloadURL: vi.fn(async (r) => `https://storage/${r.path}`),
+  listAll: vi.fn(), deleteObject: vi.fn(),
+}));
+vi.mock('../src/firebase.js', () => ({ storage: {} }));
+
+describe('U3 transport JSON', () => {
+  it('U3.1 uploadTransportJson stores result.json + returns url', async () => {
+    const url = await uploadTransportJson('CES-x', 'result', { v: 5, objects: [{ type: 'rect' }] });
+    expect(url).toContain('uploads/chart-edit-sessions/CES-x/result.json');
+  });
+  it('U3.2 downloadTransportJson parses fetched text → object', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, text: async () => JSON.stringify({ objects: [{ type: 'textbox' }] }) }));
+    const obj = await downloadTransportJson('https://storage/x.json');
+    expect(obj.objects[0].type).toBe('textbox');
+  });
+  it('U3.3 downloadTransportJson returns null on fetch failure (no throw → no PC hang)', async () => {
+    global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
+    expect(await downloadTransportJson('https://storage/missing.json')).toBeNull();
+  });
+});</code></pre>
+
+<div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools.test.js -t U3</code> · Expected: FAIL.</p>
+
+<div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement</strong></label></div>
+<pre><code>// add to src/lib/chartEditSession.js (uses the existing `folder` + storage import)
+export async function uploadTransportJson(sessionId, kind, obj) {
+  const r = storageRef(storage, `${folder(sessionId)}/${kind}.json`);
+  await uploadString(r, JSON.stringify(obj), 'raw', { contentType: 'application/json' });
+  return getDownloadURL(r);
+}
+// Guarded: returns null on any failure so the PC merge never hangs (mirror result-download guard).
+export async function downloadTransportJson(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return JSON.parse(await res.text());
+  } catch { return null; }
+}</code></pre>
+<pre><code>// src/lib/chartEditSessionCore.js — add 'resultFabricJsonUrl' wherever the writable/known
+// session fields are enumerated (e.g. SESSION_FIELDS / sanitize allow-list). If the doc shape
+// is open (no allow-list), add a one-line comment documenting the new optional field. Verify by
+// grepping the file for resultImageUrl and adding resultFabricJsonUrl beside every occurrence.</code></pre>
+
+<div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools.test.js</code> · Expected: U1+U2+U3 PASS. Then <code>npm run build</code> → clean (V11 import-resolution guard).</p>
+
+<div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git add src/lib/chartEditSession.js src/lib/chartEditSessionCore.js tests/tablet-chart-more-tools.test.js
+git commit -m "feat(tablet-chart): result.json transport (fabricJson) + session field"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 3: TabletChartCanvas — Fabric editor with pressure pen (the core)</h3>
+<p><strong>Files:</strong> Create <code>src/components/tablet-chart/TabletChartCanvas.jsx</code>.</p>
+<p><strong>Note:</strong> Fabric requires a real DOM canvas (not jsdom) — this component is verified by L1 (Task 8, real browser) + source-grep, NOT vitest unit. Build the contract precisely; the pure logic it leans on (Task 1) is already tested.</p>
+
+<div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Implement the component</strong></label></div>
+<pre><code>import { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { strokeOutline, outlineToSvgPath, PEN_PRESETS } from '../../lib/penStroke.js';
+import { isDrawTool, isShapeTool } from '../../lib/tabletChartTools.js';
+
+// Fabric v7 object editor for the tablet. Same ref API as PenCanvas + extras.
+// Pen/highlighter use OUR pointer capture (palm rejection + coalesced events, mirror PenCanvas)
+// → fabric.Path from the perfect-freehand outline on pointerup (selectable object).
+// Everything else (select/shapes/text/eraser) is Fabric-native.
+const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, tool, color, size }, ref) {
+  const elRef = useRef(null);          // <canvas>
+  const fcRef = useRef(null);          // fabric.Canvas
+  const fabricRef = useRef(null);      // fabric module
+  const toolRef = useRef({ tool, color, size }); toolRef.current = { tool, color, size };
+  const histRef = useRef([]); const hiRef = useRef(-1);
+  const penRef = useRef(null);         // active freehand stroke { points, color, size, tool }
+  const penDownRef = useRef(false);    // palm rejection: a pen pointer is active
+  const shapeRef = useRef(null);       // in-progress shape { obj, startX, startY }
+
+  const pushHistory = useCallback(() => {
+    const fc = fcRef.current; if (!fc) return;
+    const json = JSON.stringify(fc.toJSON());
+    const h = histRef.current; h.length = hiRef.current + 1; h.push(json);
+    if (h.length > 40) h.shift(); hiRef.current = h.length - 1;
+  }, []);
+
+  // init fabric + load locked template at true ratio (mirror ChartCanvas fit logic)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fabric = await import('fabric'); fabricRef.current = fabric;
+      if (cancelled || !elRef.current) return;
+      const wrap = elRef.current.parentElement;
+      const maxW = (wrap?.clientWidth || 700) - 8, maxH = (wrap?.clientHeight || 800) - 8;
+      const mkImg = (src) => new Promise((res) => { const i = new window.Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+      let cw = Math.min(maxW, Math.round(maxH * 0.78)), ch = maxH, imgEl = null;
+      if (templateImageUrl) {
+        imgEl = await mkImg(templateImageUrl);
+        if (imgEl) { const ar = imgEl.naturalWidth / imgEl.naturalHeight;
+          if (maxW / maxH > ar) { ch = maxH; cw = Math.round(maxH * ar); } else { cw = maxW; ch = Math.round(maxW / ar); } }
+      }
+      const fc = new fabric.Canvas(elRef.current, { width: cw, height: ch, backgroundColor: '#fff', isDrawingMode: false, selection: true, enableRetinaScaling: true });
+      fcRef.current = fc;
+      if (imgEl) { const fi = new fabric.FabricImage(imgEl); const s = Math.min(cw / fi.width, ch / fi.height);
+        fi.set({ scaleX: s, scaleY: s, left: Math.round((cw - fi.width * s) / 2), top: Math.round((ch - fi.height * s) / 2), selectable: false, evented: false, hoverCursor: 'default', originX: 'left', originY: 'top' });
+        fc.add(fi); fc.sendObjectToBack(fi); }
+      fc.renderAll();
+      histRef.current = [JSON.stringify(fc.toJSON())]; hiRef.current = 0;
+      fc.on('object:modified', pushHistory);
+      // pen pointer capture on the upper canvas
+      const upper = fc.upperCanvasEl;
+      const pt = (e) => fc.getScenePoint(e);
+      const onDown = (e) => {
+        const { tool, color, size } = toolRef.current;
+        if (e.pointerType === 'touch' && penDownRef.current) return;            // palm rejection
+        if (e.pointerType === 'pen') penDownRef.current = true;
+        if (isDrawTool(tool)) { upper.setPointerCapture?.(e.pointerId); const p = pt(e); penRef.current = { tool, color, size, points: [[p.x, p.y, e.pressure || 0.5]] }; }
+        else if (isShapeTool(tool)) { upper.setPointerCapture?.(e.pointerId); const p = pt(e); startShape(fabric, fc, tool, color, size, p); }
+        else if (tool === 'eraser') { eraseAt(fc, pt(e)); }
+        else if (tool === 'text') { addText(fabric, fc, color, size, pt(e)); }
+      };
+      const onMove = (e) => {
+        if (penRef.current) { const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; for (const ev of evs) { const p = pt(ev); penRef.current.points.push([p.x, p.y, ev.pressure || 0.5]); } previewPen(fc); }
+        else if (shapeRef.current && toolRef.current.tool === 'eraser') { /* n/a */ }
+        else if (shapeRef.current) { updateShape(fc, pt(e)); }
+        else if (toolRef.current.tool === 'eraser' && (e.buttons & 1)) { eraseAt(fc, pt(e)); }   // scrub-delete
+      };
+      const onUp = (e) => {
+        if (e.pointerType === 'pen') penDownRef.current = false;
+        if (penRef.current) { commitPen(fabric, fc); }
+        else if (shapeRef.current) { commitShape(fc); }
+      };
+      upper.addEventListener('pointerdown', onDown); upper.addEventListener('pointermove', onMove);
+      upper.addEventListener('pointerup', onUp); upper.addEventListener('pointercancel', onUp);
+      fc.__teardown = () => { upper.removeEventListener('pointerdown', onDown); upper.removeEventListener('pointermove', onMove); upper.removeEventListener('pointerup', onUp); upper.removeEventListener('pointercancel', onUp); };
+    })();
+    return () => { cancelled = true; const fc = fcRef.current; if (fc) { fc.__teardown?.(); fc.dispose(); fcRef.current = null; } };
+  }, [templateImageUrl, pushHistory]);
+
+  // ── pen ──
+  const previewPen = (fc) => { const ctx = fc.contextTop; fc.clearContext(ctx); const s = penRef.current; const out = strokeOutline(s.points, s.tool === 'highlighter' ? PEN_PRESETS.highlighter(s.size) : PEN_PRESETS.pen(s.size)); if (!out.length) return; ctx.save(); ctx.globalAlpha = s.tool === 'highlighter' ? 0.4 : 1; ctx.fillStyle = s.color; const d = outlineToSvgPath(out); ctx.fill(new Path2D(d)); ctx.restore(); };
+  const commitPen = (fabric, fc) => { const s = penRef.current; penRef.current = null; fc.clearContext(fc.contextTop); if (s.points.length < 2) return; const out = strokeOutline(s.points, s.tool === 'highlighter' ? PEN_PRESETS.highlighter(s.size) : PEN_PRESETS.pen(s.size)); const d = outlineToSvgPath(out); if (!d) return; const path = new fabric.Path(d, { fill: s.color, opacity: s.tool === 'highlighter' ? 0.4 : 1, stroke: null, selectable: true, objectCaching: false }); fc.add(path); fc.requestRenderAll(); pushHistory(); };
+
+  // ── shapes ──
+  const startShape = (fabric, fc, tool, color, size, p) => {
+    let obj;
+    if (tool === 'rect') obj = new fabric.Rect({ left: p.x, top: p.y, width: 1, height: 1, fill: 'transparent', stroke: color, strokeWidth: size });
+    else if (tool === 'circle') obj = new fabric.Ellipse({ left: p.x, top: p.y, rx: 1, ry: 1, fill: 'transparent', stroke: color, strokeWidth: size });
+    else if (tool === 'line') obj = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: color, strokeWidth: size });
+    else if (tool === 'arrow') { const line = new fabric.Line([p.x, p.y, p.x, p.y], { stroke: color, strokeWidth: size }); const head = new fabric.Triangle({ left: p.x, top: p.y, width: size * 4, height: size * 4, fill: color, originX: 'center', originY: 'center' }); obj = new fabric.Group([line, head], { subTargetCheck: false }); obj.__isArrow = true; }
+    if (obj) { fc.add(obj); shapeRef.current = { obj, sx: p.x, sy: p.y, tool, color, size }; }
+  };
+  const updateShape = (fc, p) => { const s = shapeRef.current; if (!s) return; const o = s.obj;
+    if (s.tool === 'rect') o.set({ width: Math.abs(p.x - s.sx), height: Math.abs(p.y - s.sy), left: Math.min(p.x, s.sx), top: Math.min(p.y, s.sy) });
+    else if (s.tool === 'circle') o.set({ rx: Math.abs(p.x - s.sx) / 2, ry: Math.abs(p.y - s.sy) / 2, left: Math.min(p.x, s.sx), top: Math.min(p.y, s.sy) });
+    else if (s.tool === 'line') o.set({ x2: p.x, y2: p.y });
+    else if (s.tool === 'arrow') rebuildArrow(fc, s, p);
+    fc.requestRenderAll(); };
+  const rebuildArrow = (fc, s, p) => { fc.remove(s.obj); const fabric = fabricRef.current; const line = new fabric.Line([s.sx, s.sy, p.x, p.y], { stroke: s.color, strokeWidth: s.size }); const ang = Math.atan2(p.y - s.sy, p.x - s.sx) * 180 / Math.PI + 90; const head = new fabric.Triangle({ left: p.x, top: p.y, width: s.size * 4, height: s.size * 4, fill: s.color, originX: 'center', originY: 'center', angle: ang }); const g = new fabric.Group([line, head]); g.__isArrow = true; fc.add(g); s.obj = g; };
+  const commitShape = (fc) => { const s = shapeRef.current; shapeRef.current = null; if (!s) return; const o = s.obj; const tiny = (o.width != null && o.width < 3 && o.height != null && o.height < 3); if (tiny) fc.remove(o); else { fc.setActiveObject(o); pushHistory(); } fc.requestRenderAll(); setToolToSelect(); };
+
+  // ── text ──
+  const addText = (fabric, fc, color, size, p) => { const tb = new fabric.Textbox('ข้อความ', { left: p.x, top: p.y, fontSize: Math.max(16, size * 4), fill: color, fontFamily: 'sans-serif', width: 120 }); fc.add(tb); fc.setActiveObject(tb); tb.enterEditing?.(); tb.selectAll?.(); fc.requestRenderAll(); pushHistory(); setToolToSelect(); };
+
+  // ── eraser (object-granular) ──
+  const eraseAt = (fc, p) => { const fabric = fabricRef.current; const target = fc.getObjects().filter(o => o.selectable !== false).reverse().find(o => o.containsPoint?.(new fabric.Point(p.x, p.y)) || (o.getBoundingRect && pointInRect(p, o.getBoundingRect()))); if (target) { fc.remove(target); fc.requestRenderAll(); pushHistory(); } };
+  const pointInRect = (p, r) => p.x >= r.left && p.x <= r.left + r.width && p.y >= r.top && p.y <= r.top + r.height;
+
+  const setToolToSelect = () => { /* notify parent via prop callback handled in page; here we just leave Fabric in select mode */ const fc = fcRef.current; if (fc) fc.isDrawingMode = false; };
+
+  // react to tool/color/size changes
+  useEffect(() => { const fc = fcRef.current; if (!fc) return; fc.isDrawingMode = false; fc.selection = (tool === 'select'); fc.skipTargetFind = (tool !== 'select' && tool !== 'eraser'); fc.defaultCursor = tool === 'eraser' ? 'crosshair' : 'default'; fc.forEachObject(o => { if (o.selectable !== false) { o.selectable = (tool === 'select'); o.evented = (tool === 'select' || tool === 'eraser'); } }); fc.requestRenderAll(); }, [tool, color, size]);
+
+  useImperativeHandle(ref, () => ({
+    exportDataUrl: () => { const fc = fcRef.current; fc.discardActiveObject(); fc.requestRenderAll(); return fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 }); },
+    exportFabricJson: () => { const fc = fcRef.current; return fc ? JSON.stringify(fc.toJSON()) : null; },
+    undo: async () => { if (hiRef.current <= 0) return; hiRef.current--; await fcRef.current.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); reLock(); fcRef.current.requestRenderAll(); },
+    redo: async () => { if (hiRef.current >= histRef.current.length - 1) return; hiRef.current++; await fcRef.current.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); reLock(); fcRef.current.requestRenderAll(); },
+    clear: () => { const fc = fcRef.current; const objs = fc.getObjects(); for (let i = objs.length - 1; i >= 0; i--) if (objs[i].selectable !== false) fc.remove(objs[i]); fc.requestRenderAll(); pushHistory(); },
+    deleteSelected: () => { const fc = fcRef.current; const a = fc.getActiveObjects?.() || []; a.forEach(o => o.selectable !== false && fc.remove(o)); fc.discardActiveObject(); fc.requestRenderAll(); if (a.length) pushHistory(); },
+  }), [pushHistory]);
+  const reLock = () => { const fc = fcRef.current; fc.getObjects().forEach((o, i) => { if (i === 0) o.set({ selectable: false, evented: false }); }); };
+
+  return (<canvas ref={elRef} style={{ touchAction: 'none', background: '#fff', display: 'block' }} />);
+});
+export default TabletChartCanvas;</code></pre>
+<p><strong>Verify Fabric v7 method names at implementation time</strong> (research-gap): <code>getScenePoint</code>, <code>contextTop</code>/<code>clearContext</code>, <code>FabricImage</code>, <code>Ellipse</code>, <code>Triangle</code>, <code>Textbox.enterEditing</code>, <code>sendObjectToBack</code>, <code>loadFromJSON</code>. If a name differs in 7.2, adapt (these are the documented v6/7 names). The Task 8 L1 spike validates the pen path FIRST before trusting the rest.</p>
+
+<div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Build clean</strong></label></div>
+<p>Run: <code>npm run build</code> · Expected: clean (imports resolve).</p>
+
+<div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add src/components/tablet-chart/TabletChartCanvas.jsx
+git commit -m "feat(tablet-chart): TabletChartCanvas — Fabric v7 editor + pressure pen"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 4: EditorToolRail — full toolset + color picker</h3>
+<p><strong>Files:</strong> Modify <code>src/components/tablet-chart/EditorToolRail.jsx</code>; Test <code>tests/tablet-chart-more-tools-flow-simulate.test.js</code> (RTL part).</p>
+
+<div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Failing RTL test</strong></label></div>
+<pre><code>// tests/tablet-chart-more-tools-flow-simulate.test.js  (RTL section)
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import EditorToolRail from '../src/components/tablet-chart/EditorToolRail.jsx';
+
+describe('R1 tool rail', () => {
+  const base = { tool:'pen', setTool: vi.fn(), color:'#ef4444', setColor: vi.fn(), size:4, setSize: vi.fn(), onUndo: vi.fn(), onRedo: vi.fn(), onClear: vi.fn(), onDelete: vi.fn() };
+  it('R1.1 renders all 9 tools', () => { render(<EditorToolRail {...base} />);
+    ['select','pen','highlighter','line','arrow','rect','circle','text','eraser'].forEach(id => expect(screen.getByTestId(`tool-${id}`)).toBeTruthy()); });
+  it('R1.2 clicking a tool calls setTool', () => { render(<EditorToolRail {...base} />); fireEvent.click(screen.getByTestId('tool-rect')); expect(base.setTool).toHaveBeenCalledWith('rect'); });
+  it('R1.3 freeform color picker calls setColor', () => { render(<EditorToolRail {...base} />); const picker = screen.getByTestId('color-picker'); fireEvent.input(picker, { target: { value: '#123456' } }); expect(base.setColor).toHaveBeenCalledWith('#123456'); });
+  it('R1.4 delete button calls onDelete', () => { render(<EditorToolRail {...base} />); fireEvent.click(screen.getByTestId('tool-delete')); expect(base.onDelete).toHaveBeenCalled(); });
+});</code></pre>
+
+<div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → FAIL</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools-flow-simulate.test.js -t R1</code> · Expected: FAIL.</p>
+
+<div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Implement (rewrite EditorToolRail)</strong></label></div>
+<pre><code>const COLORS = ['#ef4444', '#3b82f6', '#111111', '#16a34a', '#d69e2e', '#805ad5'];
+const SIZES = [4, 8, 14];
+const TOOLS = [
+  { id:'select', label:'↖' }, { id:'pen', label:'✏️' }, { id:'highlighter', label:'🖍️' },
+  { id:'line', label:'╱' }, { id:'arrow', label:'↗' }, { id:'rect', label:'▭' },
+  { id:'circle', label:'◯' }, { id:'text', label:'T' }, { id:'eraser', label:'🧽' },
+];
+export default function EditorToolRail({ tool, setTool, color, setColor, size, setSize, onUndo, onRedo, onClear, onDelete }) {
+  return (
+    <div className="flex flex-col gap-1.5 p-2 bg-neutral-900 border-r border-neutral-800 items-center select-none overflow-y-auto">
+      {TOOLS.map(t => (
+        <button key={t.id} data-testid={`tool-${t.id}`} aria-pressed={tool === t.id} onClick={() => setTool(t.id)}
+          className={`w-11 h-11 rounded-lg text-lg flex items-center justify-center ${tool === t.id ? 'bg-emerald-500 text-black' : 'bg-neutral-800 text-neutral-200'}`}>{t.label}</button>
+      ))}
+      <button data-testid="tool-delete" onClick={onDelete} className="w-11 h-11 rounded-lg bg-neutral-800 text-base">🗑️</button>
+      <div className="h-px w-6 bg-neutral-700 my-1" />
+      <button data-testid="tool-undo" onClick={onUndo} className="w-11 h-11 rounded-lg bg-neutral-800 text-lg">↩️</button>
+      <button data-testid="tool-redo" onClick={onRedo} className="w-11 h-11 rounded-lg bg-neutral-800 text-lg">↪️</button>
+      <button data-testid="tool-clear" onClick={onClear} className="w-11 h-11 rounded-lg bg-neutral-800 text-xs">ล้าง</button>
+      <div className="h-px w-6 bg-neutral-700 my-1" />
+      <div className="grid grid-cols-2 gap-1">
+        {COLORS.map(c => (
+          <button key={c} data-testid={`color-${c}`} onClick={() => setColor(c)}
+            className="w-5 h-5 rounded-full" style={{ background: c, outline: color === c ? '2px solid #fff' : 'none' }} />
+        ))}
+      </div>
+      <input data-testid="color-picker" type="color" value={color} onInput={e => setColor(e.target.value)}
+        className="w-9 h-6 rounded bg-transparent border border-neutral-600 cursor-pointer" title="เลือกสีอิสระ" />
+      <div className="flex flex-col gap-1 mt-1">
+        {SIZES.map(s => (
+          <button key={s} data-testid={`size-${s}`} onClick={() => setSize(s)}
+            className={`w-6 h-6 rounded-full mx-auto ${size === s ? 'ring-2 ring-emerald-400' : ''}`}
+            style={{ background: '#777', transform: `scale(${0.4 + s / 20})` }} />
+        ))}
+      </div>
+    </div>
+  );
+}</code></pre>
+
+<div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Run → PASS</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools-flow-simulate.test.js -t R1</code> · Expected: R1 PASS.</p>
+
+<div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git add src/components/tablet-chart/EditorToolRail.jsx tests/tablet-chart-more-tools-flow-simulate.test.js
+git commit -m "feat(tablet-chart): EditorToolRail full toolset + freeform color picker"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 5: Wire the page — swap canvas + upload fabricJson on save</h3>
+<p><strong>Files:</strong> Modify <code>src/pages/TabletChartEditorPage.jsx</code>, <code>src/hooks/useChartEditSession.js</code>.</p>
+
+<div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Page edits</strong></label></div>
+<pre><code>// TabletChartEditorPage.jsx
+// (a) import: replace PenCanvas with TabletChartCanvas; import uploadTransportJson from chartEditSession.
+// (b) onSave: export + upload BOTH png and fabricJson, set both URLs on the session doc.
+const onSave = useCallback(async () => {
+  if (!active) return;
+  const dataUrl = canvasRef.current.exportDataUrl();
+  const fabricJson = canvasRef.current.exportFabricJson();
+  const [url, jsonUrl] = await Promise.all([
+    uploadTransportImage(active.sessionId, 'result', dataUrl),
+    fabricJson ? uploadTransportJson(active.sessionId, 'result', JSON.parse(fabricJson)) : Promise.resolve(null),
+  ]);
+  await updateChartEditSession(active.sessionId, { status: SESSION_STATUS.SAVED, resultImageUrl: url, resultFabricJsonUrl: jsonUrl });
+  closeEditor(true);
+}, [active, closeEditor]);
+// (c) render: &lt;TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} tool={tool} color={color} size={size} /&gt;
+// (d) EditorToolRail: add onDelete={() =&gt; canvasRef.current.deleteSelected()}</code></pre>
+
+<div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Hook — receive fabricJson (guarded, no hang)</strong></label></div>
+<pre><code>// useChartEditSession.js — inside the status==='saved' branch, replace the merge block:
+if (doc.status === SESSION_STATUS.SAVED && doc.resultImageUrl) {
+  let merged = false;
+  try {
+    const dataUrl = await downloadTransportImageAsDataUrl(doc.resultImageUrl);
+    let fabricJson = null;
+    if (doc.resultFabricJsonUrl) { const j = await downloadTransportJson(doc.resultFabricJsonUrl); fabricJson = j ? JSON.stringify(j) : null; }
+    onSavedRef.current?.({ dataUrl, fabricJson, templateId: doc.template?.id || 'blank', source: 'tablet' });
+    merged = true;
+  } catch { setPhase('failed'); setError('รับรูปจากแท็บเล็ตไม่สำเร็จ — ลองใหม่'); }
+  await Promise.allSettled([deleteChartEditSession(sessionId), cleanupSessionStorage(sessionId), freeChartTablet(doc.tabletDeviceId)]);
+  teardown(); if (merged) setPhase('idle');
+}
+// import downloadTransportJson alongside the existing chartEditSession imports.</code></pre>
+
+<div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Build clean</strong></label></div>
+<p>Run: <code>npm run build</code> · Expected: clean.</p>
+
+<div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code>git add src/pages/TabletChartEditorPage.jsx src/hooks/useChartEditSession.js
+git commit -m "feat(tablet-chart): wire TabletChartCanvas + transport fabricJson to PC"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 6: Rule I flow-simulate + source-grep + AV103</h3>
+<p><strong>Files:</strong> Extend <code>tests/tablet-chart-more-tools-flow-simulate.test.js</code>; Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (AV103).</p>
+
+<div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Per-tool fidelity + transport simulate + wiring grep</strong></label></div>
+<pre><code>import fs from 'node:fs';
+import { shapeObjectType, TOOL_IDS } from '../src/lib/tabletChartTools.js';
+import { uploadTransportJson, downloadTransportJson } from '../src/lib/chartEditSession.js';
+
+describe('F1 per-tool object fidelity (each drawing tool yields its fabric object type)', () => {
+  // simulate the toJSON shape each tool produces — locks the contract the canvas must honor
+  const toolToObj = { pen:{type:'path'}, highlighter:{type:'path',opacity:0.4}, line:{type:'line'}, arrow:{type:'group'}, rect:{type:'rect'}, circle:{type:'ellipse'}, text:{type:'textbox'} };
+  it('F1.1 every non-select/eraser tool maps to a concrete fabric type', () => {
+    TOOL_IDS.filter(t => t!=='select' && t!=='eraser').forEach(t => expect(shapeObjectType(t)).toBe(toolToObj[t].type)); });
+  it('F1.2 a chart with one of every tool round-trips through transport with all types intact', async () => {
+    const json = { version:'7', objects: Object.values(toolToObj).map(o => ({ ...o })) };
+    const url = await uploadTransportJson('CES-sim', 'result', json);
+    expect(url).toContain('result.json');
+    global.fetch = vi.fn(async () => ({ ok:true, text: async () => JSON.stringify(json) }));
+    const back = await downloadTransportJson(url);
+    const types = back.objects.map(o => o.type).sort();
+    expect(types).toEqual(['ellipse','group','line','path','path','rect','textbox']); });
+});
+
+describe('F2 wiring source-grep', () => {
+  const page = fs.readFileSync('src/pages/TabletChartEditorPage.jsx','utf8');
+  const hook = fs.readFileSync('src/hooks/useChartEditSession.js','utf8');
+  it('F2.1 page imports TabletChartCanvas, not PenCanvas', () => { expect(page).toContain('TabletChartCanvas'); expect(page).not.toMatch(/import\s+PenCanvas/); });
+  it('F2.2 onSave uploads fabricJson + sets resultFabricJsonUrl', () => { expect(page).toContain('uploadTransportJson'); expect(page).toContain('resultFabricJsonUrl'); expect(page).toContain('exportFabricJson'); });
+  it('F2.3 hook downloads resultFabricJsonUrl + passes real fabricJson (not null)', () => { expect(hook).toContain('downloadTransportJson'); expect(hook).toContain('resultFabricJsonUrl'); expect(hook).not.toMatch(/fabricJson:\s*null/); });
+  it('F2.4 toolrail wired with onDelete + full toolset', () => { expect(page).toContain('onDelete'); });
+});</code></pre>
+
+<div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → PASS; add AV103</strong></label></div>
+<p>Run: <code>npm test -- --run tests/tablet-chart-more-tools-flow-simulate.test.js</code> · Expected: R1 + F1 + F2 PASS.</p>
+<pre><code>// AV103 (audit-anti-vibe-code SKILL.md): the tablet relay result MUST transport fabricJson
+// alongside the PNG; the PC merge MUST NOT pass `fabricJson: null` for a saved tablet result.
+// Grep: useChartEditSession.js must NOT contain /fabricJson:\s*null/ in the saved branch;
+// TabletChartEditorPage.jsx must contain uploadTransportJson + resultFabricJsonUrl.
+// Sanctioned exceptions: none.</code></pre>
+
+<div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add tests/tablet-chart-more-tools-flow-simulate.test.js .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "test(tablet-chart): per-tool fidelity + transport flow-simulate + AV103"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 7: Rule Q L2 — real-prod Storage round-trip e2e</h3>
+<p><strong>Files:</strong> Create <code>scripts/e2e-tablet-chart-more-tools.mjs</code> (mirror <code>scripts/e2e-tablet-chart-editor.mjs</code> env-load + admin SDK).</p>
+
+<div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the e2e</strong></label></div>
+<p>Script (admin SDK, <code>.env.local.prod</code>, Rule R/M pattern; <code>TEST-CES-</code> prefixed session id): build a fabricJson with one object of EVERY type (path, line, group, rect, ellipse, textbox) + a PNG dataUrl → <code>uploadTransportImage</code> + <code>uploadTransportJson</code> to real Storage → <code>downloadTransportImageAsDataUrl</code> + <code>downloadTransportJson</code> → assert (a) PNG data URL round-trips, (b) json parses, (c) every expected object type present, (d) the merged payload shape <code>{dataUrl, fabricJson, templateId, source:'tablet'}</code> has non-null fabricJson → cleanup <code>cleanupSessionStorage</code> → assert zero orphans. Print <code>PASS (N) FAIL (0)</code>.</p>
+
+<div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run against real prod</strong></label></div>
+<p>Run: <code>node scripts/e2e-tablet-chart-more-tools.mjs</code> (pull env first if needed: <code>vercel env pull .env.local.prod --environment=production</code>). Expected: PASS (all) FAIL 0; cleanup zero orphans.</p>
+
+<div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add scripts/e2e-tablet-chart-more-tools.mjs
+git commit -m "test(tablet-chart): Rule Q L2 e2e — fabricJson transport round-trip on real prod"</code></pre>
+</div>
+
+<div class="task">
+<h3>Task 8: Rule Q L1 — real-browser verification of EVERY tool (the user's 100% mandate)</h3>
+<p><strong>Tooling:</strong> Claude Preview (preview_start on the dev server) OR Playwright, driving <code>/?tablet=chart</code> against real Firestore. This is the decisive verification — mocks are insufficient (Rule Q).</p>
+
+<div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: PRESSURE-PEN SPIKE FIRST (de-risk)</strong></label></div>
+<p>Before trusting Tasks 3-5, open the editor in a real browser, select Pen, draw → assert a tapered stroke appears AND becomes a selectable object (switch to Select, click it, handles appear). If the Fabric pen-path commit fails, fix Task 3's <code>commitPen</code>/coords before proceeding.</p>
+
+<div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Per-tool matrix (draw + erase, ALL must pass)</strong></label></div>
+<p>For each of pen, highlighter, line, arrow, rect, circle, text: (a) draw it → object appears; (b) Select → move/resize/rotate works; (c) Eraser → tap removes it; (d) re-draw → Eraser scrub removes it. Record a screenshot per tool. Any tool that can't draw OR can't erase = STOP + fix.</p>
+
+<div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Save → PC round-trip (exportFabricJson contains each type)</strong></label></div>
+<p>Draw one of every tool → trigger Save → in the browser, before/at save, capture <code>exportFabricJson()</code> and assert it contains <code>path, line, group, rect, ellipse, textbox</code>. Confirm <code>exportDataUrl()</code> renders all marks + the template (un-stretched, true ratio). (Full two-device PC merge is harness-limited per the prior FP3 note; the L2 e2e (Task 7) proves the transport+merge shape on real prod — together they cover the round-trip.)</p>
+
+<div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Record evidence + honest scope</strong></label></div>
+<p>Save screenshots + the fabricJson type assertion to the session notes. State honestly what was L1-verified (each tool draws/erases/exports) vs L2-verified (transport/merge shape) vs harness-limited (live simultaneous two-device pop). No over-claim (Rule Q / V66).</p>
+</div>
+
+<div class="task">
+<h3>Task 9: Full regression + session-end</h3>
+<div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Full suite + build (Rule N batch-end)</strong></label></div>
+<p>Run: <code>npm test -- --run</code> (expect GREEN — fix any tablet-chart-editor-flow-simulate / chart-edit-session-backend regressions from the canvas swap as V21 fixups) + <code>npm run build</code> clean.</p>
+<div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: V-log + handoff + commit/push</strong></label></div>
+<p>Append a "Tablet Chart more-tools" entry (lessons: pointer-capture-over-BaseBrush, object-granular eraser, fabricJson transport, AV103). Update <code>.agents/active.md</code> + <code>SESSION_HANDOFF.md</code>. Commit + push. <strong>Do NOT deploy</strong> — await explicit "deploy" (V18).</p>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> toolset (T3+T4), eraser tap+scrub (T3 eraseAt + scrub in onMove; T8 verify), color palette+picker (T4), sizes (T4), undo/redo/clear (T3), PNG+fabricJson save (T2+T5), relay unchanged (T5 preserves status machine), ratio (T3 fit logic mirrors ChartCanvas; T8.3 asserts), per-tool 100% draw/erase/round-trip (T6 contract + T7 L2 + T8 L1). ✓ all covered.</p>
+<p><strong>Placeholder scan:</strong> none — every code step has concrete code; T7 describes the e2e shape with exact assertions; T8 is verification (no code). Fabric v7 method-name caveat is an explicit validation note, not a placeholder.</p>
+<p><strong>Type consistency:</strong> ref API names (<code>exportDataUrl/exportFabricJson/undo/redo/clear/deleteSelected</code>) consistent across T3 (defn), T5 (page calls), T8 (verify). <code>uploadTransportJson/downloadTransportJson</code> consistent T2↔T5↔T6↔T7. <code>resultFabricJsonUrl</code> consistent T2↔T5↔T6. Tool ids consistent T1↔T4↔T6.</p>
+
+</body>
+</html>
