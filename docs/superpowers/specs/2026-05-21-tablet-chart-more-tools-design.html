@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tablet Chart Editor — Pro Toolset Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background:#f0f0f0; padding:1px 4px; border-radius:3px; }
+    pre code { background:none; padding:0; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .ok { color:#16a34a; font-weight:700; }
+    .stretch { color:#d97706; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Tablet Chart Editor — Pro Toolset Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-21 · <strong>Status:</strong> Approved by user (Visual Companion option A; #2 + #6 upgraded "ให้ดีที่สุดเท่าที่จะทำได้เพื่อรองรับงานทุกรูปแบบ") · <strong>Implementation plan:</strong> [to be created by writing-plans → <code>docs/superpowers/plans/2026-05-21-tablet-chart-more-tools.html</code>]
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The Tablet Chart Editor relay (shipped + live) lets the clinician annotate a chart template on an iPad with an Apple-Pencil pressure pen, then merges the result into the patient's <code>charts[]</code> via the existing PC save path. Today the tablet canvas (<code>PenCanvas.jsx</code>) is a <strong>flat raster</strong>: it has the lovely perfect-freehand pressure pen + highlighter + a raster eraser + undo/redo/clear, but <strong>no object model</strong> — you cannot select, move, resize, or layer anything, and there are no shapes, arrows, or text. Clinicians need a professional annotation toolset (mark regions, draw arrows to spots, label with text, box areas, then nudge/resize those marks) — the same capability the PC editor (<code>ChartCanvas.jsx</code>, Fabric.js) already has, but <em>with the pressure-pen feel preserved</em>.</p>
+<p><strong>Goal:</strong> upgrade the tablet editor to a full object-based annotation tool — select / move / resize, shapes (line, arrow, rectangle, circle), text, a freeform color picker — <strong>without</strong> losing the perfect-freehand pressure pen, and <strong>without</strong> touching the proven relay state machine, presence, or the one TFP prop. Out of scope: changing the PC <code>ChartCanvas</code>, the session relay protocol semantics, or the charts[] consumers (display/print).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">iPad · full-screen editor (dark) — loaded, an object selected</div>
+  <div style="background:#0a0a0a;border-radius:8px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#171717;border-bottom:1px solid #262626;color:#e5e5e5;font-size:13px">
+      <span style="border:1px solid #525252;border-radius:6px;padding:4px 10px">✕ ยกเลิก</span>
+      <span style="opacity:.8">ใบหน้า · คุณ ก. (LC-26000001)</span>
+      <span style="background:#10b981;color:#000;font-weight:700;border-radius:6px;padding:4px 12px">✓ บันทึก</span>
+    </div>
+    <div style="display:flex;min-height:330px">
+      <div style="display:flex;flex-direction:column;gap:6px;padding:8px;background:#171717;border-right:1px solid #262626;align-items:center;font-size:17px">
+        <div title="เลือก/ย้าย/ปรับขนาด" style="width:38px;height:38px;border-radius:8px;background:#10b981;color:#000;display:flex;align-items:center;justify-content:center">↖</div>
+        <div title="ปากกา (แรงกด)" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center">✏️</div>
+        <div title="ไฮไลต์" style="width:38px;height:38px;border-radius:8px;background:#262626;display:flex;align-items:center;justify-content:center">🖍️</div>
+        <div title="เส้นตรง" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center">╱</div>
+        <div title="ลูกศร" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center">↗</div>
+        <div title="สี่เหลี่ยม" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center;font-size:15px">▭</div>
+        <div title="วงกลม" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center">◯</div>
+        <div title="ข้อความ" style="width:38px;height:38px;border-radius:8px;background:#262626;color:#e5e5e5;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">T</div>
+        <div title="ยางลบ (แตะ/ถูเพื่อลบ)" style="width:38px;height:38px;border-radius:8px;background:#262626;display:flex;align-items:center;justify-content:center">🧽</div>
+        <div style="height:1px;width:22px;background:#404040;margin:2px 0"></div>
+        <div style="display:flex;gap:4px;font-size:14px">↩️ ↪️</div>
+        <div style="font-size:10px;color:#a3a3a3">ล้าง</div>
+        <div style="height:1px;width:22px;background:#404040;margin:2px 0"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <span style="width:17px;height:17px;border-radius:50%;background:#ef4444;outline:2px solid #fff"></span>
+          <span style="width:17px;height:17px;border-radius:50%;background:#3b82f6"></span>
+          <span style="width:17px;height:17px;border-radius:50%;background:#111"></span>
+          <span style="width:17px;height:17px;border-radius:50%;background:#16a34a"></span>
+          <span style="width:17px;height:17px;border-radius:50%;background:#d69e2e"></span>
+          <span style="width:17px;height:17px;border-radius:50%;background:#805ad5"></span>
+        </div>
+        <div title="เลือกสีอิสระ" style="width:36px;height:19px;border-radius:5px;background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f);border:1px solid #525252;display:flex;align-items:center;justify-content:center;font-size:10px">🎨</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;margin-top:4px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#777"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#777;outline:2px solid #34d399"></span>
+          <span style="width:15px;height:15px;border-radius:50%;background:#777"></span>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:14px;background:#1a1a1a">
+        <div style="position:relative;background:#fff;border-radius:6px;width:230px;height:290px">
+          <svg viewBox="0 0 230 290" width="230" height="290">
+            <ellipse cx="115" cy="120" rx="70" ry="90" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+            <ellipse cx="90" cy="105" rx="9" ry="6" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+            <ellipse cx="140" cy="105" rx="9" ry="6" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+            <path d="M95 155 Q115 168 135 155" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+            <path d="M70 80 Q80 70 95 78 Q100 81 98 86 Q90 84 78 88 Q72 86 70 80 Z" fill="#ef4444"/>
+            <text x="55" y="70" font-size="9" fill="#ef4444">แรงกด (perfect-freehand)</text>
+            <line x1="150" y1="60" x2="178" y2="92" stroke="#3b82f6" stroke-width="2"/>
+            <path d="M178 92 l-9 0 l5 -6 z" fill="#3b82f6"/>
+            <rect x="118" y="185" width="70" height="48" fill="none" stroke="#16a34a" stroke-width="2"/>
+            <rect x="116" y="183" width="74" height="52" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="4 3"/>
+            <g fill="#2563eb"><rect x="112" y="179" width="8" height="8"/><rect x="149" y="179" width="8" height="8"/><rect x="186" y="179" width="8" height="8"/><rect x="112" y="207" width="8" height="8"/><rect x="186" y="207" width="8" height="8"/><rect x="112" y="231" width="8" height="8"/><rect x="149" y="231" width="8" height="8"/><rect x="186" y="231" width="8" height="8"/></g>
+            <line x1="153" y1="179" x2="153" y2="166" stroke="#2563eb" stroke-width="1"/><circle cx="153" cy="163" r="4" fill="#2563eb"/>
+            <text x="120" y="250" font-size="9" fill="#16a34a">เลือกแล้ว — ลาก/ปรับขนาด/หมุน</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Eraser interaction (object-granular) · Text edit (inline)</div>
+  <table style="margin:0">
+    <tr><th>State</th><th>Behavior</th></tr>
+    <tr><td><b>Eraser — tap</b></td><td>Tap a stroke/shape/text/arrow → that whole object is removed.</td></tr>
+    <tr><td><b>Eraser — scrub</b></td><td>Drag the eraser across the canvas → every object the eraser path intersects is removed (feels like rubbing out; each mark vanishes as you touch it).</td></tr>
+    <tr><td><b>Text</b></td><td>Tap the T tool then tap a spot → an editable textbox appears with the on-screen keyboard; type → commit. Re-select with ↖ to move/resize/recolor.</td></tr>
+    <tr><td><b>Shapes</b></td><td>Pick line/arrow/rect/circle → drag on canvas to draw at any size; auto-switches to Select so you can immediately nudge it.</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 — tool interaction (state of the active tool)</div>
+  <pre style="background:#fff;border:1px solid #e5e5e5;margin:0">
+ ┌─────────┐  pick tool   ┌──────────────────────────────────────────────┐
+ │ idle    │ ───────────▶ │ active tool ∈ {select, pen, highlighter,      │
+ │ (select)│              │   line, arrow, rect, circle, text, eraser}    │
+ └─────────┘              └──────────────────────────────────────────────┘
+      ▲                         │ pen/highlighter: pointerdown→move→up
+      │ shape committed         │   → PressureBrush builds a Fabric.Path
+      │ OR text committed       │ shapes: drag → add Fabric object
+      └─────────────────────────┤ text: tap → editable Textbox → commit
+                                │ select: tap object → handles (move/resize/rotate)
+                                │ eraser: tap/scrub → remove intersected object(s)
+                                ▼
+                    every commit → canvas.fire → pushHistory()  (undo/redo, ~40 deep)
+                    "ล้าง" → remove all objects except the locked template image
+  </pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 — save → transport → merge (data flow; the relay protocol is UNCHANGED — only payload grows)</div>
+  <pre style="background:#fff;border:1px solid #e5e5e5;margin:0">
+ TABLET (TabletChartEditorPage.onSave)                 PC (useChartEditSession listener)
+ ─────────────────────────────────────                ──────────────────────────────────
+ 1. png      = canvas.toDataURL(png, mult 2)  ──┐
+ 2. fabricJson = JSON.stringify(canvas.toJSON)  │  Firebase Storage (uploads/chart-edit-sessions/{id})
+ 3. resultImageUrl     = upload('result.png')   ├─▶  result.png   ──┐
+ 4. resultFabricJsonUrl= upload('result.json')  ┘  result.json   ──┤
+ 5. updateSession({ status:'saved',                                 │ on status==='saved':
+       resultImageUrl, resultFabricJsonUrl })   ───────────────────┤   dataUrl   = download(resultImageUrl)
+                                                                    │   fabricJson= download(resultFabricJsonUrl) [guarded]
+                                                                    ▼   onSaved({ dataUrl, fabricJson, templateId, source:'tablet' })
+                                                          → ChartSection.handleSave  → charts[]  (PNG displays; fabricJson stored = lossless/re-edit-ready)
+                                                          → delete session + cleanup Storage + free tablet  (existing teardown, unchanged)
+  </pre>
+</div>
+
+<h2>Architecture</h2>
+<p>One genuinely net-new module (the pressure brush) + a Fabric-based canvas that <strong>reuses the proven <code>ChartCanvas.jsx</code> patterns</strong> (image fit-to-ratio + locked background, shapes, text, JSON-history undo/redo, clear-all, <code>toDataURL</code> export). The relay/session/presence layer is untouched; only the transport payload grows by one JSON blob.</p>
+
+<table>
+  <tr><th>Unit</th><th>Responsibility / interface</th><th>Depends on</th></tr>
+  <tr><td><code>src/lib/pressureBrush.js</code> <b>(NEW)</b></td><td>A Fabric v7 <code>BaseBrush</code> subclass. Collects <code>[x,y,pressure]</code> from pointer events (incl. coalesced), live-previews via perfect-freehand <code>getStroke</code>, and on mouse-up adds a filled <code>fabric.Path</code> (selectable object) to the canvas. The <em>only</em> custom-drawing code; everything else is Fabric-native.</td><td>fabric v7, <code>penStroke.js</code> (getStroke + presets)</td></tr>
+  <tr><td><code>src/components/tablet-chart/TabletChartCanvas.jsx</code> <b>(NEW — replaces PenCanvas)</b></td><td>Fabric canvas adapted for touch. Same ref API as PenCanvas (<code>exportDataUrl/undo/redo/clear</code>) <b>plus</b> <code>exportFabricJson()</code>, <code>setTool/setColor/setSize</code>, <code>deleteSelected()</code>. Template fit-to-true-ratio + locked (selectable:false). Palm rejection (ignore touch while pen down). Tap/scrub eraser via Fabric hit-testing.</td><td>fabric v7, pressureBrush, penStroke</td></tr>
+  <tr><td><code>EditorToolRail.jsx</code> <b>(upgrade)</b></td><td>Add tools: select, line, arrow, rect, circle, text, eraser; add 🎨 freeform color <code>&lt;input type=color&gt;</code>; keep colors/sizes/undo/redo/clear. Same prop contract + <code>data-testid</code>s preserved/extended.</td><td>lucide-react icons</td></tr>
+  <tr><td><code>TabletChartEditorPage.jsx</code> <b>(minimal wire)</b></td><td>Swap PenCanvas→TabletChartCanvas; <code>onSave</code> also exports + uploads fabricJson and sets <code>resultFabricJsonUrl</code>. Relay/heartbeat/standby/instant-pop logic unchanged.</td><td>chartEditSession</td></tr>
+  <tr><td><code>chartEditSession.js</code> <b>(small add)</b></td><td>Generalize transport to also carry a JSON blob: <code>uploadTransportJson(sessionId,'result',json)</code> + <code>downloadTransportJson(url)</code> (mirror the PNG helpers).</td><td>firebase/storage</td></tr>
+  <tr><td><code>useChartEditSession.js</code> <b>(small)</b></td><td>On <code>saved</code>: also download <code>resultFabricJsonUrl</code> (guarded — failure ≠ hang, mirrors the existing try/catch) and pass real <code>fabricJson</code> to <code>onSaved</code> instead of <code>null</code>.</td><td>chartEditSession</td></tr>
+  <tr><td><code>chartEditSessionCore.js</code> <b>(field only)</b></td><td>Allow <code>resultFabricJsonUrl</code> in the session-doc shape (still URL-only, &lt;5000 bytes).</td><td>—</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Editing model = B:</strong> select / move / resize (object-based), not raster-only.</li>
+  <li><strong>Pen engine = Hybrid perfect-freehand:</strong> keep the pressure pen (perfect-freehand) as a custom Fabric brush — NOT Fabric's constant-width PencilBrush.</li>
+  <li><strong>Architecture:</strong> Fabric v7 object model (reuse ChartCanvas patterns) + <code>pressureBrush.js</code>. Chosen over a hand-built object model on the raster canvas (re-invents Fabric, higher bug surface).</li>
+  <li><strong>Toolset:</strong> Select · Pen(pressure) · Highlighter · Line · Arrow · Rectangle · Circle · Text · Eraser · Undo/Redo/Clear.</li>
+  <li><strong>#2 Eraser (upgraded "support all work types"):</strong> object-granular — <b>tap-to-delete + scrub-to-delete</b> (drag intersects → remove), uniform across strokes/shapes/text/arrows, no new dep, no raster compositing. + Clear-all + Undo. True sub-stroke pixel erase = scoped stretch (see Risks), never blocks the feature.</li>
+  <li><strong>Color:</strong> 6 quick swatches <b>+ freeform 🎨 picker</b> (any hex).</li>
+  <li><strong>Sizes:</strong> 3 presets (thin/med/thick) → pen + shape stroke width.</li>
+  <li><strong>#6 Save (upgraded "support all work types"):</strong> flatten PNG (unchanged charts[] contract — displays/prints) <b>+ transport full <code>fabricJson</code></b> as a second Storage blob → merged chart entry carries real object data (lossless / re-editable-ready), doc stays URL-only. (Full <code>loadFromJSON</code> object re-edit on open = uses the existing PNG-as-background pattern for now; see Risks.)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>On the real iPad (L1): pen draws pressure-tapered strokes; each is a selectable object after drawing.</li>
+  <li>Select tool: tap any mark → transform handles appear; drag moves it; corner handles resize; rotate works.</li>
+  <li>Each shape (line, arrow, rect, circle) draws by dragging at arbitrary size; text places + types via on-screen keyboard.</li>
+  <li>Eraser: tap removes one object; scrub-drag removes every object touched along the path.</li>
+  <li>Color: a swatch AND the 🎨 picker both change the active tool's color; 3 sizes change stroke width.</li>
+  <li>Undo/redo step through every commit (incl. move/resize/delete); Clear removes all marks but keeps the template.</li>
+  <li>Save → PC merges a flattened PNG into <code>charts[]</code> exactly as today (display + print unaffected) AND the chart entry carries a non-null <code>fabricJson</code>.</li>
+  <li>Relay unchanged: instant-pop, heartbeat/presence, busy-vs-offline, cancel, orphan-sweep, no-hang-on-save all still pass (regression).</li>
+  <li>Aspect ratio preserved (the 72ea7585 fix): face 4:5 / body 1:2 render un-stretched.</li>
+  <li>Verification: Rule I flow-simulate + source-grep + a real-browser L1 pass on the deployed iPad path (Rule Q — mock-only is insufficient).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<table>
+  <tr><th>Item</th><th>Plan</th></tr>
+  <tr><td><b>PressureBrush is the main risk</b> (net-new). Fabric v7 BaseBrush API + reading <code>e.pressure</code> from pointer events + emitting a selectable Path.</td><td><span class="ok">Validate FIRST</span> — spike: brush draws a tapered preview AND commits a movable Fabric.Path before building the rest. If pressure isn't reliably forwarded by Fabric's pointer pipeline, fall back to capturing pointer events on the upper canvas directly (as PenCanvas does today) and add the Path to Fabric on up.</td></tr>
+  <tr><td><b>Palm rejection</b> inside a Fabric canvas (Fabric owns pointer handling).</td><td>Gate touch-pointers while a pen pointer is active at the canvas event layer (port the existing <code>penActiveRef</code> logic).</td></tr>
+  <tr><td><b>True sub-stroke pixel erase</b> (erase HALF of one long stroke). Fabric v7 core has no EraserBrush.</td><td><span class="stretch">Scoped stretch, non-blocking.</span> Evaluate <code>@erase2d/fabric</code> (maintained Fabric v6/7 eraser) within a time-box during impl; if it integrates cleanly with the pressure brush, add it as a 2nd eraser mode. Otherwise ship tap+scrub object-delete (fully covers chart-annotation needs).</td></tr>
+  <tr><td><b>Full object re-edit on open</b> via <code>loadFromJSON</code>. PC <code>ChartCanvas</code> deliberately avoided it ("no loadFromJSON hang") and uses the saved PNG as a flat background.</td><td>This spec <em>captures</em> fabricJson (lossless) but does NOT change the open-existing-chart flow. Enabling true object re-edit (validate v7 loadFromJSON doesn't hang) = a separate future task.</td></tr>
+  <tr><td><b>Bundle size</b> — Fabric (~303 KB) is already bundled (PC uses it); the tablet route currently doesn't pull it.</td><td>Lazy-import fabric in TabletChartCanvas (dynamic <code>import('fabric')</code>, same as ChartCanvas) so the tablet route only loads it when an editor opens.</td></tr>
+  <tr><td><b>Flatten fidelity</b> — exported PNG must match on-screen incl. the template background.</td><td>Reuse ChartCanvas export (<code>toDataURL multiplier:2</code>) with the template as a locked, sent-to-back FabricImage.</td></tr>
+</table>
+
+</body>
+</html>
