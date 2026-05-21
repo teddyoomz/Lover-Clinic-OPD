@@ -1,36 +1,38 @@
 ---
-updated_at: "2026-05-21 EOD+3 — chart-relay Rule Q adversarial pass (handleSave null fix DEPLOYED) + zoom+palm feature built→deployed→REVERTED (iPad/WebKit black screen on 2-finger zoom). prod safe."
-status: "prod SAFE (zoom reverted). NEXT (user directive): make the project reliably USE Chrome MCP + full Chrome-MCP test of the tablet canvas editor (every tool + function), then stop."
+updated_at: "2026-05-21 EOD+3 LATE — tablet-chart pinch-zoom RE-SHIPPED with the REAL black-screen fix (React insertBefore crash) + DEPLOYED + verified LIVE on prod via Chrome MCP (9 tools + functions + zoom, screenshots). Rule Q-vis added."
+status: "prod LIVE with zoom (e71ef782). All tools+functions+zoom verified by SCREENSHOT on the deployed prod URL. NEXT: optional on-device iPad confirm + carryover."
 branch: "master"
-last_commit: "00a9da2f — revert: tablet-chart pinch-zoom + palm-rejection (iPad black screen); handleSave fix 7a4b7f47 retained"
-tests: "chart area 38/0 green post-revert; build clean. (zoom tests removed by the revert)"
+last_commit: "e71ef782 — feat(tablet-chart): re-ship pinch-zoom + palm-rejection with the REAL black-screen fix"
+tests: "vitest 14007/0; build clean. chart-area 158/0."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "00a9da2f — REVERT live (zoom+palm removed; handleSave null fix retained; editor = pre-zoom more-tools version)"
-firestore_rules_version: "unchanged this session (no rules/storage deploy). Last: storage chart-edit-sessions json allowance (prior session)."
+production_commit: "e71ef782 — zoom LIVE (frontend; vercel --prod, aliased)"
+firestore_rules_version: "unchanged this session (frontend-only change; NO rules/storage deploy)."
 ---
 
 # Active Context
 
 ## State
-- prod = `00a9da2f` LIVE — zoom+palm **REVERTED** (Rule A, iPad black screen); `handleSave "null"` fix **retained**; editor back to the proven pre-zoom more-tools version.
-- chart-area tests 38/0 green; build clean.
-- NEXT (user directive): Chrome-MCP setup + full tablet-canvas tool test.
+- prod = `e71ef782` LIVE — tablet-chart pinch-zoom (1-4x) + palm-rejection RE-SHIPPED + DEPLOYED (vercel --prod; no rules change).
+- REAL black-screen cause = a React `insertBefore` crash (the ⤢ fit button rendered BEFORE the Fabric-wrapped `<canvas>` → `surf.insertBefore(button, canvas)` on zoom → tree unmount → blank). Fix = render the fit button AFTER the canvas (append). The `upperCanvasEl`-listener lead was unconfirmed; kept that fix as defensive.
+- Verified LIVE on the prod URL via Chrome MCP (Rule S/Q-vis): all 9 tools + undo/redo/clear/delete/save-relay + pinch-zoom-4x + fit-reset — every item by SCREENSHOT, NO crash. Detail: checkpoint `.agents/sessions/2026-05-21-zoom-reship-real-fix.md`.
 
-## What this session shipped (detail: checkpoint .agents/sessions/2026-05-21-chart-relay-fix-zoom-revert.md)
-- **Rule Q adversarial pass** on the chart relay (REAL client SDK — not admin): storage+firestore rules / composite-index / cleanup all verified clean; **found+fixed `ChartSection.handleSave` persisting the string `"null"`** (RT8 regression) + Rule M cleanup of 2 prod charts. DEPLOYED.
-- **Built zoom+palm feature** (brainstorm→spec→plan→impl, desktop-verified via real-browser probe) → deployed → **iPad 2-finger-zoom = BLACK SCREEN** → `/systematic-debugging`.
-- **Root-cause LEAD**: the zoom added raw `addEventListener('pointer*')` on `fc.upperCanvasEl` → conflicts with Fabric's native trusted-touch pipeline on iPad (the original code explicitly warned "no raw upperCanvasEl listeners"). Desktop can't repro (mouse skips Fabric's touch path) — that's why my "verified in a real browser" was false (desktop-only).
-- **REVERTED** the feat (Rule A) + redeployed safe.
+## What this session shipped
+- `chartGestureMath.js` (restored) + `TabletChartCanvas.jsx` gesture layer (CAPTURE-phase on the OWNED wrapper, never `fc.upperCanvasEl` + stopPropagation isolation) + `TabletChartEditorPage.jsx` (fit button moved AFTER the canvas).
+- **Rule Q-vis** (`01-iron-clad.md`): no test-cheating; UI evidence = a SCREENSHOT you LOOK AT (not pixel-probe/object-model/code); probe-vs-screenshot → screenshot wins; use the most appropriate tool; verify every element. Origin = missed iPad black screen (desktop-only "verified") + a `select` pixel-probe false-negative.
+- AV107 PART A (listener placement) + PART B (the insertBefore fix). Tests F1-F5.
+- Found the root cause by reproducing the black screen ON DESKTOP via a synthetic 2-touch pinch (Chrome MCP — drives my gesture layer, which doesn't gate `isTrusted`) + reading the console.
+- NEW Rule R helper `scripts/diag-chart-session-keepalive.mjs` (keeps a relay session alive during manual/on-device tests).
+- vitest 14007/0; build clean; deployed + live-verified on prod; test sessions cleaned (0 orphan).
 
 ## Next action
-- **(user directive — carry to next chat)** Make the project reliably USE **Chrome MCP** (Rule S — it IS authorized + connected: deviceId `8bdc85cc-b6e5-47d9-b3cd-56957264819d` "Browser 1", local). Then **comprehensively test the tablet canvas editor (`?tablet=chart`) via Chrome MCP** — EVERY tool (pen/highlighter/line/arrow/rect/circle/text/eraser/select) + every function — make them all work, THEN stop.
-
-## Outstanding user-triggered actions
-- Chrome-MCP full tablet-canvas test (above) — NEXT.
-- Zoom+palm **re-ship** (shelved): on-device iPad diag to confirm the upperCanvasEl-listener lead → **overlay-based fix** (capture pinch on a separate layer / Fabric's own events, NOT raw listeners on Fabric's element). spec/plan recoverable from commit `e36a73e9`.
+- (optional, user) on-device iPad L1: open prod `?tablet=chart`, send a chart from PC, 2-finger zoom → confirm no black screen. Fix is browser-agnostic (desktop + prod verified) so it covers iPad; final confirmation only.
 - (carryover) V106 cron drain / calendar-density / Recall / V108 L1.
 
+## Outstanding user-triggered actions
+- on-device iPad confirm (optional, above).
+- carryover: V106 / calendar / Recall / V108 L1.
+
 ## Decisions (1-line)
-- Reverted zoom (Rule A): iPad-specific black screen unconfirmable without the device; desktop renders fine.
-- **Chrome MCP is the correct real-browser tool (Rule S) — use it FIRST for device/touch verification, not Claude Preview.** (User flagged twice.)
-- handleSave "null" fix kept (separate commit `7a4b7f47`, unrelated to zoom).
+- Frontend-only change → vercel --prod only, NO rules deploy (no firestore/storage rule change; avoids V1/V9 overwrite risk).
+- Rule Q-vis: screenshots are ground truth for UI; pixel-probes/code are supplements only (a probe false-negative nearly mislabeled `select` as broken).
+- Synthetic 2-touch pinch (Chrome MCP) = legit desktop L1 for the zoom logic + the React-mount crash; only Fabric's trusted-touch pipeline still needs a real iPad.
