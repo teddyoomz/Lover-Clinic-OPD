@@ -93,3 +93,10 @@ describe('U3 transport JSON (fabricJson via Storage blob)', () => {
     expect(await downloadTransportJson('https://storage/x.json')).toBeNull();
   });
 });
+
+describe('U4 TabletChartCanvas module loads (parse + import resolution; fabric is dynamic)', () => {
+  it('U4.1 imports + exports a component without loading fabric at import time', async () => {
+    const mod = await import('../src/components/tablet-chart/TabletChartCanvas.jsx');
+    expect(mod.default).toBeTruthy();
+  });
+});
