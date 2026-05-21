@@ -27,12 +27,13 @@ export default function TabletChartEditorPage() {
   const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false); const [saveErr, setSaveErr] = useState('');
+  const [zoomed, setZoomed] = useState(false);   // canvas zoomed in → show the ⤢ fit button
   const canvasRef = useRef(null); const sesUnsubRef = useRef(null);
 
   const closeEditor = useCallback((free = true) => {
     sesUnsubRef.current?.(); sesUnsubRef.current = null;
     if (free) freeChartTablet(deviceId).catch(() => {});
-    setActive(null); setTemplateDataUrl(''); setInitialFabricJson('');
+    setActive(null); setTemplateDataUrl(''); setInitialFabricJson(''); setZoomed(false);
   }, [deviceId]);
 
   const openSession = useCallback(async (sdoc) => {
@@ -130,9 +131,22 @@ export default function TabletChartEditorPage() {
             <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
               onUndo={() => canvasRef.current?.undo()} onRedo={() => canvasRef.current?.redo()}
               onClear={() => canvasRef.current?.clear()} onDelete={() => canvasRef.current?.deleteSelected()} />
-            <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
+            <div className="relative flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
               <TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} initialFabricJson={initialFabricJson} tool={tool} color={color} size={size}
-                onRequestSelect={() => setTool('select')} />
+                onRequestSelect={() => setTool('select')} onZoomChange={setZoomed} />
+              {/* The ⤢ fit button renders AFTER the canvas (last child) so React APPENDS it —
+                  it must NEVER be a sibling positioned BEFORE the <canvas>. Fabric wraps the
+                  React-owned <canvas> in a .canvas-container, so the canvas is no longer a direct
+                  child of this div. With the button BEFORE the canvas, React called
+                  surf.insertBefore(button, canvas) → "NotFoundError: node ... not a child of this
+                  node" → React unmounted the whole tree → BLANK SCREEN. This was the real iPad
+                  "black screen on 2-finger zoom": the zoom flips `zoomed` true → the button mounts
+                  → crash. Append (last child) sidesteps the insertBefore-on-a-Fabric-moved-node. */}
+              {zoomed && (
+                <button data-testid="zoom-fit" onClick={() => canvasRef.current?.resetZoom()}
+                  aria-label="พอดีจอ"
+                  className="absolute top-3 right-3 z-10 w-11 h-11 rounded-lg bg-neutral-900 text-white text-2xl shadow-lg flex items-center justify-center active:scale-95">⤢</button>
+              )}
             </div>
           </div>
         </div>

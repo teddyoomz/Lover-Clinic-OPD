@@ -54,6 +54,17 @@ User caught บั๊ค via prod use: index-building error banner + customer pi
 
 **ZERO TOLERANCE**: ถ้า user catch "เทสผ่าน prod พัง" อีกครั้ง → Rule Q violation = same-class-as Rule A revert; ถอย claim ทันที + re-verify per L1/L2.
 
+#### Q-vis — SEE-IT-WITH-EYES + tool-appropriateness (2026-05-21, user directive "ดูภาพด้วยไอ้สัส อย่าโกงเทส")
+
+For ANY user-visible / UI / rendered change, the PRIMARY verification evidence MUST be the ACTUAL RENDERED OUTPUT you LOOK AT — a **screenshot** (Chrome MCP `computer screenshot` / `zoom`), NOT a pixel-probe / object-model / source-grep / test-pass ALONE. Eyes on rendered pixels = ground truth.
+
+- **No test-cheating / no "good-enough proxy"**: never claim "tested / works / verified" using a WEAKER proxy when a STRONGER, more appropriate verification is feasible. If you CAN take a screenshot and look, you MUST — don't substitute a `getImageData` count, an object-model read, or a code read for actually SEEING it.
+- **Use the MOST appropriate tool** for the question. "Does the user SEE X work in the browser / on the device?" → Chrome MCP screenshot (Rule S). Not Claude Preview, not a probe, not code-grep.
+- **When a probe disagrees with what a screenshot would show, the SCREENSHOT WINS.** A pixel-probe can lie (false negative): 2026-05-21 the upper-canvas `getImageData` probe reported `opaque:0` for a SELECTED text object (read it as "select broken"), but the screenshot clearly showed the selection handles — select WORKED. Trusting the probe over the screen IS the cheating-pattern this rule forbids. LOOK FIRST; the probe is only a supplement.
+- **Per-element, not in-aggregate**: when asked to verify "every tool / every X", confirm EACH ONE visibly (a screenshot or zoom-region per item), not one composite "looks fine" glance.
+
+**ORIGIN (2026-05-21)**: tablet-chart pinch-zoom shipped → iPad 2-finger zoom = BLACK SCREEN, and I didn't know — my "verified in a real browser" was DESKTOP-ONLY (desktop can't pinch-zoom, so the crash never fired in my test). The REAL cause (a React `insertBefore` crash when the fit button mounts as a sibling-before the Fabric-wrapped canvas) was found only by reproducing it on desktop via a synthetic pinch + READING THE CONSOLE + LOOKING at the blank screen. User (verbatim): "รอบที่แล้วจอดำมึงยังไม่รู้เลย โกงเทสสัสๆ ... อย่าทำพฤติกรรมโกงเทสหรือใช้เครื่องมือที่ไม่ดี ไม่เหมาะสมที่สุดอีก ... เทสทุก tools จริงๆ แบบเห็นชัดๆ เห็นจริง ไม่ใช่ดูแต่ code ดูภาพด้วย". This is Rule Q's UI corollary: real-adversarial verification = SEE the rendered result with your own eyes, with the right tool, for every element.
+
 ---
 
 ### A. Bug-Blast Revert
