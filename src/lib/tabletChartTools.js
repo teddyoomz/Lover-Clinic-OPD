@@ -10,6 +10,8 @@ export const isDrawTool = (t) => t === 'pen' || t === 'highlighter';
 // Tools drawn by dragging a Fabric vector object from start→end point.
 export const isShapeTool = (t) => t === 'line' || t === 'arrow' || t === 'rect' || t === 'circle';
 
-// The fabric object type each drawing/shape/text tool produces (as it appears in canvas.toJSON()).
-const TYPE = { pen: 'path', highlighter: 'path', line: 'line', arrow: 'group', rect: 'rect', circle: 'ellipse', text: 'textbox' };
-export function shapeObjectType(tool) { return TYPE[tool] || 'path'; }
+// The fabric object type each drawing/shape/text tool produces, EXACTLY as it appears in
+// fabric v7 `canvas.toJSON()` — which uses the class name (PascalCase): Path / Line / Group /
+// Rect / Ellipse / Textbox. (Verified in a real browser; v5/v6 used lowercase — do NOT assume.)
+const TYPE = { pen: 'Path', highlighter: 'Path', line: 'Line', arrow: 'Group', rect: 'Rect', circle: 'Ellipse', text: 'Textbox' };
+export function shapeObjectType(tool) { return TYPE[tool] || 'Path'; }

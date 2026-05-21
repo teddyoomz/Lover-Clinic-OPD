@@ -61,7 +61,8 @@ describe('R1 tool rail — full toolset + color picker', () => {
 });
 
 describe('F1 per-tool object fidelity (each drawing tool yields its fabric type; round-trips intact)', () => {
-  const toolToObj = { pen: { type: 'path' }, highlighter: { type: 'path', opacity: 0.4 }, line: { type: 'line' }, arrow: { type: 'group' }, rect: { type: 'rect' }, circle: { type: 'ellipse' }, text: { type: 'textbox' } };
+  // fabric v7 toJSON `type` is PascalCase (class name) — verified in a real browser (L1).
+  const toolToObj = { pen: { type: 'Path' }, highlighter: { type: 'Path', opacity: 0.4 }, line: { type: 'Line' }, arrow: { type: 'Group' }, rect: { type: 'Rect' }, circle: { type: 'Ellipse' }, text: { type: 'Textbox' } };
   it('F1.1 every non-select/eraser tool maps to a concrete fabric type', () => {
     TOOL_IDS.filter(t => t !== 'select' && t !== 'eraser').forEach(t => expect(shapeObjectType(t)).toBe(toolToObj[t].type));
   });
@@ -72,7 +73,7 @@ describe('F1 per-tool object fidelity (each drawing tool yields its fabric type;
     global.fetch = vi.fn(async () => ({ ok: true, text: async () => JSON.stringify(json) }));
     const back = await downloadTransportJson(url);
     const types = back.objects.map(o => o.type).sort();
-    expect(types).toEqual(['ellipse', 'group', 'line', 'path', 'path', 'rect', 'textbox']);
+    expect(types).toEqual(['Ellipse', 'Group', 'Line', 'Path', 'Path', 'Rect', 'Textbox']);
   });
 });
 

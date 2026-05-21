@@ -63,14 +63,14 @@ describe('U2 tool descriptors', () => {
     expect(isShapeTool('text')).toBe(false);
     expect(isShapeTool('select')).toBe(false);
   });
-  it('U2.4 shapeObjectType maps each tool to its fabric type', () => {
-    expect(shapeObjectType('rect')).toBe('rect');
-    expect(shapeObjectType('circle')).toBe('ellipse');
-    expect(shapeObjectType('line')).toBe('line');
-    expect(shapeObjectType('arrow')).toBe('group');
-    expect(shapeObjectType('text')).toBe('textbox');
-    expect(shapeObjectType('pen')).toBe('path');
-    expect(shapeObjectType('highlighter')).toBe('path');
+  it('U2.4 shapeObjectType maps each tool to its fabric v7 toJSON type (PascalCase = class name)', () => {
+    expect(shapeObjectType('rect')).toBe('Rect');
+    expect(shapeObjectType('circle')).toBe('Ellipse');
+    expect(shapeObjectType('line')).toBe('Line');
+    expect(shapeObjectType('arrow')).toBe('Group');
+    expect(shapeObjectType('text')).toBe('Textbox');
+    expect(shapeObjectType('pen')).toBe('Path');
+    expect(shapeObjectType('highlighter')).toBe('Path');
   });
 });
 

@@ -24,20 +24,21 @@ const BUCKET = 'loverclinic-opd-4c39b.firebasestorage.app';
 const SESSION = `TEST-CES-MORETOOLS-${Date.now()}`;
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-// One Fabric object per drawing tool (shape canvas.toJSON() produces) — the per-tool fidelity contract.
+// One Fabric object per drawing tool — shape mirrors a real fabric v7 canvas.toJSON() (the
+// `type` field is PascalCase = class name; verified in a real browser, L1). Per-tool fidelity contract.
 const FABRIC_JSON = {
   version: '7.2.0',
   objects: [
-    { type: 'path', fill: '#ef4444', opacity: 1, path: [['M', 0, 0], ['L', 5, 5], ['L', 8, 2], ['Z']] }, // pen (pressure)
-    { type: 'path', fill: '#16a34a', opacity: 0.4, path: [['M', 1, 1], ['L', 9, 9], ['Z']] },            // highlighter
-    { type: 'line', stroke: '#3b82f6', x1: 0, y1: 0, x2: 20, y2: 0 },                                      // line
-    { type: 'group', objects: [{ type: 'line' }, { type: 'triangle' }] },                                 // arrow
-    { type: 'rect', stroke: '#111111', fill: 'transparent', width: 30, height: 18 },                       // rectangle
-    { type: 'ellipse', stroke: '#805ad5', fill: 'transparent', rx: 15, ry: 9 },                            // circle
-    { type: 'textbox', text: 'ทดสอบ', fill: '#000000', fontSize: 18 },                                     // text
+    { type: 'Path', fill: '#ef4444', opacity: 1, path: [['M', 0, 0], ['L', 5, 5], ['L', 8, 2], ['Z']] }, // pen (pressure)
+    { type: 'Path', fill: '#16a34a', opacity: 0.4, path: [['M', 1, 1], ['L', 9, 9], ['Z']] },            // highlighter
+    { type: 'Line', stroke: '#3b82f6', x1: 0, y1: 0, x2: 20, y2: 0 },                                      // line
+    { type: 'Group', objects: [{ type: 'Line' }, { type: 'Triangle' }] },                                 // arrow
+    { type: 'Rect', stroke: '#111111', fill: 'transparent', width: 30, height: 18 },                       // rectangle
+    { type: 'Ellipse', stroke: '#805ad5', fill: 'transparent', rx: 15, ry: 9 },                            // circle
+    { type: 'Textbox', text: 'ทดสอบ', fill: '#000000', fontSize: 18 },                                     // text
   ],
 };
-const EXPECTED_TYPES = ['ellipse', 'group', 'line', 'path', 'path', 'rect', 'textbox'];
+const EXPECTED_TYPES = ['Ellipse', 'Group', 'Line', 'Path', 'Path', 'Rect', 'Textbox'];
 
 const log = (ok, msg) => console.log(`${ok ? 'PASS' : 'FAIL'} · ${msg}`);
 let fails = 0;
@@ -84,7 +85,7 @@ async function main() {
     // 3. EVERY drawing tool's object type survived (the user's per-tool mandate)
     const types = back.objects.map(o => o.type).sort();
     assert(JSON.stringify(types) === JSON.stringify(EXPECTED_TYPES), `every tool type present: ${types.join(',')}`);
-    const highlighter = back.objects.find(o => o.type === 'path' && o.opacity === 0.4);
+    const highlighter = back.objects.find(o => o.type === 'Path' && o.opacity === 0.4);
     assert(!!highlighter, 'highlighter (path, opacity 0.4) preserved distinctly from the pen');
 
     // 4. flattened PNG round-trips (downloadTransportImageAsDataUrl path)
