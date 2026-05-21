@@ -191,3 +191,29 @@ describe('RC-render root-cause: synchronous renderAll only — never the rAF-def
     expect(canvasSrc).toMatch(/CRITICAL \(render fix\)[\s\S]*?SYNCHRONOUS renderAll/);
   });
 });
+
+// RC-cover — the ACTUAL on-device root cause (the user re-tested after RC-render and it was STILL
+// blank): Fabric v7 COPIES the canvas element's inline style (incl. `background`) to the upper-
+// canvas, which is absolutely positioned ON TOP of the lower-canvas. An inline `background:#fff`
+// there → an OPAQUE white upper-canvas that COVERS everything painted on the lower-canvas → blank-
+// white screen, while the lower-canvas backing + toDataURL save stay correct. Proven in a real
+// browser: WITH inline bg → upper-canvas computed bg white (cover); WITHOUT → transparent. The
+// white fill must come from Fabric `backgroundColor` (paints the LOWER canvas), NOT a CSS
+// background on the element. The proven PC ChartCanvas sets no inline canvas background.
+describe('RC-cover root-cause: no inline canvas background (Fabric copies it to the opaque upper-canvas)', () => {
+  const canvasSrc = fs.readFileSync('src/components/tablet-chart/TabletChartCanvas.jsx', 'utf8');
+  const chartSrc = fs.readFileSync('src/components/ChartCanvas.jsx', 'utf8');
+  const canvasEl = canvasSrc.slice(canvasSrc.indexOf('return <canvas'), canvasSrc.indexOf('/>;', canvasSrc.indexOf('return <canvas')) + 3);
+  it('RC9 the rendered <canvas> element has NO inline background (would copy to the opaque upper-canvas)', () => {
+    expect(canvasEl).toContain('<canvas');
+    expect(canvasEl).not.toMatch(/background/);   // element JSX must not set any background
+  });
+  it('RC10 the white fill comes from Fabric backgroundColor (paints the LOWER canvas backing)', () => {
+    expect(canvasSrc).toMatch(/new fabric\.Canvas\([\s\S]*?backgroundColor:\s*'#fff'/);
+  });
+  it('RC11 the proven PC ChartCanvas reference also sets no inline canvas background', () => {
+    const chartEl = chartSrc.slice(chartSrc.indexOf('<canvas'), chartSrc.indexOf('/>', chartSrc.indexOf('<canvas')) + 2);
+    expect(chartEl).toContain('<canvas');
+    expect(chartEl).not.toMatch(/background/);
+  });
+});

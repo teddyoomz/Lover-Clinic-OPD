@@ -2591,10 +2591,33 @@ micro-perf; optimize the path, never re-introduce rAF). Cross-link: tests
 on-screen render (object-model-correct + save-correct masks a never-painting live canvas) —
 verified at the rendered-pixel level in a real browser at dpr=2 (V66: pixels, not object model).
 
+### AV105 — A Fabric-wrapped canvas element MUST NOT set an inline CSS `background` (Fabric copies it to the opaque upper-canvas) (2026-05-21 more-tools-fix4)
+
+Fabric v7 wraps the React-owned `<canvas>` in a `.canvas-container` and creates an **upper-canvas
+(interaction layer) absolutely positioned ON TOP of the lower-canvas — and it COPIES the lower
+canvas element's inline `style` (including `background`) to that upper-canvas**. So an inline
+`background:#fff` (or any opaque color) on the canvas element becomes an **opaque upper-canvas that
+covers everything painted on the lower-canvas** → blank-color screen, while the lower-canvas backing
++ `toDataURL()` save stay correct (the on-device "blank live canvas + correct save" symptom).
+
+**Rule**: a Fabric-managed canvas element (in `src/components/**/*Canvas*.jsx`) MUST NOT set an
+inline CSS `background`. The canvas fill comes from Fabric `backgroundColor` (paints the LOWER
+canvas backing), never a CSS background on the element. Mirror the proven PC `ChartCanvas`
+(`<canvas className="shadow-lg" />`, no inline background).
+
+**Grep target (regression)**: the `return <canvas ... />` element in `TabletChartCanvas.jsx` has no
+`background`; `new fabric.Canvas(... backgroundColor: '#fff' ...)` present; `ChartCanvas.jsx` canvas
+element has no inline background. **Sanctioned exception**: NONE. Cross-link: tests
+`tests/tablet-chart-more-tools-flow-simulate.test.jsx` (RC9/RC10/RC11). **Class**: CSS-on-the-
+Fabric-element leaks to the upper-canvas cover (object-model-correct + save-correct masks an
+on-screen cover) — proven in a real browser (WITH inline bg → upper-canvas computed white = cover;
+WITHOUT → transparent). Companion to AV104 (both = "live canvas blank, save correct", different
+mechanism: AV104 = never-painted, AV105 = painted-but-covered).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**, **AV104 (Fabric canvas editor MUST paint via synchronous renderAll, never the rAF-deferred request-render path — blank live canvas + correct save when rAF is unreliable)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**, **AV104 (Fabric canvas editor MUST paint via synchronous renderAll, never the rAF-deferred request-render path — blank live canvas + correct save when rAF is unreliable)**, **AV105 (Fabric-wrapped canvas element MUST NOT set an inline CSS background — Fabric copies it to the opaque upper-canvas which covers the lower-canvas → blank live + correct save)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

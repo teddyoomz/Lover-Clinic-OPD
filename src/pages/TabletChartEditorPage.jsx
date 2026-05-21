@@ -25,7 +25,6 @@ export default function TabletChartEditorPage() {
   const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false); const [saveErr, setSaveErr] = useState('');
-  const [diag, setDiag] = useState(null);   // TEMP on-device render diagnostic (read real iPad canvas state) — remove after debug
   const canvasRef = useRef(null); const sesUnsubRef = useRef(null);
 
   const closeEditor = useCallback((free = true) => {
@@ -95,31 +94,6 @@ export default function TabletChartEditorPage() {
     return () => clearInterval(t);
   }, [active]);
 
-  // TEMP on-device render diagnostic — reads the REAL visible lower-canvas state ON THE TABLET
-  // (dpr, backing/CSS dims, object count, painted-pixel ratio, rAF liveness). I can't open
-  // devtools on the iPad; this surfaces the truth so a screenshot localizes the render bug.
-  // REMOVE after the live-render bug is resolved.
-  useEffect(() => {
-    if (!active) return;
-    let rafTick = 0; const rafLoop = () => { rafTick++; requestAnimationFrame(rafLoop); }; requestAnimationFrame(rafLoop);
-    const id = setInterval(() => {
-      const lc = document.querySelector('canvas.lower-canvas');
-      if (!lc) { setDiag({ err: 'no lower-canvas' }); return; }
-      let paint = '?';
-      try {
-        const ctx = lc.getContext('2d'); const N = 8; let colored = 0, white = 0, transparent = 0, total = 0;
-        for (let i = 1; i < N; i++) for (let j = 1; j < N; j++) { const d = ctx.getImageData(Math.floor(lc.width * i / N), Math.floor(lc.height * j / N), 1, 1).data; total++; if (d[3] < 10) transparent++; else if (d[0] > 245 && d[1] > 245 && d[2] > 245) white++; else colored++; }
-        paint = `c${colored} w${white} t${transparent}/${total}`;
-      } catch (e) { paint = 'ERR ' + (e.message || e).slice(0, 24); }
-      let objs = '?'; try { const j = canvasRef.current?.exportFabricJson?.(); objs = j ? JSON.parse(j).objects.length : 'null'; } catch { objs = 'e'; }
-      const r = lc.getBoundingClientRect();
-      const ups = document.querySelectorAll('canvas').length;
-      setDiag({ dpr: window.devicePixelRatio, back: `${lc.width}x${lc.height}`, css: `${Math.round(r.width)}x${Math.round(r.height)}`, objs, paint, canvases: ups, raf: rafTick });
-      rafTick = 0;
-    }, 1000);
-    return () => clearInterval(id);
-  }, [active]);
-
   // Always render the standby — it keeps useTabletPresence mounted, so the heartbeat
   // holds the presence 'busy' while editing (instead of an unmount-free flipping it
   // 'idle' and letting a 2nd PC grab a tablet that's mid-session). Editor + notice
@@ -140,11 +114,6 @@ export default function TabletChartEditorPage() {
             <span className={`text-sm ${saveErr ? 'text-red-400 font-semibold' : 'opacity-80'}`} data-testid="editor-header-label">{saveErr || `${active.template?.name} · ${active.patientLabel}`}</span>
             <button data-testid="editor-save" onClick={onSave} disabled={saving} className="px-4 py-1.5 bg-emerald-500 text-black font-bold rounded disabled:opacity-50">{saving ? 'กำลังบันทึก…' : '✓ บันทึก'}</button>
           </header>
-          {diag && (
-            <div data-testid="editor-render-diag" style={{ position: 'fixed', left: 4, bottom: 4, zIndex: 200, background: 'rgba(0,0,0,0.85)', color: '#22ff22', font: '12px monospace', padding: '5px 8px', borderRadius: 5, pointerEvents: 'none', maxWidth: '92vw' }}>
-              {diag.err ? `DIAG ${diag.err}` : `DIAG dpr ${diag.dpr} · back ${diag.back} · css ${diag.css} · objs ${diag.objs} · paint ${diag.paint} · canvases ${diag.canvases} · raf/s ${diag.raf}`}
-            </div>
-          )}
           <div className="flex flex-1 min-h-0">
             <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
               onUndo={() => canvasRef.current?.undo()} onRedo={() => canvasRef.current?.redo()}

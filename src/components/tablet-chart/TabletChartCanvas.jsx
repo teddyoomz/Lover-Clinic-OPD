@@ -240,6 +240,12 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     deleteSelected: () => { const fc = fcRef.current; if (!fc) return; const a = fc.getActiveObjects ? fc.getActiveObjects() : []; let n = 0; a.forEach(o => { if (o !== templateObjRef.current) { fc.remove(o); n++; } }); fc.discardActiveObject(); fc.renderAll(); if (n) pushHistory(); },
   }), [pushHistory, applyTool]);
 
-  return <canvas ref={elRef} style={{ touchAction: 'none', background: '#fff', display: 'block' }} />;
+  // NO inline `background` — Fabric v7 COPIES the canvas element's inline style (incl. background)
+  // to the upper-canvas, which sits absolutely positioned ON TOP of the lower-canvas. An opaque
+  // `background:#fff` there COVERS everything painted on the lower-canvas → blank-white screen while
+  // the object model + toDataURL save stay correct (the real iPad bug; proven in a real browser).
+  // The white fill comes from Fabric `backgroundColor:'#fff'` (init), which paints the LOWER canvas
+  // backing — mirror the proven PC ChartCanvas, which sets no inline canvas background.
+  return <canvas ref={elRef} style={{ touchAction: 'none', display: 'block' }} />;
 });
 export default TabletChartCanvas;

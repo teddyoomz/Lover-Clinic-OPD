@@ -1,30 +1,34 @@
 ---
-updated_at: "2026-05-21 EOD+1 LATE+2 — Tablet Chart more-tools: LIVE-DISPLAY render bug FIXED (rAF-deferred render → blank live canvas; sync renderAll fix). Verified at the rendered-pixel level in a real browser at dpr=2 (template paints + stroke paints live, rAF dead). All post-ship symptoms now resolved. storage.rules json still awaits deploy."
-status: "more-tools complete; 3 post-ship bugs fixed (init-once + storage.rules/onSave save + sync-render live-display); render fix pixel-verified in browser @ dpr=2; full vitest 13932/0; NOT deployed — awaiting 'deploy' (vercel + storage.rules Probe-Deploy-Probe #13)"
+updated_at: "2026-05-21 EOD+1 LATE+3 — Tablet Chart more-tools: LIVE-DISPLAY bug REAL on-device cause FOUND + FIXED — inline `background:#fff` on the canvas → Fabric copies it to the opaque upper-canvas → covered the painted lower-canvas (blank live + correct save). Proven in a real browser; fix = remove inline bg (mirror ChartCanvas). Awaiting on-device re-confirm + deploy."
+status: "more-tools complete; 4 post-ship fixes (init-once + save + sync-render + upper-canvas-cover); fix4 is the REAL on-device cause (proven via real-browser isolation + on-device DIAG); full vitest GREEN; NOT deployed — awaiting 'deploy' (vercel + storage.rules Probe-Deploy-Probe #13)"
 branch: "master"
-last_commit: "fix(tablet-chart): RENDER — paint via SYNC renderAll, never rAF-deferred requestRenderAll (blank live canvas + correct save when rAF unreliable); RC6-RC8 + AV104"
-tests: "full vitest GREEN (13932/0) · build clean · render fix pixel-verified (getImageData) in real browser @ forced dpr=2 · full-relay Playwright e2e GREEN (real prod)"
+last_commit: "fix(tablet-chart): COVER — remove inline canvas background (Fabric copies it to the opaque upper-canvas → covered the painted lower-canvas); RC9-RC11 + AV105"
+tests: "full vitest GREEN · build clean · fix4 proven in a real browser (fabric-reexport isolation: WITH inline bg → upper-canvas opaque white cover; WITHOUT → transparent) + on-device DIAG (lower-canvas painted t0, screen white = covered)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "d750c725 — ratio fix LIVE. more-tools + 3 post-ship fixes (~18 commits) NOT deployed."
+production_commit: "d750c725 — ratio fix LIVE. more-tools + 4 post-ship fixes NOT deployed."
 firestore_rules_version: "be_chart_* unchanged. storage.rules: NEW uploads/chart-edit-sessions match allows application/json — NEEDS `firebase deploy --only storage` (Probe-Deploy-Probe #13)."
 ---
 
 # Active Context
 
-## State — ALL post-ship symptoms FIXED (init + save + LIVE render), pixel-verified
-The tablet chart more-tools editor had THREE post-ship rounds, all now resolved:
-- **fix1 (init-once)**: init `useEffect` was keyed on `[templateImageUrl]` → late template re-ran it → `fc.dispose()` destroyed the React-owned `<canvas>`. Fixed: init ONCE + template on the live canvas.
-- **fix2 (save)**: `storage.rules` denied the `result.json` (application/json) client upload → `onSave` threw silently. Fixed: storage.rules allows json + onSave makes the json upload non-fatal (PNG always saves). Caught by a full-relay Playwright e2e.
-- **fix3 (LIVE render — THIS round)**: the canvas painted via `fc.requestRenderAll()` (rAF-deferred) ×17; on the tablet rAF is unreliable (throttled / stuck nextRenderHandle / not firing) so the paint never landed → blank live canvas (template + strokes invisible) while the object model stayed correct (so save was right — masking it). Fixed: replace all `requestRenderAll`→`renderAll` (sync; mirror the proven PC `ChartCanvas`). **Verified at the rendered-pixel level** in a real browser at forced `dpr=2`: template paints (colored 121, was transparent) + a stroke paints live (gray→green) with rAF DEAD. RC6-RC8 lock it; AV104 invariant.
+## State — LIVE-DISPLAY bug REAL cause found + fixed (the user tests localhost dev from a real browser)
+The tablet chart more-tools editor had FOUR post-ship rounds. The live-display "blank canvas" had TWO causes; fix4 is the real on-device one:
+- **fix1 (init-once)**: init effect keyed on `[templateImageUrl]` → late template re-ran it → `fc.dispose()` destroyed the React-owned `<canvas>`. Fixed: init ONCE + template on live canvas.
+- **fix2 (save)**: storage.rules denied the `result.json` (application/json) client upload → onSave threw silently. Fixed: storage.rules allows json + onSave json non-fatal.
+- **fix3 (sync-render)**: replaced `requestRenderAll` (rAF-deferred) → sync `renderAll`. **HONEST: this fixed a headless-PREVIEW-only artifact (rAF dead there), NOT the device bug.** KEPT anyway — mirrors the proven ChartCanvas + rAF-independent defensive.
+- **fix4 (upper-canvas COVER — THE REAL on-device cause)**: an inline `background:#fff` on the `<canvas>` element → **Fabric v7 copies the element's inline style to the upper-canvas** (interaction layer, absolutely positioned ON TOP) → opaque white upper-canvas **covered** the correctly-painted lower-canvas → blank-white screen while save (object model) stayed correct. Proven in a real browser (isolation: WITH inline bg → upper opaque white; WITHOUT → transparent) + on-device DIAG (`paint c7 w42 t0` = lower IS painted; screen white = covered). **Fix: remove the inline `background:#fff`** (white fill comes from Fabric `backgroundColor:'#fff'` on the LOWER canvas). Class-of-bug grep: `TabletChartCanvas` was the ONLY canvas in src/ with an inline bg; the working PC `ChartCanvas` has none → that's why it works. RC9-RC11 + AV105.
 
-## Lesson (V66, 4th time in this saga)
-Verify RENDERED PIXELS (getImageData on the live canvas), NOT the object model — my prior probe checked `json:['Image']` (model present) and "passed" while the screen was blank. Reproduce device-only render bugs by forcing `config.devicePixelRatio`. A Fabric editor must render synchronously — rAF can silently never fire.
+## Lessons (this saga)
+- Verify in a browser with **rAF ALIVE** — the headless preview's dead-rAF was a confound that sent fix3 down the wrong path. Rule S (NEW: Chrome MCP / real-browser standing auth) + on-device DIAG overlay = the pattern for devices I can't open devtools on.
+- **Fabric copies the canvas element's inline style to the opaque upper-canvas** — never set an opaque `background` on a Fabric-wrapped canvas; use Fabric `backgroundColor`. (AV105)
+- "Painted backing + correct save + blank screen" ⇒ a COVER, not a render failure. Look for an opaque layer on top.
+- The working sibling (ChartCanvas) had the answer — `grep "<canvas"` diff would have found it round 1. Diff the working example FIRST, structurally.
 
 ## Next action
-- **DEPLOY** (user-triggered, V18): `vercel --prod` (more-tools + all 3 post-ship fixes; ~18 commits) **+** `firebase deploy --only storage` (storage.rules json → enables the lossless re-edit; **Probe-Deploy-Probe #13**: anon write to `uploads/chart-edit-sessions/...` → 403, staff json write → 200). [⚠ CLI 15.x: `--only storage`, NOT `storage:rules`.]
-- After deploy: user on-device iPad re-test → template shows live + every tool draws live + erase works + save → PC merges. Then re-run the relay e2e (STEP6 should now verify json carries Image+Path).
+- **User on-device re-confirm**: reload `?tablet=chart` on the device → template shows live + every tool draws live + erase + save → PC merges. (High confidence — mechanism proven in a real browser.)
+- **DEPLOY** (user-triggered, V18): `vercel --prod` (more-tools + all 4 post-ship fixes) **+** `firebase deploy --only storage` (storage.rules json → lossless re-edit; **Probe-Deploy-Probe #13**: anon write `uploads/chart-edit-sessions/...` → 403, staff json → 200). [⚠ CLI 15.x: `--only storage`.]
 
 ## Outstanding user-triggered
+- on-device re-confirm (the fix4 cover removal).
 - **deploy** (vercel + storage.rules, Probe-Deploy-Probe #13).
-- on-device re-test (iPad) — live render + every tool + save→PC.
 - (carryover) V106 cron 03:30 BKK first drain; calendar-density / Recall / V108 list-visual L1.
