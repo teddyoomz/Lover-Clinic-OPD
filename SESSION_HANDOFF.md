@@ -66,10 +66,21 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 
 ## Current State
 
-- **Date last updated**: 2026-05-21 — Tablet Chart Editor bugfix saga (template/relay/CORS/ratio) + more-tools brainstorm PENDING
-- **Master**: `da71fa01` (clean, pushed). **Prod**: `dc9d230c` — relay fixes #1/#3 LIVE; **ratio fix `72ea7585` NOT deployed** (body still stretched on prod until deploy). **Storage CORS = applied bucket-side (live)** via `scripts/set-storage-cors.mjs --apply` (NOT a code/deploy thing). V106 + V108 also live.
-- **Tests**: full vitest **GREEN (exit 0; ~13889 = 13880 + tablet-chart bugfix tests)** · build clean. Added tablet-chart-template-transport R1-R7 + flow-simulate F7 + B3 fixup.
-- **Deploy**: Relay **VERIFIED working end-to-end on real prod** (iPad renders chart, draw+save, PC fetches 123KB result) AFTER the CORS bucket config. master ahead of prod by `fb74f0b5` (CORS tooling — CORS itself already applied) + `72ea7585` (**ratio fix — needs `vercel --prod` to reach the iPad**) + `da71fa01` (diag). [⚠ firebase CLI 15.x storage: `--only storage`, NOT `storage:rules`.]
+- **Date last updated**: 2026-05-21 EOD+1 — Tablet Chart more-tools (Fabric v7 pro toolset) shipped LOCAL; ratio fix DEPLOYED + user-confirmed earlier this session
+- **Master**: `8ae6c86f` (clean, pushed). **Prod**: `d750c725` — ratio fix `72ea7585` LIVE (user confirmed "ipad ration ตรงแล้ว", L3). **more-tools = 11 commits ahead, NOT deployed.** Storage CORS live (bucket-side). V106 + V108 also live.
+- **Tests**: full vitest **GREEN (13924/0)** · build clean (~3s). +tablet-chart-more-tools (U1-U4 + R1 + F1-F2) + L2 e2e 9/0 real prod + AV103.
+- **Deploy**: more-tools is **Vercel-only** (NO rules/data change — fabricJson rides the existing `uploads/` Storage path + live CORS). `vercel --prod` (user-triggered) ships the 11 commits; then user on-device L1. [⚠ firebase CLI 15.x storage: `--only storage`, NOT `storage:rules` — N/A this deploy.]
+
+### Session 2026-05-21 EOD+1 — Tablet Chart more-tools (Fabric v7 pro toolset) — LOCAL, awaiting deploy + on-device L1
+
+After the ratio fix deployed (user confirmed "ipad ration ตรงแล้ว", L3 — that thread closed), built the requested pro toolset on the tablet chart editor. brainstorming(Visual Companion auto)→spec→writing-plans→executing-plans inline (9 tasks, TDD). Detail + lessons: `.claude/rules/v-log-archive.md` "Tablet Chart more-tools".
+
+- **TabletChartCanvas** (NEW, Fabric v7 object editor) replaces PenCanvas in the page: select/move/resize + line/arrow/rect/circle/text + freeform color picker; KEEPS the perfect-freehand pressure pen as a `fabric.Path` built on pointer-up (rides Fabric `mouse:*` + `getScenePoint`, NOT a BaseBrush subclass — avoids v7 brush-internal risk). Eraser = object-granular tap + scrub (getBoundingRect, no new dep). EditorToolRail → 9 tools + freeform color picker.
+- **Save = PNG + full `fabricJson`** (NEW guarded `uploadTransportJson`/`downloadTransportJson` + `resultFabricJsonUrl`); merged `charts[]` lossless/re-editable-ready, NEVER `fabricJson:null`. **AV103**. NO rules change.
+- **Rule Q V66**: L2 e2e **9/0 on real prod Storage** (`scripts/e2e-tablet-chart-more-tools.mjs` — fabricJson round-trips carrying every tool's object type; download path = exact client `downloadTransportJson` incl. live CORS). **L1 real-browser** (Claude Preview + real fabric v7): every tool creates its object, eraser removes, PNG export, loadFromJSON round-trip — all pass. **L1 CAUGHT fabric v7 PascalCase `toJSON().type`** (V66 mock-shadow — lowercase `shapeObjectType`+fixtures fixed across helper+tests+e2e).
+- Full-suite (Rule N batch-end) caught 2 V21: (a) unmount-during-async-init null guard (`TabletChartCanvas` re-check `elRef.current` AFTER `await setTimeout`); (b) page-RTL mock still on `PenCanvas` (→ `TabletChartCanvas` mock + `uploadTransportJson` + testid). + AV41 `global.fetch` restore added to 3 files (incl. pre-existing `tablet-chart-template-transport`).
+- **Honest scope**: editing ENGINE (L1 real browser) + TRANSPORT (L2 real prod) verified; the mounted-component pointer-event WIRING is harness-limited (synthetic `dispatchEvent` is `isTrusted:false` → Fabric's hardware-gated pipeline ignores it) → rides Fabric core + standard `fc.on('mouse:*')` + the PROVEN relay (e2e 6/6) + **user on-device L1 hands-on**.
+- Full vitest **13924/0**, build clean (~3s). 11 commits (`2d5c5fcb`..`8ae6c86f`). **NOT deployed** — await "deploy" (V18). NEW files: `TabletChartCanvas.jsx`, `tabletChartTools.js`, `e2e-tablet-chart-more-tools.mjs`, 2 test files; MOD: `penStroke.js`/`chartEditSession.js`/`chartEditSessionCore.js`/`EditorToolRail.jsx`/`TabletChartEditorPage.jsx`/`useChartEditSession.js` + AV103. **Next**: user `deploy` (Vercel-only) → on-device L1 (draw/select/erase/save per tool on real iPad).
 
 ### Session 2026-05-21 LATE — Tablet Chart Editor bugfix saga (4 root causes from user L1) + more-tools brainstorm PENDING
 
