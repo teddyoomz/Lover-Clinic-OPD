@@ -1,7 +1,6 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { strokeOutline, outlineToSvgPath, PEN_PRESETS } from '../../lib/penStroke.js';
 import { isDrawTool, isShapeTool, serializeFabricCanvas, isObjectLevelReeditable } from '../../lib/tabletChartTools.js';
-import { MIN_ZOOM, FIT_VPT, distance, centroid, nextZoom, panDelta, isZoomedVpt } from '../../lib/chartGestureMath.js';
 
 const safeParse = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; } };
 
@@ -30,7 +29,7 @@ const safeParse = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : 
 // path; mirror it. Sync render is rAF-independent, so it always reaches the screen. Verified in a
 // real browser at dpr=2: the rAF path → 0 painted px; sync renderAll → template + strokes paint.
 // props: templateImageUrl, tool, color, size, onRequestSelect (auto-switch after shape/text).
-const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, initialFabricJson, tool, color, size, onRequestSelect, onZoomChange }, ref) {
+const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageUrl, initialFabricJson, tool, color, size, onRequestSelect }, ref) {
   const elRef = useRef(null);
   const fcRef = useRef(null);
   const fabricRef = useRef(null);
@@ -48,11 +47,6 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const penDownRef = useRef(false);    // palm rejection: a pen pointer is down
   const downRef = useRef(false);       // any pointer is down (scrub-erase gate)
   const readyRef = useRef(false);
-  const pointersRef = useRef(new Map());   // pointerId -> { type, canvas:{x,y} }
-  const penSeenRef = useRef(false);         // auto-adaptive (C): sticky — a pen has been used this editor session
-  const pinchRef = useRef(null);            // { d0, z0, c0 } during a 2-finger pinch
-  const gestureCleanupRef = useRef(null);   // detaches the raw pointer listeners on dispose
-  const onZoomRef = useRef(onZoomChange); onZoomRef.current = onZoomChange;
 
   const pushHistory = useCallback(() => {
     const fc = fcRef.current; if (!fc) return;
@@ -82,19 +76,6 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     if (first) { first.set({ selectable: false, evented: false, hoverCursor: 'default' }); templateObjRef.current = first; }
   };
 
-  // zoom = a VIEW transform (viewportTransform), never part of the saved content.
-  const emitZoom = useCallback(() => { const fc = fcRef.current; if (fc) onZoomRef.current?.(isZoomedVpt(fc.viewportTransform)); }, []);
-  const resetZoom = useCallback(() => { const fc = fcRef.current; if (!fc) return; fc.setViewportTransform([...FIT_VPT]); fc.renderAll(); emitZoom(); }, [emitZoom]);
-  // discard an in-progress no-pen stroke when a 2nd finger lands (pinch wins over a nascent draw)
-  const abortActiveStroke = useCallback(() => {
-    const fc = fcRef.current; if (!fc) return;
-    if (penRef.current?.pathObj) fc.remove(penRef.current.pathObj);
-    penRef.current = null;
-    if (shapeRef.current?.obj) fc.remove(shapeRef.current.obj);
-    shapeRef.current = null;
-    fc.renderAll();
-  }, []);
-
   // Load / replace the locked template image on the LIVE canvas + fit the canvas to its true
   // ratio. Safe to call repeatedly (idempotent on the same url). Operates on the existing
   // fcRef — NEVER disposes/recreates the canvas.
@@ -102,7 +83,6 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
     const fc = fcRef.current, fabric = fabricRef.current; if (!fc || !fabric) return;
     if (url === loadedTplRef.current) return;
     loadedTplRef.current = url;
-    fc.setViewportTransform([...FIT_VPT]);   // new content starts at fit
     if (templateObjRef.current) { fc.remove(templateObjRef.current); templateObjRef.current = null; }
     hasTemplateRef.current = false;
     const wrap = wrapRef.current;
@@ -131,7 +111,6 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const hydrateFromJson = useCallback(async (jsonStr) => {
     const fc = fcRef.current; if (!fc) return;
     const parsed = safeParse(jsonStr); if (!isObjectLevelReeditable(parsed)) return;
-    fc.setViewportTransform([...FIT_VPT]);   // re-edit starts at fit
     fc.setDimensions({ width: parsed.canvasWidth, height: parsed.canvasHeight });
     await fc.loadFromJSON(parsed);
     if (fcRef.current !== fc) return;                    // unmounted during async load (V21 guard)
@@ -249,14 +228,8 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
 
       fc.on('mouse:down', (opt) => {
         const e = opt.e; const { tool, color, size } = toolRef.current;
-        if (e.pointerType === 'pen') { penSeenRef.current = true; penDownRef.current = true; }
-        // DRAW path router: pen always draws; touch draws ONLY in no-pen fallback with a single
-        // contact. In pen mode, touch never draws (pan/zoom is handled by the pointer listeners) →
-        // a resting palm (touch) is rejected here. Multi-touch never draws (it is a pinch).
-        if (e.pointerType === 'touch') {
-          if (penSeenRef.current) return;                 // pen mode → touch never draws
-          if (pointersRef.current.size >= 2) return;       // 2nd finger present → pinch, not draw
-        }
+        if (e.pointerType === 'touch' && penDownRef.current) return;       // palm rejection
+        if (e.pointerType === 'pen') penDownRef.current = true;
         downRef.current = true;
         const p = fc.getScenePoint(e);
         if (isDrawTool(tool)) penRef.current = { tool, color, size, points: [[p.x, p.y, e.pressure || 0.5]], pathObj: null };
@@ -277,53 +250,13 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
         else if (shapeRef.current) commitShape();
       };
       fc.on('mouse:up', finish);
-
-      // ── gesture layer: pinch-zoom + pan via raw pointer events on the interaction canvas ──
-      const elc = fc.upperCanvasEl;
-      const toCanvas = (ev) => { const r = elc.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
-      const touchPts = () => [...pointersRef.current.values()].filter(pp => pp.type === 'touch').map(pp => pp.canvas);
-      const gd = (ev) => {
-        pointersRef.current.set(ev.pointerId, { type: ev.pointerType, canvas: toCanvas(ev) });
-        if (ev.pointerType === 'pen') { penSeenRef.current = true; return; }
-        const tp = touchPts();
-        if (tp.length === 2 && !penDownRef.current) {        // 2nd finger → start pinch, drop any nascent stroke
-          abortActiveStroke();
-          pinchRef.current = { d0: distance(tp[0], tp[1]) || 1, z0: fc.getZoom(), c0: centroid(tp) };
-        }
-      };
-      const gm = (ev) => {
-        const pp = pointersRef.current.get(ev.pointerId); if (!pp) return;
-        const prev = pp.canvas; pp.canvas = toCanvas(ev);
-        if (ev.pointerType === 'pen') return;
-        const tp = touchPts();
-        if (pinchRef.current && tp.length >= 2) {            // PINCH (+ 2-finger pan)
-          const c1 = centroid(tp); const z = nextZoom(pinchRef.current.z0, distance(tp[0], tp[1]) / pinchRef.current.d0);
-          if (z <= MIN_ZOOM) { fc.setViewportTransform([...FIT_VPT]); }
-          else {
-            fc.zoomToPoint(c1, z);
-            const vpt = fc.viewportTransform; vpt[4] += c1.x - pinchRef.current.c0.x; vpt[5] += c1.y - pinchRef.current.c0.y;
-            fc.setViewportTransform(vpt); pinchRef.current.c0 = c1;
-          }
-          fc.renderAll(); emitZoom();
-        } else if (penSeenRef.current && tp.length === 1 && isZoomedVpt(fc.viewportTransform)) {   // 1-finger PAN (pen mode)
-          const d = panDelta(prev, pp.canvas); const vpt = fc.viewportTransform; vpt[4] += d.dx; vpt[5] += d.dy;
-          fc.setViewportTransform(vpt); fc.renderAll();
-        }
-      };
-      const gu = (ev) => { pointersRef.current.delete(ev.pointerId); if (touchPts().length < 2) pinchRef.current = null; };
-      elc.addEventListener('pointerdown', gd);
-      elc.addEventListener('pointermove', gm);
-      elc.addEventListener('pointerup', gu);
-      elc.addEventListener('pointercancel', gu);
-      gestureCleanupRef.current = () => { elc.removeEventListener('pointerdown', gd); elc.removeEventListener('pointermove', gm); elc.removeEventListener('pointerup', gu); elc.removeEventListener('pointercancel', gu); };
-
       applyTool();
       // load whatever source is current (race-safe via refs): a reeditable json (object-level
       // re-edit) owns the canvas; otherwise the template image (raster / new chart).
       if (initialJsonRef.current && isObjectLevelReeditable(safeParse(initialJsonRef.current))) hydrateFromJson(initialJsonRef.current);
       else loadTemplate(templateUrlRef.current);
     })();
-    return () => { cancelled = true; gestureCleanupRef.current?.(); const fc = fcRef.current; if (fc) { try { fc.dispose(); } catch { /* ignore */ } fcRef.current = null; } readyRef.current = false; templateObjRef.current = null; loadedTplRef.current = undefined; };
+    return () => { cancelled = true; const fc = fcRef.current; if (fc) { try { fc.dispose(); } catch { /* ignore */ } fcRef.current = null; } readyRef.current = false; templateObjRef.current = null; loadedTplRef.current = undefined; };
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps  ← init ONCE; template handled by the effect below
 
   // load/replace the template on the LIVE canvas when it arrives/changes (no re-init) — UNLESS a
@@ -344,23 +277,13 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   useEffect(() => { applyTool(); }, [tool, applyTool]);
 
   useImperativeHandle(ref, () => ({
-    exportDataUrl: () => {
-      const fc = fcRef.current; if (!fc) return null;
-      fc.discardActiveObject();
-      const saved = fc.viewportTransform.slice();       // remember the user's zoom/pan
-      fc.setViewportTransform([...FIT_VPT]);             // export the FULL chart at canonical size (not cropped/zoomed)
-      fc.renderAll();
-      const url = fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
-      fc.setViewportTransform(saved); fc.renderAll();    // restore the user's view
-      return url;
-    },
-    resetZoom,
+    exportDataUrl: () => { const fc = fcRef.current; if (!fc) return null; fc.discardActiveObject(); fc.renderAll(); return fc.toDataURL({ format: 'png', quality: 1, multiplier: 2 }); },
     exportFabricJson: () => serializeFabricCanvas(fcRef.current),   // includes canvas dims → lossless object-level re-edit
     undo: async () => { const fc = fcRef.current; if (!fc || hiRef.current <= 0) return; hiRef.current--; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
     redo: async () => { const fc = fcRef.current; if (!fc || hiRef.current >= histRef.current.length - 1) return; hiRef.current++; await fc.loadFromJSON(JSON.parse(histRef.current[hiRef.current])); relockTemplate(); applyTool(); fc.renderAll(); },
     clear: () => { const fc = fcRef.current; if (!fc) return; fc.getObjects().filter(o => o !== templateObjRef.current).forEach(o => fc.remove(o)); fc.discardActiveObject(); fc.renderAll(); pushHistory(); },
     deleteSelected: () => { const fc = fcRef.current; if (!fc) return; const a = fc.getActiveObjects ? fc.getActiveObjects() : []; let n = 0; a.forEach(o => { if (o !== templateObjRef.current) { fc.remove(o); n++; } }); fc.discardActiveObject(); fc.renderAll(); if (n) pushHistory(); },
-  }), [pushHistory, applyTool, resetZoom, emitZoom]);
+  }), [pushHistory, applyTool]);
 
   // NO inline `background` — Fabric v7 COPIES the canvas element's inline style (incl. background)
   // to the upper-canvas, which sits absolutely positioned ON TOP of the lower-canvas. An opaque

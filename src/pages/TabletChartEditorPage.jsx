@@ -27,13 +27,12 @@ export default function TabletChartEditorPage() {
   const [tool, setTool] = useState('pen'); const [color, setColor] = useState('#ef4444'); const [size, setSize] = useState(4);
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false); const [saveErr, setSaveErr] = useState('');
-  const [zoomed, setZoomed] = useState(false);   // canvas zoomed in → show the ⤢ fit button
   const canvasRef = useRef(null); const sesUnsubRef = useRef(null);
 
   const closeEditor = useCallback((free = true) => {
     sesUnsubRef.current?.(); sesUnsubRef.current = null;
     if (free) freeChartTablet(deviceId).catch(() => {});
-    setActive(null); setTemplateDataUrl(''); setInitialFabricJson(''); setZoomed(false);
+    setActive(null); setTemplateDataUrl(''); setInitialFabricJson('');
   }, [deviceId]);
 
   const openSession = useCallback(async (sdoc) => {
@@ -131,14 +130,9 @@ export default function TabletChartEditorPage() {
             <EditorToolRail {...{ tool, setTool, color, setColor, size, setSize }}
               onUndo={() => canvasRef.current?.undo()} onRedo={() => canvasRef.current?.redo()}
               onClear={() => canvasRef.current?.clear()} onDelete={() => canvasRef.current?.deleteSelected()} />
-            <div className="relative flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
-              {zoomed && (
-                <button data-testid="zoom-fit" onClick={() => canvasRef.current?.resetZoom()}
-                  aria-label="พอดีจอ"
-                  className="absolute top-3 right-3 z-10 w-11 h-11 rounded-lg bg-neutral-900 text-white text-2xl shadow-lg flex items-center justify-center active:scale-95">⤢</button>
-              )}
+            <div className="flex-1 min-h-0 overflow-auto flex items-center justify-center p-3">
               <TabletChartCanvas ref={canvasRef} templateImageUrl={templateDataUrl} initialFabricJson={initialFabricJson} tool={tool} color={color} size={size}
-                onRequestSelect={() => setTool('select')} onZoomChange={setZoomed} />
+                onRequestSelect={() => setTool('select')} />
             </div>
           </div>
         </div>
