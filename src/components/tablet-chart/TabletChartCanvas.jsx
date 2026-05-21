@@ -163,6 +163,7 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   };
   const updateShape = (p) => {
     const fc = fcRef.current, s = shapeRef.current; if (!s) return; const o = s.obj;
+    s.ex = p.x; s.ey = p.y;   // track drag end → geometry-agnostic tiny-check (the arrow is a fabric.Group)
     if (s.tool === 'rect') o.set({ left: Math.min(p.x, s.sx), top: Math.min(p.y, s.sy), width: Math.abs(p.x - s.sx), height: Math.abs(p.y - s.sy) });
     else if (s.tool === 'circle') o.set({ left: Math.min(p.x, s.sx), top: Math.min(p.y, s.sy), rx: Math.abs(p.x - s.sx) / 2, ry: Math.abs(p.y - s.sy) / 2 });
     else if (s.tool === 'line') o.set({ x2: p.x, y2: p.y });
@@ -172,8 +173,12 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const commitShape = () => {
     const fc = fcRef.current, s = shapeRef.current; shapeRef.current = null; if (!s) return; const o = s.obj;
     const w = o.width || 0, h = o.height || 0;
-    const dist = Math.hypot((o.x2 ?? 0) - (o.x1 ?? 0), (o.y2 ?? 0) - (o.y1 ?? 0));
-    const tiny = ((s.tool === 'rect' || s.tool === 'circle') && w < 4 && h < 4) || ((s.tool === 'line' || s.tool === 'arrow') && dist < 4);
+    // line/arrow tiny-check uses the DRAG distance (sx,sy -> ex,ey) — NOT o.x1/o.x2: the arrow is a
+    // fabric.Group with no x1/x2/y1/y2, so introspecting them gave 0 -> every arrow was wrongly
+    // "tiny" -> removed on mouse:up (showed during drag, vanished on release). Drag-delta is
+    // geometry-agnostic (works for the Line AND the arrow Group).
+    const dragDist = Math.hypot((s.ex ?? s.sx) - s.sx, (s.ey ?? s.sy) - s.sy);
+    const tiny = ((s.tool === 'rect' || s.tool === 'circle') && w < 4 && h < 4) || ((s.tool === 'line' || s.tool === 'arrow') && dragDist < 4);
     if (tiny) { fc.remove(o); fc.renderAll(); return; }
     o.set({ selectable: true, evented: true }); o.setCoords?.();
     fc.renderAll(); pushHistory();
@@ -184,9 +189,13 @@ const TabletChartCanvas = forwardRef(function TabletChartCanvas({ templateImageU
   const addText = (color, sz, p) => {
     const fc = fcRef.current, fabric = fabricRef.current;
     const tb = new fabric.Textbox('ข้อความ', { left: p.x, top: p.y, fontSize: Math.max(18, sz * 4), fill: color, fontFamily: 'sans-serif', width: 160 });
+    // Mirror the proven PC ChartCanvas: add + leave the text SELECTED (with resize/move handles) +
+    // switch to select. Do NOT auto-edit on create — edit mode sets hasControls=false (hides the
+    // handles), which the user reported as "no way to resize/move the text box / set its width".
+    // Double-tap the text to edit (fabric default); the ml/mr handles set the box width.
+    tb.set({ selectable: true, evented: true });
     fc.add(tb); fc.setActiveObject(tb); fc.renderAll(); pushHistory();
     onSelectRef.current?.();
-    setTimeout(() => { try { tb.enterEditing?.(); tb.selectAll?.(); fc.renderAll(); } catch { /* ignore */ } }, 0);
   };
 
   // ── eraser: object-granular tap/scrub (getBoundingRect hit-test, topmost first) ──
