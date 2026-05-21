@@ -1,6 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../src/firebase.js', () => ({ storage: {}, db: {}, auth: {}, appId: 'test' }));
+vi.mock('firebase/storage', () => ({
+  ref: vi.fn((_s, p) => ({ __path: p })),
+  uploadString: vi.fn(async () => {}),
+  getDownloadURL: vi.fn(async (r) => `https://dl.example/${r.__path}`),
+  listAll: vi.fn(async () => ({ items: [] })),
+  deleteObject: vi.fn(async () => {}),
+}));
+// chartEditSession re-exports the pairing fns from scopedDataLayer — stub it so importing
+// chartEditSession doesn't pull backendClient/firebase wiring (mirror tablet-chart-template-transport).
+vi.mock('../src/lib/scopedDataLayer.js', () => ({
+  listenToChartTabletPresenceByBranch: vi.fn(), listenToRequestedSessionForTablet: vi.fn(),
+  upsertChartTabletPresence: vi.fn(), listenToChartEditSession: vi.fn(), createChartEditSession: vi.fn(),
+  updateChartEditSession: vi.fn(), freeChartTablet: vi.fn(), deleteChartEditSession: vi.fn(),
+}));
+
 import { outlineToSvgPath, strokeOutline, PEN_PRESETS } from '../src/lib/penStroke.js';
 import { TOOL_IDS, isDrawTool, isShapeTool, shapeObjectType } from '../src/lib/tabletChartTools.js';
+import { uploadTransportJson, downloadTransportJson } from '../src/lib/chartEditSession.js';
 
 describe('U1 outlineToSvgPath', () => {
   it('U1.1 empty outline → empty string', () => {
@@ -53,5 +71,25 @@ describe('U2 tool descriptors', () => {
     expect(shapeObjectType('text')).toBe('textbox');
     expect(shapeObjectType('pen')).toBe('path');
     expect(shapeObjectType('highlighter')).toBe('path');
+  });
+});
+
+describe('U3 transport JSON (fabricJson via Storage blob)', () => {
+  it('U3.1 uploadTransportJson stores {kind}.json + returns url', async () => {
+    const url = await uploadTransportJson('CES-x', 'result', { v: 5, objects: [{ type: 'rect' }] });
+    expect(url).toContain('uploads/chart-edit-sessions/CES-x/result.json');
+  });
+  it('U3.2 downloadTransportJson parses fetched text → object', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, text: async () => JSON.stringify({ objects: [{ type: 'textbox' }] }) }));
+    const obj = await downloadTransportJson('https://storage/x.json');
+    expect(obj.objects[0].type).toBe('textbox');
+  });
+  it('U3.3 downloadTransportJson returns null on !ok (no throw → no PC hang)', async () => {
+    global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
+    expect(await downloadTransportJson('https://storage/missing.json')).toBeNull();
+  });
+  it('U3.4 downloadTransportJson returns null when fetch itself throws', async () => {
+    global.fetch = vi.fn(async () => { throw new Error('network'); });
+    expect(await downloadTransportJson('https://storage/x.json')).toBeNull();
   });
 });

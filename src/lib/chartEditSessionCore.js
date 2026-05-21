@@ -42,7 +42,7 @@ export function buildSessionCreate({ sessionId, branchId, pcDeviceId, pcUid, tab
     sessionId, branchId: branchId || '', pcDeviceId, pcUid: pcUid || '', tabletDeviceId, tabletName: tabletName || '',
     status: SESSION_STATUS.REQUESTED, cancelledBy: null,
     template: { id: template?.id || '', name: template?.name || '', category: template?.category || '' },
-    patientLabel: patientLabel || '', templateImageUrl: null, resultImageUrl: null,
+    patientLabel: patientLabel || '', templateImageUrl: null, resultImageUrl: null, resultFabricJsonUrl: null,
     pcHeartbeatAt: nowMs, tabletHeartbeatAt: null,
     createdAt: nowMs, updatedAt: nowMs, expiresAt: nowMs + SESSION_MAX_AGE_MS,
   };

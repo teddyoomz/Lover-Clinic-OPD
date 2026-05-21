@@ -52,6 +52,25 @@ export async function downloadTransportImageAsDataUrl(url) {
   });
 }
 
+// fabricJson transport (more-tools): the editor's object model travels as a JSON Storage blob
+// alongside result.png, so the merged chart is lossless / re-editable-ready. The session doc
+// still carries only URLs (small). kind: 'result' (mirror the image helper's contract).
+export async function uploadTransportJson(sessionId, kind, obj) {
+  const r = storageRef(storage, `${folder(sessionId)}/${kind}.json`);
+  await uploadString(r, JSON.stringify(obj), 'raw', { contentType: 'application/json' });
+  return getDownloadURL(r);
+}
+
+// Guarded: returns null on ANY failure (bad status OR thrown fetch) so the PC merge can fall
+// back to the PNG and NEVER hangs waiting on the json (mirror the result-image download guard).
+export async function downloadTransportJson(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return JSON.parse(await res.text());
+  } catch { return null; }
+}
+
 export async function cleanupSessionStorage(sessionId) {
   try {
     const all = await listAll(storageRef(storage, folder(sessionId)));
