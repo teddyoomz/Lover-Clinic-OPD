@@ -71,25 +71,33 @@ export const officeToPdf = onObjectFinalized(
     const db = getFirestore();
     const messageRef = db.collection(MESSAGES_COLLECTION).doc(messageId);
 
-    // Patch ONLY the matching attachments[i] entry (race-safe — read-then-write
-    // on the message doc with the same attachments array, mutating exactly one
-    // slot identified by fullPath equality). The V73 normalizer preserves
-    // fullPath; we use that as the join key.
+    // Patch ONLY the matching attachments[i] entry. Uses a Firestore
+    // transaction for atomic read-modify-write — without this, concurrent
+    // Cloud Function instances (one per uploaded Office file) would each
+    // read the SAME attachments[] then write back their patched copies,
+    // clobbering each other (race condition caught in 2026-05-23 stress
+    // testing where 3/10 parallel uploads stayed 'pending' forever).
+    // The V73 normalizer preserves fullPath; we use that as the join key.
+    //
+    // NOTE: FieldValue.serverTimestamp() CANNOT be nested inside an array
+    // element. Use a plain Date (becomes a Timestamp via admin SDK conversion).
     const stampAttachment = async (patch) => {
-      const snap = await messageRef.get();
-      if (!snap.exists) {
-        console.warn('[officeToPdf] message not found', { messageId, filePath });
-        return;
-      }
-      const data = snap.data() || {};
-      const atts = Array.isArray(data.attachments) ? data.attachments.slice() : [];
-      const idx = atts.findIndex(a => a && a.fullPath === filePath);
-      if (idx === -1) {
-        console.warn('[officeToPdf] attachment not found in doc', { messageId, filePath });
-        return;
-      }
-      atts[idx] = { ...atts[idx], ...patch, pdfPreviewedAt: FieldValue.serverTimestamp() };
-      await messageRef.update({ attachments: atts });
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(messageRef);
+        if (!snap.exists) {
+          console.warn('[officeToPdf] message not found', { messageId, filePath });
+          return;
+        }
+        const data = snap.data() || {};
+        const atts = Array.isArray(data.attachments) ? data.attachments.slice() : [];
+        const idx = atts.findIndex(a => a && a.fullPath === filePath);
+        if (idx === -1) {
+          console.warn('[officeToPdf] attachment not found in doc', { messageId, filePath });
+          return;
+        }
+        atts[idx] = { ...atts[idx], ...patch, pdfPreviewedAt: new Date() };
+        tx.update(messageRef, { attachments: atts });
+      });
     };
 
     try {
