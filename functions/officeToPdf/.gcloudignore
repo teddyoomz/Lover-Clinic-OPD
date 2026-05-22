@@ -1,0 +1,10 @@
+# functions/officeToPdf/.gcloudignore
+# (2026-05-22 EOD+2 — T4) Exclude from gcloud / Cloud Build upload.
+
+node_modules/
+.git/
+.gitignore
+*.test.js
+*.test.jsx
+*.md
+.env*
