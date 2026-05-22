@@ -102,7 +102,14 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
           ...c,
           kind: 'course',
           label: 'คอร์ส',
-          name: c.name || c.courseName || c.courseId || '',
+          // V111 (2026-05-23 EOD+1 LATE) — receipt name override.
+          // Buy-fetcher (SaleTab/TFP) stamps `receiptCourseName` onto the
+          // course line item when admin set "ชื่อคอร์ส (แสดงในใบเสร็จ)"
+          // on the master course. Prefer it over `name` so the receipt
+          // shows the admin-curated label; fall back to original when
+          // empty (legacy sales pre-V111 + courses without override).
+          // AV111.
+          name: c.receiptCourseName || c.name || c.courseName || c.courseId || '',
         });
       }
       for (const p of (src.products || [])) {
@@ -128,7 +135,9 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
       ...it,
       kind: it.courseId ? 'course' : (it.isTakeaway ? 'med' : 'product'),
       label: it.courseId ? 'คอร์ส' : (it.isTakeaway ? 'ยา' : 'สินค้า'),
-      name: it.name || it.courseName || it.productName || it.courseId || it.productId || '',
+      // V111: receiptCourseName takes precedence for course rows. Non-course
+      // rows never have it set → fallback chain unchanged.
+      name: it.receiptCourseName || it.name || it.courseName || it.productName || it.courseId || it.productId || '',
     }));
   }, [s.items]);
 

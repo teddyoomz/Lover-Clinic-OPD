@@ -656,6 +656,15 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
             return {
               id: shape.id,
               name: shape.name || c.courseName || '',
+              // V111 (2026-05-23 EOD+1 LATE) — receipt name override.
+              // be_courses.receiptCourseName (form field "ชื่อคอร์ส (แสดงในใบเสร็จ)")
+              // exposed by beCourseToMasterShape as `receipt_course_name`. Carried
+              // as a PARALLEL field so SalePrintView prefers it while
+              // `name` (= original courseName) stays canonical for customer.courses
+              // display + treatment dropdowns + reports. Empty string when admin
+              // didn't set the override — SalePrintView's fallback chain renders
+              // the original name. AV111.
+              receiptCourseName: shape.receipt_course_name || '',
               price: shape.price != null ? shape.price : (c.salePrice ?? 0),
               category: shape.course_category || c.courseCategory || '',
               unit: c.unit || '',
@@ -683,6 +692,13 @@ export default function SaleTab({ clinicSettings, theme, initialCustomer, onCust
     const items = buyItems[buyModalType] || [];
     const newItems = items.filter(i => buyChecked.has(i.id)).map(i => ({
       id: i.id, name: i.name, price: i.price, unitPrice: i.price, unit: i.unit || (buyModalType === 'course' ? 'คอร์ส' : buyModalType === 'promotion' ? 'โปรโมชัน' : ''),
+      // V111 (2026-05-23 EOD+1 LATE) — receipt name override snapshot at
+      // buy-time. Carry from picker item into purchasedItem so it
+      // propagates verbatim through createBackendSale's spread into
+      // sale.items.courses[i].receiptCourseName. SalePrintView prefers
+      // this over `name`. Empty string when admin didn't set override.
+      // AV111.
+      receiptCourseName: i.receiptCourseName || '',
       qty: String(buyQtyMap[i.id] || 1), itemType: i.itemType || buyModalType, category: i.category,
       // Keep products/courses for auto-assign after sale
       products: i.products || [], courses: i.courses || [],

@@ -131,7 +131,19 @@ export default function QuotationFormModal({ quotation, onClose, onSaved, clinic
       };
       let entry;
       if (category === 'courses') {
-        entry = { ...base, courseId: item.id, courseName: item.name || '' };
+        // V111 (2026-05-23 EOD+1 LATE) — receipt name override.
+        // beCourseToMasterShape (via listCoursesForPicker) exposes the
+        // form-field "ชื่อคอร์ส (แสดงในใบเสร็จ)" as `receipt_course_name`
+        // (V44). Carried as parallel field on the quotation entry so
+        // QuotationPrintView prefers it while `courseName` stays original
+        // (consistent with sale-side fix). Empty string when admin didn't
+        // set the override → renderer falls back to original. AV111.
+        entry = {
+          ...base,
+          courseId: item.id,
+          courseName: item.name || '',
+          receiptCourseName: item.receipt_course_name || '',
+        };
       } else if (category === 'products') {
         entry = { ...base, productId: item.id, productName: item.name || '', isPremium: false };
       } else if (category === 'promotions') {

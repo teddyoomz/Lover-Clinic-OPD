@@ -54,7 +54,15 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
   // Flatten all 4 categories into one display list with category labels.
   const rows = useMemo(() => {
     const out = [];
-    (q.courses || []).forEach((x) => out.push({ kind: 'course', label: 'คอร์ส', name: x.courseName || x.courseId, ...x }));
+    // V111 (2026-05-23 EOD+1 LATE) — receipt name override on quotation
+    // prints (customer-facing). QuotationFormModal stamps `receiptCourseName`
+    // when admin set "ชื่อคอร์ส (แสดงในใบเสร็จ)" on the master course.
+    // Prefer override; fall back to original courseName for legacy quotes
+    // pre-V111 and courses without the override field. The trailing `...x`
+    // spread doesn't override `name` because quotation course entries have
+    // no top-level `name` field (QuotationFormModal uses `courseName`).
+    // AV111.
+    (q.courses || []).forEach((x) => out.push({ kind: 'course', label: 'คอร์ส', name: x.receiptCourseName || x.courseName || x.courseId, ...x }));
     (q.products || []).forEach((x) => out.push({ kind: 'product', label: 'สินค้า', name: x.productName || x.productId, ...x }));
     (q.promotions || []).forEach((x) => out.push({ kind: 'promotion', label: 'โปรโมชัน', name: x.promotionName || x.promotionId, ...x }));
     (q.takeawayMeds || []).forEach((x) => out.push({ kind: 'med', label: 'ยา', name: x.productName || x.productId, ...x }));

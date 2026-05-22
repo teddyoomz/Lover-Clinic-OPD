@@ -1599,6 +1599,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               return {
                 id: shape.id,
                 name: shape.name,
+                // V111 (2026-05-23 EOD+1 LATE) — receipt name override.
+                // be_courses.receiptCourseName ("ชื่อคอร์ส (แสดงในใบเสร็จ)")
+                // surfaced via beCourseToMasterShape.receipt_course_name (V44).
+                // Carried as parallel field so SalePrintView prefers it on the
+                // receipt while `name` stays original for customer.courses
+                // display + treatment course dropdowns + reports. Empty string
+                // → renderer falls back to original name. AV111.
+                receiptCourseName: shape.receipt_course_name || '',
                 price: shape.sale_price ?? shape.price,
                 category: shape.course_category || shape.category || '',
                 type: 'course', itemType: 'course',
@@ -1678,6 +1686,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
       // isRealQty locally so the stats + UI can branch without re-parsing.
       return {
         id: i.id, name: i.name, price: i.price, unitPrice: net.toFixed(2), unit: i.unit,
+        // V111 (2026-05-23 EOD+1 LATE) — receipt name override snapshot.
+        // Carried verbatim from picker → purchasedItem → grouped.courses[i]
+        // (line ~2724) → createBackendSale spread → sale.items.courses[i].
+        // SalePrintView prefers this over `name`. AV111.
+        receiptCourseName: i.receiptCourseName || '',
         qty: String(qty || 0), discount: String(disc), vat,
         itemType: i.itemType || buyModalType,
         category: i.category, courses: i.courses, products: i.products,
