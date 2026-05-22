@@ -7,8 +7,8 @@
 //   1. Uploads fixture files across all 7 convertible MIMEs (.doc/.docx/.xls/
 //      .xlsx/.ppt/.pptx/.csv) + 4 adversarial cases (.odt unsupported,
 //      password-protected .docx, corrupt file, ~49MB .pptx) under
-//      `staff-chat-attachments/{TEST-V108-BR}/{TEST-V108-MSG-{ts}}/{filename}`.
-//      Also writes a matching `be_staff_chat_messages/TEST-V108-MSG-{ts}` doc
+//      `staff-chat-attachments/{TEST-V109-BR}/{TEST-V109-MSG-{ts}}/{filename}`.
+//      Also writes a matching `be_staff_chat_messages/TEST-V109-MSG-{ts}` doc
 //      with attachments[] referencing each.
 //   2. Polls Firestore for up to 30s waiting for the Cloud Function to patch
 //      `attachments[i].pdfPreviewStatus` from 'pending' → 'ready' or 'failed'.
@@ -24,7 +24,7 @@
 // Per Rule M canonical pattern (V81-fix1 saga): admin-SDK + canonical
 // artifacts path NOT applicable here (staff-chat-attachments lives at root
 // per V73 Storage layout); two-phase dry-run not needed because we're
-// creating + deleting our OWN TEST-V108-* fixtures (not touching prod data).
+// creating + deleting our OWN TEST-V109-* fixtures (not touching prod data).
 //
 // Usage (post-deploy):
 //   vercel env pull .env.local.prod --environment=production   # if not yet pulled
@@ -57,7 +57,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await main();
 }
 
-const TEST_BRANCH = 'TEST-V108-BR';
+const TEST_BRANCH = 'TEST-V109-BR';
 const TEST_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 1_000;
 
@@ -85,8 +85,10 @@ async function main() {
   const db = getFirestore();
   const bucket = getStorage().bucket();
 
-  const messageId = `TEST-V108-MSG-${Date.now()}`;
-  const messageRef = db.collection('be_staff_chat_messages').doc(messageId);
+  const messageId = `TEST-V109-MSG-${Date.now()}`;
+  // V109 Rule M canonical path — see diag-office-preview-comprehensive.mjs for full rationale.
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const messageRef = db.doc(`artifacts/${projectId}/public/data/be_staff_chat_messages/${messageId}`);
   const prefix = `staff-chat-attachments/${TEST_BRANCH}/${messageId}/`;
 
   console.log(`Phase A — upload ${FIXTURES.length} fixtures to ${prefix}`);
@@ -114,7 +116,7 @@ async function main() {
   await messageRef.set({
     id: messageId,
     branchId: TEST_BRANCH,
-    displayName: 'E2E V108 RUNNER',
+    displayName: 'E2E V109 RUNNER',
     deviceId: 'e2e-runner',
     text: '',
     attachments,

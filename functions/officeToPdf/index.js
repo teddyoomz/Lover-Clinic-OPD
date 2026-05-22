@@ -6,7 +6,7 @@
 // http://localhost:3000 inside the same container (started by supervisord —
 // see Dockerfile + supervisord.conf).
 //
-// AV108 — sanctioned exception #1: this is the ONLY code path allowed to
+// AV109 — sanctioned exception #1: this is the ONLY code path allowed to
 // invoke a doc-conversion service, AND it must use localhost ONLY. No external
 // HTTP calls during conversion. PHI never leaves the GCP project. Source-grep
 // test in tests/audit-av108-office-preview-exception.test.js (T7) enforces.
@@ -39,7 +39,16 @@ initializeApp({ projectId: PROJECT_ID, storageBucket: STORAGE_BUCKET });
 
 const STAFF_CHAT_PREFIX = 'staff-chat-attachments/';
 const GOTENBERG_URL = 'http://localhost:3000/forms/libreoffice/convert';
-const MESSAGES_COLLECTION = 'be_staff_chat_messages';
+// (2026-05-23 EOD+1 — V109 ROOT-CAUSE FIX, Rule M canonical path discipline +
+// V15 #22 bare-collection lesson). Pre-fix used the BARE collection name; the
+// Cloud Function read+wrote to the WRONG Firestore root → conversion ran +
+// Storage PDF cached, but Firestore patch silently no-op'd → status stayed
+// 'pending' → 60s Path B fired → user-visible ⚠. Diag: 2 stuck attachments had
+// `.docx.pdf` cached at expected paths with correct application/pdf
+// contentType. Reference: pre-existing functions/index.js uses
+// `BASE_PATH = artifacts/${APP_ID}/public/data` — same project, correct
+// pattern, was right here all along. AV109 source-grep regression locks it.
+const MESSAGES_COLLECTION_PATH = `artifacts/${PROJECT_ID}/public/data/be_staff_chat_messages`;
 
 export const officeToPdf = onObjectFinalized(
   {
@@ -69,7 +78,11 @@ export const officeToPdf = onObjectFinalized(
 
     const bucket = getStorage().bucket();
     const db = getFirestore();
-    const messageRef = db.collection(MESSAGES_COLLECTION).doc(messageId);
+    // V109: production data lives at the Rule M canonical path. The pre-fix
+    // bare-collection read returned !snap.exists for every real message; the
+    // function logged 'message not found' + returned without patching → status
+    // stayed 'pending' forever (4 stuck attachments confirmed in prod diag).
+    const messageRef = db.doc(`${MESSAGES_COLLECTION_PATH}/${messageId}`);
 
     // Patch ONLY the matching attachments[i] entry. Uses a Firestore
     // transaction for atomic read-modify-write — without this, concurrent
@@ -105,7 +118,7 @@ export const officeToPdf = onObjectFinalized(
       const file = bucket.file(filePath);
       const [buf] = await file.download();
 
-      // 2. POST to bundled Gotenberg → PDF buffer (LOCAL ONLY — AV108)
+      // 2. POST to bundled Gotenberg → PDF buffer (LOCAL ONLY — AV109)
       const fd = new FormData();
       fd.append('files', new Blob([buf], { type: contentType }), parts[2]);
       const resp = await fetch(GOTENBERG_URL, { method: 'POST', body: fd });

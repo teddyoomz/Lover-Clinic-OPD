@@ -92,7 +92,14 @@ async function main() {
   const db = getFirestore();
   const bucket = getStorage().bucket();
   const messageId = `TEST-OPC-${Date.now()}`;
-  const messageRef = db.collection('be_staff_chat_messages').doc(messageId);
+  // V109 (2026-05-23 EOD+1): Rule M canonical path — must match client write
+  // path AND the Cloud Function read/write path. Pre-V109 wrote+read at bare
+  // `be_staff_chat_messages` matching the Cloud Function's bug → both lived in
+  // the same wrong-path universe → test+function agreed → claim "11/11
+  // verified" while real prod stayed pending forever. V66 mirror anti-pattern:
+  // when test fixture shares the code-under-test's wrong assumption, passing
+  // tests prove nothing.
+  const messageRef = db.doc(`artifacts/${APP_ID}/public/data/be_staff_chat_messages/${messageId}`);
   const prefix = `staff-chat-attachments/${TEST_BRANCH}/${messageId}/`;
 
   console.log('═══════════════════════════════════════════════════════════════════');

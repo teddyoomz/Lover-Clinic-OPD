@@ -51,7 +51,8 @@ async function main() {
   const db = getFirestore();
   const bucket = getStorage().bucket();
   const messageId = `TEST-OPVD-MSG-${Date.now()}`;
-  const messageRef = db.collection('be_staff_chat_messages').doc(messageId);
+  // V109 Rule M canonical path — see diag-office-preview-comprehensive.mjs for full rationale.
+  const messageRef = db.doc(`artifacts/${APP_ID}/public/data/be_staff_chat_messages/${messageId}`);
   const prefix = `staff-chat-attachments/${TEST_BRANCH}/${messageId}/`;
 
   // Two fixtures:
