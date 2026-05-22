@@ -88,4 +88,22 @@ describe('OP-SG — source-grep regression for Office preview contracts', () => 
     expect(c).toMatch(/staffChatOfficePreviewCore/);
     expect(c).toMatch(/lock-step/i);
   });
+
+  // ─── Path B graceful timeout (2026-05-22 EOD+2) ───────────────────────────
+  it('OP-SG.10 — buildMessageDoc stamps pdfPreviewStampedAt (raw Date.now millis) on Office attachments', () => {
+    const c = R('src/lib/staffChatClient.js');
+    expect(c).toMatch(/pdfPreviewStampedAt\s*=\s*Date\.now\(\)/);
+  });
+
+  it('OP-SG.11 — StaffChatAttachmentCard implements 60s timeout fallback (PENDING_TIMEOUT_MS + isPendingTimedOut + staff-chat-attach-pending-timeout testid)', () => {
+    const c = R('src/components/staffchat/StaffChatAttachmentCard.jsx');
+    expect(c).toMatch(/const PENDING_TIMEOUT_MS\s*=\s*60_000/);
+    expect(c).toMatch(/isPendingTimedOut/);
+    expect(c).toMatch(/staff-chat-attach-pending-timeout/);
+    // Tooltip Thai copy locked
+    expect(c).toMatch(/ใช้เวลานานเกินไป/);
+    expect(c).toMatch(/ดาวน์โหลด/);
+    // Pending render guarded by !isPendingTimedOut
+    expect(c).toMatch(/officeState === 'pending' && !isPendingTimedOut/);
+  });
 });

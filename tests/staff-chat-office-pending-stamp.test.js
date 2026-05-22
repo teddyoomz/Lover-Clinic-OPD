@@ -79,4 +79,26 @@ describe('OP-T2 — pending-stamp on Office attachments at send time', () => {
     }));
     expect(doc.attachments[0].pdfPreviewStatus).toBe('pending');
   });
+
+  // (2026-05-22 EOD+2 — Path B graceful timeout) buildMessageDoc also stamps
+  // pdfPreviewStampedAt (raw client-time millis) on Office attachments so the
+  // card can flip ⏳ → ⚠ after 60s when the Cloud Function isn't responding.
+  it('OP-T2.8 — Office attachment carries pdfPreviewStampedAt (Date.now millis)', () => {
+    const before = Date.now();
+    const doc = buildMessageDoc(basePayload({
+      attachments: [{ name: 'a.docx', mimeType: DOCX_MIME, size: 100, fullUrl: 'gs://x', fullPath: 'a' }],
+    }));
+    const after = Date.now();
+    const stamp = doc.attachments[0].pdfPreviewStampedAt;
+    expect(typeof stamp).toBe('number');
+    expect(stamp).toBeGreaterThanOrEqual(before);
+    expect(stamp).toBeLessThanOrEqual(after);
+  });
+
+  it('OP-T2.9 — image attachment does NOT carry pdfPreviewStampedAt (V73 shape preserved)', () => {
+    const doc = buildMessageDoc(basePayload({
+      attachments: [{ name: 'p.png', mimeType: 'image/png', size: 100, fullUrl: 'gs://x', fullPath: 'a' }],
+    }));
+    expect(doc.attachments[0].pdfPreviewStampedAt).toBeUndefined();
+  });
 });

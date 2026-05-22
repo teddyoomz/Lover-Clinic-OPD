@@ -50,6 +50,13 @@ function normalizeStaffChatAttachment(a) {
     o.pdfPreviewStatus = OfficePreviewStatus.PENDING;
     o.pdfPreviewUrl = null;
     o.pdfPreviewError = null;
+    // (2026-05-22 EOD+2 — Path B graceful-timeout) Client-time millis at send.
+    // Card reads this to flip ⏳ → ⚠ if the Cloud Function hasn't patched after
+    // 60s — graceful degradation when the conversion service is down /
+    // not-yet-deployed / overloaded. Pure-visual fork; if the patch eventually
+    // arrives the card flips to 👁 naturally. Raw Date.now() is fine — clock
+    // skew of even ±5 min still produces a meaningful signal at the 60s threshold.
+    o.pdfPreviewStampedAt = Date.now();
   }
   return o;
 }

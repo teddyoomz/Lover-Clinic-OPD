@@ -9,11 +9,18 @@
 // Thai tooltip on failure, plain card on the unsupported reservation. ⬇ always
 // works. AV108 — the 👁 opens the EXISTING StaffChatPdfOverlay with our cached
 // PDF; NO 3rd-party doc viewer is invoked.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Download, Eye, Loader2, AlertTriangle } from 'lucide-react';
 import { attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
 import { pdfPreviewStateOf } from '../../lib/staffChatOfficePreviewCore.js';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
+
+// (2026-05-22 EOD+2 — Path B graceful-timeout) ms threshold. After this much
+// time in 'pending' state, the card flips ⏳ → ⚠ with a "service unavailable"
+// tooltip. Covers: Cloud Function not deployed yet, function crashed/cold-start
+// stuck, Eventarc broken, IAM perms wrong. Pure visual — no Firestore write;
+// if a real patch eventually arrives the card flips to 👁 naturally.
+const PENDING_TIMEOUT_MS = 60_000;
 
 function iconFor(att) {
   const kind = attachmentKindFor(att && att.mimeType);
@@ -38,6 +45,21 @@ export function humanFileSize(n) {
 }
 
 export function StaffChatAttachmentCard({ att, onPreview }) {
+  // ─── Path B graceful timeout (2026-05-22 EOD+2) ───────────────────────────
+  // When officeState === 'pending', schedule a re-render after the threshold
+  // so the card can flip from ⏳ to ⚠. The hook must be called UNCONDITIONALLY
+  // (rules-of-hooks) — we early-return AFTER it.
+  const [, setTimeoutTick] = useState(0);
+  const stampedAt = (att && typeof att.pdfPreviewStampedAt === 'number') ? att.pdfPreviewStampedAt : null;
+  useEffect(() => {
+    if (!stampedAt) return;
+    const elapsed = Date.now() - stampedAt;
+    if (elapsed >= PENDING_TIMEOUT_MS) return; // already past threshold; no timer needed
+    const remaining = PENDING_TIMEOUT_MS - elapsed;
+    const id = setTimeout(() => setTimeoutTick(t => t + 1), remaining + 50);
+    return () => clearTimeout(id);
+  }, [stampedAt]);
+
   if (!att) return null;
   const kind = attachmentKindFor(att.mimeType);
   const isPdf = kind === 'pdf';
@@ -45,6 +67,12 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
   // pdfPreviewStateOf returns 'na' for non-Office; for Office one of
   // 'pending' / 'ready' / 'failed' / 'unsupported' (with defensive fallback).
   const officeState = isOffice ? pdfPreviewStateOf(att) : 'na';
+  // Local "pending too long" derivation — pure visual override of the ⏳ state.
+  const isPendingTimedOut = (
+    officeState === 'pending'
+    && stampedAt !== null
+    && (Date.now() - stampedAt) >= PENDING_TIMEOUT_MS
+  );
 
   const name = att.name || 'ไฟล์';
 
@@ -95,7 +123,7 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
             <Eye size={15} />
           </button>
         )}
-        {isOffice && officeState === 'pending' && (
+        {isOffice && officeState === 'pending' && !isPendingTimedOut && (
           <span
             data-testid="staff-chat-attach-pending"
             className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] opacity-60"
@@ -103,6 +131,16 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
             title="กำลังแปลงไฟล์เพื่อดูตัวอย่าง..."
           >
             <Loader2 size={15} className="animate-spin" />
+          </span>
+        )}
+        {isOffice && officeState === 'pending' && isPendingTimedOut && (
+          <span
+            data-testid="staff-chat-attach-pending-timeout"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-amber-500"
+            aria-label="ใช้เวลานานเกินไป"
+            title="ใช้เวลานานเกินไป — บริการแปลงไฟล์อาจไม่พร้อมใช้งาน. ดาวน์โหลดเพื่อเปิดดูได้"
+          >
+            <AlertTriangle size={15} />
           </span>
         )}
         {isOffice && officeState === 'failed' && (
