@@ -45,6 +45,24 @@ service firebase.storage {
       allow read, write, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
+    // ─── Chart templates (2026-05-22 EOD+1) ───────────────────────────────
+    // Pattern: chart-templates/{templateId}.{ext}
+    // ChartTemplateSelector uploads user-added chart background images here
+    // (universal — same image visible across all branches per user requirement
+    // "ไม่ต้องเก็บแยกสาขา"). The Firestore doc be_chart_templates/{templateId}
+    // holds the download URL. READ is permissive (isSignedIn) because patients
+    // hit TFP via anon-auth and need to load chart images. WRITE/DELETE staff
+    // only. Image-only MIME gate + 10MB cap (charts are typically 200KB-2MB
+    // JPG/PNG/SVG — pen+anatomy diagrams, not high-res photos).
+    // Probe-Deploy-Probe #14: anon write here → 403; staff write → 200.
+    match /chart-templates/{file=**} {
+      allow read: if request.auth != null;  // signed-in (staff OR patient anon)
+      allow create, update: if isClinicStaff()
+                            && request.resource.size < 10 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+      allow delete: if isClinicStaff();
+    }
+
     // ─── V73 Feature F (2026-05-16) — Staff chat attachments ──────────────
     // (2026-05-22) Multi-image: staff-chat-attachments/{branchId}/{messageId}/{id}-{t|o}.{ext}
     //   — thumbnail (~512px jpeg, tiny) + original. {file=**} matches the nested

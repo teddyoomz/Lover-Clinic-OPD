@@ -186,6 +186,17 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
      -d '{"fields":{"probe":{"booleanValue":true}}}'
    # → expect 403 (clinic-staff read; admin OR perm_system_config_management write)
    ```
+14. **Chart Templates (2026-05-22 EOD+1)** — anon WRITE to chart-templates/ Storage path → expect 401/403, AND anon WRITE to be_chart_templates Firestore doc → expect 403:
+   ```
+   curl -X POST "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o?name=chart-templates%2FPROBE-$(date +%s).png" \
+     -H "Content-Type: image/png" --data-binary "@/dev/null"
+   # → expect 401/403 (clinic-staff only via storage.rules; image/* + 10MB cap)
+
+   curl -X POST "$BASE/$PREFIX/be_chart_templates?documentId=test-probe-chart-$(date +%s)" \
+     -H "Content-Type: application/json" \
+     -d '{"fields":{"probe":{"booleanValue":true}}}'
+   # → expect 403 (clinic-staff write; signed-in read)
+   ```
 13. `firebase deploy --only firestore:rules,storage:rules`
 14. รัน probe 1, 5, 6, 7, 8, 9, 12 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11) หรือ ≠ 403 (เฉพาะ 12) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
 13. ลบ probe docs ทิ้ง:
