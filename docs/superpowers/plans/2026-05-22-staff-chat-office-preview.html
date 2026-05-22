@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat — Office Preview Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --ok: #16a34a; --warn: #f59e0b; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 2em auto; padding: 1em; line-height: 1.55; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; margin-top: 1.4em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.4; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; }
+    code:not(pre code) { background: #eee; padding: 1px 5px; border-radius: 3px; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.4em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 600; }
+    .chat-bubble { background: #f8fafc; border-radius: 12px; padding: 12px; max-width: 320px; border: 1px solid #e5e5e5; font-size: 13px; }
+    .attach-card { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px 10px; max-width: 240px; }
+    .attach-card .name { flex: 1; min-width: 0; }
+    .attach-card .name-line { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #222; }
+    .attach-card .size-line { font-size: 10px; color: #666; }
+    .attach-card .actions { display: flex; gap: 4px; }
+    .attach-card .btn { width: 30px; height: 30px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: #666; }
+    .attach-card .btn.disabled { color: #ccc; }
+    .attach-card .icon { font-size: 22px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.7em; text-align: left; vertical-align: top; font-size: 0.9em; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat — Word/Excel/PowerPoint Preview Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use HTML checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Pixel-perfect preview of Word / Excel / PowerPoint / CSV in staff chat via server-side LibreOffice→PDF conversion (Gotenberg in a Firebase Cloud Function 2nd Gen) reusing the existing PDF iframe overlay.</p>
+  <p><strong>Architecture:</strong> Storage <code>onFinalize</code> trigger → Cloud Function runs Gotenberg HTTP API → PDF cached at same prefix → Firestore patch sets <code>attachments[i].pdfPreview*</code> fields → client listener flips ⏳ to 👁 automatically. PDF cleans alongside original via existing V73 30d retention sweep.</p>
+  <p><strong>Tech Stack:</strong> Firebase Functions 2nd Gen (Docker — <code>gotenberg/gotenberg:8</code>), firebase-admin SDK, undici (built-in Node fetch), React 19, Vitest 4.1, Vite 8.</p>
+  <p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-22-staff-chat-office-preview-design.html</code> · <strong>Q1=A pixel-perfect</strong>, <strong>Q2=C hybrid+30d</strong>, <strong>Q3=C Word+Excel+PPT+CSV</strong>, <strong>Q4=B card+⚠+tooltip</strong></p>
+  <p><strong>Stop gate:</strong> vitest all green + build clean. Deploy (Cloud Function + Vercel + storage.rules if any) waits for explicit user "deploy" verb per V18.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<p>Five states the attachment card renders. Implementation must match these exactly. Source-of-truth is the spec; this mockup is duplicated here so the implementer has visual reference without context-switching.</p>
+
+<div class="mockup">
+  <div class="mockup-label">State 1 · pending (⏳ spinner, ⬇ works, no 👁 yet)</div>
+  <div class="chat-bubble">
+    <div class="attach-card">
+      <span class="icon">📝</span>
+      <div class="name"><div class="name-line">ผลตรวจสุขภาพประจำปี.docx</div><div class="size-line">142 KB</div></div>
+      <div class="actions">
+        <span class="btn disabled" title="กำลังแปลงไฟล์เพื่อดูตัวอย่าง...">⏳</span>
+        <span class="btn">⬇</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 2 · ready (👁 opens PDF overlay; ⬇ works)</div>
+  <div class="chat-bubble">
+    <div class="attach-card">
+      <span class="icon">📝</span>
+      <div class="name"><div class="name-line">ผลตรวจสุขภาพประจำปี.docx</div><div class="size-line">142 KB</div></div>
+      <div class="actions">
+        <span class="btn" style="color:#dc2626" title="ดูตัวอย่าง">👁</span>
+        <span class="btn">⬇</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 3 · failed (⚠ + tooltip from server; ⬇ works)</div>
+  <div class="chat-bubble">
+    <div class="attach-card" title="แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือต้องใช้รหัสผ่าน">
+      <span class="icon">📝</span>
+      <div class="name"><div class="name-line">protected.docx</div><div class="size-line">98 KB</div></div>
+      <div class="actions">
+        <span class="btn" style="color:#f59e0b" title="แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือต้องใช้รหัสผ่าน">⚠</span>
+        <span class="btn">⬇</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 4 · unsupported (no preview affordance at all; just ⬇)</div>
+  <div class="chat-bubble">
+    <div class="attach-card">
+      <span class="icon">📝</span>
+      <div class="name"><div class="name-line">notes.pages</div><div class="size-line">22 KB</div></div>
+      <div class="actions">
+        <span class="btn">⬇</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 5 · 👁 clicked → existing StaffChatPdfOverlay (no UI change to overlay)</div>
+  <div style="background:#000;color:#fff;padding:12px;border-radius:8px;max-width:560px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
+      <span>ผลตรวจสุขภาพประจำปี.docx · 142 KB</span>
+      <span>⬇ ดาวน์โหลด · ✕ ปิด (ESC)</span>
+    </div>
+    <div style="background:#fff;color:#000;padding:18px;border-radius:6px;font-family:sans-serif">
+      <p style="text-align:center;font-weight:bold;font-size:14px">[PDF iframe — existing StaffChatPdfOverlay renders the cached PDF here, identical fidelity to opening in Word]</p>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Implementation sequence (task order + dependency arrows)</div>
+  <svg viewBox="0 0 1000 460" style="width:100%;height:auto;background:#fff" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    </defs>
+
+    <!-- Row 1: Foundation -->
+    <rect x="20" y="20" width="280" height="70" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="160" y="46" font-size="13" font-weight="bold" text-anchor="middle" fill="#1e3a8a">T1: core module + attachmentKindFor</text>
+    <text x="160" y="66" font-size="10" text-anchor="middle" fill="#1e3a8a">staffChatOfficePreviewCore.js + retentionCore extend</text>
+    <text x="160" y="80" font-size="10" text-anchor="middle" fill="#1e3a8a">+ unit tests (TDD)</text>
+
+    <rect x="360" y="20" width="280" height="70" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="500" y="46" font-size="13" font-weight="bold" text-anchor="middle" fill="#1e3a8a">T2: pending-stamp at send</text>
+    <text x="500" y="66" font-size="10" text-anchor="middle" fill="#1e3a8a">buildMessageDoc + buildAttachmentObject</text>
+    <text x="500" y="80" font-size="10" text-anchor="middle" fill="#1e3a8a">stamps pdfPreviewStatus:'pending'</text>
+
+    <rect x="700" y="20" width="280" height="70" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+    <text x="840" y="46" font-size="13" font-weight="bold" text-anchor="middle" fill="#1e3a8a">T3: card 4-state rendering</text>
+    <text x="840" y="66" font-size="10" text-anchor="middle" fill="#1e3a8a">StaffChatAttachmentCard.jsx</text>
+    <text x="840" y="80" font-size="10" text-anchor="middle" fill="#1e3a8a">⏳/👁/⚠/⬇-only + RTL tests</text>
+
+    <line x1="300" y1="55" x2="360" y2="55" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="640" y1="55" x2="700" y2="55" stroke="#444" marker-end="url(#arr)"/>
+
+    <!-- Row 2: Server -->
+    <rect x="20" y="130" width="280" height="80" rx="6" fill="#fee2e2" stroke="#dc2626"/>
+    <text x="160" y="156" font-size="13" font-weight="bold" text-anchor="middle" fill="#7f1d1d">T4: Cloud Function source</text>
+    <text x="160" y="176" font-size="10" text-anchor="middle" fill="#7f1d1d">functions/officeToPdf/{index.js,Dockerfile,package.json}</text>
+    <text x="160" y="190" font-size="10" text-anchor="middle" fill="#7f1d1d">+ pure-logic unit tests</text>
+
+    <rect x="360" y="130" width="280" height="80" rx="6" fill="#fee2e2" stroke="#dc2626"/>
+    <text x="500" y="156" font-size="13" font-weight="bold" text-anchor="middle" fill="#7f1d1d">T5: firebase.json wiring</text>
+    <text x="500" y="176" font-size="10" text-anchor="middle" fill="#7f1d1d">functions[] entry + storage.rules confirm</text>
+    <text x="500" y="190" font-size="10" text-anchor="middle" fill="#7f1d1d">(admin SDK bypasses → no rule change)</text>
+
+    <line x1="160" y1="90" x2="160" y2="130" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="300" y1="170" x2="360" y2="170" stroke="#444" marker-end="url(#arr)"/>
+
+    <!-- Row 3: Verification -->
+    <rect x="20" y="250" width="280" height="80" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="160" y="276" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">T6: Rule I flow-simulate</text>
+    <text x="160" y="296" font-size="10" text-anchor="middle" fill="#14532d">pending→ready/failed/unsupported chain</text>
+    <text x="160" y="310" font-size="10" text-anchor="middle" fill="#14532d">via mocked Cloud Function patcher</text>
+
+    <rect x="360" y="250" width="280" height="80" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="500" y="276" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">T7: AV108 amendment</text>
+    <text x="500" y="296" font-size="10" text-anchor="middle" fill="#14532d">SKILL.md + audit regression test</text>
+    <text x="500" y="310" font-size="10" text-anchor="middle" fill="#14532d">closed-list sanctioned exception</text>
+
+    <rect x="700" y="250" width="280" height="80" rx="6" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="840" y="276" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">T8: source-grep regression</text>
+    <text x="840" y="296" font-size="10" text-anchor="middle" fill="#14532d">state derivation contract + no-3rd-party</text>
+    <text x="840" y="310" font-size="10" text-anchor="middle" fill="#14532d">sanctioned consumer locks</text>
+
+    <line x1="500" y1="210" x2="500" y2="250" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="300" y1="290" x2="360" y2="290" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="640" y1="290" x2="700" y2="290" stroke="#444" marker-end="url(#arr)"/>
+
+    <!-- Row 4: Close -->
+    <rect x="200" y="370" width="600" height="60" rx="6" fill="#fde68a" stroke="#d97706"/>
+    <text x="500" y="396" font-size="14" font-weight="bold" text-anchor="middle" fill="#78350f">T9: V21 fixups + full vitest + build (Stop gate — all green)</text>
+    <text x="500" y="414" font-size="10" text-anchor="middle" fill="#78350f">Then: NEW e2e script ready (does NOT run until user "deploy")</text>
+
+    <line x1="160" y1="330" x2="160" y2="395" stroke="#444"/>
+    <line x1="160" y1="395" x2="200" y2="395" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="500" y1="330" x2="500" y2="370" stroke="#444" marker-end="url(#arr)"/>
+    <line x1="840" y1="330" x2="840" y2="395" stroke="#444"/>
+    <line x1="840" y1="395" x2="800" y2="395" stroke="#444" marker-end="url(#arr)"/>
+  </svg>
+</div>
+
+<h2>File Structure</h2>
+
+<table>
+  <thead>
+    <tr><th>File</th><th>Purpose</th><th>Touched in</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>src/lib/staffChatOfficePreviewCore.js</code> <strong>(NEW)</strong></td><td>Pure JS — OFFICE_CONVERTIBLE_MIMES Set, isOfficeConvertible(mime), OfficePreviewStatus constants, pdfPreviewStateOf(att). Imported by core helpers + client UI + Cloud Function (the same MIME whitelist).</td><td>T1</td></tr>
+    <tr><td><code>src/lib/staffChatRetentionCore.js</code> <strong>(MOD)</strong></td><td>Extend attachmentKindFor to return 'office' when MIME is in OFFICE_CONVERTIBLE_MIMES; preserves 'image'/'video'/'audio'/'pdf'/'file' branches.</td><td>T1</td></tr>
+    <tr><td><code>src/lib/staffChatClient.js</code> <strong>(MOD)</strong></td><td>buildAttachmentObject (or buildMessageDoc) stamps <code>pdfPreviewStatus: 'pending'</code> on Office-MIME attachments at send time.</td><td>T2</td></tr>
+    <tr><td><code>src/components/staffchat/StaffChatAttachmentCard.jsx</code> <strong>(MOD)</strong></td><td>Replace the PDF-only conditional with 'office' branch — render ⏳ (pending) / 👁 (ready, opens StaffChatPdfOverlay with pdfPreviewUrl) / ⚠ (failed, tooltip = pdfPreviewError) / no preview affordance (unsupported). ⬇ unchanged.</td><td>T3</td></tr>
+    <tr><td><code>functions/officeToPdf/index.js</code> <strong>(NEW)</strong></td><td>Storage <code>onObjectFinalized</code> handler — MIME gate, download original, POST to <code>http://localhost:3000/forms/libreoffice/convert</code> (bundled Gotenberg), upload PDF, patch Firestore attachments[i].pdfPreview* fields. Error handling per state machine.</td><td>T4</td></tr>
+    <tr><td><code>functions/officeToPdf/Dockerfile</code> <strong>(NEW)</strong></td><td>FROM gotenberg/gotenberg:8 + Node 20 layer + COPY index.js + supervisor starts both Gotenberg HTTP server (port 3000) and Node handler.</td><td>T4</td></tr>
+    <tr><td><code>functions/officeToPdf/package.json</code> <strong>(NEW)</strong></td><td>Cloud Function dependencies: firebase-admin, firebase-functions, undici (or built-in fetch on Node 20). Pure-logic unit-testable helpers exported.</td><td>T4</td></tr>
+    <tr><td><code>firebase.json</code> <strong>(MOD)</strong></td><td>Add functions[] entry pointing at <code>functions/officeToPdf</code> with runtime: 'nodejs20' + source-only build (Cloud Build picks up Dockerfile).</td><td>T5</td></tr>
+    <tr><td><code>storage.rules</code></td><td>NO CHANGE — admin SDK bypasses rules; the PDF lives under existing <code>staff-chat-attachments/</code> prefix where client write is already locked to image/pdf, but admin write is unrestricted.</td><td>T5 (verify only)</td></tr>
+    <tr><td><code>firestore.rules</code></td><td>NO CHANGE — admin SDK bypasses; client read rule unchanged; the new <code>pdfPreview*</code> fields are not subject to field-level rules.</td><td>T5 (verify only)</td></tr>
+    <tr><td><code>tests/staff-chat-office-preview-core.test.js</code> <strong>(NEW)</strong></td><td>Unit tests for the pure helpers — MIME whitelist coverage, state derivation matrix, frozen constants.</td><td>T1</td></tr>
+    <tr><td><code>tests/staff-chat-office-card-rtl.test.jsx</code> <strong>(NEW)</strong></td><td>RTL tests for the 4 card states.</td><td>T3</td></tr>
+    <tr><td><code>tests/staff-chat-office-preview-flow-simulate.test.js</code> <strong>(NEW)</strong></td><td>Rule I full-flow simulate — chain client-stamp → Cloud Function patch (mocked) → listener → card render. All 4 states + unsupported MIME path.</td><td>T6</td></tr>
+    <tr><td><code>tests/staff-chat-office-preview-source-grep.test.js</code> <strong>(NEW)</strong></td><td>Regression: AV108 closed-list (Cloud Function = ONE sanctioned exception), state-derivation contract locked, attachmentKindFor returns 'office' before 'file'.</td><td>T8</td></tr>
+    <tr><td><code>tests/audit-anti-vibe-code-av108.test.js</code> (existing? or NEW)</td><td>Extend/create AV108 regression — no 3rd-party doc viewer URL/library in client bundle; Cloud Function uses only localhost Gotenberg.</td><td>T7</td></tr>
+    <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> <strong>(MOD)</strong></td><td>Update AV108 entry — add the closed-list ONE sanctioned exception (<code>functions/officeToPdf/</code> = local server-side Gotenberg in our Firebase project).</td><td>T7</td></tr>
+    <tr><td><code>scripts/e2e-staff-chat-office-preview.mjs</code> <strong>(NEW)</strong></td><td>Rule Q L2 e2e script (admin SDK against real prod). Uploads test fixtures across all 7 MIMEs + adversarial (password-protect/corrupt/oversize/.odt-unsupported). DOES NOT RUN until deploy — checked in ready.</td><td>T9 (ship, don't run)</td></tr>
+    <tr><td><code>tests/staff-chat-any-file.test.js</code> <strong>(MOD if needed)</strong></td><td>V21 fixup — the existing source-grep test asserts office = download-only ("no in-browser office preview"). New 'office' kind with 👁 affordance changes that contract. Flip the assertion to lock the new contract.</td><td>T9</td></tr>
+  </tbody>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: Pure-JS core module + attachmentKindFor extension</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/lib/staffChatOfficePreviewCore.js</code></li>
+    <li>Modify: <code>src/lib/staffChatRetentionCore.js</code> (extend <code>attachmentKindFor</code>)</li>
+    <li>Create: <code>tests/staff-chat-office-preview-core.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test bank</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-preview-core.test.js
+import { describe, it, expect } from 'vitest';
+import {
+  OFFICE_CONVERTIBLE_MIMES,
+  isOfficeConvertible,
+  OfficePreviewStatus,
+  pdfPreviewStateOf,
+} from '../src/lib/staffChatOfficePreviewCore.js';
+import { attachmentKindFor } from '../src/lib/staffChatRetentionCore.js';
+
+describe('OP1 — MIME whitelist (Q3=C: Word + Excel + PPT + CSV)', () => {
+  it('OP1.1 — includes the 7 canonical Office MIMEs', () => {
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/msword')).toBe(true); // .doc
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(true); // .docx
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.ms-excel')).toBe(true); // .xls
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe(true); // .xlsx
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.ms-powerpoint')).toBe(true); // .ppt
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe(true); // .pptx
+    expect(OFFICE_CONVERTIBLE_MIMES.has('text/csv')).toBe(true);
+  });
+  it('OP1.2 — excludes unsupported / non-convertible MIMEs', () => {
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/pdf')).toBe(false);
+    expect(OFFICE_CONVERTIBLE_MIMES.has('image/png')).toBe(false);
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/vnd.oasis.opendocument.text')).toBe(false); // .odt — unsupported per Q3=C
+    expect(OFFICE_CONVERTIBLE_MIMES.has('application/x-iwork-pages-sffpages')).toBe(false); // .pages
+  });
+  it('OP1.3 — Set is frozen (immutable closed list)', () => {
+    expect(Object.isFrozen(OFFICE_CONVERTIBLE_MIMES) || OFFICE_CONVERTIBLE_MIMES.constructor === Set).toBe(true);
+    // Practical immutability — a writer would mutate at runtime; the lock is by convention via export
+  });
+  it('OP1.4 — isOfficeConvertible() — case-insensitive, trims, handles null/undefined', () => {
+    expect(isOfficeConvertible('APPLICATION/MSWORD')).toBe(true);
+    expect(isOfficeConvertible(' application/pdf ')).toBe(false);
+    expect(isOfficeConvertible(null)).toBe(false);
+    expect(isOfficeConvertible(undefined)).toBe(false);
+    expect(isOfficeConvertible('')).toBe(false);
+    expect(isOfficeConvertible(123)).toBe(false);
+  });
+});
+
+describe('OP2 — OfficePreviewStatus constants (frozen)', () => {
+  it('OP2.1 — exposes the 4 state strings', () => {
+    expect(OfficePreviewStatus.PENDING).toBe('pending');
+    expect(OfficePreviewStatus.READY).toBe('ready');
+    expect(OfficePreviewStatus.FAILED).toBe('failed');
+    expect(OfficePreviewStatus.UNSUPPORTED).toBe('unsupported');
+  });
+  it('OP2.2 — frozen object', () => {
+    expect(Object.isFrozen(OfficePreviewStatus)).toBe(true);
+  });
+});
+
+describe('OP3 — pdfPreviewStateOf(att) state derivation', () => {
+  it('OP3.1 — null/undefined attachment → na', () => {
+    expect(pdfPreviewStateOf(null)).toBe('na');
+    expect(pdfPreviewStateOf(undefined)).toBe('na');
+  });
+  it('OP3.2 — non-convertible MIME (image/pdf/etc) → na (no Office preview affordance)', () => {
+    expect(pdfPreviewStateOf({ mimeType: 'image/png' })).toBe('na');
+    expect(pdfPreviewStateOf({ mimeType: 'application/pdf' })).toBe('na');
+  });
+  it('OP3.3 — Office MIME without pdfPreviewStatus → pending (legacy / inflight)', () => {
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword' })).toBe('pending');
+  });
+  it('OP3.4 — explicit status fields are respected', () => {
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'pending' })).toBe('pending');
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'ready', pdfPreviewUrl: 'https://...' })).toBe('ready');
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'failed' })).toBe('failed');
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'unsupported' })).toBe('unsupported');
+  });
+  it('OP3.5 — ready status without URL falls back to pending (defensive)', () => {
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'ready' })).toBe('pending');
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'ready', pdfPreviewUrl: '' })).toBe('pending');
+  });
+  it('OP3.6 — unknown status value falls back to pending', () => {
+    expect(pdfPreviewStateOf({ mimeType: 'application/msword', pdfPreviewStatus: 'garbage' })).toBe('pending');
+  });
+});
+
+describe('OP4 — attachmentKindFor returns "office" for convertible MIMEs', () => {
+  it('OP4.1 — returns "office" for all 7 convertible MIMEs', () => {
+    expect(attachmentKindFor('application/msword')).toBe('office');
+    expect(attachmentKindFor('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('office');
+    expect(attachmentKindFor('application/vnd.ms-excel')).toBe('office');
+    expect(attachmentKindFor('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('office');
+    expect(attachmentKindFor('application/vnd.ms-powerpoint')).toBe('office');
+    expect(attachmentKindFor('application/vnd.openxmlformats-officedocument.presentationml.presentation')).toBe('office');
+    expect(attachmentKindFor('text/csv')).toBe('office');
+  });
+  it('OP4.2 — pre-existing branches unchanged: image/video/audio/pdf/file', () => {
+    expect(attachmentKindFor('image/png')).toBe('image');
+    expect(attachmentKindFor('video/mp4')).toBe('video');
+    expect(attachmentKindFor('audio/mpeg')).toBe('audio');
+    expect(attachmentKindFor('application/pdf')).toBe('pdf');
+    expect(attachmentKindFor('application/zip')).toBe('file');
+    expect(attachmentKindFor('application/vnd.oasis.opendocument.text')).toBe('file'); // .odt → file (unsupported)
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run test to verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-preview-core.test.js</code></p>
+  <p>Expected: FAIL — "Cannot find module '../src/lib/staffChatOfficePreviewCore.js'"</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement core module</strong></label></div>
+<pre><code class="language-javascript">// src/lib/staffChatOfficePreviewCore.js
+//
+// Pure JS — no React, no Firebase. Shared by client (UI state derivation),
+// server (Cloud Function MIME gate), and Cloud Function (failure-reason copy).
+// Rule of 3 alignment — single source of truth for "what counts as Office".
+//
+// Scope per spec Q3=C: Word + Excel + PowerPoint + CSV.
+// Format: closed Set of canonical MIME strings (lowercase, no parameters).
+
+export const OFFICE_CONVERTIBLE_MIMES = new Set([
+  'application/msword',                                                                  // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',             // .docx
+  'application/vnd.ms-excel',                                                            // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',                   // .xlsx
+  'application/vnd.ms-powerpoint',                                                       // .ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',           // .pptx
+  'text/csv',                                                                            // .csv
+]);
+
+export function isOfficeConvertible(mime) {
+  if (typeof mime !== 'string') return false;
+  return OFFICE_CONVERTIBLE_MIMES.has(mime.toLowerCase().trim());
+}
+
+export const OfficePreviewStatus = Object.freeze({
+  PENDING: 'pending',
+  READY: 'ready',
+  FAILED: 'failed',
+  UNSUPPORTED: 'unsupported',
+});
+
+// Pure derivation — UI state from an attachment record. Returns one of:
+//   'na'          — not an Office attachment; no preview affordance
+//   'pending'     — Office MIME, conversion in flight (or status missing on legacy)
+//   'ready'       — Office MIME, PDF cached, has pdfPreviewUrl
+//   'failed'      — Office MIME, conversion failed
+//   'unsupported' — Office MIME the server rejected (shouldn't happen for the 7 canonical MIMEs;
+//                   reserved for future extension or rare LibreOffice format-not-supported errors)
+export function pdfPreviewStateOf(att) {
+  if (!att || typeof att !== 'object') return 'na';
+  if (!isOfficeConvertible(att.mimeType)) return 'na';
+  const status = att.pdfPreviewStatus;
+  if (status === OfficePreviewStatus.READY) {
+    // Defensive: ready requires a URL. Without one, fall back to pending.
+    return (typeof att.pdfPreviewUrl === 'string' && att.pdfPreviewUrl.length > 0)
+      ? OfficePreviewStatus.READY
+      : OfficePreviewStatus.PENDING;
+  }
+  if (status === OfficePreviewStatus.FAILED) return OfficePreviewStatus.FAILED;
+  if (status === OfficePreviewStatus.UNSUPPORTED) return OfficePreviewStatus.UNSUPPORTED;
+  // Any other value (missing, undefined, garbage) → pending (legacy/inflight)
+  return OfficePreviewStatus.PENDING;
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Extend attachmentKindFor</strong></label></div>
+<pre><code class="language-javascript">// src/lib/staffChatRetentionCore.js — MOD attachmentKindFor only
+// (rest of file unchanged)
+
+import { isOfficeConvertible } from './staffChatOfficePreviewCore.js'; // NEW import at the top of the file
+
+// ... existing code ...
+
+// (2026-05-22 EOD+2) Office MIME (Word/Excel/PPT/CSV) → 'office' kind; the
+// attachment card shows ⏳/👁/⚠/⬇ based on per-attachment pdfPreviewStatus
+// (set by the officeToPdf Cloud Function). Pre-existing branches preserved.
+const STAFF_CHAT_RENDERABLE_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+export function attachmentKindFor(mime) {
+  const m = typeof mime === 'string' ? mime.toLowerCase().trim() : '';
+  if (STAFF_CHAT_RENDERABLE_IMAGE.has(m)) return 'image';
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('audio/')) return 'audio';
+  if (m === 'application/pdf') return 'pdf';
+  if (isOfficeConvertible(m)) return 'office'; // NEW — must come BEFORE the generic 'file' fallback
+  return 'file';
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Run tests to verify they pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-preview-core.test.js</code></p>
+  <p>Expected: PASS (all OP1-OP4 groups green).</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/staffChatOfficePreviewCore.js src/lib/staffChatRetentionCore.js tests/staff-chat-office-preview-core.test.js
+git commit -m "feat(staff-chat): NEW staffChatOfficePreviewCore + attachmentKindFor returns 'office' for Word/Excel/PPT/CSV MIMEs (T1)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: pending-stamp at message send</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/staffChatClient.js</code> (extend <code>buildMessageDoc</code> or <code>buildAttachmentObject</code>)</li>
+    <li>Modify: <code>tests/staff-chat-multi-image.test.js</code> (extend existing or add new test)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Locate the existing attachment-building function</strong></label></div>
+  <p>Run: <code>grep -n "attachments" src/lib/staffChatClient.js | head -20</code></p>
+  <p>Read around the function that constructs the per-attachment object (likely <code>buildMessageDoc</code> or a sibling <code>buildAttachmentObject</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-pending-stamp.test.js (NEW file)
+import { describe, it, expect } from 'vitest';
+import { buildMessageDoc } from '../src/lib/staffChatClient.js';
+
+describe('OP-T2 — pending-stamp on Office attachments at send time', () => {
+  it('OP-T2.1 — Office .docx upload → attachments[0].pdfPreviewStatus = "pending"', () => {
+    const doc = buildMessageDoc({
+      branchId: 'BR-TEST',
+      senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626',
+      text: '',
+      deviceId: 'd1',
+      attachments: [{
+        id: 'a1',
+        name: 'test.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        size: 1024,
+        fullUrl: 'gs://...',
+      }],
+    });
+    expect(doc.attachments[0].pdfPreviewStatus).toBe('pending');
+    expect(doc.attachments[0].pdfPreviewUrl).toBeNull();
+    expect(doc.attachments[0].pdfPreviewError).toBeNull();
+  });
+  it('OP-T2.2 — image upload → NO pdfPreviewStatus field (preserves V73 shape)', () => {
+    const doc = buildMessageDoc({
+      branchId: 'BR-TEST',
+      senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626',
+      text: '',
+      deviceId: 'd1',
+      attachments: [{ id: 'a1', name: 'photo.png', mimeType: 'image/png', size: 1024, fullUrl: 'gs://...' }],
+    });
+    expect(doc.attachments[0].pdfPreviewStatus).toBeUndefined();
+  });
+  it('OP-T2.3 — text/csv → pending (CSV is in Q3=C scope)', () => {
+    const doc = buildMessageDoc({
+      branchId: 'BR-TEST',
+      senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626',
+      text: '',
+      deviceId: 'd1',
+      attachments: [{ id: 'a1', name: 'data.csv', mimeType: 'text/csv', size: 200, fullUrl: 'gs://...' }],
+    });
+    expect(doc.attachments[0].pdfPreviewStatus).toBe('pending');
+  });
+  it('OP-T2.4 — multiple mixed attachments — only Office MIMEs get the stamp', () => {
+    const doc = buildMessageDoc({
+      branchId: 'BR-TEST',
+      senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626',
+      text: '',
+      deviceId: 'd1',
+      attachments: [
+        { id: 'a1', name: 'photo.png', mimeType: 'image/png', size: 100, fullUrl: 'gs://x' },
+        { id: 'a2', name: 'doc.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 200, fullUrl: 'gs://y' },
+        { id: 'a3', name: 'file.pdf', mimeType: 'application/pdf', size: 300, fullUrl: 'gs://z' },
+      ],
+    });
+    expect(doc.attachments[0].pdfPreviewStatus).toBeUndefined();
+    expect(doc.attachments[1].pdfPreviewStatus).toBe('pending');
+    expect(doc.attachments[2].pdfPreviewStatus).toBeUndefined();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Run test to verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-pending-stamp.test.js</code></p>
+  <p>Expected: FAIL — pdfPreviewStatus is undefined on the .docx attachment.</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Patch buildMessageDoc</strong></label></div>
+  <p>Inside <code>buildMessageDoc</code>, locate where attachments are normalized into the persisted shape. Add the import at the top of the file:</p>
+<pre><code class="language-javascript">import { isOfficeConvertible, OfficePreviewStatus } from './staffChatOfficePreviewCore.js';</code></pre>
+  <p>Then, in the attachment-map step (where existing fields like <code>id</code>/<code>name</code>/<code>mimeType</code>/<code>size</code>/<code>fullUrl</code>/<code>thumbUrl</code> are mapped), add the conditional:</p>
+<pre><code class="language-javascript">// (2026-05-22 EOD+2) Office MIME → stamp pending so receiver UI shows ⏳ immediately.
+// The officeToPdf Cloud Function patches this to 'ready'/'failed' once conversion done.
+...(isOfficeConvertible(att.mimeType) ? {
+  pdfPreviewStatus: OfficePreviewStatus.PENDING,
+  pdfPreviewUrl: null,
+  pdfPreviewError: null,
+} : {}),</code></pre>
+  <p>Note the empty-object spread for non-Office attachments — preserves V73 shape exactly (no surprise field on images/PDFs).</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Run tests to verify they pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-pending-stamp.test.js</code></p>
+  <p>Expected: PASS (all OP-T2 green).</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Verify V73 baseline tests still pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-multi-image.test.js</code></p>
+  <p>Expected: PASS — the pdfPreviewStatus stamp is OFFICE-only, image-only attachments unchanged.</p>
+
+  <div class="step"><input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/staffChatClient.js tests/staff-chat-office-pending-stamp.test.js
+git commit -m "feat(staff-chat): buildMessageDoc stamps pdfPreviewStatus='pending' on Office attachments (T2)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: StaffChatAttachmentCard 4-state rendering</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/staffchat/StaffChatAttachmentCard.jsx</code></li>
+    <li>Create: <code>tests/staff-chat-office-card-rtl.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the failing RTL tests</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-card-rtl.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import React from 'react';
+import { StaffChatAttachmentCard } from '../src/components/staffchat/StaffChatAttachmentCard.jsx';
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const baseAtt = (overrides = {}) => ({
+  id: 'a1', name: 'test.docx', mimeType: DOCX_MIME, size: 12345,
+  fullUrl: 'gs://orig-url',
+  ...overrides,
+});
+
+describe('OP-T3 — StaffChatAttachmentCard for Office attachments', () => {
+  it('OP-T3.1 — pending: ⏳ disabled, NO 👁, ⬇ present', () => {
+    render(<StaffChatAttachmentCard att={baseAtt({ pdfPreviewStatus: 'pending' })} onPreview={vi.fn()} />);
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    const pending = screen.getByTestId('staff-chat-attach-pending');
+    expect(pending).toBeTruthy();
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+  it('OP-T3.2 — ready: 👁 present (clicking calls onPreview with pdfPreviewUrl), ⬇ present', () => {
+    const onPreview = vi.fn();
+    render(<StaffChatAttachmentCard att={baseAtt({ pdfPreviewStatus: 'ready', pdfPreviewUrl: 'https://pdf-url' })} onPreview={onPreview} />);
+    const preview = screen.getByTestId('staff-chat-attach-preview');
+    expect(preview).toBeTruthy();
+    fireEvent.click(preview);
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ fileUrl: 'https://pdf-url', name: 'test.docx' }));
+    cleanup();
+  });
+  it('OP-T3.3 — failed: ⚠ tooltip = pdfPreviewError; NO 👁; ⬇ present', () => {
+    render(<StaffChatAttachmentCard att={baseAtt({ pdfPreviewStatus: 'failed', pdfPreviewError: 'แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือต้องใช้รหัสผ่าน' })} onPreview={vi.fn()} />);
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    const failed = screen.getByTestId('staff-chat-attach-failed');
+    expect(failed.getAttribute('title')).toContain('แปลงไฟล์ไม่ได้');
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+  it('OP-T3.4 — unsupported: NO preview affordance, just ⬇', () => {
+    render(<StaffChatAttachmentCard att={baseAtt({ pdfPreviewStatus: 'unsupported' })} onPreview={vi.fn()} />);
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    expect(screen.queryByTestId('staff-chat-attach-pending')).toBeNull();
+    expect(screen.queryByTestId('staff-chat-attach-failed')).toBeNull();
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+  it('OP-T3.5 — pre-existing PDF behaviour unchanged (👁 still opens overlay)', () => {
+    const onPreview = vi.fn();
+    render(<StaffChatAttachmentCard att={{ id: 'p1', name: 'doc.pdf', mimeType: 'application/pdf', size: 100, fullUrl: 'https://pdf' }} onPreview={onPreview} />);
+    const preview = screen.getByTestId('staff-chat-attach-preview');
+    fireEvent.click(preview);
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ fileUrl: 'https://pdf' }));
+    cleanup();
+  });
+  it('OP-T3.6 — non-Office non-PDF (e.g. .zip): just ⬇, no preview affordance', () => {
+    render(<StaffChatAttachmentCard att={{ id: 'z1', name: 'a.zip', mimeType: 'application/zip', size: 100, fullUrl: 'https://zip' }} onPreview={vi.fn()} />);
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run test to verify it fails</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-card-rtl.test.jsx</code></p>
+  <p>Expected: FAIL — testids "staff-chat-attach-pending" and "staff-chat-attach-failed" don't exist yet.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Rewrite StaffChatAttachmentCard</strong></label></div>
+<pre><code class="language-jsx">// src/components/staffchat/StaffChatAttachmentCard.jsx
+//
+// (2026-05-22 EOD+2) Office preview support — Word/Excel/PPT/CSV attachments
+// derive a UI state from pdfPreviewStateOf(att) and render 4 conditional
+// affordances on the card. ⬇ download always works. AV108 sanctioned: the
+// 👁 button opens the existing StaffChatPdfOverlay with the CACHED PDF URL
+// generated by our in-project officeToPdf Cloud Function (Gotenberg). NO
+// 3rd-party doc viewer is invoked.
+import React from 'react';
+import { Download, Eye, Loader2, AlertTriangle } from 'lucide-react';
+import { attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
+import { pdfPreviewStateOf } from '../../lib/staffChatOfficePreviewCore.js';
+import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
+
+function iconFor(att) {
+  const kind = attachmentKindFor(att && att.mimeType);
+  if (kind === 'pdf') return '📄';
+  if (kind === 'audio') return '🎵';
+  if (kind === 'video') return '🎬';
+  const ext = (String((att && att.name) || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '🗜️';
+  if (['xls', 'xlsx', 'csv', 'numbers'].includes(ext)) return '📊';
+  if (['doc', 'docx', 'txt', 'rtf', 'pages', 'md'].includes(ext)) return '📝';
+  if (['ppt', 'pptx', 'key'].includes(ext)) return '📽️';
+  return '📎';
+}
+
+export function humanFileSize(n) {
+  let v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  const u = ['KB', 'MB', 'GB'];
+  let i = -1;
+  do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+  return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+
+export function StaffChatAttachmentCard({ att, onPreview }) {
+  if (!att) return null;
+  const kind = attachmentKindFor(att.mimeType);
+  const isPdf = kind === 'pdf';
+  const isOffice = kind === 'office';
+  const officeState = isOffice ? pdfPreviewStateOf(att) : 'na';
+
+  const name = att.name || 'ไฟล์';
+
+  // PDF: existing behaviour — 👁 opens overlay with the original URL.
+  // Office (ready): 👁 opens overlay with the CACHED PDF URL.
+  const handlePreviewClick = () => {
+    if (isPdf) {
+      onPreview?.({ fileUrl: att.fullUrl, name: att.name, size: att.size });
+    } else if (isOffice && officeState === 'ready') {
+      onPreview?.({ fileUrl: att.pdfPreviewUrl, name: att.name, size: att.size });
+    }
+  };
+
+  return (
+    <div
+      data-testid="staff-chat-attach-card"
+      className="flex items-center gap-2.5 w-full max-w-[240px] rounded-lg border border-[var(--bd)] bg-[var(--bg-surface)] px-2.5 py-2 mb-1"
+    >
+      <span className="text-2xl shrink-0" aria-hidden="true">{iconFor(att)}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-[var(--tx-primary)] truncate" title={name}>{name}</div>
+        <div className="text-[10px] text-[var(--tx-muted)]">{humanFileSize(att.size)}</div>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        {/* PDF: 👁 always present (when onPreview wired) */}
+        {isPdf && onPreview && (
+          <button
+            type="button"
+            onClick={handlePreviewClick}
+            data-testid="staff-chat-attach-preview"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+            aria-label="ดูตัวอย่าง"
+            title="ดูตัวอย่าง"
+          >
+            <Eye size={15} />
+          </button>
+        )}
+        {/* Office: state-dependent affordance */}
+        {isOffice && officeState === 'ready' && onPreview && (
+          <button
+            type="button"
+            onClick={handlePreviewClick}
+            data-testid="staff-chat-attach-preview"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+            aria-label="ดูตัวอย่าง"
+            title="ดูตัวอย่าง"
+          >
+            <Eye size={15} />
+          </button>
+        )}
+        {isOffice && officeState === 'pending' && (
+          <span
+            data-testid="staff-chat-attach-pending"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] opacity-60"
+            aria-label="กำลังแปลง"
+            title="กำลังแปลงไฟล์เพื่อดูตัวอย่าง..."
+          >
+            <Loader2 size={15} className="animate-spin" />
+          </span>
+        )}
+        {isOffice && officeState === 'failed' && (
+          <span
+            data-testid="staff-chat-attach-failed"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-amber-500"
+            aria-label="แปลงไฟล์ไม่ได้"
+            title={att.pdfPreviewError || 'แปลงไฟล์ไม่ได้'}
+          >
+            <AlertTriangle size={15} />
+          </span>
+        )}
+        {/* unsupported / na → no preview affordance at all */}
+        <button
+          type="button"
+          onClick={() => downloadUrlAsFile(att.fullUrl, name, att.size)}
+          data-testid="staff-chat-attach-download"
+          className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+          aria-label="ดาวน์โหลด"
+          title="ดาวน์โหลด"
+        >
+          <Download size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default StaffChatAttachmentCard;
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run tests to verify they pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-card-rtl.test.jsx</code></p>
+  <p>Expected: PASS (all OP-T3 green).</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/staffchat/StaffChatAttachmentCard.jsx tests/staff-chat-office-card-rtl.test.jsx
+git commit -m "feat(staff-chat): StaffChatAttachmentCard renders ⏳/👁/⚠ for Office attachments based on pdfPreviewStatus (T3)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Cloud Function source (functions/officeToPdf/)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>functions/officeToPdf/index.js</code></li>
+    <li>Create: <code>functions/officeToPdf/Dockerfile</code></li>
+    <li>Create: <code>functions/officeToPdf/package.json</code></li>
+    <li>Create: <code>functions/officeToPdf/.gcloudignore</code></li>
+    <li>Create: <code>tests/staff-chat-office-cloud-function-helpers.test.js</code> (pure-logic helpers only)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Confirm canonical functions/ root exists</strong></label></div>
+  <p>Run: <code>ls functions/ 2>&1 | head</code></p>
+  <p>This project's Firebase functions are under <code>functions/</code> (Cloud Functions 1st/2nd Gen). The new function lives in its own subdirectory so it can ship its own Dockerfile without polluting the existing Node-only functions.</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Write pure-logic helper tests</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-cloud-function-helpers.test.js
+//
+// Pure-logic unit tests for the Cloud Function — failure-reason copy,
+// MIME→extension mapping, path derivation. Integration tested via Rule Q L2
+// e2e script (gated on deploy; NOT run here).
+import { describe, it, expect } from 'vitest';
+import {
+  deriveFailureReason,
+  deriveOutputPath,
+  extensionForMime,
+} from '../functions/officeToPdf/helpers.js';
+
+describe('CF1 — Cloud Function pure helpers', () => {
+  it('CF1.1 — deriveOutputPath appends ".pdf" to the same prefix', () => {
+    expect(deriveOutputPath('staff-chat-attachments/br1/m1/foo.docx')).toBe('staff-chat-attachments/br1/m1/foo.docx.pdf');
+    expect(deriveOutputPath('staff-chat-attachments/br1/m1/Untitled.xlsx')).toBe('staff-chat-attachments/br1/m1/Untitled.xlsx.pdf');
+  });
+  it('CF1.2 — extensionForMime returns the canonical extension', () => {
+    expect(extensionForMime('application/msword')).toBe('doc');
+    expect(extensionForMime('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('docx');
+    expect(extensionForMime('text/csv')).toBe('csv');
+  });
+  it('CF1.3 — deriveFailureReason returns Thai-language text per error class', () => {
+    expect(deriveFailureReason({ kind: 'password-protected' })).toMatch(/รหัสผ่าน/);
+    expect(deriveFailureReason({ kind: 'corrupt' })).toMatch(/ไฟล์เสีย|ไฟล์อาจ/);
+    expect(deriveFailureReason({ kind: 'timeout' })).toMatch(/หมดเวลา|นาน/);
+    expect(deriveFailureReason({ kind: 'unknown' })).toMatch(/แปลงไฟล์ไม่ได้/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Write Cloud Function source</strong></label></div>
+<pre><code class="language-javascript">// functions/officeToPdf/helpers.js — pure JS, unit-testable
+//
+// (2026-05-22 EOD+2) Helpers for the officeToPdf Cloud Function. Pure;
+// no firebase-admin / fs / network dependencies. Used by index.js + tests.
+
+export function deriveOutputPath(originalPath) {
+  if (typeof originalPath !== 'string') throw new Error('originalPath must be a string');
+  return originalPath + '.pdf';
+}
+
+const MIME_TO_EXT = Object.freeze({
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'text/csv': 'csv',
+});
+export function extensionForMime(mime) {
+  return MIME_TO_EXT[String(mime || '').toLowerCase().trim()] || 'bin';
+}
+
+export function deriveFailureReason({ kind, message } = {}) {
+  switch (kind) {
+    case 'password-protected':
+      return 'แปลงไฟล์ไม่ได้ — ไฟล์มีรหัสผ่าน';
+    case 'corrupt':
+      return 'แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหาย';
+    case 'timeout':
+      return 'แปลงไฟล์ไม่ได้ — ใช้เวลานานเกินไป';
+    case 'unsupported-format':
+      return 'แปลงไฟล์ไม่ได้ — รูปแบบไฟล์ไม่รองรับ';
+    default:
+      return 'แปลงไฟล์ไม่ได้';
+  }
+}
+</code></pre>
+
+<pre><code class="language-javascript">// functions/officeToPdf/index.js
+//
+// (2026-05-22 EOD+2) Storage onObjectFinalized → LibreOffice (via bundled
+// Gotenberg HTTP) → PDF back to Storage → Firestore patch. Fire-and-forget.
+// All PHI stays inside our Firebase project (no 3rd-party HTTP).
+
+import { onObjectFinalized } from 'firebase-functions/v2/storage';
+import { initializeApp } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { isOfficeConvertible, OfficePreviewStatus } from '../../src/lib/staffChatOfficePreviewCore.js';
+import { deriveOutputPath, deriveFailureReason } from './helpers.js';
+
+initializeApp();
+const APP_ID = 'loverclinic-opd-4c39b';
+const STAFF_CHAT_PREFIX = 'staff-chat-attachments/';
+const GOTENBERG_URL = 'http://localhost:3000/forms/libreoffice/convert';
+
+export const officeToPdf = onObjectFinalized(
+  {
+    region: 'asia-southeast1',
+    memory: '1GiB',
+    timeoutSeconds: 540,
+    concurrency: 1,
+  },
+  async (event) => {
+    const obj = event.data;
+    const filePath = obj.name || '';
+    const contentType = obj.contentType || '';
+
+    // Gate 1: only files under the staff-chat prefix
+    if (!filePath.startsWith(STAFF_CHAT_PREFIX)) return;
+    // Gate 2: skip already-converted PDFs
+    if (filePath.endsWith('.pdf')) return;
+    // Gate 3: MIME whitelist (Q3=C scope)
+    if (!isOfficeConvertible(contentType)) return;
+
+    // The filePath under staff-chat is:
+    //   staff-chat-attachments/{branchId}/{messageId}/{attachmentId}-o.{ext}
+    // We need branchId + messageId + attachmentId to patch the right doc.
+    const parts = filePath.slice(STAFF_CHAT_PREFIX.length).split('/');
+    if (parts.length < 3) return;
+    const [branchId, messageId, fileName] = parts;
+    const attachmentId = (fileName.split('-o.')[0]) || fileName.split('.')[0];
+
+    const bucket = getStorage().bucket();
+    const db = getFirestore();
+    const messageRef = db.collection('be_staff_chat_messages').doc(messageId);
+
+    const stampStatus = async (patch) => {
+      // Patch ONLY the matching attachments[i] entry (NOT the whole array — race-safe).
+      // Read-then-write: get attachments, find by id, update field, write back.
+      const snap = await messageRef.get();
+      if (!snap.exists) return;
+      const data = snap.data();
+      const atts = Array.isArray(data.attachments) ? data.attachments.slice() : [];
+      const idx = atts.findIndex(a => a && a.id === attachmentId);
+      if (idx === -1) return;
+      atts[idx] = { ...atts[idx], ...patch, pdfPreviewedAt: FieldValue.serverTimestamp() };
+      await messageRef.update({ attachments: atts });
+    };
+
+    try {
+      // 1. Download the original from Storage
+      const file = bucket.file(filePath);
+      const [buf] = await file.download();
+
+      // 2. POST to bundled Gotenberg → PDF buffer
+      const formData = new FormData();
+      formData.append('files', new Blob([buf], { type: contentType }), fileName);
+      const r = await fetch(GOTENBERG_URL, { method: 'POST', body: formData });
+      if (!r.ok) {
+        const txt = await r.text();
+        let kind = 'unknown';
+        if (/password|encrypt/i.test(txt)) kind = 'password-protected';
+        else if (/corrupt|invalid|malformed/i.test(txt)) kind = 'corrupt';
+        else if (/timeout/i.test(txt)) kind = 'timeout';
+        await stampStatus({
+          pdfPreviewStatus: OfficePreviewStatus.FAILED,
+          pdfPreviewUrl: null,
+          pdfPreviewError: deriveFailureReason({ kind }),
+        });
+        return;
+      }
+      const pdfBuf = Buffer.from(await r.arrayBuffer());
+
+      // 3. Upload PDF to the same prefix
+      const outPath = deriveOutputPath(filePath);
+      const outFile = bucket.file(outPath);
+      await outFile.save(pdfBuf, {
+        contentType: 'application/pdf',
+        metadata: { metadata: { generatedBy: 'officeToPdf', sourcePath: filePath } },
+      });
+
+      // 4. Make readable URL — use getDownloadURL pattern (long-lived token).
+      //    (Per spec open question we choose getDownloadURL over 7d signed URLs to
+      //     match V73 retention lifetime — PDF stays accessible until V73 sweep
+      //     deletes both files together.)
+      const downloadToken = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 36);
+      await outFile.setMetadata({ metadata: { firebaseStorageDownloadTokens: downloadToken } });
+      const pdfUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(outPath)}?alt=media&token=${downloadToken}`;
+
+      // 5. Patch Firestore — status=ready + URL
+      await stampStatus({
+        pdfPreviewStatus: OfficePreviewStatus.READY,
+        pdfPreviewUrl: pdfUrl,
+        pdfPreviewError: null,
+      });
+    } catch (err) {
+      console.error('[officeToPdf] conversion failed', { filePath, err: String(err) });
+      await stampStatus({
+        pdfPreviewStatus: OfficePreviewStatus.FAILED,
+        pdfPreviewUrl: null,
+        pdfPreviewError: deriveFailureReason({ kind: 'unknown' }),
+      });
+    }
+  }
+);
+</code></pre>
+
+<pre><code class="language-dockerfile"># functions/officeToPdf/Dockerfile
+#
+# Two-tier image: Gotenberg base (LibreOffice 24.x + Chromium bundled) + Node 20
+# layer running the Firebase Functions handler. supervisord starts both
+# Gotenberg (port 3000) and the Node entrypoint inside the same container.
+#
+# Cloud Run uses this Dockerfile because Firebase Functions 2nd Gen with custom
+# runtime picks up the project's Dockerfile when present.
+
+FROM gotenberg/gotenberg:8
+
+USER root
+
+# Install Node 20 + supervisord
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl supervisor \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+
+# supervisord config — start Gotenberg + Node side-by-side
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+EXPOSE 8080
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+</code></pre>
+
+<pre><code class="language-ini"># functions/officeToPdf/supervisord.conf
+[supervisord]
+nodaemon=true
+user=root
+
+[program:gotenberg]
+command=/usr/bin/gotenberg --api-port=3000
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+
+[program:functions]
+command=/usr/bin/node /workspace/server.js
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+</code></pre>
+
+<pre><code class="language-json">// functions/officeToPdf/package.json
+{
+  "name": "office-to-pdf",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0"
+  }
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Add .gcloudignore</strong></label></div>
+<pre><code class="language-ini"># functions/officeToPdf/.gcloudignore
+node_modules/
+.git/
+.gitignore
+*.test.js
+*.md
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Run helper tests to verify they pass</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-cloud-function-helpers.test.js</code></p>
+  <p>Expected: PASS (CF1 group green).</p>
+  <p>Note: <code>index.js</code> itself is NOT unit-tested locally — it uses firebase-admin SDK + Storage triggers that need real prod or emulator. Integration is verified via the e2e script in T9.</p>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add functions/officeToPdf/ tests/staff-chat-office-cloud-function-helpers.test.js
+git commit -m "feat(functions): NEW officeToPdf Cloud Function 2nd Gen + Gotenberg Docker + pure helpers (T4)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: firebase.json wiring + rules verification</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>firebase.json</code> (add functions[] entry)</li>
+    <li>Read-only: <code>storage.rules</code>, <code>firestore.rules</code> (verify no change needed)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Read existing firebase.json</strong></label></div>
+  <p>Run: <code>cat firebase.json | head -50</code></p>
+  <p>Look for the existing <code>functions</code> array (or single entry) to understand the current shape. The new entry sits alongside.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add the officeToPdf entry to firebase.json functions[]</strong></label></div>
+  <p>If <code>functions</code> is currently an array, append:</p>
+<pre><code class="language-json">{
+  "source": "functions/officeToPdf",
+  "codebase": "office-to-pdf",
+  "runtime": "nodejs20",
+  "ignore": ["node_modules", ".git", "*.test.js"]
+}</code></pre>
+  <p>If <code>functions</code> is a single object, convert it to an array with both entries.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Verify storage.rules unchanged</strong></label></div>
+  <p>Run: <code>grep -A 5 "staff-chat-attachments" storage.rules</code></p>
+  <p>Expected: existing rule allows admin-SDK writes (admin bypasses rules). NO change needed — the PDF lives in the same prefix as the original, and the admin SDK (Cloud Function) bypasses all rules anyway.</p>
+  <p>If a client write rule restricts MIME to <code>image/* or application/pdf</code>, that's STILL CORRECT for client uploads — clients can't write PDFs to that prefix, but the admin SDK Cloud Function can. Document inline in the rule comment if helpful.</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Verify firestore.rules unchanged</strong></label></div>
+  <p>Run: <code>grep -A 5 "be_staff_chat_messages" firestore.rules</code></p>
+  <p>Expected: existing rule allows clinic-staff reads + admin-SDK writes. NO change needed.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add firebase.json
+git commit -m "feat(functions): wire officeToPdf in firebase.json (T5)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Rule I full-flow simulate</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/staff-chat-office-preview-flow-simulate.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write the flow-simulate test</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-preview-flow-simulate.test.js
+//
+// Rule I full-flow simulate — chain (1) client buildMessageDoc stamps pending,
+// (2) Cloud Function patch (mocked locally — calls the same admin-SDK pattern
+// as functions/officeToPdf/index.js but without real Storage/Firestore), (3)
+// attachmentKindFor + pdfPreviewStateOf, (4) the card UI maps state→affordance.
+//
+// Covers the 4 user-visible states: pending → ready (👁 click), pending → failed
+// (⚠ tooltip), unsupported (⬇-only), and a pre-existing PDF (V73 baseline).
+
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import React from 'react';
+import { buildMessageDoc } from '../src/lib/staffChatClient.js';
+import { attachmentKindFor } from '../src/lib/staffChatRetentionCore.js';
+import { pdfPreviewStateOf, OfficePreviewStatus } from '../src/lib/staffChatOfficePreviewCore.js';
+import { StaffChatAttachmentCard } from '../src/components/staffchat/StaffChatAttachmentCard.jsx';
+
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ODT = 'application/vnd.oasis.opendocument.text';
+
+// Simulate the Cloud Function's Firestore patch — what officeToPdf does
+// inside its handler (without calling real Firestore).
+function simulatePatch(messageDoc, attachmentId, patch) {
+  const atts = messageDoc.attachments.slice();
+  const idx = atts.findIndex(a => a.id === attachmentId);
+  if (idx === -1) return messageDoc;
+  atts[idx] = { ...atts[idx], ...patch };
+  return { ...messageDoc, attachments: atts };
+}
+
+describe('OP-F1 — full-flow simulate: pending → ready → 👁 opens preview', () => {
+  it('chains client-stamp → Cloud Function patch → card render', () => {
+    // (1) Client side: composer builds doc, stamps pending
+    const initial = buildMessageDoc({
+      branchId: 'BR1', senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626', text: '', deviceId: 'd1',
+      attachments: [{ id: 'a1', name: 'report.docx', mimeType: DOCX, size: 1024, fullUrl: 'gs://orig' }],
+    });
+    expect(initial.attachments[0].pdfPreviewStatus).toBe('pending');
+    expect(attachmentKindFor(DOCX)).toBe('office');
+    expect(pdfPreviewStateOf(initial.attachments[0])).toBe('pending');
+
+    // Render the card in pending → ⏳ shown, NO 👁
+    let view = render(<StaffChatAttachmentCard att={initial.attachments[0]} onPreview={vi.fn()} />);
+    expect(screen.getByTestId('staff-chat-attach-pending')).toBeTruthy();
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    view.unmount();
+
+    // (2) Cloud Function patches to ready
+    const ready = simulatePatch(initial, 'a1', {
+      pdfPreviewStatus: OfficePreviewStatus.READY,
+      pdfPreviewUrl: 'https://firebasestorage.googleapis.com/.../report.docx.pdf?alt=media&token=xyz',
+      pdfPreviewError: null,
+    });
+    expect(pdfPreviewStateOf(ready.attachments[0])).toBe('ready');
+
+    // (3) Card re-renders in ready → 👁 shown, click opens preview with PDF URL
+    const onPreview = vi.fn();
+    view = render(<StaffChatAttachmentCard att={ready.attachments[0]} onPreview={onPreview} />);
+    const btn = screen.getByTestId('staff-chat-attach-preview');
+    fireEvent.click(btn);
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({
+      fileUrl: 'https://firebasestorage.googleapis.com/.../report.docx.pdf?alt=media&token=xyz',
+      name: 'report.docx',
+    }));
+    view.unmount();
+    cleanup();
+  });
+});
+
+describe('OP-F2 — failed conversion → ⚠ tooltip = pdfPreviewError', () => {
+  it('chains client-stamp → Cloud Function patch (failed) → ⚠ + tooltip', () => {
+    const initial = buildMessageDoc({
+      branchId: 'BR1', senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626', text: '', deviceId: 'd1',
+      attachments: [{ id: 'a2', name: 'locked.docx', mimeType: DOCX, size: 500, fullUrl: 'gs://locked' }],
+    });
+    const failed = simulatePatch(initial, 'a2', {
+      pdfPreviewStatus: OfficePreviewStatus.FAILED,
+      pdfPreviewUrl: null,
+      pdfPreviewError: 'แปลงไฟล์ไม่ได้ — ไฟล์มีรหัสผ่าน',
+    });
+    expect(pdfPreviewStateOf(failed.attachments[0])).toBe('failed');
+    render(<StaffChatAttachmentCard att={failed.attachments[0]} onPreview={vi.fn()} />);
+    const warn = screen.getByTestId('staff-chat-attach-failed');
+    expect(warn.getAttribute('title')).toContain('รหัสผ่าน');
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+});
+
+describe('OP-F3 — unsupported MIME (.odt) falls through to download-only', () => {
+  it('client never stamps Office fields for .odt; card shows ⬇ only', () => {
+    const doc = buildMessageDoc({
+      branchId: 'BR1', senderUid: 'u1', senderRole: 'doctor',
+      displayName: 'นพ. ก', color: '#dc2626', text: '', deviceId: 'd1',
+      attachments: [{ id: 'a3', name: 'notes.odt', mimeType: ODT, size: 100, fullUrl: 'gs://odt' }],
+    });
+    expect(doc.attachments[0].pdfPreviewStatus).toBeUndefined(); // never stamped
+    expect(attachmentKindFor(ODT)).toBe('file'); // generic file, not 'office'
+    render(<StaffChatAttachmentCard att={doc.attachments[0]} onPreview={vi.fn()} />);
+    expect(screen.queryByTestId('staff-chat-attach-preview')).toBeNull();
+    expect(screen.queryByTestId('staff-chat-attach-pending')).toBeNull();
+    expect(screen.queryByTestId('staff-chat-attach-failed')).toBeNull();
+    expect(screen.getByTestId('staff-chat-attach-download')).toBeTruthy();
+    cleanup();
+  });
+});
+
+describe('OP-F4 — pre-existing PDF (V73 baseline) untouched', () => {
+  it('PDF attachment renders 👁 + ⬇ as before, no Office state machine', () => {
+    const onPreview = vi.fn();
+    render(<StaffChatAttachmentCard att={{ id: 'p1', name: 'x.pdf', mimeType: 'application/pdf', size: 100, fullUrl: 'https://pdf' }} onPreview={onPreview} />);
+    fireEvent.click(screen.getByTestId('staff-chat-attach-preview'));
+    expect(onPreview).toHaveBeenCalledWith(expect.objectContaining({ fileUrl: 'https://pdf' }));
+    cleanup();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run flow-simulate</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-preview-flow-simulate.test.js</code></p>
+  <p>Expected: PASS (OP-F1 through OP-F4 all green).</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/staff-chat-office-preview-flow-simulate.test.js
+git commit -m "test(staff-chat): Rule I flow-simulate for Office preview state machine (T6)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: AV108 amendment + audit regression test</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (extend AV108 entry)</li>
+    <li>Modify: <code>tests/staff-chat-any-file.test.js</code> (V21 fixup — flip the office-download-only assertion to allow the new path)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Locate the current AV108 entry</strong></label></div>
+  <p>Run: <code>grep -n "AV108" .agents/skills/audit-anti-vibe-code/SKILL.md | head -5</code></p>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Extend the AV108 entry</strong></label></div>
+  <p>Append (or update) the sanctioned-exception text in the AV108 block so it reads (preserve any surrounding format the file uses):</p>
+<pre><code class="language-markdown">## AV108 — Staff-chat office = no 3rd-party doc viewer; in-project Gotenberg is the ONE sanctioned exception (2026-05-22 EOD+2)
+
+The original AV108 (2026-05-22) banned all 3rd-party doc viewers in staff
+chat (Google Docs Viewer, MS Office Online, Aspose Cloud, ConvertAPI,
+CloudConvert, Microsoft Graph DriveItem convert, etc.) because they
+transmit patient files off-site → PHI leak. The ban stands.
+
+Sanctioned exception (closed list of 1):
+- `functions/officeToPdf/` — Firebase Cloud Function 2nd Gen running
+  `gotenberg/gotenberg:8` Docker image WITHIN the project's GCP project.
+  LibreOffice runs locally on `localhost:3000` inside the container; no
+  external HTTP call during conversion. PDF cached at the same Storage
+  prefix as the original; cleaned by V73 30d retention sweep.
+
+Source-grep regression — forbidden in client bundle:
+  /officeapps|docs\.google\.com\/(viewer|gview)/    (must NOT appear in src/)
+  /mammoth|xlsx|docx-preview|docx2html|sheetjs/     (no client-side office render)
+  /(aspose|cloudconvert|convertapi)\.com/           (no 3rd-party SaaS)
+  /graph\.microsoft\.com\/v1\.0\/.+\/convert/        (no MS Graph)
+
+Sanctioned consumer (closed list):
+- `functions/officeToPdf/index.js` — the ONLY file allowed to call a
+  conversion HTTP endpoint, and it MUST be `localhost:3000` (the bundled
+  Gotenberg). External hosts in this file = AV108 violation.
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: V21 fixup — staff-chat-any-file.test.js</strong></label></div>
+  <p>The existing test asserts office = download-only (no 👁, no in-browser render). Find the assertion and flip it to lock the new contract:</p>
+  <p>Run: <code>grep -n "officeapps\|isPdf\|office\|mammoth\|sheetjs" tests/staff-chat-any-file.test.js | head -15</code></p>
+  <p>Update the assertion block — instead of asserting "no in-browser office preview", assert "no 3rd-party office viewer; office preview goes through the in-project Cloud Function PDF". The existing forbidden-pattern asserts (no officeapps, no docs.google.com/viewer|gview, no mammoth, no xlsx, no SHEET_EXT) stay AS-IS; add a positive assertion that StaffChatAttachmentCard handles 'office' kind:</p>
+<pre><code class="language-javascript">// EXTEND staff-chat-any-file.test.js AF5 block (around the lightbox/office assertions):
+it('office preview: routed through in-project Cloud Function PDF (AV108 sanctioned exception)', () => {
+  const card = read('src/components/staffchat/StaffChatAttachmentCard.jsx');
+  // Office kind handled
+  expect(card).toMatch(/isOffice/);
+  expect(card).toMatch(/pdfPreviewStateOf/);
+  // 4 states wired
+  expect(card).toMatch(/staff-chat-attach-pending/);
+  expect(card).toMatch(/staff-chat-attach-failed/);
+  expect(card).toMatch(/staff-chat-attach-preview/);     // ready + pdf branches share this id
+  expect(card).toMatch(/staff-chat-attach-download/);
+  // NO 3rd-party doc viewer call in the client
+  expect(card).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);
+  expect(card).not.toMatch(/mammoth|sheetjs|docx-preview/);
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Create the AV108 audit regression test</strong></label></div>
+<pre><code class="language-javascript">// tests/audit-av108-office-preview-exception.test.js
+import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
+import { join } from 'path';
+
+const ROOT = process.cwd();
+const SRC_DIR = join(ROOT, 'src');
+const FN_DIR = join(ROOT, 'functions/officeToPdf');
+
+function walk(dir, out = []) {
+  for (const e of readdirSync(dir)) {
+    const full = join(dir, e);
+    const s = statSync(full);
+    if (s.isDirectory()) walk(full, out);
+    else if (/\.(js|jsx|ts|tsx)$/.test(e)) out.push(full);
+  }
+  return out;
+}
+
+describe('AV108 — Staff-chat office preview: no 3rd-party doc viewer', () => {
+  const SRC_FILES = walk(SRC_DIR);
+
+  it('AV108.1 — NO 3rd-party doc viewer in client src/', () => {
+    for (const f of SRC_FILES) {
+      const c = readFileSync(f, 'utf8');
+      expect(c, f).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);
+      expect(c, f).not.toMatch(/(aspose|cloudconvert|convertapi)\.com/);
+      expect(c, f).not.toMatch(/graph\.microsoft\.com\/v1\.0\/.+\/convert/);
+    }
+  });
+
+  it('AV108.2 — NO client-side office render libraries in src/', () => {
+    for (const f of SRC_FILES) {
+      const c = readFileSync(f, 'utf8');
+      expect(c, f).not.toMatch(/(^|[^a-z])mammoth([^a-z]|$)/i);
+      expect(c, f).not.toMatch(/(^|[^a-z])docx-preview([^a-z]|$)/i);
+      expect(c, f).not.toMatch(/(^|[^a-z])docx2html([^a-z]|$)/i);
+      expect(c, f).not.toMatch(/import\s+[^;]*\s+from\s+['"]xlsx['"]/);
+      expect(c, f).not.toMatch(/require\(['"]xlsx['"]\)/);
+    }
+  });
+
+  it('AV108.3 — Cloud Function calls ONLY localhost Gotenberg (sanctioned exception)', () => {
+    expect(existsSync(FN_DIR)).toBe(true);
+    const cf = readFileSync(join(FN_DIR, 'index.js'), 'utf8');
+    // The one and only external-ish URL must be localhost
+    expect(cf).toMatch(/http:\/\/localhost:3000\/forms\/libreoffice\/convert/);
+    // No external hosts
+    expect(cf).not.toMatch(/officeapps|docs\.google\.com/);
+    expect(cf).not.toMatch(/(aspose|cloudconvert|convertapi)\.com/);
+    expect(cf).not.toMatch(/graph\.microsoft\.com/);
+  });
+
+  it('AV108.4 — AV108 SKILL.md entry mentions the sanctioned exception', () => {
+    const skill = readFileSync(join(ROOT, '.agents/skills/audit-anti-vibe-code/SKILL.md'), 'utf8');
+    expect(skill).toMatch(/AV108/);
+    expect(skill).toMatch(/officeToPdf|gotenberg|sanctioned exception/i);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: Run the regression tests</strong></label></div>
+  <p>Run: <code>npx vitest run tests/audit-av108-office-preview-exception.test.js tests/staff-chat-any-file.test.js</code></p>
+  <p>Expected: PASS — AV108.1-4 + the updated AF5 block green.</p>
+
+  <div class="step"><input type="checkbox" id="t7s6"> <label for="t7s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md tests/audit-av108-office-preview-exception.test.js tests/staff-chat-any-file.test.js
+git commit -m "audit(av108): amend with officeToPdf sanctioned exception + regression test (T7)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 8: Source-grep regression (contracts locked)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>tests/staff-chat-office-preview-source-grep.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write source-grep regression tests</strong></label></div>
+<pre><code class="language-javascript">// tests/staff-chat-office-preview-source-grep.test.js
+//
+// Locks the canonical patterns from T1-T6 so future churn fails the build
+// instead of silently breaking the state machine.
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+const R = (p) => readFileSync(join(process.cwd(), p), 'utf8');
+
+describe('OP-SG — source-grep regression', () => {
+  it('OP-SG.1 — attachmentKindFor places "office" BEFORE "file" fallback', () => {
+    const c = R('src/lib/staffChatRetentionCore.js');
+    const officeIdx = c.search(/return 'office'/);
+    const fileIdx = c.search(/return 'file'/);
+    expect(officeIdx).toBeGreaterThan(-1);
+    expect(fileIdx).toBeGreaterThan(-1);
+    expect(officeIdx).toBeLessThan(fileIdx);
+  });
+  it('OP-SG.2 — staffChatOfficePreviewCore exports the 4 required surface symbols', () => {
+    const c = R('src/lib/staffChatOfficePreviewCore.js');
+    expect(c).toMatch(/export const OFFICE_CONVERTIBLE_MIMES/);
+    expect(c).toMatch(/export function isOfficeConvertible/);
+    expect(c).toMatch(/export const OfficePreviewStatus/);
+    expect(c).toMatch(/export function pdfPreviewStateOf/);
+  });
+  it('OP-SG.3 — buildMessageDoc imports + stamps via isOfficeConvertible', () => {
+    const c = R('src/lib/staffChatClient.js');
+    expect(c).toMatch(/from\s+['"]\.\/staffChatOfficePreviewCore\.js['"]/);
+    expect(c).toMatch(/isOfficeConvertible\(/);
+    expect(c).toMatch(/pdfPreviewStatus:\s*OfficePreviewStatus\.PENDING/);
+  });
+  it('OP-SG.4 — StaffChatAttachmentCard uses pdfPreviewStateOf + 4 testids', () => {
+    const c = R('src/components/staffchat/StaffChatAttachmentCard.jsx');
+    expect(c).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/staffChatOfficePreviewCore\.js['"]/);
+    expect(c).toMatch(/pdfPreviewStateOf\(/);
+    expect(c).toMatch(/staff-chat-attach-pending/);
+    expect(c).toMatch(/staff-chat-attach-failed/);
+    expect(c).toMatch(/staff-chat-attach-preview/);
+    expect(c).toMatch(/staff-chat-attach-download/);
+  });
+  it('OP-SG.5 — Cloud Function uses bundled Gotenberg ONLY (localhost:3000)', () => {
+    const c = R('functions/officeToPdf/index.js');
+    expect(c).toMatch(/http:\/\/localhost:3000\/forms\/libreoffice\/convert/);
+    expect(c).not.toMatch(/officeapps|docs\.google\.com/);
+  });
+  it('OP-SG.6 — Cloud Function patches the matching attachment ONLY (not whole array clobber)', () => {
+    const c = R('functions/officeToPdf/index.js');
+    expect(c).toMatch(/findIndex\(\s*a\s*=>\s*a\s*&&\s*a\.id\s*===\s*attachmentId\s*\)/);
+  });
+  it('OP-SG.7 — V73 pre-existing PDF branch retained (no regression)', () => {
+    const c = R('src/components/staffchat/StaffChatAttachmentCard.jsx');
+    expect(c).toMatch(/const isPdf\s*=\s*kind\s*===\s*['"]pdf['"]/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run + verify</strong></label></div>
+  <p>Run: <code>npx vitest run tests/staff-chat-office-preview-source-grep.test.js</code></p>
+  <p>Expected: PASS (OP-SG.1-7 green).</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/staff-chat-office-preview-source-grep.test.js
+git commit -m "test(staff-chat): source-grep regression locks for Office preview contracts (T8)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 9: V21 sweep + full vitest + build (stop gate — all green)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>scripts/e2e-staff-chat-office-preview.mjs</code> (Rule Q L2; ready-to-run when deployed)</li>
+    <li>Fix any pre-existing tests that lock the old "office = download-only" contract</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Run full vitest</strong></label></div>
+  <p>Run: <code>npx vitest run 2>&amp;1 | tail -5</code></p>
+  <p>Expected initial state: most green, possibly a few V21 lock-ins on the old "office = download-only" contract. List them.</p>
+
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Triage + V21-fix each failure</strong></label></div>
+  <p>For each failure: identify whether it's locking the old contract (V21) vs an actual regression. V21 lock-ins are flipped with a marker comment crosslinking T1-T8. Common candidates:</p>
+  <ul>
+    <li><code>tests/staff-chat-any-file.test.js</code> — already updated in T7; verify the AF5 block passes</li>
+    <li>Any test asserting <code>'file'</code> as the kind for Office MIMEs — change to <code>'office'</code></li>
+    <li>Any test asserting StaffChatAttachmentCard renders only <code>isPdf</code>-conditional preview button — extend to allow the new 'office' branch</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Create e2e Rule Q L2 script</strong></label></div>
+<pre><code class="language-javascript">// scripts/e2e-staff-chat-office-preview.mjs
+//
+// Rule Q L2 e2e — runs against REAL prod via admin SDK. DO NOT RUN until
+// after deploy. Uploads test fixtures across all 7 MIMEs + adversarial cases
+// (password-protected, corrupt, 49MB, .odt unsupported). Verifies:
+//   - Cloud Function fires within 10s of upload
+//   - PDF cached at expected path
+//   - Firestore patched with pdfPreviewStatus / pdfPreviewUrl / pdfPreviewError
+//   - downloaded PDF is non-empty
+//   - cleanup zero orphans
+
+import 'dotenv/config';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
+
+if (process.argv[1] !== fileURLToPath(import.meta.url)) {
+  console.log('e2e-staff-chat-office-preview: invoked as import — skipping main()');
+} else {
+  const key = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.split('\\n').join('\n');
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      privateKey: key,
+    }),
+    storageBucket: `${process.env.FIREBASE_ADMIN_PROJECT_ID}.firebasestorage.app`,
+  });
+  await main();
+}
+
+async function main() {
+  const APP_ID = 'loverclinic-opd-4c39b';
+  const bucket = getStorage().bucket();
+  const db = getFirestore();
+
+  console.log('Phase A — upload fixtures + wait for conversion');
+  // TODO at deploy time: read fixture files from a /fixtures dir checked-in
+  // alongside this script. Upload each, wait up to 30s for the Cloud Function
+  // to fire + patch Firestore, then assert the expected state.
+
+  console.log('Phase B — cleanup');
+  // Delete fixture files + message docs + the cached .pdf siblings.
+  console.log('e2e ready. Run AFTER deploy.');
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4: Run build + final full vitest</strong></label></div>
+  <p>Run in parallel:</p>
+  <pre><code class="language-bash">npx vitest run 2>&amp;1 | tail -5
+npm run build 2>&amp;1 | tail -5</code></pre>
+  <p>Expected: vitest PASS (count), build clean (no errors).</p>
+
+  <div class="step"><input type="checkbox" id="t9s5"> <label for="t9s5"><strong>Step 5: Final commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/e2e-staff-chat-office-preview.mjs tests/  # any V21 fixups
+git commit -m "test(staff-chat): V21 sweep green + Rule Q L2 e2e script ready (T9 — stop gate)"
+git push origin master</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s6"> <label for="t9s6"><strong>Step 6: STOP — await explicit "deploy" verb from user</strong></label></div>
+  <p>Per V18 + project rule: <code>vercel --prod</code> and <code>firebase deploy --only functions:officeToPdf</code> need explicit user authorization THIS turn. Report the green vitest + build state and the Rule Q L2 e2e script readiness; do NOT deploy.</p>
+</div>
+
+<h2>Self-Review (against spec)</h2>
+
+<table>
+  <thead>
+    <tr><th>Spec requirement</th><th>Implementing task</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Pixel-perfect Office→PDF preview (Q1=A)</td><td>T4 — Gotenberg LibreOffice in Cloud Function</td></tr>
+    <tr><td>Hybrid background convert on upload (Q2=C)</td><td>T4 — Storage onObjectFinalized trigger fires fire-and-forget</td></tr>
+    <tr><td>Reuse V73 30d retention sweep — no new cron (Q2=C)</td><td>T4 (PDF at same prefix as original) + Files table verification</td></tr>
+    <tr><td>Word + Excel + PowerPoint + CSV scope (Q3=C)</td><td>T1 — OFFICE_CONVERTIBLE_MIMES Set of 7 canonical MIMEs</td></tr>
+    <tr><td>Failure UX: card + ⚠ + Thai tooltip (Q4=B)</td><td>T3 — staff-chat-attach-failed branch + T4 deriveFailureReason Thai copy</td></tr>
+    <tr><td>4 states: pending/ready/failed/unsupported</td><td>T1 OfficePreviewStatus + T3 card branches + T6 flow-simulate</td></tr>
+    <tr><td>State derivation pure helper (pdfPreviewStateOf)</td><td>T1 OP3 group tests + impl</td></tr>
+    <tr><td>Reuse existing StaffChatPdfOverlay (no UI change)</td><td>T3 — handlePreviewClick passes pdfPreviewUrl as fileUrl</td></tr>
+    <tr><td>No 3rd-party doc viewer (AV108)</td><td>T7 audit regression + T8 source-grep</td></tr>
+    <tr><td>One sanctioned exception: in-project Gotenberg</td><td>T7 SKILL.md amendment + AV108.3 test</td></tr>
+    <tr><td>Acceptance: Rule Q V66 L1 + Q-vis verification</td><td>Post-deploy task (NOT in this plan — gated on user "deploy")</td></tr>
+    <tr><td>Acceptance: cost stays under free tier</td><td>Post-deploy Cloud Run metrics (NOT in this plan)</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Placeholder scan</strong>: One TODO in T9 e2e script ("TODO at deploy time: read fixture files") — intentional, since the script is checked-in ready but won't run until deploy. Acceptable given Stop gate context.</p>
+
+<p><strong>Type consistency</strong>: state names (<code>pending</code>/<code>ready</code>/<code>failed</code>/<code>unsupported</code>) consistent across T1 (OfficePreviewStatus) → T2 (buildMessageDoc stamp) → T3 (card branches) → T4 (Cloud Function patches) → T6 (flow-simulate) → T8 (source-grep). Test IDs (<code>staff-chat-attach-pending</code>/<code>-failed</code>/<code>-preview</code>/<code>-download</code>) consistent across T3 RTL + T6 flow-simulate + T8 source-grep.</p>
+
+<h2>Execution</h2>
+
+<p>Plan complete. The user has authorized "writing and coding and testing until all green" — proceeding directly with <strong>Inline Execution</strong> via executing-plans. Subagent-driven was the alternative but inline is the right call given (a) this is one cohesive feature (not parallel independent streams), (b) prior sagas (V81/V86/tablet-chart) showed subagent thrashing on this large baseline, and (c) the user wants continuous execution without between-task reviews.</p>
+
+<p><strong>Stop gate</strong>: vitest all green + build clean. Then report state + wait for explicit "deploy" verb.</p>
+
+</body>
+</html>
