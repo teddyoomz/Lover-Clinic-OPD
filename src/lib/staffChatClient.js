@@ -8,6 +8,10 @@
 // Used by ChatPanel + scopedDataLayer.addStaffChatMessage.
 import { serverTimestamp } from 'firebase/firestore';
 import { STAFF_CHAT_MAX_ATTACHMENTS } from './staffChatRetentionCore.js';
+// (2026-05-22 EOD+2 — T2) Office MIME → stamp pdfPreviewStatus='pending' at
+// send time so receiver UI shows ⏳ immediately. The officeToPdf Cloud Function
+// patches to 'ready'/'failed' once the LibreOffice conversion completes.
+import { isOfficeConvertible, OfficePreviewStatus } from './staffChatOfficePreviewCore.js';
 
 // Crypto-secure CHAT-<ts>-<hex> id (Rule C2 — no Math.random). Exported so the
 // upload pipeline can mint the id BEFORE uploading images (images live under
@@ -36,6 +40,17 @@ function normalizeStaffChatAttachment(a) {
   if (a && a.thumbPath) o.thumbPath = String(a.thumbPath);
   if (a && Number.isFinite(a.w) && a.w > 0) o.w = Math.round(a.w);
   if (a && Number.isFinite(a.h) && a.h > 0) o.h = Math.round(a.h);
+  // (2026-05-22 EOD+2 — T2) Office MIME (Word/Excel/PPT/CSV, Q3=C scope) →
+  // stamp pdfPreviewStatus='pending' so the receiver UI shows ⏳ immediately
+  // while officeToPdf Cloud Function runs in the background. Non-Office
+  // attachments preserve V73 shape exactly (no surprise field on images/PDFs).
+  // pdfPreviewUrl/pdfPreviewError use null (NOT undefined) for V14
+  // Firestore-undefined-safe write.
+  if (isOfficeConvertible(o.mimeType)) {
+    o.pdfPreviewStatus = OfficePreviewStatus.PENDING;
+    o.pdfPreviewUrl = null;
+    o.pdfPreviewError = null;
+  }
   return o;
 }
 
