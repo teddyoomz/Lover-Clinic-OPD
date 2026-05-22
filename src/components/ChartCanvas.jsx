@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pencil, Circle, Minus, Type, Eraser, Undo2, Redo2, Check, Trash2, MousePointer } from 'lucide-react';
+import { Pencil, Circle, Minus, Type, Eraser, Undo2, Redo2, Check, Trash2, MousePointer, Loader2 } from 'lucide-react';
 import { serializeFabricCanvas, isObjectLevelReeditable } from '../lib/tabletChartTools.js';
+import { uploadChartImage } from '../lib/chartImageStorage.js';
 
 const COLORS = ['#000000', '#e53e3e', '#3182ce', '#38a169', '#d69e2e', '#805ad5', '#dd6b20', '#ffffff'];
 const WIDTHS = [2, 4, 8];
 
-export default function ChartCanvas({ template, existingData, onSave, onCancel, isDark }) {
+export default function ChartCanvas({ template, existingData, onSave, onCancel, isDark, customerId = '' }) {
   const canvasElRef = useRef(null);
   const fabricRef = useRef(null);
   const containerRef = useRef(null);
@@ -17,6 +18,8 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const pushHistory = () => {
     const canvas = fabricRef.current;
@@ -78,10 +81,15 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
         if (objs0[0]) objs0[0].set({ selectable: false, evented: false, hoverCursor: 'default' }); // re-lock template
         canvas.renderAll();
 
-      // Raster fallback — use the saved PNG dataUrl as background (legacy / no re-editable json)
+      // Raster fallback — use the saved PNG dataUrl as background (legacy / no re-editable json).
+      // 2026-05-22 EOD+2 — dataUrl is now a Firebase Storage URL (Storage-ref architectural fix).
+      // crossOrigin='anonymous' is required so the canvas isn't tainted when toDataURL later runs
+      // for a re-save. Storage bucket has CORS=['*'] (set by V81-saga fix, 2026-05-21). Legacy
+      // inline `data:` dataUrls also work — crossOrigin is harmless for them.
       } else if (existingData?.dataUrl) {
         const imgEl = await new Promise((resolve) => {
           const img = new window.Image();
+          img.crossOrigin = 'anonymous';
           img.onload = () => resolve(img);
           img.onerror = () => resolve(null);
           img.src = existingData.dataUrl;
@@ -232,12 +240,28 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
     canvas.renderAll();
     pushHistory();
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     const canvas = fabricRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
-    const fabricJson = serializeFabricCanvas(canvas);   // includes canvas dims → lossless object-level re-edit
-    onSave({ dataUrl, fabricJson, templateId: template?.id || 'blank' });
+    if (!canvas || saving) return;
+    // 2026-05-22 EOD+2 — Storage-ref architectural fix. Pre-fix: dataUrl was the
+    // full inline base64 PNG (1-2+ MiB) → Firestore rejected detail.charts as
+    // "invalid nested entity" when the user uploaded a high-res template.
+    // Fix: upload the flattened PNG to Firebase Storage → store only the URL in
+    // detail.charts[].dataUrl (small ~200-char string). multiplier:2 KEPT — high
+    // resolution preserved (medical data). storagePath returned alongside so the
+    // treatment-delete cascade can clean up the Storage object.
+    setSaveError('');
+    setSaving(true);
+    try {
+      const dataUrl = canvas.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
+      const fabricJson = serializeFabricCanvas(canvas);   // includes canvas dims → lossless object-level re-edit
+      const { url, storagePath } = await uploadChartImage({ customerId, dataUrl });
+      onSave({ dataUrl: url, storagePath, fabricJson, templateId: template?.id || 'blank' });
+    } catch (e) {
+      console.error('[ChartCanvas] save failed:', e);
+      setSaveError(`บันทึก Chart ไม่สำเร็จ: ${e?.message || e}`);
+      setSaving(false);
+    }
   };
 
   const btnCls = (active) => `p-1.5 rounded-lg transition-all ${active ? 'bg-teal-500 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200'}`;
@@ -275,9 +299,10 @@ export default function ChartCanvas({ template, existingData, onSave, onCancel, 
         <button onClick={handleRedo} disabled={!canRedo} className="p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30" title="ทำซ้ำ"><Redo2 size={16} /></button>
         <button onClick={handleClear} className="p-1.5 text-red-400 hover:text-red-600" title="ล้างทั้งหมด"><Trash2 size={16} /></button>
         <div className="flex-1" />
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs font-bold text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100">ยกเลิก</button>
-        <button onClick={handleSave} className="px-3 py-1.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 flex items-center gap-1 ml-1">
-          <Check size={12} /> ยืนยัน
+        {saveError && <span className="text-[11px] text-red-500 font-bold mr-2 truncate max-w-[40%]" title={saveError}>{saveError}</span>}
+        <button onClick={onCancel} disabled={saving} className="px-3 py-1.5 text-xs font-bold text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50">ยกเลิก</button>
+        <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-xs font-bold text-white bg-teal-500 rounded-lg hover:bg-teal-600 flex items-center gap-1 ml-1 disabled:opacity-60">
+          {saving ? <><Loader2 size={12} className="animate-spin" /> กำลังบันทึก...</> : <><Check size={12} /> ยืนยัน</>}
         </button>
       </div>
       {/* Canvas area — centered */}

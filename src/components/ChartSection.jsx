@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Edit3, Trash2, FileImage } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit3, Trash2, FileImage, Maximize2, X } from 'lucide-react';
 import ChartTemplateSelector from './ChartTemplateSelector.jsx';
 import ChartCanvas from './ChartCanvas.jsx';
 import PcPairingModal from './tablet-chart/PcPairingModal.jsx';
@@ -7,13 +7,14 @@ import { useChartEditSession } from '../hooks/useChartEditSession.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import { auth } from '../firebase.js';
 
-export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '' }) {
+export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '', customerId = '' }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasTemplate, setCanvasTemplate] = useState(null);
   const [editingIdx, setEditingIdx] = useState(-1);
   const [pendingTemplate, setPendingTemplate] = useState(null);   // staged template awaiting "edit here vs tablet"
   const [pendingChart, setPendingChart] = useState(null);         // existing chart being re-edited via the modal (null = new chart)
+  const [lightboxIdx, setLightboxIdx] = useState(-1);             // 2026-05-22 EOD+2 — fullscreen view of chart
   const { branchId } = useSelectedBranch();
   const pcDeviceId = (auth.currentUser?.uid || 'pc') + ':' + (typeof window !== 'undefined' ? (window.name || 'main') : 'main');
 
@@ -43,8 +44,20 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
     // a raw object still stringifies; only null/undefined → null. (Found via Rule Q adversarial pass.)
     const fj = chartData.fabricJson;
     const fabricJson = typeof fj === 'string' ? fj : (fj == null ? null : JSON.stringify(fj));
+    // 2026-05-22 EOD+2 — chartData.dataUrl is now a Firebase Storage URL (from ChartCanvas Storage-ref
+    // upload). storagePath is the bucket path so a future delete cascade can clean it up.
     const entry = { ...chartData, fabricJson, template: canvasTemplate, savedAt: new Date().toISOString() };
     if (editingIdx >= 0) {
+      // Replacing a chart — best-effort delete of the OLD Storage object so we don't accumulate
+      // orphans every time the user re-edits + re-saves.
+      const old = charts[editingIdx];
+      const oldPath = old?.storagePath
+        || (typeof old?.dataUrl === 'string' && old.dataUrl.startsWith('http')
+            ? (() => { try { return decodeURIComponent(old.dataUrl.match(/\/o\/([^?]+)/)?.[1] || ''); } catch { return ''; } })()
+            : '');
+      if (oldPath && oldPath !== entry.storagePath) {
+        import('../lib/chartImageStorage.js').then(m => m.deleteChartImage(oldPath)).catch(() => {});
+      }
       onChartsChange(prev => prev.map((c, i) => i === editingIdx ? entry : c));
     } else {
       onChartsChange(prev => [...prev, entry].slice(0, 2)); // max 2 charts
@@ -53,6 +66,15 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
   };
 
   const handleDelete = (idx) => {
+    // Best-effort cleanup of the Storage object before removing the entry from state.
+    const c = charts[idx];
+    const path = c?.storagePath
+      || (typeof c?.dataUrl === 'string' && c.dataUrl.startsWith('http')
+          ? (() => { try { return decodeURIComponent(c.dataUrl.match(/\/o\/([^?]+)/)?.[1] || ''); } catch { return ''; } })()
+          : '');
+    if (path) {
+      import('../lib/chartImageStorage.js').then(m => m.deleteChartImage(path)).catch(() => {});
+    }
     onChartsChange(prev => prev.filter((_, i) => i !== idx));
   };
 
@@ -104,6 +126,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
             <div key={idx} className={`relative rounded-lg border overflow-hidden group ${isDark ? 'border-[#333]' : 'border-gray-200'}`}>
               <img src={chart.dataUrl} alt={`Chart ${idx + 1}`} className="w-full object-contain bg-white" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                <button data-testid={`chart-fullscreen-${idx}`} onClick={() => setLightboxIdx(idx)} title="ดูรูปใหญ่" className="p-2 bg-white/90 rounded-full text-gray-700 hover:bg-white shadow"><Maximize2 size={14} /></button>
                 <button data-testid={`chart-edit-${idx}`} onClick={() => handleEdit(idx)} className="p-2 bg-white/90 rounded-full text-blue-600 hover:bg-white shadow"><Edit3 size={14} /></button>
                 <button data-testid={`chart-delete-${idx}`} onClick={() => handleDelete(idx)} className="p-2 bg-white/90 rounded-full text-red-500 hover:bg-white shadow"><Trash2 size={14} /></button>
               </div>
@@ -140,8 +163,63 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
           onSave={handleSave}
           onCancel={() => setCanvasOpen(false)}
           isDark={isDark}
+          customerId={customerId}
+        />
+      )}
+
+      {/* 2026-05-22 EOD+2 — Fullscreen lightbox for chart image (mirror canonical
+          Lightbox in TreatmentReadOnlyMirror.jsx; AV78 lightbox-explicit-exception
+          since click-anywhere-closes IS expected UX for fullscreen image viewers). */}
+      {lightboxIdx >= 0 && charts[lightboxIdx]?.dataUrl && (
+        <ChartLightbox
+          src={charts[lightboxIdx].dataUrl}
+          label={`Chart ${lightboxIdx + 1}`}
+          onClose={() => setLightboxIdx(-1)}
         />
       )}
     </>
+  );
+}
+
+// 2026-05-22 EOD+2 — Canonical lightbox shape (mirror TreatmentReadOnlyMirror.jsx Lightbox).
+// ESC + click-anywhere closes. crossOrigin='anonymous' so Storage URLs load without taint
+// (Storage bucket CORS=['*'] set by V81-saga). z-[110] = above TFP modal at z-80.
+function ChartLightbox({ src, label, onClose }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose?.(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  if (!src) return null;
+  // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen image viewer.
+  // Click-anywhere-closes is the expected UX (Stripe/Linear convention).
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85"
+      onClick={onClose}
+      role="dialog"
+      aria-label={label || 'ดูรูปใหญ่'}
+    >
+      <div className="relative max-w-[95vw] max-h-[95vh] p-2" onClick={e => e.stopPropagation()}>
+        <img
+          src={src}
+          alt={label || 'Chart'}
+          crossOrigin="anonymous"
+          className="max-w-[95vw] max-h-[90vh] object-contain rounded shadow-2xl bg-white"
+        />
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition shadow-lg"
+          aria-label="ปิด"
+        >
+          <X size={18} />
+        </button>
+        {label && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-xs bg-black/60 px-3 py-1 rounded">
+            {label}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

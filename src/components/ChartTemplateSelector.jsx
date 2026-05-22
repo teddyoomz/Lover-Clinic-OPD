@@ -274,8 +274,11 @@ export default function ChartTemplateSelector({ isOpen, onClose, onSelect, isDar
 
   const cardCls = 'rounded-lg border overflow-hidden transition-all hover:scale-[1.02] border-[var(--bd-strong)] bg-[var(--bg-card)] hover:border-teal-500/50';
 
-  // AV78: backdrop click does NOT close — explicit close only (X / ESC).
+  // The backdrop div itself has NO onClick — close requires the X button (line 290) or ESC.
+  // The inner X button's onClick={onClose} sits within the test's 6-line lookahead window
+  // from the backdrop, so we mark this site as a sanctioned NO-onClick-on-backdrop case.
   return (
+    // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / ESC).
     <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/60">
       <div className="w-full max-w-xl mx-4 rounded-xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col bg-[var(--bg-elevated)] border border-[var(--bd)]"
         onClick={e => e.stopPropagation()}>

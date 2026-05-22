@@ -992,7 +992,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
               if (t.beforeImages?.length) setBeforeImages(t.beforeImages);
               if (t.afterImages?.length) setAfterImages(t.afterImages);
               if (t.otherImages?.length) setOtherImages(t.otherImages);
-              if (t.charts?.length) setCharts(t.charts.map(c => ({ dataUrl: c.dataUrl || '', fabricJson: c.fabricJson || null, templateId: c.templateId || 'blank', savedAt: c.savedAt || '' })));
+              if (t.charts?.length) setCharts(t.charts.map(c => ({ dataUrl: c.dataUrl || '', fabricJson: c.fabricJson || null, templateId: c.templateId || 'blank', savedAt: c.savedAt || '', storagePath: c.storagePath || null })));
               if (t.labItems?.length) setLabItems(t.labItems);
               if (t.medications?.length) setMedications(t.medications);
               if (t.consumables?.length) setConsumables(t.consumables);
@@ -3698,7 +3698,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
           {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
           <FormSection isDark={isDark}>
-            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} patientLabel={patientName ? `คุณ ${patientName}${customerHNProp ? ` (HN ${customerHNProp})` : ''}` : (customerHNProp ? `HN ${customerHNProp}` : '')} />
+            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} patientLabel={patientName ? `คุณ ${patientName}${customerHNProp ? ` (HN ${customerHNProp})` : ''}` : (customerHNProp ? `HN ${customerHNProp}` : '')} customerId={customerId} />
           </FormSection>
 
           {/* ── Treatment Images (รูปภาพการรักษา) ────────────────────────── */}

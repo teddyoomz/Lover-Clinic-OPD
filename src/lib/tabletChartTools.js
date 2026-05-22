@@ -48,5 +48,11 @@ export function chartEntryForPersist(c) {
   const dataUrl = c?.dataUrl || '';
   let fabricJson = (typeof c?.fabricJson === 'string') ? c.fabricJson : null;
   if (fabricJson && (dataUrl.length + fabricJson.length) > CHART_PERSIST_CAP_BYTES) fabricJson = null;
-  return { dataUrl, fabricJson, templateId: c?.templateId };
+  // 2026-05-22 EOD+2 — Storage-ref architectural fix. dataUrl is now a Firebase Storage URL
+  // (small, ~200 chars) instead of inlined base64 (1-2+ MiB). storagePath is the bucket path
+  // so treatment-delete + chart-replace cascade can clean up the Storage object. Both fields
+  // remain null for legacy pre-Storage-ref charts — those carry inline `data:` dataUrls,
+  // display still works via <img src>, re-edit via ChartCanvas raster fallback still works.
+  const storagePath = (typeof c?.storagePath === 'string' && c.storagePath) ? c.storagePath : null;
+  return { dataUrl, fabricJson, templateId: c?.templateId, storagePath };
 }

@@ -110,12 +110,37 @@ describe('V73-followup R5 — INSTANT lightbox (no opacity gate, no state, no ra
     cleanup();
   });
 
-  it('blurred thumb is rendered BEHIND the full image (covers fresh-load gap)', () => {
+  // Round-6 (2026-05-22 EOD+2) supersedes the R5 thumb-behind design. User
+  // reported R5 still felt "ติดบ้าง ไม่ติดบ้าง" with rapid clicks (keyed
+  // remount of `<img key={idx}>` caused DOM churn). R6 = ONE <img> never
+  // remounted (browser smooth-swaps src) + Blob cache pre-warm. The
+  // thumb-behind layer is GONE — the blob cache covers any fresh-load gap.
+  it('single full <img> for the main image — NO thumb-behind layer (Round 6 contract)', () => {
     render(<StaffChatImageLightbox images={IMAGES_2} startIndex={0} onClose={vi.fn()} />);
     const lightbox = screen.getByTestId('staff-chat-image-lightbox');
-    const thumbs = lightbox.querySelectorAll('img[aria-hidden="true"]');
-    expect(thumbs.length).toBeGreaterThanOrEqual(1);
-    expect(thumbs[0].className).toMatch(/blur-\[2px\]/);
+    // No aria-hidden blurred-thumb image (R5 artifact removed in R6)
+    const hidden = lightbox.querySelectorAll('img[aria-hidden="true"]');
+    expect(hidden.length).toBe(0);
+    // Main image is the only <img> in the central region (filmstrip thumbs at
+    // the bottom are separate — they have a parent button with thumb testid).
+    const mainImg = screen.getByTestId('staff-chat-lightbox-image');
+    expect(mainImg.tagName).toBe('IMG');
+    // No blurred-thumb className anywhere on the main image
+    expect(mainImg.className).not.toMatch(/blur-\[2px\]/);
+    cleanup();
+  });
+
+  it('main <img> is NEVER remounted across nav — same element, src swaps in place (Round 6 contract)', () => {
+    render(<StaffChatImageLightbox images={IMAGES_3} startIndex={0} onClose={vi.fn()} />);
+    const before = screen.getByTestId('staff-chat-lightbox-image');
+    fireEvent.click(queryNext());
+    const after1 = screen.getByTestId('staff-chat-lightbox-image');
+    fireEvent.click(queryNext());
+    const after2 = screen.getByTestId('staff-chat-lightbox-image');
+    // SAME DOM node identity through every nav — the heart of R6's smooth swap
+    expect(after1).toBe(before);
+    expect(after2).toBe(before);
+    expect(before.getAttribute('src')).toBe(URL_3);
     cleanup();
   });
 });

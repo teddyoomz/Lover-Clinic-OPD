@@ -25,7 +25,7 @@ const env = (await readFile('.env.local.prod', 'utf8'))
 const APP_ID = 'loverclinic-opd-4c39b';
 const privateKey = env.FIREBASE_ADMIN_PRIVATE_KEY.split('\\n').join('\n');
 initializeApp({ credential: cert({
-  projectId: env.FIREBASE_ADMIN_PROJECT_ID,
+  projectId: APP_ID,
   clientEmail: env.FIREBASE_ADMIN_CLIENT_EMAIL,
   privateKey,
 }) });
@@ -145,35 +145,88 @@ for (const [k, v] of Object.entries(finalBackendDetail)) {
   console.log(`  ${k} [${t}]`);
 }
 
-// Now try the actual setDoc to a TEST treatment doc
-console.log('\n=== Attempting setDoc to TEST-DIAG-CHART treatment doc ===');
-const testId = `TEST-DIAG-CHART-${Date.now()}`;
-const treatmentDocRef = base.collection('be_treatments').doc(testId);
-
-// Mimic createBackendTreatment shape
-const { completedAt, completedBy, ...detailRest } = finalBackendDetail;
-const topLevelPatch = {};
-if (completedAt !== undefined) topLevelPatch.completedAt = completedAt;
-if (completedBy !== undefined) topLevelPatch.completedBy = completedBy;
-topLevelPatch.branchId = finalBackendDetail.branchId || '';
-
-const payload = {
-  treatmentId: testId,
-  customerId: 'TEST-CUSTOMER',
-  detail: { ...detailRest, createdBy: 'diag', createdAt: new Date().toISOString() },
-  createdBy: 'diag',
-  createdAt: new Date().toISOString(),
-  ...topLevelPatch,
-};
-
-try {
-  await treatmentDocRef.set(payload, { merge: true });
-  console.log('✅ SAVE SUCCEEDED. The bug ISN\'T in this shape.');
-  await treatmentDocRef.delete();
-  console.log('Cleaned up TEST-DIAG-CHART doc.');
-} catch (e) {
-  console.error('❌ SAVE FAILED:', e.message);
-  console.error('Stack:', e.stack);
+// === TEST A: charts via chartEntryForPersist (CURRENT production path) ===
+async function tryWrite(label, payload) {
+  const testId = `TEST-DIAG-CHART-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const ref = base.collection('be_treatments').doc(testId);
+  try {
+    await ref.set(payload, { merge: true });
+    console.log(`✅ [${label}] SAVE SUCCEEDED.`);
+    await ref.delete();
+    return { ok: true };
+  } catch (e) {
+    console.error(`❌ [${label}] SAVE FAILED:`, e.message);
+    // Don't await delete on failure; doc may not exist
+    try { await ref.delete(); } catch {}
+    return { ok: false, err: e };
+  }
 }
 
+console.log('\n=== TEST A: detail.charts via chartEntryForPersist (clean) ===');
+const { completedAt: cA, completedBy: cBA, ...detailRestA } = finalBackendDetail;
+const payloadA = {
+  treatmentId: 'A',
+  customerId: 'TEST-CUSTOMER',
+  detail: { ...detailRestA, createdBy: 'diag', createdAt: new Date().toISOString() },
+  createdBy: 'diag', createdAt: new Date().toISOString(),
+  completedAt: cA, completedBy: cBA, branchId: finalBackendDetail.branchId || '',
+};
+await tryWrite('A clean', payloadA);
+
+// === TEST B: SIMULATE LEAK — retain template (with Timestamps) inside detail.charts[] ===
+console.log('\n=== TEST B: detail.charts[] with template:Firestore-doc (LEAK simulation) ===');
+const leakedChartEntry = clean({ dataUrl: 'data:image/png;base64,abcd', fabricJson: '{}', templateId: tmpl.id, template: tmpl, savedAt: new Date().toISOString() });
+console.log('Leaked chart entry after clean():');
+console.log(JSON.stringify(leakedChartEntry, null, 2).slice(0, 400));
+const detailB = { ...detailRestA, charts: [leakedChartEntry], createdBy: 'diag', createdAt: new Date().toISOString() };
+const payloadB = {
+  treatmentId: 'B',
+  customerId: 'TEST-CUSTOMER',
+  detail: detailB,
+  createdBy: 'diag', createdAt: new Date().toISOString(),
+  completedAt: cA, completedBy: cBA, branchId: finalBackendDetail.branchId || '',
+};
+await tryWrite('B leak', payloadB);
+
+// === TEST C: detail with raw (UN-cleaned) Timestamp instance inside charts[].template ===
+console.log('\n=== TEST C: raw Timestamp leak (NO clean()) — confirms if Timestamp instance survives admin-SDK setDoc ===');
+const rawEntry = { dataUrl: 'data:image/png;base64,abcd', fabricJson: '{}', templateId: tmpl.id, template: tmpl, savedAt: new Date().toISOString() };
+const detailC = { ...detailRestA, charts: [rawEntry], createdBy: 'diag', createdAt: new Date().toISOString() };
+const payloadC = {
+  treatmentId: 'C',
+  customerId: 'TEST-CUSTOMER',
+  detail: detailC,
+  createdBy: 'diag', createdAt: new Date().toISOString(),
+  completedAt: cA, completedBy: cBA, branchId: finalBackendDetail.branchId || '',
+};
+await tryWrite('C raw Timestamp', payloadC);
+
+// === TEST D: imageUrl-only template (mimic what a "+เพิ่ม" upload looks like AFTER chartEntryForPersist) ===
+console.log('\n=== TEST D: hasSale=true + all sale-side fields populated (auto-sale path) ===');
+const fullSaleDetail = clean({
+  ...detailRestA,
+  hasSale: true,
+  charts: [chartEntryForPersist(entry)],
+  treatmentItems: [{ id: 't1', productId: 'p1', name: 'item', qty: '1', unit: 'ครั้ง', price: 100, fillLater: false, skipStockDeduction: false }],
+  medications: [{ name: 'med1', dosage: '1', qty: '1', unitPrice: 50, unit: 'เม็ด' }],
+  consumables: [{ name: 'cons', qty: '1', unit: 'อัน' }],
+  labItems: [],
+  doctorFees: [],
+  dfEntries: [],
+  treatmentFiles: [],
+  purchasedItems: [{ id: 'pp1', name: 'product', qty: '1', unitPrice: 100, unit: 'ชิ้น', itemType: 'product' }],
+  billing: { subtotal: 100, medDisc: 0, billDiscAmt: 0, netTotal: 100 },
+  payment: { paymentStatus: '2', channels: [{ enabled: true, method: 'cash', amount: 100 }], paymentDate: '2026-05-22', paymentTime: '10:00', refNo: '', note: '', saleNote: '' },
+  sellers: [{ id: 's1', percent: 100, total: 100 }],
+});
+const payloadD = {
+  treatmentId: 'D',
+  customerId: 'TEST-CUSTOMER',
+  detail: { ...fullSaleDetail, createdBy: 'diag', createdAt: new Date().toISOString() },
+  createdBy: 'diag', createdAt: new Date().toISOString(),
+  completedAt: cA, completedBy: cBA, branchId: finalBackendDetail.branchId || '',
+};
+await tryWrite('D full sale', payloadD);
+
+console.log('\n=== DIAG done ===');
 process.exit(0);

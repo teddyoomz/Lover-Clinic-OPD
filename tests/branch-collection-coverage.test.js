@@ -66,6 +66,11 @@ const COLLECTION_MATRIX = {
   'be_staff_chat_messages':{ scope: 'branch',         source: 'V73 (2026-05-16) — staff in-branch chat. addStaffChatMessage stamps branchId from useStaffChat hook bound to selectedBranchId. listenToStaffChatMessages safe-by-default (BS-13).' },
   'be_chart_tablet_presence':{ scope: 'branch',       source: 'Tablet Chart Editor (2026-05-20) — standby presence; upsertChartTabletPresence stamps branchId; listenToChartTabletPresenceByBranch safe-by-default (BS-13).' },
   'be_chart_edit_sessions':{ scope: 'branch',         source: 'Tablet Chart Editor (2026-05-20) — PC↔tablet session relay; createChartEditSession stamps branchId; listenToRequestedSessionForTablet branch-filtered.' },
+  // EOD+1 chart-templates rewrite (2026-05-22): per-doc clinic-wide chart-annotation
+  // template store. Image bytes in Storage at chart-templates/{id}.{ext}; doc =
+  // {id, name, category, imageUrl, storagePath, builtIn, locked, _seedOrder, createdAt, updatedAt}.
+  // Per-device sort via localStorage. Not per-branch (charts are app-wide assets).
+  'be_chart_templates':    { scope: 'global', reason: 'EOD+1 chart-templates persistence rewrite (2026-05-22) — clinic-wide chart-annotation templates (face/body/etc.). Per-doc + Firebase Storage for image bytes; built-in seeds carry `locked:true`. Sort order is per-device via localStorage `lover-chart-template-order-v1`.' },
 
   // ─── Global (no branchId) ──
   'be_customers':          { scope: 'global',  reason: 'Customer can visit any branch' },

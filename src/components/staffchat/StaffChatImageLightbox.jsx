@@ -1,12 +1,31 @@
 // src/components/staffchat/StaffChatImageLightbox.jsx
+//
 // V73 Feature F (2026-05-16) — Fullscreen image overlay for chat attachments.
-// (2026-05-22) Multi-image: images[] + startIndex + prev/next + counter +
-//   filmstrip + keyboard ←→ + touch swipe + download. Loads the ORIGINAL
-//   (fullUrl) at full size; arrows/filmstrip hidden when a single image.
-//   Backward-compat: a single `src` string is wrapped as one image.
-// Esc / ✕ close (AV78 NORMAL modal — backdrop does NOT close, 2026-05-22; same
-//   pain as the user's report: accidental outside-click closing a viewer = ใช้ยาก).
-//   z-9700 above modals.
+// (2026-05-22) Multi-image: images[] + startIndex + prev/next + counter + filmstrip
+//   + keyboard ←→ + touch swipe + download. Single `src` string backward-compat.
+// Esc / ✕ close (AV78 NORMAL modal — backdrop does NOT close).
+// z-9700 above modals.
+//
+// (2026-05-22 EOD+2 — ROUND 6, user-directed) — User reported after rounds 1-5
+//   "กดแล้วไม่ Response กดแล้วไม่เลื่อน กดแล้วรูปไม่เปลี่ยน" + explicit fix
+//   suggestion: "ถ้ารูปมันใหญ่ ก็ให้เก็บไว้ใน cache ในเครื่อง จะได้ไม่ต้องโหลดใหม่
+//   ทุกครั้งที่กดเลื่อน". Round-5's `<img key={idx}>` keyed-remount caused DOM
+//   churn (unmount-then-mount) → brief blank frame between click + new paint →
+//   perceived as "click did nothing". Plus every nav re-issued the GET on
+//   cache-miss (large originals = visible delay).
+//
+// Round 6 = the user's design:
+//   1. ONE <img> element — NEVER remount. `src` attribute updates on idx change.
+//      Browser keeps painting the OLD image until the NEW one is ready, then
+//      swaps in place (the native `<img>` smooth-replace behaviour Lightbox apps
+//      rely on). No flicker, no blank frame.
+//   2. Blob cache — on mount, fetch every image as a Blob → URL.createObjectURL
+//      → store in a ref-Map. Once cached, `src=blob:...` swap is local-memory
+//      paint (zero network on nav). The first image renders from the original
+//      URL immediately while the background warm runs; subsequent clicks pull
+//      from the cache.
+//   3. NO opacity gate, NO transition, NO state for "loaded" — `<img>` natively
+//      handles src swap.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
@@ -25,25 +44,57 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   const N = images.length;
   const [idx, setIdx] = useState(() => Math.min(Math.max(0, Number(startIndex) || 0), Math.max(0, N - 1)));
   const touchX = useRef(null);
-  // (2026-05-22 EOD+1 — user-reported "บั๊คเหมือนเดิม" saga, ROUND 5 — the
-  // architectural-question round). After Rounds 1-4 chased the opacity-
-  // gate race through onLoad / refs / useEffect+complete / decode() /
-  // Set-of-loaded-URLs — each fix tightened the gate but the user STILL
-  // perceived a "delay" / "ไม่ responsive ในทันที / ก่อให้เกิดอาการค้าง".
-  // The architectural answer (Phase 4.5 of /systematic-debugging when 4+
-  // fixes don't fully land): the GATE ITSELF is the wrong primitive. ANY
-  // state-based opacity gate adds a render cycle between click + visual
-  // change AND a 150ms CSS transition AND a class of races.
-  // Round-5: REMOVE the gate entirely. Two stacked <img>s — blurred thumb
-  // BEHIND (always at full opacity, fills frame instantly via the small
-  // already-cached thumb URL) + sharp full IN FRONT (no opacity gate, no
-  // transition). The browser paints the full IMMEDIATELY on cache-hit
-  // (instant), or shows nothing-and-then-paints on fresh-load while the
-  // blurred thumb behind covers the gap. Either way the user sees SOMETHING
-  // ON THE FRAME the moment the click lands — no delay, no race, no state
-  // to drift. Keyed remount preserved so the previous picture never lingers
-  // (the original Rounds-1+ symptom). This is the simplest possible design
-  // and matches LINE / WhatsApp / Slack lightbox feel exactly.
+
+  // Blob cache — Map<originalUrl, blobObjectUrl>. State (not ref) so re-renders
+  // see cached entries; cleared on unmount via revokeObjectURL.
+  const [blobCache, setBlobCache] = useState({});
+  const objectUrlsRef = useRef([]); // for cleanup
+
+  // Preload + cache ALL originals at mount (fetch → blob → URL.createObjectURL).
+  // Browser dedupes the underlying HTTP request with any concurrent <img> load,
+  // so the first image still paints instantly from the original URL while the
+  // cache warms in the background. Concurrent fetches are fine — Firebase
+  // Storage's CDN handles parallel GETs cheaply.
+  useEffect(() => {
+    let cancelled = false;
+    const created = [];
+    objectUrlsRef.current = created;
+    (async () => {
+      // Sequence the fetches so the CURRENT image's cache lands FIRST (smoother
+      // perceived latency on a slow connection). Index order: current, next,
+      // prev, then the rest.
+      const order = [idx];
+      for (let off = 1; off < N; off++) {
+        if (idx + off < N) order.push(idx + off);
+        if (idx - off >= 0) order.push(idx - off);
+      }
+      for (const i of order) {
+        if (cancelled) return;
+        const url = images[i]?.fullUrl;
+        if (!url) continue;
+        // Skip if already cached
+        if (typeof blobCache[url] === 'string') continue;
+        try {
+          const r = await fetch(url);
+          if (!r.ok) continue;
+          const blob = await r.blob();
+          if (cancelled) return;
+          const objUrl = URL.createObjectURL(blob);
+          created.push(objUrl);
+          setBlobCache(prev => ({ ...prev, [url]: objUrl }));
+        } catch {
+          // CORS / network — fall back to original URL naturally
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      for (const u of created) {
+        try { URL.revokeObjectURL(u); } catch { /* ignore */ }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images]); // re-warm if the message changes
 
   useEffect(() => {
     const handler = (e) => {
@@ -54,19 +105,6 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, N]);
-
-  // (2026-05-22) Warm the neighbouring originals (idx ±1, ±2) into the browser
-  // cache so a left/right tap shows the sharp image instantly instead of
-  // kicking off a fresh multi-MB fetch on every navigation.
-  useEffect(() => {
-    if (N <= 1) return undefined;
-    const warm = [];
-    for (const j of [idx + 1, idx - 1, idx + 2, idx - 2]) {
-      const u = images[j]?.fullUrl;
-      if (u) { const im = new Image(); im.src = u; warm.push(im); }
-    }
-    return () => { warm.length = 0; };
-  }, [idx, images, N]);
 
   if (N === 0) return null;
 
@@ -88,14 +126,16 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     const cur = images[idx];
     const url = cur?.fullUrl;
     if (!url) return;
-    // (2026-05-22) shared helper (Rule of 3 — image lightbox + file card + PDF overlay).
     const fname = cur?.name || `staff-chat-${Date.now()}.${extFromUrl(url)}`;
     downloadUrlAsFile(url, fname, cur?.size);
   };
 
-  // (2026-05-22) AV78 normal modal — backdrop click does NOT close; only ✕ + Esc.
-  // (was a sanctioned lightbox-exception; user reported accidental outside-clicks
-  //  closing the viewer mid-look = ใช้ยาก, so it now matches every other modal.)
+  // ROUND 6 — current image source = cached blob URL when available, else
+  // the original network URL. ONE <img> element, src updates on idx change,
+  // browser smooth-swaps in place. Zero remounts, zero state for loaded.
+  const currentFullUrl = images[idx]?.fullUrl;
+  const effectiveSrc = (currentFullUrl && blobCache[currentFullUrl]) || currentFullUrl;
+
   return (
     <div
       data-testid="staff-chat-image-lightbox"
@@ -129,56 +169,61 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
         </div>
       </div>
 
-      {/* prev arrow */}
-      {N > 1 && idx > 0 && (
+      {/* prev arrow — (round-6, 2026-05-22 EOD+2) ALWAYS mounted when N>1.
+          The old conditional unmount at idx===0 created phantom missing buttons
+          during rapid power-clicking; the button disappeared mid-click → user
+          perceived "ติดบ้าง ไม่ติดบ้าง". Now disabled at edges instead. Also
+          enlarged the click target horizontally (w-20 wide). VERTICAL span is
+          CAPPED top-16/bottom-16 so the hit zone never overlaps the top-bar
+          close+download buttons OR the bottom filmstrip (user reported this:
+          "กดปิดรูปไม่ได้เลย เม้าขึ้นเป็น emoji ห้าม" — top-0 bottom-0 had
+          swallowed the X click and showed disabled cursor). */}
+      {N > 1 && (
         <button
           type="button"
           onClick={prev}
+          disabled={idx <= 0}
           data-testid="staff-chat-lightbox-prev"
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center z-10"
+          className="absolute left-0 top-16 bottom-16 w-20 flex items-center justify-start pl-3 z-10 text-white group disabled:opacity-30"
           aria-label="รูปก่อนหน้า"
         >
-          <ChevronLeft size={26} />
+          <span className="w-11 h-11 rounded-full bg-white/15 group-hover:bg-white/30 group-active:bg-white/40 flex items-center justify-center transition-colors">
+            <ChevronLeft size={26} />
+          </span>
         </button>
       )}
 
-      {/* main image — thumb shows INSTANTLY on nav (already cached from the chat
-          grid), sharp original fades in on top once decoded. keyed by idx so the
-          stale previous picture never lingers. */}
+      {/* main image — ONE <img>, NEVER remounted. src swaps in place when idx
+          changes. Browser keeps the previous frame painted until the new src
+          is ready (native <img> behaviour) → smooth swap, zero flicker.
+          Cached blob URLs (in-memory) make the swap instantaneous. */}
       <div
         className="relative w-full max-w-4xl h-[78vh] flex items-center justify-center"
         onClick={stop}
       >
         <img
-          key={`thumb-${idx}`}
-          src={images[idx]?.thumbUrl || images[idx]?.fullUrl}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-contain rounded blur-[2px]"
-        />
-        {/* (2026-05-22 round-5) NO opacity gate, NO transition, NO state.
-            Browser paints cache hits instantly; for fresh loads, the blurred
-            thumb behind covers the load window. INSTANT response to every
-            click — race-free by absence of state. */}
-        <img
-          key={`full-${idx}`}
-          src={images[idx]?.fullUrl}
+          src={effectiveSrc}
           alt=""
           data-testid="staff-chat-lightbox-image"
-          className="absolute inset-0 w-full h-full object-contain rounded"
+          className="max-w-full max-h-full object-contain rounded"
         />
       </div>
 
-      {/* next arrow */}
-      {N > 1 && idx < N - 1 && (
+      {/* next arrow — (round-6) ALWAYS mounted when N>1, disabled at idx===N-1.
+          Same fix-pattern as prev: wide hit zone but VERTICAL cap (top-16/bottom-16)
+          so it doesn't overlap the top-bar close button or the filmstrip. */}
+      {N > 1 && (
         <button
           type="button"
           onClick={next}
+          disabled={idx >= N - 1}
           data-testid="staff-chat-lightbox-next"
-          className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center z-10"
+          className="absolute right-0 top-16 bottom-16 w-20 flex items-center justify-end pr-3 z-10 text-white group disabled:opacity-30"
           aria-label="รูปถัดไป"
         >
-          <ChevronRight size={26} />
+          <span className="w-11 h-11 rounded-full bg-white/15 group-hover:bg-white/30 group-active:bg-white/40 flex items-center justify-center transition-colors">
+            <ChevronRight size={26} />
+          </span>
         </button>
       )}
 
