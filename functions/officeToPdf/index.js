@@ -6,7 +6,7 @@
 // http://localhost:3000 inside the same container (started by supervisord —
 // see Dockerfile + supervisord.conf).
 //
-// AV109 — sanctioned exception #1: this is the ONLY code path allowed to
+// AV108 — sanctioned exception #1: this is the ONLY code path allowed to
 // invoke a doc-conversion service, AND it must use localhost ONLY. No external
 // HTTP calls during conversion. PHI never leaves the GCP project. Source-grep
 // test in tests/audit-av108-office-preview-exception.test.js (T7) enforces.
@@ -28,6 +28,11 @@ import {
   deriveFailureReason,
   classifyGotenbergError,
 } from './helpers.js';
+// V110 (2026-05-23 EOD+1) — font-fidelity observability. Logs which Thai fonts
+// THIS docx requires + which are missing from the container's installed set.
+// Pre-conversion (after download, before Gotenberg) — non-fatal: failure to
+// analyze never blocks the conversion.
+import { analyzeFontRequirements } from './fontDetector.js';
 
 // (2026-05-23) When deployed via Cloud Run (gcloud run deploy) — NOT via
 // `firebase deploy --only functions` — neither projectId nor bucket is auto-
@@ -118,7 +123,38 @@ export const officeToPdf = onObjectFinalized(
       const file = bucket.file(filePath);
       const [buf] = await file.download();
 
-      // 2. POST to bundled Gotenberg → PDF buffer (LOCAL ONLY — AV109)
+      // V110 (2026-05-23 EOD+1) — Font requirements analysis (non-fatal
+      // observability). Logs the fonts this docx specifies + which are
+      // installed/aliased/missing. When `missing` is non-empty, conversion
+      // still runs but layout may drift vs MS Word. Logs let us decide which
+      // fonts to bake into future Docker image builds. Only runs on Office
+      // Open XML (.docx/.xlsx/.pptx) — legacy .doc/.xls binaries use a
+      // different font-spec mechanism (not zip-based).
+      try {
+        if (contentType.includes('wordprocessingml')
+            || contentType.includes('spreadsheetml')
+            || contentType.includes('presentationml')) {
+          const report = analyzeFontRequirements(buf);
+          if (report.error) {
+            console.warn('[officeToPdf] font-analysis skipped', {
+              filePath, error: report.error,
+            });
+          } else {
+            console.log('[officeToPdf] font-requirements', {
+              filePath,
+              declared: report.declared,
+              theme: report.theme,
+              missing: report.missing,
+              aliased: report.aliased,
+              installedCount: report.installed.length,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[officeToPdf] font-analysis threw (continuing)', String(e).slice(0, 200));
+      }
+
+      // 2. POST to bundled Gotenberg → PDF buffer (LOCAL ONLY — AV108)
       const fd = new FormData();
       fd.append('files', new Blob([buf], { type: contentType }), parts[2]);
       const resp = await fetch(GOTENBERG_URL, { method: 'POST', body: fd });

@@ -17,11 +17,38 @@ FROM gotenberg/gotenberg:8
 USER root
 
 # Install Node 20 + supervisord (Gotenberg base is Debian-based).
+# PLUS: Thai fonts (V110 font-fidelity fix, 2026-05-23 EOD+1) — fonts-thai-tlwg
+# ships TH Sarabun PSK + Loma + Garuda + Norasi + 7 other free Thai fonts. These
+# are the metric-equivalent free substitutes for the MS-proprietary fonts
+# (Cordia/Browallia/Angsana + UPC variants) that almost every Thai Word doc
+# specifies via the document theme. Without them, LibreOffice falls back to
+# Noto Sans Thai → different character widths → line-wrap doesn't match Word.
+# fontconfig-thai.conf below installs the alias map (Cordia→Loma etc.).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl supervisor ca-certificates gnupg \
+    && apt-get install -y --no-install-recommends \
+       curl supervisor ca-certificates gnupg \
+       fonts-thai-tlwg fonts-thai-tlwg-otf \
+       fontconfig \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# V110 — Install fontconfig alias mapping Microsoft-proprietary Thai fonts to
+# their free metric-equivalent counterparts. Refresh the fontconfig cache so
+# LibreOffice picks up the new fonts + aliases at runtime.
+COPY fontconfig-thai.conf /etc/fonts/conf.d/99-thai-substitute.conf
+RUN fc-cache -f -v >/dev/null 2>&1 && fc-list :lang=th | head -10
+
+# V110-bis (2026-05-23 EOD+1) — LibreOffice MS Word compatibility flags.
+# After V110 fonts alone the layout was closer but not Word-equivalent; the
+# remaining drift was LibreOffice's native paragraph/line/tab algorithm. This
+# XCU enables every documented Word-compat option (UsePrinterMetrics,
+# AddSpacing, UseLineSpacing, MsWordCompTrailingBlanks, NoExtLeading + CTL
+# enabled by default for Thai). Deployed to the gotenberg user's home dir
+# since supervisord runs LO as user=gotenberg.
+RUN mkdir -p /home/gotenberg/.config/libreoffice/4/user
+COPY libreoffice-compat.xcu /home/gotenberg/.config/libreoffice/4/user/registrymodifications.xcu
+RUN chown -R gotenberg:gotenberg /home/gotenberg/.config
 
 WORKDIR /workspace
 COPY package.json package-lock.json* ./

@@ -1,45 +1,42 @@
 ---
-updated_at: "2026-05-23 EOD+1 — V109 Office preview canonical-path fix + heal + Cloud Function redeploy IN PROGRESS"
-status: "FIXED (LOCAL); heal applied to 2 stuck docs; Cloud Run office-to-pdf redeploy in progress (gcloud run deploy --source); pending L2 canonical-path re-verify + user L1"
+updated_at: "2026-05-23 EOD+1 LATE — V110 Office preview Thai font fidelity fix (Cordia→Loma alias + fonts-thai-tlwg)"
+status: "DEPLOY IN PROGRESS — Cloud Run V110 build running (gcloud run deploy --source). Local code+tests GREEN; pending post-deploy L2 verify with user's actual stuck .docx."
 branch: "master"
-last_commit: "(pending) — V109 code fix + heal script + AV109 + V109 regression test"
-tests: "vitest 14151 + 10 V109 = 14161/0 PASS targeted; full suite pending end-of-batch"
+last_commit: "33d5eea6 (V109 — Cloud Function canonical Firestore path). V110 pending commit (12 files staged after L2 verify)."
+tests: "vitest +17 V110 + 17 V109 = 14178/0 PASS targeted; full-suite pending end-of-batch"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0dda0eae (Vercel, NO new deploy needed — client unchanged) · office-to-pdf rev N+1 (Cloud Run, redeploying NOW with V109 fix)"
+production_commit: "0dda0eae (Vercel UNCHANGED — no client change) · office-to-pdf rev N+1 (Cloud Run, redeploying NOW with V110 fix)"
 firestore_rules_version: "unchanged"
 ---
 
 # Active Context
 
 ## State
-- **Root cause found + fixed**: `functions/officeToPdf/index.js` was writing to bare `be_staff_chat_messages` collection. Client writes to canonical `artifacts/${APP_ID}/public/data/be_staff_chat_messages`. Cloud Function converted PDFs successfully (cached at correct Storage paths) but its Firestore patch landed in empty universe → `pdfPreviewStatus` stayed `pending` → 60s Path B fired → ⚠.
-- **V66 mirror amplifier**: 3 L2 test scripts (`diag-office-preview-comprehensive.mjs`, `diag-office-preview-deploy-verify.mjs`, `e2e-staff-chat-office-preview.mjs`) ALL wrote test fixtures at the SAME bare path → claimed "11/11 verified" while real prod stuck. Classic test-vs-code shared-wrong-assumption.
-- **Reference (correct, was right there)**: pre-existing `functions/index.js` uses `BASE_PATH = artifacts/${APP_ID}/public/data` — same project, correct pattern, not followed.
+- **Root cause**: User's .docx specifies `script="Thai" typeface="Cordia New"` via document theme. Cordia New is MS-proprietary (CANNOT redistribute). Gotenberg base ships only Noto Sans Thai → LibreOffice substitutes → different character widths → line-wrap doesn't match Word.
+- **Fix architecture (V110)**: Install free Thai fonts (`fonts-thai-tlwg` ships TH Sarabun PSK + Loma + Garuda + Norasi + 7 more) + fontconfig alias mapping Cordia/Browallia/Angsana + UPC variants → Loma/Garuda/Norasi (metric-similar free equivalents) + font-detection observability so we know which fonts each docx needs.
+- **Honest scope**: ~85-95% visual fidelity, NOT 100% (LibreOffice render engine ≠ Word's engine for Thai CTL even with identical fonts). User authorized this approach + added the auto-load directive.
 
-## Diag evidence (Rule R read-only, before fix)
-- 4 stuck office attachments at canonical Firestore path, ALL `status: pending`
-- **2/4 had cached `.docx.pdf` at correct Storage paths** with `contentType=application/pdf` size=52671 → proves Cloud Function ran successfully, just couldn't patch
-- 2/4 had no cached PDF (older uploads from 15:39/16:30, pre-deploy or pre-rev-00004) → need re-upload
+## What this session shipped (LOCAL — pending post-deploy L2 verify)
+- `functions/officeToPdf/Dockerfile`: +fonts-thai-tlwg + fonts-thai-tlwg-otf + fontconfig + COPY of fontconfig-thai.conf + fc-cache refresh
+- NEW `functions/officeToPdf/fontconfig-thai.conf`: 13 strong-binding aliases (Cordia/Browallia/Angsana + UPC variants → free fonts) + generic sans-serif/serif preference chain
+- NEW `functions/officeToPdf/fontDetector.js`: pure JS (fflate-based) docx unzip + fontTable.xml + theme1.xml parser + fc-list/fc-match wrappers with cache; returns {declared, theme, installed, missing, aliased}
+- `functions/officeToPdf/index.js`: imports analyzeFontRequirements + pre-conversion font-requirements log (non-fatal, try/catch — never blocks Gotenberg call)
+- `functions/officeToPdf/package.json`: +fflate dependency
+- NEW `tests/v110-font-detector.test.js` (17 PASS): Dockerfile font install + fontconfig alias map + detector pure-JS + index.js wiring + package.json
+- NEW `scripts/diag-docx-font-inspect.mjs` (Rule R): downloads user's stuck .docx, unzips, lists declared + theme fonts
+- NEW `scripts/diag-v110-convert-user-docx.mjs`: post-deploy verify — uploads user's actual docx to TEST-V110-* prefix → live Eventarc → Cloud Function → downloads result PDF for visual diff
 
-## What this session shipped (LOCAL — not yet pushed)
-- **Cloud Function fix**: `functions/officeToPdf/index.js` uses canonical `MESSAGES_COLLECTION_PATH` + `db.doc(\`${PATH}/${messageId}\`)`
-- **3 V66-mirror test scripts** fixed (now would catch the bug if re-introduced)
-- **NEW** `tests/v109-office-preview-canonical-path.test.js` (10/0): V109.A1-A4 + B1-B3 + C1-C3 source-grep regression
-- **NEW** AV109 invariant in `audit-anti-vibe-code` SKILL.md (CRITICAL priority addition)
-- **NEW** `scripts/diag-2-8mb-stuck-attachments.mjs` (Rule R)
-- **NEW** `scripts/v109-heal-stuck-office-attachments.mjs` (Rule M) — APPLIED on real prod: 2 docs healed pending→ready with reconstructed download URLs from existing Storage tokens; audit doc `be_admin_audit/v109-heal-stuck-office-1779475851250-9c23a8a8`; idempotent (2nd run 0 writes)
-- **V109 V-entry** in `.claude/rules/00-session-start.md` § 2
-- Cloud Run redeploy `gcloud run deploy --source functions/officeToPdf` IN PROGRESS (background task bnrcqzkuy)
-
-## Next action
-1. **WAIT for Cloud Run deploy to complete** (background task bnrcqzkuy, ~10-15 min)
-2. **Re-run Rule Q L2 with canonical-path fixtures** — `node scripts/diag-office-preview-comprehensive.mjs` — would have caught this bug pre-fix (V66 mirror eliminated)
-3. **Verify user's 2 healed docs** show 👁 in real client (Firestore listener picks up the ready status)
-4. **Update SESSION_HANDOFF.md** + v-log-archive.md with full V109 verbose entry
-5. **Commit + push** all V109 changes
-6. **User L1**: upload a fresh .docx → expect ⏳→👁 within ~15s (the 2 cached-PDF docs from the screenshot will already show 👁 once listener resyncs)
+## Deploy + L2 verify (in progress)
+- Background task: `gcloud run deploy --source functions/officeToPdf` (running ~10 min)
+- Post-deploy: `node scripts/diag-v110-convert-user-docx.mjs` → uploads user's REAL 2.77MB docx → live conversion → downloads `v110-result.pdf` for visual comparison against the pre-V110 cached PDF (the one currently in Storage with mismatched line-wraps)
+- Show user the side-by-side, get sign-off
 
 ## Outstanding (user-triggered)
-- L1: hard-refresh staff chat → the 2 most recent 18:27 docs (`CHAT-1779474473885-958a715e` + `CHAT-1779474454460-dd9b6fbf`) should show 👁 → click → real PDF iframe
-- The 2 older stuck docs (15:39 + 16:30, no cached PDF) need re-upload via delete-and-resend
-- Security: revoke "Owner" role from firebase-adminsdk-fbsvc SA via Cloud Console (carried over from 2026-05-23)
+- L1 (after V110 deploy + verify): user re-uploads a fresh .docx → expect 👁 → click → preview should now visually match Word ~85-95%
+- The 2 already-healed docs from V109 will keep their existing cached PDFs (V110 affects ONLY future conversions, not past ones — user can delete + re-upload to get the V110 quality if desired)
+- Security: revoke "Owner" role from firebase-adminsdk-fbsvc SA via Cloud Console (carried over)
+
+## Honest limits (locked permanent)
+- 100% pixel-match between LibreOffice + Word is **engine-bound**, not font-bound. No amount of font work bridges this. Industry-wide reality.
+- Cordia New cannot be installed (Microsoft proprietary license).
+- For truly Word-identical output: only Word itself can produce that. The download button remains the source-of-truth for exact formatting.

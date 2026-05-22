@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  functions/officeToPdf/libreoffice-compat.xcu
+  (2026-05-23 EOD+1 — V110-bis MS Word compatibility flags)
+
+  Enables every documented LibreOffice Writer "MS Word compatibility" option.
+  Without these, even with the correct fonts installed (V110 first deploy),
+  LibreOffice still computes paragraph spacing, line height, tab stops, and
+  text wrapping using its native algorithm — which differs from Word's.
+
+  This file deploys to /home/gotenberg/.config/libreoffice/4/user/registrymodifications.xcu
+  (the gotenberg user's home dir, since Gotenberg processes run as `gotenberg`,
+  see supervisord.conf). LibreOffice reads it at startup; the settings persist
+  per-instance + apply to every docx → PDF conversion the Gotenberg HTTP API
+  triggers via /forms/libreoffice/convert.
+
+  Reference: https://wiki.documentfoundation.org/Documentation/Calc_Functions/SETTINGS
+
+  oor:op="fuse" semantics: merge into the existing tree (do NOT replace it).
+  Setting value="true" enables Word-equivalent behavior; "false" reverts to LO.
+-->
+<oor:items xmlns:oor="http://openoffice.org/2001/registry"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <!-- Writer compatibility — the big block. Each prop = one checkbox under
+       Tools > Options > LibreOffice Writer > Compatibility. -->
+  <item oor:path="/org.openoffice.Office.Compatibility/WriterCompatibilityVersion">
+    <prop oor:name="UsePrinterMetrics" oor:op="fuse">
+      <value>true</value>
+    </prop>
+  </item>
+
+  <!-- Per-document compat overrides (applied as defaults when reading a docx
+       that doesn't already specify these flags). -->
+  <item oor:path="/org.openoffice.Office.Writer/Layout/Other">
+    <prop oor:name="UsePrinterMetrics" oor:op="fuse">
+      <value>true</value>
+    </prop>
+    <prop oor:name="TabStopDistance" oor:op="fuse">
+      <value>1251</value>
+    </prop>
+  </item>
+
+  <item oor:path="/org.openoffice.Office.Writer/Compatibility">
+    <prop oor:name="UsePrinterMetrics" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="AddSpacing" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="AddSpacingAtPages" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="UseOurTabStops" oor:op="fuse"><value>false</value></prop>
+    <prop oor:name="NoExtLeading" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="UseLineSpacing" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="AddTableSpacing" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="UseObjectPositioning" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="UseOurTextWrapping" oor:op="fuse"><value>false</value></prop>
+    <prop oor:name="ConsiderWrappingStyle" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="ExpandWordSpace" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="ProtectForm" oor:op="fuse"><value>false</value></prop>
+    <prop oor:name="MsWordCompTrailingBlanks" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="SubtractFlysAnchoredAtFlys" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="EmptyDbFieldHidesPara" oor:op="fuse"><value>false</value></prop>
+  </item>
+
+  <!-- Load/Save defaults — keep docx fidelity over LO native format -->
+  <item oor:path="/org.openoffice.Office.Common/Load/MicrosoftLockFiles">
+    <prop oor:name="MicrosoftLockFiles" oor:op="fuse"><value>false</value></prop>
+  </item>
+
+  <!-- Disable LO's own auto-correct that can shift paragraph layout -->
+  <item oor:path="/org.openoffice.Office.Writer/AutoFunction/Format/ByInput">
+    <prop oor:name="AutoCorrect" oor:op="fuse"><value>false</value></prop>
+  </item>
+
+  <!-- Treat Asian/Complex Text Layout (Thai is CTL) as enabled by default —
+       Gotenberg's headless LO sometimes defaults to Western-only metrics. -->
+  <item oor:path="/org.openoffice.Office.Common/I18N/CTL">
+    <prop oor:name="CTLFont" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="CTLSequenceChecking" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="CTLSequenceCheckingRestricted" oor:op="fuse"><value>true</value></prop>
+    <prop oor:name="CTLSequenceCheckingTypeAndReplace" oor:op="fuse"><value>true</value></prop>
+  </item>
+</oor:items>
