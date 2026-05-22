@@ -1,17 +1,19 @@
 // src/components/staffchat/StaffChatAttachmentCard.jsx
 // (2026-05-22) Any-file attachments — download card for non-media kinds (pdf +
-// generic 'file'). video/audio render as inline players (in StaffChatMessage),
-// so they never reach this card. A PDF shows a 👁 preview button (opens the
-// StaffChatPdfOverlay) in addition to ⬇ download.
+// generic 'file' + the NEW EOD+2 'office' kind). video/audio render as inline
+// players (in StaffChatMessage), so they never reach this card.
+//
+// (2026-05-22 EOD+2 — T3) Office (Word/Excel/PPT/CSV) gets a 4-state UI driven
+// by pdfPreviewStateOf(att) — pending/ready/failed/unsupported. ⏳ during
+// conversion, 👁 once the officeToPdf Cloud Function caches the PDF, ⚠ with
+// Thai tooltip on failure, plain card on the unsupported reservation. ⬇ always
+// works. AV108 — the 👁 opens the EXISTING StaffChatPdfOverlay with our cached
+// PDF; NO 3rd-party doc viewer is invoked.
 import React from 'react';
-import { Download, Eye } from 'lucide-react';
+import { Download, Eye, Loader2, AlertTriangle } from 'lucide-react';
 import { attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
+import { pdfPreviewStateOf } from '../../lib/staffChatOfficePreviewCore.js';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
-
-// (2026-05-22) Preview is PDF-only (browser-native <iframe>, CORS-exempt, fully
-// local). Office files (Word/Excel/PPT) are DOWNLOAD-ONLY — in-browser office
-// preview was reverted: the only browser-feasible route was a 3rd-party viewer
-// that failed for Firebase URLs + would transmit patient files off-site.
 
 function iconFor(att) {
   const kind = attachmentKindFor(att && att.mimeType);
@@ -37,8 +39,25 @@ export function humanFileSize(n) {
 
 export function StaffChatAttachmentCard({ att, onPreview }) {
   if (!att) return null;
-  const isPdf = attachmentKindFor(att.mimeType) === 'pdf';
+  const kind = attachmentKindFor(att.mimeType);
+  const isPdf = kind === 'pdf';
+  const isOffice = kind === 'office';
+  // pdfPreviewStateOf returns 'na' for non-Office; for Office one of
+  // 'pending' / 'ready' / 'failed' / 'unsupported' (with defensive fallback).
+  const officeState = isOffice ? pdfPreviewStateOf(att) : 'na';
+
   const name = att.name || 'ไฟล์';
+
+  // PDF: existing behaviour — 👁 opens overlay with the original URL.
+  // Office (ready): 👁 opens overlay with the CACHED PDF URL (in-project Gotenberg).
+  const handlePreviewClick = () => {
+    if (isPdf) {
+      onPreview?.({ fileUrl: att.fullUrl, name: att.name, size: att.size });
+    } else if (isOffice && officeState === 'ready') {
+      onPreview?.({ fileUrl: att.pdfPreviewUrl, name: att.name, size: att.size });
+    }
+  };
+
   return (
     <div
       data-testid="staff-chat-attach-card"
@@ -50,10 +69,11 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
         <div className="text-[10px] text-[var(--tx-muted)]">{humanFileSize(att.size)}</div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        {/* PDF: 👁 always present (when onPreview wired) — V73 behaviour. */}
         {isPdf && onPreview && (
           <button
             type="button"
-            onClick={() => onPreview({ fileUrl: att.fullUrl, name: att.name, size: att.size })}
+            onClick={handlePreviewClick}
             data-testid="staff-chat-attach-preview"
             className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
             aria-label="ดูตัวอย่าง"
@@ -62,6 +82,41 @@ export function StaffChatAttachmentCard({ att, onPreview }) {
             <Eye size={15} />
           </button>
         )}
+        {/* Office state machine — affordance depends on officeState. */}
+        {isOffice && officeState === 'ready' && onPreview && (
+          <button
+            type="button"
+            onClick={handlePreviewClick}
+            data-testid="staff-chat-attach-preview"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+            aria-label="ดูตัวอย่าง"
+            title="ดูตัวอย่าง"
+          >
+            <Eye size={15} />
+          </button>
+        )}
+        {isOffice && officeState === 'pending' && (
+          <span
+            data-testid="staff-chat-attach-pending"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--tx-muted)] opacity-60"
+            aria-label="กำลังแปลง"
+            title="กำลังแปลงไฟล์เพื่อดูตัวอย่าง..."
+          >
+            <Loader2 size={15} className="animate-spin" />
+          </span>
+        )}
+        {isOffice && officeState === 'failed' && (
+          <span
+            data-testid="staff-chat-attach-failed"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-amber-500"
+            aria-label="แปลงไฟล์ไม่ได้"
+            title={att.pdfPreviewError || 'แปลงไฟล์ไม่ได้'}
+          >
+            <AlertTriangle size={15} />
+          </span>
+        )}
+        {/* officeState === 'unsupported' OR 'na' → no preview affordance.       */}
+        {/* ⬇ download always present (last child in the action row).            */}
         <button
           type="button"
           onClick={() => downloadUrlAsFile(att.fullUrl, name, att.size)}
