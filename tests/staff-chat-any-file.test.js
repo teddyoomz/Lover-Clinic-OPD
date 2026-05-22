@@ -195,19 +195,30 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // the backdrop root no longer has onClick={onClose} directly before onTouchStart
     expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
   });
-  it('lightbox: instant nav — preload neighbours + thumb-first staged display (2026-05-22 lag fix)', () => {
+  it('lightbox: instant nav — preload neighbours + thumb-behind, NO opacity gate (round-5 architectural)', () => {
     const s = read('src/components/staffchat/StaffChatImageLightbox.jsx');
-    // (a) warm idx ±1/±2 originals into cache so arrows are instant, not a fresh multi-MB fetch
+    // (a) warm idx ±1/±2 originals into cache so arrows are instant
     expect(s).toMatch(/new Image\(\)/);
     expect(s).toMatch(/idx \+ 1, idx - 1, idx \+ 2, idx - 2/);
-    // (b) thumb shown INSTANTLY (already cached from chat grid) under the sharp original
+    // (b) blurred thumb BEHIND, always at full opacity — covers any load gap.
     expect(s).toMatch(/thumb-\$\{idx\}/);
     expect(s).toMatch(/thumbUrl \|\| images\[idx\]\?\.fullUrl/);
-    // (c) full-res keyed by idx (stale previous never lingers) + fades in on decode
+    expect(s).toMatch(/blur-\[2px\]/);
+    // (c) full image keyed by idx (no stale lingering from previous picture).
     expect(s).toMatch(/full-\$\{idx\}/);
-    expect(s).toMatch(/loadedSrc/);
-    expect(s).toMatch(/onLoad=\{\(\) => setLoadedSrc/);
-    expect(s).toMatch(/loadedSrc === images\[idx\]\?\.fullUrl \? 'opacity-100' : 'opacity-0'/);
+    // Round-5 contract — NO opacity gate / NO state / NO transition / NO
+    // onLoad / NO decode / NO refs to the full img. Browser paints cached
+    // hits instantly; the blurred thumb covers fresh-load gaps. Eliminates
+    // the entire class of "stale-write → opacity-stuck" races (Rounds 1-4).
+    expect(s).not.toMatch(/loadedSrc/);
+    expect(s).not.toMatch(/loadedUrls/);
+    expect(s).not.toMatch(/markLoaded/);
+    expect(s).not.toMatch(/img\.decode/);
+    expect(s).not.toMatch(/fullImgRef/);
+    expect(s).not.toMatch(/transition-opacity/);
+    expect(s).not.toMatch(/opacity-0\b/);
+    // The full image is just a plain <img> — no onLoad, no opacity class.
+    expect(s).toMatch(/key=\{`full-\$\{idx\}`\}[\s\S]{0,400}data-testid="staff-chat-lightbox-image"[\s\S]{0,200}className="absolute inset-0 w-full h-full object-contain rounded"/);
   });
   it('attachment card: PDF preview only + download; office = download-only (NO in-browser office preview, NO 3rd-party viewer)', () => {
     const s = read('src/components/staffchat/StaffChatAttachmentCard.jsx');

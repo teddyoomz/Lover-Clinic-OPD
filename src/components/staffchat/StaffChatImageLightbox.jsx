@@ -24,12 +24,26 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   }, [imagesProp, src]);
   const N = images.length;
   const [idx, setIdx] = useState(() => Math.min(Math.max(0, Number(startIndex) || 0), Math.max(0, N - 1)));
-  // (2026-05-22) Track which fullUrl has finished decoding so we can fade the
-  // sharp original in OVER an instantly-shown thumb. Without this, navigating
-  // re-used the same <img> node which kept showing the PREVIOUS picture until
-  // the next full-res (≤50MB) downloaded → "กดแล้วรูปไม่เปลี่ยน / ค้างๆ".
-  const [loadedSrc, setLoadedSrc] = useState(null);
   const touchX = useRef(null);
+  // (2026-05-22 EOD+1 — user-reported "บั๊คเหมือนเดิม" saga, ROUND 5 — the
+  // architectural-question round). After Rounds 1-4 chased the opacity-
+  // gate race through onLoad / refs / useEffect+complete / decode() /
+  // Set-of-loaded-URLs — each fix tightened the gate but the user STILL
+  // perceived a "delay" / "ไม่ responsive ในทันที / ก่อให้เกิดอาการค้าง".
+  // The architectural answer (Phase 4.5 of /systematic-debugging when 4+
+  // fixes don't fully land): the GATE ITSELF is the wrong primitive. ANY
+  // state-based opacity gate adds a render cycle between click + visual
+  // change AND a 150ms CSS transition AND a class of races.
+  // Round-5: REMOVE the gate entirely. Two stacked <img>s — blurred thumb
+  // BEHIND (always at full opacity, fills frame instantly via the small
+  // already-cached thumb URL) + sharp full IN FRONT (no opacity gate, no
+  // transition). The browser paints the full IMMEDIATELY on cache-hit
+  // (instant), or shows nothing-and-then-paints on fresh-load while the
+  // blurred thumb behind covers the gap. Either way the user sees SOMETHING
+  // ON THE FRAME the moment the click lands — no delay, no race, no state
+  // to drift. Keyed remount preserved so the previous picture never lingers
+  // (the original Rounds-1+ symptom). This is the simplest possible design
+  // and matches LINE / WhatsApp / Slack lightbox feel exactly.
 
   useEffect(() => {
     const handler = (e) => {
@@ -142,15 +156,16 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-contain rounded blur-[2px]"
         />
+        {/* (2026-05-22 round-5) NO opacity gate, NO transition, NO state.
+            Browser paints cache hits instantly; for fresh loads, the blurred
+            thumb behind covers the load window. INSTANT response to every
+            click — race-free by absence of state. */}
         <img
           key={`full-${idx}`}
           src={images[idx]?.fullUrl}
           alt=""
           data-testid="staff-chat-lightbox-image"
-          onLoad={() => setLoadedSrc(images[idx]?.fullUrl)}
-          className={`absolute inset-0 w-full h-full object-contain rounded transition-opacity duration-150 ${
-            loadedSrc === images[idx]?.fullUrl ? 'opacity-100' : 'opacity-0'
-          }`}
+          className="absolute inset-0 w-full h-full object-contain rounded"
         />
       </div>
 
