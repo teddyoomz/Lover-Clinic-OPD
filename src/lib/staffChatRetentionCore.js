@@ -21,6 +21,13 @@ export const STAFF_CHAT_MAX_ATTACHMENTS = STAFF_CHAT_MAX_IMAGES;
 // shared (cron / CLI / components / tests — Rule of 3). 'image' is limited to
 // the four browser-renderable raster types so a HEIC/SVG never produces a
 // broken <img> — it falls to a download card ('file').
+//
+// (2026-05-22 EOD+2 — T1) NEW 'office' branch for the 7 canonical
+// Word/Excel/PowerPoint/CSV MIMEs. The card uses pdfPreviewStateOf(att) to
+// derive ⏳/👁/⚠ from per-attachment pdfPreviewStatus (set by the officeToPdf
+// Cloud Function — AV108 sanctioned exception: in-project Gotenberg). MUST
+// remain BEFORE the generic 'file' fallback.
+import { OFFICE_CONVERTIBLE_MIMES } from './staffChatOfficePreviewCore.js';
 const STAFF_CHAT_RENDERABLE_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 export function attachmentKindFor(mime) {
   const m = typeof mime === 'string' ? mime.toLowerCase().trim() : '';
@@ -28,6 +35,7 @@ export function attachmentKindFor(mime) {
   if (m.startsWith('video/')) return 'video';
   if (m.startsWith('audio/')) return 'audio';
   if (m === 'application/pdf') return 'pdf';
+  if (OFFICE_CONVERTIBLE_MIMES.has(m)) return 'office';
   return 'file';
 }
 
