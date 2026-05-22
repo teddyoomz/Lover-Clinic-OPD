@@ -15,7 +15,20 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "officeToPdf"
+      ]
+    },
+    {
+      "source": "functions/officeToPdf",
+      "codebase": "office-to-pdf",
+      "runtime": "nodejs20",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.test.js",
+        "*.test.jsx",
+        "*.md"
       ]
     }
   ],
