@@ -29,7 +29,13 @@ import {
   classifyGotenbergError,
 } from './helpers.js';
 
-initializeApp();
+// (2026-05-23) When deployed via Cloud Run (gcloud run deploy) — NOT via
+// `firebase deploy --only functions` — neither projectId nor bucket is auto-
+// detected. Must explicitly set both.
+const PROJECT_ID = 'loverclinic-opd-4c39b';
+const STORAGE_BUCKET = 'loverclinic-opd-4c39b.firebasestorage.app';
+
+initializeApp({ projectId: PROJECT_ID, storageBucket: STORAGE_BUCKET });
 
 const STAFF_CHAT_PREFIX = 'staff-chat-attachments/';
 const GOTENBERG_URL = 'http://localhost:3000/forms/libreoffice/convert';
@@ -38,6 +44,7 @@ const MESSAGES_COLLECTION = 'be_staff_chat_messages';
 export const officeToPdf = onObjectFinalized(
   {
     region: 'asia-southeast1',
+    bucket: STORAGE_BUCKET,           // REQUIRED when not deployed via firebase
     memory: '1GiB',
     timeoutSeconds: 540,
     concurrency: 1,
