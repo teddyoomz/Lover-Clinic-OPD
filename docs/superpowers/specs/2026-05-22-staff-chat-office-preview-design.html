@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat — Word/Excel/PowerPoint Preview (server-side PDF conversion)</title>
+  <style>
+    :root { --accent: #dc2626; --ok: #16a34a; --warn: #f59e0b; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1040px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #444; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background: #f5f5f5; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; font-size: 0.92em; }
+    th { background: var(--bg-meta); }
+    .pill { display: inline-block; background: var(--bg-meta); padding: 1px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 600; }
+    .pill.ok { background: #dcfce7; color: #166534; }
+    .pill.warn { background: #fef3c7; color: #92400e; }
+    .pill.err { background: #fee2e2; color: #991b1b; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+    @media (max-width: 760px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* Chat-card preview helpers */
+    .chat-bubble { background: #f8fafc; border-radius: 12px; padding: 12px; max-width: 320px; border: 1px solid #e5e5e5; font-size: 13px; }
+    .attach-card { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 8px 10px; max-width: 240px; }
+    .attach-card .name { flex: 1; min-width: 0; }
+    .attach-card .name-line { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #222; }
+    .attach-card .size-line { font-size: 10px; color: #666; }
+    .attach-card .actions { display: flex; gap: 4px; }
+    .attach-card .btn { width: 30px; height: 30px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: #666; cursor: pointer; }
+    .attach-card .btn:hover { background: #fff0f0; color: var(--accent); }
+    .attach-card .btn.disabled { color: #ccc; cursor: not-allowed; }
+    .attach-card .icon { font-size: 22px; }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat — Word/Excel/PowerPoint Preview (server-side PDF conversion)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-22 (EOD+2) ·
+  <strong>Status:</strong> Approved by user (Q1-Q4 locked) ·
+  <strong>Implementation plan:</strong> [docs/superpowers/plans/2026-05-22-staff-chat-office-preview.html — pending writing-plans]
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The prior in-chat Office preview attempt (commit <code>e6a6f9d9</code>, reverted 2026-05-22) used <code>mammoth.js</code> (DOCX→HTML) and <code>xlsx</code> (XLSX→HTML) client-side renderers, plus a fallback to Microsoft Office Online Viewer iframe. User rejection (verbatim, this turn): <em>"Render Word ออกมาแย่มาก อย่างกับเอา notepad มาเปิด"</em>. The iframe path was blocked separately because (a) Firebase signed URLs are not publicly fetchable by 3rd-party viewers and (b) transmitting PHI-bearing files off-site to MS / Google viewers violates clinic privacy guarantees. <strong>AV108</strong> was locked at that revert: <em>"no 3rd-party doc viewer in staff-chat"</em>. The current production state: any Office file in chat shows a download-only card (📝 icon + ⬇ button) — no preview affordance.</p>
+
+<p>User mandate for this round (verbatim): <em>"Research หา หรือ Research สร้าง Tools ที่ใช้สำหรับ Render ไฟล์ Word และ Excel เพื่อใข้ Preview ไฟล์ต่างๆ ในโปรเจ็คของเราได้ โดยเฉพาะในช่องแชท ... หวังว่ารอบนี้จะไม่ขี้เกียจและเข้าข้างตัวเองไปเอาของแย่ๆแบบนั้นมาใส่อีก"</em>. The fidelity bar is <strong>pixel-perfect to the source document</strong> — fonts, page layout, tables, embedded images, charts, page breaks all preserved. Client-side semantic-HTML renderers cannot meet this bar by design. The only architecture that does, while preserving PHI privacy, is <strong>server-side conversion to PDF inside our own Firebase project</strong>, then reusing the existing PDF iframe preview.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A — Pixel-perfect</strong>: server-side Office→PDF conversion; client reuses existing PDF iframe overlay. Output IS the document (LibreOffice rendering, not a parsed-and-restyled approximation).</li>
+  <li><strong>Q2 = C — Hybrid (background convert on upload + 30d cleanup via V73 retention)</strong>: Cloud Function triggers on Storage object create, conversion runs in parallel with the message send (no sender wait). Receiver shows a spinner if they open the file before conversion finishes; the listener flips it to 👁 the moment the doc patches. PDF lives next to the original under the same prefix and is auto-cleaned by the existing V73 30-day staff-chat retention sweep — zero new cron.</li>
+  <li><strong>Q3 = C — Word + Excel + PowerPoint + CSV</strong>: MIME whitelist gate covers <code>.doc / .docx / .xls / .xlsx / .ppt / .pptx / .csv</code>. LibreOffice supports more (.odt/.ods/.rtf/.pages/.numbers) but they fall through to the regular download card with <code>pdfPreviewStatus: 'unsupported'</code>.</li>
+  <li><strong>Q4 = B — Failure UX: card + ⚠ + tooltip</strong>: when LibreOffice cannot convert (corrupt file, password-protected, weird legacy format), the attachment card renders normally with the ⬇ button working, but the 👁 button is replaced by a ⚠ icon with a Thai-language tooltip explaining the reason from the server. The user can still download and open locally.</li>
+</ul>
+
+<h2>Mockup Design</h2>
+
+<p>Five states the attachment card renders. The chat is identical to the existing V73 chat surface — only the per-attachment card behaviour changes.</p>
+
+<div class="mockup">
+  <div class="mockup-label">State 1 · "pending" — sender just clicked send; conversion in flight (~3-5s)</div>
+  <div class="chat-bubble">
+    <div class="attach-card" title="กำลังแปลงไฟล์...">
+      <span class="icon">📝</span>
+      <div class="name">
+        <div class="name-line">ผลตรวจสุขภาพประจำปี-2569.docx</div>
+        <div class="size-line">142 KB</div>
+      </div>
+      <div class="actions">
+        <span class="btn disabled" aria-label="กำลังแปลง" title="กำลังแปลงไฟล์เพื่อดูตัวอย่าง...">⏳</span>
+        <span class="btn" aria-label="ดาวน์โหลด">⬇</span>
+      </div>
+    </div>
+    <div style="font-size: 10px; color: #999; margin-top: 4px;">12:14 · นพ. ก ตัวอย่าง</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 2 · "ready" — PDF cached; click 👁 → opens StaffChatPdfOverlay</div>
+  <div class="chat-bubble">
+    <div class="attach-card">
+      <span class="icon">📝</span>
+      <div class="name">
+        <div class="name-line">ผลตรวจสุขภาพประจำปี-2569.docx</div>
+        <div class="size-line">142 KB</div>
+      </div>
+      <div class="actions">
+        <span class="btn" aria-label="ดูตัวอย่าง" style="color: var(--accent);">👁</span>
+        <span class="btn" aria-label="ดาวน์โหลด">⬇</span>
+      </div>
+    </div>
+    <div style="font-size: 10px; color: #999; margin-top: 4px;">12:14 · นพ. ก ตัวอย่าง</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 3 · "failed" — conversion error; ⬇ still works (tooltip explains why)</div>
+  <div class="chat-bubble">
+    <div class="attach-card" title="แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือต้องใช้รหัสผ่าน">
+      <span class="icon">📝</span>
+      <div class="name">
+        <div class="name-line">รายงาน-2568-protected.docx</div>
+        <div class="size-line">98 KB</div>
+      </div>
+      <div class="actions">
+        <span class="btn" aria-label="แปลงไฟล์ไม่ได้" title="แปลงไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือต้องใช้รหัสผ่าน" style="color: var(--warn);">⚠</span>
+        <span class="btn" aria-label="ดาวน์โหลด">⬇</span>
+      </div>
+    </div>
+    <div style="font-size: 10px; color: #999; margin-top: 4px;">12:09 · พยาบาล ข</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 4 · "unsupported" — format outside whitelist (e.g. .odt / .pages); no preview affordance at all</div>
+  <div class="chat-bubble">
+    <div class="attach-card">
+      <span class="icon">📝</span>
+      <div class="name">
+        <div class="name-line">notes.pages</div>
+        <div class="size-line">22 KB</div>
+      </div>
+      <div class="actions">
+        <span class="btn" aria-label="ดาวน์โหลด">⬇</span>
+      </div>
+    </div>
+    <div style="font-size: 10px; color: #999; margin-top: 4px;">11:50 · เจ้าหน้าที่ ค</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State 5 · click 👁 in State 2 → StaffChatPdfOverlay (existing PDF iframe overlay — no new UI)</div>
+  <div style="background:#000;color:#fff;padding:12px;border-radius:8px;max-width:560px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
+      <span>ผลตรวจสุขภาพประจำปี-2569.docx · 142 KB</span>
+      <span>⬇ ดาวน์โหลด · ✕ ปิด (ESC)</span>
+    </div>
+    <div style="background:#fff;color:#000;padding:18px;border-radius:6px;font-family:'Sarabun','TH Sarabun New',sans-serif;line-height:1.4">
+      <h3 style="font-size:18px;text-align:center;font-weight:bold;margin:0 0 12px">ผลตรวจสุขภาพประจำปี 2569</h3>
+      <h4 style="font-size:14px;font-weight:bold;color:#1a4480;margin:10px 0 6px;border-bottom:2px solid #1a4480;padding-bottom:2px">1. ข้อมูลทั่วไป</h4>
+      <p style="margin:0 0 4px;font-size:12px"><b>ชื่อ-นามสกุล:</b> นายทดสอบ ใจดี</p>
+      <p style="margin:0 0 10px;font-size:12px"><b>HN:</b> LC-26000123</p>
+      <table style="border-collapse:collapse;width:100%;font-size:11px;color:#000;border:1.5px solid #333">
+        <thead><tr style="background:#dbe7f5"><th style="border:1px solid #333;padding:4px 6px;text-align:left">ค่าที่ตรวจ</th><th style="border:1px solid #333;padding:4px 6px">ผล</th><th style="border:1px solid #333;padding:4px 6px">เกณฑ์</th></tr></thead>
+        <tbody>
+          <tr><td style="border:1px solid #333;padding:4px 6px">น้ำตาลในเลือด (FBS)</td><td style="border:1px solid #333;padding:4px 6px;text-align:center">95 mg/dL</td><td style="border:1px solid #333;padding:4px 6px;text-align:center">70-100</td></tr>
+          <tr><td style="border:1px solid #333;padding:4px 6px">คอเลสเตอรอลรวม</td><td style="border:1px solid #333;padding:4px 6px;text-align:center;color:#c00;font-weight:bold">218 mg/dL</td><td style="border:1px solid #333;padding:4px 6px;text-align:center">&lt;200</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#444;margin-top:10px;font-style:italic">[Dr. signature image rendered]</div>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<p>End-to-end data flow from upload to preview-ready. The Cloud Function is fire-and-forget — the message send path never waits on conversion.</p>
+
+<div class="mockup">
+  <div class="mockup-label">Data flow (Storage event-triggered Cloud Function)</div>
+  <svg viewBox="0 0 920 580" style="width:100%;height:auto;background:#fff" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+      <marker id="arrred" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+      <marker id="arrgrn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+    </defs>
+
+    <!-- Sender -->
+    <rect x="20" y="20" width="200" height="80" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="120" y="48" font-size="13" font-weight="bold" text-anchor="middle" fill="#0c4a6e">SENDER (chat composer)</text>
+    <text x="120" y="68" font-size="11" text-anchor="middle" fill="#075985">uploadStaffChatFile()</text>
+    <text x="120" y="84" font-size="11" text-anchor="middle" fill="#075985">+ addStaffChatMessage()</text>
+
+    <!-- Storage upload -->
+    <rect x="320" y="20" width="240" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="440" y="48" font-size="13" font-weight="bold" text-anchor="middle" fill="#92400e">FIREBASE STORAGE</text>
+    <text x="440" y="68" font-size="11" text-anchor="middle" fill="#92400e">staff-chat-attachments/</text>
+    <text x="440" y="84" font-size="11" text-anchor="middle" fill="#92400e">{branch}/{msgId}/foo.docx</text>
+
+    <!-- Firestore initial -->
+    <rect x="660" y="20" width="240" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="780" y="48" font-size="13" font-weight="bold" text-anchor="middle" fill="#92400e">FIRESTORE (initial)</text>
+    <text x="780" y="68" font-size="11" text-anchor="middle" fill="#92400e">be_staff_chat_messages/{id}</text>
+    <text x="780" y="84" font-size="11" text-anchor="middle" fill="#92400e">attachments[i].status = 'pending'</text>
+
+    <line x1="220" y1="60" x2="320" y2="60" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+    <line x1="560" y1="60" x2="660" y2="60" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- onFinalize -->
+    <line x1="440" y1="100" x2="440" y2="160" stroke="#dc2626" stroke-width="2" marker-end="url(#arrred)" stroke-dasharray="6 4"/>
+    <text x="455" y="135" font-size="11" fill="#dc2626" font-weight="bold">onFinalize event</text>
+
+    <!-- Cloud Function -->
+    <rect x="240" y="180" width="440" height="180" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+    <text x="460" y="208" font-size="14" font-weight="bold" text-anchor="middle" fill="#7f1d1d">CLOUD FUNCTION 2nd GEN — officeToPdf</text>
+    <text x="460" y="230" font-size="11" text-anchor="middle" fill="#7f1d1d">Docker: gotenberg/gotenberg:8 (LibreOffice 24.x bundled)</text>
+    <line x1="280" y1="244" x2="640" y2="244" stroke="#dc2626" stroke-dasharray="3 3"/>
+    <text x="260" y="266" font-size="11" fill="#7f1d1d" font-weight="bold">1.</text>
+    <text x="280" y="266" font-size="11" fill="#7f1d1d">MIME gate: bail unless .doc/.docx/.xls/.xlsx/.ppt/.pptx/.csv</text>
+    <text x="260" y="286" font-size="11" fill="#7f1d1d" font-weight="bold">2.</text>
+    <text x="280" y="286" font-size="11" fill="#7f1d1d">Download original from Storage (admin SDK)</text>
+    <text x="260" y="306" font-size="11" fill="#7f1d1d" font-weight="bold">3.</text>
+    <text x="280" y="306" font-size="11" fill="#7f1d1d">POST localhost:3000/forms/libreoffice/convert → PDF buffer</text>
+    <text x="260" y="326" font-size="11" fill="#7f1d1d" font-weight="bold">4.</text>
+    <text x="280" y="326" font-size="11" fill="#7f1d1d">Upload PDF to Storage SAME prefix /.../foo.docx.pdf</text>
+    <text x="260" y="346" font-size="11" fill="#7f1d1d" font-weight="bold">5.</text>
+    <text x="280" y="346" font-size="11" fill="#7f1d1d">Patch Firestore: attachments[i].pdfPreviewUrl + status='ready'</text>
+
+    <!-- Branch: Storage PDF write -->
+    <line x1="350" y1="360" x2="440" y2="420" stroke="#16a34a" stroke-width="2" marker-end="url(#arrgrn)"/>
+    <line x1="570" y1="360" x2="780" y2="420" stroke="#16a34a" stroke-width="2" marker-end="url(#arrgrn)"/>
+
+    <!-- Storage final -->
+    <rect x="320" y="420" width="240" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="440" y="448" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">STORAGE (PDF cached)</text>
+    <text x="440" y="468" font-size="11" text-anchor="middle" fill="#14532d">.../foo.docx.pdf</text>
+    <text x="440" y="484" font-size="11" text-anchor="middle" fill="#14532d">(same prefix → V73 30d sweep covers)</text>
+
+    <!-- Firestore final -->
+    <rect x="660" y="420" width="240" height="80" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="780" y="448" font-size="13" font-weight="bold" text-anchor="middle" fill="#14532d">FIRESTORE (patched)</text>
+    <text x="780" y="468" font-size="11" text-anchor="middle" fill="#14532d">attachments[i].status = 'ready'</text>
+    <text x="780" y="484" font-size="11" text-anchor="middle" fill="#14532d">+ pdfPreviewUrl (signed 7d)</text>
+
+    <!-- Receiver -->
+    <rect x="20" y="500" width="880" height="60" rx="8" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+    <text x="460" y="525" font-size="13" font-weight="bold" text-anchor="middle" fill="#0c4a6e">RECEIVER (listenToStaffChatMessages) — listener picks up the patch automatically</text>
+    <text x="460" y="545" font-size="11" text-anchor="middle" fill="#075985">⏳ spinner flips to 👁 the moment status === 'ready'; click 👁 → existing StaffChatPdfOverlay(pdfPreviewUrl)</text>
+
+    <line x1="780" y1="500" x2="780" y2="555" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arr)"/>
+    <text x="795" y="528" font-size="11" fill="#0284c7" font-weight="bold">onSnapshot</text>
+  </svg>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State machine — attachments[i].pdfPreviewStatus</div>
+  <table>
+    <thead>
+      <tr><th>State</th><th>Set by</th><th>UI</th><th>Transitions to</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="pill">pending</span></td>
+        <td>Client at <code>addStaffChatMessage</code> time (Office MIME only)</td>
+        <td>Card with ⏳ disabled spinner + ⬇ download</td>
+        <td><span class="pill ok">ready</span> · <span class="pill err">failed</span> · <span class="pill">unsupported</span></td>
+      </tr>
+      <tr>
+        <td><span class="pill ok">ready</span></td>
+        <td>Cloud Function on success</td>
+        <td>Card with 👁 (red on hover) + ⬇</td>
+        <td>(terminal — file lives until V73 30d sweep)</td>
+      </tr>
+      <tr>
+        <td><span class="pill err">failed</span></td>
+        <td>Cloud Function on LibreOffice non-zero exit OR Gotenberg HTTP 5xx</td>
+        <td>Card with ⚠ (amber) + tooltip <code>pdfPreviewError</code> + ⬇</td>
+        <td>(terminal; ⬇ still works)</td>
+      </tr>
+      <tr>
+        <td><span class="pill">unsupported</span></td>
+        <td>Cloud Function on MIME gate reject (e.g. .odt / .pages)</td>
+        <td>Card with ⬇ only (no preview affordance at all)</td>
+        <td>(terminal)</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Layer 1 — Cloud Function 2nd Gen (Docker, server-side)</h3>
+<ul>
+  <li><strong>Location</strong>: <code>functions/officeToPdf/</code> (new directory inside existing <code>functions/</code> root)</li>
+  <li><strong>Base image</strong>: <code>gotenberg/gotenberg:8</code> — pre-built, Apache-2.0, current as of 2025-09. Bundles LibreOffice 24.x + Chromium. Stateless HTTP server on port 3000 with endpoint <code>/forms/libreoffice/convert</code>.</li>
+  <li><strong>Trigger</strong>: Storage <code>onFinalize</code> event on the bucket, scoped to objects under <code>staff-chat-attachments/</code>. Fire-and-forget (no client wait).</li>
+  <li><strong>MIME whitelist</strong>: pure JS constant <code>OFFICE_CONVERTIBLE_MIMES</code> (Set) reused from a new <code>src/lib/staffChatOfficePreviewCore.js</code> module — same source-of-truth used by client (to set initial <code>pending</code>) and server (to filter). Rule of 3 alignment.</li>
+  <li><strong>Conversion call</strong>: HTTP POST multipart to the bundled Gotenberg → PDF bytes back → upload to Storage at <code>{originalPath}.pdf</code>.</li>
+  <li><strong>Firestore patch</strong>: admin SDK <code>update()</code> on <code>be_staff_chat_messages/{messageId}</code>, mutating ONLY <code>attachments[i].pdfPreview*</code> fields (rules allow admin-SDK writes; client write rule unchanged).</li>
+  <li><strong>Retry</strong>: Cloud Run built-in retry on transient (cold-start timeout, network); LibreOffice non-zero exit = permanent failure, no retry, status='failed'.</li>
+  <li><strong>Resource caps</strong>: 1 GB memory, 540s timeout (Cloud Run max) — conversion of a 50MB file completes in &lt;30s typical. Concurrency = 1 (LibreOffice not thread-safe inside the container).</li>
+</ul>
+
+<h3>Layer 2 — Client (display)</h3>
+<ul>
+  <li><strong>NEW <code>src/lib/staffChatOfficePreviewCore.js</code></strong>: pure JS, no imports. Exports <code>OFFICE_CONVERTIBLE_MIMES</code> (Set), <code>isOfficeConvertible(mime)</code>, <code>OfficePreviewStatus</code> (frozen object of state constants), <code>pdfPreviewStateOf(att)</code> (returns one of <code>'ready'|'pending'|'failed'|'unsupported'|'na'</code> from an attachment record — pure derivation, no Firestore).</li>
+  <li><strong>MOD <code>src/lib/staffChatRetentionCore.js</code></strong>: <code>attachmentKindFor</code> returns <code>'office'</code> when the MIME is in <code>OFFICE_CONVERTIBLE_MIMES</code> (else current behaviour). NEW branch sits BEFORE the generic <code>'file'</code> fallback.</li>
+  <li><strong>MOD <code>src/components/staffchat/StaffChatAttachmentCard.jsx</code></strong>: new branch when <code>attachmentKindFor === 'office'</code> — render ⏳/👁/⚠ based on <code>pdfPreviewStateOf(att)</code>. ⬇ unchanged. AV78-compliant (no backdrop click on the existing PDF overlay; the new branch only adds buttons inside the card).</li>
+  <li><strong>MOD <code>src/lib/staffChatClient.js</code> <code>buildMessageDoc</code></strong>: when an attachment's MIME is in the convertible set, stamp <code>pdfPreviewStatus: 'pending'</code> on the initial doc write. Receiver UI shows the ⏳ spinner immediately, then flips to 👁 when the Cloud Function patches.</li>
+  <li><strong>StaffChatPdfOverlay reuse</strong>: zero changes. The existing iframe overlay accepts a <code>fileUrl</code> prop; the new card hands it <code>pdfPreviewUrl</code>.</li>
+</ul>
+
+<h3>Layer 3 — Rules + retention</h3>
+<ul>
+  <li><strong><code>storage.rules</code></strong>: existing <code>match /staff-chat-attachments/{branchId}/{messageId}/{file=**}</code> already allows admin-SDK writes (admin bypasses rules). No new path needed — the PDF lives in the same prefix as the original. The client-write rule remains as-is (only image/pdf MIME from authed clients).</li>
+  <li><strong><code>firestore.rules</code></strong>: existing <code>be_staff_chat_messages</code> rule allows admin-SDK writes. Field-level whitelist not required for admin patches.</li>
+  <li><strong>V73 30d retention sweep</strong>: existing <code>api/cron/staff-chat-retention-sweep.js</code> deletes the entire <code>staff-chat-attachments/{branch}/{messageId}/</code> prefix on age-out. The PDF is in the same prefix → deleted alongside the original automatically. <strong>No new cron.</strong></li>
+  <li><strong>AV108 amendment</strong>: extend the existing invariant text to add ONE sanctioned exception — <em>local server-side conversion via the in-project Gotenberg Cloud Function</em>. The "no 3rd-party doc viewer" rule continues to forbid Google Docs Viewer / Office Online / Aspose Cloud / ConvertAPI / any external HTTP service that receives the patient file. Add closed-list of 1 sanctioned exception: <code>functions/officeToPdf/</code>.</li>
+</ul>
+
+<h3>Data model</h3>
+<p>Per <code>attachments[i]</code> (Office files only — other kinds untouched):</p>
+<pre>{
+  // existing fields (unchanged): id, name, mimeType, size, fullUrl, thumbUrl, ...
+
+  // NEW (Office files only):
+  pdfPreviewStatus: 'pending' | 'ready' | 'failed' | 'unsupported',
+  pdfPreviewUrl:    string | null,    // Storage signed URL (7d) — re-signed on each listener pickup if needed
+  pdfPreviewError:  string | null,    // Thai-language failure reason for tooltip
+  pdfPreviewedAt:   FirestoreTimestamp | null,  // when the Cloud Function finished (audit + V81 type-preservation)
+}</pre>
+
+<h3>Tool selection rationale</h3>
+<p>Researched candidates and why each was kept or rejected:</p>
+<table>
+  <thead><tr><th>Candidate</th><th>Fidelity</th><th>PHI risk</th><th>Infra fit</th><th>Decision</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Gotenberg (Docker, LibreOffice + Chromium)</strong></td><td>Pixel-perfect (= LibreOffice)</td><td>None — runs in our Firebase project</td><td>Native to Cloud Run 2nd Gen</td><td class="pill ok"><strong>SELECTED</strong></td></tr>
+    <tr><td>Raw LibreOffice CLI (custom Dockerfile)</td><td>Pixel-perfect (same engine)</td><td>None</td><td>Cloud Run; requires authoring Dockerfile + ENV setup</td><td>Rejected — Gotenberg gives the same engine plus a clean HTTP API with zero Docker authoring</td></tr>
+    <tr><td>OnlyOffice Document Server (self-hosted)</td><td>Pixel-perfect + editable</td><td>None</td><td>~1-2 GB RAM, Docker stack, license/IP considerations</td><td>Rejected — overkill for preview-only; cost+ops too high</td></tr>
+    <tr><td>mammoth.js (client DOCX→HTML)</td><td>Notepad-like — strips layout by design</td><td>None</td><td>npm dep</td><td class="pill err"><strong>REJECTED</strong> — the rejected baseline from <code>e6a6f9d9</code></td></tr>
+    <tr><td>docx-preview (client DOCX→DOM)</td><td>Better than mammoth, still not pixel-perfect</td><td>None</td><td>npm dep + tuning</td><td>Rejected — doesn't meet Q1=A bar</td></tr>
+    <tr><td>SheetJS XLSX→HTML</td><td>Loses charts, conditional formatting, merged-cell styling</td><td>None</td><td>npm dep</td><td>Rejected — same fidelity gap as mammoth</td></tr>
+    <tr><td>MS Office Online Viewer / Google Docs Viewer iframe</td><td>Pixel-perfect</td><td><strong>PHI leak</strong> — file sent off-site</td><td>iframe</td><td class="pill err"><strong>REJECTED</strong> — AV108 forbids; also Firebase signed URLs aren't 3rd-party-fetchable</td></tr>
+    <tr><td>Aspose Cloud / CloudConvert / ConvertAPI</td><td>Pixel-perfect</td><td><strong>PHI leak</strong> — file sent to 3rd-party SaaS</td><td>HTTP API</td><td class="pill err"><strong>REJECTED</strong> — AV108</td></tr>
+    <tr><td>WASM LibreOffice (libreoffice-wasm)</td><td>Pixel-perfect in principle</td><td>None</td><td>~100MB+ first-page bundle</td><td>Rejected — too heavy for browser-side; experimental project</td></tr>
+    <tr><td>Microsoft Graph API DriveItem convert</td><td>Pixel-perfect</td><td><strong>PHI leak</strong> — sends to Microsoft 365 backend</td><td>HTTP API + tenant license</td><td class="pill err"><strong>REJECTED</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li><strong>Pixel-perfect fidelity for a typical clinic .docx</strong>: uploading a Word doc that contains a Thai-script header, a 3-column table, an embedded signature image, and bullet points produces a PDF preview that is visually indistinguishable from opening the original in Microsoft Word. Verified by Chrome MCP screenshot vs reference (manual visual diff acceptable).</li>
+  <li><strong>Pending-to-ready transition completes in &lt;10s typical</strong>: receiver opens chat right as sender uploads; sees ⏳ for at most 10s, then 👁 (Cloud Run cold start &lt;6s + LibreOffice convert &lt;4s for a 1MB file).</li>
+  <li><strong>Failure cases yield correct state</strong>: password-protected .docx → <code>failed</code> + Thai error tooltip; .odt → <code>unsupported</code> + plain card; corrupt .xlsx → <code>failed</code>; 49MB .pptx → <code>ready</code> with PDF (just under Cloud Function size limit).</li>
+  <li><strong>30d retention sweeps both files</strong>: V73 retention sweep at day 31 deletes both the original .docx AND the cached .pdf in the same prefix. Verified via L2 admin-SDK e2e on real prod with a TEST-prefixed fixture.</li>
+  <li><strong>No PHI leak</strong>: AV108 source-grep regression test confirms no 3rd-party doc viewer URL/library appears in the client bundle; Cloud Function uses ONLY <code>localhost:3000</code> (bundled Gotenberg) for conversion — no external HTTP calls during conversion.</li>
+  <li><strong>Rule Q V66 — L1 verification before any "ready" claim</strong>: Chrome MCP real-browser confirms (a) ⏳ spinner shows during pending, (b) the PDF iframe overlay opens on 👁 click with correct content, (c) ⚠ tooltip shows the Thai reason on failed conversions, (d) ⬇ download always works in every state. Screenshots captured per AV-Q-vis.</li>
+  <li><strong>vitest full suite stays green</strong>: existing 14078 tests + new tests (~30-50 added) all PASS. No V21 lock-in regressions from extending <code>attachmentKindFor</code>.</li>
+  <li><strong>Cost stays under free tier</strong>: 1500 Office uploads/month (clinic ceiling) consumes &lt;10% of Cloud Run free-tier quota. Verified by Cloud Run metrics post-deploy.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>First production deploy of a 2nd-gen Cloud Function with Docker base image</strong> in this project. Existing functions (chat retention, recall cron, etc.) are 2nd-gen but Node-native; this is the first Docker. Risk: Cloud Build wiring + IAM permissions for the function's service account to read/write Storage + Firestore. Mitigation: use the canonical <code>firebase-tools</code> CLI workflow + commit the <code>functions/officeToPdf/Dockerfile</code> alongside the source so deploy is reproducible.</li>
+  <li><strong>Storage signed URL TTL (7d) shorter than V73 retention (30d)</strong>: if a receiver opens a 10-day-old chat, the signed URL is expired. Mitigation: client falls back to a fresh signed-URL fetch via a small admin endpoint, OR (simpler) re-sign on each Firestore listener pickup at the Cloud Function level (only on read). Decide at plan-write time.</li>
+  <li><strong>Cold-start latency on first conversion of the day</strong>: Gotenberg image is ~700MB → cold start can hit ~10-15s. Mitigation: min-instances=0 keeps cost low and accepts a one-time per-day cold start; the user sees the ⏳ spinner for that interval, then 👁. If unacceptable, bump min-instances=1 for ~$3-5/month.</li>
+  <li><strong>CSV rendering quality</strong>: LibreOffice's auto-import of CSV may guess delimiters/encoding wrong for unusual files (e.g. TIS-620 Thai). Acceptable fallback: <code>status='failed'</code> with tooltip explaining the user should rename to .xlsx and re-upload, OR open in Excel locally.</li>
+  <li><strong>Listener bandwidth — attachments[i] patches re-fire onSnapshot</strong>: V73's <code>useStaffChat</code> already handles per-message updates. The PDF patch is one extra update per Office message. Negligible at clinic scale, but worth a Rule I flow-simulate confirming no double-render.</li>
+  <li><strong>iPad Safari iframe rendering of PDF</strong>: iOS Safari's native PDF iframe is sometimes blank without specific Content-Type headers. The existing <code>StaffChatPdfOverlay</code> already works for chat-shared PDFs (Q-vis verified prior session), so this should hold — but worth a Chrome MCP iPad-emulation pass during verify.</li>
+</ul>
+
+<h2>Implementation order (pre-view, to be formalized in writing-plans)</h2>
+<ol>
+  <li>Pure-JS core module <code>staffChatOfficePreviewCore.js</code> + unit tests</li>
+  <li>Extend <code>attachmentKindFor</code> + client UI (StaffChatAttachmentCard branches for ⏳/👁/⚠) — wired but no server yet, all uploads stay <code>pending</code> forever (visual test of UX)</li>
+  <li>Cloud Function source code (<code>functions/officeToPdf/index.js</code> + <code>Dockerfile</code>) + local Docker test against Gotenberg image</li>
+  <li>Deploy to Firebase, real-prod e2e (Rule Q L2) with TEST-prefixed fixtures across all 7 formats + adversarial (password/corrupt/oversize)</li>
+  <li>AV108 amendment + audit regression test</li>
+  <li>Rule Q L1 Chrome MCP verification (real iPad-emulation + desktop) — every state visually confirmed by screenshot</li>
+  <li>Full vitest + build + V18 deploy gate (combined vercel + firebase per V15)</li>
+</ol>
+
+</body>
+</html>
