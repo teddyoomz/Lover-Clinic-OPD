@@ -39,9 +39,13 @@ describe('AF1 · attachmentKindFor matrix', () => {
     expect(attachmentKindFor('audio/mpeg')).toBe('audio');
     expect(attachmentKindFor('application/pdf')).toBe('pdf');
   });
-  it('everything else → file', () => {
+  it('everything else → file (Office MIMEs flipped to "office" per T1; lock the remaining "file" set)', () => {
+    // 2026-05-22 EOD+2 V21-flip: .docx removed from this list because
+    // attachmentKindFor now returns 'office' for Word/Excel/PPT/CSV. The 7
+    // Office→office mappings are locked by OP4.1 in
+    // tests/staff-chat-office-preview-core.test.js.
     for (const m of ['application/zip', 'application/octet-stream',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.oasis.opendocument.text', // .odt — still 'file' (Q3=C unsupported)
       'text/plain', '', null, undefined, 42, {}]) {
       expect(attachmentKindFor(m)).toBe('file');
     }
@@ -195,21 +199,37 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // the backdrop root no longer has onClick={onClose} directly before onTouchStart
     expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
   });
-  it('lightbox: instant nav — preload neighbours + thumb-behind, NO opacity gate (round-5 architectural)', () => {
+  it('lightbox: instant nav — Blob cache + SINGLE <img> smooth-swap, NO opacity gate (ROUND 6 architectural — 2026-05-22 EOD+2)', () => {
     const s = read('src/components/staffchat/StaffChatImageLightbox.jsx');
-    // (a) warm idx ±1/±2 originals into cache so arrows are instant
-    expect(s).toMatch(/new Image\(\)/);
-    expect(s).toMatch(/idx \+ 1, idx - 1, idx \+ 2, idx - 2/);
-    // (b) blurred thumb BEHIND, always at full opacity — covers any load gap.
-    expect(s).toMatch(/thumb-\$\{idx\}/);
-    expect(s).toMatch(/thumbUrl \|\| images\[idx\]\?\.fullUrl/);
-    expect(s).toMatch(/blur-\[2px\]/);
-    // (c) full image keyed by idx (no stale lingering from previous picture).
-    expect(s).toMatch(/full-\$\{idx\}/);
-    // Round-5 contract — NO opacity gate / NO state / NO transition / NO
-    // onLoad / NO decode / NO refs to the full img. Browser paints cached
-    // hits instantly; the blurred thumb covers fresh-load gaps. Eliminates
-    // the entire class of "stale-write → opacity-stuck" races (Rounds 1-4).
+    // ROUND 6 (user-directed after R5 still felt "ติดบ้าง ไม่ติดบ้าง"): keyed
+    // remount of the full <img key={idx}> caused DOM churn on every click →
+    // brief blank frame perceived as no-response. User's explicit fix design:
+    //   "ถ้ารูปมันใหญ่ ก็ให้เก็บไว้ใน cache ในเครื่อง จะได้ไม่ต้องโหลดใหม่
+    //    ทุกครั้งที่กดเลื่อน".
+    // Round-6 architecture:
+    //   1. ONE <img> element — NEVER remounted; `src` updates in place. Browser
+    //      keeps painting the OLD frame until the NEW one is ready, then swaps
+    //      (native <img> smooth-replace).
+    //   2. Blob cache (`URL.createObjectURL` from fetched blob) pre-warms ALL
+    //      originals at mount → subsequent swaps are local-memory paints.
+    //   3. Background URL.revokeObjectURL cleanup on unmount.
+    // Round-5's thumb-behind layer is GONE (single image is enough; the blob
+    // cache covers the "fresh load gap" R5 was protecting against).
+    expect(s).toMatch(/URL\.createObjectURL/);              // (a) blob cache
+    expect(s).toMatch(/URL\.revokeObjectURL/);              // (a) cleanup on unmount
+    expect(s).toMatch(/blobCache/);                          // (a) state name
+    expect(s).toMatch(/effectiveSrc/);                       // (b) cached-blob OR original
+    // (b) ONE <img> for the main image, testid attached. The browser smoothly
+    // swaps when src changes — no key, no remount.
+    expect(s).toMatch(/<img\s+src=\{effectiveSrc\}[\s\S]{0,200}data-testid="staff-chat-lightbox-image"/);
+    // R5 patterns REMOVED — round-6 doesn't preload via `new Image()` and has
+    // no thumb-behind layer.
+    expect(s).not.toMatch(/new Image\(\)/);
+    expect(s).not.toMatch(/thumb-\$\{idx\}/);
+    expect(s).not.toMatch(/full-\$\{idx\}/);
+    expect(s).not.toMatch(/blur-\[2px\]/);
+    // Round-5 invariants that ALSO hold for round-6 — no opacity gate, no
+    // transition, no race-prone load tracking state.
     expect(s).not.toMatch(/loadedSrc/);
     expect(s).not.toMatch(/loadedUrls/);
     expect(s).not.toMatch(/markLoaded/);
@@ -217,19 +237,28 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     expect(s).not.toMatch(/fullImgRef/);
     expect(s).not.toMatch(/transition-opacity/);
     expect(s).not.toMatch(/opacity-0\b/);
-    // The full image is just a plain <img> — no onLoad, no opacity class.
-    expect(s).toMatch(/key=\{`full-\$\{idx\}`\}[\s\S]{0,400}data-testid="staff-chat-lightbox-image"[\s\S]{0,200}className="absolute inset-0 w-full h-full object-contain rounded"/);
   });
-  it('attachment card: PDF preview only + download; office = download-only (NO in-browser office preview, NO 3rd-party viewer)', () => {
+  it('attachment card: PDF preview + Office preview via in-project Gotenberg PDF cache (AV108 sanctioned exception, 2026-05-22 EOD+2 V21-flip)', () => {
     const s = read('src/components/staffchat/StaffChatAttachmentCard.jsx');
     expect(s).toMatch(/attachmentKindFor/);
     expect(s).toMatch(/downloadUrlAsFile/);
     expect(s).toMatch(/onPreview/);
     expect(s).toMatch(/staff-chat-attach-download/);
-    // preview gated to PDF only; office (word/excel/ppt) is download-only (reverted)
+    // (V73) PDF kind still rendered via 👁
     expect(s).toMatch(/isPdf/);
-    expect(s).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);  // no 3rd-party doc viewer
-    expect(s).not.toMatch(/renderSheetToHtml|renderDocxToHtml|SHEET_EXT/);  // no client-side office render
+    // (EOD+2 T3) NEW office kind — 4-state derivation via pdfPreviewStateOf;
+    // the office card's 👁 opens the cached PDF (in-project Gotenberg), NEVER
+    // a 3rd-party viewer. Office state machine = pending/ready/failed (rendered)
+    // + unsupported (no affordance).
+    expect(s).toMatch(/isOffice/);
+    expect(s).toMatch(/pdfPreviewStateOf/);
+    expect(s).toMatch(/staff-chat-attach-pending/);
+    expect(s).toMatch(/staff-chat-attach-failed/);
+    expect(s).toMatch(/staff-chat-attach-preview/);  // ready (office) + pdf branches both use this id
+    // (AV108) NO 3rd-party doc viewer URL anywhere; NO client-side office render libs.
+    expect(s).not.toMatch(/officeapps|docs\.google\.com\/(viewer|gview)/);
+    expect(s).not.toMatch(/renderSheetToHtml|renderDocxToHtml|SHEET_EXT/);
+    expect(s).not.toMatch(/mammoth|docx-preview/);
   });
   it('pdf overlay: iframe(fileUrl) + download + Esc, NO backdrop close, NO 3rd-party viewer', () => {
     const s = read('src/components/staffchat/StaffChatPdfOverlay.jsx');
