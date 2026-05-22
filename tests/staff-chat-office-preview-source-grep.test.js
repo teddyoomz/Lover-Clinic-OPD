@@ -69,17 +69,23 @@ describe('OP-SG — source-grep regression for Office preview contracts', () => 
     expect(c).toMatch(/onPreview\?\.\(\{\s*fileUrl:\s*att\.fullUrl/);
   });
 
-  it('OP-SG.8 — firebase.json wires the office-to-pdf codebase + ignores it from the default codebase', () => {
+  it('OP-SG.8 — firebase.json default codebase ignores functions/officeToPdf (deployed via gcloud-run, NOT firebase functions)', () => {
+    // 2026-05-22 EOD+2 deploy lesson: Firebase Functions 2nd Gen with
+    // `runtime: nodejs20` uses Cloud Build BUILDPACKS — ignores custom
+    // Dockerfile. To deploy the Gotenberg-bundled container, the canonical
+    // path is `gcloud run deploy --source functions/officeToPdf` + an
+    // explicit Eventarc trigger (see scripts/deploy-office-to-pdf-cloud-run.sh).
+    // Therefore firebase.json must NOT have an office-to-pdf codebase entry
+    // (would cause `firebase deploy --only functions` to fail repeatedly), AND
+    // the default codebase's ignore list must exclude the officeToPdf subdir.
     const c = R('firebase.json');
     const parsed = JSON.parse(c);
     expect(Array.isArray(parsed.functions)).toBe(true);
     const offCb = parsed.functions.find(f => f.codebase === 'office-to-pdf');
-    expect(offCb).toBeTruthy();
-    expect(offCb.source).toBe('functions/officeToPdf');
-    expect(offCb.runtime).toBe('nodejs20');
+    expect(offCb).toBeUndefined();
     const defaultCb = parsed.functions.find(f => f.codebase === 'default');
     expect(defaultCb).toBeTruthy();
-    expect(defaultCb.ignore).toContain('officeToPdf'); // default codebase MUST exclude the Docker subdir
+    expect(defaultCb.ignore).toContain('officeToPdf');
   });
 
   it('OP-SG.9 — Cloud Function helpers explicitly note the Rule-of-3 sanctioned duplication', () => {
