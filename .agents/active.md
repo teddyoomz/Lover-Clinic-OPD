@@ -1,42 +1,32 @@
 ---
-updated_at: "2026-05-23 EOD+1 LATE — V110 Office preview Thai font fidelity fix (Cordia→Loma alias + fonts-thai-tlwg)"
-status: "DEPLOY IN PROGRESS — Cloud Run V110 build running (gcloud run deploy --source). Local code+tests GREEN; pending post-deploy L2 verify with user's actual stuck .docx."
+updated_at: "2026-05-23 EOD+1 LATE — V109 canonical path + V110 Thai font fidelity + cleanup"
+status: "Cloud Run office-to-pdf rev 00007-tfb LIVE (V110-bis); Vercel UNCHANGED (no client touch needed); 5 stale .docx chats Rule M deleted"
 branch: "master"
-last_commit: "33d5eea6 (V109 — Cloud Function canonical Firestore path). V110 pending commit (12 files staged after L2 verify)."
-tests: "vitest +17 V110 + 17 V109 = 14178/0 PASS targeted; full-suite pending end-of-batch"
+last_commit: "97385d0d chore(scripts): delete-staff-chat-with-office-attachments (Rule M)"
+tests: "vitest 14161/0 PASS (14138 full-suite + 23 V110 + 10 V109 — overlapping)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0dda0eae (Vercel UNCHANGED — no client change) · office-to-pdf rev N+1 (Cloud Run, redeploying NOW with V110 fix)"
+production_commit: "0dda0eae (Vercel — no V109/V110 client change required) · office-to-pdf-00007-tfb (Cloud Run, V110-bis fonts + alias + Word-compat XCU)"
 firestore_rules_version: "unchanged"
 ---
 
 # Active Context
 
 ## State
-- **Root cause**: User's .docx specifies `script="Thai" typeface="Cordia New"` via document theme. Cordia New is MS-proprietary (CANNOT redistribute). Gotenberg base ships only Noto Sans Thai → LibreOffice substitutes → different character widths → line-wrap doesn't match Word.
-- **Fix architecture (V110)**: Install free Thai fonts (`fonts-thai-tlwg` ships TH Sarabun PSK + Loma + Garuda + Norasi + 7 more) + fontconfig alias mapping Cordia/Browallia/Angsana + UPC variants → Loma/Garuda/Norasi (metric-similar free equivalents) + font-detection observability so we know which fonts each docx needs.
-- **Honest scope**: ~85-95% visual fidelity, NOT 100% (LibreOffice render engine ≠ Word's engine for Thai CTL even with identical fonts). User authorized this approach + added the auto-load directive.
+- V109 (canonical Firestore path) + V110 (Thai font fidelity) BOTH shipped, pushed, deployed (Cloud Run × 2 redeploys). Vercel UNCHANGED — no client code touched; current Vercel prod bundle byte-identical to what V109/V110/script-chore would produce.
+- 4 stuck/healed .docx chats from the debugging session deleted via Rule M two-phase (`delete-staff-chat-with-office-attachments.mjs`). Idempotent re-run confirms 0 candidates. Audit doc emitted.
+- Engine-bound limit accepted by user: LibreOffice ≠ MS Word render even with identical fonts. V110 closes the font-substitution gap (~85-95% similarity); 100% pixel-match unachievable industry-wide.
 
-## What this session shipped (LOCAL — pending post-deploy L2 verify)
-- `functions/officeToPdf/Dockerfile`: +fonts-thai-tlwg + fonts-thai-tlwg-otf + fontconfig + COPY of fontconfig-thai.conf + fc-cache refresh
-- NEW `functions/officeToPdf/fontconfig-thai.conf`: 13 strong-binding aliases (Cordia/Browallia/Angsana + UPC variants → free fonts) + generic sans-serif/serif preference chain
-- NEW `functions/officeToPdf/fontDetector.js`: pure JS (fflate-based) docx unzip + fontTable.xml + theme1.xml parser + fc-list/fc-match wrappers with cache; returns {declared, theme, installed, missing, aliased}
-- `functions/officeToPdf/index.js`: imports analyzeFontRequirements + pre-conversion font-requirements log (non-fatal, try/catch — never blocks Gotenberg call)
-- `functions/officeToPdf/package.json`: +fflate dependency
-- NEW `tests/v110-font-detector.test.js` (17 PASS): Dockerfile font install + fontconfig alias map + detector pure-JS + index.js wiring + package.json
-- NEW `scripts/diag-docx-font-inspect.mjs` (Rule R): downloads user's stuck .docx, unzips, lists declared + theme fonts
-- NEW `scripts/diag-v110-convert-user-docx.mjs`: post-deploy verify — uploads user's actual docx to TEST-V110-* prefix → live Eventarc → Cloud Function → downloads result PDF for visual diff
+## What this session shipped
+- V109 fix + AV109 + V109 regression test + Rule M heal (2 docs pending→ready). Detail: `.claude/rules/00-session-start.md` V109 row.
+- V110 + V110-bis: fonts-thai-tlwg + fontconfig-thai.conf alias + libreoffice-compat.xcu + fontDetector.js observability + AV110 + 23 regression tests. Detail: `.claude/rules/00-session-start.md` V110 row.
+- Cloud Run deploys: rev 00005-q54 → 00006-xxd (V110 fonts) → 00007-tfb (V110-bis + compat XCU).
+- 4 diag scripts (Rule R): `diag-2-8mb-stuck-attachments`, `diag-docx-font-inspect`, `diag-v110-convert-user-docx`, `diag-compare-pre-post-v110`. Cleanup: `diag-cleanup-test-v110.mjs`.
+- Rule M batch delete: `scripts/delete-staff-chat-with-office-attachments.mjs` (broad or per-MIME scope). 5 messages + 8 Storage objects deleted on `--apply`.
+- Detail: `.agents/sessions/2026-05-23-v109-v110-office-preview-and-cleanup.md`
 
-## Deploy + L2 verify (in progress)
-- Background task: `gcloud run deploy --source functions/officeToPdf` (running ~10 min)
-- Post-deploy: `node scripts/diag-v110-convert-user-docx.mjs` → uploads user's REAL 2.77MB docx → live conversion → downloads `v110-result.pdf` for visual comparison against the pre-V110 cached PDF (the one currently in Storage with mismatched line-wraps)
-- Show user the side-by-side, get sign-off
+## Next action
+- Idle (await user). No pending deploy work (all surfaces in sync with intent).
 
-## Outstanding (user-triggered)
-- L1 (after V110 deploy + verify): user re-uploads a fresh .docx → expect 👁 → click → preview should now visually match Word ~85-95%
-- The 2 already-healed docs from V109 will keep their existing cached PDFs (V110 affects ONLY future conversions, not past ones — user can delete + re-upload to get the V110 quality if desired)
-- Security: revoke "Owner" role from firebase-adminsdk-fbsvc SA via Cloud Console (carried over)
-
-## Honest limits (locked permanent)
-- 100% pixel-match between LibreOffice + Word is **engine-bound**, not font-bound. No amount of font work bridges this. Industry-wide reality.
-- Cordia New cannot be installed (Microsoft proprietary license).
-- For truly Word-identical output: only Word itself can produce that. The download button remains the source-of-truth for exact formatting.
+## Outstanding user-triggered actions
+- L1 hands-on: upload fresh .docx → 👁 in ~10s → click → preview now via Loma + TH Sarabun PSK + Word-compat XCU.
+- Security: revoke "Owner" role from firebase-adminsdk-fbsvc SA via Cloud Console (carried over from 2026-05-23 EOD).
