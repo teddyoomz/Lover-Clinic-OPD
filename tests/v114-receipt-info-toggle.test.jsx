@@ -246,3 +246,120 @@ describe('V114.R — SalePrintView RTL render', () => {
     expect(sw.getAttribute('aria-checked')).toBe('true');
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// V114.SG — QuotationPrintView source-grep regression locks
+// ───────────────────────────────────────────────────────────────────────────
+
+const QUOTATION_PRINT_VIEW_PATH = path.resolve(__dirname, '../src/components/backend/QuotationPrintView.jsx');
+const QUOTATION_SRC = fs.readFileSync(QUOTATION_PRINT_VIEW_PATH, 'utf8');
+
+describe('V114.SG — QuotationPrintView source-grep', () => {
+  it('SG4: imports useReceiptInfoToggle from hooks', () => {
+    expect(QUOTATION_SRC).toMatch(/import\s*\{\s*useReceiptInfoToggle\s*\}\s*from\s*['"][.\/]*hooks\/useReceiptInfoToggle(\.js)?['"]/);
+  });
+
+  it('SG4b: calls the hook in the component body', () => {
+    expect(QUOTATION_SRC).toMatch(/const\s*\{\s*showAddress\s*,\s*setShowAddress\s*\}\s*=\s*useReceiptInfoToggle\s*\(\s*\)/);
+  });
+
+  it('SG5: receipt-info block conditional gated on showAddress', () => {
+    expect(QUOTATION_SRC).toMatch(/showAddress\s*&&[\s\S]{0,200}mergedReceiptInfo\.taxId/);
+  });
+
+  it('SG5b: HN line appends phone when !showAddress and phone exists', () => {
+    expect(QUOTATION_SRC).toMatch(/!showAddress[\s\S]{0,160}โทร\./);
+  });
+
+  it('SG6: switch sits inside the print:hidden sticky header (role=switch + aria-checked)', () => {
+    const headerStart = QUOTATION_SRC.indexOf('print:hidden sticky');
+    expect(headerStart).toBeGreaterThan(-1);
+    const headerEndApprox = QUOTATION_SRC.indexOf('quotation-print-surface');
+    const headerBlock = QUOTATION_SRC.slice(headerStart, headerEndApprox);
+    expect(headerBlock).toMatch(/role=['"]switch['"]/);
+    expect(headerBlock).toMatch(/aria-checked/);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// V114.R — QuotationPrintView RTL render
+// Quotation shape: q.quotationId / q.courses / q.products / q.promotions /
+// q.takeawayMeds / q.receiptInfo. Same mock chain as SalePrintView.
+// ───────────────────────────────────────────────────────────────────────────
+
+const FAKE_QUOTATION_V114 = {
+  quotationId: 'QT-TEST-V114',
+  customerId: 'cust-v114',
+  customerName: 'นาย นิรุต ชำนาญปรุ',
+  customerHN: 'LC-26000074',
+  courses: [],
+  products: [],
+  promotions: [],
+  takeawayMeds: [],
+  receiptInfo: {
+    type: 'personal',
+    name: 'นาย นิรุต ชำนาญปรุ',
+    taxId: '3309901263672',
+    address: '369 ถนนสืบศิริ',
+    phone: '0989149195',
+  },
+};
+
+describe('V114.R — QuotationPrintView RTL render', () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch {}
+    vi.resetModules();
+    vi.doMock('../src/lib/scopedDataLayer.js', () => ({
+      getCourse: vi.fn().mockResolvedValue(null),
+      getCustomer: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock('../src/lib/BranchContext.jsx', () => ({
+      useEffectiveClinicSettings: () => ({ clinicName: 'Lover Clinic', branchName: 'นครราชสีมา', accentColor: '#dc2626' }),
+    }));
+  });
+  afterEach(() => { cleanup(); vi.doUnmock('../src/lib/scopedDataLayer.js'); vi.doUnmock('../src/lib/BranchContext.jsx'); });
+
+  it('R6: default OFF — compact HN · โทร. line in QuotationPrintView', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(<QuotationPrintView quotation={FAKE_QUOTATION_V114} onClose={() => {}} />);
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R7: click switch → ON → full block appears', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(<QuotationPrintView quotation={FAKE_QUOTATION_V114} onClose={() => {}} />);
+    const sw = screen.getByTestId('receipt-info-toggle-quotation');
+    fireEvent.click(sw);
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*3309901263672/)).toBeTruthy();
+    expect(screen.getByText(/369 ถนนสืบศิริ/)).toBeTruthy();
+  });
+
+  it('R8: toggle round-trip ON → OFF → compact returns', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(<QuotationPrintView quotation={FAKE_QUOTATION_V114} onClose={() => {}} />);
+    const sw = screen.getByTestId('receipt-info-toggle-quotation');
+    fireEvent.click(sw);
+    fireEvent.click(sw);
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R9: no phone edge — HN alone (no trailing dot)', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    const Q = { ...FAKE_QUOTATION_V114, receiptInfo: { ...FAKE_QUOTATION_V114.receiptInfo, phone: '' } };
+    render(<QuotationPrintView quotation={Q} onClose={() => {}} />);
+    const hnText = screen.getByText('HN LC-26000074');
+    expect(hnText.textContent).not.toMatch(/·/);
+    expect(hnText.textContent).not.toMatch(/โทร\./);
+  });
+
+  it('R10: a11y — role=switch + aria-checked', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(<QuotationPrintView quotation={FAKE_QUOTATION_V114} onClose={() => {}} />);
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(sw);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+});

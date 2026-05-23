@@ -16,6 +16,10 @@ import { thaiTodayISO } from '../../utils.js';
 import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import { resolveCustomerReceiptInfo } from '../../lib/customerReceiptInfo.js';
+// V114 (2026-05-23 EOD+1 LATE+2) — receipt-info toggle. Same hook as
+// SalePrintView; shared localStorage key (Q5=A) so toggling in either
+// preview affects both. Pure renderer-level UI state.
+import { useReceiptInfoToggle } from '../../hooks/useReceiptInfoToggle.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -115,6 +119,11 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
     };
   }, [q.receiptInfo, liveReceiptInfo]);
 
+  // V114 — receipt-info block toggle. Mirror of SalePrintView; shares the
+  // same localStorage key so admin toggling in either preview affects both
+  // (Q5=A). Default OFF (Q3=B PDPA). Switch lives in the print:hidden bar.
+  const { showAddress, setShowAddress } = useReceiptInfoToggle();
+
   // V113 — live-resolve helper for quotation course rows.
   function liveQuoteCourseName(x) {
     const id = x && (x.courseId != null ? x.courseId : x.id);
@@ -169,6 +178,27 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
       <div className="print:hidden sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-neutral-800">
         <div className="max-w-4xl mx-auto flex items-center gap-2 px-4 py-3">
           <h2 className="text-sm font-bold text-white flex-1">พรีวิว · ใบเสนอราคา</h2>
+          {/* V114 — toggle "ที่อยู่"; shared state with SalePrintView via
+              the same useReceiptInfoToggle hook (Q5=A single localStorage
+              key). Switch sits inside the parent print:hidden bar so it
+              never appears on the printed PDF. */}
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <span className="text-[11px] text-neutral-300">ที่อยู่</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showAddress ? 'true' : 'false'}
+              aria-label="แสดง/ซ่อนที่อยู่บนใบเสนอราคา"
+              onClick={() => setShowAddress(!showAddress)}
+              className={`relative inline-block w-8 h-[18px] rounded-full transition-colors ${showAddress ? 'bg-red-600' : 'bg-neutral-700'}`}
+              data-testid="receipt-info-toggle-quotation"
+            >
+              <span
+                className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full transition-all ${showAddress ? 'right-[2px]' : 'left-[2px]'}`}
+                aria-hidden
+              />
+            </button>
+          </label>
           <button onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white transition">
             <Printer size={14} /> พิมพ์
@@ -256,13 +286,17 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
             </div>
             {(q.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
               <div className="text-[11px] text-neutral-600 mt-0.5">
+                {/* V114 — same compact pattern as SalePrintView. Phone
+                    surfaced on HN line only when the block is hidden. */}
                 HN {q.customerHN || resolveCustomerHN(liveCustomer)}
+                {!showAddress && mergedReceiptInfo.phone ? ` · โทร. ${mergedReceiptInfo.phone}` : ''}
               </div>
             )}
             {/* V113-C (2026-05-23 EOD+1 LATE+1) — receipt-info block via
                 mergedReceiptInfo (snapshot wins field-by-field, live fills
-                empty). Same V113 class as SalePrintView. AV113. */}
-            {(mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== q.customerName)) && (
+                empty). Same V113 class as SalePrintView. AV113.
+                V114 — gated by toggle (same hook as SalePrintView). */}
+            {showAddress && (mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== q.customerName)) && (
               <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">
                 <div className="text-[9px] tracking-widest uppercase text-neutral-500 mb-0.5">
                   {mergedReceiptInfo.type === 'company' ? 'ออกใบเสนอราคาในนามนิติบุคคล' : mergedReceiptInfo.type === 'personal' ? 'ออกใบเสนอราคาในนามบุคคล' : 'ออกใบเสนอราคาตามข้อมูลลูกค้า'}
