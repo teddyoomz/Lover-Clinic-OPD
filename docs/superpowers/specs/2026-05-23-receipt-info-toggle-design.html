@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt-Info Toggle — Design Spec (V114)</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Sarabun', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; background: #f4f4f4; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.5em; color: var(--accent); }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background: #eee; padding: 1px 5px; border-radius: 3px; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); margin: 1em 0; }
+    .section { background: #fff; padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; font-weight: 700; }
+    .mockup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow-box { background: #fff; border: 1px solid var(--bd); border-radius: 6px; padding: 0.6em 0.9em; display: inline-block; font-size: 0.88em; }
+    .flow-arrow { color: var(--accent); font-size: 1.2em; font-weight: 700; margin: 0 0.5em; }
+    .receipt-frame { background: #fff; padding: 16px; border-radius: 8px; border: 1px solid #ddd; font-family: 'Sarabun', sans-serif; max-width: 480px; margin: 0.5em 0; }
+    .header-frame { background: #000; padding: 10px; border-radius: 6px; display: flex; gap: 8px; align-items: center; border: 1px solid #222; }
+    .pill-yes { background: #16a34a; color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 700; }
+    .pill-no { background: #ef4444; color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<h1>Receipt-Info Toggle (V114) — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-23 EOD+1 LATE+2<br>
+  <strong>Status:</strong> Approved by user (Q1-Q5 locked via Visual Companion brainstorm)<br>
+  <strong>Parent:</strong> Extension of V111+V112-A+V113+V113-C receipt-info infrastructure<br>
+  <strong>Implementation plan:</strong> <em>(pending — writing-plans to be invoked in next chat)</em><br>
+  <strong>Brainstorm artifacts:</strong> <code>.superpowers/brainstorm/188634-1779506272/content/</code>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+
+<div class="section">
+<p><strong>User request (verbatim 2026-05-23 EOD+1 LATE+2):</strong></p>
+<blockquote>"งั้นทำระบบ Toggle ในหน้า Preview ใบเสร็จ/ใบเสนอราคา ให้เลือกได้ว่าจะแสดงที่อยู่ หรือแสดงแค่ชื่อลูกค้า และ HN และ เบอร์โทร ซึ่ง Toggle ไว้แบบไหนพอกดพิมพ์ ก็ได้แบบนั้น ทำปุ่ม Toggle อยู่ด้านบน header ในหน้าพรีวิวแถวๆปุ่มพิมพ์เลยก็ได้"</blockquote>
+
+<p><strong>Problem:</strong> Post-V113-C, every receipt with a customer that has populated <code>patientData</code> now shows the full receipt-info block (taxId + address + phone + name) via live-resolve from the customer master. This is the right default for tax-document customers, but many clinic receipts only need a minimal customer identifier (name + HN + phone) — full address on a flyaway receipt is over-disclosure and a PDPA concern.</p>
+
+<p><strong>Solution:</strong> Add an in-preview toggle that lets admin choose <em>show full receipt-info block</em> vs <em>show compact name + HN + phone only</em>. Toggle state persists per-device via localStorage so the admin's preference sticks across receipts. Print output matches the toggle state at the moment 🖨 is clicked.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<h3>State 1 — Preview header bar (where the toggle lives)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle ON — แสดงเต็ม (current V113-C behavior)</div>
+  <div class="header-frame">
+    <span style="color:#aaa;font-size:13px;font-weight:700;flex:1">พรีวิว · ใบเสร็จ</span>
+    <span style="color:#aaa;font-size:11px">ที่อยู่</span>
+    <span style="display:inline-block;width:32px;height:18px;background:#dc2626;border-radius:9px;position:relative">
+      <span style="position:absolute;top:2px;right:2px;width:14px;height:14px;background:#fff;border-radius:50%"></span>
+    </span>
+    <button style="background:#0284c7;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">🖨 พิมพ์</button>
+    <button style="background:#404040;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">✕ ปิด</button>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle OFF — แสดงน้อย (DEFAULT on first open)</div>
+  <div class="header-frame">
+    <span style="color:#aaa;font-size:13px;font-weight:700;flex:1">พรีวิว · ใบเสร็จ</span>
+    <span style="color:#aaa;font-size:11px">ที่อยู่</span>
+    <span style="display:inline-block;width:32px;height:18px;background:#333;border-radius:9px;position:relative">
+      <span style="position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%"></span>
+    </span>
+    <button style="background:#0284c7;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">🖨 พิมพ์</button>
+    <button style="background:#404040;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">✕ ปิด</button>
+  </div>
+  <p style="margin:0.6em 0 0;font-size:12px;color:#666"><em>Switch + label ALWAYS hidden on printed PDF via <code>print:hidden</code> Tailwind class. Only visible in preview chrome.</em></p>
+</div>
+
+<h3>State 2 — Customer block on the rendered receipt</h3>
+
+<div class="mockup-grid">
+
+  <div class="mockup">
+    <div class="mockup-label">Toggle ON — full block (V113-C behavior preserved)</div>
+    <div class="receipt-frame">
+      <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+      <div style="font-size:15px;font-weight:700">นาย นิรุต ชำนาญปรุ</div>
+      <div style="font-size:11px;color:#666;margin-top:2px">HN LC-26000074</div>
+      <div style="border-top:1px dashed #ccc;margin-top:10px;padding-top:10px;font-size:11px;color:#555;line-height:1.6">
+        <div style="font-size:9px;color:#888;letter-spacing:0.1em;text-transform:uppercase">ออกใบเสร็จตามข้อมูลลูกค้า</div>
+        <div>นาย นิรุต ชำนาญปรุ</div>
+        <div>เลขประจำตัวผู้เสียภาษี: 3309901263672</div>
+        <div>369 ถนนสืบศิริ</div>
+        <div>โทร. 0989149195</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-label">Toggle OFF — compact (Q1=B)</div>
+    <div class="receipt-frame">
+      <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+      <div style="font-size:15px;font-weight:700">นาย นิรุต ชำนาญปรุ</div>
+      <div style="font-size:11px;color:#666;margin-top:2px">HN LC-26000074 · โทร. 0989149195</div>
+    </div>
+    <p style="margin:0.6em 0 0;font-size:12px;color:#666"><em>Receipt-info block hidden entirely. Phone joins HN row separated by middle-dot.</em></p>
+  </div>
+
+</div>
+
+<h3>State 3 — No phone available (graceful)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle OFF + customer has no phone (rare edge case)</div>
+  <div class="receipt-frame">
+    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+    <div style="font-size:15px;font-weight:700">นาย Test ไม่มีเบอร์</div>
+    <div style="font-size:11px;color:#666;margin-top:2px">HN LC-99999999</div>
+  </div>
+  <p style="margin:0.6em 0 0;font-size:12px;color:#666"><em>If <code>mergedReceiptInfo.phone</code> empty → HN line shown alone (no trailing dot or empty colon). No "โทร. " label rendered.</em></p>
+</div>
+
+<h3>State 4 — Quotation print (shared toggle, Q5=A)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">QuotationPrintView header — same switch UI + shared state</div>
+  <div class="header-frame">
+    <span style="color:#aaa;font-size:13px;font-weight:700;flex:1">พรีวิว · ใบเสนอราคา</span>
+    <span style="color:#aaa;font-size:11px">ที่อยู่</span>
+    <span style="display:inline-block;width:32px;height:18px;background:#333;border-radius:9px;position:relative">
+      <span style="position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%"></span>
+    </span>
+    <button style="background:#0284c7;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">🖨</button>
+    <button style="background:#1e40af;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">⬇ PDF</button>
+    <button style="background:#404040;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">✕</button>
+  </div>
+  <p style="margin:0.6em 0 0;font-size:12px;color:#666"><em>Toggle reads the SAME localStorage key as SalePrintView (<code>lover_receipt_show_address</code>). Switching state in Sale preview → opening Quotation preview = same state.</em></p>
+</div>
+
+<h2>Flow</h2>
+
+<h3>F1 — First-ever open (localStorage empty)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Bootstrap path</div>
+  <p style="margin:0;font-size:13px;line-height:1.8">
+    <span class="flow-box">Admin คลิก 🖨 button on a sale row</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">SalePrintView mounts</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box"><code>useReceiptInfoToggle()</code> reads localStorage</span>
+    <br><br>
+    <span class="flow-box">key <code>lover_receipt_show_address</code> not set</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">default <code>false</code> (Q3=B)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">render compact mode</span>
+  </p>
+</div>
+
+<h3>F2 — Admin toggles + prints</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle change → print</div>
+  <p style="margin:0;font-size:13px;line-height:1.8">
+    <span class="flow-box">Admin clicks switch</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box"><code>setShowAddress(true)</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage write <code>"true"</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">React re-render</span>
+    <br><br>
+    <span class="flow-box">receipt-info block APPEARS</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">Admin clicks 🖨 พิมพ์</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box"><code>window.print()</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">printed PDF includes block (switch chrome hidden via <code>print:hidden</code>)</span>
+  </p>
+</div>
+
+<h3>F3 — Cross-receipt persistence (Q2=A)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">localStorage carries over</div>
+  <p style="margin:0;font-size:13px;line-height:1.8">
+    <span class="flow-box">SalePrintView closes</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">Admin opens DIFFERENT sale's receipt</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">useReceiptInfoToggle reads localStorage</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">key = <code>"true"</code> (from previous session)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">renders full block immediately</span>
+  </p>
+</div>
+
+<h3>F4 — Shared with QuotationPrintView (Q5=A)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Single localStorage key, both views</div>
+  <p style="margin:0;font-size:13px;line-height:1.8">
+    <span class="flow-box">Admin toggles OFF in SalePrintView</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage = <code>"false"</code></span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">SalePrintView closes</span>
+    <br><br>
+    <span class="flow-box">Admin opens QuotationPrintView</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">same hook reads same key</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">renders compact mode</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">PDF download / 🖨 = compact</span>
+  </p>
+</div>
+
+<h3>F5 — Storage event sync (multi-tab — graceful)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Two preview windows open in different tabs</div>
+  <p style="margin:0;font-size:13px;line-height:1.8">
+    <span class="flow-box">Tab A: admin toggles OFF</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage event fires</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">Tab B's hook subscribes to <code>window 'storage'</code> event</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-box">Tab B re-renders compact mode</span>
+  </p>
+</div>
+
+<h2>Architecture</h2>
+
+<div class="section">
+
+<h3>New file — <code>src/hooks/useReceiptInfoToggle.js</code> (~35 LOC)</h3>
+
+<pre><code>import { useEffect, useState, useCallback } from 'react';
+
+const STORAGE_KEY = 'lover_receipt_show_address';
+const DEFAULT_SHOW = false; // Q3=B — PDPA-friendly default
+
+function readStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    return DEFAULT_SHOW;
+  } catch { return DEFAULT_SHOW; }
+}
+
+export function useReceiptInfoToggle() {
+  const [showAddress, setShowAddressState] = useState(readStorage);
+
+  // Cross-tab sync (F5)
+  useEffect(() => {
+    function onStorage(e) {
+      if (e.key === STORAGE_KEY) setShowAddressState(readStorage());
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const setShowAddress = useCallback((next) => {
+    const val = !!next;
+    setShowAddressState(val);
+    try { localStorage.setItem(STORAGE_KEY, val ? 'true' : 'false'); }
+    catch { /* private-mode / quota — render still works, just not persisted */ }
+  }, []);
+
+  return { showAddress, setShowAddress };
+}
+</code></pre>
+
+<h3>SalePrintView.jsx — header switch + conditional render</h3>
+
+<table>
+  <tr><th>Where</th><th>Change</th></tr>
+  <tr><td>Top imports</td><td>+ <code>import { useReceiptInfoToggle } from '../../hooks/useReceiptInfoToggle.js'</code></td></tr>
+  <tr><td>Component body</td><td>+ <code>const { showAddress, setShowAddress } = useReceiptInfoToggle();</code></td></tr>
+  <tr><td>Header bar (existing <code>.print:hidden</code> sticky bar with 🖨 พิมพ์ + ✕ ปิด)</td><td>Insert switch + label BEFORE 🖨 button. Whole switch wrapper has class <code>print:hidden</code> (already on the parent bar — inherits).</td></tr>
+  <tr><td>Customer header block (line 348-378)</td><td>HN line: change from<br><code>HN {s.customerHN || ...}</code><br>to:<br><code>HN {hnDisplay}{!showAddress && phoneDisplay ? ` · โทร. ${phoneDisplay}` : ''}</code></td></tr>
+  <tr><td>Receipt-info block conditional (line ~373)</td><td>Wrap existing <code>{(mergedReceiptInfo.taxId || ...) && (...)}</code> in <code>{showAddress && (existing-conditional)}</code></td></tr>
+</table>
+
+<h3>QuotationPrintView.jsx — mirror (same hook, same pattern)</h3>
+
+<p>Identical 4-point change. Both views import the same hook → automatic sync via single localStorage key (Q5=A).</p>
+
+</div>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+
+<table>
+  <tr><th>Q</th><th>Decision</th><th>Rationale</th></tr>
+  <tr><td>Q1 — Compact layout when Toggle=OFF</td><td><strong>B</strong> — เบอร์ต่อท้าย HN บรรทัดเดียวกัน<br><code>HN LC-26000074 · โทร. 0989149195</code></td><td>Most compact; preserves the 2-line customer header rhythm; matches user's "ชื่อ + HN + เบอร์" phrasing without adding a third row.</td></tr>
+  <tr><td>Q2 — Persistence</td><td><strong>A</strong> — localStorage per-device</td><td>Admin prints receipts in batches with same preferred format → save clicks. Persists across browser refresh, login, day. Cross-tab sync via storage event.</td></tr>
+  <tr><td>Q3 — Default on first open</td><td><strong>B</strong> — OFF (minimal / PDPA-friendly)</td><td>Most clinic receipts don't need full address (PDPA). Admin opt-IN to full block for tax-document customers.</td></tr>
+  <tr><td>Q4 — Toggle UI shape</td><td><strong>B</strong> — iOS-style switch + label "ที่อยู่"</td><td>Compact, visually clean, matches header bar density. Click anywhere on label or switch knob toggles.</td></tr>
+  <tr><td>Q5 — Sale vs Quotation scope</td><td><strong>A</strong> — Shared single localStorage key</td><td>One mental model, consistent UX. Both views import the same hook → automatic sync.</td></tr>
+</table>
+
+<h2>Acceptance Criteria</h2>
+
+<ol>
+  <li>First open on a fresh browser/device → toggle is OFF → customer header shows <code>นาย X Y</code> + <code>HN LC-xxx · โทร. xxxxxxxxxx</code> (single line) → no receipt-info block.</li>
+  <li>Click switch (or label "ที่อยู่") → toggle flips → full block appears (taxId + address + phone + name-if-different-from-customerName) via existing V113-C <code>mergedReceiptInfo</code>.</li>
+  <li>Click 🖨 พิมพ์ in either state → printed PDF matches the current toggle state. The switch chrome itself NEVER appears on the printed page (verified via <code>print:hidden</code> Tailwind class on parent header bar).</li>
+  <li>Close preview → open a different sale's receipt → toggle state matches what admin last chose (localStorage persistence).</li>
+  <li>Open QuotationPrintView → same toggle state (shared key). Toggle in Quotation preview → SalePrintView opens with the same state.</li>
+  <li>Edge case: customer has no phone → compact line shows <code>HN LC-xxx</code> alone (no trailing <code>·</code> dot, no empty <code>โทร.</code> label).</li>
+  <li>Edge case: localStorage unavailable (private/incognito + quota error) → hook gracefully falls back to in-memory state; toggle still works during the session, just doesn't persist.</li>
+  <li>Edge case: storage event from another tab → preview re-renders with the new state without manual refresh.</li>
+</ol>
+
+<h2>Test plan</h2>
+
+<table>
+  <tr><th>Layer</th><th>What to test</th><th>File</th></tr>
+  <tr><td>Hook unit</td><td>useReceiptInfoToggle: default OFF, set true/false, localStorage write/read, cross-tab storage event, private-mode graceful fallback</td><td><code>tests/v114-receipt-info-toggle.test.jsx</code> H1-H6</td></tr>
+  <tr><td>Source-grep</td><td>Both PrintViews import the hook, switch wrapper carries print:hidden, conditional render on showAddress, HN-line phone-append on !showAddress</td><td>same file, SG1-SG6</td></tr>
+  <tr><td>RTL — SalePrintView</td><td>Mount with mocked sale+customer → assert default OFF render → click switch → assert full block appears → switch re-click → assert compact returns</td><td>same file, R1-R5</td></tr>
+  <tr><td>RTL — QuotationPrintView</td><td>Mirror of R1-R5</td><td>same file, R6-R10</td></tr>
+  <tr><td>Rule I flow-simulate</td><td>Render Sale, toggle OFF, unmount, render Quotation → same state (shared key); change in Quote → Sale on remount = changed</td><td>same file, F1-F3</td></tr>
+  <tr><td>Rule S Chrome MCP / Claude Preview</td><td>Real-browser: mount real SalePrintView with INV-20260520-0010 sale → click switch → screenshot before/after → verify printed-state mockup matches preview</td><td>preview_eval probe</td></tr>
+</table>
+
+<h2>Out of Scope (explicitly excluded)</h2>
+
+<ul>
+  <li>No backend writes — pure client UI state. No firestore.rules, no audit doc, no migration.</li>
+  <li>No per-customer or per-sale override — toggle is global (per-device) only.</li>
+  <li>Toggle does NOT affect other live-resolve fields: course names (V111), customer name (V113-A), receipt-info block CONTENT (V113-C) all keep their behavior — V114 just adds a SHOW/HIDE switch over the block.</li>
+  <li>No new printed-format option (e.g. "always show", "always hide", "ask each time") — toggle is binary persistent, period.</li>
+  <li>No backfill / one-time scripts — V112-B trap not repeated. Pure renderer-level change.</li>
+  <li>Toggle does NOT appear in any non-preview surface (e.g. SaleDetailModal, reports, exports). Just the 2 PrintViews.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+
+<ul>
+  <li><strong>Print CSS interaction</strong>: The existing header bar already has <code>print:hidden</code> on the sticky-top wrapper. The switch SHOULD inherit. <em>Verification</em>: Rule S print preview to confirm switch doesn't leak into printed page.</li>
+  <li><strong>Switch styling consistency</strong>: Project doesn't have a canonical Switch component yet (DateField, ProductSelectField etc. exist; no switch). Should V114 introduce a reusable <code>Switch.jsx</code>, or inline the styles in the 2 PrintView headers? <em>Recommendation</em>: inline in the PrintView header for now (Rule C1 — 2 uses, not yet 3). Extract on the 3rd use.</li>
+  <li><strong>Phone source resolution</strong>: Compact line reads <code>mergedReceiptInfo.phone</code> (V113-C output). This already walks the priority chain: snapshot wins, then <code>liveCustomer.patientData.phone || liveCustomer.phone</code>. <em>No new helper needed.</em></li>
+  <li><strong>Accessibility</strong>: Switch should have <code>role="switch"</code> + <code>aria-checked</code> + <code>aria-label="ซ่อน/แสดงที่อยู่บนใบเสร็จ"</code> for screen readers. <em>Acceptance criterion #4 doesn't currently cover this</em> — flag as a small a11y polish in the plan.</li>
+  <li><strong>Quotation print signature line</strong>: QuotationPrintView has a "เรียน (Customer)" header (line ~221) with the same shape as SalePrintView. Verified during V113-C: same pattern, same hook works.</li>
+</ul>
+
+<h2>Cross-link</h2>
+
+<ul>
+  <li>Parent: V111 (buy-fetcher snapshot) + V112-A (updateBackendSale resolver) + V113 (live-resolve at render) + V113-C (receiptInfo block live-resolve)</li>
+  <li>AV invariants: AV111 + AV112 + AV113 (all stay valid — V114 is additive UI)</li>
+  <li>Visual Companion brainstorm artifacts: <code>F:/LoverClinic-app/.superpowers/brainstorm/188634-1779506272/content/01-q1-minimal-layout.html</code> through <code>05-q5-shared-or-independent.html</code></li>
+  <li>User-memory lesson: <code>feedback_visual_companion_server_not_inline_preview.md</code> (this session's Rule lock — always use Visual Companion server, never inline AskUserQuestion preview, for design brainstorms)</li>
+</ul>
+
+<h2>Self-review checklist (post-write)</h2>
+
+<table>
+  <tr><th>Item</th><th>Status</th></tr>
+  <tr><td>Placeholder scan — no "TBD" / "TODO" / vague</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Internal consistency — architecture matches mockups + decisions</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Scope check — single implementation plan (~5 hours)</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Ambiguity check — each requirement single-interpretation</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Mockup Design section present + visually renderable in browser</td><td><span class="pill-yes">PASS</span> (4 mockup states + header variants)</td></tr>
+  <tr><td>Flow section present + diagrams readable</td><td><span class="pill-yes">PASS</span> (F1-F5 sequence boxes)</td></tr>
+  <tr><td>All 5 Q&A decisions captured + rationale</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Out-of-scope explicitly listed</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Test plan covers unit + RTL + Rule I + Rule S</td><td><span class="pill-yes">PASS</span></td></tr>
+  <tr><td>Risks called out</td><td><span class="pill-yes">PASS</span> (4 risks + a11y flag)</td></tr>
+</table>
+
+<blockquote>
+  <strong>Next:</strong> Awaiting user spec-review approval. After approval, next chat invokes <code>writing-plans</code> skill to produce <code>docs/superpowers/plans/2026-05-23-receipt-info-toggle.html</code> with task breakdown, then executes via <code>executing-plans</code> or <code>subagent-driven-development</code>.
+</blockquote>
+
+</body>
+</html>
