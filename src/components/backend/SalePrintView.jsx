@@ -22,6 +22,12 @@ import { thaiTodayISO } from '../../utils.js';
 import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 import { resolveCustomerReceiptInfo } from '../../lib/customerReceiptInfo.js';
+// V114 (2026-05-23 EOD+1 LATE+2) — receipt-info toggle in preview header.
+// Q3=B default OFF (PDPA), Q5=A shared key with QuotationPrintView. Pure
+// renderer-level UI state — no backend / no rules / no migration. Switch
+// lives inside the existing print:hidden header bar so it never appears
+// on the printed PDF.
+import { useReceiptInfoToggle } from '../../hooks/useReceiptInfoToggle.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -170,6 +176,12 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
     };
   }, [s.receiptInfo, liveReceiptInfo]);
 
+  // V114 — receipt-info block toggle. Default OFF (Q3=B PDPA). Switch lives
+  // in the print:hidden header; never appears on the printed PDF. Shared
+  // localStorage key with QuotationPrintView (Q5=A) so toggling in either
+  // preview affects both immediately. Cross-tab sync via window 'storage'.
+  const { showAddress, setShowAddress } = useReceiptInfoToggle();
+
   // V113 helper — for a given course-line, prefer the LIVE master's
   // receiptCourseName, then fall back through V111 snapshot → original
   // courseName → docId → empty. Mirror this priority in SalePrintView
@@ -307,6 +319,27 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
       <div className="print:hidden sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-neutral-800">
         <div className="max-w-4xl mx-auto flex items-center gap-2 px-4 py-3">
           <h2 className="text-sm font-bold text-white flex-1">พรีวิว · ใบเสร็จ</h2>
+          {/* V114 — toggle "ที่อยู่" (show full receipt-info block).
+              Sits inside the parent print:hidden bar so it NEVER appears
+              on the printed PDF. role=switch + aria-checked for a11y;
+              shared state with QuotationPrintView via useReceiptInfoToggle. */}
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <span className="text-[11px] text-neutral-300">ที่อยู่</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showAddress ? 'true' : 'false'}
+              aria-label="แสดง/ซ่อนที่อยู่บนใบเสร็จ"
+              onClick={() => setShowAddress(!showAddress)}
+              className={`relative inline-block w-8 h-[18px] rounded-full transition-colors ${showAddress ? 'bg-red-600' : 'bg-neutral-700'}`}
+              data-testid="receipt-info-toggle-sale"
+            >
+              <span
+                className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full transition-all ${showAddress ? 'right-[2px]' : 'left-[2px]'}`}
+                aria-hidden
+              />
+            </button>
+          </label>
           <button onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white transition">
             <Printer size={14} /> พิมพ์
@@ -398,10 +431,15 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                 || '—'}
             </div>
             {/* V113 — live-resolve HN. Prefer snapshot s.customerHN (admin
-                explicit value), fall back to live customer doc resolver. */}
+                explicit value), fall back to live customer doc resolver.
+                V114 — when toggle is OFF and the receipt-info block is
+                hidden, append the phone here so the customer header still
+                surfaces a contact number. When the block is visible (ON),
+                the phone lives in the block — don't duplicate. */}
             {(s.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
               <div className="text-[11px] text-neutral-600 mt-0.5">
                 HN {s.customerHN || resolveCustomerHN(liveCustomer)}
+                {!showAddress && mergedReceiptInfo.phone ? ` · โทร. ${mergedReceiptInfo.phone}` : ''}
               </div>
             )}
             {/* V113-C (2026-05-23 EOD+1 LATE+1) — receipt-info block driven
@@ -414,7 +452,11 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                 the sale was created. AV113. Original V33 snapshot-only
                 pattern preserved for accounting integrity via field-level
                 snapshot-wins (admin's explicit values stay sovereign). */}
-            {(mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName)) && (
+            {/* V114 — block visibility gated by toggle. The inner
+                "has any field" check is preserved (V113-C) so even when
+                showAddress=true, an empty/null receipt-info doesn't paint
+                an empty box. */}
+            {showAddress && (mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName)) && (
               <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">
                 <div className="text-[9px] tracking-widest uppercase text-neutral-500 mb-0.5">
                   {mergedReceiptInfo.type === 'company' ? 'ออกใบเสร็จในนามนิติบุคคล' : mergedReceiptInfo.type === 'personal' ? 'ออกใบเสร็จในนามบุคคล' : 'ออกใบเสร็จตามข้อมูลลูกค้า'}
