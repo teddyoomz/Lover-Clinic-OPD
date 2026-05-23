@@ -69,7 +69,13 @@ describe('V111.A — source-grep regression at all 7 surfaces', () => {
 
   test('A6 — SalePrintView grouped reader prefers receiptCourseName in name fallback', () => {
     const code = read('components/backend/SalePrintView.jsx');
-    expect(code).toMatch(/V111[\s\S]{0,500}c\.receiptCourseName\s*\|\|\s*c\.name/);
+    // V114 fixup (2026-05-23 EOD+1 LATE+2): V113 refactored the grouped
+    // reader from inline `c.receiptCourseName || c.name` into the shared
+    // `liveReceiptName(courseLine)` helper at lines ~189-200, which uses
+    // `courseLine.receiptCourseName || courseLine.name`. The V111 contract
+    // (override wins, then snapshot, then original) is PRESERVED — just at
+    // the helper layer now. Pattern updated to lock the helper shape.
+    expect(code).toMatch(/V111[\s\S]{0,800}courseLine\.receiptCourseName[\s\S]{0,40}\|\|\s*courseLine\.name/);
   });
 
   test('A7 — SalePrintView legacy flat reader prefers receiptCourseName', () => {
@@ -80,7 +86,14 @@ describe('V111.A — source-grep regression at all 7 surfaces', () => {
 
   test('A8 — QuotationPrintView course reader prefers receiptCourseName', () => {
     const code = read('components/backend/QuotationPrintView.jsx');
-    expect(code).toMatch(/V111[\s\S]{0,500}x\.receiptCourseName\s*\|\|\s*x\.courseName/);
+    // V114 fixup (2026-05-23 EOD+1 LATE+2): the V111 marker comment in
+    // QuotationPrintView now sits AFTER the helper return line (the
+    // grouped-rows useMemo above line 140 carries the V111 lineage note).
+    // Pattern must allow V111 marker either before OR after the
+    // `x.receiptCourseName || x.courseName` chain within a wider window.
+    // V111 contract preserved at the helper layer (liveQuoteCourseName).
+    expect(code).toMatch(/x\.receiptCourseName\s*\|\|\s*x\.courseName/);
+    expect(code).toMatch(/V111[\s\S]{0,800}x\.receiptCourseName\s*\|\|\s*x\.courseName|x\.receiptCourseName\s*\|\|\s*x\.courseName[\s\S]{0,800}V111/);
   });
 
   test('A9 — anti-regression: SalePrintView grouped reader did NOT revert to pre-V111 chain', () => {
