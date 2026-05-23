@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>V114 Receipt-Info Toggle Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; font-weight: 700; }
+    .header-frame { background: #000; padding: 10px; border-radius: 6px; display: flex; gap: 8px; align-items: center; border: 1px solid #222; }
+    .receipt-frame { background: #fff; padding: 16px; border-radius: 8px; border: 1px solid #ddd; max-width: 460px; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow-box { background: #fff; border: 1px solid var(--bd); border-radius: 6px; padding: 0.4em 0.7em; display: inline-block; font-size: 0.85em; }
+    .flow-arrow { color: var(--accent); font-weight: 700; margin: 0 0.4em; }
+  </style>
+</head>
+<body>
+
+<h1>V114 Receipt-Info Toggle Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use <code>superpowers:subagent-driven-development</code> (recommended) or <code>superpowers:executing-plans</code> to implement this plan task-by-task. Steps use HTML checkboxes (<code>&lt;input type="checkbox"&gt;</code>) for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add an in-preview toggle ("ที่อยู่") to SalePrintView + QuotationPrintView headers that switches the customer block between a full receipt-info layout (taxId + address + phone + name) and a compact <code>HN · โทร.</code> single-line layout. State persists per-device via localStorage with a shared key across both views.</p>
+  <p><strong>Architecture:</strong> Single shared hook <code>useReceiptInfoToggle()</code> writes/reads <code>localStorage['lover_receipt_show_address']</code>; cross-tab sync via window <code>'storage'</code> event. Pure client UI — no backend, no rules, no migration. Default OFF (PDPA-friendly per Q3=B); both views consume the same key so toggling in either tab affects both immediately (Q5=A). Switch chrome lives inside the existing <code>print:hidden</code> sticky header — never appears on the printed PDF.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite 8, Tailwind 3.4 (<code>print:hidden</code> + <code>print:show</code> utilities), Vitest 4.1 + RTL (@testing-library/react), Lucide icons. Existing V113-C <code>mergedReceiptInfo</code> walks snapshot+live priority chain — no new resolver needed.</p>
+  <p><strong>Parent specs/lessons:</strong> V111 (buy-fetcher snapshot) + V112-A (updateBackendSale resolver) + V113 (renderer live-resolve) + V113-C (receiptInfo block live-resolve). Spec: <code>docs/superpowers/specs/2026-05-23-receipt-info-toggle-design.html</code>.</p>
+  <p><strong>Out of scope:</strong> No backend writes, no firestore.rules, no audit doc, no migration, no per-customer override, no new printed-format mode, no backfill. Pure renderer toggle.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<h3>Header bar (switch lives BEFORE the 🖨 พิมพ์ button)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle OFF — Default on first open (DEFAULT_SHOW = false)</div>
+  <div class="header-frame">
+    <span style="color:#aaa;font-size:13px;font-weight:700;flex:1">พรีวิว · ใบเสร็จ</span>
+    <span style="color:#aaa;font-size:11px">ที่อยู่</span>
+    <span style="display:inline-block;width:32px;height:18px;background:#333;border-radius:9px;position:relative" aria-label="OFF state">
+      <span style="position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%"></span>
+    </span>
+    <button style="background:#0284c7;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">🖨 พิมพ์</button>
+    <button style="background:#404040;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">✕ ปิด</button>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle ON — Admin opted into full block (red accent indicates active state)</div>
+  <div class="header-frame">
+    <span style="color:#aaa;font-size:13px;font-weight:700;flex:1">พรีวิว · ใบเสร็จ</span>
+    <span style="color:#aaa;font-size:11px">ที่อยู่</span>
+    <span style="display:inline-block;width:32px;height:18px;background:#dc2626;border-radius:9px;position:relative" aria-label="ON state">
+      <span style="position:absolute;top:2px;right:2px;width:14px;height:14px;background:#fff;border-radius:50%"></span>
+    </span>
+    <button style="background:#0284c7;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">🖨 พิมพ์</button>
+    <button style="background:#404040;color:#fff;border:0;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700">✕ ปิด</button>
+  </div>
+</div>
+
+<h3>Customer block render — both states</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle OFF — compact (NEW V114 behavior). Phone joins HN line via middle-dot.</div>
+  <div class="receipt-frame">
+    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+    <div style="font-size:15px;font-weight:700">นาย นิรุต ชำนาญปรุ</div>
+    <div style="font-size:11px;color:#666;margin-top:2px">HN LC-26000074 · โทร. 0989149195</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Toggle ON — full block (V113-C behavior PRESERVED unchanged)</div>
+  <div class="receipt-frame">
+    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+    <div style="font-size:15px;font-weight:700">นาย นิรุต ชำนาญปรุ</div>
+    <div style="font-size:11px;color:#666;margin-top:2px">HN LC-26000074</div>
+    <div style="border-top:1px dashed #ccc;margin-top:10px;padding-top:10px;font-size:11px;color:#555;line-height:1.6">
+      <div style="font-size:9px;color:#888;letter-spacing:0.1em;text-transform:uppercase">ออกใบเสร็จตามข้อมูลลูกค้า</div>
+      <div>เลขประจำตัวผู้เสียภาษี: 3309901263672</div>
+      <div>369 ถนนสืบศิริ</div>
+      <div>โทร. 0989149195</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Edge: Toggle OFF + customer has no phone → HN line alone (no trailing dot, no empty "โทร.")</div>
+  <div class="receipt-frame">
+    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:4px">ลูกค้า (CUSTOMER)</div>
+    <div style="font-size:15px;font-weight:700">นาย Test ไม่มีเบอร์</div>
+    <div style="font-size:11px;color:#666;margin-top:2px">HN LC-99999999</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>F-A — First open (localStorage empty)</h3>
+<div class="mockup">
+  <p style="margin:0;line-height:1.9">
+    <span class="flow-box">Admin clicks 🖨 on a sale row</span><span class="flow-arrow">→</span>
+    <span class="flow-box">SalePrintView mounts</span><span class="flow-arrow">→</span>
+    <span class="flow-box">useReceiptInfoToggle reads localStorage</span><span class="flow-arrow">→</span>
+    <span class="flow-box">key not set → DEFAULT_SHOW=false</span><span class="flow-arrow">→</span>
+    <span class="flow-box">compact render: HN + phone single line</span>
+  </p>
+</div>
+
+<h3>F-B — Toggle + print</h3>
+<div class="mockup">
+  <p style="margin:0;line-height:1.9">
+    <span class="flow-box">Admin clicks switch (or label "ที่อยู่")</span><span class="flow-arrow">→</span>
+    <span class="flow-box">setShowAddress(true)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage write "true"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">React re-render</span><span class="flow-arrow">→</span>
+    <span class="flow-box">receipt-info block appears</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Admin clicks 🖨 พิมพ์ → window.print() → PDF includes full block (switch chrome hidden by print:hidden parent)</span>
+  </p>
+</div>
+
+<h3>F-C — Cross-receipt persistence + cross-view shared key</h3>
+<div class="mockup">
+  <p style="margin:0;line-height:1.9">
+    <span class="flow-box">SalePrintView closes (state OFF)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Admin opens DIFFERENT sale</span><span class="flow-arrow">→</span>
+    <span class="flow-box">hook reads localStorage = "false" → renders compact</span>
+    <br>
+    <span class="flow-box">Admin toggles ON in Sale</span><span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage = "true"</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Closes preview</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Opens QuotationPrintView</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Same hook reads same key → renders full block (Q5=A shared)</span>
+  </p>
+</div>
+
+<h3>F-D — Cross-tab storage-event sync</h3>
+<div class="mockup">
+  <p style="margin:0;line-height:1.9">
+    <span class="flow-box">Tab A: Admin toggles OFF</span><span class="flow-arrow">→</span>
+    <span class="flow-box">localStorage write fires 'storage' event on OTHER tabs</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Tab B's hook subscribes to window 'storage' event</span><span class="flow-arrow">→</span>
+    <span class="flow-box">readStorage() returns false → setShowAddressState(false)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Tab B re-renders compact mode (no manual refresh)</span>
+  </p>
+</div>
+
+<h3>F-E — Print CSS hides switch chrome</h3>
+<div class="mockup">
+  <p style="margin:0;line-height:1.9">
+    <span class="flow-box">Header bar already has <code>print:hidden</code> on parent div (line 307 Sale / 169 Quotation)</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Switch + label sit INSIDE this bar</span><span class="flow-arrow">→</span>
+    <span class="flow-box">window.print() → @media print drops the bar entirely</span><span class="flow-arrow">→</span>
+    <span class="flow-box">Printed page shows ONLY the A4 document surface (sale-print-surface / quotation-print-surface)</span>
+  </p>
+</div>
+
+<h2>File Structure</h2>
+
+<table>
+  <tr><th>File</th><th>Role</th><th>Action</th></tr>
+  <tr><td><code>src/hooks/useReceiptInfoToggle.js</code></td><td>Shared hook — localStorage read/write + cross-tab storage-event sync</td><td>CREATE (~40 LOC)</td></tr>
+  <tr><td><code>src/components/backend/SalePrintView.jsx</code></td><td>Receipt renderer — consume hook, add switch to header, append phone to HN line when OFF, wrap receipt-info block in <code>{showAddress && ...}</code></td><td>MODIFY 4 surfaces (imports + body + header-bar lines 307-319 + HN/block lines 402-427)</td></tr>
+  <tr><td><code>src/components/backend/QuotationPrintView.jsx</code></td><td>Quotation renderer — mirror of SalePrintView (same hook, same pattern)</td><td>MODIFY 4 surfaces (imports + body + header-bar lines 169-181 + HN/block lines 257-275)</td></tr>
+  <tr><td><code>tests/v114-receipt-info-toggle.test.jsx</code></td><td>All V114 tests — H1-H6 hook unit + SG1-SG6 source-grep + R1-R10 RTL + F1-F3 Rule I flow-simulate</td><td>CREATE</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: <code>useReceiptInfoToggle</code> hook + H1-H6 unit tests</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Create: <code>src/hooks/useReceiptInfoToggle.js</code></li>
+    <li>Create: <code>tests/v114-receipt-info-toggle.test.jsx</code> (initialize file with H1-H6 only)</li>
+  </ul>
+
+  <div class="step">
+    <input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test file with H1-H6 hook units</strong></label>
+  </div>
+
+<pre><code>// tests/v114-receipt-info-toggle.test.jsx
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useReceiptInfoToggle } from '../src/hooks/useReceiptInfoToggle.js';
+
+const STORAGE_KEY = 'lover_receipt_show_address';
+
+describe('V114.H — useReceiptInfoToggle hook', () => {
+  beforeEach(() => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  });
+
+  it('H1: defaults to false when localStorage empty (Q3=B PDPA-friendly)', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    expect(result.current.showAddress).toBe(false);
+  });
+
+  it('H2: reads existing "true" from localStorage on mount', () => {
+    localStorage.setItem(STORAGE_KEY, 'true');
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    expect(result.current.showAddress).toBe(true);
+  });
+
+  it('H2b: reads existing "false" from localStorage on mount', () => {
+    localStorage.setItem(STORAGE_KEY, 'false');
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    expect(result.current.showAddress).toBe(false);
+  });
+
+  it('H3: setShowAddress(true) persists "true" to localStorage', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    act(() => result.current.setShowAddress(true));
+    expect(result.current.showAddress).toBe(true);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
+  });
+
+  it('H3b: setShowAddress(false) persists "false" to localStorage', () => {
+    localStorage.setItem(STORAGE_KEY, 'true');
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    act(() => result.current.setShowAddress(false));
+    expect(result.current.showAddress).toBe(false);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('false');
+  });
+
+  it('H4: cross-tab storage event updates state', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    expect(result.current.showAddress).toBe(false);
+    act(() => {
+      localStorage.setItem(STORAGE_KEY, 'true');
+      window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue: 'true' }));
+    });
+    expect(result.current.showAddress).toBe(true);
+  });
+
+  it('H4b: storage event for UNRELATED key does NOT affect state', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'some_other_key', newValue: 'whatever' }));
+    });
+    expect(result.current.showAddress).toBe(false);
+  });
+
+  it('H5: invalid localStorage value falls back to default false', () => {
+    localStorage.setItem(STORAGE_KEY, 'garbage');
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    expect(result.current.showAddress).toBe(false);
+  });
+
+  it('H6: setShowAddress coerces truthy to boolean true', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    act(() => result.current.setShowAddress(1));
+    expect(result.current.showAddress).toBe(true);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
+  });
+
+  it('H6b: setShowAddress coerces falsy to boolean false', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    act(() => result.current.setShowAddress(true));
+    act(() => result.current.setShowAddress(null));
+    expect(result.current.showAddress).toBe(false);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('false');
+  });
+
+  it('H6c: localStorage throw (private mode) — set still updates in-memory state', () => {
+    const { result } = renderHook(() => useReceiptInfoToggle());
+    const origSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new Error('QuotaExceeded'); };
+    try {
+      act(() => result.current.setShowAddress(true));
+      expect(result.current.showAddress).toBe(true); // in-memory state updated
+    } finally {
+      Storage.prototype.setItem = origSet;
+    }
+  });
+});
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run tests to verify they fail (hook file doesn't exist yet)</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: ALL FAIL with module not found <code>useReceiptInfoToggle</code></p>
+
+  <div class="step">
+    <input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Create the hook</strong></label>
+  </div>
+
+<pre><code>// src/hooks/useReceiptInfoToggle.js
+// V114 (2026-05-23 EOD+1 LATE+2) — Receipt-info toggle shared by
+// SalePrintView + QuotationPrintView. Persists per-device via localStorage;
+// cross-tab sync via 'storage' event. Default OFF (Q3=B PDPA-friendly).
+// Shared key (Q5=A) — toggling in either view affects both immediately.
+//
+// Pure renderer-level UI state. No backend, no rules, no migration.
+// Parent: V111 (course-name) + V112-A (write resolver) + V113 (live-resolve)
+// + V113-C (receiptInfo block). V114 is additive UI over V113-C.
+
+import { useCallback, useEffect, useState } from 'react';
+
+const STORAGE_KEY = 'lover_receipt_show_address';
+const DEFAULT_SHOW = false;
+
+function readStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    return DEFAULT_SHOW;
+  } catch {
+    return DEFAULT_SHOW;
+  }
+}
+
+export function useReceiptInfoToggle() {
+  const [showAddress, setShowAddressState] = useState(readStorage);
+
+  // Cross-tab sync: storage events fire on OTHER tabs when localStorage
+  // changes in any tab.
+  useEffect(() => {
+    function onStorage(e) {
+      if (e.key === STORAGE_KEY) setShowAddressState(readStorage());
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const setShowAddress = useCallback((next) => {
+    const val = !!next;
+    setShowAddressState(val);
+    try {
+      localStorage.setItem(STORAGE_KEY, val ? 'true' : 'false');
+    } catch {
+      // private mode / quota — render still works, state just doesn't persist
+    }
+  }, []);
+
+  return { showAddress, setShowAddress };
+}
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run tests to verify ALL H1-H6 pass</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: 11/11 PASS (H1, H2, H2b, H3, H3b, H4, H4b, H5, H6, H6b, H6c)</p>
+
+  <div class="step">
+    <input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label>
+  </div>
+
+<pre><code>git add src/hooks/useReceiptInfoToggle.js tests/v114-receipt-info-toggle.test.jsx
+git commit -m "feat(receipt): V114 — useReceiptInfoToggle hook (Q3=B default OFF, Q5=A shared key)
+
+V114 Task 1: NEW shared hook for SalePrintView + QuotationPrintView
+header toggle. localStorage key lover_receipt_show_address, default
+false (PDPA-friendly), cross-tab 'storage' event sync, graceful
+private-mode fallback. 11 H-unit tests PASS."
+</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: SalePrintView — header switch + compact HN+phone + conditional block (SG1-SG3 + R1-R5)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/SalePrintView.jsx</code> (imports + body hook call + lines 307-319 header bar + lines 402-427 customer block)</li>
+    <li>Modify: <code>tests/v114-receipt-info-toggle.test.jsx</code> (append SG1-SG3 + R1-R5)</li>
+  </ul>
+
+  <div class="step">
+    <input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Append SG1-SG3 source-grep + R1-R5 RTL tests for SalePrintView</strong></label>
+  </div>
+
+<pre><code>// Append to tests/v114-receipt-info-toggle.test.jsx
+import fs from 'node:fs';
+import path from 'node:path';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import React from 'react';
+
+const SALE_PRINT_VIEW_PATH = path.resolve(__dirname, '../src/components/backend/SalePrintView.jsx');
+const SALE_SRC = fs.readFileSync(SALE_PRINT_VIEW_PATH, 'utf8');
+
+describe('V114.SG — SalePrintView source-grep', () => {
+  it('SG1: imports useReceiptInfoToggle from hooks', () => {
+    expect(SALE_SRC).toMatch(/import\s*\{\s*useReceiptInfoToggle\s*\}\s*from\s*['"][.\/]*hooks\/useReceiptInfoToggle(\.js)?['"]/);
+  });
+
+  it('SG2: calls the hook in the component body', () => {
+    expect(SALE_SRC).toMatch(/const\s*\{\s*showAddress\s*,\s*setShowAddress\s*\}\s*=\s*useReceiptInfoToggle\s*\(\s*\)/);
+  });
+
+  it('SG3: receipt-info block conditional gated on showAddress', () => {
+    // The existing V113-C block conditional must be wrapped so the FULL
+    // block only renders when showAddress is true.
+    expect(SALE_SRC).toMatch(/showAddress\s*&&[\s\S]{0,200}mergedReceiptInfo\.taxId/);
+  });
+
+  it('SG3b: HN line appends phone when !showAddress and phone exists', () => {
+    // Compact mode: HN line gets " · โทร. <phone>" appended.
+    expect(SALE_SRC).toMatch(/!showAddress[\s\S]{0,160}โทร\./);
+  });
+
+  it('SG3c: switch wrapper sits inside the print:hidden sticky header', () => {
+    // The switch (role="switch") must be inside the print:hidden bar so
+    // it never appears on the printed PDF.
+    const headerStart = SALE_SRC.indexOf('print:hidden sticky');
+    expect(headerStart).toBeGreaterThan(-1);
+    const headerEndApprox = SALE_SRC.indexOf('sale-print-surface');
+    const headerBlock = SALE_SRC.slice(headerStart, headerEndApprox);
+    expect(headerBlock).toMatch(/role=['"]switch['"]/);
+    expect(headerBlock).toMatch(/aria-checked/);
+  });
+});
+
+// RTL tests require lazy import so the source-grep tests above use the
+// pre-edited file content.
+describe('V114.R — SalePrintView RTL render', () => {
+  const FAKE_SALE = {
+    id: 'INV-TEST-V114',
+    customerId: 'cust-v114',
+    customerName: 'นาย นิรุต ชำนาญปรุ',
+    customerHN: 'LC-26000074',
+    items: { courses: [], products: [], promotions: [], medications: [] },
+    payments: [],
+    netTotal: 0,
+    createdAt: { toDate: () => new Date('2026-05-23T10:00:00+07:00') },
+    receiptInfo: {
+      type: 'personal',
+      name: 'นาย นิรุต ชำนาญปรุ',
+      taxId: '3309901263672',
+      address: '369 ถนนสืบศิริ',
+      phone: '0989149195',
+    },
+  };
+  const FAKE_CLINIC = { clinicName: 'Lover Clinic', branchName: 'นครราชสีมา' };
+
+  beforeEach(() => {
+    try { localStorage.clear(); } catch {}
+  });
+  afterEach(() => { cleanup(); });
+
+  it('R1: default OFF — renders compact HN · โทร. line, hides full block', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: FAKE_CLINIC, onClose: () => {} }));
+    // Compact: HN + middle-dot + phone in a single line
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    // Full block NOT rendered (taxId hidden)
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R2: click switch → toggles ON → full block appears, HN line drops phone', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    fireEvent.click(sw);
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*3309901263672/)).toBeTruthy();
+    expect(screen.getByText(/369 ถนนสืบศิริ/)).toBeTruthy();
+    // HN line: no " · โทร." trailing
+    const hnLine = screen.getByText(/^HN LC-26000074$/);
+    expect(hnLine).toBeTruthy();
+  });
+
+  it('R3: click switch again → back to OFF → compact returns', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    fireEvent.click(sw); // ON
+    fireEvent.click(sw); // OFF
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R4: edge case — no phone → HN alone (no trailing dot, no "โทร." label)', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    const SALE_NO_PHONE = {
+      ...FAKE_SALE,
+      receiptInfo: { ...FAKE_SALE.receiptInfo, phone: '' },
+    };
+    render(React.createElement(SalePrintView, { sale: SALE_NO_PHONE, clinic: FAKE_CLINIC, onClose: () => {} }));
+    // OFF mode + no phone → HN line is bare; NO middle-dot
+    const hnText = screen.getByText(/HN LC-26000074/);
+    expect(hnText.textContent).not.toMatch(/·/);
+    expect(hnText.textContent).not.toMatch(/โทร\./);
+  });
+
+  it('R5: a11y — switch has role=switch, aria-checked reflects state', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(sw);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+});
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run new tests — verify they FAIL (file not yet edited)</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: H1-H6 still pass (Task 1); SG1-SG3 + R1-R5 FAIL (hook not imported in SalePrintView yet).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Edit SalePrintView — Surface A: imports + body</strong></label>
+  </div>
+
+  <p>Open <code>src/components/backend/SalePrintView.jsx</code>. Find the existing top-level import block, and add:</p>
+
+<pre><code>import { useReceiptInfoToggle } from '../../hooks/useReceiptInfoToggle.js';
+</code></pre>
+
+  <p>Inside the component function body, near the top (right after the existing <code>mergedReceiptInfo</code> useMemo at line ~156 — adjacent to other hooks), add:</p>
+
+<pre><code>// V114 (2026-05-23) — Toggle for showing the receipt-info block.
+// Default OFF (Q3=B PDPA-friendly). Persists per-device + shared key with
+// QuotationPrintView (Q5=A).
+const { showAddress, setShowAddress } = useReceiptInfoToggle();
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Edit SalePrintView — Surface B: header switch (lines 307-319)</strong></label>
+  </div>
+
+  <p>Locate the existing header bar at line 307:</p>
+
+<pre><code>      &lt;div className="print:hidden sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-neutral-800"&gt;
+        &lt;div className="max-w-4xl mx-auto flex items-center gap-2 px-4 py-3"&gt;
+          &lt;h2 className="text-sm font-bold text-white flex-1"&gt;พรีวิว · ใบเสร็จ&lt;/h2&gt;
+          &lt;button onClick={() =&gt; window.print()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white transition"&gt;
+            &lt;Printer size={14} /&gt; พิมพ์
+          &lt;/button&gt;
+</code></pre>
+
+  <p>Insert the switch BEFORE the <code>&lt;button onClick=&#123;() =&gt; window.print()&#125;</code> line:</p>
+
+<pre><code>          {/* V114 — toggle "ที่อยู่" / show-address. Sits inside the
+              parent print:hidden bar so it never appears on the printed
+              PDF. role=switch + aria-checked for a11y. */}
+          &lt;label className="inline-flex items-center gap-2 cursor-pointer select-none"&gt;
+            &lt;span className="text-[11px] text-neutral-300"&gt;ที่อยู่&lt;/span&gt;
+            &lt;button
+              type="button"
+              role="switch"
+              aria-checked={showAddress ? 'true' : 'false'}
+              aria-label="แสดง/ซ่อนที่อยู่บนใบเสร็จ"
+              onClick={() =&gt; setShowAddress(!showAddress)}
+              className={`relative inline-block w-8 h-[18px] rounded-full transition-colors ${showAddress ? 'bg-red-600' : 'bg-neutral-700'}`}
+              data-testid="receipt-info-toggle-sale"
+            &gt;
+              &lt;span
+                className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full transition-all ${showAddress ? 'right-[2px]' : 'left-[2px]'}`}
+                aria-hidden
+              /&gt;
+            &lt;/button&gt;
+          &lt;/label&gt;
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Edit SalePrintView — Surface C: HN line + phone-append (line 402-406)</strong></label>
+  </div>
+
+  <p>Locate the existing HN line:</p>
+
+<pre><code>            {(s.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              &lt;div className="text-[11px] text-neutral-600 mt-0.5"&gt;
+                HN {s.customerHN || resolveCustomerHN(liveCustomer)}
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <p>Replace the inner content so the HN line conditionally appends phone when <code>!showAddress</code> AND <code>mergedReceiptInfo.phone</code> exists:</p>
+
+<pre><code>            {(s.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              &lt;div className="text-[11px] text-neutral-600 mt-0.5"&gt;
+                {/* V114 — when toggle is OFF and the receipt-info block is
+                    hidden, append the phone here so the customer header
+                    still surfaces a contact number. When the block is
+                    visible (ON), the phone lives in the block — don't
+                    duplicate it on the HN line. */}
+                HN {s.customerHN || resolveCustomerHN(liveCustomer)}
+                {!showAddress && mergedReceiptInfo.phone ? ` · โทร. ${mergedReceiptInfo.phone}` : ''}
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Edit SalePrintView — Surface D: gate the receipt-info block (line 417-427)</strong></label>
+  </div>
+
+  <p>Locate the existing V113-C receipt-info conditional:</p>
+
+<pre><code>            {(mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName)) && (
+              &lt;div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed"&gt;
+                ...existing block contents...
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <p>Wrap the outer conditional with <code>showAddress &&</code>:</p>
+
+<pre><code>            {/* V114 — block visibility gated by toggle. The inner
+                "has any field" check is preserved (V113-C) so even when
+                showAddress=true, an empty/null receipt-info doesn't paint
+                an empty box. */}
+            {showAddress && (mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName)) && (
+              &lt;div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed"&gt;
+                ...existing block contents UNCHANGED...
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: Run all V114 tests to verify SG1-SG3 + R1-R5 pass</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: H1-H6 + SG1-SG3 + R1-R5 ALL PASS (~21 tests).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t2s8"> <label for="t2s8"><strong>Step 8: Commit</strong></label>
+  </div>
+
+<pre><code>git add src/components/backend/SalePrintView.jsx tests/v114-receipt-info-toggle.test.jsx
+git commit -m "feat(receipt): V114 — SalePrintView toggle wired (header switch + compact HN+phone + block gate)
+
+V114 Task 2: 4 surfaces in SalePrintView consume useReceiptInfoToggle.
+- Surface A: import + body hook call
+- Surface B: iOS-style switch inserted into print:hidden header (line ~310)
+- Surface C: HN line appends ' · โทร. <phone>' when !showAddress
+- Surface D: receipt-info block wrapped in {showAddress && ...}
+SG1-SG3 source-grep + R1-R5 RTL all green."
+</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: QuotationPrintView — mirror of Task 2 (SG4-SG6 + R6-R10)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/QuotationPrintView.jsx</code> (imports + body + header lines 169-181 + customer block lines 257-275)</li>
+    <li>Modify: <code>tests/v114-receipt-info-toggle.test.jsx</code> (append SG4-SG6 + R6-R10)</li>
+  </ul>
+
+  <div class="step">
+    <input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Append SG4-SG6 + R6-R10 (mirror of SG1-SG3 + R1-R5 but for QuotationPrintView)</strong></label>
+  </div>
+
+<pre><code>// Append to tests/v114-receipt-info-toggle.test.jsx
+const QUOTATION_PRINT_VIEW_PATH = path.resolve(__dirname, '../src/components/backend/QuotationPrintView.jsx');
+const QUOTATION_SRC = fs.readFileSync(QUOTATION_PRINT_VIEW_PATH, 'utf8');
+
+describe('V114.SG — QuotationPrintView source-grep', () => {
+  it('SG4: imports useReceiptInfoToggle from hooks', () => {
+    expect(QUOTATION_SRC).toMatch(/import\s*\{\s*useReceiptInfoToggle\s*\}\s*from\s*['"][.\/]*hooks\/useReceiptInfoToggle(\.js)?['"]/);
+  });
+
+  it('SG4b: calls the hook in the component body', () => {
+    expect(QUOTATION_SRC).toMatch(/const\s*\{\s*showAddress\s*,\s*setShowAddress\s*\}\s*=\s*useReceiptInfoToggle\s*\(\s*\)/);
+  });
+
+  it('SG5: receipt-info block conditional gated on showAddress', () => {
+    expect(QUOTATION_SRC).toMatch(/showAddress\s*&&[\s\S]{0,200}mergedReceiptInfo\.taxId/);
+  });
+
+  it('SG5b: HN line appends phone when !showAddress and phone exists', () => {
+    expect(QUOTATION_SRC).toMatch(/!showAddress[\s\S]{0,160}โทร\./);
+  });
+
+  it('SG6: switch sits inside the print:hidden sticky header', () => {
+    const headerStart = QUOTATION_SRC.indexOf('print:hidden sticky');
+    expect(headerStart).toBeGreaterThan(-1);
+    const headerEndApprox = QUOTATION_SRC.indexOf('quotation-print-surface');
+    const headerBlock = QUOTATION_SRC.slice(headerStart, headerEndApprox);
+    expect(headerBlock).toMatch(/role=['"]switch['"]/);
+    expect(headerBlock).toMatch(/aria-checked/);
+  });
+});
+
+describe('V114.R — QuotationPrintView RTL render', () => {
+  const FAKE_QUOTATION = {
+    id: 'QT-TEST-V114',
+    customerId: 'cust-v114',
+    customerName: 'นาย นิรุต ชำนาญปรุ',
+    customerHN: 'LC-26000074',
+    items: { courses: [], products: [], medications: [], promotions: [] },
+    netTotal: 0,
+    createdAt: { toDate: () => new Date('2026-05-23T10:00:00+07:00') },
+    receiptInfo: {
+      type: 'personal',
+      name: 'นาย นิรุต ชำนาญปรุ',
+      taxId: '3309901263672',
+      address: '369 ถนนสืบศิริ',
+      phone: '0989149195',
+    },
+  };
+  const FAKE_CLINIC = { clinicName: 'Lover Clinic', branchName: 'นครราชสีมา' };
+
+  beforeEach(() => {
+    try { localStorage.clear(); } catch {}
+  });
+  afterEach(() => { cleanup(); });
+
+  it('R6: default OFF — compact HN · โทร. line in QuotationPrintView', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: FAKE_CLINIC, onClose: () => {} }));
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R7: click switch → ON → full block appears', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    fireEvent.click(sw);
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*3309901263672/)).toBeTruthy();
+    expect(screen.getByText(/369 ถนนสืบศิริ/)).toBeTruthy();
+  });
+
+  it('R8: toggle round-trip ON → OFF → compact returns', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    fireEvent.click(sw);
+    fireEvent.click(sw);
+    expect(screen.getByText(/HN LC-26000074.*·.*โทร\.\s*0989149195/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('R9: no phone edge — HN alone (no trailing dot)', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    const Q = { ...FAKE_QUOTATION, receiptInfo: { ...FAKE_QUOTATION.receiptInfo, phone: '' } };
+    render(React.createElement(QuotationPrintView, { quotation: Q, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const hnText = screen.getByText(/HN LC-26000074/);
+    expect(hnText.textContent).not.toMatch(/·/);
+    expect(hnText.textContent).not.toMatch(/โทร\./);
+  });
+
+  it('R10: a11y — role=switch + aria-checked', async () => {
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+    render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: FAKE_CLINIC, onClose: () => {} }));
+    const sw = screen.getByRole('switch', { name: /ที่อยู่/ });
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(sw);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+});
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run — verify SG4-SG6 + R6-R10 FAIL</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: H1-H6 + SG1-SG3 + R1-R5 pass; SG4-SG6 + R6-R10 FAIL.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Edit QuotationPrintView — Surface A: imports + body hook call</strong></label>
+  </div>
+
+  <p>Open <code>src/components/backend/QuotationPrintView.jsx</code>. Add import:</p>
+
+<pre><code>import { useReceiptInfoToggle } from '../../hooks/useReceiptInfoToggle.js';
+</code></pre>
+
+  <p>Inside component body (next to existing <code>mergedReceiptInfo</code> useMemo, line ~101):</p>
+
+<pre><code>// V114 (2026-05-23) — Toggle for showing the receipt-info block on the
+// quotation. Mirror of SalePrintView; shares the same localStorage key
+// (Q5=A) so admin switching state in either preview affects both.
+const { showAddress, setShowAddress } = useReceiptInfoToggle();
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Edit QuotationPrintView — Surface B: switch in header (line 169-181)</strong></label>
+  </div>
+
+  <p>Locate the header bar at line 169 and insert the switch BEFORE the <code>&lt;button onClick=&#123;() =&gt; window.print()&#125;</code> line. Use a DIFFERENT data-testid (<code>receipt-info-toggle-quotation</code>) so the two views' switches don't collide in tests where both could render. Markup identical to SalePrintView Task 2 step 4, except for the testid:</p>
+
+<pre><code>          {/* V114 — toggle "ที่อยู่"; same shared state as SalePrintView. */}
+          &lt;label className="inline-flex items-center gap-2 cursor-pointer select-none"&gt;
+            &lt;span className="text-[11px] text-neutral-300"&gt;ที่อยู่&lt;/span&gt;
+            &lt;button
+              type="button"
+              role="switch"
+              aria-checked={showAddress ? 'true' : 'false'}
+              aria-label="แสดง/ซ่อนที่อยู่บนใบเสนอราคา"
+              onClick={() =&gt; setShowAddress(!showAddress)}
+              className={`relative inline-block w-8 h-[18px] rounded-full transition-colors ${showAddress ? 'bg-red-600' : 'bg-neutral-700'}`}
+              data-testid="receipt-info-toggle-quotation"
+            &gt;
+              &lt;span
+                className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full transition-all ${showAddress ? 'right-[2px]' : 'left-[2px]'}`}
+                aria-hidden
+              /&gt;
+            &lt;/button&gt;
+          &lt;/label&gt;
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Edit QuotationPrintView — Surface C: HN line + phone-append (line 257-261)</strong></label>
+  </div>
+
+  <p>Locate:</p>
+
+<pre><code>            {(q.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              &lt;div className="text-[11px] text-neutral-600 mt-0.5"&gt;
+                HN {q.customerHN || resolveCustomerHN(liveCustomer)}
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <p>Replace inner HN content (mirror SalePrintView):</p>
+
+<pre><code>            {(q.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              &lt;div className="text-[11px] text-neutral-600 mt-0.5"&gt;
+                {/* V114 — same compact pattern as SalePrintView. Phone
+                    surfaced on HN line only when the block is hidden. */}
+                HN {q.customerHN || resolveCustomerHN(liveCustomer)}
+                {!showAddress && mergedReceiptInfo.phone ? ` · โทร. ${mergedReceiptInfo.phone}` : ''}
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t3s6"> <label for="t3s6"><strong>Step 6: Edit QuotationPrintView — Surface D: gate the receipt-info block (line 265-275)</strong></label>
+  </div>
+
+  <p>Locate the V113-C block conditional and add the <code>showAddress &&</code> guard at the front:</p>
+
+<pre><code>            {/* V114 — block gated by toggle (same as SalePrintView). */}
+            {showAddress && (mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== q.customerName)) && (
+              &lt;div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed"&gt;
+                ...existing block contents UNCHANGED...
+              &lt;/div&gt;
+            )}
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t3s7"> <label for="t3s7"><strong>Step 7: Run — verify all V114 tests pass</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: H1-H6 + SG1-SG6 + R1-R10 ALL PASS (~31 tests).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t3s8"> <label for="t3s8"><strong>Step 8: Commit</strong></label>
+  </div>
+
+<pre><code>git add src/components/backend/QuotationPrintView.jsx tests/v114-receipt-info-toggle.test.jsx
+git commit -m "feat(receipt): V114 — QuotationPrintView mirror (same hook, same pattern)
+
+V114 Task 3: 4 surfaces in QuotationPrintView consume the same
+useReceiptInfoToggle hook (Q5=A shared state with SalePrintView).
+SG4-SG6 source-grep + R6-R10 RTL all green; full hook+sale+quotation
+suite ~31/31 PASS."
+</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Rule I flow-simulate — cross-view shared key (F1-F3)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>tests/v114-receipt-info-toggle.test.jsx</code> (append F1-F3)</li>
+  </ul>
+
+  <p><strong>Rule I rationale:</strong> Task 1 hook unit covers persistence; Task 2/3 RTL cover single-view render. F1-F3 chain the FULL user flow — toggle state crosses the unmount boundary AND crosses between SalePrintView and QuotationPrintView via the shared localStorage key. This is the Q5=A behavior the user explicitly chose.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Append F1-F3 cross-view flow-simulate tests</strong></label>
+  </div>
+
+<pre><code>// Append to tests/v114-receipt-info-toggle.test.jsx
+describe('V114.F — Rule I cross-view flow-simulate', () => {
+  const FAKE_SALE = {
+    id: 'INV-F-V114',
+    customerId: 'cust-f',
+    customerName: 'นาย F Test',
+    customerHN: 'LC-F-001',
+    items: { courses: [], products: [], promotions: [], medications: [] },
+    payments: [],
+    netTotal: 0,
+    createdAt: { toDate: () => new Date('2026-05-23T10:00:00+07:00') },
+    receiptInfo: { type: 'personal', name: 'นาย F Test', taxId: '1111111111', address: 'F-Address', phone: '0811111111' },
+  };
+  const FAKE_QUOTATION = {
+    id: 'QT-F-V114',
+    customerId: 'cust-f',
+    customerName: 'นาย F Test',
+    customerHN: 'LC-F-001',
+    items: { courses: [], products: [], medications: [], promotions: [] },
+    netTotal: 0,
+    createdAt: { toDate: () => new Date('2026-05-23T10:00:00+07:00') },
+    receiptInfo: { type: 'personal', name: 'นาย F Test', taxId: '1111111111', address: 'F-Address', phone: '0811111111' },
+  };
+  const CLINIC = { clinicName: 'Lover Clinic', branchName: 'นครราชสีมา' };
+
+  beforeEach(() => { try { localStorage.clear(); } catch {} });
+  afterEach(() => { cleanup(); });
+
+  it('F1: Sale toggle ON → unmount → Quotation mount shows ON (shared key)', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+
+    const { unmount } = render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: CLINIC, onClose: () => {} }));
+    const saleSw = screen.getByTestId('receipt-info-toggle-sale');
+    fireEvent.click(saleSw); // ON
+    expect(localStorage.getItem('lover_receipt_show_address')).toBe('true');
+    unmount();
+
+    render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: CLINIC, onClose: () => {} }));
+    const quoteSw = screen.getByTestId('receipt-info-toggle-quotation');
+    expect(quoteSw.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*1111111111/)).toBeTruthy();
+  });
+
+  it('F2: Quotation toggle OFF → unmount → Sale mount shows OFF (reverse direction)', async () => {
+    localStorage.setItem('lover_receipt_show_address', 'true');
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+
+    const { unmount } = render(React.createElement(QuotationPrintView, { quotation: FAKE_QUOTATION, clinic: CLINIC, onClose: () => {} }));
+    const quoteSw = screen.getByTestId('receipt-info-toggle-quotation');
+    expect(quoteSw.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(quoteSw); // OFF
+    expect(localStorage.getItem('lover_receipt_show_address')).toBe('false');
+    unmount();
+
+    render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: CLINIC, onClose: () => {} }));
+    const saleSw = screen.getByTestId('receipt-info-toggle-sale');
+    expect(saleSw.getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByText(/HN LC-F-001.*·.*โทร\.\s*0811111111/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('F3: persistence — toggle in Sale, close, re-open DIFFERENT sale → state preserved', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+
+    const { unmount } = render(React.createElement(SalePrintView, { sale: FAKE_SALE, clinic: CLINIC, onClose: () => {} }));
+    const sw1 = screen.getByTestId('receipt-info-toggle-sale');
+    fireEvent.click(sw1); // ON
+    unmount();
+
+    // "Different sale" — same component, different sale ID + customer
+    const SALE_2 = { ...FAKE_SALE, id: 'INV-F-V114-2', customerName: 'นาย OTHER', customerHN: 'LC-F-002', receiptInfo: { ...FAKE_SALE.receiptInfo, name: 'นาย OTHER', taxId: '2222222222', phone: '0822222222' } };
+    render(React.createElement(SalePrintView, { sale: SALE_2, clinic: CLINIC, onClose: () => {} }));
+    const sw2 = screen.getByTestId('receipt-info-toggle-sale');
+    expect(sw2.getAttribute('aria-checked')).toBe('true'); // state preserved
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*2222222222/)).toBeTruthy();
+  });
+});
+</code></pre>
+
+  <div class="step">
+    <input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run — verify F1-F3 pass</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run tests/v114-receipt-info-toggle.test.jsx</code></p>
+  <p>Expected: All V114 tests (~34 total: H + SG + R + F) PASS.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Commit</strong></label>
+  </div>
+
+<pre><code>git add tests/v114-receipt-info-toggle.test.jsx
+git commit -m "test(receipt): V114 — Rule I cross-view flow-simulate (F1-F3)
+
+V114 Task 4: F1 Sale→Quotation state inheritance; F2 reverse direction;
+F3 cross-receipt persistence (different sale, same hook). Locks the
+Q5=A shared-key contract end-to-end across both PrintViews.
+~34/34 V114 tests PASS."
+</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Final verify — full vitest + build + Rule S real-browser screenshot + push</h3>
+  <p><strong>Files:</strong> none modified — verification + commit/push only.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Full vitest sweep — verify no V21 lock-ins broke</strong></label>
+  </div>
+
+  <p>Run: <code>npm test -- --run</code></p>
+  <p>Expected: previous green baseline + ~34 V114 = <em>baseline_pre_V114</em>+34 PASS / 0 FAIL.</p>
+  <p>If any pre-existing test fails: it's likely a V21 lock-in on the OLD V113-C unconditional block render. Triage per Rule P Step 5 — update locked tests with V114 marker explaining the new conditional, never weaken the V114 contract to make stale tests pass.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Build check</strong></label>
+  </div>
+
+  <p>Run: <code>npm run build</code></p>
+  <p>Expected: clean build (~3s), no esbuild errors. BackendDashboard chunk size delta should be &lt; +2 KB (single new hook ~40 LOC + 2 inline switches).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Rule S Chrome MCP real-browser screenshot (Rule Q L1)</strong></label>
+  </div>
+
+  <p>Start dev server if not already running, then use Chrome MCP (per Rule S — standing authorization):</p>
+
+  <ol>
+    <li><code>preview_start</code> on the dev server URL.</li>
+    <li>Navigate to backend → Sales tab → find INV-20260520-0010 (or any test sale with populated receipt-info) → click 🖨.</li>
+    <li><code>preview_screenshot</code> the preview header — confirm switch is OFF (gray) by default; customer block shows compact "HN · โทร." line; receipt-info block hidden.</li>
+    <li><code>preview_click</code> the switch (selector: <code>[data-testid="receipt-info-toggle-sale"]</code>) — confirm aria-checked flips to "true".</li>
+    <li><code>preview_screenshot</code> after click — confirm full block appears (taxId + address + phone + name).</li>
+    <li>Verify switch is visually compact and sits inside the header bar (NOT overflowing).</li>
+    <li>Cross-view: close preview, open a quotation → confirm switch shows ON (Q5=A shared state).</li>
+  </ol>
+
+  <p>Save screenshots: switch-OFF state + switch-ON state + cross-view verification. Attach paths to the commit message (or to the next session-end note).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Print-CSS verification (Rule S print preview)</strong></label>
+  </div>
+
+  <p>Inside Chrome MCP preview:</p>
+  <ul>
+    <li>Trigger <code>window.print()</code> via <code>preview_eval</code> OR Cmd+P / Ctrl+P.</li>
+    <li>Confirm the print-preview pane shows ONLY the A4 document (no sticky header bar visible, no switch visible).</li>
+    <li>Toggle the print dialog OFF, click switch ON, re-trigger print — confirm printed page now includes the receipt-info block while STILL hiding the switch chrome.</li>
+  </ul>
+
+  <p>This validates Acceptance Criterion #3 (switch chrome NEVER appears on printed PDF).</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Final commit + push</strong></label>
+  </div>
+
+<pre><code>git add -A  # only if any tracked-file changes (e.g. session notes)
+git status  # verify no stray files staged
+
+# If active.md / SESSION_HANDOFF need updating with V114 status,
+# update them HERE (before final commit) per /session-end discipline.
+
+git push origin master
+</code></pre>
+
+  <p>Verify: <code>git log -5 --oneline</code> shows Task 1-4 commits + any verification/state-update commit. <code>git push origin master</code> succeeds.</p>
+
+  <div class="step">
+    <input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 6: Honest scope statement (Rule Q discipline)</strong></label>
+  </div>
+
+  <p>State explicitly in the final report:</p>
+  <ul>
+    <li><strong>L2 verified</strong>: Hook unit (H1-H6) + source-grep regression (SG1-SG6) + RTL render (R1-R10) + Rule I cross-view flow-simulate (F1-F3) = ~34 vitest tests + full-suite green.</li>
+    <li><strong>L1 verified (Rule S Chrome MCP)</strong>: real-browser screenshot of switch state changes + print preview confirming chrome hidden + cross-view state inheritance. Screenshots attached.</li>
+    <li><strong>NOT deployed</strong>: V112-A + V113 + V113-C + V114 batch awaits explicit user "deploy" verb (V18 lock).</li>
+    <li><strong>Out-of-scope reaffirmed</strong>: no backend writes, no rules, no migration, no per-customer override, no audit doc. Pure renderer-level addition.</li>
+  </ul>
+</div>
+
+<h2>Self-review checklist (post-write)</h2>
+
+<table>
+  <tr><th>Item</th><th>Status</th></tr>
+  <tr><td>Spec coverage — every spec section maps to a task</td><td>✅ Q1-Q5 decisions all in T2/T3; Mockup states 1-4 covered in T2+T3; Flow F1-F5 covered in T1 (cross-tab F-D = H4) + T4 (cross-view F-C = F1/F2/F3); all 8 acceptance criteria covered by tests R1-R10 + F1-F3 + T5 Rule S print verify</td></tr>
+  <tr><td>No placeholders ("TBD" / "implement later" / "similar to Task N")</td><td>✅ Every step has concrete code or exact commands</td></tr>
+  <tr><td>Type consistency across tasks</td><td>✅ <code>useReceiptInfoToggle()</code> + <code>{showAddress, setShowAddress}</code> identical across T1/T2/T3; <code>data-testid</code>s differentiated (sale vs quotation)</td></tr>
+  <tr><td>Mockup Design section present (HTML+CSS, renderable)</td><td>✅ Header bar OFF + ON states; customer block compact + full; edge no-phone</td></tr>
+  <tr><td>Flow section present (5 flow diagrams F-A through F-E)</td><td>✅ Bootstrap + toggle+print + cross-receipt + cross-tab + print-CSS</td></tr>
+  <tr><td>Task count tight (no padding, per feedback_keep_task_count_tight)</td><td>✅ 5 tasks (hook + Sale + Quote + cross-view simulate + final verify); each is a coherent subagent-dispatchable chunk</td></tr>
+  <tr><td>TDD ordering (failing test → impl → green)</td><td>✅ Every task: test write → run fail → implement → run pass → commit</td></tr>
+  <tr><td>Rule Q honored (L1 + L2 evidence, honest scope)</td><td>✅ T5 includes Rule S Chrome MCP real-browser screenshots + print-CSS verification + explicit honest-scope statement</td></tr>
+  <tr><td>Rule I full-flow simulate (cross-view shared state)</td><td>✅ T4 F1-F3 chains real Sale → real Quotation through real shared localStorage</td></tr>
+</table>
+
+<h2>Execution Handoff</h2>
+
+<blockquote>
+  <p><strong>Plan complete and saved to <code>docs/superpowers/plans/2026-05-23-receipt-info-toggle.html</code></strong> (HTML format with embedded Mockup Design + Flow — open in browser for visual preview).</p>
+
+  <p><strong>Two execution options:</strong></p>
+  <ol>
+    <li><strong>Subagent-Driven (recommended for sequential isolation)</strong> — Dispatch a fresh subagent per task (T1 → T2 → T3 → T4 → T5). Each subagent: read plan task + write tests + implement + run tests + commit. Two-stage review (spec compliance + code quality) between tasks. Subagent rate-limit cap ~5 parallel; T1-T5 are sequential (each depends on prior).</li>
+    <li><strong>Inline Execution</strong> — Execute T1-T5 in this session using <code>executing-plans</code> skill. Batch through with checkpoint after each task. Suitable since task count is small (5) and surfaces are tightly coupled.</li>
+  </ol>
+
+  <p><strong>Recommendation:</strong> Inline execution. Reasoning: V114 has only 5 tasks across 4 small files with strong interdependence (T2/T3 mirror each other; T4 imports both; T5 verifies all). Subagent autocompact thrashing on tightly-coupled tasks (V81/V86 lesson) outweighs the parallel benefit. Single-session execution is faster and the test bank accumulates progressively in one file.</p>
+</blockquote>
+
+</body>
+</html>
