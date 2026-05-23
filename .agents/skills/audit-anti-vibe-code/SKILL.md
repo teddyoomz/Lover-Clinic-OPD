@@ -2760,10 +2760,84 @@ Every RECEIPT renderer (`SalePrintView`, `QuotationPrintView`, and any future cu
 
 **Cross-link**: V111 V-entry in `.claude/rules/00-session-start.md` § 2 + this AV111 entry + `tests/v111-receipt-course-name-override.test.js` (A1-A10 source-grep + B1-B3 canonical mapper contract + C1-C11 fallback chain + D1-D6 Rule I flow-simulate + E1 AV111 presence).
 
+### AV112 — Sale write-paths MUST resolve customer identity at BOTH create + update chokepoints; empty caller-side customerName/HN with valid customerId MUST NEVER reach Firestore (2026-05-23 V112 update-path resolver + historical backfill)
+
+User reported (INV-20260520-0010, with screenshot): receipt rendered "—" under ลูกค้า even though the sale's customerId resolves cleanly to a real customer doc. Rule R diag: `customerName="" customerHN=""` with `customerId="LC-26000074"` → `firstname="นิรุต" lastname="ชำนาญปรุ"` on the customer doc. createdAt === updatedAt → never edited; empty name was written at CREATE time (pre-V108 deploy window) AND would have been re-written empty by any subsequent edit because `updateBackendSale` was the missed sibling chokepoint.
+
+**Rule**: every sale write path that accepts user-supplied customer identity (`customerName`, `customerHN`) MUST run a defensive resolver chokepoint:
+
+1. **createBackendSale chokepoint** (V108, `backendClient.js:3115-3132`): when caller-side `customerName`/`HN` is empty AND `customerId` is present → resolve from `be_customers[customerId]` via `resolveCustomerDisplayName` / `resolveCustomerHN` (V105 canonical helpers) → stamp resolved value AFTER `_normalizeSaleData` spread so resolved wins.
+
+2. **updateBackendSale chokepoint** (V112, `backendClient.js:3174-3243` — `_resolveSaleCustomerForUpdate`): same resolution as V108, plus a stricter contract: when caller-side is empty AND no `customerId` resolves (neither in patch nor existing doc), the helper MUST `delete patch.customerName` and `delete patch.customerHN` so `updateDoc` preserves the existing on-disk value rather than overwriting with empty string. This mirrors the V102 `branchId` defensive delete pattern at the same write-path.
+
+3. **Both chokepoints are non-fatal**: a missing or unreadable customer doc leaves the patch as-is (try/catch swallow); the helper never breaks the write. V108's contract preserved verbatim in V112.
+
+**Grep target (regression — `tests/v112-update-sale-customer-resolver-and-backfill.test.js`)**:
+- `src/lib/backendClient.js` `updateBackendSale` body MUST contain `_resolveSaleCustomerForUpdate(` (A1).
+- `src/lib/backendClient.js` MUST define `async function _resolveSaleCustomerForUpdate(saleId, data, patch)` (A2).
+- The helper body MUST reference `customerDoc(cid)` AND `resolveCustomerDisplayName` (A3).
+- The helper body MUST contain `delete patch.customerName` AND `delete patch.customerHN` for the no-customerId branch (A4 — protects against the empty-string clobber).
+- The V112 marker comment "chokepoint extension of V108" MUST exist (A5).
+- The helper invocation MUST happen BEFORE `updateDoc(saleDoc(saleId), patch)` (A6 — order matters; otherwise patch is committed with un-resolved empties).
+
+**Anti-regression**: a future commit that removes `_resolveSaleCustomerForUpdate(` from `updateBackendSale`, or that drops the `delete patch.customerName/HN` branch, fails the test bank.
+
+**Historical artifact backfill (V112 one-time Rule M)**: every sale doc with empty customerName/HN + valid customerId is backfilled via `scripts/v112-backfill-receipt-course-name-and-customer.mjs`. Forensic stamps `_v112BackfilledAt` + `_v112BackfilledFrom` + audit doc + idempotent (re-run with `--apply` yields 0 writes once stamped). Same script piggy-backs the V111 receipt-course-name backfill (Bug 2 — user explicit one-time override of snapshot semantic).
+
+**Class-of-bug**: V12 multi-writer-sweep at sale-write-path family — V108 fixed one writer; V112 closes the sibling. Same class as V36-quater (multi-call-site) + V44 (canonical-mapper-bypass at buy-fetcher) + V49 (canonical-shape-mapper at picker-fetch) + V111 (display-layer multi-reader-sweep at receipt-render-boundary). The architectural backstop pattern: **every write-path chokepoint that accepts identity fields MUST run the resolver, AND the resolver MUST delete-rather-than-clobber when the resolution fails**. Without the delete, the resolver's safety becomes its own footgun (empty-string overwrites still happen for the failing branch).
+
+**Sanctioned exception**: NONE. New sale-write paths added going forward (e.g. `convertQuotationToSale`, bulk-import endpoints, admin SDK ops) MUST follow the same chokepoint pattern. Extend AV112 enforcement when new write paths land.
+
+**Cross-link**: V112 V-entry in `.claude/rules/00-session-start.md` § 2 + this AV112 entry + `tests/v113-receipt-live-resolve-and-update-resolver.test.jsx` § A+B (V112-A source-grep + resolver decision matrix; V112-B backfill tests DELETED with the script per V113 reset) + Rule R diag `scripts/diag-v112-sale-and-course-override.mjs` (read-only prod inspector — preserved as Rule R tool).
+
+**HONEST CORRECTION (V113, 2026-05-23 EOD+1 LATE+1)**: V112 also shipped a Rule M backfill script `scripts/v112-backfill-receipt-course-name-and-customer.mjs` (V112-B) that admin-SDK-stamped `receiptCourseName` + `customerName` directly onto sale docs. User caught this as a Rule Q V66 / Q-vis violation ("ค** เข้าข้างตัวเองเหี้ยๆ ... ให้มึงใช้ระบบที่แก้ เจนใหม่ ไม่ใช่ dry run ไปแปะทีหลังแบบโกง") — the backfill produced "fixed-looking" receipts without changing the SYSTEM code path. **V113 superseded V112-B**: deleted the backfill script, reverted the stamps via `scripts/v113-revert-v112-backfill.mjs`, and implemented live-resolve at the renderer (V113-A SalePrintView, V113-B QuotationPrintView) per AV113. **V112-A code fix (updateBackendSale chokepoint) is PRESERVED** — it's a legitimate write-path snapshot-on-write resolver that keeps the doc data correct for non-renderer consumers (reports, exports, audit). V113 live-resolve handles the renderer concern separately.
+
+### AV113 — Receipt + Quotation renderers MUST live-resolve master at render time; snapshot is fallback only (deleted-master defense) (2026-05-23 V113 live-resolve mandate)
+
+Origin: V112-B Rule Q V66 / Q-vis violation. Admin-SDK backfill scripts that stamp display values onto persisted docs to "fix the display" are FORBIDDEN as the primary fix for any display bug. The system's RENDERER must do the work.
+
+**Rule**: every customer-facing receipt / quotation / invoice / print-view renderer that displays a course name (or any other field that admin can rename on the master) MUST:
+
+1. **Fetch the master at render time** via the canonical exported helper (`getCourse(id)` from `scopedDataLayer.js`, `getCustomer(id)`, etc.). Use `useState` + `useEffect` with a cancelled-flag guard to avoid late updates on unmount.
+
+2. **Prefer LIVE over snapshot** in the fallback chain:
+   - Priority 1: live master's field (e.g. `master.receiptCourseName`)
+   - Priority 2: snapshot on the doc (V111 buy-fetcher write + V112-A update-resolver write)
+   - Priority 3: original / id / empty
+   - The snapshot survives ONLY as defensive fallback for the deleted-master case (master doc gone → renderer cannot live-resolve → falls through to what was stamped at write time → preserves display fidelity).
+
+3. **Render snapshot synchronously on initial render** (before useEffect fires) so the receipt opens immediately. Switch to live value on next render once the master arrives. No skeleton/loading flash needed because snapshot is usually correct.
+
+4. **Re-derive memoized rows** when liveCourses state updates (include `liveCourses` in the `useMemo` deps).
+
+**Grep target (regression — `tests/v113-receipt-live-resolve-and-update-resolver.test.jsx`)**:
+- `src/components/backend/SalePrintView.jsx` MUST import `{ getCourse, getCustomer }` from `scopedDataLayer.js` (C1).
+- MUST import `{ resolveCustomerDisplayName, resolveCustomerHN }` from `customerDisplayName.js` (C2).
+- MUST declare `[liveCourses, setLiveCourses]` + `[liveCustomer, setLiveCustomer]` useState (C3).
+- MUST have a useEffect that calls `getCourse(...)` (C4) and `getCustomer(s.customerId)` (C5).
+- MUST define `function liveReceiptName(courseLine)` that references `liveCourses` + `receiptCourseName` (C6).
+- Grouped course row MUST use `name: liveReceiptName(c)` (C7).
+- `rows` useMemo MUST include `liveCourses` in deps (C8).
+- Customer header MUST chain `s.customerName || resolveCustomerDisplayName(liveCustomer) || ...` (C9).
+- MUST NOT reference any V112-B backfill script (C10).
+- Same shape mirrored to `QuotationPrintView.jsx` (D1-D6).
+
+**Anti-regression (Rule Q V66 / Q-vis enforcement)**:
+- An admin-SDK backfill script `scripts/v***-backfill-*.mjs` that writes display values onto a doc to "fix" a display bug is FORBIDDEN as the primary fix. Such scripts are caught by `tests/v113-*.F2` (V112-B script DELETED) and the AV113 grep above.
+- New customer-facing renderers added going forward MUST use the live-resolve pattern. Adding a renderer that reads only from the sale snapshot without fetching the master = AV113 violation.
+
+**Sanctioned exception**: NONE. The snapshot-only fallback is preserved IN-CHAIN, not as a separate code path. There is no scenario where a renderer can skip live-resolve and use snapshot exclusively (that's V112-B re-introduction).
+
+**When snapshot semantic IS required** (separate from this rule): money fields (sale.billing.netTotal, sale.payment.channels[].amount, course price at time of purchase) MUST snapshot at write time and the renderer MUST NOT live-resolve. Those preserve accounting/audit integrity regardless of master changes. AV113 covers display-name fields only; money fields are out of scope.
+
+**Class-of-bug**: Rule Q V66 / Q-vis violation family. Admin-SDK data patches to fix display = "เข้าข้างตัวเอง" / "โกง". The architectural answer is always to fix the RENDERER (system fix), not patch the data. AV113 codifies this discipline at the renderer-implementation boundary.
+
+**Cross-link**: V113 V-entry in `.claude/rules/00-session-start.md` § 2 + this AV113 entry + `tests/v113-receipt-live-resolve-and-update-resolver.test.jsx` (A-G covering V112-A preservation + V113 live-resolve source-grep + pure helper unit + RTL with mocked fetch) + `scripts/v113-revert-v112-backfill.mjs` (one-time revert of the V112-B cheat) + user-memory `feedback_no_admin_sdk_backfill_to_fix_display.md` (lesson lock).
+
 ## Priority
 
 **CRITICAL**: AV4 (leaked credentials), AV5 (admin uid leak), AV6 (open rules), AV13 (long-lived auth), AV15 (silent-swallow + missing token revoke), AV17 (list spread order — silent no-op), AV18 (migrate-fn zero-arity dropping branchId — silent zombie creation), **AV52 (backup file integrity — admin trusts the file before restore)**, **AV53 (autoBackupRef integrity gate — prevents wipe with stale/tampered backup)**, **AV54 (subcoll cascade — prevents orphan subcoll docs)**, **AV55 (72h-grace — prevents accidental safety-net deletion)**, **AV60 (React hook import drift — runtime crash takes down entire tree)**, **AV61 (chat fall-through MUST be NAKHON-gated — cross-branch user-visible leak)**, **AV62 (whole-system backup manifestHash integrity — tampered backup detection)**, **AV63 (whole-system cron CRON_SECRET gate + concurrency lock)**, **AV64 (whole-system retention discipline)**, **AV19 elevation V81 (whole-system Replace MUST autoBackupRef)**, **AV65 (V81-fix1: Firestore-native types MUST encode through encodeFirestoreData before JSON.stringify — silent Timestamp degradation in restore)**, **AV66 (V81-fix2: whole-system Replace mode MUST gate on password-reset ack + force reset emails — silent staff lockout prevention)**.
-**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**, **AV104 (Fabric canvas editor MUST paint via synchronous renderAll, never the rAF-deferred request-render path — blank live canvas + correct save when rAF is unreliable)**, **AV105 (Fabric-wrapped canvas element MUST NOT set an inline CSS background — Fabric copies it to the opaque upper-canvas which covers the lower-canvas → blank live + correct save)**, **AV106 (tablet shape commit MUST use the drag-delta, not object-type geometry — the arrow is a Group; text creation MUST leave resize/move handles, not auto-enter editing)**, **AV107 (tablet gesture listeners MUST be capture-phase on the OWNED wrapper + stopPropagation isolation, NEVER raw listeners on fc.upperCanvasEl — iPad black-screen on 2-finger zoom)**, **AV108 (staff-chat multi-image: per-message Storage folder + retention/orphan prefix-sweep + admin-SDK-only delete — no orphan, "ลบให้เกลี้ยง")**, **AV111 (V111: course buy-fetchers MUST propagate receipt_course_name → receiptCourseName onto purchasedItem; receipt renderer MUST prefer receiptCourseName — silent override loss on receipts / quotations)**.
+**HIGH**: AV2 (raw date input), AV3 (Math.random tokens), AV11 (N+1 reads), AV14 (silent cleanup), AV16 (source-grep alone for visual), AV29 (per-branch settings multi-reader-sweep — silent override loss), **AV77 (V82-fix2: transient workflow opt-out flag MUST be respected by ALL sibling tab-routing filters — silent wrong-tab routing)**, **AV78 (V83: modal backdrop click MUST NOT close — silent form-data loss / user trust damage)**, **AV79 (V83-followup-3: perm/tab mapping completeness — silent permission grant when adminOnly:true short-circuits requires)**, **AV101 (tablet chart editor isolation — TFP-untouched + closed writer list + images-via-Storage)**, **AV102 (image transport MUST normalize via resolveToDataUrl — model imageUrl is NOT a data URL; tablet MUST load a late templateImageUrl — instant-pop race)**, **AV103 (tablet chart result MUST transport fabricJson — never fabricJson:null; lossless per-tool round-trip to PC)**, **AV104 (Fabric canvas editor MUST paint via synchronous renderAll, never the rAF-deferred request-render path — blank live canvas + correct save when rAF is unreliable)**, **AV105 (Fabric-wrapped canvas element MUST NOT set an inline CSS background — Fabric copies it to the opaque upper-canvas which covers the lower-canvas → blank live + correct save)**, **AV106 (tablet shape commit MUST use the drag-delta, not object-type geometry — the arrow is a Group; text creation MUST leave resize/move handles, not auto-enter editing)**, **AV107 (tablet gesture listeners MUST be capture-phase on the OWNED wrapper + stopPropagation isolation, NEVER raw listeners on fc.upperCanvasEl — iPad black-screen on 2-finger zoom)**, **AV108 (staff-chat multi-image: per-message Storage folder + retention/orphan prefix-sweep + admin-SDK-only delete — no orphan, "ลบให้เกลี้ยง")**, **AV111 (V111: course buy-fetchers MUST propagate receipt_course_name → receiptCourseName onto purchasedItem; receipt renderer MUST prefer receiptCourseName — silent override loss on receipts / quotations)**, **AV112 (V112: sale write-paths MUST resolve customer identity at BOTH create + update chokepoints; empty caller-side customerName/HN with valid customerId MUST NEVER reach Firestore — silent name-loss on edit / pre-V108 historical artifacts)**, **AV113 (V113: receipt + quotation renderers MUST live-resolve master at render time; snapshot is fallback only — admin-SDK backfill scripts to "fix display" are FORBIDDEN per Rule Q V66 / Q-vis)**.
 **MEDIUM**: AV1 (dup components), AV9 (canonical helpers not reused), AV10 (copy-paste UI), AV40 (patientData.ud_* multi-reader-sweep).
 **LOW**: AV7, AV8, AV12 — hygiene over time.
 

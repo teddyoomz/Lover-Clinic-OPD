@@ -4,11 +4,16 @@
 // Print via window.print() — @media print strips the modal chrome and prints
 // only the document surface.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Download } from 'lucide-react';
 import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { thaiTodayISO } from '../../utils.js';
+// V113 (2026-05-23 EOD+1 LATE+1) — live-resolve receipt name + customer at
+// render time (mirror SalePrintView pattern). Snapshot stays as fallback
+// for deleted-master defense. AV113.
+import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
+import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -45,29 +50,70 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
   const clinic = useEffectiveClinicSettings(clinicSettings);
   const accent = clinic.accentColor || '#dc2626';
 
+  // V113 — live-resolve state. Mirror SalePrintView pattern.
+  const [liveCourses, setLiveCourses] = useState(null);
+  const [liveCustomer, setLiveCustomer] = useState(null);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // V113 live-resolve — fetch master courses + customer on mount.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const courseIds = new Set();
+      for (const c of (q.courses || [])) {
+        const id = c && (c.courseId != null ? c.courseId : c.id);
+        if (id != null) courseIds.add(String(id));
+      }
+      const entries = await Promise.all([...courseIds].map(async (id) => {
+        try {
+          const m = await getCourse(id);
+          return m ? [id, m] : null;
+        } catch { return null; }
+      }));
+      if (cancelled) return;
+      const map = new Map();
+      for (const e of entries) if (e) map.set(e[0], e[1]);
+      setLiveCourses(map);
+      if (q.customerId) {
+        try {
+          const cust = await getCustomer(q.customerId);
+          if (!cancelled) setLiveCustomer(cust || null);
+        } catch { /* non-fatal */ }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [q.quotationId, q.id, q.customerId, q.courses]);
+
+  // V113 — live-resolve helper for quotation course rows.
+  function liveQuoteCourseName(x) {
+    const id = x && (x.courseId != null ? x.courseId : x.id);
+    const master = liveCourses && id != null ? liveCourses.get(String(id)) : null;
+    const liveOverride = master && typeof master.receiptCourseName === 'string'
+      ? master.receiptCourseName.trim() : '';
+    return liveOverride || x.receiptCourseName || x.courseName || x.courseId;
+  }
+
   // Flatten all 4 categories into one display list with category labels.
   const rows = useMemo(() => {
     const out = [];
-    // V111 (2026-05-23 EOD+1 LATE) — receipt name override on quotation
-    // prints (customer-facing). QuotationFormModal stamps `receiptCourseName`
-    // when admin set "ชื่อคอร์ส (แสดงในใบเสร็จ)" on the master course.
-    // Prefer override; fall back to original courseName for legacy quotes
-    // pre-V111 and courses without the override field. The trailing `...x`
-    // spread doesn't override `name` because quotation course entries have
-    // no top-level `name` field (QuotationFormModal uses `courseName`).
-    // AV111.
-    (q.courses || []).forEach((x) => out.push({ kind: 'course', label: 'คอร์ส', name: x.receiptCourseName || x.courseName || x.courseId, ...x }));
+    // V113 — live-resolve course name from master at render time. Snapshot
+    // fields on the quotation doc (V111 + V112-A writes) survive as
+    // fallback for deleted-master defense. AV113. Supersedes V112-B
+    // admin-SDK backfill cheat.
+    (q.courses || []).forEach((x) => out.push({ kind: 'course', label: 'คอร์ส', name: liveQuoteCourseName(x), ...x }));
     (q.products || []).forEach((x) => out.push({ kind: 'product', label: 'สินค้า', name: x.productName || x.productId, ...x }));
     (q.promotions || []).forEach((x) => out.push({ kind: 'promotion', label: 'โปรโมชัน', name: x.promotionName || x.promotionId, ...x }));
     (q.takeawayMeds || []).forEach((x) => out.push({ kind: 'med', label: 'ยา', name: x.productName || x.productId, ...x }));
     return out;
-  }, [q.courses, q.products, q.promotions, q.takeawayMeds]);
+    // V113 — include liveCourses in deps so quotation re-renders when
+    // live master data arrives. Snapshot is the bootstrap render.
+  }, [q.courses, q.products, q.promotions, q.takeawayMeds, liveCourses]);
 
   const subtotal = rows.reduce((sum, r) => sum + computeLineTotal(r), 0);
 
@@ -173,8 +219,21 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
         <div className="grid grid-cols-12 gap-x-5 gap-y-3 mb-6 text-[12px]">
           <div className="col-span-7">
             <div className="text-[10px] tracking-widest uppercase text-neutral-500 mb-0.5">เรียน (Customer)</div>
-            <div className="text-[15px] font-bold text-neutral-900">{q.customerName || '—'}</div>
-            {q.customerHN && <div className="text-[11px] text-neutral-600 mt-0.5">HN {q.customerHN}</div>}
+            {/* V113 — live-resolve customer display (mirror SalePrintView).
+                Snapshot wins when present (admin-explicit); live customer
+                doc fills in when snapshot empty. AV113. */}
+            <div className="text-[15px] font-bold text-neutral-900">
+              {q.customerName
+                || (liveCustomer && resolveCustomerDisplayName(liveCustomer))
+                || (q.customerHN ? `HN ${q.customerHN}` : '')
+                || (liveCustomer && resolveCustomerHN(liveCustomer) && `HN ${resolveCustomerHN(liveCustomer)}`)
+                || '—'}
+            </div>
+            {(q.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              <div className="text-[11px] text-neutral-600 mt-0.5">
+                HN {q.customerHN || resolveCustomerHN(liveCustomer)}
+              </div>
+            )}
             {/* V33-customer-create — receipt-info block snapshot */}
             {q.receiptInfo && (q.receiptInfo.taxId || q.receiptInfo.address || (q.receiptInfo.name && q.receiptInfo.name !== q.customerName)) && (
               <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">

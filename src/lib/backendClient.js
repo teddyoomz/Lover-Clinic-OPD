@@ -3171,8 +3171,84 @@ export async function updateBackendSale(saleId, data) {
   } else {
     delete patch.branchId;
   }
+  // V112 (2026-05-23 EOD+1 LATE+1) — chokepoint extension of V108
+  // _resolveSaleCustomerIdentity to the update path. User report (INV-
+  // 20260520-0010): receipt printed "—" under ลูกค้า even though the
+  // sale's customerId resolves cleanly to a real customer doc. V108
+  // closed the CREATE chokepoint but updateBackendSale was the missing
+  // V12 multi-writer-sweep instance — SaleTab edit form passes
+  // {customerName, customerHN} verbatim from React state, JSON-roundtrip
+  // `clean()` preserves empty strings (does NOT drop them), and updateDoc
+  // overwrites with empty. Fix: when the patch carries empty
+  // customerName/HN AND a customerId is available (in patch OR in
+  // existing doc), resolve from be_customers and stamp the resolved
+  // value on the patch (resolved wins over empty). Symmetric with V108
+  // create chokepoint. Defensive (try/catch swallow) — a missing or
+  // unreadable customer leaves values as-is (V108 contract preserved).
+  // AV112 locks this. Note: we resolve only when the caller-side value
+  // is empty — non-empty caller values are PRESERVED verbatim (admin
+  // explicit rename of receipt-side display name still works).
+  await _resolveSaleCustomerForUpdate(saleId, data, patch);
   await updateDoc(saleDoc(saleId), patch);
   return { success: true };
+}
+
+/** V112 helper — defensive resolver for updateBackendSale.
+ *
+ * Decides whether to STAMP customerName/HN onto the update patch:
+ *   1. If `data.customerName` is non-empty → trust caller, no resolution.
+ *   2. If `data.customerName` is empty AND a customerId is available
+ *      (either in `data.customerId` OR on the existing sale doc) AND
+ *      the be_customers doc resolves → stamp resolved name on patch.
+ *   3. If `data.customerName` is empty AND no customerId is resolvable
+ *      → REMOVE customerName from patch entirely (preserve existing
+ *      doc value via updateDoc no-op semantic; matches V102 branchId
+ *      pattern). Without this, an empty string in patch would CLOBBER
+ *      the existing name on disk.
+ * Same logic for customerHN.
+ *
+ * Idempotent + non-fatal: if anything fails, the patch is left as-is
+ * and updateDoc proceeds. V108's contract preserved.
+ */
+async function _resolveSaleCustomerForUpdate(saleId, data, patch) {
+  try {
+    const callerName = (data && typeof data.customerName === 'string') ? data.customerName.trim() : '';
+    const callerHN = (data && typeof data.customerHN === 'string') ? data.customerHN.trim() : '';
+    // Fast path: both non-empty → trust caller verbatim.
+    if (callerName && callerHN) return;
+    // Resolve customerId: caller's patch OR existing doc.
+    let cid = data && data.customerId;
+    if (!cid) {
+      try {
+        const existingSnap = await getDoc(saleDoc(saleId));
+        if (existingSnap.exists()) cid = existingSnap.data().customerId;
+      } catch { /* non-fatal */ }
+    }
+    if (cid) {
+      try {
+        const custSnap = await getDoc(customerDoc(cid));
+        if (custSnap.exists()) {
+          const c = custSnap.data();
+          if (!callerName) {
+            const resolved = resolveCustomerDisplayName(c);
+            if (resolved) patch.customerName = resolved;
+            else delete patch.customerName; // leave existing intact
+          }
+          if (!callerHN) {
+            const resolved = resolveCustomerHN(c);
+            if (resolved) patch.customerHN = resolved;
+            else delete patch.customerHN;
+          }
+          return;
+        }
+      } catch { /* non-fatal */ }
+    }
+    // No customerId resolvable OR customer doc missing: don't clobber
+    // existing values with empties — DELETE empty fields from patch so
+    // updateDoc preserves on-disk state.
+    if (!callerName) delete patch.customerName;
+    if (!callerHN) delete patch.customerHN;
+  } catch { /* non-fatal — leave patch as caller submitted */ }
 }
 
 /** Delete a sale */

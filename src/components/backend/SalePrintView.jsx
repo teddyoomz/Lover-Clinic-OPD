@@ -3,12 +3,20 @@
 // language as QuotationPrintView (accent stripe + tabular-nums + Thai พ.ศ.
 // dates) but labels as "ใบเสร็จ/ใบขาย" with payment status displayed.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer } from 'lucide-react';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { thaiTodayISO } from '../../utils.js';
+// V113 (2026-05-23 EOD+1 LATE+1) — live-resolve at render time.
+// Receipt name override + customer name fetched fresh from master at every
+// open. The snapshot on the sale doc (V111 + V112-A writes) stays as
+// fallback for the deleted-master defensive case. Replaces V112-B
+// admin-SDK backfill (Rule Q V66 violation — user caught).
+// AV113: receipt renderer MUST live-resolve; snapshot is fallback only.
+import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
+import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -70,11 +78,77 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
   const clinic = useEffectiveClinicSettings(clinicSettings);
   const accent = clinic.accentColor || '#dc2626';
 
+  // V113 (2026-05-23 EOD+1 LATE+1) — live-resolve state. Renderer fetches
+  // the master course doc for each course line + the customer doc on mount
+  // so the displayed receipt ALWAYS reflects current master, not a stale
+  // snapshot. Snapshot value (V111 buy-fetcher stamps) stays in the fallback
+  // chain as defensive backup for the deleted-master case. AV113.
+  const [liveCourses, setLiveCourses] = useState(null); // Map<id, masterDoc> | null = still loading
+  const [liveCustomer, setLiveCustomer] = useState(null);
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // V113 live-resolve effect — fires on sale.saleId / customerId change.
+  // Defensive: any fetch failure is swallowed; snapshot fallback still
+  // renders. Cancelled-flag guards against late updates on unmount.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      // Collect course IDs from BOTH grouped + legacy-flat shapes.
+      const courseIds = new Set();
+      const src = s.items;
+      if (src && !Array.isArray(src) && typeof src === 'object') {
+        for (const c of (src.courses || [])) {
+          if (c && c.id != null) courseIds.add(String(c.id));
+        }
+      } else if (Array.isArray(src)) {
+        for (const it of src) {
+          if (it && it.courseId != null) courseIds.add(String(it.courseId));
+        }
+      }
+      // Parallel fetch all masters; tolerate individual failures.
+      const entries = await Promise.all([...courseIds].map(async (id) => {
+        try {
+          const master = await getCourse(id);
+          return master ? [id, master] : null;
+        } catch { return null; }
+      }));
+      if (cancelled) return;
+      const map = new Map();
+      for (const e of entries) if (e) map.set(e[0], e[1]);
+      setLiveCourses(map);
+      // Customer doc — only fetch if customerId present.
+      if (s.customerId) {
+        try {
+          const cust = await getCustomer(s.customerId);
+          if (!cancelled) setLiveCustomer(cust || null);
+        } catch { /* non-fatal */ }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [s.saleId, s.id, s.customerId, s.items]);
+
+  // V113 helper — for a given course-line, prefer the LIVE master's
+  // receiptCourseName, then fall back through V111 snapshot → original
+  // courseName → docId → empty. Mirror this priority in SalePrintView
+  // grouped + legacy-flat readers. AV113.
+  function liveReceiptName(courseLine) {
+    const id = courseLine && courseLine.id != null ? String(courseLine.id) : '';
+    const master = liveCourses ? liveCourses.get(id) : null;
+    const liveOverride = master && typeof master.receiptCourseName === 'string'
+      ? master.receiptCourseName.trim() : '';
+    return liveOverride
+      || courseLine.receiptCourseName
+      || courseLine.name
+      || courseLine.courseName
+      || courseLine.courseId
+      || '';
+  }
 
   // be_sales supports TWO shapes (accept both to avoid crashes):
   //   - GROUPED (canonical — SaleTab writes this): items = { promotions,
@@ -102,14 +176,17 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
           ...c,
           kind: 'course',
           label: 'คอร์ส',
-          // V111 (2026-05-23 EOD+1 LATE) — receipt name override.
-          // Buy-fetcher (SaleTab/TFP) stamps `receiptCourseName` onto the
-          // course line item when admin set "ชื่อคอร์ส (แสดงในใบเสร็จ)"
-          // on the master course. Prefer it over `name` so the receipt
-          // shows the admin-curated label; fall back to original when
-          // empty (legacy sales pre-V111 + courses without override).
-          // AV111.
-          name: c.receiptCourseName || c.name || c.courseName || c.courseId || '',
+          // V113 (2026-05-23 EOD+1 LATE+1) — live-resolve receipt name from
+          // the master course doc fetched in the useEffect above. Priority:
+          // (1) live master receiptCourseName  ← system truth
+          // (2) snapshot receiptCourseName     ← V111/V112-A fallback
+          // (3) snapshot name / courseName / courseId
+          // The renderer ALWAYS displays current-master when available; the
+          // snapshot survives as defensive backup if the master is deleted
+          // (preserves the receipt's display fidelity for legal-record
+          // integrity in that edge case). AV113. Supersedes V112-B admin-
+          // SDK backfill cheat.
+          name: liveReceiptName(c),
         });
       }
       for (const p of (src.products || [])) {
@@ -131,15 +208,23 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
       return out;
     }
     // Legacy flat array path.
-    return (Array.isArray(src) ? src : []).map((it) => ({
-      ...it,
-      kind: it.courseId ? 'course' : (it.isTakeaway ? 'med' : 'product'),
-      label: it.courseId ? 'คอร์ส' : (it.isTakeaway ? 'ยา' : 'สินค้า'),
-      // V111: receiptCourseName takes precedence for course rows. Non-course
-      // rows never have it set → fallback chain unchanged.
-      name: it.receiptCourseName || it.name || it.courseName || it.productName || it.courseId || it.productId || '',
-    }));
-  }, [s.items]);
+    return (Array.isArray(src) ? src : []).map((it) => {
+      const isCourse = !!it.courseId;
+      // V113: legacy-flat course rows go through live-resolve too; the
+      // helper inspects `it.id || it.courseId`. Pass a normalized line.
+      const liveName = isCourse
+        ? liveReceiptName({ ...it, id: it.id != null ? it.id : it.courseId })
+        : null;
+      return {
+        ...it,
+        kind: it.courseId ? 'course' : (it.isTakeaway ? 'med' : 'product'),
+        label: it.courseId ? 'คอร์ส' : (it.isTakeaway ? 'ยา' : 'สินค้า'),
+        name: liveName || it.receiptCourseName || it.name || it.courseName || it.productName || it.courseId || it.productId || '',
+      };
+    });
+    // V113 — re-derive rows when live master data arrives so the receipt
+    // re-renders with current names (not stale snapshot).
+  }, [s.items, liveCourses]);
 
   const subtotal = rows.reduce((sum, r) => sum + computeLineTotal(r), 0);
   const billing = s.billing || {};
@@ -261,8 +346,27 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
         <div className="grid grid-cols-12 gap-x-5 gap-y-3 mb-6 text-[12px]">
           <div className="col-span-7">
             <div className="text-[10px] tracking-widest uppercase text-neutral-500 mb-0.5">ลูกค้า (Customer)</div>
-            <div className="text-[15px] font-bold text-neutral-900">{s.customerName || '—'}</div>
-            {s.customerHN && <div className="text-[11px] text-neutral-600 mt-0.5">HN {s.customerHN}</div>}
+            {/* V113 (2026-05-23 EOD+1 LATE+1) — live-resolve customer display.
+                Priority: (1) snapshot s.customerName (admin-explicit override
+                stays sovereign — V108 + V112-A write paths preserve)
+                          (2) live customer doc via resolveCustomerDisplayName (V105)
+                          (3) HN-only fallback if name unresolvable
+                          (4) '—' last resort.
+                Replaces V112-B admin-SDK backfill. AV113. */}
+            <div className="text-[15px] font-bold text-neutral-900">
+              {s.customerName
+                || (liveCustomer && resolveCustomerDisplayName(liveCustomer))
+                || (s.customerHN ? `HN ${s.customerHN}` : '')
+                || (liveCustomer && resolveCustomerHN(liveCustomer) && `HN ${resolveCustomerHN(liveCustomer)}`)
+                || '—'}
+            </div>
+            {/* V113 — live-resolve HN. Prefer snapshot s.customerHN (admin
+                explicit value), fall back to live customer doc resolver. */}
+            {(s.customerHN || (liveCustomer && resolveCustomerHN(liveCustomer))) && (
+              <div className="text-[11px] text-neutral-600 mt-0.5">
+                HN {s.customerHN || resolveCustomerHN(liveCustomer)}
+              </div>
+            )}
             {/* V33-customer-create — receipt-info block. Renders personal/company/inherit details
                 from the snapshot taken at sale creation. Legacy sales without receiptInfo still show
                 customerName above; if receiptInfo is set + differs from customerName, show it. */}
