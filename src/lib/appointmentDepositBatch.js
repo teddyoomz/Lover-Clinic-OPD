@@ -900,9 +900,52 @@ export async function provisionOpdLinkForBookingPair({
     }
   }
   // Idempotent short-circuit — re-using existing session.
+  // V116 architectural backstop (2026-05-23): VERIFY the existing session doc
+  // still exists before short-circuit. If it was deleted (deleteSession line
+  // 3314 no-patientData branch, or auto-2hr-expire line 2251, or hardDelete
+  // line 3353) WITHOUT clearing the reverse-FK on appt/dep, this idempotent
+  // path used to return a URL pointing to a missing doc → customer hits
+  // "ลิงก์ไม่ถูกต้อง" / "session not found". Heals automatically: when the
+  // existing session is gone, fall through to mint a fresh one + overstamp
+  // the reverse-FK on appt/dep. User directive (Q2 silent self-heal, 2026-05-23):
+  // "ระบบฉลาดพอที่จะรู้แล้ว Gen ลิ้งพร้อม QR ใหม่ให้ลูกค้าคนที่ยังไม่กรอก
+  // ข้อมูล OPD คนนั้นๆทันทีที่กดปุ่ม ดูลิ้งที่ส่งไปในทันทีเลย".
   if (existingSessionId) {
-    const url = _buildOpdSessionUrl(existingSessionId, origin);
-    return { sessionId: existingSessionId, url, alreadyProvisioned: true };
+    const existingSessionSnap = await getDoc(opdSessionDoc(existingSessionId));
+    if (existingSessionSnap.exists()) {
+      // V116-followup (2026-05-23) — UN-HIDE on re-engagement. User report
+      // (verbatim): "พอลบแล้วสร้างลิ้งรอบที่ 2 จากลูกค้าคนที่นัดแล้ว ... มัน
+      // ไม่มาแสดงในหน้าคิวหน้าคลินิกแล้ว แล้ว Admin จะ Review ก่อนกดบันทึกลง
+      // OPD ได้ยังไง?". After V116 hide-on-delete, an admin who re-clicks
+      // "ดูลิ้งค์ที่ส่งไป" receives the SAME URL (idempotent), but the queue
+      // entry stays hidden until the customer fills the form — leaving admin
+      // no Review surface in the meantime. Admin's act of re-clicking the
+      // link button IS the re-engagement signal: re-show the queue entry
+      // immediately so admin can track outstanding pending links + click
+      // บันทึกลง OPD when customer eventually fills. The URL is unchanged
+      // (no need to re-send QR to customer).
+      const existingData = existingSessionSnap.data() || {};
+      if (existingData.isHiddenFromQueue) {
+        const unhideBatch = writeBatch(db);
+        unhideBatch.update(opdSessionDoc(existingSessionId), {
+          isHiddenFromQueue: false,
+          unhiddenFromQueueAt: serverTimestamp(),
+          unhiddenFromQueueReason: 're-engage-provision',
+        });
+        await unhideBatch.commit();
+      }
+      const url = _buildOpdSessionUrl(existingSessionId, origin);
+      return { sessionId: existingSessionId, url, alreadyProvisioned: true };
+    }
+    // Stale FK detected — session was deleted under us. Fall through to mint
+    // new (the reverse-FK stamp at line ~935 will overstamp existingSessionId
+    // with the new one). Forensic warn for observability.
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[provisionOpdLinkForBookingPair] V116 self-heal — stale linkedOpdSessionId '
+      + `(${existingSessionId}) doc missing → minting fresh session for `
+      + `deposit=${depositId || '(none)'} appointment=${appointmentId || '(none)'}`
+    );
   }
   // Mint fresh sessionId — BL-{timestamp}-{8 hex chars} (BL = Backend-Link,
   // distinct from kiosk DEP-/ND-/CST-/PRM-/FW- prefixes). Crypto-secure

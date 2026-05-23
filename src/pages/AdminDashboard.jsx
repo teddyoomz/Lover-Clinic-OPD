@@ -2248,7 +2248,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         if (s._v82FollowupOpdResetAt) return; // V82-followup opt-out
         if ((now - s.createdAt.toMillis()) > SESSION_TIMEOUT_MS) {
           if (!s.patientData) {
-            deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id)).catch(console.error);
+            // V116 (2026-05-23) — mirror deleteSession conditional. If session
+            // is linked to a real booking (deposit OR appointment), customer
+            // may still hold the URL → MUST NOT hard-delete the session.
+            // Instead set isHiddenFromQueue so queue listeners drop it but the
+            // URL stays alive. User directive: "ห้ามลบ link ยกเว้นว่าจะลบนัด
+            // นั้นทิ้งไปทั้งนัดเลย".
+            if (s.linkedAppointmentId || s.linkedDepositId) {
+              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
+                isHiddenFromQueue: true,
+                hiddenFromQueueAt: serverTimestamp(),
+              }).catch(console.error);
+            } else {
+              deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id)).catch(console.error);
+            }
           } else if (!s.isArchived) {
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
               isArchived: true, archivedAt: serverTimestamp()
@@ -2265,9 +2278,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       );
 
       // Deposit sessions — separate from queue (exclude serviceCompleted → those go to queue)
+      // V116 (2026-05-23) — isHiddenFromQueue:true sessions are hidden UNLESS
+      // customer has filled (patientData) — auto-restore via read-side override
+      // so admin sees the customer when they come back to fill the form.
       setDepositSessions(
         allDocs
-          .filter(s => !s.isArchived && s.formType === 'deposit' && !s.serviceCompleted)
+          .filter(s => !s.isArchived && s.formType === 'deposit' && !s.serviceCompleted && (!s.isHiddenFromQueue || s.patientData))
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
       setArchivedDepositSessions(
@@ -2284,8 +2300,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // was set but the reset stamp still indicates queue-intent. The queue
       // filter below (line ~2282) now picks them up. Pair-edit with that
       // filter to avoid double-appearance.
+      // V116 (2026-05-23) — same isHiddenFromQueue gate + patientData auto-restore
+      // as deposit queue above. See line ~2270 for the rationale.
       const ndData = allDocs
-          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted && !s._v82FollowupOpdResetAt)
+          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted && !s._v82FollowupOpdResetAt && (!s.isHiddenFromQueue || s.patientData))
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0));
       setNoDepositSessions(ndData);
       setArchivedNoDepositSessions(
@@ -2296,6 +2314,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       const data = allDocs.filter(session => {
           if (session.isArchived) return false;
+          // V116 (2026-05-23) — isHiddenFromQueue gate with patientData auto-restore.
+          // Set by deleteSession line ~3293 when admin deletes a queue entry that
+          // has no patientData but is linked to a booking (link must survive →
+          // session preserved, only hide from queue). If customer fills the form
+          // later (patientData becomes truthy), this filter auto-restores via
+          // the override → session reappears in queue. Read-side mechanism — no
+          // write needed at customer-fill time. Mirrors sibling deposit + noDeposit
+          // filters above. User directive: "หายไปแต่ list รายการในคิวหน้าคลินิกเฉยๆ".
+          if (session.isHiddenFromQueue && !session.patientData) return false;
           // V82-fix2 (2026-05-17 EOD+3 LATE+3): _v82FollowupOpdResetAt opt-out
           // MUST fire BEFORE any other early-reject so that reset sessions are
           // ALWAYS in queue once unarchived — regardless of isPermanent (set
@@ -3309,8 +3336,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             console.warn('queue-arrival auto-confirm failed (non-blocking):', e?.message || e);
           }
         }
+      } else if (session?.linkedAppointmentId || session?.linkedDepositId) {
+        // V116 (2026-05-23) — linked to a real booking (deposit OR appointment)
+        // → PRESERVE session doc so the customer's link still works. Only hide
+        // from queue listeners. URL is alive, customer can come back + fill.
+        // If customer fills later (patientData becomes truthy), queue filter
+        // auto-restores via the patientData override at line ~2298. User
+        // directive (Q1 verbatim): "ห้ามลบ link ยกเว้นว่าจะลบนัดนั้นทิ้งไป
+        // ทั้งนัดเลย อันนี้นลบได้" — link must survive admin queue-delete;
+        // only full-appointment-delete may cascade the link.
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId), {
+          isHiddenFromQueue: true,
+          hiddenFromQueueAt: serverTimestamp(),
+        });
       } else {
-        // ไม่มีข้อมูล → ลบทิ้งเลย
+        // ไม่มีข้อมูล + ไม่ผูกกับ booking → ลบทิ้งเลย (V116: เหมือนกดผิด, no
+        // linked booking → safe to nuke; no customer URL to preserve).
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
       }
     } catch (error) { console.error(error); }
@@ -3486,11 +3527,20 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // User report (verbatim): "หากมาจากหน้า จองมัดจำ หรือ จองไม่มัดจำ ...
       // เมื่อกดบันทึกลง OPD ในหน้า คิวหน้า Clinic จะไม่ต้องขึ้น modal มาให้
       // สร้างนัดหมายอีก".
+      // V116 (2026-05-23) — added `createdFromBackendBooking === true` as the
+      // 6th defense-in-depth indicator. Set by provisionOpdLinkForBookingPair
+      // (appointmentDepositBatch.js:927) when admin uses the Backend pickLater
+      // "ดูลิ้งค์ที่ส่งไป" flow. Belt-and-suspenders — the other 5 indicators
+      // already cover this case (linkedAppointmentId is always stamped), but
+      // this catches future drift IF the provision helper's reverse-stamp ever
+      // changes shape. User directive Q3 (verbatim): "Add createdFromBackendBooking
+      // as 6th indicator". AV invariant locks the gate shape against drift.
       const isFromBookingFlow = !!(
         session?.linkedAppointmentId ||
         session?.linkedDepositId ||
         session?.appointmentProClinicId ||
         session?.formType === 'deposit' ||
+        session?.createdFromBackendBooking ||
         (session?.appointmentData && (
           session.appointmentData.appointmentDate ||
           session.appointmentData.appointmentStartTime

@@ -2891,3 +2891,38 @@ Origin: user-reported mobile bug on iPhone — "ใน mobile กดเปิด
 Adding a 4th fullscreen image lightbox component requires explicit AV114 entry update + the new file must implement ALL 5 gates (or gates 1-4 with documented zoom-exception rationale).
 
 **Cross-link**: V115 saga in `.claude/rules/00-session-start.md` § 2 (mobile lightbox UX class, 2026-05-23) + `tests/v115-mobile-lightbox.test.jsx` (SG1-SG7 + SG-T1-T5 + R1-R8 + AV1-AV3) + this AV114 entry.
+
+### AV116 — opd_sessions hard-delete sites MUST preserve linked-booking sessions; provisionOpdLinkForBookingPair MUST verify existence before idempotent short-circuit (2026-05-23 V116 link-survives-queue-delete)
+
+Origin: user-reported `/systematic-debugging` bug 2026-05-23 LATE+2 — admin clicks "ดูลิ้งค์ที่ส่งไป" in the pickLater edit-appointment modal → SendCustomerLinkModal opens with URL → customer opens link but doesn't fill → opd_sessions doc appears in clinic queue (status:'pending') → admin clicks 🗑 to delete from queue → `deleteSession` (AdminDashboard.jsx:3287 no-patientData branch) HARD-DELETES the opd_sessions doc WITHOUT clearing the reverse-FK (`linkedOpdSessionId`) on the linked be_appointments + be_deposits → `provisionOpdLinkForBookingPair`'s idempotent short-circuit (appointmentDepositBatch.js:902) returns a URL pointing to a missing doc → customer hits "ลิงก์ไม่ถูกต้อง" / dead URL. Image-2 victims (มนทวัฒน์ มาดหนู + สันติสุข เพ็ชรไพฑูร) demonstrate exactly this state.
+
+**Class-of-bug**: 3 opd_sessions hard-delete sites in `src/pages/AdminDashboard.jsx` (line 2251 auto-2hr-expire, line 3293/3314 deleteSession no-patientData, line 3353 hardDeleteSession) NEVER cleared the reverse-FK on linked appt/dep. Sibling site at line 3345 (`handleNoDepositCancel`) self-heals because it cascades to `deleteBackendAppointment`. The provision helper's unconditional short-circuit converted stale FKs into dead URLs.
+
+**Rule** (two complementary guarantees):
+
+1. **Preserve linked sessions on user-facing queue-delete** — `deleteSession` (and the auto-2hr-expire useEffect) MUST conditionally branch the no-patientData path:
+   - IF `session.linkedAppointmentId || session.linkedDepositId` → set `isHiddenFromQueue: true` + `hiddenFromQueueAt: serverTimestamp()` (preserve session doc; URL stays alive; customer can come back and fill).
+   - ELSE → existing hard-delete (standalone session, no booking → safe to nuke; "เหมือนกดผิด" per user).
+   - Queue listeners MUST filter `(!isHiddenFromQueue || patientData)` — auto-restore via READ-side override when customer fills the form (no write needed at customer-fill time).
+   - The PatientForm.jsx:78 isArchived rejection IS NOT a synonym — never overload `isArchived` for the hide semantic; PatientForm will reject the load → defeats "URL still works".
+
+2. **Architectural backstop in provisionOpdLinkForBookingPair** — the idempotent short-circuit MUST verify `getDoc(opdSessionDoc(existingSessionId))` exists before returning. If missing, fall through to mint a fresh session + overstamp reverse-FK on appt/dep. This heals legacy victims (whose `linkedOpdSessionId` already points to a deleted doc) on the next click — no migration script needed; admin clicks "ดูลิ้งค์ที่ส่งไป" and the URL auto-regenerates.
+
+3. **Un-hide on re-engagement (V116-followup, 2026-05-23)** — when the existing session DOES exist AND is hidden (`isHiddenFromQueue:true`), the helper MUST clear the hide flag as part of the re-send action. Stamps `isHiddenFromQueue:false` + `unhiddenFromQueueAt: serverTimestamp()` + `unhiddenFromQueueReason: 're-engage-provision'`. URL is unchanged (no need to re-share QR). Queue entry reappears immediately so admin has a Review surface for the outstanding link. User report (verbatim, V116 catch): *"พอลบแล้วสร้างลิ้งรอบที่ 2 จากลูกค้าคนที่นัดแล้ว ... มันไม่มาแสดงในหน้าคิวหน้าคลินิกแล้ว แล้ว Admin จะ Review ก่อนกดบันทึกลง OPD ได้ยังไง?"*. Admin's act of clicking the link button IS the re-engagement signal; the queue must reflect that intent. Idempotent: re-engaging a non-hidden session is a no-op.
+
+**Walk-in modal gate companion** (defense-in-depth Q3 lock): the `isFromBookingFlow` check in AdminDashboard's `_maybeOpenWalkInModal` (line ~3489) MUST include `session?.createdFromBackendBooking === true` as the 6th indicator (alongside the pre-existing 5: linkedAppointmentId, linkedDepositId, appointmentProClinicId, formType==='deposit', appointmentData.appointmentDate/StartTime). `provisionOpdLinkForBookingPair` stamps `createdFromBackendBooking:true` on the opd_sessions doc — using it as a direct gate indicator catches future drift if any of the other 5 indicators ever drop.
+
+**Grep targets (`tests/v116-link-survives-queue-delete.test.js`)**:
+- `src/lib/appointmentDepositBatch.js`: `V116 architectural backstop` marker + `if (existingSessionId) { const existingSessionSnap = await getDoc(opdSessionDoc(existingSessionId))` (SG1) + anti-regression: pre-V116 unconditional pattern `if (existingSessionId) { const url = _buildOpdSessionUrl` MUST NOT match (SG1.2) + `V116 self-heal` warn (SG1) + `stale linkedOpdSessionId` log text.
+- `src/pages/AdminDashboard.jsx`: `else if (session?.linkedAppointmentId || session?.linkedDepositId)` + `isHiddenFromQueue: true,\n*hiddenFromQueueAt: serverTimestamp()` in deleteSession (SG2) + `V116 (2026-05-23) — linked to a real booking` marker + `V116:เหมือนกดผิด` marker on hard-delete branch.
+- AdminDashboard auto-expire (line ~2246): `V116 (2026-05-23) — mirror deleteSession conditional` + same `if (s.linkedAppointmentId || s.linkedDepositId) { ... isHiddenFromQueue: true` shape (SG3).
+- AdminDashboard queue filters (3 sites): `!s.isHiddenFromQueue || s.patientData` for deposit + noDeposit queues; `session.isHiddenFromQueue && !session.patientData` early-reject in main queue filter (SG4) + `V116 (2026-05-23) — isHiddenFromQueue gate` marker.
+- AdminDashboard walk-in gate: `session?.createdFromBackendBooking ||` (SG5) + 5 pre-existing indicators still present (anti-regression on accidentally dropping one).
+
+**Sanctioned exceptions**:
+- `handleNoDepositCancel` (AdminDashboard.jsx:3345) is sanctioned BECAUSE it already cascades to `deleteBackendAppointment` → the linked appt is gone too → no orphan FK to heal. Annotated `// V116: sanctioned — self-heals via deleteBackendAppointment cascade`.
+- `hardDeleteSession` (AdminDashboard.jsx:3353) is sanctioned as a history-view safety-net (admin explicitly knows they're nuking a record); covered by V116 architectural backstop at the provision helper layer — any post-hard-delete click on a stale FK auto-regens.
+
+**Class-of-bug classifier (`tests/v116-link-survives-queue-delete.test.js` G1-G3)**: enumerates all 4 opd_sessions delete sites + classifies each as fixed / self-healing / architecturally-covered. Test G3 asserts every site is handled — adding a 5th delete site without updating the classifier fails the lock.
+
+**Cross-link**: V116 saga in `.claude/rules/00-session-start.md` § 2 (link-survives-queue-delete + auto-regen, 2026-05-23) + `tests/v116-link-survives-queue-delete.test.js` (SG1-SG5 + D1-D9 + F1-F6 + G1-G3) + this AV116 entry.
