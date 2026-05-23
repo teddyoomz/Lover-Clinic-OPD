@@ -1,19 +1,20 @@
 ---
-updated_at: "2026-05-23 EOD+1 LATE+5 — V118 Card-Level OPD Lifecycle Row LOCAL"
-status: "V115+V116+V116-followup LIVE on prod @ 3612d8ae. V117 lightbox-portal + V118 card-OPD-row SHIPPED local — awaiting deploy authorization."
+updated_at: "2026-05-23 EOD+1 LATE+6 — V119 P0 fix: V118 hook-import drift + AV60 permanent gate"
+status: "V115+V116 LIVE on prod @ 3612d8ae. V117 + V118 + V119 SHIPPED local — awaiting deploy. V119 fixes the missing useCallback import that caused AdminDashboard black-screen post V118 commit."
 branch: "master"
-last_commit: "feat(opd-card): V118 — Card-level OPD lifecycle row [AV118]"
-tests: "V118 self 83/83 · V87+V116 sibling 32/32 · full vitest 14438/14438 GREEN · build clean 2.81s"
+last_commit: "fix(admin): V119 — add missing useCallback import + AV60 permanent vitest gate"
+tests: "V119 gate 3/3 · V118 self 83/83 · build clean · AV60 scanner 0/527 drift project-wide"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "3612d8ae (V115+V116+V116-followup LIVE) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
-firestore_rules_version: "unchanged (V118 client-only)"
+firestore_rules_version: "unchanged (V118+V119 client-only)"
 ---
 
 # Active Context
 
 ## State
-- **V118 LOCAL** — Card-level OPD lifecycle row pushed to master. Admin can now drive ✏️ link send/view + 🩺 OPD save/view from every appointment Card in the Frontend นัดหมาย tab without leaving for the OPD sub-tabs.
-- **V117 LOCAL** — Lightbox createPortal mandate (5 fullscreen lightboxes) — still pending deploy.
+- **V119 LOCAL — P0 fix for V118 hook-import drift.** User reported "admindashboard จอดำไปเลย" immediately after V118 commit. /systematic-debugging Phase 1: line 1 of AdminDashboard.jsx imports `useState, useEffect, useRef, useMemo` but NOT `useCallback` — V118 added 3 `useCallback` usages → ReferenceError → React unmounts AdminDashboard tree → black screen. EXACT V80 anti-pattern repeated. Fix = 1-char addition to import. Plus permanent vitest gate that runs the AV60 scanner so opt-in scanner can't be forgotten again.
+- **V118 LOCAL** — Card-level OPD lifecycle row (verified post-V119 fix).
+- **V117 LOCAL** — Lightbox createPortal mandate (5 fullscreen lightboxes).
 - **V116 LIVE on prod** — Link survives queue-delete + auto-regen + un-hide on re-engage.
 
 ## What this session shipped (V118)
