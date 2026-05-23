@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>V121 — Card-flow Notifications Design Spec</title>
+  <style>
+    :root { --accent: #a855f7; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1080px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.5em; color: #444; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.55em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); font-weight: 700; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 700; }
+
+    /* LC dark-theme tab strip replica */
+    .lc-tabs { background: #0d0d0d; padding: 12px 16px; border-radius: 8px; display: flex; gap: 16px; align-items: center; font-family: 'Segoe UI'; }
+    .lc-tab { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 6px; font-size: 0.82em; color: #aaa; position: relative; }
+    .lc-tab.active { background: rgba(220, 38, 38, 0.12); color: #fff; border: 1px solid rgba(220, 38, 38, 0.3); }
+    .lc-bubble { background: #ef4444; color: white; font-size: 0.68em; font-weight: 900; padding: 1px 7px; border-radius: 999px; min-width: 18px; text-align: center; box-shadow: 0 0 0 1.5px #0d0d0d; }
+    .lc-bubble-purple { background: #a855f7; }
+    .lc-subpills { background: #0a0a0a; padding: 6px 12px; border-radius: 0 0 6px 6px; display: flex; gap: 12px; font-size: 0.78em; align-items: center; }
+    .lc-subpill { color: #888; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+    .lc-subpill.has-bubble { color: #fbbf24; }
+
+    /* Flow boxes */
+    .flow-step { background: #fff; border: 1px solid var(--bd); border-radius: 6px; padding: 10px 14px; margin: 6px 0; display: flex; align-items: center; gap: 12px; }
+    .flow-step-num { background: var(--accent); color: #fff; font-weight: 800; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85em; }
+    .flow-arrow { text-align: center; color: var(--tx-muted); font-size: 1.4em; margin: -3px 0; }
+  </style>
+</head>
+<body>
+
+<h1>V121 — Card-flow Notifications Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-23 EOD+1 LATE+8 ·
+  <strong>Status:</strong> Approved by user ("approve") ·
+  <strong>Owner area:</strong> AdminDashboard tab bar + AppointmentHubView sub-pill bar ·
+  <strong>Implementation plan:</strong> writing-plans (next step) ·
+  <strong>V-tag:</strong> V121 (next available after V120)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+
+<p><strong>User directive (verbatim, 2026-05-23):</strong> <em>"เมื่อลูกค้ากรอกข้อมูลเสร็จแล้ว แล้ว admin ยังไม่ได้อ่าน ให้ทำ bubble notification ใน tab นัดหมาย และ tab ย่อย และการแจ้งเตือน push notification ให้เหมือนกับที่เคยทำกับ คิวหน้า Clinic เป๊ะๆด้วยนะ คือพูดง่ายๆ ระบบการแจ้งเตือนเหมือนเดิม แค่ย้ายหน้า"</em></p>
+
+<p><strong>The gap:</strong> V120 hides V118 card-flow OPD sessions from the คิวหน้า Clinic queue (since the Card has its own affordances). This breaks the existing notification surface — admin no longer sees the bubble on คิวหน้า Clinic tab when a customer fills the form via card-flow QR. V121 restores notification visibility on the Frontend นัดหมาย tab + its sub-pills, using the EXACT same notification primitives (sound + browser push + FCM + bubble count) — just rendered on a different surface.</p>
+
+<p><strong>Class-of-bug avoided:</strong> notification blackout caused by a UI scope change. The notification primitives are stable; only the rendering surface moves.</p>
+
+<h2>Mockup Design</h2>
+
+<h3>State 1 — Customer just filled, admin hasn't reviewed (5 pending across sub-pills)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop sidebar — Frontend tab strip</div>
+  <div class="lc-tabs">
+    <div class="lc-tab">💬 แชท <span class="lc-bubble" style="background:#3b82f6">3</span></div>
+    <div class="lc-tab">🏥 คิวหน้า Clinic <span class="lc-bubble">7</span></div>
+    <div class="lc-tab">🧾 จองไม่มัดจำ <span class="lc-bubble" style="background:#f97316">1</span></div>
+    <div class="lc-tab">💰 จองมัดจำ <span class="lc-bubble" style="background:#10b981">2</span></div>
+    <div class="lc-tab active">📅 นัดหมาย <span class="lc-bubble lc-bubble-purple">5</span></div>
+  </div>
+  <div class="lc-subpills">
+    <span class="lc-subpill has-bubble">วันนี้ <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">3</span></span>
+    <span class="lc-subpill has-bubble">กำลังจะถึง <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">1</span></span>
+    <span class="lc-subpill has-bubble">ก่อนหน้า <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">1</span></span>
+    <span class="lc-subpill">ยกเลิก</span>
+  </div>
+</div>
+
+<h3>State 2 — Admin clicks 🟢 ดูข้อมูล (modal opens, bubble UNCHANGED per Option B)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Bubble count stays at 5 — viewing alone is not "reading" under Option B</div>
+  <div class="lc-tabs">
+    <div class="lc-tab active">📅 นัดหมาย <span class="lc-bubble lc-bubble-purple">5</span></div>
+  </div>
+  <p style="font-size: 0.85em; color: #666; margin-top: 12px;">Per the user's locked Q1 = B: "Bubble persists until 🔴 บันทึก OPD click". Pure review (ดูข้อมูล) is NOT the read action — only saving to be_customers clears the bubble. This is a stronger UX nudge than the existing Clinic queue (which clears on session-open) because admins might glance without acting.</p>
+</div>
+
+<h3>State 3 — Admin clicks 🔴 บันทึก OPD on one card (count -1)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">handleOpdClick → session stamps opdRecordedAt + brokerStatus:'done' → filter drops it</div>
+  <div class="lc-tabs">
+    <div class="lc-tab active">📅 นัดหมาย <span class="lc-bubble lc-bubble-purple">4</span></div>
+  </div>
+  <div class="lc-subpills">
+    <span class="lc-subpill has-bubble">วันนี้ <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">2</span></span>
+    <span class="lc-subpill has-bubble">กำลังจะถึง <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">1</span></span>
+    <span class="lc-subpill has-bubble">ก่อนหน้า <span class="lc-bubble lc-bubble-purple" style="font-size:0.58em; padding:0 5px;">1</span></span>
+    <span class="lc-subpill">ยกเลิก</span>
+  </div>
+</div>
+
+<h3>State 4 — All saved (no bubbles)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Empty queue — no card-flow sessions pending</div>
+  <div class="lc-tabs">
+    <div class="lc-tab active">📅 นัดหมาย</div>
+  </div>
+  <div class="lc-subpills">
+    <span class="lc-subpill">วันนี้</span>
+    <span class="lc-subpill">กำลังจะถึง</span>
+    <span class="lc-subpill">ก่อนหน้า</span>
+    <span class="lc-subpill">ยกเลิก</span>
+  </div>
+</div>
+
+<h3>Mobile bottom dock (same primitives)</h3>
+
+<div class="mockup">
+  <div class="mockup-label">Mobile menu-badge-dock — purple bubble on "นัด" tab mirrors mobile dock pattern (lines 9131-9143)</div>
+  <div style="background:#0d0d0d; padding: 10px; border-radius: 12px; display: flex; gap: 8px; justify-content: space-around;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding: 4px 8px; color: #aaa; font-size:0.7em; position:relative;">
+      <span style="font-size:1.2em">💬</span>แชท
+      <span class="lc-bubble" style="background:#3b82f6; position:absolute; top:-2px; right:0;">3</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding: 4px 8px; color: #aaa; font-size:0.7em; position:relative;">
+      <span style="font-size:1.2em">🏥</span>คิว
+      <span class="lc-bubble" style="position:absolute; top:-2px; right:0;">7</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding: 4px 8px; color: #fff; font-size:0.7em; position:relative; background: rgba(168,85,247,0.15); border-radius: 6px;">
+      <span style="font-size:1.2em">📅</span>นัด
+      <span class="lc-bubble lc-bubble-purple" style="position:absolute; top:-2px; right:0;">5</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding: 4px 8px; color: #aaa; font-size:0.7em; position:relative;">
+      <span style="font-size:1.2em">💰</span>จอง
+      <span class="lc-bubble" style="background:#10b981; position:absolute; top:-2px; right:0;">3</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding: 4px 8px; color: #aaa; font-size:0.7em;">⋯</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>Lifecycle: customer fills form → admin sees bubble → admin saves → bubble clears</h3>
+
+<div class="mockup">
+  <div class="mockup-label">End-to-end notification lifecycle</div>
+
+  <div class="flow-step"><div class="flow-step-num">1</div><div><strong>Customer opens QR/link</strong> (provisioned by V118 card-flow with <code>hideFromQueue:true</code>) → fills PatientForm → submits</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">2</div><div><strong>PatientForm writes</strong> <code>session.patientData = {...}; session.isUnread = true</code> (existing kiosk pattern — V121 makes NO change to PatientForm).</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">3</div><div><strong>Firestore listener fires</strong> in AdminDashboard (line ~2362) — the existing <code>allNotifData</code> change-detection runs. V121 EXTENDS the listener filter to ALSO include V118 card-flow sessions (<code>createdFromBackendBooking && isHiddenFromQueue</code>) so they trigger the SAME push pipeline.</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">4</div><div><strong>Push fires + sound plays + browser notification + FCM</strong> — uses existing pipeline (Cloud Function <code>functions/index.js onPatientSubmit → FCM</code>). No new endpoint, no new VAPID key, no new Cloud Function.</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">5</div><div><strong>Bubbles render</strong> — main "นัดหมาย" tab bubble + per-sub-pill bubble. Count from <code>isCardFlowUnread(session)</code> filter. Bubble color = purple <code>#a855f7</code> (distinct from existing red/orange/green).</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">6</div><div><strong>Admin clicks 🟢 ดูข้อมูล</strong> → modal opens via <code>setViewingSession(session)</code>. V121 GATES the existing <code>isUnread:false</code> write at <code>AdminDashboard.jsx:3418</code> to skip card-flow sessions → <strong>bubble UNCHANGED</strong> per Option B.</div></div>
+  <div class="flow-arrow">↓</div>
+  <div class="flow-step"><div class="flow-step-num">7</div><div><strong>Admin clicks 🔴 บันทึก OPD</strong> → <code>handleOpdClick(session)</code> → stamps <code>opdRecordedAt + brokerStatus:'done'</code> → <code>isOpdSessionSaved(session)</code> becomes true → session drops out of <code>isCardFlowUnread</code> filter → <strong>bubble -1</strong>.</div></div>
+</div>
+
+<h3>State machine — `isCardFlowUnread(session)` predicate</h3>
+
+<table>
+  <thead><tr><th>Predicate</th><th>Value</th><th>Counted toward bubble?</th></tr></thead>
+  <tbody>
+    <tr><td><code>session.createdFromBackendBooking !== true</code></td><td>false</td><td>❌ NO (Clinic queue session — counted under existing <code>unreadCount</code> instead)</td></tr>
+    <tr><td><code>session.isHiddenFromQueue !== true</code></td><td>false</td><td>❌ NO (V116 un-hidden session — counted under existing <code>unreadCount</code> instead)</td></tr>
+    <tr><td>Customer hasn't filled (<code>!isUnread</code>)</td><td>false</td><td>❌ NO (no data to read yet)</td></tr>
+    <tr><td>Already saved (<code>isOpdSessionSaved(session)</code>)</td><td>true</td><td>❌ NO (admin's already done — drop out)</td></tr>
+    <tr><td><strong>All others</strong> (createdFromBackendBooking + isHiddenFromQueue + isUnread + NOT saved)</td><td>—</td><td>✅ <strong>YES — bubble +1</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>Architecture</h2>
+
+<h3>File changes</h3>
+
+<table>
+  <thead><tr><th>File</th><th>Op</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/opdSessionState.js</code></td><td>MODIFY</td><td>Add 1 helper: <code>isCardFlowUnread(session)</code> = createdFromBackendBooking && isHiddenFromQueue && isUnread && !isOpdSessionSaved. Pure JS; mirrors existing helpers.</td></tr>
+    <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>MODIFY</td><td>(a) Add <code>cardFlowUnreadCount</code> memo over all session arrays; (b) gate the <code>isUnread:false</code> write at line ~3418 to skip card-flow sessions; (c) extend the push-notification listener (line ~2362) to fire for card-flow transitions; (d) render purple bubble on main tab (line ~5976) + mobile dock (line ~9159).</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>MODIFY</td><td>(a) Compute per-sub-pill card-flow counts from the per-row <code>opdLifecycle.state === 'D'</code> + linkedSession.isUnread; (b) pass counts to AppointmentHubTabBar or sub-pill renderer.</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubTabBar.jsx</code> (or sibling sub-pill bar)</td><td>MODIFY</td><td>Render purple bubbles next to sub-pill labels (วันนี้/กำลังจะถึง/ก่อนหน้า) when count &gt; 0.</td></tr>
+    <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>MODIFY</td><td>Extend AV118 — sanctioned-exception list of opdSessionState helper callsites grows from 4 to 5 (add <code>isCardFlowUnread</code>).</td></tr>
+    <tr><td><code>tests/v121-opd-session-state-card-flow-unread.test.js</code></td><td>NEW</td><td>Helper unit tests (8 scenarios — Truth table for the 4 predicates).</td></tr>
+    <tr><td><code>tests/v121-card-flow-notifications-source-grep.test.js</code></td><td>NEW</td><td>Source-grep regression: bubble render at main + mobile + sub-pill sites; listener extension presence; modal-open gate preserved.</td></tr>
+    <tr><td><code>tests/v121-card-flow-notifications-flow-simulate.test.js</code></td><td>NEW</td><td>Rule I flow-simulate: customer-fills → bubble shows → admin views (bubble unchanged) → admin saves → bubble clears.</td></tr>
+  </tbody>
+</table>
+
+<h3>Critical implementation details</h3>
+
+<h4>Modal-open gate (skip isUnread:false for card-flow)</h4>
+<pre><code class="language-javascript">// AdminDashboard.jsx:3417 area — V121 modification
+const isDepositKeepUnread = session.formType === 'deposit' && session.isUnread;
+// V121 (2026-05-23): card-flow sessions (V118 + V120 hide-from-queue) use
+// SAVE as the read action, NOT modal-open. Skip the isUnread:false write
+// for these — bubble persists until handleOpdClick succeeds.
+const isCardFlowSession = session.createdFromBackendBooking && session.isHiddenFromQueue;
+if (session.isUnread && !isDepositKeepUnread && !isCardFlowSession) {
+  lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
+  lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
+  try {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
+  } catch(e) { console.error('updateDoc isUnread:', e); }
+}</code></pre>
+
+<h4>Bubble count memo (AdminDashboard)</h4>
+<pre><code class="language-javascript">// V121 (2026-05-23): card-flow pending session count across all session arrays.
+// allNotifData = [...sessions, ...noDepositSessions] (existing). V121 spans
+// ALL 5 session arrays to catch V118 sessions wherever they live.
+const cardFlowUnreadCount = useMemo(() => {
+  let count = 0;
+  for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
+    for (const s of arr || []) {
+      if (isCardFlowUnread(s)) count++;
+    }
+  }
+  return count;
+}, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);</code></pre>
+
+<h4>Sub-pill counts (HubView)</h4>
+<pre><code class="language-jsx">// AppointmentHubView.jsx — derive per-sub-pill counts from the same
+// per-row state derivation already used for OpdLifecycleRow rendering.
+// State D sessions are the only card-flow unread + customer-filled state.
+const cardFlowSubPillCounts = useMemo(() => {
+  const counts = { today: 0, tomorrow: 0, future: 0, past: 0 };
+  for (const a of appts) {
+    const linkedSession = resolveLinkedSession?.(a) ?? null;
+    if (!linkedSession || !linkedSession.isUnread) continue;
+    if (isOpdSessionSaved(linkedSession)) continue;
+    if (!linkedSession.createdFromBackendBooking || !linkedSession.isHiddenFromQueue) continue;
+    const bucket = appointmentBucketForDate(a.date, new Date());
+    if (counts[bucket] !== undefined) counts[bucket]++;
+  }
+  return counts;
+}, [appts, resolveLinkedSession]);</code></pre>
+
+<h4>Push notification listener extension</h4>
+<p>The existing detection at <code>AdminDashboard.jsx:2362+</code> processes <code>allNotifData = [...data, ...ndData]</code>. V121 widens this to also include V118-hidden card-flow sessions. The detection logic + push template remain unchanged — only the input set grows.</p>
+
+<h3>Sub-tab scope (per V118 spec § Q2 locked)</h3>
+<ul>
+  <li>✅ <code>วันนี้</code>, <code>กำลังจะถึง</code>, <code>ก่อนหน้า</code> — bubble visible when count &gt; 0</li>
+  <li>❌ <code>ยกเลิก</code> — no bubble (matches V118: OPD lifecycle row hidden on cancelled sub-pill)</li>
+</ul>
+
+<h3>Class-of-bug protection (Rule P)</h3>
+<ul>
+  <li><strong>AV118 extended</strong> — sanctioned-callsite list grows from 4 to 5 (new <code>isCardFlowUnread</code>). All OPD-state derivations still funnel through <code>opdSessionState.js</code>. No inline duplicates allowed.</li>
+  <li><strong>V12 multi-reader-sweep protection</strong> — bubble counts pulled from 3 surfaces (desktop tab, mobile dock, sub-pill bar) all consume the SAME helper. Single source = no drift.</li>
+  <li><strong>V80/V119 hook-import drift</strong> — V121 uses existing useMemo (already imported post-V119); no new hook adds. Permanent AV60 gate from V119 protects.</li>
+  <li><strong>R1 (listener inclusion verification)</strong> — Spec-time check: do the 5 session listeners load <code>isHiddenFromQueue:true</code> sessions? Per V116 design, the listener queries the whole collection + UI filters. If listener filters out hidden → would need an additional source. Implementer to verify pre-task-1.</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = B</strong>: Bubble persists until 🔴 บันทึก OPD click. Pure review (ดูข้อมูล) does NOT mark read. Stronger UX nudge than the existing Clinic-queue semantic.</li>
+  <li><strong>Push pipeline</strong>: EXTEND existing listener (no new infra). Same sound, same browser push, same FCM.</li>
+  <li><strong>Bubble surfaces</strong>: Desktop sidebar tab + mobile bottom dock + each active sub-pill (วันนี้/กำลังจะถึง/ก่อนหน้า). NOT ยกเลิก sub-pill.</li>
+  <li><strong>Bubble color</strong>: Purple <code>#a855f7</code> to distinguish from existing red/orange/green bubbles.</li>
+  <li><strong>Filter</strong>: <code>createdFromBackendBooking && isHiddenFromQueue && isUnread && !isOpdSessionSaved</code> — all 4 predicates required.</li>
+</ul>
+
+<h2>Acceptance Criteria (testable)</h2>
+<ol>
+  <li>Customer submits PatientForm via V118 card-flow link → within ~5 seconds, admin sees: (a) purple bubble on "นัดหมาย" tab with count, (b) purple bubble on the appropriate sub-pill (วันนี้/กำลังจะถึง/ก่อนหน้า based on appt.date), (c) browser push notification fires (if enabled), (d) chat alert sound plays.</li>
+  <li>Admin clicks 🟢 ดูข้อมูล → OPD modal opens → bubble count UNCHANGED on both main tab and sub-pill.</li>
+  <li>Admin clicks 🔴 บันทึก OPD → handleOpdClick succeeds → bubble count -1 on both main tab and sub-pill (the saved card transitions to State A, drops out of filter).</li>
+  <li>Card in ยกเลิก sub-pill → no bubble on ยกเลิก sub-pill regardless of underlying session state.</li>
+  <li>Clinic-queue session (createdFromBackendBooking !== true) → counts toward existing <code>unreadCount</code>, NOT toward the new card-flow bubble (no double-counting).</li>
+  <li>Mobile bottom dock "นัด" tab shows the same count as the desktop "นัดหมาย" tab (single source).</li>
+  <li>Source-grep: AdminDashboard.jsx contains the V121 modal-open gate AND the V121 cardFlowUnreadCount memo AND the V121 listener extension.</li>
+  <li>Source-grep: <code>opdSessionState.js</code> exports <code>isCardFlowUnread</code>.</li>
+  <li>Full vitest GREEN; targeted V121 tests all PASS.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+
+<table>
+  <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td><strong>R1</strong>: Session listener may filter out <code>isHiddenFromQueue:true</code> sessions → bubble count would be 0 (false-empty).</td><td>Implementer verifies AT TASK 1: read the listener filter in AdminDashboard (line ~2227+). If it filters hidden → widen the filter OR add a parallel listener. Per V116 design + my earlier read, the listener loads ALL sessions + UI filters at render → no widening needed.</td></tr>
+    <tr><td><strong>R2</strong>: Sub-pill count requires joining session → appt → date range; could be O(n²) at 100+ appts.</td><td>Use useMemo with shallow deps. At ~50-100 appts per branch + per-row resolveLinkedSession O(1) Map lookup → linear scan. Acceptable.</td></tr>
+    <tr><td><strong>R3</strong>: Cloud Function push (<code>functions/index.js onPatientSubmit</code>) may already gate on session.formType or status. Need to verify it fires for card-flow sessions.</td><td>Implementer verifies at task time. If gate excludes V118 sessions → extend the Cloud Function filter. Defer to implementer per Task 1.</td></tr>
+    <tr><td><strong>R4</strong>: Push notification might fire TOO LATE if the listener depends on tab focus.</td><td>The existing listener fires on Firestore snapshot — no tab-focus gate. V121 preserves this. Browser notifications already work cross-tab.</td></tr>
+  </tbody>
+</table>
+
+<h2>Out of Scope</h2>
+<ul>
+  <li>Renaming the existing <code>unreadCount</code> variable. Stays as-is (Clinic queue only).</li>
+  <li>Modifying the PatientForm — V121 relies on EXISTING <code>isUnread:true</code> stamp at submit.</li>
+  <li>Modifying the Cloud Function (<code>functions/index.js onPatientSubmit</code>) — V121 relies on EXISTING push pipeline. If R3 surfaces gating, that's a follow-up V121-bis.</li>
+  <li>Adding a "mark all as read" admin button — defer to follow-up if user requests.</li>
+</ul>
+
+</body>
+</html>

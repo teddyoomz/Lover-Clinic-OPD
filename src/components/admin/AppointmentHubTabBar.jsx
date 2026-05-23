@@ -14,12 +14,16 @@ const TABS = [
   { key: 'past', label: 'ย้อนหลัง 30 วัน' },
 ];
 
-export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange, rightContent = null }) {
+export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange, rightContent = null, cardFlowCounts = {} }) {
   return (
     <div className="flex gap-2 mb-3 flex-wrap items-center" data-testid="appt-hub-tabbar">
       {TABS.map(t => {
         const active = t.key === activeTab;
         const count = Number(counts[t.key] || 0);
+        // V121 (2026-05-23) — card-flow pending count per sub-pill. Purple
+        // bubble rendered next to the existing count when > 0. Distinct color
+        // (purple #a855f7) makes the new channel visible at a glance.
+        const cardFlowCount = Number(cardFlowCounts[t.key] || 0);
         return (
           <button
             key={t.key}
@@ -31,6 +35,24 @@ export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChan
           >
             <span>{t.label}</span>
             <span className={active ? BUBBLE_ACTIVE : BUBBLE_INACTIVE}>{count}</span>
+            {cardFlowCount > 0 && (
+              <span
+                data-testid={`appt-hub-tab-${t.key}-cardflow-bubble`}
+                style={{
+                  background: '#a855f7',
+                  color: 'white',
+                  fontSize: '0.65em',
+                  fontWeight: 900,
+                  padding: '2px 6px',
+                  borderRadius: '999px',
+                  marginLeft: '4px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                }}
+              >
+                {cardFlowCount > 99 ? '99+' : cardFlowCount}
+              </span>
+            )}
           </button>
         );
       })}

@@ -98,3 +98,48 @@ export function synthesizeSessionFromCustomer(customer, appt) {
     __synthSourceCustomerId: cid,
   };
 }
+
+/**
+ * V121 (2026-05-23) — does this opd_session belong to the V118 card-flow?
+ *
+ * Card-flow sessions are minted via provisionOpdLinkForBookingPair with
+ * `hideFromQueue:true` (V120) → they carry BOTH createdFromBackendBooking:true
+ * AND isHiddenFromQueue:true. Returns false for kiosk sessions, walk-in
+ * sessions, deposit sessions, and pre-V120 legacy hidden sessions (which set
+ * isHiddenFromQueue:true via the V116 deleteSession-with-link path but
+ * lacked createdFromBackendBooking).
+ *
+ * AV118 V121 amendment: every site deriving "is this card-flow?" MUST use
+ * this helper — locks the predicate so a future shape evolution (e.g. a new
+ * field) updates ONE place.
+ *
+ * @param {object|null|undefined} session
+ * @returns {boolean}
+ */
+export function isCardFlowSession(session) {
+  if (!session || typeof session !== 'object') return false;
+  return !!(session.createdFromBackendBooking && session.isHiddenFromQueue);
+}
+
+/**
+ * V121 (2026-05-23) — does this card-flow session need admin's attention?
+ *
+ * True iff:
+ *  - it's a V118 card-flow session (isCardFlowSession), AND
+ *  - customer has filled the form (session.isUnread is set true by PatientForm
+ *    on submit + sticks until handleOpdClick stamps opdRecordedAt/done), AND
+ *  - admin hasn't saved to be_customers yet (isOpdSessionSaved false)
+ *
+ * Locked Q1=B: pure review via 🟢 ดูข้อมูล does NOT clear isUnread for
+ * card-flow sessions — only handleOpdClick succeeding transitions the
+ * session out of this filter via isOpdSessionSaved becoming true.
+ *
+ * @param {object|null|undefined} session
+ * @returns {boolean}
+ */
+export function isCardFlowUnread(session) {
+  if (!isCardFlowSession(session)) return false;
+  if (!session.isUnread) return false;
+  if (isOpdSessionSaved(session)) return false;
+  return true;
+}

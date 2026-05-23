@@ -88,7 +88,8 @@ import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUt
 import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';
 import { isChatHoursActiveNow } from '../lib/chatHours.js';
 // V118 (2026-05-23) — Card-level OPD lifecycle row.
-import { isOpdSessionSaved } from '../lib/opdSessionState.js';
+// V121 (2026-05-23) — extended with isCardFlowSession + isCardFlowUnread.
+import { isOpdSessionSaved, isCardFlowSession, isCardFlowUnread } from '../lib/opdSessionState.js';
 // V118 — SendCustomerLinkModal for card-level OPD link send/view (mounted at root).
 import SendCustomerLinkModal from '../components/backend/SendCustomerLinkModal.jsx';
 // Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
@@ -2298,7 +2299,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // so admin sees the customer when they come back to fill the form.
       setDepositSessions(
         allDocs
-          .filter(s => !s.isArchived && s.formType === 'deposit' && !s.serviceCompleted && (!s.isHiddenFromQueue || s.patientData))
+          .filter(s => !s.isArchived && s.formType === 'deposit' && !s.serviceCompleted
+            // V121 (2026-05-23): card-flow sessions stay hidden from this queue
+            // REGARDLESS of patientData (closes V120 latent gap — V116's
+            // patientData auto-restore would otherwise surface them post-fill).
+            && !(s.isHiddenFromQueue && s.createdFromBackendBooking)
+            && (!s.isHiddenFromQueue || s.patientData))
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0))
       );
       setArchivedDepositSessions(
@@ -2318,7 +2324,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // V116 (2026-05-23) — same isHiddenFromQueue gate + patientData auto-restore
       // as deposit queue above. See line ~2270 for the rationale.
       const ndData = allDocs
-          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted && !s._v82FollowupOpdResetAt && (!s.isHiddenFromQueue || s.patientData))
+          .filter(s => !s.isArchived && s.isPermanent && s.formType !== 'deposit' && !s.serviceCompleted && !s._v82FollowupOpdResetAt
+              // V121 (2026-05-23): same V120-gap close as deposit filter above —
+              // card-flow sessions stay hidden regardless of patientData.
+              && !(s.isHiddenFromQueue && s.createdFromBackendBooking)
+              && (!s.isHiddenFromQueue || s.patientData))
           .sort((a, b) => (b.updatedAt?.toMillis() || b.createdAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || a.createdAt?.toMillis() || 0));
       setNoDepositSessions(ndData);
       setArchivedNoDepositSessions(
@@ -2337,6 +2347,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           // the override → session reappears in queue. Read-side mechanism — no
           // write needed at customer-fill time. Mirrors sibling deposit + noDeposit
           // filters above. User directive: "หายไปแต่ list รายการในคิวหน้าคลินิกเฉยๆ".
+          // V121 (2026-05-23) — card-flow sessions stay hidden REGARDLESS of patientData.
+          // Closes V120 latent gap: V116's `&& !patientData` clause auto-restores
+          // hidden sessions once filled, but V118 card-flow sessions should NEVER
+          // appear in คิวหน้า Clinic queue (Card has its own affordances). Tested
+          // gate at line ~3418 + bubble surfaces use the SAME predicate semantics.
+          if (session.isHiddenFromQueue && session.createdFromBackendBooking) return false;
           if (session.isHiddenFromQueue && !session.patientData) return false;
           // V82-fix2 (2026-05-17 EOD+3 LATE+3): _v82FollowupOpdResetAt opt-out
           // MUST fire BEFORE any other early-reject so that reset sessions are
@@ -3415,7 +3431,12 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     setHasNewUpdate(false);
     // Deposit: ไม่ clear isUnread เมื่อแค่ดู — ต้อง sync (บันทึกการจอง / resync) ถึงจะ clear
     const isDepositKeepUnread = session.formType === 'deposit' && session.isUnread;
-    if (session.isUnread && !isDepositKeepUnread) {
+    // V121 (2026-05-23) — Q1=B locked: card-flow sessions use 🔴 บันทึก OPD
+    // as the read action, NOT modal-open. Pure review (🟢 ดูข้อมูล) does NOT
+    // clear isUnread for card-flow sessions. Bubble persists until
+    // handleOpdClick stamps opdRecordedAt+brokerStatus:'done' → session
+    // drops out of isCardFlowUnread filter via isOpdSessionSaved transition.
+    if (session.isUnread && !isDepositKeepUnread && !isCardFlowSession(session)) {
       // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
       lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
       lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
@@ -4609,6 +4630,22 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
   const unreadCount = sessions.filter(s => s.isUnread).length;
+  // V121 (2026-05-23) — card-flow pending session count across all 5 session
+  // state arrays. Card-flow sessions are V120-hidden from queue UI but live
+  // in the SAME opd_sessions collection (loaded by the listener at line ~2240
+  // without an isHiddenFromQueue filter at listener level — only branch
+  // filter applies). The bubble counts them HERE separately from unreadCount
+  // (which counts kiosk + walk-in only). See isCardFlowUnread for the
+  // 4-predicate AND chain that defines "needs admin attention".
+  const cardFlowUnreadCount = useMemo(() => {
+    let count = 0;
+    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
+      for (const s of arr || []) {
+        if (isCardFlowUnread(s)) count++;
+      }
+    }
+    return count;
+  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);
   // Phase 20.0 final ProClinic strip (2026-05-06) — PROCLINIC_ORIGIN +
   // getProClinicUrl helpers REMOVED. AdminDashboard no longer links to
   // any ProClinic admin URL.
@@ -5985,6 +6022,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </button>
             <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย ProClinic">
               <CalendarDays size={14}/> <span>นัดหมาย</span>
+              {/* V121 (2026-05-23) — purple bubble for V118 card-flow sessions
+                  pending admin save. Distinct color (purple #a855f7) from the
+                  existing unreadCount red so admin sees the new channel at a
+                  glance. Same primitive as menu-badge — see line 5976 / 5980 / 5984. */}
+              {cardFlowUnreadCount > 0 && (
+                <span className="menu-badge" style={{background:'#a855f7'}} data-testid="cardflow-unread-badge-desktop">
+                  {cardFlowUnreadCount > 99 ? '99+' : cardFlowUnreadCount}
+                </span>
+              )}
             </button>
             <button onClick={() => setAdminMode('history')} className={`menu-tab ${adminMode === 'history' ? 'menu-tab-active' : ''}`} title="ประวัติผู้ป่วย">
               <History size={14}/> <span>ประวัติ</span>
@@ -9161,6 +9207,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <button onClick={() => setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'appointment' ? 'menu-dock-tab-active' : ''}`} data-tab="appointment">
           <CalendarDays size={18}/>
           <span>นัด</span>
+          {/* V121 (2026-05-23) — mobile mirror of desktop sidebar purple bubble.
+              Same cardFlowUnreadCount source = guaranteed consistent count. */}
+          {cardFlowUnreadCount > 0 && (
+            <span className="menu-badge-dock" style={{background:'#a855f7'}} data-testid="cardflow-unread-badge-mobile">
+              {cardFlowUnreadCount > 99 ? '99+' : cardFlowUnreadCount}
+            </span>
+          )}
         </button>
         <button onClick={() => setShowMobileJongPicker(true)} className={`menu-dock-tab ${['noDeposit','noDepositHistory','deposit','depositHistory'].includes(adminMode) ? 'menu-dock-tab-active' : ''}`} data-tab="jong">
           <Banknote size={18}/>

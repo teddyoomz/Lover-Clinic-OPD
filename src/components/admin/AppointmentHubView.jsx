@@ -31,7 +31,8 @@ import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
 import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
 // V118 (2026-05-23) — Card-level OPD lifecycle state derivation + synth-session
 // fallback for "ดูข้อมูล" on existing-customer cards with no linkedOpdSessionId.
-import { resolveCardOpdState, synthesizeSessionFromCustomer } from '../../lib/opdSessionState.js';
+// V121 (2026-05-23) — extended with isCardFlowUnread for per-sub-pill bubble counts.
+import { resolveCardOpdState, synthesizeSessionFromCustomer, isCardFlowUnread } from '../../lib/opdSessionState.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -283,6 +284,25 @@ export default function AppointmentHubView({
     };
   }, [appts]);
 
+  // V121 (2026-05-23) — per-sub-pill card-flow unread counts. Joins each appt
+  // to its linkedSession via the existing resolveLinkedSession (prop from
+  // AdminDashboard) + buckets by date range. Mirrors `counts` shape so the
+  // TabBar can render purple bubbles next to existing count badges.
+  const cardFlowSubPillCounts = useMemo(() => {
+    const now = new Date();
+    const buckets = { today: 0, tomorrow: 0, future: 0, past: 0 };
+    for (const a of appts) {
+      const linkedSession = resolveLinkedSession ? resolveLinkedSession(a) : null;
+      if (!isCardFlowUnread(linkedSession)) continue;
+      // Determine which sub-pill this appt belongs to via applyTabFilter (existing).
+      for (const tab of ['today', 'tomorrow', 'future', 'past']) {
+        const inTab = applyTabFilter([a], { tab, now }).length > 0;
+        if (inTab) { buckets[tab]++; break; }
+      }
+    }
+    return buckets;
+  }, [appts, resolveLinkedSession]);
+
   // V71 (2026-05-15) — sub-pill counts derived from same appts array.
   const todaySubCounts = useMemo(() => subPillCountsForToday(appts, new Date()), [appts]);
 
@@ -458,6 +478,7 @@ export default function AppointmentHubView({
         activeTab={activeTab}
         counts={counts}
         onTabChange={setActiveTab}
+        cardFlowCounts={cardFlowSubPillCounts}  /* V121 (2026-05-23) NEW */
       />
       {/* V71 (2026-05-15) — today sub-pill bar. Renders only on today tab. */}
       {activeTab === 'today' && (

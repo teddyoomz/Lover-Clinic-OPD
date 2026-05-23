@@ -2987,3 +2987,24 @@ Adding a 6th fullscreen lightbox requires explicit AV117 entry update + the new 
 **Source-grep regression test**: `tests/v118-card-opd-lifecycle-row-source-grep.test.js` AV118 group.
 
 **Origin**: V118 (2026-05-23) — card-level OPD lifecycle row introduced 4 new callsites of the saved-predicate (AppointmentHubView per-row state derivation + AdminDashboard 3 handlers). Centralizing prevents future drift when the state model evolves. Pairs with AV84 (V87 patient-link trigger closed list) — different concern, same multi-reader-sweep family.
+
+### AV118 — V121 amendment (2026-05-23 card-flow notification bubbles)
+
+V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
+- `isCardFlowSession(session)` — V120 hidden card-flow predicate
+- `isCardFlowUnread(session)` — pending review state for the bubble filter
+
+**Updated sanctioned-callsite list (closed list of 6 entries)**:
+
+1. `src/lib/opdSessionState.js` — defines the helpers
+2. `tests/v118-opd-session-state-helpers.test.js` — V118 helper tests
+3. `tests/v87-link-button-opd-save-guard.test.js` — V87 regression
+4. `src/pages/AdminDashboard.jsx:3475` — handleOpdClick early-return literal predicate (preserved per V87/AV84)
+5. **NEW** `tests/v121-opd-session-state-card-flow-unread.test.js` — V121 helper tests
+6. **NEW** `src/components/admin/AppointmentHubView.jsx` — sub-pill count derivation (sanctioned use of isCardFlowUnread via the V121 cardFlowSubPillCounts memo)
+
+**Source-grep regression test**: `tests/v121-card-flow-notifications-source-grep.test.js` AV118 group locks the V121 amendment + the 6 sanctioned consumers.
+
+**Origin**: V121 (2026-05-23) — card-flow notification bubbles need a single source for "session needs admin attention". 4 callsites of the new predicate (2 in AdminDashboard memos + 1 modal-open gate + 1 helper definition) + 1 HubView use. Centralizing prevents future drift when the bubble semantics evolve.
+
+**Cross-link**: V121 saga in `.claude/rules/00-session-start.md` § 2 (card-flow notifications, 2026-05-23) + `tests/v121-*` (helper + source-grep + flow-simulate) + V120 latent gap close in the 3 queue filters at AdminDashboard.jsx lines ~2301, ~2321, ~2340.

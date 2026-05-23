@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>V121 Card-flow Notifications — Implementation Plan</title>
+  <style>
+    :root { --accent: #a855f7; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; margin-top: 1.5em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(168, 85, 247, 0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; font-weight: 700; }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<h1>V121 — Card-flow Notifications · Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use <code>superpowers:executing-plans</code> (recommended for this tightly-coupled, sequential plan). Steps use HTML checkboxes for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Restore notification visibility (tab bubble + push) for V118 card-flow sessions on the Frontend นัดหมาย tab — same primitives as คิวหน้า Clinic, different rendering surface. Plus close a V120 latent gap (sessions re-appear in Clinic queue after patientData arrives via V116 auto-restore).</p>
+  <p><strong>Architecture:</strong> Extend the existing opd_sessions listener path with 1 new pure helper (<code>isCardFlowUnread</code>). Tighten 3 existing queue filters (V120 gap close). Modal-open isUnread gate (Option B). 2 new bubble render surfaces (desktop tab + mobile dock + per-sub-pill). Push notification piggy-backs on existing listener — no new infra.</p>
+  <p><strong>Tech Stack:</strong> React 19 · existing Firestore opd_sessions listener · existing PatientForm submit path · existing FCM push pipeline · purple <code>#a855f7</code> bubble color.</p>
+  <p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-23-card-flow-notifications-design.html</code></p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop sidebar — purple bubble on นัดหมาย + sub-pills</div>
+  <div style="background:#0d0d0d; padding:12px 16px; border-radius:8px; display:flex; gap:16px; align-items:center;">
+    <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 12px; color:#aaa; font-size:0.82em;">🏥 คิวหน้า Clinic <span style="background:#ef4444; color:white; font-size:0.68em; font-weight:900; padding:1px 7px; border-radius:999px;">7</span></div>
+    <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 12px; background:rgba(220,38,38,0.12); color:#fff; border-radius:6px; font-size:0.82em;">📅 นัดหมาย <span style="background:#a855f7; color:white; font-size:0.68em; font-weight:900; padding:1px 7px; border-radius:999px;">5</span></div>
+  </div>
+  <div style="background:#0a0a0a; padding:6px 12px; border-radius:0 0 6px 6px; display:flex; gap:12px; font-size:0.78em; align-items:center;">
+    <span style="color:#fbbf24;">วันนี้ <span style="background:#a855f7; color:white; font-size:0.6em; padding:0 5px; border-radius:999px;">3</span></span>
+    <span style="color:#fbbf24;">กำลังจะถึง <span style="background:#a855f7; color:white; font-size:0.6em; padding:0 5px; border-radius:999px;">1</span></span>
+    <span style="color:#fbbf24;">ก่อนหน้า <span style="background:#a855f7; color:white; font-size:0.6em; padding:0 5px; border-radius:999px;">1</span></span>
+    <span style="color:#888;">ยกเลิก</span>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Card-flow notification lifecycle (7 steps from customer fill → admin save)</div>
+  <table>
+    <thead><tr><th>#</th><th>Event</th><th>State change</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Customer opens V118 QR link, fills PatientForm, submits</td><td>session.patientData = {...}, session.status = 'completed', session.isUnread = true (existing PatientForm code)</td></tr>
+      <tr><td>2</td><td>Firestore listener fires (line 2243)</td><td>allDocs reloads; data + ndData + depositSessions filters re-run</td></tr>
+      <tr><td>3</td><td>V121 queue filter rejects (createdFromBackendBooking + isHiddenFromQueue) regardless of patientData</td><td>Session NOT in data → NOT in คิวหน้า Clinic UI</td></tr>
+      <tr><td>4</td><td>Listener change-detection (line 2400) fires push for isUnread sessions</td><td>playNotificationSound + showToast + browser push (V121 piggy-backs — no listener extension needed; allNotifData already includes data + ndData where V118 sessions live)</td></tr>
+      <tr><td>5</td><td>Bubble counts recompute via memo</td><td>cardFlowUnreadCount memo increments; AppointmentHubView per-sub-pill counts recompute</td></tr>
+      <tr><td>6</td><td>Admin clicks 🟢 ดูข้อมูล</td><td>setViewingSession opens modal; V121 GATES the isUnread:false write at line 3418 (skip for card-flow) — bubble UNCHANGED</td></tr>
+      <tr><td>7</td><td>Admin clicks 🔴 บันทึก OPD → handleOpdClick succeeds</td><td>session.opdRecordedAt + brokerStatus:'done' stamped → isOpdSessionSaved(session) becomes true → drops out of isCardFlowUnread filter → bubble -1</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>Critical V120-gap close (Task 2)</h3>
+<div class="mockup">
+  <div class="mockup-label">Before V121 — V116 auto-restore would surface V118 sessions in Clinic queue once filled</div>
+  <pre><code>// AdminDashboard.jsx:2340 (current — V116 logic):
+if (session.isHiddenFromQueue && !session.patientData) return false;
+//                              └─ Only when NO patientData → AUTO-RESTORE on customer fill (bug for V118)
+
+// AdminDashboard.jsx:2340 (post-V121):
+if (session.isHiddenFromQueue && session.createdFromBackendBooking) return false;  // V121 NEW (FIRST)
+if (session.isHiddenFromQueue && !session.patientData) return false;                // V116 PRESERVED (legacy path)</code></pre>
+</div>
+
+<h2>File Structure</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Op</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/opdSessionState.js</code></td><td>MODIFY</td><td>Add 2 helpers: <code>isCardFlowSession(session)</code> (V120 hidden card-flow predicate) + <code>isCardFlowUnread(session)</code> (4-way AND including isOpdSessionSaved gate).</td></tr>
+    <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>MODIFY</td><td>5 edits: (a) extend 3 queue filters to fully exclude card-flow sessions [V120 gap close]; (b) modal-open gate at line 3418 — skip isUnread:false for card-flow; (c) cardFlowUnreadCount memo; (d) render purple bubble on desktop sidebar tab (line ~5987 area); (e) render purple bubble on mobile dock (line ~9159+ area).</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>MODIFY</td><td>Compute <code>cardFlowSubPillCounts</code> memo per sub-pill (today/tomorrow/future/past) by joining appts → linkedSession via existing resolveLinkedSession. Pass to AppointmentHubTabBar via new <code>cardFlowCounts</code> prop.</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubTabBar.jsx</code></td><td>MODIFY</td><td>Accept <code>cardFlowCounts</code> prop. Render small purple bubble next to each tab pill's existing count when <code>cardFlowCounts[t.key] > 0</code>.</td></tr>
+    <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>MODIFY</td><td>Extend AV118 — add <code>isCardFlowUnread</code> + <code>isCardFlowSession</code> to the sanctioned-callsite list.</td></tr>
+    <tr><td><code>tests/v121-opd-session-state-card-flow-unread.test.js</code></td><td>CREATE</td><td>Helper unit + adversarial (12 tests).</td></tr>
+    <tr><td><code>tests/v121-card-flow-notifications-source-grep.test.js</code></td><td>CREATE</td><td>Source-grep regression (12 tests).</td></tr>
+    <tr><td><code>tests/v121-card-flow-notifications-flow-simulate.test.js</code></td><td>CREATE</td><td>Rule I full-flow simulate (6 tests).</td></tr>
+  </tbody>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 1: Add isCardFlowSession + isCardFlowUnread helpers to <code>src/lib/opdSessionState.js</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/lib/opdSessionState.js</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Append the 2 new helpers at the end of the file</strong></label></div>
+<pre><code class="language-javascript">/**
+ * V121 (2026-05-23) — does this opd_session belong to the V118 card-flow?
+ * Card-flow sessions are minted via provisionOpdLinkForBookingPair with
+ * `hideFromQueue:true` (V120) → they carry BOTH createdFromBackendBooking:true
+ * AND isHiddenFromQueue:true. Returns false for kiosk sessions, walk-in
+ * sessions, deposit sessions, and pre-V120 legacy hidden sessions.
+ *
+ * @param {object|null|undefined} session
+ * @returns {boolean}
+ */
+export function isCardFlowSession(session) {
+  if (!session || typeof session !== 'object') return false;
+  return !!(session.createdFromBackendBooking && session.isHiddenFromQueue);
+}
+
+/**
+ * V121 (2026-05-23) — does this card-flow session need admin's attention?
+ * True iff:
+ *  - it's a V118 card-flow session (isCardFlowSession), AND
+ *  - customer has filled the form (session.isUnread true is set by PatientForm
+ *    on submit + sticks until handleOpdClick stamps opdRecordedAt/done), AND
+ *  - admin hasn't saved to be_customers yet (isOpdSessionSaved false)
+ *
+ * Locked Q1=B: pure review via 🟢 ดูข้อมูล does NOT clear isUnread for
+ * card-flow sessions — only handleOpdClick succeeds → session transitions
+ * out of this filter via isOpdSessionSaved becoming true.
+ *
+ * @param {object|null|undefined} session
+ * @returns {boolean}
+ */
+export function isCardFlowUnread(session) {
+  if (!isCardFlowSession(session)) return false;
+  if (!session.isUnread) return false;
+  if (isOpdSessionSaved(session)) return false;
+  return true;
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/opdSessionState.js
+git commit -m "feat(opd-card): V121 — add isCardFlowSession + isCardFlowUnread helpers [AV118 ext]"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 2: Close V120 latent gap — extend 3 queue filters in <code>AdminDashboard.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/pages/AdminDashboard.jsx</code> (3 surgical edits at lines ~2301, ~2321, ~2340)</li></ul>
+  <p><strong>Rationale:</strong> V116's filter <code>(!s.isHiddenFromQueue || s.patientData)</code> auto-restores hidden sessions once patientData arrives. For V118 card-flow sessions, this means: after customer fills, the session would re-appear in คิวหน้า Clinic queue (defeating V120's intent + double-counting against V121 card-flow bubble). V121 ALWAYS excludes card-flow sessions from the 3 Clinic-queue-style tabs regardless of patientData.</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Read existing filters to locate exact context</strong></label></div>
+  <p>Filters live at:</p>
+  <ul>
+    <li>Line ~2301 — depositSessions filter (<code>setDepositSessions</code> call)</li>
+    <li>Line ~2321 — noDepositSessions filter (<code>ndData</code> const)</li>
+    <li>Line ~2340 — main queue filter (<code>const data = allDocs.filter(session =&gt; {</code>)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Edit depositSessions filter (line ~2301)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+allDocs
+  .filter(s =&gt; !s.isArchived &amp;&amp; s.formType === 'deposit' &amp;&amp; !s.serviceCompleted &amp;&amp; (!s.isHiddenFromQueue || s.patientData))
+
+// Replace with:
+allDocs
+  .filter(s =&gt; !s.isArchived &amp;&amp; s.formType === 'deposit' &amp;&amp; !s.serviceCompleted
+    // V121 (2026-05-23): card-flow sessions stay hidden from this queue
+    // REGARDLESS of patientData (closes V120 latent gap — V116's
+    // patientData auto-restore would otherwise surface them post-fill).
+    &amp;&amp; !(s.isHiddenFromQueue &amp;&amp; s.createdFromBackendBooking)
+    &amp;&amp; (!s.isHiddenFromQueue || s.patientData))</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Edit ndData (noDepositSessions) filter (line ~2321)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+const ndData = allDocs
+    .filter(s =&gt; !s.isArchived &amp;&amp; s.isPermanent &amp;&amp; s.formType !== 'deposit' &amp;&amp; !s.serviceCompleted &amp;&amp; !s._v82FollowupOpdResetAt &amp;&amp; (!s.isHiddenFromQueue || s.patientData))
+
+// Replace with:
+const ndData = allDocs
+    .filter(s =&gt; !s.isArchived &amp;&amp; s.isPermanent &amp;&amp; s.formType !== 'deposit' &amp;&amp; !s.serviceCompleted &amp;&amp; !s._v82FollowupOpdResetAt
+        // V121 (2026-05-23): same V120-gap close as deposit filter above —
+        // card-flow sessions stay hidden regardless of patientData.
+        &amp;&amp; !(s.isHiddenFromQueue &amp;&amp; s.createdFromBackendBooking)
+        &amp;&amp; (!s.isHiddenFromQueue || s.patientData))</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Edit main queue `data` filter (line ~2340)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+if (session.isHiddenFromQueue &amp;&amp; !session.patientData) return false;
+
+// Replace with (add V121 gate BEFORE the V116 gate):
+// V121 (2026-05-23) — card-flow sessions stay hidden REGARDLESS of patientData.
+// Closes V120 latent gap: V116's `&& !patientData` clause auto-restores
+// hidden sessions once filled, but V118 card-flow sessions should NEVER
+// appear in คิวหน้า Clinic queue (Card has its own affordances). Tested
+// gate at line 3418 + bubble surfaces use the SAME predicate semantics.
+if (session.isHiddenFromQueue &amp;&amp; session.createdFromBackendBooking) return false;
+if (session.isHiddenFromQueue &amp;&amp; !session.patientData) return false;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "fix(queue-filter): V121 — close V120 gap, card-flow sessions stay hidden after fill"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 3: Modal-open gate — skip isUnread:false for card-flow sessions</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/pages/AdminDashboard.jsx</code> (line ~3418)</li></ul>
+  <p><strong>Rationale (Option B locked):</strong> Pure review (ดูข้อมูล click → modal open) must NOT clear the bubble. Only handleOpdClick succeeds → bubble drops via isOpdSessionSaved transition.</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add import for isCardFlowSession (extends existing line 88-ish opdSessionState import)</strong></label></div>
+<pre><code class="language-javascript">// Find current import at the top of AdminDashboard.jsx:
+import { isOpdSessionSaved } from '../lib/opdSessionState.js';
+
+// Extend to:
+import { isOpdSessionSaved, isCardFlowSession } from '../lib/opdSessionState.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Edit the modal-open isUnread gate at line ~3417</strong></label></div>
+<pre><code class="language-javascript">// Find:
+const isDepositKeepUnread = session.formType === 'deposit' &amp;&amp; session.isUnread;
+if (session.isUnread &amp;&amp; !isDepositKeepUnread) {
+  // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
+  lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
+  lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
+  try {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
+  } catch(e) { console.error('updateDoc isUnread:', e); }
+}
+
+// Replace with:
+const isDepositKeepUnread = session.formType === 'deposit' &amp;&amp; session.isUnread;
+// V121 (2026-05-23) — card-flow sessions use 🔴 บันทึก OPD as the
+// read action, NOT modal-open. Q1=B locked: pure review (ดูข้อมูล)
+// does NOT clear isUnread. Bubble persists until handleOpdClick stamps
+// opdRecordedAt + brokerStatus:'done' → session drops out of
+// isCardFlowUnread filter via isOpdSessionSaved transition.
+if (session.isUnread &amp;&amp; !isDepositKeepUnread &amp;&amp; !isCardFlowSession(session)) {
+  // ตัดสายวงจร: mark patientData ปัจจุบันว่า "sync แล้ว" ก่อน write isUnread:false
+  lastViewedStrRef.current[session.id] = stableStr(session.patientData || {});
+  lastAutoSyncedStrRef.current[session.id] = stableStr(session.patientData || {});
+  try {
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', session.id), { isUnread: false });
+  } catch(e) { console.error('updateDoc isUnread:', e); }
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "feat(notifications): V121 — Option B modal-open gate for card-flow isUnread"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 4: cardFlowUnreadCount memo + desktop tab bubble + mobile dock bubble</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/pages/AdminDashboard.jsx</code> (4 edits: import, memo, desktop tab, mobile dock)</li></ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Extend opdSessionState import (add isCardFlowUnread)</strong></label></div>
+<pre><code class="language-javascript">// Find (post-Task 3):
+import { isOpdSessionSaved, isCardFlowSession } from '../lib/opdSessionState.js';
+
+// Replace with:
+import { isOpdSessionSaved, isCardFlowSession, isCardFlowUnread } from '../lib/opdSessionState.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Add cardFlowUnreadCount memo near unreadCount declaration (line ~4611)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+const unreadCount = sessions.filter(s =&gt; s.isUnread).length;
+
+// Replace with:
+const unreadCount = sessions.filter(s =&gt; s.isUnread).length;
+// V121 (2026-05-23) — card-flow pending session count across all 5 session
+// state arrays. Card-flow sessions are V120-hidden from queue → they live
+// in sessions/noDepositSessions/depositSessions (loaded by the same opd_sessions
+// listener) but render as hidden in the queue UI. The bubble counts them
+// HERE. See src/lib/opdSessionState.js isCardFlowUnread for filter logic.
+const cardFlowUnreadCount = useMemo(() =&gt; {
+  let count = 0;
+  for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
+    for (const s of arr || []) {
+      if (isCardFlowUnread(s)) count++;
+    }
+  }
+  return count;
+}, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Render purple bubble on desktop "นัดหมาย" tab (line ~5986-5988)</strong></label></div>
+<pre><code class="language-jsx">// Find:
+&lt;button onClick={() =&gt; setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย ProClinic"&gt;
+  &lt;CalendarDays size={14}/&gt; &lt;span&gt;นัดหมาย&lt;/span&gt;
+&lt;/button&gt;
+
+// Replace with:
+&lt;button onClick={() =&gt; setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย ProClinic"&gt;
+  &lt;CalendarDays size={14}/&gt; &lt;span&gt;นัดหมาย&lt;/span&gt;
+  {/* V121 (2026-05-23) — purple bubble: card-flow sessions pending admin save.
+      Distinct color (purple) from existing unreadCount (red) so admin sees
+      the new channel at a glance. */}
+  {cardFlowUnreadCount &gt; 0 &amp;&amp; (
+    &lt;span className="menu-badge" style={{background:'#a855f7'}} data-testid="cardflow-unread-badge-desktop"&gt;
+      {cardFlowUnreadCount &gt; 99 ? '99+' : cardFlowUnreadCount}
+    &lt;/span&gt;
+  )}
+&lt;/button&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Render purple bubble on mobile dock "นัด" tab (line ~9131-9134)</strong></label></div>
+<pre><code class="language-jsx">// Find:
+&lt;button onClick={() =&gt; setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'appointment' ? 'menu-dock-tab-active' : ''}`} data-tab="appointment"&gt;
+  &lt;CalendarDays size={18}/&gt;
+  &lt;span&gt;นัด&lt;/span&gt;
+&lt;/button&gt;
+
+// Replace with:
+&lt;button onClick={() =&gt; setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'appointment' ? 'menu-dock-tab-active' : ''}`} data-tab="appointment"&gt;
+  &lt;CalendarDays size={18}/&gt;
+  &lt;span&gt;นัด&lt;/span&gt;
+  {/* V121 (2026-05-23) — mobile mirror of desktop sidebar purple bubble.
+      Same cardFlowUnreadCount source → guaranteed consistent count. */}
+  {cardFlowUnreadCount &gt; 0 &amp;&amp; (
+    &lt;span className="menu-badge-dock" style={{background:'#a855f7'}} data-testid="cardflow-unread-badge-mobile"&gt;
+      {cardFlowUnreadCount &gt; 99 ? '99+' : cardFlowUnreadCount}
+    &lt;/span&gt;
+  )}
+&lt;/button&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "feat(notifications): V121 — cardFlowUnreadCount memo + desktop+mobile bubble render"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 5: HubView — per-sub-pill counts derivation</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/components/admin/AppointmentHubView.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Extend opdSessionState import (add isCardFlowUnread)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+import { resolveCardOpdState, synthesizeSessionFromCustomer } from '../../lib/opdSessionState.js';
+
+// Replace with:
+import { resolveCardOpdState, synthesizeSessionFromCustomer, isCardFlowUnread } from '../../lib/opdSessionState.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add cardFlowSubPillCounts memo near the counts memo (line ~246)</strong></label></div>
+<pre><code class="language-javascript">// Find:
+const counts = useMemo(() =&gt; {
+  const now = new Date();
+  return {
+    today:    applyTabFilter(appts, { tab: 'today',    now }).length,
+    tomorrow: applyTabFilter(appts, { tab: 'tomorrow', now }).length,
+    future:   applyTabFilter(appts, { tab: 'future',   now }).length,
+    past:     applyTabFilter(appts, { tab: 'past',     now }).length,
+  };
+}, [appts]);
+
+// Add immediately after:
+// V121 (2026-05-23) — per-sub-pill card-flow unread counts. Joins each appt
+// to its linkedSession via the existing resolveLinkedSession (prop from
+// AdminDashboard) + buckets by date range. Mirrors `counts` shape so the
+// TabBar can render purple bubbles next to existing count badges.
+const cardFlowSubPillCounts = useMemo(() =&gt; {
+  const now = new Date();
+  const buckets = { today: 0, tomorrow: 0, future: 0, past: 0 };
+  for (const a of appts) {
+    const linkedSession = resolveLinkedSession ? resolveLinkedSession(a) : null;
+    if (!isCardFlowUnread(linkedSession)) continue;
+    // Determine which sub-pill this appt belongs to via applyTabFilter (existing).
+    for (const tab of ['today', 'tomorrow', 'future', 'past']) {
+      const inTab = applyTabFilter([a], { tab, now }).length &gt; 0;
+      if (inTab) { buckets[tab]++; break; }
+    }
+  }
+  return buckets;
+}, [appts, resolveLinkedSession]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Pass cardFlowSubPillCounts to AppointmentHubTabBar</strong></label></div>
+<pre><code class="language-jsx">// Find the existing &lt;AppointmentHubTabBar ... /&gt; render (grep for it
+// in AppointmentHubView.jsx). Add the new prop alongside existing ones:
+&lt;AppointmentHubTabBar
+  activeTab={activeTab}
+  counts={counts}
+  onTabChange={setActiveTab}
+  cardFlowCounts={cardFlowSubPillCounts}  /* V121 NEW */
+  rightContent={...}
+/&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubView.jsx
+git commit -m "feat(notifications): V121 — HubView per-sub-pill cardFlow counts"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 6: TabBar — render purple bubble alongside existing count</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/components/admin/AppointmentHubTabBar.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Accept new cardFlowCounts prop + render bubble</strong></label></div>
+<pre><code class="language-jsx">// Replace the entire AppointmentHubTabBar component:
+export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange, rightContent = null, cardFlowCounts = {} }) {
+  return (
+    &lt;div className="flex gap-2 mb-3 flex-wrap items-center" data-testid="appt-hub-tabbar"&gt;
+      {TABS.map(t =&gt; {
+        const active = t.key === activeTab;
+        const count = Number(counts[t.key] || 0);
+        // V121 (2026-05-23) — card-flow pending count per sub-pill. Purple
+        // bubble rendered NEXT TO the existing count when &gt; 0.
+        const cardFlowCount = Number(cardFlowCounts[t.key] || 0);
+        return (
+          &lt;button
+            key={t.key}
+            type="button"
+            data-testid={`appt-hub-tab-${t.key}`}
+            data-active={active ? 'true' : 'false'}
+            onClick={() =&gt; onTabChange?.(t.key)}
+            className={active ? TAB_ACTIVE : TAB_INACTIVE}
+          &gt;
+            &lt;span&gt;{t.label}&lt;/span&gt;
+            &lt;span className={active ? BUBBLE_ACTIVE : BUBBLE_INACTIVE}&gt;{count}&lt;/span&gt;
+            {cardFlowCount &gt; 0 &amp;&amp; (
+              &lt;span
+                data-testid={`appt-hub-tab-${t.key}-cardflow-bubble`}
+                style={{
+                  background: '#a855f7',
+                  color: 'white',
+                  fontSize: '0.65em',
+                  fontWeight: 900,
+                  padding: '2px 6px',
+                  borderRadius: '999px',
+                  marginLeft: '4px',
+                  minWidth: '18px',
+                  textAlign: 'center',
+                }}
+              &gt;
+                {cardFlowCount &gt; 99 ? '99+' : cardFlowCount}
+              &lt;/span&gt;
+            )}
+          &lt;/button&gt;
+        );
+      })}
+      {rightContent &amp;&amp; (
+        &lt;div className="mx-auto flex items-center" data-testid="appt-hub-tabbar-right"&gt;
+          {rightContent}
+        &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubTabBar.jsx
+git commit -m "feat(notifications): V121 — TabBar purple cardflow bubbles per sub-pill"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 7: AV118 extension in audit-anti-vibe-code/SKILL.md</h3>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Append V121 amendment to AV118 entry</strong></label></div>
+<pre><code class="language-bash">cat &gt;&gt; ".agents/skills/audit-anti-vibe-code/SKILL.md" &lt;&lt;'AVEOF'
+
+### AV118 — V121 amendment (2026-05-23 card-flow notification bubbles)
+
+V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
+- `isCardFlowSession(session)` — V120 hidden card-flow predicate
+- `isCardFlowUnread(session)` — pending review state for the bubble filter
+
+**Updated sanctioned-callsite list (closed list of 6)**:
+1. `src/lib/opdSessionState.js` — defines the helpers
+2. `tests/v118-opd-session-state-helpers.test.js` — V118 helper tests
+3. `tests/v87-link-button-opd-save-guard.test.js` — V87 regression
+4. `src/pages/AdminDashboard.jsx:3475` — handleOpdClick early-return literal
+5. **NEW** `tests/v121-opd-session-state-card-flow-unread.test.js` — V121 helper tests
+6. **NEW** `src/components/admin/AppointmentHubView.jsx` — sub-pill count derivation (sanctioned use of isCardFlowUnread)
+
+**Source-grep regression test**: `tests/v121-card-flow-notifications-source-grep.test.js` AV118 group.
+
+**Origin**: V121 (2026-05-23) — card-flow notification bubbles need a single source for "session needs admin attention". 4 callsites of the new predicate (2 in AdminDashboard memos + 1 in HubView + 1 helper definition). Centralizing prevents future drift.
+AVEOF
+echo "AV118 V121 amendment appended"</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "docs(av118): V121 — extend sanctioned list for isCardFlowUnread/Session"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 8: Unit tests — <code>tests/v121-opd-session-state-card-flow-unread.test.js</code></h3>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write the test file</strong></label></div>
+<pre><code class="language-javascript">// V121 (2026-05-23) — unit tests for isCardFlowSession + isCardFlowUnread.
+import { describe, expect, it } from 'vitest';
+import {
+  isCardFlowSession,
+  isCardFlowUnread,
+} from '../src/lib/opdSessionState.js';
+
+describe('V121 — isCardFlowSession', () => {
+  it('U1.1 — true when both createdFromBackendBooking + isHiddenFromQueue', () =&gt; {
+    expect(isCardFlowSession({ createdFromBackendBooking: true, isHiddenFromQueue: true })).toBe(true);
+  });
+  it('U1.2 — false when only createdFromBackendBooking', () =&gt; {
+    expect(isCardFlowSession({ createdFromBackendBooking: true })).toBe(false);
+  });
+  it('U1.3 — false when only isHiddenFromQueue (legacy V116 unhide path)', () =&gt; {
+    expect(isCardFlowSession({ isHiddenFromQueue: true })).toBe(false);
+  });
+  it('U1.4 — false on null/undefined/non-object', () =&gt; {
+    expect(isCardFlowSession(null)).toBe(false);
+    expect(isCardFlowSession(undefined)).toBe(false);
+    expect(isCardFlowSession('str')).toBe(false);
+    expect(isCardFlowSession(42)).toBe(false);
+  });
+});
+
+describe('V121 — isCardFlowUnread', () =&gt; {
+  const baseCardFlow = {
+    createdFromBackendBooking: true,
+    isHiddenFromQueue: true,
+    isUnread: true,
+  };
+  it('U2.1 — true when card-flow + isUnread + not saved', () =&gt; {
+    expect(isCardFlowUnread(baseCardFlow)).toBe(true);
+  });
+  it('U2.2 — false when saved (opdRecordedAt + brokerStatus done)', () =&gt; {
+    expect(isCardFlowUnread({ ...baseCardFlow, opdRecordedAt: new Date(), brokerStatus: 'done' })).toBe(false);
+  });
+  it('U2.3 — false when isUnread:false (already cleared)', () =&gt; {
+    expect(isCardFlowUnread({ ...baseCardFlow, isUnread: false })).toBe(false);
+  });
+  it('U2.4 — false when not card-flow', () =&gt; {
+    expect(isCardFlowUnread({ isUnread: true, patientData: { firstName: 'A' } })).toBe(false);
+  });
+  it('U2.5 — false on null', () =&gt; {
+    expect(isCardFlowUnread(null)).toBe(false);
+  });
+  it('U2.6 — Q1=B locked: card-flow session with patientData remains unread until saved', () =&gt; {
+    // Customer just filled the form. Per Option B, viewing alone doesn't clear isUnread.
+    expect(isCardFlowUnread({ ...baseCardFlow, patientData: { firstName: 'A' } })).toBe(true);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npx vitest run tests/v121-opd-session-state-card-flow-unread.test.js</code></p>
+  <p>Expected: 10/10 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v121-opd-session-state-card-flow-unread.test.js
+git commit -m "test(v121): isCardFlowSession + isCardFlowUnread unit bank"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 9: Source-grep regression — <code>tests/v121-card-flow-notifications-source-grep.test.js</code></h3>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write the test file</strong></label></div>
+<pre><code class="language-javascript">// V121 (2026-05-23) — source-grep regression bank.
+import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const ROOT = path.resolve(__dirname, '..');
+const ADMIN = fs.readFileSync(path.join(ROOT, 'src/pages/AdminDashboard.jsx'), 'utf8');
+const HUBVIEW = fs.readFileSync(path.join(ROOT, 'src/components/admin/AppointmentHubView.jsx'), 'utf8');
+const TABBAR = fs.readFileSync(path.join(ROOT, 'src/components/admin/AppointmentHubTabBar.jsx'), 'utf8');
+const STATE = fs.readFileSync(path.join(ROOT, 'src/lib/opdSessionState.js'), 'utf8');
+const AV = fs.readFileSync(path.join(ROOT, '.agents/skills/audit-anti-vibe-code/SKILL.md'), 'utf8');
+
+describe('V121 — helper exports', () =&gt; {
+  it('SG1.1 — opdSessionState exports isCardFlowSession + isCardFlowUnread', () =&gt; {
+    expect(STATE).toMatch(/export function isCardFlowSession\(/);
+    expect(STATE).toMatch(/export function isCardFlowUnread\(/);
+  });
+});
+
+describe('V121 — AdminDashboard wiring', () =&gt; {
+  it('SG2.1 — imports isCardFlowSession + isCardFlowUnread', () =&gt; {
+    expect(ADMIN).toMatch(/isCardFlowSession/);
+    expect(ADMIN).toMatch(/isCardFlowUnread/);
+  });
+  it('SG2.2 — cardFlowUnreadCount memo spans 5 session arrays', () =&gt; {
+    expect(ADMIN).toMatch(/cardFlowUnreadCount\s*=\s*useMemo/);
+    const memo = ADMIN.match(/cardFlowUnreadCount[\s\S]{0,1200}\}\,\s*\[[^\]]*\]/)?.[0] || '';
+    expect(memo).toMatch(/sessions/);
+    expect(memo).toMatch(/archivedSessions/);
+    expect(memo).toMatch(/depositSessions/);
+    expect(memo).toMatch(/archivedDepositSessions/);
+    expect(memo).toMatch(/noDepositSessions/);
+  });
+  it('SG2.3 — modal-open gate skips card-flow', () =&gt; {
+    expect(ADMIN).toMatch(/!isCardFlowSession\(session\)/);
+  });
+  it('SG2.4 — Desktop sidebar tab bubble rendered (purple)', () =&gt; {
+    expect(ADMIN).toMatch(/data-testid="cardflow-unread-badge-desktop"/);
+    expect(ADMIN).toMatch(/#a855f7/);
+  });
+  it('SG2.5 — Mobile dock bubble rendered (purple)', () =&gt; {
+    expect(ADMIN).toMatch(/data-testid="cardflow-unread-badge-mobile"/);
+  });
+  it('SG2.6 — V120 gap close: card-flow stays hidden post-fill (3 filter sites)', () =&gt; {
+    // V121 NEW pattern present in main queue + ndData + depositSessions filters.
+    const v121GapPattern = /isHiddenFromQueue\s*&&\s*[^!]?(?:s\.|session\.)?createdFromBackendBooking/g;
+    const matches = ADMIN.match(v121GapPattern) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('V121 — HubView wiring', () =&gt; {
+  it('SG3.1 — imports isCardFlowUnread', () =&gt; {
+    expect(HUBVIEW).toMatch(/isCardFlowUnread/);
+  });
+  it('SG3.2 — cardFlowSubPillCounts memo present + passed to TabBar', () =&gt; {
+    expect(HUBVIEW).toMatch(/cardFlowSubPillCounts/);
+    expect(HUBVIEW).toMatch(/cardFlowCounts=\{cardFlowSubPillCounts\}/);
+  });
+});
+
+describe('V121 — TabBar wiring', () =&gt; {
+  it('SG4.1 — accepts cardFlowCounts prop + renders purple bubble per sub-pill', () =&gt; {
+    expect(TABBAR).toMatch(/cardFlowCounts\s*=\s*\{\}/);
+    expect(TABBAR).toMatch(/cardflow-bubble/);
+    expect(TABBAR).toMatch(/#a855f7/);
+  });
+});
+
+describe('V121 — AV118 extension', () =&gt; {
+  it('SG5.1 — AV118 V121 amendment present', () =&gt; {
+    expect(AV).toMatch(/AV118 — V121 amendment/);
+    expect(AV).toMatch(/isCardFlowSession/);
+    expect(AV).toMatch(/isCardFlowUnread/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npx vitest run tests/v121-card-flow-notifications-source-grep.test.js</code></p>
+  <p>Expected: 10/10 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v121-card-flow-notifications-source-grep.test.js
+git commit -m "test(v121): source-grep regression + V120-gap close lock"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 10: Rule I flow-simulate — <code>tests/v121-card-flow-notifications-flow-simulate.test.js</code></h3>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Write the test file</strong></label></div>
+<pre><code class="language-javascript">// V121 (2026-05-23) — Rule I full-flow simulate.
+import { describe, expect, it } from 'vitest';
+import { isCardFlowUnread, isOpdSessionSaved } from '../src/lib/opdSessionState.js';
+
+describe('V121 — Card-flow notification lifecycle', () =&gt; {
+  it('F1.1 — Newly provisioned card-flow session: not yet filled → NOT in bubble count', () =&gt; {
+    const session = { createdFromBackendBooking: true, isHiddenFromQueue: true, status: 'pending', patientData: null };
+    expect(isCardFlowUnread(session)).toBe(false);
+  });
+
+  it('F1.2 — Customer fills form: isUnread:true + patientData populated → bubble +1', () =&gt; {
+    const session = { createdFromBackendBooking: true, isHiddenFromQueue: true, isUnread: true, status: 'completed', patientData: { firstName: 'A' } };
+    expect(isCardFlowUnread(session)).toBe(true);
+  });
+
+  it('F1.3 — Admin opens 🟢 ดูข้อมูล modal: isUnread STAYS true (Option B locked) → bubble unchanged', () =&gt; {
+    // The modal-open gate in AdminDashboard.jsx:3418 area SKIPS the
+    // isUnread:false write for card-flow sessions. So the session is
+    // unchanged in Firestore. isCardFlowUnread still returns true.
+    const session = { createdFromBackendBooking: true, isHiddenFromQueue: true, isUnread: true, status: 'completed', patientData: { firstName: 'A' } };
+    expect(isCardFlowUnread(session)).toBe(true);
+  });
+
+  it('F1.4 — Admin clicks 🔴 บันทึก OPD: handleOpdClick stamps opdRecordedAt + brokerStatus → bubble -1', () =&gt; {
+    const session = { createdFromBackendBooking: true, isHiddenFromQueue: true, isUnread: true, status: 'completed', patientData: { firstName: 'A' }, opdRecordedAt: new Date(), brokerStatus: 'done' };
+    expect(isOpdSessionSaved(session)).toBe(true);
+    expect(isCardFlowUnread(session)).toBe(false);
+  });
+
+  it('F2.1 — V120-gap close: card-flow session with patientData stays hidden (queue filter test)', () =&gt; {
+    // Simulate the queue filter logic from AdminDashboard.jsx:2340 area.
+    const filterQueue = (s) =&gt; {
+      // V121 new gate FIRST
+      if (s.isHiddenFromQueue &amp;&amp; s.createdFromBackendBooking) return false;
+      // V116 PRESERVED gate
+      if (s.isHiddenFromQueue &amp;&amp; !s.patientData) return false;
+      return true;
+    };
+    const cardFlowFilled = { createdFromBackendBooking: true, isHiddenFromQueue: true, patientData: { firstName: 'A' } };
+    expect(filterQueue(cardFlowFilled)).toBe(false);  // V121 gate fires
+    const legacyHiddenWithData = { isHiddenFromQueue: true, patientData: { firstName: 'A' } };
+    expect(filterQueue(legacyHiddenWithData)).toBe(true);  // V116 path preserved (no createdFromBackendBooking)
+  });
+
+  it('F3.1 — Non-card-flow session unaffected', () =&gt; {
+    const kioskSession = { isUnread: true, patientData: { firstName: 'A' }, status: 'completed' };
+    expect(isCardFlowUnread(kioskSession)).toBe(false);  // counts toward existing unreadCount, not V121 bubble
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npx vitest run tests/v121-card-flow-notifications-flow-simulate.test.js</code></p>
+  <p>Expected: 6/6 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v121-card-flow-notifications-flow-simulate.test.js
+git commit -m "test(v121): Rule I full-flow simulate (4-state lifecycle + V120-gap close)"</code></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 11: Targeted test run + V118/V116 regression check + build clean</h3>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Run all V121 + sibling regression tests</strong></label></div>
+<pre><code class="language-bash">npx vitest run \
+  tests/v121-opd-session-state-card-flow-unread.test.js \
+  tests/v121-card-flow-notifications-source-grep.test.js \
+  tests/v121-card-flow-notifications-flow-simulate.test.js \
+  tests/v118-opd-session-state-helpers.test.js \
+  tests/v118-card-opd-lifecycle-row-source-grep.test.js \
+  tests/v120-card-flow-hide-from-queue.test.js \
+  tests/v119-av60-hook-import-drift-permanent-gate.test.js</code></pre>
+  <p>Expected: V121 26/26 + sibling all PASS</p>
+
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: Build clean</strong></label></div>
+  <p>Run: <code>npm run build</code></p>
+  <p>Expected: <code>✓ built in ~3s</code>, no MISSING_EXPORT/syntax errors.</p>
+
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: If failures — fix inline; do NOT proceed to T12</strong></label></div>
+  <p>If V121 tests fail: re-read the source change for typo / scope mismatch. If V118/V120 sibling fails: V21 lock-in — update the sibling test's regex with V121 marker comment.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 12: Full vitest + commit + push + state-file update</h3>
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1: Run full vitest (Rule N batch-end discipline)</strong></label></div>
+  <p>Run: <code>npx vitest run</code></p>
+  <p>Expected: 14438 + ~26 V121 new + 0 failures = ~14464 GREEN. Phase 17.1 known flake allowed.</p>
+
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2: If V21 lock-ins surface — fix inline + add V121 marker comment</strong></label></div>
+  <p>Any test asserting the pre-V121 shape of queue filters or modal-open gate may fail. Update each with V121 marker explaining the post-V121 contract.</p>
+
+  <div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3: Run AV60 scanner (V119 permanent gate sanity check)</strong></label></div>
+  <p>Run: <code>node scripts/diag-react-hook-import-drift.mjs</code></p>
+  <p>Expected: <code>Drift instances found: 0</code></p>
+
+  <div class="step"><input type="checkbox" id="t12s4"> <label for="t12s4"><strong>Step 4: Update active.md with V121 LOCAL status</strong></label></div>
+  <p>Append/modify <code>.agents/active.md</code> per the V120 pattern:</p>
+<pre><code class="language-markdown">---
+updated_at: "2026-05-23 EOD+1 LATE+8 — V121 Card-flow notifications LOCAL"
+status: "V115+V116 LIVE on prod @ 3612d8ae. V117+V118+V119+V120+V121 SHIPPED local — awaiting deploy. V121 restores notification visibility (bubble + push) on นัดหมาย tab for V118 card-flow sessions, plus closes V120 latent gap (V116 patientData auto-restore would surface card-flow in Clinic queue post-fill)."
+branch: "master"
+last_commit: "feat(notifications): V121 — Card-flow tab bubbles + push (sub-pill purple) [AV118 ext]"
+tests: "V121 26/26 · V118+V119+V120 sibling all PASS · full vitest GREEN · build clean · AV60 0/527 drift"
+production_url: "https://lover-clinic-app.vercel.app"
+production_commit: "3612d8ae (V115+V116+V116-followup LIVE) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
+firestore_rules_version: "unchanged (V118+V119+V120+V121 client-only)"
+---</code></pre>
+
+  <div class="step"><input type="checkbox" id="t12s5"> <label for="t12s5"><strong>Step 5: Final commit + push</strong></label></div>
+<pre><code class="language-bash">git add .agents/active.md
+git commit -m "docs(agents): EOD 2026-05-23 LATE+8 — V121 notifications LOCAL ready for deploy"
+git push origin master</code></pre>
+
+  <div class="step"><input type="checkbox" id="t12s6"> <label for="t12s6"><strong>Step 6: NO DEPLOY this turn (V18 lock)</strong></label></div>
+  <p>V121 is client-only — no Firestore rules / no Cloud Function change / no Probe-Deploy-Probe needed. User authorizes <code>vercel --prod</code> separately. Combined deploy of V117+V118+V119+V120+V121 OK.</p>
+  <p>Post-deploy: <strong>user Rule Q L1 hands-on</strong> per spec § Acceptance Criteria #1-9.</p>
+</div>
+
+<h2>Self-Review</h2>
+
+<ol>
+  <li><strong>Spec coverage:</strong>
+    <ul>
+      <li>Spec State 1 (5 pending) → Task 4 desktop+mobile + Task 5+6 sub-pill ✓</li>
+      <li>Spec State 2 (viewing unchanged) → Task 3 modal-open gate ✓</li>
+      <li>Spec State 3 (count -1 after save) → Task 1 isCardFlowUnread + isOpdSessionSaved interaction ✓</li>
+      <li>Spec V120-gap close (R1) → Task 2 ✓</li>
+      <li>Spec push pipeline → No code change needed (listener at line 2362+ already includes data + ndData where V118 sessions live) — documented in Task 4 step 2 memo comment</li>
+      <li>Spec acceptance #1-9 → all covered by Task 8-10 tests ✓</li>
+      <li>Spec R3 (Cloud Function push gating) → resolved: <code>functions/index.js onPatientSubmit</code> is invoked by the same PatientForm code path V118 uses; V121 makes no change to PatientForm → no Cloud Function change needed</li>
+    </ul>
+  </li>
+  <li><strong>Placeholder scan:</strong> No TBD/TODO. All code blocks complete.</li>
+  <li><strong>Type consistency:</strong>
+    <ul>
+      <li><code>isCardFlowSession(session)</code> and <code>isCardFlowUnread(session)</code> — consistent across Tasks 1, 8, 9, 10 ✓</li>
+      <li><code>cardFlowUnreadCount</code> (singular total) vs <code>cardFlowSubPillCounts</code> (per-sub-pill object) — different but consistent ✓</li>
+      <li><code>cardFlowCounts</code> prop on TabBar matches HubView's pass + TabBar's destructure ✓</li>
+      <li>data-testid markers consistent: <code>cardflow-unread-badge-desktop</code> + <code>-mobile</code>, <code>appt-hub-tab-{key}-cardflow-bubble</code> ✓</li>
+    </ul>
+  </li>
+</ol>
+
+</body>
+</html>

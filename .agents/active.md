@@ -1,12 +1,12 @@
 ---
-updated_at: "2026-05-23 EOD+1 LATE+7 — V120 Card-flow hides from Clinic queue"
-status: "V115+V116 LIVE on prod @ 3612d8ae. V117 + V118 + V119 + V120 SHIPPED local — awaiting deploy. V120 makes V118 Card-flow OPD sessions hidden from Clinic queue tab (since Card has its own affordances now)."
+updated_at: "2026-05-23 EOD+1 LATE+8 — V121 Card-flow notifications LOCAL"
+status: "V115+V116 LIVE on prod @ 3612d8ae. V117+V118+V119+V120+V121 SHIPPED local — awaiting deploy. V121 restores notification visibility (purple bubble on นัดหมาย tab + sub-pills + mobile dock) for V118 card-flow sessions, plus closes V120 latent gap (V116 patientData auto-restore would surface card-flow in Clinic queue post-fill)."
 branch: "master"
-last_commit: "feat(opd-card): V120 — Card-flow OPD sessions hide from Clinic queue [opt-in helper param]"
-tests: "V120 11/11 · V118 source-grep 24/24 · V116 26/26 · Phase-24-0-vicies-novies 38/38 · AV60 0/527 drift · build clean 3.50s"
+last_commit: "feat(notifications): V121 — Card-flow tab bubbles + V120-gap close + AV118 ext"
+tests: "V121 26/26 · full vitest 14480/14480 GREEN · AV60 0/527 drift · build clean 3.09s"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "3612d8ae (V115+V116+V116-followup LIVE) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
-firestore_rules_version: "unchanged (V118+V119+V120 client-only)"
+firestore_rules_version: "unchanged (V118+V119+V120+V121 client-only)"
 ---
 
 # Active Context
