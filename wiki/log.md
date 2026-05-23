@@ -2,6 +2,29 @@
 
 Chronological, append-only. Every entry starts `## [YYYY-MM-DD] <op> | <title>` so it's greppable: `grep "^## \[" wiki/log.md | tail -10`.
 
+## [2026-05-23 EOD+1 LATE+3] ingest | V116 link-survives-queue-delete + auto-regen + un-hide on re-engage (DEPLOYED)
+
+Single-session `/systematic-debugging` + ultrathink — Phase 1 mapping (4 files, 4 grep passes) → Phase 2 class-of-bug grep (Rule P Step 3: 3 broken delete sites + 1 self-healing) → Phase 3 brainstorming (Q1-Q4 via AskUserQuestion) → Phase 4 implementation (5 surgical edits + V116-followup catch by user) → 26 V116 tests + AV116 invariant + Tier 2 classifier + full vitest 14344/14344 + Vercel deploy.
+
+**What shipped**: `ดูลิ้งค์ที่ส่งไป` button flow is now self-healing across 3 dimensions:
+1. **Queue-delete preserves link when linked to booking** — `deleteSession` (`AdminDashboard.jsx:3287`) no-patientData branch: if `linkedAppointmentId OR linkedDepositId` → set `isHiddenFromQueue:true` (preserve session, queue-only hide); else hard-delete (standalone "เหมือนกดผิด"). Auto-2hr-expire mirrors. URL stays alive.
+2. **Provision helper architectural backstop** — `provisionOpdLinkForBookingPair` (`appointmentDepositBatch.js:902`) verifies session existence before idempotent short-circuit; on stale FK → mint fresh + overstamp reverse-FK (legacy victims healed on next click — มนทวัฒน์ + สันติสุข image-2 cohort).
+3. **Un-hide on re-engagement** (V116-followup) — re-clicking "ดูลิ้ง" on hidden session un-hides it (queue entry reappears immediately); admin has Review surface before customer fills. URL unchanged (no QR re-share needed). Idempotent on non-hidden sessions.
+
+**Architectural commitments**:
+- **Queue auto-restore via read-side override** — filter `(!s.isHiddenFromQueue || s.patientData)` at 3 queue sites (main / deposit / noDeposit). No customer-side write needed when patientData appears.
+- **PatientForm.jsx:78 isArchived gate untouched** — `isHiddenFromQueue` is a NEW field separate from `isArchived` (PatientForm rejects archived; would break link-survives-policy if we overloaded).
+- **Closed AV116 sanctioned-exception list** of 2 (`handleNoDepositCancel` self-heals via deleteBackendAppointment cascade; `hardDeleteSession` covered by provision backstop) — adding 3rd opd_session delete site fails class-of-bug classifier G3 → forces Rule P V-entry.
+- **Walk-in modal gate**: 6th indicator `createdFromBackendBooking` (defense-in-depth; pre-existing 5 already cover but locks against future drift).
+
+**Files touched**: `src/lib/appointmentDepositBatch.js` (2 edits — existence check + un-hide), `src/pages/AdminDashboard.jsx` (5 edits — deleteSession + auto-expire + 3 queue filters + walk-in gate), `tests/v116-link-survives-queue-delete.test.js` (NEW 26 tests: SG/D/F/G), `.agents/skills/audit-anti-vibe-code/SKILL.md` (NEW AV116, 3 rules + sanctioned list).
+
+**Deploy state**: Vercel prod `lover-clinic-app.vercel.app` LIVE @ `3612d8ae` (V115 + V116 + V116-followup combined ship). NO rules change → Probe-Deploy-Probe not needed.
+
+**L1 pending**: user iPhone hands-on for V115 lightbox + Rule Q L1 for V116 (3 scenarios: new flow / legacy victim / re-engage un-hide).
+
+Full lessons + design tradeoffs → `.claude/rules/v-log-archive.md` (V116 entry forthcoming at next major V-log update).
+
 ## [2026-05-19 NIGHT+5 EOD+1] ingest | V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener (DEPLOYED)
 
 Single-session 12-task subagent-driven implementation: brainstorming (Q1-Q4) → HTML spec → HTML plan → 12 tasks via fresh subagent + 2-stage review (spec compliance + code quality) per task → combined V15 deploy.

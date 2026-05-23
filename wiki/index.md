@@ -2,12 +2,12 @@
 title: Wiki Index
 type: index
 date-created: 2026-05-04
-date-updated: 2026-05-21
+date-updated: 2026-05-23
 ---
 
 # LoverClinic Wiki — Index
 
-Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener). Extended 2026-05-21 (Tablet Chart Editor session-doc relay — separate-files feature, TFP one-prop touch).
+Codebase architecture knowledge base. Bootstrapped 2026-05-04 per Karpathy LLM Wiki pattern. Backfilled 2026-05-05 (Phase 17.0/17.1 prep cycle). Re-backfilled 2026-05-05 EOD (Phase 17.2 quinquies/sexies/septies/octies + Phase 18.0 Branch Exam Rooms cycle). Extended 2026-05-19 NIGHT+5 EOD+1 (V43-followup hide-skipped-from-balance + Edit shortcut + BS-18 listener). Extended 2026-05-21 (Tablet Chart Editor session-doc relay — separate-files feature, TFP one-prop touch). Extended 2026-05-23 (V116 link-survives-queue-delete + auto-regen + un-hide on re-engage — AV116 invariant + class-of-bug classifier across 4 opd_sessions delete sites).
 
 **Schema**: see [CLAUDE.md](CLAUDE.md) for conventions.
 **Activity log**: see [log.md](log.md) for chronological history.
