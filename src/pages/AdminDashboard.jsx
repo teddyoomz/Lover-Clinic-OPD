@@ -3791,6 +3791,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         branchId: appt.branchId || selectedBranchId || '',
         formType: 'intake',
         sessionName: appt.customerNameTemp || appt.customerName || 'ลูกค้าจอง',
+        // V120 (2026-05-23) — Card has its own 🟢 ดูข้อมูล + 🔴 บันทึก
+        // affordances; the Clinic queue tab doesn't need to ALSO receive
+        // these card-bound entries. Hide from queue at mint + re-engage.
+        hideFromQueue: true,
       });
       setSendLinkModal({
         sessionId: r.sessionId,

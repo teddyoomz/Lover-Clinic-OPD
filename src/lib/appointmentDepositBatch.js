@@ -853,6 +853,18 @@ export async function provisionOpdLinkForBookingPair({
   formType = 'intake',
   sessionName = '',
   origin = '',
+  // V120 (2026-05-23) — opt-in hide-from-Clinic-queue flag. When true, the
+  // newly-minted session is stamped isHiddenFromQueue:true AND existing
+  // sessions (idempotent re-engage path) are re-stamped hidden REGARDLESS
+  // of V116's un-hide-on-re-engage logic. V118 Card-flow callers set this
+  // so admin's คิวหน้า Clinic tab never receives card-bound entries (the
+  // Card already has all the affordances: 🔗 link + 🟢 ดูข้อมูล + 🔴 บันทึก).
+  // Default false → preserves V116 behavior for AppointmentFormModal +
+  // DepositPanel callers (which haven't migrated to Card flow yet).
+  // User directive (verbatim, 2026-05-23): "ส่งลิ้งค์ลูกค้ากรอก OPD ใน
+  // Card list ... ไม่ต้องไปสร้างคิวตรง tab คิวหน้า Clinic แล้ว เพราะตอนนี้
+  // มีปุ่มดูข้อมูล OPD และบันทึกลง OPD เองในหน้านี้แล้ว".
+  hideFromQueue = false,
 } = {}) {
   if (!depositId && !appointmentId) {
     throw new Error('provisionOpdLinkForBookingPair: depositId OR appointmentId required');
@@ -925,7 +937,35 @@ export async function provisionOpdLinkForBookingPair({
       // บันทึกลง OPD when customer eventually fills. The URL is unchanged
       // (no need to re-send QR to customer).
       const existingData = existingSessionSnap.data() || {};
-      if (existingData.isHiddenFromQueue) {
+      // V120 (2026-05-23) — Card-flow re-engage: KEEP HIDDEN (override V116).
+      // When caller passed hideFromQueue:true, ENFORCE isHiddenFromQueue:true
+      // even on the idempotent path so the session never appears in the
+      // คิวหน้า Clinic queue. The Card already surfaces all OPD lifecycle
+      // affordances; admin doesn't need queue visibility.
+      if (hideFromQueue) {
+        if (!existingData.isHiddenFromQueue) {
+          const reHideBatch = writeBatch(db);
+          reHideBatch.update(opdSessionDoc(existingSessionId), {
+            isHiddenFromQueue: true,
+            hiddenFromQueueAt: serverTimestamp(),
+            hiddenFromQueueReason: 'card-flow-provision-v120',
+          });
+          await reHideBatch.commit();
+        }
+      } else if (existingData.isHiddenFromQueue) {
+        // V116-followup (2026-05-23) — UN-HIDE on re-engagement. PRESERVED
+        // for AppointmentFormModal + DepositPanel paths that don't pass
+        // hideFromQueue:true. User report (verbatim): "พอลบแล้วสร้างลิ้งรอบ
+        // ที่ 2 จากลูกค้าคนที่นัดแล้ว ... มันไม่มาแสดงในหน้าคิวหน้าคลินิกแล้ว
+        // แล้ว Admin จะ Review ก่อนกดบันทึกลง OPD ได้ยังไง?". After V116
+        // hide-on-delete, an admin who re-clicks "ดูลิ้งค์ที่ส่งไป" receives
+        // the SAME URL (idempotent), but the queue entry stays hidden until
+        // the customer fills the form — leaving admin no Review surface in
+        // the meantime. Admin's act of re-clicking the link button IS the
+        // re-engagement signal: re-show the queue entry immediately so admin
+        // can track outstanding pending links + click บันทึกลง OPD when
+        // customer eventually fills. The URL is unchanged (no need to
+        // re-send QR to customer).
         const unhideBatch = writeBatch(db);
         unhideBatch.update(opdSessionDoc(existingSessionId), {
           isHiddenFromQueue: false,
@@ -969,6 +1009,17 @@ export async function provisionOpdLinkForBookingPair({
     linkedAppointmentId: appointmentId || '',
     createdFromBackendBooking: true,
     createdAt: serverTimestamp(),
+    // V120 (2026-05-23) — Card-flow opt-in hide. When hideFromQueue:true,
+    // the session is created already-hidden from the คิวหน้า Clinic queue
+    // listener (`status:'completed'` + `isHiddenFromQueue:true` matches the
+    // existing filter shape used by V27 probe-cleanup + V116 deleteSession).
+    // The session still receives the patient form submission + admin saves
+    // via Card's 🔴 บันทึก OPD button. URL still works.
+    ...(hideFromQueue ? {
+      isHiddenFromQueue: true,
+      hiddenFromQueueAt: serverTimestamp(),
+      hiddenFromQueueReason: 'card-flow-provision-v120',
+    } : {}),
   };
   const now = new Date().toISOString();
   const reverseStamp = {
