@@ -192,12 +192,21 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     // grid fits the bubble (polish #2): no fixed width:240, uses maxWidth
     expect(s).toMatch(/width: '100%', maxWidth: 240/);
   });
-  it('lightbox: backdrop does NOT close (✕/Esc only) — AV78 polish #1', () => {
+  it('lightbox: backdrop DOES close (V115 sanctioned AV78 exception, AV114 mobile gate) — corrected from pre-V115 lock-in', () => {
     const s = read('src/components/staffchat/StaffChatImageLightbox.jsx');
-    expect(s).not.toMatch(/cursor-pointer/);
-    expect(s).toMatch(/backdrop does NOT close|backdrop click does NOT close/);
-    // the backdrop root no longer has onClick={onClose} directly before onTouchStart
-    expect(s).not.toMatch(/onClick=\{onClose\}\s*\n\s*onTouchStart/);
+    // V115 (2026-05-23 EOD+1 LATE+2): the prior AF5 assertion locked the
+    // AV78-NORMAL contract ("backdrop does NOT close") which CONTRADICTED
+    // the AV78 sanctioned-exception list in CLAUDE.md — StaffChatImageLightbox
+    // is one of 2 fullscreen image viewers where click-anywhere-closes IS
+    // the expected UX per Stripe/Linear/WhatsApp/Slack/Photos convention.
+    // User-reported mobile bug "ปิดพรีวิวไม่ได้" surfaced the drift. AV114
+    // codifies the corrected contract — backdrop tap MUST close.
+    expect(s).toMatch(/data-testid=['"]staff-chat-image-lightbox['"][\s\S]{0,500}onClick=\{onClose\}/);
+    // Anti-regression: the OLD "AV78 NORMAL modal — backdrop does NOT close"
+    // comment must not return (re-introduces the V115-fixed user bug).
+    expect(s).not.toMatch(/AV78 NORMAL modal.*backdrop does NOT close/);
+    // Sanctioned-exception annotation present.
+    expect(s).toMatch(/AV78[\s\S]{0,80}(lightbox-explicit-exception|sanctioned)/);
   });
   it('lightbox: instant nav — Blob cache + SINGLE <img> smooth-swap, NO opacity gate (ROUND 6 architectural — 2026-05-22 EOD+2)', () => {
     const s = read('src/components/staffchat/StaffChatImageLightbox.jsx');

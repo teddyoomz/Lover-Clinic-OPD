@@ -3,7 +3,25 @@
 // V73 Feature F (2026-05-16) — Fullscreen image overlay for chat attachments.
 // (2026-05-22) Multi-image: images[] + startIndex + prev/next + counter + filmstrip
 //   + keyboard ←→ + touch swipe + download. Single `src` string backward-compat.
-// Esc / ✕ close (AV78 NORMAL modal — backdrop does NOT close).
+// V115 (2026-05-23 EOD+1 LATE+2) — mobile-UX fix per user report
+//   "ใน mobile กดเปิดรูป Preview ในช่องแชท staff chat แล้วปิดพรีวิวไม่ได้
+//    และซูมดูรูปไม่ได้ด้วย ใช้งานยากมาก":
+//   1. Backdrop click closes — aligns with the AV78 sanctioned-exception
+//      list in CLAUDE.md (fullscreen image viewers are the closed-list
+//      exception to "explicit close only" because Stripe/Linear/WhatsApp/
+//      Slack/Photos all close-on-backdrop for image viewers). Earlier
+//      comment said "AV78 NORMAL modal" which CONTRADICTED the AV78
+//      sanctioned list — corrected here.
+//   2. Safe-area-inset-top padding on top bar — close button was partially
+//      under iPhone notch / dynamic island status bar.
+//   3. Close button bumped w-9 h-9 (36px) → w-11 h-11 (44px) per iOS HIG.
+//   4. Multi-touch detection — onTouchStart now BAILS on pinch (e.touches
+//      .length > 1) instead of misreading touches[0] as a single-finger
+//      swipe. Lets iOS Safari's native pinch-zoom handle 2-finger gestures.
+//   5. Double-tap-to-zoom (1x ↔ 2.5x via CSS transform). Resets on idx
+//      change. Swipe-nav skipped when zoomed.
+//   AV114 enforces these mobile gates across all fullscreen lightboxes.
+// Esc / ✕ / backdrop tap close (AV78 sanctioned exception per CLAUDE.md).
 // z-9700 above modals.
 //
 // (2026-05-22 EOD+2 — ROUND 6, user-directed) — User reported after rounds 1-5
@@ -44,6 +62,14 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   const N = images.length;
   const [idx, setIdx] = useState(() => Math.min(Math.max(0, Number(startIndex) || 0), Math.max(0, N - 1)));
   const touchX = useRef(null);
+  // V115 (2026-05-23 EOD+1 LATE+2) — mobile zoom state.
+  // `zoom` toggled via double-tap (1x ↔ 2.5x). 2-finger pinch is delegated
+  // to iOS Safari's native viewport pinch-zoom (`onTouchStart` bails on
+  // multi-touch — see below). Resets on idx change so each image starts at
+  // 1x. CSS transform on the <img> is the rendering primitive; cursor hint
+  // (zoom-in / zoom-out) shows desktop double-click affordance.
+  const [zoom, setZoom] = useState(1);
+  const lastTapAtRef = useRef(0);
 
   // Blob cache — Map<originalUrl, blobObjectUrl>. State (not ref) so re-renders
   // see cached entries; cleared on unmount via revokeObjectURL.
@@ -106,19 +132,59 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, N]);
 
+  // V115 — reset zoom when image changes so each photo starts at 1x.
+  useEffect(() => { setZoom(1); }, [idx]);
+
   if (N === 0) return null;
 
   const stop = (e) => e.stopPropagation();
   const next = (e) => { stop(e); setIdx(i => Math.min(i + 1, N - 1)); };
   const prev = (e) => { stop(e); setIdx(i => Math.max(i - 1, 0)); };
 
-  const onTouchStart = (e) => { touchX.current = e.touches?.[0]?.clientX ?? null; };
+  // V115 — onTouchStart bails on multi-touch (pinch) so iOS Safari's
+  // native pinch-zoom can handle 2-finger gestures uninterrupted. Without
+  // this guard, the old code read only `touches[0]?.clientX` and on
+  // touchend interpreted the resulting horizontal distance as a swipe,
+  // triggering unwanted prev/next nav.
+  const onTouchStart = (e) => {
+    if (e.touches && e.touches.length > 1) {
+      // pinch / multi-touch → defer to native viewport pinch
+      touchX.current = null;
+      return;
+    }
+    touchX.current = e.touches?.[0]?.clientX ?? null;
+  };
+
+  // V115 — onTouchEnd does: (a) double-tap detect (toggle zoom 1x ↔ 2.5x
+  // when single-finger, <300ms between taps, near-stationary), then (b)
+  // swipe-nav (skip when zoomed — pan-intent dominates while zoomed in).
   const onTouchEnd = (e) => {
-    if (touchX.current == null) return;
+    if (e.touches && e.touches.length > 0) return; // still touching
+    const now = Date.now();
     const endX = e.changedTouches?.[0]?.clientX ?? touchX.current;
-    const dx = endX - touchX.current;
-    if (Math.abs(dx) > 40) setIdx(i => dx < 0 ? Math.min(i + 1, N - 1) : Math.max(i - 1, 0));
+    const dx = touchX.current != null ? endX - touchX.current : 0;
+
+    // (a) Double-tap detection: 2 quick taps within 300ms, low movement
+    if (Math.abs(dx) < 12 && now - lastTapAtRef.current < 300) {
+      setZoom(z => (z === 1 ? 2.5 : 1));
+      lastTapAtRef.current = 0;
+      touchX.current = null;
+      return;
+    }
+    lastTapAtRef.current = now;
+
+    // (b) Swipe-nav: skip when zoomed (pan intent), require ≥40px travel
+    if (zoom === 1 && touchX.current != null && Math.abs(dx) > 40) {
+      setIdx(i => dx < 0 ? Math.min(i + 1, N - 1) : Math.max(i - 1, 0));
+    }
     touchX.current = null;
+  };
+
+  // V115 — desktop double-click also toggles zoom (parity with mobile
+  // double-tap; ignored when src is empty).
+  const onImageDoubleClick = (e) => {
+    e.stopPropagation();
+    setZoom(z => (z === 1 ? 2.5 : 1));
   };
 
   const download = (e) => {
@@ -137,14 +203,31 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   const effectiveSrc = (currentFullUrl && blobCache[currentFullUrl]) || currentFullUrl;
 
   return (
+    // audit-anti-vibe-code: AV78 lightbox-explicit-exception — sanctioned
+    // by CLAUDE.md AV78 list (closed set of 2: StaffChatImageLightbox +
+    // TreatmentReadOnlyMirror inner Lightbox). Click-anywhere-closes IS
+    // the expected UX for fullscreen image viewers (Stripe/Linear/WhatsApp/
+    // Slack/Photos). V115 corrects the prior AV78-NORMAL mis-ship.
+    // AV114 — fullscreen lightbox MUST close on backdrop tap + safe-area
+    // padding + 44pt close button. Children (top-bar, image, filmstrip)
+    // each carry `onClick={stop}` (e.stopPropagation) so taps on them
+    // don't bubble to the backdrop close handler.
     <div
       data-testid="staff-chat-image-lightbox"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
+      onClick={onClose}
       className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[9700] p-4"
     >
-      {/* top bar: counter + download + close */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 text-white z-10 bg-gradient-to-b from-black/60 to-transparent" onClick={stop}>
+      {/* top bar: counter + download + close
+          V115 — paddingTop env(safe-area-inset-top) keeps close button
+          below iPhone notch / dynamic island; max(0.75rem, ...) preserves
+          desktop spacing when safe-area is 0. */}
+      <div
+        className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pb-3 text-white z-10 bg-gradient-to-b from-black/60 to-transparent"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+        onClick={stop}
+      >
         <span data-testid="staff-chat-lightbox-counter" className="text-sm font-mono">
           {N > 1 ? `📷 ${idx + 1} / ${N}` : '📷'}
         </span>
@@ -161,10 +244,11 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            data-testid="staff-chat-lightbox-close"
+            className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:bg-white/35 flex items-center justify-center transition-colors"
             aria-label="ปิด"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
       </div>
@@ -198,14 +282,26 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           is ready (native <img> behaviour) → smooth swap, zero flicker.
           Cached blob URLs (in-memory) make the swap instantaneous. */}
       <div
-        className="relative w-full max-w-4xl h-[78vh] flex items-center justify-center"
+        className="relative w-full max-w-4xl h-[78vh] flex items-center justify-center overflow-hidden"
         onClick={stop}
       >
+        {/* V115 — CSS transform scale() for double-tap-zoom.
+            transition-transform gives smooth 1x↔2.5x toggle. cursor hint
+            shows desktop double-click affordance (zoom-in / zoom-out).
+            Multi-touch pinch is delegated to iOS Safari's native pinch
+            (onTouchStart bails on touches.length>1). */}
         <img
           src={effectiveSrc}
           alt=""
           data-testid="staff-chat-lightbox-image"
-          className="max-w-full max-h-full object-contain rounded"
+          onDoubleClick={onImageDoubleClick}
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: 'center center',
+            transition: 'transform 0.2s ease-out',
+            cursor: zoom === 1 ? 'zoom-in' : 'zoom-out',
+          }}
+          className="max-w-full max-h-full object-contain rounded select-none"
         />
       </div>
 

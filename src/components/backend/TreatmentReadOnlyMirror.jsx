@@ -105,6 +105,10 @@ function Lightbox({ src, label, onClose }) {
   if (!src) return null;
   // audit-anti-vibe-code: AV78 lightbox-explicit-exception — image zoom lightbox.
   // Click-anywhere-closes IS expected UX for fullscreen image viewers (Stripe/Linear/etc).
+  // V115 (2026-05-23) — AV114 mobile gates: safe-area-inset padding on close
+  // button + bumped to 44pt iOS HIG min (was w-8 h-8 = 32px). No zoom yet
+  // (Treatment admin usage is desktop-primary; class-of-bug expansion
+  // scoped to the touch-target + safe-area fixes only).
   return (
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80"
@@ -120,10 +124,11 @@ function Lightbox({ src, label, onClose }) {
         />
         <button
           onClick={onClose}
-          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition"
+          style={{ top: 'max(0.5rem, env(safe-area-inset-top))' }}
+          className="absolute right-2 w-11 h-11 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 active:bg-black/90 transition"
           aria-label="ปิด"
         >
-          ✕
+          <span className="text-base leading-none">✕</span>
         </button>
         {label && (
           <div className="absolute bottom-2 left-0 right-0 text-center text-white text-xs bg-black/40 py-1 rounded">

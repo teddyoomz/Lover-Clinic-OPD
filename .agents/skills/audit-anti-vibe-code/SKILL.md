@@ -2852,3 +2852,42 @@ Origin: V112-B Rule Q V66 / Q-vis violation. Admin-SDK backfill scripts that sta
 - AV18 — V39 (2026-05-07) patched 4 migrate fns (promotions/coupons/vouchers/df_staff_rates) + 4 mappers (`buildBe{Promotion,Coupon,Voucher}FromMaster` + `mapMasterToDfStaffRates`) to accept `{branchId}` opt. 479 zombie docs backfilled to พระราม 3 via `scripts/phase-24-0-vicies-novies-decies-backfill-zombie-branchid.mjs --apply`. Audit doc `be_admin_audit/phase-24-0-vicies-novies-decies-backfill-zombie-branchid-1778102599138-4d7618f4`.
 - AV40 — Phase 26.2g-fillin (2026-05-13) NEW `src/lib/patientHealthMapping.js` with `derivePatientCongenitalDisease` + `derivePatientTreatmentHistory` pure helpers. TFP create-mode auto-fill at `TreatmentFormPage.jsx:1024-1034` extended to call both helpers gated by `!isEdit`. Sanctioned exceptions: `PatientForm.jsx` (writer) + `AdminDashboard.jsx:4504-4533` (display chips). Source-grep regression: `tests/phase-26-2g-fillin-source-grep.test.js` G1+G2.
 - AV40 follow-up — Phase 26.2g-fillin-followup (2026-05-13) extended `patientHealthMapping.js` with `derivePatientCongenitalDiseaseEnglish` + `UD_LABELS_EN` frozen map (formal clinical labels preserved verbatim from `src/utils.js`). Refactored both `src/utils.js` OPD print builders (Thai + English) to consume helpers — 20 inline lines → 4 (2 per builder). `src/utils.js` dropped from AV40 sanctioned list. Anti-regression locks: `tests/phase-26-2g-fillin-followup-source-grep.test.js` G3.1-G3.4. V12 multi-reader-sweep class fully closed for `patientData.ud_*` project-wide.
+
+### AV114 — Fullscreen image lightboxes MUST satisfy mobile UX gates (2026-05-23 V115 mobile lightbox class)
+
+Origin: user-reported mobile bug on iPhone — "ใน mobile กดเปิดรูป Preview ในช่องแชท staff chat แล้วปิดพรีวิวไม่ได้ และซูมดูรูปไม่ได้ด้วย ใช้งานยากมาก". Root cause investigation (Phase 1+2 of `/systematic-debugging`) found 3 stacked factors for "can't close" + 2 factors for "can't zoom":
+
+**Can't close** (3 factors compounded):
+1. StaffChatImageLightbox shipped as AV78-NORMAL ("backdrop does NOT close") — but the AV78 sanctioned-exception list in CLAUDE.md explicitly lists it as one of 2 fullscreen image viewers where click-anywhere-closes IS expected UX (Stripe/Linear/WhatsApp/Slack/Photos convention). Code contradicted spec.
+2. Close button `w-9 h-9` (36px) — below iOS HIG 44pt minimum touch target.
+3. Top bar `top-0` with no `env(safe-area-inset-top)` padding — partially obscured by iPhone notch / dynamic island.
+
+**Can't zoom** (2 factors):
+1. No zoom implementation at all — `<img object-contain>` with no pinch handler, no double-tap-to-zoom, no transform state.
+2. `onTouchStart` read only `touches[0]?.clientX` — pinch gesture's 2nd finger was ignored and the resulting horizontal delta on release was misinterpreted as a single-finger swipe, falsely triggering prev/next navigation.
+
+**Rule**: every fullscreen image lightbox in `src/components/**/*Lightbox*.jsx` AND every inline `function Lightbox` declaration in `src/components/**/*.jsx` MUST satisfy ALL of:
+
+1. **Backdrop tap closes** — outer fixed-overlay div MUST have `onClick={onClose}` (sanctioned AV78 exception). Children (top-bar, image wrapper, filmstrip) MUST carry `onClick={(e) => e.stopPropagation()}` (or equivalent `stop` helper) so taps on them don't bubble.
+
+2. **iOS notch safe-area** — close button positioning MUST include `env(safe-area-inset-top)` via `style={{ paddingTop: 'max(...rem, env(safe-area-inset-top))' }}` on the top-bar OR `style={{ top: 'max(...rem, env(safe-area-inset-top))' }}` on an absolute-positioned close button. Notched iPhone (X / 11 / 12 / 13 / 14 / 15 / 16) reserves ~47pt for status bar / dynamic island.
+
+3. **44pt touch target** — close button MUST be ≥ `w-11 h-11` (44px = iOS HIG minimum). Tailwind `w-8/h-8` (32px) and `w-9/h-9` (36px) are forbidden on lightbox close buttons.
+
+4. **Multi-touch bail** (where touch swipe-nav is implemented) — `onTouchStart` MUST check `e.touches?.length > 1` and skip swipe-state tracking on pinch gestures. Otherwise iOS Safari's native pinch-zoom is interpreted as a swipe and triggers spurious nav.
+
+5. **Zoom support (recommended, REQUIRED for staff chat)** — double-tap-zoom (1x ↔ 2.5x via CSS `transform: scale()`) + reset on idx change. Treatment lightboxes are sanctioned WITHOUT zoom (admin desktop-primary usage; class-of-bug expansion scoped to mobile gates 1-4 only).
+
+**Grep targets (`tests/v115-mobile-lightbox.test.jsx`)**:
+- `StaffChatImageLightbox.jsx`: outer div `onClick={onClose}` (SG1) + AV78 sanctioned-exception annotation (SG1b) + `env(safe-area-inset-top)` (SG2) + `w-11 h-11` close button (SG3) + multi-touch bail `e.touches.length > 1` (SG4) + `[zoom, setZoom]` state (SG5) + `useEffect setZoom(1)` on `[idx]` (SG6) + `transform: scale(${zoom})` on image (SG7).
+- `TreatmentReadOnlyMirror.jsx`: 44pt close button + `env(safe-area-inset-top)` + backdrop-close preserved.
+- `TreatmentReadOnlyPanel.jsx`: 44pt close button + `env(safe-area-inset-top)` + backdrop-close preserved.
+
+**Sanctioned consumer list (closed set of 3)**:
+- `src/components/staffchat/StaffChatImageLightbox.jsx` — staff chat attachment viewer; ALL 5 gates required (incl. zoom).
+- `src/components/backend/TreatmentReadOnlyMirror.jsx` — Treatment read-only mirror inner `function Lightbox`; gates 1-4 (no zoom).
+- `src/components/backend/TreatmentReadOnlyPanel.jsx` — Treatment read-only panel inner `function Lightbox`; gates 1-4 (no zoom).
+
+Adding a 4th fullscreen image lightbox component requires explicit AV114 entry update + the new file must implement ALL 5 gates (or gates 1-4 with documented zoom-exception rationale).
+
+**Cross-link**: V115 saga in `.claude/rules/00-session-start.md` § 2 (mobile lightbox UX class, 2026-05-23) + `tests/v115-mobile-lightbox.test.jsx` (SG1-SG7 + SG-T1-T5 + R1-R8 + AV1-AV3) + this AV114 entry.
