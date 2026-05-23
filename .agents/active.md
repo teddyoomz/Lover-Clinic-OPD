@@ -1,47 +1,37 @@
 ---
-updated_at: "2026-05-23 EOD+1 LATE+8 — V121 Card-flow notifications LOCAL"
-status: "V115+V116 LIVE on prod @ 3612d8ae. V117+V118+V119+V120+V121 SHIPPED local — awaiting deploy. V121 restores notification visibility (purple bubble on นัดหมาย tab + sub-pills + mobile dock) for V118 card-flow sessions, plus closes V120 latent gap (V116 patientData auto-restore would surface card-flow in Clinic queue post-fill)."
+updated_at: "2026-05-23 EOD+1 LATE+9 — V118+V119+V120+V121 LOCAL stack ready for deploy"
+status: "V115+V116+V116-followup LIVE on prod @ 3612d8ae. V117 + V118 + V119 + V120 + V121 SHIPPED local @ 00410f93 — awaiting deploy authorization."
 branch: "master"
 last_commit: "feat(notifications): V121 — Card-flow tab bubbles + V120-gap close + AV118 ext"
-tests: "V121 26/26 · full vitest 14480/14480 GREEN · AV60 0/527 drift · build clean 3.09s"
+tests: "Full vitest 14480/14480 GREEN · V121 self 27/27 · V118+V120+V119 sibling 71/71 · AV60 0/527 drift · build clean 3.09s"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "3612d8ae (V115+V116+V116-followup LIVE) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
-firestore_rules_version: "unchanged (V118+V119+V120+V121 client-only)"
+firestore_rules_version: "unchanged (V118+V119+V120+V121 all client-only)"
 ---
 
 # Active Context
 
 ## State
-- **V119 LOCAL — P0 fix for V118 hook-import drift.** User reported "admindashboard จอดำไปเลย" immediately after V118 commit. /systematic-debugging Phase 1: line 1 of AdminDashboard.jsx imports `useState, useEffect, useRef, useMemo` but NOT `useCallback` — V118 added 3 `useCallback` usages → ReferenceError → React unmounts AdminDashboard tree → black screen. EXACT V80 anti-pattern repeated. Fix = 1-char addition to import. Plus permanent vitest gate that runs the AV60 scanner so opt-in scanner can't be forgotten again.
-- **V118 LOCAL** — Card-level OPD lifecycle row (verified post-V119 fix).
-- **V117 LOCAL** — Lightbox createPortal mandate (5 fullscreen lightboxes).
-- **V116 LIVE on prod** — Link survives queue-delete + auto-regen + un-hide on re-engage.
+- **5 V-features SHIPPED LOCAL** on master @ `00410f93` — all client-only (no rules/index/Cloud Run change, no Probe-Deploy-Probe needed).
+- **Combined deploy ready**: V117 (lightbox portal) · V118 (card OPD lifecycle row) · V119 (useCallback import + AV60 permanent gate) · V120 (card-flow hides from Clinic queue) · V121 (card-flow tab bubbles + V120-gap close).
+- **Prod unchanged** at `3612d8ae` (V115+V116 LIVE).
 
-## What this session shipped (V118)
-- 5-state visibility model: A (has HN) / B (no link) / C (link sent, waiting) / D (filled, REVIEW + SAVE) / E (saved transient → A).
-- `src/lib/opdSessionState.js` — pure helpers (`isOpdSessionSaved`, `hasPatientData`, `resolveCardOpdState`, `synthesizeSessionFromCustomer`). AV118 sole sanctioned home.
-- `src/components/admin/OpdLifecycleRow.jsx` — presentational 5-state row (3 buttons in State D: 🟢 ดูลิ้งค์ + 🟢 ดูข้อมูล review + 🔴 บันทึก).
-- `AppointmentHubRowCard.jsx` — embed row between status pill and existing action row + 📥 ready-to-save chip near HN.
-- `AppointmentHubView.jsx` — per-row state derivation + customersById Map for synth-session fallback when State A has no linkedOpdSessionId.
-- `AdminDashboard.jsx` — `sessionsById` memo spanning 5 session state arrays + `lazyFetchedSessionsRef` for ก่อนหน้า sub-tab + 3 handlers (handleSendOrViewOpdLink, handleSaveOpdFromCard wraps handleOpdClick, viewing via setViewingSession). `SendCustomerLinkModal` mounted at root. 3 destructive viewingSession-modal buttons gated on `!viewingSession.__synthetic`.
-- AV118 invariant — every OPD-save-state derivation in src/ MUST go through opdSessionState helpers (closed sanctioned-list of 4).
-- 78 V118 tests across 4 files + 2 V21 fixups absorbed (phase-22-0b + phase-24-0-quinquiesdecies — locked older import-shape and gating-regex; updated with V118 marker comments).
-- Spec + plan HTML written with Mockup + Flow sections (mandatory per 2026-05-19/20 directive).
+## What this session shipped
+- **V118** — 5-state OPD lifecycle row on Card (🔗 link · 🟢 view · 🔴 save) + AV118 invariant. Detail: `.agents/sessions/2026-05-23-eod-v118-to-v121.md`.
+- **V119 P0** — fixed black-screen ReferenceError caused by V118's missing useCallback import; AV60 scanner promoted to PERMANENT vitest gate (no more opt-in).
+- **V120** — `provisionOpdLinkForBookingPair({hideFromQueue:true})` opt-in flag; V118 Card flow passes true → sessions never appear in Clinic queue.
+- **V121** — purple #a855f7 bubble on นัดหมาย tab + sub-pills + mobile dock when card-flow customer fills form. Q1=B locked (bubble persists until save). Closes V120 latent gap (3 queue filters now exclude card-flow regardless of patientData).
+- Full vitest 14480/14480 GREEN · AV60 0/527 drift · 9 commits on master ahead of prod.
 
 ## Next action
-1. **User authorizes deploy** → `vercel --prod` (client-only — no rules/indexes/Cloud Run change, no Probe-Deploy-Probe needed). Optionally combine V117+V118 into one deploy.
-2. **User Rule Q L1 hands-on post-deploy**:
-   - Frontend นัดหมาย tab → State A card (has HN) → click 🟢 ดูข้อมูล OPD → modal renders synth-session view with customer's patientData.
-   - State B card (no HN, no link) → click 🔵 ส่งลิ้งค์ → SendCustomerLinkModal opens → URL + QR display.
-   - State D card (after customer fills via QR) → click 🟢 ดูข้อมูล (review) → modal opens → close → click 🔴 บันทึก → toast "บันทึก OPD สำเร็จ" → card transitions to State A.
-   - ก่อนหน้า sub-tab cards (past month) → first render ⏳ briefly while lazy-fetch resolves → final state correct.
-   - ยกเลิก sub-tab → no OPD lifecycle row visible.
+1. **User authorizes deploy** → `vercel --prod` (combined V117+V118+V119+V120+V121 OK — all client-only).
+2. **Rule Q L1 hands-on post-deploy** — iPhone + desktop scenarios per V118+V121 spec acceptance criteria.
 
 ## Outstanding user-triggered actions
-- V117 + V118 deploy authorization (when ready).
-- Post-deploy iPhone/desktop L1 hands-on (V118 acceptance scenarios above + V117 mobile lightbox scenarios).
+- Combined V117+V118+V119+V120+V121 deploy authorization (when ready).
+- Post-deploy iPhone L1 hands-on (V117 lightbox · V118 card flow end-to-end · V121 bubble flow).
 
 ## Notes
-- V18 deploy authorization never carries forward — every "deploy" verb is per-turn.
-- V118 preserved V87/AV84 (patient-link trigger closed list of 2) + V116/AV116 (link survives queue-delete + un-hide) — no regression.
-- Phase 17.1 RTL test continues to be a known full-suite flake under load (isolated runs always pass).
+- V18 deploy auth never carries forward — every "deploy" verb is per-turn.
+- V119 added a permanent vitest gate (`tests/v119-av60-hook-import-drift-permanent-gate.test.js`) — V80/V119-class hook drift now caught at every test run.
+- Visual Companion sessions auto-clean (server stops after 30 min idle).
