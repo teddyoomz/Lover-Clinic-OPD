@@ -85,8 +85,12 @@ import { filterDoctorsByBranch, filterStaffByBranch } from '../lib/branchScopeUt
 // Finance.มัดจำ AND BackendDashboard's จองมัดจำ sub-tab. User directive:
 // "ต้องบันทึกไปในรูปแบบการจองมัดจำใน backend ได้ถูกต้อง และบันทึกมัดจำใน
 //  การเงินได้ถูกต้อง ตามสาขาที่ได้มีการ Gen QR".
-import { createDepositBookingPair } from '../lib/appointmentDepositBatch.js';
+import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';
 import { isChatHoursActiveNow } from '../lib/chatHours.js';
+// V118 (2026-05-23) — Card-level OPD lifecycle row.
+import { isOpdSessionSaved } from '../lib/opdSessionState.js';
+// V118 — SendCustomerLinkModal for card-level OPD link send/view (mounted at root).
+import SendCustomerLinkModal from '../components/backend/SendCustomerLinkModal.jsx';
 // Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
 import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
 // Phase 24.0-duodecies (2026-05-06) — open backend customer detail/edit in new tab.
@@ -1037,6 +1041,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // is saved to be_customers, this state holds the data needed to render
   // <AppointmentFormModal> with type+channel+customer+branch locked.
   const [walkInModal, setWalkInModal] = useState(null);
+  // V118 (2026-05-23) — Card-level OPD lifecycle state.
+  // sendLinkModal: { sessionId, url, sessionName, alreadyProvisioned } | null
+  // opdLink/SaveBusyByApptId: per-row in-flight maps (independent spinners)
+  // lazyFetchedSessionsRef: cache for past-month linked sessions outside the
+  //   current listener window. lazyFetchedTick: bump on resolve → re-render.
+  const [sendLinkModal, setSendLinkModal] = useState(null);
+  const [opdLinkBusyByApptId, setOpdLinkBusyByApptId] = useState({});
+  const [opdSaveBusyByApptId, setOpdSaveBusyByApptId] = useState({});
+  const lazyFetchedSessionsRef = useRef(new Map());
+  const lazyFetchInFlightRef = useRef(new Set());
+  const [lazyFetchedTick, setLazyFetchedTick] = useState(0);
   const [historySearch, setHistorySearch] = useState('');
   const [historyPage,   setHistoryPage]   = useState(1);
   // Phase 20.0 final ProClinic strip (2026-05-06) — Import-from-ProClinic
@@ -3714,6 +3729,120 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     }
   };
 
+  // ─── V118 (2026-05-23) — Card-level OPD lifecycle handlers ─────────────────
+  // These wrap the existing handleOpdClick + provisionOpdLinkForBookingPair so
+  // the appointment Card in the Frontend นัดหมาย tab can drive the same OPD
+  // lifecycle actions as the คิวหน้าคลินิก / จองมัดจำ / จองไม่มัดจำ tabs.
+  // Per-row busy flags allow multiple cards to be in-flight independently.
+
+  // sessionsById — O(1) lookup across all 5 session state arrays. allNotifData
+  // (line ~2362) is a local var inside a useEffect, not state. We index each
+  // state array directly so the memo bumps on any session list change.
+  const sessionsById = useMemo(() => {
+    const m = new Map();
+    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
+      for (const s of arr || []) {
+        if (s?.id) m.set(s.id, s);
+      }
+    }
+    return m;
+  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);
+
+  // resolveLinkedSession — 3-tier source: current-window listener → lazy cache →
+  // trigger lazy fetch (returns null this render; re-renders on resolve via tick).
+  // ก่อนหน้า sub-tab cards may reference sessions outside the current window.
+  const resolveLinkedSession = useCallback((appt) => {
+    if (!appt?.linkedOpdSessionId) return null;
+    const id = appt.linkedOpdSessionId;
+    if (sessionsById.has(id)) return sessionsById.get(id);
+    if (lazyFetchedSessionsRef.current.has(id)) return lazyFetchedSessionsRef.current.get(id);
+    if (!lazyFetchInFlightRef.current.has(id)) {
+      lazyFetchInFlightRef.current.add(id);
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', id);
+      getDoc(ref).then(snap => {
+        if (snap.exists()) {
+          lazyFetchedSessionsRef.current.set(id, { id: snap.id, ...snap.data() });
+          setLazyFetchedTick(t => t + 1);
+        }
+      }).catch(e => {
+        console.warn('[V118 resolveLinkedSession] lazy fetch failed:', e);
+      }).finally(() => {
+        lazyFetchInFlightRef.current.delete(id);
+      });
+    }
+    return null;
+    // lazyFetchedTick is needed in deps so React re-runs this memoized fn after
+    // a fetch resolves and the underlying ref gets a new entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionsById, lazyFetchedTick, appId]);
+
+  // handleSendOrViewOpdLink — provisions (or returns existing) OPD link + opens
+  // SendCustomerLinkModal. Idempotent via provisionOpdLinkForBookingPair (V116).
+  // Mirrors AppointmentFormModal:938-984 logic. Per-row busy flag.
+  const handleSendOrViewOpdLink = useCallback(async (appt) => {
+    if (!appt?.id) return;
+    if (opdLinkBusyByApptId[appt.id]) return;
+    setOpdLinkBusyByApptId(m => ({ ...m, [appt.id]: true }));
+    try {
+      const apptId = appt.appointmentId || appt.id;
+      const r = await provisionOpdLinkForBookingPair({
+        depositId: appt.linkedDepositId || appt.spawnedFromDepositId || '',
+        appointmentId: apptId,
+        branchId: appt.branchId || selectedBranchId || '',
+        formType: 'intake',
+        sessionName: appt.customerNameTemp || appt.customerName || 'ลูกค้าจอง',
+      });
+      setSendLinkModal({
+        sessionId: r.sessionId,
+        url: r.url,
+        sessionName: appt.customerNameTemp || appt.customerName || 'ลูกค้าจอง',
+        alreadyProvisioned: !!r.alreadyProvisioned,
+      });
+    } catch (err) {
+      console.warn('[V118 handleSendOrViewOpdLink] provision failed:', err);
+      showToast('สร้างลิ้งค์ไม่สำเร็จ: ' + (err?.message || String(err)), 4000);
+    } finally {
+      setOpdLinkBusyByApptId(m => {
+        const next = { ...m };
+        delete next[appt.id];
+        return next;
+      });
+    }
+  }, [opdLinkBusyByApptId, selectedBranchId]);
+
+  // handleSaveOpdFromCard — delegates to handleOpdClick after resolving the
+  // linked session. No-ops if no session OR already saved (mirrors existing
+  // handleOpdClick guards). Per-row busy flag prevents double-clicks.
+  const handleSaveOpdFromCard = useCallback(async (appt) => {
+    if (!appt?.id) return;
+    if (opdSaveBusyByApptId[appt.id]) return;
+    const session = resolveLinkedSession(appt);
+    if (!session) {
+      showToast('ยังไม่มีข้อมูล session — กดส่งลิ้งค์ให้ลูกค้ากรอกก่อน', 4000);
+      return;
+    }
+    if (isOpdSessionSaved(session)) {
+      showToast('บันทึก OPD แล้ว — ดูข้อมูลผ่านปุ่ม "ดูข้อมูล OPD"', 3000);
+      return;
+    }
+    setOpdSaveBusyByApptId(m => ({ ...m, [appt.id]: true }));
+    try {
+      await handleOpdClick(session);
+    } catch (err) {
+      console.warn('[V118 handleSaveOpdFromCard] handleOpdClick failed:', err);
+      showToast('บันทึก OPD ไม่สำเร็จ: ' + (err?.message || String(err)), 4000);
+    } finally {
+      setOpdSaveBusyByApptId(m => {
+        const next = { ...m };
+        delete next[appt.id];
+        return next;
+      });
+    }
+    // handleOpdClick is a function declaration (not stateful); leaving out of
+    // deps is intentional — it's referenced via closure for current behavior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opdSaveBusyByApptId, resolveLinkedSession]);
+
   // ─── Manual Resync ─────────────────────────────────────────────────────────
   // เหมือน handleOpdClick แต่ไม่บล็อกเมื่อ done — ใช้กด sync ซ้ำด้วยตนเอง
   const toggleGlobalPushMuted = async () => {
@@ -4589,13 +4718,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
-              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && (
+              {/* V118 (2026-05-23) — synth sessions (built from be_customers.patientData
+                  for State A cards with no linkedOpdSessionId) have no real Firestore
+                  doc → "แก้ไขข้อมูล" + Resync would write to a non-existent ref.
+                  Gate via __synthetic; print + customer-nav buttons stay reachable
+                  because they don't mutate the session. */}
+              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && !viewingSession.__synthetic && (
               <button onClick={() => { closeViewSession(); onSimulateScan(viewingSession.id); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 rounded border border-blue-900/50 transition-colors text-xs font-bold font-semibold whitespace-nowrap">
                 <Edit3 size={13} /> แก้ไขข้อมูล
               </button>
               )}
-              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && renderResyncButton()}
+              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && !viewingSession.__synthetic && renderResyncButton()}
               {viewingSession.patientData && !isCustom && (
                 <>
                   <button onClick={() => setPrintMode('dashboard')}
@@ -4684,7 +4818,9 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                        to addCustomer recreate path)
                      • Else → addCustomer (Phase 24.0-octies identity-based
                        dedup by citizen_id / passport / phone) */}
-                {viewingSession.patientData && (
+                {/* V118 (2026-05-23) — Resync OPD writes to opd_sessions; synth
+                    sessions have no doc → gate via !__synthetic. */}
+                {viewingSession.patientData && !viewingSession.__synthetic && (
                   <button
                     onClick={() => handleResync(viewingSession)}
                     disabled={!!brokerPending[viewingSession.id]}
@@ -6916,6 +7052,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   throw err;
                 });
               }}
+              /* V118 (2026-05-23) — card-level OPD lifecycle row. AdminDashboard
+               * owns sessions + handlers + the SendCustomerLinkModal mount; the
+               * HubView per-row mapping derives state via resolveCardOpdState
+               * and dispatches handlers below. setViewingSession reaches the
+               * existing ประวัติผู้ป่วย OPD modal owned by App.jsx. */
+              resolveLinkedSession={resolveLinkedSession}
+              onSendOrViewOpdLink={handleSendOrViewOpdLink}
+              onSaveOpdFromCard={handleSaveOpdFromCard}
+              setViewingSession={setViewingSession}
+              opdLinkBusyByApptId={opdLinkBusyByApptId}
+              opdSaveBusyByApptId={opdSaveBusyByApptId}
             />
           ) : renderJsxBlock(() => {
         // ── Appointment Calendar ──
@@ -8968,6 +9115,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             setWalkInModal(null);
           }}
           onClose={() => setWalkInModal(null)}
+        />
+      )}
+
+      {/* V118 (2026-05-23) — SendCustomerLinkModal for card-level OPD link
+          send/view. Mounted at AdminDashboard root so it's reachable from any
+          sub-tab. State `sendLinkModal` set by handleSendOrViewOpdLink; cleared
+          here on close (with a tick bump so derived per-row state recomputes
+          if admin reopens immediately, before the listener has propagated). */}
+      {sendLinkModal && (
+        <SendCustomerLinkModal
+          isOpen={true}
+          onClose={() => {
+            setSendLinkModal(null);
+            setLazyFetchedTick(t => t + 1);
+          }}
+          sessionId={sendLinkModal.sessionId}
+          url={sendLinkModal.url}
+          sessionName={sendLinkModal.sessionName}
+          alreadyProvisioned={sendLinkModal.alreadyProvisioned}
         />
       )}
 

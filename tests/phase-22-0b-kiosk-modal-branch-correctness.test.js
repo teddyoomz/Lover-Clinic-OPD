@@ -22,7 +22,11 @@ describe('Phase 22.0b — A1 Imports', () => {
   });
 
   test('A1.2 imports createDepositBookingPair from appointmentDepositBatch', () => {
-    expect(SRC).toMatch(/import\s*\{\s*createDepositBookingPair\s*\}\s*from\s*['"]\.\.\/lib\/appointmentDepositBatch\.js['"]/);
+    // V118 (2026-05-23) — the named-imports list may include additional siblings
+    // (e.g. provisionOpdLinkForBookingPair added for card-level OPD link send).
+    // Regex relaxed to require createDepositBookingPair AND the module path,
+    // but tolerate other named imports in the same braces.
+    expect(SRC).toMatch(/import\s*\{[^}]*\bcreateDepositBookingPair\b[^}]*\}\s*from\s*['"]\.\.\/lib\/appointmentDepositBatch\.js['"]/);
   });
 
   test('A1.3 useSelectedBranch hook still imported (Phase 20.0 baseline preserved)', () => {

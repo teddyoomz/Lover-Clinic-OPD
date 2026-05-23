@@ -29,6 +29,9 @@ import {
 } from '../../lib/appointmentHubPrintTemplate.js';
 import { APPOINTMENT_TYPES } from '../../lib/appointmentTypes.js';
 import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
+// V118 (2026-05-23) — Card-level OPD lifecycle state derivation + synth-session
+// fallback for "ดูข้อมูล" on existing-customer cards with no linkedOpdSessionId.
+import { resolveCardOpdState, synthesizeSessionFromCustomer } from '../../lib/opdSessionState.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -67,6 +70,15 @@ export default function AppointmentHubView({
   branchName = '',
   doctors = [],
   assistants = [],
+  // V118 (2026-05-23) — Card-level OPD lifecycle handlers, plumbed from
+  // AdminDashboard. Each card derives its state via resolveLinkedSession +
+  // resolveCardOpdState; handlers dispatch the relevant side-effect.
+  resolveLinkedSession,        // (appt) => session | null
+  onSendOrViewOpdLink,         // (appt) => Promise<void> — provision + open SendCustomerLinkModal
+  onSaveOpdFromCard,           // (appt) => Promise<void> — wraps handleOpdClick(session)
+  setViewingSession,           // (session) => void — opens ประวัติผู้ป่วย OPD modal
+  opdLinkBusyByApptId = {},
+  opdSaveBusyByApptId = {},
 }) {
   const { branchId: selectedBranchId } = useSelectedBranch();
   const [activeTab, setActiveTab] = useState('today');
@@ -79,6 +91,10 @@ export default function AppointmentHubView({
   const [appts, setAppts] = useState([]);
   const [summaryMap, setSummaryMap] = useState(new Map());
   const [allDeposits, setAllDeposits] = useState([]);  // V64-fix4: full deposits list for per-appt linkage
+  // V118 (2026-05-23) — full customer list saved as state so the per-row
+  // "ดูข้อมูล" handler can synthesize a session shape from customer.patientData
+  // for State A cards without a linkedOpdSessionId.
+  const [allCustomersState, setAllCustomersState] = useState([]);
   const [allTreatments, setAllTreatments] = useState([]);  // V64-fix6: per-customer-date treatment lookup for auto-confirm + edit-button
   const [scheduleEntries, setScheduleEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +168,7 @@ export default function AppointmentHubView({
       setAllTreatments(treatments);
       setSummaryMap(map);
       setScheduleEntries(schedules);
+      setAllCustomersState(customers);  // V118 — keep for synth-session fallback
       if (!silent) setLoading(false);
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -203,6 +220,19 @@ export default function AppointmentHubView({
     }
     return map;
   }, [allDeposits]);
+
+  // V118 (2026-05-23) — customer id → customer doc Map for synth-session
+  // fallback when admin clicks 🟢 ดูข้อมูล on a State A card (existing
+  // customer with no linkedOpdSessionId). synthesizeSessionFromCustomer
+  // builds a __synthetic session shape that the existing ประวัติผู้ป่วย OPD
+  // modal renders identically (gated against destructive ops by __synthetic).
+  const customersById = useMemo(() => {
+    const m = new Map();
+    for (const c of allCustomersState || []) {
+      if (c?.id) m.set(String(c.id), c);
+    }
+    return m;
+  }, [allCustomersState]);
 
   // V64-fix6: per-customer-date treatment lookup. Lets RowCard auto-confirm
   // a past appt when ≥1 treatment exists for that customer+date+branch
@@ -478,25 +508,66 @@ export default function AppointmentHubView({
       {/* V71 (2026-05-15) — absolute-positioned LINE badge wrapper REMOVED.
           LINE badge now renders INLINE inside AppointmentHubRowCard (next to
           status chip) — closes the V68→V71 transient double-badge state. */}
-      {!loading && filteredAppts.map(a => (
-        <AppointmentHubRowCard
-          key={a.id}
-          appt={a}
-          summary={summaryMap.get(String(a.customerId))}
-          apptDeposit={depositByApptId.get(String(a.id))}
-          apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
-          isTodayTab={activeTab === 'today'}                             /* V71 NEW */
-          now={new Date()}
-          onConfirm={handleConfirmOptimistic}
-          onEdit={handleEditOpenModal}
-          onCancel={handleCancelOptimistic}
-          onCreateTreatment={onCreateTreatmentForAppt}
-          onEditTreatment={onEditTreatmentForAppt}
-          onOpenLine={onOpenLineForAppt}
-          onMarkServiceComplete={handleMarkServiceCompleteOptimistic}    /* V71 NEW */
-          onUnmarkServiceComplete={handleUnmarkServiceCompleteOptimistic} /* V71.A NEW */
-        />
-      ))}
+      {!loading && filteredAppts.map(a => {
+        // V118 (2026-05-23) — derive card-level OPD lifecycle per row.
+        // Hidden entirely on the ยกเลิก sub-tab (cancelled appts have no
+        // follow-through). State resolved via AV118 helpers.
+        const hideOpdLifecycle = activeTab === 'cancelled';
+        const linkedSession = hideOpdLifecycle ? null : (resolveLinkedSession ? resolveLinkedSession(a) : null);
+        const opdState = hideOpdLifecycle ? 'B' : resolveCardOpdState({ appt: a, linkedSession });
+        const onViewOpdHandler = () => {
+          // Path 1: real linked session → open the existing OPD modal directly
+          if (linkedSession) {
+            setViewingSession?.(linkedSession);
+            return;
+          }
+          // Path 2: existing customer, no linked session → synthesize from
+          // be_customers.patientData so the modal still renders the data
+          if (a.customerId) {
+            const customer = customersById.get(String(a.customerId));
+            if (customer) {
+              const synth = synthesizeSessionFromCustomer(customer, a);
+              if (synth) {
+                setViewingSession?.(synth);
+                return;
+              }
+            }
+          }
+          // Path 3: no data anywhere — silent (the disabled wait pill carries this case)
+        };
+        const opdLifecycle = hideOpdLifecycle
+          ? { hidden: true, state: 'B' }
+          : {
+              hidden: false,
+              state: opdState,
+              onSendLink: () => onSendOrViewOpdLink?.(a),
+              onViewLink: () => onSendOrViewOpdLink?.(a),
+              onSaveOpd:  () => onSaveOpdFromCard?.(a),
+              onViewOpd:  onViewOpdHandler,
+              sendLinkBusy: !!opdLinkBusyByApptId[a.id],
+              saveOpdBusy:  !!opdSaveBusyByApptId[a.id],
+            };
+        return (
+          <AppointmentHubRowCard
+            key={a.id}
+            appt={a}
+            summary={summaryMap.get(String(a.customerId))}
+            apptDeposit={depositByApptId.get(String(a.id))}
+            apptDateTreatments={treatmentsByCustomerDate.get(`${a.customerId}|${a.date}`) || []}
+            isTodayTab={activeTab === 'today'}                             /* V71 NEW */
+            now={new Date()}
+            onConfirm={handleConfirmOptimistic}
+            onEdit={handleEditOpenModal}
+            onCancel={handleCancelOptimistic}
+            onCreateTreatment={onCreateTreatmentForAppt}
+            onEditTreatment={onEditTreatmentForAppt}
+            onOpenLine={onOpenLineForAppt}
+            onMarkServiceComplete={handleMarkServiceCompleteOptimistic}    /* V71 NEW */
+            onUnmarkServiceComplete={handleUnmarkServiceCompleteOptimistic} /* V71.A NEW */
+            opdLifecycle={opdLifecycle}                                     /* V118 NEW */
+          />
+        );
+      })}
       {/* V64-fix3 (Issue 1): full edit modal — same component used by
           backend tab=appointment-all + CustomerDetailView. */}
       {editingAppt && (

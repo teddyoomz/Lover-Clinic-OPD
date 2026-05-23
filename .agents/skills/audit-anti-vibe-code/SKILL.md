@@ -2963,3 +2963,27 @@ Adding a 6th fullscreen lightbox requires explicit AV117 entry update + the new 
 - Self-contained: each lightbox component manages its own portal-mount; callers don't need to know.
 
 **Cross-link**: V117 saga in `.claude/rules/00-session-start.md` § 2 (lightbox-portal mandate, 2026-05-23) + `tests/v117-lightbox-portal.test.js` (SG1-SG5 + AV1-AV3 + G1-G3) + this AV117 entry. Pairs with AV114 (mobile UX gates) — together they form the complete fullscreen-lightbox contract.
+
+### AV118 — Card-level OPD state derivation MUST use opdSessionState helpers (2026-05-23 V118 card OPD lifecycle row)
+
+**Class-of-bug**: V12 multi-reader-sweep at the OPD-save-state predicate boundary. Pre-V118, the predicate `(session.opdRecordedAt && session.brokerStatus === 'done')` was inlined at ≥3 sites (`AdminDashboard.jsx:3475` handleOpdClick early-return, `AdminDashboard.jsx:5747` viewingSession-modal button label, `tests/v87-link-button-opd-save-guard.test.js` AV84 regression). When the state model evolves (e.g. a new "partial-save" intermediate state, or a `brokerStatus='retry'`), inline callsites drift silently and the card-level view diverges from the คิวหน้าคลินิก view.
+
+**Rule**: every derivation of "OPD session saved" / "customer filled" / "card OPD lifecycle state" in `src/components/admin/**` + `src/pages/AdminDashboard.jsx` MUST go through `src/lib/opdSessionState.js`:
+
+- `isOpdSessionSaved(session)` — replaces inline `session.opdRecordedAt && session.brokerStatus === 'done'`
+- `hasPatientData(session)` — replaces inline `session.patientData && Object.keys(...).length`
+- `resolveCardOpdState({appt, linkedSession})` — single source for the 5-state machine (A=has customer / B=no link / C=link sent, waiting / D=filled, ready to save / E=just saved)
+- `synthesizeSessionFromCustomer(customer, appt)` — single source for the read-only "synth" session shape used when a State A card has no real `linkedOpdSessionId`
+
+**Sanctioned exceptions** (closed list — adding a 4th = AV118 violation):
+
+1. `src/lib/opdSessionState.js` itself — defines the helpers, contains the literal `'done'` string + the predicate
+2. `tests/v118-opd-session-state-helpers.test.js` — tests the helpers, asserts the predicate
+3. `tests/v87-link-button-opd-save-guard.test.js` — V87 source-grep regression that locks the V87 patient-link guard literal text (different concern: AV84 trigger-site closed list)
+4. `src/pages/AdminDashboard.jsx:3475` — `handleOpdClick` early-return literal predicate (preserved per V87/AV84 + because `handleOpdClick` is its own canonical source of the predicate's intent at the action site).
+
+**Synth-session marker discipline (paired with AV118)**: every modal-internal write/mutation operation triggered from the existing "ประวัติผู้ป่วย OPD" modal (`setViewingSession` consumer) MUST gate on `!viewingSession.__synthetic` if the operation issues a Firestore write to an `opd_sessions` doc (`updateDoc(doc(db, ...'opd_sessions', id), ...)`). Synth sessions have no underlying doc — writes would 404 / no-op + leave admin confused. Read-only consumers (print + customer-navigation) do NOT need the gate. Sanctioned write callsites currently gated: AdminDashboard.jsx lines ~4721 (แก้ไขข้อมูล) + ~4727 (renderResyncButton) + ~4816 (Resync OPD button).
+
+**Source-grep regression test**: `tests/v118-card-opd-lifecycle-row-source-grep.test.js` AV118 group.
+
+**Origin**: V118 (2026-05-23) — card-level OPD lifecycle row introduced 4 new callsites of the saved-predicate (AppointmentHubView per-row state derivation + AdminDashboard 3 handlers). Centralizing prevents future drift when the state model evolves. Pairs with AV84 (V87 patient-link trigger closed list) — different concern, same multi-reader-sweep family.

@@ -113,8 +113,14 @@ describe('Phase 24.0-quinquiesdecies — Resync OPD button on Frontend OPD detai
   });
 
   it('DNA.B.3 — button is gated on viewingSession.patientData (only after OPD save)', () => {
+    // V118 (2026-05-23) — additional gate `&& !viewingSession.__synthetic`
+    // was added so synth sessions (built from be_customers.patientData when
+    // there's no real opd_sessions doc) can't trigger Resync. Pattern now
+    // permits any number of additional `&& <cond>` clauses BEFORE the
+    // `&& (` that opens the JSX branch — locks the patientData gate AND the
+    // post-fix synth gate without overspecifying the chain order.
     expect(ADMIN).toMatch(
-      /viewingSession\.patientData\s*&&\s*\(\s*\n?\s*<button[^>]*onClick=\{\(\)\s*=>\s*handleResync/,
+      /viewingSession\.patientData\s*&&(?:[^&|()]|\s|&&)*?\(\s*\n?\s*<button[^>]*onClick=\{\(\)\s*=>\s*handleResync/,
     );
   });
 

@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>V118 Card-Level OPD Lifecycle Row — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; margin-top: 1.5em; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; font-weight: 700; }
+    table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); font-weight: 700; }
+
+    /* LC dark-theme card replica */
+    .lc-card { background: #0d0d0d; color: #e5e5e5; border-left: 3px solid #dc2626; border-radius: 6px; padding: 12px 14px; margin: 10px 0; font-family: 'Segoe UI', sans-serif; line-height: 1.5; }
+    .lc-card-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #2a2a2a; padding-bottom: 8px; margin-bottom: 8px; gap: 10px; }
+    .lc-hn { font-size: 0.62em; color: #888; letter-spacing: 0.04em; }
+    .lc-hn-real { color: #fbbf24; font-family: monospace; font-weight: 700; }
+    .lc-name { font-weight: 800; color: #fff; font-size: 1em; }
+    .lc-status-pill { background: #1e3a8a; color: #93c5fd; font-size: 0.6em; padding: 2px 8px; border-radius: 999px; font-weight: 800; text-transform: uppercase; }
+    .lc-action-row { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: wrap; align-items: center; margin-top: 5px; }
+    .lc-opd-row { border-top: 1px dashed #f59e0b; border-bottom: 1px dashed #f59e0b; background: rgba(245, 158, 11, 0.05); padding: 6px 8px; margin: 6px 0; border-radius: 4px; }
+    .lc-opd-row-label { font-size: 0.55em; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; font-weight: 800; }
+    .lc-btn-primary { background: linear-gradient(180deg, #f97316, #ea580c); color: #fff; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 700; border: 0; }
+    .lc-btn-secondary { background: transparent; color: #93c5fd; border: 1px solid #1e40af; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 600; }
+    .lc-btn-destructive { background: transparent; color: #fca5a5; border: 1px solid #9f1239; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 600; }
+    .lc-btn-link-send { background: #1e3a8a; color: #93c5fd; border: 1px solid #1e40af; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 800; }
+    .lc-btn-link-view { background: #052e1a; color: #6ee7b7; border: 1px solid #047857; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 800; }
+    .lc-btn-opd-wait { background: #1f2937; color: #6b7280; border: 1px solid #374151; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 700; opacity: 0.7; }
+    .lc-btn-opd-red { background: #450a0a; color: #fca5a5; border: 1px solid #b91c1c; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 800; }
+    .lc-btn-opd-green { background: #052e1a; color: #6ee7b7; border: 1px solid #047857; font-size: 0.66em; padding: 4px 8px; border-radius: 5px; font-weight: 800; }
+    .lc-saved-chip { background: rgba(245, 11, 11, 0.15); color: #fca5a5; padding: 2px 7px; border-radius: 4px; font-size: 0.6em; font-weight: 700; border: 1px solid #b91c1c; }
+
+    .flow-step { background: #fff; border: 1px solid var(--bd); border-radius: 6px; padding: 8px 12px; margin: 5px 0; display: flex; align-items: center; gap: 10px; }
+    .flow-step-num { background: var(--accent); color: #fff; font-weight: 800; min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8em; }
+    .flow-arrow { text-align: center; color: var(--tx-muted); font-size: 1.2em; margin: -3px 0; }
+  </style>
+</head>
+<body>
+
+<h1>V118 — Card-Level OPD Lifecycle Row · Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use <code>superpowers:subagent-driven-development</code> (recommended) or <code>superpowers:executing-plans</code>. Steps use HTML checkboxes (<code>&lt;input type="checkbox"&gt;</code>) for tracking.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Lift the existing OPD-link-send + OPD-save buttons (from inside <code>AppointmentFormModal</code> edit-modal and from the <code>คิวหน้าคลินิก / จองมัดจำ / จองไม่มัดจำ</code> sub-tabs) onto every appointment Card in the Frontend <code>นัดหมาย</code> tab — 5-state visibility model, mirrors <code>handleOpdClick</code> exactly.</p>
+  <p><strong>Architecture:</strong> 1 NEW pure helper module (<code>opdSessionState.js</code>) + 1 NEW presentational sub-component (<code>OpdLifecycleRow.jsx</code>) + 3 modified files (RowCard, HubView, AdminDashboard). NO new collections / NO new endpoints / NO Firestore rules / NO Storage / NO deploy from this V118.</p>
+  <p><strong>Tech Stack:</strong> React 19 · Vitest 4.1 · RTL · existing handlers (<code>handleOpdClick</code>, <code>provisionOpdLinkForBookingPair</code>, <code>setViewingSession</code>) · existing modal (<code>SendCustomerLinkModal</code>)</p>
+  <p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-23-card-opd-lifecycle-row-design.html</code></p>
+  <p><strong>Rule sequence:</strong> Rule J brainstorming ✓ approved · Rule K work-first/test-last · Rule I full-flow simulate (Phase C) · Rule N targeted-first + full at batch end · Rule P AV118 invariant · Rule Q L1 user hands-on post-deploy</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<p class="mockup-label">5 card states (placement: dedicated "OPD lifecycle row" between status pill and existing action row — Option B locked)</p>
+
+<div class="mockup">
+  <div class="mockup-label">State A · Has HN (existing customer)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div><div class="lc-hn">HN <span class="lc-hn-real">LC-26000089</span></div><div class="lc-name">นาย มลธวัช มาศหนู</div></div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row"><span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span></div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับ</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State B · No HN, no link sent yet</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div><div class="lc-hn">HN · –</div><div class="lc-name">มนทวัฒน์ มาดหนู</div></div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row"><span class="lc-btn-link-send">🔗 ส่งลิ้งค์ลูกค้ากรอก OPD</span><span class="lc-btn-opd-wait">⏳ ยังไม่มีข้อมูล</span></div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับ</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State C · No HN, link sent, customer hasn't filled</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div><div class="lc-hn">HN · –</div><div class="lc-name">มนทวัฒน์ มาดหนู</div></div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row"><span class="lc-btn-link-view">🟢 ดูลิ้งค์ที่ส่งไป</span><span class="lc-btn-opd-wait">⏳ รอลูกค้ากรอก</span></div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับ</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State D · No HN, customer filled · REVIEW → SAVE (3 buttons)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div><div class="lc-hn">HN · –</div><div class="lc-name">มนทวัฒน์ มาดหนู</div><div style="margin-top:5px;"><span class="lc-saved-chip">📥 ลูกค้ากรอกแล้ว · รอบันทึก</span></div></div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row · review then save</div>
+      <div class="lc-action-row"><span class="lc-btn-link-view">🟢 ดูลิ้งค์ที่ส่งไป</span><span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span><span class="lc-btn-opd-red">🔴 บันทึกลง OPD</span></div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับ</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State E · Just saved (transitions to A on next render)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div><div class="lc-hn">HN <span class="lc-hn-real">LC-26000090</span></div><div class="lc-name">มนทวัฒน์ มาดหนู</div></div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row"><span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span></div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับ</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<p class="mockup-label">Click-to-save journey · customer-later booking lifecycle</p>
+
+<div class="flow-step"><div class="flow-step-num">1</div><div>Admin creates appt with <code>customerNameTemp</code> (no HN) → Card renders <strong>State B</strong></div></div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step"><div class="flow-step-num">2</div><div>Admin clicks 🔵 <code>ส่งลิ้งค์</code> on card → <code>provisionOpdLinkForBookingPair(...)</code> mints <code>opd_sessions/{id}</code> + stamps <code>linkedOpdSessionId</code> on appt + opens <code>SendCustomerLinkModal</code></div></div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step"><div class="flow-step-num">3</div><div>Modal close → <code>linkedOpdSessionId</code> persisted, no <code>patientData</code> yet → Card renders <strong>State C</strong> with 🟢 <code>ดูลิ้งค์ที่ส่งไป</code> + ⏳ disabled save</div></div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step"><div class="flow-step-num">4</div><div>Customer opens URL → fills PatientForm → submits → <code>session.patientData</code> populated → listener fires → Card renders <strong>State D</strong> with 🔴 pulsing + 📥 chip</div></div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step"><div class="flow-step-num">5</div><div>Admin clicks 🔴 <code>บันทึกลง OPD</code> → <code>handleOpdClick(session)</code> → kioskPatientToCanonical → addCustomer → attachCustomerToOpdSessionLinks → V116 un-hide → toast → Card transitions <strong>E → A</strong> on next render (HN populated)</div></div>
+
+<h3>State predicates (locked from spec)</h3>
+<table>
+  <thead><tr><th>State</th><th>Predicate</th><th>🔗 Link</th><th>🩺 OPD</th><th>📥 Chip</th></tr></thead>
+  <tbody>
+    <tr><td>A</td><td><code>appt.customerId</code> truthy</td><td>hidden</td><td>🟢 <code>ดูข้อมูล</code></td><td>—</td></tr>
+    <tr><td>B</td><td><code>!customerId && !linkedOpdSessionId</code></td><td>🔵 <code>ส่งลิ้งค์</code></td><td>⏳ <code>ยังไม่มีข้อมูล</code></td><td>—</td></tr>
+    <tr><td>C</td><td><code>!customerId && linkedOpdSessionId && !hasPatientData(session)</code></td><td>🟢 <code>ดูลิ้งค์</code></td><td>⏳ <code>รอกรอก</code></td><td>—</td></tr>
+    <tr><td>D</td><td><code>!customerId && linkedOpdSessionId && hasPatientData(session) && !isOpdSessionSaved(session)</code></td><td>🟢 <code>ดูลิ้งค์</code></td><td>🟢 <code>ดูข้อมูล</code> + 🔴 <code>บันทึก</code></td><td>📥 chip</td></tr>
+    <tr><td>E</td><td><code>isOpdSessionSaved(session)</code> (transient — next render hits A)</td><td>hidden</td><td>🟢 <code>ดูข้อมูล</code></td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h2>File Structure</h2>
+
+<table>
+  <thead><tr><th>File</th><th>Op</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/opdSessionState.js</code></td><td>CREATE</td><td>Pure helpers: <code>isOpdSessionSaved</code>, <code>hasPatientData</code>, <code>resolveCardOpdState</code>, <code>synthesizeSessionFromCustomer</code>. Branch-blind. AV118 sole sanctioned source.</td></tr>
+    <tr><td><code>src/components/admin/OpdLifecycleRow.jsx</code></td><td>CREATE</td><td>Presentational sub-component rendering the 3-button row + chip. Receives derived state as props.</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td><td>MODIFY</td><td>Insert <code>&lt;OpdLifecycleRow&gt;</code> between status pill and existing action row. Accept new <code>opdLifecycle</code> compound prop.</td></tr>
+    <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>MODIFY</td><td>Plumb 4 new handler props from AdminDashboard → each RowCard. Compute per-appt opdLifecycle props.</td></tr>
+    <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>MODIFY</td><td>Add <code>sendLinkModal</code> state + modal mount. Implement <code>resolveLinkedSession</code> / <code>handleSendOrViewLinkFromCard</code> / <code>handleSaveOpdFromCard</code> / <code>handleViewOpdFromCard</code>. Gate modal-internal "แก้ไข/ซิงค์/Resync" buttons on <code>!viewingSession.__synthetic</code>.</td></tr>
+    <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>MODIFY</td><td>NEW AV118 invariant.</td></tr>
+    <tr><td><code>tests/v118-opd-session-state-helpers.test.js</code></td><td>CREATE</td><td>Pure helper unit + adversarial.</td></tr>
+    <tr><td><code>tests/v118-card-opd-lifecycle-row-rtl.test.jsx</code></td><td>CREATE</td><td>RTL: 5 states + click handlers.</td></tr>
+    <tr><td><code>tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code></td><td>CREATE</td><td>Rule I full-flow B→C→D→A chain.</td></tr>
+    <tr><td><code>tests/v118-card-opd-lifecycle-row-source-grep.test.js</code></td><td>CREATE</td><td>Regression + AV118 + V87/AV84 preservation locks.</td></tr>
+  </tbody>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE A — SOURCE (Rule K work-first)                             -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="task">
+  <h3>Task 1: Create pure helper module <code>src/lib/opdSessionState.js</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>src/lib/opdSessionState.js</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the file</strong></label></div>
+<pre><code class="language-javascript">// V118 (2026-05-23) — Card-Level OPD Lifecycle Row pure helpers.
+//
+// AV118 (sole sanctioned home): every site deriving "OPD save state" or
+// "card OPD lifecycle state" MUST go through these helpers. Source-grep
+// regression locks all callsites.
+//
+// Branch-blind by design — no Firestore reads, no React imports, no branchId.
+
+/**
+ * @param {object|null|undefined} session - opd_sessions doc shape
+ * @returns {boolean} true iff session has been saved to be_customers via handleOpdClick
+ */
+export function isOpdSessionSaved(session) {
+  if (!session || typeof session !== 'object') return false;
+  return !!(session.opdRecordedAt && session.brokerStatus === 'done');
+}
+
+/**
+ * @param {object|null|undefined} session
+ * @returns {boolean} true iff customer has filled the PatientForm (patientData non-empty)
+ */
+export function hasPatientData(session) {
+  if (!session || typeof session !== 'object') return false;
+  const pd = session.patientData;
+  if (!pd || typeof pd !== 'object') return false;
+  return Object.keys(pd).length > 0;
+}
+
+/**
+ * Resolves the card-level OPD lifecycle state for a given appointment.
+ * Returns one of 'A' | 'B' | 'C' | 'D' | 'E' per the V118 state machine.
+ *
+ * @param {object} args
+ * @param {object} args.appt - be_appointments doc shape
+ * @param {object|null} args.linkedSession - opd_sessions doc (or null if none/not yet loaded)
+ * @returns {'A'|'B'|'C'|'D'|'E'}
+ */
+export function resolveCardOpdState({ appt, linkedSession }) {
+  if (!appt) return 'B';
+  // State A: customer already linked (has be_customers record)
+  if (appt.customerId) return 'A';
+  // No customer linked → check session presence + state
+  if (!appt.linkedOpdSessionId) return 'B';
+  // Has linkedOpdSessionId but session not yet resolved (lazy fetch pending) — treat as C
+  if (!linkedSession) return 'C';
+  // Session exists
+  if (isOpdSessionSaved(linkedSession)) return 'E';
+  if (!hasPatientData(linkedSession)) return 'C';
+  return 'D';
+}
+
+/**
+ * Synthesize a session-shaped object from a be_customers doc for the
+ * "ดูข้อมูล" modal when no real opd_sessions doc exists (State A path).
+ * Carries `__synthetic: true` so the modal can gate destructive buttons.
+ *
+ * @param {object} customer - be_customers doc
+ * @param {object} appt - the originating be_appointments doc (for context)
+ * @returns {object} synth session
+ */
+export function synthesizeSessionFromCustomer(customer, appt) {
+  if (!customer) return null;
+  return {
+    id: `synth-${customer.id || customer.proClinicId || 'unknown'}-${appt?.id || 'noappt'}`,
+    patientData: customer.patientData || {},
+    opdRecordedAt: customer.createdAt || null,
+    brokerStatus: 'done',
+    brokerProClinicId: customer.proClinicId || null,
+    brokerProClinicHN: customer.proClinicHN || customer.HN || '',
+    customerId: customer.id || customer.proClinicId || '',
+    __synthetic: true,
+    __synthSourceCustomerId: customer.id || customer.proClinicId || '',
+  };
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Quick smoke import check</strong></label></div>
+  <p>Run: <code>node -e "const m = require('./src/lib/opdSessionState.js'); console.log(Object.keys(m));"</code> (ESM via node test — actually skip this; vitest will validate import in Task 7.)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/opdSessionState.js
+git commit -m "feat(opd-card): V118 — opdSessionState pure helpers (isSaved, hasPatientData, resolveCardOpdState, synth) [AV118]"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 2: Create <code>src/components/admin/OpdLifecycleRow.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>src/components/admin/OpdLifecycleRow.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the component</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Presentational sub-component for the OPD lifecycle row.
+// Inserted between the status pill row and the existing action row inside
+// AppointmentHubRowCard. Receives derived state — does NOT compute it.
+//
+// State→buttons mapping (per spec):
+//   A → no link button, 🟢 view OPD
+//   B → 🔵 send link, ⏳ no data (disabled)
+//   C → 🟢 view link, ⏳ waiting (disabled)
+//   D → 🟢 view link, 🔴 save OPD (clickable, pulsing)
+//   E → no link button, 🟢 view OPD  (transient — same as A visually)
+
+import React from 'react';
+import { Send, QrCode, Clock, ClipboardCheck, FileSearch, Loader2 } from 'lucide-react';
+
+export default function OpdLifecycleRow({
+  state,                    // 'A' | 'B' | 'C' | 'D' | 'E'
+  onSendLink,               // () => void  — fires for State B
+  onViewLink,               // () => void  — fires for State C/D
+  onSaveOpd,                // () => void  — fires for State D
+  onViewOpd,                // () => void  — fires for State A/E
+  sendLinkBusy = false,
+  saveOpdBusy = false,
+}) {
+  // V118 (2026-05-23) — visibility per locked spec:
+  // - View OPD button: visible whenever there's data to view (A, D, E).
+  //   In State D the admin REVIEWS via this button BEFORE clicking save (user
+  //   directive: "admin จะต้อง Review ข้อมูลลูกค้าด้วยการกดปุ่มดูข้อมูลนี้ก่อน").
+  // - Save OPD button: visible ONLY in State D (filled but not yet saved).
+  // - Wait pill: B (no data) / C (waiting customer to fill).
+  const showLinkSend = state === 'B';
+  const showLinkView = state === 'C' || state === 'D';
+  const showOpdWaitNoData = state === 'B';
+  const showOpdWaitFilling = state === 'C';
+  const showOpdView = state === 'A' || state === 'D' || state === 'E';
+  const showOpdSave = state === 'D';
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1.5 justify-end md:justify-end mt-1.5 py-1.5 px-2 rounded-md border-y border-dashed border-amber-500/30 bg-amber-500/[0.03]"
+      data-testid="opd-lifecycle-row"
+      data-opd-state={state}
+    >
+      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500/70 mr-auto">OPD lifecycle</span>
+
+      {showLinkSend && (
+        <button
+          type="button"
+          onClick={onSendLink}
+          disabled={sendLinkBusy}
+          data-testid="opd-link-send-btn"
+          title="สร้างลิ้งค์สำหรับลูกค้ากรอกข้อมูล OPD"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50 disabled:opacity-50"
+        >
+          {sendLinkBusy ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+          ส่งลิ้งค์ลูกค้ากรอก OPD
+        </button>
+      )}
+
+      {showLinkView && (
+        <button
+          type="button"
+          onClick={onViewLink}
+          disabled={sendLinkBusy}
+          data-testid="opd-link-view-btn"
+          title="ดู / พิมพ์ลิ้งค์ที่ส่งให้ลูกค้าแล้ว"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-50"
+        >
+          {sendLinkBusy ? <Loader2 size={11} className="animate-spin" /> : <QrCode size={11} />}
+          ดูลิ้งค์ที่ส่งไป
+        </button>
+      )}
+
+      {showOpdWaitNoData && (
+        <span
+          data-testid="opd-save-btn-wait"
+          data-opd-disabled-reason="no-data"
+          title="ยังไม่มีข้อมูล — กดส่งลิ้งค์ให้ลูกค้ากรอกก่อน"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-slate-800/50 border-slate-700/40 text-slate-500 opacity-70 cursor-not-allowed"
+        >
+          <Clock size={11} />
+          ยังไม่มีข้อมูล
+        </span>
+      )}
+
+      {showOpdWaitFilling && (
+        <span
+          data-testid="opd-save-btn-wait"
+          data-opd-disabled-reason="waiting-customer"
+          title="รอลูกค้ากรอกข้อมูลผ่าน QR/ลิ้งค์"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-slate-800/50 border-slate-700/40 text-slate-500 opacity-70 cursor-not-allowed"
+        >
+          <Clock size={11} />
+          รอลูกค้ากรอก
+        </span>
+      )}
+
+      {/* V118 (2026-05-23) — View OPD button rendered BEFORE Save so left-to-right
+          read order is "review then save" in State D (matches user directive). */}
+      {showOpdView && (
+        <button
+          type="button"
+          onClick={onViewOpd}
+          data-testid="opd-view-btn"
+          title="ดูข้อมูล OPD ของลูกค้า (review)"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50"
+        >
+          <FileSearch size={11} />
+          ดูข้อมูล OPD
+        </button>
+      )}
+
+      {showOpdSave && (
+        <button
+          type="button"
+          onClick={onSaveOpd}
+          disabled={saveOpdBusy}
+          data-testid="opd-save-btn-active"
+          title="บันทึก OPD — สร้างลูกค้าใน be_customers + ผูกนัด/มัดจำ"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold border-2 bg-red-950/40 border-red-600/60 text-red-300 hover:bg-red-900/50 disabled:opacity-50 animate-pulse"
+          style={{ animationDuration: '2.4s' }}
+        >
+          {saveOpdBusy ? <Loader2 size={11} className="animate-spin" /> : <ClipboardCheck size={11} />}
+          บันทึกลง OPD
+        </button>
+      )}
+    </div>
+  );
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/OpdLifecycleRow.jsx
+git commit -m "feat(opd-card): V118 — OpdLifecycleRow presentational sub-component (5 states)"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 3: Wire <code>OpdLifecycleRow</code> into <code>AppointmentHubRowCard.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/components/admin/AppointmentHubRowCard.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add import at top</strong></label></div>
+  <p>Insert near the existing imports (after <code>AppointmentLineBadge</code>):</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Card-level OPD lifecycle row (link send/view + save/view).
+import OpdLifecycleRow from './OpdLifecycleRow.jsx';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Accept new compound prop</strong></label></div>
+  <p>In the <code>AppointmentHubRowCard</code> function-component signature, add <code>opdLifecycle</code> to the destructured props (place after <code>onUnmarkServiceComplete</code>):</p>
+<pre><code class="language-jsx">export default function AppointmentHubRowCard({
+  appt,
+  summary,
+  apptDeposit,
+  apptDateTreatments = [],
+  isTodayTab = false,
+  now = new Date(),
+  onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
+  onMarkServiceComplete,
+  onUnmarkServiceComplete,
+  // V118 (2026-05-23) — Card-level OPD lifecycle (link + save + view). Object
+  // shape: { state, onSendLink, onViewLink, onSaveOpd, onViewOpd,
+  //          sendLinkBusy, saveOpdBusy, hidden } — see OpdLifecycleRow props.
+  // `hidden:true` short-circuits render (ยกเลิก sub-tab).
+  opdLifecycle = null,
+}) {</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Add the ready-to-save chip near HN/name</strong></label></div>
+  <p>Find the customer-name block (the <code>&lt;div className="flex items-baseline gap-2 mb-1.5 flex-wrap"&gt;</code> just before the name <code>&lt;a&gt;</code> or <code>&lt;div&gt;</code> — around lines 148-160). Append the chip AFTER the existing <code>{summary?.membershipTier}</code> sibling chip:</p>
+<pre><code class="language-jsx">{/* V118 (2026-05-23) — ready-to-save chip when customer has filled
+    OPD form but admin hasn't saved yet (State D). Rendered next to HN
+    for at-a-glance visibility before admin scans the action area. */}
+{opdLifecycle && opdLifecycle.state === 'D' && !opdLifecycle.hidden && (
+  <span
+    data-testid="opd-ready-to-save-chip"
+    className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:border-rose-700/60 animate-pulse"
+    style={{ animationDuration: '2.4s' }}
+  >
+    📥 ลูกค้ากรอกแล้ว · รอบันทึก
+  </span>
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Insert the lifecycle row in the right-rail column</strong></label></div>
+  <p>Find the right-rail status+actions block — the <code>&lt;div className="flex flex-col gap-2 items-start md:items-end justify-start md:min-w-[200px]"&gt;</code> around line 302. Insert the row AFTER the status-pill <code>&lt;div className="flex items-center gap-2 flex-wrap md:justify-end"&gt;</code> and BEFORE the existing action <code>&lt;div className="flex gap-1.5 flex-wrap md:justify-end"&gt;</code>:</p>
+<pre><code class="language-jsx">{/* V118 (2026-05-23) — OPD lifecycle row: 🔗 link send/view + 🩺 OPD
+    save/view + ⏳ wait. Rendered between the status pill row and the
+    existing appointment action row. Skipped on ยกเลิก sub-tab via
+    opdLifecycle.hidden short-circuit. */}
+{opdLifecycle && !opdLifecycle.hidden && (
+  <OpdLifecycleRow
+    state={opdLifecycle.state}
+    onSendLink={opdLifecycle.onSendLink}
+    onViewLink={opdLifecycle.onViewLink}
+    onSaveOpd={opdLifecycle.onSaveOpd}
+    onViewOpd={opdLifecycle.onViewOpd}
+    sendLinkBusy={opdLifecycle.sendLinkBusy}
+    saveOpdBusy={opdLifecycle.saveOpdBusy}
+  />
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubRowCard.jsx
+git commit -m "feat(opd-card): V118 — wire OpdLifecycleRow + ready-to-save chip into row card"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 4: Plumb props through <code>AppointmentHubView.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/components/admin/AppointmentHubView.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Add import for resolveCardOpdState</strong></label></div>
+  <p>Add near the existing lib imports:</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Card-level OPD lifecycle state derivation.
+import { resolveCardOpdState } from '../../lib/opdSessionState.js';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Accept new props in signature</strong></label></div>
+  <p>Add to the destructured props (after the existing handler props like <code>onCancelAppt</code>):</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Card-level OPD lifecycle handlers passed from AdminDashboard.
+// Each accepts the appt and dispatches the appropriate side-effect.
+resolveLinkedSession,        // (appt) => session | null  — used to derive opdLifecycle.state
+onSendOrViewOpdLink,         // (appt) => Promise<void>   — provision + open SendCustomerLinkModal
+onSaveOpdFromCard,           // (appt) => Promise<void>   — wraps handleOpdClick(linkedSession)
+onViewOpdFromCard,           // (appt) => void            — opens ประวัติผู้ป่วย OPD modal
+opdLinkBusyByApptId = {},    // { [apptId]: boolean }     — per-row sendLink busy flag
+opdSaveBusyByApptId = {},    // { [apptId]: boolean }     — per-row save busy flag
+activeTab = 'today',         // sub-tab key — needed to hide opdLifecycle on 'cancelled'</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Compute per-appt opdLifecycle prop</strong></label></div>
+  <p>Find the section where AppointmentHubView maps <code>filteredAppts</code> → <code>&lt;AppointmentHubRowCard /&gt;</code>. Compute the opdLifecycle object inline per row. The exact location depends on the existing structure (search for the existing <code>&lt;AppointmentHubRowCard</code> JSX usage). Insert this block immediately above the JSX:</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — per-row OPD lifecycle prop.
+// Hidden entirely on the ยกเลิก sub-tab (no follow-through needed).
+const hideOpdLifecycle = activeTab === 'cancelled';
+const linkedSession = hideOpdLifecycle ? null : (resolveLinkedSession?.(appt) ?? null);
+const opdState = hideOpdLifecycle ? 'B' : resolveCardOpdState({ appt, linkedSession });
+const opdLifecycle = hideOpdLifecycle ? { hidden: true } : {
+  state: opdState,
+  hidden: false,
+  onSendLink: () => onSendOrViewOpdLink?.(appt),
+  onViewLink: () => onSendOrViewOpdLink?.(appt),
+  onSaveOpd:  () => onSaveOpdFromCard?.(appt),
+  onViewOpd:  () => onViewOpdFromCard?.(appt),
+  sendLinkBusy: !!opdLinkBusyByApptId[appt.id],
+  saveOpdBusy:  !!opdSaveBusyByApptId[appt.id],
+};</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Pass opdLifecycle to RowCard</strong></label></div>
+  <p>In the existing <code>&lt;AppointmentHubRowCard ... /&gt;</code> JSX, add the prop alongside the existing ones:</p>
+<pre><code class="language-jsx">&lt;AppointmentHubRowCard
+  appt={appt}
+  summary={summary}
+  // ... existing props preserved ...
+  opdLifecycle={opdLifecycle}
+/&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubView.jsx
+git commit -m "feat(opd-card): V118 — plumb opdLifecycle props through HubView"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 5: Implement handlers + state in <code>AdminDashboard.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/pages/AdminDashboard.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Add imports</strong></label></div>
+  <p>Add near the existing imports (after <code>kioskPatientToCanonical</code> imports):</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Card-level OPD lifecycle.
+import {
+  isOpdSessionSaved,
+  synthesizeSessionFromCustomer,
+} from '../lib/opdSessionState.js';
+// V118 — provisionOpdLinkForBookingPair is already imported by other call
+// sites (DepositPanel / AppointmentFormModal); add the import here.
+// If `provisionOpdLinkForBookingPair` is NOT already imported, add:
+import { provisionOpdLinkForBookingPair } from '../lib/appointmentDepositBatch.js';
+// V118 — getDoc + opdSessionDoc for lazy fetch of past-month sessions.
+// If these are NOT already imported, add the corresponding imports.
+import { getDoc } from 'firebase/firestore';
+// V118 — SendCustomerLinkModal (lazy or eager — eager OK since it's small).
+import SendCustomerLinkModal from '../components/backend/SendCustomerLinkModal.jsx';</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add state + refs near other AdminDashboard state declarations</strong></label></div>
+  <p>Insert near other state declarations (search for an existing <code>const [walkInModal, setWalkInModal] = useState(null);</code> for a good placement spot):</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Card-level OPD lifecycle state.
+// sendLinkModal: shape { sessionId, url, sessionName, alreadyProvisioned } — null when closed.
+// opdLinkBusyByApptId / opdSaveBusyByApptId: per-row busy maps so multiple cards
+// can be in-flight independently without sharing a global spinner.
+// lazyFetchedSessionsRef: cache for past-month linked sessions not in current listener window.
+// lazyFetchedTick: bump on lazy-fetch resolve to trigger re-render with new session data.
+const [sendLinkModal, setSendLinkModal] = useState(null);
+const [opdLinkBusyByApptId, setOpdLinkBusyByApptId] = useState({});
+const [opdSaveBusyByApptId, setOpdSaveBusyByApptId] = useState({});
+const lazyFetchedSessionsRef = useRef(new Map());
+const lazyFetchInFlightRef = useRef(new Set());
+const [lazyFetchedTick, setLazyFetchedTick] = useState(0);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Build sessions index memo</strong></label></div>
+  <p>Add near other <code>useMemo</code> blocks. <code>allNotifData</code> already exists (search for it — it aggregates sessions + archivedSessions + depositSessions etc.).</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — fast O(1) lookup of linked sessions by id.
+// `allNotifData` already aggregates active + archived + deposit + noDeposit
+// session arrays — this memo simply Map-indexes it for O(1) resolveLinkedSession.
+const sessionsById = useMemo(() => {
+  const m = new Map();
+  for (const s of allNotifData || []) {
+    if (s?.id) m.set(s.id, s);
+  }
+  return m;
+}, [allNotifData]);
+
+// V118 — customer-by-id Map for synth-session fallback (State A path).
+// `allCustomers` listener already exists; this memo just indexes.
+const customersById = useMemo(() => {
+  const m = new Map();
+  for (const c of allCustomers || []) {
+    if (c?.id) m.set(c.id, c);
+  }
+  return m;
+}, [allCustomers]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Implement resolveLinkedSession</strong></label></div>
+  <p>Add after the memos:</p>
+<pre><code class="language-jsx">// V118 (2026-05-23) — resolve the opd_sessions doc for a given appt.
+// Three sources (in order): memo'd current-window sessions → lazy-fetch cache →
+// trigger lazy fetch (returns null this render, re-renders on resolve).
+//
+// NOTE: lazyFetchedTick is read in the dep array so React re-runs this when a
+// lazy fetch resolves. The `_` suffix on the variable means "intentionally
+// unused-as-reference; needed for re-render trigger".
+const resolveLinkedSession = useCallback((appt) => {
+  if (!appt?.linkedOpdSessionId) return null;
+  const id = appt.linkedOpdSessionId;
+  if (sessionsById.has(id)) return sessionsById.get(id);
+  if (lazyFetchedSessionsRef.current.has(id)) return lazyFetchedSessionsRef.current.get(id);
+  // Trigger lazy fetch (coalesce duplicates via in-flight Set).
+  if (!lazyFetchInFlightRef.current.has(id)) {
+    lazyFetchInFlightRef.current.add(id);
+    // opd_sessions live at root collection 'opd_sessions/{id}' per existing
+    // patterns elsewhere in AdminDashboard (search for an existing
+    // doc(db, 'opd_sessions', ...) usage to confirm path).
+    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', id);
+    getDoc(ref).then(snap => {
+      if (snap.exists()) {
+        lazyFetchedSessionsRef.current.set(id, { id: snap.id, ...snap.data() });
+        setLazyFetchedTick(t => t + 1);
+      }
+    }).catch(e => {
+      console.warn('[V118 resolveLinkedSession] lazy fetch failed:', e);
+    }).finally(() => {
+      lazyFetchInFlightRef.current.delete(id);
+    });
+  }
+  return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [sessionsById, lazyFetchedTick, appId, db]);</code></pre>
+  <p><strong>NOTE for implementer:</strong> verify the canonical opd_sessions path in AdminDashboard by grepping <code>opd_sessions</code> — use the SAME doc-ref pattern this file already uses (it's a Phase 21/Rule M canonical path). The example above assumes <code>artifacts/{appId}/public/data/opd_sessions/{id}</code>; adjust if a project helper like <code>opdSessionDoc(id)</code> exists in <code>backendClient.js</code> already.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Implement handleSendOrViewLinkFromCard</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — provision + open SendCustomerLinkModal from the card.
+// Mirrors AppointmentFormModal:938-984 logic. provisionOpdLinkForBookingPair
+// is idempotent (V116) — re-calling for an already-linked appt returns the
+// same URL with `alreadyProvisioned:true`. Per-row busy flag prevents
+// double-clicks during the async call.
+const handleSendOrViewOpdLink = useCallback(async (appt) => {
+  if (!appt?.id) return;
+  if (opdLinkBusyByApptId[appt.id]) return;
+  setOpdLinkBusyByApptId(m => ({ ...m, [appt.id]: true }));
+  try {
+    const apptId = appt.appointmentId || appt.id;
+    const r = await provisionOpdLinkForBookingPair({
+      depositId: appt.linkedDepositId || appt.spawnedFromDepositId || '',
+      appointmentId: apptId,
+      branchId: appt.branchId || selectedBranchId || '',
+      formType: 'intake',
+      sessionName: appt.customerNameTemp || appt.customerName || 'ลูกค้าจอง',
+    });
+    setSendLinkModal({
+      sessionId: r.sessionId,
+      url: r.url,
+      sessionName: appt.customerNameTemp || appt.customerName || 'ลูกค้าจอง',
+      alreadyProvisioned: !!r.alreadyProvisioned,
+    });
+  } catch (err) {
+    console.warn('[V118 handleSendOrViewOpdLink] provision failed:', err);
+    showToast?.('สร้างลิ้งค์ไม่สำเร็จ: ' + (err?.message || String(err)), 4000);
+  } finally {
+    setOpdLinkBusyByApptId(m => {
+      const next = { ...m };
+      delete next[appt.id];
+      return next;
+    });
+  }
+}, [opdLinkBusyByApptId, selectedBranchId, showToast]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s6"> <label for="t5s6"><strong>Step 6: Implement handleSaveOpdFromCard</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — save OPD from the card by delegating to the existing
+// handleOpdClick. Looks up the linked session first; if missing or already
+// saved, no-ops. Per-row busy flag.
+const handleSaveOpdFromCard = useCallback(async (appt) => {
+  if (!appt?.id) return;
+  if (opdSaveBusyByApptId[appt.id]) return;
+  const session = resolveLinkedSession(appt);
+  if (!session) {
+    showToast?.('ยังไม่มีข้อมูล session — กดส่งลิ้งค์ให้ลูกค้ากรอกก่อน', 4000);
+    return;
+  }
+  if (isOpdSessionSaved(session)) {
+    showToast?.('บันทึก OPD แล้ว — ดูข้อมูลผ่านปุ่ม "ดูข้อมูล OPD"', 3000);
+    return;
+  }
+  setOpdSaveBusyByApptId(m => ({ ...m, [appt.id]: true }));
+  try {
+    await handleOpdClick(session);
+  } catch (err) {
+    console.warn('[V118 handleSaveOpdFromCard] handleOpdClick failed:', err);
+    showToast?.('บันทึก OPD ไม่สำเร็จ: ' + (err?.message || String(err)), 4000);
+  } finally {
+    setOpdSaveBusyByApptId(m => {
+      const next = { ...m };
+      delete next[appt.id];
+      return next;
+    });
+  }
+}, [opdSaveBusyByApptId, resolveLinkedSession, handleOpdClick, showToast]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s7"> <label for="t5s7"><strong>Step 7: Implement handleViewOpdFromCard</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — open the ประวัติผู้ป่วย OPD modal from the card.
+// Path 1: appt has linkedOpdSessionId and session exists → use real session.
+// Path 2: appt has customerId only (State A, no linked session) → synthesize
+//         from be_customers.patientData so the modal renders identically.
+//         The synth session carries __synthetic:true; modal-internal
+//         destructive buttons (edit/sync/resync) MUST gate on !__synthetic.
+const handleViewOpdFromCard = useCallback((appt) => {
+  if (!appt) return;
+  const session = resolveLinkedSession(appt);
+  if (session) {
+    setViewingSession(session);
+    return;
+  }
+  if (appt.customerId) {
+    const customer = customersById.get(appt.customerId);
+    if (customer) {
+      const synth = synthesizeSessionFromCustomer(customer, appt);
+      if (synth) setViewingSession(synth);
+      return;
+    }
+  }
+  // No linked session, no customer doc — fallback toast.
+  showToast?.('ไม่พบข้อมูล OPD สำหรับลูกค้านี้', 3000);
+}, [resolveLinkedSession, customersById, setViewingSession, showToast]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s8"> <label for="t5s8"><strong>Step 8: Pass handlers + state through to AppointmentHubView</strong></label></div>
+  <p>Find the existing <code>&lt;AppointmentHubView ... /&gt;</code> JSX render. Add the 6 new props alongside existing ones:</p>
+<pre><code class="language-jsx">&lt;AppointmentHubView
+  /* ... existing props preserved ... */
+  resolveLinkedSession={resolveLinkedSession}
+  onSendOrViewOpdLink={handleSendOrViewOpdLink}
+  onSaveOpdFromCard={handleSaveOpdFromCard}
+  onViewOpdFromCard={handleViewOpdFromCard}
+  opdLinkBusyByApptId={opdLinkBusyByApptId}
+  opdSaveBusyByApptId={opdSaveBusyByApptId}
+/&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s9"> <label for="t5s9"><strong>Step 9: Mount SendCustomerLinkModal at AdminDashboard root</strong></label></div>
+  <p>Add near the bottom of the JSX render (next to other top-level modals like <code>{walkInModal && ...}</code>):</p>
+<pre><code class="language-jsx">{/* V118 (2026-05-23) — SendCustomerLinkModal for card-level OPD link send/view.
+    Mounted at AdminDashboard root so it's reachable from any sub-tab.
+    On close: trigger a session-list refresh by bumping lazyFetchedTick (the
+    listener will already update sessionsById, but the tick ensures derived
+    state recomputes if user reopens immediately). */}
+{sendLinkModal && (
+  &lt;SendCustomerLinkModal
+    isOpen={true}
+    onClose={() => {
+      setSendLinkModal(null);
+      setLazyFetchedTick(t => t + 1);
+    }}
+    sessionId={sendLinkModal.sessionId}
+    url={sendLinkModal.url}
+    sessionName={sendLinkModal.sessionName}
+    alreadyProvisioned={sendLinkModal.alreadyProvisioned}
+  /&gt;
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s10"> <label for="t5s10"><strong>Step 10: Gate the viewingSession modal's destructive buttons on !__synthetic</strong></label></div>
+  <p>Find the existing viewingSession modal block in AdminDashboard (search for <code>viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'</code> — around line 5747; the same JSX has the "แก้ไขข้อมูล" / "ซิงค์ข้อมูลใหม่" / "Resync OPD" buttons grouped near the top). Wrap each destructive button's <code>onClick</code> + <code>disabled</code> in a synth check:</p>
+<pre><code class="language-jsx">{/* V118 (2026-05-23) — block destructive ops on synthesized sessions.
+    Synth sessions are read-only views derived from be_customers.patientData
+    for the State A path. They have no Firestore doc to edit/sync/resync. */}
+&lt;button
+  type="button"
+  onClick={() => {
+    if (viewingSession?.__synthetic) {
+      showToast?.('ปุ่มนี้ใช้ได้กับ session จริงเท่านั้น', 3000);
+      return;
+    }
+    // ... existing handler body ...
+  }}
+  disabled={viewingSession?.__synthetic /* existing disabled checks */}
+  title={viewingSession?.__synthetic ? 'ใช้ได้กับ session จริงเท่านั้น' : /* existing title */}
+  /* ... rest of button JSX preserved ... */
+&gt;
+  แก้ไขข้อมูล
+&lt;/button&gt;</code></pre>
+  <p>Repeat for: <strong>ซิงค์ข้อมูลใหม่</strong>, <strong>Resync OPD</strong>, <strong>OPD บันทึกแล้ว / บันทึกลง OPD</strong> (this last one is the V87 patient-link trigger near line 5747 — the synth check belongs there too). The two print buttons (<strong>พิมพ์สรุป A4</strong> + <strong>พิมพ์ฟอร์มมาตรฐาน</strong>) are READ-ONLY → do NOT gate them. The "ดูข้อมูลลูกค้า" / "แก้ไขข้อมูลลูกค้า" / "คอร์สและนัดหมาย" navigation buttons (line ~4624 area) navigate by customer-id which IS preserved on synth → do NOT gate.</p>
+
+  <div class="step"><input type="checkbox" id="t5s11"> <label for="t5s11"><strong>Step 11: Commit (4 sub-commits suggested for atomicity)</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "feat(opd-card): V118 — AdminDashboard handlers + state + synth-session gates [AV118]"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE B — AV118 audit invariant                                  -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="task">
+  <h3>Task 6: Add AV118 invariant to <code>audit-anti-vibe-code</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Append AV118 entry at end of file</strong></label></div>
+<pre><code class="language-markdown">### AV118 — Card-level OPD state derivation MUST use opdSessionState helpers (2026-05-23 V118 card OPD lifecycle row)
+
+**Class-of-bug**: V12 multi-reader-sweep at the OPD-save-state predicate boundary. Pre-V118, the predicate `(session.opdRecordedAt && session.brokerStatus === 'done')` was inlined at ≥3 sites (AdminDashboard.jsx:3475, :5747; V87/AV84 test). When the state model evolves (e.g. a new "partial-save" intermediate state), inline callsites drift silently.
+
+**Rule**: every derivation of "OPD session saved" / "customer filled" / "card OPD state" in `src/components/admin/**` + `src/pages/AdminDashboard.jsx` MUST go through `src/lib/opdSessionState.js` helpers:
+- `isOpdSessionSaved(session)` — replaces inline `session.opdRecordedAt && session.brokerStatus === 'done'`
+- `hasPatientData(session)` — replaces inline `session.patientData && Object.keys(...).length`
+- `resolveCardOpdState({appt, linkedSession})` — single source for the 5-state machine
+- `synthesizeSessionFromCustomer(customer, appt)` — single source for synth-session shape
+
+**Sanctioned exceptions** (closed list):
+- `src/lib/opdSessionState.js` itself — defines the helpers, contains the literal `'done'` string
+- `tests/v118-opd-session-state-helpers.test.js` — tests the helpers, asserts the predicate
+- `tests/v87-link-button-opd-save-guard.test.js` — V87 source-grep regression that locks the V87 patient-link guard literal text (different concern: AV84 trigger-site closed list)
+- `src/pages/AdminDashboard.jsx:3475` — `handleOpdClick` early-return literal predicate (preserved per V87/AV84). MUST also call `isOpdSessionSaved` (defense-in-depth) but the literal stays for V87 test compatibility.
+
+**Source-grep regression test**: `tests/v118-card-opd-lifecycle-row-source-grep.test.js` AV118.G1-G4.
+
+**Origin**: V118 (2026-05-23) — card-level OPD lifecycle row introduced 4 new callsites of the saved-predicate. Centralizing prevents future drift.
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "docs(av118): V118 — AV118 invariant (OPD state derivation via shared helpers)"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE C — TESTS (Rule K test-last)                               -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="task">
+  <h3>Task 7: Unit tests for <code>opdSessionState.js</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>tests/v118-opd-session-state-helpers.test.js</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the test file</strong></label></div>
+<pre><code class="language-javascript">// V118 (2026-05-23) — unit + adversarial tests for OPD state helpers.
+import { describe, expect, it } from 'vitest';
+import {
+  isOpdSessionSaved,
+  hasPatientData,
+  resolveCardOpdState,
+  synthesizeSessionFromCustomer,
+} from '../src/lib/opdSessionState.js';
+
+describe('V118 — isOpdSessionSaved', () => {
+  it('U1.1 — true when opdRecordedAt + brokerStatus="done"', () => {
+    expect(isOpdSessionSaved({ opdRecordedAt: new Date(), brokerStatus: 'done' })).toBe(true);
+  });
+  it('U1.2 — false when missing opdRecordedAt', () => {
+    expect(isOpdSessionSaved({ brokerStatus: 'done' })).toBe(false);
+  });
+  it('U1.3 — false when brokerStatus != "done"', () => {
+    expect(isOpdSessionSaved({ opdRecordedAt: new Date(), brokerStatus: 'pending' })).toBe(false);
+  });
+  it('U1.4 — false on null/undefined session', () => {
+    expect(isOpdSessionSaved(null)).toBe(false);
+    expect(isOpdSessionSaved(undefined)).toBe(false);
+  });
+  it('U1.5 — false on non-object input (adversarial)', () => {
+    expect(isOpdSessionSaved('string')).toBe(false);
+    expect(isOpdSessionSaved(42)).toBe(false);
+    expect(isOpdSessionSaved([])).toBe(false);
+  });
+});
+
+describe('V118 — hasPatientData', () => {
+  it('U2.1 — true when patientData has keys', () => {
+    expect(hasPatientData({ patientData: { firstName: 'A' } })).toBe(true);
+  });
+  it('U2.2 — false when patientData is empty object', () => {
+    expect(hasPatientData({ patientData: {} })).toBe(false);
+  });
+  it('U2.3 — false when patientData missing', () => {
+    expect(hasPatientData({})).toBe(false);
+  });
+  it('U2.4 — false on null/undefined session', () => {
+    expect(hasPatientData(null)).toBe(false);
+    expect(hasPatientData(undefined)).toBe(false);
+  });
+  it('U2.5 — false when patientData is null', () => {
+    expect(hasPatientData({ patientData: null })).toBe(false);
+  });
+});
+
+describe('V118 — resolveCardOpdState', () => {
+  it('U3.1 — A: appt has customerId', () => {
+    expect(resolveCardOpdState({ appt: { customerId: 'CUST-1' }, linkedSession: null })).toBe('A');
+  });
+  it('U3.2 — A: appt has customerId even if linkedSession also exists', () => {
+    expect(resolveCardOpdState({
+      appt: { customerId: 'CUST-1', linkedOpdSessionId: 'S-1' },
+      linkedSession: { opdRecordedAt: new Date(), brokerStatus: 'done' },
+    })).toBe('A');
+  });
+  it('U3.3 — B: no customerId, no linkedOpdSessionId', () => {
+    expect(resolveCardOpdState({ appt: { customerNameTemp: 'X' }, linkedSession: null })).toBe('B');
+  });
+  it('U3.4 — C: linkedOpdSessionId stamped, session not yet resolved (null)', () => {
+    expect(resolveCardOpdState({
+      appt: { linkedOpdSessionId: 'S-1' },
+      linkedSession: null,
+    })).toBe('C');
+  });
+  it('U3.5 — C: session exists but no patientData', () => {
+    expect(resolveCardOpdState({
+      appt: { linkedOpdSessionId: 'S-1' },
+      linkedSession: { id: 'S-1', patientData: {} },
+    })).toBe('C');
+  });
+  it('U3.6 — D: patientData filled, not saved', () => {
+    expect(resolveCardOpdState({
+      appt: { linkedOpdSessionId: 'S-1' },
+      linkedSession: { id: 'S-1', patientData: { firstName: 'A' } },
+    })).toBe('D');
+  });
+  it('U3.7 — E: saved (transient)', () => {
+    expect(resolveCardOpdState({
+      appt: { linkedOpdSessionId: 'S-1' },
+      linkedSession: { id: 'S-1', patientData: { firstName: 'A' }, opdRecordedAt: new Date(), brokerStatus: 'done' },
+    })).toBe('E');
+  });
+  it('U3.8 — B (fallback) on null appt', () => {
+    expect(resolveCardOpdState({ appt: null, linkedSession: null })).toBe('B');
+  });
+});
+
+describe('V118 — synthesizeSessionFromCustomer', () => {
+  it('U4.1 — synthesizes session with __synthetic flag', () => {
+    const synth = synthesizeSessionFromCustomer(
+      { id: 'CUST-1', patientData: { firstName: 'A' }, proClinicHN: 'LC-001', createdAt: new Date() },
+      { id: 'APPT-1' },
+    );
+    expect(synth.__synthetic).toBe(true);
+    expect(synth.brokerStatus).toBe('done');
+    expect(synth.patientData.firstName).toBe('A');
+    expect(synth.brokerProClinicHN).toBe('LC-001');
+  });
+  it('U4.2 — returns null on null customer', () => {
+    expect(synthesizeSessionFromCustomer(null, { id: 'APPT-1' })).toBeNull();
+  });
+  it('U4.3 — handles missing patientData gracefully', () => {
+    const synth = synthesizeSessionFromCustomer({ id: 'CUST-1' }, { id: 'APPT-1' });
+    expect(synth.patientData).toEqual({});
+  });
+  it('U4.4 — synth id is deterministic from customer+appt ids', () => {
+    const s1 = synthesizeSessionFromCustomer({ id: 'CUST-1' }, { id: 'APPT-1' });
+    const s2 = synthesizeSessionFromCustomer({ id: 'CUST-1' }, { id: 'APPT-1' });
+    expect(s1.id).toBe(s2.id);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v118-opd-session-state-helpers.test.js</code></p>
+  <p>Expected: 21/21 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v118-opd-session-state-helpers.test.js
+git commit -m "test(opd-card): V118 — opdSessionState helper unit + adversarial bank (21 tests)"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 8: Source-grep regression bank</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>tests/v118-card-opd-lifecycle-row-source-grep.test.js</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write the test file</strong></label></div>
+<pre><code class="language-javascript">// V118 (2026-05-23) — source-grep regression bank.
+// Locks: AV118 invariant + V87/AV84 preservation + sanctioned-callsite list.
+import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const ROOT = path.resolve(__dirname, '..');
+const ADMIN = fs.readFileSync(path.join(ROOT, 'src/pages/AdminDashboard.jsx'), 'utf8');
+const ROWCARD = fs.readFileSync(path.join(ROOT, 'src/components/admin/AppointmentHubRowCard.jsx'), 'utf8');
+const HUBVIEW = fs.readFileSync(path.join(ROOT, 'src/components/admin/AppointmentHubView.jsx'), 'utf8');
+const ROW = fs.readFileSync(path.join(ROOT, 'src/components/admin/OpdLifecycleRow.jsx'), 'utf8');
+const STATE = fs.readFileSync(path.join(ROOT, 'src/lib/opdSessionState.js'), 'utf8');
+const AV = fs.readFileSync(path.join(ROOT, '.agents/skills/audit-anti-vibe-code/SKILL.md'), 'utf8');
+
+describe('V118 — source-grep AV118 + sanctioned callsites', () => {
+  it('SG1.1 — opdSessionState.js exports the 4 canonical helpers', () => {
+    expect(STATE).toMatch(/export function isOpdSessionSaved\(/);
+    expect(STATE).toMatch(/export function hasPatientData\(/);
+    expect(STATE).toMatch(/export function resolveCardOpdState\(/);
+    expect(STATE).toMatch(/export function synthesizeSessionFromCustomer\(/);
+  });
+
+  it('SG1.2 — AdminDashboard imports the helpers', () => {
+    expect(ADMIN).toMatch(/from\s+['"]\.\.\/lib\/opdSessionState\.js['"]/);
+    expect(ADMIN).toMatch(/isOpdSessionSaved/);
+    expect(ADMIN).toMatch(/synthesizeSessionFromCustomer/);
+  });
+
+  it('SG1.3 — HubView imports resolveCardOpdState', () => {
+    expect(HUBVIEW).toMatch(/resolveCardOpdState/);
+    expect(HUBVIEW).toMatch(/from\s+['"]\.\.\/\.\.\/lib\/opdSessionState\.js['"]/);
+  });
+
+  it('SG2.1 — AV118 entry is present in audit-anti-vibe-code SKILL.md', () => {
+    expect(AV).toMatch(/AV118[\s\S]{0,300}Card-level OPD state derivation/i);
+    expect(AV).toMatch(/opdSessionState/);
+  });
+
+  it('SG3.1 — V87/AV84 preserved: setPatientLinkModal trigger count remains 2', () => {
+    const matches = ADMIN.match(/setPatientLinkModal\(session\.id\)/g) || [];
+    expect(matches.length).toBe(2);
+  });
+
+  it('SG3.2 — V87/AV84 guard wrapper still present (regression lock)', () => {
+    expect(ADMIN).toMatch(/session\.opdRecordedAt\s*&&\s*session\.brokerStatus\s*===\s*['"]done['"]/);
+  });
+
+  it('SG4.1 — AppointmentHubRowCard renders OpdLifecycleRow when opdLifecycle prop set', () => {
+    expect(ROWCARD).toMatch(/import OpdLifecycleRow/);
+    expect(ROWCARD).toMatch(/<OpdLifecycleRow/);
+    expect(ROWCARD).toMatch(/opdLifecycle/);
+  });
+
+  it('SG4.2 — Ready-to-save chip rendered when state === "D"', () => {
+    expect(ROWCARD).toMatch(/opdLifecycle.*state\s*===\s*['"]D['"]/);
+    expect(ROWCARD).toMatch(/ลูกค้ากรอกแล้ว/);
+  });
+
+  it('SG5.1 — OpdLifecycleRow renders 5 distinct button branches', () => {
+    expect(ROW).toMatch(/state\s*===\s*['"]B['"]/);
+    expect(ROW).toMatch(/state\s*===\s*['"]C['"]/);
+    expect(ROW).toMatch(/state\s*===\s*['"]D['"]/);
+    expect(ROW).toMatch(/state\s*===\s*['"]A['"]/);
+    expect(ROW).toMatch(/state\s*===\s*['"]E['"]/);
+  });
+
+  it('SG6.1 — HubView hides opdLifecycle on cancelled sub-tab', () => {
+    expect(HUBVIEW).toMatch(/activeTab\s*===\s*['"]cancelled['"]/);
+    expect(HUBVIEW).toMatch(/hideOpdLifecycle/);
+  });
+
+  it('SG7.1 — V118 marker comments present at AdminDashboard call sites', () => {
+    const markers = ADMIN.match(/V118 \(2026-05-23\)/g) || [];
+    expect(markers.length).toBeGreaterThanOrEqual(4);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v118-card-opd-lifecycle-row-source-grep.test.js</code></p>
+  <p>Expected: 11/11 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v118-card-opd-lifecycle-row-source-grep.test.js
+git commit -m "test(opd-card): V118 — source-grep regression + AV118 + V87/AV84 preservation locks"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 9: RTL tests for OpdLifecycleRow (5 states)</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>tests/v118-card-opd-lifecycle-row-rtl.test.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write RTL tests</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — RTL tests for OpdLifecycleRow component.
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import React from 'react';
+import OpdLifecycleRow from '../src/components/admin/OpdLifecycleRow.jsx';
+
+function setup(state, handlers = {}) {
+  const onSendLink = vi.fn();
+  const onViewLink = vi.fn();
+  const onSaveOpd = vi.fn();
+  const onViewOpd = vi.fn();
+  render(
+    <OpdLifecycleRow
+      state={state}
+      onSendLink={handlers.onSendLink || onSendLink}
+      onViewLink={handlers.onViewLink || onViewLink}
+      onSaveOpd={handlers.onSaveOpd || onSaveOpd}
+      onViewOpd={handlers.onViewOpd || onViewOpd}
+    />
+  );
+  return { onSendLink, onViewLink, onSaveOpd, onViewOpd };
+}
+
+describe('V118 — OpdLifecycleRow RTL', () => {
+  it('R1.A — State A renders only view-OPD button', () => {
+    setup('A');
+    expect(screen.getByTestId('opd-view-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('opd-link-send-btn')).toBeNull();
+    expect(screen.queryByTestId('opd-link-view-btn')).toBeNull();
+    expect(screen.queryByTestId('opd-save-btn-active')).toBeNull();
+    expect(screen.queryByTestId('opd-save-btn-wait')).toBeNull();
+  });
+
+  it('R1.B — State B renders send-link + wait (no-data)', () => {
+    setup('B');
+    expect(screen.getByTestId('opd-link-send-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('opd-save-btn-wait')).toHaveAttribute('data-opd-disabled-reason', 'no-data');
+    expect(screen.queryByTestId('opd-view-btn')).toBeNull();
+  });
+
+  it('R1.C — State C renders view-link + wait (waiting-customer)', () => {
+    setup('C');
+    expect(screen.getByTestId('opd-link-view-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('opd-save-btn-wait')).toHaveAttribute('data-opd-disabled-reason', 'waiting-customer');
+    expect(screen.queryByTestId('opd-link-send-btn')).toBeNull();
+  });
+
+  it('R1.D — State D renders view-link + view-OPD (review) + save-active (clickable)', () => {
+    setup('D');
+    expect(screen.getByTestId('opd-link-view-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('opd-view-btn')).toBeInTheDocument();      // V118 — review button present BEFORE save
+    expect(screen.getByTestId('opd-save-btn-active')).toBeInTheDocument();
+    expect(screen.queryByTestId('opd-save-btn-wait')).toBeNull();
+  });
+
+  it('R1.E — State E renders view-OPD button (same as A)', () => {
+    setup('E');
+    expect(screen.getByTestId('opd-view-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('opd-link-send-btn')).toBeNull();
+  });
+
+  it('R2.B — click send-link fires onSendLink', async () => {
+    const { onSendLink } = setup('B');
+    screen.getByTestId('opd-link-send-btn').click();
+    expect(onSendLink).toHaveBeenCalledOnce();
+  });
+
+  it('R2.D — click save-active fires onSaveOpd', async () => {
+    const { onSaveOpd } = setup('D');
+    screen.getByTestId('opd-save-btn-active').click();
+    expect(onSaveOpd).toHaveBeenCalledOnce();
+  });
+
+  it('R2.A — click view-OPD fires onViewOpd', async () => {
+    const { onViewOpd } = setup('A');
+    screen.getByTestId('opd-view-btn').click();
+    expect(onViewOpd).toHaveBeenCalledOnce();
+  });
+
+  it('R3.1 — data-opd-state attribute set on container', () => {
+    setup('D');
+    expect(screen.getByTestId('opd-lifecycle-row')).toHaveAttribute('data-opd-state', 'D');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v118-card-opd-lifecycle-row-rtl.test.jsx</code></p>
+  <p>Expected: 9/9 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v118-card-opd-lifecycle-row-rtl.test.jsx
+git commit -m "test(opd-card): V118 — RTL coverage for 5-state OpdLifecycleRow"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 10: Rule I full-flow simulate</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Write the test</strong></label></div>
+<pre><code class="language-jsx">// V118 (2026-05-23) — Rule I full-flow simulate.
+// Chains the 5 state transitions B → C → D → A via pure helpers + RowCard
+// render. Does NOT mount real Firestore — uses simulated appt/session shapes.
+
+import { describe, expect, it } from 'vitest';
+import { resolveCardOpdState } from '../src/lib/opdSessionState.js';
+
+describe('V118 — Full-flow simulate (Rule I)', () => {
+  it('F1.1 — B→C transition: provision stamps linkedOpdSessionId', () => {
+    let appt = { id: 'A-1', customerNameTemp: 'X' };
+    let session = null;
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('B');
+
+    // Admin clicks Send → provisionOpdLinkForBookingPair simulated
+    appt = { ...appt, linkedOpdSessionId: 'S-1' };
+    session = { id: 'S-1', patientData: {} };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('C');
+  });
+
+  it('F1.2 — C→D transition: customer submits PatientForm', () => {
+    const appt = { id: 'A-1', linkedOpdSessionId: 'S-1' };
+    let session = { id: 'S-1', patientData: {} };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('C');
+
+    // Customer fills via remote link
+    session = { id: 'S-1', patientData: { firstName: 'John', lastName: 'Doe' } };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('D');
+  });
+
+  it('F1.3 — D→E transition: admin clicks save → handleOpdClick fires', () => {
+    let appt = { id: 'A-1', linkedOpdSessionId: 'S-1' };
+    let session = { id: 'S-1', patientData: { firstName: 'John' } };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('D');
+
+    // handleOpdClick mutates session
+    session = { ...session, opdRecordedAt: new Date(), brokerStatus: 'done' };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('E');
+  });
+
+  it('F1.4 — E→A transition: listener fires with customerId stamped', () => {
+    let appt = { id: 'A-1', linkedOpdSessionId: 'S-1' };
+    const session = { id: 'S-1', patientData: { firstName: 'John' }, opdRecordedAt: new Date(), brokerStatus: 'done' };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('E');
+
+    // attachCustomerToOpdSessionLinks stamps customerId on appt
+    appt = { ...appt, customerId: 'CUST-NEW' };
+    expect(resolveCardOpdState({ appt, linkedSession: session })).toBe('A');
+  });
+
+  it('F2.1 — Full B→A chain in single test (lifecycle assertion)', () => {
+    const states = [];
+    // Stage 1: appointment created, no link
+    let appt = { id: 'A-1', customerNameTemp: 'Test' };
+    let session = null;
+    states.push(resolveCardOpdState({ appt, linkedSession: session })); // B
+
+    // Stage 2: admin sends link
+    appt = { ...appt, linkedOpdSessionId: 'S-1' };
+    session = { id: 'S-1', patientData: {} };
+    states.push(resolveCardOpdState({ appt, linkedSession: session })); // C
+
+    // Stage 3: customer fills form
+    session = { id: 'S-1', patientData: { firstName: 'A' } };
+    states.push(resolveCardOpdState({ appt, linkedSession: session })); // D
+
+    // Stage 4: admin saves
+    session = { ...session, opdRecordedAt: new Date(), brokerStatus: 'done' };
+    states.push(resolveCardOpdState({ appt, linkedSession: session })); // E
+
+    // Stage 5: listener catches up
+    appt = { ...appt, customerId: 'CUST-NEW' };
+    states.push(resolveCardOpdState({ appt, linkedSession: session })); // A
+
+    expect(states).toEqual(['B', 'C', 'D', 'E', 'A']);
+  });
+
+  it('F3.1 — Cancelled appt: hideOpdLifecycle short-circuits (simulated)', () => {
+    const appt = { id: 'A-1', status: 'cancelled', customerNameTemp: 'X' };
+    // The HubView gates on activeTab === 'cancelled', not appt.status — but
+    // the simulate verifies the predicate logic itself returns 'B' even for
+    // cancelled (HubView is the one that hides the row entirely).
+    expect(resolveCardOpdState({ appt, linkedSession: null })).toBe('B');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Run targeted</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code></p>
+  <p>Expected: 6/6 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx
+git commit -m "test(opd-card): V118 — Rule I full-flow simulate (B→C→D→E→A chain)"</code></pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE D — Verify + commit final                                  -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="task">
+  <h3>Task 11: Targeted test run + build clean</h3>
+
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Run all V118 tests together</strong></label></div>
+  <p>Run:</p>
+<pre><code class="language-bash">npm test -- --run tests/v118-opd-session-state-helpers.test.js tests/v118-card-opd-lifecycle-row-source-grep.test.js tests/v118-card-opd-lifecycle-row-rtl.test.jsx tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code></pre>
+  <p>Expected: 21 + 11 + 9 + 6 = 47/47 PASS</p>
+
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: Run V87/AV84 + V116/AV116 sibling tests to verify no regression</strong></label></div>
+<pre><code class="language-bash">npm test -- --run tests/v87-link-button-opd-save-guard.test.js tests/v116-link-survives-queue-delete.test.js</code></pre>
+  <p>Expected: all PASS — no regression from V118 changes.</p>
+
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: Build clean</strong></label></div>
+<pre><code class="language-bash">npm run build</code></pre>
+  <p>Expected: build succeeds, no MISSING_EXPORT or syntax errors. (V11 lesson — focused tests can pass while build fails on import resolution.)</p>
+
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: If any failures, FIX before proceeding</strong></label></div>
+  <p>If targeted tests fail: read the failure, identify which task introduced it, fix inline. If V87/V116 regress: that's a V21-class lock-in — investigate the test (may need to update its char-window/regex due to shifted markers) but DO NOT change V87/V116 behavior.</p>
+  <p>If build fails: check imports + JSX syntax. Common: forgot to import <code>doc</code> from firebase/firestore, or a typo in a button data-testid.</p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<div class="task">
+  <h3>Task 12: Full vitest at batch end + final commit + push</h3>
+
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1: Full vitest (Rule N batch-end discipline)</strong></label></div>
+<pre><code class="language-bash">npm test -- --run</code></pre>
+  <p>Expected: 14318 baseline + 47 V118 new + any V21 fixups absorbed → ALL GREEN, 0 FAIL. Known Phase 17.1 flake (per active.md) is allowed.</p>
+
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2: If V21 lock-ins surface — fix inline + add V118 marker</strong></label></div>
+  <p>Any test asserting the pre-V118 RowCard / HubView / AdminDashboard shape may fail. Update each with a V118 marker comment explaining the post-V118 contract. Do NOT change V118 behavior to placate old tests.</p>
+
+  <div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3: Run audit-anti-vibe-code AV118 check</strong></label></div>
+<pre><code class="language-bash">npm test -- --run tests/v118-card-opd-lifecycle-row-source-grep.test.js -t "AV118"</code></pre>
+  <p>Expected: PASS — confirms the audit entry is in place + sanctioned-callsite list is intact.</p>
+
+  <div class="step"><input type="checkbox" id="t12s4"> <label for="t12s4"><strong>Step 4: Git status check + final push</strong></label></div>
+<pre><code class="language-bash">git status        # should show clean working tree (all commits already made per-task)
+git log --oneline -15   # confirm V118 commits land in order
+git push origin master</code></pre>
+
+  <div class="step"><input type="checkbox" id="t12s5"> <label for="t12s5"><strong>Step 5: Update state files (active.md + SESSION_HANDOFF.md)</strong></label></div>
+  <p>Update <code>.agents/active.md</code> + add a session block to <code>SESSION_HANDOFF.md</code> per the existing pattern. Mark V118 as SHIPPED LOCAL, awaiting deploy authorization.</p>
+
+  <div class="step"><input type="checkbox" id="t12s6"> <label for="t12s6"><strong>Step 6: NO DEPLOY this turn</strong></label></div>
+  <p>Per V18 iron-clad rule: <code>vercel --prod</code> requires explicit "deploy" verb THIS turn. V118 is client-only (no rules/index/Cloud Run change) — Probe-Deploy-Probe NOT needed. User authorizes deploy separately.</p>
+  <p>Post-deploy: <strong>user iPhone/desktop L1 hands-on</strong> per Rule Q (per spec acceptance criteria #1-9).</p>
+</div>
+
+<h2>Self-Review (run after writing the plan)</h2>
+
+<ol>
+  <li><strong>Spec coverage check:</strong>
+    <ul>
+      <li>Spec State A → Task 5 step 7 + Task 9 R1.A ✓</li>
+      <li>Spec State B → Task 5 step 5 + Task 9 R1.B ✓</li>
+      <li>Spec State C → Task 9 R1.C ✓</li>
+      <li>Spec State D → Task 5 step 6 + Task 3 step 3 (chip) + Task 9 R1.D ✓</li>
+      <li>Spec State E → Task 9 R1.E + Task 10 F1.3/F1.4 ✓</li>
+      <li>Spec sub-tab scope (ยกเลิก hidden) → Task 4 step 3 + SG6.1 ✓</li>
+      <li>Spec synth session for State A no-linked-session → Task 1 + Task 5 step 7 + Task 7 U4 ✓</li>
+      <li>Spec modal-internal __synthetic gate → Task 5 step 10 ✓</li>
+      <li>Spec AV118 invariant → Task 6 + SG2.1 ✓</li>
+      <li>Spec V87/AV84 preservation → SG3.1 + SG3.2 ✓</li>
+      <li>Spec V116 preservation → Task 11 step 2 (sibling regression run) ✓</li>
+      <li>Spec all 9 acceptance criteria covered by Tasks 7-10 + Task 11 sibling regression ✓</li>
+    </ul>
+  </li>
+  <li><strong>Placeholder scan:</strong> No "TBD" / "implement later" / "fill in details" — all code blocks complete. One implementer-judgment note in Task 5 Step 4 (canonical opd_sessions doc-ref pattern) — bounded with grep instruction.</li>
+  <li><strong>Type consistency:</strong>
+    <ul>
+      <li><code>isOpdSessionSaved(session)</code> name consistent across Task 1, 7, 8, AV118 ✓</li>
+      <li><code>resolveCardOpdState({appt, linkedSession})</code> destructured-args shape consistent ✓</li>
+      <li><code>__synthetic</code> property consistent across Task 1, 5, 7 ✓</li>
+      <li><code>opdLifecycle</code> prop name consistent across Task 3, 4 ✓</li>
+      <li><code>handleSendOrViewOpdLink</code> (not "handleSendOrViewLink") consistent across Task 5 + Task 4 ✓</li>
+      <li>Test IDs (<code>opd-link-send-btn</code>, <code>opd-link-view-btn</code>, etc.) consistent across Task 2, 9 ✓</li>
+    </ul>
+  </li>
+</ol>
+
+</body>
+</html>

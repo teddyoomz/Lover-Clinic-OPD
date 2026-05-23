@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Card-Level OPD Lifecycle Row — Design Spec</title>
+  <style>
+    :root {
+      --accent: #dc2626;
+      --bd: #e5e5e5;
+      --bg-meta: #f0f4f8;
+      --bg-section: #fafafa;
+      --tx-muted: #666;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.5em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.6em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tx-muted); margin-bottom: 0.6em; font-weight: 700; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.55em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); font-weight: 700; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78em; font-weight: 700; }
+    .badge-red { background: #fee2e2; color: #7f1d1d; }
+    .badge-green { background: #d1fae5; color: #064e3b; }
+    .badge-blue { background: #dbeafe; color: #1e3a8a; }
+    .badge-gray { background: #e5e7eb; color: #374151; }
+    .badge-yellow { background: #fef3c7; color: #78350f; }
+
+    /* LC card mockup (dark theme replica) */
+    .lc-card {
+      background: #0d0d0d;
+      color: #e5e5e5;
+      border-left: 3px solid #dc2626;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      font-family: 'Segoe UI', sans-serif;
+      line-height: 1.5;
+      box-shadow: 0 4px 20px rgba(220, 38, 38, 0.08);
+    }
+    .lc-card-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #2a2a2a; padding-bottom: 10px; margin-bottom: 10px; gap: 12px; }
+    .lc-hn { font-size: 0.65em; color: #888; letter-spacing: 0.04em; }
+    .lc-name { font-weight: 800; color: #fff; font-size: 1.05em; }
+    .lc-hn-real { color: #fbbf24; font-family: monospace; font-weight: 700; }
+    .lc-status-pill { background: #1e3a8a; color: #93c5fd; font-size: 0.65em; padding: 3px 10px; border-radius: 999px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+    .lc-meta { font-size: 0.72em; color: #aaa; margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .lc-time-pill { background: #1c1408; color: #fbbf24; border: 1px solid #92400e; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-weight: 700; }
+    .lc-action-row { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+    .lc-btn-primary { background: linear-gradient(180deg, #f97316, #ea580c); color: #fff; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 700; border: 0; }
+    .lc-btn-secondary { background: transparent; color: #93c5fd; border: 1px solid #1e40af; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
+    .lc-btn-destructive { background: transparent; color: #fca5a5; border: 1px solid #9f1239; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
+    .lc-btn-link-send { background: #1e3a8a; color: #93c5fd; border: 1px solid #1e40af; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 800; }
+    .lc-btn-link-view { background: #052e1a; color: #6ee7b7; border: 1px solid #047857; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 800; }
+    .lc-btn-opd-wait { background: #1f2937; color: #6b7280; border: 1px solid #374151; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 700; opacity: 0.7; }
+    .lc-btn-opd-red { background: #450a0a; color: #fca5a5; border: 1px solid #b91c1c; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 800; animation: pulse-red 2s infinite; }
+    .lc-btn-opd-green { background: #052e1a; color: #6ee7b7; border: 1px solid #047857; font-size: 0.7em; padding: 5px 10px; border-radius: 6px; font-weight: 800; }
+    @keyframes pulse-red { 0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.6); } 50% { box-shadow: 0 0 0 4px rgba(248, 113, 113, 0); } }
+    .lc-opd-row { border-top: 1px dashed #f59e0b; border-bottom: 1px dashed #f59e0b; background: linear-gradient(90deg, rgba(245, 158, 11, 0.05), rgba(245, 158, 11, 0.02)); padding: 8px 10px; margin: 8px 0; border-radius: 4px; }
+    .lc-opd-row-label { font-size: 0.58em; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; font-weight: 800; }
+    .lc-saved-chip { background: rgba(245, 11, 11, 0.15); color: #fca5a5; padding: 2px 8px; border-radius: 4px; font-size: 0.65em; font-weight: 700; border: 1px solid #b91c1c; }
+
+    .flow-step { background: #fff; border: 1px solid var(--bd); border-radius: 6px; padding: 10px 14px; margin: 6px 0; display: flex; align-items: center; gap: 12px; }
+    .flow-step-num { background: var(--accent); color: #fff; font-weight: 800; min-width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85em; }
+    .flow-step-body { flex: 1; font-size: 0.9em; }
+    .flow-arrow { text-align: center; color: var(--tx-muted); font-size: 1.4em; margin: -3px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Card-Level OPD Lifecycle Row — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-23 EOD+1 LATE+5 ·
+  <strong>Status:</strong> Approved by user ("approve") ·
+  <strong>Owner area:</strong> AdminDashboard Frontend tab → นัดหมาย sub-tabs ·
+  <strong>Implementation plan:</strong> writing-plans (pending) ·
+  <strong>V-tag:</strong> V118 (next available)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Admin running the Frontend นัดหมาย tab currently has to <strong>open the "แก้ไขนัด" modal</strong> for every customer-later booking before being able to send/view the OPD-fill QR link, AND has to <strong>switch to a different sub-tab</strong> (คิวหน้าคลินิก / จองมัดจำ / จองไม่มัดจำ) to click "บันทึกลง OPD" when the customer's form arrives. Both actions are <strong>one extra navigation step per appointment</strong> — multiplied by ~50 appts/day this becomes real friction.</p>
+
+<p>This spec lifts both actions <strong>onto the appointment Card itself</strong>:</p>
+<ul>
+  <li><strong>🔗 Link button</strong> — send/view the OPD-fill QR (only visible when no HN, mirrors AppointmentFormModal:938-984)</li>
+  <li><strong>🩺 OPD button</strong> — always-visible 3-state button (⏳ รอกรอก disabled · 🔴 บันทึก OPD clickable · 🟢 ดูข้อมูล opens session modal)</li>
+</ul>
+
+<p>Behavior <strong>mirrors</strong> the existing คิวหน้าคลินิก / จองมัดจำ / จองไม่มัดจำ tabs <strong>exactly</strong> — same <code>handleOpdClick(session)</code> action, same <code>setViewingSession(session)</code> modal target, same V116 auto-attach + un-hide cascade. This is a <strong>presentational lift</strong>, NOT new business logic.</p>
+
+<h2>Mockup Design</h2>
+
+<p class="mockup-label">5 card states (Option B placement: dedicated "OPD lifecycle row" between status pill and existing action row)</p>
+
+<!-- State A: Has HN (existing customer) -->
+<div class="mockup">
+  <div class="mockup-label">State A · Has HN (existing customer, link button HIDDEN, OPD button = green view)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div>
+        <div class="lc-hn">HN <span class="lc-hn-real">LC-26000089</span></div>
+        <div class="lc-name">นาย มลธวัช มาศหนู</div>
+      </div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-meta">
+      <span>📅 23 พ.ค. 2569</span>
+      <span class="lc-time-pill">15:30 – 15:45</span>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row" style="justify-content: flex-end;">
+        <span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span>
+      </div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับบริการเรียบร้อย</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- State B: No HN, no link sent -->
+<div class="mockup">
+  <div class="mockup-label">State B · No HN, no link sent yet (admin must send link first)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div>
+        <div class="lc-hn">HN · –</div>
+        <div class="lc-name">มนทวัฒน์ มาดหนู</div>
+      </div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-meta">
+      <span>📅 23 พ.ค. 2569</span>
+      <span class="lc-time-pill">15:30 – 15:45</span>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row" style="justify-content: flex-end;">
+        <span class="lc-btn-link-send">🔗 ส่งลิ้งค์ลูกค้ากรอก OPD</span>
+        <span class="lc-btn-opd-wait">⏳ ยังไม่มีข้อมูล</span>
+      </div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับบริการเรียบร้อย</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- State C: No HN, link sent, customer hasn't filled -->
+<div class="mockup">
+  <div class="mockup-label">State C · No HN, link sent, customer hasn't filled (waiting on customer)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div>
+        <div class="lc-hn">HN · –</div>
+        <div class="lc-name">มนทวัฒน์ มาดหนู</div>
+      </div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-meta">
+      <span>📅 23 พ.ค. 2569</span>
+      <span class="lc-time-pill">15:30 – 15:45</span>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row" style="justify-content: flex-end;">
+        <span class="lc-btn-link-view">🟢 ดูลิ้งค์ที่ส่งไป</span>
+        <span class="lc-btn-opd-wait">⏳ รอลูกค้ากรอก</span>
+      </div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับบริการเรียบร้อย</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- State D: No HN, customer filled, NOT saved -->
+<div class="mockup">
+  <div class="mockup-label">State D · No HN, customer filled the form, admin hasn't saved yet — REVIEW THEN SAVE (3 buttons)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div>
+        <div class="lc-hn">HN · –</div>
+        <div class="lc-name">มนทวัฒน์ มาดหนู</div>
+        <div style="margin-top: 6px;">
+          <span class="lc-saved-chip">📥 ลูกค้ากรอกแล้ว · รอบันทึก</span>
+        </div>
+      </div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-meta">
+      <span>📅 23 พ.ค. 2569</span>
+      <span class="lc-time-pill">15:30 – 15:45</span>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row · REVIEW → SAVE</div>
+      <div class="lc-action-row" style="justify-content: flex-end;">
+        <span class="lc-btn-link-view">🟢 ดูลิ้งค์ที่ส่งไป</span>
+        <span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span>
+        <span class="lc-btn-opd-red">🔴 บันทึกลง OPD</span>
+      </div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับบริการเรียบร้อย</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- State E: Just saved (transition) -->
+<div class="mockup">
+  <div class="mockup-label">State E · Just saved (auto-transitions to State A on next render — HN populated)</div>
+  <div class="lc-card">
+    <div class="lc-card-top">
+      <div>
+        <div class="lc-hn">HN <span class="lc-hn-real">LC-26000090</span></div>
+        <div class="lc-name">มนทวัฒน์ มาดหนู</div>
+      </div>
+      <div class="lc-status-pill">ยืนยันแล้ว · รอการรักษา</div>
+    </div>
+    <div class="lc-meta">
+      <span>📅 23 พ.ค. 2569</span>
+      <span class="lc-time-pill">15:30 – 15:45</span>
+    </div>
+    <div class="lc-opd-row">
+      <div class="lc-opd-row-label">OPD lifecycle row</div>
+      <div class="lc-action-row" style="justify-content: flex-end;">
+        <span class="lc-btn-opd-green">🟢 ดูข้อมูล OPD</span>
+      </div>
+    </div>
+    <div class="lc-action-row">
+      <button class="lc-btn-primary">✓ ลูกค้ารับบริการเรียบร้อย</button>
+      <button class="lc-btn-secondary">แก้ไขนัด</button>
+      <button class="lc-btn-destructive">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<p class="mockup-label">User journey · customer-later booking from creation through OPD save</p>
+
+<div class="flow-step">
+  <div class="flow-step-num">1</div>
+  <div class="flow-step-body"><strong>Admin creates appointment</strong> via Frontend "+ จอง" — picks "เลือกลูกค้าภายหลัง" → enters <code>customerNameTemp</code> + <code>customerPhoneTemp</code>. <code>customerId</code> is null. <code>linkedOpdSessionId</code> is null. → <strong>Card renders State B</strong> (no HN + no link sent).</div>
+</div>
+<div class="flow-arrow">↓</div>
+
+<div class="flow-step">
+  <div class="flow-step-num">2</div>
+  <div class="flow-step-body"><strong>Admin clicks 🔵 ส่งลิ้งค์ลูกค้ากรอก OPD</strong> on the card. Calls <code>provisionOpdLinkForBookingPair(...)</code> (existing function from AppointmentFormModal:943). Creates <code>opd_sessions/{id}</code> with <code>formType:'intake'</code>, stamps <code>linkedOpdSessionId</code> on both the appt + linked deposit. Opens <code>&lt;SendCustomerLinkModal&gt;</code> with URL + QR. → <strong>Card renders State C</strong> on modal close (link exists, no patientData yet).</div>
+</div>
+<div class="flow-arrow">↓</div>
+
+<div class="flow-step">
+  <div class="flow-step-num">3</div>
+  <div class="flow-step-body"><strong>Customer opens the link</strong> (LINE/SMS) → fills the PatientForm via the unique URL → submits. Firestore <code>opd_sessions/{id}.patientData</code> becomes non-empty. Listener fires → <strong>Card auto-renders State D</strong> with red pulsing 🔴 button + 📥 ready-to-save chip.</div>
+</div>
+<div class="flow-arrow">↓</div>
+
+<div class="flow-step">
+  <div class="flow-step-num">4</div>
+  <div class="flow-step-body"><strong>Admin clicks 🔴 บันทึกลง OPD</strong>. Calls <code>handleOpdClick(linkedSession)</code> (existing function from AdminDashboard:3470). NO confirm dialog (mirrors existing flow). Creates <code>be_customers/{newId}</code> via <code>kioskPatientToCanonical → addCustomer</code>; sets <code>session.opdRecordedAt = serverTimestamp()</code> + <code>brokerStatus='done'</code>; <code>attachCustomerToOpdSessionLinks</code> stamps <code>customerId</code> on the appt + deposit; V116 un-hides the queue entry if previously hidden. Toast: "บันทึก OPD สำเร็จ ✓".</div>
+</div>
+<div class="flow-arrow">↓</div>
+
+<div class="flow-step">
+  <div class="flow-step-num">5</div>
+  <div class="flow-step-body"><strong>Card auto-renders State E → State A</strong> on next render cycle: HN populates from <code>customer.proClinicHN</code> (or local <code>LC-XXX</code> id), 🔗 link button disappears, 🩺 button stays as 🟢 ดูข้อมูล. Admin can now click 🟢 to re-open the OPD session modal anytime.</div>
+</div>
+
+<h3>State machine (visibility predicates)</h3>
+
+<table>
+  <thead>
+    <tr><th>State</th><th>Predicate</th><th>🔗 Link button</th><th>🩺 OPD button</th><th>📥 Chip</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>A</strong></td>
+      <td><code>appt.customerId</code> truthy</td>
+      <td>❌ hidden</td>
+      <td>🟢 <code>ดูข้อมูล OPD</code></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>B</strong></td>
+      <td><code>!customerId && !linkedOpdSessionId</code></td>
+      <td>🔵 <code>ส่งลิ้งค์ลูกค้ากรอก OPD</code></td>
+      <td>⏳ <code>ยังไม่มีข้อมูล</code> (disabled)</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>C</strong></td>
+      <td><code>!customerId && linkedOpdSessionId && !session.patientData</code></td>
+      <td>🟢 <code>ดูลิ้งค์ที่ส่งไป</code></td>
+      <td>⏳ <code>รอลูกค้ากรอก</code> (disabled)</td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td><strong>D</strong></td>
+      <td><code>!customerId && linkedOpdSessionId && session.patientData && !session.opdRecordedAt</code></td>
+      <td>🟢 <code>ดูลิ้งค์ที่ส่งไป</code></td>
+      <td>🟢 <code>ดูข้อมูล OPD</code> (review) + 🔴 <code>บันทึกลง OPD</code> (save)</td>
+      <td>📥 <code>ลูกค้ากรอกแล้ว · รอบันทึก</code></td>
+    </tr>
+    <tr>
+      <td><strong>E</strong></td>
+      <td><code>session.opdRecordedAt && session.brokerStatus === 'done'</code> (transient — next render hits A)</td>
+      <td>❌ hidden</td>
+      <td>🟢 <code>ดูข้อมูล OPD</code></td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Data flow (where does each row's session come from?)</h3>
+
+<table>
+  <thead>
+    <tr><th>Source</th><th>When</th><th>Lookup</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>allNotifData.find(s => s.id === appt.linkedOpdSessionId)</code></td>
+      <td>Default — vast majority of cards in active tabs</td>
+      <td>O(1) Map lookup against pre-loaded session listener</td>
+    </tr>
+    <tr>
+      <td>Lazy <code>getDoc(opdSessionDoc(appt.linkedOpdSessionId))</code></td>
+      <td><strong>ก่อนหน้า</strong> sub-tab — past months' appts where session may be outside the current listener window</td>
+      <td>Cached per-row in <code>useRef</code> Map. Fetched on first render; reused across re-renders.</td>
+    </tr>
+    <tr>
+      <td>Synthesized from <code>be_customers/{customerId}.patientData</code></td>
+      <td>State A with no <code>linkedOpdSessionId</code> (existing customer — never had a remote-fill session)</td>
+      <td>Synth shape: <code>{ id: customer.id, patientData: customer.patientData, opdRecordedAt: customer.createdAt, brokerStatus: 'done', __synthetic: true }</code>. Passed to <code>setViewingSession</code> which renders the same modal.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Architecture</h2>
+
+<h3>File changes</h3>
+<table>
+  <thead><tr><th>File</th><th>Change</th><th>LOC est.</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td>
+      <td>Insert new <code>&lt;OpdLifecycleRow&gt;</code> sub-component between status-pill row and existing action button row. Accepts 4 new props: <code>linkedSession</code>, <code>onSendOrViewLink</code>, <code>onSaveOpd</code>, <code>onViewOpd</code>.</td>
+      <td>+60</td>
+    </tr>
+    <tr>
+      <td><code>src/pages/AdminDashboard.jsx</code></td>
+      <td>Pass 4 new prop functions to <code>&lt;AppointmentHubView&gt;</code>. Implement: (a) <code>resolveLinkedSession(appt)</code> — Map lookup + lazy fetch fallback; (b) <code>handleSendOrViewLink(appt)</code> — wraps <code>provisionOpdLinkForBookingPair</code>; (c) <code>handleSaveOpdFromCard(appt)</code> — wraps <code>handleOpdClick(linkedSession)</code>; (d) <code>handleViewOpdFromCard(appt)</code> — calls <code>setViewingSession(linkedSession ?? synthesized)</code>. Re-use existing <code>sendLinkModal</code> state.</td>
+      <td>+90</td>
+    </tr>
+    <tr>
+      <td><code>src/components/admin/AppointmentHubView.jsx</code></td>
+      <td>Plumb 4 new props from AdminDashboard down to each <code>&lt;AppointmentHubRowCard&gt;</code>.</td>
+      <td>+8</td>
+    </tr>
+    <tr>
+      <td><code>src/lib/opdSessionState.js</code> (NEW)</td>
+      <td>Pure helpers: <code>isOpdSessionSaved(session)</code>, <code>resolveCardOpdState({appt, linkedSession, customer})</code> → returns one of <code>{'A','B','C','D','E'}</code>. Branch-blind. AV118 enforces all card-OPD-state derivations use these.</td>
+      <td>+50</td>
+    </tr>
+    <tr>
+      <td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td>
+      <td>NEW AV118 invariant + grep regression target.</td>
+      <td>+15</td>
+    </tr>
+    <tr>
+      <td>(reused, no edit) <code>src/components/backend/SendCustomerLinkModal.jsx</code></td>
+      <td>The link modal — already correct, AdminDashboard mounts it via existing <code>sendLinkModal</code> state.</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Data wiring contract</h3>
+<pre>
+// AdminDashboard.jsx (parent — owns state)
+const sessionsById = useMemo(() =&gt; {
+  const m = new Map();
+  for (const s of [...sessions, ...archivedSessions, ...depositSessions, ...archivedDepositSessions, ...noDepositSessions]) {
+    m.set(s.id, s);
+  }
+  return m;
+}, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);
+
+const lazyFetchedSessionsRef = useRef(new Map());
+const resolveLinkedSession = useCallback((appt) =&gt; {
+  if (!appt?.linkedOpdSessionId) return null;
+  if (sessionsById.has(appt.linkedOpdSessionId)) return sessionsById.get(appt.linkedOpdSessionId);
+  if (lazyFetchedSessionsRef.current.has(appt.linkedOpdSessionId))
+    return lazyFetchedSessionsRef.current.get(appt.linkedOpdSessionId);
+  // Lazy fetch (fire-and-forget; sets state on resolve to trigger re-render)
+  getDoc(opdSessionDoc(appt.linkedOpdSessionId)).then(snap =&gt; {
+    if (snap.exists()) {
+      lazyFetchedSessionsRef.current.set(snap.id, { id: snap.id, ...snap.data() });
+      forceUpdate({});  // setLazyTick(t =&gt; t+1)
+    }
+  });
+  return null;  // First render: not yet loaded; row shows "⏳" disabled until next paint
+});
+
+const handleViewOpdFromCard = useCallback((appt) =&gt; {
+  const session = resolveLinkedSession(appt);
+  if (session) {
+    setViewingSession(session);
+    return;
+  }
+  // State A with no linked session — synthesize from customer
+  if (appt.customerId) {
+    const customer = customersById.get(appt.customerId);
+    if (customer?.patientData) {
+      setViewingSession({
+        id: `synth-${appt.customerId}-${appt.id}`,
+        patientData: customer.patientData,
+        opdRecordedAt: customer.createdAt || null,
+        brokerStatus: 'done',
+        brokerProClinicId: customer.proClinicId || null,
+        brokerProClinicHN: customer.proClinicHN || customer.HN || '',
+        __synthetic: true,
+      });
+    }
+  }
+}, [resolveLinkedSession, customersById]);
+</pre>
+
+<h3>Sub-tab scope (per Q2 = A locked)</h3>
+<ul>
+  <li>✅ <code>วันนี้</code>, <code>กำลังจะถึง</code>, <code>ก่อนหน้า</code> — OPD lifecycle row renders.</li>
+  <li>✅ <code>เสร็จแล้ว</code> sub-pill on "วันนี้" — renders (admin may want to view data post-service).</li>
+  <li>❌ <code>ยกเลิก</code> — OPD lifecycle row hidden entirely (no follow-through needed for cancelled appts).</li>
+</ul>
+
+<h3>Class-of-bug protection (Rule P)</h3>
+<ul>
+  <li><strong>AV118 (NEW)</strong> — every site deriving "OPD save state" from <code>(session.opdRecordedAt &amp;&amp; session.brokerStatus === 'done')</code> MUST use <code>isOpdSessionSaved(session)</code> from <code>src/lib/opdSessionState.js</code>. Grep target enforces. Sanctioned callsites: AdminDashboard.jsx, AppointmentHubRowCard.jsx, opdSessionState.js itself.</li>
+  <li><strong>V87/AV84 preserved</strong> — this brainstorm does NOT introduce a new <code>setPatientLinkModal</code> trigger (different modal — <code>SendCustomerLinkModal</code> vs <code>PatientLinkModal</code>). AV84's closed list of 2 stays untouched.</li>
+  <li><strong>V116/AV116 preserved</strong> — the new save button is a NEW caller of EXISTING <code>handleOpdClick</code>. <code>provisionOpdLinkForBookingPair</code>'s existence-check + un-hide path remain unchanged.</li>
+  <li><strong>V12 multi-reader-sweep guard</strong> — the synthesized session shape (<code>{__synthetic: true, ...}</code>) is opt-in. Existing readers that call <code>setViewingSession</code> continue with real-session shapes. Future modal-internal readers that check <code>session.id</code> for Firestore writes must check <code>!session.__synthetic</code> first (handled in spec — no current writers exist).</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = B</strong>: OPD lifecycle row placement = between status pill and existing action row (Option B in Visual Companion mockup).</li>
+  <li><strong>Q2 = A</strong>: Scope = all active sub-tabs (วันนี้ / กำลังจะถึง / ก่อนหน้า), excluding ยกเลิก.</li>
+  <li><strong>Q3 (user clarification post-design)</strong>: 🩺 OPD button is <strong>always present</strong> (5 states A-E above) — NOT conditional on HN. Admin uses it as a fast-glance OPD viewer for any customer, saved or unsaved.</li>
+  <li><strong>Modal target</strong>: <code>setViewingSession(session)</code> — opens the existing "ประวัติผู้ป่วย OPD" modal (already wired in AdminDashboard, currently used by คิวหน้าคลินิก / ประวัติ tabs).</li>
+  <li><strong>Behavior</strong>: mirrors <code>handleOpdClick</code> exactly — no confirm dialog, V116 cascade preserved.</li>
+  <li><strong>Synth session shape</strong> for State A with no linked session: derived from <code>be_customers.patientData</code> + <code>__synthetic:true</code> marker.</li>
+</ul>
+
+<h2>Acceptance Criteria (testable)</h2>
+<ol>
+  <li>Card in State A (has HN, no linked session) → 🔗 hidden + 🩺 = 🟢 <code>ดูข้อมูล OPD</code>. Click → opens "ประวัติผู้ป่วย OPD" modal with synthesized session showing the customer's <code>patientData</code>. <strong>"ดูข้อมูลลูกค้า"</strong> button inside the modal still navigates to CustomerDetailView normally.</li>
+  <li>Card in State B (no HN, no link) → 🔗 = 🔵 <code>ส่งลิ้งค์ลูกค้ากรอก OPD</code> + 🩺 = ⏳ <code>ยังไม่มีข้อมูล</code> (disabled with tooltip). Click 🔗 → provision → SendCustomerLinkModal opens → URL + QR display.</li>
+  <li>After State B modal close → card transitions to State C: 🔗 = 🟢 <code>ดูลิ้งค์ที่ส่งไป</code> + 🩺 = ⏳ <code>รอลูกค้ากรอก</code> (disabled).</li>
+  <li>Customer submits PatientForm via URL → <code>session.patientData</code> populates → card auto-transitions to State D: 🔗 = 🟢 + 🩺 = 🔴 <code>บันทึกลง OPD</code> (clickable, pulsing) + 📥 chip in top-left.</li>
+  <li>Click 🔴 บันทึกลง OPD → handleOpdClick fires → toast "บันทึก OPD สำเร็จ" → card transitions to State E → next listener tick converts to State A (HN populated, 🔗 hidden, 🩺 = 🟢).</li>
+  <li>ก่อนหน้า sub-tab card (past month, has linkedOpdSessionId but session not in current listener window) → first render: 🩺 = ⏳ briefly while lazy-fetch resolves → next render: correct state (A/D/etc.) based on fetched session.</li>
+  <li>ยกเลิก sub-tab → OPD lifecycle row NOT rendered at all (no 🔗, no 🩺, no 📥 chip).</li>
+  <li>V116 invariant: clicking 🔴 บันทึกลง OPD when the appt was previously hidden from queue (via queue-delete-with-link-survives) → admin's queue auto-restores the entry via existing un-hide cascade.</li>
+  <li>Source-grep regression bank locks: (a) all derivations of <code>opdRecordedAt && brokerStatus === 'done'</code> in src/components/admin/** use <code>isOpdSessionSaved</code>; (b) <code>setPatientLinkModal</code> trigger count remains 2 (V87/AV84 unchanged); (c) at least 1 <code>provisionOpdLinkForBookingPair</code> call in AdminDashboard.jsx (the new card-level wrapper).</li>
+</ol>
+
+<h2>Test strategy</h2>
+<ul>
+  <li><strong>Rule I full-flow simulate</strong> — <code>tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code>: chain State B → click 🔗 → mock provision → State C → mock customer-submit → State D → click 🔴 → mock handleOpdClick → State A.</li>
+  <li><strong>RTL component tests</strong> — <code>tests/v118-card-opd-lifecycle-row-rtl.test.jsx</code>: 5 separate tests for States A/B/C/D/E with appropriate prop fixtures.</li>
+  <li><strong>Source-grep regression bank</strong> — <code>tests/v118-card-opd-lifecycle-row-source-grep.test.js</code>: locks AV118 + the 5 visibility predicates + the synthesized-session shape + V87/AV84 preservation.</li>
+  <li><strong>Pure helper unit tests</strong> — <code>tests/v118-opd-session-state-helpers.test.js</code>: <code>isOpdSessionSaved</code> + <code>resolveCardOpdState</code> truth tables for all 5 states with adversarial inputs (null session, missing patientData, partial timestamps).</li>
+  <li><strong>Rule N</strong>: targeted test runs during dev (Rule I + RTL + source-grep). Full <code>npm test -- --run</code> at end of batch.</li>
+  <li><strong>Rule Q L2 verification</strong> (optional, deferred): a Playwright spec that drives the real Frontend tab against a TEST-prefixed appointment in real prod Firestore — verifies state transitions render correctly. Defer to post-deploy if user requests L1 hands-on first.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+
+<table>
+  <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>R1</strong>: ก่อนหน้า tab lazy-fetch race — admin scrolls fast through 50 past appts; 50 parallel <code>getDoc</code> calls overload.</td>
+      <td>Throttle via in-flight Set; coalesce duplicate fetches; cap at 5 concurrent. Loaded sessions stay in <code>useRef</code> Map across re-renders.</td>
+    </tr>
+    <tr>
+      <td><strong>R2</strong>: Synthesized session shape breaks an existing modal-internal feature that expects real Firestore doc (e.g. "ซิงค์ข้อมูลใหม่" button at the modal top performs a Firestore write).</td>
+      <td>The modal's existing buttons gate on <code>!session.__synthetic</code> — disabled for synth sessions with tooltip "ใช้ได้กับ session จริงเท่านั้น". 4 buttons to inspect: "แก้ไขข้อมูล" / "ซิงค์ข้อมูลใหม่" / "พิมพ์สรุป A4" / "พิมพ์ฟอร์มมาตรฐาน" / "Resync OPD". Print buttons should work (read-only); edit + resync should gate.</td>
+    </tr>
+    <tr>
+      <td><strong>R3</strong>: V12 multi-reader-sweep — adding a new caller of <code>setViewingSession</code> may surface existing callers that didn't handle some shape edge case.</td>
+      <td>Pre-flight grep for all <code>setViewingSession</code> callsites; verify each handles <code>null</code> + missing patientData gracefully. AV118 enforces post-fact.</td>
+    </tr>
+    <tr>
+      <td><strong>R4</strong>: User notices "ก่อนหน้า" tab cards flash ⏳ before resolving to correct state.</td>
+      <td>Acceptable UX (~200ms per card). Add subtle skeleton-shimmer effect on the disabled state if it bothers anyone — can be follow-up polish.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Out of Scope</h2>
+<ul>
+  <li>Modifying the existing "บันทึกการรักษา" button on cards with <code>customerNameTemp</code> (no HN). That's a separate UX gap (admin shouldn't see "บันทึกการรักษา" if customer has no Firestore record). <strong>Tracked as follow-up.</strong></li>
+  <li>Modifying คิวหน้าคลินิก / จองมัดจำ / จองไม่มัดจำ tabs — those keep their current buttons as the canonical source of truth for OPD lifecycle. This spec only adds a SHORTCUT to the same actions on the appointment Card.</li>
+  <li>Adding new collections, endpoints, Firestore rules, or Storage paths. Pure UI lift.</li>
+</ul>
+
+</body>
+</html>

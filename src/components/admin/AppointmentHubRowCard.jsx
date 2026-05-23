@@ -19,6 +19,8 @@ import {
 import AppointmentOpdStepperRow from './AppointmentOpdStepperRow.jsx';
 import { AppointmentLineBadge } from '../AppointmentLineBadge.jsx';
 import PhoneLink from '../PhoneLink.jsx';
+// V118 (2026-05-23) — card-level OPD lifecycle row (link send/view + save + view).
+import OpdLifecycleRow from './OpdLifecycleRow.jsx';
 
 // V73-BS1 (2026-05-18) — confirmed label expanded to "ยืนยันแล้ว · รอการรักษา"
 // per user spec: badge state machine
@@ -73,6 +75,12 @@ export default function AppointmentHubRowCard({
   onConfirm, onEdit, onCancel, onCreateTreatment, onEditTreatment, onOpenLine,
   onMarkServiceComplete,                // V71 NEW
   onUnmarkServiceComplete,              // V71.A NEW — symmetric "back to waiting" handler
+  // V118 (2026-05-23) — card-level OPD lifecycle (link + save + view). Object
+  // shape: { state, onSendLink, onViewLink, onSaveOpd, onViewOpd,
+  //          sendLinkBusy, saveOpdBusy, hidden } — see OpdLifecycleRow props.
+  // `hidden:true` short-circuits render (used on the ยกเลิก sub-tab).
+  // null/undefined → row not rendered (back-compat for old callers).
+  opdLifecycle = null,
 }) {
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
@@ -155,6 +163,19 @@ export default function AppointmentHubRowCard({
           {summary?.membershipTier && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-100 text-yellow-900 border border-yellow-300 dark:bg-yellow-950/50 dark:text-yellow-200 dark:border-yellow-800/60">
               {summary.membershipTier} · เหลือ {summary.membershipDaysLeft} วัน
+            </span>
+          )}
+          {/* V118 (2026-05-23) — ready-to-save chip when customer has filled
+              the OPD form remotely but admin hasn't clicked save yet (State D).
+              Visible next to HN so admin sees the "ready" state at a glance
+              before scanning the right-rail buttons. */}
+          {opdLifecycle && opdLifecycle.state === 'D' && !opdLifecycle.hidden && (
+            <span
+              data-testid="opd-ready-to-save-chip"
+              className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:border-rose-700/60 animate-pulse"
+              style={{ animationDuration: '2.4s' }}
+            >
+              📥 ลูกค้ากรอกแล้ว · รอบันทึก
             </span>
           )}
         </div>
@@ -313,6 +334,21 @@ export default function AppointmentHubRowCard({
             {statusLabel}
           </span>
         </div>
+        {/* V118 (2026-05-23) — OPD lifecycle row: 🔗 link send/view + 🩺 OPD
+            view/save + ⏳ wait. Rendered between the status pill row and the
+            existing appointment action row. Skipped via opdLifecycle.hidden
+            on the ยกเลิก sub-tab. */}
+        {opdLifecycle && !opdLifecycle.hidden && (
+          <OpdLifecycleRow
+            state={opdLifecycle.state}
+            onSendLink={opdLifecycle.onSendLink}
+            onViewLink={opdLifecycle.onViewLink}
+            onSaveOpd={opdLifecycle.onSaveOpd}
+            onViewOpd={opdLifecycle.onViewOpd}
+            sendLinkBusy={!!opdLifecycle.sendLinkBusy}
+            saveOpdBusy={!!opdLifecycle.saveOpdBusy}
+          />
+        )}
         <div className="flex gap-1.5 flex-wrap md:justify-end">
           {/* V71 (2026-05-15) — mark service complete (today tab only, treatment
               recorded, not already completed). Confirm dialog before optimistic
