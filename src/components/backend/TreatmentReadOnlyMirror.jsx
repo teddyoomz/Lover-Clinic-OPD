@@ -18,6 +18,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   resolveDoctorDisplayName,
   resolveAssistantsDisplay,
@@ -109,7 +110,10 @@ function Lightbox({ src, label, onClose }) {
   // button + bumped to 44pt iOS HIG min (was w-8 h-8 = 32px). No zoom yet
   // (Treatment admin usage is desktop-primary; class-of-bug expansion
   // scoped to the touch-target + safe-area fixes only).
-  return (
+  // V117 (2026-05-23) — createPortal to document.body. AV117 enforces
+  // portal-mount for all fullscreen lightboxes (canonical React pattern that
+  // bypasses ancestor containing-block + stacking-context effects).
+  return createPortal(
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80"
       onClick={onClose}
@@ -136,7 +140,8 @@ function Lightbox({ src, label, onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

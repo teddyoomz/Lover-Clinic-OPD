@@ -8,9 +8,15 @@
 // browser-feasible route was a 3rd-party viewer that failed for Firebase URLs +
 // would transmit patient files off-site). Office files are download-only.
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
 
+// V117 (2026-05-23 EOD+1 LATE+3) — createPortal to document.body. Same
+// architectural reasoning as StaffChatImageLightbox: this overlay is rendered
+// as child of StaffChatMessage → StaffChatPanel (position:fixed; z-9000) so
+// nested position:fixed gets bounded by the panel on iOS Safari. Portal
+// bypasses ALL ancestor CSS. AV117.
 export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -20,7 +26,7 @@ export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
 
   if (!fileUrl) return null;
 
-  return (
+  return createPortal(
     <div
       data-testid="staff-chat-pdf-overlay"
       className="fixed inset-0 bg-black/90 flex flex-col z-[9700]"
@@ -54,7 +60,8 @@ export function StaffChatPdfOverlay({ fileUrl, name, size, onClose }) {
         data-testid="staff-chat-pdf-frame"
         className="flex-1 w-full bg-white border-0"
       />
-    </div>
+    </div>,
+    document.body
   );
 }
 

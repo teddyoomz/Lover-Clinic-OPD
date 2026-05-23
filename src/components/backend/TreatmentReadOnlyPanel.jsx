@@ -25,6 +25,7 @@
 // Phase 26.2 spec: docs/superpowers/specs/2026-05-13-phase-26-2-tfp-split-screen.md
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, Stethoscope, ChevronDown, ChevronUp,
   MapPin, User, Calendar, Pill, Package, Loader2, Image as ImageIcon, Activity,
@@ -132,7 +133,8 @@ function Lightbox({ src, label, onClose }) {
   // image viewer; click-anywhere-closes IS expected UX. V115 (2026-05-23)
   // — AV114 mobile gates: safe-area-inset on close button + 44pt iOS HIG
   // touch target. Backdrop close already correct.
-  return (
+  // V117 (2026-05-23) — createPortal to document.body. AV117.
+  return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
       role="dialog"
       aria-modal="true"
@@ -149,7 +151,8 @@ function Lightbox({ src, label, onClose }) {
         className="absolute right-4 w-11 h-11 rounded-full bg-black/60 hover:bg-black/80 active:bg-black/90 text-white flex items-center justify-center transition-all">
         <X size={20} />
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }
 

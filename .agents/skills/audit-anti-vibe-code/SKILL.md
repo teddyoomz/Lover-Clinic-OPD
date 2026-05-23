@@ -2926,3 +2926,40 @@ Origin: user-reported `/systematic-debugging` bug 2026-05-23 LATE+2 — admin cl
 **Class-of-bug classifier (`tests/v116-link-survives-queue-delete.test.js` G1-G3)**: enumerates all 4 opd_sessions delete sites + classifies each as fixed / self-healing / architecturally-covered. Test G3 asserts every site is handled — adding a 5th delete site without updating the classifier fails the lock.
 
 **Cross-link**: V116 saga in `.claude/rules/00-session-start.md` § 2 (link-survives-queue-delete + auto-regen, 2026-05-23) + `tests/v116-link-survives-queue-delete.test.js` (SG1-SG5 + D1-D9 + F1-F6 + G1-G3) + this AV116 entry.
+
+### AV117 — Fullscreen lightboxes MUST createPortal to document.body (2026-05-23 V117 portal mandate)
+
+Origin: user-reported `/systematic-debugging` bug 2026-05-23 LATE+3 — after V115 mobile lightbox UX fix shipped + deployed, user re-tested on real iPhone and reported: *"มันยังปิดรูป preview ในช่อง chat ใน mobile ไม่ได้เลย เหมือนมันไป full screen ในช่องแชท เลยไม่เห็นปุ่มปิดอะไรเลย"*. V115's safe-area-inset + 44pt close button + backdrop-close were all correct in source code, but on real iOS Safari the lightbox got bounded to the StaffChatPanel area (panel is itself `position:fixed; z-9000; overflow:hidden`). Result: nested position:fixed → iOS Safari quirk → lightbox `inset-0` measured from panel box, not viewport. Close button landed BEHIND the chat panel header or outside touchable area.
+
+**Class-of-bug**: every fullscreen image/PDF/chart lightbox that uses `position:fixed inset-0` WITHOUT createPortal is latent for the same bug class. Triggers when the lightbox is rendered as a child of ANY container with a containing-block-creating CSS property (transform, filter, will-change, backdrop-filter, contain, or a position:fixed parent + iOS Safari quirk). Safest architectural fix: render via `ReactDOM.createPortal(<jsx>, document.body)` so the lightbox is appended directly under `<body>`, bypassing ALL ancestor CSS effects + escaping all stacking contexts.
+
+**Rule**: every fullscreen image/PDF/chart lightbox in `src/components/**` MUST satisfy ALL of:
+
+1. **Import `createPortal` from `'react-dom'`** at module top.
+2. **Wrap the entire return JSX in `createPortal(<jsx>, document.body)`** — NOT as inline `{lightbox && <Lightbox/>}` JSX. The portal mount MUST be inside the lightbox component itself (not the caller) so all callsites benefit automatically.
+3. **`document.body`** is the canonical target. Sub-targets (e.g. `document.getElementById('lightbox-root')`) are forbidden — body is always present + has no ancestor CSS to inherit from.
+
+This rule pairs with AV114 (mobile gates) — AV117 is the structural fix, AV114 is the visual-UX fix. Both required for production-quality fullscreen overlays.
+
+**Grep targets (`tests/v117-lightbox-portal.test.js`)**:
+- Each V117 file imports `createPortal` from `'react-dom'` (SG1-SG5).
+- Each V117 file has `return createPortal(` followed by JSX + `document.body)` (SG1-SG5).
+- Anti-regression: no V117 file returns a bare `<div className="fixed inset-0 ...">` without portal wrapping (AV1).
+- Class-of-bug classifier (G1-G3) enumerates 5 fullscreen lightboxes + locks each as portalled.
+
+**Sanctioned consumer list (closed set of 5)**:
+- `src/components/staffchat/StaffChatImageLightbox.jsx` — image attachment viewer in staff chat.
+- `src/components/staffchat/StaffChatPdfOverlay.jsx` — PDF preview viewer in staff chat.
+- `src/components/backend/TreatmentReadOnlyMirror.jsx` — inner `function Lightbox` for treatment image zoom.
+- `src/components/backend/TreatmentReadOnlyPanel.jsx` — inner `function Lightbox` for timeline image zoom.
+- `src/components/ChartSection.jsx` — inner `function ChartLightbox` for chart fullscreen view.
+
+Adding a 6th fullscreen lightbox requires explicit AV117 entry update + the new file must implement portal-mount via createPortal(jsx, document.body). Test G1 hard-locks the count = 5; adding a 6th lightbox without updating the classifier fails the test.
+
+**Why portal is the canonical fix** (not "find the ancestor with transform and remove it"):
+- Bullet-proof: works regardless of ancestor CSS evolution.
+- Universal: all modal/lightbox libraries (Radix, HeadlessUI, Chakra, MUI) use portal-mount by default for the same reason.
+- Future-proof: adding a `transform: animate` to ANY ancestor in the chain won't break the lightbox.
+- Self-contained: each lightbox component manages its own portal-mount; callers don't need to know.
+
+**Cross-link**: V117 saga in `.claude/rules/00-session-start.md` § 2 (lightbox-portal mandate, 2026-05-23) + `tests/v117-lightbox-portal.test.js` (SG1-SG5 + AV1-AV3 + G1-G3) + this AV117 entry. Pairs with AV114 (mobile UX gates) — together they form the complete fullscreen-lightbox contract.

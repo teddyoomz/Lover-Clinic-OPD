@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Edit3, Trash2, FileImage, Maximize2, X } from 'lucide-react';
 import ChartTemplateSelector from './ChartTemplateSelector.jsx';
 import ChartCanvas from './ChartCanvas.jsx';
@@ -191,9 +192,9 @@ function ChartLightbox({ src, label, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
   if (!src) return null;
+  // V117 (2026-05-23) — createPortal to document.body. AV117.
   // audit-anti-vibe-code: AV78 lightbox-explicit-exception — fullscreen image viewer.
-  // Click-anywhere-closes is the expected UX (Stripe/Linear convention).
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85"
       onClick={onClose}
@@ -220,6 +221,7 @@ function ChartLightbox({ src, label, onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

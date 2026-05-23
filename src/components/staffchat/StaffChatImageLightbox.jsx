@@ -45,8 +45,22 @@
 //   3. NO opacity gate, NO transition, NO state for "loaded" — `<img>` natively
 //      handles src swap.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { downloadUrlAsFile } from '../../lib/staffChatDownload.js';
+
+// V117 (2026-05-23 EOD+1 LATE+3) — createPortal to document.body is the
+// canonical fullscreen-overlay pattern. User reported V115 mobile fix STILL
+// didn't close the preview: "เหมือนมันไป full screen ในช่องแชท เลยไม่เห็นปุ่ม
+// ปิด". Root cause: StaffChatImageLightbox is rendered as a child of
+// StaffChatMessage → StaffChatPanel (which is itself `position:fixed; z-9000`).
+// On iOS Safari, a nested position:fixed inside another position:fixed +
+// overflow:hidden parent gets BOUNDED by the parent's box (iOS Safari quirk
+// + stacking context interaction). Result: lightbox `inset-0` measured from
+// the panel, not the viewport; close button hidden behind panel header /
+// outside touchable area. createPortal to document.body bypasses ALL ancestor
+// CSS (containing-block, stacking context, transform, overflow:hidden) by
+// rendering the lightbox directly under <body>. AV117 enforces.
 
 function extFromUrl(u) {
   const m = String(u || '').match(/-o\.(\w+)(?:\?|$)/) || String(u || '').match(/\.(jpg|jpeg|png|webp|gif)(?:\?|$)/i);
@@ -202,7 +216,13 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
   const currentFullUrl = images[idx]?.fullUrl;
   const effectiveSrc = (currentFullUrl && blobCache[currentFullUrl]) || currentFullUrl;
 
-  return (
+  // V117 (2026-05-23 EOD+1 LATE+3) — createPortal to document.body. Bypasses
+  // the StaffChatPanel (`position:fixed; z-9000; overflow:hidden`) ancestor
+  // that bounded the lightbox to the panel area on iOS Safari (nested
+  // position:fixed + iOS Safari quirk → close button hidden). Body-mount is
+  // the canonical React pattern for fullscreen overlays (Radix/HeadlessUI/
+  // Chakra all do this). AV117 enforces for all fullscreen lightboxes.
+  return createPortal(
     // audit-anti-vibe-code: AV78 lightbox-explicit-exception — sanctioned
     // by CLAUDE.md AV78 list (closed set of 2: StaffChatImageLightbox +
     // TreatmentReadOnlyMirror inner Lightbox). Click-anywhere-closes IS
@@ -340,7 +360,8 @@ export function StaffChatImageLightbox({ images: imagesProp, src, startIndex = 0
           ))}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
