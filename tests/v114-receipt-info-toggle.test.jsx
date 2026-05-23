@@ -363,3 +363,106 @@ describe('V114.R — QuotationPrintView RTL render', () => {
     expect(sw.getAttribute('aria-checked')).toBe('true');
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// V114.F — Rule I cross-view flow-simulate
+// Locks the Q5=A shared-key contract end-to-end: toggling in either
+// PrintView must immediately affect the OTHER PrintView when the user opens
+// it next. The chain mirrors real admin behavior — print a sale receipt,
+// close it, then preview a quotation; the toggle state carries over.
+// ───────────────────────────────────────────────────────────────────────────
+
+const FAKE_SALE_F = {
+  saleId: 'INV-F-V114',
+  customerId: 'cust-f',
+  customerName: 'นาย F Test',
+  customerHN: 'LC-F-001',
+  items: { courses: [], products: [], promotions: [], medications: [] },
+  billing: { netTotal: 0 },
+  payment: { status: 'paid' },
+  receiptInfo: { type: 'personal', name: 'นาย F Test', taxId: '1111111111', address: 'F-Address', phone: '0811111111' },
+};
+const FAKE_QUOTATION_F = {
+  quotationId: 'QT-F-V114',
+  customerId: 'cust-f',
+  customerName: 'นาย F Test',
+  customerHN: 'LC-F-001',
+  courses: [],
+  products: [],
+  promotions: [],
+  takeawayMeds: [],
+  receiptInfo: { type: 'personal', name: 'นาย F Test', taxId: '1111111111', address: 'F-Address', phone: '0811111111' },
+};
+
+describe('V114.F — Rule I cross-view flow-simulate (shared-key chain)', () => {
+  beforeEach(() => {
+    try { localStorage.clear(); } catch {}
+    vi.resetModules();
+    vi.doMock('../src/lib/scopedDataLayer.js', () => ({
+      getCourse: vi.fn().mockResolvedValue(null),
+      getCustomer: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock('../src/lib/BranchContext.jsx', () => ({
+      useEffectiveClinicSettings: () => ({ clinicName: 'Lover Clinic', branchName: 'นครราชสีมา', accentColor: '#dc2626' }),
+    }));
+  });
+  afterEach(() => { cleanup(); vi.doUnmock('../src/lib/scopedDataLayer.js'); vi.doUnmock('../src/lib/BranchContext.jsx'); });
+
+  it('F1: Sale toggle ON → unmount → Quotation mount shows ON (shared key Q5=A)', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+
+    const { unmount } = render(<SalePrintView sale={FAKE_SALE_F} onClose={() => {}} />);
+    const saleSw = screen.getByTestId('receipt-info-toggle-sale');
+    fireEvent.click(saleSw); // ON
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
+    unmount();
+
+    render(<QuotationPrintView quotation={FAKE_QUOTATION_F} onClose={() => {}} />);
+    const quoteSw = screen.getByTestId('receipt-info-toggle-quotation');
+    expect(quoteSw.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*1111111111/)).toBeTruthy();
+  });
+
+  it('F2: Quotation toggle OFF → unmount → Sale mount shows OFF (reverse direction)', async () => {
+    // Pre-set localStorage to ON so we can verify Quotation reads it,
+    // then toggles to OFF and Sale inherits the OFF state.
+    localStorage.setItem(STORAGE_KEY, 'true');
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+    const { default: QuotationPrintView } = await import('../src/components/backend/QuotationPrintView.jsx');
+
+    const { unmount } = render(<QuotationPrintView quotation={FAKE_QUOTATION_F} onClose={() => {}} />);
+    const quoteSw = screen.getByTestId('receipt-info-toggle-quotation');
+    expect(quoteSw.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(quoteSw); // OFF
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('false');
+    unmount();
+
+    render(<SalePrintView sale={FAKE_SALE_F} onClose={() => {}} />);
+    const saleSw = screen.getByTestId('receipt-info-toggle-sale');
+    expect(saleSw.getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByText(/HN LC-F-001.*·.*โทร\.\s*0811111111/)).toBeTruthy();
+    expect(screen.queryByText(/เลขประจำตัวผู้เสียภาษี/)).toBeFalsy();
+  });
+
+  it('F3: persistence — toggle in Sale, close, re-open a DIFFERENT sale → state preserved', async () => {
+    const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
+
+    const { unmount } = render(<SalePrintView sale={FAKE_SALE_F} onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('receipt-info-toggle-sale')); // ON
+    unmount();
+
+    // "Different sale" — same component, different IDs + customer
+    const SALE_2 = {
+      ...FAKE_SALE_F,
+      saleId: 'INV-F-V114-2',
+      customerName: 'นาย OTHER',
+      customerHN: 'LC-F-002',
+      receiptInfo: { ...FAKE_SALE_F.receiptInfo, name: 'นาย OTHER', taxId: '2222222222', phone: '0822222222' },
+    };
+    render(<SalePrintView sale={SALE_2} onClose={() => {}} />);
+    const sw2 = screen.getByTestId('receipt-info-toggle-sale');
+    expect(sw2.getAttribute('aria-checked')).toBe('true'); // state preserved
+    expect(screen.getByText(/เลขประจำตัวผู้เสียภาษี:\s*2222222222/)).toBeTruthy();
+  });
+});
