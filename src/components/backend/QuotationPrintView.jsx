@@ -11,9 +11,11 @@ import { useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { thaiTodayISO } from '../../utils.js';
 // V113 (2026-05-23 EOD+1 LATE+1) — live-resolve receipt name + customer at
 // render time (mirror SalePrintView pattern). Snapshot stays as fallback
-// for deleted-master defense. AV113.
+// for deleted-master defense. AV113. V113-C extension: also live-resolve
+// receiptInfo block.
 import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
+import { resolveCustomerReceiptInfo } from '../../lib/customerReceiptInfo.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -89,6 +91,29 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
     load();
     return () => { cancelled = true; };
   }, [q.quotationId, q.id, q.customerId, q.courses]);
+
+  // V113-C — live-resolve receiptInfo merge (mirror SalePrintView).
+  const liveReceiptInfo = useMemo(() => {
+    if (!liveCustomer) return null;
+    return resolveCustomerReceiptInfo(liveCustomer);
+  }, [liveCustomer]);
+
+  const mergedReceiptInfo = useMemo(() => {
+    const snap = q.receiptInfo || {};
+    const live = liveReceiptInfo || {};
+    const pick = (k) => {
+      const sv = typeof snap[k] === 'string' ? snap[k].trim() : '';
+      const lv = typeof live[k] === 'string' ? live[k].trim() : '';
+      return sv || lv || '';
+    };
+    return {
+      type: snap.type || live.type || '',
+      name: pick('name'),
+      taxId: pick('taxId'),
+      phone: pick('phone'),
+      address: pick('address'),
+    };
+  }, [q.receiptInfo, liveReceiptInfo]);
 
   // V113 — live-resolve helper for quotation course rows.
   function liveQuoteCourseName(x) {
@@ -234,16 +259,18 @@ export default function QuotationPrintView({ quotation, clinicSettings, onClose 
                 HN {q.customerHN || resolveCustomerHN(liveCustomer)}
               </div>
             )}
-            {/* V33-customer-create — receipt-info block snapshot */}
-            {q.receiptInfo && (q.receiptInfo.taxId || q.receiptInfo.address || (q.receiptInfo.name && q.receiptInfo.name !== q.customerName)) && (
+            {/* V113-C (2026-05-23 EOD+1 LATE+1) — receipt-info block via
+                mergedReceiptInfo (snapshot wins field-by-field, live fills
+                empty). Same V113 class as SalePrintView. AV113. */}
+            {(mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== q.customerName)) && (
               <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">
                 <div className="text-[9px] tracking-widest uppercase text-neutral-500 mb-0.5">
-                  {q.receiptInfo.type === 'company' ? 'ออกใบเสนอราคาในนามนิติบุคคล' : q.receiptInfo.type === 'personal' ? 'ออกใบเสนอราคาในนามบุคคล' : 'ออกใบเสนอราคาตามข้อมูลลูกค้า'}
+                  {mergedReceiptInfo.type === 'company' ? 'ออกใบเสนอราคาในนามนิติบุคคล' : mergedReceiptInfo.type === 'personal' ? 'ออกใบเสนอราคาในนามบุคคล' : 'ออกใบเสนอราคาตามข้อมูลลูกค้า'}
                 </div>
-                {q.receiptInfo.name && q.receiptInfo.name !== q.customerName && <div className="font-semibold">{q.receiptInfo.name}</div>}
-                {q.receiptInfo.taxId && <div>เลขประจำตัวผู้เสียภาษี: {q.receiptInfo.taxId}</div>}
-                {q.receiptInfo.address && <div>{q.receiptInfo.address}</div>}
-                {q.receiptInfo.phone && <div>โทร. {q.receiptInfo.phone}</div>}
+                {mergedReceiptInfo.name && mergedReceiptInfo.name !== q.customerName && <div className="font-semibold">{mergedReceiptInfo.name}</div>}
+                {mergedReceiptInfo.taxId && <div>เลขประจำตัวผู้เสียภาษี: {mergedReceiptInfo.taxId}</div>}
+                {mergedReceiptInfo.address && <div>{mergedReceiptInfo.address}</div>}
+                {mergedReceiptInfo.phone && <div>โทร. {mergedReceiptInfo.phone}</div>}
               </div>
             )}
           </div>

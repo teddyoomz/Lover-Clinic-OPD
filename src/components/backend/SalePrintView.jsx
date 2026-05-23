@@ -14,9 +14,14 @@ import { thaiTodayISO } from '../../utils.js';
 // open. The snapshot on the sale doc (V111 + V112-A writes) stays as
 // fallback for the deleted-master defensive case. Replaces V112-B
 // admin-SDK backfill (Rule Q V66 violation — user caught).
-// AV113: receipt renderer MUST live-resolve; snapshot is fallback only.
+// V113-C extension: receiptInfo block (address/phone/taxId/name) also
+// live-resolves via resolveCustomerReceiptInfo on liveCustomer when the
+// snapshot is empty. User report (INV-20260520-0010 vs -0009): old sale
+// had snapshot, new one had null → block missing on new despite customer
+// master having all the data. Same V113 class. AV113.
 import { getCourse, getCustomer } from '../../lib/scopedDataLayer.js';
 import { resolveCustomerDisplayName, resolveCustomerHN } from '../../lib/customerDisplayName.js';
+import { resolveCustomerReceiptInfo } from '../../lib/customerReceiptInfo.js';
 
 function formatDateThaiBE(iso) {
   if (!iso) return '—';
@@ -132,6 +137,38 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
     load();
     return () => { cancelled = true; };
   }, [s.saleId, s.id, s.customerId, s.items]);
+
+  // V113-C — live-resolve receiptInfo from liveCustomer. Snapshot
+  // s.receiptInfo wins when present (admin-explicit / accounting record).
+  // When snapshot is null/empty (INV-20260520-0010 class), derive from
+  // the live customer doc via the canonical resolver so address / phone /
+  // taxId still appear. AV113.
+  const liveReceiptInfo = useMemo(() => {
+    if (!liveCustomer) return null;
+    return resolveCustomerReceiptInfo(liveCustomer);
+  }, [liveCustomer]);
+
+  // V113-C — single source of truth for receiptInfo rendering. Snapshot
+  // fields win field-by-field; live fills any empty field. NOT
+  // "snapshot-OR-live whole-object" — per-field merge so a partial
+  // snapshot (e.g. only name + missing address) gets address filled
+  // from live, without losing the snapshot's explicit name.
+  const mergedReceiptInfo = useMemo(() => {
+    const snap = s.receiptInfo || {};
+    const live = liveReceiptInfo || {};
+    const pick = (k) => {
+      const sv = typeof snap[k] === 'string' ? snap[k].trim() : '';
+      const lv = typeof live[k] === 'string' ? live[k].trim() : '';
+      return sv || lv || '';
+    };
+    return {
+      type: snap.type || live.type || '',
+      name: pick('name'),
+      taxId: pick('taxId'),
+      phone: pick('phone'),
+      address: pick('address'),
+    };
+  }, [s.receiptInfo, liveReceiptInfo]);
 
   // V113 helper — for a given course-line, prefer the LIVE master's
   // receiptCourseName, then fall back through V111 snapshot → original
@@ -367,18 +404,25 @@ export default function SalePrintView({ sale, clinicSettings, onClose, sellersLo
                 HN {s.customerHN || resolveCustomerHN(liveCustomer)}
               </div>
             )}
-            {/* V33-customer-create — receipt-info block. Renders personal/company/inherit details
-                from the snapshot taken at sale creation. Legacy sales without receiptInfo still show
-                customerName above; if receiptInfo is set + differs from customerName, show it. */}
-            {s.receiptInfo && (s.receiptInfo.taxId || s.receiptInfo.address || (s.receiptInfo.name && s.receiptInfo.name !== s.customerName)) && (
+            {/* V113-C (2026-05-23 EOD+1 LATE+1) — receipt-info block driven
+                by `mergedReceiptInfo` (snapshot wins field-by-field, live
+                customer doc fills empty fields). User report (INV-20260520-
+                0009 vs -0010): old sale captured the snapshot; new sale
+                had receiptInfo=null but customer master had address +
+                phone. V113 live-resolve fills the gap so receipts always
+                show current address/phone/taxId/name regardless of when
+                the sale was created. AV113. Original V33 snapshot-only
+                pattern preserved for accounting integrity via field-level
+                snapshot-wins (admin's explicit values stay sovereign). */}
+            {(mergedReceiptInfo.taxId || mergedReceiptInfo.address || (mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName)) && (
               <div className="mt-2 pt-2 border-t border-dashed border-neutral-300 text-[11px] text-neutral-700 leading-relaxed">
                 <div className="text-[9px] tracking-widest uppercase text-neutral-500 mb-0.5">
-                  {s.receiptInfo.type === 'company' ? 'ออกใบเสร็จในนามนิติบุคคล' : s.receiptInfo.type === 'personal' ? 'ออกใบเสร็จในนามบุคคล' : 'ออกใบเสร็จตามข้อมูลลูกค้า'}
+                  {mergedReceiptInfo.type === 'company' ? 'ออกใบเสร็จในนามนิติบุคคล' : mergedReceiptInfo.type === 'personal' ? 'ออกใบเสร็จในนามบุคคล' : 'ออกใบเสร็จตามข้อมูลลูกค้า'}
                 </div>
-                {s.receiptInfo.name && s.receiptInfo.name !== s.customerName && <div className="font-semibold">{s.receiptInfo.name}</div>}
-                {s.receiptInfo.taxId && <div>เลขประจำตัวผู้เสียภาษี: {s.receiptInfo.taxId}</div>}
-                {s.receiptInfo.address && <div>{s.receiptInfo.address}</div>}
-                {s.receiptInfo.phone && <div>โทร. {s.receiptInfo.phone}</div>}
+                {mergedReceiptInfo.name && mergedReceiptInfo.name !== s.customerName && <div className="font-semibold">{mergedReceiptInfo.name}</div>}
+                {mergedReceiptInfo.taxId && <div>เลขประจำตัวผู้เสียภาษี: {mergedReceiptInfo.taxId}</div>}
+                {mergedReceiptInfo.address && <div>{mergedReceiptInfo.address}</div>}
+                {mergedReceiptInfo.phone && <div>โทร. {mergedReceiptInfo.phone}</div>}
               </div>
             )}
           </div>

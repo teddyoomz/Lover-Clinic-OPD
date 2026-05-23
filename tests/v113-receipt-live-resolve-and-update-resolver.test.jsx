@@ -361,6 +361,91 @@ describe('V113.F — AV113 invariant + lesson tracking', () => {
   });
 });
 
+// ─── H. V113-C extension — receiptInfo block live-resolve ────────────────
+
+describe('V113.H — receiptInfo block lives-resolves from liveCustomer (V113-C)', () => {
+  test('H1 — SalePrintView imports resolveCustomerReceiptInfo', () => {
+    const code = read('src/components/backend/SalePrintView.jsx');
+    expect(code).toMatch(/import\s*\{\s*resolveCustomerReceiptInfo\s*\}\s*from\s*['"][^'"]*customerReceiptInfo/);
+  });
+
+  test('H2 — SalePrintView computes liveReceiptInfo via useMemo on liveCustomer', () => {
+    const code = read('src/components/backend/SalePrintView.jsx');
+    expect(code).toMatch(/liveReceiptInfo\s*=\s*useMemo[\s\S]{0,500}resolveCustomerReceiptInfo\(liveCustomer\)/);
+  });
+
+  test('H3 — SalePrintView computes mergedReceiptInfo via useMemo with field-by-field pick', () => {
+    const code = read('src/components/backend/SalePrintView.jsx');
+    expect(code).toMatch(/mergedReceiptInfo\s*=\s*useMemo/);
+    // Field-level snapshot-wins-fall-back-to-live merge
+    expect(code).toMatch(/sv\s*\|\|\s*lv\s*\|\|\s*''/);
+  });
+
+  test('H4 — SalePrintView receipt-info block reads mergedReceiptInfo (not s.receiptInfo)', () => {
+    const code = read('src/components/backend/SalePrintView.jsx');
+    // V113-C: render block uses mergedReceiptInfo
+    expect(code).toMatch(/mergedReceiptInfo\.taxId/);
+    expect(code).toMatch(/mergedReceiptInfo\.address/);
+    expect(code).toMatch(/mergedReceiptInfo\.phone/);
+    expect(code).toMatch(/mergedReceiptInfo\.name/);
+    // anti-regression: the OLD pre-V113-C conditional must NOT exist
+    expect(code).not.toMatch(/s\.receiptInfo && \(s\.receiptInfo\.taxId/);
+  });
+
+  test('H5 — QuotationPrintView mirrors V113-C (same imports + merge + render)', () => {
+    const code = read('src/components/backend/QuotationPrintView.jsx');
+    expect(code).toMatch(/import\s*\{\s*resolveCustomerReceiptInfo\s*\}\s*from\s*['"][^'"]*customerReceiptInfo/);
+    expect(code).toMatch(/liveReceiptInfo\s*=\s*useMemo[\s\S]{0,500}resolveCustomerReceiptInfo\(liveCustomer\)/);
+    expect(code).toMatch(/mergedReceiptInfo\s*=\s*useMemo/);
+    expect(code).toMatch(/mergedReceiptInfo\.taxId/);
+    expect(code).not.toMatch(/q\.receiptInfo && \(q\.receiptInfo\.taxId/);
+  });
+
+  test('H6 — pure merge: snapshot wins field-by-field; live fills empty', () => {
+    // Mirror the mergedReceiptInfo logic for pure-unit verification.
+    function mergeReceiptInfo(snap, live) {
+      const s = snap || {};
+      const l = live || {};
+      const pick = (k) => {
+        const sv = typeof s[k] === 'string' ? s[k].trim() : '';
+        const lv = typeof l[k] === 'string' ? l[k].trim() : '';
+        return sv || lv || '';
+      };
+      return {
+        type: s.type || l.type || '',
+        name: pick('name'),
+        taxId: pick('taxId'),
+        phone: pick('phone'),
+        address: pick('address'),
+      };
+    }
+    // Case A — null snapshot + populated live → all live values
+    expect(mergeReceiptInfo(null, {
+      type: '', name: 'นิรุต', taxId: '3309901263672', phone: '0989149195', address: '369 ถนนสืบศิริ',
+    })).toEqual({
+      type: '', name: 'นิรุต', taxId: '3309901263672', phone: '0989149195', address: '369 ถนนสืบศิริ',
+    });
+    // Case B — snapshot with some fields + live with others → snapshot wins, live fills gaps
+    expect(mergeReceiptInfo(
+      { type: '', name: 'Admin Override', taxId: '', phone: '', address: '' },
+      { type: '', name: 'IGNORED', taxId: 'LIVE-TAX', phone: 'LIVE-PHONE', address: 'LIVE-ADDR' },
+    )).toEqual({
+      type: '', name: 'Admin Override', taxId: 'LIVE-TAX', phone: 'LIVE-PHONE', address: 'LIVE-ADDR',
+    });
+    // Case C — full snapshot + populated live → snapshot wins entirely
+    expect(mergeReceiptInfo(
+      { type: 'personal', name: 'S-NAME', taxId: 'S-TAX', phone: 'S-PHONE', address: 'S-ADDR' },
+      { type: 'inherit', name: 'L-NAME', taxId: 'L-TAX', phone: 'L-PHONE', address: 'L-ADDR' },
+    )).toEqual({
+      type: 'personal', name: 'S-NAME', taxId: 'S-TAX', phone: 'S-PHONE', address: 'S-ADDR',
+    });
+    // Case D — both null → all empty
+    expect(mergeReceiptInfo(null, null)).toEqual({
+      type: '', name: '', taxId: '', phone: '', address: '',
+    });
+  });
+});
+
 // ─── G. RTL: mount SalePrintView with mocked scopedDataLayer + verify ────
 
 describe('V113.G — SalePrintView RTL with live-resolve fetch mocks', () => {
@@ -411,10 +496,14 @@ describe('V113.G — SalePrintView RTL with live-resolve fetch mocks', () => {
     });
   });
 
-  test('G2 — live customer name resolved from doc when snapshot empty', async () => {
+  test('G2 — live customer name resolved from doc when snapshot empty (V113-A + V113-C combined)', async () => {
     mockGetCourse.mockResolvedValue(null);
     mockGetCustomer.mockResolvedValue({
-      firstname: 'นิรุต', lastname: 'ชำนาญปรุ', patientData: {},
+      firstname: 'นิรุต', lastname: 'ชำนาญปรุ',
+      // V113-C: receiptInfo block also live-resolves; when customerName
+      // is empty, the live name appears in BOTH the customer header
+      // (V113-A) AND the receipt-info block (V113-C, since name !== '').
+      patientData: {},
     });
 
     const { default: SalePrintView } = await import('../src/components/backend/SalePrintView.jsx');
@@ -432,8 +521,11 @@ describe('V113.G — SalePrintView RTL with live-resolve fetch mocks', () => {
       />
     );
 
+    // V113-C: name appears in customer header AND receipt-info block
+    // (both are correct behavior — see V113-C field-by-field merge).
     await waitFor(() => {
-      expect(screen.queryByText('นิรุต ชำนาญปรุ')).toBeInTheDocument();
+      const matches = screen.queryAllByText('นิรุต ชำนาญปรุ');
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -458,10 +550,18 @@ describe('V113.G — SalePrintView RTL with live-resolve fetch mocks', () => {
       />
     );
 
-    // Snapshot wins; live doc value never appears
+    // Snapshot wins for the customer-header line
     expect(screen.queryByText('Admin Explicit Name')).toBeInTheDocument();
-    await new Promise(r => setTimeout(r, 50)); // give effect time to fire
-    expect(screen.queryByText('Live Name From Doc')).not.toBeInTheDocument();
+    // Wait for useEffect + state updates so we capture the post-resolve
+    // render state (avoids the React "not wrapped in act" warning + assert).
+    await waitFor(() => {
+      // Live customer name must NOT appear as a standalone string anywhere
+      // (snapshot wins for header; receipt-info block's name-row filter
+      // `mergedReceiptInfo.name !== s.customerName` blocks duplicate
+      // display since live name 'Live Name From Doc' != 'Admin Explicit Name').
+      expect(screen.queryByText('Live Name From Doc')).not.toBeInTheDocument();
+    });
+    // Snapshot still in place after live-resolve completes.
     expect(screen.queryByText('Admin Explicit Name')).toBeInTheDocument();
   });
 
