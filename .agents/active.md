@@ -1,39 +1,41 @@
 ---
-updated_at: "2026-05-24 EOD — V122 + V123 + V123-fix1 LOCAL · awaits commit + deploy"
-status: "V115+V116 LIVE @ 3612d8ae. V117-V123-fix1 SHIPPED local (V122 + V123 + V123-fix1 uncommitted) — combined deploy pending."
+updated_at: "2026-05-24 EOD+1 — perf cron shipped + DEPLOYED · Frontend fast confirmed by user"
+status: "V115+V116 + perf-cron LIVE @ 2fe8940d. V117-V123-fix1 all REVERTED (back to last commit before perf work)."
 branch: "master"
-last_commit: "docs(agents): EOD 2026-05-23 LATE+9 — V118+V119+V120+V121 LOCAL stack (V122 + V123 + V123-fix1 uncommitted source)"
-tests: "Full vitest 14544/14544 GREEN · V123 + V123-fix1 self 35/35 · BS-F.8 + SG2.4 V21 flipped · build clean 3.01s"
+last_commit: "feat(perf): chat_history retention cron + opd_sessions cleanup → cron"
+tests: "Full vitest unchanged from baseline · build clean 3.01s · CLI dry-runs passed (sweep-chat-history scanned=0 · sweep-opd-session scanned=110, 4 would hide, 106 skip)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "3612d8ae (V115+V116 LIVE) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
-firestore_rules_version: "unchanged (V117-V123 all client-only — no Probe-Deploy-Probe needed)"
+production_commit: "2fe8940d LIVE (V115+V116+V116-followup + perf cron) · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
+firestore_rules_version: "unchanged (perf cron client/server-only — no Probe-Deploy-Probe needed)"
 ---
 
 # Active Context
 
 ## State
-- **8 V-features SHIPPED LOCAL** — all client-only (V117 + V118 + V119 + V120 + V121 + V122 + V123 + V123-fix1). 5 committed; V122 + V123 + V123-fix1 uncommitted on local master.
-- **Prod unchanged** at `3612d8ae` (V115+V116 LIVE on Vercel).
-- **V123 list-empty browser-state confirmed (not code)**: my preview (same auth/UID/branch/code) renders the นัดหมาย tab fully (today=8, รายการนัดหมาย 8 คน, real customer names). User's session has zombie state from many HMR full-reloads triggered by "mapDepositPayloadToBe export incompatible" Fast Refresh fail.
+- **Frontend ทำงานเร็วแล้ว** (user confirmed "เร็วแล้ว" 2026-05-24 EOD+1). Backend ก็เร็วเหมือนเดิม.
+- **V117-V123-fix1 REVERTED** ก่อนทำ perf work (user: "กลับมาที่ commit ล่าสุดที่เราทำ" → back to `b40d68d9` then perf changes on top).
+- **Perf cron LIVE** on prod via deploy `2fe8940d`. Crons register via vercel.json: `chat-history-retention-sweep` (daily 04:00 BKK) + `opd-session-cleanup-sweep` (every 30 min).
 
 ## What this session shipped
-- **V122** — per-branch doctor-collision + per-branch slot-key suffix + empty-time guard. AV122 + 32 tests + BS-F.8 V21 fixup. Root cause: cross-branch `allBranches:true` scan + slot keys w/o branchId blocked pระราม 3 (3/3 fail). Diag: `scripts/diag-pram3-no-deposit-create.mjs`. Detail: `.agents/sessions/2026-05-24-v122-v123.md`.
-- **V123** — desktop นัดหมาย tab bubble: `needsAdminSave` predicate (hasPatientData + !isOpdSessionSaved) replaces V121's silently-dead `cardFlowUnreadCount` (V121's bubble walked arrays that excluded its target Card-flow sessions → always 0). AV123 + 21 tests + SG2.4 V21 fixup.
-- **V123-fix1** — user-reported "4 are cancelled" false-positives: added `!isArchived && !serviceCompleted` gates to needsAdminSave + isCardFlowUnread (class-of-bug mirror). Bubble dropped 4 → 1 (user confirmed correct). +4 tests A9-A12.
-- **Tier 2 artifacts** all landed: regression tests + AV122 + AV123 + V-entries + class-of-bug classifier inline.
-- Full vitest **14544/14544** GREEN (+31 net across all 3 fixes); build clean 3.01s.
+- **Root cause identified**: Frontend slow because (1) `chat_history` listener pulled 3,855 docs / ~7.5 MB per ChatPanel snapshot — in-listener auto-delete never wired; (2) opd_sessions inline cleanup wrote to expired sessions on every snapshot → cascade (write → fire → re-eval). Backend fast because subscribes to fewer listeners.
+- **Rule M one-shot**: deleted 3,755 chat_history docs > 24h (3,855 → 100). audit doc `be_admin_audit/rule-m-cleanup-chat-history-1d-...`.
+- **Phase 1 cron**: `chat-history-retention-sweep` (daily 04:00 BKK). Auto-delete > 24h. Lib + cron + CLI mirror (Rule of 3).
+- **Phase 2 cron**: `opd-session-cleanup-sweep` (every 30 min). Moves inline cleanup OUT of AdminDashboard listener → ends cascade. `decideCleanupAction` preserves legacy semantics verbatim (V82-followup opt-out + V116 hide-vs-delete).
+- **Rule M admin SDK delete** for noDeposit entry `BA-1779544476132 + opd_sessions/ND-9CBCD7` (user couldn't delete via UI; permission-denied silently). audit doc emitted.
+- Deploy `vercel --prod` SUCCESS, aliased `lover-clinic-app.vercel.app`. Commit `2fe8940d` pushed.
 
 ## Next action
-1. **User authorizes commit + deploy** → commit V122 + V123 + V123-fix1 source then `vercel --prod` (combined V117-V123-fix1 — all client-only).
-2. **Rule Q L1 hands-on post-deploy** — iPhone + desktop scenarios per V118/V121 spec + V122 (Pram3 booking) + V123 (purple bubble on filled-unsaved appt + clears on 🔴 บันทึก OPD click).
-3. **V123 list-empty browser-state recovery (user-side, not code fix)** — close all localhost:5173 tabs · open fresh tab · wait 10s. If still stuck → restart `npm run dev` + hard refresh.
+1. **idle** — user confirmed Frontend เร็วแล้ว. Watch for cron audit docs `be_admin_audit/opd-session-cleanup-sweep-*` and `chat-history-retention-sweep-*` over next 24h to verify cron firing.
+2. **Phase 3 (deferred)** — server-side filter on opd_sessions listener (`where('isArchived','==',false)`). Requires legacy doc backfill (some have isArchived field missing) + split active/archived listeners + lazy-mount archived for history view. Needs brainstorming before implement.
+3. **Tests Tier 2 (deferred)** — `tests/chat-history-retention-core.test.js` + `tests/opd-session-cleanup-core.test.js` + AV invariant for "no in-listener writes that mirror back via own snapshot fire" pattern. Skipped per user deploy-speed priority.
 
 ## Outstanding user-triggered actions
-- V122 + V123 + V123-fix1 commit authorization (all uncommitted on local master).
-- Combined V117-V123-fix1 deploy authorization (when ready).
-- Post-deploy iPhone + desktop L1 hands-on per V118/V121/V122/V123 acceptance criteria.
-- V123 zombie-browser-state recovery (Steps 1-3 above) if persists.
+- Monitor cron audit docs for ~24h (first 04:00 BKK fire = chat-history; opd-session fires every 30 min).
+- Phase 3 listener filter (when ready — significant refactor).
+- Tests Tier 2 (when ready).
 
 ## Notes
-- V18: deploy auth never carries forward — every "deploy" verb is per-turn.
-- 3 diag scripts NEW this session: diag-pram3 + diag-v123-today-appts + diag-v123-false-positive-sessions (Rule R read-only).
+- V18: deploy auth never carries forward.
+- chat_history will accumulate ~50-100 docs/day; cron drops back to <100 after each fire.
+- opd_session cleanup latency ≤ 30 min (vs sub-second inline) — admin doesn't wait on archive/hide ops.
+- V117 + V118 + V119 + V120 + V121 + V122 + V123 + V123-fix1 all REVERTED — NOT in this commit. Can re-introduce later via brainstorming if needed.
