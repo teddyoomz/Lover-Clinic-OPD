@@ -89,7 +89,11 @@ import { createDepositBookingPair, provisionOpdLinkForBookingPair } from '../lib
 import { isChatHoursActiveNow } from '../lib/chatHours.js';
 // V118 (2026-05-23) — Card-level OPD lifecycle row.
 // V121 (2026-05-23) — extended with isCardFlowSession + isCardFlowUnread.
-import { isOpdSessionSaved, isCardFlowSession, isCardFlowUnread } from '../lib/opdSessionState.js';
+// V124 (2026-05-24 EOD+1) — bubble surfaces swapped to isAppointmentPendingOpdSave
+// (broader state-D match). isCardFlowSession is still used by the modal-open gate
+// at line ~3424 (V121 Q1=B locked behavior); isCardFlowUnread retained for any
+// future Card-flow-specific surface but no longer used by the count memos.
+import { isOpdSessionSaved, isCardFlowSession, isCardFlowUnread, isAppointmentPendingOpdSave } from '../lib/opdSessionState.js';
 // V118 — SendCustomerLinkModal for card-level OPD link send/view (mounted at root).
 import SendCustomerLinkModal from '../components/backend/SendCustomerLinkModal.jsx';
 // Phase 24.0-undecies (2026-05-06) — chip + free-text "อื่นๆ" join/parse.
@@ -4615,22 +4619,40 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
   const activeSessionInfo = selectedQR ? sessions.find(s => s.id === selectedQR) : null;
   const unreadCount = sessions.filter(s => s.isUnread).length;
-  // V121 (2026-05-23) — card-flow pending session count across all 5 session
-  // state arrays. Card-flow sessions are V120-hidden from queue UI but live
-  // in the SAME opd_sessions collection (loaded by the listener at line ~2240
-  // without an isHiddenFromQueue filter at listener level — only branch
-  // filter applies). The bubble counts them HERE separately from unreadCount
-  // (which counts kiosk + walk-in only). See isCardFlowUnread for the
-  // 4-predicate AND chain that defines "needs admin attention".
+  // V121 (2026-05-23) → V124 (2026-05-24 EOD+1) — count of appointments in
+  // state D ("ลูกค้ากรอกลิ้งมาแล้ว แต่ยังไม่บันทึก OPD"). Iterates
+  // `apptData?.appointments` (already branch-scoped via
+  // `listenToAppointmentsByMonth({branchId: selectedBranchId})` at line ~1137)
+  // and joins each appt to its linked opd_session via `resolveLinkedSession`
+  // (which falls back to lazy-fetch for sessions excluded from the queue
+  // state arrays — important because V120 hides card-flow sessions from
+  // sessions/depositSessions/noDepositSessions, AND because non-card-flow
+  // bookings with no V118 markers ALSO exist in those arrays).
+  //
+  // Predicate is `isAppointmentPendingOpdSave` (= `resolveCardOpdState === 'D'`),
+  // matching the visible "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge at
+  // AppointmentHubRowCard:172. Pre-V124 the predicate was `isCardFlowUnread`
+  // which required V118/V120 markers — too narrow, missed all regular
+  // จองไม่มัดจำ/มัดจำ bookings. Caught 2026-05-24 EOD+1 by Rule R diag on
+  // BA-1779590375471 (regular no-deposit booking, customer filled, no V118
+  // markers → predicate returned false → bubble never rendered).
+  //
+  // Window limitation (existing — not introduced by V124): apptData listener
+  // is per-month; appts outside the current `apptMonth` are not in the array.
+  // Sub-pill bubbles (today/tomorrow/future30/past30) for the user's CURRENT
+  // window appear correctly; cross-month coverage requires a separate listener
+  // (deferred — apptMonth change reload covers most admin use cases).
   const cardFlowUnreadCount = useMemo(() => {
+    const appts = apptData?.appointments || [];
     let count = 0;
-    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
-      for (const s of arr || []) {
-        if (isCardFlowUnread(s)) count++;
-      }
+    for (const a of appts) {
+      if (!a?.linkedOpdSessionId) continue;
+      const linkedSession = resolveLinkedSession(a);
+      if (!linkedSession) continue; // state C — not loaded or no patientData yet
+      if (isAppointmentPendingOpdSave({ appt: a, linkedSession })) count++;
     }
     return count;
-  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);
+  }, [apptData, resolveLinkedSession]);
   // Phase 20.0 final ProClinic strip (2026-05-06) — PROCLINIC_ORIGIN +
   // getProClinicUrl helpers REMOVED. AdminDashboard no longer links to
   // any ProClinic admin URL.
@@ -7020,13 +7042,49 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 // locally (mode='edit', appt). NO redirect to calendar mode.
                 // This handler is now a no-op — kept for prop-shape compat.
               }}
-              onCancelAppt={(appt) => {
+              onCancelAppt={async (appt) => {
                 // V64-fix5 (2026-05-09): confirm dialog moved to View
                 // (handleCancelOptimistic) so it fires BEFORE optimistic
                 // update — no flash-then-revert jitter when user says 'No'.
-                return updateBackendAppointment(appt.id, { status: 'cancelled' }).then(() => {
+                //
+                // V125 (2026-05-24 EOD+1) — cascade: when the appt has a
+                // linked opd_session (Card flow + จองไม่มัดจำ + จองมัดจำ
+                // intake-link paths), also flip the session to isArchived:true
+                // so the queue-tab filters drop the row (their filter at
+                // AdminDashboard:2275/2295/2311/2326 all start with `!s.isArchived`).
+                // Data preserved — admin can find the session in ประวัติ tab.
+                // Forensic stamps `archivedReason:'appt-cancelled'` +
+                // `archivedFromApptId` let admin trace the trigger. The
+                // archive write is best-effort (try/catch): the appt cancel
+                // is already committed; a session-archive failure surfaces
+                // via toast but doesn't roll back the cancel. Pairs with
+                // V125 predicate fix in opdSessionState.js
+                // isAppointmentPendingOpdSave (closes the bubble surface).
+                // User-reported: "กดยกเลิก แต่ bubble ไม่หายไป + จองไม่มัดจำ
+                // ยังโชว์รายการ" — both surfaces converge after V125.
+                try {
+                  await updateBackendAppointment(appt.id, { status: 'cancelled' });
+                  if (appt?.linkedOpdSessionId) {
+                    try {
+                      await updateDoc(
+                        doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', appt.linkedOpdSessionId),
+                        {
+                          isArchived: true,
+                          archivedAt: serverTimestamp(),
+                          archivedReason: 'appt-cancelled',
+                          archivedFromApptId: appt.id,
+                        }
+                      );
+                    } catch (sessErr) {
+                      console.warn('[V125] cancel cascade archive failed:', sessErr);
+                      showToast?.('ยกเลิกนัดสำเร็จ (แต่ archive session ล้มเหลว — ' + (sessErr?.message || sessErr) + ')', 4000);
+                      return;
+                    }
+                  }
                   showToast?.('ยกเลิกนัดสำเร็จ', 2000);
-                }).catch((e) => showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000));
+                } catch (e) {
+                  showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000);
+                }
               }}
               onCreateTreatmentForAppt={(appt) => {
                 // V64-fix7 (2026-05-09): pass appt.date so TFP locks the

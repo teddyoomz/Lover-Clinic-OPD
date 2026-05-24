@@ -32,7 +32,10 @@ import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
 // V118 (2026-05-23) — Card-level OPD lifecycle state derivation + synth-session
 // fallback for "ดูข้อมูล" on existing-customer cards with no linkedOpdSessionId.
 // V121 (2026-05-23) — extended with isCardFlowUnread for per-sub-pill bubble counts.
-import { resolveCardOpdState, synthesizeSessionFromCustomer, isCardFlowUnread } from '../../lib/opdSessionState.js';
+// V124 (2026-05-24 EOD+1) — swapped to isAppointmentPendingOpdSave (broader
+// predicate matching the row badge at AppointmentHubRowCard:172). V121's
+// isCardFlowUnread was too narrow — missed all regular จองไม่มัดจำ/มัดจำ bookings.
+import { resolveCardOpdState, synthesizeSessionFromCustomer, isAppointmentPendingOpdSave } from '../../lib/opdSessionState.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -284,16 +287,21 @@ export default function AppointmentHubView({
     };
   }, [appts]);
 
-  // V121 (2026-05-23) — per-sub-pill card-flow unread counts. Joins each appt
+  // V121 (2026-05-23) — per-sub-pill pending-OPD-save counts. Joins each appt
   // to its linkedSession via the existing resolveLinkedSession (prop from
   // AdminDashboard) + buckets by date range. Mirrors `counts` shape so the
   // TabBar can render purple bubbles next to existing count badges.
+  // V124 (2026-05-24 EOD+1) — broadened predicate: `isCardFlowUnread` (V118
+  // markers required) → `isAppointmentPendingOpdSave` (state-D match w/ the
+  // visible "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge at AppointmentHubRowCard:172).
   const cardFlowSubPillCounts = useMemo(() => {
     const now = new Date();
     const buckets = { today: 0, tomorrow: 0, future: 0, past: 0 };
     for (const a of appts) {
+      if (!a?.linkedOpdSessionId) continue;
       const linkedSession = resolveLinkedSession ? resolveLinkedSession(a) : null;
-      if (!isCardFlowUnread(linkedSession)) continue;
+      if (!linkedSession) continue; // state C — not loaded or no patientData yet
+      if (!isAppointmentPendingOpdSave({ appt: a, linkedSession })) continue;
       // Determine which sub-pill this appt belongs to via applyTabFilter (existing).
       for (const tab of ['today', 'tomorrow', 'future', 'past']) {
         const inTab = applyTabFilter([a], { tab, now }).length > 0;
@@ -533,7 +541,14 @@ export default function AppointmentHubView({
         // V118 (2026-05-23) — derive card-level OPD lifecycle per row.
         // Hidden entirely on the ยกเลิก sub-tab (cancelled appts have no
         // follow-through). State resolved via AV118 helpers.
-        const hideOpdLifecycle = activeTab === 'cancelled';
+        // V125 (2026-05-24 EOD+1) — also hide when the individual row's
+        // status === 'cancelled' (defense-in-depth). past sub-pill admits
+        // cancelled appts (defaultStatusFilterForTab('past').exclude=[]),
+        // so the per-row check is the only thing stopping the "📥 ลูกค้า
+        // กรอกแล้ว · รอบันทึก" badge + the action row from rendering on a
+        // cancelled appt that's <30d old. Mirror of the V125 predicate
+        // status check in opdSessionState.js isAppointmentPendingOpdSave.
+        const hideOpdLifecycle = activeTab === 'cancelled' || a?.status === 'cancelled';
         const linkedSession = hideOpdLifecycle ? null : (resolveLinkedSession ? resolveLinkedSession(a) : null);
         const opdState = hideOpdLifecycle ? 'B' : resolveCardOpdState({ appt: a, linkedSession });
         const onViewOpdHandler = () => {

@@ -143,3 +143,47 @@ export function isCardFlowUnread(session) {
   if (isOpdSessionSaved(session)) return false;
   return true;
 }
+
+/**
+ * V124 (2026-05-24 EOD+1) — broader predicate for the "นัดหมาย" tab bubble.
+ *
+ * V121's `isCardFlowUnread` restricts to V118 Card-flow sessions only (requires
+ * `createdFromBackendBooking` + `isHiddenFromQueue` markers, set by
+ * `provisionOpdLinkForBookingPair({hideFromQueue:true})` from the V118 Card
+ * "✏️ ส่งลิ้งค์" path). Real-world bookings minted via the regular
+ * จองไม่มัดจำ / จองมัดจำ / AppointmentFormModal paths lack those markers, so
+ * V121's bubble missed them — user-visible regression vs intent. Caught
+ * 2026-05-24 EOD+1 via Rule R diag on BA-1779590375471 → ND-68FA49 (regular
+ * no-deposit booking, no V118/V120 markers, but customer DID fill the form).
+ *
+ * This helper aligns the COUNT surface with the visible BADGE on
+ * AppointmentHubRowCard line 172 ("📥 ลูกค้ากรอกแล้ว · รอบันทึก") which
+ * renders when `resolveCardOpdState({appt, linkedSession}) === 'D'`. State D =
+ * `!appt.customerId && appt.linkedOpdSessionId && linkedSession exists &&
+ *  hasPatientData(linkedSession) && !isOpdSessionSaved(linkedSession)`.
+ *
+ * Single-source-of-truth via existing `resolveCardOpdState` — any future
+ * state-machine refinement propagates automatically to BOTH rendering AND
+ * counting surfaces. AV-pattern: any badge-count pair MUST share predicate.
+ *
+ * @param {object} args
+ * @param {object|null} args.appt - be_appointments doc shape
+ * @param {object|null} args.linkedSession - opd_sessions doc (or null)
+ * @returns {boolean}
+ */
+export function isAppointmentPendingOpdSave({ appt, linkedSession }) {
+  // V125 (2026-05-24 EOD+1) — exclude cancelled appts from state-D match.
+  // Pre-V125: `resolveCardOpdState` didn't check `appt.status` → cancelled
+  // appts with linkedOpdSessionId + patientData + !saved still returned 'D'
+  // → bubble counter held a stale "1" after admin clicked ยกเลิก. User-
+  // reported: "กดยกเลิก แต่ bubble ไม่หายไป". Past sub-pill's row card ALSO
+  // rendered the "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge for the cancelled appt
+  // (defaultStatusFilterForTab('past').exclude=[] lets cancelled through).
+  //
+  // Status check happens HERE (predicate, not resolveCardOpdState) so the
+  // state-machine semantic for the lifecycle row stays clean (cancelled
+  // appts on the ยกเลิก sub-tab already short-circuit via `hideOpdLifecycle`).
+  // The predicate is bubble+badge-specific and can carry the extra guard.
+  if (appt?.status === 'cancelled') return false;
+  return resolveCardOpdState({ appt, linkedSession }) === 'D';
+}

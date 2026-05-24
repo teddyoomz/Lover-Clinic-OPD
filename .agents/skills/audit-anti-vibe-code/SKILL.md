@@ -3008,3 +3008,53 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Origin**: V121 (2026-05-23) — card-flow notification bubbles need a single source for "session needs admin attention". 4 callsites of the new predicate (2 in AdminDashboard memos + 1 modal-open gate + 1 helper definition) + 1 HubView use. Centralizing prevents future drift when the bubble semantics evolve.
 
 **Cross-link**: V121 saga in `.claude/rules/00-session-start.md` § 2 (card-flow notifications, 2026-05-23) + `tests/v121-*` (helper + source-grep + flow-simulate) + V120 latent gap close in the 3 queue filters at AdminDashboard.jsx lines ~2301, ~2321, ~2340.
+
+### AV124 — Bubble↔badge predicate parity ("ลูกค้ากรอกแล้ว · รอบันทึก")
+
+**Why**: V121 shipped purple bubble surfaces (desktop sidebar + mobile dock + sub-pills) using `isCardFlowUnread` which requires V118/V120 markers (`createdFromBackendBooking + isHiddenFromQueue`). Regular จองไม่มัดจำ/มัดจำ bookings minted via `provisionOpdLinkForBookingPair` WITHOUT `{hideFromQueue:true}` don't carry those markers — so the bubble count was 0 even though the row badge "📥 ลูกค้ากรอกแล้ว · รอบันทึก" (AppointmentHubRowCard:172) rendered for the same booking. Predicate scope mismatch between the rendering surface (`resolveCardOpdState === 'D'`) and the counting surface (`isCardFlowUnread`). User caught 2026-05-24 EOD+1 with screenshot of BA-1779590375471 → ND-68FA49.
+
+**Invariant**: any UI surface that COUNTS or BUBBLES a row badge MUST share the same predicate as the rendering surface. For the "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge (state D) the canonical predicate is `isAppointmentPendingOpdSave({appt, linkedSession})` from `src/lib/opdSessionState.js` (= `resolveCardOpdState({appt, linkedSession}) === 'D'`). Bubble count and badge render MUST derive from the same single source of truth.
+
+**Sanctioned consumers** (closed list — 3 entries):
+1. `src/lib/opdSessionState.js` — defines `isAppointmentPendingOpdSave`
+2. `src/pages/AdminDashboard.jsx:4625` — `cardFlowUnreadCount` memo (desktop sidebar + mobile dock bubbles)
+3. `src/components/admin/AppointmentHubView.jsx:291` — `cardFlowSubPillCounts` memo (sub-pill bubbles)
+
+**Forbidden anti-patterns** (V124 violations):
+- ❌ Defining a per-surface predicate that approximates state D ("isUnread + patientData + …") instead of using `isAppointmentPendingOpdSave` — drift guaranteed when `resolveCardOpdState` evolves.
+- ❌ Iterating session state arrays to count state-D items — V120 hides card-flow sessions from those arrays, AND non-card-flow bookings already living there can't carry the appt context needed for state-D evaluation. Iterate `apptData?.appointments` (already branch-scoped via `listenToAppointmentsByMonth({branchId: selectedBranchId})`) + join to linked sessions via `resolveLinkedSession`.
+
+**Source-grep regression test**: `tests/v124-bubble-pending-opd-save.test.js` SG-A group.
+
+**Origin**: V124 (2026-05-24 EOD+1) — user reported bubble missing on นัดหมาย tab for ND-68FA49 despite the row badge being visible. Rule R diag exposed predicate scope mismatch. V121's narrow predicate retained for any future Card-flow-specific surface; bubble surfaces broadened to align with row badge.
+
+**Cross-link**: V124 row in `.claude/rules/00-session-start.md` § 2 (bubble↔badge parity, 2026-05-24 EOD+1) + `tests/v124-*` + V121 commit `00410f93` (introduced the narrow predicate) + AppointmentHubRowCard:172 (canonical state-D badge render).
+
+### AV125 — Cancel-cascade integrity (status guard + linked-session archive)
+
+**Why**: V124 closed the bubble-vs-badge predicate gap but assumed the underlying state machine was complete. It wasn't — `resolveCardOpdState` didn't consider `appt.status`. A cancelled appt with linkedOpdSessionId + patientData + !saved still returned state 'D' → bubble counter held a stale "1" after ยกเลิก click. Past sub-pill (`defaultStatusFilterForTab('past').exclude=[]`) also let cancelled appts through → row badge rendered for them. Plus the cancel handler only wrote `appt.status='cancelled'` — no cascade to the linked opd_session → the จองไม่มัดจำ / จองมัดจำ / คิวหน้า Clinic tabs (filters all read opd_sessions directly with no awareness of linked appt) still rendered the row. User-reported 2026-05-24 EOD+1: "กดยกเลิก แต่ bubble ไม่หายไป + ยังมีนัดค้างอยู่ในระบบนัดหมาย และหน้าจองไม่มัดจำด้วย".
+
+**Invariant (3 surfaces)**:
+
+1. **Predicate guard** — `isAppointmentPendingOpdSave({appt, linkedSession})` in `src/lib/opdSessionState.js` MUST short-circuit to `false` when `appt?.status === 'cancelled'`. The state machine semantic stays clean (returns 'D' if the data shape matches); the predicate is bubble+badge-specific and carries the extra guard.
+
+2. **Per-row render guard** — `hideOpdLifecycle` in `src/components/admin/AppointmentHubView.jsx` MUST be `true` when EITHER `activeTab === 'cancelled'` OR `a?.status === 'cancelled'`. The per-row check is the only thing stopping the state-D badge from rendering on a cancelled appt that lives in past sub-pill (defaultStatusFilterForTab admits cancelled there).
+
+3. **Cancel cascade** — every `onCancelAppt`-shaped writer in `src/pages/AdminDashboard.jsx` (or future appt-cancel surfaces) MUST cascade-archive the linked opd_session when present: `updateDoc(opd_sessions/{linkedOpdSessionId}, { isArchived: true, archivedAt: serverTimestamp(), archivedReason: 'appt-cancelled', archivedFromApptId: appt.id })`. The session-archive write is best-effort (wrap in try/catch — appt cancel must not roll back on session failure). Forensic stamps `archivedReason` + `archivedFromApptId` are MANDATORY so admin can trace the trigger in be_admin_audit / via diag.
+
+**Sanctioned consumers** (closed list — 4 entries):
+1. `src/lib/opdSessionState.js` — defines `isAppointmentPendingOpdSave` with the status guard
+2. `src/components/admin/AppointmentHubView.jsx` — `hideOpdLifecycle` per-row check
+3. `src/pages/AdminDashboard.jsx:onCancelAppt` — cascade-archive linked opd_session
+4. `tests/v125-cancel-cascade.test.js` — Tier 2 regression bank (predicate + render + cascade)
+
+**Forbidden anti-patterns** (V125 violations):
+- ❌ Re-introducing a "cancel writes only appt.status" handler — every appt-cancel surface MUST cascade-archive the linked opd_session (or document an explicit reason to skip).
+- ❌ Adding a new bubble/badge surface that uses `resolveCardOpdState === 'D'` directly without going through `isAppointmentPendingOpdSave` — bypasses the status guard.
+- ❌ Filtering opd_sessions in a queue tab without `!s.isArchived` — V125's cascade relies on the existing filter convention.
+
+**Source-grep regression test**: `tests/v125-cancel-cascade.test.js` SG-A group (4 lock tests covering all 3 surfaces).
+
+**Origin**: V125 (2026-05-24 EOD+1) — same systematic-debugging session as V124. V124 surfaced the predicate scope-mismatch; V125 surfaced the next-layer gap (status awareness + cross-tab cascade). User explicitly flagged strategic direction: นัดหมาย tab to become the primary surface; future deprecation of คิวหน้า Clinic / จองไม่มัดจำ / จองมัดจำ tabs. The cascade fix aligns with that direction by ensuring cancel in นัดหมาย propagates to the other 3 tabs through the existing `isArchived` filter convention.
+
+**Cross-link**: V125 row in `.claude/rules/00-session-start.md` § 2 + `tests/v125-cancel-cascade.test.js` + V124 (predicate scope) + AppointmentHubView:537 (hideOpdLifecycle defense) + AdminDashboard:7045 (onCancelAppt cascade).

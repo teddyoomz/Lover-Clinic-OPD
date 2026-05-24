@@ -23,19 +23,29 @@ describe('V121 — Helper exports', () => {
 });
 
 describe('V121 — AdminDashboard wiring', () => {
-  it('SG2.1 — imports isCardFlowSession + isCardFlowUnread', () => {
+  it('SG2.1 — imports isCardFlowSession (modal gate) + isAppointmentPendingOpdSave (V124 bubble) [V124 fixup]', () => {
+    // isCardFlowSession still used by modal-open gate (V121 Q1=B).
     expect(ADMIN).toMatch(/isCardFlowSession/);
-    expect(ADMIN).toMatch(/isCardFlowUnread/);
+    // V124 (2026-05-24 EOD+1): bubble memo migrated to isAppointmentPendingOpdSave
+    // (broader state-D predicate matching the visible row badge). isCardFlowUnread
+    // was too narrow — required V118/V120 markers that regular จองไม่มัดจำ/มัดจำ
+    // bookings don't have. Old import retained for any future Card-flow surface
+    // but no longer used by the count memos.
+    expect(ADMIN).toMatch(/isAppointmentPendingOpdSave/);
   });
 
-  it('SG2.2 — cardFlowUnreadCount memo spans 5 session arrays', () => {
+  it('SG2.2 — cardFlowUnreadCount memo iterates apptData.appointments + uses isAppointmentPendingOpdSave [V124 fixup]', () => {
     expect(ADMIN).toMatch(/cardFlowUnreadCount\s*=\s*useMemo/);
-    const memo = ADMIN.match(/cardFlowUnreadCount[\s\S]{0,1500}\}\,\s*\[[^\]]*\]/)?.[0] || '';
-    expect(memo).toMatch(/sessions/);
-    expect(memo).toMatch(/archivedSessions/);
-    expect(memo).toMatch(/depositSessions/);
-    expect(memo).toMatch(/archivedDepositSessions/);
-    expect(memo).toMatch(/noDepositSessions/);
+    const memo = ADMIN.match(/cardFlowUnreadCount\s*=\s*useMemo[\s\S]{0,2500}\}\,\s*\[[^\]]*\]/)?.[0] || '';
+    // V124: source is now apptData.appointments (already branch-scoped via
+    // listenToAppointmentsByMonth at line ~1137). Predicate matches the row
+    // badge on AppointmentHubRowCard:172 (resolveCardOpdState === 'D').
+    expect(memo).toMatch(/apptData\??\.appointments/);
+    expect(memo).toMatch(/resolveLinkedSession/);
+    expect(memo).toMatch(/isAppointmentPendingOpdSave/);
+    // Anti-regression: the pre-V124 memo iterated 5 session state arrays which
+    // V120 had already filtered card-flow sessions OUT of — the bug.
+    expect(memo).not.toMatch(/for\s*\(\s*const\s+arr\s+of\s*\[\s*sessions/);
   });
 
   it('SG2.3 — Modal-open gate skips card-flow sessions (Option B)', () => {
@@ -60,8 +70,13 @@ describe('V121 — AdminDashboard wiring', () => {
 });
 
 describe('V121 — HubView wiring', () => {
-  it('SG3.1 — imports isCardFlowUnread', () => {
-    expect(HUBVIEW).toMatch(/isCardFlowUnread/);
+  it('SG3.1 — imports isAppointmentPendingOpdSave (V124 broader predicate) [V124 fixup]', () => {
+    // V124 (2026-05-24 EOD+1): the per-sub-pill memo now uses the broader
+    // state-D predicate so the bubble count matches AppointmentHubRowCard:172's
+    // visible "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge for ALL bookings, not just
+    // V118 Card-flow ones. Anti-regression: pre-V124 used isCardFlowUnread.
+    expect(HUBVIEW).toMatch(/isAppointmentPendingOpdSave/);
+    expect(HUBVIEW).not.toMatch(/isCardFlowUnread\(/);
   });
   it('SG3.2 — cardFlowSubPillCounts memo present + passed to TabBar via cardFlowCounts prop', () => {
     expect(HUBVIEW).toMatch(/cardFlowSubPillCounts\s*=\s*useMemo/);

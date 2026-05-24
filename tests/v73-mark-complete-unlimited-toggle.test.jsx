@@ -61,15 +61,18 @@ describe('V71.B-bis — markAppointmentServiceCompleted stamps wasServiceComplet
   });
 });
 
-describe('V71.B-bis — RowCard gate uses persistent flag for unlimited toggle', () => {
-  it('B2.1 V71.B-ter — gate is FULLY relaxed (no hasTreatmentForDay, no wasServiceCompleted)', () => {
-    // V71 → V71.B-bis (added persistent flag) → V71.B-ter (drop both gates).
-    // User directive "ไปๆกลับๆไม่จำกัด" + frustration at button still hidden
-    // for appts without treatment → trust admin's deliberate click entirely.
-    expect(rowCard).toMatch(/const showMarkCompleteBtn = isTodayTab && !appt\.serviceCompletedAt;/);
+describe('V71.B-bis → V126 — RowCard gate (V71.B-ter relax + V126 status guard)', () => {
+  it('B2.1 V126 — gate requires status === confirmed (V71.B-ter relax preserved for treatment-side; V126 adds workflow guard)', () => {
+    // V71 (treatment+wasServiceComplete) → V71.B-bis (add persistent flag) →
+    // V71.B-ter (drop both treatment gates) → V126 (add status === confirmed).
+    // V71.B-ter's "trust admin's deliberate click" is intact for TREATMENT
+    // concerns; V126 adds a WORKFLOW sequencing guard so admins must press
+    // "คอนเฟิร์มนัด" first (verifies customer arrived at clinic) before
+    // marking service completed. User directive: "ต้องกดคอนเฟืมนัดก่อน".
+    expect(rowCard).toMatch(/const showMarkCompleteBtn = isTodayTab && !appt\.serviceCompletedAt && rawStatus === 'confirmed';/);
   });
 
-  it('B2.2 gate does NOT reference hasTreatmentForDay or wasServiceCompleted in the visibility check', () => {
+  it('B2.2 V71.B-ter preserved — gate does NOT reference hasTreatmentForDay or wasServiceCompleted', () => {
     const fnMatch = rowCard.match(/const showMarkCompleteBtn[\s\S]+?;/);
     expect(fnMatch).toBeTruthy();
     expect(fnMatch[0]).not.toMatch(/hasTreatmentForDay/);
@@ -80,85 +83,124 @@ describe('V71.B-bis — RowCard gate uses persistent flag for unlimited toggle',
     expect(rowCard).toMatch(/const showUnmarkBtn = isTodayTab && !!appt\.serviceCompletedAt/);
   });
 
-  it('B2.4 V71.B-ter — button ALWAYS visible on today tab when not currently completed', () => {
+  it('B2.4 V126 — button visible on today tab when CONFIRMED + not currently completed', () => {
     const isTodayTab = true;
     const serviceCompletedAt = null;
-    // No conditions on treatment or prior-complete — admin's click is the gate
-    const show = isTodayTab && !serviceCompletedAt;
+    const rawStatus = 'confirmed';
+    const show = isTodayTab && !serviceCompletedAt && rawStatus === 'confirmed';
     expect(show).toBe(true);
   });
 
-  it('B2.5 V71.B-ter — button hidden when currently completed (shows unmark instead)', () => {
+  it('B2.4-bis V126 — button HIDDEN when status pending (must confirm first)', () => {
     const isTodayTab = true;
-    const serviceCompletedAt = 'TS-2026-05-18';
-    const show = isTodayTab && !serviceCompletedAt;
+    const serviceCompletedAt = null;
+    const rawStatus = 'pending';
+    const show = isTodayTab && !serviceCompletedAt && rawStatus === 'confirmed';
     expect(show).toBe(false);
   });
 
-  it('B2.6 mutual exclusion preserved: mark + unmark gates never both true', () => {
+  it('B2.4-ter V126 — button HIDDEN when status cancelled', () => {
+    const isTodayTab = true;
+    const serviceCompletedAt = null;
+    const rawStatus = 'cancelled';
+    const show = isTodayTab && !serviceCompletedAt && rawStatus === 'confirmed';
+    expect(show).toBe(false);
+  });
+
+  it('B2.5 V71.B-ter — button hidden when currently completed (shows unmark instead) — V126 preserves this', () => {
+    const isTodayTab = true;
+    const serviceCompletedAt = 'TS-2026-05-18';
+    const rawStatus = 'confirmed';
+    const show = isTodayTab && !serviceCompletedAt && rawStatus === 'confirmed';
+    expect(show).toBe(false);
+  });
+
+  it('B2.6 mutual exclusion preserved: mark + unmark gates never both true (any status)', () => {
     const isTodayTab = true;
     for (const completedAt of [null, 'TS-2026-05-18']) {
-      const showMark = isTodayTab && !completedAt;
-      const showUnmark = isTodayTab && !!completedAt;
-      expect(showMark && showUnmark).toBe(false);
+      for (const status of ['pending', 'confirmed', 'cancelled', 'done']) {
+        const showMark = isTodayTab && !completedAt && status === 'confirmed';
+        const showUnmark = isTodayTab && !!completedAt;
+        expect(showMark && showUnmark).toBe(false);
+      }
     }
   });
 });
 
-describe('V71.B-ter — round-trip simulator (mark → unmark → re-mark cycles, no preconditions)', () => {
+describe('V71.B-ter → V126 — round-trip simulator (status-gated; mark → unmark → re-mark cycles)', () => {
   function simulateCycle(initialState, action) {
     const next = { ...initialState };
-    if (action === 'mark') {
+    if (action === 'confirm') {
+      next.status = 'confirmed';
+    } else if (action === 'mark') {
       next.serviceCompletedAt = 'TS-' + Date.now();
       next.serviceCompletedBy = 'uid-123';
       next.wasServiceCompleted = true;  // still stamped — kept as historical/audit signal
     } else if (action === 'unmark') {
       next.serviceCompletedAt = null;
       next.serviceCompletedBy = '';
+    } else if (action === 'cancel') {
+      next.status = 'cancelled';
     }
     return next;
   }
 
-  // V71.B-ter gate (no conditions on treatment / prior-complete)
+  // V126 gate (V71.B-ter relax PLUS status === 'confirmed' workflow guard)
   function showMarkBtn(appt) {
     const isTodayTab = true;
-    return isTodayTab && !appt.serviceCompletedAt;
+    return isTodayTab && !appt.serviceCompletedAt && appt.status === 'confirmed';
   }
 
-  it('B3.1 fresh appt (no treatment, no prior complete) → mark visible', () => {
-    const appt = { serviceCompletedAt: null };
+  it('B3.1 V126 — fresh PENDING appt → mark HIDDEN (must confirm first)', () => {
+    const appt = { status: 'pending', serviceCompletedAt: null };
+    expect(showMarkBtn(appt)).toBe(false);
+  });
+
+  it('B3.1-bis V126 — fresh CONFIRMED appt → mark visible', () => {
+    const appt = { status: 'confirmed', serviceCompletedAt: null };
     expect(showMarkBtn(appt)).toBe(true);
   });
 
-  it('B3.2 mark cycle 1 → button hidden (now showUnmark)', () => {
-    let appt = { serviceCompletedAt: null };
+  it('B3.2 confirm → mark cycle → button hidden (now showUnmark)', () => {
+    let appt = { status: 'pending', serviceCompletedAt: null };
+    appt = simulateCycle(appt, 'confirm');
     appt = simulateCycle(appt, 'mark');
     expect(showMarkBtn(appt)).toBe(false);
   });
 
-  it('B3.3 unmark after mark → mark RE-APPEARS regardless of treatment state', () => {
-    let appt = { serviceCompletedAt: null };
+  it('B3.3 unmark after mark → mark RE-APPEARS (status still confirmed)', () => {
+    let appt = { status: 'pending', serviceCompletedAt: null };
+    appt = simulateCycle(appt, 'confirm');
     appt = simulateCycle(appt, 'mark');
     appt = simulateCycle(appt, 'unmark');
-    expect(showMarkBtn(appt)).toBe(true);
+    expect(showMarkBtn(appt)).toBe(true);  // status='confirmed' preserved through cycle
   });
 
-  it('B3.4 LEGACY appt stuck pre-fix (no wasServiceCompleted, no treatment) → STILL VISIBLE in V71.B-ter', () => {
-    // This is the exact case user hit: appt was mark+unmark BEFORE the fix
-    // so wasServiceCompleted is undefined; treatment also missing.
-    const appt = { serviceCompletedAt: null /* no wasServiceCompleted, no treatment */ };
-    expect(showMarkBtn(appt)).toBe(true);  // V71.B-ter unblocks legacy stuck appts
+  it('B3.4 V126 LEGACY appt with status="pending" + no completed → HIDDEN (V126 enforces confirm-first)', () => {
+    // Pre-V126 admin could mark complete on pending appts; V126 enforces
+    // confirm-first ordering even for legacy data. Admin must press
+    // คอนเฟิร์มนัด → then ✓ ลูกค้ารับบริการเรียบร้อย.
+    const appt = { status: 'pending', serviceCompletedAt: null };
+    expect(showMarkBtn(appt)).toBe(false);
   });
 
-  it('B3.5 10-cycle round-trip — button always available, no preconditions', () => {
-    let appt = { serviceCompletedAt: null };
+  it('B3.5 10-cycle round-trip on CONFIRMED appt — button always available after each unmark', () => {
+    let appt = { status: 'confirmed', serviceCompletedAt: null };
     expect(showMarkBtn(appt)).toBe(true);
     appt = simulateCycle(appt, 'mark');
     for (let i = 0; i < 10; i++) {
       appt = simulateCycle(appt, 'unmark');
-      expect(showMarkBtn(appt)).toBe(true);  // always available on unmark
+      expect(showMarkBtn(appt)).toBe(true);  // V71.B-ter unlimited toggle preserved on confirmed appts
       appt = simulateCycle(appt, 'mark');
       expect(appt.serviceCompletedAt).toBeTruthy();
     }
+  });
+
+  it('B3.6 V126 — cancel after confirm → mark HIDDEN (cancelled blocks all forward workflow)', () => {
+    let appt = { status: 'pending', serviceCompletedAt: null };
+    appt = simulateCycle(appt, 'confirm');
+    expect(showMarkBtn(appt)).toBe(true);
+    appt = simulateCycle(appt, 'cancel');
+    expect(showMarkBtn(appt)).toBe(false);
   });
 });

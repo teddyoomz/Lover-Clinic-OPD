@@ -85,15 +85,19 @@ export default function AppointmentHubRowCard({
   const rawStatus = appt.status || 'pending';
   const latestTreatment = apptDateTreatments[0] || null;
   const hasTreatmentForDay = !!latestTreatment;
-  // V71 (2026-05-15) → V71.B-ter (2026-05-18) — service-completed button gate
-  // FULLY relaxed per user "ไปๆกลับๆไม่จำกัด" directive. Pre-V71.B-bis
-  // required hasTreatmentForDay (treatment-link fragility blocked recovery
-  // from limbo state). V71.B-bis added wasServiceCompleted persistent flag
-  // but only helped appts that had been mark-completed AFTER the fix.
-  // V71.B-ter drops BOTH conditions: trust admin's deliberate click. Today
-  // tab + not currently completed → button always available. Symmetric with
-  // showUnmarkBtn (only requires isTodayTab + serviceCompletedAt).
-  const showMarkCompleteBtn = isTodayTab && !appt.serviceCompletedAt;
+  // V71 (2026-05-15) → V71.B-ter (2026-05-18) → V126 (2026-05-24 EOD+1) —
+  // service-completed button gate.
+  // V71.B-ter dropped TREATMENT-related gates (hasTreatmentForDay,
+  // wasServiceCompleted) per "trust admin's deliberate click" — those were
+  // fragile (treatment-link race / date-mismatch). V126 adds a WORKFLOW gate
+  // on `status === 'confirmed'` because the user wants strict sequencing:
+  // คอนเฟิร์มนัด (= ยืนยันลูกค้ามาคลินิก) → ✓ ลูกค้ารับบริการเรียบร้อย.
+  // V71.B-ter's philosophy is preserved — `status` is set by deliberate admin
+  // click on "คอนเฟิร์มนัด" (not a fragile derived value), so this gate
+  // doesn't reintroduce the V71-class limbo bug. Orthogonal concerns.
+  // User directive 2026-05-24 EOD+1: "ต้องกดคอนเฟืมนัดก่อน เป็นการยืนยันว่า
+  // ลูกค้ามาคลินิกตามนัดแล้ว ถึงจะกด ✓ ลูกค้ารับบริการเรียบร้อย ได้".
+  const showMarkCompleteBtn = isTodayTab && !appt.serviceCompletedAt && rawStatus === 'confirmed';
   // V71.A (2026-05-15) — un-mark button visibility (symmetric mirror): today tab +
   // already marked complete. Mutually exclusive with showMarkCompleteBtn (one
   // requires !serviceCompletedAt, the other requires !!serviceCompletedAt).
