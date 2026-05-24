@@ -2253,38 +2253,23 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         ? allDocsRaw.filter(s => !s.branchId || String(s.branchId) === String(selectedBranchId))
         : allDocsRaw;
 
-      // Auto-cleanup expired sessions: delete if no data, archive if has data
-      // V82-followup (2026-05-17 EOD+3 LATE) — opt-out via `_v82FollowupOpdResetAt`:
-      // when admin manually resets an old opd_session back to pending (fresh-start
-      // sync flow), the auto-archive must NOT immediately revert it. The forensic
-      // stamp from the reset script signals "admin wants this OLD doc back in
-      // queue regardless of age".
-      allDocs.forEach(s => {
-        if (s.isArchived || s.isPermanent || !s.createdAt) return;
-        if (s._v82FollowupOpdResetAt) return; // V82-followup opt-out
-        if ((now - s.createdAt.toMillis()) > SESSION_TIMEOUT_MS) {
-          if (!s.patientData) {
-            // V116 (2026-05-23) — mirror deleteSession conditional. If session
-            // is linked to a real booking (deposit OR appointment), customer
-            // may still hold the URL → MUST NOT hard-delete the session.
-            // Instead set isHiddenFromQueue so queue listeners drop it but the
-            // URL stays alive. User directive: "ห้ามลบ link ยกเว้นว่าจะลบนัด
-            // นั้นทิ้งไปทั้งนัดเลย".
-            if (s.linkedAppointmentId || s.linkedDepositId) {
-              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
-                isHiddenFromQueue: true,
-                hiddenFromQueueAt: serverTimestamp(),
-              }).catch(console.error);
-            } else {
-              deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id)).catch(console.error);
-            }
-          } else if (!s.isArchived) {
-            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', s.id), {
-              isArchived: true, archivedAt: serverTimestamp()
-            }).catch(console.error);
-          }
-        }
-      });
+      // [Auto-cleanup MOVED to cron 2026-05-24 — see api/cron/opd-session-cleanup-sweep.js]
+      // PRE-2026-05-24: this listener body called updateDoc/deleteDoc on every
+      // snapshot fire for expired sessions. Each write triggered ANOTHER snapshot
+      // fire (own-write mirror) → cascade. With N admin tabs open, N parallel
+      // cleanup runs raced for the same docs. User-visible symptom: Frontend
+      // page slow because opd_sessions listener pulled 110 docs + cascaded writes
+      // per fire. Backend stayed fast because it doesn't subscribe to opd_sessions.
+      //
+      // FIX: cron `api/cron/opd-session-cleanup-sweep.js` (every 30 min) owns
+      // the cleanup. Shared decision logic in `src/lib/opdSessionCleanupCore.js`
+      // (decideCleanupAction). Listener becomes pure read-only — no cascade.
+      // Trade-off: cleanup latency up to 30 min vs sub-second inline (acceptable —
+      // admin doesn't wait on archive/hide ops).
+      //
+      // V82-followup opt-out (`_v82FollowupOpdResetAt`) preserved in
+      // decideCleanupAction (returns skip). V116 hide-vs-delete branching for
+      // linked bookings preserved. All semantics identical to legacy inline.
 
       // Archived sessions → history page (exclude deposits except serviceCompleted, exclude noDeposit)
       setArchivedSessions(
