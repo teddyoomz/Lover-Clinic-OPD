@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Modal — Auto Deposit Section + Chip นัดมาเพื่อ Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.5em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #0a0a0b; color:#ececf0; border: 1px solid #2a2a30; border-radius: 8px; padding: 1.1em; margin: 1em 0; }
+    .mockup.light { background:#fff; color:#222; border-color:var(--bd); }
+    .mockup-label { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.05em; color: #9a9aa6; margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th,td { border:1px solid var(--bd); padding:.45em .7em; text-align:left; font-size:.9rem; vertical-align:top; }
+    th { background: var(--bg-meta); }
+    .flowbox { background:#fff; border:1px solid var(--bd); border-radius:6px; padding:.5em .8em; margin:.35em 0; font-size:.86rem; }
+    .arrow { text-align:center; color:var(--accent); font-weight:700; }
+    .chip{display:inline-block;background:#1b1b1f;border:1px solid #2a2a30;border-radius:8px;padding:4px 9px;font-size:.74rem;color:#9a9aa6;margin:2px}
+    .chip.on{border-color:#ef4444;background:#2a1417;color:#fecaca;font-weight:600}
+  </style>
+</head>
+<body>
+
+<h1>Appointment Modal — Auto Deposit Section + Chip "นัดมาเพื่อ" Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes for tracking. <strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-25-appointment-modal-deposit-purpose-unification-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> ในทุก modal สร้างนัดหมาย: (1) section "รายละเอียดมัดจำ" auto-โผล่เมื่อ effective-type = จองมัดจำ (create+edit); (2) "นัดมาเพื่อ" เป็น chip multi-select บังคับ + "อื่นๆ" free-text.</p>
+  <p><strong>Architecture:</strong> 1 shared <code>AppointmentFormModal.jsx</code> (4 callers). Broaden the deposit gate from <code>isLockedDepositType</code> → effective-type; reuse <code>createDepositBookingPair</code>/<code>updateDeposit</code>/<code>cancelDepositBookingPair</code>; NEW reverse helper <code>createDepositForExistingAppointment</code> (mirror of <code>createAppointmentForExistingDeposit</code>) for flip-to in edit. NEW <code>VisitPurposePicker</code> component + single-source <code>visitReasonOptions</code> constant. Value stays the <code>appointmentTo</code> string (backward-compatible) via existing <code>buildVisitPurposeText</code>/<code>parseVisitPurposeText</code>.</p>
+  <p><strong>Tech Stack:</strong> React 19, Vite, Firebase Firestore (client SDK), Vitest + RTL, Playwright/admin-SDK e2e. Thai-UI: no red on names/HN; chips use ember-red accent for selected.</p>
+  <p><strong>Decisions (locked):</strong> Q1=A auto+required+atomic · Q2=A chip required multi-select+อื่นๆ · scope=create+edit · option-list=single-source(3 sites) · flip-away=choice-at-confirm(delete/keep).</p>
+  <p><strong>Rules:</strong> Rule I full-flow simulate · Rule Q/Q-honest real-adversarial L2 e2e (real client SDK on prod, TEST- fixtures) · Rule C1 (extract option list) · Rule O n/a · Rule N targeted during, full suite at end · NO deploy without explicit "deploy".</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Create / Edit — effective-type = จองมัดจำ → section auto (required)</div>
+  ◉ จองมัดจำ &nbsp; ○ จองไม่มัดจำ &nbsp; ○ เข้าทำหัตถการ &nbsp; ○ ติดตามอาการ
+  <div style="border:1.5px solid #14532d;background:#0c1f14;border-radius:8px;padding:10px;margin-top:8px">
+    <span style="color:#4ade80;font-weight:700">💰 รายละเอียดมัดจำ</span>
+    <div style="font-size:.72rem;color:#7da88a;margin:4px 0 8px">บันทึกใบมัดจำ + นัดหมาย พร้อมกัน (createDepositBookingPair)</div>
+    ยอดมัดจำ* [____] &nbsp; ช่องทาง* [เงินสด▾] &nbsp; วันที่ชำระ* [25/05/2026] &nbsp; หมายเหตุ [____]
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">นัดมาเพื่อ * — VisitPurposePicker (chips + อื่นๆ box)</div>
+  <span class="chip">สมรรถภาพทางเพศ</span><span class="chip on">โรคระบบทางเดินปัสสาวะ</span><span class="chip">ดูแลสุขภาพองค์รวม</span><span class="chip">เสริมฮอร์โมน</span><span class="chip">โรคติดต่อทางเพศสัมพันธ์</span><span class="chip on">ขลิบ</span><span class="chip">ทำหมัน</span><span class="chip">เลาะสารเหลว</span><span class="chip on">เสริมขนาด</span><span class="chip">อื่นๆ</span>
+  <div style="font-size:.72rem;color:#7da88a;margin-top:6px">→ appointmentTo = "โรคระบบทางเดินปัสสาวะ, ขลิบ, เสริมขนาด" (string เดิม). "อื่นๆ" → กล่อง free-text → "อื่นๆ: &lt;detail&gt;".</div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Edit — flip ออกจาก จองมัดจำ ขณะมีใบมัดจำผูก → confirm dialog</div>
+  ⚠ นัดนี้มีใบมัดจำผูกอยู่ (฿2,000) — จัดการยังไง?
+  <div style="margin-top:6px"><span class="chip on">ลบใบมัดจำ (cancel cascade)</span> <span class="chip">เก็บใบมัดจำไว้</span> <span class="chip">ยกเลิก</span></div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup light">
+  <div class="mockup-label" style="color:var(--tx-muted)">Create — radio/lock จองมัดจำ → atomic pair</div>
+  <div class="flowbox"><code>effectiveType = safeLockedType || formData.appointmentType</code> === 'deposit-booking' &amp;&amp; mode==='create' → <code>showDepositSection</code> + <code>isCreatingDepositBooking</code></div>
+  <div class="arrow">↓ submit</div>
+  <div class="flowbox">validate ยอด&gt;0 + นัดมาเพื่อ ≥1 → <code>createDepositBookingPair({depositData, branchId})</code> writes be_deposits + be_appointments (cross-linked)</div>
+</div>
+<div class="mockup light">
+  <div class="mockup-label" style="color:var(--tx-muted)">Edit — 4 cases (modal สร้าง/แก้ deposit ได้ แต่ลบเฉพาะผ่าน cancel-cascade)</div>
+  <table>
+    <tr><th>เคส</th><th>open (hydrate)</th><th>submit</th></tr>
+    <tr><td>จองมัดจำ + linkedDepositId</td><td><code>getDeposit(id)</code> → fill deposit fields</td><td><code>updateDeposit(id, {amount,channel,date,note})</code> + existing <code>syncAppointmentToLinkedDeposit</code></td></tr>
+    <tr><td>flip-to จองมัดจำ (no link)</td><td>empty section</td><td><code>createDepositForExistingAppointment(apptId, depositData)</code> [NEW]</td></tr>
+    <tr><td>จองมัดจำ but no link (legacy)</td><td>empty section</td><td><code>createDepositForExistingAppointment(apptId, depositData)</code> [NEW]</td></tr>
+    <tr><td>flip-away จองมัดจำ→อื่น (has link)</td><td>section hides</td><td>confirm → ลบ: <code>cancelDepositBookingPair(id)</code> (guard usedAmount&gt;0) / เก็บ: appointment-only</td></tr>
+  </table>
+</div>
+<div class="mockup light">
+  <div class="mockup-label" style="color:var(--tx-muted)">นัดมาเพื่อ value round-trip (storage unchanged)</div>
+  <div class="flowbox">chips+other → <code>buildVisitPurposeText()</code> → <code>formData.appointmentTo</code> (string) ↔ edit: <code>parseVisitPurposeText(appt.appointmentTo)</code> → chips+other (legacy free-text → "อื่นๆ: …")</div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td>NEW <code>src/lib/visitReasonOptions.js</code></td><td>Single-source 10-option array {value,th,en} (Rule C1)</td></tr>
+  <tr><td>NEW <code>src/components/VisitPurposePicker.jsx</code></td><td>Controlled chip multi-select + อื่นๆ; value = appointmentTo string</td></tr>
+  <tr><td>MOD <code>src/pages/PatientForm.jsx</code> :583</td><td>import constant, delete inline copy</td></tr>
+  <tr><td>MOD <code>src/pages/AdminDashboard.jsx</code> :8741, :8944</td><td>import constant, replace 2 hardcoded arrays</td></tr>
+  <tr><td>MOD <code>src/lib/appointmentDepositBatch.js</code></td><td>NEW <code>createDepositForExistingAppointment(appointmentId, depositData)</code></td></tr>
+  <tr><td>MOD <code>src/components/backend/AppointmentFormModal.jsx</code></td><td>effective-type gate · picker swap · edit hydrate · edit deposit reconcile · flip-away dialog</td></tr>
+  <tr><td>MOD <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>AV130 invariants</td></tr>
+  <tr><td>NEW tests (5 files) + e2e script</td><td>component · helper · gate/edit RTL · flow-simulate · audit-grep · real-prod e2e</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ============ TASK 1 ============ -->
+<div class="task">
+  <h3>Task 1: Single-source <code>visitReasonOptions</code> constant + refactor 3 inline copies (Rule C1)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/visitReasonOptions.js</code> · Modify <code>src/pages/PatientForm.jsx:583-594</code>, <code>src/pages/AdminDashboard.jsx:8741</code>, <code>src/pages/AdminDashboard.jsx:8944</code> · Test <code>tests/visit-reason-options.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/visit-reason-options.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import { visitReasonOptions, VISIT_REASON_VALUES } from '../src/lib/visitReasonOptions.js';
+
+describe('visitReasonOptions single source', () => {
+  it('exports 10 options with value/th/en', () => {
+    expect(visitReasonOptions).toHaveLength(10);
+    for (const o of visitReasonOptions) {
+      expect(typeof o.value).toBe('string'); expect(o.th).toBeTruthy(); expect(o.en).toBeTruthy();
+    }
+    expect(visitReasonOptions.map(o => o.value)).toContain('อื่นๆ');
+  });
+  it('VISIT_REASON_VALUES is the value[] (used by AdminDashboard chips)', () => {
+    expect(VISIT_REASON_VALUES).toEqual(visitReasonOptions.map(o => o.value));
+    expect(VISIT_REASON_VALUES[0]).toBe('สมรรถภาพทางเพศ');
+  });
+  it('NO inline copy remains in PatientForm / AdminDashboard (source-grep)', () => {
+    const pf = fs.readFileSync('src/pages/PatientForm.jsx', 'utf8');
+    const ad = fs.readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+    // the old inline array literal pattern must be gone
+    expect(pf).not.toMatch(/const\s+visitReasonOptions\s*=\s*\[/);
+    expect(ad).not.toMatch(/\['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ'/);
+    expect(pf).toMatch(/from '\.\.\/lib\/visitReasonOptions\.js'/);
+    expect(ad).toMatch(/visitReasonOptions|VISIT_REASON_VALUES/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/visit-reason-options.test.js</code> → FAIL (module not found)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Create the constant</strong></label></div>
+<pre><code class="language-javascript">// src/lib/visitReasonOptions.js
+// Single-source canonical visit-purpose options (Rule C1, 2026-05-25).
+// Extracted from PatientForm.jsx:583 + AdminDashboard.jsx:8741/:8944 (3 inline copies).
+// Consumers: PatientForm (th/en), AdminDashboard chips (value), VisitPurposePicker (th/value).
+export const visitReasonOptions = [
+  { value: 'สมรรถภาพทางเพศ', th: 'สมรรถภาพทางเพศ', en: 'Erectile Dysfunction / Sexual Health' },
+  { value: 'โรคระบบทางเดินปัสสาวะ', th: 'โรคระบบทางเดินปัสสาวะ', en: 'Urology / Urinary Tract Issues' },
+  { value: 'ดูแลสุขภาพองค์รวม', th: 'ดูแลสุขภาพองค์รวม', en: 'General Health / Wellness' },
+  { value: 'เสริมฮอร์โมน', th: 'เสริมฮอร์โมน', en: 'Hormone Replacement Therapy (HRT)' },
+  { value: 'โรคติดต่อทางเพศสัมพันธ์', th: 'โรคติดต่อทางเพศสัมพันธ์', en: 'STD / STI Testing &amp; Treatment' },
+  { value: 'ขลิบ', th: 'ขลิบ', en: 'Circumcision' },
+  { value: 'ทำหมัน', th: 'ทำหมัน', en: 'Vasectomy' },
+  { value: 'เลาะสารเหลว', th: 'เลาะสารเหลว', en: 'Foreign Body Removal (Genital)' },
+  { value: 'เสริมขนาด', th: 'เสริมขนาด', en: 'Penile Enhancement / Augmentation' },
+  { value: 'อื่นๆ', th: 'อื่นๆ', en: 'Others' },
+];
+export const VISIT_REASON_VALUES = visitReasonOptions.map(o => o.value);
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Refactor PatientForm.jsx</strong></label></div>
+  <p>Delete the inline <code>const visitReasonOptions = [ … ];</code> at lines 583-594. Add to the import block at top: <code>import { visitReasonOptions } from '../lib/visitReasonOptions.js';</code>. The render block (lines 990-1009) maps <code>reason.th/reason.en/reason.value</code> — UNCHANGED (shape identical).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Refactor AdminDashboard.jsx (2 sites)</strong></label></div>
+  <p>Add to imports: <code>import { VISIT_REASON_VALUES } from '../lib/visitReasonOptions.js';</code>. At <code>:8741</code> and <code>:8944</code> replace the hardcoded array literal <code>['สมรรถภาพทางเพศ',…,'อื่นๆ']</code> with <code>VISIT_REASON_VALUES</code> in each <code>.map(r =&gt; …)</code>. The <code>.map(r =&gt; &lt;button key={r}&gt;{r}&lt;/button&gt;)</code> downstream is UNCHANGED (still string values).</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Run targeted tests + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/visit-reason-options.test.js</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t1s7"> <label for="t1s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/visitReasonOptions.js src/pages/PatientForm.jsx src/pages/AdminDashboard.jsx tests/visit-reason-options.test.js
+git commit -m "refactor(appointment): single-source visitReasonOptions (Rule C1, 3 inline copies merged)"</code></pre>
+</div>
+
+<!-- ============ TASK 2 ============ -->
+<div class="task">
+  <h3>Task 2: <code>VisitPurposePicker</code> component (chips + อื่นๆ ↔ appointmentTo string)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/VisitPurposePicker.jsx</code> · Test <code>tests/visit-purpose-picker-rtl.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing RTL test</strong></label></div>
+<pre><code class="language-jsx">// tests/visit-purpose-picker-rtl.test.jsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import VisitPurposePicker from '../src/components/VisitPurposePicker.jsx';
+
+describe('VisitPurposePicker', () => {
+  it('renders 10 chips + reflects selected from value string', () => {
+    render(&lt;VisitPurposePicker value="ขลิบ, เสริมขนาด" onChange={() =&gt; {}} /&gt;);
+    expect(screen.getByTestId('vp-chip-ขลิบ').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('vp-chip-ทำหมัน').getAttribute('aria-pressed')).toBe('false');
+  });
+  it('toggling a chip emits joined string', () => {
+    const onChange = vi.fn();
+    render(&lt;VisitPurposePicker value="ขลิบ" onChange={onChange} /&gt;);
+    fireEvent.click(screen.getByTestId('vp-chip-เสริมขนาด'));
+    expect(onChange).toHaveBeenCalledWith('ขลิบ, เสริมขนาด');
+  });
+  it('selecting อื่นๆ reveals the free-text box; typing emits "อื่นๆ: X"', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(&lt;VisitPurposePicker value="" onChange={onChange} /&gt;);
+    fireEvent.click(screen.getByTestId('vp-chip-อื่นๆ'));
+    expect(onChange).toHaveBeenLastCalledWith('อื่นๆ');
+    rerender(&lt;VisitPurposePicker value="อื่นๆ" onChange={onChange} /&gt;);
+    fireEvent.change(screen.getByTestId('vp-other-input'), { target: { value: 'ผ่ามุก' } });
+    expect(onChange).toHaveBeenLastCalledWith('อื่นๆ: ผ่ามุก');
+  });
+  it('hydrates legacy free-text value into อื่นๆ box', () => {
+    render(&lt;VisitPurposePicker value="botox filler" onChange={() =&gt; {}} /&gt;);
+    // unknown token → treated as a purpose chip-miss; appears in other? (see impl note)
+    expect(screen.getByTestId('vp-chip-อื่นๆ')).toBeTruthy();
+  });
+  it('wrapper carries data-field="appointmentTo" for scrollToError', () => {
+    const { container } = render(&lt;VisitPurposePicker value="" onChange={() =&gt; {}} /&gt;);
+    expect(container.querySelector('[data-field="appointmentTo"]')).toBeTruthy();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/visit-purpose-picker-rtl.test.jsx</code> → FAIL (component not found)</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement component</strong></label></div>
+<pre><code class="language-jsx">// src/components/VisitPurposePicker.jsx
+import { useMemo } from 'react';
+import { visitReasonOptions } from '../lib/visitReasonOptions.js';
+import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
+
+// Controlled chip multi-select for "นัดมาเพื่อ". The stored value is the
+// joined appointmentTo string (backward-compatible). Parent owns the string;
+// this component derives chip state from it and emits a new string on change.
+// Thai-UI: selected chip uses ember-red accent (NOT on a name/HN → allowed).
+export default function VisitPurposePicker({ value, onChange, required = false, idPrefix = 'vp' }) {
+  const { purposes, other } = useMemo(() =&gt; parseVisitPurposeText(value || ''), [value]);
+  const known = useMemo(() =&gt; new Set(visitReasonOptions.map(o =&gt; o.value)), []);
+  // Any parsed purpose not in the known list is a legacy free-text token →
+  // fold it into the "อื่นๆ" detail so nothing is lost on hydration.
+  const legacyExtra = purposes.filter(p =&gt; !known.has(p));
+  const effOther = [other, ...legacyExtra].filter(Boolean).join(', ');
+  const effPurposes = purposes.filter(p =&gt; known.has(p));
+  const hasOther = effPurposes.includes('อื่นๆ') || legacyExtra.length &gt; 0;
+  const selected = hasOther &amp;&amp; !effPurposes.includes('อื่นๆ') ? [...effPurposes, 'อื่นๆ'] : effPurposes;
+
+  const toggle = (v) =&gt; {
+    const next = selected.includes(v) ? selected.filter(p =&gt; p !== v) : [...selected, v];
+    onChange(buildVisitPurposeText(next, effOther));
+  };
+  const setOther = (txt) =&gt; onChange(buildVisitPurposeText(selected.includes('อื่นๆ') ? selected : [...selected, 'อื่นๆ'], txt));
+
+  return (
+    &lt;div data-field="appointmentTo"&gt;
+      &lt;label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1"&gt;
+        นัดมาเพื่อ {required &amp;&amp; &lt;span className="text-red-500"&gt;*&lt;/span&gt;}
+      &lt;/label&gt;
+      &lt;div className="flex flex-wrap gap-2"&gt;
+        {visitReasonOptions.map(o =&gt; {
+          const on = selected.includes(o.value);
+          return (
+            &lt;button
+              key={o.value} type="button" onClick={() =&gt; toggle(o.value)}
+              data-testid={`${idPrefix}-chip-${o.value}`} aria-pressed={on}
+              className={`px-3 py-1.5 rounded-lg text-xs border transition ${on
+                ? 'border-red-500 bg-red-950/40 text-red-200 font-semibold'
+                : 'border-[var(--bd)] bg-[var(--bg-input)] text-[var(--tx-secondary)] hover:border-red-700/50'}`}
+            &gt;{o.th}&lt;/button&gt;
+          );
+        })}
+      &lt;/div&gt;
+      {selected.includes('อื่นๆ') &amp;&amp; (
+        &lt;input
+          type="text" value={effOther} onChange={(e) =&gt; setOther(e.target.value)}
+          placeholder="ระบุเพิ่มเติม เช่น ผ่ามุก, ตรวจแผล…" data-testid={`${idPrefix}-other-input`}
+          className="mt-2 w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-red-500"
+        /&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/visit-purpose-picker-rtl.test.jsx</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/VisitPurposePicker.jsx tests/visit-purpose-picker-rtl.test.jsx
+git commit -m "feat(appointment): VisitPurposePicker chip component (value=appointmentTo string)"</code></pre>
+</div>
+
+<!-- ============ TASK 3 ============ -->
+<div class="task">
+  <h3>Task 3: Wire picker into AppointmentFormModal + required validation + edit hydration of chips</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentFormModal.jsx</code> (imports; replace textarea :1328-1332; validation in handleSubmit ~:484; layout) · Test <code>tests/appointment-modal-purpose-rtl.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write failing RTL test</strong></label></div>
+<pre><code class="language-jsx">// tests/appointment-modal-purpose-rtl.test.jsx — source-grep + behavior
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const SRC = fs.readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+describe('AppointmentFormModal นัดมาเพื่อ picker wire', () => {
+  it('imports + renders VisitPurposePicker (textarea removed)', () => {
+    expect(SRC).toMatch(/import VisitPurposePicker from '\.\.\/VisitPurposePicker\.jsx'/);
+    expect(SRC).toMatch(/&lt;VisitPurposePicker\b/);
+    expect(SRC).not.toMatch(/placeholder="botox, filler\.\.\."/);
+  });
+  it('validates นัดมาเพื่อ required (≥1) via scrollToFormError', () => {
+    expect(SRC).toMatch(/appointmentTo[\s\S]{0,200}scrollToFormError\('appointmentTo'/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-purpose-rtl.test.jsx</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Add import + replace textarea</strong></label></div>
+  <p>Add near other component imports: <code>import VisitPurposePicker from '../VisitPurposePicker.jsx';</code></p>
+  <p>Replace the textarea cell (lines 1328-1332) with the picker, pulled to full width (it needs horizontal room). Restructure the <code>grid grid-cols-2</code> at :1327 so "นัดมาเพื่อ" is its own full-width row and "สีนัดหมาย" moves to its own row (or pairs with สถานที่นัด below):</p>
+<pre><code class="language-jsx">{/* AppointmentTo — full width chip picker */}
+&lt;div&gt;
+  &lt;VisitPurposePicker
+    value={formData.appointmentTo}
+    onChange={(s) =&gt; update({ appointmentTo: s })}
+    required
+  /&gt;
+&lt;/div&gt;
+{/* สีนัดหมาย — own row (was the 2nd grid cell) */}
+&lt;div&gt;
+  &lt;label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1"&gt;สีนัดหมาย&lt;/label&gt;
+  &lt;select value={formData.appointmentColor} onChange={e =&gt; update({ appointmentColor: e.target.value })} className="..."&gt;
+    &lt;option value=""&gt;ไม่ระบุ&lt;/option&gt;
+    {APPT_COLORS.map(c =&gt; &lt;option key={c} value={c}&gt;{c}&lt;/option&gt;)}
+  &lt;/select&gt;
+&lt;/div&gt;</code></pre>
+  <p>(Edit-mode chip hydration is automatic: the form already initializes <code>appointmentTo: appt.appointmentTo || ''</code> at :298, and VisitPurposePicker parses that string internally. No extra hydration code needed for chips.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Add required validation in handleSubmit</strong></label></div>
+  <p>In <code>handleSubmit</code>, after the pickLater/date/time validations (around :484-500, BEFORE the deposit validation), add:</p>
+<pre><code class="language-javascript">// นัดมาเพื่อ required (Q2=A). appointmentTo is the joined chip string.
+if (!String(formData.appointmentTo || '').trim()) {
+  scrollToFormError('appointmentTo', 'กรุณาเลือกอย่างน้อย 1 รายการในนัดมาเพื่อ');
+  return;
+}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Run targeted + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-purpose-rtl.test.jsx</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t3s6"> <label for="t3s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/AppointmentFormModal.jsx tests/appointment-modal-purpose-rtl.test.jsx
+git commit -m "feat(appointment): chip นัดมาเพื่อ picker in AppointmentFormModal + required validation"</code></pre>
+</div>
+
+<!-- ============ TASK 4 ============ -->
+<div class="task">
+  <h3>Task 4: Broaden deposit gate to effective-type (render + create save)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentFormModal.jsx</code> (derived consts after formData; render gate :1144; save branch :503) · Test <code>tests/appointment-modal-deposit-gate.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write failing source-grep test</strong></label></div>
+<pre><code class="language-javascript">// tests/appointment-modal-deposit-gate.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const SRC = fs.readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+describe('deposit gate = effective type (not locked-only)', () => {
+  it('derives effectiveAppointmentType + showDepositSection', () => {
+    expect(SRC).toMatch(/const\s+effectiveAppointmentType\s*=\s*safeLockedType\s*\|\|\s*formData\.appointmentType/);
+    expect(SRC).toMatch(/const\s+isDepositBooking\s*=\s*effectiveAppointmentType\s*===\s*'deposit-booking'/);
+    expect(SRC).toMatch(/const\s+showDepositSection\s*=\s*isDepositBooking/);
+  });
+  it('render gate + create save branch use the derived values (not isLockedDepositType-only)', () => {
+    expect(SRC).toMatch(/\{showDepositSection &amp;&amp; \(/);
+    expect(SRC).toMatch(/isCreatingDepositBooking\s*=\s*isDepositBooking\s*&amp;&amp;\s*mode\s*===\s*'create'/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-deposit-gate.test.js</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Add derived consts after formData useState</strong></label></div>
+  <p>After the <code>formData</code>/<code>update</code> setup (after ~:430, in component body so it reads <code>formData.appointmentType</code>), add:</p>
+<pre><code class="language-javascript">// V-appt-deposit (2026-05-25) — deposit section is gated on the EFFECTIVE
+// appointment type (locked prop OR radio-picked), not the locked prop only.
+// Shows in BOTH create + edit (scope decision). isLockedDepositType (line 259)
+// kept for the locked-chip render + button-label.
+const effectiveAppointmentType = safeLockedType || formData.appointmentType;
+const isDepositBooking = effectiveAppointmentType === 'deposit-booking';
+const showDepositSection = isDepositBooking;  // create + edit</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Update render gate (:1144)</strong></label></div>
+  <p>Change <code>{isLockedDepositType &amp;&amp; mode === 'create' &amp;&amp; (</code> → <code>{showDepositSection &amp;&amp; (</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Update create save branch (:503)</strong></label></div>
+  <p>Change <code>const isCreatingDepositBooking = isLockedDepositType &amp;&amp; mode === 'create';</code> → <code>const isCreatingDepositBooking = isDepositBooking &amp;&amp; mode === 'create';</code></p>
+  <p>(The existing branches at :721/:736 — <code>createAppointmentForExistingDeposit</code> when <code>existingDepositId</code>, else <code>createDepositBookingPair</code> — now fire for radio-picked deposits too. Deposit-amount validation at :505-507 also keys off <code>isCreatingDepositBooking</code> → required automatically.)</p>
+
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 6: Run targeted + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-deposit-gate.test.js</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t4s7"> <label for="t4s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/AppointmentFormModal.jsx tests/appointment-modal-deposit-gate.test.js
+git commit -m "feat(appointment): deposit section auto-shows on effective-type=deposit-booking (radio + locked)"</code></pre>
+</div>
+
+<!-- ============ TASK 5 ============ -->
+<div class="task">
+  <h3>Task 5: NEW helper <code>createDepositForExistingAppointment</code> (reverse of createAppointmentForExistingDeposit)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/appointmentDepositBatch.js</code> (add export after :589) · Test <code>tests/create-deposit-for-existing-appointment.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/create-deposit-for-existing-appointment.test.js — pure logic + source-grep
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import { buildDepositPairPayload } from '../src/lib/appointmentDepositBatch.js';
+const SRC = fs.readFileSync('src/lib/appointmentDepositBatch.js', 'utf8');
+describe('createDepositForExistingAppointment', () => {
+  it('is exported + reuses buildDepositPairPayload + writeBatch (mirror of the reverse helper)', () => {
+    expect(SRC).toMatch(/export async function createDepositForExistingAppointment\(appointmentId, depositData = \{\}\)/);
+    expect(SRC).toMatch(/buildDepositPairPayload\(/);
+    expect(SRC).toMatch(/batch\.update\(appointmentDoc\(appointmentId\)/);
+  });
+  it('builder links deposit→appointment via linkedAppointmentId', () => {
+    const payload = buildDepositPairPayload({
+      depositData: { amount: 2000, paymentChannel: 'เงินสด', appointment: { type: 'deposit-booking', date: '2026-05-25', startTime: '10:00' } },
+      depositId: 'DEP-1', appointmentId: 'BA-1', branchId: 'BR-A',
+    });
+    expect(payload.linkedAppointmentId).toBe('BA-1');
+    expect(payload.amount).toBe(2000); expect(payload.remainingAmount).toBe(2000);
+    expect(payload.status).toBe('active');
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/create-deposit-for-existing-appointment.test.js</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Implement helper (after createAppointmentForExistingDeposit, ~:589)</strong></label></div>
+<pre><code class="language-javascript">/**
+ * Reverse of createAppointmentForExistingDeposit. Used when an appointment
+ * ALREADY exists (edit mode) and admin flips it TO 'deposit-booking' (or it's a
+ * legacy deposit-booking appt with no linked deposit). Creates a be_deposits
+ * doc + links it to the existing be_appointments doc, atomically.
+ *
+ * @param {string} appointmentId — existing be_appointments doc id.
+ * @param {Object} depositData — same shape DepositPanel/AppointmentFormModal build
+ *        (amount, paymentChannel, paymentDate, note, sellers, appointment{...}, branchId).
+ * @returns {Promise<{depositId, appointmentId}>}
+ */
+export async function createDepositForExistingAppointment(appointmentId, depositData = {}) {
+  if (!appointmentId) throw new Error('createDepositForExistingAppointment: appointmentId required');
+  const apptRef = appointmentDoc(appointmentId);
+  const apptSnap = await getDoc(apptRef);
+  if (!apptSnap.exists()) {
+    throw new Error(`createDepositForExistingAppointment: appointment ${appointmentId} not found`);
+  }
+  const apptData = apptSnap.data() || {};
+  const depositId = `DEP-${Date.now()}`;
+  const branchId = depositData.branchId || apptData.branchId || null;
+  // Reuse the canonical deposit-doc builder (DRY) — links deposit→appt.
+  const depositPayload = buildDepositPairPayload({ depositData, depositId, appointmentId, branchId });
+  const now = new Date().toISOString();
+  const apptUpdate = {
+    appointmentType: 'deposit-booking',
+    linkedDepositId: depositId,
+    spawnedFromDepositId: depositId,
+    updatedAt: now,
+  };
+  const batch = writeBatch(db);
+  batch.set(depositDoc(depositId), depositPayload);
+  batch.update(apptRef, apptUpdate);
+  await batch.commit();
+  return { depositId, appointmentId };
+}</code></pre>
+  <p>(<code>appointmentDoc</code>, <code>depositDoc</code>, <code>getDoc</code>, <code>writeBatch</code>, <code>db</code>, <code>buildDepositPairPayload</code> are all already in-module — used by createAppointmentForExistingDeposit at :499.)</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/create-deposit-for-existing-appointment.test.js</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/appointmentDepositBatch.js tests/create-deposit-for-existing-appointment.test.js
+git commit -m "feat(deposit): createDepositForExistingAppointment helper (flip-to in edit)"</code></pre>
+</div>
+
+<!-- ============ TASK 6 ============ -->
+<div class="task">
+  <h3>Task 6: Edit-mode deposit hydration (open) + reconcile on save (update / flip-to-create)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentFormModal.jsx</code> (imports: getDeposit, updateDeposit; hydration useEffect; edit save branch :655-720) · Test <code>tests/appointment-modal-edit-deposit.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write failing source-grep test</strong></label></div>
+<pre><code class="language-javascript">// tests/appointment-modal-edit-deposit.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const SRC = fs.readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+describe('edit-mode deposit hydrate + reconcile', () => {
+  it('imports getDeposit + updateDeposit', () => {
+    expect(SRC).toMatch(/getDeposit/); expect(SRC).toMatch(/updateDeposit/);
+  });
+  it('hydrates deposit fields from linked deposit on edit-open', () => {
+    expect(SRC).toMatch(/getDeposit\(\s*linkedDepositId/);
+    expect(SRC).toMatch(/depositAmount:\s*String\(/);
+  });
+  it('edit save: updateDeposit when linked, createDepositForExistingAppointment when not', () => {
+    expect(SRC).toMatch(/updateDeposit\(\s*linkedDepositId/);
+    expect(SRC).toMatch(/createDepositForExistingAppointment\(/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-edit-deposit.test.js</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Add imports</strong></label></div>
+  <p>In the <code>backendClient.js</code> import block, add <code>getDeposit, updateDeposit</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Hydration useEffect (after formData useState)</strong></label></div>
+<pre><code class="language-javascript">// V-appt-deposit — edit-mode: hydrate deposit fields from the linked deposit so
+// admin can edit ยอด/ช่องทาง/วันที่/หมายเหตุ. Runs once on edit-open for a
+// deposit-booking appt that has a linked deposit.
+useEffect(() =&gt; {
+  if (mode !== 'edit' || !appt) return;
+  if ((appt.appointmentType) !== 'deposit-booking') return;
+  const linkedDepositId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+  if (!linkedDepositId) return;
+  let cancelled = false;
+  (async () =&gt; {
+    try {
+      const dep = await getDeposit(linkedDepositId);
+      if (cancelled || !dep) return;
+      setFormData(prev =&gt; ({
+        ...prev,
+        depositAmount: dep.amount != null ? String(dep.amount) : '',
+        depositPaymentChannel: dep.paymentChannel || 'เงินสด',
+        depositPaymentDate: dep.paymentDate || prev.depositPaymentDate,
+        depositNote: dep.note || '',
+      }));
+    } catch (e) { console.warn('[AppointmentFormModal] deposit hydrate failed (best-effort):', e); }
+  })();
+  return () =&gt; { cancelled = true; };
+}, [mode, appt]);  // eslint-disable-line react-hooks/exhaustive-deps</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Edit-save deposit reconcile</strong></label></div>
+  <p>In the <code>mode === 'edit'</code> branch, AFTER <code>updateBackendAppointment</code> + the existing linked-deposit metadata cascade (after :720), add the financial reconcile. Build <code>depositDataForEdit</code> once (mirror the create-branch depositData at :751-799):</p>
+<pre><code class="language-javascript">// V-appt-deposit — edit-mode deposit financial reconcile.
+const linkedDepositId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+const nowDeposit = payload.appointmentType === 'deposit-booking';
+if (nowDeposit) {
+  if (linkedDepositId) {
+    // Case 1 — existing linked deposit: update its financial fields.
+    await updateDeposit(linkedDepositId, {
+      amount: parseFloat(formData.depositAmount) || 0,
+      paymentChannel: formData.depositPaymentChannel,
+      paymentDate: formData.depositPaymentDate,
+      note: formData.depositNote || '',
+    });
+  } else {
+    // Case 2/4 — flip-to OR legacy deposit-no-link: create + link a new deposit.
+    const { createDepositForExistingAppointment } = await import('../../lib/appointmentDepositBatch.js');
+    const depositDataForEdit = {
+      customerId: formData.pickLater ? '' : formData.customerId,
+      customerName: formData.pickLater ? tempName : formData.customerName,
+      customerHN: formData.pickLater ? '' : formData.customerHN,
+      customerNameTemp: tempName, customerPhoneTemp: tempPhone,
+      amount: parseFloat(formData.depositAmount) || 0,
+      paymentChannel: formData.depositPaymentChannel,
+      paymentDate: formData.depositPaymentDate, paymentTime: '', refNo: '',
+      sellers: formData.advisorId ? [{ id: formData.advisorId, name: formData.advisorName || '', percent: 100, total: parseFloat(formData.depositAmount) || 0 }] : [],
+      customerSource: '', sourceDetail: '', note: formData.depositNote || '',
+      hasAppointment: true,
+      appointment: {
+        type: 'deposit-booking', option: 'once',
+        date: payload.date, startTime: payload.startTime, endTime: payload.endTime,
+        doctorId: payload.doctorId, doctorName: payload.doctorName,
+        assistantIds: payload.assistantIds, assistantNames: payload.assistantNames,
+        roomId: payload.roomId, roomName: payload.roomName, channel: payload.channel,
+        purpose: payload.appointmentTo, note: payload.notes, color: payload.appointmentColor || '',
+      },
+      paymentEvidenceUrl: '', paymentEvidencePath: '', branchId: selectedBranchId,
+    };
+    await createDepositForExistingAppointment(appt.appointmentId || appt.id, depositDataForEdit);
+  }
+}</code></pre>
+  <p>Note: deposit-amount validation must also run in edit mode when <code>nowDeposit</code>. Broaden the validation at :503-507 from <code>isCreatingDepositBooking</code> to also cover edit-deposit: <code>const requiresDepositAmount = isDepositBooking &amp;&amp; (mode === 'create' || mode === 'edit');</code> then gate the <code>amt &gt; 0</code> check on that.</p>
+
+  <div class="step"><input type="checkbox" id="t6s6"> <label for="t6s6"><strong>Step 6: Run targeted + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-edit-deposit.test.js</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t6s7"> <label for="t6s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/AppointmentFormModal.jsx tests/appointment-modal-edit-deposit.test.js
+git commit -m "feat(appointment): edit-mode deposit hydrate + update/flip-to-create reconcile"</code></pre>
+</div>
+
+<!-- ============ TASK 7 ============ -->
+<div class="task">
+  <h3>Task 7: Flip-away confirm dialog (delete via cancel-cascade / keep) + usedAmount guard</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/backend/AppointmentFormModal.jsx</code> (state + early-return in handleSubmit + dialog JSX + import cancelDepositBookingPair) · Test <code>tests/appointment-modal-flip-away.test.jsx</code></p>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/appointment-modal-flip-away.test.jsx
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const SRC = fs.readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+describe('flip-away confirm (edit: was deposit + linked → now non-deposit)', () => {
+  it('has flipAway state + dialog testid + 3 actions', () => {
+    expect(SRC).toMatch(/flipAway(Open|Decision)/);
+    expect(SRC).toMatch(/data-testid="appt-flipaway-confirm"/);
+    expect(SRC).toMatch(/cancelDepositBookingPair\(/);
+  });
+  it('early-returns to open dialog when flip-away detected with no decision', () => {
+    expect(SRC).toMatch(/wasDeposit[\s\S]{0,120}!nowDeposit[\s\S]{0,160}setFlipAwayOpen\(true\)/);
+  });
+  it('delete path surfaces usedAmount-guard error', () => {
+    expect(SRC).toMatch(/ถูกใช้|usedAmount|ยกเลิกที่การเงิน/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-flip-away.test.jsx</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Add state + dialog</strong></label></div>
+  <p>Add state near other modal state: <code>const [flipAwayOpen, setFlipAwayOpen] = useState(false);</code> and <code>const flipAwayDecisionRef = useRef(null);</code> (null | 'delete' | 'keep').</p>
+  <p>In <code>handleSubmit</code>, immediately AFTER validations and BEFORE any write, add the flip-away gate:</p>
+<pre><code class="language-javascript">// V-appt-deposit — flip-away guard (edit only): leaving deposit-booking while a
+// linked deposit exists → require an explicit decision (modal never deletes a
+// money record silently). Re-invoked from the dialog buttons with a decision.
+if (mode === 'edit' &amp;&amp; appt) {
+  const linkedDepositId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+  const wasDeposit = appt.appointmentType === 'deposit-booking';
+  const nowDeposit = payload.appointmentType === 'deposit-booking';
+  if (wasDeposit &amp;&amp; !nowDeposit &amp;&amp; linkedDepositId &amp;&amp; flipAwayDecisionRef.current === null) {
+    setFlipAwayOpen(true);
+    return;  // wait for dialog decision
+  }
+}</code></pre>
+  <p>In the edit-save block, act on the decision (after <code>updateBackendAppointment</code>):</p>
+<pre><code class="language-javascript">if (mode === 'edit' &amp;&amp; appt) {
+  const linkedDepositId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+  const wasDeposit = appt.appointmentType === 'deposit-booking';
+  const nowDeposit = payload.appointmentType === 'deposit-booking';
+  if (wasDeposit &amp;&amp; !nowDeposit &amp;&amp; linkedDepositId &amp;&amp; flipAwayDecisionRef.current === 'delete') {
+    const { cancelDepositBookingPair } = await import('../../lib/appointmentDepositBatch.js');
+    try {
+      await cancelDepositBookingPair(linkedDepositId, { cancelNote: 'ยกเลิกจากการเปลี่ยนประเภทนัดหมาย' });
+    } catch (e) {
+      // cancelDepositBookingPair throws when usedAmount &gt; 0.
+      setError('ใบมัดจำถูกใช้บางส่วนแล้ว — ยกเลิก/แก้ที่ การเงิน → มัดจำ ก่อน');
+      flipAwayDecisionRef.current = null;
+      return;
+    }
+  }
+  // 'keep' → no deposit action; appointment type already updated.
+}
+// Reset decision after a successful save path.
+flipAwayDecisionRef.current = null;</code></pre>
+  <p>Add the dialog JSX (render near the modal root, gated on <code>flipAwayOpen</code>) with 3 buttons that set the decision + re-submit / abort:</p>
+<pre><code class="language-jsx">{flipAwayOpen &amp;&amp; (
+  &lt;div data-testid="appt-flipaway-confirm" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60"&gt;
+    &lt;div className="bg-[var(--bg-card)] border border-amber-700/40 rounded-xl p-5 max-w-sm w-full mx-4"&gt;
+      &lt;p className="text-amber-300 font-bold text-sm"&gt;⚠ นัดนี้มีใบมัดจำผูกอยู่&lt;/p&gt;
+      &lt;p className="text-xs text-[var(--tx-secondary)] my-2"&gt;คุณกำลังเปลี่ยนประเภทออกจาก "จองมัดจำ" — จัดการใบมัดจำเดิมยังไง?&lt;/p&gt;
+      &lt;div className="flex flex-col gap-2 mt-3"&gt;
+        &lt;button type="button" onClick={() =&gt; { flipAwayDecisionRef.current = 'delete'; setFlipAwayOpen(false); handleSubmit(); }}
+          className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-950/40 border border-red-700 text-red-200"&gt;ลบใบมัดจำด้วย (ยกเลิก)&lt;/button&gt;
+        &lt;button type="button" onClick={() =&gt; { flipAwayDecisionRef.current = 'keep'; setFlipAwayOpen(false); handleSubmit(); }}
+          className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-950/40 border border-emerald-700 text-emerald-200"&gt;เก็บใบมัดจำไว้&lt;/button&gt;
+        &lt;button type="button" onClick={() =&gt; { flipAwayDecisionRef.current = null; setFlipAwayOpen(false); }}
+          className="px-3 py-2 rounded-lg text-xs bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-secondary)]"&gt;ยกเลิก (ไม่บันทึก)&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+)}</code></pre>
+  <p>Add <code>useRef</code> to the React import if not present. Import path for cancel is dynamic (already used for other cascades).</p>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Run targeted + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-modal-flip-away.test.jsx</code> → PASS · <code>npm run build</code> → clean</p>
+
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/AppointmentFormModal.jsx tests/appointment-modal-flip-away.test.jsx
+git commit -m "feat(appointment): flip-away confirm (delete via cancel-cascade / keep) + usedAmount guard"</code></pre>
+</div>
+
+<!-- ============ TASK 8 ============ -->
+<div class="task">
+  <h3>Task 8: AV130 invariants (audit-anti-vibe-code)</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> · Test <code>tests/av130-appointment-deposit-purpose.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write failing audit-grep test</strong></label></div>
+<pre><code class="language-javascript">// tests/av130-appointment-deposit-purpose.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+const MODAL = fs.readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+const SKILL = fs.readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8');
+describe('AV130', () => {
+  it('AV130 documented in skill', () => { expect(SKILL).toMatch(/AV130/); });
+  it('(a) deposit gate uses effectiveAppointmentType (no isLockedDepositType-only render gate)', () => {
+    expect(MODAL).not.toMatch(/\{isLockedDepositType &amp;&amp; mode === 'create' &amp;&amp; \(/);
+    expect(MODAL).toMatch(/\{showDepositSection &amp;&amp; \(/);
+  });
+  it('(b) no inline visitReason array in src (single source)', () => {
+    for (const f of ['src/pages/PatientForm.jsx','src/pages/AdminDashboard.jsx','src/components/VisitPurposePicker.jsx']) {
+      const s = fs.readFileSync(f,'utf8');
+      expect(s).not.toMatch(/\['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ'/);
+    }
+  });
+  it('(c) modal mutates a deposit ONLY via sanctioned helpers (no raw deleteDoc on deposit)', () => {
+    expect(MODAL).not.toMatch(/deleteDoc\(\s*depositDoc/);
+    // sanctioned: createDepositBookingPair / createDepositForExistingAppointment / updateDeposit / cancelDepositBookingPair
+    expect(MODAL).toMatch(/cancelDepositBookingPair|updateDeposit|createDepositForExistingAppointment/);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/av130-appointment-deposit-purpose.test.js</code> → FAIL (AV130 not in skill)</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Add AV130 to SKILL.md</strong></label></div>
+<pre><code class="language-markdown">### AV130 — Appointment-modal deposit gate + single-source visit purpose (2026-05-25)
+- (a) Deposit section in AppointmentFormModal MUST gate on the EFFECTIVE appointment
+  type (`safeLockedType || formData.appointmentType`), NOT `isLockedDepositType` alone.
+  Anchor: render gate is `{showDepositSection && (`.
+- (b) The `visitReasonOptions` list is single-source (`src/lib/visitReasonOptions.js`).
+  No inline `['สมรรถภาพทางเพศ',…]` array anywhere in src/. Consumers import the constant.
+- (c) AppointmentFormModal mutates a deposit ONLY via sanctioned helpers
+  (createDepositBookingPair / createDepositForExistingAppointment / updateDeposit /
+  cancelDepositBookingPair / deleteDepositBookingPair). NEVER raw deleteDoc(depositDoc(...)).
+  Flip-away delete routes through cancelDepositBookingPair (audit + money reversal).
+- Grep: see tests/av130-appointment-deposit-purpose.test.js. Sanctioned exceptions: none.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/av130-appointment-deposit-purpose.test.js</code> → PASS</p>
+
+  <div class="step"><input type="checkbox" id="t8s5"> <label for="t8s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md tests/av130-appointment-deposit-purpose.test.js
+git commit -m "test(audit): AV130 — appointment deposit gate + single-source visit purpose"</code></pre>
+</div>
+
+<!-- ============ TASK 9 ============ -->
+<div class="task">
+  <h3>Task 9: Rule I full-flow simulate (create + 4 edit cases + chip round-trip + adversarial)</h3>
+  <p><strong>Files:</strong> Test <code>tests/appointment-deposit-purpose-flow-simulate.test.js</code></p>
+  <p>Pure-JS mirrors of the inline modal logic so the whole chain is exercised without mounting. Use the REAL <code>buildVisitPurposeText</code>/<code>parseVisitPurposeText</code> + <code>buildDepositPairPayload</code> (import them — do not re-implement).</p>
+
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write the simulate bank</strong></label></div>
+<pre><code class="language-javascript">// tests/appointment-deposit-purpose-flow-simulate.test.js
+import { describe, it, expect } from 'vitest';
+import { buildVisitPurposeText, parseVisitPurposeText } from '../src/lib/visitPurposeUtils.js';
+import { buildDepositPairPayload } from '../src/lib/appointmentDepositBatch.js';
+
+// mirror of the gate
+const effectiveType = (lockedType, formType) =&gt; lockedType || formType;
+const showDeposit = (lockedType, formType) =&gt; effectiveType(lockedType, formType) === 'deposit-booking';
+
+describe('F1 — deposit gate', () => {
+  it('radio-picked deposit shows section (no lock)', () =&gt; expect(showDeposit(null, 'deposit-booking')).toBe(true));
+  it('locked deposit shows section', () =&gt; expect(showDeposit('deposit-booking', 'follow-up')).toBe(true));
+  it('non-deposit hides section', () =&gt; expect(showDeposit(null, 'no-deposit-booking')).toBe(false));
+});
+
+describe('F2 — chip round-trip (real helpers)', () => {
+  it('chips+other → string → chips+other', () => {
+    const s = buildVisitPurposeText(['โรคระบบทางเดินปัสสาวะ','ขลิบ','อื่นๆ'], 'ผ่ามุก');
+    expect(s).toBe('โรคระบบทางเดินปัสสาวะ, ขลิบ, อื่นๆ: ผ่ามุก');
+    const parsed = parseVisitPurposeText(s);
+    expect(parsed.purposes).toContain('ขลิบ'); expect(parsed.other).toBe('ผ่ามุก');
+  });
+  it('legacy free-text hydrates without loss', () => {
+    const parsed = parseVisitPurposeText('botox filler');
+    expect(parsed.purposes).toEqual(['botox filler']); // folded to อื่นๆ by the picker
+  });
+  it('required: empty string blocks (gate mirror)', () =&gt; expect(''.trim().length &gt; 0).toBe(false));
+});
+
+describe('F3 — deposit pair payload (real builder)', () => {
+  it('create deposit → linked appointment, money fields correct', () => {
+    const p = buildDepositPairPayload({ depositData: { amount: 2000, paymentChannel:'เงินสด', appointment:{type:'deposit-booking',date:'2026-05-25',startTime:'10:00'} }, depositId:'DEP-1', appointmentId:'BA-1', branchId:'BR-A' });
+    expect(p.linkedAppointmentId).toBe('BA-1'); expect(p.remainingAmount).toBe(2000); expect(p.status).toBe('active');
+  });
+});
+
+describe('F4 — edit decision matrix (pure)', () => {
+  const decideEdit = (wasDeposit, nowDeposit, hasLink, flipDecision) => {
+    if (nowDeposit &amp;&amp; hasLink) return 'updateDeposit';
+    if (nowDeposit &amp;&amp; !hasLink) return 'createDepositForExistingAppointment';
+    if (wasDeposit &amp;&amp; !nowDeposit &amp;&amp; hasLink) return flipDecision === 'delete' ? 'cancelDepositBookingPair' : 'keep';
+    return 'appointment-only';
+  };
+  it('case1 deposit+link → update', () =&gt; expect(decideEdit(true,true,true,null)).toBe('updateDeposit'));
+  it('case2 flip-to → create', () =&gt; expect(decideEdit(false,true,false,null)).toBe('createDepositForExistingAppointment'));
+  it('case4 deposit no-link → create', () =&gt; expect(decideEdit(true,true,false,null)).toBe('createDepositForExistingAppointment'));
+  it('case3 flip-away delete', () =&gt; expect(decideEdit(true,false,true,'delete')).toBe('cancelDepositBookingPair'));
+  it('case3 flip-away keep', () =&gt; expect(decideEdit(true,false,true,'keep')).toBe('keep'));
+  it('non-deposit edit → appointment-only', () =&gt; expect(decideEdit(false,false,false,null)).toBe('appointment-only'));
+});
+
+describe('F5 — adversarial chip inputs', () => {
+  for (const v of ['', null, undefined, '   ', 'อื่นๆ', 'อื่นๆ: ', 'อื่นๆ: 😀🔥', 'A'.repeat(5000), 'ขลิบ,ขลิบ,ขลิบ']) {
+    it(`parse(${JSON.stringify(String(v).slice(0,20))}) does not throw + round-trips`, () => {
+      const parsed = parseVisitPurposeText(v);
+      const rebuilt = buildVisitPurposeText(parsed.purposes, parsed.other);
+      expect(typeof rebuilt).toBe('string');
+    });
+  }
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-deposit-purpose-flow-simulate.test.js</code> → PASS</p>
+
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/appointment-deposit-purpose-flow-simulate.test.js
+git commit -m "test(appointment): Rule I flow-simulate — deposit gate + chip round-trip + edit matrix + adversarial"</code></pre>
+</div>
+
+<!-- ============ TASK 10 ============ -->
+<div class="task">
+  <h3>Task 10: Rule Q L2 real-prod e2e (admin SDK; create-pair + edit-update + flip-to-create + flip-away-delete)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-appointment-deposit-purpose.mjs</code> (Rule M/R style: <code>vercel env pull</code> + firebase-admin + canonical path + TEST- fixtures + cleanup + audit doc). <strong>Run from local against real prod.</strong></p>
+  <blockquote><strong>Rule Q-honest:</strong> this is the test that CAN fail. It exercises the REAL helpers (<code>createDepositForExistingAppointment</code>, <code>updateDeposit</code>, <code>cancelDepositBookingPair</code>) against real Firestore. Admin SDK here is acceptable for L2 because these are doc-level writes (not compound-index queries) — but it MUST read the docs back + assert the cross-link + money fields, not just that the call returned.</blockquote>
+
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Write the e2e script</strong></label></div>
+  <p>Phases (each creates TEST-prefixed fixtures, asserts, cleans up):</p>
+  <ol>
+    <li><strong>create-pair</strong>: call <code>createDepositBookingPair({depositData, branchId})</code> → read both docs → assert <code>be_appointments.linkedDepositId</code> === depositId AND <code>be_deposits.linkedAppointmentId</code> === appointmentId AND <code>remainingAmount === amount</code> AND <code>appointmentType === 'deposit-booking'</code>.</li>
+    <li><strong>edit-update</strong>: <code>updateDeposit(depositId, {amount: 3000, paymentChannel:'โอนธนาคาร'})</code> → re-read → assert <code>amount===3000</code>, <code>remainingAmount===3000</code>, <code>paymentChannel</code> updated, <code>usedAmount</code> untouched.</li>
+    <li><strong>flip-to-create</strong>: create a bare <code>be_appointments</code> doc (no deposit, type 'no-deposit-booking') → <code>createDepositForExistingAppointment(apptId, depositData)</code> → re-read → assert appt now <code>deposit-booking</code> + <code>linkedDepositId</code> set + new deposit has <code>linkedAppointmentId === apptId</code>.</li>
+    <li><strong>flip-away-delete</strong>: <code>cancelDepositBookingPair(depositId)</code> → re-read → assert both docs <code>status==='cancelled'</code>, <code>remainingAmount===0</code>.</li>
+    <li><strong>usedAmount guard</strong>: set a deposit <code>usedAmount &gt; 0</code> → expect <code>cancelDepositBookingPair</code> to THROW (assert the guard fires).</li>
+    <li><strong>cleanup</strong>: delete all TEST- docs; assert 0 orphans; write audit doc to <code>be_admin_audit</code>.</li>
+  </ol>
+  <p>Use <code>createTestAppointmentId()</code> + <code>createTestDepositId()</code> helpers (V33.13/14). Canonical path <code>artifacts/loverclinic-opd-4c39b/public/data/*</code>. PEM <code>key.split('\\n').join('\n')</code>.</p>
+
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Run on real prod</strong></label></div>
+  <p>Run: <code>vercel env pull .env.local.prod --environment=production</code> (if not pulled this session) then <code>node scripts/e2e-appointment-deposit-purpose.mjs</code> → expect <strong>ALL PHASES PASS</strong> + cleanup zero orphans. Paste the log into the commit.</p>
+
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/e2e-appointment-deposit-purpose.mjs
+git commit -m "test(appointment): Rule Q L2 real-prod e2e — deposit pair/update/flip-to/flip-away (N/0 PASS)"</code></pre>
+</div>
+
+<!-- ============ TASK 11 ============ -->
+<div class="task">
+  <h3>Task 11: Full-suite + build + final verification + push</h3>
+  <p><strong>Files:</strong> none (verification). Rule N: full suite because Tasks 1+3+4+6+7 touched shared files (PatientForm, AdminDashboard, AppointmentFormModal) + new exports.</p>
+
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Full suite</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → ALL PASS. Fix any V21 lock-ins (tests asserting the old textarea / old deposit gate / old inline arrays — update them to the new contract with a V-marker comment). Re-run until green.</p>
+
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. (Catches import drift the focused tests can't — V11 lesson.)</p>
+
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: Audit pass</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/av130-appointment-deposit-purpose.test.js tests/audit-branch-scope.test.js</code> → green (AV130 + BSA unaffected).</p>
+
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: Update handoff + commit + push</strong></label></div>
+<pre><code class="language-bash"># update .agents/active.md + SESSION_HANDOFF.md with the V-entry
+git add .agents/active.md SESSION_HANDOFF.md
+git commit -m "docs(agents): appointment-modal deposit-section + chip นัดมาเพื่อ unification SHIPPED (local)"
+git push origin master</code></pre>
+  <blockquote><strong>NO deploy</strong> until the user explicitly says "deploy" THIS turn (V18). Post-deploy: Rule Q L1 hands-on by user — open a regular appointment-create modal, pick "จองมัดจำ" → section appears + required → save → verify deposit in การเงิน → มัดจำ; edit it → change amount → verify update; flip away → confirm dialog. NO firestore.rules change (no Probe-Deploy-Probe needed).</blockquote>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> Q1 deposit auto+required+atomic → T4 (create) + T6 (edit). Q2 chip required → T2+T3. scope create+edit → T4 (render both) + T6 (edit reconcile). single-source options → T1. flip-away choice → T7. New helper for flip-to → T5. Tests → T9 (flow-sim) + T10 (real-prod e2e) + per-task RTL/grep. AV → T8. All spec requirements have a task. ✓</p>
+<p><strong>Placeholder scan:</strong> all code blocks complete; the e2e (T10) describes exact phases + assertions (no "TBD"). The "Note" about broadening deposit validation in T6 references concrete lines. ✓</p>
+<p><strong>Type consistency:</strong> <code>visitReasonOptions</code> (named export) used consistently T1/T2; <code>VISIT_REASON_VALUES</code> for AdminDashboard. <code>effectiveAppointmentType</code>/<code>isDepositBooking</code>/<code>showDepositSection</code> consistent T4/T6/T8. <code>createDepositForExistingAppointment(appointmentId, depositData)</code> signature consistent T5/T6/T9/T10. <code>flipAwayDecisionRef</code> consistent T7. ✓</p>
+<p><strong>Edge cases covered (per user "หา edge case ให้ครบ"):</strong> radio→deposit→switch-away mid-create (gate reactive, T4) · pickLater + deposit (preserved, T6 depositData) · legacy free-text นัดมาเพื่อ hydration (T2/T9) · deposit with usedAmount&gt;0 on flip-away (guard error, T7/T10) · deposit-booking appt with NO linked deposit (legacy/drift → create, T6) · empty/huge/emoji/duplicate chip inputs (T9 F5) · Walk-in OPD-save locked no-deposit (untouched, no section). ✓</p>
+
+</body>
+</html>
