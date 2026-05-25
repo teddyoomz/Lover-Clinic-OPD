@@ -22,7 +22,7 @@
 //     occurrence (every recurringInterval recurringUnit, recurringTimes
 //     iterations)
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Calendar, X, Loader2, CheckCircle2, AlertCircle, Trash2,
   // Phase 24.0-vicies-novies (2026-05-07) — "ส่งลิ้งค์ลูกค้า" button icons.
@@ -328,6 +328,11 @@ export default function AppointmentFormModal({
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // V-appt-deposit (2026-05-25) — flip-away confirm (edit: leaving deposit-booking
+  // with a linked deposit). decision ref persists across the dialog → handleSave
+  // re-invoke; null = undecided, 'delete' = cancel-cascade, 'keep' = appt-only.
+  const [flipAwayOpen, setFlipAwayOpen] = useState(false);
+  const flipAwayDecisionRef = useRef(null);
   // Phase 24.0-vicies-novies (2026-05-07) — send-link modal state. Holds the
   // resolved {sessionId, url, sessionName, alreadyProvisioned} after admin
   // clicks "ส่งลิ้งค์ลูกค้า" on a customer-later appointment in edit mode.
@@ -560,6 +565,20 @@ export default function AppointmentFormModal({
       }
       if (!formData.depositPaymentDate) {
         scrollToFormError('depositPaymentDate', 'กรุณาเลือกวันที่ชำระ');
+        return;
+      }
+    }
+
+    // V-appt-deposit (2026-05-25) — flip-away guard (edit only): leaving
+    // deposit-booking while a linked deposit exists requires an explicit
+    // decision (the modal NEVER deletes a money record silently). Open the
+    // confirm dialog + early-return (before setSaving, so the button isn't
+    // stuck). The dialog buttons re-invoke handleSave with a decision set.
+    if (mode === 'edit' && appt) {
+      const wasDeposit = appt.appointmentType === 'deposit-booking';
+      const linkedDep = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+      if (wasDeposit && !isDepositBooking && linkedDep && flipAwayDecisionRef.current === null) {
+        setFlipAwayOpen(true);
         return;
       }
     }
@@ -823,6 +842,22 @@ export default function AppointmentFormModal({
             await createDepositForExistingAppointment(appt.appointmentId || appt.id, depositDataForEdit);
           }
         }
+        // V-appt-deposit (2026-05-25) — flip-away delete (decision from the confirm dialog).
+        // Routes through cancelDepositBookingPair (audit + money reversal); NEVER a raw delete.
+        // cancelDepositBookingPair throws when usedAmount > 0 → surface a clear error.
+        if (payload.appointmentType !== 'deposit-booking' && linkedDepositIdEdit && flipAwayDecisionRef.current === 'delete') {
+          const { cancelDepositBookingPair } = await import('../../lib/appointmentDepositBatch.js');
+          try {
+            await cancelDepositBookingPair(linkedDepositIdEdit, { cancelNote: 'ยกเลิกจากการเปลี่ยนประเภทนัดหมาย (V-appt-deposit)' });
+          } catch (e) {
+            setError('ใบมัดจำถูกใช้บางส่วนแล้ว — ยกเลิก/แก้ที่ การเงิน → มัดจำ ก่อน');
+            flipAwayDecisionRef.current = null;
+            setSaving(false);
+            return;
+          }
+        }
+        // 'keep' → no deposit action (appointment type already updated above).
+        flipAwayDecisionRef.current = null;
       } else if (isCreatingDepositBooking && existingDepositId) {
         // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" path: deposit
         // already exists in be_deposits (admin clicked the button on a
@@ -1565,6 +1600,33 @@ export default function AppointmentFormModal({
           pickLater section's "ส่งลิ้งค์ลูกค้า" button. Renders OUTSIDE the
           form panel so its z-100 backdrop doesn't trap the form's outer
           backdrop click handler. */}
+      {/* V-appt-deposit (2026-05-25) — flip-away confirm (edit: deposit → non-deposit
+          while a linked deposit exists). Modal never deletes a money record silently. */}
+      {flipAwayOpen && (
+        <div data-testid="appt-flipaway-confirm" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-[var(--bg-card)] border border-amber-700/40 rounded-xl p-5 max-w-sm w-full">
+            <p className="text-amber-300 font-bold text-sm">⚠ นัดนี้มีใบมัดจำผูกอยู่</p>
+            <p className="text-xs text-[var(--tx-secondary)] my-2">คุณกำลังเปลี่ยนประเภทออกจาก "จองมัดจำ" — จัดการใบมัดจำเดิมยังไง?</p>
+            <div className="flex flex-col gap-2 mt-3">
+              <button type="button"
+                onClick={() => { flipAwayDecisionRef.current = 'delete'; setFlipAwayOpen(false); handleSave(); }}
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-950/40 border border-red-700 text-red-200">
+                ลบใบมัดจำด้วย (ยกเลิกใบมัดจำ)
+              </button>
+              <button type="button"
+                onClick={() => { flipAwayDecisionRef.current = 'keep'; setFlipAwayOpen(false); handleSave(); }}
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-950/40 border border-emerald-700 text-emerald-200">
+                เก็บใบมัดจำไว้
+              </button>
+              <button type="button"
+                onClick={() => { flipAwayDecisionRef.current = null; setFlipAwayOpen(false); }}
+                className="px-3 py-2 rounded-lg text-xs bg-[var(--bg-input)] border border-[var(--bd)] text-[var(--tx-secondary)]">
+                ยกเลิก (ไม่บันทึก)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {sendLinkModal && (
         <SendCustomerLinkModal
           isOpen={true}
