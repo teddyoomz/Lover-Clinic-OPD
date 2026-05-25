@@ -1,38 +1,34 @@
 ---
-updated_at: "2026-05-25 — skill repo updated to obra/superpowers v5.1.0 + audit infra shipped"
-status: "9af2989e LIVE on prod (unchanged). master ahead 1 commit (audit script tooling-only, no deploy needed)."
+updated_at: "2026-05-25 EOD+1 — Customer patient-link SHIPPED LOCAL (not deployed)"
+status: "master 13 ahead of prod 9af2989e (feature + prior tooling). NOT deployed. Full suite 14551/0 GREEN."
 branch: "master"
-last_commit: "chore(scripts): add audit for skill customization drift detection"
-tests: "157 PASS focused (V125+V124+V73+V121+V118, unchanged from prev session — this session touched no src)"
+last_commit: "c9a855ce test(v21-fixup): v75 button 3→4 + v116 SG3 retarget to cron core"
+tests: "14551 PASS / 0 FAIL (full suite). Feature targeted: endpoint 11 + helpers 4 + modal 7 + CDV 6 + flow-sim 6. Rule Q L2 e2e 11/0 on REAL prod. Rule R diag confirmed field shape."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "9af2989e LIVE · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
-firestore_rules_version: "unchanged · P-D-P 200/403/403 = 200/403/403"
+production_commit: "9af2989e LIVE (unchanged — feature NOT deployed)"
+firestore_rules_version: "unchanged (NO rules change in this feature — be_* stay clinic-staff)"
 ---
 
 # Active Context
 
 ## State
-- Skill repo infrastructure shipped: `~/.claude/skills/` is now git-tracked with baseline + audit + upstream-update workflow. Customizations protected by 3-layer (baseline git / audit script / CLAUDE.md backstop).
-- 3 marketplace upstreams pulled (superpowers v5.1.0 + karpathy + claude-plugins-official). 4 customized SKILL.md 3-way merged; 10 non-customized copied verbatim. 11/11 audit PASS.
-- LoverClinic-app master = `5a82c856` (audit script committed + pushed), 1 commit ahead of prod (tooling-only, no deploy needed).
+- **Customer patient-link feature DONE (local, 8 tasks, brainstorm→spec→plan→executing-plans).** 🔗 button in CustomerDetailView (Layout A: action group + แยกปุ่มลบ) → modal → anon link `?patient=<token>` shows the EXISTING PatientDashboard view + นัดหมายครั้งต่อไป (📍 สาขา + เดือนเต็ม) + คอร์สคงเหลือ. No login needed.
+- **Architecture**: token on be_customers (clinic-staff write) → NEW public `api/patient-view.js` (admin SDK, unified resolve be_customers OR opd_session, field-minimized). PatientDashboard customer-mode = endpoint-first + reuse render + gate auto-sync + legacy opd_session fallback. **NO firestore.rules change** (be_*/be_appointments/be_branches stay clinic-staff; endpoint is the secure anon path). AppointmentCard already had a 📍 branch slot — just feed `a.branch` (resolved name) + full-month date.
+- **Reuse, not redesign** — user corrected mid-brainstorm: patient view = existing design 100%; only ADD appointments-with-branch.
+- AV126 (anon-safety) added. 2 V21 fixups absorbed (v75 button 3→4; v116 SG3 retargeted to cron core after the 2026-05-24 perf-cron relocation — V116 behavior verified intact in opdSessionCleanupCore.js).
 
-## What this session shipped
-- `~/.claude/skills/.git` repo init + baseline `df9648b` + post-update commit `f8e90d0`
-- `F:/LoverClinic-app/scripts/verify-skill-customizations.sh` (committed `5a82c856`, pushed)
-- `~/.claude/scripts/{verify-skill-customizations.sh, skill-audit-hook.sh}` (user-level canonical + hook wrapper)
-- Pulled obra/superpowers v5.1.0 → 3-way merged 3 customized skills (1 conflict resolved manually) + 10 non-customized copied verbatim
-- `~/.claude/skills/CUSTOMIZATIONS-vs-upstream-v5.1.0.patch` (483 lines, ready for future PR if user installs gh CLI)
-- SessionStart hook proposal blocked by auto-mode classifier → skipped per "do what's best" (manual workflow sufficient; 3-layer protection already strong)
-- Detail → `.agents/sessions/2026-05-25-skill-repo-update.md`
+## What this session shipped (11 feature commits, pushed, NOT deployed)
+- `api/patient-view.js` (NEW) · `src/lib/backendClient.js` (3 helpers) · `scopedDataLayer.js` re-export
+- `src/components/backend/CustomerPatientLinkModal.jsx` (NEW) · `CustomerDetailView.jsx` (Layout A + 🔗 + modal)
+- `src/pages/PatientDashboard.jsx` (customer-mode)
+- tests: helpers(15) + modal(7) + CDV-button(6) + flow-simulate(6) · `scripts/{diag,e2e}-*` · AV126
+- spec + plan HTML in `docs/superpowers/{specs,plans}/2026-05-25-customer-patient-link*`
 
 ## Next action
-- **idle** — await user direction. No carryover from this session.
-- L1 hands-on V124+V125+V126 cancel + mark-complete flows (user-triggered, carryover)
-- Brainstorm นัดหมาย-tab unification (user-triggered, deferred)
-- Cron monitoring (passive carryover)
+- **AWAIT user "deploy"** (V18 — no deploy without explicit auth THIS turn). On deploy: `vercel --prod` (frontend + the new serverless endpoint deploy together). NO firestore rules change → no Probe-Deploy-Probe needed for this feature.
+- **Then Rule Q L1** (real browser, Rule S): CustomerDetailView → 🔗 → สร้างลิงก์ → copy → open in fresh/incognito (anon) → verify patient card + นัดหมาย (เดือนเต็ม + 📍 สาขา) + คอร์ส render, no login. Toggle off → "ปิดใช้งาน". Revoke → "ไม่พบข้อมูล". (Note: a customer needs a FUTURE appointment to show the นัดหมาย section — อุดม/LC-26000101's only appt was 2026-05-24, past → none show, correct.)
 
 ## Outstanding user-triggered actions
-- L1 hands-on cancel + mark-complete flows (V124-V126)
-- Brainstorm นัดหมาย-tab unification (3 sibling tabs deprecation roadmap)
-- Cron audit doc monitoring (passive)
-- If wanting upstream PR: `winget install --id GitHub.cli` then say "fork superpowers" — patch ready at `~/.claude/skills/CUSTOMIZATIONS-vs-upstream-v5.1.0.patch`
+- Deploy the customer patient-link feature (`vercel --prod`)
+- Rule Q L1 hands-on for the patient-link (after deploy)
+- (carryover) L1 verify V124+V125+V126 cancel/mark-complete · นัดหมาย-tab unification brainstorm · cron monitoring (passive)
