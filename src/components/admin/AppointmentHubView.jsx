@@ -35,7 +35,7 @@ import { loadTreatmentsByDateRange } from '../../lib/reportsLoaders.js';
 // V124 (2026-05-24 EOD+1) — swapped to isAppointmentPendingOpdSave (broader
 // predicate matching the row badge at AppointmentHubRowCard:172). V121's
 // isCardFlowUnread was too narrow — missed all regular จองไม่มัดจำ/มัดจำ bookings.
-import { resolveCardOpdState, synthesizeSessionFromCustomer, isAppointmentPendingOpdSave } from '../../lib/opdSessionState.js';
+import { resolveCardOpdState, synthesizeSessionFromCustomer, isAppointmentPendingOpdSave, isAppointmentOpdPending } from '../../lib/opdSessionState.js';
 import AppointmentHubDoctorCards from './AppointmentHubDoctorCards.jsx';
 import AppointmentHubTabBar from './AppointmentHubTabBar.jsx';
 import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
@@ -273,8 +273,13 @@ export default function AppointmentHubView({
       typeFilter,
       todaySubPill,                            // V71 NEW
     });
-    return sortApptsByDateTimeAsc(filtered);
-  }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill]);
+    // ② (2026-05-26) — opd-pending also requires OPD state B/C/D (needs the
+    // linkedSession join, same as cardFlowSubPillCounts). Other tabs unchanged.
+    const scoped = activeTab === 'opd-pending'
+      ? filtered.filter(a => isAppointmentOpdPending({ appt: a, linkedSession: resolveLinkedSession ? resolveLinkedSession(a) : null }))
+      : filtered;
+    return sortApptsByDateTimeAsc(scoped);
+  }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);
 
   // V64-fix2 (Issue 6): real bubble counts for ALL 4 tabs from same dataset.
   // Counts ignore search/type/status filters (default-status-per-tab only)
@@ -311,6 +316,19 @@ export default function AppointmentHubView({
       }
     }
     return buckets;
+  }, [appts, resolveLinkedSession]);
+
+  // ② (2026-05-26) — count for the opd-pending pill. Ignores search/type
+  // (like the other tab counts) — date-range + state only.
+  const opdPendingCount = useMemo(() => {
+    const now = new Date();
+    const inRange = applyTabFilter(appts, { tab: 'opd-pending', now });
+    let n = 0;
+    for (const a of inRange) {
+      const ls = resolveLinkedSession ? resolveLinkedSession(a) : null;
+      if (isAppointmentOpdPending({ appt: a, linkedSession: ls })) n++;
+    }
+    return n;
   }, [appts, resolveLinkedSession]);
 
   // V71 (2026-05-15) — sub-pill counts derived from same appts array.
@@ -486,7 +504,7 @@ export default function AppointmentHubView({
           นิดหน่อยพอสวยงาม + Reserve พื้นที่ไว้ ไม่ให้ UI เลื่อนขึ้นๆลงๆ". */}
       <AppointmentHubTabBar
         activeTab={activeTab}
-        counts={counts}
+        counts={{ ...counts, 'opd-pending': opdPendingCount }}
         onTabChange={setActiveTab}
         cardFlowCounts={cardFlowSubPillCounts}  /* V121 (2026-05-23) NEW */
       />

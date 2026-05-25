@@ -12,6 +12,7 @@ const TABS = [
   { key: 'tomorrow', label: 'พรุ่งนี้' },
   { key: 'future', label: 'ล่วงหน้า 30 วัน' },
   { key: 'past', label: 'ย้อนหลัง 30 วัน' },
+  { key: 'opd-pending', label: 'รอ/ยังไม่ลง OPD' }, // ② (2026-05-26)
 ];
 
 export default function AppointmentHubTabBar({ activeTab, counts = {}, onTabChange, rightContent = null, cardFlowCounts = {} }) {
