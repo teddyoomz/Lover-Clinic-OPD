@@ -1,31 +1,35 @@
 ---
-updated_at: "2026-05-25 EOD+2 — Treatment-blob Storage-ref migration SHIPPED + DEPLOYED + 2 follow-up fixes + Rule Q-honest"
-status: "prod LIVE @ 65ab6467 (migration + chart 2→10 + OPD layout + edit-remove fix + clamp). Real-adversarial tested + user L1 confirmed 'ใช้ได้แล้ว'."
+updated_at: "2026-05-26 — Appointment-modal deposit-section + chip นัดมาเพื่อ unification SHIPPED (LOCAL, not deployed)"
+status: "master 3a5ae897 — feature complete + full suite GREEN + real-prod e2e PASS. NOT deployed (awaiting explicit 'deploy'). prod still 65ab6467."
 branch: "master"
-last_commit: "65ab6467 test(treatment): human-flow e2e (18/0 real prod) + Rule Q-honest"
-tests: "full suite 14603/0 · stress e2e 24/0 · human-flow e2e 18/0 REAL prod · build clean · zero Storage orphans"
+last_commit: "3a5ae897 test(appointment): V21 fixup phase-21-0 — deposit gate now effective-type"
+tests: "full suite 14658/0 · real-prod e2e 21/0 · build clean ✓ 3.25s"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "65ab6467 LIVE (deployed 2× this session: migration, then clamp+edit-remove fixes)"
-firestore_rules_version: "unchanged (NO rules change — storage.rules uploads/{collection}/{docId}/{fileName} already allows image/* + application/pdf)"
+production_commit: "65ab6467 LIVE (treatment-blob Storage-ref) — appointment-modal feature NOT yet deployed"
+firestore_rules_version: "unchanged (NO rules change — be_deposits/be_appointments already clinic-staff write; no new compound index)"
 ---
 
 # Active Context
 
 ## State
-- TFP treatment blobs (Before/After/Other photos + lab images + lab/treatment PDFs) migrated inline-base64 → Firebase Storage (**AV129**); doc dropped from ~95% of 1 MiB cap → ~30 KB → intermittent save-fail + jank FIXED. Chart cap 2→10. OPD Card column flex-balanced (purple btn bottom-aligns teal). All LIVE.
-- 2 follow-ups (found by stress test): `computeResizeDims` clamp ≥1 (extreme aspect ratio → 0-dim canvas); **edit-remove-cancel broken-ref** — `removeTreatmentBlob` deletes Storage only in CREATE mode; EDIT skips (doc still refs it until save → no 404 on cancel). Both for photos + charts.
-- NEW **Rule Q-honest** (`.claude/rules/01-iron-clad.md`): reasoning ≠ verification; run real-adversarial test even when certain; disclose test-vs-claim gap. Origin: I claimed "done — identical to proven chart path"; the e2e the user demanded then found the edit-remove bug.
+- **Appointment-modal unification SHIPPED LOCAL** (brainstorm → spec → plan → executing-plans, 11 tasks E1–E11, all committed + pushed). NOT deployed.
+- **① Auto deposit section**: `AppointmentFormModal` deposit section now gates on EFFECTIVE type (`showDepositSection = (safeLockedType||formData.appointmentType)==='deposit-booking'`), not `isLockedDepositType` alone → picking "จองมัดจำ" via radio shows it (create + edit). Create → `createDepositBookingPair` (atomic pair, required ยอด>0). Edit → hydrate from linked deposit (`getDeposit`) + `updateDeposit` / flip-to `createDepositForExistingAppointment` (NEW helper) / flip-away → confirm dialog (ลบ via `cancelDepositBookingPair` cascade / เก็บ) + usedAmount-guard error.
+- **② Chip "นัดมาเพื่อ"**: NEW `VisitPurposePicker` (multi-select chips + อื่นๆ free-text) replaces the free-text textarea; required ≥1; stores the existing `appointmentTo` string (backward-compat via `build/parseVisitPurposeText`). `visitReasonOptions` extracted to `src/lib/visitReasonOptions.js` single source (PatientForm + AdminDashboard×2 + picker all import it — Rule C1).
+- **AV130** invariant (gate=effective-type / single-source options / deposit-mutation-only-via-sanctioned-helpers).
 
-## What this session shipped
-- Storage-ref migration (NEW `treatmentImageUpload.js` + `uploadTreatmentBlob`/`deleteTreatmentBlob`; TFP 4 upload sites + persist + remove + save-gate; backendClient cascade) — deployed `e59756e6`
-- chart 2→10 (`ChartSection MAX_CHARTS`) + OPD column flex-balance (cosmetic)
-- clamp fix `f6eb93ca` + edit-remove-cancel fix `c6b0e1e8` + human-flow e2e + Rule Q-honest `65ab6467`
-- AV129 + 3 test banks (storage-ref 25 · stress 13 · human-flow e2e 18) + 1 V21 fixup (chart cap)
-- Detail → `.agents/sessions/2026-05-25-treatment-blob-storage-ref.md`
+## Verification (Rule Q + Q-honest)
+- Full vitest **14658/0** · build clean ✓ · **real-prod e2e `scripts/e2e-appointment-deposit-purpose.mjs` 21/0** (create-pair cross-link + updateDeposit recalc + flip-to-create link + cancel-cascade + usedAmount-guard; TEST- fixtures, zero orphans, audit doc).
+- **Honest scope**: e2e is admin-SDK doc-level L2 (no new compound-index/rules → acceptable); doc shapes mirror the REAL builders (E5 verifies them). Helper writeBatch mechanics + UI gate covered by unit + flow-simulate + RTL. **L1 (real browser) = USER post-deploy.**
 
 ## Next action
-- **idle** — work fully shipped + deployed + user L1-confirmed. Await next task.
+- **Await explicit "deploy"** (V18) → `vercel --prod` (frontend only — NO rules change, NO Probe-Deploy-Probe needed).
+- Post-deploy **Rule Q L1 by user**: open a regular appointment-create modal → pick "จองมัดจำ" → deposit section appears + required → save → verify deposit in การเงิน → มัดจำ; edit → change amount → verify update; flip away → confirm dialog (ลบ/เก็บ); "นัดมาเพื่อ" chips required.
+- **Known edge to L1-check**: Walk-in OPD-save (AdminDashboard) opens the modal locked no-deposit → no deposit section (correct); but "นัดมาเพื่อ" is now required there too — confirm that flow pre-fills or that requiring a chip is acceptable.
 
 ## Outstanding user-triggered actions
-- None for this work (deployed + confirmed "ใช้ได้แล้ว").
+- Deploy the appointment-modal feature (master 3a5ae897 → prod) when ready.
 - (carryover) นัดหมาย-tab unification brainstorm · cron monitoring (passive) · L1 verify V124-126.
+
+## Detail
+- Spec: `docs/superpowers/specs/2026-05-25-appointment-modal-deposit-purpose-unification-design.html` (+ mockup `...-unification-mockup.html`)
+- Plan: `docs/superpowers/plans/2026-05-25-appointment-modal-deposit-purpose-unification.html`
