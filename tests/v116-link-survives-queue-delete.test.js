@@ -117,7 +117,9 @@ describe('V116.SG — source-grep regression at every fix surface', () => {
 
   it('SG5 — walk-in gate: createdFromBackendBooking as 6th indicator', () => {
     // Per Q3 user directive — defense-in-depth.
-    expect(ADMIN).toMatch(/V116 \(2026-05-23\) — added `createdFromBackendBooking === true` as the\s*\n\s*\/\/ 6th defense-in-depth indicator/);
+    // ④ (2026-05-26) — isFromBookingFlow hoisted to handleOpdClick scope; the
+    // V116 6th-indicator note now lives in the hoisted definition comment.
+    expect(ADMIN).toMatch(/V116 added createdFromBackendBooking as the 6th/);
     // The gate object must contain the new indicator.
     expect(ADMIN).toMatch(/session\?\.createdFromBackendBooking \|\|/);
     // The 5 pre-existing indicators must still be present (anti-regression on

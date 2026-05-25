@@ -48,7 +48,9 @@ describe('Phase 24.0-vicies-novies — handleOpdClick post-save attach hook', ()
   it('VN.A.3 — closure invokes attachCustomerToOpdSessionLinks via lazy import', () => {
     // Within handleOpdClick scope, the closure imports + calls the helper.
     expect(ADMIN).toMatch(/const\s+mod\s*=\s*await\s+import\(['"]\.\.\/lib\/appointmentDepositBatch\.js['"]\)/);
-    expect(ADMIN).toMatch(/mod\.attachCustomerToOpdSessionLinks\s*!==\s*['"]function['"]/);
+    // ④ (2026-05-26) — guard flipped to `=== 'function'` (T7 restructure: `let r = null`
+    // then assign inside the if, so the post-attach gated session-delete always runs).
+    expect(ADMIN).toMatch(/mod\.attachCustomerToOpdSessionLinks\s*===\s*['"]function['"]/);
     expect(ADMIN).toMatch(/await\s+mod\.attachCustomerToOpdSessionLinks\(sessionId,\s*\{/);
   });
 

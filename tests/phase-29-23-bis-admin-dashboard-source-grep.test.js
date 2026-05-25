@@ -56,16 +56,18 @@ describe('Phase 29.23-bis SG-A — OPD-save button tooltips no longer mention Pr
 });
 
 describe('Phase 29.23-bis SG-B — _maybeOpenWalkInModal gates on booking-origin indicators (bis3 widened)', () => {
-  // Locate the _maybeOpenWalkInModal helper block.
-  // Anchor: helper declaration through the inner setWalkInModal call close.
-  // Generous size limit accommodates Phase 29.23-bis + bis3 marker comments
-  // (Thai explanatory blocks ~20+ lines).
+  // ④ (2026-05-26) — isFromBookingFlow HOISTED to handleOpdClick scope (shared
+  // by _maybeOpenWalkInModal's early-return AND _attachLinkedBookings's gated
+  // session-delete). The booking-origin indicators now live in the hoisted
+  // definition, so anchor the gate block from `const isFromBookingFlow =`
+  // through the inner setWalkInModal (which is inside _maybeOpenWalkInModal).
   const walkInGateBlock = SRC.match(
-    /const\s+_maybeOpenWalkInModal\s*=[\s\S]+?setWalkInModal\(\{[\s\S]+?\}\);/
+    /const\s+isFromBookingFlow\s*=[\s\S]+?setWalkInModal\(\{[\s\S]+?\}\);/
   );
 
-  it('SG-B.1 — _maybeOpenWalkInModal helper exists', () => {
+  it('SG-B.1 — _maybeOpenWalkInModal helper + hoisted isFromBookingFlow exist', () => {
     expect(walkInGateBlock).toBeTruthy();
+    expect(SRC).toMatch(/const\s+_maybeOpenWalkInModal\s*=/);
   });
 
   it('SG-B.2 — gates on session.linkedAppointmentId (no-deposit + deposit-with-appt path)', () => {

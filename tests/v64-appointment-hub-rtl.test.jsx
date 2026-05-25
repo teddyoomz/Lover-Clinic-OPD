@@ -85,10 +85,10 @@ describe('V64.R AppointmentHubFilterBar', () => {
     expect(fn).toHaveBeenCalled();
   });
 
-  it('R3.4 walk-in button fires onAddWalkIn', () => {
+  it('R3.4 เพิ่มนัดหมาย all-types button fires onAddAppointment (① 2026-05-26; was onAddWalkIn/walkin-btn)', () => {
     const fn = vi.fn();
-    render(<AppointmentHubFilterBar onAddWalkIn={fn} resultCount={0} />);
-    fireEvent.click(screen.getByTestId('appt-hub-walkin-btn'));
+    render(<AppointmentHubFilterBar onAddAppointment={fn} resultCount={0} />);
+    fireEvent.click(screen.getByTestId('appt-hub-add-appt-btn'));
     expect(fn).toHaveBeenCalled();
   });
 

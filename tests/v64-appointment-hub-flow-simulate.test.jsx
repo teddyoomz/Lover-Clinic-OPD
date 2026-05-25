@@ -125,12 +125,10 @@ describe('V64.S full-flow simulate', () => {
     expect(onConfirm.mock.calls[0][0].id).toBe('A1');
   });
 
-  it('S1.5 walk-in button fires onAddWalkIn', async () => {
-    const fn = vi.fn();
-    render(<AppointmentHubView onAddWalkIn={fn} />);
-    await waitFor(() => expect(screen.getByTestId('appt-hub-walkin-btn')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('appt-hub-walkin-btn'));
-    expect(fn).toHaveBeenCalled();
+  it('S1.5 เพิ่มนัดหมาย all-types button renders in the hub (① 2026-05-26 — opens AppointmentFormModal in create mode; the click→modal flow is covered by appt-hub-add-appointment-button.test.jsx which mocks the modal)', async () => {
+    render(<AppointmentHubView />);
+    await waitFor(() => expect(screen.getByTestId('appt-hub-add-appt-btn')).toBeInTheDocument());
+    expect(screen.getByTestId('appt-hub-add-appt-btn')).toHaveTextContent('เพิ่มนัดหมาย');
   });
 
   it('S1.6 source-grep — View imports from scopedDataLayer.js (not raw backendClient)', async () => {
