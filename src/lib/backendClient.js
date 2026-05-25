@@ -1177,25 +1177,34 @@ export async function setTreatmentLinkedSaleId(treatmentId, saleId) {
  * path stays correct because edit replaces the treatment in-place.
  */
 export async function deleteBackendTreatment(treatmentId) {
-  // 2026-05-22 EOD+2 — Storage-ref cleanup. detail.charts[].storagePath points to the
-  // uploaded chart PNG in Firebase Storage. Best-effort delete BEFORE removing the doc
-  // (so we don't lose the path reference). Failure is non-fatal — orphans cost ~0 + a
-  // cleanup cron can sweep later. Legacy charts (inline base64 dataUrl, no storagePath)
-  // skip naturally.
+  // 2026-05-22 EOD+2 → 2026-05-25 — Storage-ref cleanup. Every treatment blob now
+  // lives in Firebase Storage (charts + Before/After/Other photos + lab images +
+  // lab PDFs + treatment-file PDFs); each carries a storagePath. Best-effort delete
+  // BEFORE removing the doc (so we don't lose the path reference). Failure is non-fatal
+  // — orphans cost ~0 + a cleanup cron can sweep later. Legacy inline blobs (base64
+  // dataUrl / pdfBase64, no storagePath) skip naturally.
   try {
     const snap = await getDoc(treatmentDoc(treatmentId));
     if (snap.exists()) {
-      const charts = snap.data()?.detail?.charts || [];
-      if (charts.length > 0) {
-        const { deleteChartImage } = await import('./chartImageStorage.js');
-        await Promise.all(charts.map(c => {
-          if (!c?.storagePath) return Promise.resolve(false);
-          return deleteChartImage(c.storagePath).catch(() => false);
-        }));
+      const detail = snap.data()?.detail || {};
+      const paths = [];
+      const pushImgPaths = (arr) => (arr || []).forEach(x => { if (x?.storagePath) paths.push(x.storagePath); });
+      pushImgPaths(detail.charts);
+      pushImgPaths(detail.beforeImages);
+      pushImgPaths(detail.afterImages);
+      pushImgPaths(detail.otherImages);
+      (detail.labItems || []).forEach(l => {
+        pushImgPaths(l?.images);
+        if (l?.pdfStoragePath) paths.push(l.pdfStoragePath);
+      });
+      (detail.treatmentFiles || []).forEach(f => { if (f?.pdfStoragePath) paths.push(f.pdfStoragePath); });
+      if (paths.length > 0) {
+        const { deleteTreatmentBlob } = await import('./chartImageStorage.js');
+        await Promise.all(paths.map(p => deleteTreatmentBlob(p).catch(() => false)));
       }
     }
   } catch (e) {
-    console.warn('[deleteBackendTreatment] chart Storage cleanup skipped:', e?.message || e);
+    console.warn('[deleteBackendTreatment] Storage cleanup skipped:', e?.message || e);
   }
   await deleteDoc(treatmentDoc(treatmentId));
   return { success: true };

@@ -3119,3 +3119,20 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Source-grep regression**: `tests/customer-patient-link-flow-simulate.test.js` F7.
 
 **Cross-link**: AV126 + AV127 (same patient-link turn) + `didAttend` (appointmentAnalysisAggregator) + `serviceCompletedAt` (appointmentHubFilters).
+
+### AV129 — Treatment blobs (images + PDFs) MUST upload to Firebase Storage, never inline base64 in the be_treatments doc
+
+**Why**: 2026-05-25 user L1 — "รูปภาพการรักษา บันทึกได้บ้างไม่ได้บ้าง / ช้า / ติด". Root cause (Rule R diag `diag-treatment-image-doc-size.mjs` on real prod): `be_treatments.detail` stored Before/After/Other photos + lab images + lab `pdfBase64` + treatment-file `pdfBase64` as INLINE base64. A single 1920px JPEG ≈ 0.3-0.5 MB base64 (real prod: one Before photo = 541 KB), a PDF up to ~13 MB. The 1 MiB Firestore doc cap was hit at ~2 photos (prod docs at 95%/86%/80% of cap) → the WHOLE treatment save was intermittently REJECTED ("invalid nested entity"). The per-file FileReader→decode→canvas-resize→toDataURL burst also janked the main thread. Charts were migrated to Storage on 2026-05-22 (AV103-family) but the photo/lab/PDF blobs were NOT — a latent Rule P class-of-bug gap closed here.
+
+**Invariant**: every treatment blob (chart / Before / After / Other photo / lab image / lab PDF / treatment-file PDF) MUST upload to Firebase Storage via `uploadTreatmentBlob` (or its wrappers `processAndUploadTreatmentImage` / `uploadTreatmentPdf` in `src/lib/treatmentImageUpload.js`, or `uploadChartImage`). State + the persisted `be_treatments.detail` hold a Storage URL + `storagePath`/`pdfStoragePath` — NEVER inline base64 for a NEW upload. Readers (`<img src>` / pdf truthiness) accept BOTH `data:` (legacy) and `http` (new) so loaded legacy treatments still display. `deleteBackendTreatment` MUST cascade-delete every blob's storagePath. Save MUST be gated while `pendingUploads > 0`.
+
+**Forbidden**:
+- ❌ `FileReader.readAsDataURL` / `canvas.toDataURL(...)` feeding a base64 string into TFP image/PDF state or the persist map (the pre-AV129 inline pattern). TFP must contain ZERO `readAsDataURL` / `toDataURL` (resize lives only in `treatmentImageUpload.js`).
+- ❌ persisting `dataUrl: '<data:...>'` or `pdfBase64: '<data:...>'` for a NEW upload.
+- ❌ adding a blob field without a matching `storagePath`/`pdfStoragePath` + a `deleteBackendTreatment` cascade entry.
+
+**Sanctioned consumers**: `src/lib/treatmentImageUpload.js` + `src/lib/chartImageStorage.js` (upload/delete) · `src/components/TreatmentFormPage.jsx` (4 upload sites + persist + remove) · `src/components/ChartCanvas.jsx` (chart) · `src/lib/backendClient.js` `deleteBackendTreatment` (cascade). storage.rules `uploads/{collection}/{docId}/{fileName}` already allows image/* + application/pdf (≤10MB, clinic-staff) — NO rules change.
+
+**Source-grep regression**: `tests/treatment-blob-storage-ref.test.js` (A-E: helper guard + computeResizeDims + persist/cascade flow-simulate + TFP zero-inline lock + ChartSection cap 2→10).
+
+**Cross-link**: chart Storage-ref 2026-05-22 (`chartImageStorage.js`) + AV103 (chart fabricJson transport) + Rule P class-of-bug expansion + `feedback_no_quality_degradation_for_data.md` (Storage-ref, never compress, for clinical images).

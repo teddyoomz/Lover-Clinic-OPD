@@ -146,16 +146,20 @@ describe('RT6 re-edit result merges into the SAME slot (Rule I: handleEdit → o
     expect(out[1].dataUrl).toBe('data:image/png;base64,NEW'); // slot 1 replaced
     expect(out[1].fabricJson).toBe('{"objects":[]}');
   });
-  it('RT6.2 a NEW chart (no editingIdx) appends + caps at 2', () => {
+  it('RT6.2 a NEW chart (no editingIdx) appends + caps at 10', () => {
+    // 2026-05-25 — chart cap raised 2 → 10 (MAX_CHARTS; charts are Storage URLs so the
+    // doc stays small). This test previously asserted cap=2; updated to the new cap.
     const onChartsChange = vi.fn();
     render(<ChartSection {...props([mkChart('A')], onChartsChange)} />);
     // open the selector path → simulate a fresh tablet save without prior handleEdit (editingIdx stays -1)
     act(() => capturedOnSaved({ dataUrl: 'data:image/png;base64,NEW', fabricJson: '{"objects":[]}', templateId: 't', source: 'tablet' }));
     const updater = onChartsChange.mock.calls.at(-1)[0];
     const out = updater([mkChart('A')]);
-    expect(out).toHaveLength(2);   // appended
-    const capped = updater([mkChart('A'), mkChart('B')]);
-    expect(capped).toHaveLength(2); // cap holds
+    expect(out).toHaveLength(2);   // appended (under cap)
+    // cap holds at 10: a full set of 10 + NEW stays at 10
+    const tenCharts = Array.from({ length: 10 }, (_, i) => mkChart('C' + i));
+    const capped = updater(tenCharts);
+    expect(capped).toHaveLength(10); // cap holds at 10 (was 2)
   });
 });
 

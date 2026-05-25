@@ -29,16 +29,55 @@ function mintShortRand() {
   return Math.random().toString(16).slice(2, 14);
 }
 
+// Accepted MIME for a treatment blob: any image OR a PDF. The Firestore-doc-cap
+// class-of-bug (charts 2026-05-22) is fixed for EVERY blob by uploading to
+// Storage; storage.rules `uploads/{collection}/{docId}/{fileName}` already allows
+// image/* + application/pdf (≤10MB, clinic-staff) so no rules change is needed.
+const ALLOWED_BLOB_RE = /^data:(image\/[a-z0-9.+-]+|application\/pdf);/i;
+
 /**
- * Upload a chart PNG (data URL → Storage object). Returns {url, storagePath}.
- * The storagePath is stored alongside the URL so a future delete (treatment-
- * delete cascade) can locate the object without parsing the URL.
+ * Upload ANY treatment blob (image OR pdf data URL) → Storage object.
+ * Returns {url, storagePath}. The storagePath is stored alongside the URL so a
+ * future delete (treatment-delete cascade / per-row remove) can locate the
+ * object without parsing the URL.
  *
  * @param {object} opts
- * @param {string} opts.customerId — used as the "docId" segment of the path.
- *   For new treatments we don't have a treatmentId yet (createBackendTreatment
- *   mints it server-side); customerId keeps the path predictable + lets cleanup
- *   scan by customer if ever needed.
+ * @param {string} opts.customerId — the "docId" path segment. New treatments
+ *   don't have a treatmentId yet (createBackendTreatment mints it server-side);
+ *   customerId keeps the path predictable + lets cleanup scan by customer.
+ * @param {string} opts.dataUrl — full `data:image/*;base64,...` OR
+ *   `data:application/pdf;base64,...` blob.
+ * @param {string} [opts.kind='blob'] — filename prefix (e.g. 'photo', 'labimg',
+ *   'labpdf', 'tfile', 'chart') — cosmetic; the stored contentType comes from
+ *   the data-URL MIME, not the extension.
+ * @returns {Promise<{url: string, storagePath: string}>}
+ */
+export async function uploadTreatmentBlob({ customerId, dataUrl, kind = 'blob' }) {
+  if (!dataUrl || !ALLOWED_BLOB_RE.test(dataUrl)) {
+    throw new Error('uploadTreatmentBlob: dataUrl missing or not an image/* | application/pdf data URL');
+  }
+  const docId = String(customerId || 'unknown').replace(/[^A-Za-z0-9_-]/g, '_');
+  const ts = Date.now();
+  const rand = mintShortRand();
+  const mime = dataUrl.slice(5, dataUrl.indexOf(';')); // "image/png" / "application/pdf"
+  let ext = mime.split('/')[1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+  if (ext === 'jpeg') ext = 'jpg';
+  else if (ext.startsWith('svg')) ext = 'svg';
+  const safeKind = String(kind || 'blob').replace(/[^a-z0-9-]/gi, '') || 'blob';
+  const storagePath = `uploads/be_treatments/${docId}/${safeKind}-${ts}-${rand}.${ext}`;
+  const sref = ref(storage, storagePath);
+  // uploadString accepts data URLs directly with format 'data_url'.
+  await uploadString(sref, dataUrl, 'data_url');
+  const url = await getDownloadURL(sref);
+  return { url, storagePath };
+}
+
+/**
+ * Upload a chart PNG (data URL → Storage object). Returns {url, storagePath}.
+ * Thin wrapper over uploadTreatmentBlob (kind='chart') keeping the image-only
+ * guard since charts are always canvas PNGs.
+ * @param {object} opts
+ * @param {string} opts.customerId
  * @param {string} opts.dataUrl — full `data:image/png;base64,...` blob.
  * @returns {Promise<{url: string, storagePath: string}>}
  */
@@ -46,18 +85,7 @@ export async function uploadChartImage({ customerId, dataUrl }) {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) {
     throw new Error('uploadChartImage: dataUrl missing or not a data:image/* URL');
   }
-  const docId = String(customerId || 'unknown').replace(/[^A-Za-z0-9_-]/g, '_');
-  const ts = Date.now();
-  const rand = mintShortRand();
-  // Match the file-name to the actual MIME in the dataUrl (png most common).
-  const mime = dataUrl.slice(5, dataUrl.indexOf(';')); // "image/png" etc
-  const ext = mime.split('/')[1]?.toLowerCase().replace(/[^a-z]/g, '') || 'png';
-  const storagePath = `uploads/be_treatments/${docId}/chart-${ts}-${rand}.${ext}`;
-  const sref = ref(storage, storagePath);
-  // uploadString accepts data URLs directly with format 'data_url'.
-  await uploadString(sref, dataUrl, 'data_url');
-  const url = await getDownloadURL(sref);
-  return { url, storagePath };
+  return uploadTreatmentBlob({ customerId, dataUrl, kind: 'chart' });
 }
 
 /**
@@ -82,6 +110,10 @@ export async function deleteChartImage(storagePath) {
     return false;
   }
 }
+
+// Semantic alias for non-chart treatment blobs (photos / lab images / PDFs).
+// Same logic — accepts a storagePath OR a Storage download URL.
+export const deleteTreatmentBlob = deleteChartImage;
 
 /**
  * Parse a Firebase Storage download URL → the Storage object path.

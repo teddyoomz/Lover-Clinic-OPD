@@ -16,6 +16,11 @@ import { doc, setDoc, writeBatch, serverTimestamp, deleteField } from 'firebase/
 import { thaiTodayISO } from '../utils.js';
 import { mapPromotionProductsToConsumables, filterOutConsumablesForPromotion, buildCustomerPromotionGroups, buildCustomerCourseGroups, buildPurchasedCourseEntry, findMissingFillLaterQty, resolvePickedCourseEntry, resolvePurchasedCourseForAssign, isPurchasedSessionRowId, mapRawCoursesToForm, isCourseUsableInTreatment, buildPromotionSubCourseProducts, overlayCustomerCoursesWithMaster } from '../lib/treatmentBuyHelpers.js';
 import { chartEntryForPersist } from '../lib/tabletChartTools.js';
+// 2026-05-25 — Storage-ref for ALL treatment blobs (photos / lab images / PDFs).
+// Class-of-bug fix (Rule P): inline base64 in be_treatments doc → 1 MiB cap →
+// intermittent save failure + upload jank. Mirrors the 2026-05-22 chart fix.
+import { processAndUploadTreatmentImage, uploadTreatmentPdf } from '../lib/treatmentImageUpload.js';
+import { deleteTreatmentBlob } from '../lib/chartImageStorage.js';
 import { debugLog } from '../lib/debugLog.js';
 import ChartSection from './ChartSection.jsx';
 import DateField from './DateField.jsx';
@@ -272,7 +277,7 @@ const VitalsGrid = memo(function VitalsGrid({ vitals, onFieldChange, bmi, inputC
 // External changes to `value` (edit-mode restore, "ใช้ข้อมูลครั้งก่อน"
 // button) sync back into local via the `[value]` effect below so the UI
 // stays in sync with parent state.
-const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, value, onFieldChange, prevValue, isDark, inputCls, labelCls }) {
+const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, value, onFieldChange, prevValue, isDark, inputCls, labelCls, grow = false }) {
   const [local, setLocal] = useState(value || '');
   const committed = useRef(value || '');
   const [copied, setCopied] = useState(false);
@@ -318,7 +323,9 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
   };
 
   return (
-    <div>
+    // 2026-05-25 — `grow` (CC field only) makes the wrapper a flex column so the
+    // textarea below can flex-1 and fill the OPD Card's spare height (column balance).
+    <div className={grow ? 'flex flex-col flex-1 min-h-0' : ''}>
       <label className={labelCls}>{label}</label>
       {hasPrev && (
         <div className={`mb-1.5 rounded-lg border px-3 py-2 ${isDark ? 'bg-[#0d0d0d] border-[#2a2a2a]' : 'bg-orange-50/40 border-orange-200/50'}`}>
@@ -342,7 +349,7 @@ const OPDFieldWithPrev = memo(function OPDFieldWithPrev({ field, label, rows, va
         onChange={e => setLocal(e.target.value)}
         onBlur={handleBlur}
         rows={rows}
-        className={`${inputCls} resize-none`}
+        className={`${inputCls} resize-none ${grow ? 'flex-1 min-h-0' : ''}`}
       />
     </div>
   );
@@ -628,10 +635,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
   // Chart drawings (max 2)
   const [charts, setCharts] = useState([]);
 
-  // Treatment images (Before/After/Other) — each item: { dataUrl, id }
+  // Treatment images (Before/After/Other) — each item: { dataUrl: <Storage URL>, storagePath, id }
+  // (legacy treatments may carry inline `data:` in dataUrl — readers handle both)
   const [beforeImages, setBeforeImages] = useState([]);
   const [afterImages, setAfterImages] = useState([]);
   const [otherImages, setOtherImages] = useState([]);
+  // 2026-05-25 — in-flight blob uploads (photos / lab images / PDFs go to Firebase
+  // Storage on add). Save is gated while >0 so we never persist a half-uploaded blob.
+  const [pendingUploads, setPendingUploads] = useState(0);
 
   // Lab items
   const [labItems, setLabItems] = useState([]);
@@ -2188,6 +2199,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     //   vitals before doctor sees patient; doctor TBD).
     if (saveMode !== 'vitals' && !doctorId) { scrollToError('doctor', 'กรุณาเลือกแพทย์'); return; }
     if (!treatmentDate) { scrollToError('treatmentDate', 'กรุณาเลือกวันที่รักษา'); return; }
+    // 2026-05-25 — block save while any blob upload is in flight so we never
+    // persist a half-uploaded photo/PDF (Storage-ref: state holds a Storage URL
+    // only AFTER upload settles; pendingUploads is normally 0, settles in ~1-2s).
+    if (pendingUploads > 0) { alert('รูปภาพ/ไฟล์กำลังอัปโหลด — กรุณารอสักครู่แล้วบันทึกอีกครั้ง'); return; }
     // Phase 12.2b Step 7 (2026-04-24): fill-later treatment items (from
     // เหมาตามจริง / เลือกสินค้าตามจริง courses) must have qty entered
     // before save. qty was left blank at toggle-time; doctor fills it
@@ -2263,9 +2278,9 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
         // Chart images — sent as chart_image[] to ProClinic (data URLs from canvas)
         chartImages: charts.filter(c => c.dataUrl).map(c => c.dataUrl),
         // Treatment images — Before/After/Other galleries
-        beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
-        afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
-        otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
+        beforeImages: beforeImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
+        afterImages: afterImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
+        otherImages: otherImages.map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
         labItems: labItems.map(l => ({
           id: l.id || '', productId: l.productId, productName: l.productName,
           unitName: l.unitName || '', productType: l.productType || 'บริการ',
@@ -2273,14 +2288,14 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           discount: l.discount || '0', discountType: l.discountType || 'บาท',
           isVatIncluded: l.isVatIncluded || false, rowId: l.rowId || '',
           information: l.information || '', fileId: l.fileId || '',
-          images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '' })),
-          pdfBase64: l.pdfBase64 || '', pdfFileName: l.pdfFileName || '',
+          images: (l.images || []).map(i => ({ dataUrl: i.dataUrl, id: i.id || '', storagePath: i.storagePath || '' })),
+          pdfBase64: l.pdfBase64 || '', pdfStoragePath: l.pdfStoragePath || '', pdfFileName: l.pdfFileName || '',
         })),
         treatmentFiles: (isEdit
           ? treatmentFiles  // Edit: send ALL slots so deleted files get cleared
           : treatmentFiles.filter(f => f.pdfBase64 || f.fileId)  // Create: only send slots with data
         ).map(f => ({
-          slot: f.slot, fileId: f.fileId || '', pdfBase64: f.pdfBase64 || '', pdfFileName: f.pdfFileName || '',
+          slot: f.slot, fileId: f.fileId || '', pdfBase64: f.pdfBase64 || '', pdfStoragePath: f.pdfStoragePath || '', pdfFileName: f.pdfFileName || '',
         })),
         // Billing/Payment — only include when there's an actual sale
         ...(hasSale ? {
@@ -2420,11 +2435,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           treatmentItems: treatmentItems.filter(t => t.name).map(t => ({ id: t.id, productId: t.productId || '', name: t.name, qty: t.qty, unit: t.unit, price: t.price, fillLater: !!t.fillLater, skipStockDeduction: !!t.skipStockDeduction })),
           medications: medications.filter(m => m.name).map(m => ({ name: m.name, dosage: m.dosage, qty: m.qty, unitPrice: m.unitPrice, unit: m.unit })),
           consumables: consumables.filter(c => c.name).map(c => ({ name: c.name, qty: c.qty, unit: c.unit })),
-          labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64 })),
+          labItems: labItems.map(l => ({ productId: l.productId, productName: l.productName, qty: l.qty, price: l.price, information: l.information, images: l.images, pdfBase64: l.pdfBase64, pdfStoragePath: l.pdfStoragePath || '' })),
           doctorFees: doctorFees.map(f => ({ doctorId: f.doctorId, name: f.name, fee: f.fee, groupId: f.groupId })),
           // Phase 14.4: per-doctor-per-course DF entries (canonical)
           dfEntries,
-          treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, fileName: f.fileName })),
+          treatmentFiles: treatmentFiles.filter(f => f.pdfBase64 || f.fileId).map(f => ({ slot: f.slot, fileId: f.fileId, pdfBase64: f.pdfBase64, pdfStoragePath: f.pdfStoragePath || '', fileName: f.fileName })),
           // Billing & Payment (Phase 5A)
           purchasedItems: purchasedItems.map(p => ({ id: p.id, name: p.name, qty: p.qty, unitPrice: p.unitPrice, unit: p.unit, itemType: p.itemType })),
           billing: { subtotal: billing.subtotal, medDisc: billing.medDisc, billDiscAmt: billing.billDiscAmt, netTotal: billing.netTotal },
@@ -3618,8 +3633,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
           </div>
 
           {/* ════ RIGHT PANEL — OPD Card ════ */}
-          <div className="space-y-4">
-            <FormSection isDark={isDark}>
+          {/* 2026-05-25 — flex-col so the OPD Card fills the grid-stretched column
+              height + the CC field grows → the purple "บันทึกสำหรับแพทย์" button
+              bottom-aligns with the teal "บันทึกข้อมูลซักประวัติ" button. Cosmetic. */}
+          <div className="flex flex-col gap-4">
+            <FormSection isDark={isDark} className="flex-1 flex flex-col">
               <SectionHeader icon={ClipboardList} title="OPD Card" isDark={isDark} accent={accent}>
                 {prevTreatment && (
                   <span className={`text-[11px] font-bold ${isDark ? 'text-orange-500/60' : 'text-orange-600/60'}`}>
@@ -3627,7 +3645,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   </span>
                 )}
               </SectionHeader>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3 flex-1 min-h-0">
                 {[
                   ['symptoms', 'CC — อาการ (Chief Complaint)', 3],
                   ['physicalExam', 'PE — ตรวจร่างกาย (Physical Exam)', 3],
@@ -3641,7 +3659,8 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                   // reject re-renders for the other 6 siblings on keystroke.
                   <OPDFieldWithPrev key={key} field={key} label={label} rows={rows}
                     value={opd[key]} onFieldChange={setOpdField}
-                    prevValue={prevTreatment?.[key] || ''} isDark={isDark} inputCls={inputCls} labelCls={labelCls} />
+                    prevValue={prevTreatment?.[key] || ''} isDark={isDark} inputCls={inputCls} labelCls={labelCls}
+                    grow={key === 'symptoms'} />
                 ))}
               </div>
             </FormSection>
@@ -3726,35 +3745,28 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                 <div className="flex items-center justify-between mb-2">
                   <span className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label} <span className="text-gray-600 normal-case">({images.length}/12)</span></span>
                   {images.length < 12 && (
-                    <label className="text-xs font-bold text-orange-500 cursor-pointer flex items-center gap-1 hover:text-orange-400">
-                      <Plus size={10} /> เพิ่มรูป
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                    <label className={`text-xs font-bold cursor-pointer flex items-center gap-1 ${pendingUploads > 0 ? 'text-orange-300 opacity-70' : 'text-orange-500 hover:text-orange-400'}`}>
+                      {pendingUploads > 0 ? <><Loader2 size={10} className="animate-spin" /> กำลังอัปโหลด…</> : <><Plus size={10} /> เพิ่มรูป</>}
+                      {/* 2026-05-25 — resize → upload to Firebase Storage on add; state holds the
+                          Storage URL (never inline base64) so the be_treatments doc stays tiny. */}
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={async e => {
                         const files = Array.from(e.target.files || []);
-                        const remain = 12 - images.length;
-                        const toProcess = files.slice(0, remain);
-                        toProcess.forEach(file => {
-                          if (file.size > 10 * 1024 * 1024) return;
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const img = new Image();
-                            img.onload = () => {
-                              let w = img.width, h = img.height;
-                              if (w > h) { if (w > 1920) { h *= 1920 / w; w = 1920; } }
-                              else { if (h > 1920) { w *= 1920 / h; h = 1920; } }
-                              const canvas = document.createElement('canvas');
-                              canvas.width = w; canvas.height = h;
-                              const ctx = canvas.getContext('2d');
-                              ctx.imageSmoothingEnabled = true;
-                              ctx.imageSmoothingQuality = 'high';
-                              ctx.drawImage(img, 0, 0, w, h);
-                              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                              setImages(prev => prev.length < 12 ? [...prev, { dataUrl, id: '' }] : prev);
-                            };
-                            img.src = ev.target.result;
-                          };
-                          reader.readAsDataURL(file);
-                        });
                         e.target.value = '';
+                        const remain = 12 - images.length;
+                        const toProcess = files.slice(0, Math.max(0, remain));
+                        for (const file of toProcess) {
+                          if (file.size > 10 * 1024 * 1024) { alert('รูปภาพขนาดไม่เกิน 10MB'); continue; }
+                          setPendingUploads(n => n + 1);
+                          try {
+                            const entry = await processAndUploadTreatmentImage({ file, customerId, kind: 'photo' });
+                            setImages(prev => prev.length < 12 ? [...prev, entry] : prev);
+                          } catch (err) {
+                            console.error('[TFP] treatment photo upload failed:', err);
+                            alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err));
+                          } finally {
+                            setPendingUploads(n => Math.max(0, n - 1));
+                          }
+                        }
                       }} />
                     </label>
                   )}
@@ -3769,7 +3781,10 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     {images.map((img, idx) => (
                       <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
                         <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
-                        <button onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                        <button onClick={() => {
+                            if (img?.storagePath) deleteTreatmentBlob(img.storagePath).catch(() => {});
+                            setImages(prev => prev.filter((_, i) => i !== idx));
+                          }}
                           aria-label={`ลบรูปที่ ${idx + 1}`}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <X size={10} />
@@ -3839,29 +3854,25 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[11px] text-gray-500 uppercase tracking-wider">รูปภาพ ({(lab.images||[]).length}/6)</span>
                       {(lab.images||[]).length < 6 && (
-                        <label className="text-[11px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
-                          <Plus size={8} /> เพิ่มรูป
-                          <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
+                        <label className={`text-[11px] cursor-pointer flex items-center gap-0.5 ${pendingUploads > 0 ? 'text-cyan-300 opacity-70' : 'text-cyan-500'}`}>
+                          {pendingUploads > 0 ? <><Loader2 size={8} className="animate-spin" /> อัปโหลด…</> : <><Plus size={8} /> เพิ่มรูป</>}
+                          {/* 2026-05-25 — Storage-ref (mirror treatment photos). */}
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={async e => {
                             const files = Array.from(e.target.files || []).slice(0, 6 - (lab.images||[]).length);
-                            files.forEach(file => {
-                              if (file.size > 10*1024*1024) return;
-                              const reader = new FileReader();
-                              reader.onload = ev => {
-                                const img = new Image();
-                                img.onload = () => {
-                                  let w = img.width, h = img.height;
-                                  if (w > h) { if (w > 1920) { h *= 1920/w; w = 1920; } } else { if (h > 1920) { w *= 1920/h; h = 1920; } }
-                                  const c = document.createElement('canvas'); c.width = w; c.height = h;
-                                  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-                                  ctx.drawImage(img, 0, 0, w, h);
-                                  const dataUrl = c.toDataURL('image/jpeg', 0.8);
-                                  setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: [...(l.images||[]).slice(0, 5), { dataUrl, id: '' }] } : l));
-                                };
-                                img.src = ev.target.result;
-                              };
-                              reader.readAsDataURL(file);
-                            });
                             e.target.value = '';
+                            for (const file of files) {
+                              if (file.size > 10*1024*1024) { alert('รูปภาพขนาดไม่เกิน 10MB'); continue; }
+                              setPendingUploads(n => n + 1);
+                              try {
+                                const entry = await processAndUploadTreatmentImage({ file, customerId, kind: 'labimg' });
+                                setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: [...(l.images||[]).slice(0, 5), entry] } : l));
+                              } catch (err) {
+                                console.error('[TFP] lab image upload failed:', err);
+                                alert('อัปโหลดรูป Lab ไม่สำเร็จ: ' + (err?.message || err));
+                              } finally {
+                                setPendingUploads(n => Math.max(0, n - 1));
+                              }
+                            }
                           }} />
                         </label>
                       )}
@@ -3871,7 +3882,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                         {lab.images.map((img, ii) => (
                           <div key={ii} className="relative aspect-square rounded overflow-hidden border border-[#333] group">
                             <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
-                            <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l))}
+                            <button onClick={() => {
+                                const removed = labItems[li]?.images?.[ii];
+                                if (removed?.storagePath) deleteTreatmentBlob(removed.storagePath).catch(() => {});
+                                setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l));
+                              }}
                               aria-label={`ลบรูป Lab ที่ ${ii + 1}`}
                               className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-red-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
                           </div>
@@ -3884,23 +3899,35 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       {lab.pdfBase64 || lab.fileId ? (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
-                          <button onClick={() => setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfFileName: '', fileId: '' } : l))}
+                          <button onClick={() => {
+                              const removed = labItems[li];
+                              if (removed?.pdfStoragePath) deleteTreatmentBlob(removed.pdfStoragePath).catch(() => {});
+                              setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfStoragePath: '', pdfFileName: '', fileId: '' } : l));
+                            }}
                             aria-label="ลบไฟล์ PDF Lab"
                             className="text-red-400 hover:text-red-300"><X size={10} /></button>
                         </div>
                       ) : (
                         <label className="text-[11px] text-cyan-500 cursor-pointer flex items-center gap-0.5">
                           <Plus size={8} /> แนบ PDF
-                          <input type="file" accept="application/pdf" className="hidden" onChange={e => {
+                          {/* 2026-05-25 — Storage-ref: pdfBase64 now holds a Storage URL (not base64);
+                              pdfStoragePath drives cleanup. A single inline PDF (≤13 MB base64) would
+                              alone blow the 1 MiB doc cap — this removes that failure mode. */}
+                          <input type="file" accept="application/pdf" className="hidden" onChange={async e => {
                             const file = e.target.files?.[0];
+                            e.target.value = '';
                             if (!file) return;
                             if (file.size > 10*1024*1024) { alert('ไฟล์ PDF ขนาดไม่เกิน 10MB'); return; }
-                            const reader = new FileReader();
-                            reader.onload = ev => {
-                              setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: ev.target.result, pdfFileName: file.name, fileId: '' } : l));
-                            };
-                            reader.readAsDataURL(file);
-                            e.target.value = '';
+                            setPendingUploads(n => n + 1);
+                            try {
+                              const { url, storagePath } = await uploadTreatmentPdf({ file, customerId, kind: 'labpdf' });
+                              setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: url, pdfStoragePath: storagePath, pdfFileName: file.name, fileId: '' } : l));
+                            } catch (err) {
+                              console.error('[TFP] lab pdf upload failed:', err);
+                              alert('อัปโหลด PDF ไม่สำเร็จ: ' + (err?.message || err));
+                            } finally {
+                              setPendingUploads(n => Math.max(0, n - 1));
+                            }
                           }} />
                         </label>
                       )}
@@ -4008,7 +4035,11 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <span className={`text-[11px] font-bold text-center ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
                         {tf.pdfFileName || (tf.fileId ? `ไฟล์ #${tf.fileId}` : `ไฟล์ ${tf.slot}`)}
                       </span>
-                      <button type="button" onClick={() => setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: '', pdfFileName: '', fileId: '' } : f))}
+                      <button type="button" onClick={() => {
+                          const removed = treatmentFiles[ti];
+                          if (removed?.pdfStoragePath) deleteTreatmentBlob(removed.pdfStoragePath).catch(() => {});
+                          setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: '', pdfStoragePath: '', pdfFileName: '', fileId: '' } : f));
+                        }}
                         className={`text-xs font-bold px-2 py-1 rounded border transition-all flex items-center gap-1 ${isDark ? 'border-red-900/50 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>
                         <X size={10} /> ลบไฟล์
                       </button>
@@ -4017,16 +4048,22 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                     <label className="cursor-pointer flex flex-col items-center gap-2 w-full">
                       <Paperclip size={20} className="text-gray-500 opacity-40" />
                       <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>แนบไฟล์ (PDF, ไม่เกิน 10MB)</span>
-                      <input type="file" accept="application/pdf" className="hidden" onChange={e => {
+                      {/* 2026-05-25 — Storage-ref: pdfBase64 holds a Storage URL; pdfStoragePath cleans up. */}
+                      <input type="file" accept="application/pdf" className="hidden" onChange={async e => {
                         const file = e.target.files?.[0];
+                        e.target.value = '';
                         if (!file) return;
                         if (file.size > 10 * 1024 * 1024) { alert('ไฟล์ PDF ขนาดไม่เกิน 10MB'); return; }
-                        const reader = new FileReader();
-                        reader.onload = ev => {
-                          setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: ev.target.result, pdfFileName: file.name, fileId: '' } : f));
-                        };
-                        reader.readAsDataURL(file);
-                        e.target.value = '';
+                        setPendingUploads(n => n + 1);
+                        try {
+                          const { url, storagePath } = await uploadTreatmentPdf({ file, customerId, kind: 'tfile' });
+                          setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: url, pdfStoragePath: storagePath, pdfFileName: file.name, fileId: '' } : f));
+                        } catch (err) {
+                          console.error('[TFP] treatment file upload failed:', err);
+                          alert('อัปโหลดไฟล์ไม่สำเร็จ: ' + (err?.message || err));
+                        } finally {
+                          setPendingUploads(n => Math.max(0, n - 1));
+                        }
                       }} />
                     </label>
                   )}

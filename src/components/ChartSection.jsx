@@ -8,6 +8,11 @@ import { useChartEditSession } from '../hooks/useChartEditSession.js';
 import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import { auth } from '../firebase.js';
 
+// 2026-05-25 — chart cap raised 2 → 10 per user request. Safe: charts persist as
+// Firebase Storage URLs (Storage-ref since 2026-05-22), so 10 charts add ~10 small
+// URL strings to the doc, NOT 10 inline base64 PNGs.
+const MAX_CHARTS = 10;
+
 export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '', customerId = '' }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -61,7 +66,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
       }
       onChartsChange(prev => prev.map((c, i) => i === editingIdx ? entry : c));
     } else {
-      onChartsChange(prev => [...prev, entry].slice(0, 2)); // max 2 charts
+      onChartsChange(prev => [...prev, entry].slice(0, MAX_CHARTS)); // 2026-05-25 — max 10 (was 2); charts are Storage URLs so doc size is unaffected
     }
     setCanvasOpen(false);
   };
@@ -104,7 +109,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
       <div className="flex items-center flex-wrap gap-2 mb-3">
         <FileImage size={14} style={{ color: accent, filter: `drop-shadow(0 0 4px ${accent}60)` }} />
         <h4 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: accent }}>Chart</h4>
-        {charts.length < 2 && (
+        {charts.length < MAX_CHARTS && (
           <button onClick={() => setSelectorOpen(true)}
             className={`ml-auto text-xs font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1`}
             style={{ color: accent, borderColor: `${accent}40`, background: `${accent}0a` }}>
