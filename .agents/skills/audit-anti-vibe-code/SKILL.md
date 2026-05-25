@@ -3137,3 +3137,22 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Source-grep regression**: `tests/treatment-blob-storage-ref.test.js` (A-E: helper guard + computeResizeDims + persist/cascade flow-simulate + TFP zero-inline lock + ChartSection cap 2→10).
 
 **Cross-link**: chart Storage-ref 2026-05-22 (`chartImageStorage.js`) + AV103 (chart fabricJson transport) + Rule P class-of-bug expansion + `feedback_no_quality_degradation_for_data.md` (Storage-ref, never compress, for clinical images).
+
+### AV130 — Appointment-modal deposit gate (effective-type) + single-source visit purpose + deposit-mutation discipline (2026-05-25)
+
+The shared `AppointmentFormModal.jsx` auto-shows the deposit ("รายละเอียดมัดจำ") section + the chip "นัดมาเพื่อ" picker. Three invariants:
+
+- **(a) Deposit gate = EFFECTIVE appointment type** — the deposit section MUST gate on the effective type (`safeLockedType || formData.appointmentType`), NOT `isLockedDepositType` alone. Anchor: the render gate is `{showDepositSection && (` where `showDepositSection = isDepositBooking = (safeLockedType || formData.appointmentType) === 'deposit-booking'`. The pre-AV130 locked-only gate `{isLockedDepositType && mode === 'create' && (` MUST NOT reappear. So picking "จองมัดจำ" via radio (create OR edit) shows the section everywhere, not only in the locked appointment-deposit tab.
+- **(b) Single-source visit-purpose options** — the `visitReasonOptions` list lives ONLY in `src/lib/visitReasonOptions.js` (Rule C1). No inline `['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ',…]` array anywhere in `src/` (PatientForm / AdminDashboard / VisitPurposePicker all import it). Adding a new clinic service = edit the constant only.
+- **(c) Deposit-mutation discipline** — AppointmentFormModal mutates a deposit ONLY via sanctioned helpers: `createDepositBookingPair` / `createDepositForExistingAppointment` / `updateDeposit` / `cancelDepositBookingPair` / `deleteDepositBookingPair`. NEVER a raw `deleteDoc(depositDoc(...))`. Flip-away delete (edit: leaving จองมัดจำ with a linked deposit) routes through `cancelDepositBookingPair` (audit + money reversal + usedAmount>0 guard) behind an explicit confirm dialog — the modal never deletes a money record silently.
+
+**Forbidden**:
+- ❌ `{isLockedDepositType && mode === 'create' && (` render gate (re-introduces the locked-only bug — radio-picked จองมัดจำ would show no section).
+- ❌ a new inline `['สมรรถภาพทางเพศ',…]` array in any component (drift from the single source).
+- ❌ `deleteDoc(depositDoc(...))` inside AppointmentFormModal (bypasses audit + money reversal).
+
+**Sanctioned consumers**: `src/lib/visitReasonOptions.js` (constant) · `src/components/VisitPurposePicker.jsx` (chip UI) · `src/components/backend/AppointmentFormModal.jsx` (gate + deposit reconcile + flip-away) · `src/lib/appointmentDepositBatch.js` (`createDepositForExistingAppointment` + the existing pair helpers).
+
+**Source-grep regression**: `tests/av130-appointment-deposit-purpose.test.js` + `tests/appointment-modal-deposit-gate.test.js` + `tests/appointment-modal-edit-deposit.test.js` + `tests/appointment-modal-flip-away.test.js` + `tests/visit-reason-options.test.js`.
+
+**Cross-link**: Q1=A (auto deposit + required + atomic pair) · Q2=A (chip required multi-select + อื่นๆ) · Rule C1 (single source) · audit-cascade-logic C16 (deposit cancel cascade) · Rule Q-honest (real-prod e2e for the deposit paths).
