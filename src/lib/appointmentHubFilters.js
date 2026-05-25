@@ -53,6 +53,10 @@ export function dateRangeForTab(tabKey, now = new Date()) {
     case 'tomorrow': { const t = addDaysISO(today, 1); return { from: t, to: t }; }
     case 'future':   return { from: addDaysISO(today, 1), to: addDaysISO(today, 30) };
     case 'past':     return { from: addDaysISO(today, -30), to: addDaysISO(today, -1) };
+    // ② (2026-05-26) — today + future within the hub's loaded ±30d window
+    // (R3: not capped beyond that window; from=today INCLUDES today, unlike
+    // 'future' which starts tomorrow). Past excluded by from=today.
+    case 'opd-pending': return { from: today, to: addDaysISO(today, 30) };
     default: throw new Error(`Unknown tab: ${tabKey}`);
   }
 }
@@ -63,6 +67,7 @@ export function defaultStatusFilterForTab(tabKey) {
     case 'tomorrow': return { exclude: ['cancelled'] };
     case 'future':   return { exclude: ['done', 'cancelled'] };
     case 'past':     return { exclude: [] };
+    case 'opd-pending': return { exclude: ['cancelled'] }; // ② (2026-05-26)
     default: return { exclude: [] };
   }
 }

@@ -187,3 +187,21 @@ export function isAppointmentPendingOpdSave({ appt, linkedSession }) {
   if (appt?.status === 'cancelled') return false;
   return resolveCardOpdState({ appt, linkedSession }) === 'D';
 }
+
+/**
+ * ② (2026-05-26) — "รอ/ยังไม่ลง OPD" tab membership. True iff the appointment
+ * is NOT-yet-in-OPD: state B (booking, no link), C (link sent, not filled), or
+ * D (filled, not saved). Excludes A (existing customer), E (saved), and
+ * cancelled. Single-source via resolveCardOpdState so any state-machine change
+ * propagates to this tab automatically (AV131).
+ *
+ * @param {object} args
+ * @param {object|null} args.appt
+ * @param {object|null} args.linkedSession
+ * @returns {boolean}
+ */
+export function isAppointmentOpdPending({ appt, linkedSession }) {
+  if (appt?.status === 'cancelled') return false;
+  const s = resolveCardOpdState({ appt, linkedSession });
+  return s === 'B' || s === 'C' || s === 'D';
+}
