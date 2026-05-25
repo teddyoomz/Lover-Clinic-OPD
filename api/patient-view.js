@@ -95,10 +95,17 @@ export default async function handler(req, res) {
     //    Real be_appointments field shape (verified via Rule R diag 2026-05-25):
     //    date(ISO) · startTime/endTime · doctorName · branchId · roomName? · status.
     const apptSnap = await dataCol(db, 'be_appointments').where('customerId', '==', String(customerId)).get();
+    // Upcoming = future date, NOT cancelled, NOT already serviced/attended.
+    // Status set mirrors didAttend (appointmentAnalysisAggregator); serviceCompletedAt
+    // is the AppointmentHub canonical "service done" signal (appointmentHubFilters).
+    const COMPLETED_APPT_STATUSES = new Set(['done', 'completed', 'มาตามนัด', 'ชำระเงิน']);
+    const isUpcomingAppt = (a) =>
+      a.status !== 'cancelled' && !a.serviceCompletedAt && !a.wasServiceCompleted
+      && !COMPLETED_APPT_STATUSES.has(String(a.status || '').trim());
     let appts = apptSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(a => { const dt = a.date || ''; return !dt || String(dt) >= today; })
-      .filter(a => a.status !== 'cancelled');
+      .filter(isUpcomingAppt);
     appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.startTime || '').localeCompare(b.startTime || ''));
 
     const branchCache = {};

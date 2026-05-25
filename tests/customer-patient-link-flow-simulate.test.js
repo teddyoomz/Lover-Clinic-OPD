@@ -145,4 +145,40 @@ describe('Rule I — customer patient-link full flow', () => {
       expect(SRC).not.toMatch(/allCourses\.filter\(c => !c\.expiryDate/);
     }
   });
+
+  // ── F7: completed/serviced appointments excluded from "นัดหมายครั้งต่อไป" (2026-05-25) ──
+  const COMPLETED_APPT_STATUSES = new Set(['done', 'completed', 'มาตามนัด', 'ชำระเงิน']);
+  const isUpcomingAppt = (a) =>
+    a.status !== 'cancelled' && !a.serviceCompletedAt && !a.wasServiceCompleted
+    && !COMPLETED_APPT_STATUSES.has(String(a.status || '').trim());
+  it('F7.1: pending/confirmed kept; done/completed/มาตามนัด/ชำระเงิน + cancelled + serviceCompleted excluded', () => {
+    expect(isUpcomingAppt({ status: 'pending' })).toBe(true);
+    expect(isUpcomingAppt({ status: 'confirmed' })).toBe(true);
+    expect(isUpcomingAppt({ status: 'done' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'completed' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'มาตามนัด' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'ชำระเงิน' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'cancelled' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'confirmed', serviceCompletedAt: '2026-05-25T10:00:00Z' })).toBe(false);
+    expect(isUpcomingAppt({ status: 'confirmed', wasServiceCompleted: true })).toBe(false);
+  });
+  it('F7.2: real ไพบูลย์ case — done-today dropped, pending-future kept', () => {
+    const all = [
+      { date: '2026-05-25', status: 'done', serviceCompletedAt: 'x' },
+      { date: '2026-06-04', status: 'pending' },
+    ];
+    const today = '2026-05-25';
+    const out = all.filter(a => (!a.date || a.date >= today) && isUpcomingAppt(a));
+    expect(out).toHaveLength(1);
+    expect(out[0].date).toBe('2026-06-04');
+  });
+  it('F7.3: BOTH patient-view appt lists exclude completed (class-of-bug lock)', () => {
+    const EP = readFileSync('api/patient-view.js', 'utf8');
+    const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
+    for (const SRC of [EP, PD]) {
+      expect(SRC).toMatch(/COMPLETED_APPT_STATUSES/);
+      expect(SRC).toMatch(/serviceCompletedAt/);
+      expect(SRC).toMatch(/'มาตามนัด'/);
+    }
+  });
 });

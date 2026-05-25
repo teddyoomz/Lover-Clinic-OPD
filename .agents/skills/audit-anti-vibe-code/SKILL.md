@@ -3107,3 +3107,15 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Origin**: 2026-05-25 — user L1 on the deployed customer patient-link. Same canonical helper the report + LINE bot already used; the patient view was missing it. Class-of-bug = 2 instances fixed in one commit (endpoint + fetchCoursesViaApi).
 
 **Cross-link**: AV126 (patient-link anon-safety) + `remainingCourseUtils.deriveEffectiveStatus` + `lineBotResponder.formatCoursesReply` (V33.8).
+
+### AV128 — Patient-view "upcoming appointments" MUST exclude completed/serviced
+
+**Why**: 2026-05-25 user L1 — a "done" (serviced) appointment showed under "นัดหมายครั้งต่อไป" (upcoming). The list filtered future-date + not-cancelled ONLY → already-serviced appts leaked into the customer's "next appointments."
+
+**Invariant**: customer-facing "upcoming appointments" lists MUST exclude completed/serviced appts. An appt is upcoming iff: status NOT cancelled AND status NOT in `{done, completed, มาตามนัด, ชำระเงิน}` (mirrors `didAttend`, appointmentAnalysisAggregator.js) AND NOT `serviceCompletedAt` AND NOT `wasServiceCompleted` (AppointmentHub canonical, appointmentHubFilters.js). Keeps pending/confirmed not-yet-serviced future appts.
+
+**Sanctioned consumers**: `api/patient-view.js` (`isUpcomingAppt`) + `src/pages/PatientDashboard.jsx` `fetchCoursesViaApi`.
+
+**Source-grep regression**: `tests/customer-patient-link-flow-simulate.test.js` F7.
+
+**Cross-link**: AV126 + AV127 (same patient-link turn) + `didAttend` (appointmentAnalysisAggregator) + `serviceCompletedAt` (appointmentHubFilters).

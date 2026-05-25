@@ -446,10 +446,15 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         expiredCourses = usable.filter(c => c.expiryDate && String(c.expiryDate) < today);
 
         const appts = await getCustomerAppointments(String(proClinicId)).catch(() => []);
-        // Future appointments only — public-link view shows upcoming bookings
+        // Upcoming only — future date, NOT cancelled, NOT already serviced (2026-05-25:
+        // class-of-bug w/ api/patient-view). Mirrors didAttend (appointmentAnalysisAggregator)
+        // + serviceCompletedAt (appointmentHubFilters). "นัดหมายครั้งต่อไป" = not-yet-done.
+        const COMPLETED_APPT_STATUSES = new Set(['done', 'completed', 'มาตามนัด', 'ชำระเงิน']);
         appointments = (appts || []).filter(a => {
           const d = a.appointmentDate || a.date || '';
-          return !d || String(d) >= today;
+          if (d && String(d) < today) return false;
+          if (a.status === 'cancelled' || a.serviceCompletedAt || a.wasServiceCompleted) return false;
+          return !COMPLETED_APPT_STATUSES.has(String(a.status || '').trim());
         });
 
         const pd = customer.patientData || {};
