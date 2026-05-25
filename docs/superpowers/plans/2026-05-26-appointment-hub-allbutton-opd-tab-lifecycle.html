@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Hub — All-types button + OPD-pending tab + link auto-cleanup · Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .app { background:#0c0c0d; border-radius:10px; padding:14px; color:#e5e5e5; font-size:13px; }
+    .pill { display:inline-block; background:#1c1c1f; border:1px solid #2a2a2e; border-radius:10px; padding:6px 12px; margin:2px; font-weight:600; color:#cfcfcf; }
+    .pill.active { background:linear-gradient(180deg,#ff7a18,#f59f0a); color:#111; }
+    .pill.new { border:1px dashed #f59f0a; color:#f5d199; }
+    .danger { color:#b91c1c; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Hub — All-types button + OPD-pending tab + link auto-cleanup · Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-26-appointment-hub-allbutton-opd-tab-lifecycle-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Four connected changes on the Frontend "นัดหมาย" (AppointmentHubView) tab + the patient-fill-link (opd_sessions) lifecycle: ① relabel Walk-in button → "เพิ่มนัดหมาย" reusing the existing AppointmentFormModal in create mode; ② new "รอ/ยังไม่ลง OPD" primary pill (states B+C+D, today+future); ③ cron hard-deletes a link once its appointment date passes; ④ hard-delete the session immediately on OPD-save success.</p>
+  <p><strong>Architecture:</strong> ① reuses the SAME <code>AppointmentFormModal</code> AppointmentHubView already renders for edit (add a <code>creatingAppt</code> state mirror of <code>editingAppt</code>) — no new modal. ② adds a 5th <code>TABS</code> entry + an <code>opd-pending</code> case in <code>appointmentHubFilters</code> + an in-view state filter via the existing <code>resolveLinkedSession</code> join (mirror of <code>cardFlowSubPillCounts</code>). ③ adds a date-passed branch to the pure <code>decideCleanupAction</code> + a be_appointments join in the cron's <code>sweepOpdSessionCleanup</code> (sessions don't store the appt date — R5). ④ adds a best-effort hard-delete inside <code>_attachLinkedBookings</code> (the one function all 3 handleOpdClick success paths call), gated on the existing <code>isFromBookingFlow</code> predicate so kiosk walk-in sessions are never deleted.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite, Vitest 4 + @testing-library/react, firebase / firebase-admin, Bangkok-TZ midday-UTC date helpers. Pure-JS helpers in <code>src/lib/*</code>; cron in <code>api/cron/*</code>.</p>
+  <p><strong>Decisions (locked, spec Q&amp;A):</strong> Q1 = B+C+D · Q2 = hard-delete · Q3 = delete-all-date-passed (override V116, even filled-but-unsaved) · Q4 = single all-types button (reuse modal, retire kiosk wiring of the button).</p>
+  <p><strong>V-number:</strong> assign at ship per the V-log convention (next free ~V127). AV invariant = <strong>AV131</strong> (AV130 is the last taken). Reason-string keys are stable (<code>'appt-date-passed'</code>) and don't need a V-number.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">Primary pill row — NEW 5th pill after "ย้อนหลัง 30 วัน" + relabeled button</div>
+  <div class="app">
+    <span class="pill active">วันนี้ 0</span><span class="pill">พรุ่งนี้ 7</span><span class="pill">ล่วงหน้า 30 วัน 54</span><span class="pill">ย้อนหลัง 30 วัน 55</span><span class="pill new">⏳ รอ/ยังไม่ลง OPD 9</span>
+    <div style="margin-top:10px"><span class="pill" style="background:linear-gradient(180deg,#33b1ff,#1f8fe0);color:#062a44">＋ เพิ่มนัดหมาย</span> <span style="color:#777">(เดิม: "＋ เพิ่มคิว Walk-in")</span></div>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">"รอ/ยังไม่ลง OPD" list — data shape per row (state B/C/D, date ≥ today)</div>
+  <table>
+    <tr><th>state</th><th>appt fields</th><th>chip</th><th>shows?</th></tr>
+    <tr><td>B</td><td>!customerId &amp;&amp; !linkedOpdSessionId</td><td>⚪ ยังไม่ส่งลิงก์</td><td>yes (Q1)</td></tr>
+    <tr><td>C</td><td>!customerId &amp;&amp; linkedOpdSessionId &amp;&amp; !patientData</td><td>🔴 รอกรอกข้อมูล</td><td>yes</td></tr>
+    <tr><td>D</td><td>!customerId &amp;&amp; linkedOpdSessionId &amp;&amp; patientData &amp;&amp; !saved</td><td>🟡 กรอกแล้ว · ยังไม่บันทึก</td><td>yes</td></tr>
+    <tr><td>A</td><td>customerId set</td><td>—</td><td>no</td></tr>
+    <tr><td>E</td><td>saved (opdRecordedAt + brokerStatus='done')</td><td>—</td><td>no (session deleted by ④)</td></tr>
+    <tr><td>any</td><td>status==='cancelled' OR date &lt; today</td><td>—</td><td>no</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">① create · ② filter · ③ cron-delete · ④ save-delete</div>
+  <table>
+    <tr><th>#</th><th>trigger</th><th>steps</th></tr>
+    <tr><td>①</td><td>click "เพิ่มนัดหมาย"</td><td><code>setCreatingAppt(true)</code> → render existing <code>AppointmentFormModal {mode:'create', lockedAppointmentType:null}</code> → pick type → modal's internal create (deposit-pair / appt / fill-link) → <code>onSaved</code> → <code>setCreatingAppt(false)</code> + <code>loadAll({silent})</code></td></tr>
+    <tr><td>②</td><td>tab = opd-pending</td><td>appts → <code>applyTabFilter({tab:'opd-pending'})</code> (date∈[today, today+30] within loaded window, exclude cancelled, search/type) → <code>.filter(isAppointmentOpdPending({appt, linkedSession:resolveLinkedSession(appt)}))</code> (state B/C/D) → sorted list + count badge</td></tr>
+    <tr><td>③</td><td>cron /30min</td><td>scan opd_sessions → join be_appointments by linkedAppointmentId → <code>effectiveData.appointmentDate</code> → <code>decideCleanupAction(data, now, T, todayISO)</code>: if <code>appointmentDate &lt; todayISO</code> → <span class="danger">delete</span> (above 2h-age logic; overrides V116 hide; fires even with patientData)</td></tr>
+    <tr><td>④</td><td>OPD save success</td><td><code>handleOpdClick</code> success → <code>_attachLinkedBookings</code> stamps customerId on linked appt (→ appt becomes state A → leaves ② tab) → <strong>if <code>isFromBookingFlow</code></strong>: <span class="danger">best-effort deleteDoc(opd_sessions/{sessionId})</span> (kiosk sessions skipped — walk-in modal needs them)</td></tr>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility / change</th></tr>
+  <tr><td><code>src/components/admin/AppointmentHubFilterBar.jsx</code></td><td>① relabel button + rename prop <code>onAddWalkIn</code>→<code>onAddAppointment</code> + testid.</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubView.jsx</code></td><td>① <code>creatingAppt</code> state + 2nd AppointmentFormModal (create) + wire button to internal create; ② import <code>isAppointmentOpdPending</code> + state-filter in <code>filteredAppts</code> + <code>opdPendingCount</code> memo + merge into TabBar counts.</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubTabBar.jsx</code></td><td>② add 5th <code>TABS</code> entry.</td></tr>
+  <tr><td><code>src/pages/AdminDashboard.jsx</code></td><td>① remove the <code>onAddWalkIn</code> prop passed to AppointmentHubView (retire kiosk wiring of the button); ④ hoist <code>isFromBookingFlow</code> + add gated delete in <code>_attachLinkedBookings</code>.</td></tr>
+  <tr><td><code>src/lib/opdSessionState.js</code></td><td>② NEW pure helper <code>isAppointmentOpdPending</code>.</td></tr>
+  <tr><td><code>src/lib/appointmentHubFilters.js</code></td><td>② <code>opd-pending</code> case in <code>dateRangeForTab</code> + <code>defaultStatusFilterForTab</code>.</td></tr>
+  <tr><td><code>src/lib/opdSessionCleanupCore.js</code></td><td>③ <code>todayISO</code> param + date-passed delete branch in <code>decideCleanupAction</code>.</td></tr>
+  <tr><td><code>api/cron/opd-session-cleanup-sweep.js</code></td><td>③ Bangkok todayISO + be_appointments join in <code>sweepOpdSessionCleanup</code> (also used by the CLI mirror).</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>AV131 invariant.</td></tr>
+  <tr><td>Tests (new)</td><td><code>tests/appt-hub-add-appointment-button.test.jsx</code> · <code>tests/opd-pending-tab.test.js</code> + <code>tests/opd-pending-tab-rtl.test.jsx</code> · <code>tests/opd-session-date-passed-cleanup.test.js</code> · <code>tests/opd-session-delete-on-save.test.js</code> · <code>tests/appt-hub-opd-lifecycle-flow-simulate.test.js</code> · <code>tests/av131-opd-link-lifecycle.test.js</code> · <code>scripts/e2e-opd-link-lifecycle.mjs</code></td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ============================ TASK 1 ============================ -->
+<div class="task">
+  <h3>Task 1: ① Relabel Walk-in button → "เพิ่มนัดหมาย" (FilterBar)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/AppointmentHubFilterBar.jsx:26</code> (prop) + <code>:100-107</code> (button)</li>
+    <li>Test: <code>tests/appt-hub-add-appointment-button.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-jsx">// tests/appt-hub-add-appointment-button.test.jsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import AppointmentHubFilterBar from '../src/components/admin/AppointmentHubFilterBar.jsx';
+
+describe('AppointmentHubFilterBar — all-types button (①)', () => {
+  it('renders "เพิ่มนัดหมาย" (not Walk-in) and fires onAddAppointment', () => {
+    const onAddAppointment = vi.fn();
+    render(&lt;AppointmentHubFilterBar onAddAppointment={onAddAppointment} /&gt;);
+    const btn = screen.getByTestId('appt-hub-add-appt-btn');
+    expect(btn).toHaveTextContent('เพิ่มนัดหมาย');
+    expect(screen.queryByText(/เพิ่มคิว Walk-in/)).toBeNull();
+    fireEvent.click(btn);
+    expect(onAddAppointment).toHaveBeenCalledTimes(1);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appt-hub-add-appointment-button.test.jsx</code></p>
+  <p>Expected: FAIL — testid <code>appt-hub-add-appt-btn</code> not found / text still "Walk-in".</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement</strong></label></div>
+  <p>In <code>AppointmentHubFilterBar.jsx</code> change the destructured prop on line 26 from <code>onPrint, onAddWalkIn,</code> to <code>onPrint, onAddAppointment,</code> and replace the button (lines 100-107):</p>
+<pre><code class="language-jsx">        &lt;button
+          type="button"
+          data-testid="appt-hub-add-appt-btn"
+          onClick={() =&gt; onAddAppointment?.()}
+          className={BTN_PRIMARY}
+        &gt;
+          &lt;Plus size={12} /&gt; เพิ่มนัดหมาย
+        &lt;/button&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appt-hub-add-appointment-button.test.jsx</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubFilterBar.jsx tests/appt-hub-add-appointment-button.test.jsx
+git commit -m "feat(appt-hub): relabel Walk-in button -> เพิ่มนัดหมาย + rename prop (①)"</code></pre>
+</div>
+
+<!-- ============================ TASK 2 ============================ -->
+<div class="task">
+  <h3>Task 2: ① AppointmentHubView create path + retire kiosk wiring</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/AppointmentHubView.jsx</code> (props line 71; FilterBar usage line 500-519; modal render after line 620)</li>
+    <li>Modify: <code>src/pages/AdminDashboard.jsx:7122-7125</code> (remove the <code>onAddWalkIn</code> prop)</li>
+    <li>Test: extend <code>tests/appt-hub-add-appointment-button.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the failing test (HubView opens create modal)</strong></label></div>
+  <p>Append to <code>tests/appt-hub-add-appointment-button.test.jsx</code>. Mock the loaders + AppointmentFormModal so we assert the modal mounts in create mode with no locked type:</p>
+<pre><code class="language-jsx">import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import AppointmentHubView from '../src/components/admin/AppointmentHubView.jsx';
+
+vi.mock('../src/lib/BranchContext.jsx', () =&gt; ({
+  useSelectedBranch: () =&gt; ({ branchId: 'BR-TEST', branches: [] }),
+}));
+vi.mock('../src/lib/scopedDataLayer.js', () =&gt; ({
+  getAppointmentsByDateRange: vi.fn().mockResolvedValue([]),
+  getAllCustomers: vi.fn().mockResolvedValue([]),
+  getAllDeposits: vi.fn().mockResolvedValue([]),
+  getAllSales: vi.fn().mockResolvedValue([]),
+  getAllMemberships: vi.fn().mockResolvedValue([]),
+  getWalletsForCustomerIds: vi.fn().mockResolvedValue([]),
+  listStaffSchedules: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../src/lib/reportsLoaders.js', () =&gt; ({ loadTreatmentsByDateRange: vi.fn().mockResolvedValue([]) }));
+// Capture the props AppointmentFormModal is mounted with.
+let modalProps = null;
+vi.mock('../src/components/backend/AppointmentFormModal.jsx', () =&gt; ({
+  default: (props) =&gt; { modalProps = props; return &lt;div data-testid="appt-form-modal" data-mode={props.mode} /&gt;; },
+}));
+
+describe('AppointmentHubView — create path (①)', () =&gt; {
+  it('clicking เพิ่มนัดหมาย opens AppointmentFormModal in create mode, no locked type', async () =&gt; {
+    modalProps = null;
+    render(&lt;AppointmentHubView /&gt;);
+    await waitFor(() =&gt; expect(screen.getByTestId('appt-hub-add-appt-btn')).toBeInTheDocument());
+    expect(screen.queryByTestId('appt-form-modal')).toBeNull();
+    fireEvent.click(screen.getByTestId('appt-hub-add-appt-btn'));
+    await waitFor(() =&gt; expect(screen.getByTestId('appt-form-modal')).toBeInTheDocument());
+    expect(modalProps.mode).toBe('create');
+    expect(modalProps.lockedAppointmentType).toBeNull();
+    expect(typeof modalProps.onSaved).toBe('function');
+    expect(typeof modalProps.onClose).toBe('function');
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appt-hub-add-appointment-button.test.jsx</code> → FAIL (no create modal renders; button still wired to <code>onAddWalkIn</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement in AppointmentHubView.jsx</strong></label></div>
+  <p>(a) Remove <code>onAddWalkIn,</code> from the props destructure (line 71).</p>
+  <p>(b) Add create state near the other <code>useState</code> (after line 112's <code>reloadKey</code>):</p>
+<pre><code class="language-jsx">  // ① (2026-05-26) — "เพิ่มนัดหมาย" opens the SAME AppointmentFormModal this
+  // view already renders for edit (line ~609), in create mode (all 5 types).
+  const [creatingAppt, setCreatingAppt] = useState(false);
+  const handleCreateSaved = useCallback(() =&gt; {
+    setCreatingAppt(false);
+    loadAll({ silent: true });
+  }, [loadAll]);</code></pre>
+  <p>(c) In the <code>&lt;AppointmentHubFilterBar ... /&gt;</code> usage, replace <code>onAddWalkIn={onAddWalkIn}</code> (line 509) with:</p>
+<pre><code class="language-jsx">        onAddAppointment={() =&gt; setCreatingAppt(true)}</code></pre>
+  <p>(d) Add the create modal right after the existing edit-modal block (after line 620, before the closing <code>&lt;/div&gt;</code>):</p>
+<pre><code class="language-jsx">      {/* ① (2026-05-26) — all-types create. SAME component as the edit modal
+          above + the ปฏิทิน openCreate path. lockedAppointmentType=null → the
+          radio shows all 5 types (incl. Walk-in). Collision/holiday checks ON
+          (defaults) for parity with the calendar's create. */}
+      {creatingAppt &amp;&amp; (
+        &lt;AppointmentFormModal
+          mode="create"
+          lockedAppointmentType={null}
+          initialDate={dateRangeForTab('today', new Date()).from}
+          existingAppointments={appts}
+          onSaved={handleCreateSaved}
+          onClose={() =&gt; setCreatingAppt(false)}
+        /&gt;
+      )}</code></pre>
+  <p>(<code>dateRangeForTab</code> is already imported at line 21; <code>AppointmentFormModal</code> at line 44; <code>useCallback</code> at line 5.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Retire the kiosk wiring in AdminDashboard.jsx</strong></label></div>
+  <p>Delete the <code>onAddWalkIn</code> prop passed to <code>&lt;AppointmentHubView ... /&gt;</code> (lines 7122-7125):</p>
+<pre><code class="language-jsx">              onAddWalkIn={() =&gt; {
+                setSessionModalTab?.('standard');
+                setShowSessionModal(true);
+              }}</code></pre>
+  <p>Remove those 4 lines entirely. (R6: the kiosk <code>showSessionModal</code> infra is left in place — verify separately whether any other button still opens it before deleting that dead code; out of scope here.)</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appt-hub-add-appointment-button.test.jsx</code> → PASS. Then <code>npm run build</code> → clean (catches the removed-prop / import drift).</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubView.jsx src/pages/AdminDashboard.jsx tests/appt-hub-add-appointment-button.test.jsx
+git commit -m "feat(appt-hub): เพิ่มนัดหมาย reuses AppointmentFormModal in create mode; retire kiosk button wiring (①)"</code></pre>
+</div>
+
+<!-- ============================ TASK 3 ============================ -->
+<div class="task">
+  <h3>Task 3: ② Pure helpers — isAppointmentOpdPending + opd-pending filter cases</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/opdSessionState.js</code> (append helper) · <code>src/lib/appointmentHubFilters.js:49-58, 60-68</code></li>
+    <li>Test: <code>tests/opd-pending-tab.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/opd-pending-tab.test.js
+import { describe, it, expect } from 'vitest';
+import { isAppointmentOpdPending } from '../src/lib/opdSessionState.js';
+import { dateRangeForTab, defaultStatusFilterForTab } from '../src/lib/appointmentHubFilters.js';
+
+const filled = { patientData: { firstName: 'x' } };
+const saved  = { patientData: { firstName: 'x' }, opdRecordedAt: '2026-01-01', brokerStatus: 'done' };
+
+describe('isAppointmentOpdPending (②, states B/C/D)', () =&gt; {
+  it('B: booking, no link → true', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { id: 'a' }, linkedSession: null })).toBe(true);
+  });
+  it('C: link sent, not filled → true', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { linkedOpdSessionId: 's' }, linkedSession: null })).toBe(true);
+    expect(isAppointmentOpdPending({ appt: { linkedOpdSessionId: 's' }, linkedSession: { patientData: {} } })).toBe(true);
+  });
+  it('D: filled, not saved → true', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { linkedOpdSessionId: 's' }, linkedSession: filled })).toBe(true);
+  });
+  it('A: existing customer → false', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { customerId: 'c', linkedOpdSessionId: 's' }, linkedSession: filled })).toBe(false);
+  });
+  it('E: saved → false', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { linkedOpdSessionId: 's' }, linkedSession: saved })).toBe(false);
+  });
+  it('cancelled → false regardless of state', () =&gt; {
+    expect(isAppointmentOpdPending({ appt: { status: 'cancelled', linkedOpdSessionId: 's' }, linkedSession: filled })).toBe(false);
+  });
+});
+
+describe('opd-pending tab filter cases (②)', () =&gt; {
+  const now = new Date('2026-06-01T03:00:00Z'); // Bangkok 10:00 → today 2026-06-01
+  it('dateRangeForTab opd-pending = today..today+30 (includes today)', () =&gt; {
+    expect(dateRangeForTab('opd-pending', now)).toEqual({ from: '2026-06-01', to: '2026-07-01' });
+  });
+  it('defaultStatusFilterForTab opd-pending excludes cancelled', () =&gt; {
+    expect(defaultStatusFilterForTab('opd-pending')).toEqual({ exclude: ['cancelled'] });
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-pending-tab.test.js</code> → FAIL (<code>isAppointmentOpdPending</code> undefined; <code>dateRangeForTab('opd-pending')</code> throws "Unknown tab").</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Implement</strong></label></div>
+  <p>(a) Append to <code>src/lib/opdSessionState.js</code> (after <code>isAppointmentPendingOpdSave</code>):</p>
+<pre><code class="language-javascript">/**
+ * ② (2026-05-26) — "รอ/ยังไม่ลง OPD" tab membership. True iff the appointment
+ * is NOT-yet-in-OPD: state B (booking, no link), C (link sent, not filled), or
+ * D (filled, not saved). Excludes A (existing customer), E (saved), and
+ * cancelled. Single-source via resolveCardOpdState so any state-machine change
+ * propagates to this tab automatically (AV131).
+ *
+ * @param {object} args
+ * @param {object|null} args.appt
+ * @param {object|null} args.linkedSession
+ * @returns {boolean}
+ */
+export function isAppointmentOpdPending({ appt, linkedSession }) {
+  if (appt?.status === 'cancelled') return false;
+  const s = resolveCardOpdState({ appt, linkedSession });
+  return s === 'B' || s === 'C' || s === 'D';
+}</code></pre>
+  <p>(b) In <code>src/lib/appointmentHubFilters.js</code>, add the <code>opd-pending</code> case to <code>dateRangeForTab</code> (inside the switch, before <code>default</code>):</p>
+<pre><code class="language-javascript">    // ② (2026-05-26) — today + future within the hub's loaded ±30d window
+    // (R3: not capped beyond the loaded window; from=today INCLUDES today,
+    // unlike 'future' which starts tomorrow). Past is excluded by from=today.
+    case 'opd-pending': return { from: today, to: addDaysISO(today, 30) };</code></pre>
+  <p>and the case to <code>defaultStatusFilterForTab</code> (before <code>default</code>):</p>
+<pre><code class="language-javascript">    case 'opd-pending': return { exclude: ['cancelled'] };</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-pending-tab.test.js</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/opdSessionState.js src/lib/appointmentHubFilters.js tests/opd-pending-tab.test.js
+git commit -m "feat(appt-hub): isAppointmentOpdPending + opd-pending filter cases (②)"</code></pre>
+</div>
+
+<!-- ============================ TASK 4 ============================ -->
+<div class="task">
+  <h3>Task 4: ② Wire the new pill + in-view state filter + count</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/AppointmentHubTabBar.jsx:10-15</code> (TABS) · <code>src/components/admin/AppointmentHubView.jsx</code> (import, <code>filteredAppts</code> line 265-275, NEW <code>opdPendingCount</code> memo, TabBar usage line 485-490)</li>
+    <li>Test: <code>tests/opd-pending-tab-rtl.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-jsx">// tests/opd-pending-tab-rtl.test.jsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+
+const TODAY = '2026-06-01';
+const future = (d) =&gt; `2026-06-${String(d).padStart(2, '0')}`;
+// 3 OPD-pending appts (B/C/D, future) + 1 state-A (existing customer) future appt.
+const APPTS = [
+  { id: 'B1', date: future(3), startTime: '10:00', appointmentType: 'no-deposit-booking', status: 'pending' }, // B
+  { id: 'C1', date: future(4), startTime: '10:00', appointmentType: 'deposit-booking', status: 'pending', linkedOpdSessionId: 'sC' }, // C
+  { id: 'D1', date: future(6), startTime: '10:00', appointmentType: 'no-deposit-booking', status: 'pending', linkedOpdSessionId: 'sD' }, // D
+  { id: 'A1', date: future(5), startTime: '10:00', appointmentType: 'follow-up', status: 'confirmed', customerId: 'cust-1' }, // A → excluded
+];
+const SESSIONS = { sC: { patientData: {} }, sD: { patientData: { firstName: 'x' } } };
+
+vi.mock('../src/lib/BranchContext.jsx', () =&gt; ({ useSelectedBranch: () =&gt; ({ branchId: 'BR-TEST', branches: [] }) }));
+vi.mock('../src/lib/scopedDataLayer.js', () =&gt; ({
+  getAppointmentsByDateRange: vi.fn().mockResolvedValue(APPTS),
+  getAllCustomers: vi.fn().mockResolvedValue([]), getAllDeposits: vi.fn().mockResolvedValue([]),
+  getAllSales: vi.fn().mockResolvedValue([]), getAllMemberships: vi.fn().mockResolvedValue([]),
+  getWalletsForCustomerIds: vi.fn().mockResolvedValue([]), listStaffSchedules: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../src/lib/reportsLoaders.js', () =&gt; ({ loadTreatmentsByDateRange: vi.fn().mockResolvedValue([]) }));
+vi.mock('../src/components/backend/AppointmentFormModal.jsx', () =&gt; ({ default: () =&gt; null }));
+
+import AppointmentHubView from '../src/components/admin/AppointmentHubView.jsx';
+
+describe('opd-pending pill (②)', () =&gt; {
+  beforeAll(() =&gt; { vi.useFakeTimers(); vi.setSystemTime(new Date(`${TODAY}T03:00:00Z`)); });
+  afterAll(() =&gt; vi.useRealTimers());
+
+  it('renders the 5th pill with count=3 (B+C+D, A excluded) and lists exactly those', async () =&gt; {
+    const resolveLinkedSession = (a) =&gt; (a.linkedOpdSessionId ? SESSIONS[a.linkedOpdSessionId] || null : null);
+    render(&lt;AppointmentHubView resolveLinkedSession={resolveLinkedSession} /&gt;);
+    const pill = await screen.findByTestId('appt-hub-tab-opd-pending');
+    expect(pill).toHaveTextContent('รอ/ยังไม่ลง OPD');
+    expect(pill).toHaveTextContent('3');
+    fireEvent.click(pill);
+    await waitFor(() =&gt; expect(screen.getByTestId('appt-hub-view')).toBeInTheDocument());
+    // A1 (existing customer) must NOT be in the opd-pending list.
+    expect(screen.queryByText(/A1/)).toBeNull();
+  });
+});</code></pre>
+  <p><em>Note for implementer:</em> the row card renders customer info, not the appt id — adjust the final assertion to a field your RowCard shows (e.g. assert exactly 3 row cards via a stable testid on AppointmentHubRowCard, or assert the empty-state is absent + count chip = 3). The load-bearing assertions are the pill text + count=3.</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-pending-tab-rtl.test.jsx</code> → FAIL (no <code>appt-hub-tab-opd-pending</code> pill).</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Implement</strong></label></div>
+  <p>(a) <code>AppointmentHubTabBar.jsx</code> — add the 5th entry to <code>TABS</code>:</p>
+<pre><code class="language-jsx">const TABS = [
+  { key: 'today', label: 'วันนี้' },
+  { key: 'tomorrow', label: 'พรุ่งนี้' },
+  { key: 'future', label: 'ล่วงหน้า 30 วัน' },
+  { key: 'past', label: 'ย้อนหลัง 30 วัน' },
+  { key: 'opd-pending', label: 'รอ/ยังไม่ลง OPD' }, // ② (2026-05-26)
+];</code></pre>
+  <p>(b) <code>AppointmentHubView.jsx</code> — import the helper (extend the line-38 import):</p>
+<pre><code class="language-jsx">import { resolveCardOpdState, synthesizeSessionFromCustomer, isAppointmentPendingOpdSave, isAppointmentOpdPending } from '../../lib/opdSessionState.js';</code></pre>
+  <p>(c) Extend <code>filteredAppts</code> (lines 265-275) so the opd-pending tab additionally filters by state via the existing <code>resolveLinkedSession</code> join:</p>
+<pre><code class="language-jsx">  const filteredAppts = useMemo(() =&gt; {
+    const filtered = applyTabFilter(appts, {
+      tab: activeTab, now: new Date(), statusOverride: statusFilter, search, typeFilter, todaySubPill,
+    });
+    // ② (2026-05-26) — opd-pending also requires OPD state B/C/D (needs the
+    // linkedSession join, same as cardFlowSubPillCounts). Other tabs unchanged.
+    const scoped = activeTab === 'opd-pending'
+      ? filtered.filter(a =&gt; isAppointmentOpdPending({ appt: a, linkedSession: resolveLinkedSession ? resolveLinkedSession(a) : null }))
+      : filtered;
+    return sortApptsByDateTimeAsc(scoped);
+  }, [appts, activeTab, statusFilter, search, typeFilter, todaySubPill, resolveLinkedSession]);</code></pre>
+  <p>(d) Add an <code>opdPendingCount</code> memo near <code>cardFlowSubPillCounts</code> (after line 312):</p>
+<pre><code class="language-jsx">  // ② (2026-05-26) — count for the opd-pending pill. Ignores search/type
+  // (like the other tab counts) — date-range + state only.
+  const opdPendingCount = useMemo(() =&gt; {
+    const now = new Date();
+    const inRange = applyTabFilter(appts, { tab: 'opd-pending', now });
+    let n = 0;
+    for (const a of inRange) {
+      const ls = resolveLinkedSession ? resolveLinkedSession(a) : null;
+      if (isAppointmentOpdPending({ appt: a, linkedSession: ls })) n++;
+    }
+    return n;
+  }, [appts, resolveLinkedSession]);</code></pre>
+  <p>(e) Merge the count into the TabBar (line 485-490):</p>
+<pre><code class="language-jsx">      &lt;AppointmentHubTabBar
+        activeTab={activeTab}
+        counts={{ ...counts, 'opd-pending': opdPendingCount }}
+        onTabChange={setActiveTab}
+        cardFlowCounts={cardFlowSubPillCounts}
+      /&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-pending-tab-rtl.test.jsx</code> → PASS. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubTabBar.jsx src/components/admin/AppointmentHubView.jsx tests/opd-pending-tab-rtl.test.jsx
+git commit -m "feat(appt-hub): add รอ/ยังไม่ลง OPD pill + state filter + count (②)"</code></pre>
+</div>
+
+<!-- ============================ TASK 5 ============================ -->
+<div class="task">
+  <h3>Task 5: ③ decideCleanupAction — date-passed delete branch</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/opdSessionCleanupCore.js:67-91</code></li>
+    <li>Test: <code>tests/opd-session-date-passed-cleanup.test.js</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Write the failing test</strong></label></div>
+<pre><code class="language-javascript">// tests/opd-session-date-passed-cleanup.test.js
+import { describe, it, expect } from 'vitest';
+import { decideCleanupAction } from '../src/lib/opdSessionCleanupCore.js';
+
+const TODAY = '2026-06-01';
+const freshMs = Date.now(); // within 2h → would normally skip
+
+describe('decideCleanupAction — appt-date-passed (③)', () =&gt; {
+  it('past appt date → delete, even with patientData (Q3=A)', () =&gt; {
+    const r = decideCleanupAction(
+      { appointmentDate: '2026-05-30', patientData: { firstName: 'x' }, linkedAppointmentId: 'a' },
+      freshMs, undefined, TODAY,
+    );
+    expect(r.action).toBe('delete');
+    expect(r.reason).toBe('appt-date-passed');
+  });
+  it('today appt date → NOT date-passed (falls through to age logic → skip while fresh)', () =&gt; {
+    const r = decideCleanupAction({ appointmentDate: TODAY, linkedAppointmentId: 'a' }, freshMs, undefined, TODAY);
+    expect(r.action).toBe('skip');
+  });
+  it('future appt date → falls through', () =&gt; {
+    const r = decideCleanupAction({ appointmentDate: '2026-06-10', linkedAppointmentId: 'a' }, freshMs, undefined, TODAY);
+    expect(r.action).toBe('skip');
+  });
+  it('no appointmentDate → unchanged legacy behavior (expired+linked+no-data → hide)', () =&gt; {
+    const old = Date.now() - 3 * 60 * 60 * 1000; // 3h ago
+    const r = decideCleanupAction({ linkedAppointmentId: 'a' }, old, undefined, TODAY);
+    expect(r.action).toBe('hide');
+  });
+  it('isPermanent wins over date-passed', () =&gt; {
+    const r = decideCleanupAction({ isPermanent: true, appointmentDate: '2026-05-01' }, freshMs, undefined, TODAY);
+    expect(r.action).toBe('skip');
+    expect(r.reason).toBe('permanent-link');
+  });
+  it('isArchived wins over date-passed', () =&gt; {
+    const r = decideCleanupAction({ isArchived: true, appointmentDate: '2026-05-01' }, freshMs, undefined, TODAY);
+    expect(r.action).toBe('skip');
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-date-passed-cleanup.test.js</code> → FAIL (no date-passed branch; returns skip/hide).</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Implement</strong></label></div>
+  <p>Change the <code>decideCleanupAction</code> signature + insert the new branch AFTER the 3 skip guards and BEFORE <code>const ms = createdAtMs(data)</code>:</p>
+<pre><code class="language-javascript">export function decideCleanupAction(data, nowMs = Date.now(), timeoutMs = SESSION_TIMEOUT_MS, todayISO = null) {
+  if (!data || typeof data !== 'object') {
+    return { action: 'skip', reason: 'invalid-data' };
+  }
+  if (data.isArchived) return { action: 'skip', reason: 'already-archived' };
+  if (data.isPermanent) return { action: 'skip', reason: 'permanent-link' };
+  if (data._v82FollowupOpdResetAt) {
+    return { action: 'skip', reason: 'v82-followup-opt-out' };
+  }
+  // ③ (2026-05-26) — appt-date-passed → HARD DELETE. Overrides V116 hide AND
+  // fires even with patientData (Q3=A: delete filled-but-unsaved too). todayISO
+  // = Bangkok 'YYYY-MM-DD'; data.appointmentDate is the linked appointment's
+  // date (the cron joins be_appointments to populate it — sessions don't store
+  // it). Placed above the age check so a fresh session whose appt already
+  // passed is still removed. AV131.
+  if (typeof todayISO === 'string'
+      &amp;&amp; typeof data.appointmentDate === 'string'
+      &amp;&amp; data.appointmentDate
+      &amp;&amp; data.appointmentDate &lt; todayISO) {
+    return { action: 'delete', reason: 'appt-date-passed' };
+  }
+  const ms = createdAtMs(data);
+  if (ms == null) {
+    return { action: 'skip', reason: 'no-createdAt' };
+  }
+  if ((nowMs - ms) &lt;= timeoutMs) {
+    return { action: 'skip', reason: 'still-fresh' };
+  }
+  if (data.patientData) {
+    return { action: 'archive', reason: 'expired-with-patientData' };
+  }
+  if (data.linkedAppointmentId || data.linkedDepositId) {
+    return { action: 'hide', reason: 'expired-no-data-but-linked-booking-V116' };
+  }
+  return { action: 'delete', reason: 'expired-no-data-no-link' };
+}</code></pre>
+  <p>Also update the JSDoc decision-tree comment above the function to list the new branch.</p>
+
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-date-passed-cleanup.test.js</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/lib/opdSessionCleanupCore.js tests/opd-session-date-passed-cleanup.test.js
+git commit -m "feat(opd-cleanup): decideCleanupAction date-passed -> hard delete (③, AV131)"</code></pre>
+</div>
+
+<!-- ============================ TASK 6 ============================ -->
+<div class="task">
+  <h3>Task 6: ③ Cron join — populate appointmentDate + pass Bangkok todayISO</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>api/cron/opd-session-cleanup-sweep.js</code> (<code>sweepOpdSessionCleanup</code>, also used by the CLI mirror)</li>
+    <li>Test: <code>tests/opd-session-date-passed-cleanup.test.js</code> (append a sweep test)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Write the failing test (mock db)</strong></label></div>
+<pre><code class="language-javascript">// append to tests/opd-session-date-passed-cleanup.test.js
+import { sweepOpdSessionCleanup } from '../api/cron/opd-session-cleanup-sweep.js';
+
+function mockDb({ sessions, appts }) {
+  const apptMap = new Map(appts.map(a =&gt; [a.id, a]));
+  const calls = { deletes: [], updates: [] };
+  const makeRef = (id) =&gt; ({ id });
+  return {
+    _calls: calls,
+    collection: (path) =&gt; ({
+      limit: () =&gt; ({
+        get: async () =&gt; ({
+          size: sessions.length,
+          docs: sessions.map(s =&gt; ({ id: s.id, ref: makeRef(s.id), data: () =&gt; s })),
+        }),
+      }),
+      doc: (id) =&gt; makeRef(`${path}/${id}`),
+    }),
+    // be_appointments join: getAll(...refs) → snaps with .id + exists + data()
+    getAll: async (...refs) =&gt; refs.map(r =&gt; {
+      const id = String(r.id).split('/').pop();
+      const a = apptMap.get(id);
+      return { id, exists: !!a, data: () =&gt; a || null };
+    }),
+    doc: (...seg) =&gt; makeRef(seg.join('/')),
+    batch: () =&gt; ({
+      delete: (ref) =&gt; calls.deletes.push(ref.id),
+      update: (ref, patch) =&gt; calls.updates.push({ id: ref.id, patch }),
+      commit: async () =&gt; {},
+    }),
+  };
+}
+
+describe('sweepOpdSessionCleanup — be_appointments join (③)', () =&gt; {
+  it('joins appt date by linkedAppointmentId → deletes when appt date passed', async () =&gt; {
+    const now = new Date('2026-06-01T03:00:00Z').getTime(); // Bangkok today 2026-06-01
+    const db = mockDb({
+      sessions: [
+        { id: 's-past', createdAt: now, linkedAppointmentId: 'a-past', patientData: { firstName: 'x' } },
+        { id: 's-future', createdAt: now, linkedAppointmentId: 'a-future' },
+      ],
+      appts: [
+        { id: 'a-past', date: '2026-05-20' },
+        { id: 'a-future', date: '2026-06-20' },
+      ],
+    });
+    const r = await sweepOpdSessionCleanup({ db, now, apply: true });
+    expect(db._calls.deletes).toContain('s-past');     // date passed → delete (even with patientData)
+    expect(db._calls.deletes).not.toContain('s-future');
+    expect(r.deleted).toBeGreaterThanOrEqual(1);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-date-passed-cleanup.test.js</code> → FAIL (sweep doesn't join appts / doesn't pass todayISO → s-past not deleted).</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Implement in api/cron/opd-session-cleanup-sweep.js</strong></label></div>
+  <p>(a) Add a be_appointments collection const near line 27 + a Bangkok-today helper:</p>
+<pre><code class="language-javascript">const BE_APPOINTMENTS_COL = `${PREFIX}/be_appointments`;
+
+// Bangkok (UTC+7) 'YYYY-MM-DD' for the given epoch ms.
+function bangkokTodayISO(nowMs) {
+  const u = new Date(nowMs + 7 * 60 * 60 * 1000);
+  return `${u.getUTCFullYear()}-${String(u.getUTCMonth() + 1).padStart(2, '0')}-${String(u.getUTCDate()).padStart(2, '0')}`;
+}</code></pre>
+  <p>(b) Rewrite the body of <code>sweepOpdSessionCleanup</code> after the snapshot scan to join appt dates before deciding. Replace the existing decision loop (the <code>for (const d of snap.docs)</code> block) with:</p>
+<pre><code class="language-javascript">  const todayISO = bangkokTodayISO(now);
+
+  // ③ (2026-05-26) — sessions don't store the appt date (R5). Collect linked
+  // appointment ids for sessions lacking data.appointmentDate, batch-join
+  // be_appointments, and stamp the date onto an effective-data copy so the
+  // pure decideCleanupAction can apply the date-passed branch.
+  const needDateIds = [...new Set(
+    snap.docs
+      .map(d =&gt; d.data())
+      .filter(s =&gt; !s.appointmentDate &amp;&amp; s.linkedAppointmentId)
+      .map(s =&gt; String(s.linkedAppointmentId)),
+  )];
+  const apptDateById = new Map();
+  if (needDateIds.length &gt; 0) {
+    const refs = needDateIds.map(id =&gt; db.collection(BE_APPOINTMENTS_COL).doc(id));
+    const snaps = await db.getAll(...refs);
+    for (const s of snaps) {
+      if (s.exists) {
+        const a = s.data() || {};
+        if (typeof a.date === 'string') apptDateById.set(s.id, a.date);
+      }
+    }
+  }
+
+  const writes = []; // { ref, op }
+  for (const d of snap.docs) {
+    const data = d.data();
+    const joinedDate = data.appointmentDate
+      || (data.linkedAppointmentId ? apptDateById.get(String(data.linkedAppointmentId)) : '')
+      || '';
+    const effectiveData = joinedDate &amp;&amp; !data.appointmentDate
+      ? { ...data, appointmentDate: joinedDate }
+      : data;
+    const action = decideCleanupAction(effectiveData, now, SESSION_TIMEOUT_MS, todayISO);
+    reasonsByAction[action.action][action.reason] = (reasonsByAction[action.action][action.reason] || 0) + 1;
+    if (action.action === 'skip') { skipped++; continue; }
+    writes.push({ ref: d.ref, op: action.action });
+  }</code></pre>
+  <p>(The <code>apply</code> batch-commit block + the <code>archived/hidden/deleted</code> tally below are unchanged.)</p>
+  <p><em>Note:</em> <code>db.getAll(...refs)</code> is the firebase-admin batch read; the CLI mirror (<code>scripts/opd-session-cleanup-sweep.mjs</code>) imports the SAME <code>sweepOpdSessionCleanup</code>, so this single edit covers both (Rule of 3).</p>
+
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-date-passed-cleanup.test.js</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add api/cron/opd-session-cleanup-sweep.js tests/opd-session-date-passed-cleanup.test.js
+git commit -m "feat(opd-cleanup): cron joins be_appointments + Bangkok todayISO for date-passed delete (③)"</code></pre>
+</div>
+
+<!-- ============================ TASK 7 ============================ -->
+<div class="task">
+  <h3>Task 7: ④ Delete the session on OPD-save success (handleOpdClick)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/pages/AdminDashboard.jsx</code> — hoist <code>isFromBookingFlow</code> (currently inside <code>_maybeOpenWalkInModal</code> at 3564-3574) to handleOpdClick scope; add gated delete inside <code>_attachLinkedBookings</code> (3584-3608)</li>
+    <li>Test: <code>tests/opd-session-delete-on-save.test.js</code> (source-grep regression — the runtime path is verified by the Rule Q L2 e2e in Task 9)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the failing test (source-grep regression)</strong></label></div>
+<pre><code class="language-javascript">// tests/opd-session-delete-on-save.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+
+const src = fs.readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+
+describe('④ delete session on OPD-save success', () =&gt; {
+  it('isFromBookingFlow is hoisted to handleOpdClick scope (not only inside _maybeOpenWalkInModal)', () =&gt; {
+    // const isFromBookingFlow = ... appears BEFORE _maybeOpenWalkInModal definition
+    const idxFlag = src.indexOf('const isFromBookingFlow');
+    const idxWalk = src.indexOf('const _maybeOpenWalkInModal');
+    expect(idxFlag).toBeGreaterThan(-1);
+    expect(idxWalk).toBeGreaterThan(-1);
+    expect(idxFlag).toBeLessThan(idxWalk);
+  });
+  it('_attachLinkedBookings hard-deletes opd_sessions/{sessionId}, gated on isFromBookingFlow, best-effort', () =&gt; {
+    const fn = src.slice(src.indexOf('const _attachLinkedBookings'), src.indexOf('const hasExistingProClinic'));
+    expect(fn).toMatch(/if\s*\(\s*isFromBookingFlow\s*\)/);
+    expect(fn).toMatch(/deleteDoc\(\s*doc\(db,\s*'artifacts',\s*appId,\s*'public',\s*'data',\s*'opd_sessions',\s*sessionId\)\s*\)/);
+    // best-effort: wrapped in try/catch (no throw on delete failure)
+    expect(fn).toMatch(/catch\s*\([^)]*\)\s*\{[^}]*best-effort/i);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-delete-on-save.test.js</code> → FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Implement</strong></label></div>
+  <p>(a) At the top of <code>handleOpdClick</code> (just after <code>const d = session.patientData;</code> at line 3498, and BEFORE <code>_maybeOpenWalkInModal</code>), hoist the predicate:</p>
+<pre><code class="language-jsx">    // ④ (2026-05-26) — booking-flow predicate, hoisted so BOTH _maybeOpenWalkInModal
+    // (early-returns when true) AND _attachLinkedBookings (deletes the session
+    // when true) share ONE source. Mutual exclusion: a session that opens the
+    // walk-in modal (false) is NEVER deleted here; a link/booking session (true)
+    // is deleted + never opens the walk-in modal. Mirrors the V116 indicators.
+    const isFromBookingFlow = !!(
+      session?.linkedAppointmentId ||
+      session?.linkedDepositId ||
+      session?.appointmentProClinicId ||
+      session?.formType === 'deposit' ||
+      session?.createdFromBackendBooking ||
+      (session?.appointmentData &amp;&amp; (
+        session.appointmentData.appointmentDate ||
+        session.appointmentData.appointmentStartTime
+      ))
+    );</code></pre>
+  <p>(b) Inside <code>_maybeOpenWalkInModal</code>, DELETE its local <code>const isFromBookingFlow = !!(...)</code> declaration (lines 3564-3574) — it now uses the hoisted one. Keep the <code>if (isFromBookingFlow) return;</code>.</p>
+  <p>(c) Inside <code>_attachLinkedBookings</code>, add the delete after the attach try/catch, before <code>return r;</code> (note: <code>r</code> must be captured — restructure so the attach result is stored, then delete, then return):</p>
+<pre><code class="language-jsx">    const _attachLinkedBookings = async (customerId, customerHN) =&gt; {
+      if (!customerId) return null;
+      const fname = patient.firstname || patient.firstName || '';
+      const lname = patient.lastname || patient.lastName || '';
+      const customerName = `${patient.prefix || ''} ${fname} ${lname}`.trim();
+      let r = null;
+      try {
+        const mod = await import('../lib/appointmentDepositBatch.js');
+        if (typeof mod.attachCustomerToOpdSessionLinks === 'function') {
+          r = await mod.attachCustomerToOpdSessionLinks(sessionId, { customerId, customerName, customerHN: customerHN || '' });
+          const total = (r?.depositCount || 0) + (r?.appointmentCount || 0);
+          if (total &gt; 0) showToast(`บันทึกลง OPD สำเร็จ + ผูกนัด/มัดจำ ${total} รายการ`);
+        }
+      } catch (e) {
+        console.warn('[handleOpdClick] attachCustomerToOpdSessionLinks failed (best-effort):', e);
+        showToast('บันทึก OPD สำเร็จ — ผูกนัด/มัดจำล้มเหลว กรุณาลองใหม่');
+      }
+      // ④ (2026-05-26) — link/booking session is redundant once the customer is
+      // saved to be_customers (customerId truthy = saved). Hard-delete it to
+      // prevent opd_sessions buildup (perf). Gated on isFromBookingFlow so kiosk
+      // walk-in sessions (which open the walk-in modal next) are NOT deleted.
+      // Best-effort: delete failure → the cron sweep (③) catches it; never roll
+      // back the successful save. AV131.
+      if (isFromBookingFlow) {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
+        } catch (delErr) {
+          console.warn('[handleOpdClick] post-save session delete failed (best-effort; cron will sweep):', delErr);
+        }
+      }
+      return r;
+    };</code></pre>
+
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-session-delete-on-save.test.js</code> → PASS. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx tests/opd-session-delete-on-save.test.js
+git commit -m "feat(opd): hard-delete link session on OPD-save success, gated on isFromBookingFlow (④, AV131)"</code></pre>
+</div>
+
+<!-- ============================ TASK 8 ============================ -->
+<div class="task">
+  <h3>Task 8: Rule I full-flow simulate (lifecycle chain)</h3>
+  <p><strong>Files:</strong> Test: <code>tests/appt-hub-opd-lifecycle-flow-simulate.test.js</code></p>
+  <p>Chains the REAL pure helpers across the lifecycle so a future refactor can't silently break the tab↔cleanup↔save contract.</p>
+
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write the simulate test</strong></label></div>
+<pre><code class="language-javascript">// tests/appt-hub-opd-lifecycle-flow-simulate.test.js
+import { describe, it, expect } from 'vitest';
+import { isAppointmentOpdPending, resolveCardOpdState } from '../src/lib/opdSessionState.js';
+import { applyTabFilter } from '../src/lib/appointmentHubFilters.js';
+import { decideCleanupAction } from '../src/lib/opdSessionCleanupCore.js';
+
+const TODAY = '2026-06-01';
+const now = new Date(`${TODAY}T03:00:00Z`); // Bangkok 2026-06-01
+
+// Pure mirror of the in-view opd-pending pipeline (applyTabFilter + state filter).
+function opdPendingList(appts, sessionsById) {
+  return applyTabFilter(appts, { tab: 'opd-pending', now })
+    .filter(a =&gt; isAppointmentOpdPending({ appt: a, linkedSession: a.linkedOpdSessionId ? sessionsById[a.linkedOpdSessionId] || null : null }));
+}
+
+describe('OPD-pending lifecycle — tab ↔ cleanup ↔ save', () =&gt; {
+  it('C (link sent, future) appears in tab; cleanup keeps it (date not passed)', () =&gt; {
+    const appt = { id: 'x', date: '2026-06-05', startTime: '10:00', status: 'pending', linkedOpdSessionId: 's' };
+    const sess = { id: 's', createdAt: now.getTime(), linkedAppointmentId: 'x' }; // no patientData → C
+    expect(opdPendingList([appt], { s: sess })).toHaveLength(1);
+    const cleanup = decideCleanupAction({ ...sess, appointmentDate: appt.date }, now.getTime(), undefined, TODAY);
+    expect(cleanup.action).toBe('skip'); // future + fresh
+  });
+
+  it('D (filled, date passed) leaves the tab (past hidden) AND cleanup hard-deletes it (Q3=A)', () =&gt; {
+    const appt = { id: 'x', date: '2026-05-25', startTime: '10:00', status: 'pending', linkedOpdSessionId: 's' };
+    const sess = { id: 's', createdAt: now.getTime(), linkedAppointmentId: 'x', patientData: { firstName: 'a' } }; // D
+    expect(resolveCardOpdState({ appt, linkedSession: sess })).toBe('D');
+    expect(opdPendingList([appt], { s: sess })).toHaveLength(0); // date &lt; today → out of range
+    const cleanup = decideCleanupAction({ ...sess, appointmentDate: appt.date }, now.getTime(), undefined, TODAY);
+    expect(cleanup.action).toBe('delete');
+    expect(cleanup.reason).toBe('appt-date-passed');
+  });
+
+  it('after save: appt gets customerId (state A) → leaves the tab', () =&gt; {
+    const appt = { id: 'x', date: '2026-06-05', startTime: '10:00', status: 'pending', linkedOpdSessionId: 's', customerId: 'cust-1' };
+    expect(resolveCardOpdState({ appt, linkedSession: { patientData: { firstName: 'a' } } })).toBe('A');
+    expect(opdPendingList([appt], { s: { patientData: { firstName: 'a' } } })).toHaveLength(0);
+  });
+
+  it('B (no link, future) appears (Q1) ; cancelled never appears', () =&gt; {
+    const b = { id: 'b', date: '2026-06-03', startTime: '09:00', status: 'pending' };
+    const cancelled = { id: 'c', date: '2026-06-03', startTime: '09:00', status: 'cancelled', linkedOpdSessionId: 's2' };
+    const list = opdPendingList([b, cancelled], { s2: { patientData: { firstName: 'z' } } });
+    expect(list.map(a =&gt; a.id)).toEqual(['b']);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appt-hub-opd-lifecycle-flow-simulate.test.js</code> → PASS (helpers from Tasks 3/5 already exist).</p>
+
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/appt-hub-opd-lifecycle-flow-simulate.test.js
+git commit -m "test(appt-hub): Rule I flow-simulate — tab/cleanup/save lifecycle chain"</code></pre>
+</div>
+
+<!-- ============================ TASK 9 ============================ -->
+<div class="task">
+  <h3>Task 9: Rule Q L2 — admin-SDK e2e on REAL prod (③④)</h3>
+  <p><strong>Files:</strong> Create: <code>scripts/e2e-opd-link-lifecycle.mjs</code></p>
+  <p>③④ mutate real Firestore; per Rule Q this needs real-data verification (not mocks). Admin-SDK doc-level is acceptable here — NO new composite index / rules (R: be_appointments + opd_sessions already exist; the cron's join is a getAll read). Uses TEST-/E2E- prefixed fixtures per the test-prefix discipline. Env via Rule R (<code>vercel env pull .env.local.prod</code>).</p>
+
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write the e2e script</strong></label></div>
+<pre><code class="language-javascript">// scripts/e2e-opd-link-lifecycle.mjs
+// Rule Q L2 — real-prod admin-SDK verification of ③ (cron date-passed delete)
+// and ④ (delete-on-save). TEST-prefixed fixtures; cleans up; writes audit doc.
+// Run: node scripts/e2e-opd-link-lifecycle.mjs
+import 'dotenv/config';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { sweepOpdSessionCleanup } from '../api/cron/opd-session-cleanup-sweep.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const PREFIX = `artifacts/${APP_ID}/public/data`;
+
+function loadEnv() {
+  // .env.local.prod from `vercel env pull` (Rule R). Minimal parse.
+  const raw = readFileSync('.env.local.prod', 'utf8');
+  const get = (k) =&gt; (raw.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1]?.replace(/^"|"$/g, '') || '';
+  return {
+    projectId: get('FIREBASE_ADMIN_PROJECT_ID') || APP_ID,
+    clientEmail: get('FIREBASE_ADMIN_CLIENT_EMAIL'),
+    privateKey: get('FIREBASE_ADMIN_PRIVATE_KEY').split('\\n').join('\n'),
+  };
+}
+
+async function main() {
+  if (!getApps().length) initializeApp({ credential: cert(loadEnv()) });
+  const db = getFirestore();
+  const ts = Date.now();
+  const apptId = `TEST-APPT-${ts}`;
+  const pastSessId = `TEST-OPD-PAST-${ts}`;
+  const futureSessId = `TEST-OPD-FUTURE-${ts}`;
+  const apptRef = db.doc(`${PREFIX}/be_appointments/${apptId}`);
+  const futureApptId = `TEST-APPT-FUT-${ts}`;
+  const futureApptRef = db.doc(`${PREFIX}/be_appointments/${futureApptId}`);
+  const pastRef = db.doc(`${PREFIX}/opd_sessions/${pastSessId}`);
+  const futureRef = db.doc(`${PREFIX}/opd_sessions/${futureSessId}`);
+
+  // Bangkok dates relative to "now".
+  const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+  const iso = (d) =&gt; `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  const yesterday = iso(new Date(bkk.getTime() - 86400000));
+  const nextWeek = iso(new Date(bkk.getTime() + 7 * 86400000));
+
+  let pass = 0, fail = 0;
+  const check = (name, ok) =&gt; { console.log(`${ok ? 'PASS' : 'FAIL'} — ${name}`); ok ? pass++ : fail++; };
+  try {
+    // Seed: past appt + its session (with patientData → D), future appt + session.
+    await apptRef.set({ date: yesterday, branchId: 'TEST', appointmentType: 'no-deposit-booking' });
+    await futureApptRef.set({ date: nextWeek, branchId: 'TEST', appointmentType: 'no-deposit-booking' });
+    await pastRef.set({ createdAt: new Date(), linkedAppointmentId: apptId, patientData: { firstName: 'TEST' } });
+    await futureRef.set({ createdAt: new Date(), linkedAppointmentId: futureApptId });
+
+    // ③ — run the REAL sweep (apply). Past-dated session must be deleted even with patientData (Q3=A).
+    await sweepOpdSessionCleanup({ db, now: Date.now(), apply: true });
+    check('③ past-date session deleted (even with patientData)', !(await pastRef.get()).exists);
+    check('③ future-date session preserved', (await futureRef.get()).exists);
+
+    // ④ — simulate the save-delete: the gated hard-delete a link session receives.
+    await futureRef.set({ createdAt: new Date(), linkedAppointmentId: futureApptId, createdFromBackendBooking: true });
+    await futureRef.delete(); // ④ effect (best-effort hard delete)
+    check('④ link session hard-deleted on save', !(await futureRef.get()).exists);
+
+    // Idempotent: re-run sweep yields no error + no resurrection.
+    const r2 = await sweepOpdSessionCleanup({ db, now: Date.now(), apply: true });
+    check('③ idempotent re-run', typeof r2.deleted === 'number');
+  } finally {
+    // Cleanup any survivors.
+    await Promise.allSettled([apptRef.delete(), futureApptRef.delete(), pastRef.delete(), futureRef.delete()]);
+    // Audit doc.
+    await db.doc(`${PREFIX}/be_admin_audit/e2e-opd-link-lifecycle-${ts}`).set({
+      op: 'e2e-opd-link-lifecycle', pass, fail, ranAt: new Date().toISOString(),
+    });
+  }
+  console.log(`\n${pass}/${pass + fail} PASS`);
+  if (fail) process.exit(1);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(e =&gt; { console.error(e); process.exit(1); });</code></pre>
+
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Pull env + run against real prod</strong></label></div>
+  <p>Run: <code>vercel env pull .env.local.prod --environment=production</code> (Rule R; reuse if pulled this session), then <code>node scripts/e2e-opd-link-lifecycle.mjs</code>.</p>
+  <p>Expected: <code>N/N PASS</code>, fixtures cleaned, audit doc written. If FAIL, fix the implementation (not the test) and re-run.</p>
+
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add scripts/e2e-opd-link-lifecycle.mjs
+git commit -m "test(opd): Rule Q L2 real-prod e2e — date-passed delete + save-delete (③④)"</code></pre>
+</div>
+
+<!-- ============================ TASK 10 ============================ -->
+<div class="task">
+  <h3>Task 10: AV131 invariant + audit test</h3>
+  <p><strong>Files:</strong> Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> · Test: <code>tests/av131-opd-link-lifecycle.test.js</code></p>
+
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: Write the failing audit test</strong></label></div>
+<pre><code class="language-javascript">// tests/av131-opd-link-lifecycle.test.js
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+
+describe('AV131 — OPD link lifecycle invariants', () =&gt; {
+  it('opd-pending tab membership goes through isAppointmentOpdPending (single source)', () =&gt; {
+    const view = fs.readFileSync('src/components/admin/AppointmentHubView.jsx', 'utf8');
+    expect(view).toMatch(/isAppointmentOpdPending\(/);
+    // no inline state-string comparison for the tab membership (must use the helper)
+    expect(view).not.toMatch(/activeTab === 'opd-pending'[\s\S]{0,120}=== 'B'/);
+  });
+  it('decideCleanupAction has the appt-date-passed branch above the age logic', () =&gt; {
+    const core = fs.readFileSync('src/lib/opdSessionCleanupCore.js', 'utf8');
+    const idxDate = core.indexOf("reason: 'appt-date-passed'");
+    const idxAge = core.indexOf('createdAtMs(data)');
+    expect(idxDate).toBeGreaterThan(-1);
+    expect(idxDate).toBeLessThan(idxAge); // date branch fires before age check
+  });
+  it('④ session delete is gated on isFromBookingFlow + best-effort', () =&gt; {
+    const dash = fs.readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+    const fn = dash.slice(dash.indexOf('const _attachLinkedBookings'), dash.indexOf('const hasExistingProClinic'));
+    expect(fn).toMatch(/if\s*\(\s*isFromBookingFlow\s*\)/);
+    expect(fn).toMatch(/deleteDoc\([^)]*opd_sessions[^)]*sessionId/);
+  });
+  it('AV131 documented in the audit skill', () =&gt; {
+    const skill = fs.readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8');
+    expect(skill).toMatch(/AV131/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/av131-opd-link-lifecycle.test.js</code> → FAIL (AV131 not in SKILL.md).</p>
+
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: Add AV131 to the audit skill</strong></label></div>
+  <p>Append to <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (HIGH priority invariant):</p>
+<pre><code class="language-markdown">### AV131 — OPD link lifecycle (2026-05-26)
+
+OPD-pending tab membership + opd_session cleanup discipline:
+
+1. **Tab membership single-source**: the "รอ/ยังไม่ลง OPD" tab (AppointmentHubView)
+   MUST derive membership via `isAppointmentOpdPending({appt, linkedSession})`
+   (which wraps `resolveCardOpdState`). No inline state-string comparison.
+   Grep: `isAppointmentOpdPending(` present in AppointmentHubView.jsx.
+2. **Date-passed hard delete**: `decideCleanupAction` MUST delete an opd_session
+   whose linked appointment date has passed (reason `'appt-date-passed'`), ABOVE
+   the 2h-age logic, overriding V116 hide + firing even with patientData (Q3=A).
+   The cron joins be_appointments for the date (sessions don't store it).
+3. **Delete-on-save gated**: the post-OPD-save session delete in
+   `_attachLinkedBookings` MUST be gated on `isFromBookingFlow` (kiosk walk-in
+   sessions are NEVER deleted — the walk-in modal needs them) and best-effort
+   (delete failure never rolls back the save; the cron sweep catches it).
+
+Sanctioned exceptions: NONE. Tests: tests/av131-opd-link-lifecycle.test.js +
+tests/opd-pending-tab.test.js + tests/opd-session-date-passed-cleanup.test.js +
+tests/opd-session-delete-on-save.test.js + tests/appt-hub-opd-lifecycle-flow-simulate.test.js.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/av131-opd-link-lifecycle.test.js</code> → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t10s5"> <label for="t10s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md tests/av131-opd-link-lifecycle.test.js
+git commit -m "audit(AV131): OPD link lifecycle invariants (②③④)"</code></pre>
+</div>
+
+<!-- ============================ TASK 11 ============================ -->
+<div class="task">
+  <h3>Task 11: V21 fixups + full suite + build</h3>
+  <p><strong>Files:</strong> existing tests that lock the old shapes.</p>
+
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Find the lock-ins</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> (full suite). Expect failures in tests that asserted: (a) the old <code>appt-hub-walkin-btn</code> testid / "เพิ่มคิว Walk-in" label / <code>onAddWalkIn</code> prop (e.g. <code>tests/v64-appointment-hub-rtl.test.jsx</code>); (b) a 4-entry <code>TABS</code> count in AppointmentHubTabBar (the new 5th pill); (c) any AdminDashboard test asserting the <code>onAddWalkIn</code> prop is passed to AppointmentHubView.</p>
+
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: Fix each failing assertion to the NEW contract</strong></label></div>
+  <p>For each failure: update the testid → <code>appt-hub-add-appt-btn</code>, label → "เพิ่มนัดหมาย", prop → <code>onAddAppointment</code>, TABS length 4 → 5 (add the <code>opd-pending</code> entry to expectation arrays), and remove any assertion that <code>onAddWalkIn</code> is passed to AppointmentHubView. Add a one-line comment on each fixup: <code>// 2026-05-26 (①/②) — relabel/new-pill; was &lt;old&gt;</code>. Do NOT weaken assertions — re-point them at the new contract.</p>
+
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: Full suite + build green</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → 0 fail. Then <code>npm run build</code> → clean. (Rule N: this is the batch-end full-suite gate.)</p>
+
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/
+git commit -m "test: V21 fixups for relabel button + opd-pending pill (①②)"</code></pre>
+</div>
+
+<h2>Self-Review (run after writing — done)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> ① → T1+T2 · ② → T3+T4 · ③ → T5+T6 · ④ → T7 · verification → T8 (Rule I) + T9 (Rule Q L2) · AV131 → T10 · regression → T11. R1 resolved by reuse (T2). R5 handled (T6 join). R6 noted (T2 leaves kiosk infra; out of scope). R3/R4 accepted (today+30 window; state-B included).</li>
+  <li><strong>Placeholder scan:</strong> every code step shows real code. The one soft spot — T4 RTL final assertion (row-id vs customer-render) — is flagged with explicit alternatives + the load-bearing assertions (pill text + count=3) are concrete.</li>
+  <li><strong>Type consistency:</strong> <code>isAppointmentOpdPending({appt, linkedSession})</code> signature matches across T3/T4/T8/T10; <code>decideCleanupAction(data, nowMs, timeoutMs, todayISO)</code> 4th param consistent T5/T6/T8/T9; <code>onAddAppointment</code> consistent T1/T2/T11; <code>'opd-pending'</code> tab key consistent T3/T4/T11.</li>
+</ul>
+
+<h2>Post-implementation (user-gated)</h2>
+<ul>
+  <li><strong>No deploy without explicit "deploy"</strong> (V18). All changes are client + cron + a pure-helper — <strong>NO firestore.rules / no new composite index</strong> → no Probe-Deploy-Probe. Deploy = <code>vercel --prod</code> (frontend + the cron) when authorized.</li>
+  <li><strong>Rule Q L1 (user, post-deploy):</strong> click "เพิ่มนัดหมาย" → pick each type → saves like ปฏิทิน; open "รอ/ยังไม่ลง OPD" → see B/C/D rows (today+future, no past); save a pending one → it leaves the tab + its link is gone; a past-dated test link disappears after the cron runs.</li>
+</ul>
+
+</body>
+</html>
