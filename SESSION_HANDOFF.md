@@ -95,6 +95,17 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **Deploy**: ✅ **DONE this session** (V15 combined, user-authorized "ผ่านหมดจริงๆค่อย deploy") — `vercel --prod` (aliased) **+** `firebase deploy --only storage` (**P-D-P #13**: anon 403 pre+post; rules compiled + released). **Object-level re-edit unlocked LIVE** (PC + tablet). Remaining: on-device L1 by user. [⚠ firebase CLI 15.x: `--only storage`, NOT `storage:rules`.]
 - **Findings (flagged)**: object-level re-edit is **live-gated on the storage deploy** (client json upload denied until then → fabricJson null → raster fallback, which works). Pre-existing limit: a single chart PNG dataUrl > ~1MB risks the Firestore doc cap — Storage-ref is the architectural follow-up (decide separately; the new size guard prevents the fabricJson from compounding it).
 
+### Session 2026-05-26 EOD+2 — Frontend 4-tab removal + deposit-aware cancel dialog SHIPPED (LOCAL)
+
+Full `/session-start` → `brainstorming` (Visual Companion via AskUserQuestion previews) → spec → `writing-plans` → `executing-plans` (T1–T11, Rule K). master = `e84d2538`; prod UNCHANGED `65ab6467` (await "deploy", V18).
+
+- **Part 1** — removed 4 tabs (คิวหน้า Clinic / จองไม่มัดจำ / จองมัดจำ / ประวัติ): default landing → นัดหมาย + redirect guard in the `setAdminMode` wrapper + repointed nav; tab buttons removed (desktop + mobile dock); 5 dead render branches excised (~750 lines, chain now chat→clinicSettings→appointment); orphaned `showMobileJongPicker` removed. KEPT deposit/noDeposit state + create-forms (still used by viewingSession resolver + สร้างคิวใหม่ — not orphaned).
+- **Part 2** — deposit-aware cancel dialog (AV132): NEW `resolveDepositCancelState` + shared `DepositAwareCancelDialog` (both|this-only|cancel; hard-delete via `deleteDepositBookingPair`; used-deposit blocks delete) wired into ALL 3 cancel surfaces (นัดหมาย / AppointmentCalendarView / Finance·มัดจำ — fixes the Finance orphan-appt gap). AppointmentFormModal flip-away left as-is.
+- **Verify**: full vitest **14712/14712 — 0 fail** · build clean · real-prod e2e **31/0** (`scripts/e2e-deposit-cancel-dialog.mjs` — ran the REAL decision helper on 11 REAL prod deposits + both/keep/used-block cascade on TEST- fixtures). 11 V21-fixup test files (flipped removed-render/old-calview/trigger-count assertions). **NO rules/index change → no Probe-Deploy-Probe.**
+- **Decisions**: Q1=นัดหมาย default · Q2=นัดหมายครอบคลุมหมด · Q3=ลบหายเลย hard-delete · Q4=ทุกที่ที่ยกเลิกได้ (3 surfaces).
+- **Rule Q-honest**: deposit-cancel LOGIC = L2 (e2e real prod); tab-removal RENDER = build + markers + suite, **real-browser render L1 = USER post-deploy** (workstyle ไม่ self-test UI + auth-gated AdminDashboard; not driven by me — disclosed).
+- Detail: `.agents/sessions/2026-05-26-tab-removal-deposit-cancel-dialog.md`.
+
 ### Session 2026-05-26 EOD+1 — Appointment-hub all-types button + "รอ/ยังไม่ลง OPD" tab + OPD-link auto-cleanup SHIPPED (LOCAL)
 
 Full `/session-start` → `brainstorming` (Visual Companion via AskUserQuestion previews — Rule S: no live browser at ask/plan) → spec → `writing-plans` → `executing-plans` (11 tasks T1–T11, inline per V81/V86). master = `b476f615`; prod UNCHANGED `65ab6467` (await "deploy", V18).
