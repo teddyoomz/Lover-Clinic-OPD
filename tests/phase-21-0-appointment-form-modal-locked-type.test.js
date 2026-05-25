@@ -37,7 +37,11 @@ describe('Phase 21.0 — F1 lockedAppointmentType prop', () => {
     // an inline deposit subform. Admin can create the paired deposit-
     // booking from this modal directly via createDepositBookingPair.
     expect(SRC).toMatch(/data-testid=['"]appt-deposit-subform['"]/);
-    expect(SRC).toMatch(/isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]\s*&&\s*\(/);
+    // V-appt-deposit (2026-05-25) — the render gate broadened from the locked-only
+    // `isLockedDepositType && mode==='create'` to the effective-type `showDepositSection`
+    // (= isDepositBooking), so picking จองมัดจำ via radio shows the section in create + edit.
+    expect(SRC).toMatch(/\{showDepositSection && \(/);
+    expect(SRC).toMatch(/const\s+showDepositSection\s*=\s*isDepositBooking/);
     expect(SRC).toMatch(/💰\s*รายละเอียดมัดจำ/);
     // Anti-regression: the legacy redirect banner + button MUST be gone.
     expect(SRC).not.toMatch(/appt-deposit-redirect-banner/);
@@ -59,7 +63,10 @@ describe('Phase 21.0 — F1 lockedAppointmentType prop', () => {
   });
 
   test('F1.8 handleSave validates deposit fields when isCreatingDepositBooking', () => {
-    expect(SRC).toMatch(/const\s+isCreatingDepositBooking\s*=\s*isLockedDepositType\s*&&\s*mode\s*===\s*['"]create['"]/);
+    // V-appt-deposit (2026-05-25) — isCreatingDepositBooking now keys off the EFFECTIVE
+    // type (isDepositBooking), not isLockedDepositType, so radio-picked จองมัดจำ routes
+    // to createDepositBookingPair on create too. (Validation gates on showDepositSection.)
+    expect(SRC).toMatch(/const\s+isCreatingDepositBooking\s*=\s*isDepositBooking\s*&&\s*mode\s*===\s*['"]create['"]/);
     expect(SRC).toMatch(/parseFloat\(formData\.depositAmount\)/);
     expect(SRC).toMatch(/scrollToFormError\(['"]depositAmount['"]/);
     expect(SRC).toMatch(/scrollToFormError\(['"]depositPaymentChannel['"]/);
