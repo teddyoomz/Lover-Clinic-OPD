@@ -37,7 +37,9 @@ describe('Menu Variant A v2 — Phase A (2026-05-18)', () => {
   });
 
   // ───── 8 desktop tabs — all setAdminMode handlers preserved ─────
-  const tabModes = ['chat', 'dashboard', 'noDeposit', 'deposit', 'appointment', 'history', 'clinicSettings'];
+  // (2026-05-26) tab removal — คิวหน้า Clinic/จองไม่มัดจำ/จองมัดจำ/ประวัติ removed
+  // (unified into นัดหมาย); only chat/appointment/clinicSettings survive.
+  const tabModes = ['chat', 'appointment', 'clinicSettings'];
   for (const mode of tabModes) {
     it(`M2.${mode} desktop tab dispatches setAdminMode('${mode}')`, () => {
       expect(SRC).toMatch(new RegExp(`setAdminMode\\('${mode}'\\)`));
@@ -51,39 +53,40 @@ describe('Menu Variant A v2 — Phase A (2026-05-18)', () => {
   it('M3.1 chat badge: isChatActive && chatUnread > 0 → blue-500', () => {
     expect(SRC).toMatch(/isChatActive\s*&&\s*chatUnread\s*>\s*0[\s\S]{0,200}?background:\s*['"]#3b82f6['"]/);
   });
-  it('M3.2 queue badge: unreadCount > 0 → red-500', () => {
-    expect(SRC).toMatch(/unreadCount\s*>\s*0[\s\S]{0,200}?background:\s*['"]#ef4444['"]/);
+  // (2026-05-26) tab removal — queue/no-deposit/deposit menu badges removed with their tabs.
+  it('M3.2 queue badge (#ef4444) removed with คิวหน้า Clinic tab', () => {
+    expect(SRC).not.toMatch(/unreadCount\s*>\s*0[\s\S]{0,200}?background:\s*['"]#ef4444['"]/);
   });
-  it('M3.3 no-deposit badge: noDepositSessions.filter(s=>s.isUnread).length → orange-500', () => {
-    expect(SRC).toMatch(/noDepositSessions\.filter\(s\s*=>\s*s\.isUnread\)\.length[\s\S]{0,300}?background:\s*['"]#f97316['"]/);
+  it('M3.3 no-deposit badge (#f97316) removed with จองไม่มัดจำ tab', () => {
+    expect(SRC).not.toMatch(/noDepositSessions\.filter\(s\s*=>\s*s\.isUnread\)\.length[\s\S]{0,300}?background:\s*['"]#f97316['"]/);
   });
-  it('M3.4 deposit badge: depositSessions.filter(s=>s.isUnread).length → emerald-500', () => {
-    expect(SRC).toMatch(/depositSessions\.filter\(s\s*=>\s*s\.isUnread\)\.length[\s\S]{0,300}?background:\s*['"]#10b981['"]/);
+  it('M3.4 deposit badge (#10b981) removed with จองมัดจำ tab', () => {
+    expect(SRC).not.toMatch(/depositSessions\.filter\(s\s*=>\s*s\.isUnread\)\.length[\s\S]{0,300}?background:\s*['"]#10b981['"]/);
   });
 
   // ───── Mobile bottom dock ─────
   it('M4.1 bottom dock has data-testid', () => {
     expect(SRC).toMatch(/data-testid="menu-bottom-dock"/);
   });
-  it('M4.2 bottom dock has 5 slots: chat / dashboard / appointment / jong / more', () => {
-    for (const tab of ['chat', 'dashboard', 'appointment', 'jong', 'more']) {
+  it('M4.2 bottom dock has 3 slots: chat / appointment / more (dashboard + jong removed 2026-05-26)', () => {
+    for (const tab of ['chat', 'appointment', 'more']) {
       expect(SRC).toMatch(new RegExp(`data-tab="${tab}"`));
     }
+    expect(SRC).not.toMatch(/data-tab="dashboard"/);
+    expect(SRC).not.toMatch(/data-tab="jong"/);
   });
-  it('M4.3 จอง slot opens BottomSheet picker (setShowMobileJongPicker(true))', () => {
-    expect(SRC).toMatch(/setShowMobileJongPicker\(true\)/);
+  it('M4.3 จอง slot + BottomSheet picker REMOVED (2026-05-26 — no setShowMobileJongPicker)', () => {
+    expect(SRC).not.toMatch(/setShowMobileJongPicker/);
   });
   it('M4.4 ⋯ เพิ่ม slot opens drawer (setShowMobileMoreDrawer(true))', () => {
     expect(SRC).toMatch(/setShowMobileMoreDrawer\(true\)/);
   });
-  it('M4.5 BottomSheet picker has both จองไม่มัดจำ + จองมัดจำ options', () => {
-    expect(SRC).toMatch(/data-testid="menu-jong-sheet"/);
-    expect(SRC).toMatch(/setAdminMode\('noDeposit'\);\s*setShowMobileJongPicker\(false\)/);
-    expect(SRC).toMatch(/setAdminMode\('deposit'\);\s*setShowMobileJongPicker\(false\)/);
+  it('M4.5 BottomSheet จอง picker REMOVED (2026-05-26 — menu-jong-sheet gone)', () => {
+    expect(SRC).not.toMatch(/data-testid="menu-jong-sheet"/);
   });
-  it('M4.6 More drawer has ประวัติ / ตั้งค่า / หลังบ้าน / theme / signOut', () => {
+  it('M4.6 More drawer has ตั้งค่า / หลังบ้าน / signOut (ประวัติ removed 2026-05-26)', () => {
     expect(SRC).toMatch(/data-testid="menu-more-drawer"/);
-    expect(SRC).toMatch(/setAdminMode\('history'\);\s*setShowMobileMoreDrawer\(false\)/);
+    expect(SRC).not.toMatch(/setAdminMode\('history'\);\s*setShowMobileMoreDrawer\(false\)/);
     expect(SRC).toMatch(/setAdminMode\('clinicSettings'\);\s*setShowMobileMoreDrawer\(false\)/);
     expect(SRC).toMatch(/window\.open\('\?backend=1', '_blank'\);\s*setShowMobileMoreDrawer\(false\)/);
     expect(SRC).toMatch(/signOut\(auth\)/);
