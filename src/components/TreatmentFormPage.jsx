@@ -386,6 +386,16 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
     );
   }
   const isEdit = mode === 'edit';
+  // 2026-05-25 — blob-remove cleanup. CREATE mode: a removed blob was uploaded this
+  // session + is in NO saved doc → delete the orphan Storage object now. EDIT mode:
+  // the saved doc may STILL reference it (until + unless this edit is saved) →
+  // do NOT delete here, or cancelling-without-saving would 404 the image. Removed-
+  // in-edit blobs become harmless orphans (negligible Storage cost; the delete-
+  // treatment cascade still cleans referenced blobs on full delete). Shared by the
+  // 4 TFP remove handlers + ChartSection (onBlobRemoved).
+  const removeTreatmentBlob = useCallback((storagePath) => {
+    if (storagePath && !isEdit) deleteTreatmentBlob(storagePath).catch(() => {});
+  }, [isEdit]);
   // Note: `canAddNewItems` flag is declared lower (after the
   // `loadedTreatmentStatus` useState declaration) to avoid a temporal
   // dead zone reference error. See the Phase 26.0a comment block below
@@ -3730,7 +3740,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
 
           {/* ── Chart (บันทึกแผนผังการรักษา) ────────────────────────────────── */}
           <FormSection isDark={isDark}>
-            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} patientLabel={patientName ? `คุณ ${patientName}${customerHNProp ? ` (HN ${customerHNProp})` : ''}` : (customerHNProp ? `HN ${customerHNProp}` : '')} customerId={customerId} />
+            <ChartSection charts={charts} onChartsChange={setCharts} isDark={isDark} accent="#14b8a6" db={db} appId={appId} patientLabel={patientName ? `คุณ ${patientName}${customerHNProp ? ` (HN ${customerHNProp})` : ''}` : (customerHNProp ? `HN ${customerHNProp}` : '')} customerId={customerId} onBlobRemoved={removeTreatmentBlob} />
           </FormSection>
 
           {/* ── Treatment Images (รูปภาพการรักษา) ────────────────────────── */}
@@ -3782,7 +3792,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-[#333] group">
                         <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
                         <button onClick={() => {
-                            if (img?.storagePath) deleteTreatmentBlob(img.storagePath).catch(() => {});
+                            removeTreatmentBlob(img?.storagePath);
                             setImages(prev => prev.filter((_, i) => i !== idx));
                           }}
                           aria-label={`ลบรูปที่ ${idx + 1}`}
@@ -3884,7 +3894,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                             <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
                             <button onClick={() => {
                                 const removed = labItems[li]?.images?.[ii];
-                                if (removed?.storagePath) deleteTreatmentBlob(removed.storagePath).catch(() => {});
+                                removeTreatmentBlob(removed?.storagePath);
                                 setLabItems(prev => prev.map((l, i) => i === li ? { ...l, images: l.images.filter((_, j) => j !== ii) } : l));
                               }}
                               aria-label={`ลบรูป Lab ที่ ${ii + 1}`}
@@ -3901,7 +3911,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                           <span className="text-xs text-cyan-500">{lab.pdfFileName || (lab.fileId ? `ไฟล์ #${lab.fileId}` : 'PDF')}</span>
                           <button onClick={() => {
                               const removed = labItems[li];
-                              if (removed?.pdfStoragePath) deleteTreatmentBlob(removed.pdfStoragePath).catch(() => {});
+                              removeTreatmentBlob(removed?.pdfStoragePath);
                               setLabItems(prev => prev.map((l, i) => i === li ? { ...l, pdfBase64: '', pdfStoragePath: '', pdfFileName: '', fileId: '' } : l));
                             }}
                             aria-label="ลบไฟล์ PDF Lab"
@@ -4037,7 +4047,7 @@ export default function TreatmentFormPage({ mode = 'create', customerId, custome
                       </span>
                       <button type="button" onClick={() => {
                           const removed = treatmentFiles[ti];
-                          if (removed?.pdfStoragePath) deleteTreatmentBlob(removed.pdfStoragePath).catch(() => {});
+                          removeTreatmentBlob(removed?.pdfStoragePath);
                           setTreatmentFiles(prev => prev.map((f, i) => i === ti ? { ...f, pdfBase64: '', pdfStoragePath: '', pdfFileName: '', fileId: '' } : f));
                         }}
                         className={`text-xs font-bold px-2 py-1 rounded border transition-all flex items-center gap-1 ${isDark ? 'border-red-900/50 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-500 hover:bg-red-50'}`}>

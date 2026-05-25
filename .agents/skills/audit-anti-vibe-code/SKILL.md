@@ -3130,6 +3130,7 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 - ❌ `FileReader.readAsDataURL` / `canvas.toDataURL(...)` feeding a base64 string into TFP image/PDF state or the persist map (the pre-AV129 inline pattern). TFP must contain ZERO `readAsDataURL` / `toDataURL` (resize lives only in `treatmentImageUpload.js`).
 - ❌ persisting `dataUrl: '<data:...>'` or `pdfBase64: '<data:...>'` for a NEW upload.
 - ❌ adding a blob field without a matching `storagePath`/`pdfStoragePath` + a `deleteBackendTreatment` cascade entry.
+- ❌ eagerly deleting a blob's Storage object on remove in EDIT mode — the saved doc still references it until save, so cancelling-without-saving would 404 the image. Delete on remove ONLY in CREATE mode (true orphan) via `removeTreatmentBlob` (TFP) / `onBlobRemoved` (ChartSection); removed-in-edit blobs become harmless orphans (negligible Storage cost). Found by the 2026-05-25 stress test.
 
 **Sanctioned consumers**: `src/lib/treatmentImageUpload.js` + `src/lib/chartImageStorage.js` (upload/delete) · `src/components/TreatmentFormPage.jsx` (4 upload sites + persist + remove) · `src/components/ChartCanvas.jsx` (chart) · `src/lib/backendClient.js` `deleteBackendTreatment` (cascade). storage.rules `uploads/{collection}/{docId}/{fileName}` already allows image/* + application/pdf (≤10MB, clinic-staff) — NO rules change.
 

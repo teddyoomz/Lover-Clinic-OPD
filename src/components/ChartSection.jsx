@@ -13,7 +13,16 @@ import { auth } from '../firebase.js';
 // URL strings to the doc, NOT 10 inline base64 PNGs.
 const MAX_CHARTS = 10;
 
-export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '', customerId = '' }) {
+export default function ChartSection({ charts, onChartsChange, isDark, accent, db, appId, patientLabel = '', customerId = '', onBlobRemoved = null }) {
+  // 2026-05-25 — route chart-blob removal through the parent (TFP) so edit-mode
+  // defers/skips the Storage delete (a saved doc still references it until save —
+  // deleting now would 404 the chart if the user cancels). Falls back to a direct
+  // delete when used without the prop (defensive; ChartSection is TFP-only today).
+  const removeChartBlob = (path) => {
+    if (!path) return;
+    if (onBlobRemoved) onBlobRemoved(path);
+    else import('../lib/chartImageStorage.js').then(m => m.deleteChartImage(path)).catch(() => {});
+  };
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [canvasTemplate, setCanvasTemplate] = useState(null);
@@ -62,7 +71,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
             ? (() => { try { return decodeURIComponent(old.dataUrl.match(/\/o\/([^?]+)/)?.[1] || ''); } catch { return ''; } })()
             : '');
       if (oldPath && oldPath !== entry.storagePath) {
-        import('../lib/chartImageStorage.js').then(m => m.deleteChartImage(oldPath)).catch(() => {});
+        removeChartBlob(oldPath);
       }
       onChartsChange(prev => prev.map((c, i) => i === editingIdx ? entry : c));
     } else {
@@ -78,9 +87,7 @@ export default function ChartSection({ charts, onChartsChange, isDark, accent, d
       || (typeof c?.dataUrl === 'string' && c.dataUrl.startsWith('http')
           ? (() => { try { return decodeURIComponent(c.dataUrl.match(/\/o\/([^?]+)/)?.[1] || ''); } catch { return ''; } })()
           : '');
-    if (path) {
-      import('../lib/chartImageStorage.js').then(m => m.deleteChartImage(path)).catch(() => {});
-    }
+    removeChartBlob(path);
     onChartsChange(prev => prev.filter((_, i) => i !== idx));
   };
 

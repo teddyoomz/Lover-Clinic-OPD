@@ -161,3 +161,33 @@ describe('S6 — delete-cascade completeness', () => {
     expect((TFP.match(/pdfStoragePath: [lf]\.pdfStoragePath \|\| ''/g) || []).length).toBeGreaterThanOrEqual(2); // lab pdf + tfile (block 1)
   });
 });
+
+// ── S7 — edit-remove-cancel broken-ref fix (delete only in CREATE; skip in EDIT) ──
+describe('S7 — edit-remove-cancel broken-ref fix', () => {
+  // Mirror of removeTreatmentBlob: delete only in CREATE mode (true orphan); EDIT
+  // mode skips (the saved doc may still reference it until save → deleting now would
+  // 404 the image if the user cancels without saving).
+  const removeTreatmentBlob = (storagePath, isEdit, del) => { if (storagePath && !isEdit) del(storagePath); };
+  it('S7.1 CREATE → deletes the orphan Storage object immediately', () => {
+    const d = []; removeTreatmentBlob('p1', false, p => d.push(p)); expect(d).toEqual(['p1']);
+  });
+  it('S7.2 EDIT → does NOT delete (no broken ref on cancel)', () => {
+    const d = []; removeTreatmentBlob('p1', true, p => d.push(p)); expect(d).toEqual([]);
+  });
+  it('S7.3 missing storagePath → no-op (both modes)', () => {
+    const d = []; removeTreatmentBlob('', false, p => d.push(p)); removeTreatmentBlob(null, true, p => d.push(p)); expect(d).toEqual([]);
+  });
+  it('S7.4 TFP: helper gated on !isEdit; all 4 remove handlers route through it; ZERO direct delete', () => {
+    expect(TFP).toMatch(/const removeTreatmentBlob = useCallback\(\(storagePath\) => \{\s*if \(storagePath && !isEdit\) deleteTreatmentBlob/);
+    expect((TFP.match(/removeTreatmentBlob\(/g) || []).length).toBeGreaterThanOrEqual(4); // 4 remove handlers
+    expect(TFP).toMatch(/onBlobRemoved=\{removeTreatmentBlob\}/);                          // chart wire
+    expect((TFP.match(/deleteTreatmentBlob\(/g) || []).length).toBe(1);                    // only inside the helper
+  });
+  it('S7.5 ChartSection routes delete + replace through onBlobRemoved (removeChartBlob)', () => {
+    const CS = read('src/components/ChartSection.jsx');
+    expect(CS).toMatch(/onBlobRemoved = null/);
+    expect(CS).toMatch(/const removeChartBlob = \(path\) =>/);
+    expect(CS).toMatch(/if \(onBlobRemoved\) onBlobRemoved\(path\)/);
+    expect((CS.match(/removeChartBlob\(/g) || []).length).toBeGreaterThanOrEqual(2);        // handleDelete + replace
+  });
+});
