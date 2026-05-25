@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Hub — All-types button + OPD-pending tab + link auto-cleanup · Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+
+    /* dark app-like mockup surface */
+    .app { background: #0c0c0d; border-radius: 12px; padding: 18px; color: #e5e5e5; font-size: 14px; }
+    .pillrow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+    .pill { background: #1c1c1f; border: 1px solid #2a2a2e; border-radius: 12px; padding: 9px 16px; font-weight: 600; color: #cfcfcf; display: inline-flex; gap: 8px; align-items: center; }
+    .pill.active { background: linear-gradient(180deg,#ff7a18,#f59f0a); color:#111; border-color: transparent; }
+    .pill.newtab { background: #15140f; border: 1px dashed #f59f0a; color: #f5d199; }
+    .badge { background: #5a2e22; color: #ffd9c7; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 700; }
+    .badge.new { background: #f59f0a; color:#111; }
+    .btn { background: linear-gradient(180deg,#33b1ff,#1f8fe0); color:#062a44; font-weight:700; border-radius: 10px; padding: 9px 16px; border:none; display:inline-flex; gap:6px; align-items:center; }
+    .btn.red { background: linear-gradient(180deg,#ff5a5a,#dc2626); color:#fff; }
+    .row { background:#161618; border:1px solid #26262a; border-radius:10px; padding:11px 14px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; }
+    .who { font-weight:700; color:#fff; }
+    .meta { color:#9a9aa0; font-size:13px; }
+    .chip { border-radius:999px; padding:3px 11px; font-size:12px; font-weight:700; }
+    .c-grey { background:#2a2a2e; color:#cfcfcf; }
+    .c-red  { background:#4a1e1e; color:#ffb4b4; }
+    .c-amber{ background:#4a3a12; color:#ffd98a; }
+    .hidden-note { color:#6b6b70; font-size:12.5px; margin-top:10px; }
+    .typeradio { background:#161618; border:1px solid #26262a; border-radius:10px; padding:10px 12px; }
+    .typeradio label { display:flex; gap:8px; align-items:center; padding:6px 2px; color:#e5e5e5; }
+    .dot { width:10px;height:10px;border-radius:999px; display:inline-block; }
+    .flowbox { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:10px 14px; margin:6px 0; }
+    .flowbox b { color: var(--accent); }
+    .arrow { text-align:center; color:#999; font-size:18px; margin:-2px 0; }
+    .danger { color:#b91c1c; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Hub — All-types button + OPD-pending tab + link auto-cleanup</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 · <strong>Status:</strong> Approved by user (design) · <strong>Surface:</strong> Frontend <code>AdminDashboard</code> → "นัดหมาย" (V64 AppointmentHub) + OPD-session lifecycle (cron + save hook) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-26-appointment-hub-allbutton-opd-tab-lifecycle.html (pending)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Four connected asks on the Frontend "นัดหมาย" tab + the patient-fill-link (<code>opd_sessions</code>) lifecycle:</p>
+<ol>
+  <li><strong>① ปุ่มเดียวจองได้ทุกประเภท</strong> — วันนี้ปุ่ม "เพิ่มคิว Walk-in" เปิด kiosk session modal (flow แบบบันทึกลูกค้าก่อน→ค่อยสร้างนัด). เปลี่ยนเป็น "เพิ่มนัดหมาย" ที่เปิด <strong>AppointmentFormModal ตัวเดียวกันเป๊ะ</strong>ที่ <code>AppointmentHubView</code> render อยู่แล้ว (วันนี้ใช้ในโหมด edit ที่บรรทัด 609) — โหมด create, เลือกได้ทั้ง 5 type. <strong>ไม่สร้าง modal ใหม่ ไม่สร้าง flow ใหม่</strong>; เป็น component + save-path เดียวกับปุ่ม "เพิ่มนัดหมาย" ใน appointment-all/ปฏิทิน.</li>
+  <li><strong>② แท็บ "รอ/ยังไม่ลง OPD"</strong> — รวบรวมนัด (ปัจจุบัน+อนาคต) ที่ลูกค้ายังรอกรอกข้อมูล หรือแอดมินยังไม่บันทึกลง OPD ไว้ในที่เดียว วางหลังแท็บ "ย้อนหลัง 30 วัน". วันที่เลยมาแล้วไม่ต้องโชว์.</li>
+  <li><strong>③ ลบลิงก์อัตโนมัติเมื่อเลยวันนัด</strong> — <code>opd_session</code> ที่เป็นลิงก์ให้ลูกค้ากรอกใน PatientForm ถูกลบเองเมื่อเลยวันนัดของลูกค้าคนนั้น.</li>
+  <li><strong>④ ลบ session+ลิงก์ทันทีเมื่อ save OPD สำเร็จ</strong> — ลูกค้าไม่ต้องกรอกอะไรอีก; ลบเลยเพื่อกันลิงก์ตกค้างจนระบบรวน (อ้างอิงอาการ perf 2026-05-24: opd_sessions/chat_history listener ดึง doc มากเกินไป).</li>
+</ol>
+<p><strong>Root motivation</strong> ของ ③+④: ป้องกัน <code>opd_sessions</code> สะสมจนกระทบ performance (listener payload). ③ = no-show/abandoned path; ④ = happy path.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Desktop · "นัดหมาย" tab — new primary pill (after "ย้อนหลัง 30 วัน") + relabeled button</div>
+  <div class="app">
+    <div class="pillrow">
+      <span class="pill"><span>📋</span> รายการ</span>
+      <span class="pill"><span>🔔</span> Recall วันนี้</span>
+      <span class="pill"><span>🗓</span> ปฏิทิน</span>
+      <span style="flex:1"></span>
+      <button class="btn"><span>＋</span> เพิ่มนัดหมาย</button>
+    </div>
+    <div class="pillrow">
+      <span class="pill active">วันนี้ <span class="badge" style="background:#7a4a12">0</span></span>
+      <span class="pill">พรุ่งนี้ <span class="badge">7</span></span>
+      <span class="pill">ล่วงหน้า 30 วัน <span class="badge">54</span></span>
+      <span class="pill">ย้อนหลัง 30 วัน <span class="badge">55</span></span>
+      <span class="pill newtab">⏳ รอ/ยังไม่ลง OPD <span class="badge new">9</span></span>
+    </div>
+    <div class="hidden-note">("กำลังรอ / เสร็จแล้ว" secondary sub-pills แสดงเฉพาะตอน active=วันนี้ — ไม่เปลี่ยน)</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">"รอ/ยังไม่ลง OPD" list — states B + C + D, present + future only</div>
+  <div class="app">
+    <div class="row">
+      <div><div class="who">อนันต์ ใจดี</div><div class="meta">3 มิ.ย. · จองไม่มัดจำ</div></div>
+      <span class="chip c-grey">⚪ ยังไม่ส่งลิงก์ (รอแอดมิน)</span>
+    </div>
+    <div class="row">
+      <div><div class="who">สมชาย มานะ</div><div class="meta">4 มิ.ย. · จองมัดจำ</div></div>
+      <span class="chip c-red">🔴 รอลูกค้ากรอกข้อมูล</span>
+    </div>
+    <div class="row">
+      <div><div class="who">สมหญิง พากเพียร</div><div class="meta">6 มิ.ย. · จองไม่มัดจำ</div></div>
+      <span class="chip c-amber">🟡 กรอกแล้ว · ยังไม่บันทึก OPD</span>
+    </div>
+    <div class="hidden-note">✗ ซ่อน: วันนัดเลยมาแล้ว (link ถูกลบโดย cron ③) · บันทึก OPD แล้ว (state E, session ถูกลบโดย ④) · ลูกค้าเดิมที่มี HN แล้ว (state A)</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">① "เพิ่มนัดหมาย" → AppointmentFormModal (lockedAppointmentType = null → เลือกได้ทั้ง 5 type)</div>
+  <div class="app">
+    <div class="typeradio">
+      <div style="font-weight:700;margin-bottom:6px;color:#fff">ประเภทนัดหมาย</div>
+      <label><input type="radio" name="t"> <span class="dot" style="background:#86efac"></span> จองมัดจำ <span class="meta">(deposit-booking → createDepositBookingPair)</span></label>
+      <label><input type="radio" name="t" checked> <span class="dot" style="background:#fdba74"></span> จองไม่มัดจำ <span class="meta">(default)</span></label>
+      <label><input type="radio" name="t"> <span class="dot" style="background:#93c5fd"></span> เข้าทำหัตถการ</label>
+      <label><input type="radio" name="t"> <span class="dot" style="background:#fde047"></span> ติดตามอาการ</label>
+      <label><input type="radio" name="t"> <span class="dot" style="background:#d6b48c"></span> Walk-in</label>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data — opd_session lifecycle states (V118 resolveCardOpdState) → tab membership + cleanup</div>
+  <table>
+    <tr><th>State</th><th>ความหมาย</th><th>อยู่ในแท็บ ②?</th><th>ชะตากรรมของ session</th></tr>
+    <tr><td><b>A</b></td><td>customerId มีแล้ว (ลูกค้าเดิม/มี HN)</td><td>ไม่</td><td>ไม่มี link (หรือไม่เกี่ยว)</td></tr>
+    <tr><td><b>B</b></td><td>booking, ยังไม่ generate ลิงก์</td><td><b>ใช่</b> (⚪)</td><td>—</td></tr>
+    <tr><td><b>C</b></td><td>ส่งลิงก์แล้ว ลูกค้ายังไม่กรอก (no patientData)</td><td><b>ใช่</b> (🔴)</td><td>เลยวันนัด → <span class="danger">delete</span> (③)</td></tr>
+    <tr><td><b>D</b></td><td>กรอกแล้ว แต่ยังไม่ save OPD</td><td><b>ใช่</b> (🟡)</td><td>เลยวันนัด → <span class="danger">delete</span> (③, Q3=A); save สำเร็จ → <span class="danger">delete</span> (④)</td></tr>
+    <tr><td><b>E</b></td><td>บันทึก OPD แล้ว (opdRecordedAt + brokerStatus='done')</td><td>ไม่</td><td>save สำเร็จ → <span class="danger">delete</span> ทันที (④)</td></tr>
+  </table>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">① All-types button → SAME modal AppointmentHubView already renders (create mode)</div>
+  <div class="flowbox">คลิก <b>"เพิ่มนัดหมาย"</b> (AppointmentHubFilterBar) → handler ภายใน AppointmentHubView ตั้ง <code>creatingAppt=true</code> (มิเรอร์ <code>editingAppt</code> ที่มีอยู่)</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox">render <b>AppointmentFormModal ตัวเดิม</b> (บรรทัด 609 ที่ตอนนี้ใช้ edit) ในโหมด <code>{mode:'create', lockedAppointmentType:null, existingAppointments:appts, onSaved:handleModalSaved, onClose}</code> — props/save-path เดียวกับที่ปฏิทินส่งใน <code>openCreate</code></div>
+  <div class="arrow">↓ เลือก type (internal modal logic, ไม่แตะ)</div>
+  <div class="flowbox"><b>จองมัดจำ</b> → <code>createDepositBookingPair</code> &nbsp;|&nbsp; <b>จองไม่มัดจำ</b> → appt (+fill-link/card ตาม behavior modal เดิม) &nbsp;|&nbsp; <b>เข้าทำหัตถการ/ติดตาม/Walk-in</b> → appt ปกติ</div>
+  <div class="arrow">↓ onSaved (handleModalSaved → silent reload, มีอยู่แล้ว)</div>
+  <div class="flowbox">list reload → แท็บ ② โชว์รายการใหม่ถ้าเป็น booking ที่ยังไม่ลง OPD</div>
+  <div class="hidden-note">rewire: FilterBar button handler จาก <code>onAddWalkIn</code> (เด้งไป AdminDashboard kiosk modal) → create ภายใน HubView. retire <code>onAddWalkIn → setShowSessionModal(true)</code> (R6: ตรวจ <code>showSessionModal</code> ไม่ถูกใช้ที่อื่นก่อนลบ infra).</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">② Tab filter pipeline (appointmentHubFilters)</div>
+  <div class="flowbox">appointments (branch-scoped) + linkedSession map (<code>resolveLinkedSession</code>)</div>
+  <div class="arrow">↓ per appt</div>
+  <div class="flowbox"><code>resolveCardOpdState(appt, linkedSession)</code> → state ∈ {A,B,C,D,E}</div>
+  <div class="arrow">↓ NEW predicate <code>isAppointmentOpdPending</code></div>
+  <div class="flowbox">keep if <b>state ∈ {B,C,D}</b> <b>AND</b> วันนัด ≥ วันนี้ (Bangkok, <code>thaiTodayISO</code>)</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox">render list + badge count. past hidden by date filter (กัน edge: deleted-link past appt ก็ไม่โผล่)</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">③ Cron date-passed delete — decideCleanupAction decision order (opdSessionCleanupCore)</div>
+  <table>
+    <tr><th>#</th><th>เงื่อนไข (ตรวจตามลำดับ)</th><th>action</th></tr>
+    <tr><td>0</td><td>already archived / isPermanent / no createdAt / _v82FollowupOpdResetAt</td><td><code>skip</code> (เดิม)</td></tr>
+    <tr><td><b>1 (NEW)</b></td><td><b>มีวันนัด (จาก linked appointment) AND เลยวันนัดแล้ว</b> (apptDate &lt; วันนี้ Bangkok)</td><td><span class="danger"><code>delete</code></span> — override V116, แม้ patientData มีอยู่ (Q3=A)</td></tr>
+    <tr><td>2</td><td>expired (&gt;2ชม.) AND มี patientData</td><td><code>archive</code> (เดิม)</td></tr>
+    <tr><td>3</td><td>expired AND ไม่มี patientData AND มี linkedAppointmentId/linkedDepositId</td><td><code>hide</code> (เดิม, V116)</td></tr>
+    <tr><td>4</td><td>expired AND ไม่มี patientData AND ไม่มี linked booking</td><td><code>delete</code> (เดิม)</td></tr>
+  </table>
+  <div class="hidden-note">cron <code>api/cron/opd-session-cleanup-sweep.js</code> (ทุก 30 นาที) ใช้ decision นี้อยู่แล้ว. ต้องยืนยันว่า session เก็บวันนัด หรือ cron join <code>be_appointments</code> ผ่าน <code>linkedAppointmentId</code> (R5).</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">④ Save-success → delete session (immediate, best-effort)</div>
+  <div class="flowbox">แอดมินเปิดฟอร์ม OPD จาก session X → กดบันทึก → <code>addCustomer</code>/<code>updateCustomerFromForm</code> สำเร็จ</div>
+  <div class="arrow">↓</div>
+  <div class="flowbox"><code>_attachLinkedBookings</code> → <code>attachCustomerToOpdSessionLinks(X, …)</code> stamp customerId บน be_deposits/be_appointments (เดิม)</div>
+  <div class="arrow">↓ NEW</div>
+  <div class="flowbox"><span class="danger">hard-delete <code>opd_sessions/X</code></span> — try/catch best-effort (ล้มเหลว → cron ③ เก็บตก; ไม่ roll back การ save). มิเรอร์ V125 cascade.</div>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Feature</th><th>Files</th><th>Change</th></tr>
+  <tr>
+    <td>① All-types button</td>
+    <td><code>src/components/admin/AppointmentHubView.jsx</code> (add create path; <strong>already renders AppointmentFormModal</strong> @609) · <code>src/components/admin/AppointmentHubFilterBar.jsx</code> (relabel + rewire handler) · <code>src/pages/AdminDashboard.jsx</code> (retire kiosk wiring)</td>
+    <td>relabel "เพิ่มคิว Walk-in"→"เพิ่มนัดหมาย"; HubView adds <code>creatingAppt</code> state (mirror existing <code>editingAppt</code>) → renders the SAME <code>AppointmentFormModal</code> in <code>{mode:'create', lockedAppointmentType:null}</code> (same props as ปฏิทิน <code>openCreate</code>); button handler → HubView-internal create (not AdminDashboard kiosk). retire <code>onAddWalkIn→showSessionModal</code>. <strong>No new modal.</strong></td>
+  </tr>
+  <tr>
+    <td>② OPD-pending tab</td>
+    <td><code>src/components/admin/AppointmentHubTabBar.jsx</code> (TABS) · <code>src/lib/appointmentHubFilters.js</code> (applyTabFilter, count) · <code>src/lib/opdSessionState.js</code> (NEW <code>isAppointmentOpdPending</code>)</td>
+    <td>5th primary pill <code>opd-pending</code> after <code>past</code>; filter = state∈{B,C,D} AND date≥today; badge count.</td>
+  </tr>
+  <tr>
+    <td>③ Date-passed delete</td>
+    <td><code>src/lib/opdSessionCleanupCore.js</code> (decideCleanupAction) · <code>api/cron/opd-session-cleanup-sweep.js</code></td>
+    <td>NEW branch #1 (date-passed → delete, above 2h-age logic); session must carry apptDate or cron joins be_appointments.</td>
+  </tr>
+  <tr>
+    <td>④ Save-success delete</td>
+    <td><code>src/pages/AdminDashboard.jsx</code> (<code>_attachLinkedBookings</code> success) · (maybe) <code>src/lib/appointmentDepositBatch.js</code></td>
+    <td>after attach success → hard-delete opd_sessions/{sessionId}, best-effort.</td>
+  </tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user, 2026-05-26)</h2>
+<ul>
+  <li><strong>Q1 = B+C+D:</strong> tab ② shows every not-yet-in-OPD appointment incl. "ยังไม่ส่งลิงก์" (B), present+future, past hidden.</li>
+  <li><strong>Q2 = hard-delete:</strong> obsolete opd_session is hard-deleted (no archive) — collection stays lean (perf goal).</li>
+  <li><strong>Q3 = delete all date-passed:</strong> once apptDate &lt; today, delete the link even for linked sessions (override V116 preserve-on-expire) and even filled-but-unsaved (D). Tab ② warns admin to save before the date.</li>
+  <li><strong>Q4 = single all-types button:</strong> replace Walk-in button; Walk-in remains 1 of 5 types in the modal; kiosk inverted flow retires.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Frontend "นัดหมาย" tab shows <strong>"เพิ่มนัดหมาย"</strong> (not "เพิ่มคิว Walk-in"); clicking opens AppointmentFormModal with all 5 types selectable; creating each type produces the same artifacts as the calendar's "เพิ่มนัดหมาย" (appt; deposit-pair for มัดจำ; fill-link/card for booking-types) — <em>parity verified</em> (R1).</li>
+  <li>New 5th primary pill <strong>"รอ/ยังไม่ลง OPD"</strong> appears after "ย้อนหลัง 30 วัน" with a count badge; list = state {B,C,D} appointments dated today-or-future; past + state A/E excluded.</li>
+  <li>An <code>opd_session</code> linked to an appointment whose date has passed is <strong>hard-deleted</strong> by the cron (incl. filled-but-unsaved D); a fresh reschedule mints a new link.</li>
+  <li>On successful OPD save, the originating <code>opd_session</code> is <strong>hard-deleted immediately</strong> (best-effort; save never rolls back on delete failure).</li>
+  <li>No regression in V116 (queue-delete still preserves link <em>before</em> the date passes), V124/V125 bubble+cascade, V126 mark-complete gate.</li>
+</ol>
+
+<h2>Verification (Rule Q + Q-honest)</h2>
+<ul>
+  <li><strong>Helpers</strong> (<code>isAppointmentOpdPending</code>, <code>decideCleanupAction</code> new branch, filter): unit tests + Rule I flow-simulate (state matrix B/C/D/A/E × date past/today/future; cleanup decision order; idempotency).</li>
+  <li><strong>Cron-delete + save-delete</strong> (touch real Firestore): <strong>Rule Q L2 admin-SDK e2e</strong> on real prod with TEST-/E2E- prefixed fixtures — date-passed session → deleted; save-attach → session deleted; re-run idempotent; zero orphans + audit doc.</li>
+  <li><strong>Tab + button UI:</strong> <strong>Rule Q L1 Chrome MCP</strong> at verify stage (Rule S) — relabeled button opens all-types modal; new pill renders + filters; <em>+ user hands-on post-deploy.</em></li>
+  <li><strong>Q-honest:</strong> disclose the test-vs-claim gap explicitly — L2 doc-level is acceptable here (no new composite index / rules); L1 real-browser for the click-flow is the user's gold standard.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>R1 (parity — mostly resolved):</strong> ① reuses the SAME <code>AppointmentFormModal</code> that <code>AppointmentHubView</code> already renders (edit) and ปฏิทิน uses (create) → save-path/artifact parity is automatic as long as the create-open passes the same props ปฏิทิน's <code>openCreate</code> passes (<code>lockedAppointmentType:null</code>, <code>initialDate</code>, <code>existingAppointments</code>). Residual to confirm in the plan: the modal's <em>no-deposit-booking</em> create produces the fill-link/card the same way it does today (existing behavior, not new code).</li>
+  <li><strong>R2 (data loss, accepted):</strong> Q3=A deletes a filled-but-unsaved (D) link when its date passes → the customer's filled data is lost. Tab ② is the mitigation (prompts admin to save before the date).</li>
+  <li><strong>R3 ("อนาคต" range):</strong> tab ② = today + all future (no 30-day cap). Change if a cap is wanted.</li>
+  <li><strong>R4 (state-B noise):</strong> state B may include non-booking appts (treatment-in/follow-up/walk-in with no customerId + no link). May add UI noise; predicate can be narrowed to booking-types in the plan if needed.</li>
+  <li><strong>R5 (apptDate source):</strong> cron ③ needs the appointment date — confirm the <code>opd_session</code> stores it (<code>appointmentDate</code>/<code>appointmentDateTime</code>) or join <code>be_appointments</code> via <code>linkedAppointmentId</code> in the sweep.</li>
+  <li><strong>R6 (showSessionModal):</strong> confirm the kiosk session modal isn't used by another button before removing its wiring (retire only if Walk-in was its sole caller).</li>
+</ul>
+
+</body>
+</html>
