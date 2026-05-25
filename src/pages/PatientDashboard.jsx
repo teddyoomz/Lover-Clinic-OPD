@@ -354,6 +354,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
   // Auto-sync on page load: เรียก API ตรงเสมอ (ไม่พึ่ง AdminDashboard relay — patient page ต้อง self-sufficient)
   useEffect(() => {
+    if (sessionData?.__customerMode) return; // 2026-05-25: endpoint provided data; skip client fetch (anon can't read be_*)
     if (!clinicSettingsLoaded || !sessionData?.brokerProClinicId || refreshRequestedRef.current) return;
     const last = sessionData.lastCoursesAutoFetch;
     const cooling = cooldownMsRef.current > 0 && last && (Date.now() - last.toMillis()) < cooldownMsRef.current;
@@ -487,7 +488,59 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     }
   }
 
+  // Customer patient-link (2026-05-25): resolve via the public /api/patient-view
+  // endpoint FIRST. be_customers/be_appointments are clinic-staff-only → anon
+  // CANNOT read them client-side, so the endpoint (admin SDK) is the data path.
+  // It resolves BOTH be_customers tokens (new) AND legacy opd_session tokens, and
+  // returns the latestCourses-shaped payload the EXISTING render already consumes
+  // (patient card + AppointmentCard + CourseCard reused 100%). The legacy
+  // opd_session Firestore listener below runs ONLY as a fallback when the endpoint
+  // errors (5xx/network) — on success/404 it never overrides.
+  const [legacyFallback, setLegacyFallback] = useState(false);
   useEffect(() => {
+    if (!token) { setStatus('notfound'); return; }
+    if (!clinicSettingsLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
+        if (cancelled) return;
+        if (r.ok) {
+          const data = await r.json();
+          if (cancelled) return;
+          if (data?.ok) {
+            setSessionData({
+              __customerMode: true,
+              patientLinkEnabled: true,
+              patientData: data.patientData || {},
+              brokerProClinicHN: data.hn || '',
+              latestCourses: {
+                courses: data.courses || [], expiredCourses: data.expiredCourses || [],
+                appointments: data.appointments || [], patientName: data.patientName || '',
+                fetchedAt: data.fetchedAt || new Date().toISOString(), success: true,
+              },
+            });
+            setStatus('done');
+            return;
+          }
+        }
+        if (r.status === 404) {
+          const body = await r.json().catch(() => ({}));
+          if (cancelled) return;
+          setStatus(body?.error === 'DISABLED' ? 'disabled' : 'notfound');
+          return;
+        }
+        if (!cancelled) setLegacyFallback(true); // 5xx → legacy opd_session listener
+      } catch {
+        if (!cancelled) setLegacyFallback(true); // network → legacy opd_session listener
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, clinicSettingsLoaded]);
+
+  useEffect(() => {
+    // 2026-05-25: legacy opd_session listener — FALLBACK ONLY (endpoint errored).
+    if (!legacyFallback) return;
     if (!token) { setStatus('notfound'); return; }
     // 2026-04-25 race fix: don't subscribe until clinic settings have at
     // least loaded once. Without this, a Firestore query can fire before
@@ -521,7 +574,7 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
 
     }, () => setStatus('notfound'));
     return () => unsub();
-  }, [token, clinicSettingsLoaded]);
+  }, [token, clinicSettingsLoaded, legacyFallback]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   // ── Controls bar (reused in loading/error/main screens) ───────────────────
@@ -694,17 +747,20 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
             </div>
           </div>
 
-          {/* Sync button strip */}
-          <div className="px-5 pb-4 pt-1 flex justify-center">
-            <SyncButton
-              syncStatus={syncStatus}
-              syncTimeStr={syncTimeStr}
-              inCooldown={inCooldown}
-              cooldownMins={cooldownMins}
-              onResync={handleResync}
-              tx={tx}
-            />
-          </div>
+          {/* Sync button strip — hidden in customer-mode (data is server-fresh via endpoint;
+              no client resync path since anon can't read be_*). 2026-05-25. */}
+          {!sessionData?.__customerMode && (
+            <div className="px-5 pb-4 pt-1 flex justify-center">
+              <SyncButton
+                syncStatus={syncStatus}
+                syncTimeStr={syncTimeStr}
+                inCooldown={inCooldown}
+                cooldownMins={cooldownMins}
+                onResync={handleResync}
+                tx={tx}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Contact Buttons (LINE + Call) ────────────────────────────────── */}
