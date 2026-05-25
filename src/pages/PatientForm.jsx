@@ -9,6 +9,7 @@ import {
   hexToRgb, THAI_MONTHS, EN_MONTHS, YEARS_BE, YEARS_CE,
   COUNTRY_CODES, NATIONALITY_COUNTRIES, defaultFormData, bangkokNow
 } from '../utils.js';
+import { visitReasonOptions } from '../lib/visitReasonOptions.js';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import DateField from '../components/DateField.jsx';
@@ -580,18 +581,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const heroGlass   = isLightHero ? 'rgba(0,0,0,0.05)'   : 'rgba(255,255,255,0.06)';
   const heroGlassBd = isLightHero ? 'rgba(0,0,0,0.10)'   : 'rgba(255,255,255,0.10)';
 
-  const visitReasonOptions = [
-    { value: 'สมรรถภาพทางเพศ', th: 'สมรรถภาพทางเพศ', en: 'Erectile Dysfunction / Sexual Health' },
-    { value: 'โรคระบบทางเดินปัสสาวะ', th: 'โรคระบบทางเดินปัสสาวะ', en: 'Urology / Urinary Tract Issues' },
-    { value: 'ดูแลสุขภาพองค์รวม', th: 'ดูแลสุขภาพองค์รวม', en: 'General Health / Wellness' },
-    { value: 'เสริมฮอร์โมน', th: 'เสริมฮอร์โมน', en: 'Hormone Replacement Therapy (HRT)' },
-    { value: 'โรคติดต่อทางเพศสัมพันธ์', th: 'โรคติดต่อทางเพศสัมพันธ์', en: 'STD / STI Testing & Treatment' },
-    { value: 'ขลิบ', th: 'ขลิบ', en: 'Circumcision' },
-    { value: 'ทำหมัน', th: 'ทำหมัน', en: 'Vasectomy' },
-    { value: 'เลาะสารเหลว', th: 'เลาะสารเหลว', en: 'Foreign Body Removal (Genital)' },
-    { value: 'เสริมขนาด', th: 'เสริมขนาด', en: 'Penile Enhancement / Augmentation' },
-    { value: 'อื่นๆ', th: 'อื่นๆ', en: 'Others' }
-  ];
+  // visitReasonOptions moved to src/lib/visitReasonOptions.js (Rule C1 single source, 2026-05-25).
 
   const hrtGoalOptions = [
     { value: 'ออกกำลังกาย', th: 'ออกกำลังกาย', en: 'Fitness / Bodybuilding' },

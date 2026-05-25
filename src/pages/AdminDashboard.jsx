@@ -118,6 +118,7 @@ import {
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import PhoneLink from '../components/PhoneLink.jsx';
+import { VISIT_REASON_VALUES } from '../lib/visitReasonOptions.js'; // Rule C1 single source (2026-05-25)
 // V68 (2026-05-15) — LINE badge for queue-calendar appt cells. Self-nullifies
 // for non-LINE appts (notifyChannel ≠ ['line']); only renders the 🟢 chip when
 // the appt's reminder channel is LINE OA. See AppointmentLineBadge.jsx.
@@ -8738,7 +8739,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className="border-t border-[var(--bd)] pt-4">
                     <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ {depositFormData.hasAppointment && <span className="text-red-500">*</span>}</label>
                     <div className="flex flex-wrap gap-2">
-                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','เสริมขนาด','อื่นๆ'].map(r => (
+                      {VISIT_REASON_VALUES.map(r => (
                         <button key={r} type="button"
                           onClick={() => setDepositFormData(p => {
                             const has = p.visitPurpose.includes(r);
@@ -8941,7 +8942,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                   <div className={`border-t pt-4 ${isDark ? 'border-[var(--bd)]' : 'border-pink-200'}`}>
                     <label className="text-xs text-gray-500 font-semibold block mb-2">นัดมาเพื่อ <span className="text-red-500">*</span></label>
                     <div className="flex flex-wrap gap-2">
-                      {['สมรรถภาพทางเพศ','โรคระบบทางเดินปัสสาวะ','ดูแลสุขภาพองค์รวม','เสริมฮอร์โมน','โรคติดต่อทางเพศสัมพันธ์','ขลิบ','ทำหมัน','เลาะสารเหลว','เสริมขนาด','อื่นๆ'].map(r => (
+                      {VISIT_REASON_VALUES.map(r => (
                         <button key={r} type="button"
                           onClick={() => setNoDepositFormData(p => {
                             const has = p.visitPurpose.includes(r);
