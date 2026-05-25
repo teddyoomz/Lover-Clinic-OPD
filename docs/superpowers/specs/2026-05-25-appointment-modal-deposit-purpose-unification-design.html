@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Appointment Modal — Auto Deposit Section + Chip "นัดมาเพื่อ" Design Spec</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; --green:#16a34a; --green-bg:#0c1f14; --green-bd:#14532d; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+    h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { margin-top:1.4em; }
+    pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+    .section { background:var(--bg-section); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .mockup { background:#0a0a0b; color:#ececf0; border:1px solid #2a2a30; border-radius:10px; padding:1.2em; margin:1em 0; }
+    .mockup-label { font-size:.72em; text-transform:uppercase; letter-spacing:.05em; color:#9a9aa6; margin-bottom:.7em; }
+    .m-lbl { font-size:.78rem; color:#9a9aa6; margin:10px 0 4px; font-weight:600; }
+    .m-lbl.req::after { content:" *"; color:#ef4444; }
+    .m-inp { background:#1b1b1f; border:1px solid #2a2a30; border-radius:8px; padding:7px 11px; font-size:.82rem; color:#ececf0; }
+    .m-inp.ph { color:#6b6b76; }
+    .m-row { display:flex; gap:8px; flex-wrap:wrap; }
+    .m-row > div { flex:1; min-width:120px; }
+    .ty { display:inline-flex; align-items:center; gap:5px; font-size:.8rem; color:#9a9aa6; margin-right:14px; }
+    .ty .dot { width:13px; height:13px; border-radius:50%; border:2px solid #555; display:inline-block; position:relative; }
+    .ty.on { color:#ececf0; font-weight:600; }
+    .ty.on .dot { border-color:#ef4444; } .ty.on .dot::after { content:""; position:absolute; inset:3px; background:#ef4444; border-radius:50%; }
+    .dep { margin-top:12px; border:1.5px solid var(--green-bd); background:var(--green-bg); border-radius:10px; padding:12px; }
+    .dep .dh { color:#4ade80; font-weight:700; font-size:.88rem; }
+    .dep .dn { font-size:.72rem; color:#7da88a; margin:5px 0 10px; }
+    .pill { font-size:.62rem; background:#14532d; color:#86efac; padding:2px 8px; border-radius:999px; font-weight:700; margin-left:6px; }
+    .chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:5px; }
+    .chip { background:#1b1b1f; border:1px solid #2a2a30; border-radius:9px; padding:6px 11px; font-size:.78rem; color:#9a9aa6; }
+    .chip.on { border-color:#ef4444; background:#2a1417; color:#fecaca; font-weight:600; }
+    .confirm { background:#15161a; border:1px solid #3a2a1a; border-radius:10px; padding:14px; }
+    .confirm .ch { color:#fbbf24; font-weight:700; font-size:.9rem; }
+    .btn { display:inline-block; padding:7px 14px; border-radius:8px; font-size:.8rem; font-weight:600; margin:8px 6px 0 0; }
+    .btn.del { background:#3b1d1d; color:#fca5a5; border:1px solid #7f1d1d; }
+    .btn.keep { background:#14331f; color:#86efac; border:1px solid #14532d; }
+    .btn.cancel { background:#222; color:#aaa; border:1px solid #333; }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; font-size:.92rem; }
+    th { background:var(--bg-meta); }
+    .arrow { text-align:center; color:var(--accent); font-weight:700; }
+    .flowbox { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:.6em .9em; margin:.4em 0; font-size:.9rem; }
+    .tag-new { background:#dcfce7; color:#166534; font-size:.7em; padding:1px 7px; border-radius:999px; font-weight:700; }
+    .tag-reuse { background:#dbeafe; color:#1e40af; font-size:.7em; padding:1px 7px; border-radius:999px; font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>สร้างนัดหมาย — Auto Deposit Section + Chip "นัดมาเพื่อ" (Unification)</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-25 · <strong>Status:</strong> Approved by user (Q1=A · Q2=A · scope=create+edit · option-list=single-source · flip-away=choice-at-confirm) · <strong>Mockup (เปิดดูได้):</strong> <code>docs/superpowers/specs/2026-05-25-appointment-modal-unification-mockup.html</code>
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>มี modal "สร้างนัดหมาย" ตัวเดียว (<code>AppointmentFormModal.jsx</code>) ที่เรียกจาก 4 ที่ แต่ปัจจุบัน section "รายละเอียดมัดจำ" โผล่เฉพาะตอนที่ caller <em>ล็อก</em> ประเภทเป็น <code>deposit-booking</code> (prop <code>lockedAppointmentType</code>) เท่านั้น — เมื่อผู้ใช้ <em>เลือก</em> "จองมัดจำ" ผ่าน radio (ในปฏิทินนัดหมาย / หน้าข้อมูลลูกค้า) section ไม่โผล่ ทำให้สร้างมัดจำจากที่นั่นไม่ได้. และช่อง "นัดมาเพื่อ" เป็น free-text (<code>botox, filler…</code>) ต่างจากปุ่ม "สร้างคิว" ใน Frontend ที่เป็น chip เลือกหลายตัว.</p>
+<p><strong>เป้าหมาย:</strong> (1) section มัดจำ auto-โผล่ทุกที่ที่เลือก "จองมัดจำ" ได้ (รวม create + edit); (2) "นัดมาเพื่อ" เป็น chip multi-select เหมือนสร้างคิว. แก้ที่ shared modal ตัวเดียว → มีผลทุก entry point.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State A · Create — เลือก "จองมัดจำ" ผ่าน radio → section auto-โผล่ (บังคับ)</div>
+  <div class="m-lbl">ประเภทนัดหมาย</div>
+  <div>
+    <span class="ty on"><span class="dot"></span>จองมัดจำ</span>
+    <span class="ty"><span class="dot"></span>จองไม่มัดจำ</span>
+    <span class="ty"><span class="dot"></span>เข้าทำหัตถการ</span>
+    <span class="ty"><span class="dot"></span>ติดตามอาการ</span>
+  </div>
+  <div class="dep">
+    <div class="dh">💰 รายละเอียดมัดจำ <span class="pill">AUTO ↓ effective-type = จองมัดจำ</span></div>
+    <div class="dn">ระบบจะบันทึกทั้งใบมัดจำและนัดหมายพร้อมกันแบบอัตโนมัติ (createDepositBookingPair) แสดงใน จองมัดจำ + การเงิน → มัดจำ ของสาขานี้</div>
+    <div class="m-row">
+      <div><div class="m-lbl req">ยอดมัดจำ (บาท)</div><div class="m-inp ph">0</div></div>
+      <div><div class="m-lbl req">ช่องทางชำระ</div><div class="m-inp">เงินสด ▾</div></div>
+    </div>
+    <div class="m-row" style="margin-top:8px">
+      <div><div class="m-lbl req">วันที่ชำระ</div><div class="m-inp">25/05/2026</div></div>
+      <div><div class="m-lbl">หมายเหตุมัดจำ</div><div class="m-inp ph">(ไม่บังคับ)</div></div>
+    </div>
+  </div>
+  <p style="font-size:.72rem;color:#7da88a;margin-top:8px">เลือกประเภทอื่น → section หาย (ไม่บังคับ). locked callers (tab จองมัดจำ / DepositPanel / Walk-in OPD-save) เหมือนเดิมเป๊ะ.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State B · Chip "นัดมาเพื่อ" — multi-select + "อื่นๆ" free-text (บังคับ ≥1)</div>
+  <div class="m-lbl req">นัดมาเพื่อ</div>
+  <div class="chips">
+    <span class="chip">สมรรถภาพทางเพศ</span><span class="chip on">โรคระบบทางเดินปัสสาวะ</span>
+    <span class="chip">ดูแลสุขภาพองค์รวม</span><span class="chip">เสริมฮอร์โมน</span>
+    <span class="chip">โรคติดต่อทางเพศสัมพันธ์</span><span class="chip on">ขลิบ</span>
+    <span class="chip">ทำหมัน</span><span class="chip">เลาะสารเหลว</span>
+    <span class="chip on">เสริมขนาด</span><span class="chip">อื่นๆ</span>
+  </div>
+  <div class="m-lbl" style="margin-top:10px">ถ้าเลือก "อื่นๆ" → กล่องพิมพ์เพิ่ม</div>
+  <div class="m-inp ph">เช่น ผ่ามุก, ตรวจแผล…</div>
+  <p style="font-size:.72rem;color:#7da88a;margin-top:8px">เก็บเป็น string เดิม <code>appointmentTo</code> = "โรคระบบทางเดินปัสสาวะ, ขลิบ, เสริมขนาด" → เข้ากับข้อมูลเก่า 100%. edit: parse string → chips; legacy free-text → "อื่นๆ: …".</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">State C · Edit — flip "จองมัดจำ" → ประเภทอื่น ขณะมีใบมัดจำผูก → confirm ตอนกดบันทึก</div>
+  <div class="confirm">
+    <div class="ch">⚠ นัดนี้มีใบมัดจำผูกอยู่ (฿2,000)</div>
+    <p style="font-size:.8rem;color:#cbd5e1;margin:6px 0">คุณกำลังเปลี่ยนประเภทออกจาก "จองมัดจำ" — ต้องการจัดการใบมัดจำเดิมยังไง?</p>
+    <span class="btn del">ลบใบมัดจำด้วย (ยกเลิก cascade)</span>
+    <span class="btn keep">เก็บใบมัดจำไว้</span>
+    <span class="btn cancel">ยกเลิก (ไม่บันทึก)</span>
+  </div>
+  <p style="font-size:.72rem;color:#7da88a;margin-top:8px">"ลบ" = reuse path ยกเลิกมัดจำเดิมของ DepositPanel (audit + reversal ครบ ไม่ลบดิบ). "เก็บ" = อัปเดตประเภทนัด ปล่อยใบมัดจำไว้ (ยังเห็นใน การเงิน → มัดจำ).</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup" style="background:#fff;color:#222;border-color:var(--bd)">
+  <div class="mockup-label" style="color:var(--tx-muted)">Create flow — เลือก/ล็อก "จองมัดจำ"</div>
+  <div class="flowbox">radio/lock → <code>effective = safeLockedType || formData.appointmentType</code></div>
+  <div class="arrow">↓ effective === 'deposit-booking' &amp;&amp; mode==='create'</div>
+  <div class="flowbox"><code>showDepositSection = true</code> → render section (gate ที่ <code>:1144</code>)</div>
+  <div class="arrow">↓ กดบันทึก</div>
+  <div class="flowbox">validate ยอดมัดจำ &gt; 0 (<code>:505</code>) + นัดมาเพื่อ ≥1 chip → <code>createDepositBookingPair</code> (<code>:801</code>) เขียน be_deposits + be_appointments atomic</div>
+</div>
+
+<div class="mockup" style="background:#fff;color:#222;border-color:var(--bd)">
+  <div class="mockup-label" style="color:var(--tx-muted)">Edit flow — 3 เคส (หลัก: modal สร้าง/แก้ใบมัดจำได้ แต่ห้ามลบเงียบ)</div>
+  <table>
+    <tr><th>เคส (เปิด edit)</th><th>section</th><th>ตอนกดบันทึก</th></tr>
+    <tr><td>จองมัดจำ + มีใบมัดจำผูก</td><td>โผล่ + <b>hydrate</b> ยอด/ช่องทาง/วันที่/หมายเหตุ จากใบมัดจำเดิม</td><td><span class="tag-reuse">UPDATE</span> ใบมัดจำเดิม (path เดียวกับ DepositPanel) + update appointment</td></tr>
+    <tr><td>ประเภทอื่น → flip เป็น จองมัดจำ</td><td>section ว่างโผล่</td><td><span class="tag-new">CREATE</span> + ผูกใบมัดจำใหม่</td></tr>
+    <tr><td>จองมัดจำ → flip ออก (มีใบมัดจำผูก)</td><td>section หาย</td><td><b>confirm:</b> ลบ (cascade-cancel) / เก็บ / ยกเลิก</td></tr>
+    <tr><td>จองมัดจำ แต่ไม่มีใบมัดจำผูก (legacy/drift)</td><td>section ว่างโผล่</td><td>CREATE + ผูก (เหมือน flip-to)</td></tr>
+  </table>
+</div>
+
+<div class="mockup" style="background:#fff;color:#222;border-color:var(--bd)">
+  <div class="mockup-label" style="color:var(--tx-muted)">"นัดมาเพื่อ" value round-trip (ไม่เปลี่ยน storage)</div>
+  <div class="flowbox">chips [โรคระบบทางเดินปัสสาวะ, ขลิบ] + อื่นๆ "ผ่ามุก" → <code>buildVisitPurposeText()</code> → <code>"โรคระบบทางเดินปัสสาวะ, ขลิบ, อื่นๆ: ผ่ามุก"</code> → เก็บ <code>formData.appointmentTo</code> (เดิม)</div>
+  <div class="arrow">↕ edit hydration</div>
+  <div class="flowbox"><code>appt.appointmentTo</code> string → <code>parseVisitPurposeText()</code> → { purposes:[…], other:"ผ่ามุก" } → chips ติ๊ก + กล่องอื่นๆ</div>
+</div>
+
+<h2>Architecture</h2>
+<p>1 shared component, ไฟล์เดียวเป็นหัวใจ. ใช้ helper + save path ที่มีอยู่ทั้งหมด — ส่วนใหม่มีแค่ chip picker component + constant กลาง.</p>
+<table>
+  <tr><th>ส่วน</th><th>ไฟล์ / จุด</th><th>การเปลี่ยน</th></tr>
+  <tr><td>Deposit gate (effective type)</td><td><code>AppointmentFormModal.jsx</code> ~<code>:259</code></td><td><span class="tag-new">NEW</span> <code>isDepositBooking = (safeLockedType||formData.appointmentType)==='deposit-booking'</code>; <code>showDepositSection = isDepositBooking &amp;&amp; mode==='create'</code> → ขยายเป็นรองรับ edit (ดูแถวล่าง)</td></tr>
+  <tr><td>Render gate</td><td><code>:1144</code></td><td>เปลี่ยน <code>isLockedDepositType &amp;&amp; mode==='create'</code> → <code>isDepositBooking</code> (โผล่ทั้ง create + edit)</td></tr>
+  <tr><td>Save branch (create)</td><td><code>:503</code></td><td><code>isCreatingDepositBooking</code> ผูกกับ effective type; create → <span class="tag-reuse">REUSE</span> <code>createDepositBookingPair</code> (<code>:801</code>)</td></tr>
+  <tr><td>Save branch (edit)</td><td><code>:609–733</code></td><td><span class="tag-new">NEW</span> edit-deposit: hydrate จาก linked deposit (โหลดตอนเปิด) → UPDATE/CREATE/flip-confirm ตาม 3 เคส; reuse update-deposit + cancel-deposit helper ของ DepositPanel (<em>verify ชื่อ helper ตอนเขียน plan — ไม่เดา</em>)</td></tr>
+  <tr><td>Type radio</td><td><code>:1129</code></td><td>ไม่เปลี่ยน — onChange update <code>formData.appointmentType</code> อยู่แล้ว → gate reactive</td></tr>
+  <tr><td>"นัดมาเพื่อ" field</td><td><code>:1330</code></td><td>แทน <code>&lt;textarea&gt;</code> ด้วย <span class="tag-new">NEW</span> <code>&lt;VisitPurposePicker&gt;</code> ผูก <code>formData.appointmentTo</code> ผ่าน build/parse helper</td></tr>
+  <tr><td>Chip picker component</td><td><span class="tag-new">NEW</span> <code>src/components/VisitPurposePicker.jsx</code></td><td>multi-select chips + "อื่นๆ" free-text; value ↔ string via <code>buildVisitPurposeText</code>/<code>parseVisitPurposeText</code></td></tr>
+  <tr><td>Option list (single source)</td><td><span class="tag-new">NEW</span> <code>src/lib/visitReasonOptions.js</code></td><td>ย้าย <code>visitReasonOptions</code> (10 ตัว value/th/en) ออกจาก <code>PatientForm.jsx:583</code> → import ร่วมใน PatientForm + AdminDashboard (สร้างคิว) + VisitPurposePicker (Rule C1)</td></tr>
+  <tr><td>Helpers</td><td><code>src/lib/visitPurposeUtils.js</code>, <code>appointmentDepositBatch.js</code></td><td><span class="tag-reuse">REUSE</span> ทั้งหมด (มีอยู่แล้ว)</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> เลือก "จองมัดจำ" (locked หรือ radio) → auto-โผล่ section + บังคับ ยอดมัดจำ&gt;0 + บันทึกคู่ atomic เหมือน tab จองมัดจำเป๊ะ</li>
+  <li><strong>Q2 = A:</strong> "นัดมาเพื่อ" = chip multi-select บังคับ ≥1 + "อื่นๆ" free-text; เก็บเป็น <code>appointmentTo</code> string เดิม (backward-compatible)</li>
+  <li><strong>Scope = create + edit:</strong> section ทำงานทั้งสองโหมด</li>
+  <li><strong>Option list = single source:</strong> แยก <code>visitReasonOptions</code> → constant กลาง ใช้ร่วม 3 ที่ (Rule C1)</li>
+  <li><strong>Flip-away (edit, มีใบมัดจำ) = choice-at-confirm:</strong> ตอนกดบันทึกให้เลือก ลบ (cascade-cancel) / เก็บ / ยกเลิก — modal ไม่ลบเงินเงียบ</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Create + radio-เลือก "จองมัดจำ" → deposit section โผล่; เลือกประเภทอื่น → หาย</li>
+  <li>Create จองมัดจำ → บังคับ ยอดมัดจำ&gt;0; save เขียน be_deposits + be_appointments atomic (createDepositBookingPair)</li>
+  <li>"นัดมาเพื่อ" = chip multi-select (10 ตัว + อื่นๆ); ไม่เลือกเลย → block save (scrollToError <code>data-field="appointmentTo"</code>); เก็บเป็น comma-string</li>
+  <li>Edit นัดจองมัดจำที่มีใบมัดจำ → hydrate ฟิลด์มัดจำจากใบมัดจำเดิม; save = UPDATE ใบเดิม (ไม่สร้างซ้ำ)</li>
+  <li>Edit + flip-to จองมัดจำ → save = สร้าง+ผูกใบมัดจำใหม่</li>
+  <li>Edit + flip-away (มีใบมัดจำ) → confirm ลบ/เก็บ/ยกเลิก; "ลบ" ยกเลิกผ่าน cascade เดิม; "เก็บ" ปล่อยใบมัดจำไว้</li>
+  <li>Edit hydrate "นัดมาเพื่อ" chips จาก string; legacy free-text → "อื่นๆ: …"</li>
+  <li>Locked callers (tab จองมัดจำ / DepositPanel / Walk-in OPD-save) เหมือนเดิม 100% (Walk-in ล็อก no-deposit → ไม่มี section)</li>
+  <li><code>visitReasonOptions</code> = constant กลาง import โดย PatientForm + AdminDashboard + VisitPurposePicker</li>
+  <li><strong>Rule Q L2</strong>: real client-SDK e2e บน prod จริง (fixture TEST-) ยืนยัน create-pair + edit-update + flip paths; L1 hands-on by user post-deploy</li>
+</ol>
+
+<h2>Testing (Rule I + Q + N)</h2>
+<ul>
+  <li><strong>Rule I flow-simulate</strong>: radio→section→required→createDepositBookingPair payload · edit hydrate→update · flip-to→create · flip-away→confirm-delete/keep · chip↔appointmentTo round-trip · legacy free-text hydration</li>
+  <li><strong>RTL</strong>: radio toggle แสดง/ซ่อน section · chip บังคับ block save · "อื่นๆ" เปิดกล่อง · flip-away confirm dialog 3 ปุ่ม</li>
+  <li><strong>Rule Q L2</strong>: <code>scripts/e2e-…mjs</code> real client SDK บน prod (create จองมัดจำ จาก modal ปลดล็อก → ยืนยัน pair; edit update; flip delete via cascade) — fixture TEST-prefix + cleanup</li>
+  <li><strong>AV invariant ใหม่</strong>: (a) deposit gate = effective type (ไม่ใช่ locked-only); (b) <code>visitReasonOptions</code> single-source (ห้าม inline copy ใหม่); (c) modal ไม่ลบ deposit นอกจากผ่าน cascade-cancel path</li>
+  <li><strong>Rule N</strong>: targeted ระหว่างทำ; full suite ก่อน commit (แตะ PatientForm + AdminDashboard → ต้อง full)</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>update-deposit / cancel-deposit helper</strong>: edit-mode UPDATE + flip-away DELETE ต้องใช้ helper ที่ DepositPanel ใช้จริง — <em>verify ชื่อ + shape ตอนเขียน plan (Rule Q-honest: ไม่เดา; ถ้าไม่มี update path ต้องออกแบบเพิ่ม)</em></li>
+  <li><strong>Money safety</strong>: "ลบ" ต้อง route ผ่าน cascade-cancel เดิม (audit + reversal) — ห้าม deleteDoc ดิบ (audit-cascade-logic C16)</li>
+  <li><strong>Linked-deposit lookup</strong>: edit ต้องหาใบมัดจำที่ผูกกับ appointment (โดย <code>linkedAppointmentId</code> / field จริง — verify ตอน plan)</li>
+  <li><strong>Backward compat</strong>: appt เก่าที่ appointmentTo เป็น free-text ต้อง hydrate ไม่หาย (parseVisitPurposeText จัดการแล้ว — เพิ่ม test)</li>
+  <li><strong>pickLater + บังคับนัดมาเพื่อ</strong>: chip บังคับเป็นอิสระจากลูกค้า → pickLater ยังทำงาน (purpose ≠ customer)</li>
+  <li><strong>V21 / multi-reader</strong>: ย้าย visitReasonOptions แตะ PatientForm + AdminDashboard → full-suite + tests ของทั้งสอง</li>
+</ul>
+
+</body>
+</html>

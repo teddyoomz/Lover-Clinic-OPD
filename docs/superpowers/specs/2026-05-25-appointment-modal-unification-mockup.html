@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Auto มัดจำ + Chip นัดมาเพื่อ (สร้างนัดหมาย)</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --card:#141416; --card2:#1b1b1f; --bd:#2a2a30;
+    --tx:#ececf0; --tx2:#9a9aa6; --red:#dc2626; --red2:#ef4444;
+    --green:#16a34a; --green-bd:#14532d; --green-bg:#0c1f14; --teal:#2dd4bf;
+    --amber:#f59e0b;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);margin:0;padding:24px;line-height:1.55}
+  h1{font-size:1.4rem;border-bottom:2px solid var(--red);padding-bottom:8px;margin:0 0 4px}
+  .sub{color:var(--tx2);font-size:.9rem;margin:0 0 24px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:20px;align-items:start}
+  .panel{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+  .phead{padding:12px 16px;font-weight:700;font-size:.92rem;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd)}
+  .phead.before{background:#1a1416;color:#fca5a5}
+  .phead.after{background:#0f1a14;color:#86efac}
+  .tag{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .tag.b{background:#3b1d1d;color:#fca5a5}
+  .tag.a{background:#15331f;color:#86efac}
+  .pbody{padding:16px}
+  .lbl{font-size:.8rem;color:var(--tx2);margin:14px 0 5px;font-weight:600}
+  .lbl.req::after{content:" *";color:var(--red2)}
+  .inp{background:var(--card2);border:1px solid var(--bd);border-radius:9px;padding:9px 12px;font-size:.86rem;color:var(--tx);width:100%}
+  .inp.ph{color:#6b6b76}
+  .row3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:9px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  /* radio type picker */
+  .types{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px}
+  .ty{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--tx2)}
+  .dot{width:15px;height:15px;border-radius:50%;border:2px solid #555;display:inline-block;position:relative}
+  .ty.on{color:var(--tx);font-weight:600}
+  .ty.on .dot{border-color:var(--red2)}
+  .ty.on .dot::after{content:"";position:absolute;inset:3px;background:var(--red2);border-radius:50%}
+  .locked{display:inline-flex;align-items:center;gap:7px;background:var(--card2);border:1px solid var(--bd);border-radius:999px;padding:7px 16px;font-weight:700;font-size:.85rem}
+  /* deposit section */
+  .deposit{margin-top:16px;border:1.5px solid var(--green-bd);background:var(--green-bg);border-radius:12px;padding:14px}
+  .deposit .dh{display:flex;align-items:center;gap:8px;color:#4ade80;font-weight:700;font-size:.92rem}
+  .deposit .dnote{font-size:.74rem;color:#7da88a;margin:6px 0 12px;line-height:1.5}
+  .deposit .dnote b{color:#a7f3d0}
+  .auto-pill{margin-left:auto;font-size:.66rem;background:#14532d;color:#86efac;padding:2px 9px;border-radius:999px;font-weight:700}
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{background:var(--card2);border:1px solid var(--bd);border-radius:10px;padding:8px 13px;font-size:.83rem;color:var(--tx2);cursor:default}
+  .chip.on{border-color:var(--red2);background:#2a1417;color:#fecaca;font-weight:600;box-shadow:0 0 0 1px var(--red2) inset}
+  .other-box{margin-top:9px}
+  .note{font-size:.74rem;color:var(--tx2);margin-top:8px;padding-left:2px}
+  .x{margin-left:auto;color:var(--tx2)}
+  .modaltop{display:flex;align-items:center;font-weight:700;font-size:1rem;padding-bottom:8px}
+  .warn{font-size:.74rem;color:var(--amber);margin-top:6px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:.8rem;color:var(--tx2);margin:18px 0 4px}
+  .legend b{color:var(--tx)}
+  .callout{background:#11161f;border:1px solid #1e3a5f;border-left:3px solid #3b82f6;border-radius:8px;padding:10px 14px;font-size:.82rem;color:#bcd4f0;margin-top:20px}
+</style>
+</head>
+<body>
+  <h1>สร้างนัดหมาย — Auto มัดจำ + Chip "นัดมาเพื่อ"</h1>
+  <p class="sub">ทุก modal สร้างนัดหมายใช้ component เดียวกัน (<code>AppointmentFormModal</code>) → แก้ที่เดียว มีผลทุกที่ · ภาพ mockup เปรียบเทียบ ก่อน/หลัง</p>
+
+  <div class="grid">
+
+    <!-- ============ BEFORE ============ -->
+    <div class="panel">
+      <div class="phead before"><span class="tag b">ก่อน</span> ปัจจุบัน (ภาพ 1 + 3)</div>
+      <div class="pbody">
+        <div class="lbl req">ลูกค้า</div>
+        <div class="inp ph">ค้นหาชื่อ / HN / เบอร์…</div>
+
+        <div class="row3">
+          <div><div class="lbl req">วันที่</div><div class="inp">25/05/2026</div></div>
+          <div><div class="lbl req">เริ่ม</div><div class="inp">10:00</div></div>
+          <div><div class="lbl">สิ้นสุด</div><div class="inp">10:15</div></div>
+        </div>
+
+        <div class="lbl">ประเภทนัดหมาย</div>
+        <div class="types">
+          <span class="ty on"><span class="dot"></span>จองมัดจำ</span>
+          <span class="ty"><span class="dot"></span>จองไม่มัดจำ</span>
+          <span class="ty"><span class="dot"></span>เข้าทำหัตถการ</span>
+          <span class="ty"><span class="dot"></span>ติดตามอาการ</span>
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;border:1px dashed #4a2a2a;border-radius:9px;color:#c98a8a;font-size:.78rem">
+          ❌ เลือก "จองมัดจำ" แล้ว <b>ไม่มี</b> section มัดจำโผล่ — ต้องไปสร้างที่ tab จองมัดจำเท่านั้น
+        </div>
+
+        <div class="lbl">นัดมาเพื่อ</div>
+        <div class="inp ph">botox, filler…  <span style="color:#c98a8a">(พิมพ์เอง free-text)</span></div>
+      </div>
+    </div>
+
+    <!-- ============ AFTER: deposit ============ -->
+    <div class="panel">
+      <div class="phead after"><span class="tag a">หลัง</span> Auto Section มัดจำ (เหมือนภาพ 2)</div>
+      <div class="pbody">
+        <div class="lbl req">ลูกค้า</div>
+        <div class="inp ph">ค้นหาชื่อ / HN / เบอร์…</div>
+
+        <div class="row3">
+          <div><div class="lbl req">วันที่</div><div class="inp">25/05/2026</div></div>
+          <div><div class="lbl req">เริ่ม</div><div class="inp">10:00</div></div>
+          <div><div class="lbl">สิ้นสุด</div><div class="inp">10:15</div></div>
+        </div>
+
+        <div class="lbl">ประเภทนัดหมาย</div>
+        <div class="types">
+          <span class="ty on"><span class="dot"></span>จองมัดจำ</span>
+          <span class="ty"><span class="dot"></span>จองไม่มัดจำ</span>
+          <span class="ty"><span class="dot"></span>เข้าทำหัตถการ</span>
+          <span class="ty"><span class="dot"></span>ติดตามอาการ</span>
+        </div>
+
+        <!-- auto-expanding deposit -->
+        <div class="deposit">
+          <div class="dh">💰 รายละเอียดมัดจำ <span class="auto-pill">AUTO ↓ เมื่อเลือกจองมัดจำ</span></div>
+          <div class="dnote">ระบบจะบันทึกทั้งใบมัดจำและนัดหมายพร้อมกันแบบอัตโนมัติ แสดงในแท็บ <b>จองมัดจำ</b> และ <b>การเงิน → มัดจำ</b> ของสาขานี้</div>
+          <div class="row2">
+            <div><div class="lbl req">ยอดมัดจำ (บาท)</div><div class="inp ph">0</div></div>
+            <div><div class="lbl req">ช่องทางชำระ</div><div class="inp">เงินสด ▾</div></div>
+          </div>
+          <div class="row2" style="margin-top:9px">
+            <div><div class="lbl req">วันที่ชำระ</div><div class="inp">25/05/2026</div></div>
+            <div><div class="lbl">หมายเหตุมัดจำ</div><div class="inp ph">(ไม่บังคับ)</div></div>
+          </div>
+        </div>
+        <div class="note">เลือก "จองไม่มัดจำ / หัตถการ / ติดตาม" → section นี้หายไป (ไม่บังคับกรอก)</div>
+      </div>
+    </div>
+
+    <!-- ============ AFTER: chips ============ -->
+    <div class="panel">
+      <div class="phead after"><span class="tag a">หลัง</span> Chip "นัดมาเพื่อ" (เหมือนภาพ 4)</div>
+      <div class="pbody">
+        <div class="lbl req">นัดมาเพื่อ</div>
+        <div class="chips">
+          <span class="chip">สมรรถภาพทางเพศ</span>
+          <span class="chip on">โรคระบบทางเดินปัสสาวะ</span>
+          <span class="chip">ดูแลสุขภาพองค์รวม</span>
+          <span class="chip">เสริมฮอร์โมน</span>
+          <span class="chip">โรคติดต่อทางเพศสัมพันธ์</span>
+          <span class="chip on">ขลิบ</span>
+          <span class="chip">ทำหมัน</span>
+          <span class="chip">เลาะสารเหลว</span>
+          <span class="chip on">เสริมขนาด</span>
+          <span class="chip">อื่นๆ</span>
+        </div>
+        <div class="note">เลือกได้หลายอัน (multi-select) · ใช้รายการเดียวกับปุ่ม "สร้างคิว" ใน Frontend (<code>getReasons()</code>)</div>
+
+        <div class="lbl" style="margin-top:16px">ถ้าเลือก "อื่นๆ" → กล่องพิมพ์เพิ่ม</div>
+        <div class="inp ph other-box">เช่น ผ่ามุก, ตรวจแผล…</div>
+
+        <div class="note" style="margin-top:14px;color:#7da88a">
+          💾 เก็บเป็น string เดิม (<code>appointmentTo</code>) → <b>เข้ากับข้อมูลเก่าได้</b><br>
+          ตัวอย่างที่บันทึก: <code>"โรคระบบทางเดินปัสสาวะ, ขลิบ, เสริมขนาด"</code><br>
+          เปิดแก้ไขนัดเก่าที่เป็น free-text → map เข้า "อื่นๆ: &lt;ข้อความเดิม&gt;" อัตโนมัติ
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <span><b>●</b> chip ที่เลือก = ขอบ/พื้นแดงเข้ม (ไฟ)</span>
+    <span><b>💰</b> section มัดจำ = กรอบเขียว (เหมือน tab จองมัดจำเดิม)</span>
+    <span><b>⚠</b> สี/ชื่อลูกค้า = ไม่ใช้แดง (วัฒนธรรมไทย)</span>
+  </div>
+
+  <div class="callout">
+    <b>หมายเหตุสถาปัตยกรรม:</b> มี modal สร้างนัดหมายตัวเดียว <code>AppointmentFormModal.jsx</code> ที่ถูกเรียกจาก 4 ที่
+    (ปฏิทินนัดหมาย · หน้าข้อมูลลูกค้า · ปุ่มสร้างนัดใน tab จองมัดจำ · OPD-save ของ Walk-in).
+    แก้ component เดียว → ได้ผลทุกที่. ส่วน Walk-in OPD-save ถูกล็อกเป็น "จองไม่มัดจำ" อยู่แล้ว จึงไม่มี section มัดจำ (ถูกต้อง).
+  </div>
+</body>
+</html>
