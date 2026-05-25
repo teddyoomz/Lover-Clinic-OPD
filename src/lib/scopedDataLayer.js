@@ -247,6 +247,10 @@ export const listDocumentTemplates = (...args) => raw.listDocumentTemplates(...a
 // Customer-attached subcollections
 export const getCustomer = (...args) => raw.getCustomer(...args);
 export const getAllCustomers = (...args) => raw.getAllCustomers(...args);
+// Customer patient-link (2026-05-25) — universal (be_customers is universal; clinic-staff write)
+export const generateCustomerPatientLink = (...args) => raw.generateCustomerPatientLink(...args);
+export const setCustomerPatientLinkEnabled = (...args) => raw.setCustomerPatientLinkEnabled(...args);
+export const revokeCustomerPatientLink = (...args) => raw.revokeCustomerPatientLink(...args);
 // Phase 20.0 Task 5a (2026-05-06) — be_customers search (replaces
 // broker.searchCustomers). Universal (cross-branch); admin can find
 // any customer regardless of selected branch.

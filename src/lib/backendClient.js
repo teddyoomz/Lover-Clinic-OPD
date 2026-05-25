@@ -156,6 +156,30 @@ export async function getCustomer(proClinicId) {
   return { id: snap.id, ...snap.data() };
 }
 
+// ─── Customer patient-link (2026-05-25) ──────────────────────────────────────
+// Token lives on the be_customers doc. Generated/revoked by clinic-staff (client
+// SDK — be_customers write is isClinicStaff). The ANON patient view reads via the
+// /api/patient-view endpoint (admin SDK), NEVER direct Firestore (be_* are
+// clinic-staff-only). crypto.getRandomValues = Rule C2 (no Math.random for tokens).
+
+/** Generate a crypto patient-link token + enable it. Returns the token. */
+export async function generateCustomerPatientLink(customerId) {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  await updateDoc(customerDoc(customerId), { patientLinkToken: token, patientLinkEnabled: true });
+  return token;
+}
+
+/** Toggle the patient link on/off without discarding the token. */
+export async function setCustomerPatientLinkEnabled(customerId, enabled) {
+  await updateDoc(customerDoc(customerId), { patientLinkEnabled: !!enabled });
+}
+
+/** Revoke — clear token + disable (link stops resolving via the endpoint). */
+export async function revokeCustomerPatientLink(customerId) {
+  await updateDoc(customerDoc(customerId), { patientLinkToken: null, patientLinkEnabled: false });
+}
+
 /** Get all customers from be_customers (sorted by clonedAt desc) */
 export async function getAllCustomers() {
   const snap = await getDocs(customersCol());
