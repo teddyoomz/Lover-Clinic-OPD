@@ -77,6 +77,7 @@ import {
 } from '../../lib/appointmentTypes.js';
 import { thaiTodayISO } from '../../utils.js';
 import DateField from '../DateField.jsx';
+import VisitPurposePicker from '../VisitPurposePicker.jsx'; // V-appt-deposit (2026-05-25) — chip นัดมาเพื่อ
 import { useSelectedBranch, resolveBranchName, useEffectiveClinicSettings } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 // V53 (2026-05-08, BS-12) — per-branch openHours filter the time-picker dropdowns
@@ -495,6 +496,12 @@ export default function AppointmentFormModal({
     }
     if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
     if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
+    // V-appt-deposit (2026-05-25) — นัดมาเพื่อ is required (Q2=A; chip picker ≥1).
+    // appointmentTo is the joined chip string (VisitPurposePicker emits it).
+    if (!String(formData.appointmentTo || '').trim()) {
+      scrollToFormError('appointmentTo', 'กรุณาเลือกอย่างน้อย 1 รายการในนัดมาเพื่อ');
+      return;
+    }
     // Phase 21.0-ter (2026-05-06 EOD) — when admin creates a deposit-booking
     // appointment, additional deposit fields are required. The save handler
     // routes to createDepositBookingPair → atomic paired write of be_deposits
@@ -1323,21 +1330,20 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
-          {/* AppointmentTo + Color */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">นัดมาเพื่อ</label>
-              <textarea value={formData.appointmentTo} onChange={e => update({ appointmentTo: e.target.value })} rows={2} placeholder="botox, filler..."
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] resize-none focus:outline-none focus:ring-1 focus:ring-sky-500" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สีนัดหมาย</label>
-              <select value={formData.appointmentColor} onChange={e => update({ appointmentColor: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
-                <option value="">ไม่ระบุ</option>
-                {APPT_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+          {/* AppointmentTo — full-width chip picker (V-appt-deposit 2026-05-25; was free-text textarea) */}
+          <VisitPurposePicker
+            value={formData.appointmentTo}
+            onChange={(s) => update({ appointmentTo: s })}
+            required
+          />
+          {/* สีนัดหมาย — own row (was the 2nd cell of the AppointmentTo+Color grid) */}
+          <div>
+            <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สีนัดหมาย</label>
+            <select value={formData.appointmentColor} onChange={e => update({ appointmentColor: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] focus:outline-none focus:ring-1 focus:ring-sky-500">
+              <option value="">ไม่ระบุ</option>
+              {APPT_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
           {/* Location + Expected sales */}
           <div className="grid grid-cols-2 gap-3">
