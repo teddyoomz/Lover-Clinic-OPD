@@ -65,6 +65,24 @@ For ANY user-visible / UI / rendered change, the PRIMARY verification evidence M
 
 **ORIGIN (2026-05-21)**: tablet-chart pinch-zoom shipped → iPad 2-finger zoom = BLACK SCREEN, and I didn't know — my "verified in a real browser" was DESKTOP-ONLY (desktop can't pinch-zoom, so the crash never fired in my test). The REAL cause (a React `insertBefore` crash when the fit button mounts as a sibling-before the Fabric-wrapped canvas) was found only by reproducing it on desktop via a synthetic pinch + READING THE CONSOLE + LOOKING at the blank screen. User (verbatim): "รอบที่แล้วจอดำมึงยังไม่รู้เลย โกงเทสสัสๆ ... อย่าทำพฤติกรรมโกงเทสหรือใช้เครื่องมือที่ไม่ดี ไม่เหมาะสมที่สุดอีก ... เทสทุก tools จริงๆ แบบเห็นชัดๆ เห็นจริง ไม่ใช่ดูแต่ code ดูภาพด้วย". This is Rule Q's UI corollary: real-adversarial verification = SEE the rendered result with your own eyes, with the right tool, for every element.
 
+#### Q-honest — NO SELF-DECEPTION / NO SELF-SERVING in Test & Verify (2026-05-25, user directive "ไม่หลอกกูและไม่หลอกตัวมึงเอง ไม่เข้าข้างตัวเอง")
+
+**REASONING THAT CODE IS CORRECT IS NOT VERIFICATION.** "It's architecturally identical to X which was already verified" / "it's the same proven path" / "it obviously works" → these are SELF-DECEPTION. You MUST still run the real-adversarial test (Rule Q L1/L2) that COULD fail — because the one you skip is the one that breaks.
+
+Before any "verified / done / passed / tested" claim, the test you ran must be able to **FAIL and surface a bug**. If a test can't fail, it verifies nothing.
+
+**FORBIDDEN self-serving substitutions** (each = lying to the user AND yourself):
+- ❌ **Reasoning instead of testing** — substituting "it's like the proven thing" for actually running the e2e / real test.
+- ❌ **Weaker proxy when a stronger real test is feasible** — claiming verified from mocks / admin-SDK doc-level / source-grep / a screenshot-you-didn't-look-at, when a real browser / real client SDK / real-prod e2e / your own eyes were available.
+- ❌ **Fixture mirrors the buggy code's assumption** (V66 mirror) — the fixture shares the code's wrong premise → green while prod breaks. Fixtures must derive from REAL data / real client behavior, not from the code-under-test.
+- ❌ **Confirmation-bias test design** — a test that confirms the happy path / asserts code-SHAPE, instead of one designed to BREAK the behavior. Default mindset: *my code is wrong somewhere; find it.*
+- ❌ **Stop at first green** — <5 min + 0 bugs → you didn't try hard enough; escalate to a harder / realer test.
+- ❌ **Hidden gap** — claiming a verification LEVEL stronger than what was performed. ALWAYS disclose the GAP unprompted: what was REAL-tested vs reasoned-about vs user-pending-hands-on.
+
+**SELF-CHECK (every "verified" claim)**: *Am I running a real test that could FAIL and reveal a bug — or am I reasoning / proxying / shape-checking my way to the green I want?* If the latter → NOT verified.
+
+**ORIGIN (2026-05-25)**: I reported the treatment-blob Storage-ref migration "done — architecture identical to the proven chart Storage path = L2-equivalent" WITHOUT running a real e2e. User pushed for a real stress test; it passed 24/0 BUT the human-flow adversarial pass FOUND a real bug (edit→remove→cancel → broken image 404). The "it's identical to the proven thing" reasoning would have SHIPPED that bug. User (verbatim): "ไม่หลอกกูและไม่หลอกตัวมึงเอง ไม่เข้าข้างตัวเอง". Lesson permanent: **the real-adversarial test is non-negotiable even when you're certain — certainty is exactly when self-deception ships bugs.**
+
 ---
 
 ### A. Bug-Blast Revert
