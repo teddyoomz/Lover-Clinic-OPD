@@ -28,11 +28,13 @@ import {
 import {
   createDepositBookingPair,
   cancelDepositBookingPair,
+  deleteDepositBookingPair,
   // Phase 24.0-vicies-novies (2026-05-07) — provision an opd_sessions doc +
   // stamp linkedOpdSessionId on the deposit + linked appointment so the
   // bookings auto-attach when admin clicks "บันทึกลง OPD" later.
   provisionOpdLinkForBookingPair,
 } from '../../lib/appointmentDepositBatch.js';
+import DepositAwareCancelDialog from '../admin/DepositAwareCancelDialog.jsx';
 // Phase 24.0-noniesdecies (2026-05-06) — AppointmentFormModal in
 // create-for-existing-deposit mode (existingDepositId prop set).
 import AppointmentFormModal from './AppointmentFormModal.jsx';
@@ -147,6 +149,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [sendLinkModal, setSendLinkModal] = useState(null);
   const [sendLinkBusyId, setSendLinkBusyId] = useState('');
   const [cancelModal, setCancelModal] = useState(null);
+  // (2026-05-26) deposit-aware HARD delete — { dep } when a deposit-linked
+  // (linkedAppointmentId) deposit is being deleted; null otherwise.
+  const [deleteDialog, setDeleteDialog] = useState(null);
   const [cancelNote, setCancelNote] = useState('');
   const [cancelEvidenceUrl, setCancelEvidenceUrl] = useState('');
   const [cancelSaving, setCancelSaving] = useState(false);
@@ -549,6 +554,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   };
 
   const handleDelete = async (dep) => {
+    // (2026-05-26) deposit-linked → ask ลบนัดด้วย / เก็บนัด via the shared
+    // deposit-aware dialog (fixes the orphan-appt gap: bare deleteDeposit left
+    // the linked be_appointments doc dangling). Legacy no-link → plain confirm.
+    if (dep.linkedAppointmentId) { setDeleteDialog({ dep }); return; }
     if (!confirm(`ต้องการลบมัดจำ ${dep.depositId}?`)) return;
     try {
       await deleteDeposit(dep.depositId || dep.id);
@@ -901,6 +910,30 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         />
       )}
 
+      {/* (2026-05-26) deposit-aware HARD delete — ลบมัดจำ+ยกเลิกนัด / ลบแต่มัดจำ-เก็บนัด */}
+      {deleteDialog && (
+        <DepositAwareCancelDialog
+          open
+          orientation="deposit"
+          depositId={deleteDialog.dep.depositId || deleteDialog.dep.id}
+          subtitle={`มัดจำ ${deleteDialog.dep.depositId || ''} · ผูกกับนัดหมาย`}
+          onChoice={async (choice) => {
+            const dlg = deleteDialog;
+            setDeleteDialog(null);
+            if (!dlg || choice === 'cancel') return;
+            const depId = dlg.dep.depositId || dlg.dep.id;
+            try {
+              if (choice === 'both') {
+                await deleteDepositBookingPair(depId); // hard: deposit + linked appt
+              } else {
+                await deleteDeposit(depId); // deposit only — keep the appt
+              }
+              loadList();
+            } catch (err) { alert(err.message || 'ลบไม่สำเร็จ'); }
+          }}
+          onClose={() => setDeleteDialog(null)}
+        />
+      )}
       {cancelModal && (
         // AV78 (EOD8): backdrop click does NOT close — explicit close only (X / Cancel / ESC)
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-labelledby="deposit-cancel-title"
