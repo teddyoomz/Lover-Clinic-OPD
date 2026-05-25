@@ -3058,3 +3058,29 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Origin**: V125 (2026-05-24 EOD+1) — same systematic-debugging session as V124. V124 surfaced the predicate scope-mismatch; V125 surfaced the next-layer gap (status awareness + cross-tab cascade). User explicitly flagged strategic direction: นัดหมาย tab to become the primary surface; future deprecation of คิวหน้า Clinic / จองไม่มัดจำ / จองมัดจำ tabs. The cascade fix aligns with that direction by ensuring cancel in นัดหมาย propagates to the other 3 tabs through the existing `isArchived` filter convention.
 
 **Cross-link**: V125 row in `.claude/rules/00-session-start.md` § 2 + `tests/v125-cancel-cascade.test.js` + V124 (predicate scope) + AppointmentHubView:537 (hideOpdLifecycle defense) + AdminDashboard:7045 (onCancelAppt cascade).
+
+### AV126 — Customer patient-link anon-safety (endpoint-only reads + field-minimized)
+
+**Why**: 2026-05-25 customer patient-link feature — an anon customer (no login) opens `?patient=<token>` to view their appointments + remaining courses on the existing PatientDashboard view. `be_customers` / `be_appointments` / `be_branches` are clinic-staff-only (firestore.rules) → anon CANNOT read them client-side. The data MUST flow through the public token-gated `/api/patient-view` endpoint (admin SDK), NEVER via direct client-SDK reads of those collections. Opening anon-read on `be_customers` would expose the ENTIRE customer PII database — a serious security regression (Firestore rules can't gate a collection query on secret-token knowledge).
+
+**Invariant**:
+1. The anon patient view reads customer data ONLY via `api/patient-view` (admin SDK). PatientDashboard customer-mode fetches the endpoint; it MUST NOT call `fetchCoursesViaApi`/`getCustomer`/`getCustomerAppointments` when `sessionData.__customerMode` (those hit anon-denied be_* reads). The auto-sync effect is guarded by `if (sessionData?.__customerMode) return;`.
+2. `api/patient-view` MUST be field-minimized: response keys ⊆ `{ok, patientName, hn, patientData(prefix/firstName/lastName/phone), courses, expiredCourses, appointments, fetchedAt}`. NO national-ID / sensitive PII identifier in the response.
+3. `firestore.rules` `be_customers`/`be_appointments`/`be_branches` MUST stay `isClinicStaff` (no anon-read rule added).
+4. The token = `crypto.getRandomValues` 128-bit (Rule C2 — no Math.random).
+
+**Sanctioned consumers** (closed list — 3 entries):
+1. `api/patient-view.js` — admin SDK endpoint (the ONLY anon data path; unified resolve be_customers OR opd_session).
+2. `src/lib/backendClient.js` — `generateCustomerPatientLink`/`setCustomerPatientLinkEnabled`/`revokeCustomerPatientLink` (clinic-staff write of the token on be_customers).
+3. `src/pages/PatientDashboard.jsx` — customer-mode fetches the endpoint (gated by `__customerMode`; never reads be_* directly).
+
+**Forbidden anti-patterns** (AV126 violations):
+- ❌ Adding `allow read: if isSignedIn()` (or anon) to be_customers/be_appointments/be_branches → exposes the PII DB.
+- ❌ Calling `getCustomer`/`getCustomerAppointments` client-side in PatientDashboard `__customerMode` (anon-denied → silent empty appointments).
+- ❌ Returning national-ID / full patientData in the endpoint response.
+
+**Source-grep regression test**: `tests/customer-patient-link-helpers.test.js` (E7 no-PII + E8 no-admin-gate) + `tests/customer-patient-link-flow-simulate.test.js` (F3 render shape + F5 __customerMode guard).
+
+**Origin**: 2026-05-25 — customer patient-link. Spec `docs/superpowers/specs/2026-05-25-customer-patient-link-design.html`. The auth reality (be_* clinic-staff-only, verified via firestore.rules grep) forced the server-endpoint design — NOT anon-read rules.
+
+**Cross-link**: spec + plan `docs/superpowers/plans/2026-05-25-customer-patient-link.html` + `api/patient-view.js` + `tests/customer-patient-link-*.test.js`.
