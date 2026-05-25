@@ -68,7 +68,6 @@ export default function AppointmentHubView({
   onCreateTreatmentForAppt,
   onEditTreatmentForAppt,
   onOpenLineForAppt,
-  onAddWalkIn,
   onMarkServiceComplete,                     // V71 NEW
   onUnmarkServiceComplete,                   // V71.A NEW — symmetric un-mark
   branchName = '',
@@ -110,6 +109,9 @@ export default function AppointmentHubView({
   // mutation. Optimistic local update + revert-on-error is enough; full
   // reconcile happens on next branch switch.
   const [reloadKey] = useState(0);
+  // ① (2026-05-26) — "เพิ่มนัดหมาย" opens the SAME AppointmentFormModal this
+  // view already renders for edit (below), in create mode (all 5 types).
+  const [creatingAppt, setCreatingAppt] = useState(false);
 
   // V64 — reset filters on branch switch (Phase 17.0 BS-9 reset-on-branch-switch pattern)
   useEffect(() => {
@@ -506,7 +508,7 @@ export default function AppointmentHubView({
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         onPrint={handlePrint}
-        onAddWalkIn={onAddWalkIn}
+        onAddAppointment={() => setCreatingAppt(true)}
         resultCount={filteredAppts.length}
         doctorBadge={
           <AppointmentHubDoctorCards
@@ -616,6 +618,20 @@ export default function AppointmentHubView({
           onSaved={handleModalSaved}
           onClose={() => setEditingAppt(null)}
           onDelete={handleModalDelete}
+        />
+      )}
+      {/* ① (2026-05-26) — all-types create. SAME component as the edit modal
+          above + the ปฏิทิน openCreate path. lockedAppointmentType=null → the
+          radio shows all 5 types (incl. Walk-in). Collision/holiday checks ON
+          (defaults) for parity with the calendar's create. */}
+      {creatingAppt && (
+        <AppointmentFormModal
+          mode="create"
+          lockedAppointmentType={null}
+          initialDate={dateRangeForTab('today', new Date()).from}
+          existingAppointments={appts}
+          onSaved={() => { setCreatingAppt(false); loadAll({ silent: true }); }}
+          onClose={() => setCreatingAppt(false)}
         />
       )}
     </div>

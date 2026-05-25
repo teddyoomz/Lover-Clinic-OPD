@@ -7119,10 +7119,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 if (!appt.customerLineUserId) return;
                 window.open(`https://line.me/R/oaMessage/@loverclinic/?customer=${appt.customerHN || appt.customerId}`, '_blank');
               }}
-              onAddWalkIn={() => {
-                setSessionModalTab?.('standard');
-                setShowSessionModal(true);
-              }}
               /* V71 (2026-05-15) — mark service complete. Calls the canonical
                * writer with the current admin's Firebase auth uid for the
                * serviceCompletedBy forensic stamp. Re-throws on error so

@@ -23,7 +23,7 @@ export default function AppointmentHubFilterBar({
   search, onSearchChange,
   typeFilter, onTypeFilterChange, typeOptions = [],
   statusFilter, onStatusFilterChange,
-  onPrint, onAddWalkIn,
+  onPrint, onAddAppointment,
   resultCount = 0,
   // V64-fix13 (2026-05-09): doctor-cards badge slot moved here from TabBar
   // rightContent. User: "ขอย้าย หมอมายด์ 13:30-19:30 ลงมา 1 row มาอยู่
@@ -99,11 +99,11 @@ export default function AppointmentHubFilterBar({
         </button>
         <button
           type="button"
-          data-testid="appt-hub-walkin-btn"
-          onClick={() => onAddWalkIn?.()}
+          data-testid="appt-hub-add-appt-btn"
+          onClick={() => onAddAppointment?.()}
           className={BTN_PRIMARY}
         >
-          <Plus size={12} /> เพิ่มคิว Walk-in
+          <Plus size={12} /> เพิ่มนัดหมาย
         </button>
       </div>
     </div>
