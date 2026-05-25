@@ -589,6 +589,45 @@ export async function createAppointmentForExistingDeposit(depositId, apptPayload
 }
 
 /**
+ * V-appt-deposit (2026-05-25) — reverse of createAppointmentForExistingDeposit.
+ * Used when an appointment ALREADY exists (edit mode) and admin flips it TO
+ * 'deposit-booking' (or it's a legacy deposit-booking appt with no linked
+ * deposit). Creates a be_deposits doc + links it to the existing be_appointments
+ * doc, atomically. Reuses buildDepositPairPayload (DRY — same deposit-doc shape
+ * as the pair-helper, with linkedAppointmentId pointing at the existing appt).
+ *
+ * @param {string} appointmentId — existing be_appointments doc id.
+ * @param {Object} depositData — same shape DepositPanel/AppointmentFormModal build
+ *        (amount, paymentChannel, paymentDate, note, sellers, appointment{...}, branchId).
+ * @returns {Promise<{depositId, appointmentId}>}
+ */
+export async function createDepositForExistingAppointment(appointmentId, depositData = {}) {
+  if (!appointmentId) throw new Error('createDepositForExistingAppointment: appointmentId required');
+  const apptRef = appointmentDoc(appointmentId);
+  const apptSnap = await getDoc(apptRef);
+  if (!apptSnap.exists()) {
+    throw new Error(`createDepositForExistingAppointment: appointment ${appointmentId} not found`);
+  }
+  const apptData = apptSnap.data() || {};
+  const depositId = `DEP-${Date.now()}`;
+  const branchId = depositData.branchId || apptData.branchId || null;
+  // Reuse the canonical deposit-doc builder (DRY) — links deposit → existing appt.
+  const depositPayload = buildDepositPairPayload({ depositData, depositId, appointmentId, branchId });
+  const now = new Date().toISOString();
+  const apptUpdate = {
+    appointmentType: 'deposit-booking',
+    linkedDepositId: depositId,
+    spawnedFromDepositId: depositId,
+    updatedAt: now,
+  };
+  const batch = writeBatch(db);
+  batch.set(depositDoc(depositId), depositPayload);
+  batch.update(apptRef, apptUpdate);
+  await batch.commit();
+  return { depositId, appointmentId };
+}
+
+/**
  * Phase 24.0-vicies (2026-05-06) — sync customer temp identity (name + phone)
  * to the linked be_deposits doc. User report: "ตรงปุ่มแก้ไขในหน้าจองไม่มัดจำ
  * ทำให้แก้ไขชื่อและเบอร์โทรลูกค้าได้ด้วย และเมื่อแก้ในนี้ก็จะไปแก้ตรงหน้า
