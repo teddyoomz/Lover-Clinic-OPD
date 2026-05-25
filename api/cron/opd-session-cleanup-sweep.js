@@ -25,8 +25,15 @@ import {
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const OPD_SESSIONS_COL = `${PREFIX}/opd_sessions`;
+const BE_APPOINTMENTS_COL = `${PREFIX}/be_appointments`;
 const AUDIT_COL = `${PREFIX}/be_admin_audit`;
 const SWEEP_LIMIT = 500;
+
+// ③ (2026-05-26) — Bangkok (UTC+7) 'YYYY-MM-DD' for the given epoch ms.
+function bangkokTodayISO(nowMs) {
+  const u = new Date(nowMs + 7 * 60 * 60 * 1000);
+  return `${u.getUTCFullYear()}-${String(u.getUTCMonth() + 1).padStart(2, '0')}-${String(u.getUTCDate()).padStart(2, '0')}`;
+}
 
 function initAdmin() {
   if (getApps().length) return;
@@ -55,9 +62,40 @@ export async function sweepOpdSessionCleanup({ db, now = Date.now(), limit = SWE
   const snap = await db.collection(OPD_SESSIONS_COL).limit(limit).get();
   scanned = snap.size;
 
+  const todayISO = bangkokTodayISO(now);
+
+  // ③ (2026-05-26) — sessions don't store the appt date (R5). Collect linked
+  // appointment ids for sessions lacking data.appointmentDate, batch-join
+  // be_appointments, and stamp the date onto an effective-data copy so the pure
+  // decideCleanupAction can apply the date-passed branch. AV131.
+  const needDateIds = [...new Set(
+    snap.docs
+      .map((d) => d.data())
+      .filter((s) => !s.appointmentDate && s.linkedAppointmentId)
+      .map((s) => String(s.linkedAppointmentId)),
+  )];
+  const apptDateById = new Map();
+  if (needDateIds.length > 0) {
+    const refs = needDateIds.map((id) => db.collection(BE_APPOINTMENTS_COL).doc(id));
+    const snaps = await db.getAll(...refs);
+    for (const s of snaps) {
+      if (s.exists) {
+        const a = s.data() || {};
+        if (typeof a.date === 'string') apptDateById.set(s.id, a.date);
+      }
+    }
+  }
+
   const writes = []; // { ref, op: 'archive'|'hide'|'delete' }
   for (const d of snap.docs) {
-    const action = decideCleanupAction(d.data(), now);
+    const data = d.data();
+    const joinedDate = data.appointmentDate
+      || (data.linkedAppointmentId ? apptDateById.get(String(data.linkedAppointmentId)) : '')
+      || '';
+    const effectiveData = (joinedDate && !data.appointmentDate)
+      ? { ...data, appointmentDate: joinedDate }
+      : data;
+    const action = decideCleanupAction(effectiveData, now, SESSION_TIMEOUT_MS, todayISO);
     reasonsByAction[action.action][action.reason] = (reasonsByAction[action.action][action.reason] || 0) + 1;
     if (action.action === 'skip') { skipped++; continue; }
     writes.push({ ref: d.ref, op: action.action });
