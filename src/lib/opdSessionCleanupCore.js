@@ -58,13 +58,14 @@ export function createdAtMs(data) {
  * Decision tree (preserved exactly from legacy inline):
  *   - isArchived/isPermanent/no createdAt        → skip (already terminal OR cannot age out)
  *   - _v82FollowupOpdResetAt stamp                → skip (admin-explicit opt-out)
+ *   - ③ (2026-05-26) appointmentDate < todayISO   → delete (linked appt passed; overrides V116; even with patientData)
  *   - createdAt within SESSION_TIMEOUT_MS         → skip (still active)
  *   - expired + has patientData                   → archive
  *   - expired + no patientData + has linked booking (V116)
  *                                                 → hide (preserve session URL)
  *   - expired + no patientData + no link          → delete
  */
-export function decideCleanupAction(data, nowMs = Date.now(), timeoutMs = SESSION_TIMEOUT_MS) {
+export function decideCleanupAction(data, nowMs = Date.now(), timeoutMs = SESSION_TIMEOUT_MS, todayISO = null) {
   if (!data || typeof data !== 'object') {
     return { action: 'skip', reason: 'invalid-data' };
   }
@@ -72,6 +73,18 @@ export function decideCleanupAction(data, nowMs = Date.now(), timeoutMs = SESSIO
   if (data.isPermanent) return { action: 'skip', reason: 'permanent-link' };
   if (data._v82FollowupOpdResetAt) {
     return { action: 'skip', reason: 'v82-followup-opt-out' };
+  }
+  // ③ (2026-05-26) — appt-date-passed → HARD DELETE. Overrides V116 hide AND
+  // fires even with patientData (Q3=A: delete filled-but-unsaved too). todayISO
+  // = Bangkok 'YYYY-MM-DD'; data.appointmentDate is the linked appointment's
+  // date (the cron joins be_appointments to populate it — sessions don't store
+  // it). Above the age check so a fresh session whose appt already passed is
+  // still removed. AV131.
+  if (typeof todayISO === 'string'
+      && typeof data.appointmentDate === 'string'
+      && data.appointmentDate
+      && data.appointmentDate < todayISO) {
+    return { action: 'delete', reason: 'appt-date-passed' };
   }
   const ms = createdAtMs(data);
   if (ms == null) {
