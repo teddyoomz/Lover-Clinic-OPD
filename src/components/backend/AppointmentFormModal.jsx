@@ -51,6 +51,8 @@ import {
   listAllSellers,
   // Phase 18.0 (2026-05-05) — branch-scoped exam-room master
   listExamRooms,
+  // V-appt-deposit (2026-05-25) — edit-mode deposit hydrate + update (universal pass-through)
+  getDeposit, updateDeposit,
 } from '../../lib/scopedDataLayer.js';
 // Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform routes through
 // the same atomic pair-helper DepositPanel uses. V12 single-writer lock
@@ -489,6 +491,33 @@ export default function AppointmentFormModal({
   const isDepositBooking = effectiveAppointmentType === 'deposit-booking';
   const showDepositSection = isDepositBooking; // create + edit
 
+  // V-appt-deposit (2026-05-25) — edit-mode: hydrate the deposit fields from the
+  // linked deposit so admin can see/edit ยอด/ช่องทาง/วันที่/หมายเหตุ. Runs once on
+  // edit-open for a deposit-booking appt that has a linked deposit. Best-effort.
+  useEffect(() => {
+    if (mode !== 'edit' || !appt) return;
+    if (appt.appointmentType !== 'deposit-booking') return;
+    const linkedDepositId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+    if (!linkedDepositId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const dep = await getDeposit(linkedDepositId);
+        if (cancelled || !dep) return;
+        setFormData((prev) => ({
+          ...prev,
+          depositAmount: dep.amount != null ? String(dep.amount) : '',
+          depositPaymentChannel: dep.paymentChannel || 'เงินสด',
+          depositPaymentDate: dep.paymentDate || prev.depositPaymentDate,
+          depositNote: dep.note || '',
+        }));
+      } catch (e) {
+        console.warn('[AppointmentFormModal] deposit hydrate failed (best-effort):', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, appt]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSave = async () => {
     // Phase 24.0-terdecies — pickLater branch: customerId stays '' but the
     // booking-time temp name + phone become required. Both must be filled
@@ -516,7 +545,10 @@ export default function AppointmentFormModal({
     // + be_appointments. Edit mode (mode === 'edit') skips this guard
     // because edits only touch appointment metadata, not the deposit doc.
     const isCreatingDepositBooking = isDepositBooking && mode === 'create';
-    if (isCreatingDepositBooking) {
+    // V-appt-deposit (2026-05-25) — deposit fields are required whenever the section
+    // shows (create OR edit-deposit). isCreatingDepositBooking (create-only) still
+    // gates the SAVE routing (createDepositBookingPair) further below.
+    if (showDepositSection) {
       const amt = parseFloat(formData.depositAmount);
       if (!amt || amt <= 0) {
         scrollToFormError('depositAmount', 'กรุณาระบุยอดมัดจำมากกว่า 0');
@@ -732,6 +764,64 @@ export default function AppointmentFormModal({
           }
         } catch (cascadeErr) {
           console.warn('[AppointmentFormModal] linked-deposit cascade failed (best-effort):', cascadeErr);
+        }
+        // V-appt-deposit (2026-05-25) — edit-mode deposit financial reconcile.
+        // (Flip-AWAY delete is handled by the confirm dialog gate — Task E7 — before
+        // this branch runs; here we only handle "still/now a deposit-booking".)
+        const linkedDepositIdEdit = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+        if (payload.appointmentType === 'deposit-booking') {
+          if (linkedDepositIdEdit) {
+            // Case 1 — existing linked deposit: update its financial fields.
+            await updateDeposit(linkedDepositIdEdit, {
+              amount: parseFloat(formData.depositAmount) || 0,
+              paymentChannel: formData.depositPaymentChannel,
+              paymentDate: formData.depositPaymentDate,
+              note: formData.depositNote || '',
+            });
+          } else {
+            // Case 2/4 — flip-to OR legacy deposit-no-link: create + link a new deposit.
+            const { createDepositForExistingAppointment } = await import('../../lib/appointmentDepositBatch.js');
+            const depositDataForEdit = {
+              customerId: formData.pickLater ? '' : formData.customerId,
+              customerName: formData.pickLater ? tempName : formData.customerName,
+              customerHN: formData.pickLater ? '' : formData.customerHN,
+              customerNameTemp: tempName,
+              customerPhoneTemp: tempPhone,
+              amount: parseFloat(formData.depositAmount) || 0,
+              paymentChannel: formData.depositPaymentChannel,
+              paymentDate: formData.depositPaymentDate,
+              paymentTime: '',
+              refNo: '',
+              sellers: formData.advisorId
+                ? [{ id: formData.advisorId, name: formData.advisorName || '', percent: 100, total: parseFloat(formData.depositAmount) || 0 }]
+                : [],
+              customerSource: '',
+              sourceDetail: '',
+              note: formData.depositNote || '',
+              hasAppointment: true,
+              appointment: {
+                type: 'deposit-booking',
+                option: 'once',
+                date: payload.date,
+                startTime: payload.startTime,
+                endTime: payload.endTime,
+                doctorId: payload.doctorId,
+                doctorName: payload.doctorName,
+                assistantIds: payload.assistantIds,
+                assistantNames: payload.assistantNames,
+                roomId: payload.roomId,
+                roomName: payload.roomName,
+                channel: payload.channel,
+                purpose: payload.appointmentTo,
+                note: payload.notes,
+                color: payload.appointmentColor || '',
+              },
+              paymentEvidenceUrl: '',
+              paymentEvidencePath: '',
+              branchId: selectedBranchId,
+            };
+            await createDepositForExistingAppointment(appt.appointmentId || appt.id, depositDataForEdit);
+          }
         }
       } else if (isCreatingDepositBooking && existingDepositId) {
         // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" path: deposit
