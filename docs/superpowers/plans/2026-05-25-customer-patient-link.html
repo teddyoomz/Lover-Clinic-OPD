@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer Patient-Link Implementation Plan</title>
+  <style>
+    :root { --accent: #a855f7; --bd: #e5e5e5; --bg-meta: #f4f0fa; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .flowbox{display:inline-block;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:7px 11px;font-size:0.8em;margin:3px;}
+    .flowarrow{color:var(--accent);font-weight:800;}
+    .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:6px 11px;border-radius:9px;border:1px solid;}
+  </style>
+</head>
+<body>
+
+<h1>Customer Patient-Link Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Implement task-by-task. Spec: <code>docs/superpowers/specs/2026-05-25-customer-patient-link-design.html</code>. Rules: Rule Q (real-adversarial verify) · Rule I (flow-simulate) · Rule N (targeted tests; full suite at batch end) · Rule P (class-of-bug). NO firestore.rules change. NO deploy without explicit "deploy".
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> เพิ่มปุ่ม 🔗 "ลิงก์ดูข้อมูล" ใน CustomerDetailView → สร้างลิงก์ให้ลูกค้า (anon, no login) เปิดดูหน้า PatientDashboard เดิม พร้อมนัดหมายครั้งต่อไป (สาขา + เดือนเต็ม) + คอร์สคงเหลือ.</p>
+  <p><strong>Architecture:</strong> Token บน be_customers (clinic-staff สร้าง client-side). หน้าผู้ป่วยดึงข้อมูลผ่าน NEW public token-gated serverless endpoint <code>api/patient-view.js</code> (admin SDK, unified resolve be_customers OR opd_session) → คืนรูปทรง <code>latestCourses</code> เดิม → PatientDashboard render เดิม (reuse 100%). AppointmentCard มีช่องสาขาอยู่แล้ว. ไม่แตะ firestore.rules.</p>
+  <p><strong>Tech Stack:</strong> React 19 · firebase-admin (endpoint) · Vitest · client SDK (be_customers writes). fmtThaiDate(monthStyle:'full') สำหรับวันที่.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">1 · CustomerDetailView button row — Layout A (action group + แยกปุ่มลบ)</div>
+  <div style="background:#080808;padding:18px;border-radius:10px;">
+    <div style="background:linear-gradient(180deg,#141414,#0c0c0c);border:1px solid #262626;border-radius:16px;padding:18px;width:300px;margin:0 auto;text-align:center;">
+      <div style="width:60px;height:60px;border-radius:50%;background:#1a0a0a;border:2px solid #5b1a1a;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:800;">ร</div>
+      <div style="color:#f5f5f5;font-weight:800;font-size:14px;margin:8px 0 14px;">นาง ราตรี ผ่องใส</div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+        <span class="chip" style="color:#60a5fa;border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.08);">✏️ แก้ไข</span>
+        <span class="chip" style="color:#06C755;border-color:rgba(6,199,85,.3);background:rgba(6,199,85,.08);">▦ ผูก LINE</span>
+        <span class="chip" style="color:#c084fc;border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.12);">🔗 ลิงก์</span>
+      </div>
+      <div style="width:78%;height:1px;background:rgba(255,255,255,.07);margin:11px auto;"></div>
+      <span class="chip" style="color:#f87171;border-color:rgba(190,49,68,.55);background:rgba(127,29,29,.28);">🗑️ ลบลูกค้า</span>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">2 · หน้าผู้ป่วย (anon) — PatientDashboard เดิม + นัดหมาย (สาขา + เดือนเต็ม). UI ไม่แก้ — feed data เท่านั้น</div>
+  <div style="background:#080808;padding:16px;border-radius:10px;max-width:420px;margin:0 auto;color:#e7e2f0;">
+    <div style="text-align:center;font-size:22px;font-weight:900;color:#fff;margin-bottom:14px;">LO<span style="color:#dc2626;">V</span>ER</div>
+    <div style="background:linear-gradient(135deg,#200000,#0a0a0a 40%,#2a0000);border:1.5px solid #5a1010;border-radius:14px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:900;color:#f3eaea;">อุดม ศิริประสมทรัพย์</div>
+      <span style="font-size:11px;font-family:monospace;color:#fdba74;background:#1a0a00;border:1px solid #4a1a0a;padding:3px 8px;border-radius:8px;">HN LC-26000101</span>
+    </div>
+    <div style="font-size:11px;font-weight:900;letter-spacing:2px;color:#fb923c;margin-bottom:8px;">📅 นัดหมายครั้งต่อไป · 2</div>
+    <div style="display:flex;background:linear-gradient(135deg,#0a0a0a,#1a0800 70%,#2d0f00);border:1.5px solid #4a1a0a;border-radius:14px;overflow:hidden;margin-bottom:14px;">
+      <div style="min-width:84px;text-align:center;padding:12px;background:linear-gradient(to bottom,#2d0f00,#4a1a0a 50%,#2d0f00);">
+        <div style="font-size:24px;font-weight:900;color:#ffedd5;">28</div><div style="font-size:10.5px;color:rgba(251,146,60,.75);line-height:1.25;">พฤษภาคม<br>2569</div></div>
+      <div style="padding:12px 14px;font-size:12.5px;">
+        <div style="color:#ffedd5;font-weight:700;">🕐 10:00 น.</div>
+        <div style="color:rgba(254,215,170,.7);">🩺 นพ. สมชาย ใจดี</div>
+        <div style="color:#fdba74;font-weight:700;">📍 สาขานครราชสีมา</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:900;letter-spacing:2px;color:#34d399;margin-bottom:8px;">📦 คอร์สของฉัน · 2</div>
+    <div style="background:linear-gradient(135deg,#0a0a0a,#001a0a 50%,#002d10);border:1.5px solid #1a4a2a;border-radius:14px;padding:14px;font-size:13px;color:#ffedd5;font-weight:700;">Shock Wave 12 ครั้ง... <span style="float:right;font-size:10px;color:#6ee7b7;background:rgba(5,150,105,.15);border:1px solid #1a4a2a;padding:2px 7px;border-radius:9999px;">กำลังใช้งาน</span></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">A · clinic-staff สร้างลิงก์ (client SDK)</div>
+  <div style="line-height:2.2;">
+    <span class="flowbox">กด 🔗</span><span class="flowarrow">→</span>
+    <span class="flowbox">crypto token</span><span class="flowarrow">→</span>
+    <span class="flowbox">updateDoc be_customers {patientLinkToken, patientLinkEnabled:true}</span><span class="flowarrow">→</span>
+    <span class="flowbox">modal: ลิงก์ + QR + คัดลอก/เปิด/toggle/เพิกถอน</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">B · ผู้ป่วย anon เปิดลิงก์</div>
+  <div style="line-height:2.2;">
+    <span class="flowbox">?patient=&lt;token&gt;</span><span class="flowarrow">→</span>
+    <span class="flowbox">PatientDashboard: GET /api/patient-view?token=</span><span class="flowarrow">→</span>
+    <span class="flowbox">endpoint admin SDK: be_customers OR opd_session by token</span><span class="flowarrow">→</span>
+    <span class="flowbox">courses(filter) + be_appointments(future) + branchId→ชื่อ + fmtThaiDate(full)</span><span class="flowarrow">→</span>
+    <span class="flowbox">return {patientName,hn,courses,expiredCourses,appointments(+branch)}</span><span class="flowarrow">→</span>
+    <span class="flowbox">map → sessionData shape → render เดิม</span>
+  </div>
+  <p style="font-size:.8em;color:var(--tx-muted)">404/disabled → notfound/disabled state เดิม. network error → fallback opd_session listener เดิม.</p>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li>Create: <code>api/patient-view.js</code> — public token-gated endpoint (admin SDK, unified resolve, branch+date format)</li>
+  <li>Modify: <code>src/lib/backendClient.js</code> — 3 helpers (generate/setEnabled/revoke customer patient-link)</li>
+  <li>Modify: <code>src/lib/scopedDataLayer.js</code> — re-export 3 helpers (universal pass-through)</li>
+  <li>Create: <code>src/components/backend/CustomerPatientLinkModal.jsx</code> — modal (mirror patient-link เดิม, customer-scoped)</li>
+  <li>Modify: <code>src/components/backend/CustomerDetailView.jsx</code> — Layout A button row + 🔗 + modal wiring (line ~830)</li>
+  <li>Modify: <code>src/pages/PatientDashboard.jsx</code> — customer-mode (endpoint-first resolution + map + gate auto-sync + fallback)</li>
+  <li>Test: <code>tests/customer-patient-link-helpers.test.js</code> · <code>tests/customer-patient-link-modal-rtl.test.jsx</code> · <code>tests/customer-patient-link-flow-simulate.test.js</code></li>
+  <li>Verify: <code>scripts/diag-patient-link-appointments.mjs</code> (Rule R) · <code>scripts/e2e-customer-patient-link.mjs</code> (Rule Q L2)</li>
+  <li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> — AV invariant</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 0: Rule R diag — verify the user's link customer has appointments + id matching</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>scripts/diag-patient-link-appointments.mjs</code></li></ul>
+  <div class="step"><input type="checkbox" id="t0s1"> <label for="t0s1"><strong>Step 1: pull env (Rule R standing auth)</strong></label></div>
+  <pre><code class="language-bash">vercel env pull .env.local.prod --environment=production</code></pre>
+  <div class="step"><input type="checkbox" id="t0s2"> <label for="t0s2"><strong>Step 2: write diag script</strong></label></div>
+  <pre><code class="language-javascript">import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+for (const line of readFileSync('.env.local.prod','utf8').split('\n')) {
+  const m = line.match(/^([A-Z_]+)=(.*)$/); if (m) process.env[m[1]] = m[2].replace(/^"|"$/g,'');
+}
+if (!getApps().length) initializeApp({ credential: cert({
+  projectId: APP_ID, clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+  privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY||'').split('\\n').join('\n') }) });
+const db = getFirestore();
+const dataCol = (c) => db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(c);
+
+async function main() {
+  const TOKEN = '1b550b9aebc845cfe4adc49cd747813e';
+  // resolve via opd_session (the user's link)
+  const ss = await dataCol('opd_sessions').where('patientLinkToken','==',TOKEN).limit(1).get();
+  let customerId = null;
+  if (!ss.empty) { const s = ss.docs[0].data(); customerId = s.brokerProClinicId;
+    console.log('opd_session:', { id: ss.docs[0].id, brokerProClinicId: s.brokerProClinicId, brokerProClinicHN: s.brokerProClinicHN, enabled: s.patientLinkEnabled, latestApptCount: (s.latestCourses?.appointments||[]).length }); }
+  const cust = customerId ? await dataCol('be_customers').doc(String(customerId)).get() : null;
+  console.log('customer exists:', !!cust?.exists, 'courses:', (cust?.data()?.courses||[]).length);
+  // appointments by customerId
+  const aps = await dataCol('be_appointments').where('customerId','==',String(customerId)).get();
+  const today = new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+  const all = aps.docs.map(d=>({id:d.id,...d.data()}));
+  const future = all.filter(a => (a.date||'') >= today);
+  console.log('appointments total:', all.length, 'future:', future.length);
+  console.log('sample appt fields:', all[0] ? Object.keys(all[0]) : 'NONE');
+  console.log('future sample:', future.slice(0,3).map(a => ({ date:a.date, time:a.time, doctorName:a.doctorName, branchId:a.branchId, roomName:a.roomName, status:a.status })));
+  // branch names
+  for (const a of future.slice(0,3)) { if (a.branchId) { const b = await dataCol('be_branches').doc(String(a.branchId)).get(); console.log('branch', a.branchId, '→', b.exists ? b.data().name : 'MISSING'); } }
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) main().then(()=>process.exit(0));</code></pre>
+  <div class="step"><input type="checkbox" id="t0s3"> <label for="t0s3"><strong>Step 3: run + record findings</strong></label></div>
+  <p>Run: <code>node scripts/diag-patient-link-appointments.mjs</code>. Confirm: customerId resolves, appointments exist with <code>customerId</code> matching, <code>branchId</code> resolves to a name, field names = {date,time,doctorName,branchId,roomName,status}. <strong>If field names differ → adjust the endpoint mapping in Task 1 accordingly.</strong> (read-only; no commit)</p>
+</div>
+
+<div class="task">
+  <h3>Task 1: <code>api/patient-view.js</code> — public token-gated endpoint</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>api/patient-view.js</code></li><li>Test: <code>tests/customer-patient-link-helpers.test.js</code> (source-grep + pure-shape)</li></ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: write failing source-grep test</strong></label></div>
+  <pre><code class="language-javascript">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+const SRC = readFileSync('api/patient-view.js','utf8');
+describe('api/patient-view.js — endpoint contract', () => {
+  it('E1: admin SDK init (getApps guard + PEM)', () => {
+    expect(SRC).toMatch(/getApps\(\)/); expect(SRC).toMatch(/FIREBASE_ADMIN_PRIVATE_KEY/);
+    expect(SRC).toMatch(/split\('\\\\n'\)\.join\('\\n'\)|replace\(\/\\\\n\/g/);
+  });
+  it('E2: canonical data path', () => { expect(SRC).toMatch(/artifacts.*public.*data|\.collection\('artifacts'\)/s); });
+  it('E3: unified resolve — be_customers AND opd_sessions by patientLinkToken', () => {
+    expect(SRC).toMatch(/be_customers/); expect(SRC).toMatch(/opd_sessions/);
+    expect(SRC).toMatch(/patientLinkToken/);
+  });
+  it('E4: gates on patientLinkEnabled', () => { expect(SRC).toMatch(/patientLinkEnabled/); });
+  it('E5: reads be_appointments + resolves branch name from be_branches', () => {
+    expect(SRC).toMatch(/be_appointments/); expect(SRC).toMatch(/be_branches/);
+  });
+  it('E6: formats appt date with full month (fmtThaiDate full)', () => {
+    expect(SRC).toMatch(/fmtThaiDate/); expect(SRC).toMatch(/monthStyle:\s*'full'/);
+  });
+  it('E7: field-minimized — NO nationalId / idCard leaked', () => {
+    expect(SRC).not.toMatch(/nationalId|idCard|citizenId/i);
+  });
+  it('E8: NOT admin-gated (public) — no verifyAdminToken', () => { expect(SRC).not.toMatch(/verifyAdminToken/); });
+  it('E9: 404 path for not-found / disabled', () => { expect(SRC).toMatch(/404/); });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: run → FAIL (file not found)</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-helpers.test.js</code> → FAIL (ENOENT api/patient-view.js)</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: implement endpoint</strong></label></div>
+  <pre><code class="language-javascript">// ─── /api/patient-view — PUBLIC token-gated patient data (anon, no login) ───
+// Customer-level patient link: resolves a crypto token (be_customers OR legacy
+// opd_session) server-side via admin SDK (be_* are clinic-staff-only → anon
+// client reads denied, so this endpoint is the secure data path). Returns the
+// latestCourses-shaped payload PatientDashboard already renders. Field-minimized.
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { fmtThaiDate } from '../src/lib/dateFormat.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+let cachedDb = null;
+function getDb() {
+  if (cachedDb) return cachedDb;
+  let app;
+  if (getApps().length > 0) app = getApp();
+  else {
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+    if (!clientEmail || !rawKey) throw new Error('firebase-admin not configured');
+    app = initializeApp({ credential: cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+      clientEmail, privateKey: rawKey.replace(/\\n/g, '\n') }) });
+  }
+  cachedDb = getFirestore(app); return cachedDb;
+}
+const dataCol = (db, c) => db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(c);
+const bangkokToday = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+
+  const token = String(req.query.token || '');
+  if (!token || token.length < 16) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+
+  try {
+    const db = getDb();
+    // 1. Resolve token — be_customers first, then legacy opd_session
+    let customerData = null, customerId = null;
+    const custSnap = await dataCol(db, 'be_customers').where('patientLinkToken', '==', token).limit(1).get();
+    if (!custSnap.empty) {
+      const doc = custSnap.docs[0];
+      if (doc.data().patientLinkEnabled !== true) return res.status(404).json({ ok: false, error: 'DISABLED' });
+      customerId = doc.id; customerData = doc.data();
+    } else {
+      const sessSnap = await dataCol(db, 'opd_sessions').where('patientLinkToken', '==', token).limit(1).get();
+      if (sessSnap.empty) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+      const s = sessSnap.docs[0].data();
+      if (s.patientLinkEnabled !== true) return res.status(404).json({ ok: false, error: 'DISABLED' });
+      customerId = s.brokerProClinicId ? String(s.brokerProClinicId) : null;
+      if (customerId) {
+        const cdoc = await dataCol(db, 'be_customers').doc(customerId).get();
+        customerData = cdoc.exists ? cdoc.data() : null;
+      }
+    }
+    if (!customerData) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+
+    const today = bangkokToday();
+    // 2. Courses (mirror fetchCoursesViaApi filter)
+    const allCourses = Array.isArray(customerData.courses) ? customerData.courses : [];
+    const courses = allCourses.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
+    const expiredCourses = allCourses.filter(c => c.expiryDate && String(c.expiryDate) < today);
+
+    // 3. Appointments (future-only) + branch-name resolve + full-month date
+    const apptSnap = await dataCol(db, 'be_appointments').where('customerId', '==', String(customerId)).get();
+    let appts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => { const dt = a.date || ''; return !dt || String(dt) >= today; });
+    appts.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const branchCache = {};
+    const branchName = async (bid) => {
+      if (!bid) return '';
+      if (branchCache[bid] !== undefined) return branchCache[bid];
+      const b = await dataCol(db, 'be_branches').doc(String(bid)).get();
+      const n = b.exists ? (b.data().name || '') : '';
+      branchCache[bid] = n; return n;
+    };
+    const appointments = [];
+    for (const a of appts) {
+      appointments.push({
+        date: a.date ? fmtThaiDate(a.date, { monthStyle: 'full', yearStyle: 'full' }) : '',
+        time: a.time || '',
+        doctor: a.doctorName || '',
+        branch: await branchName(a.branchId),
+        room: a.roomName || '',
+        status: a.status || '',
+      });
+    }
+    // 4. Patient identity (minimal)
+    const pd = customerData.patientData || {};
+    const patientName = `${pd.prefix || ''} ${pd.firstName || pd.firstNameTh || ''} ${pd.lastName || pd.lastNameTh || ''}`.trim()
+      || `${customerData.prefix || ''} ${customerData.firstname || ''} ${customerData.lastname || ''}`.trim();
+    const hn = customerData.proClinicHN || customerData.hn_no || customerData.hn || '';
+    return res.status(200).json({
+      ok: true, patientName, hn,
+      patientData: { prefix: pd.prefix || '', firstName: pd.firstName || pd.firstNameTh || '', lastName: pd.lastName || pd.lastNameTh || '', phone: pd.phone || customerData.phone || '' },
+      courses, expiredCourses, appointments,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[patient-view]', e?.message || e);
+    return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: run → PASS</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-helpers.test.js</code> → E1-E9 PASS. Also <code>npm run build</code> → clean (import resolves).</p>
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: commit</strong></label></div>
+  <pre><code class="language-bash">git add api/patient-view.js tests/customer-patient-link-helpers.test.js
+git commit -m "feat(patient-link): public token-gated endpoint (anon patient view, unified resolve + branch + full-month)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: backendClient helpers + scopedDataLayer re-export</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/lib/backendClient.js</code> (near getCustomer ~line 153 / Customer CRUD section)</li><li>Modify: <code>src/lib/scopedDataLayer.js</code> (universal customer re-exports ~line 248)</li><li>Test: append to <code>tests/customer-patient-link-helpers.test.js</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: write failing source-grep test (append)</strong></label></div>
+  <pre><code class="language-javascript">describe('backendClient — customer patient-link helpers', () => {
+  const BC = readFileSync('src/lib/backendClient.js','utf8');
+  const SDL = readFileSync('src/lib/scopedDataLayer.js','utf8');
+  it('H1: 3 helpers exported', () => {
+    expect(BC).toMatch(/export async function generateCustomerPatientLink/);
+    expect(BC).toMatch(/export async function setCustomerPatientLinkEnabled/);
+    expect(BC).toMatch(/export async function revokeCustomerPatientLink/);
+  });
+  it('H2: token via crypto.getRandomValues (Rule C2 — not Math.random)', () => {
+    const block = BC.slice(BC.indexOf('generateCustomerPatientLink'), BC.indexOf('generateCustomerPatientLink')+600);
+    expect(block).toMatch(/crypto\.getRandomValues/); expect(block).not.toMatch(/Math\.random/);
+  });
+  it('H3: writes patientLinkToken + patientLinkEnabled on be_customers (customerDoc)', () => {
+    expect(BC).toMatch(/patientLinkToken/); expect(BC).toMatch(/patientLinkEnabled/);
+  });
+  it('H4: scopedDataLayer re-exports all 3 (universal pass-through)', () => {
+    expect(SDL).toMatch(/generateCustomerPatientLink/);
+    expect(SDL).toMatch(/setCustomerPatientLinkEnabled/);
+    expect(SDL).toMatch(/revokeCustomerPatientLink/);
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-helpers.test.js -t "customer patient-link helpers"</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: implement helpers in backendClient.js</strong> (after <code>getCustomer</code>, uses existing <code>customerDoc</code> + <code>updateDoc</code> + <code>deleteField</code>/null)</label></div>
+  <pre><code class="language-javascript">/** Customer patient-link — generate a crypto token + enable. Clinic-staff only
+ *  (be_customers write is isClinicStaff). The anon patient view reads via the
+ *  /api/patient-view endpoint (admin SDK), NOT direct Firestore. Returns token. */
+export async function generateCustomerPatientLink(customerId) {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  await updateDoc(customerDoc(customerId), { patientLinkToken: token, patientLinkEnabled: true });
+  return token;
+}
+/** Toggle the link on/off without discarding the token. */
+export async function setCustomerPatientLinkEnabled(customerId, enabled) {
+  await updateDoc(customerDoc(customerId), { patientLinkEnabled: !!enabled });
+}
+/** Revoke — clear token + disable (link stops resolving). */
+export async function revokeCustomerPatientLink(customerId) {
+  await updateDoc(customerDoc(customerId), { patientLinkToken: null, patientLinkEnabled: false });
+}</code></pre>
+  <p>(Verify <code>crypto</code> is available — browser global; backendClient already runs in the browser. <code>updateDoc</code> + <code>customerDoc</code> already imported in backendClient.js.)</p>
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: re-export in scopedDataLayer.js</strong> (add near getCustomer line ~248, universal pass-through)</label></div>
+  <pre><code class="language-javascript">// Customer patient-link (universal — be_customers is universal; clinic-staff write)
+export const generateCustomerPatientLink = (...args) => raw.generateCustomerPatientLink(...args);
+export const setCustomerPatientLinkEnabled = (...args) => raw.setCustomerPatientLinkEnabled(...args);
+export const revokeCustomerPatientLink = (...args) => raw.revokeCustomerPatientLink(...args);</code></pre>
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: run → PASS + build</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-helpers.test.js</code> → PASS. <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: commit</strong></label></div>
+  <pre><code class="language-bash">git add src/lib/backendClient.js src/lib/scopedDataLayer.js tests/customer-patient-link-helpers.test.js
+git commit -m "feat(patient-link): backendClient generate/setEnabled/revoke + scopedDataLayer re-export"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: <code>CustomerPatientLinkModal.jsx</code></h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>src/components/backend/CustomerPatientLinkModal.jsx</code></li><li>Test: <code>tests/customer-patient-link-modal-rtl.test.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: write failing RTL test</strong></label></div>
+  <pre><code class="language-javascript">import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import CustomerPatientLinkModal from '../src/components/backend/CustomerPatientLinkModal.jsx';
+
+vi.mock('../src/lib/scopedDataLayer.js', () => ({
+  generateCustomerPatientLink: vi.fn(async () => 'tok123tok123tok1'),
+  setCustomerPatientLinkEnabled: vi.fn(async () => {}),
+  revokeCustomerPatientLink: vi.fn(async () => {}),
+}));
+import * as sdl from '../src/lib/scopedDataLayer.js';
+
+describe('CustomerPatientLinkModal', () => {
+  beforeEach(() => vi.clearAllMocks());
+  it('M1: no token → shows สร้างลิงก์ button; click calls generate', async () => {
+    const onUpdated = vi.fn();
+    render(<CustomerPatientLinkModal customer={{ id: 'C1', name: 'นาง ราตรี' }} onClose={() => {}} onUpdated={onUpdated} isDark />);
+    const btn = screen.getByText(/สร้างลิงก์ดูข้อมูล/);
+    fireEvent.click(btn);
+    await waitFor(() => expect(sdl.generateCustomerPatientLink).toHaveBeenCalledWith('C1'));
+    await waitFor(() => expect(onUpdated).toHaveBeenCalled());
+  });
+  it('M2: has token → shows link URL + copy + revoke', () => {
+    render(<CustomerPatientLinkModal customer={{ id: 'C1', name: 'นาง ราตรี', patientLinkToken: 'tok123tok123tok1', patientLinkEnabled: true }} onClose={() => {}} onUpdated={() => {}} isDark />);
+    expect(screen.getByDisplayValue(/\?patient=tok123tok123tok1/)).toBeTruthy();
+    expect(screen.getByText(/เพิกถอน/)).toBeTruthy();
+  });
+  it('M3: revoke calls revokeCustomerPatientLink', async () => {
+    const onUpdated = vi.fn();
+    render(<CustomerPatientLinkModal customer={{ id: 'C1', name: 'น', patientLinkToken: 'tok123tok123tok1', patientLinkEnabled: true }} onClose={() => {}} onUpdated={onUpdated} isDark />);
+    fireEvent.click(screen.getByText(/เพิกถอน/));
+    await waitFor(() => expect(sdl.revokeCustomerPatientLink).toHaveBeenCalledWith('C1'));
+  });
+  it('M4: backdrop click does NOT close (AV78 explicit-close-only)', () => {
+    const onClose = vi.fn();
+    const { container } = render(<CustomerPatientLinkModal customer={{ id: 'C1', name: 'น' }} onClose={onClose} onUpdated={() => {}} isDark />);
+    fireEvent.click(container.querySelector('[data-testid="cust-link-backdrop"]'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-modal-rtl.test.jsx</code> → FAIL (module not found)</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: implement modal</strong> (mirror AdminDashboard renderPatientLinkModal; AV78 backdrop = no-close; X/Cancel close)</label></div>
+  <pre><code class="language-jsx">import { useState } from 'react';
+import { Link, Loader2, X, ClipboardList, ExternalLink, Unlink } from 'lucide-react';
+import { generateCustomerPatientLink, setCustomerPatientLinkEnabled, revokeCustomerPatientLink } from '../../lib/scopedDataLayer.js';
+
+const linkUrl = (token) => `${window.location.origin}${window.location.pathname}?patient=${token}`;
+const qrUrl = (token) => `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(linkUrl(token))}&margin=10&color=000000&ecc=Q`;
+
+export default function CustomerPatientLinkModal({ customer, onClose, onUpdated, isDark }) {
+  const [loading, setLoading] = useState(false);
+  const token = customer?.patientLinkToken;
+  const enabled = customer?.patientLinkEnabled;
+  const cid = customer?.id;
+
+  const doGenerate = async () => { setLoading(true); try { await generateCustomerPatientLink(cid); onUpdated?.(); } finally { setLoading(false); } };
+  const doToggle = async () => { setLoading(true); try { await setCustomerPatientLinkEnabled(cid, !enabled); onUpdated?.(); } finally { setLoading(false); } };
+  const doRevoke = async () => { setLoading(true); try { await revokeCustomerPatientLink(cid); onUpdated?.(); } finally { setLoading(false); } };
+  const copy = (t) => { navigator.clipboard?.writeText(t).catch(() => {}); };
+
+  return (
+    <div data-testid="cust-link-backdrop" className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+      {/* AV78: backdrop does NOT close — explicit close only (X) */}
+      <div className="w-full max-w-sm rounded-2xl border border-[var(--bd)] bg-[var(--bg-card)] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2.5 p-4 border-b border-[var(--bd)]">
+          <div className="w-8 h-8 rounded-lg bg-purple-950/40 flex items-center justify-center"><Link size={16} className="text-purple-400" /></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black text-purple-400">ลิงก์ดูข้อมูลของผู้ป่วย</p>
+            <p className="text-sm font-bold text-white truncate">{customer?.name || '-'}</p>
+          </div>
+          <button onClick={onClose} aria-label="ปิด" className="p-2 rounded-lg text-gray-600 hover:text-white hover:bg-[var(--bg-hover)]"><X size={16} /></button>
+        </div>
+        <div className="p-5 flex flex-col gap-4">
+          {!token ? (
+            <>
+              <p className="text-xs text-gray-500 leading-relaxed text-center">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br/>และคอร์สคงเหลือได้ทุกเวลา</p>
+              <button onClick={doGenerate} disabled={loading} className="w-full py-3.5 rounded-xl font-bold text-sm text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2" style={{ background: 'rgba(168,85,247,0.8)', boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
+                {loading ? <Loader2 size={15} className="animate-spin" /> : <Link size={15} />} สร้างลิงก์ดูข้อมูล
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs text-gray-600 font-bold">ลิงก์</p>
+                <div className="flex items-center gap-2">
+                  <input readOnly value={linkUrl(token)} className="flex-1 bg-[var(--bg-card)] border border-[var(--bd)] text-gray-500 text-xs p-2.5 rounded-lg outline-none font-mono" />
+                  <button onClick={() => copy(linkUrl(token))} aria-label="คัดลอก" className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-white shrink-0"><ClipboardList size={14} /></button>
+                  <a href={linkUrl(token)} target="_blank" rel="noopener noreferrer" aria-label="เปิด" className="p-2.5 rounded-lg bg-[var(--bg-hover)] border border-[var(--bd)] text-gray-400 hover:text-purple-400 shrink-0"><ExternalLink size={14} /></a>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-3 flex justify-center"><img src={qrUrl(token)} alt="QR" className="w-40 h-40" /></div>
+              <div className="flex gap-2">
+                <button onClick={doToggle} disabled={loading} className="flex-1 py-2.5 rounded-lg border border-[var(--bd)] text-xs font-bold text-gray-300 hover:bg-[var(--bg-hover)] flex items-center justify-center gap-1.5">
+                  <Unlink size={13} /> {enabled ? 'ปิดใช้งานลิงก์' : 'เปิดใช้งานลิงก์'}
+                </button>
+                <button onClick={doRevoke} disabled={loading} className="flex-1 py-2.5 rounded-lg border border-red-800/50 bg-red-950/20 text-xs font-bold text-red-400 hover:bg-red-900/40">เพิกถอน</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: run → PASS</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-modal-rtl.test.jsx</code> → M1-M4 PASS</p>
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: commit</strong></label></div>
+  <pre><code class="language-bash">git add src/components/backend/CustomerPatientLinkModal.jsx tests/customer-patient-link-modal-rtl.test.jsx
+git commit -m "feat(patient-link): CustomerPatientLinkModal (mirror patient-link modal, customer-scoped, AV78 explicit-close)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: CustomerDetailView — Layout A button row + 🔗 wiring</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/components/backend/CustomerDetailView.jsx</code> (button row ~line 830 <code>data-testid="customer-detail-button-row"</code>; import + state)</li><li>Test: append RTL to <code>tests/customer-patient-link-modal-rtl.test.jsx</code> OR new <code>tests/customer-detail-patient-link-button.test.jsx</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: write failing source-grep + RTL test</strong></label></div>
+  <pre><code class="language-javascript">// tests/customer-detail-patient-link-button.test.jsx
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+const CDV = readFileSync('src/components/backend/CustomerDetailView.jsx','utf8');
+describe('CustomerDetailView — patient-link button (Layout A)', () => {
+  it('B1: imports CustomerPatientLinkModal', () => { expect(CDV).toMatch(/CustomerPatientLinkModal/); });
+  it('B2: 🔗 ลิงก์ button present (purple #a855f7/c084fc theme)', () => {
+    expect(CDV).toMatch(/ลิงก์ดูข้อมูล|patient-link-btn/);
+    expect(CDV).toMatch(/168,85,247|a855f7|c084fc/);
+  });
+  it('B3: Layout A — action group wrapper + divider before ลบลูกค้า', () => {
+    expect(CDV).toMatch(/data-testid="customer-detail-action-group"/);
+  });
+  it('B4: opens modal on click (state)', () => { expect(CDV).toMatch(/setShowPatientLinkModal|showPatientLinkModal/); });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: run → FAIL</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-detail-patient-link-button.test.jsx</code> → FAIL</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3a: add import + state</strong> (top of CustomerDetailView: import after LinkLineInstructionsModal; state near other modal state)</label></div>
+  <pre><code class="language-jsx">import CustomerPatientLinkModal from './CustomerPatientLinkModal.jsx';
+// ...inside component, with other modal state:
+const [showPatientLinkModal, setShowPatientLinkModal] = useState(false);</code></pre>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 3b: restructure button row to Layout A</strong> — wrap [แก้ไข · ผูก LINE · 🔗 ลิงก์] in an action-group div, thin divider, then ลบลูกค้า. Replace the existing row block (~line 830-862) with:</label></div>
+  <pre><code class="language-jsx">&lt;div data-testid="customer-detail-button-row" className="mt-3 flex flex-col items-center gap-0"&gt;
+  &lt;div data-testid="customer-detail-action-group" className="flex flex-wrap items-center justify-center gap-2"&gt;
+    {onEditCustomer && (
+      &lt;button onClick={onEditCustomer} data-testid="edit-customer-btn"
+        className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
+        style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
+        title="แก้ไขข้อมูลลูกค้าทั้งหมด"&gt;&lt;Edit3 size={11} /&gt; แก้ไข&lt;/button&gt;
+    )}
+    {/* existing ผูก LINE button — keep as-is (the QrCode green button) */}
+    &lt;button onClick={() =&gt; setShowLineModal(true)} /* ...existing props... */&gt;
+      &lt;QrCode size={11} /&gt; {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
+    &lt;/button&gt;
+    {/* NEW 🔗 patient-link button (purple) */}
+    &lt;button onClick={() =&gt; setShowPatientLinkModal(true)} data-testid="patient-link-btn"
+      className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
+      style={{ color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)', backgroundColor: 'rgba(168,85,247,0.12)' }}
+      title="สร้างลิงก์ให้ลูกค้าดูนัดหมาย + คอร์สคงเหลือ"&gt;
+      &lt;Link size={11} /&gt; {customer?.patientLinkToken ? 'ลิงก์ ✓' : 'ลิงก์ดูข้อมูล'}
+    &lt;/button&gt;
+  &lt;/div&gt;
+  {canDeleteCustomer && onDeleteCustomer && (
+    &lt;&gt;
+      &lt;div className="w-3/4 h-px my-3" style={{ background: 'var(--bd)' }} /&gt;
+      &lt;button onClick={() =&gt; onDeleteCustomer(customer)} data-testid="customer-detail-delete-button"
+        title="ลบลูกค้าถาวร พร้อมประวัติทั้งหมด"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"&gt;
+        &lt;Trash2 size={11} /&gt; ลบลูกค้า&lt;/button&gt;
+    &lt;/&gt;
+  )}
+&lt;/div&gt;</code></pre>
+  <p>(Ensure <code>Link</code> is imported from lucide-react at top of CustomerDetailView. Keep the existing ผูก LINE button's full props — only the wrapper structure + the NEW 🔗 button are added.)</p>
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 3c: render the modal</strong> (near other modals at the bottom of the component's return)</label></div>
+  <pre><code class="language-jsx">{showPatientLinkModal && (
+  &lt;CustomerPatientLinkModal
+    customer={customer}
+    isDark={isDark}
+    onClose={() =&gt; setShowPatientLinkModal(false)}
+    onUpdated={() =&gt; { /* liveCustomer listener auto-refreshes token state */ }}
+  /&gt;
+)}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 4: run → PASS + build</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-detail-patient-link-button.test.jsx</code> → PASS. <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t4s7"> <label for="t4s7"><strong>Step 5: commit</strong></label></div>
+  <pre><code class="language-bash">git add src/components/backend/CustomerDetailView.jsx tests/customer-detail-patient-link-button.test.jsx
+git commit -m "feat(patient-link): CustomerDetailView Layout A button row + 🔗 patient-link button + modal wiring"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: PatientDashboard — customer-mode (endpoint-first resolution)</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Modify: <code>src/pages/PatientDashboard.jsx</code> (resolution useEffect ~line 490-524; auto-sync useEffect ~line 355-364 gate)</li><li>Test: append to <code>tests/customer-patient-link-flow-simulate.test.js</code> (Task 6)</li></ul>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: add endpoint-first resolution useEffect</strong> — BEFORE the existing opd_sessions listener effect. Tries the endpoint; on success → customer-mode; on 404 → notfound/disabled; on network error → fall through to the existing listener (leave it intact as fallback).</label></div>
+  <pre><code class="language-jsx">// Customer patient-link (2026-05-25): resolve via the public endpoint first.
+// be_* are clinic-staff-only → anon CANNOT read them client-side, so the
+// endpoint (admin SDK) is the data path. Maps to the existing sessionData shape
+// so the existing render (patient card + AppointmentCard + CourseCard) is reused.
+const [endpointTried, setEndpointTried] = useState(false);
+useEffect(() => {
+  if (!token || !clinicSettingsLoaded || endpointTried) return;
+  let cancelled = false;
+  (async () => {
+    try {
+      const r = await fetch(`/api/patient-view?token=${encodeURIComponent(token)}`);
+      if (cancelled) return;
+      if (r.ok) {
+        const data = await r.json();
+        if (cancelled) return;
+        if (data?.ok) {
+          setSessionData({
+            __customerMode: true,
+            patientLinkEnabled: true,
+            patientData: data.patientData || {},
+            brokerProClinicHN: data.hn || '',
+            latestCourses: {
+              courses: data.courses || [], expiredCourses: data.expiredCourses || [],
+              appointments: data.appointments || [], patientName: data.patientName || '',
+              fetchedAt: data.fetchedAt || new Date().toISOString(), success: true,
+            },
+          });
+          setStatus('done');
+          setEndpointTried(true);
+          return;
+        }
+      }
+      if (r.status === 404) {
+        const body = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        setStatus(body?.error === 'DISABLED' ? 'disabled' : 'notfound');
+        setEndpointTried(true);
+        return;
+      }
+      // 5xx / network → fall through to the legacy opd_session listener
+      setEndpointTried(true);
+    } catch {
+      if (!cancelled) setEndpointTried(true); // network → legacy listener fallback
+    }
+  })();
+  return () => { cancelled = true; };
+}, [token, clinicSettingsLoaded]);</code></pre>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: gate the legacy listener + auto-sync for customer-mode</strong></label></div>
+  <p>In the existing opd_sessions listener effect (~line 490): add <code>if (sessionData?.__customerMode) return;</code> at the top, and only subscribe after the endpoint attempt resolved without success. In the auto-sync effect (~line 356): add <code>if (sessionData?.__customerMode) return;</code> so <code>fetchCoursesViaApi</code> never runs in customer-mode (it would hit anon-denied be_* reads). The resync button (SyncButton) — hide/disable when <code>sessionData?.__customerMode</code> (data is server-fresh; no client resync path). Keep all legacy behavior intact when not customer-mode.</p>
+  <pre><code class="language-jsx">// auto-sync effect — add guard:
+useEffect(() => {
+  if (sessionData?.__customerMode) return;              // ← NEW: endpoint already provided data
+  if (!clinicSettingsLoaded || !sessionData?.brokerProClinicId || refreshRequestedRef.current) return;
+  /* ...existing... */
+}, [clinicSettingsLoaded, sessionData?.id]);
+
+// legacy opd_sessions listener effect — add guard so it doesn't override customer-mode:
+useEffect(() => {
+  if (!token) { setStatus('notfound'); return; }
+  if (!clinicSettingsLoaded) return;
+  if (sessionData?.__customerMode || !endpointTried) return;  // ← NEW: only legacy fallback after endpoint tried + failed
+  /* ...existing onSnapshot opd_sessions WHERE patientLinkToken == token ... */
+}, [token, clinicSettingsLoaded, endpointTried]);</code></pre>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: hide resync button in customer-mode</strong> (SyncButton render strip ~line 698) — wrap with <code>{!sessionData?.__customerMode && (...)}</code>.</label></div>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: build + run existing patient tests</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. <code>npx vitest run tests/extended/public-link-auth-race.test.js</code> → PASS (legacy path intact). Verify no regression in existing PatientDashboard tests.</p>
+  <div class="step"><input type="checkbox" id="t5s5"> <label for="t5s5"><strong>Step 5: commit</strong></label></div>
+  <pre><code class="language-bash">git add src/pages/PatientDashboard.jsx
+git commit -m "feat(patient-link): PatientDashboard customer-mode — endpoint-first resolution + gate auto-sync + legacy fallback"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Rule I flow-simulate + AV invariant</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>tests/customer-patient-link-flow-simulate.test.js</code></li><li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></li></ul>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: write flow-simulate (pure mirror of endpoint resolve + map + render-shape)</strong></label></div>
+  <pre><code class="language-javascript">import { describe, it, expect } from 'vitest';
+import { fmtThaiDate } from '../src/lib/dateFormat.js';
+
+// Pure mirror of api/patient-view appointment mapping (lock the contract).
+function mapAppt(a, branchNameOf, today) {
+  return { date: a.date ? fmtThaiDate(a.date, { monthStyle: 'full', yearStyle: 'full' }) : '',
+    time: a.time || '', doctor: a.doctorName || '', branch: branchNameOf(a.branchId) || '', room: a.roomName || '', status: a.status || '' };
+}
+function futureOnly(appts, today) { return appts.filter(a => !a.date || String(a.date) >= today); }
+
+describe('Rule I — customer patient-link full flow', () => {
+  const today = '2026-05-25';
+  const branches = { 'BR-NM': 'นครราชสีมา', 'BR-R3': 'พระราม 3' };
+  const branchNameOf = (b) => branches[b] || '';
+  it('F1: future appts only + branch resolved + full Thai month', () => {
+    const raw = [
+      { date: '2026-05-28', time: '10:00 น.', doctorName: 'นพ. สมชาย ใจดี', branchId: 'BR-NM', roomName: 'ห้อง 1', status: 'confirmed' },
+      { date: '2026-06-12', time: '14:30 น.', branchId: 'BR-R3', status: 'pending' },
+      { date: '2026-01-01', time: '09:00 น.', branchId: 'BR-NM' }, // past → dropped
+    ];
+    const out = futureOnly(raw, today).map(a => mapAppt(a, branchNameOf, today));
+    expect(out).toHaveLength(2);
+    expect(out[0].date).toBe('28 พฤษภาคม 2569');     // full month + พ.ศ.
+    expect(out[0].branch).toBe('นครราชสีมา');         // resolved name
+    expect(out[1].date).toBe('12 มิถุนายน 2569');
+    expect(out[1].branch).toBe('พระราม 3');
+    expect(out.every(a => !/นายน\.|พ\.ค\.|มิ\.ย\./.test(a.date))).toBe(true); // NOT abbreviated
+  });
+  it('F2: courses active/expired split (mirror fetchCoursesViaApi)', () => {
+    const all = [ { name: 'A', expiryDate: '2026-12-31' }, { name: 'B', expiryDate: '2026-01-01' }, { name: 'C' } ];
+    expect(all.filter(c => !c.expiryDate || c.expiryDate >= today).map(c => c.name)).toEqual(['A', 'C']);
+    expect(all.filter(c => c.expiryDate && c.expiryDate < today).map(c => c.name)).toEqual(['B']);
+  });
+  it('F3: customer-mode sessionData shape feeds existing render keys', () => {
+    const data = { ok: true, patientName: 'อุดม', hn: 'LC-1', patientData: { firstName: 'อุดม' }, courses: [], expiredCourses: [], appointments: [{ date: '28 พฤษภาคม 2569', branch: 'นครราชสีมา' }] };
+    const sessionData = { __customerMode: true, patientData: data.patientData, brokerProClinicHN: data.hn,
+      latestCourses: { courses: data.courses, expiredCourses: data.expiredCourses, appointments: data.appointments, patientName: data.patientName } };
+    // render reads: sessionData.latestCourses.appointments / .courses / sessionData.patientData / .brokerProClinicHN
+    expect(sessionData.latestCourses.appointments[0].branch).toBe('นครราชสีมา');
+    expect(sessionData.brokerProClinicHN).toBe('LC-1');
+  });
+  it('F4: AppointmentCard already renders branch (source-grep)', () => {
+    const fs = require('fs'); const PD = fs.readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
+    expect(PD).toMatch(/a\.branch.*a\.room|\[a\.branch, a\.room\]/);
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: run → PASS</strong></label></div>
+  <p>Run: <code>npx vitest run tests/customer-patient-link-flow-simulate.test.js</code> → F1-F4 PASS</p>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: add AV invariant</strong> to audit-anti-vibe-code SKILL.md (next free AV number)</label></div>
+  <pre><code>AVxx — Customer patient-link anon-safety (2026-05-25)
+  - The anon patient view MUST read customer data via api/patient-view (admin SDK),
+    NEVER via direct client-SDK reads of be_customers/be_appointments/be_branches
+    (those are isClinicStaff-only — anon reads denied).
+  - api/patient-view MUST be field-minimized: NO nationalId/idCard/citizenId in the
+    response. Grep: response object keys ⊆ {patientName,hn,patientData(prefix/first/last/phone),courses,expiredCourses,appointments,fetchedAt,ok}.
+  - firestore.rules be_customers/be_appointments MUST stay isClinicStaff (no anon-read rule).
+  Sanctioned consumers: api/patient-view.js (admin SDK). Test: customer-patient-link-flow-simulate + helpers.</code></pre>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: commit</strong></label></div>
+  <pre><code class="language-bash">git add tests/customer-patient-link-flow-simulate.test.js .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "test(patient-link): Rule I flow-simulate (branch+full-month+shape) + AVxx anon-safety invariant"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule Q L2 — real-prod e2e (admin SDK)</h3>
+  <p><strong>Files:</strong></p>
+  <ul><li>Create: <code>scripts/e2e-customer-patient-link.mjs</code></li></ul>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: write e2e</strong> — seed TEST customer (TEST- prefix) + TEST appointment (TEST-APPT-, future, branchId) → simulate the endpoint resolve logic against real prod → assert {courses, appointments(+branch name), full-month date} → cleanup. (Mirror endpoint logic since the serverless fn needs HTTP; this verifies the DATA + resolution on real prod.)</label></div>
+  <pre><code class="language-javascript">// Seeds a TEST-prefixed customer + future appointment in real prod, runs the
+// EXACT resolve+map logic, asserts shape, then deletes. Rule Q L2 (real client/admin
+// SDK against real Firestore). Run: node scripts/e2e-customer-patient-link.mjs --apply
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs'; import { fileURLToPath } from 'url'; import crypto from 'crypto';
+import { fmtThaiDate } from '../src/lib/dateFormat.js';
+const APP_ID = 'loverclinic-opd-4c39b';
+for (const l of readFileSync('.env.local.prod','utf8').split('\n')) { const m=l.match(/^([A-Z_]+)=(.*)$/); if(m) process.env[m[1]]=m[2].replace(/^"|"$/g,''); }
+if (!getApps().length) initializeApp({ credential: cert({ projectId: APP_ID, clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY||'').split('\\n').join('\n') }) });
+const db = getFirestore(); const dataCol = (c) => db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(c);
+async function main() {
+  const apply = process.argv.includes('--apply');
+  const cid = `TEST-PLINK-${Date.now()}`; const aid = `TEST-APPT-PLINK-${Date.now()}`;
+  const token = crypto.randomBytes(16).toString('hex');
+  const branches = await dataCol('be_branches').limit(1).get(); const branchId = branches.empty ? 'BR-TEST' : branches.docs[0].id;
+  const branchName = branches.empty ? '' : (branches.docs[0].data().name || '');
+  const future = new Date(Date.now()+7*3600000+86400000*5).toISOString().slice(0,10);
+  let pass = 0, fail = 0; const ok=(c,m)=>{ if(c){pass++;console.log('✓',m);}else{fail++;console.log('✗',m);} };
+  if (apply) {
+    await dataCol('be_customers').doc(cid).set({ patientLinkToken: token, patientLinkEnabled: true, patientData: { prefix:'นาย', firstName:'ทดสอบ', lastName:'ลิงก์', phone:'0800000000' }, hn_no:'TEST-HN', courses:[{ name:'TEST Course', status:'กำลังใช้งาน', qty:'9 / 12 ครั้ง' }] });
+    await dataCol('be_appointments').doc(aid).set({ customerId: cid, date: future, time:'10:00 น.', doctorName:'นพ. ทดสอบ', branchId, roomName:'ห้อง 1', status:'confirmed' });
+  }
+  // resolve (mirror endpoint)
+  const cs = await dataCol('be_customers').where('patientLinkToken','==',token).limit(1).get();
+  ok(!cs.empty, 'resolve be_customers by token');
+  const cust = cs.docs[0]; ok(cust?.data().patientLinkEnabled===true, 'enabled gate');
+  const today = new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+  const aps = await dataCol('be_appointments').where('customerId','==',cid).get();
+  const fut = aps.docs.map(d=>d.data()).filter(a=>(a.date||'')>=today);
+  ok(fut.length>=1, 'future appointment found');
+  const mapped = fut.map(a=>({ date: fmtThaiDate(a.date,{monthStyle:'full'}), branch: a.branchId===branchId?branchName:'' }));
+  ok(/[ก-๛]{4,}\s\d{4}$/.test(mapped[0]?.date||''), `full-month date: ${mapped[0]?.date}`);
+  ok(mapped[0]?.branch===branchName, `branch resolved: ${mapped[0]?.branch}`);
+  // cleanup
+  if (apply) { await dataCol('be_customers').doc(cid).delete(); await dataCol('be_appointments').doc(aid).delete(); console.log('cleanup done'); }
+  console.log(`\nPASS ${pass} FAIL ${fail}`); process.exit(fail?1:0);
+}
+if (process.argv[1]===fileURLToPath(import.meta.url)) main();</code></pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: run on real prod</strong></label></div>
+  <p>Run: <code>node scripts/e2e-customer-patient-link.mjs --apply</code> → expect PASS (resolve + enabled + future appt + full-month date + branch resolved) + cleanup done + zero orphans.</p>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: commit</strong></label></div>
+  <pre><code class="language-bash">git add scripts/e2e-customer-patient-link.mjs scripts/diag-patient-link-appointments.mjs
+git commit -m "test(patient-link): Rule Q L2 real-prod e2e + Rule R appointment diag"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 8: full-suite + build + Rule Q L1 prep + handoff</h3>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: full vitest (Rule N batch-end)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → 0 fail (fix any V21 lock-ins surfaced by the CustomerDetailView button-row restructure — e.g. tests asserting the old single-row structure).</p>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: audit-branch-scope + anti-vibe-code regression</strong></label></div>
+  <p>Run: <code>npx vitest run tests/audit-branch-scope.test.js</code> → green (no new direct backendClient import in UI; modal uses scopedDataLayer).</p>
+  <div class="step"><input type="checkbox" id="t8s4"> <label for="t8s4"><strong>Step 4: Rule Q L1 (real browser, post-deploy — user-gated)</strong></label></div>
+  <p>After deploy (separate authorization): in CustomerDetailView click 🔗 → สร้างลิงก์ → copy URL → open in a fresh/incognito browser (truly anon) → verify: patient card + นัดหมายครั้งต่อไป (เดือนเต็ม + 📍 สาขา) + คอร์สคงเหลือ render, no login prompt. Toggle off → "ปิดใช้งาน". Revoke → "ไม่พบข้อมูล". (Chrome MCP per Rule S.)</p>
+  <div class="step"><input type="checkbox" id="t8s5"> <label for="t8s5"><strong>Step 5: update SESSION_HANDOFF + active.md; STOP (no deploy without explicit "deploy")</strong></label></div>
+</div>
+
+<h2>Notes</h2>
+<ul>
+  <li><strong>NO firestore.rules change</strong> — be_customers/be_appointments/be_branches stay clinic-staff. No Probe-Deploy-Probe.</li>
+  <li><strong>Rule Q honesty:</strong> L2 (real-prod e2e) verifies the resolve+map+shape. L1 (real anon browser) is post-deploy + user-gated. Until L1 confirms, status = "L2-verified, L1-pending".</li>
+  <li><strong>Rule N:</strong> targeted tests during tasks; full <code>npm test -- --run</code> at Task 8 (batch end).</li>
+  <li><strong>Deploy:</strong> frontend (Vercel) + the new serverless endpoint deploy together on <code>vercel --prod</code> — ONLY on explicit "deploy" (V18).</li>
+</ul>
+
+</body>
+</html>
