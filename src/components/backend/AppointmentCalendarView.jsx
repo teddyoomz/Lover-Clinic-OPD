@@ -256,6 +256,21 @@ export default function AppointmentCalendarView({
     const n = bangkokNow();
     return { year: n.getUTCFullYear(), month: n.getUTCMonth() };
   });
+  // Issue-1 fix (2026-05-26) — defense-in-depth: initialSelectedDate can arrive
+  // AFTER mount (BackendDashboard's deep-link useEffect). The selectedDate/
+  // calMonth initializers above run once → if the prop was empty at mount they
+  // locked to today and won't re-derive. Sync when the prop becomes a valid
+  // YYYY-MM-DD. Deps=[initialSelectedDate] → fires only on prop change, so it
+  // never fights the admin's own day navigation (clicks change selectedDate but
+  // not the prop). Primary fix is the synchronous URL-derive in BackendDashboard
+  // (prop already correct at first mount); this catches any late arrival.
+  useEffect(() => {
+    const candidate = String(initialSelectedDate || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return;
+    setSelectedDate(candidate);
+    const [y, m] = candidate.split('-');
+    setCalMonth({ year: parseInt(y, 10), month: parseInt(m, 10) - 1 });
+  }, [initialSelectedDate]);
   const [monthAppts, setMonthAppts] = useState({}); // for mini calendar dots
   const [dayAppts, setDayAppts] = useState([]); // appointments for selectedDate
   const [dayLoading, setDayLoading] = useState(false);
@@ -648,8 +663,12 @@ export default function AppointmentCalendarView({
     setFormMode({
       mode: 'create',
       initialDate: date || selectedDate,
-      initialStartTime: time || '10:00',
-      initialEndTime: time ? (TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time) : '10:15',
+      // Issue-2 (2026-05-26) — pass '' (not '10:00') when no specific slot was
+      // clicked, so AppointmentFormModal applies the branch's open-time default
+      // for the date. A clicked slot time is still passed through + respected
+      // (the modal treats a non-empty initialStartTime as an explicit choice).
+      initialStartTime: time || '',
+      initialEndTime: time ? (TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1] || time) : '',
       initialRoomName: room || '',
     });
   };

@@ -214,6 +214,22 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     [apptDate, cs?.openHoursMonFri, cs?.openHoursSatSun],
   );
   const visibleSlots = visibleTime.slots;
+  // Issue-2 sibling (2026-05-26) — default the deposit-appointment start time to
+  // the branch's open time for the selected date (was hardcoded '10:00'), to
+  // match AppointmentFormModal. Reuses visibleTime.openRange (already computed).
+  // Fires when the appointment toggle turns on, cs loads, or the date changes;
+  // NOT keyed on apptStartTime, so a manual time pick is preserved (only
+  // re-defaults on toggle / date / cs change). Closed day → openRange null →
+  // keeps the current value.
+  useEffect(() => {
+    if (!hasAppointment) return;
+    const open = visibleTime.openRange?.open;
+    if (!open) return;
+    const i = TIME_SLOTS.indexOf(open);
+    const end = i >= 0 ? (TIME_SLOTS[i + 1] || open) : open;
+    setApptStartTime(open);
+    setApptEndTime(end);
+  }, [hasAppointment, visibleTime.openRange]);
   const [apptDoctorId, setApptDoctorId] = useState('');
   const [apptDoctorName, setApptDoctorName] = useState('');
   const [apptAssistantIds, setApptAssistantIds] = useState([]);

@@ -24,6 +24,14 @@
 //      on the linked opd_session
 //
 // Both surfaces converge: bubble drops + queue-tab filters drop the row.
+//
+// (2026-05-26 Issue-3 SUPERSEDE) — the Frontend นัดหมาย cancel now HARD-DELETES
+// the appt (deleteBackendAppointment) instead of writing status='cancelled'
+// (user: "ยกเลิกลบออกจากระบบ ลบออกจาก appointment-all ไปเลย"; mirrors the
+// Backend calendar delete). The V125 PREDICATE tests below (U1-U5, F1/F3/F4)
+// stay valid: the optimistic UI still flips status='cancelled' transiently and
+// the predicate must still exclude it; the cascade reason is now 'appt-deleted'
+// (SG-A3 + F2 updated). isAppointmentPendingOpdSave is unchanged by Issue-3.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -87,21 +95,30 @@ describe('V125 — Source-grep regression locks', () => {
     expect(HUBVIEW).toMatch(/hideOpdLifecycle\s*=\s*activeTab\s*===\s*'cancelled'\s*\|\|\s*a\??\.status\s*===\s*'cancelled'/);
   });
 
-  it('SG-A3 — AdminDashboard onCancelAppt cascades isArchived:true on linked opd_session', () => {
+  it('SG-A3 — AdminDashboard onCancelAppt HARD-DELETES the appt + cascades isArchived on linked opd_session', () => {
     // Window-scan: 4000 chars after `onCancelAppt=` covers the whole handler.
-    // (2026-05-26) bumped 2500→4000 — the deposit-aware 'both' branch
-    // (deleteDepositBookingPair) was added ABOVE the appt-only archive path,
-    // pushing the 'appt-cancelled' archive past the old 2500 window.
+    // (2026-05-26 Issue-3) the Frontend นัดหมาย cancel now HARD-DELETES the appt
+    // (deleteBackendAppointment) instead of marking status='cancelled' — mirrors
+    // the Backend AppointmentCalendarView delete (AppointmentCalendarView.jsx:1177).
+    // The linked opd_session is still archived (V125 cascade) with the new reason
+    // 'appt-deleted' so the queue tabs + นัดหมาย bubble still clear + trace is kept.
     const idx = ADMIN.indexOf('onCancelAppt=');
     expect(idx).toBeGreaterThan(-1);
-    const handler = ADMIN.slice(idx, idx + 4000);
+    // (2026-05-26 Issue-3) bumped 4000→5500 — the verbose hard-delete comment +
+    // the deposit 'both' branch push the else-path 'appt-deleted' archive (line
+    // ~6382) past the old 4000 window.
+    const handler = ADMIN.slice(idx, idx + 5500);
+    // Issue-3: hard delete, NOT a status='cancelled' mark (anti-regression).
+    expect(handler).toMatch(/deleteBackendAppointment\(appt\.id\)/);
+    expect(handler).not.toMatch(/updateBackendAppointment\(appt\.id,\s*\{\s*status:\s*['"]cancelled['"]\s*\}\)/);
+    // V125 cascade preserved:
     expect(handler).toMatch(/linkedOpdSessionId/);
     expect(handler).toMatch(/isArchived:\s*true/);
-    expect(handler).toMatch(/archivedReason:\s*['"]appt-cancelled['"]/);
+    expect(handler).toMatch(/archivedReason:\s*['"]appt-deleted['"]/);
     expect(handler).toMatch(/archivedFromApptId/);
     expect(handler).toMatch(/serverTimestamp\(\)/);
     expect(handler).toMatch(/V125/);
-    // Best-effort try/catch around the session-archive (not fatal to the appt cancel):
+    // Best-effort try/catch around the session-archive (not fatal to the delete):
     expect(handler).toMatch(/catch\s*\(\s*sessErr\s*\)/);
   });
 
@@ -152,7 +169,10 @@ describe('V125 — Full-chain flow simulate (bubble drops + cascade)', () => {
     expect(noDepFilter(pre)).toBe(true);
 
     // Post-V125 cascade: isArchived=true is stamped by onCancelAppt.
-    const post = { ...pre, isArchived: true, archivedReason: 'appt-cancelled', archivedFromApptId: 'BA-X' };
+    // (2026-05-26 Issue-3) reason is now 'appt-deleted' (the appt is hard-deleted,
+    // not status='cancelled'); the filter only checks !isArchived so the row drops
+    // identically.
+    const post = { ...pre, isArchived: true, archivedReason: 'appt-deleted', archivedFromApptId: 'BA-X' };
     expect(noDepFilter(post)).toBe(false);  // filter drops it
   });
 

@@ -6359,7 +6359,19 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     showToast?.('ยกเลิกนัด + ลบมัดจำแล้ว', 2000);
                     return;
                   }
-                  await updateBackendAppointment(appt.id, { status: 'cancelled' });
+                  // Issue-3 (2026-05-26) — Frontend นัดหมาย cancel = HARD DELETE
+                  // from be_appointments (user: "ยกเลิกลบออกจากระบบ ลบออกจาก
+                  // appointment-all ไปเลย"), NOT a status='cancelled' mark.
+                  // Mirrors the Backend calendar delete path
+                  // (deleteBackendAppointment at AppointmentCalendarView.jsx:1177).
+                  // The linked opd_session is still archived (V125 cascade) so the
+                  // queue tabs + นัดหมาย bubble clear AND admin keeps a trace in
+                  // ประวัติ. deleteBackendAppointment also releases the slot key so
+                  // the time becomes bookable again. (Deposit, when present, is
+                  // handled by the opts.deleteDeposit branch above: 'ลบทั้งคู่' →
+                  // pair delete; 'เก็บมัดจำ'/this-only → falls here = appt deleted,
+                  // deposit preserved — mirrors AppointmentCalendarView:1207.)
+                  await deleteBackendAppointment(appt.id);
                   if (appt?.linkedOpdSessionId) {
                     try {
                       await updateDoc(
@@ -6367,17 +6379,17 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                         {
                           isArchived: true,
                           archivedAt: serverTimestamp(),
-                          archivedReason: 'appt-cancelled',
+                          archivedReason: 'appt-deleted',
                           archivedFromApptId: appt.id,
                         }
                       );
                     } catch (sessErr) {
-                      console.warn('[V125] cancel cascade archive failed:', sessErr);
-                      showToast?.('ยกเลิกนัดสำเร็จ (แต่ archive session ล้มเหลว — ' + (sessErr?.message || sessErr) + ')', 4000);
+                      console.warn('[Issue-3] delete cascade archive failed:', sessErr);
+                      showToast?.('ลบนัดสำเร็จ (แต่ archive session ล้มเหลว — ' + (sessErr?.message || sessErr) + ')', 4000);
                       return;
                     }
                   }
-                  showToast?.('ยกเลิกนัดสำเร็จ', 2000);
+                  showToast?.('ลบนัดออกจากระบบแล้ว', 2000);
                 } catch (e) {
                   showToast?.('ยกเลิกนัดไม่สำเร็จ: ' + (e?.message || e), 3000);
                 }

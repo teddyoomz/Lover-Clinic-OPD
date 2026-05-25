@@ -183,7 +183,21 @@ export default function BackendDashboard({ clinicSettings: parentSettings }) {
   //   deposit row to its linked appointment on the calendar).
   // Phase 24.0-vicies-octies — initialApptDate hoisted to component state so
   // AppointmentCalendarView receives it as a prop.
-  const [initialApptDate, setInitialApptDate] = useState('');
+  // Issue-1 fix (2026-05-26): derive the ?date= deep-link SYNCHRONOUSLY in the
+  // useState initializer so initialApptDate is correct on the FIRST render.
+  // Before this, it was useState('') and only set in the post-render useEffect
+  // below — but the default activeTab='appointment-all' already mounts
+  // <AppointmentCalendarView> on the first render, so its selectedDate/calMonth
+  // useState initializers captured today (empty prop) and never re-derived when
+  // the prop later changed (same element, no remount → Finance "ไปที่นัด"
+  // always landed on today). Synchronous-derive = correct prop at first mount,
+  // no flash. The useEffect below still re-sets it (idempotent) for cohesion.
+  const [initialApptDate, setInitialApptDate] = useState(() => {
+    try {
+      const d = new URLSearchParams(window.location.search).get('date');
+      return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+    } catch { return ''; }
+  });
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const customerId = params.get('customer');

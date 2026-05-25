@@ -21,8 +21,12 @@ describe('Phase 19.0 — AppointmentTab 15-min grid', () => {
     expect(SRC).not.toMatch(/^const SLOT_H\s*=\s*18\b/m);
   });
 
-  test("C2.1 default endTime fallback = '10:15' (was '10:30')", () => {
-    expect(SRC).toMatch(/['"]10:15['"]/);
+  test("C2.1 slot-click endTime advances one 15-min slot; no-slot default moved to modal (Issue-2)", () => {
+    // The 15-min grid duration for a CLICKED slot is preserved.
+    expect(SRC).toMatch(/TIME_SLOTS\[TIME_SLOTS\.indexOf\(time\) \+ 1\]/);
+    // Issue-2 (2026-05-26) — openCreate now passes '' (not '10:15'/'10:00') when no
+    // slot is clicked, so AppointmentFormModal applies the branch open-hours default.
+    expect(SRC).toMatch(/initialStartTime: time \|\| '',/);
   });
 
   test('C3.1 imports canonical TIME_SLOTS', () => {

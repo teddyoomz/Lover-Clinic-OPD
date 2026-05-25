@@ -314,10 +314,19 @@ export default function AppointmentFormModal({
       customerName: `${lockedCustomer.patientData?.prefix || ''} ${lockedCustomer.patientData?.firstName || ''} ${lockedCustomer.patientData?.lastName || ''}`.trim(),
       customerHN: lockedCustomer.proClinicHN || '',
     } : {};
+    // Issue-2 fix (2026-05-26) — default the create-mode start time to the
+    // branch's OPEN time for the initial date (was hardcoded '10:00'; a branch
+    // that opens 11:30 now defaults to 11:30). cs may be unloaded at mount →
+    // falls back to '10:00'; the effect below re-applies the open time once cs
+    // resolves OR the admin changes the date. An explicit initialStartTime
+    // (calendar slot click) always wins.
+    const cDate = initialDate || thaiTodayISO();
+    const cStart = initialStartTime || getOpenHoursForDate(cDate, cs)?.open || '10:00';
+    const cStartIdx = TIME_SLOTS.indexOf(cStart);
     return defaultFormData({
-      date: initialDate || thaiTodayISO(),
-      startTime: initialStartTime || '10:00',
-      endTime: initialEndTime || (initialStartTime ? (TIME_SLOTS[TIME_SLOTS.indexOf(initialStartTime) + 1] || initialStartTime) : '10:15'),
+      date: cDate,
+      startTime: cStart,
+      endTime: initialEndTime || (cStartIdx >= 0 ? (TIME_SLOTS[cStartIdx + 1] || cStart) : cStart),
       roomName: initialRoomName || '',
       // Phase 21.0 — pre-fill type from lock so payload + UI start in sync.
       appointmentType: safeLockedType || DEFAULT_APPOINTMENT_TYPE,
@@ -355,6 +364,23 @@ export default function AppointmentFormModal({
   );
   const visibleSlots = visibleTime.slots;
   const isClosedDay = visibleTime.isClosed;
+
+  // Issue-2 fix (2026-05-26) — keep the create-mode default start time aligned
+  // to the branch's open time for the selected date. Fires on mount (catches cs
+  // loading AFTER the useState initializer ran → stuck at the '10:00' fallback)
+  // and when the admin changes the date in the modal (Mon-Fri vs Sat-Sun hours
+  // differ). Skips edit mode + skips when an explicit initialStartTime was
+  // passed (calendar slot click). NOT keyed on formData.startTime, so a manual
+  // time pick is never overridden — the effect only re-fires on date / cs
+  // change. The functional updater no-ops when already aligned (React bails).
+  useEffect(() => {
+    if (mode === 'edit' || initialStartTime) return;
+    const oh = getOpenHoursForDate(formData.date, cs);
+    if (!oh?.open) return; // cs not ready / closed day → keep current value
+    const i = TIME_SLOTS.indexOf(oh.open);
+    const end = i >= 0 ? (TIME_SLOTS[i + 1] || oh.open) : oh.open;
+    setFormData(f => (f.startTime === oh.open ? f : { ...f, startTime: oh.open, endTime: end }));
+  }, [mode, initialStartTime, formData.date, cs?.openHoursMonFri, cs?.openHoursSatSun]);
 
   // ── Data loaders ──
   const [customers, setCustomers] = useState([]);

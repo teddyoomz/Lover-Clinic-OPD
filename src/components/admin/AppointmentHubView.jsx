@@ -445,7 +445,9 @@ export default function AppointmentHubView({
     // (handled by handleCancelChoice). The dialog asks ลบมัดจำด้วย / เก็บมัดจำ.
     const depId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
     if (depId) { setCancelDialog({ appt, depositId: depId }); return; }
-    if (!window.confirm('ยกเลิกนัดนี้?')) return;
+    // Issue-3 (2026-05-26) — cancel = HARD DELETE from be_appointments now, so
+    // the confirm says so honestly (was 'ยกเลิกนัดนี้?').
+    if (!window.confirm('ยกเลิกและลบนัดนี้ออกจากระบบ?')) return;
     const prevStatus = appt.status;
     setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
     try {

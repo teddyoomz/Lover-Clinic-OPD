@@ -63,10 +63,20 @@ describe('Phase 24.0-vicies-octies — AppointmentCalendarView initialSelectedDa
 });
 
 describe('Phase 24.0-vicies-octies — BackendDashboard deep-link reads ?date=', () => {
-  it('VOC.B.1 — initialApptDate state declared', () => {
+  it('VOC.B.1 — initialApptDate state declared (Issue-1: synchronous ?date= derive)', () => {
+    // Issue-1 (2026-05-26) — was useState(''); now a synchronous URL-derive so the
+    // calendar opens on the appt date at FIRST mount (the default activeTab already
+    // mounts AppointmentCalendarView before the deep-link useEffect runs → its
+    // selectedDate initializer would otherwise lock to today).
     expect(BACKEND).toMatch(
-      /const\s+\[initialApptDate,\s*setInitialApptDate\]\s*=\s*useState\(''\)/,
+      /const\s+\[initialApptDate,\s*setInitialApptDate\]\s*=\s*useState\(\(\)\s*=>/,
     );
+    const idx = BACKEND.indexOf('const [initialApptDate, setInitialApptDate] = useState(() =>');
+    const block = BACKEND.slice(idx, idx + 400);
+    expect(block).toMatch(/URLSearchParams\(window\.location\.search\)/);
+    expect(block).toMatch(/\.get\(['"]date['"]\)/);
+    // anti-regression: must NOT revert to the empty-string init (the today-lock bug).
+    expect(BACKEND).not.toMatch(/const\s+\[initialApptDate,\s*setInitialApptDate\]\s*=\s*useState\(''\)/);
   });
 
   it('VOC.B.2 — deep-link useEffect reads dateParam', () => {
