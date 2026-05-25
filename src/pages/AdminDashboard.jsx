@@ -512,8 +512,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [sessionNameInput, setSessionNameInput] = useState('');
   const [editingNameId, setEditingNameId] = useState(null);
   const [editingNameValue, setEditingNameValue] = useState("");
-  const [adminMode, setAdminModeRaw] = useState('dashboard'); // chat, dashboard, formBuilder, appointment
-  const setAdminMode = (mode, preserveQR = false) => { setAdminModeRaw(mode); if (!preserveQR) setSelectedQR(null); };
+  // (2026-05-26) default landing → 'appointment' (the unified นัดหมาย surface).
+  // คิวหน้า Clinic / จองมัดจำ / จองไม่มัดจำ / ประวัติ tabs were removed.
+  const [adminMode, setAdminModeRaw] = useState('appointment'); // chat, appointment, formBuilder, clinicSettings
+  // (2026-05-26) redirect guard — any removed mode (legacy programmatic nav OR
+  // a stale deep-link) lands on 'appointment'. Single chokepoint: every UI nav
+  // goes through setAdminMode (setAdminModeRaw is private to this wrapper).
+  const REMOVED_ADMIN_MODES = ['dashboard', 'noDeposit', 'noDepositHistory', 'deposit', 'depositHistory', 'history'];
+  const setAdminMode = (mode, preserveQR = false) => {
+    const safeMode = REMOVED_ADMIN_MODES.includes(mode) ? 'appointment' : mode;
+    setAdminModeRaw(safeMode);
+    if (!preserveQR) setSelectedQR(null);
+  };
   // V78 (2026-05-16 NIGHT — BUG-CHAT-3 wire): pass selectedBranchId so the
   // chat-tab badge + chime gate are scoped to the admin's current branch.
   // Pre-V78 the badge showed cross-branch unread total → cross-branch chime
@@ -3386,7 +3396,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         isPermanent: false,
         createdAt: serverTimestamp(), // reset 2-hour timer
       });
-      setAdminMode('dashboard'); // ย้ายไปหน้าคิว
+      setAdminMode('appointment'); // ย้ายไปหน้าคิว
     } catch (error) { console.error('handleNoDepositServiceStart error:', error); }
   };
 
@@ -3488,7 +3498,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       }
       await updateDoc(ref, updates);
       setSessionToRestore(null);
-      setAdminMode('dashboard');
+      setAdminMode('appointment');
     } catch(e) { console.error('restoreToQueue:', e); }
   };
 
@@ -6035,7 +6045,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <MessageCircle size={14}/> <span>แชท</span>
               {isChatActive && chatUnread > 0 && <span className="menu-badge" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
             </button>
-            <button onClick={() => setAdminMode('dashboard')} className={`menu-tab ${adminMode === 'dashboard' ? 'menu-tab-active' : ''}`}>
+            <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'dashboard' ? 'menu-tab-active' : ''}`}>
               <Activity size={14}/> <span>คิวหน้า Clinic</span>
               {unreadCount > 0 && <span className="menu-badge" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </button>
@@ -6213,7 +6223,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         </div>
       ) : adminMode === 'clinicSettings' ? (
         <div className="flex flex-col gap-6">
-          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('dashboard')} theme={theme} setTheme={setTheme} />
+          <ClinicSettingsPanel db={db} appId={appId} clinicSettings={cs} onBack={() => setAdminMode('appointment')} theme={theme} setTheme={setTheme} />
           {/* Form Builder shortcut */}
           <div className="bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl border border-[var(--bd)] p-5 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -6330,7 +6340,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                     {/* Action buttons */}
                     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                       {d && (
-                        <button onClick={() => { prevAdminModeRef.current = adminMode; setViewingSession(session); setAdminMode('dashboard'); }}
+                        <button onClick={() => { prevAdminModeRef.current = adminMode; setViewingSession(session); setAdminMode('appointment'); }}
                           className="p-2 bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-900/50 transition-colors" title="ดูประวัติ">
                           <FileText size={15}/>
                         </button>
@@ -9279,7 +9289,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <span>แชท</span>
           {isChatActive && chatUnread > 0 && <span className="menu-badge-dock" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
         </button>
-        <button onClick={() => setAdminMode('dashboard')} className={`menu-dock-tab ${adminMode === 'dashboard' ? 'menu-dock-tab-active' : ''}`} data-tab="dashboard">
+        <button onClick={() => setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'dashboard' ? 'menu-dock-tab-active' : ''}`} data-tab="dashboard">
           <Activity size={18}/>
           <span>คิว</span>
           {unreadCount > 0 && <span className="menu-badge-dock" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
