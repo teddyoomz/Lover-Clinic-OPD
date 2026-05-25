@@ -93,6 +93,16 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **Deploy**: ✅ **DONE this session** (V15 combined, user-authorized "ผ่านหมดจริงๆค่อย deploy") — `vercel --prod` (aliased) **+** `firebase deploy --only storage` (**P-D-P #13**: anon 403 pre+post; rules compiled + released). **Object-level re-edit unlocked LIVE** (PC + tablet). Remaining: on-device L1 by user. [⚠ firebase CLI 15.x: `--only storage`, NOT `storage:rules`.]
 - **Findings (flagged)**: object-level re-edit is **live-gated on the storage deploy** (client json upload denied until then → fabricJson null → raster fallback, which works). Pre-existing limit: a single chart PNG dataUrl > ~1MB risks the Firestore doc cap — Storage-ref is the architectural follow-up (decide separately; the new size guard prevents the fabricJson from compounding it).
 
+### Session 2026-05-26 — Appointment-modal deposit-section + chip "นัดมาเพื่อ" unification SHIPPED (LOCAL)
+
+Full `/session-start` boot → `brainstorming` (Visual Companion mockup from question stage) → spec → `writing-plans` → `executing-plans` (11 tasks E1–E11, inline per V81/V86 baseline lesson). master = `def9e256`; prod UNCHANGED `65ab6467` (await "deploy", V18).
+
+- **① Auto deposit section** — `AppointmentFormModal` (1 shared modal, 4 callers): deposit section gates on EFFECTIVE type (`showDepositSection = isDepositBooking = (safeLockedType||formData.appointmentType)==='deposit-booking'`), replacing locked-only `isLockedDepositType && mode==='create'`. Radio "จองมัดจำ" (create+edit) → required ยอด>0 → `createDepositBookingPair`. Edit: hydrate from linked deposit (`getDeposit`) + `updateDeposit` / flip-to NEW `createDepositForExistingAppointment` / flip-away → confirm ลบ(`cancelDepositBookingPair` cascade)/เก็บ + usedAmount guard.
+- **② Chip "นัดมาเพื่อ"** — NEW `VisitPurposePicker` (multi-select + อื่นๆ) replaces textarea; required ≥1; stores `appointmentTo` string (backward-compat `build/parseVisitPurposeText`; legacy → "อื่นๆ: …"). `visitReasonOptions` → NEW `src/lib/visitReasonOptions.js` single source (Rule C1, 3 inline copies merged). **AV130**.
+- **Verify**: full vitest **14658/0** · build clean · **real-prod e2e 21/0** (`scripts/e2e-appointment-deposit-purpose.mjs`, admin-SDK doc-level L2 — acceptable, no new index/rules; builders verified by E5). 1 V21 fixup (phase-21-0 F1.6+F1.8). **L1 = USER post-deploy**.
+- **NO rules change**; **NOT deployed**. Edge to L1-check: Walk-in OPD-save now also requires a chip.
+- Detail: `.agents/sessions/2026-05-26-appointment-modal-deposit-purpose.md` + `docs/superpowers/{specs,plans}/2026-05-25-appointment-modal-deposit-purpose-unification*`.
+
 ### Session 2026-05-25 EOD+2 — Treatment-blob Storage-ref migration + 2 follow-up fixes + Rule Q-honest
 
 `/systematic-debugging` (user: "รูปภาพการรักษา save บ้างไม่บ้าง/ช้า/ติด") → Rule R prod diag root cause → brainstorm-scope (AskUserQuestion: full blob class + leave-legacy) → fix → deploy → heavy stress test → 2 follow-up fixes → Rule Q-honest.
