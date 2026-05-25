@@ -7062,7 +7062,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 // locally (mode='edit', appt). NO redirect to calendar mode.
                 // This handler is now a no-op — kept for prop-shape compat.
               }}
-              onCancelAppt={async (appt) => {
+              onCancelAppt={async (appt, opts = {}) => {
                 // V64-fix5 (2026-05-09): confirm dialog moved to View
                 // (handleCancelOptimistic) so it fires BEFORE optimistic
                 // update — no flash-then-revert jitter when user says 'No'.
@@ -7083,6 +7083,27 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 // User-reported: "กดยกเลิก แต่ bubble ไม่หายไป + จองไม่มัดจำ
                 // ยังโชว์รายการ" — both surfaces converge after V125.
                 try {
+                  // (2026-05-26) deposit-aware: 'ลบมัดจำด้วย' (opts.deleteDeposit)
+                  // → HARD-delete the deposit + its linked appt via
+                  // deleteDepositBookingPair; archive the opd_session (if any)
+                  // for trace. Throws on a partially-used deposit (the dialog
+                  // already disables this choice — outer catch surfaces the rare
+                  // backstop case). Else fall through to the V125 appt-only cancel.
+                  if (opts.deleteDeposit) {
+                    const depId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+                    const { deleteDepositBookingPair } = await import('../lib/appointmentDepositBatch.js');
+                    await deleteDepositBookingPair(depId);
+                    if (appt?.linkedOpdSessionId) {
+                      try {
+                        await updateDoc(
+                          doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', appt.linkedOpdSessionId),
+                          { isArchived: true, archivedAt: serverTimestamp(), archivedReason: 'appt-cancelled-with-deposit', archivedFromApptId: appt.id }
+                        );
+                      } catch (sessErr) { console.warn('[deposit-cancel] opd_session archive failed:', sessErr); }
+                    }
+                    showToast?.('ยกเลิกนัด + ลบมัดจำแล้ว', 2000);
+                    return;
+                  }
                   await updateBackendAppointment(appt.id, { status: 'cancelled' });
                   if (appt?.linkedOpdSessionId) {
                     try {

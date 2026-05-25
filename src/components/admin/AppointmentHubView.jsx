@@ -42,6 +42,7 @@ import AppointmentHubFilterBar from './AppointmentHubFilterBar.jsx';
 import AppointmentHubRowCard from './AppointmentHubRowCard.jsx';
 import AppointmentHubTodaySubPillBar from './AppointmentHubTodaySubPillBar.jsx';
 import AppointmentFormModal from '../backend/AppointmentFormModal.jsx';
+import DepositAwareCancelDialog from './DepositAwareCancelDialog.jsx';
 import { subPillCountsForToday } from '../../lib/appointmentHubFilters.js';
 // V71 (2026-05-15) — AppointmentLineBadge MIGRATED to AppointmentHubRowCard
 // (inline next to status chip). HubView no longer renders the badge directly;
@@ -112,6 +113,9 @@ export default function AppointmentHubView({
   // ① (2026-05-26) — "เพิ่มนัดหมาย" opens the SAME AppointmentFormModal this
   // view already renders for edit (below), in create mode (all 5 types).
   const [creatingAppt, setCreatingAppt] = useState(false);
+  // (2026-05-26) deposit-aware cancel — { appt, depositId } when an appt with a
+  // linked deposit is being cancelled; null otherwise. See DepositAwareCancelDialog.
+  const [cancelDialog, setCancelDialog] = useState(null);
 
   // V64 — reset filters on branch switch (Phase 17.0 BS-9 reset-on-branch-switch pattern)
   useEffect(() => {
@@ -436,6 +440,11 @@ export default function AppointmentHubView({
     // 'No' on the confirm dialog. Pre-fix flow had confirm AFTER setAppts:
     // status flipped to 'ยกเลิก' instantly → confirm dialog blocked → user
     // says no → revert flips back to prev status → 1-2 frame jitter visible.
+    // (2026-05-26) deposit-linked → open the deposit-aware dialog instead of
+    // the plain confirm; NO optimistic flip until the user picks a choice
+    // (handled by handleCancelChoice). The dialog asks ลบมัดจำด้วย / เก็บมัดจำ.
+    const depId = appt.linkedDepositId || appt.spawnedFromDepositId || '';
+    if (depId) { setCancelDialog({ appt, depositId: depId }); return; }
     if (!window.confirm('ยกเลิกนัดนี้?')) return;
     const prevStatus = appt.status;
     setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
@@ -445,6 +454,23 @@ export default function AppointmentHubView({
       setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: prevStatus } : a));
     }
   }, [onCancelAppt]);
+
+  // (2026-05-26) deposit-aware cancel choice from DepositAwareCancelDialog.
+  // 'both' → onCancelAppt(appt,{deleteDeposit:true}) → deleteDepositBookingPair
+  // (hard, both gone). 'this-only' → cancel appt only (deposit preserved).
+  const handleCancelChoice = useCallback(async (choice) => {
+    const dlg = cancelDialog;
+    setCancelDialog(null);
+    if (!dlg || choice === 'cancel') return;
+    const { appt } = dlg;
+    const prevStatus = appt.status;
+    setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: 'cancelled' } : a));
+    try {
+      await Promise.resolve(onCancelAppt?.(appt, { deleteDeposit: choice === 'both' }));
+    } catch {
+      setAppts(prev => prev.map(a => a.id === appt.id ? { ...a, status: prevStatus } : a));
+    }
+  }, [cancelDialog, onCancelAppt]);
 
   // V71 (2026-05-15) — optimistic local-state update wrapper. Parent
   // (AdminDashboard) owns the Firestore write via the onMarkServiceComplete
@@ -650,6 +676,18 @@ export default function AppointmentHubView({
           existingAppointments={appts}
           onSaved={() => { setCreatingAppt(false); loadAll({ silent: true }); }}
           onClose={() => setCreatingAppt(false)}
+        />
+      )}
+      {/* (2026-05-26) deposit-aware cancel — opens when an appt with a linked
+          deposit is cancelled; choice routes to onCancelAppt(appt,{deleteDeposit}). */}
+      {cancelDialog && (
+        <DepositAwareCancelDialog
+          open
+          orientation="appt"
+          depositId={cancelDialog.depositId}
+          subtitle={`คุณ ${cancelDialog.appt.customerName || '-'} · ${cancelDialog.appt.date || ''} ${cancelDialog.appt.startTime || ''}`.trim()}
+          onChoice={handleCancelChoice}
+          onClose={() => setCancelDialog(null)}
         />
       )}
     </div>

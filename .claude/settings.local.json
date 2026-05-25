@@ -12,7 +12,13 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Skill(using-superpowers)",
-      "Skill(using-superpowers:*)"
+      "Skill(using-superpowers:*)",
+      "Bash(rtk grep *)",
+      "Bash(bash scripts/deploy-office-to-pdf-cloud-run.sh)",
+	  "Bash(node scripts/_extract-sa-key.mjs:*)",
+      "Bash(gcloud auth activate-service-account:*)",
+      "Bash(grep \"ADMIN\" .env.local.prod:*)",
+      "Bash(head .env.local.prod:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
