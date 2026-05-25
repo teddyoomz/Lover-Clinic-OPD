@@ -43,6 +43,7 @@ import { isDateHoliday, DAY_OF_WEEK_LABELS } from '../../lib/holidayValidation.j
 import { useSelectedBranch } from '../../lib/BranchContext.jsx';
 import { filterDoctorsByBranch } from '../../lib/branchScopeUtils.js';
 import AppointmentFormModal from './AppointmentFormModal.jsx';
+import DepositAwareCancelDialog from '../admin/DepositAwareCancelDialog.jsx';
 import AppointmentDetailPopover from './AppointmentDetailPopover.jsx';
 import AppointmentAgendaView from './AppointmentAgendaView.jsx';
 import TodaysDoctorsPanel from './scheduling/TodaysDoctorsPanel.jsx';
@@ -267,6 +268,9 @@ export default function AppointmentCalendarView({
   // the modal, which auto-ticks LINE in notifyChannel based on per-branch
   // customer linkage. AV45 LR-4 invariant satisfied via delegation.
   const [formMode, setFormMode] = useState(null);
+  // (2026-05-26) deposit-aware delete — { appt, depositId, apptId } when a
+  // deposit-linked appt is being deleted; null otherwise.
+  const [deleteDialog, setDeleteDialog] = useState(null);
   // Calendar-density (2026-05-20) — tapping a block/agenda card opens a
   // read-only detail popover first; แก้ไข inside it routes to the edit modal.
   const [detailAppt, setDetailAppt] = useState(null);
@@ -1162,21 +1166,15 @@ export default function AppointmentCalendarView({
             const linkedDepositId = _coerceDepId(formMode.appt.linkedDepositId)
               || _coerceDepId(formMode.appt.spawnedFromDepositId)
               || '';
+            // (2026-05-26) deposit-linked → open the deposit-aware dialog
+            // (ลบมัดจำด้วย / เก็บมัดจำ) instead of silently pair-deleting.
+            // The dialog (rendered below) routes the choice to the cascade.
             if (linkedDepositId) {
-              // Pair-delete: removes BOTH be_appointments + be_deposits in
-              // a single writeBatch. Best-effort — falls back to bare appt
-              // delete if the helper throws (e.g. deposit was already
-              // independently deleted).
-              try {
-                const { deleteDepositBookingPair } = await import('../../lib/appointmentDepositBatch.js');
-                await deleteDepositBookingPair(linkedDepositId);
-              } catch (pairErr) {
-                console.warn('[AppointmentCalendarView] deleteDepositBookingPair failed (falling back to bare appt delete):', pairErr);
-                await deleteBackendAppointment(id);
-              }
-            } else {
-              await deleteBackendAppointment(id);
+              setDeleteDialog({ appt: formMode.appt, depositId: linkedDepositId, apptId: id });
+              setFormMode(null);
+              return;
             }
+            await deleteBackendAppointment(id);
             setFormMode(null);
             // listener auto-refreshes the day grid + the mini-calendar bubble
           } : undefined}
@@ -1185,6 +1183,35 @@ export default function AppointmentCalendarView({
           // We just enable the link here. The Phase 15.7-sexies in-page
           // redirect callback (onOpenCustomer) is removed per user directive.
           enableCustomerLink={true}
+        />
+      )}
+
+      {/* (2026-05-26) deposit-aware delete — when a deposit-linked appt is
+          deleted, ask ลบมัดจำด้วย / เก็บมัดจำ. 'both' hard-deletes the pair;
+          'this-only' deletes just the appt (deposit preserved). */}
+      {deleteDialog && (
+        <DepositAwareCancelDialog
+          open
+          orientation="appt"
+          depositId={deleteDialog.depositId}
+          subtitle={`คุณ ${deleteDialog.appt.customerName || '-'} · ${deleteDialog.appt.date || ''} ${deleteDialog.appt.startTime || ''}`.trim()}
+          onChoice={async (choice) => {
+            const dlg = deleteDialog;
+            setDeleteDialog(null);
+            if (!dlg || choice === 'cancel') return;
+            try {
+              if (choice === 'both') {
+                const { deleteDepositBookingPair } = await import('../../lib/appointmentDepositBatch.js');
+                await deleteDepositBookingPair(dlg.depositId);
+              } else {
+                await deleteBackendAppointment(dlg.apptId); // keep deposit
+              }
+            } catch (err) {
+              console.warn('[AppointmentCalendarView] deposit-aware delete failed:', err);
+            }
+            // listener auto-refreshes the day grid + the mini-calendar bubble
+          }}
+          onClose={() => setDeleteDialog(null)}
         />
       )}
 
