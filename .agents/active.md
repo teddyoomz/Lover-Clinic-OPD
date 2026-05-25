@@ -1,9 +1,9 @@
 ---
-updated_at: "2026-05-24 EOD+1 LATE+1 — V124+V125+V126 DEPLOYED"
-status: "9af2989e LIVE on prod. All client-only — no rule change."
+updated_at: "2026-05-25 — skill repo updated to obra/superpowers v5.1.0 + audit infra shipped"
+status: "9af2989e LIVE on prod (unchanged). master ahead 1 commit (audit script tooling-only, no deploy needed)."
 branch: "master"
-last_commit: "feat(appt-flow): V124 bubble parity + V125 cancel cascade + V126 mark-complete gate"
-tests: "157 PASS (V125+V124+V73+V121+V118) · build clean 3.08s · L1 verified"
+last_commit: "chore(scripts): add audit for skill customization drift detection"
+tests: "157 PASS focused (V125+V124+V73+V121+V118, unchanged from prev session — this session touched no src)"
 production_url: "https://lover-clinic-app.vercel.app"
 production_commit: "9af2989e LIVE · office-to-pdf-00007-tfb (Cloud Run V110-bis)"
 firestore_rules_version: "unchanged · P-D-P 200/403/403 = 200/403/403"
@@ -12,28 +12,27 @@ firestore_rules_version: "unchanged · P-D-P 200/403/403 = 200/403/403"
 # Active Context
 
 ## State
-- 3 V-entries shipped + deployed in one /systematic-debugging cycle. Bubble drops on cancel, mark-complete gated on confirmed.
-- Strategic direction noted (NOT implemented): user wants นัดหมาย tab as primary; eventually deprecate คิวหน้า Clinic / จองไม่มัดจำ / จองมัดจำ tabs. V125 cascade is the tactical first step.
-- V117-V123-fix1 still REVERTED (pre-perf-cron). Can re-introduce via brainstorm if needed.
+- Skill repo infrastructure shipped: `~/.claude/skills/` is now git-tracked with baseline + audit + upstream-update workflow. Customizations protected by 3-layer (baseline git / audit script / CLAUDE.md backstop).
+- 3 marketplace upstreams pulled (superpowers v5.1.0 + karpathy + claude-plugins-official). 4 customized SKILL.md 3-way merged; 10 non-customized copied verbatim. 11/11 audit PASS.
+- LoverClinic-app master = `5a82c856` (audit script committed + pushed), 1 commit ahead of prod (tooling-only, no deploy needed).
 
 ## What this session shipped
-- **V124** bubble↔badge predicate parity (AV124) — `isAppointmentPendingOpdSave({appt, linkedSession}) = resolveCardOpdState === 'D'`. Memo iterates `apptData.appointments`.
-- **V125** cancel cascade (AV125) — predicate excludes cancelled + `hideOpdLifecycle` per-row + `onCancelAppt` cascade-archives linked opd_session.
-- **V126** workflow-strict mark-complete gate — `&& rawStatus === 'confirmed'` on `showMarkCompleteBtn`. V21 fixup on V73 test bank.
-- L1 verified all 3 in real browser via DOM eval.
-- Detail → `.agents/sessions/2026-05-24-v124-v125-v126.md`.
+- `~/.claude/skills/.git` repo init + baseline `df9648b` + post-update commit `f8e90d0`
+- `F:/LoverClinic-app/scripts/verify-skill-customizations.sh` (committed `5a82c856`, pushed)
+- `~/.claude/scripts/{verify-skill-customizations.sh, skill-audit-hook.sh}` (user-level canonical + hook wrapper)
+- Pulled obra/superpowers v5.1.0 → 3-way merged 3 customized skills (1 conflict resolved manually) + 10 non-customized copied verbatim
+- `~/.claude/skills/CUSTOMIZATIONS-vs-upstream-v5.1.0.patch` (483 lines, ready for future PR if user installs gh CLI)
+- SessionStart hook proposal blocked by auto-mode classifier → skipped per "do what's best" (manual workflow sufficient; 3-layer protection already strong)
+- Detail → `.agents/sessions/2026-05-25-skill-repo-update.md`
 
 ## Next action
-- **idle** — await user direction. L1 hands-on by user on real cancel + mark-complete flows.
-- **Strategic brainstorm (deferred)** — นัดหมาย tab unification (deprecate 3 sibling tabs). User-triggered.
-- **Cron monitoring** (carryover) — `be_admin_audit/{opd-session-cleanup-sweep,chat-history-retention-sweep}-*` over next 24h.
+- **idle** — await user direction. No carryover from this session.
+- L1 hands-on V124+V125+V126 cancel + mark-complete flows (user-triggered, carryover)
+- Brainstorm นัดหมาย-tab unification (user-triggered, deferred)
+- Cron monitoring (passive carryover)
 
 ## Outstanding user-triggered actions
-- L1 hands-on cancel + mark-complete flow check on real prod
-- Brainstorm นัดหมาย-tab unification
+- L1 hands-on cancel + mark-complete flows (V124-V126)
+- Brainstorm นัดหมาย-tab unification (3 sibling tabs deprecation roadmap)
 - Cron audit doc monitoring (passive)
-
-## Notes
-- V124+V125+V126 all client-only. No rules/index/Cloud Run change.
-- V18: deploy auth never carries forward.
-- AV124+AV125 closed-list invariants; future bubble surfaces MUST go through `isAppointmentPendingOpdSave`; new cancel handlers MUST cascade-archive.
+- If wanting upstream PR: `winget install --id GitHub.cli` then say "fork superpowers" — patch ready at `~/.claude/skills/CUSTOMIZATIONS-vs-upstream-v5.1.0.patch`
