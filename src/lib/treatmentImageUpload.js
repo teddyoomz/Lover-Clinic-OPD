@@ -21,8 +21,10 @@ import { uploadTreatmentBlob } from './chartImageStorage.js';
 export function computeResizeDims(w, h, maxDim = 1920) {
   if (!(w > 0) || !(h > 0)) return { w: 0, h: 0 };
   if (w <= maxDim && h <= maxDim) return { w: Math.round(w), h: Math.round(h) };
-  if (w >= h) return { w: maxDim, h: Math.round((h * maxDim) / w) };
-  return { w: Math.round((w * maxDim) / h), h: maxDim };
+  // clamp the scaled side to ≥1 — an extreme aspect ratio (e.g. 8000×15) would
+  // otherwise round the short side to 0 → a 0-dimension canvas → empty image.
+  if (w >= h) return { w: maxDim, h: Math.max(1, Math.round((h * maxDim) / w)) };
+  return { w: Math.max(1, Math.round((w * maxDim) / h)), h: maxDim };
 }
 
 /** FileReader → data URL (Promise). */
