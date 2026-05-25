@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Frontend Tab Removal + Deposit-Aware Cancel Dialog — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --ember:#a855f7; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color:#111; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size:0.9em; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .tabbar { display:flex; gap:6px; flex-wrap:wrap; background:#1a1a1a; padding:8px 12px; border-radius:10px; }
+    .tab { background:#2a2a2a; color:#bbb; padding:6px 12px; border-radius:8px; font-size:0.85em; white-space:nowrap; }
+    .tab.active { background:var(--accent); color:#fff; font-weight:700; }
+    .tab.removed { background:#3a1010; color:#7a4a4a; text-decoration:line-through; }
+    .dlg { max-width:420px; border:1px solid var(--bd); border-radius:14px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,.18); background:#fff; }
+    .dlg h4 { margin:0 0 4px; font-size:1.05em; }
+    .dlg .sub { color:var(--tx-muted); font-size:0.85em; margin-bottom:12px; }
+    .dlg .warn { background:#fff4f4; border:1px solid #f3c0c0; border-radius:8px; padding:8px 10px; font-size:0.85em; color:#a33; margin-bottom:12px; }
+    .opt { display:block; width:100%; text-align:left; padding:11px 14px; border-radius:10px; margin-bottom:8px; border:1px solid var(--bd); font-size:0.92em; }
+    .opt.danger { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
+    .opt.neutral { background:#f3f4f6; color:#222; }
+    .opt.disabled { background:#f3f4f6; color:#aaa; border-style:dashed; }
+    .opt.back { background:transparent; color:var(--tx-muted); text-align:center; border:none; }
+    .flowbox { display:inline-block; border:1px solid var(--bd); border-radius:8px; padding:8px 12px; margin:4px; background:#fff; font-size:0.85em; }
+    .flowbox.q { background:#fff8e6; border-color:#e6c14a; }
+    .flowbox.act { background:#eef6ff; border-color:#8ab6e6; }
+    .flowbox.danger { background:#fff0f0; border-color:#e69a9a; }
+    .arrow { color:var(--tx-muted); font-weight:700; margin:0 2px; }
+    .keep { color:#0a7d34; font-weight:600; }
+    .drop { color:var(--accent); font-weight:600; }
+  </style>
+</head>
+<body>
+
+<h1>Frontend Tab Removal + Deposit-Aware Cancel Dialog</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 · <strong>Status:</strong> Approved by user · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-26-frontend-tab-removal-deposit-cancel-dialog.html (pending)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<div class="section">
+<p><strong>Two connected asks</strong> on the Frontend admin page (<code>src/pages/AdminDashboard.jsx</code>) + the deposit-booking lifecycle:</p>
+<ol>
+  <li><strong>Remove 4 redundant tabs</strong> — <em>คิวหน้า Clinic</em>, <em>จองไม่มัดจำ</em>, <em>จองมัดจำ</em>, <em>ประวัติ</em>. Queue creation + viewing + history are all covered by the unified <em>นัดหมาย</em> (AppointmentHubView) surface + Backend now. Continues the V124–V126 strategic direction ("unify นัดหมาย, deprecate the queue tabs"); V125 cancel-cascade was the tactical first step.</li>
+  <li><strong>Deposit-aware cancel</strong> — today, cancelling a deposit-booking <em>appointment</em> in the นัดหมาย tab sets <code>status='cancelled'</code> + archives the linked <code>opd_session</code> but <strong>leaves the deposit money active in Finance·มัดจำ</strong> (orphan). The admin should be asked: <em>"ลบตัวเงินมัดจำไปด้วยเลยไหม หรือลบแต่นัดหมาย"</em>.</li>
+</ol>
+<p><strong>Scope:</strong> single implementation plan. Frontend tab structure + a shared cancel-confirmation dialog wired into all cancel surfaces. No new Firestore collection, no rules/index change.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Frontend top tab bar · BEFORE (8 modes)</div>
+  <div class="tabbar">
+    <span class="tab">💬 แชท</span>
+    <span class="tab removed">🩺 คิวหน้า Clinic</span>
+    <span class="tab removed">➕ จองไม่มัดจำ</span>
+    <span class="tab removed">💵 จองมัดจำ</span>
+    <span class="tab">📅 นัดหมาย</span>
+    <span class="tab removed">🕘 ประวัติ</span>
+    <span class="tab">🎨 ตั้งค่า</span>
+    <span class="tab">🗄 หลังบ้าน</span>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:8px 0 0">Strikethrough = removed. Applies to BOTH the desktop top bar (<code>AdminDashboard.jsx:6038–6064</code>) AND the mobile <code>.menu-mobile</code> / <code>.menu-bottom-dock</code> equivalents.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Frontend top tab bar · AFTER (4 modes, นัดหมาย default-active)</div>
+  <div class="tabbar">
+    <span class="tab">💬 แชท</span>
+    <span class="tab active">📅 นัดหมาย</span>
+    <span class="tab">🎨 ตั้งค่า</span>
+    <span class="tab">🗄 หลังบ้าน</span>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:8px 0 0">The right-rail "➕ สร้างคิวใหม่" public-link generator button STAYS. Default landing <code>adminMode='appointment'</code> [Q1].</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Cancel dialog · state A — booking HAS a deposit (3 choices)</div>
+  <div class="dlg">
+    <h4>ยกเลิกการนัดหมาย</h4>
+    <div class="sub">คุณ สมหญิง ใจดี · 28 พ.ค. 2569 10:00 น.</div>
+    <div class="warn">⚠ นัดนี้มีมัดจำ 2,000 ฿ ในระบบ</div>
+    <div style="font-size:0.85em;margin-bottom:8px">จะจัดการมัดจำอย่างไร?</div>
+    <span class="opt danger">🗑 ยกเลิกนัด + ลบมัดจำ</span>
+    <span class="opt neutral">📌 ยกเลิกแต่นัด (เก็บมัดจำไว้)</span>
+    <span class="opt back">ย้อนกลับ</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Cancel dialog · state B — deposit PARTIALLY USED (ลบมัดจำ disabled)</div>
+  <div class="dlg">
+    <h4>ยกเลิกการนัดหมาย</h4>
+    <div class="sub">คุณ สมชาย รักดี · 28 พ.ค. 2569 13:30 น.</div>
+    <div class="warn">⚠ มัดจำถูกใช้ไปแล้วบางส่วน — ต้องยกเลิกใบเสร็จที่ใช้มัดจำก่อนจึงจะลบได้</div>
+    <span class="opt disabled">🗑 ยกเลิกนัด + ลบมัดจำ &nbsp;(ปิดใช้งาน)</span>
+    <span class="opt neutral">📌 ยกเลิกแต่นัด (เก็บมัดจำไว้)</span>
+    <span class="opt back">ย้อนกลับ</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Cancel dialog · state C — NO deposit (plain confirm, unchanged behaviour)</div>
+  <div class="dlg">
+    <h4>ยกเลิกการนัดหมาย?</h4>
+    <div class="sub">คุณ วิภา สดใส · 28 พ.ค. 2569 15:00 น.</div>
+    <span class="opt danger" style="text-align:center">ยืนยันยกเลิกนัด</span>
+    <span class="opt back">ย้อนกลับ</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Finance·มัดจำ surface (DepositPanel) — deposit-oriented variant</div>
+  <div class="dlg">
+    <h4>ยกเลิกมัดจำ</h4>
+    <div class="sub">มัดจำ 2,000 ฿ · ผูกกับนัด 28 พ.ค. 2569</div>
+    <div style="font-size:0.85em;margin-bottom:8px">มัดจำนี้ผูกกับนัดหมาย — จะจัดการนัดอย่างไร?</div>
+    <span class="opt danger">🗑 ลบมัดจำ + ยกเลิกนัด</span>
+    <span class="opt neutral">📌 ลบแต่มัดจำ (เก็บนัดไว้)</span>
+    <span class="opt back">ย้อนกลับ</span>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:8px 0 0">Same shared dialog, deposit-oriented copy. Only shown when the deposit has a <code>linkedAppointmentId</code>; legacy no-link deposits keep the plain cancel.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 · Deposit-aware cancel decision (shared across all surfaces)</div>
+  <div>
+    <span class="flowbox act">admin clicks ยกเลิก / ลบ</span> <span class="arrow">→</span>
+    <span class="flowbox q">booking มี linkedDepositId?</span>
+  </div>
+  <div style="margin-left:30px">
+    <span class="arrow">└ no →</span> <span class="flowbox act">plain confirm (state C) → cancel appt only</span> <span class="keep">(เดิม)</span>
+  </div>
+  <div style="margin-left:30px">
+    <span class="arrow">└ yes →</span> <span class="flowbox q">deposit.usedAmount &gt; 0?</span>
+    <span class="arrow">→ yes →</span> <span class="flowbox">"ลบมัดจำ" disabled (state B)</span>
+  </div>
+  <div style="margin-left:60px; margin-top:6px">
+    <span class="arrow">↓ show 3 choices (state A)</span>
+  </div>
+  <div style="margin-left:60px">
+    <span class="flowbox danger">🗑 ลบนัด+ลบมัดจำ</span> <span class="arrow">→</span> <span class="flowbox">deleteDepositBookingPair(depId)</span> <span class="drop">both vanish (hard)</span>
+  </div>
+  <div style="margin-left:60px">
+    <span class="flowbox act">📌 ลบแต่นัด</span> <span class="arrow">→</span> <span class="flowbox">cancel appt only + archive opd_session</span> <span class="keep">deposit preserved</span>
+  </div>
+  <div style="margin-left:60px">
+    <span class="flowbox">ย้อนกลับ</span> <span class="arrow">→</span> <span class="flowbox">no-op</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 · Tab-removal default-route</div>
+  <div>
+    <span class="flowbox act">open Frontend admin</span> <span class="arrow">→</span>
+    <span class="flowbox q">adminMode ∈ {dashboard, noDeposit, deposit, history}?</span>
+  </div>
+  <div style="margin-left:30px">
+    <span class="arrow">└ yes (stale/deep-link) →</span> <span class="flowbox act">redirect adminMode = 'appointment'</span>
+  </div>
+  <div style="margin-left:30px">
+    <span class="arrow">└ no →</span> <span class="flowbox act">render that tab</span>
+  </div>
+  <p style="font-size:0.85em;color:#666;margin:10px 0 0">Default initial <code>adminMode</code> changes <code>'dashboard' → 'appointment'</code>. "จำ tab ล่าสุด" NOT chosen [Q1=นัดหมาย].</p>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>Part 1 — Remove 4 tabs (hard delete)</h3>
+<table>
+  <tr><th>Action</th><th>Where</th></tr>
+  <tr><td>Remove 4 tab buttons (desktop)</td><td><code>AdminDashboard.jsx:6038</code> (dashboard), <code>:6042</code> (noDeposit), <code>:6046</code> (deposit), <code>:6062</code> (history)</td></tr>
+  <tr><td>Remove the same 4 from mobile</td><td><code>.menu-mobile</code> + <code>.menu-bottom-dock</code> markup (mobile dock)</td></tr>
+  <tr><td>Default landing <code>'dashboard' → 'appointment'</code> + redirect any removed mode → <code>'appointment'</code></td><td>initial <code>useState(adminMode)</code> + a guard effect</td></tr>
+  <tr><td>Remove render branches + orphaned state</td><td>dashboard queue render; <code>depositSessions</code> / <code>noDepositSessions</code> / <code>archived*</code> / <code>depositFormData</code> / <code>noDepositFormData</code> / <code>showDepositForm</code> / <code>showNoDepositForm</code> / <code>editingDepositData</code> (<code>:947–991</code>); <code>noDepositHistory</code>/<code>depositHistory</code> sub-modes; tab-only kiosk-delete handlers (<code>:4227</code>, <code>:5519</code>); the <code>history</code> render branch</td></tr>
+  <tr><td><strong>KEEP (shared — do NOT remove)</strong></td><td><code>sessions</code> / <code>unreadCount</code> state; <code>handleOpdClick</code> / <code>_attachLinkedBookings</code> / <code>resolveLinkedSession</code> / <code>provisionOpdLinkForBookingPair</code>; "สร้างคิวใหม่" public-link generator (right rail)</td></tr>
+</table>
+<p><strong>Coverage [Q2]:</strong> walk-in → นัดหมาย "เพิ่มนัดหมาย" (Walk-in type); link-fill arrivals → "รอ/ยังไม่ลง OPD" pill; patient history → Backend CustomerList + the OPD modal. No separate arrival surface kept. Tab-permissions: the 4 modes are NOT in <code>TAB_PERMISSION_MAP</code> → no permission change needed.</p>
+
+<h3>Part 2 — Shared deposit-aware cancel dialog (Rule C1)</h3>
+<p>NEW shared component <code>src/components/admin/DepositAwareCancelDialog.jsx</code> + NEW pure helper <code>src/lib/depositCancelDecision.js</code> (<code>resolveDepositCancelState({appt|deposit, linkedDeposit})</code> → <code>{ hasDeposit, usedAmount, blocked, depositId, appointmentId, amount }</code>). Wired into the 3 live cancel surfaces; cascade helpers already exist — we add the <em>ask</em> in front:</p>
+<table>
+  <tr><th>Surface</th><th>File:line</th><th>Today</th><th>After</th></tr>
+  <tr><td>Frontend นัดหมาย appt-cancel</td><td><code>AdminDashboard.jsx:7065</code> (onCancelAppt)</td><td>cancel appt + archive opd_session; <strong>deposit untouched</strong></td><td>dialog → 🗑 <code>deleteDepositBookingPair</code> / 📌 current behaviour</td></tr>
+  <tr><td>Backend AppointmentCalendarView appt-delete</td><td><code>AppointmentCalendarView.jsx:1142–1176</code></td><td>hard-deletes pair silently</td><td>dialog gates the same delete</td></tr>
+  <tr><td>Backend Finance·มัดจำ deposit-cancel</td><td><code>DepositPanel.jsx:510–514</code></td><td>soft-cancels pair silently</td><td>dialog (deposit-oriented copy) gates it; only when <code>linkedAppointmentId</code></td></tr>
+</table>
+<p><strong>Link fields:</strong> appt → <code>linkedDepositId</code> (fallback <code>spawnedFromDepositId</code>); deposit → <code>linkedAppointmentId</code>. <strong>Hard delete [Q3]:</strong> <code>deleteDepositBookingPair(depositId)</code> (both helpers throw when <code>usedAmount &gt; 0</code> → drives the state-B block). <strong>Left as-is:</strong> <code>AppointmentFormModal.jsx:846</code> flip-away (type-change, already has its own confirm via <code>flipAwayDecisionRef</code>).</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = นัดหมาย:</strong> default landing tab after removal is <code>'appointment'</code>.</li>
+  <li><strong>Q2 = นัดหมายครอบคลุมหมด:</strong> remove the live queue entirely; no dedicated arrival surface.</li>
+  <li><strong>Q3 = ลบหายเลย (hard):</strong> "ลบมัดจำ" → <code>deleteDepositBookingPair</code> (row vanishes from Finance), matching the kiosk precedent.</li>
+  <li><strong>Q4 = ทุกที่ที่ยกเลิกได้:</strong> the shared dialog appears on all 3 live cancel surfaces (นัดหมาย + AppointmentCalendarView + Finance·มัดจำ).</li>
+  <li><strong>Approach:</strong> one shared dialog component + one pure decision helper (Rule C1), not inline-per-surface.</li>
+  <li><strong>Removal depth:</strong> hard-delete the tab buttons + render branches + orphaned state (not hide-only).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Frontend admin shows exactly 4 tabs (แชท · นัดหมาย · ตั้งค่า · หลังบ้าน) on desktop AND mobile; opening it lands on นัดหมาย.</li>
+  <li>Any stale <code>adminMode</code> / deep-link to a removed mode redirects to นัดหมาย (no blank screen).</li>
+  <li>Cancelling a นัดหมาย appt WITH a deposit → dialog with 3 choices; 🗑 removes both deposit + appt; 📌 cancels appt only, deposit stays usable.</li>
+  <li>Cancelling a นัดหมาย appt WITHOUT a deposit → unchanged plain confirm.</li>
+  <li>Deposit with <code>usedAmount &gt; 0</code> → "ลบมัดจำ" disabled + clear Thai reason; ลบแต่นัด still works.</li>
+  <li>The same dialog fires on Backend AppointmentCalendarView appt-delete + Finance·มัดจำ deposit-cancel (deposit-oriented copy).</li>
+  <li>No orphan deposit left in Finance after a 🗑 cancel; no orphan appt after a Finance 🗑.</li>
+  <li>Full vitest green + build clean + Rule I flow-simulate + real-prod e2e (L2) for the cascade branches. No firestore.rules/index change.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Dead effects gated on <code>adminMode==='dashboard'</code></strong> (walk-in arrival modal <code>:3549</code>, inline cleanup) — since dashboard is never active after removal, verify these were already retired by the appointment-hub work (checkpoint says "kiosk walk-in modal wiring retired") or relocate/delete them. Must not silently disable a needed flow.</li>
+  <li><strong>Mobile dock parity</strong> — the 4 removals must land in the mobile menu/dock too, not just the desktop bar.</li>
+  <li><strong>Finance·มัดจำ orientation</strong> — the dialog there is deposit-oriented ("ลบมัดจำ → ลบนัดด้วย/เก็บนัด"). Confirm at L1 the copy reads correctly.</li>
+  <li><strong>"ลบแต่นัด" leaves deposit.linkedAppointmentId → a cancelled appt</strong> — acceptable (money preserved, customer rebooks); the deposit stays usable. Confirm no downstream reader breaks on a linked-but-cancelled appt.</li>
+  <li><strong>Surviving kiosk-delete callsites</strong> — confirm in the plan which of <code>:4227</code>/<code>:5519</code> die with the tabs vs survive elsewhere.</li>
+</ul>
+
+</body>
+</html>
