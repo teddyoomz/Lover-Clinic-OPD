@@ -46,6 +46,12 @@ const ADMIN = fs.readFileSync(
   path.join(process.cwd(), 'src/pages/AdminDashboard.jsx'),
   'utf8',
 );
+// 2026-05-24 perf-cron refactor relocated the inline auto-2hr-expire block from
+// AdminDashboard → the daily cron core. SG3 reads it from there now.
+const CLEANUP = fs.readFileSync(
+  path.join(process.cwd(), 'src/lib/opdSessionCleanupCore.js'),
+  'utf8',
+);
 
 describe('V116.SG — source-grep regression at every fix surface', () => {
   it('SG1 — provisionOpdLinkForBookingPair: existence-check + auto-regen on stale FK', () => {
@@ -89,12 +95,14 @@ describe('V116.SG — source-grep regression at every fix surface', () => {
     expect(ADMIN).toMatch(/V116:\s*เหมือนกดผิด/);
   });
 
-  it('SG3 — auto-2hr-expire: mirror conditional (preserve if linked)', () => {
-    // The auto-expire useEffect (line ~2246) MUST also branch on linked vs
-    // unlinked when patientData is missing. Otherwise the 2hr-expire would
-    // re-introduce the bug class.
-    expect(ADMIN).toMatch(/V116 \(2026-05-23\) — mirror deleteSession conditional/);
-    expect(ADMIN).toMatch(/if \(s\.linkedAppointmentId \|\| s\.linkedDepositId\)\s*\{[\s\S]{0,400}isHiddenFromQueue: true/);
+  it('SG3 — auto-expire cleanup: preserve-if-linked conditional (relocated to cron core)', () => {
+    // 2026-05-24 perf-cron refactor RELOCATED the inline auto-2hr-expire block
+    // from AdminDashboard → the daily opd-session-cleanup cron. The V116
+    // invariant (expired + no patientData + linked booking → HIDE, not delete)
+    // is preserved in src/lib/opdSessionCleanupCore.js. SG3 retargeted from
+    // ADMIN → CLEANUP (V21 fixup 2026-05-25; verified the cron preserves V116).
+    expect(CLEANUP).toMatch(/linked booking \(V116\)|expired-no-data-but-linked-booking-V116/);
+    expect(CLEANUP).toMatch(/if \(data\.linkedAppointmentId \|\| data\.linkedDepositId\)\s*\{[\s\S]{0,200}action: 'hide'/);
   });
 
   it('SG4 — queue filters: isHiddenFromQueue gate with patientData auto-restore', () => {

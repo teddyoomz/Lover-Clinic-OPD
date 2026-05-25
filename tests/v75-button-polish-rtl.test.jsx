@@ -71,8 +71,10 @@ describe('V75 Item 1 — CustomerDetailView 4-button row equal-height polish', (
     while ((m = buttonTagPattern.exec(block)) !== null) {
       classNames.push(m[1]);
     }
-    // V81-fix4 (V21 fix-up V82-followup): 4 → 3 buttons (สำรอง removed)
-    expect(classNames.length).toBe(3);
+    // V81-fix4 (V21 fix-up V82-followup): 4 → 3 buttons (สำรอง removed).
+    // 2026-05-25 (V21 fix-up): 🔗 patient-link button ADDED → 3 → 4
+    // (แก้ไข / ผูก LINE / 🔗 ลิงก์ดูข้อมูล / ลบลูกค้า). All 4 keep inline-flex polish.
+    expect(classNames.length).toBe(4);
     classNames.forEach((cn, i) => {
       expect(cn, `button ${i + 1} className: ${cn}`).toMatch(/inline-flex/);
       expect(cn, `button ${i + 1} className: ${cn}`).toMatch(/items-center/);
