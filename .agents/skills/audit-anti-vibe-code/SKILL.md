@@ -3084,3 +3084,26 @@ V121 adds 2 helpers to the AV118-sanctioned source `src/lib/opdSessionState.js`:
 **Origin**: 2026-05-25 — customer patient-link. Spec `docs/superpowers/specs/2026-05-25-customer-patient-link-design.html`. The auth reality (be_* clinic-staff-only, verified via firestore.rules grep) forced the server-endpoint design — NOT anon-read rules.
 
 **Cross-link**: spec + plan `docs/superpowers/plans/2026-05-25-customer-patient-link.html` + `api/patient-view.js` + `tests/customer-patient-link-*.test.js`.
+
+### AV127 — Customer-facing course list MUST filter by effective status (not expiry-only)
+
+**Why**: 2026-05-25 — user L1 on the deployed customer patient-link caught the view showing **used-up courses (qty "0 / 1 ครั้ง", remaining 0) as "กำลังใช้งาน"**. The stored `course.status` does NOT auto-flip to "ใช้หมดแล้ว" when qty hits 0 (ProClinic-era data + our deduction don't restamp the status string). The patient-view course filter (`api/patient-view.js` + legacy `fetchCoursesViaApi`) filtered by **EXPIRY DATE only** → depleted-but-not-date-expired courses leaked into the active "คอร์สคงเหลือ" list. The LINE bot (`formatCoursesReply` V33.8) + `RemainingCourseTab` (`deriveEffectiveStatus`) already filtered correctly — the patient view was the outlier (V12 multi-reader-sweep: a new/parallel reader missing the canonical filter).
+
+**Invariant**: any CUSTOMER-FACING list of "remaining / usable courses" MUST gate each course through `deriveEffectiveStatus(parseStatusFromCourse(c), total, remaining) === STATUS_ACTIVE` (from `remainingCourseUtils.js`), NOT a bare expiry-date filter. `deriveEffectiveStatus` flips finite+depleted (`total>0 && remaining<=0`) → ใช้หมดแล้ว (excluded), KEEPS buffet (`total === 0`) + `remaining>0`, and preserves refunded/cancelled (excluded). Used-up + terminal courses stay in `customer.courses[]` for audit but MUST NOT appear in customer-facing usable lists.
+
+**Sanctioned consumers** (customer-facing usable-course lists):
+1. `api/patient-view.js` — `isUsableActive` gate (anon patient endpoint).
+2. `src/pages/PatientDashboard.jsx` `fetchCoursesViaApi` — `isUsableActive` gate (legacy opd_session path).
+3. `src/lib/lineBotResponder.js` `formatCoursesReply` — V33.8 status+remaining filter (reference; already correct).
+4. `src/lib/remainingCourseUtils.js` — `deriveEffectiveStatus` (canonical helper + RemainingCourseTab; reference).
+
+**Forbidden anti-patterns** (AV127 violations):
+- ❌ filtering customer-facing courses by `!c.expiryDate || expiryDate >= today` ALONE (misses depleted).
+- ❌ trusting `course.status === 'กำลังใช้งาน'` without the qty-remaining numeric guard (status is stale).
+- ❌ excluding buffet (`qtyTotal === 0`) as if depleted — `deriveEffectiveStatus` only flips when `total > 0`.
+
+**Source-grep regression test**: `tests/customer-patient-link-flow-simulate.test.js` F6 (uses the REAL helpers + locks both patient-view sites + anti-regression on the old `allCourses.filter(c => !c.expiryDate` pattern).
+
+**Origin**: 2026-05-25 — user L1 on the deployed customer patient-link. Same canonical helper the report + LINE bot already used; the patient view was missing it. Class-of-bug = 2 instances fixed in one commit (endpoint + fetchCoursesViaApi).
+
+**Cross-link**: AV126 (patient-link anon-safety) + `remainingCourseUtils.deriveEffectiveStatus` + `lineBotResponder.formatCoursesReply` (V33.8).

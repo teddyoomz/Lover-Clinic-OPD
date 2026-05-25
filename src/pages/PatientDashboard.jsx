@@ -8,6 +8,8 @@ import { hexToRgb, thaiTodayISO } from '../utils.js';
 // is set (line 344) so the assumption holds. Fetches customer.courses[]
 // directly + getCustomerAppointments for the future-appointments slice.
 import { getCustomer, getCustomerAppointments } from '../lib/scopedDataLayer.js';
+import { parseQtyString } from '../lib/courseUtils.js';
+import { parseStatusFromCourse, deriveEffectiveStatus, STATUS_ACTIVE } from '../lib/remainingCourseUtils.js';
 import ClinicLogo from '../components/ClinicLogo.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import PhoneLink from '../components/PhoneLink.jsx';
@@ -430,10 +432,18 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
       if (customer) {
         const allCourses = Array.isArray(customer.courses) ? customer.courses : [];
         const today = thaiTodayISO();
-        // Active = not yet expired (or no explicit expiry). Expired = past expiry.
-        // Adapter parity with broker.getCourses output shape.
-        courses = allCourses.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
-        expiredCourses = allCourses.filter(c => c.expiryDate && String(c.expiryDate) < today);
+        // 2026-05-25 fix (class-of-bug w/ api/patient-view): show only USABLE
+        // remaining courses ("คอร์สคงเหลือ"). Stored status doesn't auto-flip when
+        // qty hits 0 → derive effective status: finite+depleted → ใช้หมดแล้ว
+        // (excluded); buffet (total 0) + remaining>0 kept; refunded/cancelled
+        // excluded. Matches lineBotResponder.formatCoursesReply + RemainingCourseTab.
+        const isUsableActive = (c) => {
+          const { remaining, total } = parseQtyString(c.qty || '');
+          return deriveEffectiveStatus(parseStatusFromCourse(c), Number(total) || 0, Number(remaining) || 0) === STATUS_ACTIVE;
+        };
+        const usable = allCourses.filter(isUsableActive);
+        courses = usable.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
+        expiredCourses = usable.filter(c => c.expiryDate && String(c.expiryDate) < today);
 
         const appts = await getCustomerAppointments(String(proClinicId)).catch(() => []);
         // Future appointments only — public-link view shows upcoming bookings

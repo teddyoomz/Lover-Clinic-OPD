@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { fmtThaiDate } from '../src/lib/dateFormat.js';
+import { parseQtyString } from '../src/lib/courseUtils.js';
+import { parseStatusFromCourse, deriveEffectiveStatus, STATUS_ACTIVE, STATUS_USED } from '../src/lib/remainingCourseUtils.js';
 
 // ─── Rule I full-flow simulate — customer patient-link ───
 // Pure mirrors of api/patient-view appointment mapping + course split, so the
@@ -95,5 +97,52 @@ describe('Rule I — customer patient-link full flow', () => {
     const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
     expect(PD).toMatch(/__customerMode/);
     expect(PD).toMatch(/sessionData\?\.__customerMode\) return/); // auto-sync guarded
+  });
+
+  // ── F6: used-up / depleted courses excluded from the patient view (2026-05-25 fix) ──
+  // Stored status doesn't auto-flip → derive effective status (buffet-safe).
+  const isUsableActive = (c) => {
+    const { remaining, total } = parseQtyString(c.qty || '');
+    return deriveEffectiveStatus(parseStatusFromCourse(c), Number(total) || 0, Number(remaining) || 0) === STATUS_ACTIVE;
+  };
+  it('F6.1: finite depleted course (0/1, stale active status) is EXCLUDED', () => {
+    expect(isUsableActive({ qty: '0 / 1 ครั้ง', status: 'กำลังใช้งาน' })).toBe(false);
+    expect(deriveEffectiveStatus('กำลังใช้งาน', 1, 0)).toBe(STATUS_USED);
+  });
+  it('F6.2: course with remaining (9/12) is KEPT', () => {
+    expect(isUsableActive({ qty: '9 / 12 ครั้ง', status: 'กำลังใช้งาน' })).toBe(true);
+  });
+  it('F6.3: buffet / unlimited (qty unparseable → total 0) is KEPT (not wrongly excluded)', () => {
+    expect(isUsableActive({ qty: 'ไม่จำกัด', status: 'กำลังใช้งาน' })).toBe(true);
+    expect(isUsableActive({ qty: '', status: 'กำลังใช้งาน' })).toBe(true);
+  });
+  it('F6.4: refunded / cancelled courses are EXCLUDED', () => {
+    expect(isUsableActive({ qty: '1 / 1 ครั้ง', status: 'คืนเงิน' })).toBe(false);
+    expect(isUsableActive({ qty: '1 / 1 ครั้ง', status: 'ยกเลิก' })).toBe(false);
+  });
+  it('F6.5: real ไพบูลย์ case — 2× "0/1" used-up → 0 shown (active + expired both empty)', () => {
+    const all = [
+      { qty: '0 / 1 ครั้ง', status: 'กำลังใช้งาน', expiryDate: '2026-06-24' },
+      { qty: '0 / 1 ครั้ง', status: 'กำลังใช้งาน' },
+      { qty: '5 / 10 ครั้ง', status: 'กำลังใช้งาน' },
+    ];
+    const today = '2026-05-25';
+    const usable = all.filter(isUsableActive);
+    const courses = usable.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
+    const expired = usable.filter(c => c.expiryDate && String(c.expiryDate) < today);
+    expect(usable).toHaveLength(1); // only 5/10 survives
+    expect(courses).toHaveLength(1);
+    expect(expired).toHaveLength(0);
+  });
+  it('F6.6: BOTH patient-view course lists gate on deriveEffectiveStatus (class-of-bug lock)', () => {
+    const EP = readFileSync('api/patient-view.js', 'utf8');
+    const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
+    for (const SRC of [EP, PD]) {
+      expect(SRC).toMatch(/deriveEffectiveStatus/);
+      expect(SRC).toMatch(/parseStatusFromCourse/);
+      expect(SRC).toMatch(/isUsableActive/);
+      // anti-regression: the OLD expiry-only filter on allCourses must be gone
+      expect(SRC).not.toMatch(/allCourses\.filter\(c => !c\.expiryDate/);
+    }
   });
 });

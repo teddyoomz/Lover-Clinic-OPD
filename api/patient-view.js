@@ -11,6 +11,8 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { fmtThaiDate } from '../src/lib/dateFormat.js';
+import { parseQtyString } from '../src/lib/courseUtils.js';
+import { parseStatusFromCourse, deriveEffectiveStatus, STATUS_ACTIVE } from '../src/lib/remainingCourseUtils.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 
@@ -73,10 +75,21 @@ export default async function handler(req, res) {
 
     const today = bangkokToday();
 
-    // 2. Courses — active / expired split (mirror fetchCoursesViaApi).
+    // 2. Courses — show only USABLE remaining ("คอร์สคงเหลือ"). The stored
+    //    `status` does NOT auto-flip when qty hits 0, so we derive the effective
+    //    status: deriveEffectiveStatus flips finite+depleted (total>0 &&
+    //    remaining<=0) → ใช้หมดแล้ว, KEEPS buffet (total 0) + remaining>0 as
+    //    active, and preserves refunded/cancelled. Used-up + terminal courses
+    //    are EXCLUDED from both lists (customer wants them gone). Matches
+    //    lineBotResponder.formatCoursesReply (V33.8) + RemainingCourseTab.
     const allCourses = Array.isArray(customerData.courses) ? customerData.courses : [];
-    const courses = allCourses.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
-    const expiredCourses = allCourses.filter(c => c.expiryDate && String(c.expiryDate) < today);
+    const isUsableActive = (c) => {
+      const { remaining, total } = parseQtyString(c.qty || '');
+      return deriveEffectiveStatus(parseStatusFromCourse(c), Number(total) || 0, Number(remaining) || 0) === STATUS_ACTIVE;
+    };
+    const usable = allCourses.filter(isUsableActive);
+    const courses = usable.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
+    const expiredCourses = usable.filter(c => c.expiryDate && String(c.expiryDate) < today);
 
     // 3. Appointments — future-only + branch-name resolve + full-month Thai date.
     //    Real be_appointments field shape (verified via Rule R diag 2026-05-25):
