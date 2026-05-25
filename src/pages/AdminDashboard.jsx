@@ -3497,6 +3497,25 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     const sessionId = session.id;
     const d = session.patientData;
 
+    // ④ (2026-05-26) — booking-flow predicate, HOISTED so BOTH
+    // _maybeOpenWalkInModal (early-returns when true) AND _attachLinkedBookings
+    // (hard-deletes the session when true) share ONE source — mutual exclusion:
+    // a session that opens the walk-in modal (false) is NEVER deleted here; a
+    // link/booking session (true) is deleted + never opens the walk-in modal.
+    // 6 indicators (V116 added createdFromBackendBooking as the 6th): a session
+    // from จองมัดจำ / จองไม่มัดจำ / Backend-pickLater booking flows.
+    const isFromBookingFlow = !!(
+      session?.linkedAppointmentId ||
+      session?.linkedDepositId ||
+      session?.appointmentProClinicId ||
+      session?.formType === 'deposit' ||
+      session?.createdFromBackendBooking ||
+      (session?.appointmentData && (
+        session.appointmentData.appointmentDate ||
+        session.appointmentData.appointmentStartTime
+      ))
+    );
+
     // If already recorded successfully → block (ต้องลบจากหน้าประวัติเท่านั้น)
     if (session.opdRecordedAt && session.brokerStatus === 'done') return;
 
@@ -3553,25 +3572,11 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       // User report (verbatim): "หากมาจากหน้า จองมัดจำ หรือ จองไม่มัดจำ ...
       // เมื่อกดบันทึกลง OPD ในหน้า คิวหน้า Clinic จะไม่ต้องขึ้น modal มาให้
       // สร้างนัดหมายอีก".
-      // V116 (2026-05-23) — added `createdFromBackendBooking === true` as the
-      // 6th defense-in-depth indicator. Set by provisionOpdLinkForBookingPair
-      // (appointmentDepositBatch.js:927) when admin uses the Backend pickLater
-      // "ดูลิ้งค์ที่ส่งไป" flow. Belt-and-suspenders — the other 5 indicators
-      // already cover this case (linkedAppointmentId is always stamped), but
-      // this catches future drift IF the provision helper's reverse-stamp ever
-      // changes shape. User directive Q3 (verbatim): "Add createdFromBackendBooking
-      // as 6th indicator". AV invariant locks the gate shape against drift.
-      const isFromBookingFlow = !!(
-        session?.linkedAppointmentId ||
-        session?.linkedDepositId ||
-        session?.appointmentProClinicId ||
-        session?.formType === 'deposit' ||
-        session?.createdFromBackendBooking ||
-        (session?.appointmentData && (
-          session.appointmentData.appointmentDate ||
-          session.appointmentData.appointmentStartTime
-        ))
-      );
+      // ④ (2026-05-26) — isFromBookingFlow hoisted to handleOpdClick scope
+      // (see top). Walk-in modal is for NON-booking (kiosk) sessions only;
+      // booking-flow sessions are hard-deleted in _attachLinkedBookings instead
+      // (mutual exclusion via the shared predicate). V116 kept createdFromBackendBooking
+      // as the 6th indicator in that hoisted definition.
       if (isFromBookingFlow) return;
       setWalkInModal({
         sessionId,
@@ -3586,25 +3591,39 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       const fname = patient.firstname || patient.firstName || '';
       const lname = patient.lastname || patient.lastName || '';
       const customerName = `${patient.prefix || ''} ${fname} ${lname}`.trim();
+      let r = null;
       try {
         const mod = await import('../lib/appointmentDepositBatch.js');
-        if (typeof mod.attachCustomerToOpdSessionLinks !== 'function') return null;
-        const r = await mod.attachCustomerToOpdSessionLinks(sessionId, {
-          customerId,
-          customerName,
-          customerHN: customerHN || '',
-        });
-        const total = (r?.depositCount || 0) + (r?.appointmentCount || 0);
-        if (total > 0) {
-          showToast(`บันทึกลง OPD สำเร็จ + ผูกนัด/มัดจำ ${total} รายการ`);
+        if (typeof mod.attachCustomerToOpdSessionLinks === 'function') {
+          r = await mod.attachCustomerToOpdSessionLinks(sessionId, {
+            customerId,
+            customerName,
+            customerHN: customerHN || '',
+          });
+          const total = (r?.depositCount || 0) + (r?.appointmentCount || 0);
+          if (total > 0) {
+            showToast(`บันทึกลง OPD สำเร็จ + ผูกนัด/มัดจำ ${total} รายการ`);
+          }
         }
-        return r;
       } catch (e) {
         // V31 anti-pattern lock — classify error, don't silent-swallow.
         console.warn('[handleOpdClick] attachCustomerToOpdSessionLinks failed (best-effort):', e);
         showToast('บันทึก OPD สำเร็จ — ผูกนัด/มัดจำล้มเหลว กรุณาลองใหม่');
-        return null;
       }
+      // ④ (2026-05-26) — link/booking session is redundant once the customer is
+      // saved to be_customers (customerId truthy = saved). Hard-delete it to
+      // prevent opd_sessions buildup (perf). Gated on isFromBookingFlow so kiosk
+      // walk-in sessions (which open the walk-in modal next) are NOT deleted.
+      // Best-effort: delete failure → the cron sweep (③) catches it; never roll
+      // back the successful save. AV131.
+      if (isFromBookingFlow) {
+        try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'opd_sessions', sessionId));
+        } catch (delErr) {
+          console.warn('[handleOpdClick] post-save session delete failed (best-effort; cron will sweep):', delErr);
+        }
+      }
+      return r;
     };
 
     const hasExistingProClinic = session.brokerProClinicId || session.brokerProClinicHN;
