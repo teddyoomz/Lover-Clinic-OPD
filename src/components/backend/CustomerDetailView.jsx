@@ -12,7 +12,7 @@ import {
   Clock, AlertCircle, CheckCircle2, Heart, Pill, FileText,
   Loader2, RefreshCw, Droplets, Shield, Plus, Edit3, Trash2,
   Search, X, Users, Wallet, CreditCard, Ticket, Star, Crown, Check, Printer, QrCode, IdCard, Building2,
-  ClipboardCheck
+  ClipboardCheck, Link
 } from 'lucide-react';
 import {
   getCustomerTreatments, listenToCustomerTreatments,
@@ -42,6 +42,8 @@ import { resolveAssistantNames, buildDoctorMap } from '../../lib/appointmentDisp
 import { useSelectedBranch, resolveBranchName } from '../../lib/BranchContext.jsx';
 import DocumentPrintModal from './DocumentPrintModal.jsx';
 import LinkLineInstructionsModal from './LinkLineInstructionsModal.jsx';
+// Customer patient-link (2026-05-25) — 🔗 button → modal → anon link for the customer
+import CustomerPatientLinkModal from './CustomerPatientLinkModal.jsx';
 // V74 (2026-05-16) — customer backup/restore: header button → modal → POST /api/admin/customer-backup-export
 import CustomerBackupModal from './CustomerBackupModal.jsx';
 // Task 12 (LINE OA Appointment Reminder, 2026-05-15) — per-branch LINE
@@ -270,6 +272,7 @@ export default function CustomerDetailView({
   // Phase 14.5 — print document modal
   const [printDocOpen, setPrintDocOpen] = useState(false);
   const [lineQrOpen, setLineQrOpen] = useState(false);
+  const [showPatientLinkModal, setShowPatientLinkModal] = useState(false);
   // V74 (2026-05-16) — customer backup modal (admin clicks "💾 สำรอง")
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   // V32-tris-quater (2026-04-26) — focused nationalId/passport edit modal.
@@ -827,38 +830,50 @@ export default function CustomerDetailView({
                   V75 Item 1 (2026-05-16) — normalize all 4 buttons to inline-flex
                   + whitespace-nowrap; wrap row in flex-wrap so mobile <375px collapses
                   to 2x2 grid instead of splitting a single button across lines. */}
-              <div data-testid="customer-detail-button-row" className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                {onEditCustomer && (
-                  <button onClick={onEditCustomer}
-                    data-testid="edit-customer-btn"
+              {/* 2026-05-25 — Layout A: action group (แก้ไข · ผูก LINE · 🔗 ลิงก์) on
+                  one row + thin divider + destructive "ลบลูกค้า" separated below. */}
+              <div data-testid="customer-detail-button-row" className="mt-3 flex flex-col items-center gap-0">
+                <div data-testid="customer-detail-action-group" className="flex flex-wrap items-center justify-center gap-2">
+                  {onEditCustomer && (
+                    <button onClick={onEditCustomer}
+                      data-testid="edit-customer-btn"
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
+                      style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
+                      title="แก้ไขข้อมูลลูกค้าทั้งหมด">
+                      <Edit3 size={11} /> แก้ไข
+                    </button>
+                  )}
+                  <button onClick={() => setLineQrOpen(true)}
+                    data-testid="link-line-btn"
                     className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
-                    style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.08)' }}
-                    title="แก้ไขข้อมูลลูกค้าทั้งหมด">
-                    <Edit3 size={11} /> แก้ไข
+                    style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
+                    title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
+                    <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
                   </button>
-                )}
-                <button onClick={() => setLineQrOpen(true)}
-                  data-testid="link-line-btn"
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
-                  style={{ color: '#06C755', borderColor: 'rgba(6,199,85,0.3)', backgroundColor: 'rgba(6,199,85,0.08)' }}
-                  title={customer?.lineUserId ? 'ผูก LINE ใหม่ (จะแทนที่บัญชีเดิม)' : 'สร้าง QR ให้ลูกค้าสแกนเพื่อผูกบัญชี LINE'}>
-                  <QrCode size={11} /> {customer?.lineUserId ? 'LINE ✓' : 'ผูก LINE'}
-                </button>
+                  {/* 🔗 patient-link — anon link for the customer to view appointments + courses */}
+                  <button onClick={() => setShowPatientLinkModal(true)}
+                    data-testid="patient-link-btn"
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg border transition-all inline-flex items-center gap-1.5 whitespace-nowrap hover:shadow-md active:scale-95"
+                    style={{ color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)', backgroundColor: 'rgba(168,85,247,0.12)' }}
+                    title="สร้างลิงก์ให้ลูกค้าดูนัดหมาย + คอร์สคงเหลือ (ไม่ต้องล็อกอิน)">
+                    <Link size={11} /> {customer?.patientLinkToken ? 'ลิงก์ ✓' : 'ลิงก์ดูข้อมูล'}
+                  </button>
+                </div>
                 {/* V81-fix4 (2026-05-17 EOD+2): V74 per-customer "💾 สำรอง" button REMOVED.
-                    Per-customer backup model deprecated — use V81 Whole-System Backup
-                    (Backend → จัดการ Backup → 📥 Backup Now) which includes ALL customer
-                    data + Auth + Storage in ONE single file. Per user directive:
-                    "ไม่ต้องเก็บข้อมูล Backup ลูกค้าแบบแยกคน". */}
-                {/* Phase 24.0 — prominent ลบลูกค้า button (dual gate) */}
+                    Per-customer backup model deprecated — use V81 Whole-System Backup. */}
+                {/* Phase 24.0 — prominent ลบลูกค้า button (dual gate), separated below the divider */}
                 {canDeleteCustomer && onDeleteCustomer && (
-                  <button
-                    onClick={() => onDeleteCustomer(customer)}
-                    data-testid="customer-detail-delete-button"
-                    title="ลบลูกค้าถาวร พร้อมประวัติทั้งหมด"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"
-                  >
-                    <Trash2 size={11} /> ลบลูกค้า
-                  </button>
+                  <>
+                    <div className="w-3/4 h-px my-3" style={{ background: 'var(--bd)' }} />
+                    <button
+                      onClick={() => onDeleteCustomer(customer)}
+                      data-testid="customer-detail-delete-button"
+                      title="ลบลูกค้าถาวร พร้อมประวัติทั้งหมด"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-red-950/20 hover:bg-red-900/40 text-red-400 border-red-800/50 text-xs font-bold whitespace-nowrap transition-all hover:shadow-md active:scale-95"
+                    >
+                      <Trash2 size={11} /> ลบลูกค้า
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -1421,6 +1436,17 @@ export default function CustomerDetailView({
             // Refresh by triggering parent reload (caller passes onCustomerUpdated)
             onCustomerUpdated?.();
           }}
+        />
+      )}
+      {/* 2026-05-25 — Customer patient-link modal. customer is live (listenToCustomer
+          → liveCustomer), so writing the token auto-refreshes the modal + flips the
+          🔗 button label — onUpdated can be a no-op. */}
+      {showPatientLinkModal && (
+        <CustomerPatientLinkModal
+          customer={customer}
+          isDark={isDark}
+          onClose={() => setShowPatientLinkModal(false)}
+          onUpdated={() => { /* liveCustomer listener auto-refreshes token state */ }}
         />
       )}
       {/* V74 (2026-05-16) — customer backup modal */}
