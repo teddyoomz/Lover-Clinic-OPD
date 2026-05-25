@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer Patient-Link (หน้าดูข้อมูลลูกค้า) Design Spec</title>
+  <style>
+    :root { --accent: #a855f7; --bd: #e5e5e5; --bg-meta: #f4f0fa; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; background:#f0eef5; padding:1px 5px; border-radius:4px; }
+    pre code { background:none; padding:0; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .warn { background:#fff4f4; border-left:4px solid #dc2626; padding:0.6em 1em; border-radius:0 6px 6px 0; }
+    .ok { background:#f0fbf4; border-left:4px solid #16a34a; padding:0.6em 1em; border-radius:0 6px 6px 0; }
+    /* dark mockup of the real app card */
+    .app{background:#080808;padding:22px;border-radius:10px;}
+    .mk-card{background:linear-gradient(180deg,#141414,#0c0c0c);border:1px solid #262626;border-radius:16px;padding:18px 16px;width:300px;margin:0 auto;box-shadow:0 12px 30px rgba(0,0,0,.45);}
+    .mk-head{display:flex;flex-direction:column;align-items:center;gap:8px;}
+    .mk-av{width:62px;height:62px;border-radius:50%;background:#1a0a0a;border:2px solid #5b1a1a;display:flex;align-items:center;justify-content:center;color:#fff;font-size:25px;font-weight:800;}
+    .mk-name{color:#f5f5f5;font-weight:800;font-size:14px;}
+    .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:6px 11px;border-radius:9px;border:1px solid;white-space:nowrap;}
+    .c-edit{color:#60a5fa;border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.08);}
+    .c-line{color:#06C755;border-color:rgba(6,199,85,.3);background:rgba(6,199,85,.08);}
+    .c-link{color:#c084fc;border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.12);}
+    .c-del{color:#f87171;border-color:rgba(190,49,68,.55);background:rgba(127,29,29,.28);}
+    .mk-div{width:78%;height:1px;background:rgba(255,255,255,.07);margin:11px auto;}
+    .pv{background:linear-gradient(180deg,#150a1f,#0a0a12);border:1px solid #2a2438;border-radius:14px;padding:18px;width:320px;margin:0 auto;color:#e7e2f0;}
+    .pv h4{margin:14px 0 6px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#a78bcf;border-bottom:1px solid #2a2438;padding-bottom:4px;}
+    .pv .row{font-size:12.5px;padding:4px 0;color:#d8d2e6;}
+    .flowbox{display:inline-block;background:#fff;border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font-size:0.82em;margin:3px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+    .flowarrow{color:var(--accent);font-weight:800;margin:0 2px;}
+  </style>
+</head>
+<body>
+
+<h1>Customer Patient-Link — ปุ่ม "🔗 ลิงก์ดูข้อมูล" ในหน้าดูข้อมูลลูกค้า</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-25 · <strong>Status:</strong> Approved by user (design) · <strong>Implementation plan:</strong> (จะลิงก์หลังเขียน plan)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>ปัจจุบันปุ่ม "สร้างลิงก์ดูข้อมูล" มีเฉพาะใน frontend queue (AdminDashboard) และผูกกับ <code>opd_session</code> + ข้อมูล <code>latestCourses</code> ที่ ProClinic เคย sync — แต่ <strong>V50 (2026-05-08) ถอด ProClinic ออกหมดแล้ว</strong> ทำให้ field นั้นไม่มีตัวเขียน. ผู้ใช้ต้องการปุ่มเดียวกันในหน้า <strong>CustomerDetailView</strong> (ดู <code>be_customers</code>) เพื่อสร้างลิงก์ให้ <strong>ลูกค้า (anon, ไม่ต้อง login)</strong> เปิดดูนัดหมาย + คอร์สคงเหลือของตัวเองได้ทุกเวลา. ลิงก์ต้องดึงข้อมูล <strong>สดจาก be_*</strong> (ไม่พึ่ง ProClinic).</p>
+
+<div class="warn">
+  <strong>Security correction จาก Q1:</strong> appointments อยู่คนละ collection (<code>be_appointments</code> by customerId) + courses บน customer doc. การเปิด anon-read <code>be_customers</code>/<code>be_appointments</code> ใน firestore.rules = เปิด PII ลูกค้าทั้งฐานให้ใครก็อ่านได้ (rules gate "การรู้ token" ไม่ได้สำหรับ collection query) → <strong>ห้ามทำ</strong>. ใช้ public serverless endpoint (admin SDK, token-gated) แทน — be_customers/be_appointments ยังล็อค clinic-staff เหมือนเดิม.
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">1 · CustomerDetailView — แถวปุ่ม (Layout A: action group + แยกปุ่มลบ) · desktop/mobile เหมือนกัน</div>
+  <div class="app">
+    <div class="mk-card">
+      <div class="mk-head">
+        <div class="mk-av">ร</div>
+        <div class="mk-name">นาง ราตรี ผ่องใส</div>
+      </div>
+      <div style="margin-top:14px;text-align:center;">
+        <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+          <span class="chip c-edit">✏️ แก้ไข</span>
+          <span class="chip c-line">▦ ผูก LINE</span>
+          <span class="chip c-link">🔗 ลิงก์</span>
+        </div>
+        <div class="mk-div"></div>
+        <span class="chip c-del">🗑️ ลบลูกค้า</span>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">กลุ่ม action (แก้ไข · ผูก LINE · 🔗 ลิงก์) แถวบน → เส้นคั่นบาง → "ลบลูกค้า" (destructive) แยกแถวล่าง. ปุ่ม 🔗 = สีม่วง (ตรงธีม patient-link เดิม). ถ้ามีลิงก์อยู่แล้วป้ายเป็น "🔗 ลิงก์ ✓".</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">2 · Modal (เลียนแบบภาพ 1, customer-scoped) — ซ้าย: ยังไม่มีลิงก์ · ขวา: มีลิงก์แล้ว</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;">
+    <div style="background:#0c0c0c;border:1px solid #2a2438;border-radius:14px;padding:18px;width:300px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="color:#c084fc;">🔗</span>
+        <div><div style="font-size:11px;font-weight:800;color:#c084fc;">ลิงก์ดูข้อมูลของผู้ป่วย</div><div style="font-size:13px;font-weight:700;color:#fff;">นาง ราตรี ผ่องใส</div></div>
+      </div>
+      <p style="font-size:11px;color:#888;text-align:center;margin:14px 0;">สร้างลิงก์ดูข้อมูลเพื่อให้ผู้ป่วยดูข้อมูลนัดหมาย<br>และคอร์สคงเหลือได้ทุกเวลา</p>
+      <button style="width:100%;padding:11px;border-radius:12px;border:none;background:rgba(168,85,247,.85);color:#fff;font-weight:800;font-size:12.5px;">🔗 สร้างลิงก์ดูข้อมูล</button>
+    </div>
+    <div style="background:#0c0c0c;border:1px solid #2a2438;border-radius:14px;padding:18px;width:300px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <span style="color:#c084fc;">🔗</span>
+        <div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#c084fc;">ลิงก์ดูข้อมูลของผู้ป่วย</div><div style="font-size:13px;font-weight:700;color:#fff;">นาง ราตรี ผ่องใส</div></div>
+        <label style="font-size:10px;color:#9a91b0;">เปิด <input type="checkbox" checked></label>
+      </div>
+      <div style="font-size:10px;color:#888;margin-bottom:4px;">ลิงก์</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <div style="flex:1;background:#141414;border:1px solid #2a2438;border-radius:8px;padding:8px;font-size:10px;color:#9a91b0;font-family:monospace;overflow:hidden;">.../?patient=a3f9…e21</div>
+        <button style="background:#1a1430;border:1px solid #2a2438;border-radius:8px;color:#c084fc;padding:0 9px;">⧉</button>
+        <button style="background:#1a1430;border:1px solid #2a2438;border-radius:8px;color:#c084fc;padding:0 9px;">↗</button>
+      </div>
+      <div style="background:#fff;border-radius:8px;padding:8px;text-align:center;font-size:9px;color:#666;margin-bottom:10px;">▣ QR Code</div>
+      <button style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(190,49,68,.4);background:rgba(127,29,29,.2);color:#f87171;font-size:11px;font-weight:700;">เพิกถอนลิงก์</button>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">3 · สิ่งที่ผู้ป่วยเห็น — เปิด ?patient=&lt;token&gt; (anon · ไม่ต้อง login)</div>
+  <div class="app">
+    <div class="pv">
+      <div style="font-weight:800;font-size:15px;">นาง ราตรี ผ่องใส</div>
+      <div style="font-size:11px;color:#9a91b0;">HN 000123</div>
+      <h4>📅 นัดหมาย</h4>
+      <div class="row">• 28/05/2569 · 10:00 · ตรวจติดตาม · <span style="color:#7ee0a0;">ยืนยันแล้ว</span></div>
+      <div class="row">• 12/06/2569 · 14:30 · ทำเลเซอร์</div>
+      <h4>📦 คอร์สคงเหลือ</h4>
+      <div class="row">• Q-Switch Laser — เหลือ <b>3/5</b> ครั้ง</div>
+      <div class="row">• ดริปผิว สูตร 1 — เหลือ <b>1</b> ครั้ง</div>
+    </div>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">ข้อมูลสดจาก <code>be_appointments</code> (by customerId) + <code>be_customers.courses[]</code> ผ่าน endpoint. ไม่มีบัตร ปชช./PII ละเอียด. ใช้ shell/ธีม/TH-EN เดิมของ PatientDashboard.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">A · สร้างลิงก์ (clinic-staff)</div>
+  <div style="line-height:2.4;">
+    <span class="flowbox">กด 🔗 ในหน้าลูกค้า</span><span class="flowarrow">→</span>
+    <span class="flowbox">ยังไม่มี token → "สร้างลิงก์ดูข้อมูล"</span><span class="flowarrow">→</span>
+    <span class="flowbox">gen crypto token (128-bit)</span><span class="flowarrow">→</span>
+    <span class="flowbox">client write <code>be_customers</code>: <code>patientLinkToken</code> + <code>patientLinkEnabled=true</code></span><span class="flowarrow">→</span>
+    <span class="flowbox">modal โชว์ลิงก์ + QR + คัดลอก/เปิด/ปิด/เพิกถอน</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">B · ผู้ป่วยเปิดลิงก์ (anon · NO login)</div>
+  <div style="line-height:2.4;">
+    <span class="flowbox">ลูกค้าเปิด <code>?patient=&lt;token&gt;</code></span><span class="flowarrow">→</span>
+    <span class="flowbox">PatientDashboard customer-mode: <code>GET /api/patient-view?token=</code></span><span class="flowarrow">→</span>
+    <span class="flowbox">server (admin SDK) query <code>be_customers</code> WHERE patientLinkToken==token</span><span class="flowarrow">→</span>
+    <span class="flowbox">enabled? → อ่าน courses[] + query <code>be_appointments</code> by customerId</span><span class="flowarrow">→</span>
+    <span class="flowbox">return เฉพาะ field ปลอดภัย (ชื่อ·HN·courses·appointments)</span><span class="flowarrow">→</span>
+    <span class="flowbox">render หน้าผู้ป่วย</span>
+  </div>
+  <p style="font-size:0.82em;color:var(--tx-muted)">token ไม่พบ → 404 → "ไม่พบข้อมูล" · <code>patientLinkEnabled=false</code> → "ปิดใช้งาน". ถ้า endpoint 404 → PatientDashboard fallback ไป path เดิม (opd_session legacy, ไม่แตะ).</p>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>ชั้น</th><th>รายละเอียด</th></tr>
+  <tr><td><b>Token model</b></td><td><code>be_customers.patientLinkToken</code> (string, crypto 128-bit hex) + <code>patientLinkEnabled</code> (bool). สร้าง/เพิกถอนโดย clinic-staff (client SDK write — be_customers เขียนได้โดย clinic-staff อยู่แล้ว).</td></tr>
+  <tr><td><b>api/patient-view.js</b> (NEW)</td><td>Public GET, token-gated. admin SDK. resolve be_customers by token → ถ้า enabled → คืน <code>{ patientName, hn, courses[], appointments[] }</code> (field-minimized; ไม่มี national ID). 404 ถ้าไม่พบ/disabled. อ่าน be_appointments by customerId ฝั่ง server. <b>ไม่ต้อง Firebase auth</b> (server validate token).</td></tr>
+  <tr><td><b>PatientDashboard</b></td><td>customer-mode: ลอง <code>fetch(/api/patient-view?token=)</code>; สำเร็จ → render customer view (shell/ธีม/TH-EN เดิม). 404 → fallback path เดิม (opd_session listener, unchanged).</td></tr>
+  <tr><td><b>CustomerDetailView</b></td><td>restructure แถวปุ่ม → Layout A. ปุ่ม 🔗 ม่วง เปิด <code>CustomerPatientLinkModal</code>.</td></tr>
+  <tr><td><b>CustomerPatientLinkModal</b> (NEW)</td><td>เลียนแบบ image-1 modal, customer-scoped: empty→สร้าง; active→ลิงก์+คัดลอก+QR+เปิด/ปิด+เพิกถอน.</td></tr>
+  <tr><td><b>backendClient.js</b></td><td>helpers: <code>generateCustomerPatientLink(customerId)</code> · <code>setCustomerPatientLinkEnabled(customerId, enabled)</code> · <code>revokeCustomerPatientLink(customerId)</code>.</td></tr>
+  <tr><td><b>firestore.rules</b></td><td><b>ไม่แตะ</b> ✅ — be_customers/be_appointments ยังล็อค clinic-staff. ไม่ต้อง Probe-Deploy-Probe.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> ลิงก์ระดับลูกค้า (customer-level) อ่าน be_* สด — ไม่ใช่ reuse opd_session legacy.</li>
+  <li><strong>Q2 (layout) = A:</strong> action group [แก้ไข · ผูก LINE · 🔗 ลิงก์] + เส้นคั่น + [ลบลูกค้า] แยกแถวล่าง.</li>
+  <li><strong>Data path = A2 (refinement):</strong> public token-gated serverless endpoint (admin SDK) — ไม่เปิด anon-read be_customers (security). ไม่มี snapshot doc (กัน stale).</li>
+  <li><strong>Anon · NO login</strong> (ผู้ใช้ยืนยัน 2026-05-25): ลูกค้าเปิดลิงก์ดูข้อมูลตัวเองโดยไม่ต้อง login ใด ๆ. endpoint = public, validate ด้วย token เท่านั้น.</li>
+  <li><strong>Modal scope = mirror image 1:</strong> สร้าง / คัดลอกลิงก์ / QR / เปิดลิงก์ / เปิด-ปิด / เพิกถอน.</li>
+  <li><strong>Field-minimization:</strong> คืนเฉพาะ ชื่อ · HN · courses (ชื่อ+เหลือ) · appointments (วัน/เวลา/ประเภท/สถานะ/หมอ). ไม่มีบัตร ปชช.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>หน้าลูกค้าแสดงปุ่ม 🔗 ลิงก์ (ม่วง) ในกลุ่ม action; "ลบลูกค้า" แยกแถวล่าง (Layout A) — ทั้ง desktop + mobile.</li>
+  <li>กด 🔗 (ยังไม่มี token) → "สร้างลิงก์ดูข้อมูล" → เขียน token ลง be_customers → modal โชว์ลิงก์ + QR.</li>
+  <li>Modal: คัดลอก / เปิด / QR / เปิด-ปิด (toggle <code>patientLinkEnabled</code>) / เพิกถอน (clear token+enabled) ทำงานครบ.</li>
+  <li>ลูกค้าเปิด <code>?patient=&lt;token&gt;</code> <b>โดยไม่ต้อง login</b> → เห็น ชื่อ + HN + นัดหมาย + คอร์สคงเหลือ (สด).</li>
+  <li>token ปิด → "ปิดใช้งาน"; token ผิด/เพิกถอนแล้ว → "ไม่พบข้อมูล".</li>
+  <li>endpoint คืนเฉพาะ field ปลอดภัย (ไม่มี national ID); be_customers/be_appointments ยังล็อค clinic-staff (ไม่แก้ firestore.rules).</li>
+  <li>path opd_session patient-link เดิมไม่พัง (fallback).</li>
+  <li>Rule Q: L2 endpoint verified บน prod จริง (TEST customer + cleanup) + L1 เปิดลิงก์จริงใน browser เห็นข้อมูล TEST customer.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><b>Public endpoint = attack surface</b> — ลดด้วย token crypto 128-bit (brute-force ไม่ไหว) + read-only + field-minimized. พิจารณา rate-limit เบา ๆ (optional).</li>
+  <li><b>App.jsx render gate</b> — route <code>?patient=</code> ปัจจุบัน gate render จนกว่า anon-auth (<code>user</code>) จะ resolve (V16/V23). customer-mode ดึงข้อมูลจาก endpoint (ไม่ต้องใช้ Firebase auth) — anon-auth ที่ยังทำงานอยู่ไม่เป็นพิษ (สำเร็จเร็ว) แต่ทางเทคนิคไม่จำเป็นต่อ data fetch. <b>Plan ต้องเช็คว่า gate ไม่บล็อก customer-mode โดยไม่จำเป็น</b> (ปล่อย anon-auth ไว้ได้ ถ้าไม่ทำให้ช้า).</li>
+  <li><b>PatientDashboard ไฟล์ใหญ่</b> — เพิ่ม customer-mode branch ต้องระวังไม่พัง legacy path (Rule I flow-simulate ครอบทั้ง 2 path).</li>
+  <li><b>AVxx invariant</b> — ล็อกว่า endpoint ต้อง field-minimize + be_customers ห้ามเปิด anon-read (กัน regression อนาคต).</li>
+</ul>
+
+</body>
+</html>
