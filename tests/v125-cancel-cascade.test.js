@@ -88,10 +88,13 @@ describe('V125 — Source-grep regression locks', () => {
   });
 
   it('SG-A3 — AdminDashboard onCancelAppt cascades isArchived:true on linked opd_session', () => {
-    // Window-scan: 2500 chars after `onCancelAppt=` covers the whole handler.
+    // Window-scan: 4000 chars after `onCancelAppt=` covers the whole handler.
+    // (2026-05-26) bumped 2500→4000 — the deposit-aware 'both' branch
+    // (deleteDepositBookingPair) was added ABOVE the appt-only archive path,
+    // pushing the 'appt-cancelled' archive past the old 2500 window.
     const idx = ADMIN.indexOf('onCancelAppt=');
     expect(idx).toBeGreaterThan(-1);
-    const handler = ADMIN.slice(idx, idx + 2500);
+    const handler = ADMIN.slice(idx, idx + 4000);
     expect(handler).toMatch(/linkedOpdSessionId/);
     expect(handler).toMatch(/isArchived:\s*true/);
     expect(handler).toMatch(/archivedReason:\s*['"]appt-cancelled['"]/);

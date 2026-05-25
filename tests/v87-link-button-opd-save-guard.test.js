@@ -20,9 +20,9 @@ describe('V87 — AV84 patient-link button OPD-save guard', () => {
   // does NOT need the guard (it's a close, not an open).
   const TRIGGER_OPEN_RE = /setPatientLinkModal\(session\.id\)/g;
 
-  it('G1.1 — exactly 2 trigger-OPEN sites exist (closed list)', () => {
+  it('G1.1 — (2026-05-26) exactly 1 trigger-OPEN site (history-tab trigger removed)', () => {
     const matches = SOURCE.match(TRIGGER_OPEN_RE) || [];
-    expect(matches.length).toBe(2);
+    expect(matches.length).toBe(1);
   });
 
   it('G1.2 — every trigger-OPEN site is preceded by the OPD-save guard within ~400 chars', () => {
@@ -33,7 +33,7 @@ describe('V87 — AV84 patient-link button OPD-save guard', () => {
       .map((line, idx) => (line.includes('setPatientLinkModal(session.id)') ? idx : -1))
       .filter((i) => i !== -1);
 
-    expect(triggerLineIdxs.length).toBe(2);
+    expect(triggerLineIdxs.length).toBe(1);
 
     for (const idx of triggerLineIdxs) {
       // Walk back up to 15 lines looking for the guard expression. AV84 contract:
@@ -80,7 +80,7 @@ describe('V87 — AV84 patient-link button OPD-save guard', () => {
     expect(SOURCE).toMatch(historyGuard);
   });
 
-  it('G3.2 — both guard wrappers are paired with closing `)}`', () => {
+  it('G3.2 — (2026-05-26) the link-button guard wrapper is paired with closing `)}` (history one removed)', () => {
     // Each `{session.opdRecordedAt && session.brokerStatus === 'done' && (`
     // must be followed by a matching `)}` to close the JSX branch.
     const openGuards = SOURCE.match(/\{session\.opdRecordedAt\s*&&\s*session\.brokerStatus\s*===\s*['"]done['"]\s*&&\s*\(/g) || [];
@@ -103,7 +103,8 @@ describe('V87 — AV84 patient-link button OPD-save guard', () => {
         }
       }
     }
-    expect(linkGuardOpens).toBe(2);
-    expect(linkGuardCloses).toBe(2);
+    // (2026-05-26) was 2 (walk-in queue + history); history tab removed → 1.
+    expect(linkGuardOpens).toBe(1);
+    expect(linkGuardCloses).toBe(1);
   });
 });

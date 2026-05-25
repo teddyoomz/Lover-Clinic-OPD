@@ -167,19 +167,19 @@ describe('V88 — handler / wiring lock (cosmetic-shell constraint)', () => {
   });
 
   it('W1.6 — menu-tab buttons retain exact handler shape', () => {
-    // 8 menu-tab buttons each with `setAdminMode('X')` or window.open('?backend=1').
+    // (2026-05-26) 4 menu-tab buttons after tab removal (dashboard/noDeposit/
+    // deposit/history unified into นัดหมาย): chat / appointment / clinicSettings / backend.
     const handlers = [
       `setAdminMode('chat')`,
-      `setAdminMode('dashboard')`,
-      `setAdminMode('noDeposit')`,
-      `setAdminMode('deposit')`,
       `setAdminMode('appointment')`,
-      `setAdminMode('history')`,
       `setAdminMode('clinicSettings')`,
       `window.open('?backend=1'`,
     ];
     for (const h of handlers) {
       expect(SOURCE.includes(h)).toBe(true);
     }
+    // anti-regression: removed-tab handlers must NOT reappear as menu nav.
+    expect(SOURCE.includes(`setAdminMode('dashboard')`)).toBe(false);
+    expect(SOURCE.includes(`setAdminMode('history')`)).toBe(false);
   });
 });

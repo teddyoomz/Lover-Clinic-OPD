@@ -55,9 +55,11 @@ describe('V118 — AV118 invariant + sanctioned exceptions', () => {
 });
 
 describe('V118 — V87/AV84 preservation (regression locks)', () => {
-  it('SG3.1 — V87/AV84 preserved: setPatientLinkModal trigger count remains 2', () => {
+  it('SG3.1 — (2026-05-26) setPatientLinkModal trigger count = 1 (history-tab trigger removed)', () => {
+    // The 2nd trigger was the ประวัติ (history) view card; that tab was removed
+    // (unified into นัดหมาย). The surviving queue-card trigger stays V87/AV84-guarded.
     const matches = ADMIN.match(/setPatientLinkModal\(session\.id\)/g) || [];
-    expect(matches.length).toBe(2);
+    expect(matches.length).toBe(1);
   });
 
   it('SG3.2 — V87/AV84 guard wrapper still present (regression lock)', () => {

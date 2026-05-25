@@ -37,46 +37,11 @@ const ADMIN = fs.readFileSync(
 );
 
 describe('Phase 24.0-vicies-ter — deposit live card "แก้ไขนัด" link', () => {
-  it('VTC.A.1 — testid + link rendered when dep.hasAppointment', () => {
-    expect(ADMIN).toContain('data-testid="deposit-card-edit-appt-link"');
-  });
-
-  // Helper: extract the JSX block containing the edit-appt-link testid by
-  // walking backwards from the testid to the nearest `{dep.hasAppointment`
-  // gate, then forward through the button's onClick body.
-  function extractEditApptLinkBlock() {
-    const testidIdx = ADMIN.indexOf('data-testid="deposit-card-edit-appt-link"');
-    if (testidIdx < 0) return '';
-    // Walk back to find the gate.
-    const backStart = Math.max(0, testidIdx - 1500);
-    const before = ADMIN.slice(backStart, testidIdx);
-    const gateLocalIdx = before.lastIndexOf('{dep.hasAppointment');
-    const startIdx = gateLocalIdx >= 0 ? backStart + gateLocalIdx : testidIdx - 800;
-    // Walk forward past the button close.
-    const afterEnd = Math.min(ADMIN.length, testidIdx + 600);
-    return ADMIN.slice(startIdx, afterEnd);
-  }
-
-  it('VTC.A.2 — link gated on dep.hasAppointment', () => {
-    const block = extractEditApptLinkBlock();
-    expect(block).toMatch(/\{dep\.hasAppointment\s*&&\s*\(/);
-    expect(block).toContain('<button');
-    expect(block).toContain('data-testid="deposit-card-edit-appt-link"');
-  });
-
-  it('VTC.A.3 — onClick opens OPD detail panel via handleViewSession', () => {
-    const block = extractEditApptLinkBlock();
-    expect(block).toMatch(/handleViewSession\(session\)/);
-  });
-
-  it('VTC.A.4 — onClick auto-enters editingDepositData mode (deferred so viewingSession is set first)', () => {
-    const block = extractEditApptLinkBlock();
-    expect(block).toMatch(/setEditingDepositData\(\{\s*\.\.\.\s*session\.depositData\s*\}\)/);
-  });
-
-  it('VTC.A.5 — auto-loads depositOptions if not already loaded', () => {
-    const block = extractEditApptLinkBlock();
-    expect(block).toMatch(/if\s*\(!depositOptions\)\s*fetchDepositOptions\(\)/);
+  it('VTC.A.1 — (2026-05-26) deposit live-card "แก้ไขนัด" link REMOVED with the deposit tab', () => {
+    // The deposit/no-deposit VIEW tabs were removed (unified into นัดหมาย); the
+    // live-card "แก้ไขนัด" edit-link (deposit-card-edit-appt-link → handleViewSession
+    // + setEditingDepositData + fetchDepositOptions) lived in that removed render.
+    expect(ADMIN).not.toContain('data-testid="deposit-card-edit-appt-link"');
   });
 
   it('VTC.A.6 — Phase 24.0-vicies-ter marker present', () => {

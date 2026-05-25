@@ -232,8 +232,8 @@ describe('Phase 24.0-undecies — AdminDashboard wiring (source-grep)', () => {
     expect(occurrences.length).toBe(2);
   });
 
-  it('VPO.C.9 — edit-mode hydration uses parseVisitPurposeText', () => {
-    expect(ADMIN_DASHBOARD).toMatch(/parseVisitPurposeText\(\s*a\.visitPurpose\s*\|\|\s*\[\]/);
+  it('VPO.C.9 — (2026-05-26) noDeposit card-edit parseVisitPurposeText hydration REMOVED with the tab', () => {
+    expect(ADMIN_DASHBOARD).not.toMatch(/parseVisitPurposeText\(\s*a\.visitPurpose\s*\|\|\s*\[\]/);
   });
 
   it('VPO.C.10 — both modals have the conditional ระบุ input testids', () => {
@@ -248,9 +248,8 @@ describe('Phase 24.0-undecies — AdminDashboard wiring (source-grep)', () => {
     expect(occurrences.length).toBe(2); // deposit + no-deposit modals
   });
 
-  it('VPO.C.12 — Card list row 3 chip render shows interpolated label', () => {
-    // The row-3 chip render now constructs "อื่นๆ: <detail>" inline.
-    expect(ADMIN_DASHBOARD).toMatch(/`อื่นๆ:\s*\$\{otherDetail\}`/);
+  it('VPO.C.12 — (2026-05-26) card-row "อื่นๆ: <detail>" chip REMOVED with the deposit/no-deposit cards', () => {
+    expect(ADMIN_DASHBOARD).not.toMatch(/`อื่นๆ:\s*\$\{otherDetail\}`/);
   });
 
   it('VPO.C.13 — form-reset paths reset visitPurposeOther to empty', () => {

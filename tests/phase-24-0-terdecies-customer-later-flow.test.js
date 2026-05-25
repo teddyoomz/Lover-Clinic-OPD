@@ -147,9 +147,10 @@ describe('Phase 24.0-terdecies — kiosk modal source-grep', () => {
     expect(ADMIN).toMatch(/customerNameTemp:\s*noDepositFormData\.customerNameTemp/);
   });
 
-  it('CLF.B.8 — edit-mode hydration restores temp fields from session.appointmentData', () => {
-    expect(ADMIN).toMatch(/customerNameTemp:\s*a\.customerNameTemp\s*\|\|\s*''/);
-    expect(ADMIN).toMatch(/customerPhoneTemp:\s*a\.customerPhoneTemp\s*\|\|\s*''/);
+  it('CLF.B.8 — (2026-05-26) noDeposit card-edit temp-field hydration REMOVED with the tab', () => {
+    // The "แก้ไขนัด" inline hydration (a.customerNameTemp from session.appointmentData)
+    // lived in the removed noDeposit card render. Create-form reset paths (CLF.B.9) kept.
+    expect(ADMIN).not.toMatch(/customerNameTemp:\s*a\.customerNameTemp\s*\|\|\s*''/);
   });
 
   it('CLF.B.9 — form reset paths clear temp fields', () => {
@@ -161,16 +162,14 @@ describe('Phase 24.0-terdecies — kiosk modal source-grep', () => {
     expect(phoneResets.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('CLF.B.10 — card list row 2: deposit-card-customer-temp + no-deposit-card-customer-temp testids exist', () => {
-    expect(ADMIN).toContain('data-testid="deposit-card-customer-temp"');
-    expect(ADMIN).toContain('data-testid="no-deposit-card-customer-temp"');
+  it('CLF.B.10 — (2026-05-26) deposit/no-deposit card-temp testids REMOVED with the tabs', () => {
+    expect(ADMIN).not.toContain('data-testid="deposit-card-customer-temp"');
+    expect(ADMIN).not.toContain('data-testid="no-deposit-card-customer-temp"');
   });
 
-  it('CLF.B.11 — card list shows ลูกค้าจอง label when temp present (UPPERCASE chip badge)', () => {
-    // Both card lists render a "ลูกค้าจอง" uppercase label inside the temp
-    // display block.
+  it('CLF.B.11 — (2026-05-26) ลูกค้าจอง card-temp label REMOVED with the deposit/no-deposit cards', () => {
     const occurrences = ADMIN.match(/uppercase[^>]*>\s*ลูกค้าจอง\s*</g) || [];
-    expect(occurrences.length).toBeGreaterThanOrEqual(2); // deposit + no-deposit cards
+    expect(occurrences.length).toBe(0);
   });
 
   it('CLF.B.12 — Phase 24.0-terdecies marker present in AdminDashboard', () => {

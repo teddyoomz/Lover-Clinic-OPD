@@ -174,9 +174,10 @@ describe('P3 — Customer phone display sites must use PhoneLink', () => {
       label: 'AdminDashboard',
       mustContain: [
         "import PhoneLink from '../components/PhoneLink.jsx';",
-        // queue card patient phone + emergency phone + appt list + picker + appt secondary = 5 PhoneLink occurrences
+        // (2026-05-26) deposit/no-deposit/history card phones removed with the tabs;
+        // queue card patient phone + emergency + appt list + picker = 4 PhoneLink occurrences
       ],
-      minPhoneLinkCount: 5,
+      minPhoneLinkCount: 4,
     },
     {
       file: 'src/pages/PatientDashboard.jsx',
@@ -277,10 +278,11 @@ describe('P3 — Customer phone display sites must use PhoneLink', () => {
   it('P3.anti.1 AdminDashboard no longer has bare formatPhoneNumberDisplay span at queue-card patient phone', () => {
     const src = readSrc('src/pages/AdminDashboard.jsx');
     // Must not have a bare span wrapping formatPhoneNumberDisplay(d.phone, ...) WITHOUT being wrapped in PhoneLink
-    // Locks the 5 V82-Phone migration sites — every formatPhoneNumberDisplay(d.phone|data.phone, ...) call
-    // must be inside a PhoneLink. Conservative check: assert at least 5 PhoneLink wrappers paired with the helper.
+    // (2026-05-26) deposit/no-deposit/history card phones removed with the tabs.
+    // Conservative check: surviving formatPhoneNumberDisplay phones (queue card +
+    // emergency + appt secondary) are still wrapped in PhoneLink.
     const phoneLinkMatches = src.match(/<PhoneLink\s+value=\{formatPhoneNumberDisplay\(/g) || [];
-    expect(phoneLinkMatches.length).toBeGreaterThanOrEqual(4);
+    expect(phoneLinkMatches.length).toBeGreaterThanOrEqual(3);
   });
 
   it('P3.anti.2 PatientDashboard no longer renders bare {d.phone} after <Phone> icon', () => {

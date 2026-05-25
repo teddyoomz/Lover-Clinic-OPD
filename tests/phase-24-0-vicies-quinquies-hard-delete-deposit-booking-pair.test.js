@@ -157,23 +157,22 @@ describe('Phase 24.0-vicies-quinquies — AppointmentCalendarView delete-handler
     );
   });
 
-  it('VQQ.D.2 — when linkedDepositId set, calls deleteDepositBookingPair', () => {
-    // Wider buffer to span the comment block + import + call.
+  // (2026-05-26 / AV132) — AppointmentCalendarView delete now OPENS the shared
+  // DepositAwareCancelDialog when linkedDepositId is set (ask ลบมัดจำด้วย/เก็บ),
+  // instead of silently pair-deleting. The cascade moved into the dialog onChoice.
+  it('VQQ.D.2 — linkedDepositId set → opens deposit-aware dialog (setDeleteDialog)', () => {
     expect(VIEW).toMatch(
-      /if\s*\(linkedDepositId\)\s*\{[\s\S]{0,800}?await\s+deleteDepositBookingPair\(linkedDepositId\)/,
+      /if\s*\(linkedDepositId\)\s*\{[\s\S]{0,300}?setDeleteDialog\(\{[\s\S]{0,120}?depositId:\s*linkedDepositId/,
     );
   });
 
-  it('VQQ.D.3 — fallback to bare deleteBackendAppointment if pair-delete throws', () => {
-    expect(VIEW).toMatch(
-      /catch\s*\(pairErr\)\s*\{[\s\S]{0,300}?deleteBackendAppointment\(id\)/,
-    );
+  it('VQQ.D.3 — dialog onChoice: both → deleteDepositBookingPair, this-only → deleteBackendAppointment', () => {
+    expect(VIEW).toMatch(/choice\s*===\s*'both'[\s\S]{0,200}?deleteDepositBookingPair\(dlg\.depositId\)/);
+    expect(VIEW).toMatch(/deleteBackendAppointment\(dlg\.apptId\)/);
   });
 
-  it('VQQ.D.4 — when no linkedDepositId, uses bare deleteBackendAppointment (anti-regression)', () => {
-    expect(VIEW).toMatch(
-      /\}\s*else\s*\{[\s\S]{0,200}?await\s+deleteBackendAppointment\(id\)/,
-    );
+  it('VQQ.D.4 — no linkedDepositId → bare deleteBackendAppointment(id) (anti-regression)', () => {
+    expect(VIEW).toMatch(/await\s+deleteBackendAppointment\(id\)/);
   });
 
   it('VQQ.D.5 — Phase 24.0-vicies-quinquies marker present', () => {
