@@ -42,8 +42,8 @@ Wrap session into 3 files in ≤ 5k tokens.
    git push origin {branch}
    ```
 
-6. **Emit Resume Prompt** as ONE text message ≤ 30 lines:
-   ```
+6. **Emit Resume Prompt** in ONE message ≤ 30 lines. The Resume Prompt MUST be emitted INSIDE a fenced code block (triple-backtick fence with language `text`) so the chat UI renders a one-click **copy button**. Emit the fence verbatim as a top-level code block — do NOT flatten it to plain prose, quotes, or `---` separators (those kill the copy button):
+   ```text
    Resume {project} — continue from {date} EOD.
 
    Read in order BEFORE any tool call:
@@ -70,4 +70,4 @@ Wrap session into 3 files in ≤ 5k tokens.
 
 ## Success
 
-Total tokens ≤ 5k. Tomorrow's chat reading `.agents/active.md` knows: branch + commit + tests + prod state + next action in ≤ 50 lines. Resume Prompt fits one message.
+Total tokens ≤ 5k. Tomorrow's chat reading `.agents/active.md` knows: branch + commit + tests + prod state + next action in ≤ 50 lines. Resume Prompt fits one message AND is emitted inside a fenced ```text code block (one-click copy button).

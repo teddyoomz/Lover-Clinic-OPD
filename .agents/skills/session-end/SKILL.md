@@ -154,14 +154,14 @@ Script auto-runs:
 
 ### 6. Relay the Resume Prompt
 
-Take the script's stdout (the final block after `[session-apply] done.`) and emit as the LLM's final message. Verbatim — do not paraphrase or re-template. The script already produced the canonical form.
+Take the script's stdout (the final block after `[session-apply] done.`) and emit as the LLM's final message. Verbatim — do not paraphrase or re-template. The script already produced the canonical form. Emit it INSIDE a fenced code block (top-level triple-backtick fence, language `text`) so the chat UI shows a one-click **copy button** — do NOT flatten it to plain prose.
 
 ## Success criteria
 
 - LLM token budget for session-end: ~600 tokens (capsule only) to ~2000 tokens (full mode with 2 new wiki pages).
 - Total wall time: ~5-15 seconds (1 bash brief + 1 Write capsule + 0-2 wiki Writes + 1 bash apply that runs vitest internally + git push).
 - Tomorrow's `/session-start` can boot from `.agents/active.md` + checkpoint in ≤ 50 lines.
-- Resume Prompt fits one message; pasting it into a new chat fully restores context.
+- Resume Prompt fits one message, emitted inside a fenced ```text code block (one-click copy button); pasting it into a new chat fully restores context.
 
 ## Anti-patterns (BLOCKING)
 
