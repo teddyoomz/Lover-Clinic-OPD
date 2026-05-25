@@ -6045,19 +6045,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               <MessageCircle size={14}/> <span>แชท</span>
               {isChatActive && chatUnread > 0 && <span className="menu-badge" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
             </button>
-            <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'dashboard' ? 'menu-tab-active' : ''}`}>
-              <Activity size={14}/> <span>คิวหน้า Clinic</span>
-              {unreadCount > 0 && <span className="menu-badge" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-            </button>
-            <button onClick={() => setAdminMode('noDeposit')} className={`menu-tab ${(adminMode === 'noDeposit' || adminMode === 'noDepositHistory') ? 'menu-tab-active' : ''}`} title="ลูกค้าจองไม่มัดจำ">
-              <UserPlus size={14}/> <span>จองไม่มัดจำ</span>
-              {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="menu-badge" style={{background:'#f97316'}}>{noDepositSessions.filter(s => s.isUnread).length}</span>}
-            </button>
-            <button onClick={() => setAdminMode('deposit')} className={`menu-tab ${(adminMode === 'deposit' || adminMode === 'depositHistory') ? 'menu-tab-active' : ''}`} title="ลูกค้าจองมัดจำ">
-              <Banknote size={14}/> <span>จองมัดจำ</span>
-              {depositSessions.filter(s => s.isUnread).length > 0 && <span className="menu-badge" style={{background:'#10b981'}}>{depositSessions.filter(s => s.isUnread).length}</span>}
-            </button>
-            <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย ProClinic">
+            {/* (2026-05-26) removed: คิวหน้า Clinic / จองไม่มัดจำ / จองมัดจำ — unified into นัดหมาย */}
+            <button onClick={() => setAdminMode('appointment')} className={`menu-tab ${adminMode === 'appointment' ? 'menu-tab-active' : ''}`} title="นัดหมาย">
               <CalendarDays size={14}/> <span>นัดหมาย</span>
               {/* V121 (2026-05-23) — purple bubble for V118 card-flow sessions
                   pending admin save. Distinct color (purple #a855f7) from the
@@ -6069,9 +6058,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 </span>
               )}
             </button>
-            <button onClick={() => setAdminMode('history')} className={`menu-tab ${adminMode === 'history' ? 'menu-tab-active' : ''}`} title="ประวัติผู้ป่วย">
-              <History size={14}/> <span>ประวัติ</span>
-            </button>
+            {/* (2026-05-26) removed: ประวัติ — patient history lives in Backend (CustomerList + OPD modal) */}
             <button onClick={() => setAdminMode('clinicSettings')} className={`menu-tab ${(adminMode === 'clinicSettings' || adminMode === 'formBuilder') ? 'menu-tab-active' : ''}`} title="ตั้งค่าระบบ">
               <Palette size={14}/> <span>ตั้งค่า</span>
             </button>
@@ -9289,11 +9276,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
           <span>แชท</span>
           {isChatActive && chatUnread > 0 && <span className="menu-badge-dock" style={{background:'#3b82f6'}}>{chatUnread > 99 ? '99+' : chatUnread}</span>}
         </button>
-        <button onClick={() => setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'dashboard' ? 'menu-dock-tab-active' : ''}`} data-tab="dashboard">
-          <Activity size={18}/>
-          <span>คิว</span>
-          {unreadCount > 0 && <span className="menu-badge-dock" style={{background:'#ef4444'}}>{unreadCount > 99 ? '99+' : unreadCount}</span>}
-        </button>
+        {/* (2026-05-26) removed คิว dock tab — unified into นัด */}
         <button onClick={() => setAdminMode('appointment')} className={`menu-dock-tab ${adminMode === 'appointment' ? 'menu-dock-tab-active' : ''}`} data-tab="appointment">
           <CalendarDays size={18}/>
           <span>นัด</span>
@@ -9305,42 +9288,14 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </span>
           )}
         </button>
-        <button onClick={() => setShowMobileJongPicker(true)} className={`menu-dock-tab ${['noDeposit','noDepositHistory','deposit','depositHistory'].includes(adminMode) ? 'menu-dock-tab-active' : ''}`} data-tab="jong">
-          <Banknote size={18}/>
-          <span>จอง</span>
-          {(noDepositSessions.filter(s => s.isUnread).length + depositSessions.filter(s => s.isUnread).length) > 0 && (
-            <span className="menu-badge-dock" style={{background:'#10b981'}}>
-              {noDepositSessions.filter(s => s.isUnread).length + depositSessions.filter(s => s.isUnread).length}
-            </span>
-          )}
-        </button>
+        {/* (2026-05-26) removed จอง dock picker — จองมัดจำ/ไม่มัดจำ unified into นัด */}
         <button onClick={() => setShowMobileMoreDrawer(true)} className="menu-dock-tab" data-tab="more">
           <MoreHorizontal size={18}/>
           <span>เพิ่ม</span>
         </button>
       </nav>
 
-      {/* ───── Mobile จอง BottomSheet (มัดจำ / ไม่มัดจำ picker) ───── */}
-      {showMobileJongPicker && (
-        <div className="md:hidden fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-end" onClick={() => setShowMobileJongPicker(false)} data-testid="menu-jong-sheet">
-          <div className="w-full bg-[var(--bg-surface)] rounded-t-3xl p-4 border-t border-[var(--bd-strong)] animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-[var(--bd)] rounded-full mx-auto mb-4"></div>
-            <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">เลือกประเภทการจอง</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setAdminMode('noDeposit'); setShowMobileJongPicker(false); }} className="p-4 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex flex-col items-center gap-2 hover:border-orange-900/50 active:scale-95 transition-all">
-                <UserPlus size={22} className="text-orange-500"/>
-                <span className="text-sm font-bold text-[var(--tx-heading)]">จองไม่มัดจำ</span>
-                {noDepositSessions.filter(s => s.isUnread).length > 0 && <span className="text-[10px] font-bold text-orange-500">{noDepositSessions.filter(s => s.isUnread).length} ใหม่</span>}
-              </button>
-              <button onClick={() => { setAdminMode('deposit'); setShowMobileJongPicker(false); }} className="p-4 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex flex-col items-center gap-2 hover:border-emerald-900/50 active:scale-95 transition-all">
-                <Banknote size={22} className="text-emerald-500"/>
-                <span className="text-sm font-bold text-[var(--tx-heading)]">จองมัดจำ</span>
-                {depositSessions.filter(s => s.isUnread).length > 0 && <span className="text-[10px] font-bold text-emerald-500">{depositSessions.filter(s => s.isUnread).length} ใหม่</span>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* (2026-05-26) Mobile จอง BottomSheet removed — จองมัดจำ/ไม่มัดจำ unified into นัด */}
 
       {/* ───── Mobile ⋯ เพิ่ม Drawer (ประวัติ/ตั้งค่า/หลังบ้าน/theme/online/signout) ───── */}
       {showMobileMoreDrawer && (
@@ -9349,11 +9304,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             <div className="w-10 h-1 bg-[var(--bd)] rounded-full mx-auto mb-4"></div>
             <h3 className="text-sm font-bold text-[var(--tx-heading)] mb-3">เพิ่มเติม</h3>
             <div className="space-y-1.5">
-              <button onClick={() => { setAdminMode('history'); setShowMobileMoreDrawer(false); }} className="w-full p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center gap-3 hover:border-orange-900/50 active:scale-[0.98] transition-all">
-                <History size={18} className="text-orange-500 shrink-0"/>
-                <span className="text-sm font-bold text-[var(--tx-heading)] flex-1 text-left">ประวัติ</span>
-                {adminMode === 'history' && <span className="text-[10px] text-orange-500 font-bold">เปิดอยู่</span>}
-              </button>
+              {/* (2026-05-26) removed ประวัติ — patient history lives in Backend (CustomerList + OPD modal) */}
               <button onClick={() => { setAdminMode('clinicSettings'); setShowMobileMoreDrawer(false); }} className="w-full p-3 rounded-xl bg-[var(--bg-hover)] border border-[var(--bd)] flex items-center gap-3 active:scale-[0.98] transition-all">
                 <Palette size={18} className="shrink-0" style={{color: ac}}/>
                 <span className="text-sm font-bold text-[var(--tx-heading)] flex-1 text-left">ตั้งค่า</span>
