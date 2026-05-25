@@ -481,6 +481,14 @@ export default function AppointmentFormModal({
     }, 50);
   }, []);
 
+  // V-appt-deposit (2026-05-25) — the deposit section gates on the EFFECTIVE
+  // appointment type (locked prop OR radio-picked), NOT isLockedDepositType
+  // alone. Shown in BOTH create + edit (scope decision). isLockedDepositType
+  // (line 259) is kept for the locked-type chip render + the save-button label.
+  const effectiveAppointmentType = safeLockedType || formData.appointmentType;
+  const isDepositBooking = effectiveAppointmentType === 'deposit-booking';
+  const showDepositSection = isDepositBooking; // create + edit
+
   const handleSave = async () => {
     // Phase 24.0-terdecies — pickLater branch: customerId stays '' but the
     // booking-time temp name + phone become required. Both must be filled
@@ -507,7 +515,7 @@ export default function AppointmentFormModal({
     // routes to createDepositBookingPair → atomic paired write of be_deposits
     // + be_appointments. Edit mode (mode === 'edit') skips this guard
     // because edits only touch appointment metadata, not the deposit doc.
-    const isCreatingDepositBooking = isLockedDepositType && mode === 'create';
+    const isCreatingDepositBooking = isDepositBooking && mode === 'create';
     if (isCreatingDepositBooking) {
       const amt = parseFloat(formData.depositAmount);
       if (!amt || amt <= 0) {
@@ -1148,7 +1156,7 @@ export default function AppointmentFormModal({
               fields. Replaces the prior Phase 21.0-main redirect banner
               per user directive: "ทำให้สร้างได้ตั้งแต่หน้าจองมัดจำเลย ...
               ก็มีช่องให้กรอกรายละเอียดการมัดจำไปด้วยไง ง่ายๆ". */}
-          {isLockedDepositType && mode === 'create' && (
+          {showDepositSection && (
             <div
               className="rounded-lg p-3 bg-emerald-900/15 border border-emerald-700/40 space-y-3"
               data-testid="appt-deposit-subform"
