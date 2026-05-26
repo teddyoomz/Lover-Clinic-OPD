@@ -17,6 +17,7 @@
 
 import React from 'react';
 import { Send, QrCode, Clock, ClipboardCheck, FileSearch, Loader2 } from 'lucide-react';
+import { OPD_PILL } from './_apptHubStyles.js';
 
 export default function OpdLifecycleRow({
   state,                    // 'A' | 'B' | 'C' | 'D' | 'E'
@@ -41,10 +42,6 @@ export default function OpdLifecycleRow({
       data-testid="opd-lifecycle-row"
       data-opd-state={state}
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500/70 mr-auto">
-        OPD lifecycle
-      </span>
-
       {showLinkSend && (
         <button
           type="button"
@@ -52,7 +49,7 @@ export default function OpdLifecycleRow({
           disabled={sendLinkBusy}
           data-testid="opd-link-send-btn"
           title="สร้างลิ้งค์สำหรับลูกค้ากรอกข้อมูล OPD"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50 disabled:opacity-50 transition-colors"
+          className={OPD_PILL.blue}
         >
           {sendLinkBusy ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
           ส่งลิ้งค์ลูกค้ากรอก OPD
@@ -66,7 +63,7 @@ export default function OpdLifecycleRow({
           disabled={sendLinkBusy}
           data-testid="opd-link-view-btn"
           title="ดู / พิมพ์ลิ้งค์ที่ส่งให้ลูกค้าแล้ว"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-50 transition-colors"
+          className={OPD_PILL.emerald}
         >
           {sendLinkBusy ? <Loader2 size={11} className="animate-spin" /> : <QrCode size={11} />}
           ดูลิ้งค์ที่ส่งไป
@@ -78,7 +75,7 @@ export default function OpdLifecycleRow({
           data-testid="opd-save-btn-wait"
           data-opd-disabled-reason="no-data"
           title="ยังไม่มีข้อมูล — กดส่งลิ้งค์ให้ลูกค้ากรอกก่อน"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-slate-800/50 border-slate-700/40 text-slate-500 opacity-70 cursor-not-allowed"
+          className={OPD_PILL.wait}
         >
           <Clock size={11} />
           ยังไม่มีข้อมูล
@@ -90,7 +87,7 @@ export default function OpdLifecycleRow({
           data-testid="opd-save-btn-wait"
           data-opd-disabled-reason="waiting-customer"
           title="รอลูกค้ากรอกข้อมูลผ่าน QR/ลิ้งค์"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-slate-800/50 border-slate-700/40 text-slate-500 opacity-70 cursor-not-allowed"
+          className={OPD_PILL.wait}
         >
           <Clock size={11} />
           รอลูกค้ากรอก
@@ -106,7 +103,7 @@ export default function OpdLifecycleRow({
           onClick={onViewOpd}
           data-testid="opd-view-btn"
           title="ดูข้อมูล OPD ของลูกค้า"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50 transition-colors"
+          className={OPD_PILL.emerald}
         >
           <FileSearch size={11} />
           ดูข้อมูล OPD
@@ -120,11 +117,11 @@ export default function OpdLifecycleRow({
           disabled={saveOpdBusy}
           data-testid="opd-save-btn-active"
           title="บันทึก OPD — สร้างลูกค้าใน be_customers + ผูกนัด/มัดจำ"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold border-2 bg-red-950/40 border-red-600/60 text-red-300 hover:bg-red-900/50 disabled:opacity-50 animate-pulse transition-colors"
+          className={OPD_PILL.save}
           style={{ animationDuration: '2.4s' }}
         >
           {saveOpdBusy ? <Loader2 size={11} className="animate-spin" /> : <ClipboardCheck size={11} />}
-          บันทึกลง OPD
+          บันทึกเข้าระบบ
         </button>
       )}
     </div>

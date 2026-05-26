@@ -15,6 +15,9 @@ import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 const read = (p) => fs.readFileSync(path.resolve(process.cwd(), p), 'utf8');
+// Strip full-line // comments so "not present" greps target rendered code, not
+// the component's purpose-description / historical user-directive quotes.
+const codeOnly = (p) => read(p).split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
 const STYLES = 'src/components/admin/_apptHubStyles.js';
 
 describe('Card redesign — Task 1: OPD_PILL tokens', () => {
@@ -38,5 +41,47 @@ describe('Card redesign — Task 1: OPD_PILL tokens', () => {
     expect(s).toMatch(/dark:bg-emerald-900\/30/);
     expect(s).toMatch(/dark:bg-slate-800\/50/);
     expect(s).toMatch(/dark:bg-red-950\/40/);
+  });
+});
+
+describe('Card redesign — Task 2: OpdLifecycleRow theme-matched + label changes', () => {
+  const ROW = 'src/components/admin/OpdLifecycleRow.jsx';
+
+  it('T2.1 imports OPD_PILL from _apptHubStyles', () => {
+    expect(read(ROW)).toMatch(/import\s*\{[^}]*OPD_PILL[^}]*\}\s*from\s*'\.\/_apptHubStyles\.js'/);
+  });
+
+  it('T2.2 NO unconditional dark-only semantic classes remain (the green-on-green bug)', () => {
+    const s = codeOnly(ROW);
+    expect(s).not.toMatch(/bg-emerald-900\/30/);
+    expect(s).not.toMatch(/bg-blue-900\/30/);
+    expect(s).not.toMatch(/bg-slate-800\/50/);
+    expect(s).not.toMatch(/bg-red-950\/40/);
+  });
+
+  it('T2.3 Q5 — rendered "OPD lifecycle" header label removed (comments may still describe the component)', () => {
+    expect(codeOnly(ROW)).not.toMatch(/OPD lifecycle/i);
+  });
+
+  it('T2.4 Q6 — save button reads "บันทึกเข้าระบบ", not "บันทึกลง OPD" (rendered label)', () => {
+    expect(read(ROW)).toMatch(/บันทึกเข้าระบบ/);          // present in JSX
+    expect(codeOnly(ROW)).not.toMatch(/บันทึกลง OPD/);    // absent in rendered code (historical quote in comments OK)
+  });
+
+  it('T2.5 every data-testid + data-attr preserved', () => {
+    const s = read(ROW);
+    for (const id of ['opd-lifecycle-row', 'opd-link-send-btn', 'opd-link-view-btn',
+                      'opd-save-btn-wait', 'opd-view-btn', 'opd-save-btn-active']) {
+      expect(s, id).toContain(`data-testid="${id}"`);
+    }
+    expect(s).toMatch(/data-opd-state=/);
+    expect(s).toMatch(/data-opd-disabled-reason=/);
+  });
+
+  it('T2.6 all handler props still wired', () => {
+    const s = read(ROW);
+    for (const h of ['onSendLink', 'onViewLink', 'onSaveOpd', 'onViewOpd']) {
+      expect(s, h).toMatch(new RegExp(`onClick=\\{${h}\\}`));
+    }
   });
 });
