@@ -1,33 +1,31 @@
 ---
-updated_at: "2026-05-26 EOD+3 — /systematic-debugging 3-fix batch (goto-appt date · open-hours default · cancel hard-delete) SHIPPED LOCAL"
-status: "master e07451fb — Issue 1/2/3 + 2 Rule-P siblings + AV133 + tests. Full suite GREEN. NOT deployed (await explicit 'deploy'). prod still 65ab6467."
+updated_at: "2026-05-26 EOD+4 — Staff-chat enhancements (day-sep · 13px quote · unsend · emoji/stickers) SHIPPED + DEPLOYED"
+status: "DEPLOYED — vercel lover-clinic-app.vercel.app + firebase rules LIVE (Probe-Deploy-Probe #15 PASS). prod=459a4ea3. Awaiting user L1."
 branch: "master"
-last_commit: "e07451fb fix(appointment): goto-appt date nav + branch open-hours default + Frontend cancel hard-delete (AV133)"
-tests: "full suite 14731/14731 — 0 fail · build clean 2.91s"
+last_commit: "459a4ea3 feat(staffchat): day separators + 13px quote + own-only unsend + emoji/stickers (AV134)"
+tests: "full suite 14746 · 14745 pass + 1 known V50 full-suite-load flake (isolated 64/64) · staff-chat 289/0 · new bank 33/0 · build clean 4.17s"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "65ab6467 LIVE — this batch + tab-removal + deposit-cancel + appointment-hub + appointment-modal-deposit ALL NOT yet deployed"
-firestore_rules_version: "unchanged (client-only logic; NO rules/index change → no Probe-Deploy-Probe)"
+production_commit: "459a4ea3 LIVE — shipped staff-chat + ALL carryover since 65ab6467 (tab-removal · deposit-cancel · appointment-hub · appointment-modal-deposit · AV133)"
+firestore_rules_version: "DEPLOYED 2026-05-26 — be_staff_chat_messages (sticker-only create clause + clinic-staff delete) + storage staff-chat-attachments (clinic-staff delete). Probe-Deploy-Probe #15 PASS (P1/P5=200, P9/P15a/b/c=403 pre+post)."
 ---
 
 # Active Context
 
 ## State
-- **Issue 1** — Finance "ไปที่นัด" opens the appt's DATE (was today). Root cause: BackendDashboard default `activeTab='appointment-all'` mounts AppointmentCalendarView on first render before the deep-link useEffect set `initialApptDate` → its `useState(()=>)` locked to today. Fix: synchronous `?date=` derive in the useState initializer + a `[initialSelectedDate]` prop-sync effect.
-- **Issue 2** — create-appointment default start = branch open hours via `getOpenHoursForDate` (was hardcoded '10:00'). Rule-P siblings fixed: `AppointmentCalendarView.openCreate` (`time||''`) + `DepositPanel` deposit-appt sub-form (`visibleTime.openRange`).
-- **Issue 3** — Frontend นัดหมาย cancel HARD-DELETES (`deleteBackendAppointment`, mirrors Backend) instead of `status:'cancelled'`; V125 linked-session archive cascade preserved (reason `appt-deleted`).
+- 4 staff-chat features SHIPPED + DEPLOYED: (F1) day-separator pill dividers · (F2) quote 10px→13px · (F3) own-only unsend (hard-delete doc + Storage folder, AV78 confirm) · (F4) emoji + 2-tier stickers (bundled Fluent-Emoji MIT 20 SVGs = ID-ref 0 Firebase; custom = IndexedDB → temp Storage on send, 30-day retention).
+- `vercel --prod` shipped master HEAD = EVERYTHING since prod 65ab6467 (staff-chat + the 4 carryover stacks) — all now LIVE.
+- Probe-Deploy-Probe #15 PASS: chat-webhook + patient-form open paths stayed 200; staff-chat anon write/delete/sticker-create all 403 (new rules did NOT open anon).
 
 ## What this session shipped
-- /session-start → /systematic-debugging (Phase 1 root-cause for all 3 via code, no guessing) → fix → Tier-2.
-- AV133 + NEW `tests/finance-goto-default-time-cancel-delete.test.js` (Issue 2 runs the REAL getOpenHoursForDate = L2) + 3 V21 fixups (v125 SG-A3 hard-delete/appt-deleted · phase-19-0 C2.1 · phase-24-0 VOC.B.1).
-- Detail → `.agents/sessions/2026-05-26-finance-goto-default-time-cancel-delete.md`
+- /session-start → brainstorming (AskUserQuestion previews, no Chrome MCP) → spec → writing-plans → subagent-driven (pivoted inline: subagent died on a 1M-context billing wall; baseline-thrash documented per V81/Tablet-Chart).
+- 13-task plan executed inline; 20/20 Fluent Emoji fetched via node fetch+JSON.parse (curl/grep choked on the 8 MB single-line GitHub tree; Fluent folder names ≠ CLDR → keyword-match + skin-tone Default path).
+- AV134 + 33 new tests (unit 15 + flow-simulate 10 + RTL 8) + 2 V21 fixups (storage.rules delete contract).
+- Rule S reaffirmed (2026-05-26): design Q&A uses AskUserQuestion preview, NEVER Chrome MCP to "verify" the Visual Companion at ask→plan. `01-iron-clad.md` Rule S + memory updated.
+- Detail → `.agents/sessions/2026-05-26-staff-chat-enhancements.md`
 
 ## Next action
-- **Await explicit "deploy"** (V18) → `vercel --prod` (frontend; NO rules → no Probe-Deploy-Probe). One deploy ships everything since prod 65ab6467.
-- Post-deploy Rule Q **L1 by user**: Finance·มัดจำ "ไปที่นัด" opens the appt's day; create-appt modal start defaults to the branch open time (e.g. 11:30); cancel a นัดหมาย → row GONE from appointment-all (not just marked cancelled).
-
-## Rule Q-honest scope
-- Logic = L2 (real `getOpenHoursForDate` in the bank) + source-grep + full suite. Real-browser render (date-land / 11:30 default) + real Firestore delete round-trip = USER L1 post-deploy (auth-gated dashboards; workstyle "ไม่ self-test UI") — disclosed, not driven by me.
+- **User L1 on `lover-clinic-app.vercel.app` (hard-refresh first)**: staff chat day-pill / 13px quote / own-only unsend / emoji+sticker send+render (bundled + custom); + carryover L1 (4-tab removal · deposit-cancel dialog · appointment-hub button + opd-pending tab · AV133 goto-appt/open-hours/cancel).
+- If a bug surfaces → `/systematic-debugging` + Rule P.
 
 ## Outstanding user-triggered actions
-- Deploy the combined stack (this batch + tab-removal + deposit-cancel + appointment-hub + appointment-modal-deposit) when ready.
-- (carryover) V124-126 L1 verify · cron monitoring (passive).
+- L1 verify (above). No pending deploy — all current work is LIVE.
