@@ -153,6 +153,9 @@ function defaultFormData(overrides = {}) {
     recurringUnit: 'วัน',
     recurringTimes: '',
     status: 'pending',
+    // V-deposit-noappt (2026-05-27) — deposit-booking + noAppointment → write a
+    // deposit-only doc (createDeposit) and hide the appointment fields.
+    noAppointment: false,
     ...overrides,
   };
 }
@@ -562,8 +565,11 @@ export default function AppointmentFormModal({
     } else if (!formData.customerId) {
       scrollToFormError('apptCustomer', 'กรุณาเลือกลูกค้า หรือเปิดโหมด "เลือกลูกค้าภายหลัง"'); return;
     }
-    if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
-    if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
+    // V-deposit-noappt (2026-05-27) — no-appointment deposits skip date/time.
+    if (!formData.noAppointment) {
+      if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
+      if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
+    }
     // V-appt-deposit (2026-05-25) — นัดมาเพื่อ is required (Q2=A; chip picker ≥1).
     // appointmentTo is the joined chip string (VisitPurposePicker emits it).
     if (!String(formData.appointmentTo || '').trim()) {
@@ -610,7 +616,7 @@ export default function AppointmentFormModal({
     }
 
     // Holiday confirm (create only)
-    if (mode === 'create' && !skipHolidayCheck) {
+    if (mode === 'create' && !skipHolidayCheck && !formData.noAppointment) {
       const holiday = isDateHoliday(formData.date, holidays);
       if (holiday) {
         const label = holiday.type === 'weekly'
@@ -625,7 +631,7 @@ export default function AppointmentFormModal({
     try {
       // Collision check (skip for customer-page mode where caller doesn't
       // have full-day appointment context). Mirror AppointmentTab logic.
-      if (!skipCollisionCheck) {
+      if (!skipCollisionCheck && !formData.noAppointment) {
         const editingId = mode === 'edit' && appt ? (appt.appointmentId || appt.id) : null;
         const newStart = String(formData.startTime);
         const newEnd = String(formData.endTime || formData.startTime) || newStart;
@@ -662,7 +668,7 @@ export default function AppointmentFormModal({
       // see RECURRING entries (which have dayOfWeek, no date). Previous
       // {startDate, endDate} filter excluded recurring entries entirely
       // → silent "no entry → assume available" for every doctor.
-      if (!skipStaffScheduleCheck && formData.doctorId) {
+      if (!skipStaffScheduleCheck && formData.doctorId && !formData.noAppointment) {
         try {
           const newStart = String(formData.startTime);
           const newEnd = String(formData.endTime || formData.startTime) || newStart;
@@ -1225,7 +1231,8 @@ export default function AppointmentFormModal({
               )}
             />
           </div>
-          {/* Date + Time */}
+          {/* Date + Time — hidden when ไม่นัดหมาย (V-deposit-noappt) */}
+          {!formData.noAppointment && (
           <div className="grid grid-cols-3 gap-3">
             <div data-field="apptDate">
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">วันที่ *</label>
@@ -1262,11 +1269,12 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
+          )}
           {/* V53 (BS-12) — closed-day banner inside the modal. When the
               selected date falls on a closed bucket (open===close OR invalid),
               admin sees a banner above the form. Save still allowed (admin
               may know what they're doing for special cases). */}
-          {isClosedDay && (
+          {!formData.noAppointment && isClosedDay && (
             <div data-testid="appt-modal-closed-hours-banner"
               className="text-xs text-amber-200 bg-amber-700/15 border border-amber-600/40 rounded-lg px-3 py-2">
               ⚠ <span className="font-bold">นอกเวลาเปิดทำการของสาขา</span> สำหรับวันที่เลือก — บันทึกได้แต่อยู่นอกชั่วโมงเปิด
@@ -1298,6 +1306,24 @@ export default function AppointmentFormModal({
               </div>
             )}
           </div>
+          {/* V-deposit-noappt (2026-05-27) — when จองมัดจำ is active, offer a
+              "ไม่นัดหมาย" toggle. Ticked → hide the appointment fields + write a
+              deposit-only doc (handleSave routes to createDeposit). */}
+          {showDepositSection && (
+            <label
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/15 border border-emerald-700/40 cursor-pointer text-xs font-bold text-emerald-200"
+              data-testid="appt-no-appointment-toggle"
+            >
+              <input
+                type="checkbox"
+                checked={!!formData.noAppointment}
+                onChange={(e) => update({ noAppointment: e.target.checked })}
+                className="w-4 h-4 accent-emerald-500"
+                data-testid="appt-no-appointment-checkbox"
+              />
+              ไม่นัดหมาย (จองมัดจำอย่างเดียว)
+            </label>
+          )}
           {/* Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform.
               When admin opens this modal from the จองมัดจำ sub-tab (or
               picks 'deposit-booking' from the radio), these required fields
@@ -1396,6 +1422,7 @@ export default function AppointmentFormModal({
                 {advisorOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            {!formData.noAppointment && (<>
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">แพทย์</label>
               <select value={formData.doctorId} onChange={e => { const d = doctors.find(x => String(x.id) === e.target.value); update({ doctorId: e.target.value, doctorName: d?.name || '' }); }}
@@ -1423,10 +1450,12 @@ export default function AppointmentFormModal({
                 )}
               </select>
             </div>
+            </>)}
           </div>
           {/* Assistants (multi-select chips) — Phase 15.7 (2026-04-28):
               picker shows ALL doctors + assistants (no position filter);
               max-5 enforced on SELECTION only. User-confirmed wording. */}
+          {!formData.noAppointment && (
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ผู้ช่วยแพทย์ (สูงสุด 5 คน)</label>
             {assistants.length === 0 ? (
@@ -1456,7 +1485,9 @@ export default function AppointmentFormModal({
               </div>
             )}
           </div>
+          )}
           {/* Channel + Status */}
+          {!formData.noAppointment && (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ช่องทางนัดหมาย</label>
@@ -1489,13 +1520,16 @@ export default function AppointmentFormModal({
               </select>
             </div>
           </div>
+          )}
           {/* AppointmentTo — full-width chip picker (V-appt-deposit 2026-05-25; was free-text textarea) */}
           <VisitPurposePicker
             value={formData.appointmentTo}
             onChange={(s) => update({ appointmentTo: s })}
+            label={formData.noAppointment ? 'มัดจำสำหรับ' : 'นัดมาเพื่อ'}
             required
           />
           {/* สีนัดหมาย — own row (was the 2nd cell of the AppointmentTo+Color grid) */}
+          {!formData.noAppointment && (
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สีนัดหมาย</label>
             <select value={formData.appointmentColor} onChange={e => update({ appointmentColor: e.target.value })}
@@ -1504,7 +1538,9 @@ export default function AppointmentFormModal({
               {APPT_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          )}
           {/* Location + Expected sales */}
+          {!formData.noAppointment && (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">สถานที่นัด</label>
@@ -1530,8 +1566,9 @@ export default function AppointmentFormModal({
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
             </div>
           </div>
+          )}
           {/* Recurring (create only) */}
-          {mode === 'create' && (
+          {mode === 'create' && !formData.noAppointment && (
             <div>
               <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">ตัวเลือกนัดหมาย</label>
               <div className="flex gap-3 mb-2">
@@ -1561,11 +1598,13 @@ export default function AppointmentFormModal({
             </div>
           )}
           {/* Preparation */}
+          {!formData.noAppointment && (
           <div>
             <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">การเตรียมตัว</label>
             <textarea value={formData.preparation} onChange={e => update({ preparation: e.target.value })} rows={2} placeholder="งดทาครีม, งดกินแอสไพริน..."
               className="w-full px-3 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--bd)] text-xs text-[var(--tx-primary)] resize-none placeholder:text-[var(--tx-muted)] focus:outline-none focus:ring-1 focus:ring-sky-500" />
           </div>
+          )}
           {/* Notes (2 types) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
