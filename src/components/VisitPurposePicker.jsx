@@ -51,7 +51,7 @@ export default function VisitPurposePicker({ value, onChange, required = false, 
               aria-pressed={on}
               className={`px-3 py-1.5 rounded-lg text-xs border transition ${
                 on
-                  ? 'border-red-500 bg-red-950/40 text-red-200 font-semibold'
+                  ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-950/40 dark:text-red-200 font-semibold'
                   : 'border-[var(--bd)] bg-[var(--bg-input)] text-[var(--tx-secondary)] hover:border-red-700/50'
               }`}
             >

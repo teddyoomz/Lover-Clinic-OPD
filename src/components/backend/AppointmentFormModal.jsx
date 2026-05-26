@@ -1169,8 +1169,8 @@ export default function AppointmentFormModal({
                       data-testid="appt-modal-send-link-btn"
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition-colors ${
                         appt.linkedOpdSessionId
-                          ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50'
-                          : 'bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50'
+                          ? 'bg-emerald-100 border-emerald-400 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                          : 'bg-blue-100 border-blue-400 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:border-blue-700/40 dark:text-blue-300 dark:hover:bg-blue-900/50'
                       } disabled:opacity-50`}
                       title={appt.linkedOpdSessionId
                         ? 'ดู / พิมพ์ลิ้งค์ที่ส่งให้ลูกค้าแล้ว'
@@ -1307,7 +1307,7 @@ export default function AppointmentFormModal({
               may know what they're doing for special cases). */}
           {!formData.noAppointment && isClosedDay && (
             <div data-testid="appt-modal-closed-hours-banner"
-              className="text-xs text-amber-200 bg-amber-700/15 border border-amber-600/40 rounded-lg px-3 py-2">
+              className="text-xs text-amber-800 bg-amber-100 border border-amber-400 dark:text-amber-200 dark:bg-amber-700/15 dark:border-amber-600/40 rounded-lg px-3 py-2">
               ⚠ <span className="font-bold">นอกเวลาเปิดทำการของสาขา</span> สำหรับวันที่เลือก — บันทึกได้แต่อยู่นอกชั่วโมงเปิด
             </div>
           )}
@@ -1342,7 +1342,7 @@ export default function AppointmentFormModal({
               deposit-only doc (handleSave routes to createDeposit). */}
           {showDepositSection && (
             <label
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/15 border border-emerald-700/40 cursor-pointer text-xs font-bold text-emerald-200"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 border border-emerald-400 cursor-pointer text-xs font-bold text-emerald-800 dark:bg-emerald-900/15 dark:border-emerald-700/40 dark:text-emerald-200"
               data-testid="appt-no-appointment-toggle"
             >
               <input
@@ -1366,16 +1366,16 @@ export default function AppointmentFormModal({
               ก็มีช่องให้กรอกรายละเอียดการมัดจำไปด้วยไง ง่ายๆ". */}
           {showDepositSection && (
             <div
-              className="rounded-lg p-3 bg-emerald-900/15 border border-emerald-700/40 space-y-3"
+              className="rounded-lg p-3 bg-emerald-100 border border-emerald-400 dark:bg-emerald-900/15 dark:border-emerald-700/40 space-y-3"
               data-testid="appt-deposit-subform"
             >
-              <p className="text-xs font-bold text-emerald-200 uppercase tracking-wider">
+              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider">
                 💰 รายละเอียดมัดจำ
               </p>
               <p className="text-[10px] text-[var(--tx-muted)] leading-relaxed">
                 ระบบจะบันทึกทั้งใบมัดจำและนัดหมายพร้อมกันแบบอัตโนมัติ
-                แสดงในแท็บ <span className="text-emerald-300 font-bold">จองมัดจำ</span> และ
-                <span className="text-emerald-300 font-bold"> การเงิน → มัดจำ</span> ของสาขานี้
+                แสดงในแท็บ <span className="text-emerald-700 dark:text-emerald-300 font-bold">จองมัดจำ</span> และ
+                <span className="text-emerald-700 dark:text-emerald-300 font-bold"> การเงิน → มัดจำ</span> ของสาขานี้
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div data-field="depositAmount">
@@ -1671,7 +1671,7 @@ export default function AppointmentFormModal({
               }}
               disabled={saving}
               data-testid="appointment-form-delete"
-              className="px-3 py-2 rounded-lg text-xs font-bold bg-red-900/20 border border-red-700/40 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-all disabled:opacity-50 flex items-center gap-1.5"
+              className="px-3 py-2 rounded-lg text-xs font-bold bg-red-100 border border-red-400 text-red-700 hover:bg-red-200 hover:text-red-800 dark:bg-red-900/20 dark:border-red-700/40 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300 transition-all disabled:opacity-50 flex items-center gap-1.5"
               title="ลบนัดหมายนี้"
             >
               <Trash2 size={12} /> ลบนัดหมาย
@@ -1701,17 +1701,17 @@ export default function AppointmentFormModal({
       {flipAwayOpen && (
         <div data-testid="appt-flipaway-confirm" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
           <div className="bg-[var(--bg-card)] border border-amber-700/40 rounded-xl p-5 max-w-sm w-full">
-            <p className="text-amber-300 font-bold text-sm">⚠ นัดนี้มีใบมัดจำผูกอยู่</p>
+            <p className="text-amber-700 dark:text-amber-300 font-bold text-sm">⚠ นัดนี้มีใบมัดจำผูกอยู่</p>
             <p className="text-xs text-[var(--tx-secondary)] my-2">คุณกำลังเปลี่ยนประเภทออกจาก "จองมัดจำ" — จัดการใบมัดจำเดิมยังไง?</p>
             <div className="flex flex-col gap-2 mt-3">
               <button type="button"
                 onClick={() => { flipAwayDecisionRef.current = 'delete'; setFlipAwayOpen(false); handleSave(); }}
-                className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-950/40 border border-red-700 text-red-200">
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-100 border border-red-500 text-red-800 dark:bg-red-950/40 dark:border-red-700 dark:text-red-200">
                 ลบใบมัดจำด้วย (ยกเลิกใบมัดจำ)
               </button>
               <button type="button"
                 onClick={() => { flipAwayDecisionRef.current = 'keep'; setFlipAwayOpen(false); handleSave(); }}
-                className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-950/40 border border-emerald-700 text-emerald-200">
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-100 border border-emerald-500 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-200">
                 เก็บใบมัดจำไว้
               </button>
               <button type="button"

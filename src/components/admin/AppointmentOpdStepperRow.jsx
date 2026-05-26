@@ -26,7 +26,7 @@ export default function AppointmentOpdStepperRow({ latestTreatment, isTodayTab }
       className="border-t border-[var(--bd)] mt-3 pt-3"
       data-testid="appt-row-opd-stepper"
     >
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center justify-center gap-3 flex-wrap">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--tx-muted)] shrink-0">
           สถานะ OPD
         </span>

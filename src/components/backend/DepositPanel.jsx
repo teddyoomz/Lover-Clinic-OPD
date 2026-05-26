@@ -605,6 +605,19 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     } catch (err) { alert(err.message || 'ลบไม่สำเร็จ'); }
   };
 
+  // (2026-05-27) Open the appointment-deposit tab on this deposit's appointment
+  // date (new tab). Shared by the row "ไปที่นัด" button AND the clickable
+  // appt-date link under "มัดจำสำหรับ". Reuses the existing nav URL — no behaviour change.
+  const gotoApptDate = (dep) => {
+    const apptDate = String(dep.appointment?.date || '').trim();
+    if (!apptDate) return;
+    const origin = (typeof window !== 'undefined' && window.location?.origin) || '';
+    const url = `${origin}/?backend=1&tab=appointment-deposit&date=${encodeURIComponent(apptDate)}`;
+    if (typeof window !== 'undefined' && typeof window.open === 'function') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   // ══════════════════ RENDER ══════════════════
   if (formOpen) return renderForm();
 
@@ -712,7 +725,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       <td className="px-3 py-2 text-[var(--tx-heading)] font-medium" data-testid="deposit-customer-cell">
                         {dep.customerId ? (
                           <a href={`/?backend=1&customer=${dep.customerId}`} target="_blank" rel="noopener noreferrer"
-                            className="text-teal-400 hover:text-teal-300 hover:underline transition-colors">{dep.customerName || '-'}</a>
+                            className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 hover:underline transition-colors">{dep.customerName || '-'}</a>
                         ) : (dep.customerName || '-')}
                         {dep.customerHN && <span className="text-[var(--tx-muted)] text-xs ml-1">{dep.customerHN}</span>}
                         {/* Phase 24.0-terdecies (2026-05-06) — when customerId is
@@ -723,9 +736,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                             below the (placeholder) customerName. */}
                         {!dep.customerId && (dep.customerNameTemp || dep.customerPhoneTemp) && (
                           <div className="mt-1 text-[10px] flex flex-wrap items-center gap-1.5" data-testid="deposit-customer-temp-badge">
-                            <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300 font-bold uppercase">ลูกค้าจอง</span>
-                            {dep.customerNameTemp && <span className="text-amber-200">{dep.customerNameTemp}</span>}
-                            {dep.customerPhoneTemp && <span className="text-amber-300/80 font-mono">· <PhoneLink value={dep.customerPhoneTemp}>{dep.customerPhoneTemp}</PhoneLink></span>}
+                            <span className="px-1.5 py-0.5 rounded bg-amber-600 border border-amber-600 text-white dark:bg-amber-900/30 dark:border-amber-700/40 dark:text-amber-300 font-bold uppercase">ลูกค้าจอง</span>
+                            {dep.customerNameTemp && <span className="text-amber-800 dark:text-amber-200">{dep.customerNameTemp}</span>}
+                            {dep.customerPhoneTemp && <span className="text-amber-700 dark:text-amber-300/80 font-mono">· <PhoneLink value={dep.customerPhoneTemp}>{dep.customerPhoneTemp}</PhoneLink></span>}
                             {/* Phase 24.0-vicies-novies (2026-05-07) —
                                 "ส่งลิ้งค์ลูกค้า" button. When clicked, mints
                                 an opd_sessions doc + stamps linkedOpdSessionId
@@ -766,8 +779,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                               data-testid="deposit-send-link-btn"
                               className={`ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${
                                 dep.linkedOpdSessionId
-                                  ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50'
-                                  : 'bg-blue-900/30 border-blue-700/40 text-blue-300 hover:bg-blue-900/50'
+                                  ? 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+                                  : 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 dark:bg-blue-900/30 dark:border-blue-700/40 dark:text-blue-300 dark:hover:bg-blue-900/50'
                               } disabled:opacity-50`}
                               disabled={sendLinkBusyId === (dep.depositId || dep.id)}
                               title={dep.linkedOpdSessionId
@@ -803,13 +816,27 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                           break-words; title tooltip preserved as a courtesy. */}
                       <td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[280px] align-top" data-testid="deposit-purpose-cell">
                         {dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose ? (
-                          <span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug" title={dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}>
+                          <span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-600 border border-emerald-600 text-white dark:bg-emerald-900/20 dark:border-emerald-700/30 dark:text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug" title={dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}>
                             <span className="shrink-0">🎯</span>
                             <span>{dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}</span>
                           </span>
                         ) : (
                           <span className="text-[var(--tx-muted)]/60 text-[11px]">—</span>
                         )}
+                        {/* 2026-05-27 — appt date under purpose: clickable date+time (→ ไปที่นัด) OR ยังไม่นัด hint */}
+                        {(dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date ? (
+                          <button
+                            type="button"
+                            onClick={() => gotoApptDate(dep)}
+                            data-testid="deposit-appt-date-link"
+                            title="ไปที่นัด (เปิดแท็บใหม่)"
+                            className="mt-1 block text-left text-[11px] font-semibold text-sky-700 hover:text-sky-600 dark:text-sky-300 dark:hover:text-sky-200 underline underline-offset-2"
+                          >
+                            📅 นัด {fmtThaiDate(dep.appointment.date)}{dep.appointment.startTime ? ` · ${dep.appointment.startTime}` : ''}
+                          </button>
+                        ) : (!dep.hasAppointment && !dep.linkedAppointmentId && dep.status !== 'cancelled' && dep.status !== 'refunded') ? (
+                          <span data-testid="deposit-no-appt-hint" className="mt-1 block text-[11px] font-medium text-amber-600 dark:text-amber-400/90">ยังไม่นัด</span>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 font-mono">
                         <div className="text-emerald-400 font-bold">
@@ -826,7 +853,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                       <td className="px-3 py-2"><StatusBadge status={dep.status} isDark={isDark} /></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
-                          <button onClick={() => setViewingDeposit(dep)} className="p-2 rounded hover:bg-violet-900/20 text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
+                          <button onClick={() => setViewingDeposit(dep)} className="p-2 rounded hover:bg-violet-100 dark:hover:bg-violet-900/20 text-violet-600 dark:text-violet-400" title="ดูรายละเอียด" aria-label="ดูรายละเอียด"><Eye size={13} /></button>
                           {/* Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด"
                               button on deposit rows that DON'T yet have a linked
                               appointment. Click → opens AppointmentFormModal in
@@ -839,7 +866,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                             <button
                               onClick={() => setApptForDepositModal(dep)}
                               data-testid="deposit-add-appointment-btn"
-                              className="p-2 rounded hover:bg-emerald-900/20 text-emerald-400"
+                              className="p-2 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
                               title="สร้างนัดสำหรับมัดจำนี้"
                               aria-label="สร้างนัด"
                             >
@@ -855,17 +882,9 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                               ในวันนั้น นัดนั้นเลย". */}
                           {(dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date && (
                             <button
-                              onClick={() => {
-                                const apptDate = String(dep.appointment?.date || '').trim();
-                                if (!apptDate) return;
-                                const origin = (typeof window !== 'undefined' && window.location?.origin) || '';
-                                const url = `${origin}/?backend=1&tab=appointment-deposit&date=${encodeURIComponent(apptDate)}`;
-                                if (typeof window !== 'undefined' && typeof window.open === 'function') {
-                                  window.open(url, '_blank', 'noopener,noreferrer');
-                                }
-                              }}
+                              onClick={() => gotoApptDate(dep)}
                               data-testid="deposit-goto-appointment-btn"
-                              className="p-2 rounded hover:bg-blue-900/20 text-blue-400"
+                              className="p-2 rounded hover:bg-blue-100 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                               title="ไปที่นัด (เปิดแท็บใหม่)"
                               aria-label="ไปที่นัด"
                             >
@@ -873,16 +892,16 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                             </button>
                           )}
                           {canEdit && (
-                            <button onClick={() => openEdit(dep)} className="p-2 rounded hover:bg-sky-900/20 text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
+                            <button onClick={() => openEdit(dep)} className="p-2 rounded hover:bg-sky-100 dark:hover:bg-sky-900/20 text-sky-600 dark:text-sky-400" title="แก้ไข" aria-label="แก้ไข"><Edit3 size={13} /></button>
                           )}
                           {canRefund && (
-                            <button onClick={() => openRefund(dep)} className="p-2 rounded hover:bg-purple-900/20 text-purple-400" title="คืนเงิน" aria-label="คืนเงิน"><RotateCcw size={13} /></button>
+                            <button onClick={() => openRefund(dep)} className="p-2 rounded hover:bg-purple-100 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400" title="คืนเงิน" aria-label="คืนเงิน"><RotateCcw size={13} /></button>
                           )}
                           {canCancel && (
-                            <button onClick={() => openCancel(dep)} className="p-2 rounded hover:bg-red-900/20 text-red-400" title="ยกเลิก" aria-label="ยกเลิก"><Ban size={13} /></button>
+                            <button onClick={() => openCancel(dep)} className="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" title="ยกเลิก" aria-label="ยกเลิก"><Ban size={13} /></button>
                           )}
                           {canDelete && (
-                            <button onClick={() => handleDelete(dep)} className="p-2 rounded hover:bg-red-900/20 text-red-400" title="ลบ" aria-label="ลบ"><Trash2 size={13} /></button>
+                            <button onClick={() => handleDelete(dep)} className="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" title="ลบ" aria-label="ลบ"><Trash2 size={13} /></button>
                           )}
                         </div>
                       </td>

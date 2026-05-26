@@ -282,20 +282,20 @@ describe('Phase 24.0-undecies — DepositPanel column wrap (source-grep)', () =>
   it('VPO.D.2 — truncate class removed from purpose badge', () => {
     // The badge inside <td data-testid="deposit-purpose-cell"> must NOT have
     // truncate (which silently hid long values).
-    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]{0,1100}<\/td>/);
+    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]*?<\/td>/);
     expect(cellBlock).toBeTruthy();
     expect(cellBlock[0]).not.toMatch(/\btruncate\b/);
   });
 
   it('VPO.D.3 — whitespace-normal + break-words classes present for wrapping', () => {
-    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]{0,1100}<\/td>/);
+    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]*?<\/td>/);
     expect(cellBlock[0]).toMatch(/whitespace-normal/);
     expect(cellBlock[0]).toMatch(/break-words/);
   });
 
   it('VPO.D.4 — title tooltip preserved (a11y)', () => {
     // Even with wrap, keep the tooltip.
-    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]{0,1100}<\/td>/);
+    const cellBlock = DEPOSIT_PANEL.match(/data-testid="deposit-purpose-cell"[\s\S]*?<\/td>/);
     expect(cellBlock[0]).toMatch(/title=\{dep\.appointment\?\.purpose/);
   });
 

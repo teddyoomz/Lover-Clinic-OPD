@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Deposit-list appointment date + OPD stepper polish — Design Spec</title>
+<style>
+  :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-section:#fafafa; --tx-muted:#666; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:980px; margin:2em auto; padding:1em; line-height:1.65; color:#222; }
+  h1 { border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+  h2 { border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+  h3 { margin-top:1.4em; }
+  pre { background:#f5f5f5; padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+  code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+  blockquote { border-left:4px solid var(--accent); background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; color:var(--tx-muted); }
+  table { border-collapse:collapse; width:100%; margin:1em 0; }
+  th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+  th { background:var(--bg-meta); }
+  .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.6em; }
+  .ok { color:#15803d; font-weight:600; }
+  /* shared mockup styles (dark/light app panels) */
+  .pairs { display:flex; gap:14px; flex-wrap:wrap; }
+  .appp { flex:1; min-width:300px; padding:14px; border-radius:10px; }
+  .appp.dark  { --b:#050505;--bdc:#222;--bds:#333;--txm:#6b7280;--txf:#4b5563; background:#080808; --cardbg:#0f0f0f; }
+  .appp.light { --b:#f0f4f8;--bdc:#e2e8f0;--bds:#cbd5e1;--txm:#64748b;--txf:#94a3b8; background:#eef2f6; --cardbg:#fff; }
+  .themetag { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;color:var(--txm); }
+  .cardmini { background:var(--cardbg); border:1px solid var(--bdc); border-radius:10px; overflow:hidden; }
+  .band { padding:11px 16px; border-top:1px solid var(--bdc); }
+  .opd-row { display:flex; align-items:center; gap:12px; justify-content:center; }
+  .opd-row.left { justify-content:flex-start; }
+  .opd-label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txm);white-space:nowrap; }
+  .stepper { display:flex; align-items:flex-start; }
+  .step { display:flex;flex-direction:column;align-items:center;min-width:60px; }
+  .dot { width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid; background:var(--b); border-color:var(--bds); color:var(--txf); }
+  .slabel { font-size:10px;font-weight:700;margin-top:5px;color:var(--txm); }
+  .stime { font-size:9px;font-family:monospace;margin-top:2px;color:var(--txf); }
+  .conn { width:30px;height:2px;background:var(--bdc);margin-top:11px; }
+  .dt { width:100%; border-collapse:collapse; background:#0e0e0e; border:1px solid #2a2a2a; border-radius:10px; overflow:hidden; font-size:12px; color:#cfcfcf; }
+  .dt th { text-align:left; padding:8px 10px; color:#8a8a8a; text-transform:uppercase; font-size:10px; background:#181818; border:none; border-bottom:1px solid #2a2a2a; white-space:nowrap; }
+  .dt td { padding:9px 10px; border:none; border-bottom:1px solid #222; color:#cfcfcf; }
+  .cust { color:#5eead4; font-weight:600; }
+  .chip-purpose { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); color:#6ee7b7; font-size:11px; }
+  .appt-link { color:#7dd3fc; font-weight:600; font-size:11px; text-decoration:underline; text-underline-offset:2px; white-space:nowrap; }
+  .noappt-hint { color:#fbbf24; font-size:11px; }
+  .badge-jong { display:inline-block; padding:1px 6px; border-radius:4px; background:rgba(120,53,15,.35); border:1px solid rgba(180,83,9,.4); color:#fcd34d; font-weight:700; font-size:10px; }
+  .remain { color:#34d399; font-weight:700; }
+  .status { padding:2px 8px; border-radius:999px; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.35); color:#34d399; font-size:11px; white-space:nowrap; }
+</style>
+</head>
+<body>
+
+<h1>Deposit-list appointment date + OPD stepper polish — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-27 (EOD+9) · <strong>Status:</strong> Approved by user ("ok เขียน spec และ plan เลย") · <strong>Type:</strong> Pure-display / cosmetic-shell (no flow / logic / data / rules / serverless) · <strong>Plan:</strong> docs/superpowers/plans/2026-05-27-deposit-appt-date-and-opd-stepper-polish.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Two independent UI-polish items in the backend, both <strong>display-only</strong> (data already present; no behaviour change):</p>
+<ol>
+  <li><strong>Finance → มัดจำ deposit list</strong>: a deposit's appointment date is invisible in the list row — admin must open the detail modal (or hover "ไปที่นัด") to see when the appointment is. The date is already denormalised on the deposit doc (<code>dep.appointment.date</code> / <code>.startTime</code>); it just isn't surfaced in the list. Requested: show it per-row for deposits that have an appointment.</li>
+  <li><strong>Appointment tab → สถานะ OPD stepper</strong>: the "สถานะ OPD" stepper (1 ซักประวัติ → 2 แพทย์ → 3 เสร็จ) sits left-aligned in the OPD footer band, and the band colour (<code>orange-50/40</code> light → "ขาวๆ", <code>amber-500/[0.03]</code> dark → faint warm) does not harmonise with either theme. Requested: centre-align + recolour the band to fit both themes.</li>
+</ol>
+
+<h2>Mockup Design</h2>
+
+<h3>① Deposit list — appointment date under "มัดจำสำหรับ" (placement B)</h3>
+<div class="mockup">
+  <div class="mockup-label">After · dark · 2 rows with appointment (clickable date) + 2 without (ยังไม่นัด)</div>
+  <table class="dt">
+    <thead><tr><th>ลูกค้า</th><th>มัดจำสำหรับ</th><th>ยอด / คงเหลือ</th><th>วันที่ชำระ</th><th>สถานะ</th></tr></thead>
+    <tbody>
+      <tr><td><span class="cust">วศิน เข็มทอง</span></td><td><span class="chip-purpose">🎯 ขลิบ</span><br><span class="appt-link">📅 นัด 28 พ.ค. 2569 · 14:30</span></td><td><span class="remain">1,000</span> บาท</td><td>27 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+      <tr><td><span class="cust">ประมวล ฟ้าสันเทียะ</span></td><td><span class="chip-purpose">🎯 ขลิบ</span><br><span class="appt-link">📅 นัด 30 พ.ค. 2569 · 10:00</span></td><td><span class="remain">1,000</span> บาท</td><td>25 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+      <tr><td><span class="cust">สันติราษกร์ ชูแก้ว</span><br><span class="badge-jong">ลูกค้าจอง</span></td><td><span class="chip-purpose">🎯 ขลิบ, เสริมขนาด</span><br><span class="noappt-hint">ยังไม่นัด</span></td><td><span class="remain">1,000</span> บาท</td><td>24 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+      <tr><td><span class="cust">คุณหริรักษ์ ทรัพย์เกษรวงษ์</span><br><span class="badge-jong">ลูกค้าจอง</span></td><td><span class="chip-purpose">🎯 ขลิบ</span><br><span class="noappt-hint">ยังไม่นัด</span></td><td><span class="remain">1,000</span> บาท</td><td>18 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:.85em;color:var(--tx-muted)">วันที่นัด = สีฟ้า ขีดเส้นใต้ → กดได้ เปิดแท็บนัด (URL เดิม). ปุ่ม "ไปที่นัด" (ไอคอนปฏิทิน) ในคอลัมน์จัดการ <strong>คงเดิม</strong>.</p>
+</div>
+
+<h3>② OPD stepper — centred + Ember band (both themes)</h3>
+<div class="mockup">
+  <div class="mockup-label">After · centred · band = Ember (red-100/50 light · red-500/[0.06] dark) · circles VERBATIM (untouched)</div>
+  <div class="pairs">
+    <div class="appp dark"><div class="themetag">🌙 Dark</div><div class="cardmini"><div class="band" style="background:rgba(239,68,68,.06);border-top-color:rgba(239,68,68,.2)"><div class="opd-row"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div>
+    <div class="appp light"><div class="themetag">☀️ Light</div><div class="cardmini"><div class="band" style="background:rgba(254,226,226,.5);border-top-color:rgba(239,68,68,.25)"><div class="opd-row"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div>
+  </div>
+  <div class="mockup-label" style="margin-top:1em">Before · left-aligned · band orange-50/40 (light) · amber-500/[0.03] (dark)</div>
+  <div class="pairs">
+    <div class="appp dark"><div class="themetag">🌙 Dark (เดิม)</div><div class="cardmini"><div class="band" style="background:rgba(245,158,11,.03)"><div class="opd-row left"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div></div>
+    <div class="appp light"><div class="themetag">☀️ Light (เดิม)</div><div class="cardmini"><div class="band" style="background:rgba(255,247,237,.4)"><div class="opd-row left"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>① Deposit row — per-row render decision (data already on doc)</h3>
+<table>
+  <thead><tr><th>เงื่อนไข (ในแต่ละ row ของ <code>filteredDeposits.map</code>)</th><th>แสดงใต้ชิป 🎯 purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>dep.appointment?.date</code> มีค่า</td><td>ลิงก์กดได้ <code>📅 นัด {fmtThaiDate(date)}{startTime ? ' · '+startTime : ''}</code> → <code>onClick</code> → <code>gotoApptDate(dep)</code> → <code>window.open(/?backend=1&tab=appointment-deposit&date=…)</code></td></tr>
+    <tr><td>ไม่มี appointment + <code>status</code> ∈ {active, partial} (= เงื่อนไขเดียวกับปุ่ม +สร้างนัด)</td><td><code>ยังไม่นัด</code> (amber hint, ไม่กดได้)</td></tr>
+    <tr><td>ไม่มี appointment + cancelled / refunded</td><td>(ไม่แสดง — เหลือแค่ purpose หรือ —)</td></tr>
+  </tbody>
+</table>
+<p style="font-size:.9em;color:var(--tx-muted)"><code>gotoApptDate(dep)</code> = helper เล็กๆ ดึง logic จากปุ่ม "ไปที่นัด" เดิม (<code>DepositPanel.jsx:858-865</code>) มาใช้ร่วม → ปุ่มเดิม + ลิงก์วันที่ใหม่ เรียกตัวเดียวกัน (DRY, ปุ่มเดิม behaviour ไม่เปลี่ยน).</p>
+
+<h3>② OPD stepper — 2-line render change (no state machine)</h3>
+<table>
+  <thead><tr><th>ไฟล์ : บรรทัด</th><th>เดิม</th><th>ใหม่</th></tr></thead>
+  <tbody>
+    <tr><td><code>AppointmentOpdStepperRow.jsx:29</code></td><td><code>flex items-center gap-3 flex-wrap</code></td><td><code>flex items-center justify-center gap-3 flex-wrap</code></td></tr>
+    <tr><td><code>AppointmentHubRowCard.jsx:354</code> (band)</td><td><code>bg-orange-50/40 dark:bg-amber-500/[0.03]</code> + <code>border-[var(--bd)]</code></td><td><code>bg-red-100/50 dark:bg-red-500/[0.06]</code> + <code>border-red-500/25 dark:border-red-500/20</code></td></tr>
+  </tbody>
+</table>
+<p style="font-size:.9em;color:var(--tx-muted)">Shared <code>TreatmentLifecycleStepper</code> (วงกลม/connector/สี done) <strong>ไม่แตะ</strong> → หน้าประวัติการรักษา (CustomerDetailView) ไม่กระทบ.</p>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong>Item ① files</strong>: <code>src/components/backend/DepositPanel.jsx</code> เท่านั้น — (a) เพิ่ม helper <code>gotoApptDate(dep)</code>; (b) refactor onClick ปุ่ม "ไปที่นัด" เดิม (line ~858) ให้เรียก helper (behaviour เดิม); (c) ใน cell "มัดจำสำหรับ" (line ~804-813) เพิ่ม block ใต้ purpose: clickable date OR ยังไม่นัด. <code>fmtThaiDate</code> import อยู่แล้ว.</li>
+  <li><strong>Item ② files</strong>: <code>src/components/admin/AppointmentOpdStepperRow.jsx</code> (1 บรรทัด: <code>justify-center</code>) + <code>src/components/admin/AppointmentHubRowCard.jsx</code> (1 บรรทัด: band classes). ไม่แตะ shared stepper.</li>
+  <li><strong>Boundaries</strong>: ทั้งสอง = pure-display. ไม่มี Firestore write, ไม่มี data shape change, ไม่มี rules/storage/serverless/cron. ไม่ใช่ branch-scope concern (display only).</li>
+  <li><strong>Cosmetic-shell discipline</strong> (feedback_cosmetic_shell_redesign_constraint): handlers/state/props เดิมคงทุกตัว; การเปลี่ยน = เพิ่ม display + reuse นำทางเดิม + เปลี่ยน className. ไม่ลด/เพิ่มฟังก์ชันปุ่มใด.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A + Visual Companion)</h2>
+<ul>
+  <li><strong>① placement = B</strong>: ใต้ "มัดจำสำหรับ" (ไม่เพิ่มคอลัมน์; เห็น purpose+วันนัดคู่กัน)</li>
+  <li><strong>① format = วันที่ + เวลา</strong>: <code>📅 นัด 28 พ.ค. 2569 · 14:30</code> (กันพลาด: ไม่มี startTime → ตัด "· เวลา")</li>
+  <li><strong>① no-appt = "ยังไม่นัด" (amber)</strong></li>
+  <li><strong>① clickable = YES</strong>: กดวันที่ → เด้งไปที่นัด (reuse URL เดิม); ปุ่ม "ไปที่นัด" เดิมคงไว้</li>
+  <li><strong>② OPD band = Ember (C)</strong> + <strong>centre-align</strong>; วงกลม stepper เหมือนเดิม (shared, ไม่แตะ)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Deposit row ที่มี <code>appointment.date</code> → แสดง <code>📅 นัด &lt;dd MMM พ.ศ.&gt; · &lt;HH:MM&gt;</code> ใต้ purpose chip; ไม่มี startTime → แสดงวันที่อย่างเดียว.</li>
+  <li>กดวันที่ → เปิดแท็บใหม่ที่ <code>/?backend=1&amp;tab=appointment-deposit&amp;date=&lt;apptDate&gt;</code> (เหมือนปุ่ม "ไปที่นัด" เดิม).</li>
+  <li>Deposit row ไม่มี appointment + status active/partial → แสดง <code>ยังไม่นัด</code> (amber); cancelled/refunded → ไม่แสดง.</li>
+  <li>ปุ่ม "ไปที่นัด" + "+สร้างนัด" เดิม behaviour ไม่เปลี่ยน.</li>
+  <li>OPD stepper row จัดกลาง; band เป็น Ember ทั้ง dark + light; วงกลม/label/connector/เวลา เหมือนเดิมเป๊ะ.</li>
+  <li>CustomerDetailView treatment-history stepper (shared component) ไม่เปลี่ยนแปลง.</li>
+  <li>Build clean; full suite ไม่มี new red; source-grep regression ทั้ง 2 ไฟล์ผ่าน.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Rule Q-vis (L1)</strong>: source-grep/RTL พิสูจน์ shape ไม่พอ — ต้องเปิด browser จริง (Chrome MCP) ดู pixel ทั้ง 2 ธีมก่อน claim เสร็จ. DepositPanel mount หนัก (Firebase/Branch) → list-row อาจ source-grep + flow-simulate + L1; <code>AppointmentOpdStepperRow</code> mount RTL ได้.</li>
+  <li><strong>ปุ่มเขียว "ดูข้อมูลรับเข้า" บนแถบ Ember แดงจางๆ</strong>: green-on-faint-red — alpha ต่ำมาก ควรอ่านได้ปกติ; ยืนยันด้วยตา (Rule Q-vis).</li>
+  <li><strong>Legacy deposit doc</strong> ที่ <code>appointment.date</code> มีแต่ไม่มี <code>startTime</code> → defensive (ตัดเวลาออก). ไม่มี appointment object เลย → ไป path "ยังไม่นัด".</li>
+  <li><strong>Redundancy</strong>: วันที่กดได้ + ปุ่ม "ไปที่นัด" = 2 ทางไปที่เดียวกัน (ตั้งใจ; additive). ถ้า user อยากเอาปุ่มออกภายหลัง = 1-line.</li>
+</ul>
+
+</body>
+</html>

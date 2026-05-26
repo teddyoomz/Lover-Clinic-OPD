@@ -351,7 +351,7 @@ export default function AppointmentHubRowCard({
           (AppointmentOpdStepperRow → TreatmentLifecycleStepper) is re-parented
           VERBATIM — never restyled/recolored (Q4). */}
       {showOpdFooterBand && (
-        <div className="px-4 py-2 pl-5 border-t border-[var(--bd)] bg-orange-50/40 dark:bg-amber-500/[0.03]">
+        <div className="px-4 py-2 pl-5 border-t border-red-500/25 dark:border-red-500/20 bg-red-100/50 dark:bg-red-500/[0.06]">
           {showOpdLifecycle && (
             <OpdLifecycleRow
               state={opdLifecycle.state}

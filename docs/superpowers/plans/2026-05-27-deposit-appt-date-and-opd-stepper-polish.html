@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deposit appt-date + OPD stepper polish — Implementation Plan</title>
+  <style>
+    :root { --accent:#dc2626; --bd:#e5e5e5; --bg-meta:#f0f4f8; --bg-task:#fafafa; --bg-pre:#f5f5f5; --tx-muted:#666; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; max-width:960px; margin:2em auto; padding:1em; line-height:1.6; color:#222; }
+    h1 { color:#111; border-bottom:2px solid var(--accent); padding-bottom:.3em; }
+    h2 { color:#111; border-bottom:1px solid var(--bd); padding-bottom:.2em; margin-top:2em; }
+    h3 { color:#222; }
+    pre { background:var(--bg-pre); padding:1em; border-radius:6px; overflow-x:auto; font-size:.86em; }
+    code { font-family:'SF Mono',Menlo,Consolas,monospace; }
+    blockquote { border-left:4px solid var(--accent); padding-left:1em; color:var(--tx-muted); margin:1em 0; background:var(--bg-meta); padding:.5em 1em; border-radius:0 6px 6px 0; }
+    .header-meta { background:var(--bg-meta); padding:1em 1.5em; border-radius:8px; margin:1em 0; }
+    .header-meta p { margin:.4em 0; }
+    .task { border-left:4px solid var(--accent); padding:.8em 1.2em; margin:1.2em 0; background:var(--bg-task); border-radius:0 6px 6px 0; }
+    .step { margin:.6em 0; padding-left:.5em; }
+    .step input[type=checkbox] { margin-right:.6em; transform:scale(1.2); accent-color:var(--accent); }
+    table { border-collapse:collapse; width:100%; margin:1em 0; }
+    th,td { border:1px solid var(--bd); padding:.5em .8em; text-align:left; vertical-align:top; }
+    th { background:var(--bg-meta); }
+    .mockup { background:#fff; border:1px solid var(--bd); border-radius:8px; padding:1.2em; margin:1em 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .mockup-label { font-size:.75em; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-muted); margin-bottom:.5em; }
+    .pairs { display:flex; gap:14px; flex-wrap:wrap; }
+    .appp { flex:1; min-width:290px; padding:14px; border-radius:10px; }
+    .appp.dark  { --b:#050505;--bdc:#222;--bds:#333;--txm:#6b7280;--txf:#4b5563; background:#080808; --cardbg:#0f0f0f; }
+    .appp.light { --b:#f0f4f8;--bdc:#e2e8f0;--bds:#cbd5e1;--txm:#64748b;--txf:#94a3b8; background:#eef2f6; --cardbg:#fff; }
+    .themetag { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;color:var(--txm); }
+    .cardmini { background:var(--cardbg); border:1px solid var(--bdc); border-radius:10px; overflow:hidden; }
+    .band { padding:11px 16px; border-top:1px solid var(--bdc); }
+    .opd-row { display:flex; align-items:center; gap:12px; justify-content:center; }
+    .opd-row.left { justify-content:flex-start; }
+    .opd-label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txm);white-space:nowrap; }
+    .stepper { display:flex; align-items:flex-start; }
+    .step2 { display:flex;flex-direction:column;align-items:center;min-width:60px; }
+    .dot { width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid; background:var(--b); border-color:var(--bds); color:var(--txf); }
+    .slabel { font-size:10px;font-weight:700;margin-top:5px;color:var(--txm); }
+    .stime { font-size:9px;font-family:monospace;margin-top:2px;color:var(--txf); }
+    .conn { width:30px;height:2px;background:var(--bdc);margin-top:11px; }
+    .dt { width:100%; border-collapse:collapse; background:#0e0e0e; border:1px solid #2a2a2a; border-radius:10px; overflow:hidden; font-size:12px; color:#cfcfcf; }
+    .dt th { text-align:left; padding:8px 10px; color:#8a8a8a; text-transform:uppercase; font-size:10px; background:#181818; border:none; border-bottom:1px solid #2a2a2a; }
+    .dt td { padding:9px 10px; border:none; border-bottom:1px solid #222; color:#cfcfcf; }
+    .cust { color:#5eead4; font-weight:600; }
+    .chip-purpose { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.3); color:#6ee7b7; font-size:11px; }
+    .appt-link { color:#7dd3fc; font-weight:600; font-size:11px; text-decoration:underline; text-underline-offset:2px; }
+    .noappt-hint { color:#fbbf24; font-size:11px; }
+    .badge-jong { display:inline-block; padding:1px 6px; border-radius:4px; background:rgba(120,53,15,.35); border:1px solid rgba(180,83,9,.4); color:#fcd34d; font-weight:700; font-size:10px; }
+    .remain { color:#34d399; font-weight:700; }
+    .status { padding:2px 8px; border-radius:999px; background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.35); color:#34d399; font-size:11px; }
+  </style>
+</head>
+<body>
+
+<h1>Deposit appt-date + OPD stepper polish — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Use superpowers:subagent-driven-development or superpowers:executing-plans to implement task-by-task. Steps use HTML checkboxes. <strong>Spec:</strong> docs/superpowers/specs/2026-05-27-deposit-appt-date-and-opd-stepper-polish-design.html
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> (1) Show each deposit's appointment date+time (clickable) in the Finance→มัดจำ list row; (2) centre the OPD status stepper + recolour its footer band to an Ember tint that fits both themes.</p>
+  <p><strong>Architecture:</strong> Pure display / cosmetic-shell. All data already on the deposit doc (<code>dep.appointment.date/.startTime</code>); reuse the existing appointment-nav URL. No flow/logic/data/rules/serverless change. Shared <code>TreatmentLifecycleStepper</code> untouched (no ripple to treatment-history).</p>
+  <p><strong>Tech Stack:</strong> React 19, Tailwind 3.4 (theme CSS vars), Vitest + RTL.</p>
+  <p><strong>⚠️ Gating (V18):</strong> NO commit / push / deploy until the user says so THIS turn. Commit steps below are the documented sequence for when authorized. No firestore.rules/storage/data/cron touched → if deployed later, NO Probe-Deploy-Probe needed.</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<h3>① Deposit list — appointment date under "มัดจำสำหรับ" (placement B) · dark</h3>
+<div class="mockup">
+  <div class="mockup-label">2 rows with appointment (clickable date) · 2 without (ยังไม่นัด)</div>
+  <table class="dt">
+    <thead><tr><th>ลูกค้า</th><th>มัดจำสำหรับ</th><th>ยอด / คงเหลือ</th><th>วันที่ชำระ</th><th>สถานะ</th></tr></thead>
+    <tbody>
+      <tr><td><span class="cust">วศิน เข็มทอง</span></td><td><span class="chip-purpose">🎯 ขลิบ</span><br><span class="appt-link">📅 นัด 28 พ.ค. 2569 · 14:30</span></td><td><span class="remain">1,000</span> บาท</td><td>27 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+      <tr><td><span class="cust">สันติราษกร์ ชูแก้ว</span><br><span class="badge-jong">ลูกค้าจอง</span></td><td><span class="chip-purpose">🎯 ขลิบ, เสริมขนาด</span><br><span class="noappt-hint">ยังไม่นัด</span></td><td><span class="remain">1,000</span> บาท</td><td>24 พ.ค. 2569</td><td><span class="status">● ใช้งาน</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>② OPD stepper — centred + Ember band (both themes)</h3>
+<div class="mockup">
+  <div class="mockup-label">After · centred · Ember band · circles VERBATIM</div>
+  <div class="pairs">
+    <div class="appp dark"><div class="themetag">🌙 Dark</div><div class="cardmini"><div class="band" style="background:rgba(239,68,68,.06);border-top-color:rgba(239,68,68,.2)"><div class="opd-row"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step2"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step2"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step2"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div>
+    <div class="appp light"><div class="themetag">☀️ Light</div><div class="cardmini"><div class="band" style="background:rgba(254,226,226,.5);border-top-color:rgba(239,68,68,.25)"><div class="opd-row"><span class="opd-label">สถานะ OPD</span><div class="stepper"><div class="step2"><div class="dot">1</div><div class="slabel">ซักประวัติ</div><div class="stime">—</div></div><div class="conn"></div><div class="step2"><div class="dot">2</div><div class="slabel">แพทย์</div><div class="stime">—</div></div><div class="conn"></div><div class="step2"><div class="dot">3</div><div class="slabel">เสร็จ</div><div class="stime">—</div></div></div></div></div></div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<h3>① Deposit row — per-row render decision (inside <code>filteredDeposits.map</code>; data already on doc)</h3>
+<table>
+  <thead><tr><th>Condition</th><th>Render under 🎯 purpose chip</th></tr></thead>
+  <tbody>
+    <tr><td><code>(dep.hasAppointment || dep.linkedAppointmentId) &amp;&amp; dep.appointment?.date</code> (= same as existing "ไปที่นัด" button)</td><td>clickable link <code>📅 นัด {fmtThaiDate(date)}{startTime ? ' · '+startTime : ''}</code> → onClick <code>gotoApptDate(dep)</code> → <code>window.open(/?backend=1&amp;tab=appointment-deposit&amp;date=…)</code></td></tr>
+    <tr><td><code>!hasAppointment &amp;&amp; !linkedAppointmentId &amp;&amp; status∉{cancelled,refunded}</code> (= same as existing "+สร้างนัด" button)</td><td><code>ยังไม่นัด</code> (amber, not clickable)</td></tr>
+    <tr><td>else (no date + cancelled/refunded, or degenerate)</td><td>nothing (cell keeps purpose chip / —)</td></tr>
+  </tbody>
+</table>
+
+<h3>② OPD stepper — 2 className edits (no state machine)</h3>
+<table>
+  <thead><tr><th>File:line</th><th>Before</th><th>After</th></tr></thead>
+  <tbody>
+    <tr><td><code>AppointmentOpdStepperRow.jsx:29</code></td><td><code>flex items-center gap-3 flex-wrap</code></td><td><code>flex items-center justify-center gap-3 flex-wrap</code></td></tr>
+    <tr><td><code>AppointmentHubRowCard.jsx:354</code></td><td><code>border-[var(--bd)] bg-orange-50/40 dark:bg-amber-500/[0.03]</code></td><td><code>border-red-500/25 dark:border-red-500/20 bg-red-100/50 dark:bg-red-500/[0.06]</code></td></tr>
+  </tbody>
+</table>
+
+<h2>File Structure</h2>
+<ul>
+  <li><strong>Modify</strong> <code>src/components/admin/AppointmentOpdStepperRow.jsx</code> — line 29 flex row: add <code>justify-center</code>.</li>
+  <li><strong>Modify</strong> <code>src/components/admin/AppointmentHubRowCard.jsx</code> — line 354 footer-band className: orange/amber → ember.</li>
+  <li><strong>Modify</strong> <code>src/components/backend/DepositPanel.jsx</code> — add <code>gotoApptDate(dep)</code> helper; refactor existing "ไปที่นัด" button onClick (~line 858) to call it; add appt-date-link / ยังไม่นัด block in the "มัดจำสำหรับ" cell (~line 804-813).</li>
+  <li><strong>Create</strong> <code>tests/opd-stepper-polish.test.jsx</code> (Task 1).</li>
+  <li><strong>Create</strong> <code>tests/deposit-appt-date.test.jsx</code> (Task 2 source-grep).</li>
+  <li><strong>Create</strong> <code>tests/deposit-appt-date-flow-simulate.test.js</code> (Task 2 Rule I flow-simulate).</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: OPD stepper — centre + Ember band</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/AppointmentOpdStepperRow.jsx:29</code></li>
+    <li>Modify: <code>src/components/admin/AppointmentHubRowCard.jsx:354</code></li>
+    <li>Test: <code>tests/opd-stepper-polish.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing test</strong></label></div>
+  <p>Create <code>tests/opd-stepper-polish.test.jsx</code>:</p>
+<pre><code class="language-jsx">import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import AppointmentOpdStepperRow from '../src/components/admin/AppointmentOpdStepperRow.jsx';
+
+describe('OPD stepper polish — centre + Ember', () => {
+  it('RTL: stepper row is centred + circles render verbatim', () => {
+    render(&lt;AppointmentOpdStepperRow latestTreatment={null} isTodayTab={true} /&gt;);
+    const wrap = screen.getByTestId('appt-row-opd-stepper');
+    const flexRow = wrap.querySelector(':scope &gt; div');
+    expect(flexRow.className).toMatch(/justify-center/);
+    expect(flexRow.className).toMatch(/items-center/); // existing classes kept
+    expect(screen.getByText('สถานะ OPD')).toBeInTheDocument();
+    expect(screen.getAllByTestId('stepper-dot')).toHaveLength(3); // circles verbatim, untouched
+  });
+
+  it('source-grep: AppointmentOpdStepperRow flex row has justify-center', () => {
+    const src = readFileSync('src/components/admin/AppointmentOpdStepperRow.jsx', 'utf8');
+    expect(src).toMatch(/flex items-center justify-center gap-3 flex-wrap/);
+  });
+
+  it('source-grep: AppointmentHubRowCard band uses Ember, NOT orange/amber', () => {
+    const src = readFileSync('src/components/admin/AppointmentHubRowCard.jsx', 'utf8');
+    expect(src).toMatch(/bg-red-100\/50/);
+    expect(src).toMatch(/dark:bg-red-500\/\[0\.06\]/);
+    expect(src).not.toMatch(/bg-orange-50\/40/);          // anti-regression
+    expect(src).not.toMatch(/dark:bg-amber-500\/\[0\.03\]/); // anti-regression
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run → verify it FAILS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-stepper-polish.test.jsx</code></p>
+  <p>Expected: FAIL (justify-center / ember classes not present yet).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Implement — centre the stepper row</strong></label></div>
+  <p>In <code>src/components/admin/AppointmentOpdStepperRow.jsx</code> line 29, change:</p>
+<pre><code class="language-jsx">// before
+&lt;div className="flex items-center gap-3 flex-wrap"&gt;
+// after
+&lt;div className="flex items-center justify-center gap-3 flex-wrap"&gt;</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Implement — recolour the footer band to Ember</strong></label></div>
+  <p>In <code>src/components/admin/AppointmentHubRowCard.jsx</code> line 354, change the band className:</p>
+<pre><code class="language-jsx">// before
+&lt;div className="px-4 py-2 pl-5 border-t border-[var(--bd)] bg-orange-50/40 dark:bg-amber-500/[0.03]"&gt;
+// after
+&lt;div className="px-4 py-2 pl-5 border-t border-red-500/25 dark:border-red-500/20 bg-red-100/50 dark:bg-red-500/[0.06]"&gt;</code></pre>
+  <p>Note: do NOT touch the inner <code>&lt;AppointmentOpdStepperRow&gt;</code> / <code>&lt;OpdLifecycleRow&gt;</code> children. Only the band wrapper className.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Run → verify it PASSES</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/opd-stepper-polish.test.jsx</code> → Expected: PASS (3/3).</p>
+
+  <div class="step"><input type="checkbox" id="t1s6"> <label for="t1s6"><strong>Step 6: Commit (only when authorized — V18)</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentOpdStepperRow.jsx src/components/admin/AppointmentHubRowCard.jsx tests/opd-stepper-polish.test.jsx
+git commit -m "style(appt): centre OPD stepper + Ember footer band (both themes)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: Deposit list — appointment date under "มัดจำสำหรับ"</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/DepositPanel.jsx</code> (helper + button refactor ~line 858 + cell ~line 804-813)</li>
+    <li>Test: <code>tests/deposit-appt-date.test.jsx</code> (source-grep)</li>
+    <li>Test: <code>tests/deposit-appt-date-flow-simulate.test.js</code> (Rule I flow-simulate)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write the failing flow-simulate test (Rule I)</strong></label></div>
+  <p>Create <code>tests/deposit-appt-date-flow-simulate.test.js</code> — pure mirror of the render-decision + nav-URL logic (Rule I item a; source-grep in Step 2 locks the real JSX matches this):</p>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+
+// Mirror of DepositPanel cell decision (locked to real JSX by deposit-appt-date.test.jsx)
+function decideApptCell(dep, fmtThaiDate) {
+  const hasAppt = (dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date;
+  if (hasAppt) {
+    const t = dep.appointment.startTime;
+    return { kind: 'date', label: `📅 นัด ${fmtThaiDate(dep.appointment.date)}${t ? ` · ${t}` : ''}`, clickable: true };
+  }
+  const noAppt = !dep.hasAppointment && !dep.linkedAppointmentId
+    && dep.status !== 'cancelled' && dep.status !== 'refunded';
+  if (noAppt) return { kind: 'noappt', label: 'ยังไม่นัด', clickable: false };
+  return { kind: 'none' };
+}
+
+// Mirror of gotoApptDate URL builder
+function apptUrl(origin, dep) {
+  const apptDate = String(dep.appointment?.date || '').trim();
+  if (!apptDate) return null;
+  return `${origin}/?backend=1&amp;tab=appointment-deposit&amp;date=${encodeURIComponent(apptDate)}`;
+}
+
+const fmt = (iso) =&gt; '28 พ.ค. 2569'; // stub stand-in for fmtThaiDate
+
+describe('deposit appt-date cell — flow-simulate (Rule I)', () =&gt; {
+  it('has appt + startTime → clickable date+time', () =&gt; {
+    const r = decideApptCell({ hasAppointment: true, appointment: { date: '2026-05-28', startTime: '14:30' } }, fmt);
+    expect(r.kind).toBe('date'); expect(r.clickable).toBe(true);
+    expect(r.label).toBe('📅 นัด 28 พ.ค. 2569 · 14:30');
+  });
+  it('has appt, no startTime → date only (defensive)', () =&gt; {
+    const r = decideApptCell({ linkedAppointmentId: 'BA-1', appointment: { date: '2026-05-28' } }, fmt);
+    expect(r.label).toBe('📅 นัด 28 พ.ค. 2569');
+  });
+  it('no appt + active → ยังไม่นัด', () =&gt; {
+    const r = decideApptCell({ hasAppointment: false, status: 'active' }, fmt);
+    expect(r).toEqual({ kind: 'noappt', label: 'ยังไม่นัด', clickable: false });
+  });
+  it('no appt + cancelled → none', () =&gt; {
+    expect(decideApptCell({ hasAppointment: false, status: 'cancelled' }, fmt).kind).toBe('none');
+  });
+  it('nav URL encodes the appt date', () =&gt; {
+    expect(apptUrl('https://x.app', { appointment: { date: '2026-05-28' } }))
+      .toBe('https://x.app/?backend=1&amp;tab=appointment-deposit&amp;date=2026-05-28');
+    expect(apptUrl('https://x.app', { appointment: {} })).toBeNull();
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Write the failing source-grep test (locks real JSX = mirror)</strong></label></div>
+  <p>Create <code>tests/deposit-appt-date.test.jsx</code>:</p>
+<pre><code class="language-js">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+const src = readFileSync('src/components/backend/DepositPanel.jsx', 'utf8');
+
+describe('deposit appt-date — source-grep regression', () =&gt; {
+  it('defines + reuses gotoApptDate helper (button + date link)', () =&gt; {
+    expect(src).toMatch(/const gotoApptDate\s*=/);
+    expect((src.match(/gotoApptDate\(/g) || []).length).toBeGreaterThanOrEqual(2); // button + date link callsites
+  });
+  it('renders clickable appt-date link with fmtThaiDate + startTime', () =&gt; {
+    expect(src).toMatch(/deposit-appt-date-link/);
+    expect(src).toMatch(/fmtThaiDate\(dep\.appointment\.date\)/);
+    expect(src).toMatch(/dep\.appointment\.startTime/);
+  });
+  it('renders ยังไม่นัด hint for no-appointment active deposits', () =&gt; {
+    expect(src).toMatch(/deposit-no-appt-hint/);
+    expect(src).toMatch(/ยังไม่นัด/);
+  });
+  it('the existing "ไปที่นัด" button now calls gotoApptDate (no inline window.open dup left in that button)', () =&gt; {
+    // helper centralises window.open; only one window.open in the helper body
+    expect((src.match(/window\.open\(/g) || []).length).toBe(1);
+  });
+});
+</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Run both → verify FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-appt-date.test.jsx tests/deposit-appt-date-flow-simulate.test.js</code></p>
+  <p>Expected: flow-simulate PASSES (pure mirror); source-grep FAILS (code not changed yet).</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Implement — add the gotoApptDate helper</strong></label></div>
+  <p>In <code>src/components/backend/DepositPanel.jsx</code>, add this helper in the component body (alongside the other row handlers such as <code>openEdit</code>/<code>openRefund</code>/<code>openCancel</code>, before the <code>return</code>):</p>
+<pre><code class="language-jsx">// Open the appointment-deposit tab on this deposit's appointment date (new tab).
+// Shared by the row "ไปที่นัด" button AND the clickable appt-date link under "มัดจำสำหรับ".
+const gotoApptDate = (dep) =&gt; {
+  const apptDate = String(dep.appointment?.date || '').trim();
+  if (!apptDate) return;
+  const origin = (typeof window !== 'undefined' && window.location?.origin) || '';
+  const url = `${origin}/?backend=1&amp;tab=appointment-deposit&amp;date=${encodeURIComponent(apptDate)}`;
+  if (typeof window !== 'undefined' && typeof window.open === 'function') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Implement — refactor the existing "ไปที่นัด" button to use the helper</strong></label></div>
+  <p>At ~line 856-865, replace the inline onClick body with a call to the helper (behaviour identical):</p>
+<pre><code class="language-jsx">{(dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date && (
+  &lt;button
+    onClick={() =&gt; gotoApptDate(dep)}
+    data-testid="deposit-goto-appointment-btn"
+    className="p-2 rounded hover:bg-blue-900/20 text-blue-400"
+    title="ไปที่นัด (เปิดแท็บใหม่)"
+    aria-label="ไปที่นัด"
+  &gt;
+    &lt;Calendar size={13} /&gt;
+  &lt;/button&gt;
+)}</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Implement — add the appt-date line in the "มัดจำสำหรับ" cell</strong></label></div>
+  <p>In the <code>data-testid="deposit-purpose-cell"</code> &lt;td&gt; (~line 804-813), AFTER the existing purpose-chip / dash block (still inside the same &lt;td&gt;), append:</p>
+<pre><code class="language-jsx">{(dep.hasAppointment || dep.linkedAppointmentId) && dep.appointment?.date ? (
+  &lt;button
+    type="button"
+    onClick={() =&gt; gotoApptDate(dep)}
+    data-testid="deposit-appt-date-link"
+    title="ไปที่นัด (เปิดแท็บใหม่)"
+    className="mt-1 block text-left text-[11px] font-semibold text-sky-300 hover:text-sky-200 underline underline-offset-2"
+  &gt;
+    📅 นัด {fmtThaiDate(dep.appointment.date)}{dep.appointment.startTime ? ` · ${dep.appointment.startTime}` : ''}
+  &lt;/button&gt;
+) : (!dep.hasAppointment && !dep.linkedAppointmentId && dep.status !== 'cancelled' && dep.status !== 'refunded') ? (
+  &lt;span data-testid="deposit-no-appt-hint" className="mt-1 block text-[11px] font-medium text-amber-400/90"&gt;ยังไม่นัด&lt;/span&gt;
+) : null}</code></pre>
+  <p><code>fmtThaiDate</code> is already imported in this file (used by the "วันที่ชำระ" column).</p>
+
+  <div class="step"><input type="checkbox" id="t2s7"> <label for="t2s7"><strong>Step 7: Run → verify PASS + targeted siblings (Rule N)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-appt-date.test.jsx tests/deposit-appt-date-flow-simulate.test.js</code> → PASS.</p>
+  <p>Then run any pre-existing tests that import DepositPanel (Rule N targeted): <code>grep -rln "DepositPanel" tests/</code> → run those files. Expect no new red.</p>
+
+  <div class="step"><input type="checkbox" id="t2s8"> <label for="t2s8"><strong>Step 8: Commit (only when authorized — V18)</strong></label></div>
+<pre><code class="language-bash">git add src/components/backend/DepositPanel.jsx tests/deposit-appt-date.test.jsx tests/deposit-appt-date-flow-simulate.test.js
+git commit -m "feat(finance): show appointment date+time (clickable) in deposit list; ยังไม่นัด hint"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: Verify — build + full suite + Rule Q-vis real-browser pixel check</h3>
+  <p><strong>Files:</strong> none (verification only).</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Build clean</strong></label></div>
+  <p>Run: <code>npm run build</code> → Expected: clean (no errors). Catches import/JSX issues.</p>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Full suite (batch end — Rule N)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → Expected: no NEW red vs the 14929-pass baseline. (Touched 3 source files + 3 new tests.)</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Rule Q-vis — see the rendered pixels in a real browser (Rule S)</strong></label></div>
+  <p>Open the running app in a real browser (Chrome MCP per feedback_use_chrome_mcp_first, or Claude Preview). Verify with eyes (screenshot), both dark + light:</p>
+  <ul>
+    <li>Finance → มัดจำ: a deposit WITH an appointment shows <code>📅 นัด … · HH:MM</code> (sky, underlined) under the purpose chip; clicking opens the appointment-deposit tab on that date. A deposit WITHOUT shows <code>ยังไม่นัด</code> (amber). The "ไปที่นัด" + "+สร้างนัด" buttons still behave as before.</li>
+    <li>Appointment tab (a row with OPD footer): the "สถานะ OPD" stepper is centred; the band is a faint Ember tint that reads cleanly in BOTH themes; the green "ดูข้อมูลรับเข้า" button is still legible on it; the 1/2/3 circles + labels are unchanged.</li>
+    <li>Open CustomerDetailView treatment-history once to confirm its shared stepper is unchanged (no ripple).</li>
+  </ul>
+  <p>If a screenshot disagrees with a probe, the screenshot wins (Q-vis). If real-app navigation needs auth/data the harness can't reach → flag for user L1 hands-on.</p>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Report — honest verification scope (Rule Q / Q-honest)</strong></label></div>
+  <p>State exactly what was verified at which level: source-grep (shape) + flow-simulate (logic) + RTL (OPD row mount) + L1 real-browser pixels (what I saw) vs what remains user-hands-on. Do not claim "done" beyond what was actually exercised.</p>
+</div>
+
+<h2>Self-Review</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> ① placement B → Task 2 Step 6; format date+time → Step 6 + flow-sim; ยังไม่นัด → Step 6 + flow-sim; clickable + reuse URL → helper Step 4-5 + flow-sim. ② Ember band + centre → Task 1 Step 3-4. Shared-stepper-untouched → Task 3 Step 3. Acceptance criteria 1-7 all map to Task 1-3 steps. No gaps.</li>
+  <li><strong>Placeholder scan:</strong> No TBD/TODO; every code step has complete code + exact run commands + expected output.</li>
+  <li><strong>Type/name consistency:</strong> <code>gotoApptDate</code> identical across helper + button + date link; testids <code>deposit-appt-date-link</code> / <code>deposit-no-appt-hint</code> / <code>appt-row-opd-stepper</code> / <code>stepper-dot</code> consistent between source + tests; Ember classes identical in plan + spec + test grep.</li>
+  <li><strong>V66 / Q-honest note:</strong> the flow-simulate is a MIRROR — it proves the logic, not the live render. The source-grep locks the real JSX to that logic; the REAL verification is Task 3 Step 3 (L1 pixels). Mirror alone ≠ "verified".</li>
+</ul>
+
+</body>
+</html>
