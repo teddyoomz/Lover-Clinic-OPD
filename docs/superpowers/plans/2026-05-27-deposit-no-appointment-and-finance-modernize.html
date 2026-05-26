@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deposit-without-appointment + Finance deposit modernize — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.84em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .new { color: var(--accent); font-weight: 700; }
+  </style>
+</head>
+<body>
+
+<h1>Deposit-without-appointment + Finance deposit modernize — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes for tracking. <strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-27-deposit-no-appointment-and-finance-modernize-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add a <code>ไม่นัดหมาย</code> (no-appointment) deposit mode to <code>AppointmentFormModal</code> (writes a deposit-only doc), and modernize the Finance <code>DepositPanel</code> create form in place (เลือกลูกค้าภายหลัง + มัดจำสำหรับ), with full money-field parity preserved.</p>
+  <p><strong>Architecture:</strong> Surgical extension of the EXISTING code (per user directive "อิงของเก่า") — no new modal, no new design. Reuse <code>createDeposit</code> (deposit-only writer), <code>VisitPurposePicker</code> (purpose chips), and the existing pickLater temp-customer pattern. <code>be_deposits</code> gains 3 optional string fields. The advisor→100%-seller behavior the appointment modal already does is inherited unchanged.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite + Firebase (Firestore) + Tailwind. Tests: Vitest + RTL + Rule I flow-simulate + Rule Q L2 (real-prod admin-SDK) + Rule Q L1 (user hands-on).</p>
+  <p><strong>Decisions:</strong> Q1 = Modernize-in-place (two forms). Q2 = Port-all (no money field dropped). <code>ที่ปรึกษา</code> = appt-modal-only (→ seller); <code>มัดจำสำหรับ</code> = reuse <code>นัดมาเพื่อ</code> chip set.</p>
+  <p><strong>Test ordering (Rule K + Rule I override of the skill's per-task TDD):</strong> lib tasks (T2, T3) are test-first; the UI tasks (T4–T6) build structure first; the test bank (T7–T9) lands after the UI structure is reviewable.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<p>Full faithful mockups are in the spec (open it in a browser). Condensed target shapes:</p>
+
+<div class="mockup">
+  <div class="mockup-label">AppointmentFormModal · จองมัดจำ + ไม่นัดหมาย ON (appointment fields collapse)</div>
+  <div style="background:#101014;color:#e6e6ea;border-radius:8px;padding:12px;font-size:12px">
+    <div style="font-weight:800;margin-bottom:6px">📅 สร้างนัดหมาย / มัดจำ</div>
+    <div>ประเภท: <span style="background:#3a1414;border:1px solid #f87171;color:#fca5a5;border-radius:6px;padding:1px 8px">จองมัดจำ ✓</span></div>
+    <div style="margin-top:6px;background:rgba(220,38,38,.12);border:1px solid rgba(248,113,113,.4);border-radius:7px;padding:6px 9px"><b style="color:#fca5a5">☑ ไม่นัดหมาย (จองมัดจำอย่างเดียว)</b> &larr; NEW</div>
+    <div style="margin-top:6px">ลูกค้า ☑ เลือกลูกค้าภายหลัง → <span style="color:#fbbf24">[ชื่อ*] [เบอร์*]</span> &nbsp;(หรือค้นหา HN เดิม)</div>
+    <div style="margin-top:6px">มัดจำสำหรับ* <span style="background:#3a1414;border:1px solid #f87171;color:#fca5a5;border-radius:6px;padding:1px 8px">สมรรถภาพ</span> &nbsp;·&nbsp; ที่ปรึกษา [พญ.กานต์ ▾] (→ ผู้ขาย 100%)</div>
+    <div style="margin-top:6px">ยอดมัดจำ* [2,000] · ช่องทาง* [เงินสด ▾] · วันที่ชำระ* [27/05/2026] · หมายเหตุ []</div>
+    <div style="margin-top:6px;opacity:.32;text-decoration:line-through">วันที่ · เริ่ม · สิ้นสุด · หมอ · ห้อง · ผู้ช่วย · สีนัด · สถานะ · recurring · การเตรียมตัว</div>
+    <div style="margin-top:8px"><span style="background:#dc2626;color:#fff;border-radius:6px;padding:5px 12px;font-weight:800">บันทึก → createDeposit (deposit-only)</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">be_deposits doc — NEW fields (rest unchanged)</div>
+<pre><code>{
+  depositId: "DEP-…", amount, paymentChannel, paymentDate, paymentTime, refNo,
+  customerId: ""  (empty when pickLater),  customerName, customerHN,
+  customerNameTemp: "คุณสมหญิง รักดี",     // NEW (stamped by createDeposit)
+  customerPhoneTemp: "081-234-5678",       // NEW
+  purpose: "สมรรถภาพ",                      // NEW  (= appointmentTo / มัดจำสำหรับ)
+  sellers: [{ id, name, percent:100, total }],   // advisor → 100% seller (existing pattern)
+  hasAppointment: false, appointment: null,
+  branchId, status:"active", …
+}</code></pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Finance DepositPanel — modernized create (in place)</div>
+  <div style="background:#101014;color:#e6e6ea;border-radius:8px;padding:12px;font-size:12px">
+    <div style="font-weight:800;margin-bottom:6px">💰 สร้างมัดจำ</div>
+    <div>ลูกค้า <b style="color:#fbbf24">☑ เลือกลูกค้าภายหลัง</b> <span class="new">NEW</span> → [ชื่อ*][เบอร์*] &nbsp;(หรือค้นหา HN เดิม)</div>
+    <div style="margin-top:6px">มัดจำสำหรับ <span class="new">NEW</span> <span style="background:#3a1414;border:1px solid #f87171;color:#fca5a5;border-radius:6px;padding:1px 8px">ดูดไขมัน</span></div>
+    <div style="margin-top:6px">ยอด* · ช่องทาง* · วันที่/เวลา · เลขอ้างอิง · หลักฐาน · หมายเหตุ &nbsp;(unchanged)</div>
+    <div style="margin-top:6px">พนักงานขาย (5 ช่อง) · แหล่งที่มาลูกค้า &nbsp;(unchanged — kept)</div>
+    <div style="margin-top:6px">○ ไม่นัดหมาย &nbsp; ○ จองนัดหมาย &nbsp;(existing subform unchanged)</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">State machine — ไม่นัดหมาย toggle (appt modal, deposit-booking type)</div>
+<pre><code>จองมัดจำ + ไม่นัดหมาย OFF        ──tick──►   จองมัดจำ + ไม่นัดหมาย ON
+  customer · นัดมาเพื่อ                       customer · มัดจำสำหรับ · ที่ปรึกษา
+  · date/time/หมอ/ห้อง · deposit              · deposit  (NO date/time/หมอ/ห้อง)
+  SAVE → createDepositBookingPair             SAVE → createDeposit (deposit-only)
+  validation: require date+startTime          validation: skip date+startTime;
+                                              skip collision/holiday/schedule checks</code></pre>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data flow — the write paths after this change</div>
+  <table>
+    <thead><tr><th>Entry point</th><th>Condition</th><th>Writer</th><th>Docs</th><th>purpose source (table column)</th></tr></thead>
+    <tbody>
+      <tr><td>Appt modal</td><td>deposit-booking, noAppointment=false</td><td><code>createDepositBookingPair</code> (unchanged)</td><td>be_deposits + be_appointments</td><td><code>appointment.purpose</code></td></tr>
+      <tr><td>Appt modal</td><td>deposit-booking, <span class="new">noAppointment=true (NEW)</span></td><td><code>createDeposit</code></td><td>be_deposits only</td><td><span class="new"><code>dep.purpose</code> (NEW)</span></td></tr>
+      <tr><td>Finance DepositPanel</td><td>hasAppointment=false (default)</td><td><code>createDeposit</code></td><td>be_deposits only</td><td><span class="new"><code>dep.purpose</code> (NEW)</span></td></tr>
+      <tr><td>Finance DepositPanel</td><td>hasAppointment=true</td><td><code>createDepositBookingPair</code> (unchanged)</td><td>be_deposits + be_appointments</td><td><code>appointment.purpose</code></td></tr>
+      <tr><td>Deposit row <code>+ สร้างนัด</code></td><td>no-appt deposit → schedule later</td><td><code>createAppointmentForExistingDeposit</code> (unchanged)</td><td>+ be_appointments</td><td>then <code>appointment.purpose</code></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <thead><tr><th>File</th><th>Responsibility / change</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/components/VisitPurposePicker.jsx</code></td><td>Add backward-compat <code>label</code> prop (default <code>'นัดมาเพื่อ'</code>). [T1]</td></tr>
+    <tr><td><code>src/lib/depositValidation.js</code></td><td><code>emptyDepositForm</code> + <code>normalizeDeposit</code> + <code>validateDeposit</code> learn <code>purpose</code>/<code>customerNameTemp</code>/<code>customerPhoneTemp</code>; strict accepts temp-identity. [T2]</td></tr>
+    <tr><td><code>src/lib/backendClient.js</code> · <code>createDeposit</code></td><td>Stamp the 3 new fields; guard <code>recalcCustomerDepositBalance</code> on empty customerId. [T3]</td></tr>
+    <tr><td><code>src/components/backend/AppointmentFormModal.jsx</code></td><td><code>noAppointment</code> state + checkbox + relabel picker + gate appt-only fields + skip validations [T4]; deposit-only save branch [T5].</td></tr>
+    <tr><td><code>src/components/backend/DepositPanel.jsx</code></td><td>pickLater + มัดจำสำหรับ + payload wiring + table <code>|| dep.purpose</code> + form resets. [T6]</td></tr>
+    <tr><td><code>tests/deposit-no-appointment-flow-simulate.test.js</code> (new)</td><td>Rule I full-flow simulate + source-grep regression. [T7]</td></tr>
+    <tr><td><code>tests/deposit-no-appointment-rtl.test.jsx</code> (new)</td><td>RTL: appt-modal toggle hide/show + DepositPanel pickLater. [T8]</td></tr>
+    <tr><td><code>scripts/e2e-deposit-no-appointment.mjs</code> (new)</td><td>Rule Q L2 real-prod round-trip (TEST-DEPOSIT- fixtures). [T9]</td></tr>
+  </tbody>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: VisitPurposePicker — backward-compat <code>label</code> prop</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/VisitPurposePicker.jsx:16</code> (signature), <code>:40</code> (label text)</li>
+    <li>Test: <code>tests/deposit-no-appointment-rtl.test.jsx</code> (added in T8 — assert label override)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Add the <code>label</code> prop (default preserves "นัดมาเพื่อ")</strong></label></div>
+  <p>Line 16 — add <code>label</code> to the destructured props:</p>
+<pre><code>export default function VisitPurposePicker({ value, onChange, required = false, idPrefix = 'vp', label = 'นัดมาเพื่อ' }) {</code></pre>
+  <p>Line 39-41 — use the prop instead of the hard-coded string:</p>
+<pre><code>      &lt;label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1"&gt;
+        {label} {required &amp;&amp; &lt;span className="text-red-500"&gt;*&lt;/span&gt;}
+      &lt;/label&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Verify nothing else broke</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. Existing callers pass no <code>label</code> → still render "นัดมาเพื่อ".</p>
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add src/components/VisitPurposePicker.jsx
+git commit -m "feat(deposit): VisitPurposePicker gains backward-compat label prop"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: depositValidation — purpose/temp fields + temp-identity strict (TDD)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/depositValidation.js</code> (<code>validateDeposit</code> :33-40, <code>emptyDepositForm</code> :119-149, <code>normalizeDeposit</code> :174-208)</li>
+    <li>Test: <code>tests/deposit-validation-purpose.test.js</code> (new)</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Write failing tests</strong></label></div>
+<pre><code>// tests/deposit-validation-purpose.test.js
+import { describe, it, expect } from 'vitest';
+import { validateDeposit, emptyDepositForm, normalizeDeposit } from '../src/lib/depositValidation.js';
+
+describe('V-deposit purpose + temp identity', () =&gt; {
+  it('emptyDepositForm has purpose + temp fields', () =&gt; {
+    const f = emptyDepositForm();
+    expect(f.purpose).toBe('');
+    expect(f.customerNameTemp).toBe('');
+    expect(f.customerPhoneTemp).toBe('');
+  });
+  it('normalizeDeposit trims the new string fields', () =&gt; {
+    const n = normalizeDeposit({ amount: 100, customerNameTemp: '  สมหญิง  ', purpose: ' สมรรถภาพ ', customerPhoneTemp: ' 081 ' });
+    expect(n.customerNameTemp).toBe('สมหญิง');
+    expect(n.purpose).toBe('สมรรถภาพ');
+    expect(n.customerPhoneTemp).toBe('081');
+  });
+  it('strict passes with temp identity (no customerId)', () =&gt; {
+    const fail = validateDeposit(normalizeDeposit({ amount: 2000, paymentChannel: 'เงินสด', customerNameTemp: 'สมหญิง' }), { strict: true });
+    expect(fail).toBeNull();
+  });
+  it('strict fails when neither customerId nor customerNameTemp', () =&gt; {
+    const fail = validateDeposit(normalizeDeposit({ amount: 2000, paymentChannel: 'เงินสด' }), { strict: true });
+    expect(fail?.[0]).toBe('customerId');
+  });
+  it('strict still passes with a real customerId (regression)', () =&gt; {
+    const fail = validateDeposit(normalizeDeposit({ amount: 2000, paymentChannel: 'เงินสด', customerId: 'C-1' }), { strict: true });
+    expect(fail).toBeNull();
+  });
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-validation-purpose.test.js</code> → FAIL (purpose undefined; strict rejects temp).</p>
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Implement</strong></label></div>
+  <p><code>emptyDepositForm</code> — add inside the returned object (after <code>customerHN: ''</code> on :123):</p>
+<pre><code>    customerNameTemp: '',
+    customerPhoneTemp: '',
+    purpose: '',</code></pre>
+  <p><code>normalizeDeposit</code> — add after <code>out.customerHN = …</code> (:185):</p>
+<pre><code>  out.customerNameTemp = String(trim(out.customerNameTemp) || '');
+  out.customerPhoneTemp = String(trim(out.customerPhoneTemp) || '');
+  out.purpose = String(trim(out.purpose) || '');</code></pre>
+  <p><code>validateDeposit</code> strict block — replace the customerId check (:34-36) with temp-identity-aware check:</p>
+<pre><code>  if (strict) {
+    const hasCustomer = form.customerId &amp;&amp; String(form.customerId).trim();
+    const hasTemp = form.customerNameTemp &amp;&amp; String(form.customerNameTemp).trim();
+    if (!hasCustomer &amp;&amp; !hasTemp) {
+      return ['customerId', 'ต้องระบุลูกค้า หรือชื่อลูกค้าจอง'];
+    }
+    if (!form.paymentChannel || !String(form.paymentChannel).trim()) {
+      return ['paymentChannel', 'ต้องระบุวิธีชำระเงิน'];
+    }
+  }</code></pre>
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-validation-purpose.test.js</code> → PASS.</p>
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git add src/lib/depositValidation.js tests/deposit-validation-purpose.test.js
+git commit -m "feat(deposit): validator learns purpose + temp-customer identity"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: createDeposit — stamp new fields + recalc guard (TDD)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/lib/backendClient.js</code> · <code>createDeposit</code> (:4391-4428)</li>
+    <li>Test: <code>tests/create-deposit-purpose.test.js</code> (new) — mock <code>firebase/firestore</code> setDoc + recalc</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Write failing test</strong></label></div>
+  <p>Mirror the existing backendClient test setup in <code>tests/</code> (mock <code>setDoc</code>, capture the written payload). Assert:</p>
+<pre><code>// tests/create-deposit-purpose.test.js — assertions (use the repo's existing
+// backendClient firestore-mock harness; copy its mock block, then:)
+it('createDeposit stamps purpose + temp fields', async () =&gt; {
+  await createDeposit({ amount: 2000, paymentChannel: 'เงินสด', purpose: 'สมรรถภาพ',
+    customerNameTemp: 'สมหญิง', customerPhoneTemp: '081', customerId: '' });
+  const written = lastSetDocPayload();      // from the mock harness
+  expect(written.purpose).toBe('สมรรถภาพ');
+  expect(written.customerNameTemp).toBe('สมหญิง');
+  expect(written.customerPhoneTemp).toBe('081');
+  expect(written.hasAppointment).toBe(false);
+});
+it('does NOT recalc balance for empty customerId', async () =&gt; {
+  recalcSpy.mockClear();
+  await createDeposit({ amount: 2000, paymentChannel: 'เงินสด', customerNameTemp: 'สมหญิง', customerId: '' });
+  expect(recalcSpy).not.toHaveBeenCalled();
+});</code></pre>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run → FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/create-deposit-purpose.test.js</code> → FAIL (fields absent; recalc('') called).</p>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Implement</strong></label></div>
+  <p>In <code>createDeposit</code>'s <code>payload</code> object (after <code>customerHN: …</code> on :4395) add:</p>
+<pre><code>    customerNameTemp: data.customerNameTemp || '',
+    customerPhoneTemp: data.customerPhoneTemp || '',
+    purpose: data.purpose || '',</code></pre>
+  <p>Replace the unconditional recalc (:4428) with a guarded call:</p>
+<pre><code>  await setDoc(depositDoc(depositId), payload);
+  if (payload.customerId) await recalcCustomerDepositBalance(payload.customerId);
+  return { depositId, success: true };</code></pre>
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run → PASS + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/create-deposit-purpose.test.js</code> → PASS. <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code>git add src/lib/backendClient.js tests/create-deposit-purpose.test.js
+git commit -m "feat(deposit): createDeposit stamps purpose/temp + guards recalc on empty customerId"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: AppointmentFormModal — noAppointment toggle + gate appt-only fields + skip validations</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/AppointmentFormModal.jsx</code> — formData init (:155), validation (:565-566, :613, :628, :665), type-row region (:1300), VisitPurposePicker (:1493), and the appt-only render blocks (date/time :1228-1264, closed-day :1269, doctor+room cells :1399-1425, assistants :1430-1458, channel+status :1460-1491, สีนัด :1499-1506, location+expectedSales :1508-1532, recurring :1534-1562, preparation :1564-1568).</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Add the state flag</strong></label></div>
+  <p>In <code>buildInitialForm</code> (or the default form object), after <code>status: 'pending',</code> (:155):</p>
+<pre><code>    noAppointment: false,  // V-deposit-noappt — when true (deposit-booking only),
+                           // write a deposit-only doc; hide the appointment fields.</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Add the checkbox after the type row</strong></label></div>
+  <p>Immediately after the type-row closing <code>&lt;/div&gt;</code> (:1300), before the deposit subform (:1310):</p>
+<pre><code>          {showDepositSection &amp;&amp; (
+            &lt;label
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/15 border border-emerald-700/40 cursor-pointer text-xs font-bold text-emerald-200"
+              data-testid="appt-no-appointment-toggle"
+            &gt;
+              &lt;input
+                type="checkbox"
+                checked={!!formData.noAppointment}
+                onChange={(e) =&gt; update({ noAppointment: e.target.checked })}
+                className="w-4 h-4 accent-emerald-500"
+                data-testid="appt-no-appointment-checkbox"
+              /&gt;
+              ไม่นัดหมาย (จองมัดจำอย่างเดียว)
+            &lt;/label&gt;
+          )}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Gate every appointment-only render block with <code>!formData.noAppointment</code></strong></label></div>
+  <p>Wrap each block below in <code>{!formData.noAppointment &amp;&amp; ( … )}</code> (or extend its existing guard). KEEP: customer section, deposit subform, advisor cell, VisitPurposePicker, customerNote/notes.</p>
+  <ul>
+    <li>Date+Time grid (:1228-1264) → <code>{!formData.noAppointment &amp;&amp; (&lt;div className="grid grid-cols-3 gap-3"&gt;…&lt;/div&gt;)}</code></li>
+    <li>Closed-day banner (:1269) → change <code>{isClosedDay &amp;&amp; (</code> to <code>{!formData.noAppointment &amp;&amp; isClosedDay &amp;&amp; (</code></li>
+    <li>Doctor cell (:1399-1406) + Room cell (:1407-1425) → wrap EACH cell in <code>{!formData.noAppointment &amp;&amp; (…)}</code> (advisor cell :1387-1398 stays — so the grid shows only ที่ปรึกษา when noAppointment).</li>
+    <li>Assistants block (:1430-1458) → <code>{!formData.noAppointment &amp;&amp; (…)}</code></li>
+    <li>Channel + Status grid (:1460-1491) → <code>{!formData.noAppointment &amp;&amp; (…)}</code></li>
+    <li>สีนัดหมาย block (:1499-1506) → <code>{!formData.noAppointment &amp;&amp; (…)}</code></li>
+    <li>Location + Expected sales grid (:1508-1532) → <code>{!formData.noAppointment &amp;&amp; (…)}</code></li>
+    <li>Recurring block (:1534-1562) → extend to <code>{mode === 'create' &amp;&amp; !formData.noAppointment &amp;&amp; (…)}</code></li>
+    <li>Preparation block (:1564-1568) → <code>{!formData.noAppointment &amp;&amp; (…)}</code></li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Relabel the purpose picker for deposit-only</strong></label></div>
+  <p>VisitPurposePicker (:1493-1497):</p>
+<pre><code>          &lt;VisitPurposePicker
+            value={formData.appointmentTo}
+            onChange={(s) =&gt; update({ appointmentTo: s })}
+            label={formData.noAppointment ? 'มัดจำสำหรับ' : 'นัดมาเพื่อ'}
+            required
+          /&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Skip the appointment-only guards in handleSave</strong></label></div>
+  <p>(a) Date + startTime requirement (:565-566) — wrap:</p>
+<pre><code>    if (!formData.noAppointment) {
+      if (!formData.date) { scrollToFormError('apptDate', 'กรุณาเลือกวันที่'); return; }
+      if (!formData.startTime) { scrollToFormError('apptStartTime', 'กรุณาเลือกเวลาเริ่ม'); return; }
+    }</code></pre>
+  <p>(b) Holiday check (:613) → <code>if (mode === 'create' &amp;&amp; !skipHolidayCheck &amp;&amp; !formData.noAppointment) {</code></p>
+  <p>(c) Collision check (:628) → <code>if (!skipCollisionCheck &amp;&amp; !formData.noAppointment) {</code></p>
+  <p>(d) Staff-schedule check (:665) → <code>if (!skipStaffScheduleCheck &amp;&amp; formData.doctorId &amp;&amp; !formData.noAppointment) {</code></p>
+  <div class="step"><input type="checkbox" id="t4s6"> <label for="t4s6"><strong>Step 6: Build + manual sanity</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. (Behavior verified by RTL in T8.)</p>
+  <div class="step"><input type="checkbox" id="t4s7"> <label for="t4s7"><strong>Step 7: Commit</strong></label></div>
+<pre><code>git add src/components/backend/AppointmentFormModal.jsx
+git commit -m "feat(appt): ไม่นัดหมาย toggle hides appointment fields + skips appt-only validation"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: AppointmentFormModal — deposit-only save branch</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/AppointmentFormModal.jsx</code> — imports (createDeposit), handleSave create-branch chain (before :887).</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Import createDeposit</strong></label></div>
+  <p>Add <code>createDeposit</code> to the existing backendClient import (the one that already brings in <code>getDeposit</code>, <code>updateDeposit</code>, <code>createBackendAppointment</code>, …).</p>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add the deposit-only branch FIRST in the create chain</strong></label></div>
+  <p>Insert as the first <code>else if</code> after the <code>if (mode === 'edit' &amp;&amp; appt)</code> block closes (immediately before <code>} else if (isCreatingDepositBooking &amp;&amp; existingDepositId) {</code> on :887):</p>
+<pre><code>      } else if (isCreatingDepositBooking &amp;&amp; formData.noAppointment) {
+        // V-deposit-noappt — write a deposit-only doc (NO be_appointments).
+        // Mirrors the createDepositBookingPair depositData (advisor → 100%
+        // seller; same pattern as :930-937) minus hasAppointment/appointment,
+        // plus purpose (= appointmentTo / มัดจำสำหรับ) stamped top-level.
+        await createDeposit({
+          customerId: formData.pickLater ? '' : formData.customerId,
+          customerName: formData.pickLater ? tempName : formData.customerName,
+          customerHN: formData.pickLater ? '' : formData.customerHN,
+          customerNameTemp: tempName,
+          customerPhoneTemp: tempPhone,
+          amount: parseFloat(formData.depositAmount) || 0,
+          paymentChannel: formData.depositPaymentChannel,
+          paymentDate: formData.depositPaymentDate,
+          paymentTime: '',
+          refNo: '',
+          sellers: formData.advisorId
+            ? [{ id: formData.advisorId, name: formData.advisorName || '', percent: 100, total: parseFloat(formData.depositAmount) || 0 }]
+            : [],
+          customerSource: '',
+          sourceDetail: '',
+          note: formData.depositNote || '',
+          purpose: formData.appointmentTo,
+          hasAppointment: false,
+          paymentEvidenceUrl: '',
+          paymentEvidencePath: '',
+          branchId: selectedBranchId,
+        });</code></pre>
+  <p>(Note: <code>tempName</code>/<code>tempPhone</code> are already computed in handleSave at :705-706; <code>isCreatingDepositBooking</code> at :578. The branch precedes <code>existingDepositId</code> — a no-appt deposit is never the "+สร้างนัด" path.)</p>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Build</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code>git add src/components/backend/AppointmentFormModal.jsx
+git commit -m "feat(appt): ไม่นัดหมาย save writes deposit-only via createDeposit (advisor→seller, purpose stamped)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: DepositPanel — pickLater + มัดจำสำหรับ + table purpose fallback</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/backend/DepositPanel.jsx</code> — imports (VisitPurposePicker), state (~:188), openCreate (:315-318), openEdit (:369-371), handleSave guard (:425) + payload (:479-490), customer render (:1063-1113), purpose render (new, in the payment-fields card ~:1117), table cell (:781).</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Import + state</strong></label></div>
+  <p>Import: <code>import VisitPurposePicker from '../VisitPurposePicker.jsx';</code></p>
+  <p>Add state near the core form state (~after <code>customerHN</code> :177):</p>
+<pre><code>  const [pickLater, setPickLater] = useState(false);
+  const [customerNameTemp, setCustomerNameTemp] = useState('');
+  const [customerPhoneTemp, setCustomerPhoneTemp] = useState('');
+  const [purpose, setPurpose] = useState('');</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Reset/hydrate in openCreate + openEdit</strong></label></div>
+  <p>openCreate (after <code>setCustomerHN('')</code> — actually after :314): add</p>
+<pre><code>    setPickLater(false); setCustomerNameTemp(''); setCustomerPhoneTemp(''); setPurpose('');</code></pre>
+  <p>openEdit (after :371): add</p>
+<pre><code>    setPurpose(dep.purpose || '');
+    setCustomerNameTemp(dep.customerNameTemp || '');
+    setCustomerPhoneTemp(dep.customerPhoneTemp || '');
+    setPickLater(!dep.customerId &amp;&amp; !!(dep.customerNameTemp || dep.customerPhoneTemp));</code></pre>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Relax the customer guard in handleSave (:425)</strong></label></div>
+<pre><code>    if (pickLater) {
+      if (!customerNameTemp.trim()) { setError('กรุณากรอกชื่อลูกค้า'); return; }
+      if (!customerPhoneTemp.trim()) { setError('กรุณากรอกเบอร์โทรลูกค้า'); return; }
+    } else if (!customerId) {
+      setError('กรุณาเลือกลูกค้า หรือเปิด "เลือกลูกค้าภายหลัง"'); return;
+    }</code></pre>
+  <div class="step"><input type="checkbox" id="t6s4"> <label for="t6s4"><strong>Step 4: Carry the new fields into the payload (:479-490)</strong></label></div>
+  <p>Replace the customer lines + add purpose/temp in the <code>clean({ … })</code> payload:</p>
+<pre><code>      const payload = clean({
+        customerId: pickLater ? '' : customerId,
+        customerName: pickLater ? customerNameTemp : customerName,
+        customerHN: pickLater ? '' : customerHN,
+        customerNameTemp,
+        customerPhoneTemp,
+        purpose,
+        amount: amt,
+        paymentChannel, paymentDate, paymentTime, refNo,
+        sellers: activeSellers,
+        customerSource, sourceDetail,
+        note,
+        hasAppointment,
+        appointment,
+        paymentEvidenceUrl: paymentEvidenceUrl || '',
+        paymentEvidencePath: paymentEvidencePath || '',
+      });</code></pre>
+  <div class="step"><input type="checkbox" id="t6s5"> <label for="t6s5"><strong>Step 5: Customer render — add pickLater toggle + temp inputs (:1063-1113)</strong></label></div>
+  <p>Mirror the appointment modal's pattern: a "เลือกลูกค้าภายหลัง" checkbox above the picker; when on, render amber name+phone temp inputs instead of the picker. Replace the customer card body:</p>
+<pre><code>              &lt;div className="flex items-center justify-between mb-1"&gt;
+                &lt;label className={labelCls}&gt;ลูกค้า {!pickLater &amp;&amp; '*'}&lt;/label&gt;
+                {!editingDeposit &amp;&amp; (
+                  &lt;label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 cursor-pointer" data-testid="dep-pick-later-toggle"&gt;
+                    &lt;input type="checkbox" checked={pickLater}
+                      onChange={(e) =&gt; { setPickLater(e.target.checked); if (e.target.checked) { setCustomerId(''); setCustomerName(''); setCustomerHN(''); } else { setCustomerNameTemp(''); setCustomerPhoneTemp(''); } }}
+                      className="w-3.5 h-3.5 accent-amber-500" data-testid="dep-pick-later-checkbox" /&gt;
+                    เลือกลูกค้าภายหลัง
+                  &lt;/label&gt;
+                )}
+              &lt;/div&gt;
+              {pickLater ? (
+                &lt;div className="grid grid-cols-2 gap-2 px-3 py-2.5 rounded-lg bg-amber-900/10 border border-amber-700/40"&gt;
+                  &lt;div&gt;&lt;label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1"&gt;ชื่อลูกค้า *&lt;/label&gt;
+                    &lt;input type="text" value={customerNameTemp} onChange={(e) =&gt; setCustomerNameTemp(e.target.value)} maxLength={120}
+                      placeholder="เช่น คุณสมหญิง รักดี" data-testid="dep-customer-name-temp" className={inputCls} /&gt;&lt;/div&gt;
+                  &lt;div&gt;&lt;label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1"&gt;เบอร์โทร *&lt;/label&gt;
+                    &lt;input type="tel" inputMode="tel" value={customerPhoneTemp} onChange={(e) =&gt; setCustomerPhoneTemp(e.target.value)} maxLength={20}
+                      placeholder="08x-xxx-xxxx" data-testid="dep-customer-phone-temp" className={inputCls} /&gt;&lt;/div&gt;
+                  &lt;p className="col-span-2 text-[10px] text-[var(--tx-muted)] italic"&gt;มัดจำถูกบันทึกโดยยังไม่ผูกลูกค้า — ผูกภายหลังได้&lt;/p&gt;
+                &lt;/div&gt;
+              ) : customerName ? (
+                /* …existing picked-customer chip (unchanged :1066-1074)… */
+              ) : (
+                /* …existing search picker (unchanged :1076-1097)… */
+              )}</code></pre>
+  <div class="step"><input type="checkbox" id="t6s6"> <label for="t6s6"><strong>Step 6: Add the มัดจำสำหรับ picker</strong></label></div>
+  <p>Inside the "ข้อมูลมัดจำ" payment card (after the amount/channel grid ~:1145), add:</p>
+<pre><code>              &lt;VisitPurposePicker value={purpose} onChange={setPurpose} label="มัดจำสำหรับ" idPrefix="dep-vp" /&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t6s7"> <label for="t6s7"><strong>Step 7: Table column fallback (:781)</strong></label></div>
+  <p>Extend the purpose-cell condition + render to fall back to <code>dep.purpose</code>:</p>
+<pre><code>                      &lt;td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[280px] align-top" data-testid="deposit-purpose-cell"&gt;
+                        {(dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose) ? (
+                          &lt;span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug"&gt;
+                            &lt;span className="shrink-0"&gt;🎯&lt;/span&gt;
+                            &lt;span&gt;{dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}&lt;/span&gt;
+                          &lt;/span&gt;
+                        ) : (
+                          &lt;span className="text-[var(--tx-muted)]/60 text-[11px]"&gt;—&lt;/span&gt;
+                        )}
+                      &lt;/td&gt;</code></pre>
+  <div class="step"><input type="checkbox" id="t6s8"> <label for="t6s8"><strong>Step 8: Build + commit</strong></label></div>
+<pre><code>npm run build   # clean
+git add src/components/backend/DepositPanel.jsx
+git commit -m "feat(finance): DepositPanel เลือกลูกค้าภายหลัง + มัดจำสำหรับ + table purpose fallback"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 7: Rule I full-flow simulate + source-grep regression (new file)</h3>
+  <p><strong>Files:</strong> Create <code>tests/deposit-no-appointment-flow-simulate.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Write the flow-simulate + source-grep tests</strong></label></div>
+  <p>Chain the no-appt path with pure mirrors + lock the source contracts. Include:</p>
+  <ul>
+    <li><strong>F1 — pure mirror</strong>: build the deposit-only payload the way AppointmentFormModal does (advisor→100% seller; <code>purpose = appointmentTo</code>; <code>hasAppointment:false</code>; pickLater → <code>customerId:''</code> + temp fields) → run through <code>normalizeDeposit</code> + <code>validateDeposit({strict:true})</code> → expect null (valid).</li>
+    <li><strong>F2 — table resolver</strong>: a pure <code>resolvePurpose(dep)</code> mirror = <code>dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose</code> → assert it returns <code>dep.purpose</code> when no appointment, and <code>appointment.purpose</code> when present (no regression).</li>
+    <li><strong>F3 — adversarial</strong>: empty/null/Thai/very-long/duplicate-seller/percent≠100 inputs through validate.</li>
+    <li><strong>SG1 — AppointmentFormModal</strong>: source contains <code>noAppointment</code> in formData init; the <code>else if (isCreatingDepositBooking &amp;&amp; formData.noAppointment)</code> branch calls <code>createDeposit</code> with <code>hasAppointment: false</code> and <code>purpose: formData.appointmentTo</code>; the date/startTime guard is wrapped in <code>!formData.noAppointment</code>.</li>
+    <li><strong>SG2 — DepositPanel</strong>: source contains <code>pickLater</code>, the <code>purpose</code> state + <code>VisitPurposePicker</code> with <code>label="มัดจำสำหรับ"</code>, and the table cell reads <code>|| dep.purpose</code>.</li>
+    <li><strong>SG3 — VisitPurposePicker</strong>: signature has <code>label = 'นัดมาเพื่อ'</code> and renders <code>{label}</code>.</li>
+  </ul>
+<pre><code>// pattern for source-grep (repo convention):
+import { readFileSync } from 'node:fs';
+const appt = readFileSync('src/components/backend/AppointmentFormModal.jsx', 'utf8');
+expect(appt).toMatch(/noAppointment:\s*false/);
+expect(appt).toMatch(/isCreatingDepositBooking\s*&amp;&amp;\s*formData\.noAppointment/);
+expect(appt).toMatch(/purpose:\s*formData\.appointmentTo/);</code></pre>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-no-appointment-flow-simulate.test.js</code> → PASS.</p>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add tests/deposit-no-appointment-flow-simulate.test.js
+git commit -m "test(deposit): Rule I flow-simulate + source-grep for no-appt deposit"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 8: RTL — appt-modal toggle + DepositPanel pickLater (new file)</h3>
+  <p><strong>Files:</strong> Create <code>tests/deposit-no-appointment-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: Write RTL tests (mock scopedDataLayer / backendClient per repo convention)</strong></label></div>
+  <ul>
+    <li><strong>R1</strong>: render AppointmentFormModal with <code>lockedAppointmentType="deposit-booking"</code>; assert <code>appt-no-appointment-checkbox</code> visible; tick it → <code>apptDate</code> field gone, deposit subform + <code>appointmentTo</code> still present; the picker label reads "มัดจำสำหรับ".</li>
+    <li><strong>R2</strong>: with noAppointment ON + pickLater, fill temp name+phone + amount + a purpose chip + save → assert <code>createDeposit</code> mock called with <code>hasAppointment:false</code>, <code>purpose</code> set, <code>customerId:''</code>; <code>createDepositBookingPair</code> NOT called.</li>
+    <li><strong>R3</strong>: noAppointment ON, leave date empty, save → NO "กรุณาเลือกวันที่" error (guard skipped); noAppointment OFF + empty date → error fires (regression).</li>
+    <li><strong>R4</strong>: render DepositPanel create form; tick <code>dep-pick-later-checkbox</code> → temp name/phone inputs appear, picker hidden; the <code>มัดจำสำหรับ</code> picker is present.</li>
+    <li><strong>R5</strong>: VisitPurposePicker with <code>label="มัดจำสำหรับ"</code> renders that text; default renders "นัดมาเพื่อ".</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Run → PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/deposit-no-appointment-rtl.test.jsx</code> → PASS. If a real bug surfaces, fix source + re-run (Rule I lesson).</p>
+  <div class="step"><input type="checkbox" id="t8s3"> <label for="t8s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code>git add tests/deposit-no-appointment-rtl.test.jsx
+git commit -m "test(deposit): RTL for ไม่นัดหมาย toggle + DepositPanel pickLater"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 9: Rule Q L2 real-prod e2e + full suite + build</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-deposit-no-appointment.mjs</code> (admin-SDK, Rule R/M env-pull, TEST-DEPOSIT- fixtures).</p>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Write the e2e script</strong></label></div>
+  <p>Pattern after an existing <code>scripts/e2e-*.mjs</code> (env load via <code>.env.local.prod</code>, admin SDK, canonical path <code>artifacts/loverclinic-opd-4c39b/public/data/be_deposits</code>, invocation guard). Steps:</p>
+  <ul>
+    <li>Use <code>createTestDepositId()</code> (<code>tests/helpers/testDeposit.js</code>, V33.14) for the doc id.</li>
+    <li>Write a deposit-only doc with <code>{ amount, paymentChannel, paymentDate, purpose:'สมรรถภาพ', customerNameTemp:'E2E สมหญิง', customerPhoneTemp:'081', customerId:'', hasAppointment:false, sellers:[{id:'E2E-ADV',name:'adv',percent:100,total:amount}], branchId:&lt;test branch&gt; }</code> through the REAL <code>createDeposit</code> logic shape.</li>
+    <li>Read it back → assert <code>hasAppointment===false</code>, <code>purpose</code>, <code>customerNameTemp</code>, <code>customerPhoneTemp</code>, <code>branchId</code> present; assert NO be_appointments doc was created with the same id.</li>
+    <li>Resolve the table column value via the same fallback → assert it equals <code>'สมรรถภาพ'</code>.</li>
+    <li>Cleanup: delete the test deposit; assert zero orphans. Emit a <code>be_admin_audit</code> entry.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Run the e2e (Rule R env already authorized)</strong></label></div>
+  <p>Run: <code>node scripts/e2e-deposit-no-appointment.mjs</code> → all phases PASS, cleanup confirmed.</p>
+  <div class="step"><input type="checkbox" id="t9s3"> <label for="t9s3"><strong>Step 3: Full suite + build (Rule N batch-end)</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → 0 fail (fix any V21 lock-ins surfaced by the field/label changes). <code>npm run build</code> → clean.</p>
+  <div class="step"><input type="checkbox" id="t9s4"> <label for="t9s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code>git add scripts/e2e-deposit-no-appointment.mjs
+git commit -m "test(deposit): Rule Q L2 real-prod e2e for no-appointment deposit round-trip"</code></pre>
+  <div class="step"><input type="checkbox" id="t9s5"> <label for="t9s5"><strong>Step 5: Rule Q L1 — hand off to user</strong></label></div>
+  <p>NOT auto-claimed verified. User (or Playwright on the real modal) ticks <code>ไม่นัดหมาย</code>, saves, confirms the deposit appears in Finance → มัดจำ with the <code>มัดจำสำหรับ</code> column filled + the <code>ลูกค้าจอง</code> badge, then <code>+ สร้างนัด</code>.</p>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> AC1→T4/T5, AC2→T4/T5/T6 (pickLater), AC3→T2/T3/T6 (purpose stored + table), AC4→existing +สร้างนัด (verified in T9 L1), AC5→T6 (pickLater + purpose; sellers/source kept untouched), AC6→unchanged pair path (locked by SG1), AC7→<code>createDeposit</code> already stamps <code>branchId</code> via <code>_resolveBranchIdForWrite</code> (T3 preserves). ✓ all covered.</p>
+<p><strong>Placeholder scan:</strong> the two test files (T7/T8) describe each case with concrete assertions + the source-grep regex pattern; the e2e (T9) lists exact phases. The RTL mock block + e2e env block say "per repo convention" because the repo has an established harness to copy — not a vague TODO. No "add error handling"/"etc." placeholders.</p>
+<p><strong>Type/name consistency:</strong> <code>purpose</code> / <code>customerNameTemp</code> / <code>customerPhoneTemp</code> identical across validator (T2), writer (T3), modal save (T5), DepositPanel payload (T6), table reader (T6), tests (T7-T9). <code>noAppointment</code> consistent T4↔T5↔T7. <code>label</code> prop consistent T1↔T4↔T6↔T8.</p>
+
+<h2>Risks / Notes</h2>
+<ul>
+  <li><strong>recalc guard (T3)</strong> — the only behavioral change to <code>createDeposit</code> beyond field-stamping; the existing pair path already creates <code>customerId:''</code> deposits, so guarding recalc on empty id is strictly safer.</li>
+  <li><strong>Edit path</strong> — a no-appt deposit has no be_appointments doc → it is edited via DepositPanel, not the appointment modal. The modal's noAppointment branch is CREATE-only (no edit handling needed).</li>
+  <li><strong>Full-suite V21 risk</strong> — the VisitPurposePicker label change + new formData field may trip existing source-grep tests; T9 Step 3 catches + fixes them in the batch.</li>
+  <li><strong>No rules/data/deploy</strong> — this is frontend + lib only; no firestore.rules change → no Probe-Deploy-Probe. Ships under V18 (await explicit "deploy").</li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Deposit-without-appointment + Finance deposit modernize — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1040px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2.2em; }
+    h3 { margin-top: 1.4em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: #333; }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .tag { display:inline-block; font-size:0.72em; padding:0.1em 0.5em; border-radius:6px; background:#fee2e2; color:#991b1b; font-weight:700; }
+    .ok { color:#047857; font-weight:700; }
+    .new { color: var(--accent); font-weight:700; }
+
+    /* ── Faithful dark-theme mockup (matches app: dark / fire-red, NO red on names) ── */
+    .mockup-label { font-size: 0.74em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin: 1.4em 0 0.4em; font-weight:700; }
+    .m { background:#101014; border:1px solid #2a2a33; border-radius:12px; padding:1.1em 1.2em; margin:0.4em 0 1em; color:#e6e6ea; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,0.25); }
+    .m .ttl { font-weight:800; color:#f4f4f6; font-size:14px; margin-bottom:0.7em; display:flex; align-items:center; gap:0.5em; }
+    .m .seg { border-top:1px solid #23232b; margin-top:0.8em; padding-top:0.7em; }
+    .m label.k { display:block; font-size:10px; font-weight:700; color:#9b9bA6; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:3px; }
+    .m .req { color:#f87171; }
+    .m .inp { background:#17171d; border:1px solid #33333d; border-radius:7px; padding:6px 9px; color:#d7d7de; min-height:30px; display:flex; align-items:center; }
+    .m .inp.ph { color:#5e5e6a; }
+    .m .row { display:flex; gap:10px; }
+    .m .row > div { flex:1; }
+    .m .chk { display:inline-flex; align-items:center; gap:7px; font-weight:700; font-size:12px; }
+    .m .box-amber { background:rgba(180,120,10,0.10); border:1px solid rgba(217,160,40,0.42); border-radius:9px; padding:9px 11px; }
+    .m .box-sky { background:rgba(40,120,180,0.10); border:1px solid rgba(80,150,210,0.32); border-radius:9px; padding:8px 11px; }
+    .m .chip { display:inline-block; background:rgba(16,140,90,0.14); border:1px solid rgba(20,160,100,0.34); color:#6ee7b7; border-radius:7px; padding:2px 9px; font-size:11px; font-weight:600; margin:2px 4px 2px 0; }
+    .m .chip.sel { background:rgba(220,38,38,0.18); border-color:rgba(248,113,113,0.5); color:#fca5a5; }
+    .m .toggle { background:rgba(220,38,38,0.12); border:1px solid rgba(248,113,113,0.4); border-radius:8px; padding:7px 11px; }
+    .m .dim { opacity:0.32; text-decoration:line-through; }
+    .m .dim-note { font-size:11px; color:#7a7a86; font-style:italic; }
+    .m .badge-amber { background:rgba(180,120,10,0.22); border:1px solid rgba(217,160,40,0.5); color:#fbbf24; border-radius:5px; padding:1px 7px; font-size:10px; font-weight:800; text-transform:uppercase; }
+    .m .pill-red { background:#dc2626; color:#fff; border-radius:7px; padding:6px 14px; font-weight:800; font-size:12px; display:inline-block; }
+    .m table.t { font-size:12px; color:#cfcfd6; }
+    .m table.t th { background:#1a1a21; color:#9b9bA6; border:1px solid #26262e; font-size:10px; text-transform:uppercase; padding:6px 8px; }
+    .m table.t td { border:1px solid #20202733; padding:6px 8px; }
+    .m .money { color:#34d399; font-weight:800; }
+    .arrow { font-size:1.3em; color:var(--accent); }
+  </style>
+</head>
+<body>
+
+<h1>Deposit-without-appointment + Finance deposit modernize</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-27 · <strong>Status:</strong> Approved by user (Q1 = Modernize-in-place, Q2 = Port-all) · <strong>Implementation plan:</strong> TBD (next: writing-plans) · <strong>Branch baseline:</strong> master <code>9209ec70</code>, prod LIVE, 14892 tests/0 fail.
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Two related deposit flows are out of step:</p>
+<ol>
+  <li><strong>Appointment modal</strong> (<code>AppointmentFormModal.jsx</code>, 1669 lines) can already book a deposit (<code>จองมัดจำ</code>) with pick-customer-later <em>or</em> an existing HN — but it <strong>always requires an appointment</strong> (date/time) and always writes the deposit+appointment pair. Staff need to take a deposit <strong>without scheduling a visit yet</strong>.</li>
+  <li>The <strong>Finance deposit-create form</strong> (<code>DepositPanel.jsx</code>, 1555 lines) is the older form: it <strong>can't pick a customer later</strong>, and a deposit with no appointment shows a blank <code>มัดจำสำหรับ</code> column (the reason lived only on the linked appointment).</li>
+</ol>
+<p>Goal: add a <code>ไม่นัดหมาย</code> (no-appointment) deposit path to the appointment modal, and modernize the Finance deposit form in place (pick-later + a <code>มัดจำสำหรับ</code> reason field + visual polish) — preserving <strong>all</strong> existing money fields (commission/source/evidence).</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup-label">① Appointment modal — <code>จองมัดจำ</code> with NEW <code>ไม่นัดหมาย</code> toggle OFF (today's behavior)</div>
+<div class="m">
+  <div class="ttl">📅 สร้างนัดหมาย / มัดจำ</div>
+  <div>
+    <label class="k">ประเภท</label>
+    <span class="chip">นัดหมาย</span><span class="chip">ปรึกษา</span><span class="chip sel">จองมัดจำ ✓</span><span class="chip">อื่นๆ</span>
+  </div>
+  <div class="seg">
+    <span class="chk"><input type="checkbox"> <span>ไม่นัดหมาย (จองมัดจำอย่างเดียว)</span></span>
+    <span class="dim-note">&nbsp;&nbsp;← NEW · unticked = full appointment, as today</span>
+  </div>
+  <div class="seg row">
+    <div><label class="k">ลูกค้า</label><div class="box-sky">คุณสมชาย ใจดี <span style="color:#7da7c7">HN-000123</span></div></div>
+    <div><label class="k">นัดมาเพื่อ <span class="req">*</span></label><span class="chip sel">สมรรถภาพ</span><span class="chip">อื่นๆ</span></div>
+  </div>
+  <div class="seg row">
+    <div><label class="k">วันที่ <span class="req">*</span></label><div class="inp">27/05/2026</div></div>
+    <div><label class="k">เริ่ม <span class="req">*</span></label><div class="inp">13:00</div></div>
+    <div><label class="k">สิ้นสุด</label><div class="inp">13:30</div></div>
+  </div>
+  <div class="row"><div><label class="k">หมอ</label><div class="inp ph">เลือกแพทย์…</div></div><div><label class="k">ห้อง</label><div class="inp ph">เลือกห้อง…</div></div></div>
+  <div class="seg row">
+    <div><label class="k">ยอดมัดจำ <span class="req">*</span></label><div class="inp">2,000</div></div>
+    <div><label class="k">ช่องทาง <span class="req">*</span></label><div class="inp">เงินสด</div></div>
+    <div><label class="k">วันที่ชำระ <span class="req">*</span></label><div class="inp">27/05/2026</div></div>
+  </div>
+  <div style="margin-top:0.9em"><span class="pill-red">บันทึก → createDepositBookingPair (deposit + appointment)</span></div>
+</div>
+
+<div class="mockup-label">① Appointment modal — <code>ไม่นัดหมาย</code> toggle ON → appointment system collapses, deposit-only</div>
+<div class="m">
+  <div class="ttl">📅 สร้างนัดหมาย / มัดจำ</div>
+  <div>
+    <label class="k">ประเภท</label>
+    <span class="chip">นัดหมาย</span><span class="chip">ปรึกษา</span><span class="chip sel">จองมัดจำ ✓</span><span class="chip">อื่นๆ</span>
+  </div>
+  <div class="seg toggle">
+    <span class="chk"><input type="checkbox" checked> <span class="new">ไม่นัดหมาย (จองมัดจำอย่างเดียว) ✓</span></span>
+  </div>
+  <div class="seg">
+    <span class="chk"><input type="checkbox" checked> <span style="color:#fbbf24">เลือกลูกค้าภายหลัง</span></span>
+    <div class="box-amber row" style="margin-top:6px">
+      <div><label class="k">ชื่อลูกค้า <span class="req">*</span></label><div class="inp">คุณสมหญิง รักดี</div></div>
+      <div><label class="k">เบอร์โทร <span class="req">*</span></label><div class="inp" style="font-family:monospace">081-234-5678</div></div>
+    </div>
+    <div class="dim-note" style="margin-top:4px">นัดถูกบันทึกโดยยังไม่ผูกลูกค้า — ผูกภายหลังได้ &nbsp;(หรือสลับมาค้นหา HN เดิม)</div>
+  </div>
+  <div class="seg row">
+    <div><label class="k">มัดจำสำหรับ <span class="req">*</span></label><span class="chip sel">สมรรถภาพ</span><span class="chip">อื่นๆ: ___</span></div>
+    <div><label class="k">ที่ปรึกษา</label><div class="inp">พญ. กานต์</div></div>
+  </div>
+  <div class="seg row">
+    <div><label class="k">ยอดมัดจำ <span class="req">*</span></label><div class="inp">2,000</div></div>
+    <div><label class="k">ช่องทาง <span class="req">*</span></label><div class="inp">เงินสด</div></div>
+    <div><label class="k">วันที่ชำระ <span class="req">*</span></label><div class="inp">27/05/2026</div></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <span class="dim">วันที่ · เริ่ม · สิ้นสุด · หมอ · ผู้ช่วย · ห้อง · สีนัด · ทำซ้ำ</span>
+    <span class="dim-note">&nbsp;ปิด (ระบบนัดหมายถูกซ่อน) — ไม่เช็คชนเวลา/วันหยุด/ตารางหมอ</span>
+  </div>
+  <div style="margin-top:0.9em"><span class="pill-red">บันทึก → createDeposit (deposit-only · ไม่มี be_appointments)</span></div>
+</div>
+
+<div class="mockup-label">② Finance <code>DepositPanel</code> create — modernized in place (pick-later + มัดจำสำหรับ + ALL money fields kept)</div>
+<div class="m">
+  <div class="ttl">💰 สร้างมัดจำ (tab=finance)</div>
+  <div class="seg">
+    <span class="chk"><input type="checkbox" checked> <span style="color:#fbbf24">เลือกลูกค้าภายหลัง</span></span> <span class="badge-amber">NEW</span>
+    <div class="box-amber row" style="margin-top:6px">
+      <div><label class="k">ชื่อลูกค้า <span class="req">*</span></label><div class="inp">คุณวีระ ทองดี</div></div>
+      <div><label class="k">เบอร์โทร <span class="req">*</span></label><div class="inp" style="font-family:monospace">089-000-1111</div></div>
+    </div>
+    <div class="dim-note">หรือปิดเพื่อค้นหาลูกค้า HN เดิม (ค้นหาชื่อ / HN / เบอร์)</div>
+  </div>
+  <div class="seg">
+    <label class="k">มัดจำสำหรับ <span class="badge-amber">NEW</span></label>
+    <span class="chip sel">ดูดไขมัน</span><span class="chip">โบ</span><span class="chip">ฟิลเลอร์</span><span class="chip">อื่นๆ: ___</span>
+  </div>
+  <div class="seg row">
+    <div><label class="k">ยอดมัดจำ <span class="req">*</span></label><div class="inp">5,000</div></div>
+    <div><label class="k">ช่องทาง <span class="req">*</span></label><div class="inp">โอน</div></div>
+    <div><label class="k">วันที่/เวลา ชำระ <span class="req">*</span></label><div class="inp">27/05/2026 14:20</div></div>
+    <div><label class="k">เลขอ้างอิง</label><div class="inp ph">REF…</div></div>
+  </div>
+  <div class="seg">
+    <label class="k">ผู้ขาย / ค่ามือ <span class="req">*</span> &nbsp;<span class="dim-note">(คงไว้ครบ — feeds DF/payout)</span></label>
+    <div class="inp">☑ พนง. A — 60% · 3,000 &nbsp;&nbsp; ☑ พนง. B — 40% · 2,000 &nbsp;&nbsp;[+ เพิ่มผู้ขาย]</div>
+  </div>
+  <div class="seg row">
+    <div><label class="k">แหล่งที่มาลูกค้า</label><div class="inp">Facebook</div></div>
+    <div><label class="k">หลักฐานการชำระ</label><div class="inp ph">📎 แนบสลิป…</div></div>
+    <div><label class="k">หมายเหตุ</label><div class="inp ph">—</div></div>
+  </div>
+  <div class="seg"><span class="chk"><input type="checkbox"> <span>มีนัดหมายด้วย</span></span> <span class="dim-note">(subform เดิม — ติ๊กเพื่อนัดพร้อมกัน → createDepositBookingPair)</span></div>
+  <div style="margin-top:0.9em"><span class="pill-red">บันทึก</span></div>
+</div>
+
+<div class="mockup-label">③ Deposit table — <code>มัดจำสำหรับ</code> column now populated for a no-appointment / pick-later deposit</div>
+<div class="m">
+  <table class="t">
+    <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th>มัดจำสำหรับ</th><th>ยอด / คงเหลือ</th><th>ช่องทาง</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+    <tbody>
+      <tr>
+        <td style="font-family:monospace">DEP-…401</td>
+        <td>คุณสมหญิง รักดี<br><span class="badge-amber">ลูกค้าจอง</span> <span style="color:#fbbf24">081-234-5678</span></td>
+        <td><span class="chip" style="margin:0">🎯 สมรรถภาพ</span></td>
+        <td><span class="money">คงเหลือ 2,000</span> <span style="color:#8a8a93;font-size:10px">บาท</span></td>
+        <td>เงินสด</td>
+        <td><span style="color:#34d399">active</span></td>
+        <td>👁 &nbsp;<span class="chip" style="margin:0">+ สร้างนัด</span></td>
+      </tr>
+      <tr>
+        <td style="font-family:monospace">DEP-…388</td>
+        <td>คุณสมชาย ใจดี <span style="color:#8a8a93">HN-000123</span></td>
+        <td><span class="chip" style="margin:0">🎯 ดูดไขมัน</span></td>
+        <td><span class="money">คงเหลือ 5,000</span> <span style="color:#8a8a93;font-size:10px">บาท</span></td>
+        <td>โอน</td>
+        <td><span style="color:#34d399">active</span></td>
+        <td>👁</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="dim-note" style="margin-top:6px">column reader: <code>dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose</code> &nbsp;(<span class="new">|| dep.purpose</span> = NEW fallback). The <code>+ สร้างนัด</code> action stays available on no-appointment rows.</div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup-label">A · State transition — the <code>ไม่นัดหมาย</code> toggle (appointment modal, deposit-booking type)</div>
+<div class="m">
+  <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:13px">
+    <span class="box-sky" style="padding:8px 12px">จองมัดจำ + <b>ไม่นัดหมาย OFF</b><br><span class="dim-note">customer · นัดมาเพื่อ · <b>date/time/หมอ/ห้อง</b> · deposit fields</span></span>
+    <span class="arrow">⇄ tick</span>
+    <span class="toggle" style="padding:8px 12px">จองมัดจำ + <b class="new">ไม่นัดหมาย ON</b><br><span class="dim-note">customer · มัดจำสำหรับ · ที่ปรึกษา · deposit fields &nbsp;<b>(no date/time)</b></span></span>
+  </div>
+  <div style="margin-top:10px; font-size:12.5px">
+    <b>Save routing:</b>
+    OFF → <code>createDepositBookingPair</code> (be_deposits + be_appointments, atomic) &nbsp;|&nbsp;
+    ON → <code>createDeposit</code> (be_deposits only, <code>hasAppointment:false</code>)
+  </div>
+  <div style="margin-top:6px" class="dim-note">Validation when ON: require (customer OR temp name+phone) + มัดจำสำหรับ + amount&gt;0 + channel + payDate. The date/startTime guards are skipped.</div>
+</div>
+
+<div class="mockup-label">B · Data flow — the three write paths after this change</div>
+<table>
+  <thead><tr><th>Entry point</th><th>Condition</th><th>Writer</th><th>Docs written</th><th><code>purpose</code> source (table column)</th></tr></thead>
+  <tbody>
+    <tr><td>Appointment modal</td><td>deposit-booking, <code>noAppointment = false</code></td><td><code>createDepositBookingPair</code> <span class="dim-note">(unchanged)</span></td><td>be_deposits + be_appointments</td><td><code>appointment.purpose</code></td></tr>
+    <tr><td>Appointment modal</td><td>deposit-booking, <code>noAppointment = true</code> <span class="new">(NEW)</span></td><td><code>createDeposit</code></td><td>be_deposits only</td><td><code>dep.purpose</code> (top-level) <span class="new">(NEW)</span></td></tr>
+    <tr><td>Finance DepositPanel</td><td><code>hasAppointment = false</code> <span class="dim-note">(default)</span></td><td><code>createDeposit</code></td><td>be_deposits only</td><td><code>dep.purpose</code> (top-level) <span class="new">(NEW)</span></td></tr>
+    <tr><td>Finance DepositPanel</td><td><code>hasAppointment = true</code></td><td><code>createDepositBookingPair</code> <span class="dim-note">(unchanged)</span></td><td>be_deposits + be_appointments</td><td><code>appointment.purpose</code></td></tr>
+    <tr><td>Deposit row <code>+ สร้างนัด</code></td><td>no-appt deposit → schedule later</td><td><code>createAppointmentForExistingDeposit</code> <span class="dim-note">(unchanged)</span></td><td>+ be_appointments (links to deposit)</td><td>then <code>appointment.purpose</code></td></tr>
+  </tbody>
+</table>
+
+<h2>Architecture</h2>
+
+<blockquote><strong>Planning refinement (2026-05-27):</strong> advisor (<code>ที่ปรึกษา</code>) flows through the existing <code>sellers</code> array (advisor → 100% seller — the pattern <code>AppointmentFormModal</code> already uses at <code>:930-937</code>), NOT new <code>advisorId/advisorName</code> deposit fields. So <code>be_deposits</code> adds only <strong>3</strong> fields: <code>purpose</code> + <code>customerNameTemp</code> + <code>customerPhoneTemp</code>. <code>VisitPurposePicker</code> gains a backward-compat <code>label</code> prop. The plan is authoritative for implementation detail.</blockquote>
+
+<h3>Files touched</h3>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/lib/depositValidation.js</code></td><td><code>emptyDepositForm</code> + <code>normalizeDeposit</code> gain <code>purpose</code> / <code>customerNameTemp</code> / <code>customerPhoneTemp</code> / <code>advisorId</code> / <code>advisorName</code>. <code>validateDeposit</code> strict: accept temp identity — require <code>customerId</code> <strong>OR</strong> non-empty <code>customerNameTemp</code> (instead of <code>customerId</code> only). Sellers rules unchanged (empty array still passes).</td></tr>
+    <tr><td><code>src/lib/backendClient.js</code> · <code>createDeposit</code></td><td>Payload stamps the new fields (<code>purpose</code>, <code>customerNameTemp</code>, <code>customerPhoneTemp</code>, <code>advisorId</code>, <code>advisorName</code>) — additive, defaults <code>''</code>. Verify <code>recalcCustomerDepositBalance('')</code> is a no-op for temp-customer deposits (the pair path already creates <code>customerId:''</code> deposits, so this should hold).</td></tr>
+    <tr><td><code>src/components/backend/AppointmentFormModal.jsx</code></td><td>NEW <code>noAppointment</code> flag (formData), checkbox shown when <code>isDepositBooking</code>. When ON: hide appt fields + skip date/startTime validation + skip collision/holiday/schedule checks; relabel <code>นัดมาเพื่อ → มัดจำสำหรับ</code>; route save to <code>createDeposit</code> (deposit-only) passing <code>purpose = appointmentTo</code>, advisor, temp fields, <code>sellers: []</code>.</td></tr>
+    <tr><td><code>src/components/backend/DepositPanel.jsx</code></td><td>Create form: add <code>เลือกลูกค้าภายหลัง</code> toggle (amber temp name+phone; relax the <code>if (!customerId)</code> guard to require temp identity instead) + <code>มัดจำสำหรับ</code> VisitPurposePicker (→ <code>payload.purpose</code>) + visual polish. Keep all money fields + <code>sellers≥1</code> UI check. Table <code>มัดจำสำหรับ</code> cell reader gains <code>|| dep.purpose</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3>Reuse / isolation</h3>
+<ul>
+  <li><code>VisitPurposePicker</code> — reused as-is for <code>มัดจำสำหรับ</code> in both surfaces (no fork).</li>
+  <li>The pickLater temp-customer pattern (amber name+phone + <code>customerNameTemp/Phone</code>) is mirrored from the appointment modal — same field names, same persisted shape, so the table's existing <code>ลูกค้าจอง</code> badge renders for both.</li>
+  <li>No new collection. <code>be_deposits</code> gains 5 optional string fields (reader = table/detail/edit + reports; writer = both create paths; can't live elsewhere — no appointment doc for no-appt deposits). Rule C3 satisfied.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = Modernize in place:</strong> keep <code>DepositPanel</code> as its own full-featured money form; appointment modal gains only the <code>ไม่นัดหมาย</code> toggle. Two forms, lower regression risk to the 1669-line modal.</li>
+  <li><strong>Q2 = Port all (full parity):</strong> the Finance form keeps every money field (commission/ผู้ขาย, source, ref-no, evidence, time) — nothing dropped.</li>
+  <li><strong>Defaults (accepted, no objection):</strong> <code>มัดจำสำหรับ</code> = reuse <code>นัดมาเพื่อ</code> VisitPurposePicker, stored top-level <code>dep.purpose</code>; no-appt deposit still supports <code>+ สร้างนัด</code> later; when no-appt → hide date/time/หมอ/ห้อง/recurring and write deposit-only.</li>
+  <li><strong>Open call (accepted):</strong> a no-appt deposit created <em>from the appointment modal</em> does not collect commission (sellers empty — lib-valid); commission added later via Finance edit. Full commission form lives in Finance.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>In the appointment modal, selecting <code>จองมัดจำ</code> shows a <code>ไม่นัดหมาย</code> checkbox; ticking it hides date/time/หมอ/ห้อง/recurring and the modal saves a <code>be_deposits</code> doc with <strong>no</strong> <code>be_appointments</code> doc.</li>
+  <li>The no-appt deposit works with both an existing-HN customer and <code>เลือกลูกค้าภายหลัง</code> (temp name+phone persisted; <code>customerId:''</code>).</li>
+  <li><code>มัดจำสำหรับ</code> (= chosen <code>appointmentTo</code>) is stored top-level and shows in the Finance deposit table's <code>มัดจำสำหรับ</code> column for no-appt + Finance deposits.</li>
+  <li>The no-appt deposit still offers <code>+ สร้างนัด</code> on its row and schedules correctly afterward.</li>
+  <li>Finance <code>สร้างมัดจำ</code> supports <code>เลือกลูกค้าภายหลัง</code> + a <code>มัดจำสำหรับ</code> field, while still capturing ผู้ขาย/ค่ามือ + source + ref-no + evidence (no field lost).</li>
+  <li>Existing with-appointment deposit-booking (both entry points) is unchanged: still the atomic <code>createDepositBookingPair</code>.</li>
+  <li>Branch-scope preserved: deposit stamped with the selected branch via <code>_resolveBranchIdForWrite</code>; list/table re-fetch on branch switch.</li>
+</ol>
+
+<h2>Testing (Part 3 — comprehensive, Rule Q, no self-deception)</h2>
+<ul>
+  <li><strong>Unit</strong>: <code>validateDeposit</code> temp-identity branch + <code>purpose</code>/temp normalize; <code>createDeposit</code> payload stamps new fields; table <code>purpose</code>-fallback resolver (<code>appointment.purpose || appointmentTo || dep.purpose</code>); adversarial inputs (empty/null/Thai/very-long/NUL/duplicate seller/percent≠100).</li>
+  <li><strong>Rule I full-flow simulate</strong>: no-appt chain — modal form (toggle on, pickLater) → <code>createDeposit</code> write shape → table row render (purpose + ลูกค้าจอง badge) → <code>+ สร้างนัด</code> later attaches appointment. Plus the with-appointment path still pairs.</li>
+  <li><strong>RTL</strong>: appointment modal toggle hide/show + validation (no date required when ON; date required when OFF); DepositPanel pickLater relax + purpose pick.</li>
+  <li><strong>Source-grep regression</strong>: lock the save-routing (noAppointment → createDeposit), the table reader fallback, the validator temp-identity clause.</li>
+  <li><strong>Stress/adversarial</strong>: rapid double-submit, pickLater-without-name, amount=0/negative, branch-switch mid-form, concurrent create.</li>
+  <li><strong>Rule Q L2</strong> (real prod, <code>TEST-DEPOSIT-</code> fixtures via <code>createTestDepositId</code>): create a no-appt deposit via <code>createDeposit</code> → read back the doc → assert <code>hasAppointment:false</code>, <code>purpose</code>, temp fields, <code>branchId</code>; cleanup zero orphans.</li>
+  <li><strong>Rule Q L1</strong> (real browser / user hands-on): tick <code>ไม่นัดหมาย</code> in the live modal, save, see it in Finance.มัดจำ with the purpose column filled, then <code>+ สร้างนัด</code>.</li>
+</ul>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>recalcCustomerDepositBalance('')</strong> for temp-customer deposits — verify it's a safe no-op (the pickLater pair path already creates <code>customerId:''</code> deposits, so this is almost certainly already handled; confirm in plan).</li>
+  <li><strong>VisitPurposePicker import surface</strong> into DepositPanel — confirm it doesn't pull branch-scoped data that conflicts with the Finance tab; reuse the same prop contract as the modal.</li>
+  <li><strong>"+ สร้างนัด" on a temp-customer no-appt deposit</strong> — the existing flow handles <code>customerId:''</code> deposits (Phase 24.0-noniesdecies); re-verify it carries the temp identity onto the new appointment.</li>
+</ul>
+
+</body>
+</html>
