@@ -1,31 +1,38 @@
 ---
-updated_at: "2026-05-26 EOD+4 — Staff-chat enhancements (day-sep · 13px quote · unsend · emoji/stickers) SHIPPED + DEPLOYED"
-status: "DEPLOYED — vercel lover-clinic-app.vercel.app + firebase rules LIVE (Probe-Deploy-Probe #15 PASS). prod=459a4ea3. Awaiting user L1."
+updated_at: "2026-05-26 EOD+5 — Patient-link hide-empty-boxes + auto-delete stale links (AV135) SHIPPED LOCAL"
+status: "LOCAL — committed + pushed; NOT deployed (awaits explicit 'deploy', V18). prod UNCHANGED 459a4ea3."
 branch: "master"
-last_commit: "459a4ea3 feat(staffchat): day separators + 13px quote + own-only unsend + emoji/stickers (AV134)"
-tests: "full suite 14746 · 14745 pass + 1 known V50 full-suite-load flake (isolated 64/64) · staff-chat 289/0 · new bank 33/0 · build clean 4.17s"
+last_commit: "269010c9 feat(patient-link): hide empty boxes in customer-mode + auto-delete stale links (AV135)"
+tests: "full suite 14803 pass + rotating pre-existing load-flakes (global.fetch-leak/perf — all pass isolated; my files 80/0) · build clean"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "459a4ea3 LIVE — shipped staff-chat + ALL carryover since 65ab6467 (tab-removal · deposit-cancel · appointment-hub · appointment-modal-deposit · AV133)"
-firestore_rules_version: "DEPLOYED 2026-05-26 — be_staff_chat_messages (sticker-only create clause + clinic-staff delete) + storage staff-chat-attachments (clinic-staff delete). Probe-Deploy-Probe #15 PASS (P1/P5=200, P9/P15a/b/c=403 pre+post)."
+production_commit: "459a4ea3 LIVE (staff-chat + carryover) — patient-link feature NOT yet deployed"
+firestore_rules_version: "UNCHANGED — no rules/index change this feature (admin-SDK cron; be_appointments where customerId== already used by the endpoint) → no Probe-Deploy-Probe"
 ---
 
 # Active Context
 
 ## State
-- 4 staff-chat features SHIPPED + DEPLOYED: (F1) day-separator pill dividers · (F2) quote 10px→13px · (F3) own-only unsend (hard-delete doc + Storage folder, AV78 confirm) · (F4) emoji + 2-tier stickers (bundled Fluent-Emoji MIT 20 SVGs = ID-ref 0 Firebase; custom = IndexedDB → temp Storage on send, 30-day retention).
-- `vercel --prod` shipped master HEAD = EVERYTHING since prod 65ab6467 (staff-chat + the 4 carryover stacks) — all now LIVE.
-- Probe-Deploy-Probe #15 PASS: chat-webhook + patient-form open paths stayed 200; staff-chat anon write/delete/sticker-create all 403 (new rules did NOT open anon).
+- Customer patient-link page (`?patient=<token>`, `__customerMode`) now shows ONLY boxes with data:
+  - courses empty box ("ไม่มีคอร์สคงเหลือ") HIDDEN in customer-mode (admin/sync view keeps it as feedback)
+  - appointments box already hides when empty (existing); subtle line "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้" when nothing at all (Q2=B)
+- NEW daily cron `patient-link-cleanup-sweep` auto-deletes a link empty (no upcoming appt + no remaining course) for ≥30 days — empty-since state machine; true-delete = clear token (Q3=A/Q4=A). Staff regenerate from CustomerDetailView.
+- "What does this link show" single-sourced in NEW `src/lib/customerLinkPayloadCore.js` (endpoint + cron agree). AV135.
 
 ## What this session shipped
-- /session-start → brainstorming (AskUserQuestion previews, no Chrome MCP) → spec → writing-plans → subagent-driven (pivoted inline: subagent died on a 1M-context billing wall; baseline-thrash documented per V81/Tablet-Chart).
-- 13-task plan executed inline; 20/20 Fluent Emoji fetched via node fetch+JSON.parse (curl/grep choked on the 8 MB single-line GitHub tree; Fluent folder names ≠ CLDR → keyword-match + skin-tone Default path).
-- AV134 + 33 new tests (unit 15 + flow-simulate 10 + RTL 8) + 2 V21 fixups (storage.rules delete contract).
-- Rule S reaffirmed (2026-05-26): design Q&A uses AskUserQuestion preview, NEVER Chrome MCP to "verify" the Visual Companion at ask→plan. `01-iron-clad.md` Rule S + memory updated.
-- Detail → `.agents/sessions/2026-05-26-staff-chat-enhancements.md`
+- /session-start → brainstorming (AskUserQuestion previews, Rule S no live browser at ask/plan) → spec → writing-plans → executing-plans INLINE (subagents thrash this baseline).
+- 13 files (+1279/-45): core + endpoint refactor + cron + script + diag + vercel.json + UI + test bank + AV135 + 3 V21 fixups (F6.6/F7.3/E10 follow the core extraction).
+- Decisions: Q1=A customer-mode-only · Q2=B subtle line · Q3=A empty-since 30d · Q4=A clear-token true-delete.
+- Detail → spec/plan `docs/superpowers/{specs,plans}/2026-05-26-patient-link-hide-empty-boxes-auto-cleanup*`.
+
+## Verification (Rule Q-honest)
+- Code: focused 80/0 (real-core unit + flow-simulate + source-grep); full suite 14803 pass — residual reds = rotating pre-existing global.fetch-leak/perf load-flakes (each run a different file; all pass isolated; NOT mine). Build clean.
+- **L2 real prod** (cron dry-run, READ-ONLY): scanned 2 / skipped 2 / 0 deleted. Diag of the screenshot customer LC-26000023 (0 courses + 1 appt) → coursesBox HIDDEN, apptBox SHOW, subtleLine no, cron isEmpty=false → kept. ไพบูลย์ LC-26000106 same.
+- **GAP (disclosed):** visual pixel render not driven in a real browser by me — local vite dev doesn't serve the serverless endpoint (customer-mode needs vercel dev/deploy). Render is source-grep + build locked + data-contract L2-proven. Full visual L1 = user post-deploy.
 
 ## Next action
-- **User L1 on `lover-clinic-app.vercel.app` (hard-refresh first)**: staff chat day-pill / 13px quote / own-only unsend / emoji+sticker send+render (bundled + custom); + carryover L1 (4-tab removal · deposit-cancel dialog · appointment-hub button + opd-pending tab · AV133 goto-appt/open-hours/cancel).
-- If a bug surfaces → `/systematic-debugging` + Rule P.
+- USER: say "deploy" → `vercel --prod` (frontend + new cron; NO rules change → no Probe-Deploy-Probe). Vercel registers the new daily cron from vercel.json.
+- USER L1 post-deploy: open the screenshot link `?patient=3cc66f7e…` → no "ไม่มีคอร์สคงเหลือ" box, just the appointment; an all-empty customer → subtle line only.
+- Rule M: cron `--apply` runs automatically daily once deployed; first manual confirm via `node scripts/patient-link-cleanup-sweep.mjs --apply` is user-authorized (currently 0 would-delete, safe).
 
 ## Outstanding user-triggered actions
-- L1 verify (above). No pending deploy — all current work is LIVE.
+- Deploy (above). No pending migration (cron is recurring, not a one-shot). If a bug surfaces → /systematic-debugging + Rule P.
