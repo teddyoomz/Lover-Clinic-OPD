@@ -121,4 +121,19 @@ describe('Card redesign — Task 3: AppointmentHubRowCard cosmetic-shell invaria
     expect(s).toMatch(/data-testid="row-name"[\s\S]{0,500}?text-sky-700/);
     expect(s).not.toMatch(/data-testid="row-name"[\s\S]{0,200}?text-red/);
   });
+
+  it('T3.5 no IIFE-in-JSX (Vite OXC crash risk) introduced by the re-layout', () => {
+    // {(() => …)()} inside JSX crashes the Vite OXC parser (rule 03-stack).
+    // The todayBangkok IIFE is in the logic block (= (() => …)()), not JSX.
+    expect(codeOnly(CARD)).not.toMatch(/\{\s*\(\(\)\s*=>/);
+  });
+});
+
+describe('Card redesign — Task 5: AV136 invariant documented', () => {
+  it('T5.1 AV136 entry present in audit-anti-vibe-code SKILL.md', () => {
+    const s = read('.agents/skills/audit-anti-vibe-code/SKILL.md');
+    expect(s).toMatch(/### AV136 —/);
+    expect(s).toMatch(/OPD_PILL/);
+    expect(s).toMatch(/OFF-LIMITS/);
+  });
 });

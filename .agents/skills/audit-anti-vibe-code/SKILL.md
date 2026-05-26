@@ -3260,3 +3260,25 @@ The customer patient-link page (`?patient=<token>` → `api/patient-view.js` →
 **Source-grep regression**: `tests/patient-link-cleanup-and-hide-empty.test.js` (real-core unit A-D + flow-simulate E + AV135 source-grep F1-F8).
 
 **Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-patient-link-hide-empty-boxes-auto-cleanup*` · Customer Patient-Link feature (2026-05-25, AV126-128) · Rule Q-honest (real-core unit + flow-simulate; UI = L1 real-browser on the anon link; cron = L2 real-prod DRY-RUN, `--apply` user-authorized post-deploy per Rule M — disclosed).
+
+### AV136 — Appointment card cosmetic-shell redesign: theme-matched OPD pills + 5-band layout + stepper OFF-LIMITS (2026-05-26 EOD+6)
+
+The appointment-hub card (`AppointmentHubRowCard.jsx`) is a COSMETIC-SHELL 5-band layout (header / finance / detail / OPD-footer / actions), theme-correct in BOTH Dark + Light. Invariants:
+
+- **(a) OPD lifecycle pills MUST use the shared `OPD_PILL` tokens (`_apptHubStyles.js`: blue / emerald / wait / save) — light base + `dark:` override, mirroring `STATUS_CHIP_CLS`.** Unconditional dark-only semantic classes in `OpdLifecycleRow.jsx` are FORBIDDEN (they caused the Light-theme green-on-green: light-coloured text on a translucent dark bg with no light base). Grep: `bg-(emerald|blue|slate|red)-(900|950|800)/\d+` inside `OpdLifecycleRow.jsx` (excluding comments) → ZERO.
+- **(b) the round-circle `สถานะ OPD` stepper (`AppointmentOpdStepperRow` / `TreatmentLifecycleStepper`) is OFF-LIMITS** — re-parented VERBATIM into the footer band, NEVER restyled/recolored (Q4). It is a SHARED Phase 28 component (also rendered by the Backend treatment-history `CustomerDetailView`); recoloring would propagate there. This redesign edits neither file.
+- **(c) the re-layout is cosmetic-shell** — every `data-testid` (26 on the card + 6 on the row), every `onClick`/handler prop, every render conditional (`hasTreatmentForDay` / `rawStatus` / `isPastDate` / `showMarkCompleteBtn` / `showUnmarkBtn` / `opdLifecycle` gates / `effectiveStatus`), and every button/chip/field label preserved byte-for-byte — EXCEPT the two sanctioned label changes: Q5 removed the "⚙ OPD lifecycle" header span; Q6 renamed the save button `บันทึกลง OPD` → `บันทึกเข้าระบบ` (label text only; `onSaveOpd` + `data-testid="opd-save-btn-active"` unchanged).
+- **(d) patient name stays sky-blue, never red** (Thai-culture iron-clad) — `row-name` uses `text-sky-700 dark:text-sky-300`. The rose save-CTA pill is a BUTTON, not a name/HN, so red there is allowed.
+
+**Forbidden**:
+- ❌ unconditional dark-only semantic classes on OPD pills (no light base) — the green-on-green bug.
+- ❌ editing / restyling / recoloring `AppointmentOpdStepperRow` or `TreatmentLifecycleStepper` (shared, OFF-LIMITS).
+- ❌ dropping any `data-testid` / handler / conditional during a card re-layout (cosmetic-shell — markup may move, behavior may not).
+- ❌ red on the patient name / HN.
+- ❌ `{(() => …)()}` IIFE inside the card JSX (Vite OXC crash — Rule 03-stack).
+
+**Sanctioned consumers**: `src/components/admin/_apptHubStyles.js` (`OPD_PILL` token source) · `src/components/admin/OpdLifecycleRow.jsx` (consumes `OPD_PILL`) · `src/components/admin/AppointmentHubRowCard.jsx` (5-band layout; re-parents the stepper). The `บันทึกลง OPD` string in AdminDashboard (kiosk `handleOpdClick` OPD-save + its toast) is a DIFFERENT button — NOT renamed by this redesign.
+
+**Source-grep regression**: `tests/appointment-card-redesign.test.jsx` (T1 tokens · T2 OpdLifecycleRow theme-match + Q5 + Q6 · T3 cosmetic-shell invariant: every testid + handler + sky-name). v118-rtl R3.4 V21-fixed for the removed header.
+
+**Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-appointment-card-redesign*` · Rule Q-vis (rendered pixels verified by eye in a real browser, Dark + Light) · cosmetic-shell-redesign-constraint + mockup-depict-offlimits-verbatim user-memories.
