@@ -127,8 +127,11 @@ describe('V118 — OpdLifecycleRow RTL: container + accessibility', () => {
     expect(screen.getByTestId('opd-link-send-btn')).toBeDisabled();
   });
 
-  it('R3.4 — OPD lifecycle row label is present', () => {
+  // card-redesign 2026-05-26 (Q5): the "OPD lifecycle" header label was removed —
+  // the row is now identified by its container data-testid, not a header text node.
+  it('R3.4 — OPD lifecycle header label removed; row identified by container testid (Q5)', () => {
     setup('A');
-    expect(screen.getByText(/OPD lifecycle/i)).toBeInTheDocument();
+    expect(screen.queryByText(/OPD lifecycle/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('opd-lifecycle-row')).toBeInTheDocument();
   });
 });
