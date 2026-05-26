@@ -13,7 +13,7 @@ import { useMemo } from 'react';
 import { visitReasonOptions } from '../lib/visitReasonOptions.js';
 import { buildVisitPurposeText, parseVisitPurposeText } from '../lib/visitPurposeUtils.js';
 
-export default function VisitPurposePicker({ value, onChange, required = false, idPrefix = 'vp' }) {
+export default function VisitPurposePicker({ value, onChange, required = false, idPrefix = 'vp', label = 'นัดมาเพื่อ' }) {
   const { purposes, other } = useMemo(() => parseVisitPurposeText(value || ''), [value]);
   const known = useMemo(() => new Set(visitReasonOptions.map((o) => o.value)), []);
 
@@ -37,7 +37,7 @@ export default function VisitPurposePicker({ value, onChange, required = false, 
   return (
     <div data-field="appointmentTo">
       <label className="text-xs font-bold text-[var(--tx-muted)] uppercase tracking-wider block mb-1">
-        นัดมาเพื่อ {required && <span className="text-red-500">*</span>}
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="flex flex-wrap gap-2">
         {visitReasonOptions.map((o) => {
