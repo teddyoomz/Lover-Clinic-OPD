@@ -85,3 +85,40 @@ describe('Card redesign — Task 2: OpdLifecycleRow theme-matched + label change
     }
   });
 });
+
+describe('Card redesign — Task 3: AppointmentHubRowCard cosmetic-shell invariant', () => {
+  const CARD = 'src/components/admin/AppointmentHubRowCard.jsx';
+  const TESTIDS = [
+    'appt-hub-row', 'row-accent-bar', 'row-hn', 'row-name', 'opd-ready-to-save-chip',
+    'row-finance-chips', 'row-chip-wallet', 'row-chip-deposit', 'row-chip-outstanding', 'row-chip-lifetime',
+    'row-date-full', 'row-time-emphasis', 'row-type-chip', 'row-deposit-chip', 'row-missed-chip',
+    'row-purpose-block', 'row-purpose', 'row-status', 'row-action-mark-complete', 'row-action-unmark-complete',
+    'row-action-line', 'row-action-edit-treatment', 'row-action-edit', 'row-action-cancel',
+    'row-action-create-treatment', 'row-action-confirm',
+  ];
+
+  it('T3.1 every data-testid preserved', () => {
+    const s = read(CARD);
+    for (const id of TESTIDS) expect(s, id).toContain(`data-testid="${id}"`);
+  });
+
+  it('T3.2 stepper + OpdLifecycleRow children still rendered (re-parented, not removed)', () => {
+    const s = read(CARD);
+    expect(s).toMatch(/<AppointmentOpdStepperRow\b/);
+    expect(s).toMatch(/<OpdLifecycleRow\b/);
+  });
+
+  it('T3.3 every handler prop still wired through', () => {
+    const s = read(CARD);
+    for (const h of ['onConfirm', 'onEdit', 'onCancel', 'onCreateTreatment', 'onEditTreatment',
+                     'onOpenLine', 'onMarkServiceComplete', 'onUnmarkServiceComplete']) {
+      expect(s, h).toMatch(new RegExp(h));
+    }
+  });
+
+  it('T3.4 patient name stays sky (never red) — Thai-culture iron-clad', () => {
+    const s = read(CARD);
+    expect(s).toMatch(/data-testid="row-name"[\s\S]{0,500}?text-sky-700/);
+    expect(s).not.toMatch(/data-testid="row-name"[\s\S]{0,200}?text-red/);
+  });
+});
