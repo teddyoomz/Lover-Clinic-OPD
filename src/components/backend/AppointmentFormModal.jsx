@@ -53,6 +53,8 @@ import {
   listExamRooms,
   // V-appt-deposit (2026-05-25) — edit-mode deposit hydrate + update (universal pass-through)
   getDeposit, updateDeposit,
+  // V-deposit-noappt (2026-05-27) — deposit-only writer for the ไม่นัดหมาย path.
+  createDeposit,
 } from '../../lib/scopedDataLayer.js';
 // Phase 21.0-ter (2026-05-06 EOD) — embedded deposit subform routes through
 // the same atomic pair-helper DepositPanel uses. V12 single-writer lock
@@ -890,6 +892,35 @@ export default function AppointmentFormModal({
         }
         // 'keep' → no deposit action (appointment type already updated above).
         flipAwayDecisionRef.current = null;
+      } else if (isCreatingDepositBooking && formData.noAppointment) {
+        // V-deposit-noappt (2026-05-27) — write a deposit-only doc (NO
+        // be_appointments). Mirrors the createDepositBookingPair depositData
+        // (advisor → 100% seller, same pattern as the pair branch below) minus
+        // hasAppointment/appointment, plus purpose (= appointmentTo / มัดจำสำหรับ)
+        // stamped top-level so the Finance.มัดจำ "มัดจำสำหรับ" column shows it.
+        await createDeposit({
+          customerId: formData.pickLater ? '' : formData.customerId,
+          customerName: formData.pickLater ? tempName : formData.customerName,
+          customerHN: formData.pickLater ? '' : formData.customerHN,
+          customerNameTemp: tempName,
+          customerPhoneTemp: tempPhone,
+          amount: parseFloat(formData.depositAmount) || 0,
+          paymentChannel: formData.depositPaymentChannel,
+          paymentDate: formData.depositPaymentDate,
+          paymentTime: '',
+          refNo: '',
+          sellers: formData.advisorId
+            ? [{ id: formData.advisorId, name: formData.advisorName || '', percent: 100, total: parseFloat(formData.depositAmount) || 0 }]
+            : [],
+          customerSource: '',
+          sourceDetail: '',
+          note: formData.depositNote || '',
+          purpose: formData.appointmentTo,
+          hasAppointment: false,
+          paymentEvidenceUrl: '',
+          paymentEvidencePath: '',
+          branchId: selectedBranchId,
+        });
       } else if (isCreatingDepositBooking && existingDepositId) {
         // Phase 24.0-noniesdecies (2026-05-06) — "+ สร้างนัด" path: deposit
         // already exists in be_deposits (admin clicked the button on a
