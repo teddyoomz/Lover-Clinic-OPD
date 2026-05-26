@@ -3915,7 +3915,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       return;
     }
     if (isOpdSessionSaved(session)) {
-      showToast('บันทึก OPD แล้ว — ดูข้อมูลผ่านปุ่ม "ดูข้อมูล OPD"', 3000);
+      showToast('บันทึก OPD แล้ว — ดูข้อมูลผ่านปุ่ม "ดูข้อมูลรับเข้า"', 3000);
       return;
     }
     setOpdSaveBusyByApptId(m => ({ ...m, [appt.id]: true }));

@@ -5,11 +5,11 @@
 // State derivation lives in `src/lib/opdSessionState.js` (AV118).
 //
 // Visibility per locked spec (docs/superpowers/specs/2026-05-23-card-opd-lifecycle-row-design.html):
-//   State A — 🟢 ดูข้อมูล OPD only
+//   State A — 🟢 ดูข้อมูลรับเข้า only
 //   State B — 🔵 ส่งลิ้งค์ + ⏳ ยังไม่มีข้อมูล (disabled)
 //   State C — 🟢 ดูลิ้งค์ + ⏳ รอลูกค้ากรอก (disabled)
 //   State D — 🟢 ดูลิ้งค์ + 🟢 ดูข้อมูล (REVIEW) + 🔴 บันทึก OPD  (review-then-save)
-//   State E — 🟢 ดูข้อมูล OPD only (transient — converts to A on next render)
+//   State E — 🟢 ดูข้อมูลรับเข้า only (transient — converts to A on next render)
 //
 // User directive (locked 2026-05-23): "admin จะต้อง Review ข้อมูลลูกค้าด้วย
 // การกดปุ่มดูข้อมูลนี้ก่อน เพื่อดูข้อมูลคร่าวๆ แล้วถ้าไม่มีปัญหาอะไรก็จะกดปุ่ม
@@ -102,11 +102,11 @@ export default function OpdLifecycleRow({
           type="button"
           onClick={onViewOpd}
           data-testid="opd-view-btn"
-          title="ดูข้อมูล OPD ของลูกค้า"
+          title="ดูข้อมูลรับเข้าของลูกค้า"
           className={OPD_PILL.emerald}
         >
           <FileSearch size={11} />
-          ดูข้อมูล OPD
+          ดูข้อมูลรับเข้า
         </button>
       )}
 

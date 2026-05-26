@@ -3324,3 +3324,21 @@ comm -23 \
 **Source-grep regression**: `tests/firestore-rules-push-config.test.js` (rule exists + allows isClinicStaff + AV138 class-of-bug check on AdminDashboard.jsx client paths).
 
 **Cross-link**: firestore.rules `match /push_config/{docId}` · `enablePushNotifications` + push self-heal (AdminDashboard.jsx) · Cloud Function `sendPushOnSubmit` (functions/index.js, admin SDK) · Rule B Probe-Deploy-Probe.
+
+### AV139 — Patient-facing (anon) per-branch data MUST come via a server endpoint when the source is staff-only; source per-branch fields, not legacy globals (2026-05-26)
+
+The PUBLIC patient form (`?session=`, anon auth) shows per-branch info (e.g. the branch's LINE OA add-friend URL). The source — `be_branches/{branchId}.settings.lineOaUrl` (set in BranchFormModal) — lives in a CLINIC-STAFF-ONLY collection (firestore.rules:244, which also holds license #, tax id, address). The anon client MUST NOT read be_branches directly (would require loosening the rule + leaking those fields). Instead a server endpoint (admin SDK) reads ONLY the public field + returns it.
+
+**Invariant**:
+- `api/branch-line-oa.js` (+ any future patient-facing per-branch reader) reads the staff-only collection via admin SDK + returns ONLY the public field — NEVER spreads the whole doc into the response.
+- PatientForm sources the per-branch LINE OA from `/api/branch-line-oa` (keyed on the session's branchId), NOT the global `clinic_settings.lineOfficialUrl` (empty/legacy) and NOT a direct be_branches read.
+- Canonical per-branch LINE OA = `be_branches/{branchId}.settings.lineOaUrl`. The regression was field-SOURCE drift: the success screen read the empty global `clinic_settings.lineOfficialUrl` (a different name + a different, never-populated doc) instead of the per-branch field → the "Add LINE OA" button silently vanished when LINE config went per-branch.
+
+**Forbidden**:
+- ❌ anon client reading be_branches / be_line_configs (staff-only, has secrets) directly.
+- ❌ a patient-facing endpoint returning more than the public field (`...snap.data()` spread).
+- ❌ patient form sourcing per-branch data from a global/legacy clinic_settings field.
+
+**Source-grep regression**: `tests/branch-line-oa-and-rename.test.js`.
+
+**Cross-link**: api/patient-view.js (same secure server-read pattern, same be_branches-is-staff-only note) · firestore.rules be_branches:244 · AV138 (client-accessed collections need a rule — here anon uses the endpoint, NOT a direct read) · BranchFormModal.jsx settings.lineOaUrl.

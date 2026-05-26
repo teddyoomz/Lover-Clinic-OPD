@@ -35,6 +35,11 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   // Without this, App.jsx's anon-auth race could surface "Invalid Link"
   // pre-auth even with the App.jsx gate (defense in depth).
   const [sessionExists, setSessionExists] = useState(null);
+  // 2026-05-26 — per-branch LINE OA on the success screen. The branch's LINE
+  // add-URL is be_branches.settings.lineOaUrl (staff-only) → fetched for the
+  // SESSION's branch via the public /api/branch-line-oa endpoint (anon-safe).
+  const [sessionBranchId, setSessionBranchId] = useState('');
+  const [branchLineUrl, setBranchLineUrl] = useState('');
   const [isExpired, setIsExpired] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -69,6 +74,7 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
       // Set to true on first server-confirmed exists() === true
       setSessionExists(true);
       const data = snapshot.data();
+      setSessionBranchId(data.branchId || '');
       const currentFormType = data.formType || 'intake';
       setSessionType(currentFormType);
       
@@ -112,6 +118,21 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
     });
     return () => unsubscribe();
   }, [db, appId, user, sessionId, isEditing, language]);
+
+  // 2026-05-26 — fetch the SESSION's branch LINE OA add-URL via the public
+  // server endpoint (be_branches is clinic-staff-only; the endpoint returns ONLY
+  // the public lin.ee URL via admin SDK). Drives the success-screen "Add LINE
+  // Official" card per-branch (fixes the lost button — global lineOfficialUrl
+  // was always empty + wrong source).
+  useEffect(() => {
+    if (!sessionBranchId) return;
+    let cancelled = false;
+    fetch(`/api/branch-line-oa?branchId=${encodeURIComponent(sessionBranchId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (!cancelled && j && j.lineAddUrl) setBranchLineUrl(j.lineAddUrl); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionBranchId]);
 
   // Close country dropdown on click outside
   useEffect(() => {
@@ -455,7 +476,9 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   }
 
   if (isSuccess && !isEditing) {
-    const lineUrl = cs.lineOfficialUrl?.trim();
+    // 2026-05-26 — prefer the SESSION's branch LINE OA (be_branches.settings.
+    // lineOaUrl via /api/branch-line-oa); fall back to the global clinic setting.
+    const lineUrl = (branchLineUrl || cs.lineOfficialUrl || '').trim();
     const accentR = isDark ? '#dc2626' : '#e11d48';
     const accentO = isDark ? '#f97316' : '#ea580c';
     return (
