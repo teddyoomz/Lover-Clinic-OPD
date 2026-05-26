@@ -3282,3 +3282,23 @@ The appointment-hub card (`AppointmentHubRowCard.jsx`) is a COSMETIC-SHELL 5-ban
 **Source-grep regression**: `tests/appointment-card-redesign.test.jsx` (T1 tokens · T2 OpdLifecycleRow theme-match + Q5 + Q6 · T3 cosmetic-shell invariant: every testid + handler + sky-name). v118-rtl R3.4 V21-fixed for the removed header.
 
 **Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-appointment-card-redesign*` · Rule Q-vis (rendered pixels verified by eye in a real browser, Dark + Light) · cosmetic-shell-redesign-constraint + mockup-depict-offlimits-verbatim user-memories.
+
+### AV137 — Appointment-linked (card-flow) opd_session form-fills MUST stay real-time + notifying (2026-05-26)
+
+Card-flow sessions (`createdFromBackendBooking && isHiddenFromQueue`, minted by `provisionOpdLinkForBookingPair({hideFromQueue:true})`) are intentionally EXCLUDED from the queue `data`/`ndData` arrays (AdminDashboard.jsx ~2305/2329/2354) because the นัดหมาย appointment card is their display surface. That exclusion MUST NOT ALSO drop them from:
+
+- **(a) live linked-session resolution** — the `sessionsById` memo MUST include `allLinkedSessions` (the unfiltered listener doc set, published read-only via `setAllLinkedSessions(allDocs)` in the opd_sessions snapshot callback) so `resolveLinkedSession` returns FRESH data and the card flips to "📥 ลูกค้ากรอกแล้ว · รอบันทึก" the instant the linked form is filled — no F5, no re-fetch. The V124 purple count rides the same resolver, so it bumps too.
+- **(b) notification detection** — `allNotifData` MUST include `cardFlowNotif` (the excluded card-flow filled+unread sessions: `!isArchived && isHiddenFromQueue && createdFromBackendBooking && patientData && isUnread && status==='completed'`) so the blue bubble + sound fire. Reuses the existing detector + `isNotifEnabled` gate + `lastNotifiedStrRef` dedup + first-load stamp (no spam, no re-notify on page open).
+
+**Forbidden**:
+- ❌ `sessionsById` memo built WITHOUT `allLinkedSessions` (card-flow form-fills then resolve stale via the one-shot `getDoc` lazy cache → card never updates live).
+- ❌ `allNotifData = [...data, ...ndData]` without `...cardFlowNotif` (card-flow form-fills silently never notify).
+- ❌ a Firestore WRITE inside the opd_sessions snapshot callback for this fix — `setAllLinkedSessions(allDocs)` is setState-only (read-only listener; V34/V36 cascade lock). Push self-heal is a SEPARATE app-load effect, not in the callback.
+
+**Grep**: `sessionsById` memo source + deps end with `allLinkedSessions]`; `allNotifData = [...data, ...ndData, ...cardFlowNotif]`; `cardFlowNotif` predicate uses `isHiddenFromQueue && s.createdFromBackendBooking`.
+
+**Sanctioned exceptions**: NONE.
+
+**Source-grep regression**: `tests/realtime-intake-notif-appointment-cards.test.js` (F1 live resolution · F2 cardFlowNotif filter · SG1-SG6 source locks · AV137 presence).
+
+**Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-realtime-intake-notif-on-appointment-cards*` · V124 (purple card-flow count) · V125 (cancel-cascade) · Rule Q (real-browser L1 form-fill verify) · Rule R push_config diag (`scripts/diag-push-config.mjs`).
