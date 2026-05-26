@@ -104,6 +104,14 @@ They are **CODE-SHAPE COVERAGE ONLY**.
 - **Deploy**: ✅ **DONE this session** (V15 combined, user-authorized "ผ่านหมดจริงๆค่อย deploy") — `vercel --prod` (aliased) **+** `firebase deploy --only storage` (**P-D-P #13**: anon 403 pre+post; rules compiled + released). **Object-level re-edit unlocked LIVE** (PC + tablet). Remaining: on-device L1 by user. [⚠ firebase CLI 15.x: `--only storage`, NOT `storage:rules`.]
 - **Findings (flagged)**: object-level re-edit is **live-gated on the storage deploy** (client json upload denied until then → fabricJson null → raster fallback, which works). Pre-existing limit: a single chart PNG dataUrl > ~1MB risks the Firestore doc cap — Storage-ref is the architectural follow-up (decide separately; the new size guard prevents the fabricJson from compounding it).
 
+### Session 2026-05-27 — V122 backup-subsystem fix DEPLOYED + L2-verified + create-queue button removal + EOD+8 deploy
+
+master `954420d6` (pushed); prod LIVE (`vercel --prod` → lover-clinic-app.vercel.app). Full suite **14892/0**. NO rules/data/cron touched → frontend+serverless deploy only (no Probe-Deploy-Probe).
+
+`/systematic-debugging` on business-critical report: Whole-System V81 backups silently `NO_MANIFEST` since 05-22. Confirmed root cause = ~1000 SEQUENTIAL cross-region round-trips > Vercel 300s cap (real HTTP 504 @300.7s + 20h-stale cron lock) + 28/65 collections silently omitted by hardcoded scope. Fix: `mapWithConcurrency` bounded-parallel I/O (~20×) + dynamic `listCollections()` enumeration across backup + restore + whole-fleet + branch `maxDuration` 60→300; fixed latent orphan-subcoll wipe-order bug. AV141 + AV142. **L2-VERIFIED LIVE**: deployed endpoint → 200 in 38.1s (was 504), complete manifest 4783 docs/0 failed. Real-prod e2e 10/0. Rule Q-honest: 2 "flakes" were real V21 regressions in whole-fleet source-greps — fixed (5 V21 fixups). Also: removed `+สร้างคิวใหม่` button (modal KEPT dormant) + EOD+8 UI shipped same deploy.
+
+Open (optional): clean 5 pre-fix NO_MANIFEST folders; stale QR placeholder AdminDashboard:7541; 2 pre-existing Rule S edits (CLAUDE.md, rules/01) uncommitted. USER L1 on prod. Detail: `.agents/sessions/2026-05-27-backup-v122-deploy.md` + `v-log-archive.md` V122.
+
 ### Session 2026-05-26 EOD+8 — 13 UI/UX fixes (3 /systematic-debugging batches) DONE + TESTED, UNCOMMITTED
 
 master `00e4b3a6` (unchanged — EOD+8 work uncommitted); prod `7e2a5bd8` LIVE. 15 files in working tree (9 src + 5 test + AV140), NOT committed (iron-clad: await user "commit").
