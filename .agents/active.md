@@ -23,10 +23,7 @@ firestore_rules_version: "UNCHANGED — pure presentation (no rules/index/data c
 - Decisions: Q1=C band layout · Q2=A theme-matched pills · Q3=A Editorial Ember · Q4=A stepper untouched · Q5 remove header · Q6 rename save.
 
 ## Verification (Rule Q-vis / Q-honest)
-- **L1 real-browser BOTH themes (Chrome, Browser 1)** — mounted the REAL AppointmentHubRowCard in a temp vite harness (deleted after, never committed) + verified by eye: data-theme=light → light readable OPD pills (the fix); data-theme=dark → dark readable pills. Computed-style confirmed (light: blue-100 bg + blue-900 text). 5-band layout, name sky, no header, save="บันทึกเข้าระบบ", stepper intact — all confirmed.
-- **Rule Q-vis FINDING (this is why the live check mattered)**: the initial T1/T2 `dark:` approach washed out on this DARK-OS machine in light theme (Tailwind `dark:` = OS-coupled, no darkMode config). Switched to data-theme-driven → OS-independent → correct in both themes. Caught + fixed in the browser before claiming done.
-- Code: full suite 14818/0; build clean; touched-file grep clean (no IIFE-in-JSX, name never red).
-- **GAP (disclosed):** the card's NEIGHBOR chips (STATUS/TYPE/finance) still use Tailwind `dark:` (OS-coupled) — pre-existing systemic, out of scope. On the user's light-OS machine they render light/consistent in light theme anyway; only the OPD pills (the complaint) were made fully OS-independent.
+- L1 real-browser BOTH themes (temp vite harness mounting the REAL component, deleted/never-committed): data-theme=light → light readable OPD pills (the fix); data-theme=dark → dark readable pills; computed-style + eye confirmed. The live check on a DARK-OS machine CAUGHT the `dark:`-OS-coupled washout → switched to data-theme-driven (OS-independent). Full suite 14818/0 · build clean. GAP: neighbor chips still OS-coupled (pre-existing, out of scope). Full detail → checkpoint `.agents/sessions/2026-05-26-appointment-card-redesign.md`.
 
 ## Next action
 - USER: say "deploy" → `vercel --prod` (frontend only; NO rules/index change → no Probe-Deploy-Probe).
