@@ -957,6 +957,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   const [archivedDepositSessions, setArchivedDepositSessions] = useState([]);
   const [noDepositSessions, setNoDepositSessions] = useState([]);
   const [archivedNoDepositSessions, setArchivedNoDepositSessions] = useState([]);
+  // FIX ① (2026-05-26) — live map of ALL branch sessions (incl. card-flow that
+  // the queue filters exclude) so resolveLinkedSession returns FRESH data and the
+  // นัดหมาย card flips the instant the linked form is filled (no F5, no re-fetch).
+  const [allLinkedSessions, setAllLinkedSessions] = useState([]);
   const [sessionToHardDelete, setSessionToHardDelete] = useState(null);
 
   // ── Deposit form state ──
@@ -2252,6 +2256,35 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     return () => unsub();
   }, [db, appId]);
 
+  // FIX ③ (2026-05-26) — push token self-heal. Diag found 7 tokens all ~2 months
+  // stale. If push was previously enabled on THIS device, silently re-acquire +
+  // re-register the current FCM token on load so push keeps working without the
+  // admin manually re-enabling. Guarded on already-granted permission (no prompt).
+  // One-shot app-load effect — NOT inside the opd_sessions snapshot callback, so
+  // the V34/V36 read-only-listener constraint does not apply.
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    if (typeof localStorage === 'undefined' || localStorage.getItem('lc_push_enabled') !== 'true') return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supported = await isSupported();
+        if (!supported || cancelled) return;
+        const msg = getMessaging(app);
+        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+        if (!token || cancelled) return;
+        const tokensRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'tokens');
+        const tokensSnap = await getDoc(tokensRef);
+        const existing = tokensSnap.exists() ? (tokensSnap.data().tokens || []) : [];
+        if (existing.some(t => (typeof t === 'string' ? t : t.token) === token)) return;
+        await setDoc(tokensRef, { tokens: [...existing, { token, userAgent: navigator.userAgent.substring(0, 120), createdAt: new Date().toISOString() }] });
+      } catch (e) { console.warn('[push self-heal] failed:', e?.message); }
+    })();
+    return () => { cancelled = true; };
+  }, [db, appId, user]);
+
   useEffect(() => {
     if (!user || user.isAnonymous) return;
     const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'opd_sessions');
@@ -2389,7 +2422,18 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
       });
 
       // รวม queue + noDeposit สำหรับ notification detection (ทั้ง 2 tab ต้องมี noti)
-      const allNotifData = [...data, ...ndData];
+      // FIX ② (2026-05-26) — card-flow (backend-booking) sessions are EXCLUDED
+      // from data/ndData (2305/2329/2354) because the appointment card is their
+      // display surface — but that ALSO dropped them from notification detection,
+      // so their form-fills never fired bubble+sound. Re-include the EXACT
+      // excluded predicate here. They are not in data/ndData (excluded) so no
+      // double-count. Downstream detector (new-session branch ~2429) + dedup
+      // (lastNotifiedStrRef) + first-load stamp (else ~2450) all apply unchanged.
+      const cardFlowNotif = allDocs.filter(s =>
+        !s.isArchived && s.isHiddenFromQueue && s.createdFromBackendBooking &&
+        s.patientData && s.isUnread && s.status === 'completed'
+      );
+      const allNotifData = [...data, ...ndData, ...cardFlowNotif];
 
       if (prevSessionsRef.current.length > 0) {
         let updatedSessions = [];
@@ -2526,6 +2570,10 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
 
       prevSessionsRef.current = allNotifData;
       setSessions(data);
+      // FIX ① — publish the unfiltered branch session set for live linked-session
+      // resolution (includes card-flow / isHiddenFromQueue sessions the queue
+      // filters drop). Read-only: no Firestore write here (V34/V36 cascade lock).
+      setAllLinkedSessions(allDocs);
     }, (error) => console.error("Firestore Error:", error));
     return () => unsubscribe();
     // Phase 20.0 follow-up (2026-05-06) — selectedBranchId in deps so the
@@ -3779,13 +3827,15 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
   // state array directly so the memo bumps on any session list change.
   const sessionsById = useMemo(() => {
     const m = new Map();
-    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]) {
+    // FIX ① — allLinkedSessions LAST so the fresh unfiltered doc wins over a
+    // stale filtered copy; it is a superset, so card-flow sessions now resolve.
+    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions, allLinkedSessions]) {
       for (const s of arr || []) {
         if (s?.id) m.set(s.id, s);
       }
     }
     return m;
-  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions]);
+  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions, allLinkedSessions]);
 
   // resolveLinkedSession — 3-tier source: current-window listener → lazy cache →
   // trigger lazy fetch (returns null this render; re-renders on resolve via tick).
