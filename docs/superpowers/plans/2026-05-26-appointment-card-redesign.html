@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Card Redesign Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+    th, td { border: 1px solid var(--bd); padding: 0.45em 0.7em; text-align: left; }
+    th { background: var(--bg-meta); }
+    .warn { background:#fff7ed; border-left:4px solid #ea580c; padding:0.5em 1em; border-radius:0 6px 6px 0; margin:1em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Appointment Card Redesign Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes. <strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-26-appointment-card-redesign-design.html</code> (open in browser — approved, dual-theme mockup).
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Cosmetic-shell redesign of the appointment-hub card into a 5-band layout that is beautiful + theme-correct in BOTH Dark and Light, fixing the green-on-green OPD-pill bug — with ZERO changes to any button wiring/flow/logic/<code>data-testid</code>/conditional.</p>
+  <p><strong>Architecture:</strong> 3 files. (1) <code>_apptHubStyles.js</code> — new <code>OPD_PILL</code> token family (light-base + <code>dark:</code>, mirroring <code>STATUS_CHIP_CLS</code>). (2) <code>OpdLifecycleRow.jsx</code> — swap dark-only classes → tokens, remove "⚙ OPD lifecycle" header span, rename save label → "บันทึกเข้าระบบ". (3) <code>AppointmentHubRowCard.jsx</code> — re-lay-out JSX into 5 bands; the round-circle stepper (<code>AppointmentOpdStepperRow</code> / <code>TreatmentLifecycleStepper</code>) is OFF-LIMITS, only re-parented verbatim.</p>
+  <p><strong>Tech Stack:</strong> React 19 · Tailwind 3.4 (theme via <code>data-theme</code> + <code>src/index.css</code> override layer) · Vitest + RTL. Rules: Q-vis (verify pixels in real browser, both themes) · cosmetic-shell · N (targeted tests, full suite at end) · P (class-of-bug). Thai-culture: name never red.</p>
+</div>
+
+<div class="warn">
+  <strong>COSMETIC-SHELL INVARIANT (the whole point):</strong> every <code>data-testid</code>, every <code>onClick</code>/handler prop, every render conditional (<code>hasTreatmentForDay</code>, <code>rawStatus</code>, <code>isPastDate</code>, <code>showMarkCompleteBtn</code>, <code>showUnmarkBtn</code>, <code>opdLifecycle</code> gates, <code>effectiveStatus</code>, …), and every button label EXCEPT the two sanctioned label changes (Q5 remove "OPD lifecycle" header text, Q6 "บันทึกลง OPD"→"บันทึกเข้าระบบ") stays byte-for-byte. Only wrapping markup + classNames move. The stepper is NOT edited/restyled/recolored.
+</div>
+
+<h2>Mockup Design</h2>
+<p>Full live mockup (Dark + Light, all states) is the approved spec file — open
+<code>docs/superpowers/specs/2026-05-26-appointment-card-redesign-design.html</code> in a browser. Band skeleton below:</p>
+<div class="mockup">
+  <div class="mockup-label">Card · 5-band architecture (per row)</div>
+  <div style="border:1px solid #ddd;border-radius:14px;overflow:hidden;max-width:620px;font-size:12px">
+    <div style="background:#f0f4f8;padding:.6em .9em;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between">
+      <div><b style="font-family:monospace;font-size:10px;color:#64748b">HN · 0042</b> <span style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:1px 6px">เพชร·120วัน</span><br><a style="color:#0369a1;font-weight:900;font-size:15px">ชื่อ-สกุล</a> <span style="color:#64748b">เพศ ชาย · 📞</span></div>
+      <span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:2px 10px;font-weight:800;height:fit-content">รอยืนยัน</span>
+    </div>
+    <div style="padding:.5em .9em;border-bottom:1px solid #e2e8f0">① header  ·  <span style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:1px 6px">💰Wallet</span> <span style="background:#ffedd5;border:1px solid #fdba74;border-radius:6px;padding:1px 6px">🏷️มัดจำ</span> ② finance strip</div>
+    <div style="padding:.5em .9em;border-bottom:1px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:.6em">
+      <div>📅 27 พค 2569 <span style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:1px 6px;font-family:monospace;font-weight:900">16:00–17:00</span><br>③ detail (date/time/type)</div>
+      <div>ที่ปรึกษา/แพทย์/ผู้ช่วย/ห้อง<br>นัดมาเพื่อ <span style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:6px;padding:1px 6px">ขลิบ</span></div>
+    </div>
+    <div style="padding:.5em .9em;border-bottom:1px solid #e2e8f0;background:#fff7ed">
+      <span style="background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:2px 8px">📤 ส่งลิ้งค์</span>
+      <span style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:2px 8px;color:#64748b">⏳ ยังไม่มีข้อมูล</span>
+      &nbsp; ④ OPD footer (NO "OPD Lifecycle" header) + สถานะ OPD stepper (UNCHANGED)
+    </div>
+    <div style="padding:.5em .9em;background:#f0f4f8;text-align:right">
+      <span style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border-radius:8px;padding:3px 10px">คอนเฟิร์มนัด</span>
+      <span style="border:1px solid #7dd3fc;color:#0369a1;border-radius:8px;padding:3px 10px">แก้ไขนัด</span>
+      <span style="border:1px solid #fda4af;color:#be123c;border-radius:8px;padding:3px 10px">ยกเลิก</span>
+      &nbsp; ⑤ action bar
+    </div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Render flow — pure presentation (no state/handler change)</div>
+  <pre style="background:#fff;border:0;margin:0">props (appt, summary, opdLifecycle, on* handlers) ──unchanged──▶ AppointmentHubRowCard
+      │ derive rawStatus / effectiveStatus / isMissed / hasTreatmentForDay  ← VERBATIM
+      ▼
+   render 5 bands (markup re-arranged ONLY):
+   ① band-head   → HN · membership/ready chip · &lt;a row-name&gt; (sky) · phone | LINE badge + row-status
+   ② band-fin    → row-chip-wallet/deposit/outstanding/lifetime  (same conditionals)
+   ③ band-detail → row-date-full + row-time-emphasis + row-type/deposit/missed chips | dt-grid + row-purpose
+   ④ band-opd    → &lt;OpdLifecycleRow .../&gt; (pills, theme-matched) + &lt;AppointmentOpdStepperRow/&gt; (UNCHANGED)
+   ⑤ band-actions→ the SAME status-conditional button matrix (every data-testid + onClick verbatim)
+
+OpdLifecycleRow pill mapping (opdSessionState.js logic UNCHANGED — only classNames + 2 labels change):
+   state B → OPD_PILL.blue (ส่งลิ้งค์) + OPD_PILL.wait (ยังไม่มีข้อมูล)
+   state C → OPD_PILL.emerald (ดูลิ้งค์) + OPD_PILL.wait (รอลูกค้ากรอก)
+   state D → OPD_PILL.emerald (ดูลิ้งค์) + OPD_PILL.emerald (ดูข้อมูล OPD) + OPD_PILL.save (บันทึกเข้าระบบ)
+   state A/E → OPD_PILL.emerald (ดูข้อมูล OPD)</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Change</th><th>Responsibility</th></tr>
+  <tr><td><code>src/components/admin/_apptHubStyles.js</code></td><td>Modify (add)</td><td>NEW <code>OPD_PILL_BASE</code> + <code>OPD_PILL</code> token family (blue/emerald/wait/save). Shared style home.</td></tr>
+  <tr><td><code>src/components/admin/OpdLifecycleRow.jsx</code></td><td>Modify</td><td>Use tokens; remove header span; rename save label. Logic byte-for-byte.</td></tr>
+  <tr><td><code>src/components/admin/AppointmentHubRowCard.jsx</code></td><td>Modify</td><td>Re-lay-out JSX into 5 bands. All testids/handlers/conditionals verbatim.</td></tr>
+  <tr><td><code>tests/appointment-card-redesign.test.jsx</code></td><td>Create</td><td>Source-grep cosmetic-shell invariants (tokens exist + theme-aware · no dark-only-no-light-base in OpdLifecycleRow · header removed · label renamed · every data-testid present).</td></tr>
+  <tr><td><code>tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code><br><code>tests/v71-opd-stepper-row.test.js</code><br><code>tests/phase-26-0-status-display-rtl.test.jsx</code> (+ any others full-suite flags)</td><td>Modify (V21-fix)</td><td>Re-anchor layout/label assertions on preserved <code>data-testid</code>s; update "บันทึกลง OPD"→"บันทึกเข้าระบบ" + removed-header assertions.</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>Modify</td><td>NEW AV invariant: OpdLifecycleRow pills MUST be theme-matched (no unconditional dark-only semantic classes).</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: OPD_PILL token family in _apptHubStyles.js</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/_apptHubStyles.js</code> (append after <code>STATUS_CHIP_CLS</code>)</li>
+    <li>Create: <code>tests/appointment-card-redesign.test.jsx</code></li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Write the failing source-grep test</strong></label></div>
+<pre><code class="language-js">// tests/appointment-card-redesign.test.jsx
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, it, expect } from 'vitest';
+
+const read = (p) => fs.readFileSync(path.resolve(process.cwd(), p), 'utf8');
+const STYLES = 'src/components/admin/_apptHubStyles.js';
+
+describe('Card redesign — Task 1: OPD_PILL tokens', () => {
+  it('T1.1 exports OPD_PILL with blue/emerald/wait/save', () => {
+    const s = read(STYLES);
+    expect(s).toMatch(/export const OPD_PILL\b/);
+    for (const k of ['blue', 'emerald', 'wait', 'save']) {
+      expect(s).toMatch(new RegExp(`${k}\\s*:`));
+    }
+  });
+  it('T1.2 each token has a LIGHT base + a dark: override (theme-matched, not dark-only)', () => {
+    const s = read(STYLES);
+    // light bases present
+    expect(s).toMatch(/bg-blue-100/); expect(s).toMatch(/bg-emerald-100/);
+    expect(s).toMatch(/bg-slate-100/); expect(s).toMatch(/bg-rose-100/);
+    // dark overrides present (mirror the prior dark-only values)
+    expect(s).toMatch(/dark:bg-blue-900\/30/); expect(s).toMatch(/dark:bg-emerald-900\/30/);
+    expect(s).toMatch(/dark:bg-slate-800\/50/); expect(s).toMatch(/dark:bg-red-950\/40/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Run it — expect FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx</code> → FAIL (OPD_PILL not exported).</p>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Add the tokens</strong></label></div>
+  <p>Append to <code>src/components/admin/_apptHubStyles.js</code>:</p>
+<pre><code class="language-js">// ─── OPD lifecycle pills (card redesign 2026-05-26) ─────────────────────────
+// Theme-matched dual-tone (light base + dark: override) — fixes the Light-theme
+// green-on-green bug where OpdLifecycleRow used unconditional dark-only classes.
+// Mirrors STATUS_CHIP_CLS / TYPE_CHIP_CLS so pills match their neighbour chips.
+// (Tailwind dark: is OS-coupled here — no darkMode config — same as every other
+//  chip on this card; a systemic dark:→data-theme migration is out of scope.)
+export const OPD_PILL_BASE =
+  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors';
+
+export const OPD_PILL = {
+  // send-link (state B)
+  blue:
+    `${OPD_PILL_BASE} border ` +
+    'bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200 ' +
+    'dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/40 dark:hover:bg-blue-900/50 ' +
+    'disabled:opacity-50',
+  // view-link / view-OPD (state C/D/A/E)
+  emerald:
+    `${OPD_PILL_BASE} border ` +
+    'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 ' +
+    'dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40 dark:hover:bg-emerald-900/50 ' +
+    'disabled:opacity-50',
+  // wait (disabled — no-data / waiting-customer)
+  wait:
+    `${OPD_PILL_BASE} border ` +
+    'bg-slate-100 text-slate-500 border-slate-300 ' +
+    'dark:bg-slate-800/50 dark:text-slate-500 dark:border-slate-700/40 ' +
+    'opacity-70 cursor-not-allowed',
+  // save CTA (state D) — strongest emphasis: rose + border-2 + pulse
+  save:
+    `${OPD_PILL_BASE} border-2 ` +
+    'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 font-extrabold ' +
+    'dark:bg-red-950/40 dark:text-red-300 dark:border-red-600/60 dark:hover:bg-red-900/50 ' +
+    'disabled:opacity-50 animate-pulse',
+};</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Run it — expect PASS</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx</code> → T1.1 + T1.2 PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/_apptHubStyles.js tests/appointment-card-redesign.test.jsx
+git commit -m "feat(appt-card): add theme-matched OPD_PILL token family (card redesign T1)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: OpdLifecycleRow.jsx — tokens + remove header + rename save label</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/OpdLifecycleRow.jsx</code></li>
+    <li>Modify: <code>tests/appointment-card-redesign.test.jsx</code> (add T2 group)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Add the failing T2 source-grep group</strong></label></div>
+<pre><code class="language-js">describe('Card redesign — Task 2: OpdLifecycleRow theme-matched + label changes', () => {
+  const ROW = 'src/components/admin/OpdLifecycleRow.jsx';
+  it('T2.1 imports OPD_PILL from _apptHubStyles', () => {
+    expect(read(ROW)).toMatch(/import\s*\{[^}]*OPD_PILL[^}]*\}\s*from\s*'\.\/_apptHubStyles\.js'/);
+  });
+  it('T2.2 NO unconditional dark-only semantic classes remain (the bug)', () => {
+    const s = read(ROW);
+    expect(s).not.toMatch(/bg-emerald-900\/30/);
+    expect(s).not.toMatch(/bg-blue-900\/30/);
+    expect(s).not.toMatch(/bg-slate-800\/50/);
+    expect(s).not.toMatch(/bg-red-950\/40/);
+  });
+  it('T2.3 Q5 — "OPD lifecycle" header label removed', () => {
+    expect(read(ROW)).not.toMatch(/OPD lifecycle/i);
+  });
+  it('T2.4 Q6 — save button reads "บันทึกเข้าระบบ", not "บันทึกลง OPD"', () => {
+    const s = read(ROW);
+    expect(s).toMatch(/บันทึกเข้าระบบ/);
+    expect(s).not.toMatch(/บันทึกลง OPD/);
+  });
+  it('T2.5 every data-testid preserved', () => {
+    const s = read(ROW);
+    for (const id of ['opd-lifecycle-row','opd-link-send-btn','opd-link-view-btn',
+                      'opd-save-btn-wait','opd-view-btn','opd-save-btn-active']) {
+      expect(s).toContain(`data-testid="${id}"`);
+    }
+    expect(s).toMatch(/data-opd-state=/);
+    expect(s).toMatch(/data-opd-disabled-reason=/);
+  });
+  it('T2.6 all handler props still wired', () => {
+    const s = read(ROW);
+    for (const h of ['onSendLink','onViewLink','onSaveOpd','onViewOpd']) {
+      expect(s).toMatch(new RegExp(`onClick=\\{${h}\\}`));
+    }
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Run T2 — expect FAIL</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx</code> → T2.1-T2.4 FAIL.</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Refactor OpdLifecycleRow.jsx</strong></label></div>
+  <p>(a) Add import: <code>import { OPD_PILL } from './_apptHubStyles.js';</code></p>
+  <p>(b) DELETE the header span entirely (Q5):</p>
+<pre><code class="language-jsx">// REMOVE this block:
+&lt;span className="text-[9px] font-bold uppercase tracking-wider text-amber-500/70 mr-auto"&gt;
+  OPD lifecycle
+&lt;/span&gt;</code></pre>
+  <p>The container keeps <code>md:justify-end</code>; without the <code>mr-auto</code> spacer the pills now right-align in the footer band (intended). Keep the container <code>data-testid="opd-lifecycle-row"</code> + <code>data-opd-state</code> + the warm dashed wrapper classes.</p>
+  <p>(c) Replace each button/span's hardcoded className tail with the token (keep <code>type</code>, <code>onClick</code>, <code>disabled</code>, <code>data-testid</code>, <code>title</code>, icons, and label text — EXCEPT the save label):</p>
+<pre><code class="language-jsx">// send-link button:
+className={OPD_PILL.blue}
+// view-link button:
+className={OPD_PILL.emerald}
+// wait spans (BOTH no-data + waiting-customer):
+className={OPD_PILL.wait}
+// view-OPD button:
+className={OPD_PILL.emerald}
+// save button:
+className={OPD_PILL.save}
+style={{ animationDuration: '2.4s' }}   // keep — controls the existing pulse speed</code></pre>
+  <p>(d) Q6 — rename ONLY the save button's visible label:</p>
+<pre><code class="language-jsx">// inside the showOpdSave &lt;button data-testid="opd-save-btn-active"&gt;:
+//   was:  บันทึกลง OPD
+//   now:  บันทึกเข้าระบบ
+{saveOpdBusy ? &lt;Loader2 size={11} className="animate-spin" /&gt; : &lt;ClipboardCheck size={11} /&gt;}
+บันทึกเข้าระบบ</code></pre>
+  <p><strong>Do NOT touch:</strong> the 6 visibility predicates (<code>showLinkSend</code>…<code>showOpdSave</code>), prop list, <code>onClick</code> bindings, <code>disabled</code> gates, <code>data-opd-disabled-reason</code>, icons, or the other 5 labels.</p>
+
+  <div class="step"><input type="checkbox" id="t2s4"> <label for="t2s4"><strong>Step 4: Run T2 + the OpdLifecycleRow's existing tests</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code></p>
+  <p>Expected: T2 PASS. <code>v118</code> may FAIL on the old label "บันทึกลง OPD" / removed header → V21-fix in Step 5.</p>
+
+  <div class="step"><input type="checkbox" id="t2s5"> <label for="t2s5"><strong>Step 5: V21-fix v118 assertions (label/header only)</strong></label></div>
+  <p>In <code>tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx</code>: change any <code>'บันทึกลง OPD'</code> assertion → <code>'บันทึกเข้าระบบ'</code>; drop/relax any assertion of the "OPD lifecycle" header text; re-anchor on <code>data-testid="opd-save-btn-active"</code> (unchanged). Add a marker comment <code>// card-redesign 2026-05-26: label Q6 + header Q5</code>. Re-run → PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t2s6"> <label for="t2s6"><strong>Step 6: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/OpdLifecycleRow.jsx tests/appointment-card-redesign.test.jsx tests/v118-card-opd-lifecycle-row-flow-simulate.test.jsx
+git commit -m "feat(appt-card): theme-match OPD pills + remove header label + rename save→บันทึกเข้าระบบ (T2)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: AppointmentHubRowCard.jsx — 5-band re-layout (cosmetic-shell)</h3>
+  <p><strong>Files:</strong></p>
+  <ul>
+    <li>Modify: <code>src/components/admin/AppointmentHubRowCard.jsx</code> (JSX <code>return</code> only; lines ~140-541)</li>
+    <li>Modify: <code>tests/appointment-card-redesign.test.jsx</code> (add T3 group)</li>
+  </ul>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add the failing T3 cosmetic-shell invariant group</strong></label></div>
+<pre><code class="language-js">describe('Card redesign — Task 3: AppointmentHubRowCard cosmetic-shell', () => {
+  const CARD = 'src/components/admin/AppointmentHubRowCard.jsx';
+  const TESTIDS = ['appt-hub-row','row-accent-bar','row-hn','row-name','opd-ready-to-save-chip',
+    'row-finance-chips','row-chip-wallet','row-chip-deposit','row-chip-outstanding','row-chip-lifetime',
+    'row-date-full','row-time-emphasis','row-type-chip','row-deposit-chip','row-missed-chip',
+    'row-purpose-block','row-purpose','row-status','row-action-mark-complete','row-action-unmark-complete',
+    'row-action-line','row-action-edit-treatment','row-action-edit','row-action-cancel',
+    'row-action-create-treatment','row-action-confirm'];
+  it('T3.1 every data-testid preserved', () => {
+    const s = read(CARD);
+    for (const id of TESTIDS) expect(s, id).toContain(`data-testid="${id}"`);
+  });
+  it('T3.2 stepper + OpdLifecycleRow children still rendered (re-parented, not removed)', () => {
+    const s = read(CARD);
+    expect(s).toMatch(/&lt;AppointmentOpdStepperRow\b/);
+    expect(s).toMatch(/&lt;OpdLifecycleRow\b/);
+  });
+  it('T3.3 every handler prop still wired through', () => {
+    const s = read(CARD);
+    for (const h of ['onConfirm','onEdit','onCancel','onCreateTreatment','onEditTreatment',
+                     'onOpenLine','onMarkServiceComplete','onUnmarkServiceComplete']) {
+      expect(s, h).toMatch(new RegExp(h));
+    }
+  });
+  it('T3.4 patient name stays sky (never red) — Thai-culture iron-clad', () => {
+    const s = read(CARD);
+    expect(s).toMatch(/data-testid="row-name"[\s\S]{0,400}?text-sky-700/);
+    expect(s).not.toMatch(/data-testid="row-name"[\s\S]{0,200}?text-red/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Run T3 — expect PASS for T3.1/T3.3/T3.4 (current card already has them), then re-layout must KEEP them green</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx</code>. T3.1-T3.4 should pass against the CURRENT card (they assert what must be preserved). They are the regression guard for Step 3.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Re-lay-out the JSX into 5 bands</strong></label></div>
+  <p>Rebuild the <code>return (...)</code> as the band structure below. Move existing blocks verbatim (copy their full JSX incl. <code>data-testid</code>/<code>onClick</code>/conditionals) into the matching band. Replace the outer <code>CARD_SURFACE flex flex-col</code> + inner 3-column flex with the band wrappers.</p>
+<pre><code class="language-jsx">return (
+  &lt;div className="relative border border-[var(--bd)] rounded-2xl overflow-hidden bg-[var(--bg-card)]
+                  shadow-[var(--shadow-card)] mb-3 transition-all duration-200
+                  hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10 flex flex-col"
+       data-testid="appt-hub-row" data-appt-id={appt.id} data-status-accent={accentKey}&gt;
+    &lt;span aria-hidden="true" data-testid="row-accent-bar"
+          className={`${ACCENT_BAR_BASE} ${accentClass}`} /&gt;
+
+    {/* ① HEADER BAND — HN/membership/ready chip + name + phone | LINE + status */}
+    &lt;div className="flex justify-between items-start gap-4 px-4 py-3 pl-5 bg-[var(--bg-elevated)] border-b border-[var(--bd)]"&gt;
+      &lt;div className="min-w-0"&gt;
+        {/* HN + membership chip + opd-ready-to-save-chip — VERBATIM from current lines 160-185 */}
+        {/* &lt;a data-testid="row-name" ... text-sky-700 dark:text-sky-300 ...&gt; — VERBATIM lines 189-205 */}
+        {/* gender + phone sub — VERBATIM lines 207-210 */}
+      &lt;/div&gt;
+      &lt;div className="flex flex-col items-end gap-1.5 shrink-0"&gt;
+        &lt;div className="flex items-center gap-2 flex-wrap justify-end"&gt;
+          {/* &lt;AppointmentLineBadge appt={appt} size="xs" /&gt; + row-status span — VERBATIM lines 332-339 */}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    {/* ② FINANCE STRIP — only if any chip present (same 4 conditionals) */}
+    &lt;div className="flex flex-wrap gap-1.5 px-4 py-2 pl-5 border-b border-[var(--bd)]" data-testid="row-finance-chips"&gt;
+      {/* row-chip-wallet / deposit / outstanding / lifetime — VERBATIM lines 213-245 (keep each && conditional) */}
+    &lt;/div&gt;
+
+    {/* ③ DETAIL ZONE — 2-col desktop, 1-col mobile */}
+    &lt;div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 py-3 pl-5"&gt;
+      &lt;div&gt;
+        {/* row-date-full + row-time-emphasis — VERBATIM lines 252-261 */}
+        {/* row-type-chip + row-deposit-chip + row-missed-chip — VERBATIM lines 263-289 */}
+      &lt;/div&gt;
+      &lt;div&gt;
+        {/* dl.dt-grid (ที่ปรึกษา/แพทย์/ผู้ช่วย/ห้องตรวจ) — VERBATIM lines 291-306 */}
+        {/* row-purpose-block — VERBATIM lines 309-318 */}
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    {/* ④ OPD FOOTER ZONE — pills + stepper, warm tint, NO header label */}
+    &lt;div className="px-4 py-2.5 pl-5 border-t border-[var(--bd)] bg-orange-50/40 dark:bg-amber-500/[0.03]"&gt;
+      {opdLifecycle && !opdLifecycle.hidden && (
+        &lt;OpdLifecycleRow state={opdLifecycle.state} onSendLink={opdLifecycle.onSendLink}
+          onViewLink={opdLifecycle.onViewLink} onSaveOpd={opdLifecycle.onSaveOpd}
+          onViewOpd={opdLifecycle.onViewOpd} sendLinkBusy={!!opdLifecycle.sendLinkBusy}
+          saveOpdBusy={!!opdLifecycle.saveOpdBusy} /&gt;
+      )}
+      &lt;AppointmentOpdStepperRow latestTreatment={latestTreatment} isTodayTab={isTodayTab} /&gt;
+    &lt;/div&gt;
+
+    {/* ⑤ ACTION BAR — the SAME status-conditional button matrix, VERBATIM lines 356-533 */}
+    &lt;div className="flex gap-1.5 flex-wrap justify-end px-4 py-2.5 border-t border-[var(--bd)] bg-[var(--bg-elevated)]"&gt;
+      {/* mark-complete / unmark / line / edit-treatment / edit / cancel / create-treatment / confirm
+          — every button + data-testid + onClick + conditional copied verbatim */}
+    &lt;/div&gt;
+  &lt;/div&gt;
+);</code></pre>
+  <div class="warn">Move the OPD-ready-to-save chip (lines 176-184) into band ① next to HN (it already lives there). The <code>AppointmentOpdStepperRow</code> + <code>OpdLifecycleRow</code> JSX is copied VERBATIM (same props). The action-button matrix (lines 356-533) is copied VERBATIM into band ⑤ — do NOT alter any conditional or handler.</div>
+
+  <div class="step"><input type="checkbox" id="t3s4"> <label for="t3s4"><strong>Step 4: Run T3 — expect PASS (all preserved)</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/appointment-card-redesign.test.jsx</code> → T3.1-T3.4 PASS. If any testid/handler missing → you dropped it in the re-layout; restore it.</p>
+
+  <div class="step"><input type="checkbox" id="t3s5"> <label for="t3s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/components/admin/AppointmentHubRowCard.jsx tests/appointment-card-redesign.test.jsx
+git commit -m "feat(appt-card): 5-band layout re-architecture (cosmetic-shell, all testids/handlers preserved) (T3)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Full suite + V21-fixups</h3>
+  <p><strong>Files:</strong> any test file that asserts the old card structure/labels.</p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Run full vitest</strong></label></div>
+  <p>Run: <code>npm test -- --run</code>. Note: pre-existing rotating <code>global.fetch</code>-leak/perf load-flakes are NOT ours (verify any failure is reproducible in isolation before fixing).</p>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: V21-fix card-structure/label assertions</strong></label></div>
+  <p>For each genuine failure caused by the re-layout/label change (likely <code>v71-opd-stepper-row</code>, <code>phase-26-0-status-display-rtl</code>, and any RTL test asserting the 3-column structure): re-anchor on the preserved <code>data-testid</code>s (NOT on DOM nesting/class structure); update <code>'บันทึกลง OPD'</code>→<code>'บันทึกเข้าระบบ'</code>; drop "OPD lifecycle" header text assertions. Add a <code>// card-redesign 2026-05-26</code> marker comment on each fixed assertion. No behavior change → no real regression.</p>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Re-run full vitest — 0 fail</strong></label></div>
+  <p>Run: <code>npm test -- --run</code> → green (modulo the known isolated-pass load-flakes).</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Build clean</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean (catches any import/JSX error the REPL can't).</p>
+
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5: Commit the V21-fixups</strong></label></div>
+<pre><code class="language-bash">git add tests/
+git commit -m "test(appt-card): V21-fix layout/label assertions for card redesign (T4)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Audits + AV invariant</h3>
+  <p><strong>Files:</strong> <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Run the relevant audits</strong></label></div>
+  <p>Invoke <code>/audit-ui-cultural-a11y</code> (Thai colors / name-never-red / contrast) + <code>/audit-react-patterns</code> (no IIFE-in-JSX, no stale closures). Fix any finding.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Add the AV invariant</strong></label></div>
+  <p>Add to <code>audit-anti-vibe-code</code> SKILL.md: <em>"OpdLifecycleRow pills MUST use the shared OPD_PILL tokens (light base + dark:) — unconditional dark-only semantic classes (<code>bg-emerald-900/30</code> w/o a light base) are forbidden (Light-theme green-on-green bug)."</em> Grep target: <code>bg-(emerald|blue|slate|red)-(900|950|800)/\d+</code> inside <code>OpdLifecycleRow.jsx</code> → must be ZERO. Cross-link <code>tests/appointment-card-redesign.test.jsx</code> T2.2.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "docs(audit): AV invariant — OpdLifecycleRow pills must be theme-matched (T5)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 6: Rule Q-vis real-browser verification (both themes) — the gate</h3>
+  <p><strong>Files:</strong> none (verification only).</p>
+
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: Run the app + reach the appointment hub</strong></label></div>
+  <p>Start the dev server (preview_start / existing vite). Reach the Frontend → นัดหมาย (AppointmentHubView) card list. (AdminDashboard is auth-gated — sign in as a real clinic-staff role per Rule Q. If the auth-gated hub can't be reached headless, render the card via a temp harness mounting <code>AppointmentHubRowCard</code> with sample <code>appt</code>/<code>summary</code>/<code>opdLifecycle</code> props — delete the harness after; never commit it.)</p>
+
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: Verify BOTH themes by eye (screenshot)</strong></label></div>
+  <p>Toggle <code>data-theme</code> light ↔ dark. Confirm with a screenshot you LOOK AT (Rule Q-vis): (a) OPD pills AA-readable in BOTH themes (no green-on-green / washed); (b) 5-band layout renders, name sky-blue, no overflow at mobile width; (c) "⚙ OPD Lifecycle" text gone; (d) save button reads "บันทึกเข้าระบบ"; (e) the round-circle สถานะ OPD stepper looks byte-identical to before (muted + done states). Compare OPD pills against the neighbour STATUS/TYPE chips — they must match (same dual-tone). If dark-theme chips render light-base (OS-coupling), confirm the EXISTING neighbour chips do the same → pre-existing systemic, out of scope; flag to user.</p>
+
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Final commit + state update</strong></label></div>
+<pre><code class="language-bash"># update SESSION_HANDOFF.md + .agents/active.md (new V/feature entry, NOT deployed)
+git add -A && git commit -m "docs(agents): appointment-card redesign SHIPPED LOCAL (Rule Q-vis both themes)"
+git push origin master</code></pre>
+  <p>Do NOT deploy. Awaiting explicit "deploy" (V18). Post-deploy: user L1 hands-on in the real AdminDashboard.</p>
+</div>
+
+<h2>Self-Review (run after writing)</h2>
+<ul>
+  <li><strong>Spec coverage:</strong> Q1 band layout → T3 · Q2 theme-matched pills → T1+T2 · Q3 Editorial Ember → T3 surfaces/hover · Q4 stepper untouched → T3 re-parent verbatim (no edits to stepper files) · Q5 remove header → T2 · Q6 rename save → T2. All covered.</li>
+  <li><strong>No placeholders:</strong> token code complete; OpdLifecycleRow changes enumerated; card band skeleton + verbatim-move map given (full 540-line file not duplicated — the cosmetic-shell invariant test T3 is the guardrail, not a re-typed file).</li>
+  <li><strong>Type consistency:</strong> <code>OPD_PILL.{blue,emerald,wait,save}</code> used identically in T1 (def) and T2 (consumption).</li>
+  <li><strong>Rules:</strong> Q-vis (T6) · cosmetic-shell (T3 invariant) · N (targeted during, full at T4) · P (AV at T5) · Thai-culture name-never-red (T3.4). Stepper OFF-LIMITS honored (no task edits <code>AppointmentOpdStepperRow</code>/<code>TreatmentLifecycleStepper</code>).</li>
+</ul>
+
+</body>
+</html>
