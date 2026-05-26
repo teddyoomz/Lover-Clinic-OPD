@@ -3302,3 +3302,25 @@ Card-flow sessions (`createdFromBackendBooking && isHiddenFromQueue`, minted by 
 **Source-grep regression**: `tests/realtime-intake-notif-appointment-cards.test.js` (F1 live resolution · F2 cardFlowNotif filter · SG1-SG6 source locks · AV137 presence).
 
 **Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-realtime-intake-notif-on-appointment-cards*` · V124 (purple card-flow count) · V125 (cancel-cascade) · Rule Q (real-browser L1 form-fill verify) · Rule R push_config diag (`scripts/diag-push-config.mjs`).
+
+### AV138 — Every collection the CLIENT reads/writes MUST have a firestore.rules match block (no silent default-deny) (2026-05-26)
+
+`firestore.rules` has a root catch-all `match /{document=**} { allow read, write: if false; }` (default-deny) + a `match /artifacts/{appId}/public/data/{document=**}` wrapper that has NO own `allow` (only nested per-collection matches). So ANY collection the browser touches that LACKS a dedicated `match /<collection>/...` block falls through to default-deny → the client gets **"Missing or insufficient permissions."** Admin-SDK (Cloud Functions, `scripts/diag-*`, migrations) BYPASSES rules, so server-side reads of the same collection SUCCEED — masking the gap (the V66 admin-vs-client blind spot: a diag that reads via admin SDK will report "data is fine" while the real client is denied).
+
+**Invariant**: for every collection the client (`src/`) reads/writes via `doc(db,'artifacts',appId,'public','data','<X>',...)` / `collection(...)`, firestore.rules MUST have a `match /<X>/...` block granting the intended role.
+
+**Grep (class-of-bug classifier — output MUST be empty)**:
+```
+comm -23 \
+  <(grep -rohE "'data',[[:space:]]*'[a-zA-Z_0-9]+'" src/ api/ | grep -oE "'[a-zA-Z_0-9]+'$" | tr -d "'" | sort -u) \
+  <(grep -oE "match /[a-zA-Z_0-9]+/" firestore.rules | sed "s|match /||;s|/||" | sort -u)
+```
+(2026-05-26: the sole instance was `push_config` — client reads/writes `push_config/{tokens,settings}` but there was never a `match /push_config` block → enable-push denied for ~2 months. Now fixed + isolated; no other client-accessed collection lacks a rule.)
+
+**Probe (Rule B)**: every NEW client-write collection MUST be added to the Rule B probe list (`01-iron-clad.md`) at the SAME time as its rule. `push_config` write was never probed → the regression went unnoticed for ~2 months (V1/V9 lesson — the probe list is the only guard against silent rules-refactor drops). Probe: clinic-staff write to `push_config/tokens` → 200; anon → 403.
+
+**Sanctioned exceptions**: NONE.
+
+**Source-grep regression**: `tests/firestore-rules-push-config.test.js` (rule exists + allows isClinicStaff + AV138 class-of-bug check on AdminDashboard.jsx client paths).
+
+**Cross-link**: firestore.rules `match /push_config/{docId}` · `enablePushNotifications` + push self-heal (AdminDashboard.jsx) · Cloud Function `sendPushOnSubmit` (functions/index.js, admin SDK) · Rule B Probe-Deploy-Probe.

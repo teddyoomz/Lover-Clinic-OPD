@@ -656,9 +656,27 @@ service cloud.firestore {
       }
 
       // ── FCM tokens (legacy — no code path writes to this collection anymore;
-      //    the real push-subscriber list lives at push_config/tokens).
+      //    the real push-subscriber list lives at push_config/tokens — see the
+      //    push_config rule below).
       //    Left intentionally locked so the dead collection stays dead. ──
       match /fcm_tokens/{tokenId} {
+        allow read, write: if isClinicStaff();
+      }
+
+      // ── Push notification config (2026-05-26 — AV138 fix) ──
+      //    push_config/tokens   = live web-push FCM subscriber list. The browser
+      //      (clinic-staff) registers its device token here on "เปิดการแจ้งเตือน
+      //      มือถือ"; the Cloud Function sendPushOnSubmit reads it via admin SDK
+      //      (bypasses rules). The app-load self-heal re-registers the current
+      //      token. push_config/settings = globalPushMuted test-mode toggle.
+      //    CLIENT reads + writes BOTH docs → REQUIRES this rule. It was MISSING
+      //    (the older broad public/data allow was dropped in the per-collection
+      //    rules refactor ~c0d0ffc and push_config was forgotten — never had a
+      //    match block), so client read/write fell through to the default-deny
+      //    catch-all → "Missing or insufficient permissions" on enable-push for
+      //    ~2 months (the 7 stored tokens predate the regression). Added to the
+      //    Rule B probe list so it can't silently regress again.
+      match /push_config/{docId} {
         allow read, write: if isClinicStaff();
       }
 
