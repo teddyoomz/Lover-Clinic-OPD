@@ -3342,3 +3342,63 @@ The PUBLIC patient form (`?session=`, anon auth) shows per-branch info (e.g. the
 **Source-grep regression**: `tests/branch-line-oa-and-rename.test.js`.
 
 **Cross-link**: api/patient-view.js (same secure server-read pattern, same be_branches-is-staff-only note) · firestore.rules be_branches:244 · AV138 (client-accessed collections need a rule — here anon uses the endpoint, NOT a direct read) · BranchFormModal.jsx settings.lineOaUrl.
+
+### AV140 — Card-flow (📥 pending-OPD-save) tab bubble: every bubble-bearing tab key MUST have a matching cardFlowSubPillCounts bucket (2026-05-26 EOD+7)
+
+`AppointmentHubTabBar` renders the purple card-flow bubble GENERICALLY per tab key — `cardFlowCount = Number(cardFlowCounts[t.key] || 0)` then `cardFlowCount > 0 && <bubble>`. So a tab silently shows NO bubble whenever its key is MISSING from the `cardFlowSubPillCounts` object built in `AppointmentHubView`. The bug: `cardFlowSubPillCounts` built only `{today, tomorrow, future, past}` while `TABS` also has `opd-pending` → the "รอ/ยังไม่ลง OPD" tab never showed its 📥 count (same V12 multi-reader / parity family as AV124 bubble↔badge + AV137 card-flow surfacing).
+
+**Invariant**: every `AppointmentHubTabBar.TABS` key that should surface a card-flow bubble MUST have a corresponding key computed in `cardFlowSubPillCounts` (AppointmentHubView). `opd-pending` is a CROSS-CUTTING state tab (it overlaps the date-range tabs) so it is counted SEPARATELY — outside the `['today','tomorrow','future','past']` break loop — gated by its own `applyTabFilter(tab:'opd-pending')` membership + `isAppointmentPendingOpdSave` (state D = the 📥 "ลูกค้ากรอกแล้ว · รอบันทึก" badge).
+
+**Forbidden**:
+- ❌ adding a key to `TABS` (with an expected bubble) without adding it to `cardFlowSubPillCounts` → silent no-bubble.
+- ❌ counting `opd-pending` INSIDE the date-range `for...break` loop (it would steal the appt from its date bucket AND under-count, since the tabs overlap).
+
+**Grep**: `cardFlowSubPillCounts` buckets literal includes `'opd-pending': 0`; the opd-pending increment uses `applyTabFilter([a], { tab: 'opd-pending'` OUTSIDE the date-range break loop.
+
+**Sanctioned exceptions**: NONE (a tab that legitimately never has card-flow simply yields 0).
+
+**Source-grep regression**: `tests/eod7-ui-fixes-batch.test.jsx` (item-6 group + a real RTL render proving the opd-pending bubble appears when `cardFlowCounts['opd-pending'] > 0`).
+
+**Cross-link**: AppointmentHubTabBar.jsx (generic per-key bubble) · AV124 (bubble↔badge predicate parity) · AV137 (card-flow real-time surfacing) · AV131 (opd-pending tab lifecycle) · `opdSessionState.isAppointmentPendingOpdSave`.
+
+### AV141 — Serverless backup/restore I/O MUST be bounded-PARALLEL, never sequential-per-item against the 300s Vercel cap (V122, 2026-05-26) — CONFIRMED prod 504
+
+A serverless backup/restore that does N SEQUENTIAL network round-trips (per-collection read+write, per-customer×subcollection reads, per-storage-file copy/hash) grows linearly with data. On Vercel the function region (sin1) is far from Firestore/Storage; each round-trip is ~100-250ms; ~1000 of them blow past the `maxDuration: 300` ceiling → **HTTP 504 FUNCTION_INVOCATION_TIMEOUT** → the process is KILLED mid-flight (after collections, before the manifest write) → backup folder has files but NO manifest.json → `NO_MANIFEST`. CONFIRMED 2026-05-26: the V81 whole-system backup silently broke since 2026-05-22 (5604-doc 05-21 backup healthy → 05-22..26 all NO_MANIFEST); a real trigger returned 504 after 300.7s + left a 20h-stale cron lock (its `finally{}` never ran). The kill bypasses ALL per-item try/catch (process-level, not a throwable) → the day-to-day VARIATION in the death point is the timeout-near-boundary signature. 300s is the HARD ceiling — you cannot raise it; you MUST reduce wall-time.
+
+**Invariant**: every loop in `wholeSystemBackupExecutor.js` / `wholeSystemRestoreExecutor.js` / `whole-fleet-customer-restore.js` (+ any future serverless backup/restore) that issues per-item Firestore/Storage round-trips MUST use `mapWithConcurrency(items, LIMIT, fn)` (bounded parallel), NOT a `for (const x of items) { await … }` sequential loop. Limits: collections ~15-20, subcollections ~40, storage ~15. The manifest write (the success signal) MUST be reachable within the cap.
+
+**Forbidden**:
+- ❌ `for (… of …) { await db.collection(...).get() / .save() / .copy() / sha256Stream(...) }` over data-scaling collections in a serverless backup/restore.
+- ❌ a Replace-mode restore whose auto-pre-backup runs a sequential backup (compounds: pre-backup + wipe + restore in ONE function).
+- ❌ wiping a parent collection BEFORE its subcollections (Firestore does not cascade-delete subcollections; `be_customers.get()` returns nothing once parent docs are gone → orphaned subcoll survive a "full replace"). Capture refs via `listDocuments()` up front; wipe subcoll → then parent.
+
+**Grep (class-of-bug classifier — backup/restore files MUST use mapWithConcurrency, not sequential per-item awaits)**:
+```
+grep -nE "for \(const .* of .*\) \{" api/admin/_lib/wholeSystemBackupExecutor.js api/admin/_lib/wholeSystemRestoreExecutor.js | grep -v "for (const r of"   # spread-collect loops OK
+grep -c "mapWithConcurrency" api/admin/_lib/wholeSystemBackupExecutor.js api/admin/_lib/wholeSystemRestoreExecutor.js   # MUST be > 0
+```
+
+**Sanctioned exceptions**: per-customer V74 single-customer backup (one customer; already `Promise.all`), central-stock (bounded by #warehouses × ~6 cols). The whole-fleet RESTORE decision loop stays SEQUENTIAL (V77-fix2 intra-batch HN-collision ordering) but its download-heavy LOAD phase is parallel (`FLEET_LOAD_CONCURRENCY`).
+
+**Source-grep regression**: `tests/v122-backup-parallel-and-completeness.test.js` (group A mapWithConcurrency + group D source-grep locks). Real-prod proof: `scripts/e2e-whole-system-backup-restore-v122.mjs` (7.5s local, complete manifest, byte-identical restore). Deploy-gated final proof: trigger the real endpoint → 200 within cap (`scripts/diag-trigger-whole-system-backup.mjs`).
+
+**Cross-link**: `mapWithConcurrency` (wholeSystemBackupCore.js) · vercel.json maxDuration · Rule B (stale-lock = killed-mid-flight signature) · AV142 (the completeness facet of the same V122 fix).
+
+### AV142 — Whole-system backup scope MUST be dynamically enumerated, never a hardcoded collection list (V122, 2026-05-26)
+
+A "whole-system / full" backup whose scope is a HARDCODED collection list (`UNIVERSAL_COLLECTIONS` + `BRANCH_SCOPED_COLLECTIONS`) SILENTLY OMITS every collection added after the list was last edited. CONFIRMED 2026-05-26: 28 of 65 prod collections were omitted — including MONEY (`be_deposits`, `be_wallet_transactions`, `be_point_transactions`), INV/HN COUNTERS (`be_customer_counter`, `be_sales_counter`), and master data (`be_master_*`). Even a "healthy" backup was a partial backup → a restore would lose all of it. Same drift family as AV138 (every client collection needs a rule): a hardcoded registry of "all collections" rots as features add collections, and the omission is invisible (the backup succeeds, just incomplete).
+
+**Invariant**: full-scope (`scope === 'full'`) backup + restore-wipe + assertTargetEmpty MUST enumerate collections DYNAMICALLY via `db.doc(PREFIX).listCollections()` (minus an explicit, auditable `FULL_SCOPE_COLLECTION_DENYLIST`), so a new feature collection is captured automatically. The hardcoded `UNIVERSAL_COLLECTIONS` / `BRANCH_SCOPED_COLLECTIONS` lists may remain ONLY for (a) the customer-only curated subset and (b) file-path classification (`classifyCollectionCategory`) — NEVER as the full-scope enumeration source.
+
+**Forbidden**:
+- ❌ `for (const col of UNIVERSAL_COLLECTIONS) / BRANCH_SCOPED_COLLECTIONS` as the FULL-scope backup/wipe enumeration.
+- ❌ a Replace-mode full wipe that iterates the hardcoded lists (leaves the omitted collections as stale data after a "full replace").
+- ❌ adding a new `be_*` collection without it being auto-covered by dynamic enumeration (it is, by default — the denylist is opt-OUT).
+
+**Grep**: `wholeSystemBackupExecutor.js` + `wholeSystemRestoreExecutor.js` MUST contain `db.doc(PREFIX).listCollections()` for the non-customer-only branch; the full-scope path MUST NOT iterate `colScope.universal` / `colScope.branchScoped` (those are customer-only).
+
+**Sanctioned exceptions**: customer-only scope uses the curated `CUSTOMER_ONLY_*` lists by design (intentional subset). Branch (V40) + central-stock use intentional tier/bucket lists (scoped by design; not "whole-system").
+
+**Source-grep regression**: `tests/v122-backup-parallel-and-completeness.test.js` (group E completeness contract). Real-prod proof: `scripts/e2e-whole-system-backup-restore-v122.mjs` asserts ALL 65 live collections captured + money/counter collections present.
+
+**Cross-link**: `classifyCollectionCategory` + `FULL_SCOPE_COLLECTION_DENYLIST` (wholeSystemBackupCore.js) · AV138 (hardcoded-registry-drift family) · AV141 (the timeout facet — adding the 28 omitted collections would worsen the timeout if not also parallelized; both fixed together in V122).

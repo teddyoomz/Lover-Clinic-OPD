@@ -1,31 +1,26 @@
 ---
-updated_at: "2026-05-26 EOD+7 — per-branch LINE OA add button restored + ดูข้อมูล OPD→ดูข้อมูลรับเข้า (AV139) DEPLOYED + L2-verified"
-status: "ALL DEPLOYED — 4 ships this session LIVE on prod. master=7e2a5bd8=prod. branch-line-oa endpoint L2-verified."
+updated_at: "2026-05-27 — V122 backup-subsystem fix DEPLOYED + L2-verified live + create-queue button removed + EOD+8 UI fixes DEPLOYED"
+status: "DEPLOYED. master=0805da87 pushed; prod LIVE (vercel --prod → lover-clinic-app.vercel.app). V122 backup fix L2-verified on the real endpoint (HTTP 200 in 38.1s, complete manifest, 0 failed). Full suite 14892/0."
 branch: "master"
-last_commit: "7e2a5bd8 fix(patient-form): restore per-branch LINE OA add button + rename ดูข้อมูล OPD→ดูข้อมูลรับเข้า (AV139)"
-tests: "full suite 14843 pass + 1 isolated-pass flake (phase-17-1-cross-branch-import-rtl global.fetch-leak, 7/0 isolated, NOT mine) · build clean · new bank 9/0 (ran this session; no source change since)"
+last_commit: "0805da87 feat(frontend): remove +สร้างคิวใหม่ create-queue button (keep form) + EOD+8 UI fixes"
+tests: "full suite 14892 pass / 0 fail. build clean. backup e2e 10/0 (real prod). branch backup e2e healthy."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "7e2a5bd8 LIVE — appointment-card + realtime-notif + push_config-rule + LINE-OA/rename all deployed 2026-05-26 EOD+7"
-firestore_rules_version: "push_config rule added + DEPLOYED EOD+7 (AV138, Probe-Deploy-Probe green). LINE-OA fix = no rules change."
+production_commit: "0805da87 LIVE (V122 backup + button removal + EOD+8). prior prod = 7e2a5bd8."
+firestore_rules_version: "UNCHANGED this session (no rules/data/cron touched — frontend+serverless deploy only; NO Probe-Deploy-Probe needed)"
 ---
 
 # Active Context
 
 ## State
-- LINE-OA fix (AV139): patient-form success screen "เพิ่มเพื่อน LINE Official" button restored PER-BRANCH. Was gated on empty global `clinic_settings.lineOfficialUrl`; real source = `be_branches.settings.lineOaUrl` (staff-only, e.g. https://lin.ee/mFFsDkG). NEW `api/branch-line-oa.js` (admin SDK, returns ONLY the public lin.ee URL) → PatientForm fetches per `session.branchId` (global kept as fallback). L2-verified on prod: valid→`{lineAddUrl:"https://lin.ee/mFFsDkG"}` HTTP200, bad→400.
-- Rename (same batch): OpdLifecycleRow view button "ดูข้อมูล OPD"→"ดูข้อมูลรับเข้า" (label/title/2 comments + OPD-save toast). `opd-view-btn` testid + `onViewOpd` UNCHANGED (cosmetic-shell).
-- Session shipped 4 deploys, ALL LIVE: appointment-card 5-band redesign · realtime-intake-notif (AV137) · push_config rule (AV138) · LINE-OA+rename (AV139).
-
-## What this session shipped
-- AV137 realtime-intake-notif: live `allLinkedSessions`→sessionsById + `cardFlowNotif`→allNotifData + push self-heal — DEPLOYED.
-- AV138 push_config firestore rule (client enable-push was default-denied; V66 admin-vs-client blind spot) — DEPLOYED, Probe-Deploy-Probe green.
-- AV139 per-branch LINE OA endpoint (`api/branch-line-oa.js`) + ดูข้อมูล OPD→ดูข้อมูลรับเข้า — DEPLOYED + endpoint L2-verified.
-- Checkpoint: `.agents/sessions/2026-05-26-line-oa-restore-and-rename.md`.
+- V122 backup-subsystem fix DEPLOYED + **L2-VERIFIED LIVE**: deployed `/api/admin/whole-system-backup-export` → HTTP 200 in 38.1s (was 504 @ 300.7s timeout); complete manifest (4783 docs · 409 users · 0 failedCollections · 0 failedStorage). The 03:00 cron now produces complete backups (no more NO_MANIFEST).
+- Root cause: ~1000 sequential cross-region round-trips > 300s Vercel cap + 28/65 collections silently omitted (hardcoded scope). Fix: mapWithConcurrency bounded-parallel I/O (~20×) + dynamic listCollections() enumeration across backup + restore + whole-fleet + branch maxDuration 60→300. AV141 + AV142. V122 V-log.
+- Create-queue "+สร้างคิวใหม่" button REMOVED (desktop + mobile) — modal/form KEPT dormant for later (prose breadcrumb to re-enable). 3 V21 test fixups (v88 R5.1/W1.2 + menu M7.1).
+- EOD+8 UI fixes shipped in the same deploy (were awaiting commit/deploy).
 
 ## Next action
-- idle — all 4 fixes deployed; endpoint + rule L2-verified. Await user L1 + next task.
+- idle — user L1 on prod for auth-gated UI (create-queue button gone from header; EOD+8 visual items: card breathing · opd-pending bubble · OPD modal renames · QR mobile).
 
-## Outstanding user-triggered actions
-- USER L1: open `?session=<intake link>` → LINE OA button shows; re-enable push on device (rule live); confirm นัดหมาย card real-time + renamed "ดูข้อมูลรับเข้า".
-- 3 Rule S edits (CLAUDE.md / rules 00 / 01) uncommitted — pre-existing, user's to commit. (optional) add push_config + branch-line-oa to Rule B probe list there.
-- Bug → /systematic-debugging + Rule P.
+## Outstanding (user-triggered)
+- OPTIONAL: clean up 5 pre-fix broken NO_MANIFEST backup folders (auto-20260522..26 auto-clean via 5-day retention; manual-20260524 needs manual delete).
+- OPTIONAL: stale QR-panel placeholder "กดสร้างคิวใหม่ด้านบน" (AdminDashboard.jsx:7541) still references the removed button — left unchanged (scope=button); soften if desired.
+- 2 pre-existing Rule S edits (CLAUDE.md, rules/01-iron-clad.md) still UNCOMMITTED — user's to commit (doc-only, not in prod bundle).
