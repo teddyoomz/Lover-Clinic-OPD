@@ -22,7 +22,9 @@ const sliceFrom = (src, anchor, len = 1600) => {
 // =============================================================================
 describe('W1 — createDeposit routing contract (DepositPanel surface)', () => {
   it('W1.1 createDeposit sets status active', () => {
-    const body = sliceFrom(BACKEND, 'export async function createDeposit');
+    // V-deposit-noappt (2026-05-27) — widened slice: createDeposit's payload
+    // gained purpose/customerNameTemp/customerPhoneTemp, pushing `status` down.
+    const body = sliceFrom(BACKEND, 'export async function createDeposit', 2200);
     expect(body).toBeTruthy();
     expect(body).toMatch(/status:\s*'active'/);
   });

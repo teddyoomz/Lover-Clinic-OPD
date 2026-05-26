@@ -15,7 +15,9 @@ describe('AppointmentFormModal นัดมาเพื่อ picker wire', () =
 
   it('picker is bound to formData.appointmentTo + required', () => {
     expect(SRC).toMatch(/value=\{formData\.appointmentTo\}[\s\S]{0,120}onChange=\{\(s\)\s*=>\s*update\(\{ appointmentTo: s \}\)\}/);
-    expect(SRC).toMatch(/<VisitPurposePicker[\s\S]{0,160}required/);
+    // V-deposit-noappt (2026-05-27) — window widened from 160: the picker JSX
+    // grew a `label={...}` line, pushing `required` further from the tag.
+    expect(SRC).toMatch(/<VisitPurposePicker[\s\S]{0,300}required/);
   });
 
   it('validates นัดมาเพื่อ required (≥1) via scrollToFormError', () => {
