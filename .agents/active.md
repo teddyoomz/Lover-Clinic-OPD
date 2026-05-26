@@ -1,31 +1,30 @@
 ---
-updated_at: "2026-05-27 EOD+9 — deposit-without-appointment + Finance deposit modernize (LOCAL, not pushed/deployed)"
-status: "Feature complete + tested LOCAL. master tip ff9a775d (+EOD docs commit) — 10+ commits ahead of origin/master 9209ec70, NOT pushed. prod UNCHANGED = 0805da87 (V122). Full suite 14929/0; build clean; real-prod L2 e2e 21/0. Awaiting user push/deploy word (V18)."
+updated_at: "2026-05-27 EOD+10 — deposit-list appt-date + OPD stepper polish + light-theme contrast sweep (SHIPPED + DEPLOYED)"
+status: "SHIPPED + DEPLOYED. master=8f6b7ced (pushed); prod=8f6b7ced LIVE (vercel --prod, aliased lover-clinic-app.vercel.app). Full suite 14942/0; build clean. Light theme user-verified clear (real browser, after dev-server restart). NO rules/storage/data/cron touched → vercel-only deploy, no Probe-Deploy-Probe."
 branch: "master"
-last_commit: "ff9a775d test(deposit): Rule Q L2 e2e (feature tip) + EOD docs commit on top"
-tests: "full suite 14929 pass / 0 fail. build clean. deposit no-appt e2e 21/0 (real prod). 2 pre-existing flakes (Phase 17.1 + genShortId, probabilistic) pass on clean run."
+last_commit: "8f6b7ced feat(finance+appt): deposit-list appt date + OPD stepper polish + light-theme contrast sweep"
+tests: "full suite 14942 pass / 0 fail. build clean."
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "0805da87 LIVE (V122) — UNCHANGED this session (feature NOT deployed)"
-firestore_rules_version: "UNCHANGED (no rules/data/cron touched — frontend+serverless only; no Probe-Deploy-Probe when deployed)"
+production_commit: "8f6b7ced LIVE (deployed 2026-05-27 EOD+10) — was 0805da87 (V122)"
+firestore_rules_version: "UNCHANGED (no rules/storage/data/cron this session)"
 ---
 
 # Active Context
 
 ## State
-- Deposit-without-appointment feature DONE + tested, LOCAL on master (10+ commits ahead of origin, NOT pushed/deployed per V18).
-- Flow: brainstorm → spec.html → plan.html → execution (subagent-driven attempted, switched to INLINE per user + a 1M-context credits error). 9 tasks, all on master (user: "merge branch to master").
-- Verify: full suite 14929/0 · build clean · Rule Q L2 real-prod e2e 21/0 · flow-simulate + source-grep + VisitPurposePicker RTL. L1 (real-browser UI) = USER (these modals are never RTL-mounted in repo; Rule Q V66 — no mocks-that-lie).
+- deposit-list appt-date display + OPD stepper polish + light-theme contrast sweep — SHIPPED + DEPLOYED to prod (8f6b7ced).
+- Flow: /systematic-debugging reframed (it was a DESIGN req, not a bug) → brainstorming (Visual Companion) → spec.html → plan.html → executing-plans (TDD) → light-theme contrast sweep follow-on.
+- Verify: full suite 14942/0 · build clean · Rule Q-vis: deposit feature seen live in dark w/ real data; light theme user-confirmed clear AFTER dev-server restart.
 
-## What this session shipped (detail: .agents/sessions/2026-05-27-deposit-no-appointment.md)
-- Part 1: AppointmentFormModal `ไม่นัดหมาย` toggle (deposit-booking only) → hides appt fields (date/time/หมอ/ห้อง/recurring) + skips appt validations → writes a deposit-only doc; advisor→100% seller; purpose=appointmentTo; still supports +สร้างนัด later.
-- Part 2: Finance DepositPanel `เลือกลูกค้าภายหลัง` + `มัดจำสำหรับ` (VisitPurposePicker new `label` prop) + table `|| dep.purpose` fallback; all money fields kept (Q2 port-all).
-- be_deposits +3 fields (purpose/customerNameTemp/customerPhoneTemp); createDeposit stamps them + guards recalc on empty customerId.
-- 10 commits + spec/plan HTML; 7 V21 source-grep fixups (tests locked old shapes).
+## What this session shipped (detail: .agents/sessions/2026-05-27-light-theme-deposit-appt-polish.md)
+- Deposit list (Finance→มัดจำ): appt date under "มัดจำสำหรับ" — clickable "นัด <date> · <time>" (reuses goto-appt nav) / "ยังไม่นัด" hint. Pure display (dep.appointment.date already on doc).
+- OPD stepper (Appointment tab): center-align (justify-center) + Ember footer band (theme-aware). Shared TreatmentLifecycleStepper untouched (no ripple to treatment-history).
+- Light-theme contrast sweep (deposit + appt zone): badges/chips/link-buttons/action-icons/VisitPurposePicker selected-chips/create-appt-modal → theme-aware; active/selected = solid bg + white text (were dark-first -300/-400 washing out on light). AppointmentHubRowCard + OpdLifecycleRow were already theme-aware.
+- Tests: +opd-stepper-polish, +deposit-appt-date (.jsx + flow-simulate); 2 V21 fixups (purpose-cell source-grep window → non-greedy). 12 files, commit 8f6b7ced.
 
 ## Next action
-- idle — awaiting user: push master? / deploy (frontend+serverless, NO Probe-Deploy-Probe)? / L1 hands-on. (Optional: Chrome MCP visual check of toggle.)
+- idle — awaiting user.
 
 ## Outstanding user-triggered actions
-- push master (10+ commits, local) + deploy — both await explicit word (V18).
-- L1 hands-on: appt → สร้าง → จองมัดจำ → ติ๊ก ไม่นัดหมาย → save → Finance.มัดจำ row + มัดจำสำหรับ col + ลูกค้าจอง badge → +สร้างนัด.
-- 2 pre-existing Rule S doc edits (CLAUDE.md, rules/01-iron-clad.md) still uncommitted (user's).
+- 2 pre-existing Rule S doc edits (CLAUDE.md, .claude/rules/01-iron-clad.md) STILL uncommitted (user's — left untouched both sessions).
+- OPD stepper Ember band: live-pixel (both themes) NOT seen — current data has no checked-in customer to render the OPD footer; centering RTL-verified + ember source-verified. User L1 when a patient is mid-OPD.
