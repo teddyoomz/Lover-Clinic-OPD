@@ -7,13 +7,13 @@ import { randomBytes } from 'node:crypto';
 import {
   validateWholeSystemManifest,
   computeWholeSystemManifestHash,
-  UNIVERSAL_COLLECTIONS,
-  BRANCH_SCOPED_COLLECTIONS,
   CUSTOMER_SUBCOLLECTIONS,
   CUSTOMER_ONLY_UNIVERSAL,        // V81-fix6
   CUSTOMER_ONLY_BRANCH_SCOPED,    // V81-fix6
   CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES, // V81-fix6
   decodeFirestoreData, // V81-fix1: re-hydrate Timestamp/GeoPoint/Bytes from markers
+  mapWithConcurrency,            // V122: bounded-parallel I/O (300s timeout fix)
+  FULL_SCOPE_COLLECTION_DENYLIST, // V122: deliberate full-scope exclusions
 } from '../../../src/lib/wholeSystemBackupCore.js';
 
 // V81-fix1: SDK constructors used by decodeFirestoreData
@@ -23,9 +23,29 @@ const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
 const BATCH_SIZE = 450; // Firestore writeBatch limit is 500; 450 = safe headroom
 
+// V122 (2026-05-26): bounded parallelism — same 300s-timeout fix as the backup
+// executor (restore was also fully sequential: per-collection restore, 107-customer
+// subcoll wipe, per-file storage copy). Replace mode also runs the backup executor
+// as its auto-pre-backup, so both must be parallel to fit 300s.
+const COLLECTION_CONCURRENCY = 15;
+const SUBCOLL_CONCURRENCY = 40;
+const STORAGE_CONCURRENCY = 15;
+
 // V81-fix6: scope-aware backup path
 function backupPathPrefix(scope) {
   return scope === 'customer-only' ? 'backups/customer-only' : 'backups/whole-system';
+}
+
+// V122: dynamic collection list for full-scope wipe + assertTargetEmpty.
+// Mirrors the backup executor's dynamic enumeration so a Replace restore wipes
+// EVERY current collection (not just the 53 hardcoded ones) before restoring —
+// otherwise the 28 previously-omitted collections would survive as stale data.
+async function listScopedCollections(db, scope) {
+  if (scope === 'customer-only') {
+    return [...CUSTOMER_ONLY_UNIVERSAL, ...CUSTOMER_ONLY_BRANCH_SCOPED];
+  }
+  const discovered = await db.doc(PREFIX).listCollections();
+  return discovered.map(c => c.id).filter(id => !FULL_SCOPE_COLLECTION_DENYLIST.includes(id));
 }
 
 async function readManifest(storage, backupRef, scope = 'full') {
@@ -35,19 +55,20 @@ async function readManifest(storage, backupRef, scope = 'full') {
 
 async function assertTargetEmpty(db, scope = 'full') {
   // Scan scoped non-audit collections; refuse if any has docs.
-  // V81-fix6: customer-only restore checks ONLY customer-scoped collections.
-  const cols = scope === 'customer-only'
-    ? [...CUSTOMER_ONLY_UNIVERSAL, ...CUSTOMER_ONLY_BRANCH_SCOPED]
-    : [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
-  for (const col of cols) {
-    if (col === 'be_admin_audit') continue;
+  // V122: dynamic enumeration (full scope) so newly-added collections are also
+  // checked. listCollections() only returns NON-EMPTY collections → a clean
+  // target yields [] → passes; any data → caught. Parallel for speed.
+  const cols = (await listScopedCollections(db, scope)).filter(c => c !== 'be_admin_audit');
+  const checks = await mapWithConcurrency(cols, COLLECTION_CONCURRENCY, async (col) => {
     const snap = await db.collection(`${PREFIX}/${col}`).limit(1).get();
-    if (!snap.empty) {
-      const err = new Error('Target not empty');
-      err.code = 'TARGET_NOT_EMPTY';
-      err.firstNonEmpty = col;
-      throw err;
-    }
+    return { col, empty: snap.empty };
+  });
+  const nonEmpty = checks.find(c => !c.empty);
+  if (nonEmpty) {
+    const err = new Error('Target not empty');
+    err.code = 'TARGET_NOT_EMPTY';
+    err.firstNonEmpty = nonEmpty.col;
+    throw err;
   }
 }
 
@@ -64,18 +85,16 @@ async function restoreCollections(db, storage, manifest, backupRef, scope = 'ful
   //   4. If batch fails → fall back to per-doc individual writes with try/catch
   //   5. Track restoredDocs + failedDocsCount per collection + per-doc errors
 
-  let restoredDocs = 0;
   const failedDocs = [];
-  for (const c of manifest.collections) {
-    let downloadFailed = false;
+  // V122: PARALLEL across collections (inner per-batch + per-doc fallback unchanged).
+  const perColRestored = await mapWithConcurrency(manifest.collections || [], COLLECTION_CONCURRENCY, async (c) => {
     let buf;
     try {
       [buf] = await storage.file(`${backupPathPrefix(scope)}/${backupRef}/${c.path}`).download();
     } catch (e) {
       failedDocs.push({ collection: c.name, phase: 'download', error: e.message });
-      downloadFailed = true;
+      return 0;
     }
-    if (downloadFailed) continue;
 
     let docs;
     try {
@@ -83,7 +102,7 @@ async function restoreCollections(db, storage, manifest, backupRef, scope = 'ful
       docs = rawDocs.map(d => decodeFirestoreData(d, FB_TYPE_OPTS));
     } catch (e) {
       failedDocs.push({ collection: c.name, phase: 'parse', error: e.message });
-      continue;
+      return 0;
     }
 
     const colPath = `${PREFIX}/${c.name}`;
@@ -101,7 +120,7 @@ async function restoreCollections(db, storage, manifest, backupRef, scope = 'ful
         perCollectionRestored += slice.length;
         continue;
       } catch (batchErr) {
-        // Slow path: per-doc fallback — find the bad doc(s), preserve the good ones
+        // Slow path: per-doc fallback — find the bad doc(s), preserve the good ones (V81-fix7)
         for (const doc of slice) {
           const { id, ...data } = doc;
           try {
@@ -119,7 +138,6 @@ async function restoreCollections(db, storage, manifest, backupRef, scope = 'ful
         }
       }
     }
-    restoredDocs += perCollectionRestored;
     if (perCollectionRestored !== docs.length) {
       failedDocs.push({
         collection: c.name,
@@ -128,7 +146,9 @@ async function restoreCollections(db, storage, manifest, backupRef, scope = 'ful
         succeeded: perCollectionRestored,
       });
     }
-  }
+    return perCollectionRestored;
+  });
+  const restoredDocs = perColRestored.reduce((s, n) => s + (n || 0), 0);
   return { restoredDocs, failedDocs };
 }
 
@@ -171,17 +191,19 @@ async function restoreAuthUsers(auth, storage, manifest, backupRef, callerUid, s
 }
 
 async function restoreStorage(storage, manifest, backupRef, scope = 'full') {
-  let restoredStorage = 0;
   const failedStorage = [];
-  for (const s of (manifest.storageObjects || [])) {
+  // V122: PARALLEL copies (was sequential per-file).
+  const results = await mapWithConcurrency(manifest.storageObjects || [], STORAGE_CONCURRENCY, async (s) => {
     try {
       const srcPath = `${backupPathPrefix(scope)}/${backupRef}/${s.path}`;
       await storage.file(srcPath).copy(storage.file(s.originalGsPath));
-      restoredStorage += 1;
+      return 1;
     } catch (e) {
       failedStorage.push({ path: s.originalGsPath, error: e.message });
+      return 0;
     }
-  }
+  });
+  const restoredStorage = results.reduce((a, b) => a + b, 0);
   return { restoredStorage, failedStorage };
 }
 
@@ -200,15 +222,44 @@ async function restoreStorage(storage, manifest, backupRef, scope = 'full') {
  * passwordHash from backup files anyway).
  */
 async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false, scope = 'full' } = {}) {
-  // V81-fix6: scope-aware wipe. Customer-only restore wipes ONLY scoped collections;
-  // other collections (staff, products, courses, branches, etc.) untouched.
-  const cols = scope === 'customer-only'
-    ? [...CUSTOMER_ONLY_UNIVERSAL, ...CUSTOMER_ONLY_BRANCH_SCOPED]
-    : [...UNIVERSAL_COLLECTIONS, ...BRANCH_SCOPED_COLLECTIONS];
+  // V81-fix6: scope-aware wipe. Customer-only restore wipes ONLY scoped collections.
+  // V122: full scope enumerates dynamically (listScopedCollections) so a Replace
+  // restore wipes EVERY current collection — the pre-V122 hardcoded list left the
+  // 28 omitted collections as stale data after a "full replace".
+  const cols = (await listScopedCollections(db, scope)).filter(c => c !== 'be_admin_audit');
 
-  // Wipe Firestore collections (V74 cascade pattern)
-  for (const col of cols) {
-    if (col === 'be_admin_audit') continue; // audit immutable per Rule D
+  // V122 ORDERING FIX: subcollections MUST be wiped BEFORE their parent collection.
+  // Firestore does NOT cascade-delete subcollections, and once be_customers docs
+  // are deleted, `be_customers.get()` returns nothing → the pre-V122 order ran the
+  // subcoll wipe against an already-empty parent → orphaned subcollections survived
+  // a "full replace" (a restore-fidelity bug). Capture doc refs (incl. phantom
+  // parents) via listDocuments() up front, wipe subcollections, THEN wipe collections.
+  const custDocs = await db.collection(`${PREFIX}/be_customers`).listDocuments();
+  const convDocs = await db.collection(`${PREFIX}/chat_conversations`).listDocuments();
+
+  // 1. Wipe customer subcollections (V74 T4) — PARALLEL over (customer × subcoll).
+  const subPairs = [];
+  for (const cRef of custDocs) for (const sub of CUSTOMER_SUBCOLLECTIONS) subPairs.push({ cid: cRef.id, sub });
+  await mapWithConcurrency(subPairs, SUBCOLL_CONCURRENCY, async ({ cid, sub }) => {
+    const subSnap = await db.collection(`${PREFIX}/be_customers/${cid}/${sub}`).get();
+    if (subSnap.empty) return;
+    const batch = db.batch();
+    subSnap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  });
+
+  // 2. Wipe chat_conversations messages subcoll — PARALLEL over conversations.
+  await mapWithConcurrency(convDocs, SUBCOLL_CONCURRENCY, async (cRef) => {
+    const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${cRef.id}/messages`).get();
+    if (msgsSnap.empty) return;
+    const batch = db.batch();
+    msgsSnap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  });
+
+  // 3. Wipe top-level Firestore collections — PARALLEL across collections
+  //    (pagination loop stays sequential within each collection).
+  await mapWithConcurrency(cols, COLLECTION_CONCURRENCY, async (col) => {
     let snap;
     do {
       snap = await db.collection(`${PREFIX}/${col}`).limit(BATCH_SIZE).get();
@@ -217,30 +268,7 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false, sc
       snap.docs.forEach(d => batch.delete(d.ref));
       await batch.commit();
     } while (snap.size === BATCH_SIZE);
-  }
-
-  // Wipe customer subcollections (V74 T4 cascade) — applies to BOTH scopes
-  // since customer-only also includes per-customer subcolls
-  const custSnap = await db.collection(`${PREFIX}/be_customers`).get();
-  for (const c of custSnap.docs) {
-    for (const sub of CUSTOMER_SUBCOLLECTIONS) {
-      const subSnap = await db.collection(`${PREFIX}/be_customers/${c.id}/${sub}`).get();
-      if (subSnap.empty) continue;
-      const batch = db.batch();
-      subSnap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-  }
-
-  // Wipe chat_conversations messages subcoll (applies to both scopes)
-  const convSnap = await db.collection(`${PREFIX}/chat_conversations`).get();
-  for (const c of convSnap.docs) {
-    const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${c.id}/messages`).get();
-    if (msgsSnap.empty) continue;
-    const batch = db.batch();
-    msgsSnap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-  }
+  });
 
   // V81-fix4: Auth wipe is OPT-IN. Default = preserve Auth (no login loss).
   // V81-fix6: customer-only scope NEVER wipes Auth regardless of wipeAuth.
@@ -258,19 +286,19 @@ async function wipeFirebase(db, storage, auth, callerUid, { wipeAuth = false, sc
     } while (nextPageToken);
   }
 
-  // Wipe Storage objects (V81-fix6: scope-aware filter)
-  // Whole-system: wipe everything except backups/
-  // Customer-only: wipe ONLY customers/ paths
+  // 4. Wipe Storage objects (V81-fix6: scope-aware filter) — V122: PARALLEL.
+  //    Whole-system: wipe everything except backups/. Customer-only: customers/ only.
   const [allFiles] = await storage.getFiles();
-  for (const f of allFiles) {
-    if (f.name.startsWith('backups/')) continue;
+  const toDelete = allFiles.filter(f => {
+    if (f.name.startsWith('backups/')) return false;
     if (scope === 'customer-only') {
-      if (!CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES.some(p => f.name.startsWith(p))) continue;
+      return CUSTOMER_ONLY_STORAGE_INCLUDE_PREFIXES.some(p => f.name.startsWith(p));
     }
-    try {
-      await f.delete();
-    } catch { /* tolerant */ }
-  }
+    return true;
+  });
+  await mapWithConcurrency(toDelete, STORAGE_CONCURRENCY, async (f) => {
+    try { await f.delete(); } catch { /* tolerant */ }
+  });
 }
 
 /**

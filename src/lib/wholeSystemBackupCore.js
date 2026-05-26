@@ -98,6 +98,72 @@ export const RETENTION_DAYS = Object.freeze({
 
 export const NAME_PATTERN = /^(?:auto|manual|pre-restore)-\d{8}-\d{4}$/;
 
+// ─── 2026-05-26 — concurrency helper (V122: backup/restore timeout fix) ─────
+// Root cause (confirmed via real prod 504 FUNCTION_INVOCATION_TIMEOUT): the V81
+// backup + restore executors did ~1000+ SEQUENTIAL network round-trips (per-
+// collection read+write, 107 customers × 8 subcoll reads, per-storage-file
+// copy+hash). Cross-region Vercel↔Firestore/Storage latency × that many
+// sequential awaits exceeded the 300s maxDuration cap → process killed before
+// manifest.json written → NO_MANIFEST. Fix: bound-parallel the I/O so N trips
+// collapse into ceil(N/limit) batches.
+
+/**
+ * mapWithConcurrency — run async `fn` over `items` with at most `limit` in
+ * flight at once. Results are returned in INPUT ORDER (index-stable).
+ * Pure JS (no deps) so it is unit-testable without Firebase.
+ *
+ * `fn` rejections propagate (Promise.all rejects). Callers that need
+ * per-item tolerance (backup executor) must try/catch INSIDE `fn` and return
+ * a sentinel — never let one bad doc abort the whole backup.
+ *
+ * @template T,R
+ * @param {T[]} items
+ * @param {number} limit  max concurrent fn invocations (>=1)
+ * @param {(item: T, index: number) => Promise<R>} fn
+ * @returns {Promise<R[]>}
+ */
+export async function mapWithConcurrency(items, limit, fn) {
+  const arr = Array.isArray(items) ? items : [];
+  const results = new Array(arr.length);
+  const n = Math.max(1, Math.min(Math.floor(limit) || 1, arr.length || 1));
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= arr.length) return;
+      results[i] = await fn(arr[i], i);
+    }
+  }
+  const workers = [];
+  for (let w = 0; w < n; w++) workers.push(worker());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * classifyCollectionCategory — for the backup file path layout.
+ * Known collections keep their universal/branch-scoped folder (back-compat with
+ * pre-V122 backups + the manifest `scope` block); dynamically-discovered
+ * collections (V122 completeness fix) land under 'other'. Restore reads
+ * `c.path` verbatim so the category is cosmetic — but keeping it stable means
+ * old restore code + the UI display stay correct.
+ */
+export function classifyCollectionCategory(colName) {
+  if (UNIVERSAL_COLLECTIONS.includes(colName)) return 'universal';
+  if (BRANCH_SCOPED_COLLECTIONS.includes(colName)) return 'branch-scoped';
+  return 'other';
+}
+
+/**
+ * collectionsNeverBackedUp — collections that must NOT be enumerated into a
+ * full-scope backup even by dynamic discovery. Kept tiny + explicit.
+ *   - (none structural today; the lock doc lives UNDER be_admin_audit which IS
+ *     backed up, and is harmless to capture.)
+ * This list exists so future ephemeral/transient collections can be excluded
+ * deliberately rather than by silent omission (the Bug-2 anti-pattern).
+ */
+export const FULL_SCOPE_COLLECTION_DENYLIST = Object.freeze([]);
+
 /**
  * resolveStorageScope — should a given Storage object path be included in backup?
  * EXCLUDE takes precedence over INCLUDE (defensive — `backups/` recursion gate).

@@ -222,11 +222,18 @@ describe('V81 — restore endpoint (Fresh + Replace modes)', () => {
   });
 
   it('executor wipe Storage skips backups/ prefix (preserve pre-restore + other backups)', () => {
-    expect(exec).toMatch(/f\.name\.startsWith\(['"]backups\/['"]\)[\s\S]{0,80}continue/);
+    // V122 (2026-05-26): wipe Storage parallelized — the per-file `continue` skip
+    // became a `.filter(f => { if (f.name.startsWith('backups/')) return false; ...})`
+    // pre-filter feeding mapWithConcurrency. Same intent (backups/ preserved).
+    expect(exec).toMatch(/f\.name\.startsWith\(['"]backups\/['"]\)[\s\S]{0,40}return false/);
   });
 
   it('executor wipe Firestore skips be_admin_audit (Rule D immutable)', () => {
-    expect(exec).toMatch(/be_admin_audit[\s\S]{0,50}continue/);
+    // V122 (2026-05-26): wipe Firestore parallelized + dynamic-enumerated — the
+    // per-collection `if (col === 'be_admin_audit') continue;` became a
+    // `.filter(c => c !== 'be_admin_audit')` on the dynamic listScopedCollections
+    // result. Same intent (audit immutable, never wiped).
+    expect(exec).toMatch(/!==\s*['"]be_admin_audit['"]/);
   });
 });
 

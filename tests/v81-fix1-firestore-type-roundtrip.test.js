@@ -354,11 +354,14 @@ describe('V81-fix1 — source-grep regression locks (Group J)', () => {
     expect(src).toMatch(/FB_TYPE_OPTS/);
   });
 
-  it('J.3 — backup executor wraps all 4 docs.map sites with encodeFirestoreData', async () => {
+  it('J.3 — backup executor wraps all docs.map sites with encodeFirestoreData', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync('api/admin/_lib/wholeSystemBackupExecutor.js', 'utf8');
     const matches = src.match(/encodeFirestoreData\(\{\s*\.\.\.d\.data\(\),\s*id:\s*d\.id\s*\}\)/g) || [];
-    expect(matches.length).toBe(4); // 4 sites: universal + branch-scoped + customer-subcoll + chat-messages
+    // V122 (2026-05-26): the separate universal + branch-scoped sequential loops were
+    // merged into ONE parallel mapWithConcurrency over dynamically-enumerated collections,
+    // so the 4 pre-V122 sites (universal/branch/subcoll/chat) are now 3 (collections/subcoll/chat).
+    expect(matches.length).toBe(3); // 3 sites: collections (universal+branch+other) + customer-subcoll + chat-messages
   });
 
   it('J.4 — restore executor decodes BEFORE batch.set in restoreCollections', async () => {

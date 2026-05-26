@@ -18,10 +18,21 @@ import {
   computeWholeSystemManifestHash,
   sanitizeAuthUser,
   encodeFirestoreData, // V81-fix1: Timestamp/GeoPoint/Bytes encoder
+  mapWithConcurrency,            // V122: bounded-parallel I/O (300s timeout fix)
+  classifyCollectionCategory,    // V122: file-path category for dynamic collections
+  FULL_SCOPE_COLLECTION_DENYLIST, // V122: deliberate full-scope exclusions
 } from '../../../src/lib/wholeSystemBackupCore.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const PREFIX = `artifacts/${APP_ID}/public/data`;
+
+// V122 (2026-05-26): bounded parallelism for the backup I/O. The pre-V122
+// executor ran every read+write SEQUENTIALLY → ~1000+ cross-region round-trips
+// → exceeded the 300s Vercel cap → NO_MANIFEST. These limits collapse N trips
+// into ceil(N/limit) batches while staying well under Firestore/Storage QPS.
+const COLLECTION_CONCURRENCY = 20;
+const SUBCOLL_CONCURRENCY = 40;
+const STORAGE_CONCURRENCY = 15;
 
 // V81-fix6: backup storage path prefix per scope
 function backupPathPrefix(scope) {
@@ -91,115 +102,107 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
     }
   }
 
-  // 2. Export universal collections (V81-fix6: scope-aware)
   const colScope = resolveCollectionScope({ scope });
-  for (const colName of colScope.universal) {
+
+  // 2+3. Export collections — V122: PARALLEL + dynamic enumeration for full scope.
+  // Full scope discovers EVERY collection under PREFIX via listCollections() so
+  // a new feature collection can NEVER be silently omitted (Bug-2 fix; the
+  // pre-V122 hardcoded lists missed 28/65 prod collections incl. money +
+  // counters). Customer-only keeps its curated subset (intentional scope).
+  let colNames;
+  if (colScope.scope === 'customer-only') {
+    colNames = [...colScope.universal, ...colScope.branchScoped];
+  } else {
+    const discovered = await db.doc(PREFIX).listCollections();
+    colNames = discovered
+      .map(c => c.id)
+      .filter(id => !FULL_SCOPE_COLLECTION_DENYLIST.includes(id));
+  }
+  const colResults = await mapWithConcurrency(colNames, COLLECTION_CONCURRENCY, async (colName) => {
     try {
       const snap = await db.collection(`${PREFIX}/${colName}`).get();
-      // V38 spread-order discipline: docId WINS over any stray data.id field
-      // (legacy ProClinic imports occasionally carry numeric `id` in data).
-      // V81-fix1 (2026-05-17): encode Firestore-native types (Timestamp/GeoPoint/Bytes)
-      // before JSON.stringify so restore can re-hydrate. Diagnostic on real prod
-      // (2026-05-17) confirmed bare JSON.stringify degrades Timestamp→Map.
+      // V38 spread-order discipline: docId WINS over any stray data.id field.
+      // V81-fix1: encode Firestore-native types (Timestamp/GeoPoint/Bytes) before
+      // JSON.stringify so restore can re-hydrate (bare stringify degrades Timestamp→Map).
       const docs = snap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
       const json = JSON.stringify(docs, null, 2);
-      const filePath = `${baseStoragePath}/collections/universal/${colName}.json`;
+      const category = classifyCollectionCategory(colName);
+      const filePath = `${baseStoragePath}/collections/${category}/${colName}.json`;
       await storage.file(filePath).save(json, { contentType: 'application/json' });
-      collections.push({
-        path: `collections/universal/${colName}.json`,
+      return {
+        path: `collections/${category}/${colName}.json`,
         name: colName,
-        type: 'universal',
+        type: category,
         docCount: docs.length,
         fileSizeBytes: Buffer.byteLength(json, 'utf8'),
         fileHash: sha256Buffer(json),
-      });
+      };
     } catch (e) {
       failedCollections.push({ name: colName, error: e.message });
+      return null;
     }
-  }
+  });
+  for (const r of colResults) if (r) collections.push(r);
 
-  // 3. Export branch-scoped collections
-  for (const colName of colScope.branchScoped) {
-    try {
-      const snap = await db.collection(`${PREFIX}/${colName}`).get();
-      // V81-fix1 (2026-05-17): encode Firestore-native types (Timestamp/GeoPoint/Bytes)
-      // before JSON.stringify so restore can re-hydrate. Diagnostic on real prod
-      // (2026-05-17) confirmed bare JSON.stringify degrades Timestamp→Map.
-      const docs = snap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
-      const json = JSON.stringify(docs, null, 2);
-      const filePath = `${baseStoragePath}/collections/branch-scoped/${colName}.json`;
-      await storage.file(filePath).save(json, { contentType: 'application/json' });
-      collections.push({
-        path: `collections/branch-scoped/${colName}.json`,
-        name: colName,
-        type: 'branch-scoped',
-        docCount: docs.length,
-        fileSizeBytes: Buffer.byteLength(json, 'utf8'),
-        fileHash: sha256Buffer(json),
-      });
-    } catch (e) {
-      failedCollections.push({ name: colName, error: e.message });
-    }
-  }
-
-  // 4. Export customer subcollections (V74 T4 pattern)
+  // 4. Export customer subcollections (V74 T4) — V122: PARALLEL over (customer × subcoll) pairs.
   try {
     const custSnap = await db.collection(`${PREFIX}/be_customers`).get();
+    const pairs = [];
     for (const custDoc of custSnap.docs) {
-      const cid = custDoc.id;
-      for (const subName of CUSTOMER_SUBCOLLECTIONS) {
-        try {
-          const subSnap = await db.collection(`${PREFIX}/be_customers/${cid}/${subName}`).get();
-          if (subSnap.empty) continue;
-          // V38 spread-order: docId WINS over any stray data.id field
-          // V81-fix1: encode Timestamp/GeoPoint/Bytes before JSON.stringify
-          const docs = subSnap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
-          const json = JSON.stringify(docs, null, 2);
-          const filePath = `${baseStoragePath}/collections/subcollections/be_customers__${cid}__${subName}.json`;
-          await storage.file(filePath).save(json, { contentType: 'application/json' });
-          collections.push({
-            path: `collections/subcollections/be_customers__${cid}__${subName}.json`,
-            name: `be_customers/${cid}/${subName}`,
-            type: 'subcollection',
-            docCount: docs.length,
-            fileSizeBytes: Buffer.byteLength(json, 'utf8'),
-            fileHash: sha256Buffer(json),
-          });
-        } catch (e) {
-          failedCollections.push({ name: `be_customers/${cid}/${subName}`, error: e.message });
-        }
-      }
+      for (const subName of CUSTOMER_SUBCOLLECTIONS) pairs.push({ cid: custDoc.id, subName });
     }
+    const subResults = await mapWithConcurrency(pairs, SUBCOLL_CONCURRENCY, async ({ cid, subName }) => {
+      try {
+        const subSnap = await db.collection(`${PREFIX}/be_customers/${cid}/${subName}`).get();
+        if (subSnap.empty) return null;
+        const docs = subSnap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
+        const json = JSON.stringify(docs, null, 2);
+        const filePath = `${baseStoragePath}/collections/subcollections/be_customers__${cid}__${subName}.json`;
+        await storage.file(filePath).save(json, { contentType: 'application/json' });
+        return {
+          path: `collections/subcollections/be_customers__${cid}__${subName}.json`,
+          name: `be_customers/${cid}/${subName}`,
+          type: 'subcollection',
+          docCount: docs.length,
+          fileSizeBytes: Buffer.byteLength(json, 'utf8'),
+          fileHash: sha256Buffer(json),
+        };
+      } catch (e) {
+        failedCollections.push({ name: `be_customers/${cid}/${subName}`, error: e.message });
+        return null;
+      }
+    });
+    for (const r of subResults) if (r) collections.push(r);
   } catch (e) {
     failedCollections.push({ name: '__customer_subcollections__', error: e.message });
   }
 
-  // 5. Export chat_conversations messages subcoll
+  // 5. Export chat_conversations messages subcoll — V122: PARALLEL over conversations.
   try {
     const convSnap = await db.collection(`${PREFIX}/chat_conversations`).get();
-    for (const convDoc of convSnap.docs) {
+    const convResults = await mapWithConcurrency(convSnap.docs, SUBCOLL_CONCURRENCY, async (convDoc) => {
       const convId = convDoc.id;
       try {
         const msgsSnap = await db.collection(`${PREFIX}/chat_conversations/${convId}/messages`).get();
-        if (msgsSnap.empty) continue;
-        // V38 spread-order: docId WINS over any stray data.id field
-        // V81-fix1: encode Timestamp/GeoPoint/Bytes before JSON.stringify
+        if (msgsSnap.empty) return null;
         const docs = msgsSnap.docs.map(d => encodeFirestoreData({ ...d.data(), id: d.id }));
         const json = JSON.stringify(docs, null, 2);
         const filePath = `${baseStoragePath}/collections/subcollections/chat_conversations__${convId}__messages.json`;
         await storage.file(filePath).save(json, { contentType: 'application/json' });
-        collections.push({
+        return {
           path: `collections/subcollections/chat_conversations__${convId}__messages.json`,
           name: `chat_conversations/${convId}/messages`,
           type: 'subcollection',
           docCount: docs.length,
           fileSizeBytes: Buffer.byteLength(json, 'utf8'),
           fileHash: sha256Buffer(json),
-        });
+        };
       } catch (e) {
         failedCollections.push({ name: `chat_conversations/${convId}/messages`, error: e.message });
+        return null;
       }
-    }
+    });
+    for (const r of convResults) if (r) collections.push(r);
   } catch (e) {
     failedCollections.push({ name: '__chat_messages_subcoll__', error: e.message });
   }
@@ -228,29 +231,32 @@ export async function runWholeSystemBackup({ db, storage, auth, type, createdBy,
     }
   }
 
-  // 7. Copy Storage objects (V81-fix6: scope-aware filter)
+  // 7. Copy Storage objects (V81-fix6: scope-aware filter) — V122: PARALLEL.
   let totalStorageBytes = 0;
   try {
     const [allStorageFiles] = await storage.getFiles();
-    for (const f of allStorageFiles) {
-      if (!resolveStorageScopeForBackup(f.name, { scope })) continue;
+    const includeFiles = allStorageFiles.filter(f => resolveStorageScopeForBackup(f.name, { scope }));
+    const stResults = await mapWithConcurrency(includeFiles, STORAGE_CONCURRENCY, async (f) => {
       try {
         const destPath = `${baseStoragePath}/storage/${f.name}`;
         await f.copy(storage.file(destPath));
         const [meta] = await f.getMetadata();
         const sizeBytes = parseInt(meta.size || '0', 10);
         const fileHash = await sha256Stream(f.createReadStream());
-        totalStorageBytes += sizeBytes;
-        storageObjects.push({
+        return {
           path: `storage/${f.name}`,
           originalGsPath: f.name,
           fileSizeBytes: sizeBytes,
           fileHash,
           contentType: meta.contentType || 'application/octet-stream',
-        });
+        };
       } catch (e) {
         failedStorageObjects.push({ path: f.name, error: e.message });
+        return null;
       }
+    });
+    for (const r of stResults) {
+      if (r) { storageObjects.push(r); totalStorageBytes += r.fileSizeBytes; }
     }
   } catch (e) {
     failedStorageObjects.push({ path: '__storage_enumerate__', error: e.message });

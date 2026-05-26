@@ -48,6 +48,12 @@ import {
   computeWholeFleetManifestHash,
   resolveCustomerEntryPath, // V77-fix4 (N2) — legacy backupRef + post-fix3 fileEntry
 } from '../../src/lib/wholeFleetBackupCore.js';
+import { mapWithConcurrency } from '../../src/lib/wholeSystemBackupCore.js'; // V122: parallel per-customer load
+
+// V122: parallelize the download-heavy per-customer LOAD phase (the dominant
+// cross-region latency). The decide+restore loop stays SEQUENTIAL to preserve
+// V77-fix2 (P1-7) intra-batch HN-collision ordering against earlier restores.
+const FLEET_LOAD_CONCURRENCY = 10;
 
 const APP_ID = 'loverclinic-opd-4c39b';
 const BUCKET = `${APP_ID}.firebasestorage.app`;
@@ -386,7 +392,7 @@ export default async function handler(req, res) {
     const liveSnap = await dataCol(db, 'be_customers').get();
     const liveCustomers = liveSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
-    // 5. Per-customer loop with failure isolation
+    // 5. Per-customer: PHASE A (parallel load) → sequential decide+restore.
     const parentBatchAuditId = `whole-fleet-restore-${Date.now()}-${randHex(4)}`;
     const perCustomer = [];
     let restored = 0;
@@ -402,55 +408,52 @@ export default async function handler(req, res) {
     // all compare against the original liveCustomers snapshot).
     const restoredLive = [...liveCustomers];
 
-    for (const entry of manifest.customers || []) {
+    // PHASE A (V122): PARALLEL load+verify per-customer backup files. This is the
+    // download-heavy, cross-region-latency-dominated part. Path-sanitize + load +
+    // backupCustomer derivation all happen here; the sequential loop below only
+    // does the in-memory conflict decision + the (ordered) restore writes.
+    const fleetEntries = manifest.customers || [];
+    const loadedEntries = await mapWithConcurrency(fleetEntries, FLEET_LOAD_CONCURRENCY, async (entry) => {
       const cid = String(entry.cid || '');
-      // V77-fix2 (SP-2): path-traversal sanitize. fileEntry comes from
-      // manifest.json (admin-controlled but Storage-blob-tamperable). Reject
-      // anything not under the canonical backups/customers/ prefix to prevent
-      // restore from pulling arbitrary JSON files via path traversal.
-      // V77-fix4 (N2): use resolveCustomerEntryPath helper so legacy V77b/c
-      // manifests (which used `backupRef` instead of `fileEntry`) still
-      // restore. Defense-in-depth: even if validateWholeFleetManifest
-      // accepted the legacy shape, the restore path here previously read
-      // only entry.fileEntry → silently broken.
+      // V77-fix2 (SP-2): path-traversal sanitize. fileEntry comes from manifest.json
+      // (admin-controlled but Storage-blob-tamperable). Reject anything not under the
+      // canonical backups/customers/ prefix. V77-fix4 (N2): resolveCustomerEntryPath
+      // handles legacy V77b/c manifests (backupRef instead of fileEntry).
       const safeFileEntry = resolveCustomerEntryPath(entry).trim();
       if (!safeFileEntry.startsWith('backups/customers/')) {
+        return { cid, ok: false, error: 'INVALID_FILE_ENTRY_PATH', detail: { fileEntry: safeFileEntry.slice(0, 120) } };
+      }
+      try {
+        const loadResult = await loadAndVerifyPerCustomer({ bucket, backupRef: safeFileEntry });
+        if (!loadResult.ok) {
+          return { cid, ok: false, error: loadResult.error, detail: loadResult.detail };
+        }
+        const backupCustomer = (loadResult.file.collections?.be_customers || [])[0];
+        if (!backupCustomer) {
+          return { cid, ok: false, error: 'BACKUP_CUSTOMER_DOC_MISSING' };
+        }
+        return { cid, ok: true, file: loadResult.file, backupPrefix: loadResult.backupPrefix, backupCustomer };
+      } catch (err) {
+        return { cid, ok: false, error: err.message };
+      }
+    });
+
+    // SEQUENTIAL decide + restore — preserves V77-fix2 (P1-7) ordering: each
+    // would-restore appends to restoredLive BEFORE the next iteration's conflict
+    // scan, and restore writes happen in manifest order. (Identical semantics to
+    // pre-V122; only the download moved to Phase A above.)
+    for (const L of loadedEntries) {
+      const cid = L.cid;
+      if (!L.ok) {
         failed++;
-        perCustomer.push({
-          cid,
-          outcome: 'failed',
-          error: 'INVALID_FILE_ENTRY_PATH',
-          detail: { fileEntry: safeFileEntry.slice(0, 120) },
-        });
+        perCustomer.push({ cid, outcome: 'failed', error: L.error, detail: L.detail });
         continue;
       }
       try {
-        const loadResult = await loadAndVerifyPerCustomer({
-          bucket,
-          backupRef: safeFileEntry,
-        });
-        if (!loadResult.ok) {
-          failed++;
-          perCustomer.push({
-            cid,
-            outcome: 'failed',
-            error: loadResult.error,
-            detail: loadResult.detail,
-          });
-          continue;
-        }
-
-        const { file, backupPrefix } = loadResult;
-        const backupCustomer = (file.collections?.be_customers || [])[0];
-        if (!backupCustomer) {
-          failed++;
-          perCustomer.push({ cid, outcome: 'failed', error: 'BACKUP_CUSTOMER_DOC_MISSING' });
-          continue;
-        }
+        const { file, backupPrefix, backupCustomer } = L;
 
         // V77-fix2 (P1-7): use restoredLive (grows as customers are restored)
-        // so successive iterations detect HN-collision against earlier
-        // restores in THIS batch, not just the original snapshot.
+        // so successive iterations detect HN-collision against earlier restores.
         const conflicts = scanRestoreConflicts({ backupCustomer, liveCustomers: restoredLive });
 
         if (conflicts.customerIdExists || conflicts.hnCollision) {
@@ -459,9 +462,7 @@ export default async function handler(req, res) {
           perCustomer.push({
             cid,
             outcome: 'skipped-conflict',
-            reason: conflicts.customerIdExists
-              ? 'CUSTOMER_ID_EXISTS'
-              : 'HN_COLLISION',
+            reason: conflicts.customerIdExists ? 'CUSTOMER_ID_EXISTS' : 'HN_COLLISION',
             detail: conflicts.hnCollision || { customerId: cid },
           });
           continue;
@@ -490,11 +491,7 @@ export default async function handler(req, res) {
         });
         if (!restoreResult.ok) {
           failed++;
-          perCustomer.push({
-            cid,
-            outcome: 'failed',
-            error: restoreResult.error,
-          });
+          perCustomer.push({ cid, outcome: 'failed', error: restoreResult.error });
           continue;
         }
         restored++;

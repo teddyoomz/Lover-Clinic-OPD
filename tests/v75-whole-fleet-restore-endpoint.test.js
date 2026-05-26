@@ -93,10 +93,17 @@ describe('V75 Item 2 — /api/admin/whole-fleet-customer-restore endpoint', () =
 
   it('WFR1.8 — per-customer failure isolation (one customer fail does NOT abort batch)', () => {
     const src = fs.readFileSync('api/admin/whole-fleet-customer-restore.js', 'utf8');
-    // try/catch INSIDE the per-customer loop (failure scoped to one entry)
-    expect(src).toMatch(/for\s*\(\s*const\s+entry\s+of\s+manifest\.customers/);
-    expect(src).toMatch(/try\s*\{[\s\S]{0,800}?loadAndVerifyPerCustomer/);
-    expect(src).toMatch(/catch\s*\(\s*err\s*\)[\s\S]{0,100}?failed\+\+/);
+    // V122 (2026-05-26): the per-customer LOAD phase was parallelized
+    // (mapWithConcurrency over fleetEntries=manifest.customers) — each entry's
+    // load is wrapped in try/catch returning {ok:false}; the decision+restore
+    // loop stays SEQUENTIAL (for...of loadedEntries) with its OWN try/catch →
+    // failed++. A single customer failure (load OR restore) still does NOT abort
+    // the batch — isolation is now in BOTH phases. Same intent, new structure.
+    expect(src).toMatch(/mapWithConcurrency\(fleetEntries/);            // Phase A: parallel load
+    expect(src).toMatch(/loadAndVerifyPerCustomer/);                    // per-customer load
+    expect(src).toMatch(/ok:\s*false/);                                 // Phase A per-entry isolation → {ok:false}
+    expect(src).toMatch(/for\s*\(\s*const\s+L\s+of\s+loadedEntries/);   // Phase B: sequential decide+restore
+    expect(src).toMatch(/catch\s*\(\s*err\s*\)[\s\S]{0,100}?failed\+\+/); // Phase B per-entry isolation
   });
 
   it('WFR1.9 — uses canonical adminAuth import path + V74 customer helpers', () => {

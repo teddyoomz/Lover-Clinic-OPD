@@ -218,12 +218,16 @@ describe('V75 Item 2 — Whole-fleet backup MAHA-ADVERSARIAL test bank', () => {
 
     it('CAT5.2 — endpoint accepts manifests from any branch composition (no per-branch filter)', () => {
       const src = fs.readFileSync('api/admin/whole-fleet-customer-restore.js', 'utf8');
-      // Endpoint does NOT filter by branchId — it processes all customers in
-      // manifest regardless of which branches they belong to.
-      const manifestLoop = src.match(/for\s*\(\s*const\s+entry\s+of\s+manifest\.customers[\s\S]{0,2000}/);
-      expect(manifestLoop).not.toBeNull();
-      // No branchId filter inside the loop
-      expect(manifestLoop[0]).not.toMatch(/entry\.branchId\s*[!=]==?\s*selectedBranchId/);
+      // V122 (2026-05-26): per-customer processing is now Phase A (parallel
+      // mapWithConcurrency over fleetEntries = manifest.customers) + Phase B
+      // (sequential for...of loadedEntries). The endpoint STILL processes ALL
+      // customers regardless of branch — assert branch-blindness DIRECTLY
+      // (stronger than the old loop-window grep): no selectedBranchId / branchId filter anywhere.
+      expect(src).toMatch(/const fleetEntries = manifest\.customers/);   // draws from manifest.customers
+      expect(src).toMatch(/mapWithConcurrency\(fleetEntries/);
+      expect(src).not.toMatch(/selectedBranchId/);                       // no per-branch filter
+      expect(src).not.toMatch(/entry\.branchId\s*[!=]==?/);
+      expect(src).not.toMatch(/L\.branchId\s*[!=]==?/);
     });
   });
 

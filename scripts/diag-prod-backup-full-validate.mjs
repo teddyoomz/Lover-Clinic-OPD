@@ -115,9 +115,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Validate meta block
-  if (file.meta?.schemaVersion !== 1) {
-    console.error(`✗ FAIL: meta.schemaVersion expected 1, got ${file.meta?.schemaVersion}`);
+  // Validate meta block — branch schema accepts v1 (legacy) + v2 (current, BACKUP_SCHEMA_VERSION).
+  if (![1, 2].includes(file.meta?.schemaVersion)) {
+    console.error(`✗ FAIL: meta.schemaVersion expected 1|2, got ${file.meta?.schemaVersion}`);
     process.exit(1);
   }
   if (file.meta.sourceBranchId !== TARGET_BRANCH) {
