@@ -125,3 +125,42 @@ export const CARD_SURFACE =
   'p-4 mb-3 ' +
   'transition-all duration-200 ' +
   'hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10';
+
+// ─── OPD lifecycle pills (card redesign 2026-05-26) ─────────────────────────
+// Theme-matched dual-tone (light base + dark: override) — fixes the Light-theme
+// green-on-green bug where OpdLifecycleRow used unconditional dark-only classes
+// (bg-emerald-900/30 text-emerald-300 etc.) with NO light base, so in Light
+// theme they rendered light-green text on translucent dark-green = unreadable.
+// Mirrors STATUS_CHIP_CLS / TYPE_CHIP_CLS so the pills render identically to
+// their neighbour chips. (Tailwind dark: is OS-coupled here — no darkMode config
+// — same as every other chip on this card; a systemic dark:→data-theme migration
+// is out of scope.)
+export const OPD_PILL_BASE =
+  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors';
+
+export const OPD_PILL = {
+  // send-link (state B)
+  blue:
+    `${OPD_PILL_BASE} border ` +
+    'bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200 ' +
+    'dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/40 dark:hover:bg-blue-900/50 ' +
+    'disabled:opacity-50',
+  // view-link / view-OPD (state C/D/A/E)
+  emerald:
+    `${OPD_PILL_BASE} border ` +
+    'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 ' +
+    'dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40 dark:hover:bg-emerald-900/50 ' +
+    'disabled:opacity-50',
+  // wait (disabled — no-data / waiting-customer)
+  wait:
+    `${OPD_PILL_BASE} border ` +
+    'bg-slate-100 text-slate-500 border-slate-300 ' +
+    'dark:bg-slate-800/50 dark:text-slate-500 dark:border-slate-700/40 ' +
+    'opacity-70 cursor-not-allowed',
+  // save CTA (state D) — strongest emphasis: rose + border-2 + pulse
+  save:
+    `${OPD_PILL_BASE} border-2 ` +
+    'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 font-extrabold ' +
+    'dark:bg-red-950/40 dark:text-red-300 dark:border-red-600/60 dark:hover:bg-red-900/50 ' +
+    'disabled:opacity-50 animate-pulse',
+};
