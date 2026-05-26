@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Appointment Card Redesign — Design Spec</title>
+<style>
+  /* ============ App palette (mirrors src/index.css :root + [data-theme=light]) ============ */
+  :root, :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg-base:#050505; --bg-surface:#0a0a0a; --bg-elevated:#111; --bg-card:#0f0f0f;
+    --bd:#222; --bd-strong:#333;
+    --tx-primary:#e5e7eb; --tx-secondary:#9ca3af; --tx-muted:#6b7280; --tx-heading:#fff;
+    --shadow-card:none;
+  }
+  :root[data-theme="light"]{
+    color-scheme:light;
+    --bg-base:#f0f4f8; --bg-surface:#fff; --bg-elevated:#f8fafc; --bg-card:#f8fafc;
+    --bd:#e2e8f0; --bd-strong:#cbd5e1;
+    --tx-primary:#0f172a; --tx-secondary:#334155; --tx-muted:#64748b; --tx-heading:#0f172a;
+    --shadow-card:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  }
+
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Sarabun',sans-serif;max-width:1040px;margin:0 auto;padding:1.5em;line-height:1.6;color:#222;background:#fbfbfc}
+  h1{border-bottom:3px solid #dc2626;padding-bottom:.3em}
+  h2{border-bottom:1px solid #e5e5e5;padding-bottom:.2em;margin-top:2.2em}
+  blockquote{border-left:4px solid #dc2626;background:#f0f4f8;padding:.5em 1em;border-radius:0 6px 6px 0;color:#555}
+  table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.9em}
+  th,td{border:1px solid #e5e5e5;padding:.5em .7em;text-align:left}
+  th{background:#f0f4f8}
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.86em}
+  .toolbar{position:sticky;top:0;z-index:10;background:#fbfbfcdd;backdrop-filter:blur(6px);padding:.6em 0;border-bottom:1px solid #e5e5e5;margin-bottom:1em}
+  .toolbar button{font:inherit;font-weight:700;padding:.5em 1.1em;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;margin-right:.5em}
+  .toolbar button.on{background:linear-gradient(135deg,#f59e0b,# ea580c);background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border-color:#c2410c}
+  .stage-label{font-size:.72em;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:700;margin:1.4em 0 .5em}
+
+  /* ============ Mockup stage (carries the data-theme that the toggle flips) ============ */
+  .stage{border-radius:14px;padding:1.4em;transition:background .25s,box-shadow .25s}
+  .stage[data-theme="dark"]{background:#050505;box-shadow:inset 0 0 0 1px #1a1a1a}
+  .stage[data-theme="light"]{background:#f0f4f8;box-shadow:inset 0 0 0 1px #e2e8f0}
+
+  /* ============ THE REDESIGNED CARD (band architecture) ============ */
+  .card{position:relative;border:1px solid var(--bd);border-radius:16px;overflow:hidden;
+        background:var(--bg-card);box-shadow:var(--shadow-card);margin-bottom:1.1em;
+        transition:border-color .2s,box-shadow .2s}
+  .card:hover{border-color:rgba(234,88,12,.45);box-shadow:0 8px 26px rgba(234,88,12,.10)}
+  .accent{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .accent.pending{background:linear-gradient(180deg,#fbbf24,# ea580c);background:linear-gradient(180deg,#fbbf24,#ea580c)}
+  .accent.confirmed{background:linear-gradient(180deg,#38bdf8,#0891b2)}
+  .accent.done{background:linear-gradient(180deg,#34d399,#047857)}
+  .accent.missed{background:linear-gradient(180deg,#ef4444,#be123c)}
+  .accent.cancelled{background:linear-gradient(180deg,#94a3b8,#475569)}
+
+  /* HEADER BAND */
+  .band-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1em;
+             padding:.85em 1.1em .7em 1.4em;background:var(--bg-elevated);border-bottom:1px solid var(--bd)}
+  .hn{font:700 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-muted)}
+  .name{font-weight:900;font-size:18px;line-height:1.15;color:#0369a1;margin-top:3px}
+  [data-theme="dark"] .name{color:#7dd3fc}
+  .name:hover{text-decoration:underline}
+  .sub{font-size:11.5px;color:var(--tx-muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+  .head-right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
+
+  /* FINANCE STRIP */
+  .band-fin{display:flex;gap:6px;flex-wrap:wrap;padding:.55em 1.1em .55em 1.4em;border-bottom:1px solid var(--bd)}
+
+  /* DETAIL ZONE */
+  .band-detail{display:grid;grid-template-columns:1fr 1fr;gap:1em;padding:.85em 1.1em .85em 1.4em}
+  @media(max-width:620px){.band-detail{grid-template-columns:1fr}}
+  .date-line{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-weight:700;font-size:14px;color:var(--tx-heading);margin-bottom:8px}
+  .dt-grid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12.5px}
+  .dt-grid dt{color:var(--tx-muted)} .dt-grid dd{color:var(--tx-heading);margin:0}
+  .purpose-row{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .purpose-lbl{font:700 10px/1 sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--tx-muted)}
+
+  /* OPD FOOTER ZONE */
+  .band-opd{padding:.7em 1.1em .7em 1.4em;border-top:1px solid var(--bd);
+            background:color-mix(in srgb,#f59e0b 4%,var(--bg-card))}
+  .opd-head{font:700 9px/1 sans-serif;text-transform:uppercase;letter-spacing:.08em;color:#d97706;margin-bottom:7px}
+  [data-theme="dark"] .opd-head{color:#fbbf2499}
+  .opd-pills{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  .stepper{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:11px;color:var(--tx-muted)}
+  .step-dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--bd-strong)}
+  .step-dot.done{background:#10b981;border-color:#10b981}
+  .step-dot.active{background:#f59e0b;border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.2)}
+  .step-line{flex:0 0 22px;height:2px;background:var(--bd-strong)}
+
+  /* ACTION BAR */
+  .band-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;
+                padding:.7em 1.1em;border-top:1px solid var(--bd);background:var(--bg-elevated)}
+
+  /* ---- chips & pills (dual-tone, theme-matched — the Q2=A system) ---- */
+  .chip{font-weight:700;font-size:11px;padding:3px 9px;border-radius:7px;border:1px solid;white-space:nowrap}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-weight:700;font-size:11px;padding:5px 11px;
+        border-radius:8px;border:1px solid;cursor:pointer;transition:background .15s}
+  .pill.wait{cursor:not-allowed;opacity:.85}
+  .status{font-weight:800;font-size:11px;padding:5px 13px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;border:1px solid}
+  .time{font:900 15px/1 ui-monospace,monospace;padding:3px 11px;border-radius:7px;border:1px solid}
+
+  /* color tokens — light defaults + dark overrides (mirrors the real Tailwind dual-tone) */
+  .c-blue   {background:#dbeafe;color:#1e40af;border-color:#93c5fd}  [data-theme="dark"] .c-blue   {background:#1e3a8a4d;color:#bfdbfe;border-color:#1e40af99}
+  .c-emerald{background:#d1fae5;color:#065f46;border-color:#6ee7b7}  [data-theme="dark"] .c-emerald{background:#064e3b4d;color:#a7f3d0;border-color:#06553f99}
+  .c-amber  {background:#fef3c7;color:#92400e;border-color:#fcd34d}  [data-theme="dark"] .c-amber  {background:#451a034d;color:#fde68a;border-color:#78350f99}
+  .c-orange {background:#ffedd5;color:#9a3412;border-color:#fdba74}  [data-theme="dark"] .c-orange {background:#431407 4d;color:#fed7aa;border-color:#7c2d1299}
+  .c-orange {background:#ffedd5;color:#9a3412;border-color:#fdba74}  [data-theme="dark"] .c-orange {background:#4314074d;color:#fed7aa;border-color:#7c2d1299}
+  .c-sky    {background:#e0f2fe;color:#075985;border-color:#7dd3fc}  [data-theme="dark"] .c-sky    {background:#0c4a6e4d;color:#bae6fd;border-color:#075985aa}
+  .c-rose   {background:#ffe4e6;color:#9f1239;border-color:#fda4af}  [data-theme="dark"] .c-rose   {background:#4c05194d;color:#fecdd3;border-color:#9f123999}
+  .c-slate  {background:#f1f5f9;color:#64748b;border-color:#cbd5e1}  [data-theme="dark"] .c-slate  {background:#1e293b80;color:#94a3b8;border-color:#33415580}
+  .c-yellow {background:#fef9c3;color:#854d0e;border-color:#fde047}  [data-theme="dark"] .c-yellow {background:#42200633;color:#fde68a;border-color:#78350f99}
+
+  .pill.c-blue:hover{background:#bfdbfe} .pill.c-emerald:hover{background:#a7f3d0}
+  /* SAVE CTA — strong rose, pulse, the single highest-emphasis OPD action */
+  .pill.save{background:#fecdd3;color:#9f1239;border:2px solid #fb7185;font-weight:800;animation:p 2.4s ease-in-out infinite}
+  [data-theme="dark"] .pill.save{background:#4c0519aa;color:#fecdd3;border-color:#e11d4899}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.62}}
+
+  /* status pill colors */
+  .status.pending{background:#fef3c7;color:#92400e;border-color:#fcd34d}  [data-theme="dark"] .status.pending{background:#451a0399;color:#fde68a;border-color:#78350f99}
+  .status.confirmed{background:#e0f2fe;color:#075985;border-color:#7dd3fc} [data-theme="dark"] .status.confirmed{background:#0c4a6e99;color:#bae6fd;border-color:#075985aa}
+  .status.done{background:#d1fae5;color:#065f46;border-color:#6ee7b7}      [data-theme="dark"] .status.done{background:#064e3b99;color:#a7f3d0;border-color:#06553f99}
+  .status.cancelled{background:#e2e8f0;color:#475569;border-color:#cbd5e1} [data-theme="dark"] .status.cancelled{background:#1e293b99;color:#94a3b8;border-color:#33415599}
+  .time{background:#fef3c7;color:#92400e;border-color:#fcd34d}             [data-theme="dark"] .time{background:#451a0399;color:#fde68a;border-color:#78350f99}
+
+  /* action buttons — ember PRIMARY / sky SECONDARY / rose DESTRUCTIVE (preserved BTN_* tiers) */
+  .btn{font-weight:700;font-size:11px;padding:7px 13px;border-radius:8px;cursor:pointer;border:1px solid;display:inline-flex;align-items:center;gap:4px}
+  .btn-primary{background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border-color:#c2410c;box-shadow:0 1px 3px rgba(234,88,12,.3)}
+  .btn-secondary{background:transparent;color:#0369a1;border-color:#7dd3fc} [data-theme="dark"] .btn-secondary{color:#7dd3fc;border-color:#075985aa}
+  .btn-destructive{background:transparent;color:#be123c;border-color:#fda4af} [data-theme="dark"] .btn-destructive{color:#fb7185;border-color:#9f123999}
+  .btn-line{background:#06C755;color:#fff;border-color:#06C755}
+
+  .legend{display:flex;gap:6px;align-items:center;font-size:10px;color:var(--tx-muted)}
+
+  /* before/after */
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:1em;margin:1em 0}
+  @media(max-width:620px){.ba{grid-template-columns:1fr}}
+  .ba-cell{border:1px solid var(--bd);border-radius:10px;padding:1em;background:var(--bg-card)}
+  .ba-tag{font:700 10px/1 sans-serif;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.7em}
+  .ba-bad .ba-tag{color:#dc2626} .ba-good .ba-tag{color:#16a34a}
+  /* the BROKEN current opd row — dark-only classes rendered on a light surface */
+  .broken-row{display:flex;gap:7px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;
+              border-top:1px dashed rgba(245,158,11,.3);border-bottom:1px dashed rgba(245,158,11,.3);background:rgba(245,158,11,.03)}
+  .broken-pill{font-weight:700;font-size:11px;padding:5px 11px;border-radius:8px;border:1px solid;display:inline-flex;gap:5px}
+  .broken-emerald{background:rgba(6,78,59,.3);color:#6ee7b7;border-color:rgba(4,120,87,.4)}   /* green-on-green */
+  .broken-slate{background:rgba(30,41,59,.5);color:#64748b;border-color:rgba(51,65,85,.4)}     /* washed gray */
+  /* AFTER cell: force light pills regardless of the page theme toggle */
+  .ba-cell[data-theme="light"] .pill.c-emerald{background:#d1fae5;color:#065f46;border-color:#6ee7b7}
+  .ba-cell[data-theme="light"] .pill.c-slate{background:#f1f5f9;color:#64748b;border-color:#cbd5e1}
+
+  .flowbox{border:1px solid var(--bd);border-radius:10px;padding:1em;background:#fff;margin:.5em 0}
+  .flowband{border:1px dashed #cbd5e1;border-radius:8px;padding:.5em .8em;margin:.4em 0;font-size:.88em;background:#fafafa}
+  .flowband b{color:#ea580c}
+</style>
+</head>
+<body>
+
+<h1>Appointment Card Redesign — Design Spec</h1>
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 EOD+6 · <strong>Status:</strong> ✅ Approved by user — live mockup verified in Browser 1 (Dark + Light), Rule Q-vis ·
+  <strong>Scope:</strong> Q1=C full layout redesign · Q2=A theme-matched pills · Q3=A refined Editorial Ember · Q4=A stepper untouched (re-position only) ·
+  <strong>Constraint:</strong> COSMETIC-SHELL — zero changes to any button wiring / flow / logic / data-testid / conditional.
+</blockquote>
+
+<div class="toolbar">
+  <strong style="margin-right:1em">Theme:</strong>
+  <button id="btn-dark" class="on" onclick="setTheme('dark')">🌙 Dark</button>
+  <button id="btn-light" onclick="setTheme('light')">☀️ Light</button>
+  <span style="margin-left:1em;color:#64748b;font-size:.85em">← flip to see BOTH themes (this is the whole point)</span>
+</div>
+
+<h2>Purpose / Problem</h2>
+<p>The appointment-hub card list (<code>AppointmentHubRowCard.jsx</code>) looks unrefined — <strong>especially in Light theme</strong> — and the
+<strong>OPD LIFECYCLE</strong> strip is visibly broken: its badges (<code>OpdLifecycleRow.jsx</code>) use unconditional <em>dark-only</em>
+Tailwind classes (<code>bg-emerald-900/30 text-emerald-300</code>, <code>bg-blue-900/30 text-blue-300</code>,
+<code>bg-slate-800/50 text-slate-500</code>) with <strong>no light base and no <code>[data-theme="light"]</code> override</strong>.
+The app theme is driven by the <code>data-theme</code> attribute (NOT Tailwind <code>dark:</code> / OS), so in Light theme those badges render
+<strong>light-green text on a translucent dark-green background → unreadable green-on-green</strong> (the screenshot). Goal: a genuinely
+beautiful, theme-correct card in <strong>both</strong> Dark + Light — without touching any button's behavior.</p>
+
+<h2>Mockup Design</h2>
+<p>Live mockup — <strong>use the Theme toggle above</strong>. Three real states shown. Hover a card to see the warm Editorial-Ember lift.</p>
+<p><em>Note: the round-circle <strong>สถานะ OPD</strong> stepper shown (ซักประวัติ → แพทย์ลงบันทึก → เสร็จ) is the EXISTING <code>TreatmentLifecycleStepper</code> — per the 2026-05-26 EOD+6 directive it is <strong>NOT redesigned (เด็ดขาด)</strong>, only re-positioned into the new footer band.</em></p>
+
+<div class="stage" id="stage" data-theme="dark">
+
+  <div class="stage-label">State 1 — pending · OPD state B (link not sent yet)</div>
+  <div class="card">
+    <span class="accent pending"></span>
+    <div class="band-head">
+      <div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="hn">HN · 0042</span>
+          <span class="chip c-yellow">เพชร · เหลือ 120 วัน</span>
+        </div>
+        <a class="name" href="#">สันติราษกร์ ชูแก้ว</a>
+        <div class="sub"><span>เพศ ชาย</span><span>📞 08x-xxx-xxxx</span></div>
+      </div>
+      <div class="head-right">
+        <span class="status pending">รอยืนยัน</span>
+      </div>
+    </div>
+    <div class="band-fin">
+      <span class="chip c-blue">💰 Wallet 2,000 ฿</span>
+      <span class="chip c-orange">🏷️ มัดจำ 1,000 ฿</span>
+      <span class="chip c-emerald">📈 ยอดสั่งซื้อ 45,000 ฿</span>
+    </div>
+    <div class="band-detail">
+      <div>
+        <div class="date-line"><span style="color:var(--tx-muted)">📅</span> วันพุธ ที่ 27 พฤษภาคม 2569
+          <span class="time">16:00 – 17:00</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip c-emerald">จองมัดจำ</span>
+          <span class="chip c-amber">💰 มัดจำ 1,000 ฿ · เพื่อ ขลิบ, เสริมขนาด</span>
+        </div>
+      </div>
+      <div>
+        <dl class="dt-grid">
+          <dt>ที่ปรึกษา</dt><dd>วัน</dd>
+          <dt>แพทย์</dt><dd>หมอมายด์</dd>
+          <dt>ผู้ช่วย</dt><dd>—</dd>
+          <dt>ห้องตรวจ</dt><dd>—</dd>
+        </dl>
+        <div class="purpose-row"><span class="purpose-lbl">นัดมาเพื่อ</span>
+          <span class="chip c-emerald">ขลิบ, เสริมขนาด</span></div>
+      </div>
+    </div>
+    <div class="band-opd">
+      <div class="opd-head">⚙ OPD Lifecycle</div>
+      <div class="opd-pills">
+        <span class="pill c-blue">📤 ส่งลิ้งค์ลูกค้ากรอก OPD</span>
+        <span class="pill wait c-slate">⏳ ยังไม่มีข้อมูล</span>
+      </div>
+      <div class="stepper"><span>สถานะ OPD</span>
+        <span class="step-dot"></span><span class="step-line"></span>
+        <span class="step-dot"></span><span class="step-line"></span>
+        <span class="step-dot"></span></div>
+    </div>
+    <div class="band-actions">
+      <span class="btn btn-primary">คอนเฟิร์มนัด</span>
+      <span class="btn btn-secondary">แก้ไขนัด</span>
+      <span class="btn btn-destructive">ยกเลิก</span>
+    </div>
+  </div>
+
+  <div class="stage-label">State 2 — confirmed · OPD state C (link sent, waiting for customer)</div>
+  <div class="card">
+    <span class="accent confirmed"></span>
+    <div class="band-head">
+      <div>
+        <span class="hn">HN · 0108</span>
+        <a class="name" href="#">วศิน เข็มทอง</a>
+        <div class="sub"><span>เพศ ชาย</span><span>📞 09x-xxx-xxxx</span></div>
+      </div>
+      <div class="head-right">
+        <span class="btn-line btn" style="cursor:default">LINE</span>
+        <span class="status confirmed">ยืนยันแล้ว · รอการรักษา</span>
+      </div>
+    </div>
+    <div class="band-detail">
+      <div>
+        <div class="date-line"><span style="color:var(--tx-muted)">📅</span> วันพุธ ที่ 27 พฤษภาคม 2569
+          <span class="time">17:00 – 18:00</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip c-emerald">จองมัดจำ</span>
+          <span class="chip c-amber">💰 มัดจำ 1,000 ฿ · เพื่อ ขลิบ</span>
+        </div>
+      </div>
+      <div>
+        <dl class="dt-grid">
+          <dt>ที่ปรึกษา</dt><dd>วัน</dd><dt>แพทย์</dt><dd>หมอมายด์</dd>
+          <dt>ผู้ช่วย</dt><dd>—</dd><dt>ห้องตรวจ</dt><dd>—</dd>
+        </dl>
+        <div class="purpose-row"><span class="purpose-lbl">นัดมาเพื่อ</span><span class="chip c-emerald">ขลิบ</span></div>
+      </div>
+    </div>
+    <div class="band-opd">
+      <div class="opd-head">⚙ OPD Lifecycle</div>
+      <div class="opd-pills">
+        <span class="pill c-emerald">🔗 ดูลิ้งค์ที่ส่งไป</span>
+        <span class="pill wait c-slate">⏳ รอลูกค้ากรอก</span>
+      </div>
+      <div class="stepper"><span>สถานะ OPD</span>
+        <span class="step-dot done"></span><span class="step-line" style="background:#10b981"></span>
+        <span class="step-dot active"></span><span class="step-line"></span>
+        <span class="step-dot"></span></div>
+    </div>
+    <div class="band-actions">
+      <span class="btn btn-primary">บันทึกการรักษา</span>
+      <span class="btn btn-secondary">แก้ไขนัด</span>
+      <span class="btn btn-destructive">ยกเลิก</span>
+    </div>
+  </div>
+
+  <div class="stage-label">State 3 — confirmed · OPD state D (customer filled remotely → review then save)</div>
+  <div class="card">
+    <span class="accent confirmed"></span>
+    <div class="band-head">
+      <div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="hn">HN · 0211</span>
+          <span class="chip c-rose" style="animation:p 2.4s ease-in-out infinite">📥 ลูกค้ากรอกแล้ว · รอบันทึก</span>
+        </div>
+        <a class="name" href="#">ไพบูลย์ ทองสุข</a>
+        <div class="sub"><span>📞 08x-xxx-xxxx</span></div>
+      </div>
+      <div class="head-right"><span class="status confirmed">ยืนยันแล้ว · รอการรักษา</span></div>
+    </div>
+    <div class="band-detail">
+      <div>
+        <div class="date-line"><span style="color:var(--tx-muted)">📅</span> วันพุธ ที่ 27 พฤษภาคม 2569
+          <span class="time">18:00 – 19:00</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip c-orange">นัดติดตามผล</span></div>
+      </div>
+      <div>
+        <dl class="dt-grid"><dt>ที่ปรึกษา</dt><dd>วัน</dd><dt>แพทย์</dt><dd>หมอมายด์</dd>
+          <dt>ผู้ช่วย</dt><dd>เมย์</dd><dt>ห้องตรวจ</dt><dd>ห้อง 2</dd></dl>
+        <div class="purpose-row"><span class="purpose-lbl">นัดมาเพื่อ</span><span class="chip c-emerald">ติดตามผลหลังผ่าตัด</span></div>
+      </div>
+    </div>
+    <div class="band-opd">
+      <div class="opd-head">⚙ OPD Lifecycle</div>
+      <div class="opd-pills">
+        <span class="pill c-emerald">🔗 ดูลิ้งค์ที่ส่งไป</span>
+        <span class="pill c-emerald">🔎 ดูข้อมูลรับเข้า</span>
+        <span class="pill save">🗎 บันทึกลง OPD</span>
+      </div>
+      <div class="stepper"><span>สถานะ OPD</span>
+        <span class="step-dot done"></span><span class="step-line" style="background:#10b981"></span>
+        <span class="step-dot done"></span><span class="step-line" style="background:#10b981"></span>
+        <span class="step-dot active"></span></div>
+    </div>
+    <div class="band-actions">
+      <span class="btn btn-primary">บันทึกการรักษา</span>
+      <span class="btn btn-secondary">แก้ไขนัด</span>
+      <span class="btn btn-destructive">ยกเลิก</span>
+    </div>
+  </div>
+
+</div>
+
+<h2>Before / After — the OPD LIFECYCLE row (the broken area)</h2>
+<p>Both cells are forced to <strong>Light theme</strong> so the bug is visible regardless of the toggle above.</p>
+<div class="ba">
+  <div class="ba-cell ba-bad" data-theme="light" style="background:#f8fafc">
+    <div class="ba-tag">✗ NOW — dark-only classes on a light surface</div>
+    <div class="broken-row">
+      <span style="font:700 9px/1 sans-serif;text-transform:uppercase;letter-spacing:.08em;color:#fbbf2499;margin-right:auto;align-self:center">OPD lifecycle</span>
+      <span class="broken-pill broken-emerald">🔗 ดูลิ้งค์ที่ส่งไป</span>
+      <span class="broken-pill broken-slate">⏳ รอลูกค้ากรอก</span>
+    </div>
+    <p style="font-size:11px;color:#64748b;margin:.7em 0 0">Green text on translucent dark-green = unreadable. Gray pill is washed out. Matches your screenshot.</p>
+  </div>
+  <div class="ba-cell ba-good" data-theme="light" style="background:#f8fafc">
+    <div class="ba-tag">✓ AFTER — theme-matched pills (Q2=A)</div>
+    <div class="band-opd" style="border:0;border-radius:8px">
+      <div class="opd-head">⚙ OPD Lifecycle</div>
+      <div class="opd-pills">
+        <span class="pill c-emerald">🔗 ดูลิ้งค์ที่ส่งไป</span>
+        <span class="pill wait c-slate">⏳ รอลูกค้ากรอก</span>
+      </div>
+    </div>
+    <p style="font-size:11px;color:#64748b;margin:.7em 0 0">Light bg + dark text + crisp border → AA-readable. Same dual-tone as the มัดจำ / นัดมาเพื่อ chips.</p>
+  </div>
+</div>
+
+<h2>Flow</h2>
+<p><strong>Band architecture</strong> — the card reads top-to-bottom instead of three cramped columns.</p>
+<div class="flowbox">
+  <div class="flowband"><b>① HEADER BAND</b> — HN · membership/ready chips · <b>name</b> (sky-blue, never red) · phone &nbsp;|&nbsp; right: LINE badge + status pill</div>
+  <div class="flowband"><b>② FINANCE STRIP</b> — wallet · มัดจำ · ค่างชำระ · ยอดสั่งซื้อ (renders only if any present — conditional preserved)</div>
+  <div class="flowband"><b>③ DETAIL ZONE</b> (2-col → 1-col mobile) — date + time chip + type/deposit/missed chips &nbsp;|&nbsp; ที่ปรึกษา/แพทย์/ผู้ช่วย/ห้อง + นัดมาเพื่อ</div>
+  <div class="flowband"><b>④ OPD FOOTER ZONE</b> — OPD lifecycle pills (state A–E) + สถานะ OPD stepper, in one delineated warm-tinted footer</div>
+  <div class="flowband"><b>⑤ ACTION BAR</b> — confirm / record-treatment / mark-complete (ember) · edit (sky) · cancel (rose) — every existing button + handler + data-testid, just relocated to a bottom bar</div>
+</div>
+
+<p><strong>OPD lifecycle state → pill mapping</strong> (logic unchanged in <code>opdSessionState.js</code> — only the classes change):</p>
+<table>
+  <tr><th>State</th><th>Meaning</th><th>Pills rendered (AFTER)</th></tr>
+  <tr><td>A</td><td>OPD already saved</td><td>🟢 ดูข้อมูลรับเข้า (emerald)</td></tr>
+  <tr><td>B</td><td>no link sent yet</td><td>🔵 ส่งลิ้งค์ (blue) · ⏳ ยังไม่มีข้อมูล (slate, disabled)</td></tr>
+  <tr><td>C</td><td>link sent, waiting</td><td>🟢 ดูลิ้งค์ (emerald) · ⏳ รอลูกค้ากรอก (slate, disabled)</td></tr>
+  <tr><td>D</td><td>customer filled → review+save</td><td>🟢 ดูลิ้งค์ · 🟢 ดูข้อมูลรับเข้า (review) · 🔴 บันทึก OPD (rose CTA, pulse)</td></tr>
+  <tr><td>E</td><td>transient post-save</td><td>🟢 ดูข้อมูลรับเข้า (emerald)</td></tr>
+</table>
+
+<h2>Architecture</h2>
+<ul>
+  <li><strong><code>src/components/admin/_apptHubStyles.js</code></strong> — add a new <code>OPD_PILL</code> token family (blue / emerald / slate-wait / rose-save) using the proven dual-tone pattern, mirroring <code>STATUS_CHIP_CLS</code>. Rule of 3: the OPD pills are a badge family → centralize here (same home as the other shared card tokens).</li>
+  <li><strong><code>src/components/admin/OpdLifecycleRow.jsx</code></strong> — swap the 4 hardcoded dark-only class strings for the new theme-aware tokens. <strong>All button TEXT (labels unchanged), predicates, props, <code>onClick</code> handlers, <code>data-testid</code>, disabled state, and the State A–E logic stay byte-for-byte.</strong> Note: the new tokens mirror the card's existing <code>STATUS_CHIP_CLS</code> / <code>TYPE_CHIP_CLS</code> pattern (light base + <code>dark:</code> override) so the pills render identically to their neighbor chips. (Tailwind <code>dark:</code> here is OS-coupled — no <code>darkMode</code> config — but matching the neighbors is the correct, consistent fix; it resolves the reported Light-theme bug and a systemic <code>dark:</code>→<code>data-theme</code> migration is explicitly out of scope.)</li>
+  <li><strong><code>src/components/admin/AppointmentHubRowCard.jsx</code></strong> — re-lay-out the JSX into the 5 bands above. Every interactive element, every conditional (<code>hasTreatmentForDay</code>, <code>rawStatus</code>, <code>isPastDate</code>, <code>showMarkCompleteBtn</code>, …), every handler prop, and every <code>data-testid</code> is preserved verbatim — only the wrapping markup + classNames move. <code>AppointmentOpdStepperRow</code> + <code>TreatmentLifecycleStepper</code> (the round-circle <code>สถานะ OPD</code> stepper: ซักประวัติ→แพทย์ลงบันทึก→เสร็จ) are <strong>OFF-LIMITS — NOT edited, NOT restyled (เด็ดขาด, user directive 2026-05-26 EOD+6)</strong>; only re-parented verbatim into the new footer band. <code>AppointmentLineBadge</code> likewise re-parented unchanged.</li>
+  <li><strong>No changes</strong> to <code>opdSessionState.js</code>, <code>appointmentHubFilters.js</code>, <code>AppointmentHubView.jsx</code> data flow, or any Firestore / endpoint / cron. Pure presentation.</li>
+</ul>
+
+<h2>Decisions (locked via Q&amp;A)</h2>
+<ul>
+  <li><strong>Q1 = C</strong> — full layout redesign (band architecture), not a polish of the 3-column layout.</li>
+  <li><strong>Q2 = A</strong> — OPD lifecycle states render as theme-matched dual-tone pills (blue / emerald / slate-wait / rose-save CTA).</li>
+  <li><strong>Q3 = A</strong> — Refined Editorial Ember: warm amber/orange accent unified across Dark + Light; Light = crisp white card + hairline slate border + soft shadow + warm hover.</li>
+  <li><strong>Q4 = A (locked 2026-05-26 EOD+6)</strong> — the round-circle <code>สถานะ OPD</code> stepper is left <strong>completely untouched — ONLY re-positioned</strong> into the new footer band. <strong>NOT even a color change.</strong> Rationale: <code>TreatmentLifecycleStepper</code> is a <em>shared</em> Phase 28 component also rendered by the Backend treatment-history view (<code>CustomerDetailView</code>); any color tweak would propagate there too. It already uses theme-aware CSS vars (<code>var(--bg-base)</code> / <code>var(--bd-strong)</code> / <code>var(--tx-faint)</code>) for its muted state + gradient+white for done states, so it renders correctly in both themes as-is. Verbatim re-parent only.</li>
+  <li><strong>Amendment 2026-05-26 EOD+6:</strong> redesign EVERY part of the card EXCEPT the round-circle OPD-tracking stepper — the <code>สถานะ OPD</code> / <code>TreatmentLifecycleStepper</code> dots (ซักประวัติ → แพทย์ลงบันทึก → เสร็จ) on the วันนี้/Today tab are <strong>OFF-LIMITS (เด็ดขาด)</strong>: re-positioned verbatim, never restyled or re-implemented. <strong>No text/wording changes anywhere</strong> — every button label, chip label, and field label stays byte-for-byte (this is a pure visual/layout redesign, not a content change).</li>
+  <li><strong>Hard constraints:</strong> (a) cosmetic-shell — never touch wiring/flow/logic/handlers/conditionals; (b) every existing <code>data-testid</code> preserved (tests depend on them); (c) patient name stays sky-blue, never red (Thai-culture iron-clad); (d) theme via <code>data-theme</code> dual-tone, never dark-only classes.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>OPD lifecycle pills are AA-readable in <strong>both</strong> Dark and Light (no green-on-green / washed states).</li>
+  <li>Card renders cleanly in both themes + mobile (≤620px collapses detail zone to 1 col, no overflow).</li>
+  <li>Every button present in the old card is present in the new one, with the same <code>data-testid</code>, same handler, same show/hide condition.</li>
+  <li>Patient name never red.</li>
+  <li>Full vitest green (with V21 fixups for any layout-assert tests); build clean; <code>/audit-ui-cultural-a11y</code> + <code>/audit-react-patterns</code> pass.</li>
+  <li><strong>Rule Q-vis:</strong> rendered pixels verified by eye in a real browser (Dark + Light) — feasible here because the AdminDashboard is served by the local vite dev server (unlike the serverless patient-view).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Test churn (expected):</strong> the Scope-C layout change will break RTL/source-grep tests that assert the old 3-column structure (e.g. <code>v118-*</code>). These get V21 fixups — re-anchored on the preserved <code>data-testid</code>s, not on layout. No real regression if every testid + handler is preserved.</li>
+  <li><strong>Theme mechanism:</strong> the card already uses Tailwind <code>dark:</code> (OS-coupled) for its working chips; the new OPD pills follow the same proven dual-tone so they render identically to the neighbors. A systemic migration off <code>dark:</code> to <code>isDark</code> is out of scope (would touch the whole hub).</li>
+  <li><strong>Mockup vs React:</strong> this HTML mockup hand-renders the design with plain CSS; the implementation maps it to the app's real Tailwind classes + CSS vars. Final sign-off is the real-browser pixel check (Rule Q-vis), not this mockup.</li>
+</ul>
+
+<script>
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('stage').setAttribute('data-theme',t);
+  document.getElementById('btn-dark').classList.toggle('on',t==='dark');
+  document.getElementById('btn-light').classList.toggle('on',t==='light');
+}
+</script>
+</body>
+</html>
