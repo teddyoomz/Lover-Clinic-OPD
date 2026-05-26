@@ -31,8 +31,13 @@ export function validateDeposit(form, opts = {}) {
   if (amount < 0) return ['amount', 'amount ต้องไม่ติดลบ'];
 
   if (strict) {
-    if (!form.customerId || !String(form.customerId).trim()) {
-      return ['customerId', 'ต้องระบุ customerId'];
+    // V-deposit-noappt (2026-05-27) — accept a temp identity (customerNameTemp)
+    // when customerId is empty, so no-appointment / เลือกลูกค้าภายหลัง deposits
+    // pass strict validation.
+    const hasCustomer = form.customerId && String(form.customerId).trim();
+    const hasTemp = form.customerNameTemp && String(form.customerNameTemp).trim();
+    if (!hasCustomer && !hasTemp) {
+      return ['customerId', 'ต้องระบุลูกค้า หรือชื่อลูกค้าจอง'];
     }
     if (!form.paymentChannel || !String(form.paymentChannel).trim()) {
       return ['paymentChannel', 'ต้องระบุวิธีชำระเงิน'];
@@ -121,6 +126,9 @@ export function emptyDepositForm() {
     customerId: '',
     customerName: '',
     customerHN: '',
+    customerNameTemp: '',
+    customerPhoneTemp: '',
+    purpose: '',
     amount: 0,
     usedAmount: 0,
     remainingAmount: 0,
@@ -183,6 +191,9 @@ export function normalizeDeposit(form) {
   out.customerId = String(trim(out.customerId) || '');
   out.customerName = String(trim(out.customerName) || '');
   out.customerHN = String(trim(out.customerHN) || '');
+  out.customerNameTemp = String(trim(out.customerNameTemp) || '');
+  out.customerPhoneTemp = String(trim(out.customerPhoneTemp) || '');
+  out.purpose = String(trim(out.purpose) || '');
   out.amount = numOrZero(out.amount);
   out.usedAmount = numOrZero(out.usedAmount);
   // If caller didn't provide remainingAmount OR left it at zero-default, derive
