@@ -43,9 +43,13 @@ describe('api/patient-view.js — endpoint contract', () => {
     expect(SRC).toMatch(/NOT_FOUND/);
     expect(SRC).toMatch(/DISABLED/);
   });
-  it('E10: future-only + excludes cancelled appointments', () => {
-    expect(SRC).toMatch(/>=\s*today|>= today/);
-    expect(SRC).toMatch(/status\s*!==\s*'cancelled'/);
+  it('E10: future-only + excludes cancelled — delegated to customerLinkPayloadCore (AV135)', () => {
+    // AV135 (2026-05-26): endpoint's appt filter moved into the shared core
+    // (consumed by the cleanup cron too) — endpoint delegates via isAppointmentUpcoming.
+    expect(SRC).toMatch(/isAppointmentUpcoming/);
+    const CORE = readFileSync('src/lib/customerLinkPayloadCore.js', 'utf8');
+    expect(CORE).toMatch(/<\s*todayISO/);           // future-only (date < today → drop)
+    expect(CORE).toMatch(/status === 'cancelled'/);  // cancelled-exclusion
   });
 });
 

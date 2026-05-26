@@ -11,8 +11,7 @@
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { fmtThaiDate } from '../src/lib/dateFormat.js';
-import { parseQtyString } from '../src/lib/courseUtils.js';
-import { parseStatusFromCourse, deriveEffectiveStatus, STATUS_ACTIVE } from '../src/lib/remainingCourseUtils.js';
+import { computeUsableCourses, isAppointmentUpcoming } from '../src/lib/customerLinkPayloadCore.js';
 
 const APP_ID = 'loverclinic-opd-4c39b';
 
@@ -75,37 +74,22 @@ export default async function handler(req, res) {
 
     const today = bangkokToday();
 
-    // 2. Courses — show only USABLE remaining ("คอร์สคงเหลือ"). The stored
-    //    `status` does NOT auto-flip when qty hits 0, so we derive the effective
-    //    status: deriveEffectiveStatus flips finite+depleted (total>0 &&
-    //    remaining<=0) → ใช้หมดแล้ว, KEEPS buffet (total 0) + remaining>0 as
-    //    active, and preserves refunded/cancelled. Used-up + terminal courses
-    //    are EXCLUDED from both lists (customer wants them gone). Matches
-    //    lineBotResponder.formatCoursesReply (V33.8) + RemainingCourseTab.
-    const allCourses = Array.isArray(customerData.courses) ? customerData.courses : [];
-    const isUsableActive = (c) => {
-      const { remaining, total } = parseQtyString(c.qty || '');
-      return deriveEffectiveStatus(parseStatusFromCourse(c), Number(total) || 0, Number(remaining) || 0) === STATUS_ACTIVE;
-    };
-    const usable = allCourses.filter(isUsableActive);
-    const courses = usable.filter(c => !c.expiryDate || String(c.expiryDate) >= today);
-    const expiredCourses = usable.filter(c => c.expiryDate && String(c.expiryDate) < today);
+    // 2. Courses — show only USABLE remaining ("คอร์สคงเหลือ"); expired split out.
+    //    Logic single-sourced in customerLinkPayloadCore (AV135) — also consumed by
+    //    the auto-cleanup cron so "empty" is computed identically. (effective-status
+    //    flips finite+depleted → ใช้หมดแล้ว; keeps buffet; excludes refunded/cancelled.
+    //    Matches lineBotResponder.formatCoursesReply V33.8 + RemainingCourseTab.)
+    const { remaining: courses, expired: expiredCourses } = computeUsableCourses(customerData.courses, today);
 
     // 3. Appointments — future-only + branch-name resolve + full-month Thai date.
     //    Real be_appointments field shape (verified via Rule R diag 2026-05-25):
     //    date(ISO) · startTime/endTime · doctorName · branchId · roomName? · status.
     const apptSnap = await dataCol(db, 'be_appointments').where('customerId', '==', String(customerId)).get();
-    // Upcoming = future date, NOT cancelled, NOT already serviced/attended.
-    // Status set mirrors didAttend (appointmentAnalysisAggregator); serviceCompletedAt
-    // is the AppointmentHub canonical "service done" signal (appointmentHubFilters).
-    const COMPLETED_APPT_STATUSES = new Set(['done', 'completed', 'มาตามนัด', 'ชำระเงิน']);
-    const isUpcomingAppt = (a) =>
-      a.status !== 'cancelled' && !a.serviceCompletedAt && !a.wasServiceCompleted
-      && !COMPLETED_APPT_STATUSES.has(String(a.status || '').trim());
+    // Upcoming = future-or-today, NOT cancelled, NOT serviced/attended.
+    // Single-sourced in customerLinkPayloadCore (AV135) — same predicate the cron uses.
     let appts = apptSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
-      .filter(a => { const dt = a.date || ''; return !dt || String(dt) >= today; })
-      .filter(isUpcomingAppt);
+      .filter(a => isAppointmentUpcoming(a, today));
     appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.startTime || '').localeCompare(b.startTime || ''));
 
     const branchCache = {};

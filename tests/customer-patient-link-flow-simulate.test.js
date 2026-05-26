@@ -134,16 +134,22 @@ describe('Rule I — customer patient-link full flow', () => {
     expect(courses).toHaveLength(1);
     expect(expired).toHaveLength(0);
   });
-  it('F6.6: BOTH patient-view course lists gate on deriveEffectiveStatus (class-of-bug lock)', () => {
+  it('F6.6: patient-view course gating single-sourced in customerLinkPayloadCore + PatientDashboard still gates (class-of-bug lock; AV135 relocated the endpoint half to the core)', () => {
+    const CORE = readFileSync('src/lib/customerLinkPayloadCore.js', 'utf8');
     const EP = readFileSync('api/patient-view.js', 'utf8');
     const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
-    for (const SRC of [EP, PD]) {
-      expect(SRC).toMatch(/deriveEffectiveStatus/);
-      expect(SRC).toMatch(/parseStatusFromCourse/);
-      expect(SRC).toMatch(/isUsableActive/);
-      // anti-regression: the OLD expiry-only filter on allCourses must be gone
-      expect(SRC).not.toMatch(/allCourses\.filter\(c => !c\.expiryDate/);
-    }
+    // AV135 (2026-05-26): the endpoint's course gating moved into the shared core
+    // (consumed by api/patient-view.js AND the cleanup cron) — gating lives THERE now:
+    expect(CORE).toMatch(/deriveEffectiveStatus/);
+    expect(CORE).toMatch(/parseStatusFromCourse/);
+    expect(CORE).toMatch(/isUsableActive/);
+    // endpoint delegates to the core (no re-inline); old expiry-only filter gone:
+    expect(EP).toMatch(/computeUsableCourses/);
+    expect(EP).not.toMatch(/allCourses\.filter\(c => !c\.expiryDate/);
+    // PatientDashboard admin/legacy ProClinic-sync path (fetchCoursesViaApi) still gates inline:
+    expect(PD).toMatch(/deriveEffectiveStatus/);
+    expect(PD).toMatch(/parseStatusFromCourse/);
+    expect(PD).toMatch(/isUsableActive/);
   });
 
   // ── F7: completed/serviced appointments excluded from "นัดหมายครั้งต่อไป" (2026-05-25) ──
@@ -172,13 +178,19 @@ describe('Rule I — customer patient-link full flow', () => {
     expect(out).toHaveLength(1);
     expect(out[0].date).toBe('2026-06-04');
   });
-  it('F7.3: BOTH patient-view appt lists exclude completed (class-of-bug lock)', () => {
+  it('F7.3: patient-view appt completed-exclusion single-sourced in core + PatientDashboard still excludes (class-of-bug lock; AV135 relocated the endpoint half)', () => {
+    const CORE = readFileSync('src/lib/customerLinkPayloadCore.js', 'utf8');
     const EP = readFileSync('api/patient-view.js', 'utf8');
     const PD = readFileSync('src/pages/PatientDashboard.jsx', 'utf8');
-    for (const SRC of [EP, PD]) {
-      expect(SRC).toMatch(/COMPLETED_APPT_STATUSES/);
-      expect(SRC).toMatch(/serviceCompletedAt/);
-      expect(SRC).toMatch(/'มาตามนัด'/);
-    }
+    // AV135 (2026-05-26): endpoint's appt completed-exclusion moved into the shared core:
+    expect(CORE).toMatch(/COMPLETED_APPT_STATUSES/);
+    expect(CORE).toMatch(/serviceCompletedAt/);
+    expect(CORE).toMatch(/'มาตามนัด'/);
+    // endpoint delegates:
+    expect(EP).toMatch(/isAppointmentUpcoming/);
+    // PatientDashboard (admin/legacy sync path) still excludes inline:
+    expect(PD).toMatch(/COMPLETED_APPT_STATUSES/);
+    expect(PD).toMatch(/serviceCompletedAt/);
+    expect(PD).toMatch(/'มาตามนัด'/);
   });
 });

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Patient-Link: Hide Empty Boxes + Auto-Cleanup — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    /* dark fire patient-card mockup */
+    .pv { background: #0a0a0a; border-radius: 16px; padding: 1.2em; max-width: 460px; margin: 0.6em auto; font-family: 'Segoe UI', sans-serif; }
+    .pv-card { background: linear-gradient(135deg,#200000,#0a0a0a 40%,#2a0000); border: 1.5px solid #5a1010; border-radius: 14px; padding: 0.9em 1em; display:flex; gap:0.8em; align-items:center; }
+    .pv-av { width:46px;height:46px;border-radius:50%;border:2px solid rgba(249,115,22,.5);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9em; }
+    .pv-name { color:#e5e5e5;font-weight:800;font-size:0.95em; }
+    .pv-hn { color:#fdba74;font-size:0.7em;font-family:monospace;background:#1a0a00;border:1px solid #4a1a0a;padding:2px 8px;border-radius:6px;display:inline-block;margin-top:4px; }
+    .pv-contact { background:#080808;border:1.5px solid rgba(90,16,16,.35);border-radius:14px;padding:0.7em 1em;margin-top:0.7em;color:#888;font-size:0.8em;text-align:center; }
+    .pv-sec-label { color:#fb923c;font-size:0.72em;font-weight:800;margin:0.9em 0 0.4em;text-transform:uppercase;letter-spacing:.05em; }
+    .pv-appt { background:linear-gradient(135deg,#1a0a00,#0a0a0a);border:1px solid #4a1a0a;border-radius:12px;padding:0.7em 0.9em;color:#e5e5e5;font-size:0.82em;display:flex;gap:0.8em;align-items:center; }
+    .pv-appt .d { color:#fb923c;font-weight:800;text-align:center;font-size:0.8em;line-height:1.1; }
+    .pv-course { background:linear-gradient(135deg,#001a10,#0a0a0a);border:1px solid #0a4a30;border-radius:12px;padding:0.7em 0.9em;color:#e5e5e5;font-size:0.82em; }
+    .pv-emptybox { background:#111;border:1px dashed #333;border-radius:14px;padding:1.6em;text-align:center;color:#666;font-size:0.72em;font-weight:800;letter-spacing:.1em; }
+    .pv-subtle { text-align:center;color:#555;font-size:0.78em;margin:1em 0 0.4em; }
+    .pv-foot { text-align:center;color:#444;font-size:0.7em;margin-top:0.8em; }
+    .bad { color:#dc2626;font-weight:700; }
+    .good { color:#059669;font-weight:700; }
+    .arrow { font-size:1.4em;color:var(--accent);text-align:center; }
+    .fbox { background:#fff;border:1.5px solid var(--bd);border-radius:8px;padding:0.7em 1em;margin:0.4em 0; }
+    .fbox b { color:var(--accent); }
+  </style>
+</head>
+<body>
+
+<h1>Patient-Link: Hide Empty Boxes + Auto-Cleanup of Stale Links</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 (EOD+5) · <strong>Status:</strong> Approved by user · <strong>Surface:</strong> Customer patient-link page (<code>?patient=&lt;token&gt;</code>, <code>__customerMode</code>) + new daily cron · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-26-patient-link-hide-empty-boxes-auto-cleanup.html
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>The customer patient-link page (the public <code>?patient=&lt;token&gt;</code> view a customer opens without login) currently renders an ugly empty-state box <em>"ไม่มีคอร์สคงเหลือ"</em> when a customer has no remaining courses (see the user screenshot of <code>3cc66f7e…</code>: 1 appointment + a big empty "no courses" box). The user wants <strong>only boxes that have data</strong> — hide the empty courses box, and likewise hide the appointments box when there are no appointments (the appointments box is already conditional — confirmed at <code>PatientDashboard.jsx:882</code>, no change needed there).</p>
+<p>Second, links accumulate: staff generate a <code>patientLinkToken</code> per customer, and stale links (a customer with no upcoming appointment and no remaining courses) pile up. The user wants the system to <strong>auto-delete a link once it has shown nothing useful for over 1 month</strong> — if a customer later needs a link again, staff regenerate it from the customer-detail page. Goal: keep the active-link set from flooding the system.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">A · Customer link — has 1 appointment, 0 remaining courses (the screenshot case · AFTER)</div>
+  <div class="pv">
+    <div class="pv-card"><div class="pv-av">สส</div><div><div class="pv-name">นาย สิทธิกร สินสันเทียะ</div><span class="pv-hn">HN LC-26000023</span></div></div>
+    <div class="pv-contact">[ LINE ]&nbsp;&nbsp;|&nbsp;&nbsp;[ โทรหาคลินิก ]</div>
+    <div class="pv-sec-label">📅 นัดหมายถัดไป (1)</div>
+    <div class="pv-appt"><div class="d">31<br>พ.ค. 69</div><div>14:30 - 14:45 น.<br>หมอมายด์ · นครราชสีมา</div></div>
+    <div class="pv-foot">จัดทำโดย Lover Clinic</div>
+  </div>
+  <p style="font-size:0.85em;color:#666">No <span class="bad">"ไม่มีคอร์สคงเหลือ"</span> box — only the appointment box renders. (Compare: the BEFORE screenshot showed the dashed empty box below the appointment.)</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">B · Customer link — has courses + appointment (both render normally)</div>
+  <div class="pv">
+    <div class="pv-card"><div class="pv-av">กข</div><div><div class="pv-name">นางสาว กมล ขจร</div><span class="pv-hn">HN LC-26000045</span></div></div>
+    <div class="pv-contact">[ LINE ]&nbsp;&nbsp;|&nbsp;&nbsp;[ โทรหาคลินิก ]</div>
+    <div class="pv-sec-label">📅 นัดหมายถัดไป (1)</div>
+    <div class="pv-appt"><div class="d">2<br>มิ.ย. 69</div><div>10:00 - 10:30 น.<br>หมอมายด์ · นครราชสีมา</div></div>
+    <div class="pv-sec-label" style="color:#34d399">📦 คอร์สของฉัน (2)</div>
+    <div class="pv-course">Filler ใต้ตา · เหลือ 3/5 ครั้ง</div>
+    <div class="pv-course" style="margin-top:6px">Botox กราม · เหลือ 1 ครั้ง</div>
+    <div class="pv-foot">จัดทำโดย Lover Clinic</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">C · Customer link — NOTHING at all (no appt, no remaining course, no expired) · Q2=B subtle line</div>
+  <div class="pv">
+    <div class="pv-card"><div class="pv-av">มต</div><div><div class="pv-name">นาย มานะ ตั้งใจ</div><span class="pv-hn">HN LC-26000099</span></div></div>
+    <div class="pv-contact">[ LINE ]&nbsp;&nbsp;|&nbsp;&nbsp;[ โทรหาคลินิก ]</div>
+    <div class="pv-subtle">ยังไม่มีนัดหมายหรือคอร์สในขณะนี้</div>
+    <div class="pv-foot">จัดทำโดย Lover Clinic</div>
+  </div>
+  <p style="font-size:0.85em;color:#666">One muted line (not a bare page, not the dashed empty box). This customer is also a candidate for auto-cleanup (Part B) after 30 days empty.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">D · Admin / sync patient view — UNCHANGED (Q1=A: feedback boxes stay)</div>
+  <div class="pv">
+    <div class="pv-card"><div class="pv-av">สส</div><div><div class="pv-name">นาย สิทธิกร สินสันเทียะ</div><span class="pv-hn">HN LC-26000023</span></div></div>
+    <div class="pv-contact" style="color:#aaa;border-color:#3a3a3a">[ 🔄 ซิงค์ข้อมูล ]</div>
+    <div class="pv-emptybox" style="margin-top:0.7em">📦 &nbsp; ไม่มีคอร์สคงเหลือ</div>
+  </div>
+  <p style="font-size:0.85em;color:#666">In the admin/sync view (<code>!__customerMode</code>) the empty box is kept — it's the "synced, 0 courses" feedback. The hide-empty change is gated to <code>__customerMode</code> only.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Data shape — fields touched on <code>be_customers/{id}</code> (Part B)</div>
+  <pre>{
+  patientLinkToken:      "3cc66f7e…",   // existing — cleared to null on auto-delete
+  patientLinkEnabled:    true,          // existing — set false on auto-delete
+  patientLinkEmptySince: 1748200000000, // NEW — epoch ms, stamped when cron first sees empty; cleared when data returns
+  patientLinkAutoDeletedAt:  &lt;serverTimestamp&gt;,        // NEW forensic — set on auto-delete
+  patientLinkAutoDeleteReason: "stale-empty-30d"        // NEW forensic
+}</pre>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 1 · UI render decision (customer-mode), per section</div>
+  <table>
+    <tr><th>Section</th><th>Condition</th><th>Customer-mode (NEW)</th><th>Admin/sync (unchanged)</th></tr>
+    <tr><td>นัดหมายถัดไป</td><td><code>appointments.length &gt; 0</code></td><td>show / hide (already conditional)</td><td>same</td></tr>
+    <tr><td>คอร์สของฉัน</td><td><code>courses.length &gt; 0</code></td><td>show box</td><td>show box</td></tr>
+    <tr><td>"ไม่มีคอร์สคงเหลือ" box</td><td><code>courses.length === 0</code></td><td class="good">HIDDEN (gated <code>!isCustomerMode</code>)</td><td>shown (feedback)</td></tr>
+    <tr><td>คอร์สหมดอายุ</td><td><code>expiredCourses.length &gt; 0</code></td><td>show / hide (already conditional)</td><td>same</td></tr>
+    <tr><td>subtle line</td><td>appts==0 &amp;&amp; courses==0 &amp;&amp; expired==0</td><td class="good">NEW — "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้"</td><td>n/a (hasData fallback box already covers it)</td></tr>
+  </table>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 2 · Auto-cleanup cron (daily) — empty-since state machine (Q3=A)</div>
+  <div class="fbox">① Query <code>be_customers where patientLinkEnabled == true</code></div>
+  <div class="arrow">↓ for each</div>
+  <div class="fbox">② <code>isCustomerLinkEmpty</code> = (no usable non-expired course) AND (no upcoming appt)<br>
+    &nbsp;&nbsp;<span style="color:#666">optimization: usable courses computed from <code>doc.courses[]</code> (local); appt query only when courses already empty</span></div>
+  <div class="arrow">↓ decidePatientLinkCleanup(doc, isEmpty, now)</div>
+  <table>
+    <tr><th>State</th><th>Action</th><th>Write</th></tr>
+    <tr><td>isEmpty &amp; no <code>emptySince</code></td><td><b>stamp</b></td><td><code>patientLinkEmptySince = now</code></td></tr>
+    <tr><td>isEmpty &amp; <code>now − emptySince ≥ 30d</code></td><td><b>delete</b></td><td><code>patientLinkToken=null, patientLinkEnabled=false, +AutoDeletedAt/+Reason</code></td></tr>
+    <tr><td>isEmpty &amp; within 30d grace</td><td>skip</td><td>—</td></tr>
+    <tr><td>has data &amp; <code>emptySince</code> set</td><td><b>clear</b></td><td><code>patientLinkEmptySince = null</code> (data returned → reset clock)</td></tr>
+    <tr><td>has data &amp; no <code>emptySince</code></td><td>skip</td><td>—</td></tr>
+  </table>
+  <div class="arrow">↓</div>
+  <div class="fbox">③ Batch-commit writes (chunk 450) · ④ Audit doc → <code>be_admin_audit/patient-link-cleanup-sweep-&lt;ts&gt;-&lt;rand&gt;</code></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Flow 3 · Deleted-link experience (Q4=A — true delete)</div>
+  <div class="fbox">Cron clears token → customer opens old URL → <code>api/patient-view.js</code> <code>where patientLinkToken == &lt;oldToken&gt;</code> → empty → <b>404 NOT_FOUND</b> → existing "ไม่พบข้อมูล" page</div>
+  <div class="arrow">↓</div>
+  <div class="fbox">Customer contacts clinic → staff opens CustomerDetailView → <code>patientLinkToken</code> is null → modal shows <b>"สร้างลิงก์"</b> (generate) state automatically (no modal change — it reads the same fields the cron cleared)</div>
+</div>
+
+<h2>Architecture</h2>
+<p><strong>Shared core (Rule of 3 / C1):</strong> the "what does this link show" logic currently lives inline in <code>api/patient-view.js:85-109</code>. Extract it to a new pure module <code>src/lib/customerLinkPayloadCore.js</code> (no firebase imports) so the endpoint AND the cron compute "empty" identically:</p>
+<ul>
+  <li><code>computeUsableCourses(courses, todayISO)</code> → <code>{ remaining, expired }</code> — the <code>deriveEffectiveStatus</code> usable filter + expiry split.</li>
+  <li><code>isAppointmentUpcoming(appt, todayISO)</code> — future-date + not-cancelled + not-serviced/attended (COMPLETED_APPT_STATUSES + serviceCompletedAt/wasServiceCompleted).</li>
+  <li><code>isCustomerLinkEmpty({ courses, appointments, todayISO })</code> → boolean — no usable non-expired course AND no upcoming appt. Expired courses do NOT count as "คอร์สคงเหลือ" and do NOT block deletion.</li>
+</ul>
+<p><code>api/patient-view.js</code> refactors to consume these (behavior-preserving; the existing e2e is the contract). The endpoint still owns the I/O (token resolve, branch-name resolve, Thai-date formatting) — only the filter logic moves to the core.</p>
+
+<p><strong>Cleanup decision core:</strong> <code>decidePatientLinkCleanup(customerDoc, isEmpty, now)</code> → <code>{ action: 'stamp'|'clear'|'delete'|'skip', patch }</code> + constant <code>PATIENT_LINK_EMPTY_GRACE_MS = 30 * 24 * 3600 * 1000</code>. Lives in <code>customerLinkPayloadCore.js</code> (or a sibling cleanup-core file). Pure → fully unit-testable.</p>
+
+<p><strong>Cron:</strong> <code>api/cron/patient-link-cleanup-sweep.js</code> mirrors <code>opd-session-cleanup-sweep.js</code> exactly — CRON_SECRET gate, admin SDK, canonical <code>artifacts/{APP_ID}/public/data</code> paths, exported <code>sweepPatientLinkCleanup({ db, now, apply })</code> (dry-run when <code>apply=false</code>), batch writes, audit doc. <code>scripts/patient-link-cleanup-sweep.mjs</code> is the Rule-M dry-run/apply mirror. <code>vercel.json</code> gets one daily cron entry (<code>"30 21 * * *"</code> = 04:30 BKK, off-peak after the other daily sweeps).</p>
+
+<p><strong>UI:</strong> <code>PatientDashboard.jsx</code> — derive <code>isCustomerMode = !!sessionData?.__customerMode</code>; gate the empty courses box (<code>:914-919</code>) with <code>!isCustomerMode</code>; add the subtle line + tx TH/EN strings. The admin/sync feedback boxes and the loading/noData fallbacks are untouched.</p>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Hide empty boxes in the <strong>customer link view only</strong> (<code>__customerMode</code>); keep the feedback boxes in the admin/sync view.</li>
+  <li><strong>Q2 = B:</strong> When a customer has nothing at all → one subtle line <em>"ยังไม่มีนัดหมายหรือคอร์สในขณะนี้"</em> (not a bare page).</li>
+  <li><strong>Q3 = A:</strong> Auto-delete trigger = <strong>empty for ≥ 30 days</strong>, tracked via <code>patientLinkEmptySince</code> (stamp on first-empty, clear on data-return).</li>
+  <li><strong>Q4 = A:</strong> "Delete" = <strong>clear the token</strong> (true delete) + disable; customer sees the existing "ไม่พบข้อมูล"; staff regenerate.</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Customer link with appointment(s) but 0 remaining courses → NO "ไม่มีคอร์สคงเหลือ" box; appointment box renders. (the screenshot case)</li>
+  <li>Customer link with remaining courses → courses box renders normally.</li>
+  <li>Customer link with no appt + no remaining course + no expired course → exactly one subtle line "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้"; no boxes.</li>
+  <li>Admin/sync patient view with 0 courses → the "ไม่มีคอร์สคงเหลือ" feedback box STILL shows (regression guard).</li>
+  <li>Cron: a customer empty for &lt; 30 days → <code>patientLinkEmptySince</code> stamped, link still works.</li>
+  <li>Cron: a customer empty for ≥ 30 days → <code>patientLinkToken</code> cleared + disabled; opening the old URL → 404; CustomerDetailView shows "สร้างลิงก์".</li>
+  <li>Cron: a customer that regains data (new appt/course) before 30 days → <code>patientLinkEmptySince</code> cleared; link kept.</li>
+  <li>Cron is idempotent (re-run yields 0 new writes once stable) and reconciles exactly with the endpoint's "empty" definition.</li>
+  <li>Endpoint output unchanged after the helper extraction (existing e2e green).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Expired-only customers (flagged to user):</strong> a customer with only EXPIRED courses (no remaining, no appt) counts as "empty" → its link is cleaned after 30 days, even though the expired-courses box still renders until then. This matches the literal "ไม่มีคอร์สคงเหลือ" wording. If the user prefers keeping expired-only links alive, change <code>isCustomerLinkEmpty</code> to also require <code>expired.length === 0</code>.</li>
+  <li><strong>No firestore.rules / index change</strong> → no Probe-Deploy-Probe. The <code>be_appointments where customerId ==</code> query (single-field equality, JS-sorted) is already used by the endpoint; no new composite index.</li>
+  <li><strong>Cron cost:</strong> appt query is bounded — only fires for customers with an enabled link AND empty courses. Enabled-link count is small (manual staff action). Trivial.</li>
+  <li><strong>No notification on auto-delete</strong> (YAGNI) — audit doc records deletions; staff regenerate when a customer reports a dead link.</li>
+  <li><strong>Verification scope (Rule Q-honest):</strong> UI is conditional-render only — RTL + build + L1 real-browser on the <em>anon/public</em> customer link (feasible for me at verify, Rule S). Cron is verified by pure-core unit + flow-simulate + an L2 real-prod <strong>dry-run</strong> (no mutation); <code>--apply</code> runs only post-deploy with user authorization (Rule M). No deploy this turn unless explicitly authorized (V18).</li>
+</ul>
+
+</body>
+</html>

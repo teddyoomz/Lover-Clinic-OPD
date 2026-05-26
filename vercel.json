@@ -76,6 +76,7 @@
     { "path": "/api/cron/chart-edit-session-sweep", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/staff-chat-retention-sweep", "schedule": "45 19 * * *" },
     { "path": "/api/cron/chat-history-retention-sweep", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/opd-session-cleanup-sweep", "schedule": "*/30 * * * *" }
+    { "path": "/api/cron/opd-session-cleanup-sweep", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/patient-link-cleanup-sweep", "schedule": "30 21 * * *" }
   ]
 }

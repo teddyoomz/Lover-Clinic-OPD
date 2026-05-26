@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Patient-Link Hide-Empty + Auto-Cleanup — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.4em 0.7em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+  </style>
+</head>
+<body>
+
+<h1>Patient-Link Hide-Empty + Auto-Cleanup — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute INLINE (superpowers:executing-plans) — subagents thrash on this baseline (1M-context wall, per V81/Tablet-Chart handoff). <strong>Rule K ordering</strong>: build ALL source (T1–T6) first → review → write the test bank (T7) → AV135 + verify (T8). TDD not explicitly invoked → work-first/test-last.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> On the customer patient-link page, render only boxes that have data (hide the "ไม่มีคอร์สคงเหลือ" box; subtle line when nothing); and auto-delete a link that has been empty (no upcoming appt + no remaining course) for ≥ 30 days via a new daily cron.</p>
+  <p><strong>Architecture:</strong> Extract the endpoint's inline "what does this link show" logic to a shared pure core (<code>customerLinkPayloadCore.js</code>) consumed by both <code>api/patient-view.js</code> and a new cron (<code>api/cron/patient-link-cleanup-sweep.js</code>, mirror of <code>opd-session-cleanup-sweep.js</code>). UI change is gated to <code>__customerMode</code>. Empty-since state machine on <code>be_customers</code>.</p>
+  <p><strong>Tech Stack:</strong> React 19 + Vite, Vercel serverless cron, firebase-admin SDK, Vitest, RTL. Spec: <code>docs/superpowers/specs/2026-05-26-patient-link-hide-empty-boxes-auto-cleanup-design.html</code>.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">be_customers/{id} — fields touched (NEW = added by this work)</div>
+<pre>{
+  patientLinkToken:      "3cc66f7e…",     // existing — set null on auto-delete
+  patientLinkEnabled:    true,            // existing — set false on auto-delete
+  patientLinkEmptySince: 1748200000000,   // NEW (epoch ms) stamped on first-empty; null when data returns
+  patientLinkAutoDeletedAt:    &lt;serverTimestamp&gt;,   // NEW forensic
+  patientLinkAutoDeleteReason: "stale-empty-30d"     // NEW forensic
+}</pre>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Customer-mode render — appt only (screenshot case) · vs · all-empty</div>
+<pre>appt only:                          all empty:
+┌───────────────────┐               ┌───────────────────┐
+│ ⬤ name · HN       │               │ ⬤ name · HN       │
+│ [LINE] | [โทร]    │               │ [LINE] | [โทร]    │
+│ 📅 นัดหมายถัดไป(1) │               │ ยังไม่มีนัดหมายหรือ │
+│  31 พ.ค. 14:30…   │               │   คอร์สในขณะนี้     │
+│ (NO empty box)    │               └───────────────────┘
+└───────────────────┘               (Q2=B subtle line)</pre>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">Cron empty-since state machine (daily) — Q3=A</div>
+  <table>
+    <tr><th>Customer state</th><th>decidePatientLinkCleanup action</th><th>Write patch</th></tr>
+    <tr><td>isEmpty &amp; no emptySince</td><td>stamp</td><td><code>{patientLinkEmptySince: now}</code></td></tr>
+    <tr><td>isEmpty &amp; now−emptySince ≥ 30d</td><td>delete</td><td><code>{patientLinkToken:null, patientLinkEnabled:false, patientLinkEmptySince:null, patientLinkAutoDeletedAt:ts, patientLinkAutoDeleteReason:'stale-empty-30d'}</code></td></tr>
+    <tr><td>isEmpty &amp; within grace</td><td>skip</td><td>—</td></tr>
+    <tr><td>has data &amp; emptySince set</td><td>clear</td><td><code>{patientLinkEmptySince:null}</code></td></tr>
+    <tr><td>has data &amp; no emptySince</td><td>skip</td><td>—</td></tr>
+  </table>
+  <p style="font-size:0.85em;color:#666"><code>isEmpty = !computeUsableCourses(courses).remaining.length &amp;&amp; !appointments.some(isAppointmentUpcoming)</code>. Sweep queries <code>be_customers where patientLinkEnabled==true</code>; appt query (by <code>customerId</code>) fires only when usable courses already empty.</p>
+</div>
+<div class="mockup">
+  <div class="mockup-label">UI render decision (customer-mode)</div>
+<pre>appointments.length&gt;0 ─────────► render appt section (existing)
+courses.length&gt;0 ──────────────► render courses section (existing)
+courses.length===0 &amp; !customerMode ► render "ไม่มีคอร์สคงเหลือ" box (ADMIN ONLY now)
+expiredCourses.length&gt;0 ───────► render expired section (existing)
+customerMode &amp; appts==0 &amp; courses==0 &amp; expired==0 ► NEW subtle line</pre>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Action</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/customerLinkPayloadCore.js</code></td><td>Create</td><td>Pure: computeUsableCourses · isAppointmentUpcoming · isCustomerLinkEmpty · decidePatientLinkCleanup · PATIENT_LINK_EMPTY_GRACE_MS. No firebase imports.</td></tr>
+  <tr><td><code>api/patient-view.js</code></td><td>Modify (:85-134)</td><td>Consume the 2 filter helpers (behavior-preserving).</td></tr>
+  <tr><td><code>api/cron/patient-link-cleanup-sweep.js</code></td><td>Create</td><td>Cron handler + exported <code>sweepPatientLinkCleanup({db,now,apply})</code>. Mirror opd-session-cleanup-sweep.</td></tr>
+  <tr><td><code>scripts/patient-link-cleanup-sweep.mjs</code></td><td>Create</td><td>Rule-M dry-run/apply mirror.</td></tr>
+  <tr><td><code>vercel.json</code></td><td>Modify (crons[])</td><td>Add daily cron entry.</td></tr>
+  <tr><td><code>src/pages/PatientDashboard.jsx</code></td><td>Modify (:30-31, :914-919, +subtle line)</td><td>isCustomerMode gate + subtle line + tx strings.</td></tr>
+  <tr><td><code>tests/patient-link-cleanup-and-hide-empty.test.js</code></td><td>Create</td><td>Pure-core unit + flow-simulate.</td></tr>
+  <tr><td><code>tests/patient-link-hide-empty-rtl.test.jsx</code></td><td>Create</td><td>UI RTL render cases.</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>Modify</td><td>AV135 invariant.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1 (T3): Shared core — customerLinkPayloadCore.js</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/customerLinkPayloadCore.js</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Create the module</strong> — mirror api/patient-view.js:85-109 logic EXACTLY.</label></div>
+<pre><code class="language-javascript">// src/lib/customerLinkPayloadCore.js
+// Pure core for the customer patient-link payload + auto-cleanup decision.
+// Single source for "what does this link show" — consumed by api/patient-view.js
+// (render payload) AND api/cron/patient-link-cleanup-sweep.js (isEmpty). NO firebase imports.
+import { parseQtyString } from './courseUtils.js';
+import { parseStatusFromCourse, deriveEffectiveStatus, STATUS_ACTIVE } from './remainingCourseUtils.js';
+
+export const PATIENT_LINK_EMPTY_GRACE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Completed/attended appt statuses — mirrors api/patient-view.js + appointmentAnalysisAggregator.
+const COMPLETED_APPT_STATUSES = new Set(['done', 'completed', 'มาตามนัด', 'ชำระเงิน']);
+
+/** A course is "usable remaining" iff its effective status is ACTIVE (buffet-safe). */
+export function isUsableActiveCourse(c) {
+  const { remaining, total } = parseQtyString(c?.qty || '');
+  return deriveEffectiveStatus(parseStatusFromCourse(c), Number(total) || 0, Number(remaining) || 0) === STATUS_ACTIVE;
+}
+
+/** Split usable courses into remaining (non-expired) vs expired. todayISO = 'YYYY-MM-DD' (Bangkok). */
+export function computeUsableCourses(courses, todayISO) {
+  const all = Array.isArray(courses) ? courses : [];
+  const usable = all.filter(isUsableActiveCourse);
+  const remaining = usable.filter(c => !c.expiryDate || String(c.expiryDate) >= todayISO);
+  const expired = usable.filter(c => c.expiryDate && String(c.expiryDate) < todayISO);
+  return { remaining, expired };
+}
+
+/** Upcoming = future-or-today date, NOT cancelled, NOT serviced/attended. */
+export function isAppointmentUpcoming(a, todayISO) {
+  if (!a) return false;
+  const dt = a.date || '';
+  if (dt && String(dt) < todayISO) return false;
+  if (a.status === 'cancelled') return false;
+  if (a.serviceCompletedAt || a.wasServiceCompleted) return false;
+  if (COMPLETED_APPT_STATUSES.has(String(a.status || '').trim())) return false;
+  return true;
+}
+
+/** Empty = no usable non-expired course AND no upcoming appt. Expired courses do NOT count. */
+export function isCustomerLinkEmpty({ courses, appointments, todayISO }) {
+  const { remaining } = computeUsableCourses(courses, todayISO);
+  if (remaining.length > 0) return false;
+  const appts = Array.isArray(appointments) ? appointments : [];
+  return !appts.some(a => isAppointmentUpcoming(a, todayISO));
+}
+
+/**
+ * Decide the cleanup action for one enabled-link customer.
+ * @returns {{action:'stamp'|'clear'|'delete'|'skip', patch:object}}
+ */
+export function decidePatientLinkCleanup(customer, isEmpty, now, graceMs = PATIENT_LINK_EMPTY_GRACE_MS) {
+  const emptySince = typeof customer?.patientLinkEmptySince === 'number' ? customer.patientLinkEmptySince : null;
+  if (isEmpty) {
+    if (emptySince == null) return { action: 'stamp', patch: { patientLinkEmptySince: now } };
+    if (now - emptySince >= graceMs) {
+      return { action: 'delete', patch: {
+        patientLinkToken: null,
+        patientLinkEnabled: false,
+        patientLinkEmptySince: null,
+        patientLinkAutoDeleteReason: 'stale-empty-30d',
+      } };
+    }
+    return { action: 'skip', patch: {} };
+  }
+  // has data
+  if (emptySince != null) return { action: 'clear', patch: { patientLinkEmptySince: null } };
+  return { action: 'skip', patch: {} };
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2:</strong> <code>npm run build</code> → clean (catches import-resolution).</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 2 (T4): Refactor api/patient-view.js to use the core</h3>
+  <p><strong>Files:</strong> Modify <code>api/patient-view.js</code> (imports + :85-109)</p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1:</strong> Replace the per-file imports + inline filters with the shared helpers (behavior-preserving).</label></div>
+<pre><code class="language-javascript">// imports — replace the 2 lib imports with the core
+import { computeUsableCourses, isAppointmentUpcoming } from '../src/lib/customerLinkPayloadCore.js';
+
+// §2 Courses — replace the isUsableActive/usable/courses/expiredCourses block:
+const { remaining: courses, expired: expiredCourses } = computeUsableCourses(customerData.courses, today);
+
+// §3 Appointments — replace the inline COMPLETED_APPT_STATUSES + isUpcomingAppt with:
+let appts = apptSnap.docs
+  .map(d => ({ id: d.id, ...d.data() }))
+  .filter(a => isAppointmentUpcoming(a, today));
+appts.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.startTime || '').localeCompare(b.startTime || ''));</code></pre>
+  <p><strong>Note:</strong> the old <code>parseQtyString</code>/<code>parseStatusFromCourse</code>/<code>deriveEffectiveStatus</code>/<code>STATUS_ACTIVE</code> imports are now unused — remove them. Keep <code>fmtThaiDate</code>. The endpoint's I/O (token resolve, branch-name, formatting) is unchanged.</p>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2:</strong> Contract = existing <code>scripts/e2e-customer-patient-link.mjs</code> stays green (run at verify).</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 3 (T5): Cron + script + vercel.json</h3>
+  <p><strong>Files:</strong> Create <code>api/cron/patient-link-cleanup-sweep.js</code> + <code>scripts/patient-link-cleanup-sweep.mjs</code>; Modify <code>vercel.json</code></p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Create the cron</strong> (mirror opd-session-cleanup-sweep.js structure).</label></div>
+<pre><code class="language-javascript">// api/cron/patient-link-cleanup-sweep.js
+// Auto-delete stale customer patient-links (no upcoming appt + no remaining course
+// for ≥ 30 days). Daily. CRON_SECRET-gated · admin SDK · idempotent · audit doc.
+// Decision logic shared via src/lib/customerLinkPayloadCore.js (Rule of 3 —
+// also consumed by scripts/patient-link-cleanup-sweep.mjs + api/patient-view.js).
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { randomBytes } from 'node:crypto';
+import { isCustomerLinkEmpty, decidePatientLinkCleanup } from '../../src/lib/customerLinkPayloadCore.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+const PREFIX = `artifacts/${APP_ID}/public/data`;
+const BE_CUSTOMERS_COL = `${PREFIX}/be_customers`;
+const BE_APPOINTMENTS_COL = `${PREFIX}/be_appointments`;
+const AUDIT_COL = `${PREFIX}/be_admin_audit`;
+const SWEEP_LIMIT = 1000;
+
+function bangkokTodayISO(nowMs) {
+  const u = new Date(nowMs + 7 * 60 * 60 * 1000);
+  return `${u.getUTCFullYear()}-${String(u.getUTCMonth() + 1).padStart(2, '0')}-${String(u.getUTCDate()).padStart(2, '0')}`;
+}
+function initAdmin() {
+  if (getApps().length) return;
+  const privateKey = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
+  initializeApp({ credential: cert({
+    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID,
+    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+    privateKey,
+  }) });
+}
+
+export async function sweepPatientLinkCleanup({ db, now = Date.now(), limit = SWEEP_LIMIT, apply = true }) {
+  let scanned = 0, stamped = 0, cleared = 0, deleted = 0, skipped = 0;
+  const todayISO = bangkokTodayISO(now);
+  // Only enabled links matter.
+  const snap = await db.collection(BE_CUSTOMERS_COL).where('patientLinkEnabled', '==', true).limit(limit).get();
+  scanned = snap.size;
+
+  const writes = []; // { ref, action, patch }
+  for (const d of snap.docs) {
+    const data = d.data();
+    // usable courses are local to the customer doc; appt query only when courses empty.
+    let isEmpty;
+    const { isCustomerLinkEmpty: _isEmpty } = await import('../../src/lib/customerLinkPayloadCore.js');
+    // courses-first short-circuit (cheap), then appt query
+    const hasUsable = !isCustomerLinkEmpty({ courses: data.courses, appointments: [], todayISO });
+    if (hasUsable) {
+      isEmpty = false;
+    } else {
+      const apptSnap = await db.collection(BE_APPOINTMENTS_COL).where('customerId', '==', String(d.id)).get();
+      const appts = apptSnap.docs.map(a => a.data());
+      isEmpty = isCustomerLinkEmpty({ courses: data.courses, appointments: appts, todayISO });
+    }
+    const decision = decidePatientLinkCleanup(data, isEmpty, now);
+    if (decision.action === 'skip') { skipped++; continue; }
+    writes.push({ ref: d.ref, action: decision.action, patch: decision.patch });
+  }
+
+  if (apply && writes.length > 0) {
+    const CHUNK = 450;
+    for (let i = 0; i < writes.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const { ref, action, patch } of writes.slice(i, i + CHUNK)) {
+        const finalPatch = { ...patch };
+        if (action === 'delete') finalPatch.patientLinkAutoDeletedAt = FieldValue.serverTimestamp();
+        batch.update(ref, finalPatch);
+      }
+      await batch.commit();
+    }
+  }
+  for (const { action } of writes) {
+    if (action === 'stamp') stamped++;
+    else if (action === 'clear') cleared++;
+    else if (action === 'delete') deleted++;
+  }
+  return { scanned, stamped, cleared, deleted, skipped, graceMsDays: 30, apply };
+}
+
+export default async function handler(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  const provided = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.headers['x-cron-secret'];
+  if (!cronSecret || provided !== cronSecret) return res.status(401).json({ error: 'UNAUTHORIZED' });
+  initAdmin();
+  const db = getFirestore();
+  try {
+    const result = await sweepPatientLinkCleanup({ db, now: Date.now() });
+    const auditId = `patient-link-cleanup-sweep-${Date.now()}-${randomBytes(4).toString('hex')}`;
+    await db.collection(AUDIT_COL).doc(auditId).set({ op: 'patient-link-cleanup-sweep', ...result, ranAt: new Date().toISOString() });
+    return res.status(200).json(result);
+  } catch (e) {
+    return res.status(500).json({ error: 'SWEEP_FAILED', message: e.message });
+  }
+}</code></pre>
+  <p><strong>Note:</strong> drop the stray dynamic <code>import()</code> in the loop (it was a draft artifact) — <code>isCustomerLinkEmpty</code> is already imported at top. Use the top-level import only.</p>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Create the script mirror</strong> (Rule M dry-run default; <code>--apply</code> to commit).</label></div>
+<pre><code class="language-javascript">// scripts/patient-link-cleanup-sweep.mjs
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { sweepPatientLinkCleanup } from '../api/cron/patient-link-cleanup-sweep.js';
+
+const APP_ID = 'loverclinic-opd-4c39b';
+function init() {
+  if (getApps().length) return;
+  const pk = (process.env.FIREBASE_ADMIN_PRIVATE_KEY || '').split('\\n').join('\n');
+  initializeApp({ credential: cert({ projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || APP_ID, clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL, privateKey: pk }) });
+}
+async function main() {
+  const apply = process.argv.includes('--apply');
+  init();
+  const db = getFirestore();
+  const result = await sweepPatientLinkCleanup({ db, now: Date.now(), apply });
+  console.log(JSON.stringify({ mode: apply ? 'APPLY' : 'DRY-RUN', ...result }, null, 2));
+}
+if (process.argv[1] === fileURLToPath(import.meta.url)) main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });</code></pre>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3:</strong> Add to <code>vercel.json</code> crons[] (after opd-session-cleanup-sweep):</label></div>
+<pre><code class="language-json">{ "path": "/api/cron/patient-link-cleanup-sweep", "schedule": "30 21 * * *" }</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4 (T6): UI — hide empty boxes in customer-mode</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/PatientDashboard.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1:</strong> Add tx strings (TH+EN) near :30-31:</label></div>
+<pre><code class="language-javascript">// TH block: add after noData/noCourses
+noneYet: 'ยังไม่มีนัดหมายหรือคอร์สในขณะนี้',
+// EN block:
+noneYet: 'No upcoming appointments or courses at the moment',</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2:</strong> Derive the flag (near the other derived consts ~:652):</label></div>
+<pre><code class="language-javascript">const isCustomerMode = !!sessionData?.__customerMode;</code></pre>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3:</strong> Gate the empty courses box (:914) with <code>!isCustomerMode</code>:</label></div>
+<pre><code class="language-jsx">{!isCustomerMode && courses.length === 0 && (
+  &lt;div className={`rounded-2xl border p-8 text-center ...`}&gt; ... {tx.noCourses} ... &lt;/div&gt;
+)}</code></pre>
+  <div class="step"><input for="t4s4" type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4:</strong> Add the subtle line AFTER the Treatment-history block (~:955), before the footer:</label></div>
+<pre><code class="language-jsx">{isCustomerMode &amp;&amp; appointments.length === 0 &amp;&amp; courses.length === 0 &amp;&amp; expiredCourses.length === 0 &amp;&amp; (
+  &lt;p className={`text-center text-xs py-2 ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}&gt;{tx.noneYet}&lt;/p&gt;
+)}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s5"> <label for="t4s5"><strong>Step 5:</strong> <code>npm run build</code> → clean.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 5 (T7): Test bank (Rule K — written after source)</h3>
+  <p><strong>Files:</strong> Create <code>tests/patient-link-cleanup-and-hide-empty.test.js</code> + <code>tests/patient-link-hide-empty-rtl.test.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Pure-core unit + flow-simulate</strong> (the .test.js):</label></div>
+  <ul>
+    <li><code>computeUsableCourses</code>: buffet (total 0, remaining&gt;0) → remaining; finite depleted (total&gt;0, remaining 0) → dropped; expired split by date; empty/null input.</li>
+    <li><code>isAppointmentUpcoming</code>: future-today keep; past drop; cancelled drop; done/completed/มาตามนัด/ชำระเงิน drop; serviceCompletedAt/wasServiceCompleted drop; missing date keep.</li>
+    <li><code>isCustomerLinkEmpty</code>: remaining course → false; upcoming appt → false; only expired → true; nothing → true.</li>
+    <li><code>decidePatientLinkCleanup</code>: empty+no-stamp→stamp; empty+&lt;30d→skip; empty+≥30d→delete(patch shape incl token null + enabled false + reason); empty at exactly 30d boundary→delete; has-data+stamp→clear; has-data+no-stamp→skip; idempotent (delete patch re-applied = stable).</li>
+    <li><strong>flow-simulate</strong>: stamp@day0 → skip@day10 → delete@day31 (in-memory doc + repeated decide); data-returns@day10 → clear → re-empty@day12 re-stamps (clock resets).</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: UI RTL</strong> (the .test.jsx) — mock the listeners; mount PatientDashboard with a customer-mode sessionData:</label></div>
+  <ul>
+    <li>customer-mode + courses=[] + appts=[1] → query NO "ไม่มีคอร์สคงเหลือ"; appt section present; NO subtle line.</li>
+    <li>customer-mode + courses=[1] → courses section present.</li>
+    <li>customer-mode + all empty → subtle line "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้" present; no boxes.</li>
+    <li><strong>regression guard</strong>: non-customer-mode + courses=[] + hasData → "ไม่มีคอร์สคงเหลือ" box STILL present.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3:</strong> Run both files focused → green.</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 6 (T7/T8): AV135 + source-grep regression</h3>
+  <p><strong>Files:</strong> Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code>; add source-grep cases to the .test.js</p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: AV135 invariant</strong>: (a) endpoint + cron compute "empty" via the SAME <code>customerLinkPayloadCore</code> helpers — no re-inlined course/appt filter in either; (b) auto-delete = clear token (token:null + enabled:false), never a hard <code>deleteDoc</code> of the customer; (c) the hide-empty courses box is gated <code>!isCustomerMode</code> (admin feedback preserved).</label></div>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: source-grep</strong>: api/patient-view.js imports computeUsableCourses+isAppointmentUpcoming · cron imports isCustomerLinkEmpty+decidePatientLinkCleanup · PatientDashboard has <code>!isCustomerMode &amp;&amp; courses.length === 0</code> · cron patch has no <code>.delete(</code> on the customer ref (uses update).</label></div>
+</div>
+
+<div class="task">
+  <h3>Task 7 (T8): Verify + commit (NO deploy)</h3>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1 (Rule N — big change):</strong> full <code>npm test -- --run</code> + <code>npm run build</code>. Fix any V21 lock-ins.</label></div>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2 (Rule Q L1):</strong> real-browser the anon customer link (local dev / preview) — verify the screenshot case (appt, no empty box) + an all-empty fixture (subtle line). Pixels via screenshot (Rule Q-vis).</label></div>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3 (Rule Q L2 / Rule M):</strong> <code>vercel env pull</code> + <code>node scripts/patient-link-cleanup-sweep.mjs</code> (DRY-RUN) on real prod → report stamp/clear/delete counts; spot-check 1-2 customers' isEmpty vs the endpoint. NO <code>--apply</code> (post-deploy + user authorization only).</label></div>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4:</strong> commit (docs spec+plan, feat impl, test bank) + push. <strong>NO deploy</strong> — user must say "deploy". Update SESSION_HANDOFF + active.md (state-truth + Rule Q-honest scope).</label></div>
+</div>
+
+<h2>Self-Review</h2>
+<p><strong>Spec coverage:</strong> AC1-2-3 → Task 4 + Task 5 RTL. AC4 (admin regression) → Task 5 RTL guard. AC5-7-8 (cron states) → Task 1 decide + Task 5 flow-simulate. AC6 (deleted-link UX) → Task 2 endpoint NOT_FOUND (unchanged) + modal reads cleared fields (verify Step in Task 7). AC9 (endpoint unchanged) → Task 2 + e2e at verify. ✓ all covered.</p>
+<p><strong>Placeholder scan:</strong> none — full code in T1/T3; the stray loop-level dynamic <code>import()</code> in the T3 draft is explicitly called out to remove (use top-level import). ✓</p>
+<p><strong>Type consistency:</strong> helper names (computeUsableCourses / isAppointmentUpcoming / isCustomerLinkEmpty / decidePatientLinkCleanup / PATIENT_LINK_EMPTY_GRACE_MS) used identically across T1/T2/T3/T5/T6. Decision patch shape matches the cron's <code>batch.update</code> + <code>FieldValue.serverTimestamp()</code> stamp. ✓</p>
+
+</body>
+</html>

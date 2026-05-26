@@ -32,6 +32,7 @@ const TX = {
     noDataSub: 'ข้อมูลจะแสดงหลังจากที่คลินิกดึงข้อมูลจากระบบ',
     syncingCourses: 'กำลัง Sync ข้อมูลคอร์ส...', requesting: 'กำลังส่งคำขอไปยังคลินิก...',
     updatedAt: 'อัพเดท', poweredBy: 'จัดทำโดย', active: 'กำลังใช้งาน',
+    noneYet: 'ยังไม่มีนัดหมายหรือคอร์สในขณะนี้',
   },
   en: {
     loading: 'Loading', headerSub: 'Patient Dashboard',
@@ -46,6 +47,7 @@ const TX = {
     noDataSub: 'Data will appear after the clinic syncs from the system.',
     syncingCourses: 'Syncing course data...', requesting: 'Sending request to clinic...',
     updatedAt: 'Updated', poweredBy: 'Powered by', active: 'Active',
+    noneYet: 'No upcoming appointments or courses at the moment',
   },
 };
 
@@ -670,6 +672,10 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
     : 'idle';
 
   const hasData = sessionData.latestCourses != null;
+  // AV135: customer patient-link view (?patient=<token> → endpoint, anon). In this
+  // mode show ONLY boxes with data — hide the "ไม่มีคอร์สคงเหลือ" empty box (the
+  // admin/sync view keeps it as feedback). subtle line when nothing at all.
+  const isCustomerMode = !!sessionData?.__customerMode;
 
   // ─── Cooldown ───────────────────────────────────────────────────────────────
   const lastAutoFetch = sessionData.lastCoursesAutoFetch;
@@ -911,7 +917,8 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
               </section>
             )}
 
-            {courses.length === 0 && (
+            {/* AV135: customer-link view hides this empty box — admin/sync view keeps it (feedback). */}
+            {!isCustomerMode && courses.length === 0 && (
               <div className={`rounded-2xl border p-8 text-center flex flex-col items-center gap-2 ${isDark ? 'border-[var(--bd)] bg-[var(--bg-card)]' : 'border-pink-100 bg-pink-50/30'}`}>
                 <Package size={28} className={isDark ? 'text-[var(--tx-muted)]' : 'text-pink-300'} />
                 <p className={`text-xs font-black uppercase tracking-widest ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>{tx.noCourses}</p>
@@ -952,6 +959,14 @@ export default function PatientDashboard({ token, clinicSettings, clinicSettings
         {/* ── Treatment History (admin only) ────────────────────────────── */}
         {isAdminView && sessionData.brokerProClinicId && (
           <TreatmentTimeline customerId={sessionData.brokerProClinicId} isDark={isDark} />
+        )}
+
+        {/* AV135: customer-link view — when there is NOTHING (no appt, no remaining
+            course, no expired), show one subtle line instead of empty boxes (Q2=B). */}
+        {isCustomerMode && appointments.length === 0 && courses.length === 0 && expiredCourses.length === 0 && (
+          <p className={`text-center text-sm py-3 ${isDark ? 'text-[var(--tx-muted)]' : 'text-pink-400/60'}`}>
+            {tx.noneYet}
+          </p>
         )}
 
         {/* Footer */}

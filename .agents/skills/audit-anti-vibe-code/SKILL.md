@@ -3237,3 +3237,26 @@ Four staff-chat features on one surface. Invariants:
 **Source-grep regression**: `tests/staff-chat-enhancements-helpers.test.js` (day-groups + buildMessageDoc sticker + bundled accessors) + `tests/staff-chat-enhancements-flow-simulate.test.js` (Rule I) + V21 fixups in `staff-chat-any-file.test.js` + `staff-chat-multi-image.test.js` (storage.rules delete now clinic-staff).
 
 **Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-staff-chat-day-quote-unsend-stickers*` · AV78 (explicit-close dialog) · AV108 (attachment append-only — delete premise updated) · Rule Q-honest (unit + sibling + flow-simulate; real-browser UI + rule-gated client paths = user/L1 post-deploy, disclosed).
+
+### AV135 — Patient-link: single-source "empty" · true-delete cleanup · customer-mode-only hide-empty (2026-05-26)
+
+The customer patient-link page (`?patient=<token>` → `api/patient-view.js` → `PatientDashboard` `__customerMode`) shows ONLY boxes with data, and stale links auto-delete after 30 days empty. Invariants:
+
+- **(a) "What does this link show" is single-sourced in `src/lib/customerLinkPayloadCore.js` (pure, NO firebase import)** — `computeUsableCourses` / `isAppointmentUpcoming` / `isCustomerLinkEmpty`. BOTH `api/patient-view.js` (render payload) AND `api/cron/patient-link-cleanup-sweep.js` (isEmpty) MUST consume these helpers — never re-inline the usable-course or upcoming-appt filter. (Rule of 3 — the endpoint + cron + the Rule-M script all agree on "empty".)
+- **(b) "empty" = no usable non-expired course AND no upcoming appt; EXPIRED courses do NOT count** — `isCustomerLinkEmpty` ignores the expired bucket (literal "ไม่มีคอร์สคงเหลือ"). An expired-only customer is empty → eligible for cleanup. (Flagged decision; if reversed, require `expired.length===0` too.)
+- **(c) auto-delete = CLEAR TOKEN (true delete), never a hard `deleteDoc` of the customer** — `decidePatientLinkCleanup` 'delete' patch = `{patientLinkToken:null, patientLinkEnabled:false, patientLinkEmptySince:null, patientLinkAutoDeleteReason}`; the cron applies it via `batch.update(ref, ...)` + a `FieldValue.serverTimestamp()` `patientLinkAutoDeletedAt` stamp. The cron MUST NOT `batch.delete` the customer doc. Empty-since state machine: stamp on first-empty → delete after `PATIENT_LINK_EMPTY_GRACE_MS` (30d) → clear stamp when data returns (clock resets).
+- **(d) hide-empty is gated to customer-mode ONLY** — `PatientDashboard` derives `isCustomerMode = !!sessionData?.__customerMode`; the "ไม่มีคอร์สคงเหลือ" empty box renders `{!isCustomerMode && courses.length === 0 && ...}` (admin/sync view KEEPS it as feedback). When customer-mode + all-empty (appts==0 && courses==0 && expired==0) → one subtle `tx.noneYet` line (Q2=B), not a bare page.
+
+**Forbidden**:
+- ❌ re-inlining the usable-course / upcoming-appt filter in the endpoint or cron (drift between "what the link shows" and "what the cron calls empty").
+- ❌ `batch.delete` / `deleteDoc` of the customer doc in the cleanup cron (it's a link cleanup, not a customer wipe — clear the token only).
+- ❌ hiding the empty courses box outside customer-mode (would remove the admin/sync "synced, 0 courses" feedback).
+- ❌ counting expired courses as "remaining" in `isCustomerLinkEmpty` (would keep dead links alive).
+
+**Sanctioned consumers**: `src/lib/customerLinkPayloadCore.js` (the core) · `api/patient-view.js` (computeUsableCourses + isAppointmentUpcoming) · `api/cron/patient-link-cleanup-sweep.js` + `scripts/patient-link-cleanup-sweep.mjs` (isCustomerLinkEmpty + decidePatientLinkCleanup) · `src/pages/PatientDashboard.jsx` (isCustomerMode gate + subtle line).
+
+**Cron**: daily `30 21 * * *` (vercel.json) · CRON_SECRET-gated · admin SDK · canonical `artifacts/{APP_ID}/public/data` · audit doc `be_admin_audit/patient-link-cleanup-sweep-<ts>-<rand>`. NO firestore.rules / index change (`be_appointments where customerId==` already used by the endpoint; admin SDK bypasses rules) → no Probe-Deploy-Probe.
+
+**Source-grep regression**: `tests/patient-link-cleanup-and-hide-empty.test.js` (real-core unit A-D + flow-simulate E + AV135 source-grep F1-F8).
+
+**Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-patient-link-hide-empty-boxes-auto-cleanup*` · Customer Patient-Link feature (2026-05-25, AV126-128) · Rule Q-honest (real-core unit + flow-simulate; UI = L1 real-browser on the anon link; cron = L2 real-prod DRY-RUN, `--apply` user-authorized post-deploy per Rule M — disclosed).
