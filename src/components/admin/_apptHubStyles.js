@@ -127,40 +127,25 @@ export const CARD_SURFACE =
   'hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10';
 
 // ─── OPD lifecycle pills (card redesign 2026-05-26) ─────────────────────────
-// Theme-matched dual-tone (light base + dark: override) — fixes the Light-theme
-// green-on-green bug where OpdLifecycleRow used unconditional dark-only classes
-// (bg-emerald-900/30 text-emerald-300 etc.) with NO light base, so in Light
-// theme they rendered light-green text on translucent dark-green = unreadable.
-// Mirrors STATUS_CHIP_CLS / TYPE_CHIP_CLS so the pills render identically to
-// their neighbour chips. (Tailwind dark: is OS-coupled here — no darkMode config
-// — same as every other chip on this card; a systemic dark:→data-theme migration
-// is out of scope.)
+// DATA-THEME driven (NOT Tailwind `dark:`). `dark:` is OS-coupled here (no
+// darkMode config in tailwind.config.js), so on a dark-OS machine it fires even
+// in data-theme=light → washed light-on-translucent-dark pills (the exact
+// green-on-green bug the user reported). The pill COLORS live in src/index.css
+// keyed on the `data-theme` attribute (the app's real theme mechanism):
+// `.opd-pill-{blue,emerald,wait,save}` = dark default (app is dark-first) +
+// `[data-theme="light"|"auto"]` light override → theme-correct in BOTH themes
+// regardless of prefers-color-scheme. (Found + fixed via Rule Q-vis real-browser
+// check on a dark-OS machine, which exposed the dark:-approach washout. AV136.)
 export const OPD_PILL_BASE =
-  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors';
+  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all duration-150';
 
 export const OPD_PILL = {
   // send-link (state B)
-  blue:
-    `${OPD_PILL_BASE} border ` +
-    'bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200 ' +
-    'dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700/40 dark:hover:bg-blue-900/50 ' +
-    'disabled:opacity-50',
+  blue:    `${OPD_PILL_BASE} border opd-pill-blue hover:brightness-95 disabled:opacity-50`,
   // view-link / view-OPD (state C/D/A/E)
-  emerald:
-    `${OPD_PILL_BASE} border ` +
-    'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 ' +
-    'dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40 dark:hover:bg-emerald-900/50 ' +
-    'disabled:opacity-50',
+  emerald: `${OPD_PILL_BASE} border opd-pill-emerald hover:brightness-95 disabled:opacity-50`,
   // wait (disabled — no-data / waiting-customer)
-  wait:
-    `${OPD_PILL_BASE} border ` +
-    'bg-slate-100 text-slate-500 border-slate-300 ' +
-    'dark:bg-slate-800/50 dark:text-slate-500 dark:border-slate-700/40 ' +
-    'opacity-70 cursor-not-allowed',
+  wait:    `${OPD_PILL_BASE} border opd-pill-wait opacity-80 cursor-not-allowed`,
   // save CTA (state D) — strongest emphasis: rose + border-2 + pulse
-  save:
-    `${OPD_PILL_BASE} border-2 ` +
-    'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 font-extrabold ' +
-    'dark:bg-red-950/40 dark:text-red-300 dark:border-red-600/60 dark:hover:bg-red-900/50 ' +
-    'disabled:opacity-50 animate-pulse',
+  save:    `${OPD_PILL_BASE} border-2 opd-pill-save font-extrabold animate-pulse hover:brightness-95 disabled:opacity-50`,
 };

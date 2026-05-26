@@ -3961,3 +3961,24 @@ nav[aria-label="เมนูระบบหลังบ้าน"] ul[role="list
     transform: none !important;
   }
 }
+
+/* ─── OPD lifecycle pills — DATA-THEME driven (card redesign 2026-05-26 EOD+6) ───
+   The appointment card's OPD pills MUST be theme-correct in BOTH themes regardless
+   of the OS prefers-color-scheme. Tailwind `dark:` is OS-coupled here (no darkMode
+   config), so on a dark-OS machine `dark:` fires even in data-theme=light → washed
+   pills (the green-on-green class the user reported). These classes key on the
+   `data-theme` attribute (the app's real theme mechanism) — dark = default (app is
+   dark-first), [data-theme=light|auto] = light override → OS-independent. Token
+   strings live in src/components/admin/_apptHubStyles.js (OPD_PILL). AV136. */
+.opd-pill-blue    { background: rgba(30, 58, 138, .35); color: #bfdbfe; border-color: rgba(30, 64, 175, .6); }
+.opd-pill-emerald { background: rgba(6, 78, 59, .40);   color: #a7f3d0; border-color: rgba(5, 150, 105, .5); }
+.opd-pill-wait    { background: rgba(30, 41, 59, .60);  color: #94a3b8; border-color: rgba(51, 65, 85, .5); }
+.opd-pill-save    { background: rgba(76, 5, 25, .55);   color: #fecdd3; border-color: rgba(225, 29, 72, .65); }
+[data-theme="light"] .opd-pill-blue,
+[data-theme="auto"]  .opd-pill-blue    { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+[data-theme="light"] .opd-pill-emerald,
+[data-theme="auto"]  .opd-pill-emerald { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+[data-theme="light"] .opd-pill-wait,
+[data-theme="auto"]  .opd-pill-wait    { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
+[data-theme="light"] .opd-pill-save,
+[data-theme="auto"]  .opd-pill-save    { background: #ffe1e6; color: #9f1239; border-color: #fb7185; }

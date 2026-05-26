@@ -29,18 +29,24 @@ describe('Card redesign — Task 1: OPD_PILL tokens', () => {
     }
   });
 
-  it('T1.2 each token has a LIGHT base + a dark: override (theme-matched, not dark-only)', () => {
+  it('T1.2 tokens are DATA-THEME driven (.opd-pill-* in index.css), not OS-coupled dark:', () => {
     const s = read(STYLES);
-    // light bases present (the fix — these were missing, causing green-on-green)
-    expect(s).toMatch(/bg-blue-100/);
-    expect(s).toMatch(/bg-emerald-100/);
-    expect(s).toMatch(/bg-slate-100/);
-    expect(s).toMatch(/bg-rose-100/);
-    // dark overrides present (mirror the prior dark-only values, now as dark: variants)
-    expect(s).toMatch(/dark:bg-blue-900\/30/);
-    expect(s).toMatch(/dark:bg-emerald-900\/30/);
-    expect(s).toMatch(/dark:bg-slate-800\/50/);
-    expect(s).toMatch(/dark:bg-red-950\/40/);
+    // tokens reference the data-theme-driven classes (OS-independent)
+    expect(s).toMatch(/opd-pill-blue/);
+    expect(s).toMatch(/opd-pill-emerald/);
+    expect(s).toMatch(/opd-pill-wait/);
+    expect(s).toMatch(/opd-pill-save/);
+    // the OS-coupled dark: approach is gone FROM THE OPD PILLS — it washed out on a
+    // dark-OS machine in data-theme=light (Rule Q-vis finding). (Neighbor tokens like
+    // STATUS_CHIP_CLS legitimately still use dark: — out of scope; scope to the OPD block.)
+    const opdBlock = s.slice(s.indexOf('export const OPD_PILL_BASE'));
+    expect(opdBlock).not.toMatch(/dark:/);
+    // index.css defines each pill class with a dark default + a [data-theme=light] override
+    const css = read('src/index.css');
+    for (const c of ['blue', 'emerald', 'wait', 'save']) {
+      expect(css, `.opd-pill-${c} base`).toMatch(new RegExp(`\\.opd-pill-${c}\\b`));
+      expect(css, `[data-theme=light] .opd-pill-${c}`).toMatch(new RegExp(`\\[data-theme="light"\\][^{]*\\.opd-pill-${c}\\b`));
+    }
   });
 });
 
