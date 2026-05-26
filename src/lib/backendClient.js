@@ -4393,6 +4393,9 @@ export async function createDeposit(data, opts = {}) {
     customerId: String(data.customerId || ''),
     customerName: data.customerName || '',
     customerHN: data.customerHN || '',
+    customerNameTemp: data.customerNameTemp || '',
+    customerPhoneTemp: data.customerPhoneTemp || '',
+    purpose: data.purpose || '',
     amount,
     usedAmount: 0,
     remainingAmount: amount,
@@ -4425,7 +4428,10 @@ export async function createDeposit(data, opts = {}) {
     updatedAt: now,
   };
   await setDoc(depositDoc(depositId), payload);
-  await recalcCustomerDepositBalance(payload.customerId);
+  // V-deposit-noappt (2026-05-27) — temp-customer (เลือกลูกค้าภายหลัง / no-appt)
+  // deposits have customerId:''. Skip the meaningless balance recalc for an
+  // empty customer (the pair path already creates customerId:'' deposits).
+  if (payload.customerId) await recalcCustomerDepositBalance(payload.customerId);
   return { depositId, success: true };
 }
 
