@@ -45,6 +45,8 @@ import { fmtThaiDate } from '../../lib/dateFormat.js';
 import { resolveSellerName } from '../../lib/documentFieldAutoFill.js';
 import FileUploadField from './FileUploadField.jsx';
 import DateField from '../DateField.jsx';
+// V-deposit-noappt (2026-05-27) — มัดจำสำหรับ reuses the นัดมาเพื่อ chip set.
+import VisitPurposePicker from '../VisitPurposePicker.jsx';
 // Task 9 (LINE OA Appointment Reminder, 2026-05-15) — shared customer
 // name + per-branch LINE badge (LR-4 lock).
 import { CustomerOption } from '../CustomerOption.jsx';
@@ -175,6 +177,11 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
   const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerHN, setCustomerHN] = useState('');
+  // V-deposit-noappt (2026-05-27) — เลือกลูกค้าภายหลัง (pickLater) + มัดจำสำหรับ (purpose).
+  const [pickLater, setPickLater] = useState(false);
+  const [customerNameTemp, setCustomerNameTemp] = useState('');
+  const [customerPhoneTemp, setCustomerPhoneTemp] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [amount, setAmount] = useState('');
   const [paymentChannel, setPaymentChannel] = useState('');
   const [paymentDate, setPaymentDate] = useState(todayStr());
@@ -312,6 +319,7 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
         : ''
     );
     setCustomerHN(src.proClinicHN || '');
+    setPickLater(false); setCustomerNameTemp(''); setCustomerPhoneTemp(''); setPurpose('');
     setAmount(''); setPaymentChannel(''); setPaymentDate(todayStr()); setPaymentTime(nowTimeStr()); setRefNo('');
     setNote(''); setCustomerSource(''); setSourceDetail('');
     setPaymentEvidenceUrl(''); setPaymentEvidencePath('');
@@ -369,6 +377,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
     setCustomerId(dep.customerId || '');
     setCustomerName(dep.customerName || '');
     setCustomerHN(dep.customerHN || '');
+    setPurpose(dep.purpose || '');
+    setCustomerNameTemp(dep.customerNameTemp || '');
+    setCustomerPhoneTemp(dep.customerPhoneTemp || '');
+    setPickLater(!dep.customerId && !!(dep.customerNameTemp || dep.customerPhoneTemp));
     setAmount(String(dep.amount || ''));
     setPaymentChannel(dep.paymentChannel || '');
     setPaymentDate(dep.paymentDate || todayStr());
@@ -422,7 +434,14 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
 
   // ── Save handler ──────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!customerId) { setError('กรุณาเลือกลูกค้า'); return; }
+    // V-deposit-noappt (2026-05-27) — เลือกลูกค้าภายหลัง relaxes the customerId
+    // requirement to a temp name + phone (mirrors the appointment modal).
+    if (pickLater) {
+      if (!customerNameTemp.trim()) { setError('กรุณากรอกชื่อลูกค้า'); return; }
+      if (!customerPhoneTemp.trim()) { setError('กรุณากรอกเบอร์โทรลูกค้า'); return; }
+    } else if (!customerId) {
+      setError('กรุณาเลือกลูกค้า หรือเปิด "เลือกลูกค้าภายหลัง"'); return;
+    }
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError('กรุณาระบุยอดมัดจำมากกว่า 0'); return; }
     if (!paymentChannel) { setError('กรุณาเลือกช่องทางชำระเงิน'); return; }
@@ -477,7 +496,12 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
       } : null;
 
       const payload = clean({
-        customerId, customerName, customerHN,
+        customerId: pickLater ? '' : customerId,
+        customerName: pickLater ? customerNameTemp : customerName,
+        customerHN: pickLater ? '' : customerHN,
+        customerNameTemp,
+        customerPhoneTemp,
+        purpose,
         amount: amt,
         paymentChannel, paymentDate, paymentTime, refNo,
         sellers: activeSellers,
@@ -778,10 +802,10 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                           show in full. The badge wraps via whitespace-normal +
                           break-words; title tooltip preserved as a courtesy. */}
                       <td className="px-3 py-2 text-[var(--tx-secondary)] max-w-[280px] align-top" data-testid="deposit-purpose-cell">
-                        {dep.appointment?.purpose || dep.appointment?.appointmentTo ? (
-                          <span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug" title={dep.appointment.purpose || dep.appointment.appointmentTo}>
+                        {dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose ? (
+                          <span className="inline-flex items-start gap-1 px-2 py-0.5 rounded-md bg-emerald-900/20 border border-emerald-700/30 text-emerald-300 text-[11px] font-medium whitespace-normal break-words leading-snug" title={dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}>
                             <span className="shrink-0">🎯</span>
-                            <span>{dep.appointment.purpose || dep.appointment.appointmentTo}</span>
+                            <span>{dep.appointment?.purpose || dep.appointment?.appointmentTo || dep.purpose}</span>
                           </span>
                         ) : (
                           <span className="text-[var(--tx-muted)]/60 text-[11px]">—</span>
@@ -1062,8 +1086,34 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
           <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
             {/* Customer picker */}
             <div className={`p-4 rounded-xl border ${isDark ? 'bg-[var(--bg-card)] border-[var(--bd)]' : 'bg-white border-gray-200'}`}>
-              <label className={labelCls}>ลูกค้า *</label>
-              {customerName ? (
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>ลูกค้า {!pickLater && '*'}</label>
+                {!editingDeposit && (
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 cursor-pointer" data-testid="dep-pick-later-toggle">
+                    <input
+                      type="checkbox"
+                      checked={pickLater}
+                      onChange={(e) => { setPickLater(e.target.checked); if (e.target.checked) { setCustomerId(''); setCustomerName(''); setCustomerHN(''); } else { setCustomerNameTemp(''); setCustomerPhoneTemp(''); } }}
+                      className="w-3.5 h-3.5 accent-amber-500"
+                      data-testid="dep-pick-later-checkbox"
+                    />
+                    เลือกลูกค้าภายหลัง
+                  </label>
+                )}
+              </div>
+              {pickLater ? (
+                <div className="grid grid-cols-2 gap-2 px-3 py-2.5 rounded-lg bg-amber-900/10 border border-amber-700/40">
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1">ชื่อลูกค้า *</label>
+                    <input type="text" value={customerNameTemp} onChange={(e) => setCustomerNameTemp(e.target.value)} maxLength={120} placeholder="เช่น คุณสมหญิง รักดี" data-testid="dep-customer-name-temp" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--tx-muted)] block mb-1">เบอร์โทร *</label>
+                    <input type="tel" inputMode="tel" value={customerPhoneTemp} onChange={(e) => setCustomerPhoneTemp(e.target.value)} maxLength={20} placeholder="08x-xxx-xxxx" data-testid="dep-customer-phone-temp" className={inputCls} />
+                  </div>
+                  <p className="col-span-2 text-[10px] text-[var(--tx-muted)] italic">มัดจำถูกบันทึกโดยยังไม่ผูกลูกค้า — ผูกภายหลังได้</p>
+                </div>
+              ) : customerName ? (
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-emerald-900/10 border border-emerald-700/30">
                   <span className="text-xs font-bold">
                     {customerName} <span className="font-mono text-[var(--tx-muted)]">{customerHN}</span>
@@ -1143,6 +1193,8 @@ export default function DepositPanel({ clinicSettings, theme, initialCustomer, o
                   </select>
                 </div>
               </div>
+              {/* V-deposit-noappt (2026-05-27) — มัดจำสำหรับ (same chips as นัดมาเพื่อ) */}
+              <VisitPurposePicker value={purpose} onChange={setPurpose} label="มัดจำสำหรับ" idPrefix="dep-vp" />
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={labelCls}>วันที่จ่ายมัดจำ *</label>
