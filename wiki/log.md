@@ -2,6 +2,18 @@
 
 Chronological, append-only. Every entry starts `## [YYYY-MM-DD] <op> | <title>` so it's greppable: `grep "^## \[" wiki/log.md | tail -10`.
 
+## [2026-05-26 EOD+5] ingest | Patient-link hide-empty boxes + auto-cleanup of stale links (AV135) — LOCAL, awaiting deploy
+
+Single-session `/session-start → brainstorming (AskUserQuestion previews, Rule S no live browser at ask/plan) → spec → writing-plans → executing-plans INLINE` (subagents thrash this baseline). Two changes to the customer patient-link page (`?patient=<token>`, `__customerMode`): (1) show ONLY boxes with data — hide the "ไม่มีคอร์สคงเหลือ" empty box in customer-mode (admin/sync view keeps it as feedback, Q1=A); subtle line "ยังไม่มีนัดหมายหรือคอร์สในขณะนี้" when nothing at all (Q2=B). (2) NEW daily cron auto-deletes a link empty (no upcoming appt + no remaining usable course) for ≥30d via an empty-since state machine (Q3=A), delete = clear token (Q4=A true delete).
+
+**Architecture**: "what does this link show" single-sourced in NEW pure `src/lib/customerLinkPayloadCore.js` (`computeUsableCourses` / `isAppointmentUpcoming` / `isCustomerLinkEmpty` / `decidePatientLinkCleanup`) consumed by BOTH `api/patient-view.js` (refactored, behavior-preserving) AND the NEW `api/cron/patient-link-cleanup-sweep.js` + `scripts/patient-link-cleanup-sweep.mjs` (Rule M) + `scripts/diag-patient-link-empty-state.mjs` (Rule R). NEW AV135 (single-source isEmpty · clear-token true-delete · customer-mode-only hide · expired ≠ remaining). NO firestore.rules/index change → no Probe-Deploy-Probe.
+
+**Verify (Rule Q-honest)**: focused 80/0; full suite 14803 pass (residual reds = rotating pre-existing global.fetch-leak/perf load-flakes, all pass isolated). L2 real-prod cron dry-run scanned 2/skipped 2/0 deleted; diag of screenshot customer LC-26000023 (0 courses + 1 appt) → coursesBox HIDDEN, link kept. GAP disclosed: visual pixel render = user L1 post-deploy (vite dev doesn't serve the serverless endpoint). 3 V21 fixups (customer-patient-link F6.6/F7.3 + E10 — the AV127/AV128 class-of-bug locks now follow the core extraction). Master `269010c9`; NOT deployed (awaits "deploy", V18).
+
+**Production this entry**: 1 NEW source page ([patient-link-hide-empty-cleanup-design](sources/patient-link-hide-empty-cleanup-design.md)) + 2 NEW entity pages ([customer-link-payload-core](entities/customer-link-payload-core.md), [patient-link-cleanup-cron](entities/patient-link-cleanup-cron.md)) + 1 NEW concept page ([patient-link-lifecycle](concepts/patient-link-lifecycle.md)). Index extended +4 rows (1 source + 2 entities + 1 concept) + date-updated 2026-05-23 → 2026-05-26. `graphify update .` ran (AST-only): 8087 nodes / 14648 edges / 859 communities (graph.json + GRAPH_REPORT.md updated).
+
+Cross-references locked: customerLinkPayloadCore (single-source isEmpty) ↔ patient-link-cleanup-cron (empty-since state machine, mirror of opd-session-cleanup-sweep) ↔ Customer Patient-Link feature 2026-05-25 (AV126/127/128) ↔ Rule M data-ops-via-local-sdk ↔ skip-stock-filter (same branch-agnostic single-source pure-filter shape).
+
 ## [2026-05-23 EOD+1 LATE+3] ingest | V116 link-survives-queue-delete + auto-regen + un-hide on re-engage (DEPLOYED)
 
 Single-session `/systematic-debugging` + ultrathink — Phase 1 mapping (4 files, 4 grep passes) → Phase 2 class-of-bug grep (Rule P Step 3: 3 broken delete sites + 1 self-healing) → Phase 3 brainstorming (Q1-Q4 via AskUserQuestion) → Phase 4 implementation (5 surgical edits + V116-followup catch by user) → 26 V116 tests + AV116 invariant + Tier 2 classifier + full vitest 14344/14344 + Vercel deploy.
