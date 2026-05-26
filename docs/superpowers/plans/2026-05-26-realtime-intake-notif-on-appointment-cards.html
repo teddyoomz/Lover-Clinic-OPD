@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-time intake notification on appointment cards — Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; --blue:#2563eb; --amber:#d97706; --green:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    .chip { display:inline-block; font-size:0.78em; font-weight:700; padding:0.15em 0.6em; border-radius:999px; }
+    .chip-wait { background:#f3f4f6; color:#6b7280; } .chip-filled { background:#fef3c7; color:#92400e; }
+    .card { border:1px solid var(--bd); border-left:4px solid var(--blue); border-radius:10px; padding:0.8em 1em; margin:0.5em 0; background:#fff; }
+    .flowbox { border:1px solid var(--bd); border-radius:8px; padding:0.5em 0.8em; background:#fff; margin:0.3em 0; font-size:0.92em; }
+    .flowbox b { color:var(--accent); } .new { color:var(--green); font-weight:700; }
+    .arrow { text-align:center; color:var(--accent); font-weight:700; margin:0.1em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Real-time intake notification on appointment cards — Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> Execute task-by-task. Steps use HTML checkboxes. Spec: <code>docs/superpowers/specs/2026-05-26-realtime-intake-notif-on-appointment-cards-design.html</code>. <strong>Rule K ordering</strong>: source Tasks 1-3 first → review → test bank Task 4 → verify Task 5 (NOT TDD test-first — multi-edit cycle).
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> When a patient fills the form sent off their นัดหมาย card, the card updates real-time + blue bubble + sound fire — no new screen.</p>
+  <p><strong>Architecture:</strong> All edits in <code>src/pages/AdminDashboard.jsx</code>. ① feed a live <code>allLinkedSessions</code> (from the listener's already-computed <code>allDocs</code>) into the existing <code>sessionsById</code> memo so <code>resolveLinkedSession</code> returns FRESH card-flow data (no re-fetch, just re-render). ② include excluded card-flow form-fills in <code>allNotifData</code> so the existing detector fires bubble+sound. ③ app-load effect re-registers the FCM token (heals 2-month-stale tokens). Listener stays READ-ONLY (no new writes inside the snapshot callback — V34/V36).</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase Firestore onSnapshot, FCM web push, Vitest.</p>
+</div>
+
+<h2>Mockup Design</h2>
+<div class="mockup">
+  <div class="mockup-label">นัดหมาย card — before (waiting) → after fill (live, no F5) — FIX ①</div>
+  <div class="card"><b>นาย สมชาย ใจดี</b> · 14:30 · ขลิบเลเซอร์ — <span class="chip chip-wait">⏳ รอลูกค้ากรอกฟอร์ม</span></div>
+  <div class="arrow">▼ ลูกค้ากรอก (เด้งทันที)</div>
+  <div class="card" style="border-left-color:var(--amber)"><b>นาย สมชาย ใจดี</b> · 14:30 · ขลิบเลเซอร์ — <span class="chip chip-filled">📥 ลูกค้ากรอกแล้ว · รอบันทึก</span> <span style="font-size:0.8em;color:#6b7280">+ purple count +1</span></div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Blue bubble + 🔔 sound (global) — FIX ②</div>
+  <div style="background:var(--blue);color:#fff;padding:0.7em 1em;border-radius:14px;display:inline-flex;gap:0.5em;align-items:center"><span>🔔</span><span><b>มีการอัปเดตข้อมูล</b> — นาย สมชาย ใจดี</span></div>
+</div>
+
+<h2>Flow</h2>
+<div class="mockup">
+  <div class="mockup-label">form-fill → live resolve → card re-render + bubble/sound (no re-fetch)</div>
+  <div class="flowbox">1. ลูกค้ากรอก → <code>updateDoc(opd_sessions/{id}, {status:'completed', patientData, isUnread:true})</code> (PatientForm.jsx:374) — ไม่แตะ be_appointments</div>
+  <div class="arrow">▼ onSnapshot (AdminDashboard:2258, รันอยู่แล้ว)</div>
+  <div class="flowbox"><span class="new">①</span> <code>setAllLinkedSessions(allDocs)</code> (read-only) → <code>sessionsById</code> memo includes fresh session → <code>resolveLinkedSession</code> new identity → <code>AppointmentHubView</code> re-renders → การ์ด resolve สด → "📥 ลูกค้ากรอกแล้ว" + purple count memo (4655) recompute. <b>ไม่ re-fetch — แค่ re-render.</b></div>
+  <div class="arrow">▼ (same listener fire)</div>
+  <div class="flowbox"><span class="new">②</span> <code>cardFlowNotif</code> (card-flow filled+unread, เคยถูก exclude) → merge เข้า <code>allNotifData</code> → detector new-session branch (2429) → <code>playNotificationSound</code> + <code>showToast</code>. dedup (lastNotifiedStrRef) + first-load stamp (2450) กันเด้งซ้ำ/รัว.</div>
+  <div class="arrow">▼ (parallel, server-side, ไม่เปลี่ยน)</div>
+  <div class="flowbox">3. <code>sendPushOnSubmit</code> → FCM. <span class="new">③</span> on app-load: lc_push_enabled + permission granted → silently getToken + register → token ไม่ stale.</div>
+</div>
+
+<h2>File Structure</h2>
+<ul>
+  <li>Modify: <code>src/pages/AdminDashboard.jsx</code> — state decl (~959), listener (~2268/2392/2528), sessionsById memo (3780-3788), new push-heal useEffect (~2247).</li>
+  <li>Create: <code>tests/realtime-intake-notif-appointment-cards.test.js</code> — Rule I flow-simulate + source-grep + AV137 presence.</li>
+  <li>Modify: <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> — NEW AV137.</li>
+</ul>
+
+<h2>Tasks</h2>
+
+<div class="task">
+  <h3>Task 1: FIX ① — live linked-session resolution (real-time card)</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/AdminDashboard.jsx</code> (state ~959; listener ~2528; memo 3780-3788)</p>
+
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Add state</strong> next to the other session-list states (after line 959 <code>archivedNoDepositSessions</code>)</label></div>
+<pre><code class="language-jsx">// FIX ① (2026-05-26) — live map of ALL branch sessions (incl. card-flow that
+// the queue filters exclude) so resolveLinkedSession returns FRESH data and the
+// นัดหมาย card flips the instant the linked form is filled (no F5, no re-fetch).
+const [allLinkedSessions, setAllLinkedSessions] = useState([]);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Feed allDocs into it</strong> inside the opd_sessions listener — add right after <code>setSessions(data);</code> (line ~2528, still READ-ONLY: setState only, no Firestore write)</label></div>
+<pre><code class="language-jsx">      setSessions(data);
+      // FIX ① — publish the unfiltered branch session set for live linked-session
+      // resolution (includes card-flow / isHiddenFromQueue sessions the queue
+      // filters drop). Read-only: no Firestore write here (V34/V36 cascade lock).
+      setAllLinkedSessions(allDocs);</code></pre>
+
+  <div class="step"><input type="checkbox" id="t1s3"> <label for="t1s3"><strong>Step 3: Add allLinkedSessions to the sessionsById memo</strong> (3780-3788) — both the source array AND the deps</label></div>
+<pre><code class="language-jsx">  const sessionsById = useMemo(() => {
+    const m = new Map();
+    // FIX ① — allLinkedSessions LAST so the fresh unfiltered doc wins over a
+    // stale filtered copy; it is a superset, so card-flow sessions now resolve.
+    for (const arr of [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions, allLinkedSessions]) {
+      for (const s of arr || []) {
+        if (s?.id) m.set(s.id, s);
+      }
+    }
+    return m;
+  }, [sessions, archivedSessions, depositSessions, archivedDepositSessions, noDepositSessions, allLinkedSessions]);</code></pre>
+  <p><em>Why this is enough:</em> <code>resolveLinkedSession</code> (3793) already returns <code>sessionsById.get(id)</code> first; now that map contains card-flow sessions, it returns fresh data instead of the stale one-shot <code>getDoc</code> cache. The memo re-runs on <code>allLinkedSessions</code> change → <code>resolveLinkedSession</code> gets a new identity → <code>AppointmentHubView</code> (receives it as a prop, line 6457) re-renders → cards re-resolve. NO change to <code>resolveLinkedSession</code> or <code>appointmentDataVersion</code> needed.</p>
+
+  <div class="step"><input type="checkbox" id="t1s4"> <label for="t1s4"><strong>Step 4: Build + grep verify</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. Run: <code>grep -n "allLinkedSessions" src/pages/AdminDashboard.jsx</code> → 4 hits (decl, setAllLinkedSessions, memo source, memo deps).</p>
+
+  <div class="step"><input type="checkbox" id="t1s5"> <label for="t1s5"><strong>Step 5: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "fix(appt-realtime): live allLinkedSessions → sessionsById so card-flow form-fill flips the นัดหมาย card real-time (no F5)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 2: FIX ② — card-flow form-fills fire blue bubble + sound</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/AdminDashboard.jsx</code> (listener notification detection ~2392)</p>
+
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Build cardFlowNotif + merge into allNotifData</strong> — replace the line <code>const allNotifData = [...data, ...ndData];</code> (line ~2392) with:</label></div>
+<pre><code class="language-jsx">      // FIX ② (2026-05-26) — card-flow (backend-booking) sessions are EXCLUDED
+      // from data/ndData (2305/2329/2354) because the appointment card is their
+      // display surface — but that ALSO dropped them from notification detection,
+      // so their form-fills never fired bubble+sound. Re-include the EXACT
+      // excluded predicate here. They are not in data/ndData (excluded), so no
+      // double-count. Downstream detector (new-session branch ~2429) + dedup
+      // (lastNotifiedStrRef) + first-load stamp (else ~2450) all apply unchanged.
+      const cardFlowNotif = allDocs.filter(s =>
+        !s.isArchived && s.isHiddenFromQueue && s.createdFromBackendBooking &&
+        s.patientData && s.isUnread && s.status === 'completed'
+      );
+      const allNotifData = [...data, ...ndData, ...cardFlowNotif];</code></pre>
+  <p><em>Why the detector handles it:</em> before fill a card-flow session has no <code>patientData</code> → not in <code>cardFlowNotif</code> → not in <code>prevSessionsRef</code>. After fill (<code>patientData</code> + <code>isUnread</code> + <code>status==='completed'</code>) it enters <code>cardFlowNotif</code> → the "new session not in prevRef" branch (2429) pushes it to <code>updatedSessions</code> → <code>playNotificationSound</code> + <code>showToast</code>. On first page load the else-branch (2450) stamps it → no notify on open.</p>
+
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Build + grep verify</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. <code>grep -n "cardFlowNotif" src/pages/AdminDashboard.jsx</code> → 2 hits (def + spread in allNotifData).</p>
+
+  <div class="step"><input type="checkbox" id="t2s3"> <label for="t2s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "fix(appt-realtime): include card-flow form-fills in allNotifData → blue bubble + sound fire on patient-form submit"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 3: FIX ③ — push token self-heal on app load</h3>
+  <p><strong>Files:</strong> Modify <code>src/pages/AdminDashboard.jsx</code> (new useEffect near the Form Templates effect ~2247; reuses imports already present: <code>isSupported, getMessaging, getToken</code> (line 3), <code>VAPID_KEY</code> (1089), <code>getDoc/setDoc/doc</code>)</p>
+
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Add the self-heal effect</strong></label></div>
+<pre><code class="language-jsx">  // FIX ③ (2026-05-26) — push tokens go stale (diag: 7 tokens all ~2 months
+  // old). If push was previously enabled on THIS device, silently re-acquire +
+  // re-register the current FCM token on load so push keeps working without the
+  // admin manually re-enabling. Guarded on granted permission (no prompt).
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    if (typeof localStorage === 'undefined' || localStorage.getItem('lc_push_enabled') !== 'true') return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supported = await isSupported();
+        if (!supported || cancelled) return;
+        const msg = getMessaging(app);
+        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+        if (!token || cancelled) return;
+        const tokensRef = doc(db, 'artifacts', appId, 'public', 'data', 'push_config', 'tokens');
+        const tokensSnap = await getDoc(tokensRef);
+        const existing = tokensSnap.exists() ? (tokensSnap.data().tokens || []) : [];
+        if (existing.some(t => (typeof t === 'string' ? t : t.token) === token)) return;
+        await setDoc(tokensRef, { tokens: [...existing, { token, userAgent: navigator.userAgent.substring(0, 120), createdAt: new Date().toISOString() }] });
+      } catch (e) { console.warn('[push self-heal] failed:', e?.message); }
+    })();
+    return () => { cancelled = true; };
+  }, [db, appId, user]);</code></pre>
+  <p><em>Not a listener-cascade write:</em> this is a one-shot app-load effect (writes to push_config/tokens only when the current token is missing), NOT inside the opd_sessions snapshot callback — the V34/V36 read-only constraint is about the snapshot callback, so this is allowed.</p>
+
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Build + grep verify</strong></label></div>
+  <p>Run: <code>npm run build</code> → clean. <code>grep -n "push self-heal" src/pages/AdminDashboard.jsx</code> → 1 hit.</p>
+
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Commit</strong></label></div>
+<pre><code class="language-bash">git add src/pages/AdminDashboard.jsx
+git commit -m "fix(push): self-heal — re-register current FCM token on load when lc_push_enabled (heals 2-month-stale tokens)"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 4: Test bank (Rule I flow-simulate + source-grep + AV137)</h3>
+  <p><strong>Files:</strong> Create <code>tests/realtime-intake-notif-appointment-cards.test.js</code>; Modify <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></p>
+
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Write the test file</strong> — pure-function mirrors of the inline logic (Rule I) + source-grep regression locks</label></div>
+<pre><code class="language-javascript">import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+const ADMIN = readFileSync('src/pages/AdminDashboard.jsx', 'utf8');
+
+// Pure mirrors of the inline AdminDashboard logic (Rule I item a) ---------------
+function buildSessionsById(arrays) {
+  const m = new Map();
+  for (const arr of arrays) for (const s of arr || []) if (s?.id) m.set(s.id, s);
+  return m;
+}
+function cardFlowNotifFilter(allDocs) {
+  return allDocs.filter(s =>
+    !s.isArchived && s.isHiddenFromQueue && s.createdFromBackendBooking &&
+    s.patientData && s.isUnread && s.status === 'completed');
+}
+
+describe('F1 — real-time linked-session resolution (FIX ①)', () => {
+  const cardFlow = { id: 'TEST-APPT-sess-1', createdFromBackendBooking: true, isHiddenFromQueue: true, patientData: { firstName: 'สมชาย' }, isUnread: true, status: 'completed' };
+  it('card-flow session is RESOLVABLE via sessionsById when allLinkedSessions is included', () => {
+    // pre-fix: built only from filtered arrays (card-flow excluded) → NOT found
+    const preFix = buildSessionsById([[], [], [], [], []]);
+    expect(preFix.has('TEST-APPT-sess-1')).toBe(false);
+    // post-fix: allLinkedSessions (unfiltered) included → found, fresh
+    const postFix = buildSessionsById([[], [], [], [], [], [cardFlow]]);
+    expect(postFix.get('TEST-APPT-sess-1')).toEqual(cardFlow);
+  });
+  it('fresh doc wins over a stale filtered copy (allLinkedSessions last)', () => {
+    const stale = { id: 'X', patientData: {} };
+    const fresh = { id: 'X', patientData: { firstName: 'now' } };
+    const m = buildSessionsById([[stale], [], [], [], [], [fresh]]);
+    expect(m.get('X').patientData.firstName).toBe('now');
+  });
+});
+
+describe('F2 — card-flow form-fill enters notification stream (FIX ②)', () => {
+  it('a card-flow session that just got patientData+isUnread+completed is detected', () => {
+    const allDocs = [{ id: 'A', createdFromBackendBooking: true, isHiddenFromQueue: true, patientData: { firstName: 'ก' }, isUnread: true, status: 'completed' }];
+    expect(cardFlowNotifFilter(allDocs).map(s => s.id)).toEqual(['A']);
+  });
+  it('NOT detected before fill (no patientData) — no spam pre-fill', () => {
+    const allDocs = [{ id: 'A', createdFromBackendBooking: true, isHiddenFromQueue: true, isUnread: false, status: 'pending' }];
+    expect(cardFlowNotifFilter(allDocs)).toHaveLength(0);
+  });
+  it('archived / non-card-flow excluded', () => {
+    const allDocs = [
+      { id: 'B', createdFromBackendBooking: true, isHiddenFromQueue: true, patientData: { x: 1 }, isUnread: true, status: 'completed', isArchived: true },
+      { id: 'C', createdFromBackendBooking: false, patientData: { x: 1 }, isUnread: true, status: 'completed' },
+    ];
+    expect(cardFlowNotifFilter(allDocs)).toHaveLength(0);
+  });
+});
+
+describe('SG — source-grep regression locks', () => {
+  it('SG1 sessionsById memo includes allLinkedSessions (source + deps)', () => {
+    expect(ADMIN).toMatch(/noDepositSessions,\s*allLinkedSessions\]/);
+  });
+  it('SG2 listener publishes allLinkedSessions read-only', () => {
+    expect(ADMIN).toMatch(/setAllLinkedSessions\(allDocs\)/);
+  });
+  it('SG3 allNotifData includes cardFlowNotif', () => {
+    expect(ADMIN).toMatch(/allNotifData\s*=\s*\[\.\.\.data,\s*\.\.\.ndData,\s*\.\.\.cardFlowNotif\]/);
+  });
+  it('SG4 cardFlowNotif uses the exact excluded predicate', () => {
+    expect(ADMIN).toMatch(/isHiddenFromQueue\s*&&\s*s\.createdFromBackendBooking/);
+  });
+  it('SG5 push self-heal effect present + guarded', () => {
+    expect(ADMIN).toContain('push self-heal');
+    expect(ADMIN).toMatch(/lc_push_enabled/);
+    expect(ADMIN).toMatch(/Notification\.permission !== 'granted'/);
+  });
+  it('SG6 listener stays read-only — no new updateDoc/setDoc/deleteDoc added by FIX ①/②', () => {
+    // the two FIX lines are setState/filter only (this asserts the marker comments exist near setState, not a write)
+    expect(ADMIN).toMatch(/FIX ① — publish the unfiltered branch session set/);
+  });
+});
+
+describe('AV137 — invariant registered', () => {
+  it('audit-anti-vibe-code SKILL.md documents AV137', () => {
+    const av = readFileSync('.agents/skills/audit-anti-vibe-code/SKILL.md', 'utf8');
+    expect(av).toMatch(/AV137/);
+  });
+});</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Add AV137 to audit-anti-vibe-code SKILL.md</strong></label></div>
+<pre><code class="language-markdown">### AV137 — Appointment-linked (card-flow) opd_session form-fills MUST stay real-time + notifying (2026-05-26)
+Card-flow sessions (`createdFromBackendBooking && isHiddenFromQueue`) are excluded
+from the queue `data`/`ndData` arrays — that exclusion MUST NOT also drop them from:
+(a) live linked-session resolution — `sessionsById` memo MUST include `allLinkedSessions`
+    (the unfiltered listener doc set) so `resolveLinkedSession` returns fresh data and
+    the นัดหมาย card flips real-time (no F5);
+(b) notification detection — `allNotifData` MUST include `cardFlowNotif` (the excluded
+    card-flow filled+unread sessions) so blue bubble + sound fire.
+Grep: `sessionsById` memo deps end with `allLinkedSessions]`; `allNotifData = [...data, ...ndData, ...cardFlowNotif]`.
+Sanctioned exceptions: NONE. Listener stays READ-ONLY (no new writes in the snapshot callback — V34/V36).
+Cross-link: tests/realtime-intake-notif-appointment-cards.test.js.</code></pre>
+
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Run the new tests</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/realtime-intake-notif-appointment-cards.test.js</code> → all PASS.</p>
+
+  <div class="step"><input type="checkbox" id="t4s4"> <label for="t4s4"><strong>Step 4: Commit</strong></label></div>
+<pre><code class="language-bash">git add tests/realtime-intake-notif-appointment-cards.test.js .agents/skills/audit-anti-vibe-code/SKILL.md
+git commit -m "test(appt-realtime): Rule I flow-simulate + source-grep locks + AV137 invariant"</code></pre>
+</div>
+
+<div class="task">
+  <h3>Task 5: Verify (full suite + build + Rule Q L1 real-browser) + handoff</h3>
+  <p><strong>Files:</strong> none (verification + state docs)</p>
+
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: Targeted + full suite + build</strong></label></div>
+  <p>Run: <code>npm test -- --run tests/realtime-intake-notif-appointment-cards.test.js</code> then the AdminDashboard-touching siblings (<code>grep -rln "AppointmentHubView\|resolveLinkedSession\|allNotifData" tests/</code>), then full <code>npm test -- --run</code> (Rule N: full suite at end of multi-edit batch) → 0 NEW fail. <code>npm run build</code> → clean.</p>
+
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Rule Q L1 — real-browser (Chrome MCP / Claude Preview, Rule S)</strong></label></div>
+  <p>Pull prod env (Rule R). Create a TEST-prefixed appointment + linked card-flow opd_session via admin-SDK (IDs <code>TEST-APPT-*</code> / <code>TEST-APPT-sess-*</code> per V33.13), branchId = a real branch, <code>createdFromBackendBooking:true, isHiddenFromQueue:true, status:'pending', isUnread:false, no patientData</code>. Open the app (real-browser, logged-in admin), go to นัดหมาย, find the TEST card (state ⏳ waiting). Then admin-SDK write <code>{status:'completed', patientData:{firstName:'TESTQ'}, isUnread:true}</code> to the session (simulates the form-fill). <strong>Observe WITHOUT refreshing</strong>: card flips to "📥 ลูกค้ากรอกแล้ว · รอบันทึก", purple count +1, blue bubble + sound fire. Screenshot (verify PIXELS — Rule Q-vis). Delete the TEST fixtures after; verify zero orphans.</p>
+  <p><em>Honest scope:</em> push (③) = user hands-on post-deploy (re-enable on device → fill a form → expect mobile push); cannot be L1'd here without sending real pushes.</p>
+
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: Update state docs + commit</strong></label></div>
+  <p>Update <code>.agents/active.md</code> + <code>SESSION_HANDOFF.md</code> (status: SHIPPED LOCAL, NOT deployed; L1 result). Commit. <strong>Do NOT deploy</strong> — await explicit "deploy" (V18). Frontend-only (no rules/index change → no Probe-Deploy-Probe).</p>
+</div>
+
+</body>
+</html>
