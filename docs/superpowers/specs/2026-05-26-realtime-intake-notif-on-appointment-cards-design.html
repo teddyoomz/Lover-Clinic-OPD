@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-time intake notification on appointment cards — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; --blue:#2563eb; --amber:#d97706; --green:#16a34a; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 960px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .card { border:1px solid var(--bd); border-left:4px solid var(--blue); border-radius:10px; padding:0.9em 1.1em; margin:0.6em 0; background:#fff; }
+    .chip { display:inline-block; font-size:0.78em; font-weight:700; padding:0.15em 0.6em; border-radius:999px; }
+    .chip-wait { background:#f3f4f6; color:#6b7280; }
+    .chip-filled { background:#fef3c7; color:#92400e; }
+    .chip-saved { background:#dcfce7; color:#166534; }
+    .bubble { background:var(--blue); color:#fff; padding:0.8em 1.1em; border-radius:14px; display:inline-flex; gap:0.6em; align-items:center; box-shadow:0 8px 20px rgba(37,99,235,0.3); }
+    .arrow { text-align:center; color:var(--accent); font-weight:700; font-size:1.2em; margin:0.2em 0; }
+    .flowbox { border:1px solid var(--bd); border-radius:8px; padding:0.6em 0.9em; background:#fff; margin:0.35em 0; }
+    .flowbox b { color:var(--accent); }
+    .new { color:var(--green); font-weight:700; }
+  </style>
+</head>
+<body>
+
+<h1>Real-time intake notification on appointment cards</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 (EOD+7) · <strong>Status:</strong> Approved by user (direction "ไม่เพิ่มหน้าจอใหม่ — ใช้การ์ดนัดหมายเดิม" + "ok" on 3-part approach) · <strong>Origin:</strong> /systematic-debugging Phase 1 root cause · <strong>Plan:</strong> (writing-plans next)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>เมื่อลูกค้ากรอก patient form ผ่านลิงก์ที่ส่งจากการ์ดนัดหมาย (OPD link, <code>hideFromQueue:true</code> → card-flow), การ์ดในหน้า "นัดหมาย" <strong>ไม่อัปเดต real-time</strong> (ต้อง F5) และ <strong>ไม่มี blue bubble + เสียง</strong>. Push มือถือก็ไม่เข้า. ระบบนี้เคยใช้ได้ตอนยังมี tab "คิวหน้าคลินิก".</p>
+<p><strong>Root cause (verified, file:line):</strong></p>
+<ul>
+  <li><strong>① Real-time การ์ด</strong>: hub re-fetch ผูกกับ <code>be_appointments</code> เท่านั้น (<code>AdminDashboard.jsx:1165</code> bump <code>appointmentDataVersion</code>); form-fill เขียนแค่ <code>opd_sessions</code> (<code>PatientForm.jsx:374</code>) → ไม่ bump. และ <code>resolveLinkedSession</code> (<code>:3793</code>) สำหรับ card-flow ตกไปใช้ <strong>stale one-shot <code>getDoc</code> cache</strong> (<code>:3797–3811</code>) ที่ไม่เคย invalidate เมื่อ session เปลี่ยน.</li>
+  <li><strong>② Blue bubble + เสียง</strong>: card-flow sessions (<code>createdFromBackendBooking && isHiddenFromQueue</code>, set ที่ <code>appointmentDepositBatch.js:1049,1058</code>) ถูก exclude จาก <code>data</code>/<code>ndData</code> (<code>:2305/2329/2354</code>) → ไม่อยู่ใน <code>allNotifData</code> (<code>:2392</code>) → detection (<code>:2398–2443</code>) ไม่เห็น → toast+เสียงไม่ยิง. (หมายเหตุ: V124 แก้ "purple count badge" ให้ count ได้แล้ว แต่ blue toast+เสียงยังไม่ครอบคลุม card-flow.)</li>
+  <li><strong>③ Push</strong>: คนละเส้น — <code>functions/index.js sendPushOnSubmit</code> ถูกเรียกโดย <code>PatientForm.jsx:380</code> เสมอ (server-side, ไม่ถูก exclude). Rule R diag: <strong>7 tokens, globalPushMuted=false, แต่ token ทุกตัวเก่า ~2 เดือน (2026-03-21..26)</strong> → น่าจะ stale/หมดอายุ หรือ device ปัจจุบันไม่ได้ register token ใหม่.</li>
+</ul>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">การ์ดนัดหมาย — BEFORE ลูกค้ากรอก (state รอกรอก)</div>
+  <div class="card">
+    <div>👤 <b>นาย สมชาย ใจดี</b> · 14:30 · ขลิบเลเซอร์</div>
+    <div style="margin-top:0.4em">สถานะ OPD: <span class="chip chip-wait">⏳ รอลูกค้ากรอกฟอร์ม</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">การ์ดนัดหมาย — AFTER ลูกค้ากรอก (เด้งทันที ไม่ต้อง F5) ← FIX ①</div>
+  <div class="card" style="border-left-color:var(--amber)">
+    <div>👤 <b>นาย สมชาย ใจดี</b> · 14:30 · ขลิบเลเซอร์</div>
+    <div style="margin-top:0.4em">สถานะ OPD: <span class="chip chip-filled">📥 ลูกค้ากรอกแล้ว · รอบันทึก</span></div>
+    <div style="margin-top:0.3em;font-size:0.85em;color:#6b7280">+ ตัวนับ sub-pill (วันนี้/ล่วงหน้า) + purple badge เด้ง +1 พร้อมกัน</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Blue bubble + 🔔 เสียง — เด้งตอนลูกค้ากรอก (global, ทุกหน้า) ← FIX ②</div>
+  <div class="bubble">
+    <span style="font-size:1.3em">🔔</span>
+    <span><b>มีการอัปเดตข้อมูล</b><br><span style="font-size:0.85em;opacity:0.9">นาย สมชาย ใจดี — กรอกฟอร์มแล้ว</span></span>
+  </div>
+  <div style="font-size:0.82em;color:#6b7280;margin-top:0.5em">(เคารพ toggle 🔔 isNotifEnabled + dedup เดิม กันเด้งรัว)</div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Push มือถือ ← FIX ③ (self-heal token)</div>
+  <div class="card" style="border-left-color:var(--green)">
+    🔔 <b>นาย สมชาย ใจดี</b><br>
+    <span style="font-size:0.9em">🔔 ข้อมูลใหม่ · สมชาย ใจดี</span>
+    <div style="font-size:0.82em;color:#6b7280;margin-top:0.4em">token ปัจจุบันถูก re-register เงียบๆ ตอนเปิดแอป (ถ้า lc_push_enabled) → ไม่หมดอายุค้าง</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">ลูกค้ากรอกฟอร์ม → การ์ดอัปเดต + bubble/เสียง + push (real-time)</div>
+  <div class="flowbox">1. ลูกค้ากรอก patient form (ลิงก์จากการ์ด) → <code>updateDoc(opd_sessions/{id}, {status:'completed', patientData, isUnread:true})</code> (PatientForm.jsx:374) <b>[เขียนแค่ session — ไม่แตะ be_appointments]</b></div>
+  <div class="arrow">▼ (Firestore onSnapshot ที่รันอยู่แล้ว — AdminDashboard:2258)</div>
+  <div class="flowbox"><span class="new">NEW ① </span> listener สร้าง <b>live <code>linkedSessionsById</code></b> จาก <code>allDocs</code> (ไม่ถูก filter) → <code>setLinkedSessionsById(map)</code></div>
+  <div class="arrow">▼</div>
+  <div class="flowbox">2. <code>resolveLinkedSession(appt)</code> อ่าน <code>linkedSessionsById</code> <b>สด</b> ก่อน lazy cache → คืน session ที่กรอกแล้ว → <code>AppointmentHubView</code> re-render → การ์ดเป็น "📥 ลูกค้ากรอกแล้ว · รอบันทึก" + purple count +1 <b>(real-time, ไม่ต้อง F5)</b></div>
+  <div class="arrow">▼ (พร้อมกัน ใน listener เดิม)</div>
+  <div class="flowbox"><span class="new">NEW ② </span> detection เพิ่ม pass สำหรับ appointment-linked form-fill (card-flow ที่ถูก exclude จาก allNotifData) → ถ้า <code>isNotifEnabled</code> + ยังไม่ dedup → <code>playNotificationSound(notifVolume)</code> + <code>showToast(ชื่อลูกค้า)</code> = blue bubble + เสียง</div>
+  <div class="arrow">▼ (เส้นขนาน — server-side)</div>
+  <div class="flowbox">3. <code>PatientForm.jsx:380 fetch(sendPushOnSubmit)</code> → FCM → มือถือ. <span class="new">NEW ③ </span> on app-load ถ้า <code>localStorage.lc_push_enabled && Notification.permission==='granted'</code> → silently <code>getToken</code> + register → token ไม่ stale (heal 2-เดือน-เก่า)</div>
+</div>
+
+<h2>Architecture</h2>
+<table>
+  <tr><th>Fix</th><th>ไฟล์ / จุดแก้</th><th>วิธี (read-only, no new write → ไม่กระทบ perf V36)</th></tr>
+  <tr><td>① Real-time card</td><td><code>AdminDashboard.jsx</code> listener (~2255–2533) + <code>resolveLinkedSession</code> (3793) + new state <code>linkedSessionsById</code></td><td>listener สร้าง map จาก <code>allDocs</code> (ทุก session incl. card-flow) → <code>setLinkedSessionsById</code>; resolveLinkedSession consult map สดก่อน lazy getDoc cache. Hub re-render ผ่าน prop-identity / tick (mirror lazyFetchedTick).</td></tr>
+  <tr><td>② Bubble + sound</td><td><code>AdminDashboard.jsx</code> notification detection (~2392–2443)</td><td>เพิ่ม pass ที่ scan <code>allDocs</code> หา appointment-linked (มี <code>linkedAppointmentId</code> หรือ card-flow) ที่เพิ่งกลายเป็น filled+unread → push เข้า updatedSessions (reuse playNotificationSound + showToast + lastNotifiedStrRef dedup + isNotifEnabled gate).</td></tr>
+  <tr><td>③ Push self-heal</td><td><code>AdminDashboard.jsx</code> app-load effect + reuse <code>enablePushNotifications</code> token-register (2203–2232)</td><td>useEffect: ถ้า lc_push_enabled + permission granted → getToken(SW) → register ถ้ายังไม่มีใน push_config/tokens. + user re-enable 1 ครั้ง / verify post-deploy.</td></tr>
+</table>
+
+<h2>Decisions (locked via Q&amp;A with user)</h2>
+<ul>
+  <li><strong>Placement = ไม่เพิ่มหน้าจอใหม่</strong> — surface บนการ์ดนัดหมายเดิม (user: "ใน tab นัดหมายก็มี Card list ของลูกค้าคนนั้นอยู่สักที่อยู่แล้ว ไม่อยู่ในคิววันนี้ ก็คิวล่วงหน้า"). ปฏิเสธ option เพิ่ม pill/tab/drawer.</li>
+  <li><strong>3-part fix = approved</strong> ("ok"): ① real-time linked-session live · ② blue bubble+เสียง สำหรับ card-flow · ③ push self-heal.</li>
+  <li><strong>Scope = appointment-linked flow เท่านั้น</strong> (เคสที่ลูกค้ามีนัด). intake link แบบไม่ผูกนัด (ถ้ามี) bubble/เสียง global เด้งอยู่แล้ว แต่ไม่มีการ์ด — นอกขอบเขต.</li>
+  <li><strong>Bubble clickable → jump to การ์ด</strong> = optional (เพิ่มได้ถ้าถูก ไม่เพิ่ม scope มาก; default: bubble แสดงชื่อ).</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>ลูกค้ากรอกฟอร์ม (ลิงก์จากการ์ด) → การ์ดเป็น "📥 ลูกค้ากรอกแล้ว · รอบันทึก" ภายใน ~1–2 วินาที <strong>โดยไม่ต้อง F5</strong> + purple pending-OPD count เด้ง +1.</li>
+  <li>Blue bubble + เสียง เด้งตอนกรอก (เมื่อ isNotifEnabled เปิด) + ไม่เด้งรัว (dedup) + ไม่เด้งซ้ำตอนเปิดหน้า (first-load stamp).</li>
+  <li>Push: app-load re-register token เมื่อ lc_push_enabled; user re-enable แล้วได้รับ push จริง (verify post-deploy).</li>
+  <li>ไม่มี perf regression — listener ยัง read-only (ไม่เพิ่ม write/cascade; V34/V36 lesson).</li>
+  <li>ไม่กระทบ flow อื่น (queue filters / deposit / V125 cancel-cascade / V124 purple count) — เป็น additive.</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>Perf</strong>: listener pull ทุก session ใน branch อยู่แล้ว — map เป็น read-only (ไม่เพิ่ม read/write). ต้องไม่ re-introduce cascade (V36).</li>
+  <li><strong>resolveLinkedSession reactivity</strong>: ต้องมั่นใจ AppointmentHubView re-render เมื่อ linkedSessionsById เปลี่ยน (mirror lazyFetchedTick pattern; ระวัง React.memo บน rows).</li>
+  <li><strong>Push validity</strong>: token 2-เดือน-เก่า — ยืนยัน valid ไม่ได้ถ้าไม่ส่ง push จริง (ไม่ทำ unprompted). user verify post-deploy.</li>
+  <li><strong>Verification (Rule Q)</strong>: real-time + bubble = ต้อง L1 real-browser (Chrome MCP, Rule S) ด้วย real opd_sessions write (TEST-prefixed fixture) ก่อน claim; push = user hands-on.</li>
+</ul>
+
+</body>
+</html>
