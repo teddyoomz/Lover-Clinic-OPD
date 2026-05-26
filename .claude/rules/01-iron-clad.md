@@ -215,8 +215,14 @@ is now 6 endpoints: 1 + 5 + 6 + 7 + 8 + 9 below (V73 added 9 on 2026-05-16).
      -d '{"fields":{"probe":{"booleanValue":true}}}'
    # → expect 403 (clinic-staff write; signed-in read)
    ```
-13. `firebase deploy --only firestore:rules,storage:rules`
-14. รัน probe 1, 5, 6, 7, 8, 9, 12 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11) หรือ ≠ 403 (เฉพาะ 12) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
+15. **V26 Staff-Chat Unsend (2026-05-26)** — anon DELETE `be_staff_chat_messages` → expect 403; anon DELETE `staff-chat-attachments` Storage → expect 401/403; anon CREATE sticker-only `be_staff_chat_messages` → expect 403 (proves the new sticker create-clause did NOT open anon writes):
+   ```
+   curl -s -o /dev/null -w "%{http_code}\n" -X DELETE "$BASE/$PREFIX/be_staff_chat_messages/test-probe-staffchat-del-$(date +%s)"   # → 403
+   curl -s -o /dev/null -w "%{http_code}\n" -X DELETE "https://firebasestorage.googleapis.com/v0/b/$APP_ID.firebasestorage.app/o/staff-chat-attachments%2FPROBE%2Ftest.png"   # → 401/403
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/$PREFIX/be_staff_chat_messages?documentId=test-probe-sticker-$(date +%s)" -H "Content-Type: application/json" -d '{"fields":{"branchId":{"stringValue":"BR-PROBE"},"displayName":{"stringValue":"PROBE"},"deviceId":{"stringValue":"d"},"sticker":{"mapValue":{"fields":{"kind":{"stringValue":"bundled"}}}}}}'   # → 403
+   ```
+13. `firebase deploy --only firestore:rules,storage` (⚠ firebase CLI 15.x: `storage`, NOT `storage:rules`)
+14. รัน probe 1, 5, 6, 7, 8, 9, 12, 15 ซ้ำ → ถ้า 403 ตัวไหน (เฉพาะ 1, 5, 6, 7) หรือ ≠ 403/401 (เฉพาะ 8, 9, 10, 11, 15) หรือ ≠ 403 (เฉพาะ 12) = revert deploy ทันที (`git checkout <last-good-commit> -- firestore.rules storage.rules` + redeploy)
 13. ลบ probe docs ทิ้ง:
    - DELETE `$BASE/$PREFIX/chat_conversations/test-probe-{TS}` x 2 (BLOCKED for anon — staff only; legacy noise OK)
    - DELETE `$BASE/$PREFIX/opd_sessions/test-probe-anon-{TS}` x 2 (BLOCKED for anon — staff only)
@@ -372,6 +378,8 @@ User directive (verbatim, 2026-05-21): **"อนุญาตให้ใช้ c
 - Building a temp probe page that mounts a REAL component to drive its real lifecycle (delete it after — never commit).
 
 **When Rule S does NOT apply — TIMING (2026-05-22, user directive "ไม่ต้องใช้ Chrome MCP ตอนถามกับตอนแพลน … นาน … ให้ใช้ตอนทดสอบ ตรวจสอบ inspect บลาๆ อย่างอื่นเท่านั้น")**: Chrome MCP / Claude Preview are for the **test / verify / inspect / debug** phase ONLY. Do **NOT** spin them up during the **ask** (brainstorming clarifying questions) or **plan** (writing-plans) stages — they are slow ("นาน") and premature while the design is still being decided. During design Q&A, show visuals the lightweight way — AskUserQuestion `preview` mockups, or write the HTML mockup into the spec for the user to open — **NOT** by driving a live browser. Reach for the real browser only once there is something built to TEST / a rendered result to VERIFY / a live page to INSPECT.
+
+**Reaffirmed 2026-05-26** (user directive: "ตอนถาม ถ้าเกี่ยวกับการ Design มึงต้องใช้ visual companion เสมอ … แค่มึงไม่ต้องใช้ chrome mcp ตรวจสอบ visual companion มันเสียเวลา ถ้ามีอะไรที่เร็วกว่าก็ให้ใช้ตรวจสอบแทน ในเฟสนี้ถึงตอนเขียนแพลน"): design topics MUST use the Visual Companion FROM the question stage — but **do NOT open Chrome MCP / Claude Preview to "verify" that a companion mockup renders** during ask→plan. The `AskUserQuestion` `preview` IS the verification — the user sees it inline; no separate browser check is needed. Use the fastest inline method available (inline preview / HTML in the spec); a live browser is only for the test/verify/inspect stage. This applies across the whole ask→plan phase, every design brainstorm.
 
 **How**:
 - Chrome MCP needs the Chrome extension connected; if it isn't, ASK the user to connect it (don't silently fall back to a weaker tier).

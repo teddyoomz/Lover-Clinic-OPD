@@ -135,8 +135,15 @@ service cloud.firestore {
                         || (request.resource.data.get('attachments', []) is list
                             && request.resource.data.get('attachments', []).size() > 0
                             && request.resource.data.get('attachments', []).size() <= 10)
+                        // (2026-05-26) Feature 4 — sticker-only message (bundled/custom) counts as content
+                        || (request.resource.data.get('sticker', {}) is map
+                            && request.resource.data.sticker.get('kind', '') is string
+                            && request.resource.data.sticker.get('kind', '').size() > 0)
                       );
-        allow update, delete: if false;  // immutable from client; admin SDK only (retention cron)
+        allow update: if false;             // still immutable-once-sent
+        // (2026-05-26) Feature 3 Unsend — clinic-staff may delete (own-only
+        // enforced UI-side via deviceId; the retention cron still uses admin SDK).
+        allow delete: if isClinicStaff();
       }
 
       // ── Backend: Phase 29 Recall System (2026-05-14) ──

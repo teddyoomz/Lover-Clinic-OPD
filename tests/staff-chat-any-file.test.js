@@ -290,7 +290,9 @@ describe('AF5 · source-grep contracts (render-by-kind · split cap · cancel/re
     const s = read('storage.rules');
     expect(s).toMatch(/contentType\.matches\('image\/\.\*'\)\s*&&\s*request\.resource\.size < 50 \* 1024 \* 1024/);
     expect(s).toMatch(/!request\.resource\.contentType\.matches\('image\/\.\*'\)\s*&&\s*request\.resource\.size < 1024 \* 1024 \* 1024/);
-    expect(s).toMatch(/allow update, delete: if false/);
+    // (2026-05-26 Feature 3 Unsend) update still locked; client delete now allowed
+    // for clinic-staff (unsend folder-sweep). Was "allow update, delete: if false".
+    expect(s).toMatch(/allow update: if false/);
   });
   it('lib re-exports + no client deleteObject in staff-chat surfaces', () => {
     const s = read('src/lib/staffChatImageResize.js');

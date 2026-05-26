@@ -79,7 +79,11 @@ service firebase.storage {
                          (request.resource.contentType.matches('image/.*')  && request.resource.size < 50 * 1024 * 1024)
                       || (!request.resource.contentType.matches('image/.*') && request.resource.size < 1024 * 1024 * 1024)
                     );
-      allow update, delete: if false;
+      allow update: if false;
+      // (2026-05-26) Feature 3 Unsend — clinic-staff may delete (the unsend
+      // handler sweeps this message's folder; retention cron uses admin SDK).
+      allow delete: if request.auth != null
+                    && (request.auth.token.isClinicStaff == true || request.auth.token.admin == true);
     }
 
     // Default deny all

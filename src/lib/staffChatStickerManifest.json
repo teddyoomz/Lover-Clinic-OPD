@@ -1,0 +1,107 @@
+{
+  "pack": "fluent",
+  "license": "MIT — Microsoft Fluent Emoji (see /stickers/LICENSE)",
+  "basePath": "/stickers/fluent/",
+  "stickers": [
+    {
+      "id": "fluent/ok",
+      "file": "ok_hand_color.svg",
+      "label": "โอเค"
+    },
+    {
+      "id": "fluent/thumbsup",
+      "file": "thumbs_up_color.svg",
+      "label": "เยี่ยม"
+    },
+    {
+      "id": "fluent/laugh",
+      "file": "laugh_color.svg",
+      "label": "ฮา"
+    },
+    {
+      "id": "fluent/cry",
+      "file": "cry_color.svg",
+      "label": "ร้องไห้"
+    },
+    {
+      "id": "fluent/think",
+      "file": "thinking_color.svg",
+      "label": "คิด"
+    },
+    {
+      "id": "fluent/sleep",
+      "file": "sleeping_color.svg",
+      "label": "ง่วง"
+    },
+    {
+      "id": "fluent/eat",
+      "file": "eat_color.svg",
+      "label": "กิน"
+    },
+    {
+      "id": "fluent/hello",
+      "file": "waving_color.svg",
+      "label": "สวัสดี"
+    },
+    {
+      "id": "fluent/sorry",
+      "file": "pleading_color.svg",
+      "label": "ขอโทษ"
+    },
+    {
+      "id": "fluent/congrats",
+      "file": "party_color.svg",
+      "label": "ยินดีด้วย"
+    },
+    {
+      "id": "fluent/thanks",
+      "file": "folded_hands_color.svg",
+      "label": "ขอบคุณ"
+    },
+    {
+      "id": "fluent/love",
+      "file": "red_heart_color.svg",
+      "label": "หัวใจ"
+    },
+    {
+      "id": "fluent/angry",
+      "file": "pouting_color.svg",
+      "label": "โกรธ"
+    },
+    {
+      "id": "fluent/confused",
+      "file": "confused_color.svg",
+      "label": "งง"
+    },
+    {
+      "id": "fluent/wait",
+      "file": "hourglass_color.svg",
+      "label": "รอแป๊บ"
+    },
+    {
+      "id": "fluent/busy",
+      "file": "construction_color.svg",
+      "label": "ยุ่ง"
+    },
+    {
+      "id": "fluent/done",
+      "file": "check_color.svg",
+      "label": "เสร็จแล้ว"
+    },
+    {
+      "id": "fluent/fire",
+      "file": "fire_color.svg",
+      "label": "ไฟ"
+    },
+    {
+      "id": "fluent/100",
+      "file": "hundred_color.svg",
+      "label": "100"
+    },
+    {
+      "id": "fluent/clap",
+      "file": "clap_color.svg",
+      "label": "ปรบมือ"
+    }
+  ]
+}

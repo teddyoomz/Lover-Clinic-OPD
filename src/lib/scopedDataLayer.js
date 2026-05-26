@@ -336,6 +336,8 @@ export const deleteChartEditSession = (...args) => raw.deleteChartEditSession(..
 export const listenToStaffChatMessages = (opts = {}, onChange, onError) =>
   raw.listenToStaffChatMessages(opts, onChange, onError);
 export const addStaffChatMessage = (messageDoc) => raw.addStaffChatMessage(messageDoc);
+// (2026-05-26) Feature 3 Unsend — passthrough (staff chat is universal; delete by id).
+export const deleteStaffChatMessage = (...args) => raw.deleteStaffChatMessage(...args);
 
 // V75 Item 3 (2026-05-16) — listenToChatConversationsByBranch wrapper (BS-16).
 // Auto-injects resolveSelectedBranchId() when caller passes {} (BSA Layer 2).

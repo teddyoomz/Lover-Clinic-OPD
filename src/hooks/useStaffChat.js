@@ -32,6 +32,7 @@ import { useSelectedBranch } from '../lib/BranchContext.jsx';
 import {
   listenToStaffChatMessages,
   addStaffChatMessage,
+  deleteStaffChatMessage,
 } from '../lib/scopedDataLayer.js';
 import { buildMessageDoc, newStaffChatMessageId } from '../lib/staffChatClient.js';
 import {
@@ -65,6 +66,11 @@ import {
   uploadStaffChatFile,
   STAFF_CHAT_MAX_ATTACHMENTS,
 } from '../lib/staffChatImageResize.js';
+// (2026-05-26) Feature 4 — sticker field builders + per-message Storage prefix for
+// the custom-sticker upload; firebase/storage for the raw upload.
+import { buildBundledStickerField, buildCustomStickerField } from '../lib/staffChatStickers.js';
+import { storagePrefixForMessage } from '../lib/staffChatRetentionCore.js';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export function useStaffChat() {
   const { branchId: selectedBranchId } = useSelectedBranch();
@@ -406,6 +412,45 @@ export function useStaffChat() {
     return { messageId, attachments, failed };
   }, [selectedBranchId]);
 
+  // (2026-05-26) Feature 3 — Unsend. Hard-delete own message (UI-gated to own via
+  // deviceId in the message component). deleteStaffChatMessage sweeps the Storage
+  // folder + deletes the Firestore doc; the listener removes it from `messages`.
+  const deleteMessage = useCallback(async (messageId) => {
+    if (!selectedBranchId || !messageId) return;
+    try {
+      await deleteStaffChatMessage(selectedBranchId, messageId);
+    } catch (e) {
+      setError(String(e?.message || e));
+    }
+  }, [selectedBranchId]);
+
+  // (2026-05-26) Feature 4 — Sticker send. Bundled → ID ref (0 Storage write).
+  // Custom → upload the IndexedDB blob to the per-message attachment folder
+  // (retention + unsend folder-sweep cover it) then send a custom sticker field.
+  // Reuses send()'s color/role embedding + error handling. Requires a display
+  // name first (re-click after naming — no stash; avoids an orphan upload if the
+  // name picker is cancelled).
+  const sendSticker = useCallback(async (arg) => {
+    if (!selectedBranchId) return undefined;
+    if (!getDisplayName()) { setNamePickerOpen(true); return undefined; }
+    if (typeof arg === 'string') {
+      return send('', { sticker: buildBundledStickerField(arg) });
+    }
+    if (!arg || !arg.blob) return undefined;
+    try {
+      const id = newStaffChatMessageId();
+      const ext = (arg.type && String(arg.type).split('/')[1]) || 'png';
+      const path = storagePrefixForMessage(selectedBranchId, id) + 'sticker.' + ext;
+      const sref = storageRef(getStorage(), path);
+      await uploadBytes(sref, arg.blob, { contentType: arg.type || 'image/png' });
+      const url = await getDownloadURL(sref);
+      return send('', { id, sticker: buildCustomStickerField({ url, storagePath: path }) });
+    } catch (e) {
+      setError(String(e?.message || e));
+      return undefined;
+    }
+  }, [selectedBranchId, send]);
+
   return {
     messages, minimized, unreadCount,
     deviceId, error, loading,
@@ -432,5 +477,8 @@ export function useStaffChat() {
     canMinimize,
     markScrolledToBottom,
     role: currentRole,
+    // (2026-05-26) Feature 3 — unsend; Feature 4 — sticker send.
+    deleteMessage,
+    sendSticker,
   };
 }

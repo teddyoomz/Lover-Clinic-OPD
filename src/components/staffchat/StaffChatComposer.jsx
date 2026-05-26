@@ -12,6 +12,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, X as XIcon } from 'lucide-react';
 import { extractMentions } from '../../lib/staffChatClient.js';
 import { StaffChatMentionDropdown } from './StaffChatMentionDropdown.jsx';
+import { StaffChatStickerPicker } from './StaffChatStickerPicker.jsx';
 import {
   validateStaffChatFile,
   attachmentKindFor,
@@ -32,12 +33,14 @@ function pendingIcon(p) {
   return KIND_ICON[k] || '📎';
 }
 
-export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload }) {
+export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyingTo, onClearReply, onPrepareAndUpload, onSendSticker }) {
   const [text, setText] = useState('');
   const [mentionTrigger, setMentionTrigger] = useState(null);
   // pendingFiles: [{ id, file, previewUrl|null, kind, name, progress, cancelled }]
   const [pendingFiles, setPendingFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  // (2026-05-26) Feature 4 — emoji/sticker picker popover toggle.
+  const [showPicker, setShowPicker] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const idRef = useRef(0);
@@ -75,6 +78,17 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
     setText(`${before}@${name} ${after}`);
     setMentionTrigger(null);
     textareaRef.current?.focus();
+  };
+
+  // (2026-05-26) Feature 4 — insert a unicode emoji at the textarea caret.
+  const insertEmoji = (emoji) => {
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? text.length;
+    const end = ta?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    requestAnimationFrame(() => {
+      if (ta) { const pos = start + emoji.length; ta.focus(); try { ta.setSelectionRange(pos, pos); } catch { /* noop */ } }
+    });
   };
 
   // (2026-05-22) Accept N files of ANY type (paste/drop/file-input). Validate
@@ -226,7 +240,7 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
       {replyingTo && (
         <div
           data-testid="staff-chat-composer-quote-strip"
-          className="px-3 py-1.5 bg-rose-500/10 border-b border-rose-500/30 flex items-center gap-2 text-[10px]"
+          className="px-3 py-1.5 bg-rose-500/10 border-b border-rose-500/30 flex items-center gap-2 text-[13px]"
         >
           <span className="font-bold text-rose-300">↩ ตอบกลับ {replyingTo.displayName}:</span>
           <span className="flex-1 text-[var(--tx-muted)] italic truncate">{replyingTo.snippet}</span>
@@ -281,7 +295,27 @@ export function StaffChatComposer({ onSend, recentMentionCandidates = [], replyi
           </span>
         </div>
       )}
+      {showPicker && (
+        <div className="px-2 pb-1">
+          <StaffChatStickerPicker
+            onPickEmoji={insertEmoji}
+            onSendBundled={(id) => onSendSticker && onSendSticker(id)}
+            onSendCustom={(rec) => onSendSticker && onSendSticker(rec)}
+            onClose={() => setShowPicker(false)}
+          />
+        </div>
+      )}
       <div className="px-2 py-2 flex items-end gap-2">
+        <button
+          type="button"
+          onClick={() => setShowPicker((v) => !v)}
+          disabled={uploading}
+          data-testid="staff-chat-composer-sticker"
+          className="w-9 h-9 rounded-lg hover:bg-rose-500/10 flex items-center justify-center text-lg disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="อีโมจิ / สติกเกอร์"
+        >
+          😀
+        </button>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}

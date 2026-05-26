@@ -72,13 +72,17 @@ export function buildMessageDoc({
   senderColor,
   // V82 (2026-05-17) — optional sender role label
   senderRole,
+  // (2026-05-26) optional sticker { kind:'bundled'|'custom', id|url, storagePath, w, h }
+  sticker,
 } = {}) {
   if (!branchId || typeof branchId !== 'string') throw new Error('STAFF_CHAT_BRANCH_REQUIRED');
   if (!displayName || typeof displayName !== 'string') throw new Error('STAFF_CHAT_NAME_REQUIRED');
   if (!deviceId || typeof deviceId !== 'string') throw new Error('STAFF_CHAT_DEVICE_REQUIRED');
   const trimmed = (typeof text === 'string' ? text : '').trim();
   const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-  if (!trimmed && !attachmentUrl && !hasAttachments) throw new Error('STAFF_CHAT_EMPTY_MESSAGE');
+  // (2026-05-26) sticker counts as content (a sticker-only message has empty text).
+  const hasSticker = !!(sticker && typeof sticker === 'object' && typeof sticker.kind === 'string' && sticker.kind);
+  if (!trimmed && !attachmentUrl && !hasAttachments && !hasSticker) throw new Error('STAFF_CHAT_EMPTY_MESSAGE');
   if (trimmed.length > 500) throw new Error('STAFF_CHAT_TEXT_TOO_LONG');
 
   // Use the caller-minted id when provided (upload pipeline mints it before
@@ -118,6 +122,19 @@ export function buildMessageDoc({
   // field render without role suffix on the reader side.
   if (senderRole) {
     doc.senderRole = String(senderRole);
+  }
+  // (2026-05-26) sticker — bundled (id ref, 0 Storage) or custom (Storage url).
+  // Undefined-safe (V14): only known sub-fields, no undefined leaves.
+  if (hasSticker) {
+    const s = { kind: String(sticker.kind) };
+    if (sticker.kind === 'bundled' && sticker.id) s.id = String(sticker.id);
+    if (sticker.kind === 'custom') {
+      s.url = String(sticker.url || '');
+      s.storagePath = String(sticker.storagePath || '');
+      if (Number.isFinite(sticker.w) && sticker.w > 0) s.w = Math.round(sticker.w);
+      if (Number.isFinite(sticker.h) && sticker.h > 0) s.h = Math.round(sticker.h);
+    }
+    doc.sticker = s;
   }
   return doc;
 }

@@ -80,6 +80,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
             messages={chat.messages}
             ownDeviceId={chat.deviceId}
             onReply={handleReply}
+            onDelete={chat.deleteMessage}
             onScrolledToBottom={chat.markScrolledToBottom}
           />
           <StaffChatComposer
@@ -88,6 +89,7 @@ export function StaffChatWidget({ user, needsPublicAuth, branchName: propBranchN
             replyingTo={chat.replyingTo}
             onClearReply={() => chat.setReplyingTo?.(null)}
             onPrepareAndUpload={chat.prepareAndUpload}
+            onSendSticker={chat.sendSticker}
           />
         </StaffChatPanel>
       )}

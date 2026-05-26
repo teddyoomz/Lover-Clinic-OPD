@@ -4,6 +4,9 @@
 
 import { db, auth, appId } from '../firebase.js';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, limit, updateDoc, deleteDoc, orderBy, writeBatch, runTransaction, onSnapshot, serverTimestamp, documentId } from 'firebase/firestore';
+// (2026-05-26) Feature 3 Unsend — Storage folder sweep for staff-chat message delete.
+import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
+import { storagePrefixForMessage } from './staffChatRetentionCore.js';
 // Phase BS (2026-05-06): pure JS module — V36 audit G.51 forbids
 // importing BranchContext.jsx into the data layer (React leak risk).
 import { resolveSelectedBranchId } from './branchSelection.js';
@@ -2763,6 +2766,20 @@ export async function addStaffChatMessage(messageDoc) {
   // V73 BSA Rule L lock: messageDoc.branchId is stamped by useStaffChat hook
   // bound to selectedBranchId — verified by branch-collection-coverage BC2.direct.
   return messageDoc.id;
+}
+
+// (2026-05-26) Feature 3 Unsend — hard-delete a staff-chat message: sweep its
+// Storage folder (attachments / custom sticker) THEN delete the Firestore doc.
+// Best-effort on Storage (text-only / bundled-sticker messages have no folder →
+// tolerated). Own-only is enforced UI-side (deviceId); the rule permits clinic-staff.
+export async function deleteStaffChatMessage(branchId, messageId) {
+  if (!branchId || !messageId) throw new Error('STAFF_CHAT_DELETE_ARGS');
+  try {
+    const prefix = storagePrefixForMessage(branchId, messageId).replace(/\/$/, '');
+    const listing = await listAll(storageRef(getStorage(), prefix));
+    await Promise.all(listing.items.map((it) => deleteObject(it).catch(() => {})));
+  } catch { /* no folder (text-only / bundled sticker) — fine */ }
+  await deleteDoc(staffChatMessageDoc(messageId));
 }
 
 // V76 (2026-05-16 EOD+1) — listenToChatHistoryByBranch (BSA Layer 1 safe-by-default).

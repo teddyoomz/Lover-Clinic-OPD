@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat Enhancements Implementation Plan</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-task: #fafafa; --bg-pre: #f5f5f5; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.6; color: #222; }
+    h1 { color: #111; border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { color: #111; border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { color: #222; }
+    pre { background: var(--bg-pre); padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); padding-left: 1em; color: var(--tx-muted); margin: 1em 0; background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; }
+    .header-meta { background: var(--bg-meta); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .header-meta p { margin: 0.4em 0; }
+    .task { border-left: 4px solid var(--accent); padding: 0.8em 1.2em; margin: 1.2em 0; background: var(--bg-task); border-radius: 0 6px 6px 0; }
+    .step { margin: 0.6em 0; padding-left: 0.5em; }
+    .step input[type=checkbox] { margin-right: 0.6em; transform: scale(1.2); accent-color: var(--accent); }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.5em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:0.85em; }
+    .flow .node { background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; }
+    .flow .arrow { color:var(--accent); font-weight:bold; }
+    .flow .zero { background:#dcfce7; border-color:#86efac; }
+    .flow .fire { background:#fee2e2; border-color:#fca5a5; }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat Enhancements Implementation Plan</h1>
+
+<blockquote>
+  <strong>For agentic workers:</strong> REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use HTML checkboxes for tracking. Spec: <code>docs/superpowers/specs/2026-05-26-staff-chat-day-quote-unsend-stickers-design.html</code>.
+</blockquote>
+
+<div class="header-meta">
+  <p><strong>Goal:</strong> Add 4 staff-chat improvements — day-separators, larger quote text, own-message unsend (hard-delete Firestore + Storage), and emoji + 2-tier stickers (bundled Fluent-Emoji-MIT by ID, custom in IndexedDB → temporary Storage on send).</p>
+  <p><strong>Architecture:</strong> Pure helpers + focused components in <code>src/components/staffchat/*</code>; messages stay in <code>be_staff_chat_messages</code> (canonical path); sticker/attachment bytes under <code>staff-chat-attachments/{branchId}/{messageId}/</code>. Custom-sticker LIBRARY = IndexedDB (never Firebase). One new optional <code>sticker</code> field on the message doc.</p>
+  <p><strong>Tech Stack:</strong> React 19, Firebase (client SDK Firestore + Storage), Tailwind 3.4, Vitest, Playwright, IndexedDB.</p>
+  <p><strong>⚠️ ORDERING — Rule K (work-first, test-last):</strong> this is a multi-feature cycle sharing files (StaffChatMessage.jsx touched by F2+F3+F4; useStaffChat by F3+F4; rules by F3+F4). Per project iron-clad Rule K, build ALL source (T1–T10) first, then the consolidated test bank (T11–T12). Source tasks verify via <code>npm run build</code> + grep; the full test bank + Rule I flow-simulate + L2 e2e land at the end. (Overrides the skill's default per-task TDD.)</p>
+  <p><strong>⚠️ DEPLOY:</strong> T6 changes <code>firestore.rules</code> + <code>storage.rules</code> → this ships with <strong>Probe-Deploy-Probe (Rule B)</strong>, NOT a client-only deploy. Deploy only on explicit user "deploy" (V18).</p>
+</div>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Day dividers + 13px quote + own-message 🗑 (dark staff-chat theme)</div>
+  <div style="background:#141414;border-radius:12px;padding:14px;width:300px;font-size:13px;color:#eee">
+    <div style="text-align:center;margin:8px 0"><span style="background:#333;color:#bbb;font-size:11px;padding:3px 14px;border-radius:12px">เมื่อวาน</span></div>
+    <div style="background:#2a2a2a;padding:6px 10px;border-radius:10px;display:inline-block;margin-bottom:6px">
+      <div style="border-left:3px solid #f43f5e;background:rgba(244,63,94,.10);border-radius:4px;padding:5px 8px;margin-bottom:5px">
+        <div style="color:#fda4af;font-weight:bold;font-size:13px">↩ หมอเอ</div>
+        <div style="color:#aaa;font-style:italic;font-size:13px">ขอเลื่อนคนไข้บ่ายสอง</div>
+      </div>
+      <div style="font-size:14px">ได้ครับ</div>
+    </div>
+    <div style="text-align:center;margin:8px 0"><span style="background:#333;color:#bbb;font-size:11px;padding:3px 14px;border-radius:12px">วันนี้</span></div>
+    <div style="text-align:right"><span style="background:#7f1d1d;color:#fff;padding:6px 10px;border-radius:10px;display:inline-block">อัปรูปผิด 😅 <span style="background:#000;border-radius:6px;padding:2px 6px;font-size:11px">🗑</span></span></div>
+    <div style="text-align:right;margin-top:8px"><span style="font-size:60px">🎉</span></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Sticker picker (tabbed popover above composer)</div>
+  <div style="background:#1f1f1f;border-radius:12px;padding:10px;width:260px">
+    <div style="display:flex;gap:6px;margin-bottom:8px;font-size:12px">
+      <span style="background:#7f1d1d;color:#fff;border-radius:8px;padding:4px 10px">😀 Emoji</span>
+      <span style="background:#333;color:#bbb;border-radius:8px;padding:4px 10px">🏷️ ชุดแถม</span>
+      <span style="background:#333;color:#bbb;border-radius:8px;padding:4px 10px">➕ ของฉัน</span>
+    </div>
+    <div style="font-size:24px;letter-spacing:6px;color:#eee">😀😂😍😴👍🙏🎉😅😭🤔😡👋❤️✅🔥💯</div>
+    <div style="margin-top:8px;border-top:1px solid #333;padding-top:6px;font-size:11px;color:#fdba74">➕ เพิ่มจากไฟล์ / URL → เก็บใน IndexedDB เครื่องนี้</div>
+  </div>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Unsend (own message)</div>
+  <div class="flow">
+    <span class="node">hover/long-press (deviceId===own)</span><span class="arrow">→</span>
+    <span class="node">🗑 + confirm</span><span class="arrow">→</span>
+    <span class="node fire">delete Storage staff-chat-attachments/{branchId}/{id}/**</span><span class="arrow">+</span>
+    <span class="node fire">deleteDoc(be_staff_chat_messages/{id})</span><span class="arrow">→</span>
+    <span class="node">onSnapshot removes on all devices</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Bundled sticker (0 Firebase) vs Custom sticker (IndexedDB → temp Storage)</div>
+  <div class="flow" style="margin-bottom:8px">
+    <span class="node">pick bundled</span><span class="arrow">→</span>
+    <span class="node">msg <code>sticker:{kind:'bundled',id}</code></span><span class="arrow">→</span>
+    <span class="node zero">no Storage write</span><span class="arrow">→</span>
+    <span class="node">recipient renders /public/stickers asset by id</span>
+  </div>
+  <div class="flow">
+    <span class="node">+add file/URL</span><span class="arrow">→</span>
+    <span class="node zero">IndexedDB (device only)</span><span class="arrow">→ send →</span>
+    <span class="node fire">upload to staff-chat-attachments/{branchId}/{msgId}/sticker.ext</span><span class="arrow">→</span>
+    <span class="node">msg <code>sticker:{kind:'custom',url,storagePath}</code></span><span class="arrow">→</span>
+    <span class="node">recipient renders url · 30-day retention cleans</span>
+  </div>
+</div>
+<div class="mockup">
+  <div class="mockup-label">Day-grouping render (no Firestore change)</div>
+  <div class="flow">
+    <span class="node">messages[] (ASC)</span><span class="arrow">→</span>
+    <span class="node">groupMessagesByDay (Bangkok-TZ, dual-shape createdAt)</span><span class="arrow">→</span>
+    <span class="node">[{dayKey,label,items[]}]</span><span class="arrow">→</span>
+    <span class="node">pill divider + bubbles per group</span>
+  </div>
+</div>
+
+<h2>File Structure</h2>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>src/lib/staffChatDayGroups.js</code> (NEW)</td><td>Pure: group messages by Bangkok day + divider label.</td></tr>
+  <tr><td><code>src/lib/stickerLibrary.js</code> (NEW)</td><td>IndexedDB CRUD for the per-device custom sticker library.</td></tr>
+  <tr><td><code>src/lib/staffChatStickers.js</code> (NEW)</td><td>Bundled-pack manifest accessors + sticker-field builders + asset path resolver.</td></tr>
+  <tr><td><code>public/stickers/fluent/*.svg</code> + <code>manifest.json</code> + <code>LICENSE</code> (NEW)</td><td>~22 curated Fluent Emoji Color SVGs (MIT).</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatStickerPicker.jsx</code> (NEW)</td><td>Tabbed picker: emoji / bundled / custom (+ add file/URL).</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatMessageList.jsx</code></td><td>Render day dividers (Feature 1).</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatMessage.jsx</code></td><td>Quote 13px (F2) · own-only 🗑 + confirm (F3) · sticker bubble (F4).</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatComposer.jsx</code></td><td>Picker button; emoji-insert; quote-strip font.</td></tr>
+  <tr><td><code>src/lib/staffChatClient.js</code></td><td><code>buildMessageDoc</code> + <code>sticker</code> field (undefined-safe).</td></tr>
+  <tr><td><code>src/lib/backendClient.js</code></td><td>NEW <code>deleteStaffChatMessage(branchId, messageId)</code> (near <code>staffChatCol()</code>).</td></tr>
+  <tr><td><code>src/lib/scopedDataLayer.js</code></td><td>Pass-through re-export of <code>deleteStaffChatMessage</code>.</td></tr>
+  <tr><td><code>src/hooks/useStaffChat.js</code></td><td>Expose <code>deleteMessage(id)</code> + <code>sendSticker(...)</code>.</td></tr>
+  <tr><td><code>firestore.rules</code> + <code>storage.rules</code></td><td>Add <code>delete</code> (clinic-staff) + sticker content clause.</td></tr>
+  <tr><td><code>.agents/skills/audit-anti-vibe-code/SKILL.md</code></td><td>NEW AV134.</td></tr>
+  <tr><td><code>tests/staff-chat-enhancements-*.test.js{,x}</code> + <code>scripts/e2e-staff-chat-enhancements.mjs</code> (NEW)</td><td>Test bank + L2 real-prod e2e.</td></tr>
+</table>
+
+<h2>Tasks</h2>
+
+<!-- ===================== T1 ===================== -->
+<div class="task">
+  <h3>Task 1: Day-grouping pure helper (Feature 1 core)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/staffChatDayGroups.js</code></p>
+  <div class="step"><input type="checkbox" id="t1s1"> <label for="t1s1"><strong>Step 1: Create the helper</strong></label></div>
+  <p>Confirm <code>THAI_MONTHS</code> is exported from <code>src/utils.js</code> first: <code>grep -n "export const THAI_MONTHS" src/utils.js</code>. If named differently, import the actual name.</p>
+<pre><code class="language-js">// src/lib/staffChatDayGroups.js
+// PURE (no firebase import) — group staff-chat messages by Bangkok-local day +
+// a human divider label. createdAt is DUAL-SHAPE (V82 lesson): Firestore
+// Timestamp ({toMillis}/{seconds}) OR number(ms) OR ISO string. Bangkok = GMT+7
+// fixed (no DST) — shift then read UTC parts so the bucket is machine-TZ-stable
+// (V53 lesson). Older days display full Thai BE date (per the approved preview).
+import { THAI_MONTHS } from '../utils.js';
+
+const BKK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const THAI_WEEKDAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
+export function toMs(createdAt) {
+  if (createdAt == null) return null;
+  if (typeof createdAt === 'number' && Number.isFinite(createdAt)) return createdAt;
+  if (typeof createdAt.toMillis === 'function') { try { return createdAt.toMillis(); } catch { return null; } }
+  if (typeof createdAt.seconds === 'number') return createdAt.seconds * 1000;
+  const p = Date.parse(createdAt);
+  return Number.isFinite(p) ? p : null;
+}
+
+export function bangkokDayKey(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return '';
+  const d = new Date(ms + BKK_OFFSET_MS);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+export function dayDividerLabel(ms, nowMs = Date.now()) {
+  const key = bangkokDayKey(ms);
+  if (!key) return '';
+  if (key === bangkokDayKey(nowMs)) return 'วันนี้';
+  if (key === bangkokDayKey(nowMs - 86400000)) return 'เมื่อวาน';
+  const d = new Date(ms + BKK_OFFSET_MS);
+  return `${THAI_WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${THAI_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
+}
+
+// messages assumed chronological ASC (the list reverses the DESC query before render).
+// Returns [{ dayKey, label, items: [msg] }]. Unknown-timestamp msgs bucket under '__unknown__' (label '').
+export function groupMessagesByDay(messages, nowMs = Date.now()) {
+  const arr = Array.isArray(messages) ? messages : [];
+  const groups = [];
+  let cur = null;
+  for (const m of arr) {
+    const ms = toMs(m && m.createdAt);
+    const key = bangkokDayKey(ms) || '__unknown__';
+    if (!cur || cur.dayKey !== key) {
+      cur = { dayKey: key, label: ms != null ? dayDividerLabel(ms, nowMs) : '', items: [] };
+      groups.push(cur);
+    }
+    cur.items.push(m);
+  }
+  return groups;
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t1s2"> <label for="t1s2"><strong>Step 2: Build clean</strong></label> — <code>npm run build</code> → no error. Commit: <code>feat(staffchat): day-grouping pure helper (F1)</code>.</div>
+</div>
+
+<!-- ===================== T2 ===================== -->
+<div class="task">
+  <h3>Task 2: Render day dividers in the message list (Feature 1)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatMessageList.jsx</code> (the flat <code>messages.map</code> at ~:65)</p>
+  <div class="step"><input type="checkbox" id="t2s1"> <label for="t2s1"><strong>Step 1: Import + group, render a pill divider per group</strong></label></div>
+  <p>Add import <code>import { groupMessagesByDay } from '../../lib/staffChatDayGroups.js';</code>. Replace the flat <code>{messages.map(m =&gt; (&lt;StaffChatMessage .../&gt;))}</code> with grouped render (KEEP the bottom-sentinel ref + IntersectionObserver exactly as-is, after the groups):</p>
+<pre><code class="language-jsx">{groupMessagesByDay(messages).map(group =&gt; (
+  &lt;React.Fragment key={group.dayKey}&gt;
+    {group.label &amp;&amp; (
+      &lt;div className="flex justify-center my-2" data-testid="staff-chat-day-divider"&gt;
+        &lt;span className="text-[11px] text-[var(--tx-muted)] bg-black/30 px-3 py-0.5 rounded-full"&gt;{group.label}&lt;/span&gt;
+      &lt;/div&gt;
+    )}
+    {group.items.map(m =&gt; (
+      &lt;StaffChatMessage key={m.id} message={m} isOwn={m.deviceId === ownDeviceId} onReply={onReply} onDelete={onDelete} /&gt;
+    ))}
+  &lt;/React.Fragment&gt;
+))}</code></pre>
+  <p>Note: <code>onDelete</code> is added here now (used in T5); it is undefined until T5 wires it (StaffChatMessage guards on it — harmless).</p>
+  <div class="step"><input type="checkbox" id="t2s2"> <label for="t2s2"><strong>Step 2: Build clean + grep</strong></label> — <code>npm run build</code>; <code>grep -n "staff-chat-day-divider" src/components/staffchat/StaffChatMessageList.jsx</code>. Commit: <code>feat(staffchat): day dividers in message list (F1)</code>.</div>
+</div>
+
+<!-- ===================== T3 ===================== -->
+<div class="task">
+  <h3>Task 3: Quote text 10px → 13px (Feature 2)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatMessage.jsx:108</code> (quote card) + the composer "replying-to" strip in <code>StaffChatComposer.jsx</code> (~:226)</p>
+  <div class="step"><input type="checkbox" id="t3s1"> <label for="t3s1"><strong>Step 1: Bump the quote-card font</strong></label></div>
+  <p>In <code>StaffChatMessage.jsx</code> the quote card wrapper className starts <code>text-[10px] px-2 py-1 mb-1 ...</code> → change <code>text-[10px]</code> to <code>text-[13px]</code>. (The inner name/snippet spans inherit; no other change needed.)</p>
+  <div class="step"><input type="checkbox" id="t3s2"> <label for="t3s2"><strong>Step 2: Match the composer quote strip</strong></label> — in <code>StaffChatComposer.jsx</code> reply strip (~:226), bump its label font to <code>text-[13px]</code> (find the <code>↩ ตอบกลับ</code> strip; if it uses <code>text-[10px]</code>/<code>text-[11px]</code> set 13px).</p>
+  <div class="step"><input type="checkbox" id="t3s3"> <label for="t3s3"><strong>Step 3: Build clean</strong></label> — <code>npm run build</code>; <code>grep -n "text-\[13px\]" src/components/staffchat/StaffChatMessage.jsx</code>. Commit: <code>feat(staffchat): larger quote text 10px→13px (F2)</code>.</div>
+</div>
+
+<!-- ===================== T4 ===================== -->
+<div class="task">
+  <h3>Task 4: deleteStaffChatMessage helper — Firestore doc + Storage folder (Feature 3 core)</h3>
+  <p><strong>Files:</strong> Modify <code>src/lib/backendClient.js</code> (near <code>staffChatCol()</code> ~:1109) + <code>src/lib/scopedDataLayer.js</code> (pass-through re-export)</p>
+  <div class="step"><input type="checkbox" id="t4s1"> <label for="t4s1"><strong>Step 1: Add the helper in backendClient.js</strong></label></div>
+  <p>Confirm the firestore/storage imports exist at top of <code>backendClient.js</code> (it already uses <code>doc</code>, <code>deleteDoc</code>; add storage ones if missing): <code>grep -n "from 'firebase/storage'" src/lib/backendClient.js</code>. Add what's missing: <code>import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';</code> and ensure <code>deleteDoc, doc</code> from <code>firebase/firestore</code>. Then add:</p>
+<pre><code class="language-js">import { storagePrefixForMessage } from './staffChatRetentionCore.js';
+
+// V73+ Unsend (2026-05-26) — hard-delete a staff-chat message: sweep its Storage
+// folder (attachments/custom-sticker) THEN delete the Firestore doc. Best-effort
+// on Storage (text-only / bundled-sticker msgs have no folder → tolerated).
+// Own-only is enforced at the UI layer (deviceId); the rule permits clinic-staff.
+export async function deleteStaffChatMessage(branchId, messageId) {
+  if (!branchId || !messageId) throw new Error('STAFF_CHAT_DELETE_ARGS');
+  try {
+    const prefix = storagePrefixForMessage(branchId, messageId).replace(/\/$/, '');
+    const listing = await listAll(storageRef(getStorage(), prefix));
+    await Promise.all(listing.items.map((it) =&gt; deleteObject(it).catch(() =&gt; {})));
+  } catch { /* no folder (text-only / bundled sticker) — fine */ }
+  await deleteDoc(doc(staffChatCol(), messageId));
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t4s2"> <label for="t4s2"><strong>Step 2: Re-export through scopedDataLayer</strong></label> — in <code>src/lib/scopedDataLayer.js</code> add a pass-through (mirror <code>addStaffChatMessage</code>): <code>export const deleteStaffChatMessage = (...a) =&gt; raw.deleteStaffChatMessage(...a);</code> (staff-chat is universal — no branch auto-inject).</p>
+  <div class="step"><input type="checkbox" id="t4s3"> <label for="t4s3"><strong>Step 3: Build clean</strong></label> — <code>npm run build</code>; <code>grep -n "deleteStaffChatMessage" src/lib/backendClient.js src/lib/scopedDataLayer.js</code>. Commit: <code>feat(staffchat): deleteStaffChatMessage doc+storage helper (F3)</code>.</div>
+</div>
+
+<!-- ===================== T5 ===================== -->
+<div class="task">
+  <h3>Task 5: Unsend UI — own-only 🗑 + confirm dialog (Feature 3)</h3>
+  <p><strong>Files:</strong> Modify <code>src/components/staffchat/StaffChatMessage.jsx</code> (add delete affordance) + <code>src/hooks/useStaffChat.js</code> (expose <code>deleteMessage</code>) + thread <code>onDelete</code> through <code>StaffChatWidget</code> → <code>StaffChatMessageList</code> → <code>StaffChatMessage</code></p>
+  <div class="step"><input type="checkbox" id="t5s1"> <label for="t5s1"><strong>Step 1: useStaffChat exposes deleteMessage</strong></label></div>
+<pre><code class="language-js">// in useStaffChat.js — import at top:
+import { deleteStaffChatMessage } from '../lib/scopedDataLayer.js';
+// inside the hook (branchId already resolved as selectedBranchId in scope):
+const deleteMessage = useCallback(async (messageId) =&gt; {
+  if (!selectedBranchId || !messageId) return;
+  await deleteStaffChatMessage(selectedBranchId, messageId);
+  // listener (onSnapshot) removes it from `messages` automatically.
+}, [selectedBranchId]);
+// add `deleteMessage` to the hook's return object.</code></pre>
+  <p>(Confirm <code>useCallback</code> is imported — it is per the existing hook; if not, add to the React import. V119/AV60 lesson: never reference a hook without importing it.)</p>
+  <div class="step"><input type="checkbox" id="t5s2"> <label for="t5s2"><strong>Step 2: Thread onDelete</strong></label> — <code>StaffChatWidget.jsx</code>: pass <code>onDelete={deleteMessage}</code> into the message list (next to the existing <code>onReply</code> wiring). <code>StaffChatMessageList.jsx</code> already forwards <code>onDelete</code> to each <code>StaffChatMessage</code> (T2).</p>
+  <div class="step"><input type="checkbox" id="t5s3"> <label for="t5s3"><strong>Step 3: StaffChatMessage — own-only 🗑 + confirm dialog</strong></label></div>
+  <p>Add <code>onDelete</code> to the component props. Add a <code>const [confirmDelete, setConfirmDelete] = useState(false);</code>. Render a 🗑 button ONLY when <code>isOwn &amp;&amp; onDelete</code>, beside the existing reply button (same hover pattern). On click → <code>setConfirmDelete(true)</code>. Render an AV78 explicit-close confirm dialog (NO backdrop-close — ✕/Cancel/confirm only):</p>
+<pre><code class="language-jsx">import { Reply, Trash2 } from 'lucide-react';
+// ...beside the reply button (only own messages):
+{isOwn &amp;&amp; onDelete &amp;&amp; (
+  &lt;button type="button" onClick={(e) =&gt; { e.stopPropagation(); setConfirmDelete(true); }}
+    data-testid={`staff-chat-message-delete-${message.id}`}
+    className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+    aria-label="ลบข้อความ" title="ลบข้อความ"&gt;
+    &lt;Trash2 size={11} /&gt;
+  &lt;/button&gt;
+)}
+// ...confirm dialog (render at component root; explicit-close per AV78 — backdrop does NOT close):
+{confirmDelete &amp;&amp; (
+  &lt;div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50" data-testid="staff-chat-delete-confirm"&gt;
+    &lt;div className="bg-[var(--bg-card)] text-[var(--tx-primary)] rounded-xl p-4 w-[260px] shadow-2xl" onClick={(e) =&gt; e.stopPropagation()}&gt;
+      &lt;div className="font-bold mb-1"&gt;ลบข้อความ&lt;/div&gt;
+      &lt;div className="text-sm text-[var(--tx-muted)] mb-3"&gt;ลบข้อความนี้ออกจากระบบ? ลบแล้วกู้คืนไม่ได้ (ลบทั้งข้อความและไฟล์แนบ)&lt;/div&gt;
+      &lt;div className="flex justify-end gap-2"&gt;
+        &lt;button type="button" className="px-3 py-1 rounded bg-black/20" onClick={() =&gt; setConfirmDelete(false)}&gt;ยกเลิก&lt;/button&gt;
+        &lt;button type="button" className="px-3 py-1 rounded bg-rose-600 text-white"
+          onClick={async () =&gt; { setConfirmDelete(false); try { await onDelete(message.id); } catch {} }}&gt;ลบเลย&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+)}</code></pre>
+  <p>NOTE: the backdrop div has NO onClick (AV78 — explicit close only). The inner div stops propagation. ✕ omitted in favor of explicit ยกเลิก/ลบเลย buttons.</p>
+  <div class="step"><input type="checkbox" id="t5s4"> <label for="t5s4"><strong>Step 4: Build clean + grep</strong></label> — <code>npm run build</code>; <code>grep -n "staff-chat-message-delete-" src/components/staffchat/StaffChatMessage.jsx</code>. Commit: <code>feat(staffchat): own-only unsend + confirm dialog (F3)</code>.</div>
+</div>
+
+<!-- ===================== T6 ===================== -->
+<div class="task">
+  <h3>Task 6: Rules — delete permission + sticker content clause (Feature 3 + 4)</h3>
+  <p><strong>Files:</strong> Modify <code>firestore.rules</code> (be_staff_chat_messages :120-139) + <code>storage.rules</code> (staff-chat-attachments :82). NO DEPLOY in this task — deploy is gated on user "deploy" (T13).</p>
+  <div class="step"><input type="checkbox" id="t6s1"> <label for="t6s1"><strong>Step 1: firestore.rules — allow sticker-only messages + clinic-staff delete</strong></label></div>
+  <p>In the content-presence clause (the <code>&amp;&amp; ( text&gt;0 || attachmentUrl || attachments[] )</code> block, lines ~130-138), add a 4th OR for sticker-only messages, then change line 139:</p>
+<pre><code class="language-js">// inside the create content-presence OR-group, add:
+        || (request.resource.data.get('sticker', {}) is map
+            &amp;&amp; request.resource.data.sticker.get('kind', '') is string
+            &amp;&amp; request.resource.data.sticker.get('kind', '').size() &gt; 0)
+// ...then replace line 139:
+//   OLD: allow update, delete: if false;  // immutable from client; admin SDK only (retention cron)
+//   NEW:
+        allow update: if false;             // still immutable-once-sent
+        allow delete: if isClinicStaff();   // V73+ Unsend (2026-05-26) — own-only enforced UI-side</code></pre>
+  <div class="step"><input type="checkbox" id="t6s2"> <label for="t6s2"><strong>Step 2: storage.rules — allow clinic-staff delete on attachment folder</strong></label></div>
+  <p>In <code>match /staff-chat-attachments/{branchId}/{file=**}</code>, replace line 82 <code>allow update, delete: if false;</code> with:</p>
+<pre><code class="language-js">      allow update: if false;
+      allow delete: if request.auth != null
+                    &amp;&amp; (request.auth.token.isClinicStaff == true || request.auth.token.admin == true);</code></pre>
+  <div class="step"><input type="checkbox" id="t6s3"> <label for="t6s3"><strong>Step 3: Add Probe-Deploy-Probe entry #15</strong></label> — document in <code>.claude/rules/01-iron-clad.md</code> Rule B probe list: anon DELETE <code>be_staff_chat_messages/&lt;id&gt;</code> → 403; anon DELETE Storage <code>staff-chat-attachments/PROBE/x</code> → 401/403; sticker-only create by clinic-staff → 200. Commit: <code>feat(staffchat): rules — sticker-only create + clinic-staff delete (F3/F4) + probe #15</code>. (DO NOT deploy here.)</p>
+</div>
+
+<!-- ===================== T7 ===================== -->
+<div class="task">
+  <h3>Task 7: Bundled sticker pack — Fluent Emoji (MIT) assets + manifest + license</h3>
+  <p><strong>Files:</strong> Create <code>public/stickers/fluent/&lt;name&gt;_color.svg</code> (×~22) + <code>public/stickers/manifest.json</code> + <code>public/stickers/LICENSE</code></p>
+  <div class="step"><input type="checkbox" id="t7s1"> <label for="t7s1"><strong>Step 1: Fetch ~22 curated Color SVGs from microsoft/fluentui-emoji</strong></label></div>
+  <p>Repo path pattern: <code>https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/&lt;Folder Name&gt;/Color/&lt;snake_name&gt;_color.svg</code>. Download each into <code>public/stickers/fluent/</code> (use the snake filename). Curated mood set:</p>
+  <pre><code class="language-text">ok       → Folder "OK Hand"            file ok_hand_color.svg
+thumbsup → Folder "Thumbs Up"          file thumbs_up_color.svg
+laugh    → Folder "Face With Tears of Joy"  file face_with_tears_of_joy_color.svg
+cry      → Folder "Loudly Crying Face"  file loudly_crying_face_color.svg
+think    → Folder "Thinking Face"       file thinking_face_color.svg
+sleep    → Folder "Sleeping Face"       file sleeping_face_color.svg
+work     → Folder "Person Office Worker" OR "Laptop" file laptop_color.svg
+eat      → Folder "Fork and Knife"      file fork_and_knife_color.svg
+hello    → Folder "Waving Hand"         file waving_hand_color.svg
+bye      → (reuse waving_hand) label "บาย"
+sorry    → Folder "Pleading Face"       file pleading_face_color.svg
+congrats → Folder "Party Popper"        file party_popper_color.svg
+thanks   → Folder "Folded Hands"        file folded_hands_color.svg
+love     → Folder "Red Heart"           file red_heart_color.svg
+angry    → Folder "Pouting Face"        file pouting_face_color.svg
+confused → Folder "Confused Face"       file confused_face_color.svg
+wait     → Folder "Hourglass Not Done"  file hourglass_not_done_color.svg
+busy     → Folder "Construction"        file construction_color.svg
+done     → Folder "Check Mark Button"   file check_mark_button_color.svg
+fire     → Folder "Fire"                file fire_color.svg
+100      → Folder "Hundred Points"      file hundred_points_color.svg
+clap     → Folder "Clapping Hands"      file clapping_hands_color.svg</code></pre>
+  <p>If a folder/file name 404s, list the repo's <code>assets/</code> dir via <code>gh api repos/microsoft/fluentui-emoji/contents/assets</code> and pick the matching folder; the canonical filename is always <code>&lt;folder lowercased, spaces→_&gt;_color.svg</code>.</p>
+  <div class="step"><input type="checkbox" id="t7s2"> <label for="t7s2"><strong>Step 2: LICENSE</strong></label> — save the repo's MIT LICENSE text to <code>public/stickers/LICENSE</code> (fetch <code>https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/LICENSE</code>). This satisfies the only MIT obligation.</p>
+  <div class="step"><input type="checkbox" id="t7s3"> <label for="t7s3"><strong>Step 3: manifest.json</strong></label></div>
+<pre><code class="language-json">{
+  "pack": "fluent",
+  "license": "MIT — Microsoft Fluent Emoji (see ./LICENSE)",
+  "basePath": "/stickers/fluent/",
+  "stickers": [
+    { "id": "fluent/ok",       "file": "ok_hand_color.svg",                 "label": "โอเค" },
+    { "id": "fluent/thumbsup", "file": "thumbs_up_color.svg",               "label": "เยี่ยม" },
+    { "id": "fluent/laugh",    "file": "face_with_tears_of_joy_color.svg",  "label": "ฮา" },
+    { "id": "fluent/cry",      "file": "loudly_crying_face_color.svg",      "label": "ร้องไห้" },
+    { "id": "fluent/think",    "file": "thinking_face_color.svg",           "label": "คิด" },
+    { "id": "fluent/sleep",    "file": "sleeping_face_color.svg",           "label": "ง่วง" },
+    { "id": "fluent/eat",      "file": "fork_and_knife_color.svg",          "label": "กิน" },
+    { "id": "fluent/hello",    "file": "waving_hand_color.svg",             "label": "สวัสดี" },
+    { "id": "fluent/sorry",    "file": "pleading_face_color.svg",           "label": "ขอโทษ" },
+    { "id": "fluent/congrats", "file": "party_popper_color.svg",            "label": "ยินดีด้วย" },
+    { "id": "fluent/thanks",   "file": "folded_hands_color.svg",            "label": "ขอบคุณ" },
+    { "id": "fluent/love",     "file": "red_heart_color.svg",               "label": "หัวใจ" },
+    { "id": "fluent/angry",    "file": "pouting_face_color.svg",            "label": "โกรธ" },
+    { "id": "fluent/confused", "file": "confused_face_color.svg",           "label": "งง" },
+    { "id": "fluent/wait",     "file": "hourglass_not_done_color.svg",      "label": "รอแป๊บ" },
+    { "id": "fluent/busy",     "file": "construction_color.svg",            "label": "ยุ่ง" },
+    { "id": "fluent/done",     "file": "check_mark_button_color.svg",       "label": "เสร็จแล้ว" },
+    { "id": "fluent/fire",     "file": "fire_color.svg",                    "label": "ไฟ" },
+    { "id": "fluent/100",      "file": "hundred_points_color.svg",          "label": "100" },
+    { "id": "fluent/clap",     "file": "clapping_hands_color.svg",          "label": "ปรบมือ" }
+  ]
+}</code></pre>
+  <div class="step"><input type="checkbox" id="t7s4"> <label for="t7s4"><strong>Step 4: staffChatStickers.js accessors</strong></label> — Create <code>src/lib/staffChatStickers.js</code>:</p>
+<pre><code class="language-js">// src/lib/staffChatStickers.js — bundled-pack accessors + sticker-field builders.
+import manifest from '/stickers/manifest.json';  // Vite serves /public at root; if import fails, fetch('/stickers/manifest.json') in the picker instead.
+export const BUNDLED_STICKERS = Array.isArray(manifest.stickers) ? manifest.stickers : [];
+export function bundledStickerById(id) { return BUNDLED_STICKERS.find(s =&gt; s.id === id) || null; }
+export function bundledStickerSrc(id) { const s = bundledStickerById(id); return s ? `${manifest.basePath}${s.file}` : ''; }
+export function buildBundledStickerField(id) { return { kind: 'bundled', id: String(id) }; }
+export function buildCustomStickerField({ url, storagePath, w, h } = {}) {
+  const f = { kind: 'custom', url: String(url || ''), storagePath: String(storagePath || '') };
+  if (Number.isFinite(w) &amp;&amp; w &gt; 0) f.w = Math.round(w);
+  if (Number.isFinite(h) &amp;&amp; h &gt; 0) f.h = Math.round(h);
+  return f;
+}</code></pre>
+  <p>(If a build-time JSON import of a <code>/public</code> file is awkward in this Vite setup, move <code>manifest.json</code> to <code>src/lib/staffChatStickerManifest.json</code> and import that, keeping the SVGs in <code>/public/stickers/fluent/</code>. Confirm at build.)</p>
+  <div class="step"><input type="checkbox" id="t7s5"> <label for="t7s5"><strong>Step 5: Build clean</strong></label> — <code>npm run build</code>; <code>ls public/stickers/fluent | wc -l</code> (≥20). Commit: <code>feat(staffchat): bundled Fluent-Emoji (MIT) sticker pack + manifest (F4)</code>.</div>
+</div>
+
+<!-- ===================== T8 ===================== -->
+<div class="task">
+  <h3>Task 8: Custom sticker library — IndexedDB (Feature 4 custom, AV134)</h3>
+  <p><strong>Files:</strong> Create <code>src/lib/stickerLibrary.js</code></p>
+  <div class="step"><input type="checkbox" id="t8s1"> <label for="t8s1"><strong>Step 1: IndexedDB CRUD</strong></label></div>
+<pre><code class="language-js">// src/lib/stickerLibrary.js
+// Per-device custom-sticker library in IndexedDB. NEVER written to Firebase
+// (AV134) — only the SENT instance is uploaded to Storage by the send path.
+// Stores the raw Blob + meta. Crypto-secure local id (Rule C2 — even though it's
+// only an IndexedDB key, avoid Math.random project-wide).
+const DB_NAME = 'lover-staff-chat-stickers';
+const STORE = 'stickers';
+export const MAX_STICKERS = 60;
+export const MAX_STICKER_BYTES = 1.5 * 1024 * 1024;
+
+function localId() {
+  const b = new Uint8Array(6); crypto.getRandomValues(b);
+  return 'LST-' + Date.now() + '-' + Array.from(b).map(x =&gt; x.toString(16).padStart(2, '0')).join('');
+}
+function openDb() {
+  return new Promise((res, rej) =&gt; {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () =&gt; { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' }); };
+    r.onsuccess = () =&gt; res(r.result);
+    r.onerror = () =&gt; rej(r.error);
+  });
+}
+function store(mode) { return openDb().then(db =&gt; db.transaction(STORE, mode).objectStore(STORE)); }
+
+export async function listStickers() {
+  const s = await store('readonly');
+  return new Promise((res, rej) =&gt; { const r = s.getAll(); r.onsuccess = () =&gt; res((r.result || []).sort((a, b) =&gt; b.addedAt - a.addedAt)); r.onerror = () =&gt; rej(r.error); });
+}
+export async function removeSticker(id) {
+  const s = await store('readwrite');
+  return new Promise((res, rej) =&gt; { const r = s.delete(id); r.onsuccess = () =&gt; res(); r.onerror = () =&gt; rej(r.error); });
+}
+export async function addSticker(blob) {
+  if (!(blob instanceof Blob)) throw new Error('STICKER_NOT_BLOB');
+  if (blob.size &gt; MAX_STICKER_BYTES) throw new Error('STICKER_TOO_LARGE');
+  if (!/^image\//.test(blob.type || '')) throw new Error('STICKER_NOT_IMAGE');
+  const all = await listStickers();
+  while (all.length &gt;= MAX_STICKERS) { await removeSticker(all.pop().id); } // evict oldest
+  const rec = { id: localId(), blob, type: blob.type || 'image/png', addedAt: Date.now() };
+  const s = await store('readwrite');
+  return new Promise((res, rej) =&gt; { const r = s.put(rec); r.onsuccess = () =&gt; res(rec); r.onerror = () =&gt; rej(r.error); });
+}
+// Fetch-from-URL helper (best-effort; CORS may block cross-origin reads).
+export async function addStickerFromUrl(url) {
+  const resp = await fetch(url, { mode: 'cors' });
+  if (!resp.ok) throw new Error('STICKER_FETCH_FAILED');
+  return addSticker(await resp.blob());
+}
+export function stickerObjectUrl(rec) { return rec &amp;&amp; rec.blob ? URL.createObjectURL(rec.blob) : ''; }</code></pre>
+  <div class="step"><input type="checkbox" id="t8s2"> <label for="t8s2"><strong>Step 2: Build clean</strong></label> — <code>npm run build</code>. Commit: <code>feat(staffchat): IndexedDB custom-sticker library (F4, AV134)</code>.</div>
+</div>
+
+<!-- ===================== T9 ===================== -->
+<div class="task">
+  <h3>Task 9: Sticker/emoji picker component (Feature 4 UI)</h3>
+  <p><strong>Files:</strong> Create <code>src/components/staffchat/StaffChatStickerPicker.jsx</code></p>
+  <div class="step"><input type="checkbox" id="t9s1"> <label for="t9s1"><strong>Step 1: Tabbed picker (emoji / bundled / custom)</strong></label></div>
+<pre><code class="language-jsx">// src/components/staffchat/StaffChatStickerPicker.jsx
+import React, { useEffect, useState } from 'react';
+import { BUNDLED_STICKERS, bundledStickerSrc } from '../../lib/staffChatStickers.js';
+import { listStickers, addSticker, addStickerFromUrl, removeSticker, stickerObjectUrl } from '../../lib/stickerLibrary.js';
+
+const EMOJIS = ['😀','😂','😍','😴','👍','🙏','🎉','😅','😭','🤔','😡','👋','❤️','✅','🔥','💯','👏','😎','🥹','🤝','🙌','😇','😊','🫡','💪','🤒','🩺','💊'];
+
+export function StaffChatStickerPicker({ onPickEmoji, onSendBundled, onSendCustom, onClose }) {
+  const [tab, setTab] = useState('emoji');
+  const [mine, setMine] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const reload = () =&gt; listStickers().then(setMine).catch(() =&gt; setMine([]));
+  useEffect(() =&gt; { if (tab === 'custom') reload(); }, [tab]);
+
+  async function onFile(e) {
+    const f = e.target.files &amp;&amp; e.target.files[0]; if (!f) return;
+    setBusy(true); setErr('');
+    try { await addSticker(f); await reload(); } catch (x) { setErr('เพิ่มไม่ได้: ' + x.message); } finally { setBusy(false); e.target.value = ''; }
+  }
+  async function onUrl() {
+    const url = window.prompt('วาง URL รูปสติกเกอร์ (png/gif/jpg):'); if (!url) return;
+    setBusy(true); setErr('');
+    try { await addStickerFromUrl(url); await reload(); }
+    catch { setErr('ดึงจาก URL ไม่ได้ (อาจติด CORS) — ลองดาวน์โหลดไฟล์แล้วอัปแทน'); } finally { setBusy(false); }
+  }
+
+  return (
+    &lt;div data-testid="staff-chat-sticker-picker" className="bg-[var(--bg-card)] border border-[var(--bd-soft)] rounded-xl p-2 w-[260px] shadow-2xl"&gt;
+      &lt;div className="flex gap-1 mb-2 text-xs"&gt;
+        {[['emoji','😀 Emoji'],['bundled','🏷️ ชุดแถม'],['custom','➕ ของฉัน']].map(([k,l]) =&gt; (
+          &lt;button key={k} type="button" onClick={() =&gt; setTab(k)}
+            className={`px-2 py-1 rounded ${tab===k?'bg-rose-700 text-white':'bg-black/20 text-[var(--tx-muted)]'}`}&gt;{l}&lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+      {tab === 'emoji' &amp;&amp; (
+        &lt;div className="grid grid-cols-8 gap-1 text-2xl max-h-40 overflow-y-auto"&gt;
+          {EMOJIS.map(e =&gt; &lt;button key={e} type="button" data-testid="sticker-emoji" onClick={() =&gt; onPickEmoji(e)}&gt;{e}&lt;/button&gt;)}
+        &lt;/div&gt;
+      )}
+      {tab === 'bundled' &amp;&amp; (
+        &lt;div className="grid grid-cols-4 gap-2 max-h-44 overflow-y-auto"&gt;
+          {BUNDLED_STICKERS.map(s =&gt; (
+            &lt;button key={s.id} type="button" data-testid="sticker-bundled" title={s.label}
+              onClick={() =&gt; { onSendBundled(s.id); onClose &amp;&amp; onClose(); }}&gt;
+              &lt;img src={bundledStickerSrc(s.id)} alt={s.label} className="w-12 h-12" /&gt;
+            &lt;/button&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+      {tab === 'custom' &amp;&amp; (
+        &lt;div&gt;
+          &lt;div className="flex gap-2 mb-2 text-xs"&gt;
+            &lt;label className="px-2 py-1 rounded bg-black/20 cursor-pointer"&gt;อัปไฟล์
+              &lt;input type="file" accept="image/*" className="hidden" onChange={onFile} data-testid="sticker-file-input" /&gt;
+            &lt;/label&gt;
+            &lt;button type="button" className="px-2 py-1 rounded bg-black/20" onClick={onUrl}&gt;จาก URL&lt;/button&gt;
+          &lt;/div&gt;
+          {err &amp;&amp; &lt;div className="text-[11px] text-rose-400 mb-1"&gt;{err}&lt;/div&gt;}
+          &lt;div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto"&gt;
+            {mine.map(rec =&gt; (
+              &lt;div key={rec.id} className="relative"&gt;
+                &lt;button type="button" data-testid="sticker-custom"
+                  onClick={() =&gt; { onSendCustom(rec); onClose &amp;&amp; onClose(); }}&gt;
+                  &lt;img src={stickerObjectUrl(rec)} alt="" className="w-12 h-12 object-contain" /&gt;
+                &lt;/button&gt;
+                &lt;button type="button" aria-label="ลบสติกเกอร์" onClick={() =&gt; removeSticker(rec.id).then(reload)}
+                  className="absolute -top-1 -right-1 bg-black/70 text-white rounded-full w-4 h-4 text-[10px]"&gt;×&lt;/button&gt;
+              &lt;/div&gt;
+            ))}
+          &lt;/div&gt;
+          {busy &amp;&amp; &lt;div className="text-[11px] text-[var(--tx-muted)] mt-1"&gt;กำลังเพิ่ม…&lt;/div&gt;}
+        &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+export default StaffChatStickerPicker;</code></pre>
+  <div class="step"><input type="checkbox" id="t9s2"> <label for="t9s2"><strong>Step 2: Build clean</strong></label> — <code>npm run build</code>; confirm <code>--bg-card</code>/<code>--bd-soft</code> vars exist (else use the project's actual card vars). Commit: <code>feat(staffchat): emoji + sticker picker component (F4)</code>.</div>
+</div>
+
+<!-- ===================== T10 ===================== -->
+<div class="task">
+  <h3>Task 10: Wire sticker send + render + buildMessageDoc field (Feature 4)</h3>
+  <p><strong>Files:</strong> <code>staffChatClient.js</code> (sticker field) · <code>useStaffChat.js</code> (sendSticker) · <code>StaffChatComposer.jsx</code> (picker button + emoji insert) · <code>StaffChatMessage.jsx</code> (sticker bubble)</p>
+  <div class="step"><input type="checkbox" id="t10s1"> <label for="t10s1"><strong>Step 1: buildMessageDoc accepts sticker (undefined-safe)</strong></label></div>
+  <p>In <code>staffChatClient.js buildMessageDoc</code>: (a) add <code>sticker</code> to the destructured params; (b) relax the empty-message guard so a sticker counts as content; (c) emit the field. Exact edits:</p>
+<pre><code class="language-js">// params: add `sticker,`
+// guard (line 80-81): replace with —
+  const hasAttachments = Array.isArray(attachments) &amp;&amp; attachments.length &gt; 0;
+  const hasSticker = sticker &amp;&amp; typeof sticker === 'object' &amp;&amp; typeof sticker.kind === 'string' &amp;&amp; sticker.kind;
+  if (!trimmed &amp;&amp; !attachmentUrl &amp;&amp; !hasAttachments &amp;&amp; !hasSticker) throw new Error('STAFF_CHAT_EMPTY_MESSAGE');
+// before `return doc;` add —
+  if (hasSticker) {
+    const s = { kind: String(sticker.kind) };
+    if (sticker.kind === 'bundled' &amp;&amp; sticker.id) s.id = String(sticker.id);
+    if (sticker.kind === 'custom') {
+      s.url = String(sticker.url || '');
+      s.storagePath = String(sticker.storagePath || '');
+      if (Number.isFinite(sticker.w) &amp;&amp; sticker.w &gt; 0) s.w = Math.round(sticker.w);
+      if (Number.isFinite(sticker.h) &amp;&amp; sticker.h &gt; 0) s.h = Math.round(sticker.h);
+    }
+    doc.sticker = s;
+  }</code></pre>
+  <div class="step"><input type="checkbox" id="t10s2"> <label for="t10s2"><strong>Step 2: useStaffChat.sendSticker</strong></label></div>
+  <p>Reuse the SAME upload primitive the attachment pipeline uses (find it: <code>grep -n "staff-chat-attachments\|uploadBytes\|getDownloadURL" src/hooks/useStaffChat.js src/lib/*.js</code> — the existing <code>prepareAndUpload</code> path). Mint the message id FIRST (so the custom blob lands under <code>{branchId}/{id}/</code>):</p>
+<pre><code class="language-js">import { newStaffChatMessageId, sendStaffChatMessage } from '../lib/staffChatClient.js';
+import { buildBundledStickerField, buildCustomStickerField } from '../lib/staffChatStickers.js';
+import { ref as storageRef, uploadBytes, getDownloadURL, getStorage } from 'firebase/storage';
+import { storagePrefixForMessage } from '../lib/staffChatRetentionCore.js';
+
+const sendSticker = useCallback(async (arg) =&gt; {
+  if (!selectedBranchId) return;
+  const base = { branchId: selectedBranchId, displayName, deviceId, senderColor: color, senderRole: role };
+  if (typeof arg === 'string') {                       // bundled id
+    await sendStaffChatMessage({ ...base, sticker: buildBundledStickerField(arg) });
+    return;
+  }
+  // custom: arg is the IndexedDB record { id, blob, type }
+  const id = newStaffChatMessageId();
+  const ext = (arg.type &amp;&amp; arg.type.split('/')[1]) || 'png';
+  const path = storagePrefixForMessage(selectedBranchId, id) + 'sticker.' + ext;
+  const sref = storageRef(getStorage(), path);
+  await uploadBytes(sref, arg.blob, { contentType: arg.type || 'image/png' });
+  const url = await getDownloadURL(sref);
+  await sendStaffChatMessage({ ...base, id, sticker: buildCustomStickerField({ url, storagePath: path }) });
+}, [selectedBranchId, displayName, deviceId, color, role]);
+// add `sendSticker` to the hook return.</code></pre>
+  <p>(Match the exact <code>displayName/deviceId/color/role</code> variable names already in the hook — confirm via grep; the snippet uses the names from the Explore map.)</p>
+  <div class="step"><input type="checkbox" id="t10s3"> <label for="t10s3"><strong>Step 3: Composer — picker button + emoji insert</strong></label></div>
+  <p>In <code>StaffChatComposer.jsx</code>: add a 😀 button next to the attachment picker that toggles <code>showPicker</code>; render <code>&lt;StaffChatStickerPicker&gt;</code> above the input when open. Wire: <code>onPickEmoji=(e)=&gt;</code> insert <code>e</code> at the textarea cursor (splice into the controlled value at selectionStart); <code>onSendBundled=(id)=&gt;onSendSticker(id)</code>; <code>onSendCustom=(rec)=&gt;onSendSticker(rec)</code> — where <code>onSendSticker</code> is a new prop wired from the widget to <code>sendSticker</code>. Close picker after a sticker send.</p>
+  <div class="step"><input type="checkbox" id="t10s4"> <label for="t10s4"><strong>Step 4: StaffChatMessage — render the sticker bubble</strong></label></div>
+  <p>Near the top of the bubble render (before/instead of the text bubble when <code>message.sticker</code> present), render a chrome-less large sticker:</p>
+<pre><code class="language-jsx">import { bundledStickerSrc } from '../../lib/staffChatStickers.js';
+// inside StaffChatMessage, before the regular bubble — if sticker, render it instead:
+{message.sticker ? (
+  &lt;img
+    data-testid={`staff-chat-message-sticker-${message.id}`}
+    src={message.sticker.kind === 'bundled' ? bundledStickerSrc(message.sticker.id) : message.sticker.url}
+    alt="sticker"
+    className="w-28 h-28 object-contain"
+    onError={(e) =&gt; { e.currentTarget.style.opacity = '0.3'; }}
+  /&gt;
+) : (
+  /* ...existing bubble JSX (attachments + text)... */
+)}</code></pre>
+  <p>The reply button + (own) delete button + time label stay as-is (a sticker message can still be replied-to / deleted).</p>
+  <div class="step"><input type="checkbox" id="t10s5"> <label for="t10s5"><strong>Step 5: Build clean + grep</strong></label> — <code>npm run build</code>; <code>grep -n "staff-chat-message-sticker-\|sendSticker\|doc.sticker" src/</code>. Commit: <code>feat(staffchat): sticker send + render + buildMessageDoc field (F4)</code>.</div>
+</div>
+
+<!-- ===================== T11 ===================== -->
+<div class="task">
+  <h3>Task 11: Test bank (Rule K — consolidated, after all source) — unit + RTL + Rule I flow-simulate</h3>
+  <p><strong>Files:</strong> Create <code>tests/staff-chat-enhancements-helpers.test.js</code>, <code>tests/staff-chat-enhancements-rtl.test.jsx</code>, <code>tests/staff-chat-enhancements-flow-simulate.test.js</code></p>
+  <div class="step"><input type="checkbox" id="t11s1"> <label for="t11s1"><strong>Step 1: Unit (helpers)</strong></label> — cover:</label></div>
+  <ul>
+    <li><code>staffChatDayGroups</code>: <code>toMs</code> dual-shape (number / <code>{toMillis}</code> / <code>{seconds}</code> / ISO / null); <code>bangkokDayKey</code> machine-TZ-stable (mock a non-BKK TZ via fixed ms); <code>dayDividerLabel</code> = วันนี้/เมื่อวาน/full BE date incl. a known date → <code>"อังคาร 25 พฤษภาคม 2569"</code>; <code>groupMessagesByDay</code> splits a 3-day fixture into 3 groups, contiguous same-day stays one group, unknown ts → '__unknown__' label ''.</li>
+    <li><code>staffChatClient.buildMessageDoc</code>: sticker-only (no text) passes (bundled) → <code>doc.sticker={kind:'bundled',id}</code>; custom → url/storagePath present; empty (no text/attach/sticker) throws; undefined-safe (no <code>undefined</code> leaf — walk the doc).</li>
+    <li><code>staffChatStickers</code>: <code>bundledStickerSrc</code> resolves a manifest id → <code>/stickers/fluent/...svg</code>; unknown id → ''.</li>
+    <li><code>stickerLibrary</code> (jsdom + <code>fake-indexeddb</code> — add devDep if absent): addSticker rejects non-image / oversized; evicts oldest beyond MAX_STICKERS; list sorted desc; remove works.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t11s2"> <label for="t11s2"><strong>Step 2: RTL</strong></label> — render with mocked data:</label></div>
+  <ul>
+    <li><code>StaffChatMessageList</code> with a 2-day fixture → exactly N <code>staff-chat-day-divider</code> present, labels correct.</li>
+    <li><code>StaffChatMessage</code> quote → the quote element className contains <code>text-[13px]</code> (NOT <code>text-[10px]</code> — anti-regression).</li>
+    <li><code>StaffChatMessage</code> own (<code>isOwn + onDelete</code>) → <code>staff-chat-message-delete-*</code> present; NOT own → absent. Click 🗑 → confirm dialog appears; click "ลบเลย" → <code>onDelete(message.id)</code> called; click "ยกเลิก" → not called; backdrop click → dialog stays (AV78).</li>
+    <li><code>StaffChatMessage</code> with <code>sticker:{kind:'bundled',id:'fluent/congrats'}</code> → <code>staff-chat-message-sticker-*</code> img with src ending the manifest file; <code>kind:'custom'</code> → src = url.</li>
+    <li><code>StaffChatStickerPicker</code> → emoji tab click fires <code>onPickEmoji</code>; bundled tab click fires <code>onSendBundled(id)</code>.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t11s3"> <label for="t11s3"><strong>Step 3: Rule I flow-simulate</strong></label> — pure-chain mirrors (no real Firebase):</label></div>
+  <ul>
+    <li>bundled send: <code>buildBundledStickerField('fluent/fire')</code> → <code>buildMessageDoc</code> → assert doc has <code>sticker.kind==='bundled'</code>, NO attachments, text ''.</li>
+    <li>custom send: simulate upload returns a url → <code>buildCustomStickerField({url,storagePath})</code> → <code>buildMessageDoc</code> → assert <code>sticker.kind==='custom'</code> + url + storagePath.</li>
+    <li>day-group end-to-end: feed messages across 3 BKK days (with <code>{toMillis}</code> Timestamps) → <code>groupMessagesByDay</code> → 3 groups, ordered, labels correct.</li>
+    <li>delete contract: assert <code>storagePrefixForMessage(b,id)</code> = <code>staff-chat-attachments/{b}/{id}/</code> (the folder the delete helper sweeps) — locks the path the e2e verifies.</li>
+  </ul>
+  <div class="step"><input type="checkbox" id="t11s4"> <label for="t11s4"><strong>Step 4: Run targeted</strong></label> — <code>npx vitest run tests/staff-chat-enhancements-*.test.*</code> → all green. Commit: <code>test(staffchat): day/quote/unsend/sticker bank (unit+RTL+flow-simulate)</code>.</div>
+</div>
+
+<!-- ===================== T12 ===================== -->
+<div class="task">
+  <h3>Task 12: L2 real-prod e2e + AV134 (Rule Q)</h3>
+  <p><strong>Files:</strong> Create <code>scripts/e2e-staff-chat-enhancements.mjs</code> (Rule M/R: <code>vercel env pull</code> + firebase-admin + canonical path) + extend <code>.agents/skills/audit-anti-vibe-code/SKILL.md</code> (AV134)</p>
+  <div class="step"><input type="checkbox" id="t12s1"> <label for="t12s1"><strong>Step 1: e2e against real prod (admin-SDK setup; CLIENT-SDK or real-browser for the verified leg where feasible)</strong></label></div>
+  <ul>
+    <li>Bundled sticker round-trip: create a <code>be_staff_chat_messages</code> doc (id <code>TEST-CHAT-...</code>) with <code>sticker:{kind:'bundled',id:'fluent/ok'}</code>, NO text/attachments → assert it persists (the new content-clause accepts it) + read-back shape; assert NO Storage object created.</li>
+    <li>Custom sticker round-trip: upload a tiny png to <code>staff-chat-attachments/{TEST-BR}/{TEST-CHAT}/sticker.png</code>, write the doc with <code>sticker:{kind:'custom',url,storagePath}</code> → read back → fetch the url (client download path) → bytes match.</li>
+    <li>Unsend: call the delete path on the custom-sticker fixture → assert Firestore doc gone AND <code>listAll(staff-chat-attachments/{TEST-BR}/{TEST-CHAT}/)</code> returns 0 items (no orphan).</li>
+    <li>Cleanup: delete all <code>TEST-CHAT-*</code> + their folders; assert 0 orphan; emit an audit doc to <code>be_admin_audit/e2e-staff-chat-enh-&lt;ts&gt;-&lt;rand&gt;</code>.</li>
+  </ul>
+  <p><strong>Rule Q-honest scope to record:</strong> rule-gated CLIENT writes (sticker-only create + client delete) need the deployed rules to be truly L2 — so the rule-acceptance + client-delete legs are <em>verified after deploy</em> (or via a client-SDK script with E2E creds); the admin-SDK e2e proves the doc/Storage shapes + the no-orphan delete mechanics. The UI (picker, day dividers render, confirm dialog) = <strong>L1 by the user post-deploy</strong> (auth-gated AdminDashboard; workstyle "ไม่ self-test UI"). Disclose this gap in the V-entry/handoff — do not claim full L1.</p>
+  <div class="step"><input type="checkbox" id="t12s2"> <label for="t12s2"><strong>Step 2: AV134</strong></label> — add invariant: (a) custom-sticker library is IndexedDB only — grep that NO code writes the sticker LIBRARY to Firestore/Storage as a catalog (only the per-send instance under the attachment prefix); (b) bundled sticker send = ID ref, 0 Storage write; (c) unsend deletes Firestore doc + Storage folder (no orphan); (d) own-only delete is a client gate. Source-grep targets + sanctioned exceptions.</p>
+  <div class="step"><input type="checkbox" id="t12s3"> <label for="t12s3"><strong>Step 3: Run e2e</strong></label> — <code>node scripts/e2e-staff-chat-enhancements.mjs</code> → all green, 0 orphan. Commit: <code>test(staffchat): real-prod e2e + AV134</code>.</div>
+</div>
+
+<!-- ===================== T13 ===================== -->
+<div class="task">
+  <h3>Task 13: Full suite + build + deploy gate</h3>
+  <div class="step"><input type="checkbox" id="t13s1"> <label for="t13s1"><strong>Step 1: Full suite + build</strong></label> — <code>npm test -- --run</code> (full, per Rule N — this is a multi-file feature) → 0 fail (fix any V21 lock-ins in sibling staff-chat tests, e.g. tests asserting the old <code>text-[10px]</code> quote or the flat message-list map). <code>npm run build</code> → clean.</div>
+  <div class="step"><input type="checkbox" id="t13s2"> <label for="t13s2"><strong>Step 2: Update docs/state</strong></label> — V-entry in <code>.claude/rules/00-session-start.md</code> § 2 (+ verbose archive), <code>SESSION_HANDOFF.md</code>, <code>.agents/active.md</code> with the Rule Q-honest scope (L2 shapes + post-deploy L1).</div>
+  <div class="step"><input type="checkbox" id="t13s3"> <label for="t13s3"><strong>Step 3: DEPLOY — only on explicit user "deploy" (V18)</strong></label> — combined per V15: <code>vercel --prod</code> + <code>firebase deploy --only firestore:rules,storage</code> wrapped in <strong>Probe-Deploy-Probe</strong> (Rule B): pre+post probes incl. NEW #15 (anon delete <code>be_staff_chat_messages</code> → 403; anon Storage delete → 401/403; clinic-staff sticker-only create → 200). 403 mismatch → revert. (⚠ firebase CLI 15.x uses <code>--only ... storage</code>, NOT <code>storage:rules</code>.)</div>
+  <div class="step"><input type="checkbox" id="t13s4"> <label for="t13s4"><strong>Step 4: Post-deploy L1 (user)</strong></label> — day dividers across 2+ days; quote reads at 13px; delete own message → gone on a 2nd device, file gone; send bundled + custom sticker → 2nd device renders; emoji inserts in text.</div>
+</div>
+
+<h2>Self-Review</h2>
+<blockquote>
+<strong>Spec coverage:</strong> F1→T1+T2 · F2→T3 · F3→T4+T5+T6(delete rule) · F4 emoji→T9+T10 · F4 bundled→T7+T10 · F4 custom→T8+T9+T10+T6(sticker create clause) · sourcing(Fluent MIT)→T7 · AV134→T12 · tests→T11+T12 · deploy/P-D-P→T6+T13. All spec acceptance criteria mapped.<br>
+<strong>Placeholders:</strong> none — every new file has complete code; edits cite file:line + show the new code. Sticker asset list is concrete (folder + filename pattern + fallback via <code>gh api</code>).<br>
+<strong>Type consistency:</strong> <code>sticker:{kind,id|url,storagePath,w,h}</code> identical across buildMessageDoc (T10) / staffChatStickers builders (T7) / picker+send (T9,T10) / render (T10) / e2e (T12). <code>deleteStaffChatMessage(branchId,messageId)</code> same signature T4→T5→T12. <code>groupMessagesByDay</code>/<code>dayDividerLabel</code> consistent T1→T2→T11.<br>
+<strong>Known confirmations the executor must grep at execution (flagged inline):</strong> exact card CSS vars (<code>--bg-card</code>/<code>--bd-soft</code>); the existing attachment upload primitive name in useStaffChat; <code>THAI_MONTHS</code> export; Vite <code>/public</code> JSON-import vs <code>src/</code> manifest. CORS limit on add-from-URL is surfaced to the user in the picker.
+</blockquote>
+
+</body>
+</html>

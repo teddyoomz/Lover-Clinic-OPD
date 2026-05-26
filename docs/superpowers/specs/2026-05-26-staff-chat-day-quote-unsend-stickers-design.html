@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Staff Chat Enhancements — Design Spec</title>
+  <style>
+    :root { --accent: #dc2626; --bd: #e5e5e5; --bg-meta: #f0f4f8; --bg-section: #fafafa; --tx-muted: #666; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 980px; margin: 2em auto; padding: 1em; line-height: 1.65; color: #222; }
+    h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.3em; }
+    h2 { border-bottom: 1px solid var(--bd); padding-bottom: 0.2em; margin-top: 2em; }
+    h3 { margin-top: 1.4em; color: #b91c1c; }
+    pre { background: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.86em; }
+    code { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    blockquote { border-left: 4px solid var(--accent); background: var(--bg-meta); padding: 0.5em 1em; border-radius: 0 6px 6px 0; color: var(--tx-muted); }
+    .section { background: var(--bg-section); padding: 1em 1.5em; border-radius: 8px; margin: 1em 0; }
+    .mockup { background: #fff; border: 1px solid var(--bd); border-radius: 8px; padding: 1.2em; margin: 1em 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .mockup-label { font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tx-muted); margin-bottom: 0.6em; }
+    .chat { background:#141414; border-radius:12px; padding:14px; width:300px; font-size:13px; color:#eee; }
+    .divider { text-align:center; margin:10px 0; }
+    .divider span { background:#333; color:#bbb; font-size:11px; padding:3px 14px; border-radius:12px; }
+    .bub { padding:6px 10px; border-radius:10px; display:inline-block; margin-bottom:5px; max-width:80%; }
+    .me { background:#7f1d1d; color:#fff; }
+    .them { background:#2a2a2a; color:#eee; }
+    .quote { border-left:3px solid #f43f5e; background:rgba(244,63,94,.10); border-radius:4px; padding:5px 8px; margin-bottom:6px; }
+    .quote .q-name { color:#fda4af; font-weight:bold; }
+    .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:0.85em; }
+    .flow .node { background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; }
+    .flow .arrow { color:var(--accent); font-weight:bold; }
+    .flow .zero { background:#dcfce7; border-color:#86efac; }
+    .flow .fire { background:#fee2e2; border-color:#fca5a5; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid var(--bd); padding: 0.5em 0.8em; text-align: left; vertical-align: top; }
+    th { background: var(--bg-meta); }
+    .tag { font-size:0.75em; background:#fee2e2; color:#b91c1c; border-radius:4px; padding:1px 6px; }
+  </style>
+</head>
+<body>
+
+<h1>Staff Chat Enhancements — Design Spec</h1>
+
+<blockquote>
+  <strong>Date:</strong> 2026-05-26 · <strong>Status:</strong> Approved by user (design + Q1–Q5 locked) · <strong>Surface:</strong> internal staff-to-staff chat (NOT customer FB/LINE chat) · <strong>Implementation plan:</strong> docs/superpowers/plans/2026-05-26-staff-chat-day-quote-unsend-stickers.html (pending)
+</blockquote>
+
+<h2>Purpose / Problem</h2>
+<p>Four user-reported gaps in the staff chat, all on one surface:</p>
+<ol>
+  <li><strong>No day separators</strong> — messages render as a flat list. On days a doctor isn't in, there may be zero messages; reviewing the log later is confusing because there's no marker of which day a bubble belongs to.</li>
+  <li><strong>Quoted reply text too small</strong> — the reply/quote preview is <code>text-[10px]</code>, almost unreadable.</li>
+  <li><strong>No unsend / delete</strong> — a wrong upload or mis-sent message cannot be removed; only a 30-day retention cron eventually clears it.</li>
+  <li><strong>No emoji / stickers</strong> — only plain text + @mentions + attachments today.</li>
+</ol>
+<p>All four live in <code>src/components/staffchat/*</code> + <code>useStaffChat</code> + <code>staffChatClient</code>. Messages stay in <code>be_staff_chat_messages</code> (canonical <code>artifacts/{APP_ID}/public/data/be_staff_chat_messages</code>); attachment/sticker bytes stay under Storage <code>staff-chat-attachments/{branchId}/{messageId}/</code>.</p>
+
+<h2>Mockup Design</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 · Day separators (loaded, messages spanning 3 days)</div>
+  <div class="chat">
+    <div class="divider"><span>อังคาร 25 พฤษภาคม 2569</span></div>
+    <div><span class="bub them">หมอเข้าบ่ายนะ</span></div>
+    <div class="divider"><span>เมื่อวาน</span></div>
+    <div><span class="bub them">วันนี้คนไข้เยอะ</span></div>
+    <div style="text-align:right"><span class="bub me">รับทราบครับ</span></div>
+    <div class="divider"><span>วันนี้</span></div>
+    <div style="text-align:right"><span class="bub me">โอเคครับ</span></div>
+  </div>
+  <p style="font-size:0.8em;color:#666">Relative <code>วันนี้</code>/<code>เมื่อวาน</code> for recent; full Thai <strong>BE</strong> date + weekday for older (honoring the selected preview). Static inline pill — no sticky.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 2 · Quote text 10px → 13px (before / after)</div>
+  <div style="display:flex; gap:18px; flex-wrap:wrap">
+    <div class="chat" style="width:230px">
+      <div style="font-size:10px;color:#777;margin-bottom:4px">ก่อน (10px)</div>
+      <div class="bub them" style="display:block">
+        <div class="quote"><div class="q-name" style="font-size:10px">↩ หมอเอ</div><div style="color:#aaa;font-style:italic;font-size:10px">ขอเลื่อนคนไข้บ่ายสองได้ไหม</div></div>
+        <div style="font-size:14px">ได้ครับ เลื่อนเป็นบ่ายสาม</div>
+      </div>
+    </div>
+    <div class="chat" style="width:230px">
+      <div style="font-size:10px;color:#86efac;margin-bottom:4px">หลัง (13px)</div>
+      <div class="bub them" style="display:block">
+        <div class="quote"><div class="q-name" style="font-size:13px">↩ หมอเอ</div><div style="color:#aaa;font-style:italic;font-size:13px">ขอเลื่อนคนไข้บ่ายสองได้ไหม</div></div>
+        <div style="font-size:14px">ได้ครับ เลื่อนเป็นบ่ายสาม</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 3 · Unsend (own message action + confirm dialog)</div>
+  <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start">
+    <div class="chat" style="width:250px">
+      <div style="font-size:11px;color:#888;margin-bottom:3px">ของคนอื่น — ไม่มีปุ่มลบ</div>
+      <div><span class="bub them">สวัสดีครับ</span></div>
+      <div style="font-size:11px;color:#888;margin:6px 0 3px">ของเรา — hover / กดค้าง → 🗑</div>
+      <div style="text-align:right"><span class="bub me">อัปรูปผิด 😅 &nbsp;<span style="background:#000;border-radius:6px;padding:2px 6px;font-size:11px">🗑 ลบ</span></span></div>
+    </div>
+    <div style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:14px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.15)">
+      <div style="font-weight:bold;margin-bottom:6px">ลบข้อความ</div>
+      <div style="font-size:0.85em;color:#555;margin-bottom:12px">ลบข้อความนี้ออกจากระบบ? ลบแล้วกู้คืนไม่ได้ (ลบทั้งข้อความและไฟล์แนบ)</div>
+      <div style="text-align:right"><button style="background:#eee;border:none;border-radius:6px;padding:5px 12px;margin-right:6px">ยกเลิก</button><button style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:5px 12px">ลบเลย</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 4 · Sticker picker (tabbed) + sent sticker bubble</div>
+  <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start">
+    <div style="background:#1f1f1f;border-radius:12px;padding:10px;width:250px">
+      <div style="display:flex;gap:6px;margin-bottom:8px;font-size:12px">
+        <span style="background:#7f1d1d;color:#fff;border-radius:8px;padding:4px 10px">😀 Emoji</span>
+        <span style="background:#333;color:#bbb;border-radius:8px;padding:4px 10px">🏷️ ชุดแถม</span>
+        <span style="background:#333;color:#bbb;border-radius:8px;padding:4px 10px">➕ ของฉัน</span>
+      </div>
+      <div style="font-size:26px;letter-spacing:6px;color:#eee">😀😂😍😴👍🙏🎉😅<br>😭🤔😡👋❤️✅🔥💯</div>
+    </div>
+    <div class="chat" style="width:230px">
+      <div style="font-size:11px;color:#888;margin-bottom:4px">ส่งสติกเกอร์ (bubble ใหญ่ ไม่มีกรอบ)</div>
+      <div style="text-align:right"><span style="font-size:64px">🎉</span></div>
+      <div style="text-align:right;font-size:10px;color:#777">14:32</div>
+    </div>
+  </div>
+  <p style="font-size:0.8em;color:#666">Bundled tab = Fluent Emoji SVGs (sent by ID). "ของฉัน" tab = personal IndexedDB library with an <strong>+ เพิ่มจาก URL / อัปไฟล์</strong> control. Emoji insert into the text box; a sticker is its own message.</p>
+</div>
+
+<h2>Flow</h2>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 1 · Day-grouping render flow (no Firestore change)</div>
+  <div class="flow">
+    <span class="node">listener → messages[] (createdAt ASC after reverse)</span><span class="arrow">→</span>
+    <span class="node">groupMessagesByDay() · Bangkok-TZ buckets · dual-shape createdAt</span><span class="arrow">→</span>
+    <span class="node">[{dayKey, label, items[]}]</span><span class="arrow">→</span>
+    <span class="node">render pill divider + bubbles per group</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 3 · Unsend flow (own message)</div>
+  <div class="flow">
+    <span class="node">long-press / hover (deviceId === own)</span><span class="arrow">→</span>
+    <span class="node">🗑 + confirm dialog</span><span class="arrow">→</span>
+    <span class="node fire">deleteDoc(be_staff_chat_messages/{id})</span><span class="arrow">+</span>
+    <span class="node fire">delete Storage staff-chat-attachments/{branchId}/{id}/**</span><span class="arrow">→</span>
+    <span class="node">onSnapshot removes from all devices</span>
+  </div>
+  <p style="font-size:0.8em;color:#666">Own-only = client gate (deviceId is localStorage, not auth). Server rule = any clinic-staff may delete. Storage delete reuses the retention cron's folder-delete (Rule of 3). Best-effort: tolerate already-gone objects.</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 4 · Bundled sticker send (0 Firebase / 0 Storage)</div>
+  <div class="flow">
+    <span class="node">pick bundled sticker</span><span class="arrow">→</span>
+    <span class="node">message <code>sticker:{kind:'bundled', id:'fluent/party'}</code></span><span class="arrow">→</span>
+    <span class="node zero">no Storage write</span><span class="arrow">→</span>
+    <span class="node">recipient renders from its own /public/stickers asset by id</span>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-label">Feature 4 · Custom sticker (library = IndexedDB; sent instance = temporary Storage)</div>
+  <div class="flow">
+    <span class="node">+ add from URL / file</span><span class="arrow">→</span>
+    <span class="node zero">IndexedDB (this device only · never Firebase)</span><span class="arrow">→ on SEND →</span>
+    <span class="node fire">upload to staff-chat-attachments/{branchId}/{messageId}/</span><span class="arrow">→</span>
+    <span class="node">message <code>sticker:{kind:'custom', url, storagePath, w, h}</code></span><span class="arrow">→</span>
+    <span class="node">recipient renders from url</span><span class="arrow">→</span>
+    <span class="node">30-day retention auto-deletes (like any attachment)</span>
+  </div>
+</div>
+
+<h2>Architecture</h2>
+
+<h3>New / changed files</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/lib/staffChatDayGroups.js</code> <span class="tag">NEW</span></td><td>Pure: <code>groupMessagesByDay(messages)</code> + <code>dayDividerLabel(ms, nowMs)</code>. Bangkok-TZ day bucket, dual-shape <code>createdAt</code> (number OR Firestore Timestamp — V82 lesson), relative วันนี้/เมื่อวาน + full BE date.</td></tr>
+  <tr><td><code>src/lib/stickerLibrary.js</code> <span class="tag">NEW</span></td><td>IndexedDB CRUD for the per-device custom-sticker library: <code>addSticker(blob, meta)</code> / <code>listStickers()</code> / <code>removeSticker(id)</code> / quota guard + oldest-evict. Never touches Firebase.</td></tr>
+  <tr><td><code>src/lib/staffChatStickers.js</code> <span class="tag">NEW</span></td><td>Bundled-pack manifest (id → asset path) + <code>buildStickerField()</code> helpers for bundled vs custom.</td></tr>
+  <tr><td><code>/public/stickers/</code> <span class="tag">NEW</span></td><td>~20–24 curated Microsoft Fluent Emoji "Color/flat" SVGs + <code>LICENSE</code> (MIT) + <code>manifest.json</code>.</td></tr>
+  <tr><td><code>src/components/staffchat/StaffChatStickerPicker.jsx</code> <span class="tag">NEW</span></td><td>Tabbed popover: Emoji (curated unicode) · ชุดแถม (bundled grid) · ของฉัน (IndexedDB grid + add-from-URL/upload).</td></tr>
+  <tr><td><code>StaffChatMessageList.jsx</code></td><td>Render via <code>groupMessagesByDay</code> + pill dividers (was flat <code>.map</code> at :65).</td></tr>
+  <tr><td><code>StaffChatMessage.jsx</code></td><td>(2) quote <code>text-[10px]</code> → <code>text-[13px]</code> (:105). (3) own-only 🗑 + confirm dialog (AV78 explicit-close). (4) render <code>sticker</code> bubble (bundled by id / custom by url), large + no chrome.</td></tr>
+  <tr><td><code>StaffChatComposer.jsx</code></td><td>Sticker/emoji picker button; emoji inserts at cursor; quote strip font bumped for consistency.</td></tr>
+  <tr><td><code>staffChatClient.js</code></td><td><code>buildMessageDoc</code> gains optional <code>sticker</code> field (undefined-safe). NEW <code>deleteStaffChatMessage(branchId, messageId)</code> = Firestore delete + Storage folder delete (reuse retention helper).</td></tr>
+  <tr><td><code>useStaffChat.js</code></td><td>Expose <code>deleteMessage(id)</code>, <code>sendSticker(...)</code>; wire picker.</td></tr>
+  <tr><td><code>firestore.rules</code> + <code>storage.rules</code></td><td>Add <code>delete</code> for clinic-staff on <code>be_staff_chat_messages</code> + <code>staff-chat-attachments/...</code>. → <strong>Probe-Deploy-Probe</strong>.</td></tr>
+  <tr><td><code>audit-anti-vibe-code/SKILL.md</code></td><td>NEW <strong>AV134</strong>.</td></tr>
+</table>
+
+<h3>New message-doc field</h3>
+<pre>sticker?: {            // optional; present ⇒ sticker message (text empty, attachments[] absent)
+  kind: 'bundled' | 'custom',
+  id?:   string,       // bundled: manifest id e.g. 'fluent/party-popper'
+  url?:  string,       // custom: Storage download URL
+  storagePath?: string,// custom: for delete/cleanup
+  w?: number, h?: number
+}</pre>
+
+<h3>AV134 (new invariant)</h3>
+<ul>
+  <li>Unsend gate is own-only on the CLIENT (<code>deviceId</code> match); server rule allows clinic-staff delete (no per-user auth in staff chat).</li>
+  <li>Custom-sticker LIBRARY lives in IndexedDB only — it MUST NOT be written to Firestore/Storage as a catalog. Only the SENT instance touches Storage (under the attachment prefix, retention-covered).</li>
+  <li>Bundled stickers are ID references to in-repo assets — 0 Firebase / 0 Storage on send.</li>
+  <li>Delete = Firestore doc + Storage folder both removed (no orphan).</li>
+</ul>
+
+<h2>Decisions (locked via Q&A with user)</h2>
+<ul>
+  <li><strong>Q1 = A:</strong> Day separators — relative (วันนี้/เมื่อวาน) + full Thai <strong>BE</strong> date w/ weekday for older; centered pill, static (no sticky).</li>
+  <li><strong>Q2 = A:</strong> Quote text 10px → <strong>13px</strong> (near-normal; body ≈ 14px).</li>
+  <li><strong>Q3 = A:</strong> Unsend — own messages only (client deviceId gate), <strong>hard-delete</strong> Firestore + Storage (vanish, no tombstone), confirm dialog.</li>
+  <li><strong>Q4 = A:</strong> Emoji = unicode inserted in text. Stickers = 2-tier (bundled ID-ref 0 Firebase + custom IndexedDB library → temporary Storage on send, 30-day auto-clean).</li>
+  <li><strong>Q5 → MIT:</strong> Bundled pack = <strong>Microsoft Fluent Emoji (MIT)</strong>, curated ~20–24 moods, LICENSE committed. (User chose "find a CC0 cartoon pack"; MIT Fluent Emoji is the license-safe, higher-quality realization for a commercial clinic — accepted.)</li>
+</ul>
+
+<h2>Acceptance Criteria</h2>
+<ol>
+  <li>Messages spanning ≥2 Bangkok days render a divider between each day group; today/yesterday correct; older = full BE date + weekday.</li>
+  <li>Quote label + snippet render at 13px.</li>
+  <li>A 🗑 affordance appears ONLY on the viewer's own messages; on confirm, the Firestore doc AND every Storage object under that message's folder are gone (verified by real-prod L2 e2e); other devices stop showing it.</li>
+  <li>Other users' messages show no delete affordance.</li>
+  <li>Emoji picker inserts unicode at the textarea cursor (no Firebase write).</li>
+  <li>Sending a bundled sticker writes <code>sticker:{kind:'bundled',id}</code> with <strong>zero</strong> Storage writes and renders on a second device from local assets.</li>
+  <li>A custom sticker is stored in IndexedDB (not Firebase); on send it uploads to the attachment prefix, the message carries <code>sticker:{kind:'custom',url,...}</code>, renders on a second device, and is removed by the 30-day retention sweep.</li>
+  <li>Rules deploy passes Probe-Deploy-Probe (anon delete on <code>be_staff_chat_messages</code> + <code>staff-chat-attachments</code> → 403/401; clinic-staff delete succeeds).</li>
+</ol>
+
+<h2>Risks / Open Questions</h2>
+<ul>
+  <li><strong>License:</strong> Fluent Emoji MIT — keep the LICENSE file in <code>/public/stickers/</code>; no in-app attribution required. (If true-CC0-only is mandatory, fallback = OpenMoji CC BY-SA w/ attribution — lower quality choice.)</li>
+  <li><strong>Own-only is client-gated</strong> (deviceId, not auth) — accepted; consistent with the existing staff-chat identity model.</li>
+  <li><strong>IndexedDB quota</strong> for the custom library (per device): bound count/size, show usage, evict oldest. Library loss on browser-data clear is acceptable (personal palette, re-addable).</li>
+  <li><strong>Custom sticker after 30 days:</strong> the sent image is retention-deleted like any attachment → an old chat review shows a missing sticker. Same contract as attachments (acceptable).</li>
+  <li><strong>Emoji dataset:</strong> default = curated categorized unicode set (lean, no heavy dep). Can swap to a fuller set later if needed — confirm at spec review if you want the full Unicode keyboard.</li>
+  <li><strong>Date format:</strong> divider uses พ.ศ. (per the selected preview) even though backend UIs default to ค.ศ. — staff chat is internal; honoring the chosen visual.</li>
+</ul>
+
+</body>
+</html>

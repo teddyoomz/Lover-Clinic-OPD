@@ -3213,3 +3213,27 @@ Three /systematic-debugging fixes in the appointment area. Three invariants:
 **Source-grep regression**: `tests/finance-goto-default-time-cancel-delete.test.js` (I1/I2/I3 source-grep + pure-logic flow-simulate; I2 runs the REAL `getOpenHoursForDate`) + `tests/v125-cancel-cascade.test.js` SG-A3 (hard-delete + `appt-deleted` reason).
 
 **Cross-link**: Issue-1 (deep-link date-nav) · Issue-2 (branch open-hours default) · Issue-3 (cancel = hard-delete, mirrors Backend `deleteBackendAppointment`) · V125 (cascade preserved) · Rule Q-honest (logic L2 via real helper + source-grep; UI render-timing + real hard-delete round-trip = user/L1 post-deploy, disclosed).
+
+### AV134 — Staff-chat enhancements: day-separators · 13px quote · own-only unsend · 2-tier stickers (2026-05-26)
+
+Four staff-chat features on one surface. Invariants:
+
+- **(a) Unsend = own-only CLIENT gate (deviceId); hard-delete doc + Storage folder, no orphan** — the 🗑 affordance renders ONLY when `isOwn && onDelete` (`message.deviceId === ownDeviceId`). `deleteStaffChatMessage(branchId, messageId)` MUST sweep the Storage folder `staff-chat-attachments/{branchId}/{messageId}/` (best-effort, tolerate missing) THEN `deleteDoc`. Server rule = clinic-staff delete (staff chat has no per-user auth — deviceId is localStorage; own-only is a UX gate, NOT a security boundary). Confirm dialog is AV78 explicit-close (no backdrop-close).
+- **(b) Custom-sticker LIBRARY = IndexedDB only — NEVER a Firebase catalog** — `stickerLibrary.js` stores custom sticker blobs in IndexedDB per device; the library MUST NOT be written to Firestore/Storage. Only the SENT instance uploads — to the per-message attachment prefix (`staff-chat-attachments/{branchId}/{messageId}/sticker.<ext>`) so retention + the unsend folder-sweep cover it (30-day auto-clean).
+- **(c) Bundled sticker send = ID reference, 0 Storage / 0 Firebase blob** — bundled stickers ship in `/public/stickers/fluent/` (Microsoft Fluent Emoji, MIT — `/public/stickers/LICENSE` kept in-repo). A bundled message carries `sticker:{kind:'bundled', id}` only; recipients render from their own bundled asset via `bundledStickerSrc(id)`. No Storage write on send.
+- **(d) sticker field undefined-safe + sticker-only message is valid content** — `buildMessageDoc` emits `sticker` with only known sub-fields (V14, no `undefined` leaves); a sticker-only message (empty text, no attachments) passes the empty-message guard AND the firestore.rules create content-clause (`sticker.kind` non-empty).
+- **(e) day-separators from a pure Bangkok-TZ helper (dual-shape createdAt)** — `bangkokDayKey`/`groupMessagesByDay` shift to GMT+7 then read UTC parts (machine-TZ-stable, V53); `toMs` handles number / Timestamp / `{seconds}` / ISO (V82 dual-shape). Quote preview is `text-[13px]` (was `text-[10px]`).
+
+**Forbidden**:
+- ❌ a delete affordance on another user's message (gate MUST be `isOwn && onDelete`); unsend that deletes the doc but leaks the Storage folder (or vice-versa).
+- ❌ writing the custom-sticker library/catalog to Firestore or Storage; rendering a bundled sticker from a Storage URL (it is an ID ref).
+- ❌ `buildMessageDoc` writing a `sticker` with `undefined` leaves; a firestore.rules create-clause that rejects a sticker-only message.
+- ❌ `new Date()` / local-TZ day bucketing for the divider (must be GMT+7 shift); assuming `THAI_MONTHS[i]` is a string (it is a `{value,label}` object — the helper inlines its own month array).
+
+**Sanctioned consumers**: `src/lib/staffChatDayGroups.js` · `src/lib/stickerLibrary.js` (IndexedDB) · `src/lib/staffChatStickers.js` + `/public/stickers/` (bundled) · `src/lib/staffChatClient.js` (`buildMessageDoc` sticker) · `src/lib/backendClient.js` + `src/lib/scopedDataLayer.js` (`deleteStaffChatMessage`) · `src/hooks/useStaffChat.js` (`deleteMessage` + `sendSticker`) · `src/components/staffchat/{StaffChatMessage,StaffChatMessageList,StaffChatComposer,StaffChatStickerPicker}.jsx`.
+
+**Rules**: `firestore.rules be_staff_chat_messages` (sticker-only create clause + `allow delete: if isClinicStaff()`) + `storage.rules staff-chat-attachments` (`allow delete` clinic-staff). Supersedes the AV108 "client delete locked" premise for `staff-chat-attachments` — delete is now allowed for clinic-staff (Feature 3 unsend); the retention cron still uses admin SDK. Probe-Deploy-Probe #15 (anon delete `be_staff_chat_messages` → 403; anon Storage delete → 401/403; clinic-staff sticker-only create → 200).
+
+**Source-grep regression**: `tests/staff-chat-enhancements-helpers.test.js` (day-groups + buildMessageDoc sticker + bundled accessors) + `tests/staff-chat-enhancements-flow-simulate.test.js` (Rule I) + V21 fixups in `staff-chat-any-file.test.js` + `staff-chat-multi-image.test.js` (storage.rules delete now clinic-staff).
+
+**Cross-link**: spec/plan `docs/superpowers/{specs,plans}/2026-05-26-staff-chat-day-quote-unsend-stickers*` · AV78 (explicit-close dialog) · AV108 (attachment append-only — delete premise updated) · Rule Q-honest (unit + sibling + flow-simulate; real-browser UI + rule-gated client paths = user/L1 post-deploy, disclosed).

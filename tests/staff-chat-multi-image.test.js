@@ -199,11 +199,14 @@ describe('G5 · AV108 source-grep (per-message folder + cron prefix-sweep + lock
     expect(s).toMatch(/--apply/);
     expect(s).toMatch(/\.env\.local\.prod/);
   });
-  it('storage.rules: 50MB cap + client delete locked', () => {
+  it('storage.rules: 50MB cap + update locked + clinic-staff delete (V26 Feature 3 unsend)', () => {
     const s = read('storage.rules');
     expect(s).toMatch(/staff-chat-attachments\/\{branchId\}\/\{file=\*\*\}/);
     expect(s).toMatch(/request\.resource\.size < 50 \* 1024 \* 1024/);
-    expect(s).toMatch(/allow update, delete: if false/);
+    // (2026-05-26 Feature 3) update stays locked; client delete now allowed for
+    // clinic-staff (the unsend folder-sweep). Was "allow update, delete: if false".
+    expect(s).toMatch(/allow update: if false/);
+    expect(s).toMatch(/allow delete: if request\.auth != null/);
   });
   it('firestore.rules: attachments[] (≤10) accepted as content', () => {
     const s = read('firestore.rules');

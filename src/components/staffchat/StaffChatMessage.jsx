@@ -5,8 +5,13 @@
 // V73 Feature F (2026-05-16) — Attachment thumbnail + click-to-open lightbox.
 // V73 color-picker (2026-05-18) — sender-chosen color drives name + bubble.
 //   Past messages without senderColor → default rose (own) / sky (other).
+// (2026-05-26) Feature 2 — quote text 10px → 13px (near-normal, readable).
+// (2026-05-26) Feature 3 — own-only unsend: 🗑 on hover (own messages) → confirm
+//   dialog (AV78 explicit-close) → onDelete(id) hard-deletes Firestore doc + Storage.
+// (2026-05-26) Feature 4 — sticker bubble: bundled (by id) or custom (by url),
+//   rendered chrome-less + large (no message-bubble background).
 import React, { useState } from 'react';
-import { Reply } from 'lucide-react';
+import { Reply, Trash2 } from 'lucide-react';
 import { StaffChatMessageBody } from './StaffChatMessageBody.jsx';
 import { StaffChatImageLightbox } from './StaffChatImageLightbox.jsx';
 import { StaffChatAttachmentCard } from './StaffChatAttachmentCard.jsx';
@@ -14,11 +19,9 @@ import { StaffChatPdfOverlay } from './StaffChatPdfOverlay.jsx';
 import { StaffChatRoleBadge } from './StaffChatRoleBadge.jsx';
 import { hexToRgba, resolveSenderColor } from '../../lib/staffChatColor.js';
 import { gridLayoutFor, attachmentKindFor } from '../../lib/staffChatRetentionCore.js';
+import { bundledStickerSrc } from '../../lib/staffChatStickers.js';
 
 // (2026-05-22) Adaptive thumbnail grid for message.attachments[] (LINE-style).
-// 1 image renders at natural aspect; 2+ render as a fixed-height grid of square
-// cover tiles; the 4th tile shows "+N" when there are more than 4. Click a tile
-// → onOpen(index) opens the lightbox at that image.
 function AttachmentGrid({ attachments, onOpen }) {
   const atts = Array.isArray(attachments) ? attachments : [];
   if (atts.length === 0) return null;
@@ -76,12 +79,13 @@ function formatTime(createdAt) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function StaffChatMessage({ message, isOwn, onReply }) {
-  // V73 Feature F — local lightbox state. (2026-05-22) null = closed; else
-  // { images, start } so the swipe lightbox opens at the clicked image.
+export function StaffChatMessage({ message, isOwn, onReply, onDelete }) {
+  // V73 Feature F — local lightbox state. null = closed; else { images, start }.
   const [lightbox, setLightbox] = useState(null);
-  // (2026-05-22) any-file: file-preview overlay state ({ viewerUrl, fileUrl, name, size }).
+  // (2026-05-22) any-file: file-preview overlay state.
   const [fileViewer, setFileViewer] = useState(null);
+  // (2026-05-26) Feature 3 — unsend confirm dialog state.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // V73 color-picker (2026-05-18) — resolve sender color from message doc.
   const senderColor = resolveSenderColor(message, isOwn);
   const bubbleStyle = {
@@ -89,13 +93,12 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
     borderColor: hexToRgba(senderColor, 0.45),
   };
   const nameStyle = { color: senderColor };
-  // (2026-05-22) any-file: split attachments by render kind. Images group into
-  // the existing grid (+ lightbox); every other kind renders in order below
-  // (inline video/audio players · pdf/file download cards). Legacy multi-image
-  // records carry image/* mimeType → land in imageAtts unchanged.
+  // (2026-05-22) any-file: split attachments by render kind.
   const atts = Array.isArray(message.attachments) ? message.attachments : [];
   const imageAtts = atts.filter((a) => attachmentKindFor(a && a.mimeType) === 'image');
   const otherAtts = atts.filter((a) => attachmentKindFor(a && a.mimeType) !== 'image');
+  // (2026-05-26) Feature 4 — sticker message renders chrome-less (no bubble).
+  const isSticker = !!(message.sticker && message.sticker.kind);
   return (
     <div
       data-testid="staff-chat-message"
@@ -105,28 +108,20 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
       {message.replyTo && (
         <div
           data-testid={`staff-chat-message-quote-${message.id}`}
-          className={`text-[10px] px-2 py-1 mb-1 border-l-2 border-rose-400 bg-rose-500/[0.08] rounded max-w-[80%] ${isOwn ? 'self-end' : 'self-start'} cursor-pointer hover:bg-rose-500/15`}
+          className={`text-[13px] px-2 py-1 mb-1 border-l-2 border-rose-400 bg-rose-500/[0.08] rounded max-w-[80%] ${isOwn ? 'self-end' : 'self-start'} cursor-pointer hover:bg-rose-500/15`}
         >
           <span className="font-bold text-rose-300">↩ {message.replyTo.displayName}: </span>
           <span className="text-[var(--tx-muted)] italic">{message.replyTo.snippet}</span>
         </div>
       )}
       {/* V73 L1 fix (2026-05-18) — show displayName on ALL messages incl. own.
-          V73 color-picker (2026-05-18) — name color uses sender-chosen hex
-          (resolved via resolveSenderColor with fallback to default rose/sky).
-          Inline style required since hex is dynamic (cannot pre-generate
-          Tailwind classes for arbitrary user-picked colors).
-          V82 (2026-05-17) — RoleBadge rendered inline-flex BEFORE the name
-          when message.senderRole present; returns null gracefully for legacy
-          messages (no senderRole field) so no layout reflow. */}
+          V82 (2026-05-17) — RoleBadge before the name when senderRole present. */}
       {message.displayName && (
         <div
           data-testid={`staff-chat-message-name-${message.id}`}
           className="text-[10px] font-bold mb-0.5 px-1"
         >
-          <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             <StaffChatRoleBadge role={message.senderRole} size="sm" />
             <span data-testid="staff-chat-sender-name" style={nameStyle}>
               {message.displayName}
@@ -135,68 +130,78 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
         </div>
       )}
       <div className="flex items-end gap-1">
-        <div
-          className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words border text-[var(--tx-primary)] ${
-            isOwn ? 'rounded-br-md' : 'rounded-bl-md'
-          }`}
-          style={bubbleStyle}
-          data-testid={`staff-chat-message-bubble-${message.id}`}
-        >
-          {imageAtts.length > 0 && (
-            <div data-testid={`staff-chat-message-image-${message.id}`}>
-              <AttachmentGrid
-                attachments={imageAtts}
-                onOpen={(i) => setLightbox({ images: imageAtts, start: i })}
-              />
-            </div>
-          )}
-          {otherAtts.map((a, i) => {
-            const kind = attachmentKindFor(a && a.mimeType);
-            if (kind === 'video') {
+        {isSticker ? (
+          <img
+            data-testid={`staff-chat-message-sticker-${message.id}`}
+            src={message.sticker.kind === 'bundled' ? bundledStickerSrc(message.sticker.id) : message.sticker.url}
+            alt="sticker"
+            className="w-28 h-28 object-contain"
+            onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}
+          />
+        ) : (
+          <div
+            className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words border text-[var(--tx-primary)] ${
+              isOwn ? 'rounded-br-md' : 'rounded-bl-md'
+            }`}
+            style={bubbleStyle}
+            data-testid={`staff-chat-message-bubble-${message.id}`}
+          >
+            {imageAtts.length > 0 && (
+              <div data-testid={`staff-chat-message-image-${message.id}`}>
+                <AttachmentGrid
+                  attachments={imageAtts}
+                  onOpen={(i) => setLightbox({ images: imageAtts, start: i })}
+                />
+              </div>
+            )}
+            {otherAtts.map((a, i) => {
+              const kind = attachmentKindFor(a && a.mimeType);
+              if (kind === 'video') {
+                return (
+                  <video
+                    key={i}
+                    src={a.fullUrl}
+                    controls
+                    preload="metadata"
+                    data-testid="staff-chat-attach-video"
+                    className="block w-full max-w-[240px] rounded-lg mb-1 bg-black"
+                  />
+                );
+              }
+              if (kind === 'audio') {
+                return (
+                  <audio
+                    key={i}
+                    src={a.fullUrl}
+                    controls
+                    preload="metadata"
+                    data-testid="staff-chat-attach-audio"
+                    className="block w-full max-w-[240px] mb-1"
+                  />
+                );
+              }
               return (
-                <video
+                <StaffChatAttachmentCard
                   key={i}
-                  src={a.fullUrl}
-                  controls
-                  preload="metadata"
-                  data-testid="staff-chat-attach-video"
-                  className="block w-full max-w-[240px] rounded-lg mb-1 bg-black"
+                  att={a}
+                  onPreview={(info) => setFileViewer(info)}
                 />
               );
-            }
-            if (kind === 'audio') {
-              return (
-                <audio
-                  key={i}
-                  src={a.fullUrl}
-                  controls
-                  preload="metadata"
-                  data-testid="staff-chat-attach-audio"
-                  className="block w-full max-w-[240px] mb-1"
-                />
-              );
-            }
-            return (
-              <StaffChatAttachmentCard
-                key={i}
-                att={a}
-                onPreview={(info) => setFileViewer(info)}
-              />
-            );
-          })}
-          {imageAtts.length === 0 && otherAtts.length === 0 && message.attachmentUrl && (
-            // Legacy V73 single-image message (attachmentUrl scalar) — still renders.
-            <button
-              type="button"
-              onClick={() => setLightbox({ images: [{ fullUrl: message.attachmentUrl, thumbUrl: message.attachmentUrl }], start: 0 })}
-              data-testid={`staff-chat-message-image-${message.id}`}
-              className="block max-w-[200px] rounded-lg overflow-hidden mb-1 cursor-zoom-in"
-            >
-              <img src={message.attachmentUrl} alt="" className="w-full h-auto" />
-            </button>
-          )}
-          {message.text && <StaffChatMessageBody text={message.text} />}
-        </div>
+            })}
+            {imageAtts.length === 0 && otherAtts.length === 0 && message.attachmentUrl && (
+              // Legacy V73 single-image message (attachmentUrl scalar) — still renders.
+              <button
+                type="button"
+                onClick={() => setLightbox({ images: [{ fullUrl: message.attachmentUrl, thumbUrl: message.attachmentUrl }], start: 0 })}
+                data-testid={`staff-chat-message-image-${message.id}`}
+                className="block max-w-[200px] rounded-lg overflow-hidden mb-1 cursor-zoom-in"
+              >
+                <img src={message.attachmentUrl} alt="" className="w-full h-auto" />
+              </button>
+            )}
+            {message.text && <StaffChatMessageBody text={message.text} />}
+          </div>
+        )}
         {onReply && (
           <button
             type="button"
@@ -207,6 +212,19 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
             title="ตอบกลับ"
           >
             <Reply size={11} />
+          </button>
+        )}
+        {/* (2026-05-26) Feature 3 — own-only unsend affordance. */}
+        {isOwn && onDelete && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
+            data-testid={`staff-chat-message-delete-${message.id}`}
+            className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded text-[var(--tx-muted)] hover:text-rose-500 hover:bg-rose-500/10"
+            aria-label="ลบข้อความ"
+            title="ลบข้อความ"
+          >
+            <Trash2 size={11} />
           </button>
         )}
       </div>
@@ -227,6 +245,41 @@ export function StaffChatMessage({ message, isOwn, onReply }) {
           size={fileViewer.size}
           onClose={() => setFileViewer(null)}
         />
+      )}
+      {/* (2026-05-26) Feature 3 — unsend confirm. AV78 explicit-close: backdrop
+          does NOT close; only ยกเลิก / ลบเลย. */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50"
+          data-testid={`staff-chat-delete-confirm-${message.id}`}
+        >
+          <div
+            className="bg-[var(--bg-card)] text-[var(--tx-primary)] rounded-xl p-4 w-[260px] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-bold mb-1">ลบข้อความ</div>
+            <div className="text-sm text-[var(--tx-muted)] mb-3">
+              ลบข้อความนี้ออกจากระบบ? ลบแล้วกู้คืนไม่ได้ (ลบทั้งข้อความและไฟล์แนบ)
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-1 rounded bg-black/20"
+                onClick={() => setConfirmDelete(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                data-testid={`staff-chat-delete-confirm-yes-${message.id}`}
+                className="px-3 py-1 rounded bg-rose-600 text-white"
+                onClick={async () => { setConfirmDelete(false); try { await onDelete(message.id); } catch { /* surfaced upstream */ } }}
+              >
+                ลบเลย
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
