@@ -9,7 +9,7 @@ export default function ThemeToggle({ theme, setTheme, compact = false }) {
     return (
       <button
         onClick={() => setTheme(next)}
-        className="p-2.5 bg-[var(--bg-input)] hover:bg-[var(--bg-hover2)] border border-[var(--bd)] text-[var(--tx-muted)] hover:text-[var(--tx-heading)] rounded-lg transition-all"
+        className="p-2.5 bg-[var(--bg-input)] hover:bg-[var(--bg-hover2)] border border-[var(--bd-strong,var(--bd))] text-[var(--tx-secondary)] hover:text-[var(--tx-heading)] rounded-lg transition-all"
         title={`Theme: ${theme} (click to change)`}
       >
         <Icon size={16} />

@@ -128,9 +128,13 @@ describe('Menu Variant A v2 — Phase A (2026-05-18)', () => {
     expect(SRC).toMatch(/onClick=\{\(\)\s*=>\s*signOut\(auth\)\}/);
   });
 
-  // ───── สร้างคิวใหม่ + popover ─────
-  it('M7.1 สร้างคิวใหม่ button dispatches setSessionModalTab + setShowSessionModal', () => {
-    expect(SRC).toMatch(/setSessionModalTab\('standard'\);\s*setShowSessionModal\(true\)/);
+  // ───── สร้างคิวใหม่ create-queue (button REMOVED 2026-05-27; modal kept) ─────
+  it('M7.1 create-queue button REMOVED 2026-05-27 (live dispatch gone; modal/form kept)', () => {
+    // V21-fixup: user removed the create-queue button. The live open-trigger
+    // (setSessionModalTab('standard'); setShowSessionModal(true)) is GONE...
+    expect(SRC).not.toMatch(/setSessionModalTab\('standard'\);\s*setShowSessionModal\(true\)/);
+    // ...the dormant session-creation modal/form is KEPT for later re-use.
+    expect(SRC).toMatch(/\{showSessionModal && \(/);
   });
 
   // ───── CSS contract ─────

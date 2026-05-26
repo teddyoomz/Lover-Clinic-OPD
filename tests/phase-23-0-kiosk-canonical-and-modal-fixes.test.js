@@ -288,18 +288,15 @@ describe('Phase 23.0 / B — AdminDashboard.jsx contract guards', () => {
     expect(legacy).toEqual([]);
   });
 
-  it('B.5 Resync button label renamed (Bug 3a)', () => {
-    // Pre-fix: 'Resync ProClinic' (misleading post Phase 20.0 strip).
-    // Post-fix: 'ซิงค์ข้อมูลใหม่'.
-    expect(ADMIN).toContain("'ซิงค์ข้อมูลใหม่'");
-    // Anti-regression: literal "Resync ProClinic" in user-visible button
-    // text MUST be gone (still OK in inline comments).
+  it('B.5 "ซิงค์ข้อมูลใหม่" Resync button REMOVED from the OPD review modal (EOD+7 2026-05-26)', () => {
+    // User removed the Sync button (unused; sync/edit via backend now). Both the
+    // label and the renderResyncButton fn are gone. Supersedes the old B.5/B.6
+    // which validated the renamed button + its tooltip.
+    expect(ADMIN).not.toContain("'ซิงค์ข้อมูลใหม่'");
+    expect(ADMIN).not.toContain('renderResyncButton');
+    // Legacy "Resync ProClinic" must also stay gone (still OK in inline comments).
     const visibleResyncProClinic = ADMIN.match(/[>\s]Resync ProClinic[<\s]/g) || [];
     expect(visibleResyncProClinic).toEqual([]);
-  });
-
-  it('B.6 Resync tooltip rewritten to backend-only language (Bug 3a)', () => {
-    expect(ADMIN).toContain('บันทึกข้อมูลลูกค้าลง backend อีกครั้ง');
   });
 
   it('B.7 OPD button title surfaces brokerError + retry hint (Bug 3c)', () => {

@@ -38,7 +38,7 @@ export default function OpdLifecycleRow({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1.5 mt-1.5 py-1.5 px-2 rounded-md border-y border-dashed border-amber-500/30 bg-amber-500/[0.03] md:justify-end"
+      className="flex flex-wrap items-center gap-1.5 mt-1.5 md:justify-end"
       data-testid="opd-lifecycle-row"
       data-opd-state={state}
     >

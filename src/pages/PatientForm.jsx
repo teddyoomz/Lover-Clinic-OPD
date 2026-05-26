@@ -82,9 +82,14 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
         setCustomTemplate(data.customTemplate);
       }
 
-      if (data.isArchived) { setIsClosed(true); return; }
+      // EOD+7 (2026-05-26) — the archived + 2h-expiry gates exist for the PUBLIC
+      // customer link. When admin opens the form via "แก้ไขข้อมูล"
+      // (isSimulation=true) to fix data the customer mis-entered, skip BOTH so
+      // the form is always editable. The public link (isSimulation=false) keeps
+      // them — 2h security timeout + cron-archived sessions stay closed to customers.
+      if (data.isArchived && !isSimulation) { setIsClosed(true); return; }
 
-      if (data.createdAt && !data.isPermanent) {
+      if (data.createdAt && !data.isPermanent && !isSimulation) {
         if (Date.now() - data.createdAt.toMillis() > SESSION_TIMEOUT_MS) { setIsExpired(true); return; }
       }
       
@@ -416,9 +421,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
   const LanguageToggle = () => (
     <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
       {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-      <div style={{ display: 'flex', background: isDark ? 'rgba(220,38,38,0.08)' : 'rgba(236,72,153,0.08)', border: `1px solid ${isDark ? 'rgba(220,38,38,0.2)' : 'rgba(236,72,153,0.2)'}`, borderRadius: '8px', overflow: 'hidden' }}>
-        <button type="button" onClick={() => setLanguage('th')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'th' ? 'text-white' : isDark ? 'text-red-300/50 hover:text-white' : 'text-pink-400/50 hover:text-pink-800'}`} style={language === 'th' ? {backgroundColor: isDark ? '#dc2626' : '#ec4899', color: '#fff'} : {}}>TH</button>
-        <button type="button" onClick={() => setLanguage('en')} className={`px-3 py-2 text-xs font-bold transition-colors ${language === 'en' ? 'text-white' : isDark ? 'text-red-300/50 hover:text-white' : 'text-pink-400/50 hover:text-pink-800'}`} style={language === 'en' ? {backgroundColor: isDark ? '#dc2626' : '#ec4899', color: '#fff'} : {}}>EN</button>
+      <div style={{ display: 'flex', background: isDark ? 'rgba(220,38,38,0.12)' : 'rgba(236,72,153,0.10)', border: `1px solid ${isDark ? 'rgba(248,113,113,0.5)' : 'rgba(236,72,153,0.45)'}`, borderRadius: '8px', overflow: 'hidden' }}>
+        {/* EOD+7 fix2 — inline color (highest specificity, no Tailwind JIT/override risk):
+            inactive = light-red on dark / dark-rose on light → clearly readable in both themes. */}
+        <button type="button" onClick={() => setLanguage('th')} className="px-3 py-2 text-xs font-bold transition-colors"
+          style={{ color: language === 'th' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'th' ? (isDark ? '#dc2626' : '#ec4899') : 'transparent' }}>TH</button>
+        <button type="button" onClick={() => setLanguage('en')} className="px-3 py-2 text-xs font-bold transition-colors"
+          style={{ color: language === 'en' ? '#ffffff' : (isDark ? '#fca5a5' : '#9f1239'), backgroundColor: language === 'en' ? (isDark ? '#dc2626' : '#ec4899') : 'transparent' }}>EN</button>
       </div>
     </div>
   );
@@ -500,8 +509,8 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
             </h2>
             <p className="text-sm leading-relaxed max-w-xs mx-auto" style={{ color: isDark ? '#6b7280' : '#64748b' }}>
               {language === 'en'
-                ? 'Your information has been submitted. Please wait to be called by our staff.'
-                : 'ข้อมูลของท่านถูกส่งเรียบร้อยแล้ว กรุณารอเจ้าหน้าที่เรียกชื่อเพื่อพบแพทย์'}
+                ? 'Your information has been submitted.'
+                : 'ข้อมูลของท่านถูกส่งเรียบร้อยแล้ว'}
             </p>
           </div>
         </div>
@@ -623,13 +632,13 @@ export default function PatientForm({ db, appId, user, sessionId, isSimulation, 
           {/* Lang + theme toggles */}
           <div className="pf-lang-toggle">
             {theme && setTheme && <ThemeToggle theme={theme} setTheme={setTheme} compact />}
-            <div style={{ display: 'flex', background: heroGlass, border: `1px solid ${heroGlassBd}`, borderRadius: '8px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', background: heroGlass, border: `1px solid ${isLightHero ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.22)'}`, borderRadius: '8px', overflow: 'hidden' }}>
               <button type="button" onClick={() => setLanguage('th')}
-                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'th' ? '#fff' : heroFaint, backgroundColor: language === 'th' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'th' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'th' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
                 TH
               </button>
               <button type="button" onClick={() => setLanguage('en')}
-                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'en' ? '#fff' : heroFaint, backgroundColor: language === 'en' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
+                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: '700', color: language === 'en' ? '#fff' : (isLightHero ? '#475569' : 'rgba(255,255,255,0.78)'), backgroundColor: language === 'en' ? ac : 'transparent', transition: 'all 0.15s', border: 'none', cursor: 'pointer' }}>
                 EN
               </button>
             </div>

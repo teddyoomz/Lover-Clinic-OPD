@@ -159,9 +159,12 @@ describe('V118 — AdminDashboard handlers', () => {
   });
 
   it('SG7.5 — synth-session __synthetic gate present at destructive modal buttons', () => {
-    // The 3 V118 gates added to viewingSession modal's destructive ops
+    // V118 gated 3 modal ops on __synthetic. EOD+8 (2026-05-26) removed the
+    // "ซิงค์ข้อมูลใหม่" Sync button (1 gate) → 2 remain: "แก้ไขข้อมูล" (~4852) +
+    // post-save "Resync OPD" (~4948). The gate must still be present on the
+    // surviving destructive ops so synth sessions (no real doc) stay protected.
     const gateMatches = ADMIN.match(/!viewingSession\.__synthetic/g) || [];
-    expect(gateMatches.length).toBeGreaterThanOrEqual(3);
+    expect(gateMatches.length).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -183,7 +183,7 @@ export function getTreatmentStatusLabel(t, isLatest = false) {
  *   - "แพทย์"      if doctor done
  *   - "ข้ามแพทย์"  if vitals + completed done but NO doctor (skip-doctor path)
  *   - "รอแพทย์"    if only vitals done (waiting for doctor)
- *   - "ข้าม"       otherwise (no relevant signal)
+ *   - "แพทย์"      otherwise (default/muted — stage name, NOT "skip"; EOD+7)
  *
  * @param {Array<{key:string, time?:string}>} lifecycle
  * @returns {{t:string, a:string, e:string}}
@@ -206,7 +206,11 @@ export function getStepLabels(lifecycle) {
   if (hasD) aLabel = 'แพทย์';
   else if (hasV && hasC && !hasD) aLabel = 'ข้ามแพทย์';
   else if (hasV && !hasC) aLabel = 'รอแพทย์';
-  else aLabel = 'ข้าม';
+  // EOD+7 (2026-05-26) — default/muted doctor slot shows the STAGE NAME "แพทย์"
+  // (was "ข้าม"). On a fresh/empty card the middle dot is the doctor stage that
+  // is waiting to be recorded — "ข้าม" (skip) was confusing there. The genuine
+  // skip-doctor case keeps its explicit "ข้ามแพทย์" label above. Per user.
+  else aLabel = 'แพทย์';
 
   return { t: tLabel, a: aLabel, e: 'เสร็จ' };
 }

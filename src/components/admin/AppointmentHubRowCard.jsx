@@ -149,10 +149,15 @@ export default function AppointmentHubRowCard({
   // avoids an empty warm strip. No behavior change.
   const showOpdLifecycle = !!(opdLifecycle && !opdLifecycle.hidden);
   const showOpdFooterBand = showOpdLifecycle || !!latestTreatment || isTodayTab;
+  // EOD+7 (2026-05-26) — filled-pending (📥 ลูกค้ากรอกแล้ว · รอบันทึก, OPD
+  // state D) → card gets a strong "unread"-style breathing + shadow (CSS
+  // .card-filled-pending) so it pops out of the queue. Same condition as the
+  // ready-to-save chip (line ~183). Cosmetic only — no handler/wiring change.
+  const isFilledPending = !!(opdLifecycle && opdLifecycle.state === 'D' && !opdLifecycle.hidden);
 
   return (
     <div
-      className="relative border border-[var(--bd)] rounded-2xl overflow-hidden bg-[var(--bg-card)] shadow-sm mb-3 flex flex-col transition-all duration-200 hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10"
+      className={`relative border border-[var(--bd)] rounded-2xl overflow-hidden bg-[var(--bg-card)] shadow-sm mb-3 flex flex-col transition-all duration-200 hover:border-orange-700/30 hover:shadow-lg hover:shadow-orange-950/10${isFilledPending ? ' card-filled-pending' : ''}`}
       data-testid="appt-hub-row"
       data-appt-id={appt.id}
       data-status-accent={accentKey}

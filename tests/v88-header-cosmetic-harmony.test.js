@@ -120,17 +120,15 @@ describe('V88 — desktop right-rail buttons harmonized to transparent-base', ()
     expect(cls).not.toMatch(/bg-\[var\(--bg-input\)\]/);
   });
 
-  it('R5.1 — Primary CTA "สร้างคิวใหม่" stays as solid red button (NOT harmonized)', () => {
-    // The primary CTA must KEEP its solid styling (it's the action focus).
-    expect(DESKTOP_SLICE).toMatch(/<PlusCircle size=\{14\}\/>\s*สร้างคิวใหม่/);
-    // Locate the CTA className.
-    const m = DESKTOP_SLICE.match(/setSessionModalTab\('standard'\);[\s\S]{0,500}?className="([^"]+)"/);
-    expect(m).not.toBeNull();
-    const cls = m[1];
-    // Still solid red text-white px-3 py-2 rounded-lg.
-    expect(cls).toMatch(/text-white/);
-    expect(cls).toMatch(/rounded-lg/);
-    expect(cls).toMatch(/font-bold/);
+  it('R5.1 — create-queue CTA REMOVED 2026-05-27 (button no longer rendered; modal/form KEPT)', () => {
+    // V21-fixup: user removed the "สร้างคิวใหม่" create-queue button (feature paused,
+    // not deleted). The live header button is GONE; only a prose breadcrumb + the kept
+    // dormant modal remain. (Was: "Primary CTA stays solid red" — void now the CTA is gone.)
+    expect(DESKTOP_SLICE).not.toMatch(/<PlusCircle size=\{14\}\/>\s*สร้างคิวใหม่/);
+    // No live open-trigger remains in the desktop slice.
+    expect(DESKTOP_SLICE).not.toMatch(/setSessionModalTab\('standard'\);\s*setShowSessionModal\(true\)/);
+    // Removal breadcrumb present (institutional memory + re-enable hint).
+    expect(DESKTOP_SLICE).toMatch(/Create-queue button REMOVED per user/);
   });
 
   it('R6.1 — V88 marker comments present at all 3 harmonized buttons', () => {
@@ -149,8 +147,12 @@ describe('V88 — handler / wiring lock (cosmetic-shell constraint)', () => {
     expect(SOURCE).toMatch(/onClick=\{\(\)\s*=>\s*setShowNotifSettings\(!showNotifSettings\)\}/);
   });
 
-  it('W1.2 — สร้างคิวใหม่ CTA still wired to setSessionModalTab + setShowSessionModal', () => {
-    expect(SOURCE).toMatch(/setSessionModalTab\('standard'\);\s*setShowSessionModal\(true\);/);
+  it('W1.2 — create-queue CTA REMOVED 2026-05-27; modal/form KEPT (dormant) for later re-use', () => {
+    // V21-fixup: the live open-trigger (button onClick) is GONE per user...
+    expect(SOURCE).not.toMatch(/setSessionModalTab\('standard'\);\s*setShowSessionModal\(true\)/);
+    // ...but the session-creation modal/form + its close handler are KEPT (paused, not deleted).
+    expect(SOURCE).toMatch(/\{showSessionModal && \(/);
+    expect(SOURCE).toMatch(/setShowSessionModal\(false\)/);
   });
 
   it('W1.3 — Online indicator still pulls from onlineAdmins state', () => {

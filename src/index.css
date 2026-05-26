@@ -1500,6 +1500,26 @@ select.pf-input {
   50%       { box-shadow: 0 0 24px rgba(var(--accent-rgb, 220,38,38), 0.55); }
 }
 
+/* EOD+7 (2026-05-26) — filled-pending appointment card (📥 ลูกค้ากรอกแล้ว ·
+   รอบันทึก, OPD state D). Strong "unread"-style breathing + prominent shadow so
+   the card pops out of the queue. Purple (#a855f7) matches the card-flow tab
+   bubble channel (AppointmentHubTabBar cardflow bubble). Reduced-motion → static
+   strong shadow (no animation) so it still stands out. */
+@keyframes card-filled-pending-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(168,85,247,0.45), 0 4px 18px rgba(168,85,247,0.22); }
+  50%      { box-shadow: 0 0 0 2px rgba(168,85,247,0.9), 0 10px 34px rgba(168,85,247,0.55); }
+}
+.card-filled-pending {
+  animation: card-filled-pending-breathe 2s ease-in-out infinite;
+  border-color: rgba(168,85,247,0.65) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-filled-pending {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(168,85,247,0.75), 0 8px 28px rgba(168,85,247,0.45);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════ */
 /* V85 — Universal Glow Effect Utilities (2026-05-18 EOD+9)             */
 /* Spec: docs/superpowers/specs/2026-05-18-v85-glow-effect-universal-   */

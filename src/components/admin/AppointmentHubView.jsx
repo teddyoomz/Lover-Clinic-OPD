@@ -307,16 +307,25 @@ export default function AppointmentHubView({
   // visible "📥 ลูกค้ากรอกแล้ว · รอบันทึก" badge at AppointmentHubRowCard:172).
   const cardFlowSubPillCounts = useMemo(() => {
     const now = new Date();
-    const buckets = { today: 0, tomorrow: 0, future: 0, past: 0 };
+    const buckets = { today: 0, tomorrow: 0, future: 0, past: 0, 'opd-pending': 0 };
     for (const a of appts) {
       if (!a?.linkedOpdSessionId) continue;
       const linkedSession = resolveLinkedSession ? resolveLinkedSession(a) : null;
       if (!linkedSession) continue; // state C — not loaded or no patientData yet
       if (!isAppointmentPendingOpdSave({ appt: a, linkedSession })) continue;
-      // Determine which sub-pill this appt belongs to via applyTabFilter (existing).
+      // Determine which date-range sub-pill this appt belongs to (mutually
+      // exclusive — break on first).
       for (const tab of ['today', 'tomorrow', 'future', 'past']) {
         const inTab = applyTabFilter([a], { tab, now }).length > 0;
         if (inTab) { buckets[tab]++; break; }
+      }
+      // ② (2026-05-26 EOD+7) — opd-pending is a CROSS-CUTTING state tab (not a
+      // date-range bucket) so it overlaps the date tabs → count SEPARATELY,
+      // outside the break loop. Same 📥 state-D appts, gated by the opd-pending
+      // tab's own date-range membership (mirror opdPendingCount). Gives the
+      // "รอ/ยังไม่ลง OPD" tab purple-bubble parity with the other tabs.
+      if (applyTabFilter([a], { tab: 'opd-pending', now }).length > 0) {
+        buckets['opd-pending']++;
       }
     }
     return buckets;

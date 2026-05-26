@@ -55,7 +55,9 @@ function SendCustomerLinkModal({
     let alive = true;
     (async () => {
       try {
-        const data = await generateQrDataUrl(url, { width: 280, margin: 2 });
+        // EOD+7 (2026-05-26) — render the QR large (fills mobile width for
+        // on-screen scanning), so generate at high res to stay crisp.
+        const data = await generateQrDataUrl(url, { width: 600, margin: 2 });
         if (alive) setQrDataUrl(data);
       } catch (e) {
         console.warn('[SendCustomerLinkModal] generateQrDataUrl failed:', e);
@@ -118,7 +120,7 @@ function SendCustomerLinkModal({
       data-testid="send-customer-link-modal"
     >
       <div
-        className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-2xl shadow-2xl w-full max-w-md p-5 sm:p-6"
+        className="bg-[var(--bg-card)] border border-[var(--bd)] rounded-2xl shadow-2xl w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -146,7 +148,7 @@ function SendCustomerLinkModal({
 
         {/* QR */}
         {qrDataUrl ? (
-          <div className="mx-auto bg-white rounded-xl p-3 mb-4 w-full max-w-[240px] aspect-square shadow-md">
+          <div className="mx-auto bg-white rounded-xl p-3 mb-4 w-full aspect-square shadow-md">
             <img
               src={qrDataUrl}
               alt="QR ลิ้งค์ลูกค้า"
@@ -155,7 +157,7 @@ function SendCustomerLinkModal({
             />
           </div>
         ) : (
-          <div className="mx-auto bg-[var(--bg-input)] border border-[var(--bd)] rounded-xl mb-4 w-full max-w-[240px] aspect-square flex items-center justify-center text-[var(--tx-muted)] text-xs">
+          <div className="mx-auto bg-[var(--bg-input)] border border-[var(--bd)] rounded-xl mb-4 w-full aspect-square flex items-center justify-center text-[var(--tx-muted)] text-xs">
             กำลังสร้าง QR ...
           </div>
         )}

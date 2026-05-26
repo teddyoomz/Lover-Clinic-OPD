@@ -4838,9 +4838,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
               </div>
               <div className="min-w-0">
                 <h3 className="font-black text-white font-semibold text-xs sm:text-sm leading-tight">
-                  {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'ประวัติผู้ป่วย OPD'}
+                  {isCustom ? `แบบฟอร์ม: ${viewingSession.customTemplate?.title}` : isFollowUp ? 'แบบรายงานติดตาม' : 'บันทึกข้อมูลรับเข้า'}
                 </h3>
-                <p className="text-[11px] text-red-500 font-mono mt-0.5">ID: {viewingSession.id}</p>
               </div>
             </div>
 
@@ -4856,7 +4855,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
                 <Edit3 size={13} /> แก้ไขข้อมูล
               </button>
               )}
-              {viewingSession.patientData && !(viewingSession.isArchived && viewingSession.formType === 'deposit') && !viewingSession.__synthetic && renderResyncButton()}
               {viewingSession.patientData && !isCustom && (
                 <>
                   <button onClick={() => setPrintMode('dashboard')}
@@ -5958,30 +5956,6 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
     );
   };
 
-  // Resync button for the viewing-session modal header.
-  // Phase 23.0 — relabeled "Resync ProClinic" → "ซิงค์ข้อมูลใหม่" (post
-  // Phase 20.0 ProClinic strip the call path is now backend-only via
-  // scopedDataLayer; the old label was misleading + redundant with main
-  // OPD button).
-  const renderResyncButton = () => {
-    const isPending = brokerPending[viewingSession.id] || viewingSession.brokerStatus === 'pending';
-    return (
-      <button
-        onClick={() => handleResync(viewingSession)}
-        disabled={isPending}
-        title="บันทึกข้อมูลลูกค้าลง backend อีกครั้ง (manual sync)"
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded border transition-all text-xs font-bold font-semibold whitespace-nowrap ${
-          isPending
-            ? 'bg-orange-950/20 text-orange-400 border-orange-700/50 animate-pulse cursor-not-allowed'
-            : 'bg-teal-950/20 hover:bg-teal-900/40 text-teal-400 border-teal-800/50'
-        }`}
-      >
-        <RotateCcw size={13} className={isPending ? 'animate-spin' : ''} />
-        {isPending ? 'กำลังส่ง...' : 'ซิงค์ข้อมูลใหม่'}
-      </button>
-    );
-  };
-
   // Full-OPD button for the viewing-session modal header (richer styling
   // than the per-row renderOpdButton — shows label + done-state).
   const renderViewingSessionOpdButton = () => {
@@ -6007,7 +5981,7 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         }`}
       >
         <ClipboardCheck size={13} />
-        {isPending ? 'กำลังส่ง...' : isFailed ? 'ล้มเหลว' : viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกลง OPD'}
+        {isPending ? 'กำลังส่ง...' : isFailed ? 'ล้มเหลว' : viewingSession.opdRecordedAt ? 'OPD บันทึกแล้ว' : 'บันทึกเข้าระบบ'}
       </button>
     );
   };
@@ -6116,13 +6090,13 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
             </button>
           </div>
 
-          {/* Right rail — create + notif + branch + theme + online + signout */}
+          {/* Right rail — notif + branch + theme + online + signout */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
-              className="text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-70 transition-all whitespace-nowrap"
-              style={{backgroundColor: ac, boxShadow: `0 0 10px rgba(${acRgb},0.3)`}}>
-              <PlusCircle size={14}/> สร้างคิวใหม่
-            </button>
+            {/* (2026-05-27) Create-queue button REMOVED per user — feature paused, not deleted.
+                The session-creation modal/form is KEPT below (state showSessionModal; the modal whose
+                heading reads สร้างคิวใหม่). To restore: add a header button here whose onClick opens
+                that modal (set the modal tab to standard, then show the session modal); disable while
+                isGenerating. Handlers/state intact so re-enabling is a one-line JSX add. */}
 
             {/* V88 (2026-05-18 EOD+11) — desktop right-rail cosmetic harmony.
                 Transparent base + hover:bg-[var(--bg-hover)] matches the
@@ -6205,10 +6179,8 @@ export default function AdminDashboard({ db, appId, user, auth, viewingSession, 
         <div className="menu-mobile md:hidden flex items-center justify-between gap-2 px-3 py-2 bg-[var(--bg-surface)] border border-[var(--bd)] border-t-0 rounded-b-2xl">
           <ClinicLogo className="h-7 max-w-[100px] w-auto shrink-0" showText={false} clinicSettings={cs} theme={theme} />
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={() => { setSessionModalTab('standard'); setShowSessionModal(true); }} disabled={isGenerating}
-              className="p-2 rounded-lg text-white disabled:opacity-70" style={{backgroundColor: ac, boxShadow: `0 0 8px rgba(${acRgb},0.3)`}} title="สร้างคิวใหม่">
-              <PlusCircle size={15}/>
-            </button>
+            {/* (2026-05-27) Mobile create-queue button REMOVED per user — feature paused.
+                See the desktop right-rail note above; the modal/form is KEPT for later re-use. */}
             <div className="relative">
               <button onClick={() => setShowNotifSettings(!showNotifSettings)}
                 className={`border p-2 rounded-lg ${isNotifEnabled ? 'bg-blue-950/30 border-blue-900/50 text-blue-500' : 'bg-[var(--bg-input)] border-[var(--bd)] text-[var(--tx-muted)]'}`} title="ตั้งค่าการแจ้งเตือน">

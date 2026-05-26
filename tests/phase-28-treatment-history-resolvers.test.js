@@ -158,16 +158,19 @@ describe('Phase 28 · getStepLabels', () => {
     const lc = [{ key: 'doctor', time: 't2' }];
     expect(getStepLabels(lc)).toEqual({ t: 'ข้าม', a: 'แพทย์', e: 'เสร็จ' });
   });
-  it('R3.5 returns all default placeholders for empty lifecycle', () => {
-    expect(getStepLabels([])).toEqual({ t: 'ซักประวัติ', a: 'ข้าม', e: 'เสร็จ' });
+  it('R3.5 returns default placeholders (doctor="แพทย์" stage name) for empty lifecycle', () => {
+    // EOD+7 (2026-05-26): doctor-slot default is the STAGE NAME "แพทย์" (was "ข้าม").
+    expect(getStepLabels([])).toEqual({ t: 'ซักประวัติ', a: 'แพทย์', e: 'เสร็จ' });
   });
-  it('R3.6 returns "ข้าม" for vitals when only completed (direct save)', () => {
+  it('R3.6 returns "ข้าม" for vitals + "แพทย์" for doctor when only completed (direct save)', () => {
     const lc = [{ key: 'completed', time: 't3' }];
-    expect(getStepLabels(lc)).toEqual({ t: 'ข้าม', a: 'ข้าม', e: 'เสร็จ' });
+    // EOD+7 (2026-05-26): doctor slot now the stage name "แพทย์" (was "ข้าม").
+    expect(getStepLabels(lc)).toEqual({ t: 'ข้าม', a: 'แพทย์', e: 'เสร็จ' });
   });
   it('R3.7 handles null/undefined input gracefully', () => {
-    expect(getStepLabels(null)).toEqual({ t: 'ซักประวัติ', a: 'ข้าม', e: 'เสร็จ' });
-    expect(getStepLabels(undefined)).toEqual({ t: 'ซักประวัติ', a: 'ข้าม', e: 'เสร็จ' });
+    // EOD+7 (2026-05-26): doctor-slot default "แพทย์" (was "ข้าม").
+    expect(getStepLabels(null)).toEqual({ t: 'ซักประวัติ', a: 'แพทย์', e: 'เสร็จ' });
+    expect(getStepLabels(undefined)).toEqual({ t: 'ซักประวัติ', a: 'แพทย์', e: 'เสร็จ' });
   });
 });
 
