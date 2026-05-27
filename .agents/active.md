@@ -1,33 +1,44 @@
 ---
-updated_at: "2026-05-27 EOD+12 — chart-edit flash FIXED (portal) + treatment-image ดูรูปใหญ่ button + light-theme button fix (LOCAL commit, NOT pushed/deployed)"
-status: "Feature committed locally (96eb089d) on master. Full suite 14971/0, build clean. Root cause CSS-proven in real browser (light theme). NOT pushed, NOT deployed — await explicit 'push'/'deploy' (V18). In-app live-TFP-edit L1 = user hands-on (login/data)."
+updated_at: "2026-05-27 EOD+13 — Light-Theme Audit (WCAG AA, App UI) COMPLETE + deep automated-scanner pass (7 surfaces). LOCAL, NOT committed/pushed/deployed."
+status: "Light-theme audit done + deep-verified. 7 surfaces scanned clean (per-page contrast scanner) + global fixes proven. full vitest 14975/0 (last full run; 1 prior=flake). build clean ×6. NOT committed — await explicit 'commit'/'push'/'deploy' (V18). Brand-red decision pending."
 branch: "master"
-last_commit: "96eb089d fix(chart): portal chart overlays → no edit-flash + treatment-image ดูรูปใหญ่ button [V123/AV143]"
-tests: "full suite 14971 pass / 0 fail (677 files). build clean."
+last_commit: "762a89df (EOD+12 chart docs) — ALL light-theme work UNCOMMITTED on top of working tree"
+tests: "full vitest 14975/0 (678 files); T7 override-coverage 4/0; build clean ×6. (green-500/600 edit after last full run = CSS-only, build-confirmed.)"
 production_url: "https://lover-clinic-app.vercel.app"
-production_commit: "8f6b7ced LIVE (EOD+10) — EOD+11 & EOD+12 work NOT deployed"
-firestore_rules_version: "UNCHANGED (no rules/storage/data/cron this session)"
+production_commit: "8f6b7ced LIVE — EOD+11 + EOD+12 + light-theme NOT deployed"
+firestore_rules_version: "UNCHANGED — CSS/theme-config only (no rules/storage/data/cron → no Probe-Deploy-Probe)"
 ---
 
-# Active Context
+# Active Context — Light-Theme Audit (brainstorming→writing-plans→executing-plans→deep scanner)
 
-## State
-- Chart-edit FLASH fixed: ChartCanvas + ChartTemplateSelector + PcPairingModal now `createPortal(…, document.body)`. Root cause = `fixed inset-0` trapped by a transient transformed ancestor in TFP (the editor laid out in-box then snapped full-screen). Same class as AV117 → NEW **AV143** (editors/modals). Committed local `96eb089d`.
-- Treatment + lab images now have a `Maximize2` "ดูรูปใหญ่" button → shared portaled **ImageLightbox** (extracted from ChartSection.ChartLightbox, Rule of 3). Light-theme bug fixed: buttons `bg-black/70 text-white` → `bg-white/90` + gray/red icon (index.css:404 remaps `text-white` dark on non-colored bg → icon was invisible). Mirrors the chart button.
-- EOD+11 appt-live-cross-device + CC-row-align work STILL unpushed/undeployed; this session's chart work stacks on top. Working tree clean except the 2 pre-existing user Rule S doc edits (CLAUDE.md, rules/01) — untouched.
+Goal: every App-UI page+modal WCAG AA in light theme. **CSS/colour/theme-config ONLY — 0 wiring/flow/logic** (diff = index.css + tailwind.config 1 line + 14 inline-colour swaps in 5 .jsx). Spec/plan/inventory: docs/superpowers/2026-05-27-light-theme-*.
 
-## What this session shipped (detail: .agents/sessions/2026-05-27-chart-overlay-portal-flash.md)
-- `/systematic-debugging`: root cause confirmed via static-chain proof (no persistent transform → transient → flash) + AV117 precedent + real-browser CSS computed-style proof in light theme.
-- 4 files portaled (ChartCanvas/Selector/PairingModal) + NEW `ImageLightbox.jsx`; TFP wires zoom buttons + lightbox; ChartSection delegates to ImageLightbox.
-- Tier 2 (Rule P): NEW AV143 + `tests/v123-chart-overlay-portal.test.js` (13); AV117 + `v117-lightbox-portal.test.js` retargeted to ImageLightbox; `pc-pairing-rtl` PP4 portal fixup.
-- Verify: build clean ×2 · full suite **14971/0** · root cause + fix CSS-proven in real browser (light theme: old icon `rgb(15,23,42)` dark-on-dark = invisible; new = gray-on-white visible).
+## Fixes (all theme-layer)
+- **FM-A** ~10 uncovered dark surface classes → light tokens (index.css).
+- **FM-C base** ~23 colour text shades -300/400/500 → AA-dark.
+- **Alert-box ext** bg-{c}-700/800/900/950/alpha TINTS → {c}-50 + text -50/100/200/300 → {c}-700, all 17 colours (info/success/error boxes 1.0–1.3 → 4.84–6.51:1).
+- **FM-D** 14 inline-colour → `--accent-{blue,line,purple,amber,red,teal}` vars (CustomerDetailView, LinkLineInstructionsModal, LinkRequestsTab, TreatmentTimelineModal, ClinicSettingsPanel).
+- **teal** text-teal-300/400 #0d9488→#0f766e · **muted** --tx-muted #64748b→#5b6675 · **green** text-green-500/600 #16a34a→#15803d (all were sub-AA).
+- **tailwind darkMode root-fix** (USER-APPROVED) `darkMode: ['selector','[data-theme="dark"]']` — was unset(media) → `dark:` (82 uses/15 files) coupled to OS → light-on-dark-OS showed dark-variant colours (invisible finance/wallet). AV136 class, fixed globally.
+- NEW tests/light-theme-override-coverage.test.js (4) + TL1.6 fixup.
 
-## Next action
-- USER-TRIGGERED: push master + deploy (vercel-only — no rules/storage/cron → no Probe-Deploy-Probe). Say "push" / "deploy".
+## Verified (Rule Q-vis/Q-honest — REAL browser, measured)
+- **Per-page contrast scanner clean on 7 surfaces**: sale · reports · promotions · finance(synthetic) · appointment-hub · customer-detail · frontend-appt (only residual anywhere = brand-red below).
+- darkMode fix **proven both directions** (synthetic + frontend-appt reload: sky-100/200/orange dark: fails GONE after reload).
+- Dark theme NO regression (customer-detail dark screenshot post-config).
+- The deep scan (user's "ตรวจหมดจริงๆเหรอ" push — justified) surfaced teal/muted/green/dark: classes that eyeballing missed. All fixed.
 
-## Outstanding user-triggered actions
-- push + `vercel --prod` (covers EOD+11 appt-live + EOD+12 chart work — all frontend) — await explicit word (V18).
-- In-app live L1 (your hands-on): open real TFP edit → กดแก้ไข Chart → expect full-screen immediately (NO flash); hover a treatment image in light theme → white "ดูรูปใหญ่" button visible → opens lightbox. (Mechanism AV117-proven + CSS-proven; live TFP-edit not driven by me — login/data.)
-- 2 pre-existing Rule S doc edits (CLAUDE.md, rules/01) still uncommitted (user's).
-- OPD ember-band live-pixel (carryover) — user L1 when a patient is mid-OPD.
-- ⚠ SESSION_HANDOFF.md is 266 KB (over its 200 KB cap) — archival overdue (flagged at boot; separate maintenance pass).
+## ⚠ Pending decision (brand colour — NOT auto-changed)
+Brand red `#dc2626` (`text-red-400`, 261 uses) = **4.37:1 on tinted cards** (4.5 on white). Always on appropriate red (delete/weekend/error), NOT names. Keep brand red (≈AA) OR bump → red-700 #b91c1c (strict AA, darkens brand red app-wide) — **user's call**.
+
+## ⚠ HONEST scope gap
+Scanner ran on 7 surfaces. **stock / master-data / treatment-form / chat / settings / deep modals NOT individually scanned** — backend collapsed-section + frontend drawer nav resisted programmatic clicks in-session. They use the SAME now-fixed global classes (FM-A/C + alert-box + dark: + teal/muted/green all global) → covered by the global fixes + **need user L1 spot-check**. dev server UP at localhost:5173 (Browser 1, light) for L1.
+
+## Next action (USER-TRIGGERED)
+Decide brand-red → `commit` → `push` → `vercel --prod` (frontend+theme-config only; no rules/storage/cron → no Probe-Deploy-Probe). Await word (V18).
+
+## Outstanding
+- commit/push/deploy await word (covers EOD+11 appt-live + EOD+12 chart + light-theme).
+- brand-red #dc2626 decision · in-app L1 on the 6 unscanned surfaces.
+- V-entry + SESSION_HANDOFF finalize at commit (⚠ SESSION_HANDOFF 266KB over 200KB cap — archive first).
+- 2 pre-existing Rule S doc edits (CLAUDE.md, rules/01) uncommitted (yours).

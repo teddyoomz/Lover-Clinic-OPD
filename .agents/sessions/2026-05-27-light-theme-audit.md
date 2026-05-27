@@ -1,0 +1,59 @@
+# Checkpoint — Light-Theme WCAG-AA Audit (App UI) — 2026-05-27 EOD+13
+
+## Summary
+Dark-first project is launching → audited the LIGHT theme across the App UI for WCAG **AA (4.5:1)** legibility and fixed every contrast/invisible-text failure. **CSS / colour / theme-config ONLY — zero wiring/flow/logic** (per user directive "ยุ่งกับแค่สีดีไซน์ css ห้ามยุ่งกับ wiring flow logic เด็ดขาด เป็นแค่การปรับตีม"). Brainstorm-locked: AA · Hybrid central-first · App-UI (exclude print/doc) · full live-browser pass. After a representative-sample "done" claim, the user pushed "ตรวจหมดจริงๆเหรอ" → I built an automated per-page contrast scanner that found 3 more real classes eyeballing missed (vindicated the push). LOCAL, UNCOMMITTED.
+
+## Current State (5 bullets)
+- master HEAD `ac4f9eea` (EOD+12 docs); **light-theme work UNCOMMITTED** on working tree; prod UNCHANGED `8f6b7ced`.
+- Diff surface = `src/index.css` (central override sweep block) + `tailwind.config.js` (1-line `darkMode`) + 14 inline-colour swaps in 5 `.jsx` + 1 NEW test + 1 test fixup. NO firestore.rules/storage/data/cron → frontend+theme-config (no Probe-Deploy-Probe).
+- **Verified (Rule Q-vis, real browser, measured)**: per-page contrast scanner CLEAN on **7 surfaces** (sale · reports · promotions · finance[synthetic] · appointment-hub · customer-detail · frontend-appt). darkMode fix proven BOTH directions. Dark theme NO regression.
+- full vitest **14975/0** (678 files; 1 prior "fail" = non-reproduced flake) · build clean ×6 · T7 4/0.
+- **⚠ Pending USER decision**: brand-red `#dc2626` keep (≈AA) vs darken red-700 (strict AA). **⚠ Honest gap**: 6 surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) NOT individually scanned (nav resisted clicks) — covered by global fixes + need user L1.
+
+## Architecture understood
+Light theme = a giant `[data-theme="light"],[data-theme="auto"]` override layer in `src/index.css` that remaps hardcoded dark Tailwind classes → light values (theme = `data-theme` attr on `<html>`, `useTheme.js`, `THEME_KEY='app-theme'`). Failure mode = any uncovered hardcoded dark class, OR light-pastel text on a light surface → invisible / sub-AA.
+
+## Fixes (all theme-layer)
+- **FM-A** ~10 uncovered dark surface classes → light tokens (`.bg-[#0e0e0e]`→`--bg-card`, `bg-[#0a0c14]`→#eff6ff, `border-[#2a2a2a]`→`--bd-strong`, `from-[#1a0515]`→#fdf2f8, etc.).
+- **FM-C** colour text -300/400/500 → AA-dark (emerald→#047857, sky→#0369a1, rose→#be123c, amber→#b45309, …).
+- **Alert-box ext** (17 colours): `bg-{c}-700/800/900/950/alpha` TINTS → `{c}-50`; `text-{c}-50/100/200/300` → `{c}-700` (1.0–1.3 → 4.84–6.51:1).
+- **FM-D** 14 inline `color:#hex` → `--accent-{blue,line,purple,amber,red,teal}` vars (CustomerDetailView · LinkLineInstructionsModal · LinkRequestsTab · TreatmentTimelineModal · ClinicSettingsPanel). borderColor/backgroundColor untouched.
+- **teal** text-teal-300/400 #0d9488→#0f766e · **muted** `--tx-muted` #64748b→#5b6675 (light+auto) · **green** text-green-500/600 #16a34a→#15803d (all were sub-AA).
+- **tailwind darkMode root-fix (USER-APPROVED "Global config")**: `darkMode: ['selector','[data-theme="dark"]']` — was unset (=media) so `dark:` (82 uses/15 files) coupled to OS prefers-color-scheme → light theme on a dark-OS machine rendered dark-variant colours (invisible finance/wallet). **AV136 class**, fixed globally.
+- NEW `tests/light-theme-override-coverage.test.js` (T7, 4 tests) + TL1.6 fixup (`#2EC4B6`→`var(--accent-teal)`).
+
+## Commits
+NONE — light-theme work intentionally UNCOMMITTED (await explicit "commit" + brand-red decision, V18).
+This session's only writes-to-be-committed are the handoff docs (active.md + SESSION_HANDOFF.md + this checkpoint) — committed LOCAL-only, NOT pushed (V18; push would send the unpushed EOD+11 appt-live + EOD+12 chart stack too).
+
+## Files Touched (light-theme work — uncommitted)
+- `src/index.css` (central override sweep block, labeled "LIGHT-THEME AUDIT 2026-05-27")
+- `tailwind.config.js` (darkMode line + comment)
+- `src/components/backend/CustomerDetailView.jsx` (841/849/857)
+- `src/components/backend/LinkLineInstructionsModal.jsx` (176/289/296/303)
+- `src/components/backend/LinkRequestsTab.jsx` (341/352/363)
+- `src/components/backend/TreatmentTimelineModal.jsx` (81/83/126)
+- `src/components/ClinicSettingsPanel.jsx` (199)
+- `tests/light-theme-override-coverage.test.js` (NEW)
+- `tests/customer-treatment-timeline-flow.test.js` (TL1.6)
+- `docs/superpowers/specs/2026-05-27-light-theme-audit-design.html` (NEW)
+- `docs/superpowers/plans/2026-05-27-light-theme-audit.html` (NEW)
+- `docs/superpowers/plans/2026-05-27-light-theme-inventory.md` (NEW)
+
+## Decisions (1-line each)
+- Quality bar = WCAG **AA 4.5:1** (not AAA). Fix mechanism = **Hybrid central-first** (extend index.css override layer; component-level only where central can't reach = inline styles). Scope = **App UI**, exclude print/document views. darkMode = **Global config** (user-approved).
+- Brand-red `#dc2626` = **NOT auto-changed** — flagged for user (4.37:1 on tinted cards; always on delete/weekend/error, never on names/HN per Thai-culture rule).
+- Scanner > eyeballing: the frontend-appt page I'd called "clean" from a screenshot had real fails when scanned. The user's "ตรวจหมดจริงๆเหรอ" push was correct.
+
+## Next Todo (USER-triggered)
+1. Decide brand-red: keep `#dc2626` (≈AA) OR bump red-700 `#b91c1c` (strict AA, darkens brand red app-wide).
+2. `commit` → `push` → `vercel --prod` (frontend+theme-config only; no rules/storage/cron → no Probe-Deploy-Probe). One deploy covers EOD+11 appt-live + EOD+12 chart + light-theme.
+3. User L1 spot-check the 6 unscanned surfaces (dev up localhost:5173, Browser 1, light theme).
+4. At commit: V-entry + finalize SESSION_HANDOFF; **archive SESSION_HANDOFF (277 KB > 200 KB cap)** in a dedicated clean-shell maintenance turn (deferred this turn — RTK output-collapsing made safe line-surgery risky).
+
+## Resume Prompt
+Resume LoverClinic light-theme audit — continue from 2026-05-27 EOD+13.
+Read in order BEFORE any tool call: 1. CLAUDE.md  2. SESSION_HANDOFF.md (master=ac4f9eea, prod=8f6b7ced; read with a `limit` — file is 277 KB)  3. .agents/active.md  4. .claude/rules/00-session-start.md  5. this checkpoint.
+Status: light-theme WCAG-AA audit (App UI) COMPLETE + deep-scanned (7 surfaces clean), full vitest 14975/0, build clean ×6 — LOCAL, UNCOMMITTED.
+Next: (1) decide brand-red #dc2626 keep-vs-darken; (2) commit→push→deploy await explicit word (V18); (3) user L1 on stock/master-data/treatment-form/chat/settings/modals.
+Rules: CSS/colour/theme-config ONLY (cosmetic-shell) · Rule Q/Q-vis/Q-honest · no commit/push/deploy without the word THIS turn (V18) · no Probe-Deploy-Probe (no rules/storage/cron).
