@@ -48,14 +48,14 @@ PUSHED origin/master + `vercel --prod` LIVE (alias lover-clinic-app.vercel.app) 
 - Scanner > eyeballing: the frontend-appt page I'd called "clean" from a screenshot had real fails when scanned. The user's "ตรวจหมดจริงๆเหรอ" push was correct.
 
 ## Next Todo (USER-triggered)
-1. Decide brand-red: keep `#dc2626` (≈AA) OR bump red-700 `#b91c1c` (strict AA, darkens brand red app-wide).
-2. `commit` → `push` → `vercel --prod` (frontend+theme-config only; no rules/storage/cron → no Probe-Deploy-Probe). One deploy covers EOD+11 appt-live + EOD+12 chart + light-theme.
-3. User L1 spot-check the 6 unscanned surfaces (dev up localhost:5173, Browser 1, light theme).
-4. At commit: V-entry + finalize SESSION_HANDOFF; **archive SESSION_HANDOFF (277 KB > 200 KB cap)** in a dedicated clean-shell maintenance turn (deferred this turn — RTK output-collapsing made safe line-surgery risky).
+1. ✅ DONE (2026-05-28): brand-red darken `#b91c1c` (strict AA) → commit `a4731775` + push + `vercel --prod` LIVE + prod-verified.
+2. ✅ DONE: SESSION_HANDOFF archival (277→142 KB; 46 oldest blocks → archive; under cap) via one-shot node script.
+3. ⏳ user L1 spot-check 6 unscanned surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) on PROD light theme.
+4. ⏳ user L1: appt-live cross-device + chart flows (first prod exposure since EOD+11/EOD+12 deployed in this same push).
 
 ## Resume Prompt
-Resume LoverClinic light-theme audit — continue from 2026-05-27 EOD+13.
-Read in order BEFORE any tool call: 1. CLAUDE.md  2. SESSION_HANDOFF.md (master=ac4f9eea, prod=8f6b7ced; read with a `limit` — file is 277 KB)  3. .agents/active.md  4. .claude/rules/00-session-start.md  5. this checkpoint.
-Status: light-theme WCAG-AA audit (App UI) COMPLETE + deep-scanned (7 surfaces clean), full vitest 14975/0, build clean ×6 — LOCAL, UNCOMMITTED.
-Next: (1) decide brand-red #dc2626 keep-vs-darken; (2) commit→push→deploy await explicit word (V18); (3) user L1 on stock/master-data/treatment-form/chat/settings/modals.
-Rules: CSS/colour/theme-config ONLY (cosmetic-shell) · Rule Q/Q-vis/Q-honest · no commit/push/deploy without the word THIS turn (V18) · no Probe-Deploy-Probe (no rules/storage/cron).
+Resume LoverClinic — continue from 2026-05-28 (light-theme + brand-red SHIPPED + DEPLOYED).
+Read in order BEFORE any tool call: 1. CLAUDE.md  2. SESSION_HANDOFF.md (master=3605f284, prod=9042934a; read with a `limit`)  3. .agents/active.md  4. .claude/rules/00-session-start.md.
+Status: light-theme WCAG-AA audit (App UI) + brand-red red-700 #b91c1c SHIPPED + DEPLOYED + prod-verified; full vitest 14976/0; build clean; tree clean; SESSION_HANDOFF 142 KB (under cap).
+Next: idle / await user. Remaining = user L1 on 6 unscanned surfaces (stock/master-data/treatment-form/chat/settings/deep-modals) + appt-live/chart prod flows.
+Rules: no commit/push/deploy without the word THIS turn (V18); Rule Q/Q-vis/Q-honest; no Probe-Deploy-Probe (no rules/storage/cron).
